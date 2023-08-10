@@ -5,7 +5,7 @@ import HomePage from "./page/Home/page";
 function App() {
   return (
     <ChakraProvider>
-      <HomePage></HomePage>
+      <HomePage />
     </ChakraProvider>
   );
 }
