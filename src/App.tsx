@@ -1,12 +1,17 @@
 import "./App.css";
 import { ChakraProvider } from "@chakra-ui/react";
-import HomePage from "./page/Home/page";
+import MainPage from "./page/Main/Page";
+import { MantineProvider } from "@mantine/core";
+import { Notifications } from "@mantine/notifications";
 
 function App() {
   return (
-    <ChakraProvider>
-      <HomePage />
-    </ChakraProvider>
+    <MantineProvider withNormalizeCSS withGlobalStyles>
+      <ChakraProvider>
+        <Notifications />
+        <MainPage />
+      </ChakraProvider>
+    </MantineProvider>
   );
 }
 

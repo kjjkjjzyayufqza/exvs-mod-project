@@ -39,7 +39,7 @@ const rejectStyle = {
   borderColor: "#ff1744",
 };
 
-export default function HomePage() {
+export default function DDSConversion() {
   const [nutexbCardList, setNutexbCardList] = useState<ReactNode[]>([]);
   const onDrop = useCallback((acceptedFiles: any) => {
     setNutexbCardList(

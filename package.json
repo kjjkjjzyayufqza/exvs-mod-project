@@ -9,13 +9,19 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri-build": "tauri build",
-    "start": "vite",
+    "start": "tauri dev",
     "start-tauri": "tauri dev"
   },
   "dependencies": {
     "@chakra-ui/react": "^2.8.0",
-    "@emotion/react": "^11",
+    "@emotion/react": "^11.11.1",
     "@emotion/styled": "^11",
+    "@mantine/core": "^6.0.19",
+    "@mantine/dropzone": "^6.0.19",
+    "@mantine/hooks": "^6.0.19",
+    "@mantine/notifications": "^6.0.19",
+    "@mantine/prism": "^6.0.19",
+    "@tabler/icons-react": "^2.30.0",
     "@tauri-apps/api": "^1.4.0",
     "buffer": "^6.0.3",
     "flowbite": "^1.8.1",
@@ -23,7 +29,11 @@
     "framer-motion": "^6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-dropzone": "^14.2.3"
+    "react-dropzone": "^14.2.3",
+    "react-icons": "^4.10.1",
+    "react-router": "^6.15.0",
+    "react-router-dom": "^6.15.0",
+    "tabler-icons-react": "^1.56.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^1.4.0",
