@@ -1,10 +1,6 @@
 import { Group, Text, useMantineTheme, rem } from "@mantine/core";
 import { IconUpload, IconPhoto, IconX } from "@tabler/icons-react";
-import {
-  Dropzone,
-  DropzoneProps,
-  FileWithPath,
-} from "@mantine/dropzone";
+import { Dropzone, DropzoneProps, FileWithPath } from "@mantine/dropzone";
 import { FC } from "react";
 interface FileDropzoneModel {
   props?: Partial<DropzoneProps>;

@@ -8,24 +8,40 @@ import {
   Burger,
   useMantineTheme,
   NavLink,
+  Button,
 } from "@mantine/core";
+import {
+  IconActivity,
+  IconChevronRight,
+  IconFingerprint,
+  IconGauge,
+} from "@tabler/icons-react";
+import MainPage from "../page/Main/Page";
+import { Link } from "react-router-dom";
+import { router } from "../routers/routers";
 type Props = {
   children: string | JSX.Element | JSX.Element[];
 };
 
 export default function AppShellLayout({ children }: Props) {
   const theme = useMantineTheme();
+  const [active, setActive] = useState(0);
   const [opened, setOpened] = useState(false);
+
+  const items = router.map((item, index) => (
+    <Link key={index} to={item.path}>
+      <NavLink
+        key={index}
+        label={item.label}
+        active={index === active}
+        icon={<item.icon size="1rem" stroke={1.5} />}
+        onClick={() => setActive(index)}
+      />
+    </Link>
+  ));
+
   return (
     <AppShell
-      styles={{
-        main: {
-          background:
-            theme.colorScheme === "dark"
-              ? theme.colors.dark[8]
-              : theme.colors.gray[0],
-        },
-      }}
       navbarOffsetBreakpoint="sm"
       asideOffsetBreakpoint="sm"
       navbar={
@@ -35,9 +51,7 @@ export default function AppShellLayout({ children }: Props) {
           hidden={!opened}
           width={{ sm: 100, lg: 200 }}
         >
-          <NavLink component="a" href="/" label="Main" />
-          <NavLink component="a" href="/DDSConversion" label="DDS Conversion" />
-          <NavLink component="a" href="/FileEdit" label="File Edit" />
+          {items}
         </Navbar>
       }
       header={
