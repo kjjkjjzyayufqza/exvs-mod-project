@@ -17,7 +17,12 @@ import { setOutputFileUrl } from "../../stateManager/configStore/configStore";
 import { updateConfig } from "../../module/storeConfig";
 import { bufferReader } from "../../module/reader";
 import { FileWithPath } from "react-dropzone";
-import { Fhm2dData, PS4FhmData, getFileType } from "../../models/fhm2d";
+import {
+  Fhm2dData,
+  Fhm2dType,
+  PS4FhmData,
+  getFileType,
+} from "../../models/fhm2d";
 import {
   createDir,
   exists,
@@ -30,6 +35,8 @@ import {
   notificationsType,
   showNotification,
 } from "../../module/notifications";
+import { Buffer } from "buffer";
+import pako from "pako";
 
 interface FromModel {
   inputFileUrl: string;
@@ -78,15 +85,19 @@ export default function ExtractFilePage() {
     const contents = await bufferReader(file);
 
     const Magic = contents.slice(0, 0x4).toString("hex");
-    let data!: Fhm2dData | PS4FhmData;
+    let data: Fhm2dData | PS4FhmData | undefined = undefined;
     if (Magic.toUpperCase() == "B9B7B2CD") {
       data = new Fhm2dData(contents);
     } else if (Magic.toUpperCase() == "9992CD90") {
       data = new PS4FhmData(contents);
     }
-    setfhm2dData(data);
-    // Create Preview Json
-    createPreviewJson(data);
+    if (data) {
+      setfhm2dData(data);
+      // Create Preview Json
+      createPreviewJson(data);
+    } else {
+      throw "cc";
+    }
   };
 
   const createPreviewJson = (data: PS4FhmData | Fhm2dData) => {
@@ -124,23 +135,26 @@ export default function ExtractFilePage() {
     // Sort The Array first
     const sortData = fhm2dData.getSortSubFileData();
 
-    
-
     sortData.map((e, i) => {
       const outFileName = `${i}${typeList[i]}`;
-      // invoke("save_buffer_to_file", {
-      //   path: `${outDir}\\${outFileName}`,
-      //   buffer: Array.from(e.BufferData),
-      // }).then((e) => {
-      //   setProgressbarValue((prevValue) => ({
-      //     ...prevValue,
-      //     value: i + 1, // 更新 value 字段
-      //     max: sortData.length,
-      //   }));
-      // });
-      
-      
-      writeBinaryFile(`${outDir}\\${outFileName}`, e.BufferData, {})
+
+      let BufferData!: Buffer;
+      if (fhm2dData._TYPE_ == Fhm2dType.PS4GundamVersus) {
+        BufferData = e.BufferData;
+      } else if (fhm2dData._TYPE_ == Fhm2dType.Xboost) {
+        //解压 Chunk
+        let decompressData: Uint8Array[] = [];
+        if (e._isNeedDeComp == false) {
+          BufferData = e.CompBufferData[0].CompBufferData;
+        } else {
+          e.CompBufferData.map((_e) => {
+            const temp = pako.inflateRaw(new Uint8Array(_e.CompBufferData));
+            decompressData.push(temp);
+          });
+          BufferData = Buffer.concat(decompressData);
+        }
+      }
+      writeBinaryFile(`${outDir}\\${outFileName}`, BufferData, {})
         .then((res) => {
           setProgressbarValue((prevValue) => ({
             ...prevValue,
@@ -150,25 +164,26 @@ export default function ExtractFilePage() {
         })
         .catch((err) => {
           console.log("save error", err);
-        });
-
-      let outputMeta = {
-        SubFileData: fhm2dData.SubFileData.map((e, i) => {
-          return {
-            fileName: i,
-            fileIndex: e.FileIndex,
-          };
-        }),
-        SubFileStructure: fhm2dData.SubFileStructure,
-      };
-      writeTextFile(`${jsonDir}`, JSON.stringify(outputMeta), {})
-        .then((res) => {
-          showNotification(notificationsType.Success);
-        })
-        .catch((err) => {
-          console.log("save error", err);
+          showNotification(notificationsType.Warning, "Extract Error");
         });
     });
+    let outputMeta = {
+      SubFileData: fhm2dData.SubFileData.map((e, i) => {
+        return {
+          fileName: i,
+          fileIndex: e.FileIndex,
+          isNeedComp: e._isNeedDeComp ? true : false,
+        };
+      }),
+      SubFileStructure: fhm2dData.SubFileStructure,
+    };
+    writeTextFile(`${jsonDir}`, JSON.stringify(outputMeta), {})
+      .then((res) => {
+        showNotification(notificationsType.Success);
+      })
+      .catch((err) => {
+        console.log("save error", err);
+      });
   };
 
   const form = useForm<FromModel>({

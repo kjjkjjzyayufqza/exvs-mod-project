@@ -246,12 +246,12 @@ class SubData {
   Unk1!: number;
   ChunkCount!: number;
   ChunkBinaryCount!: number;
-  ChunkCompDataSize!: number[];
   FileIndex!: number;
   BufferData!: Buffer;
+  CompBufferData!: { Size: number; CompBufferData: Buffer }[];
   _Length!: number;
+  _isNeedDeComp: boolean = true; //有些文件本身没有经过压缩
   constructor(_TYPE_: Fhm2dType, meta: Buffer, body: Buffer) {
-    this.ChunkCompDataSize = [];
     if (_TYPE_ == Fhm2dType.PS4GundamVersus) {
       this.StartOffset = meta.readUInt32LE(0);
       this.FileSize = meta.readUInt32LE(0x8);
@@ -262,6 +262,7 @@ class SubData {
         this.StartOffset + this.FileSize
       );
     } else if (_TYPE_ == Fhm2dType.Xboost) {
+      this.CompBufferData = [];
       this.StartOffset = meta.readUInt32LE(0x20); //0x20 is start offset
       this.FileSize = meta.readUInt32LE(0x8);
       this.Unk1 = meta.readUInt32LE(0x18);
@@ -280,21 +281,38 @@ class SubData {
         }
 
         const eachChunkSizeStartOffset = 0x2c + padding;
+        let offset: number = this.StartOffset;
         for (let i = 0; i < this.ChunkCount; i++) {
-          this.ChunkCompDataSize.push(
-            meta.readInt32LE(eachChunkSizeStartOffset + i * 0x8)
-          );
+          const Size = meta.readInt32LE(eachChunkSizeStartOffset + i * 0x8);
+          this.CompBufferData.push({
+            Size: Size,
+            CompBufferData: body.slice(offset, offset + Size),
+          });
+          offset += Size;
         }
-        this.BufferData = body.slice(
-          this.StartOffset,
-          this.StartOffset + this.FileSize
-        );
-
         // 获取整个块信息的大小
         this._Length = 0x2c + padding + 0x8 * this.ChunkCount;
       }
       if (this.ChunkCount == 0) {
-        throw new Error("No do this");
+        //获取下一个chunk的start offset
+        const netChunkStartOffset = meta.readInt32LE(0x4c); // skip current
+
+        //判断当前文件的原始大小是否等于下个文件chunk开始offset - 当前文件chunk开始offset的大小'
+        if (netChunkStartOffset - this.StartOffset == this.FileSize) {
+          this.CompBufferData.push({
+            Size: this.FileSize,
+            CompBufferData: body.slice(
+              this.StartOffset,
+              this.StartOffset + this.FileSize
+            ),
+          });
+          // 获取整个块信息的大小
+          this._Length = 0x2c;
+          this._isNeedDeComp = false;
+        } else {
+          //不支持其他的
+          throw new Error("No do this");
+        }
       }
     }
   }
