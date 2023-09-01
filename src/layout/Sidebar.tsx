@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AppShell,
   Navbar,
@@ -9,6 +9,7 @@ import {
   useMantineTheme,
   NavLink,
   Button,
+  Progress,
 } from "@mantine/core";
 import {
   IconActivity,
@@ -16,9 +17,11 @@ import {
   IconFingerprint,
   IconGauge,
 } from "@tabler/icons-react";
-import MainPage from "../page/Main/Page";
+import MainPage from "../page/Main/page";
 import { Link } from "react-router-dom";
 import { router } from "../routers/routers";
+import { useAppDispatch } from "../hooks";
+import { getConfig } from "../module/storeConfig";
 type Props = {
   children: string | JSX.Element | JSX.Element[];
 };
@@ -27,13 +30,18 @@ export default function AppShellLayout({ children }: Props) {
   const theme = useMantineTheme();
   const [active, setActive] = useState(0);
   const [opened, setOpened] = useState(false);
+  const dispatch = useAppDispatch();
+
+  useEffect(() => {
+    dispatch(getConfig());
+  }, [dispatch]);
 
   const items = router.map((item, index) => (
     <Link key={index} to={item.path}>
       <NavLink
         key={index}
         label={item.label}
-        active={index === active}
+        active={item.path === window.location.pathname}
         icon={<item.icon size="1rem" stroke={1.5} />}
         onClick={() => setActive(index)}
       />
@@ -59,7 +67,7 @@ export default function AppShellLayout({ children }: Props) {
           <div
             style={{ display: "flex", alignItems: "center", height: "100%" }}
           >
-            <MediaQuery largerThan="sm" styles={{ display: "none" }}>
+            <MediaQuery largerThan="sm" styles={{}}>
               <Burger
                 opened={opened}
                 onClick={() => setOpened((o) => !o)}

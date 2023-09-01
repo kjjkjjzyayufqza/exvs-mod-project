@@ -18,13 +18,7 @@ function App() {
             <AppShellLayout>
               <Routes>
                 {router.map((e, i) => {
-                  return (
-                    <Route
-                      key={i}
-                      path={e.path}
-                      element={e.element}
-                    />
-                  );
+                  return <Route key={i} path={e.path} element={e.element} />;
                 })}
               </Routes>
             </AppShellLayout>

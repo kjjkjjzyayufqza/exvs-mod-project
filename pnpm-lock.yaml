@@ -47,6 +47,9 @@ dependencies:
   '@tauri-apps/api':
     specifier: ^1.4.0
     version: 1.4.0
+  '@types/pako':
+    specifier: ^2.0.0
+    version: 2.0.0
   buffer:
     specifier: ^6.0.3
     version: 6.0.3
@@ -65,6 +68,9 @@ dependencies:
   framer-motion:
     specifier: ^6
     version: 6.5.1(react-dom@18.2.0)(react@18.2.0)
+  pako:
+    specifier: ^2.1.0
+    version: 2.1.0
   react:
     specifier: ^18.2.0
     version: 18.2.0
@@ -2348,6 +2354,10 @@ packages:
     resolution: {integrity: sha512-22y3o88f4a94mKljsZcanlNWPzO0uBsBdzLAngf2tp533LzZcQzb6+eZPJ+vCTt+bqF2XnvT9gejTLsAcJAJyQ==}
     dev: false
 
+  /@types/pako@2.0.0:
+    resolution: {integrity: sha512-10+iaz93qR5WYxTo+PMifD5TSxiOtdRaxBf7INGGXMQgTCu8Z/7GYWYFUOS3q/G0nE5boj1r4FEB+WSy7s5gbA==}
+    dev: false
+
   /@types/parse-json@4.0.0:
     resolution: {integrity: sha512-//oorEZjL6sbPcKUaCdIGlIUeH26mgzimjBB77G6XRgnDl/L5wOnpyBGRe/Mmf5CVW3PwEBE1NjiMZ/ssFh4wA==}
     dev: false
@@ -3141,6 +3151,10 @@ packages:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
     dependencies:
       wrappy: 1.0.2
+
+  /pako@2.1.0:
+    resolution: {integrity: sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==}
+    dev: false
 
   /parent-module@1.0.1:
     resolution: {integrity: sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==}

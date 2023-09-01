@@ -1,6 +1,6 @@
 import DDSConversion from "../page/ImageCov/page";
 import FileEdit from "../page/FIleEdit/page";
-import MainPage from "../page/Main/Page";
+import MainPage from "../page/Main/page";
 import { IconGauge } from "@tabler/icons-react";
 import ExtractFilePage from "../page/Extract/page";
 
