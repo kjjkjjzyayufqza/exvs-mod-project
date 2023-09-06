@@ -37,11 +37,13 @@ export function getFileType(type: number) {
   }
 }
 
+
 export class PS4FhmData {
   _TYPE_: Fhm2dType = Fhm2dType.PS4GundamVersus;
   bufferData: Buffer;
   Magic: string;
   MetaSize: number;
+  MetaHeader : number;
   BodyData: Buffer;
   MetaDataSize: number;
   MetaData: Buffer;
@@ -50,10 +52,11 @@ export class PS4FhmData {
   private StreamReader: Buffer;
   FileTypeData: FileTypeData[];
   SubFileData: SubData[];
-  SubFileStructure: any[];
+  SubFileStructure: SubFileStructure[];
   constructor(buffer: Buffer) {
     this.bufferData = buffer;
     this.Magic = this.readFileMagic(); //0
+    this.MetaHeader = this.bufferData.readInt32LE(0x20)
     this.MetaSize = this.bufferData.readUInt32LE(0x10); //0x10
     // Get the body data
     this.BodyData = this.bufferData.slice(
@@ -121,6 +124,7 @@ export class PS4FhmData {
     return subDataArray;
   }
 
+  // 因为 PS4的文件不是按照FileIndex来进行排序的，所以这样要这样处理
   getSortSubFileData() {
     return this.SubFileData.sort((a, b) => a.FileIndex - b.FileIndex);
   }
@@ -134,14 +138,14 @@ export class Fhm2dData {
   MetaCompSize: number;
   MetaCompData: Buffer;
   BodyCompData: Buffer;
-  MetaBuffer: Buffer;
+  MetaData: Buffer;
   MetaHeader: number;
   FileTypeCount: number;
   FileCount: number;
   private StreamReader: Buffer;
   FileTypeData: FileTypeData[];
   SubFileData: SubData[];
-  SubFileStructure: any[];
+  SubFileStructure: SubFileStructure[];
   constructor(buffer: Buffer) {
     this.bufferData = buffer;
     this.Magic = this.readFileMagic(); //0
@@ -163,13 +167,12 @@ export class Fhm2dData {
     // handle meta data
     // decompress first
     const decompressMeata = pako.inflateRaw(new Uint8Array(this.MetaCompData));
-    this.MetaBuffer = Buffer.from(decompressMeata);
+    this.MetaData = Buffer.from(decompressMeata);
     // get meta data info
-    this.MetaHeader = this.MetaBuffer.readUInt32LE(0);
-    this.FileTypeCount = this.MetaBuffer.readUInt32LE(0x18);
-    this.FileCount = this.MetaBuffer.readUInt32LE(0x1c);
-
-    this.StreamReader = this.MetaBuffer;
+    this.MetaHeader = this.MetaData.readUInt32LE(0);
+    this.FileTypeCount = this.MetaData.readUInt32LE(0x18);
+    this.FileCount = this.MetaData.readUInt32LE(0x1c);
+    this.StreamReader = this.MetaData;
     this.FileTypeData = this.createFileTypeDataArray();
 
     // Skip the data, and update StreamReader
@@ -318,7 +321,20 @@ class SubData {
   }
 }
 
-function createSubFileStructure(file: Buffer, _TYPE_: Fhm2dType) {
+interface SubFileStructure {
+  type: "Folder" | "Item" | "EndMark";
+  unk1?: string;
+  folderCount?: number;
+  fileIndex?: number;
+  endMarkCount?: number;
+  unk2?: string;
+  unk3?: number;
+}
+
+function createSubFileStructure(
+  file: Buffer,
+  _TYPE_: Fhm2dType
+): SubFileStructure[] {
   let Items: any = [];
   function loopingData(Data: Buffer, Offset = 0) {
     const TYPE = Data.readInt8(0);

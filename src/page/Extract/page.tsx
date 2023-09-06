@@ -85,12 +85,22 @@ export default function ExtractFilePage() {
     const contents = await bufferReader(file);
 
     const Magic = contents.slice(0, 0x4).toString("hex");
-    let data: Fhm2dData | PS4FhmData | undefined = undefined;
+    let data!: Fhm2dData | PS4FhmData;
     if (Magic.toUpperCase() == "B9B7B2CD") {
       data = new Fhm2dData(contents);
     } else if (Magic.toUpperCase() == "9992CD90") {
       data = new PS4FhmData(contents);
     }
+
+    const outDir = `${form.values.outputFileUrl}\\${file.name.split(".")[0]}`;
+
+    // Create the meta file
+    writeBinaryFile(`${outDir}_meta.bin`, data.MetaData)
+      .then((res) => {})
+      .catch((err) => {
+        console.log("save error", err);
+        showNotification(notificationsType.Warning, "Extract Error");
+      });
     if (data) {
       setfhm2dData(data);
       // Create Preview Json
@@ -133,8 +143,15 @@ export default function ExtractFilePage() {
 
     // Create each sub File
     // Sort The Array first
-    const sortData = fhm2dData.getSortSubFileData();
+    let sortData: any[] = [];
 
+    if (fhm2dData._TYPE_ == Fhm2dType.PS4GundamVersus) {
+      sortData = fhm2dData.getSortSubFileData();
+    } else if (fhm2dData._TYPE_ == Fhm2dType.Xboost) {
+      sortData = fhm2dData.SubFileData;
+    }
+
+    let fileUrl: { fileName: string; fileUrl: string }[] = [];
     sortData.map((e, i) => {
       const outFileName = `${i}${typeList[i]}`;
 
@@ -147,13 +164,17 @@ export default function ExtractFilePage() {
         if (e._isNeedDeComp == false) {
           BufferData = e.CompBufferData[0].CompBufferData;
         } else {
-          e.CompBufferData.map((_e) => {
+          e.CompBufferData.map((_e: any) => {
             const temp = pako.inflateRaw(new Uint8Array(_e.CompBufferData));
             decompressData.push(temp);
           });
           BufferData = Buffer.concat(decompressData);
         }
       }
+      fileUrl.push({
+        fileName: outFileName,
+        fileUrl: `.\\${form.values.inputFileUrl.split(".")[0]}\\${outFileName}`,
+      });
       writeBinaryFile(`${outDir}\\${outFileName}`, BufferData, {})
         .then((res) => {
           setProgressbarValue((prevValue) => ({
@@ -167,12 +188,35 @@ export default function ExtractFilePage() {
           showNotification(notificationsType.Warning, "Extract Error");
         });
     });
+
+    // 处理SubFileStructure ，因为后面打包需要所有文件从0开始排序，所以只能重新排序SubFileStructure
+    // 先储存所有文件的FileIndex，用来做索引
+    let originAllFileIndex: number[] = [];
+    fhm2dData.SubFileData.map((e) => {
+      originAllFileIndex.push(e.FileIndex);
+    });
+
+    // 然后开始进行更改SubFileStructure中的FileIndex
+    fhm2dData.SubFileStructure.map((e) => {
+      if (e.type == "Item") {
+        const index = originAllFileIndex.indexOf(e.fileIndex!);
+        if (index > -1) {
+          e.fileIndex = index;
+        }
+      }
+    });
+
     let outputMeta = {
+      Magic: fhm2dData.MetaHeader,
       SubFileData: fhm2dData.SubFileData.map((e, i) => {
         return {
-          fileName: i,
-          fileIndex: e.FileIndex,
+          id: i, //标识符
+          fileType: typeList[i],
+          fileName: fileUrl[i].fileName,
+          originalFileIndex: e.FileIndex,
+          newFileIndex: i, //分配一个新的
           isNeedComp: e._isNeedDeComp ? true : false,
+          fileUrl: fileUrl[i].fileUrl,
         };
       }),
       SubFileStructure: fhm2dData.SubFileStructure,
