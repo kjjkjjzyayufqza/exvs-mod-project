@@ -7,17 +7,24 @@ import { Command } from "@tauri-apps/api/shell";
 import { open } from "@tauri-apps/api/dialog";
 import { readBinaryFile } from "@tauri-apps/api/fs";
 import Pako from "pako";
+import { invoke } from "@tauri-apps/api/tauri";
+import { Buffer } from "buffer";
 
 export default function MainPage() {
   const dispatch = useAppDispatch();
   const stu = useAppSelector((state) => state.stu);
 
   const save = async () => {
-    await storeConfig.set("config", {
-      inputFileUrl: "a",
-      outputFileUrl: "b",
+    // await storeConfig.set("config", {
+    //   inputFileUrl: "a",
+    //   outputFileUrl: "b",
+    // });
+    // await storeConfig.save();
+
+    await invoke("save_buffer_to_file", {
+      path: "./a.bin",
+      buffer: Array.from(Buffer.alloc(0x1000)),
     });
-    await storeConfig.save();
   };
   const get = async () => {
     const a = await getConfig();
@@ -26,11 +33,11 @@ export default function MainPage() {
   };
 
   const test = async () => {
-    const a = await open({})
-    const b = await readBinaryFile(a as string)
+    const a = await open({});
+    const b = await readBinaryFile(a as string);
     const input = new Uint8Array(b);
     //... fill input data here
-    console.log(b.length)
+    console.log(b.length);
     // const command = new Command("node", ["..\\src\\outSrc\\test.js", `${b.toString()}`]);
     // command.on("close", (data) => {
     //   console.log(

@@ -1,7 +1,7 @@
 // getData.ts
 
 import { writeBinaryFile } from "@tauri-apps/api/fs";
-import { createBinaryFile } from "../../module/fileManager";
+
 
 /* eslint-disable no-restricted-globals */
 

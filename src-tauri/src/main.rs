@@ -7,7 +7,6 @@ mod reader_file;
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>>{
     tauri::Builder::default()
@@ -15,7 +14,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
             greet,
             reader_file::read_binary_file,
             reader_file::save_buffer_to_file,
-            reader_file::decompression_deflate_raw_buffer
+            reader_file::decompression_deflate_raw_buffer,
+            reader_file::create_large_file_and_print_done
         ])
         .plugin(tauri_plugin_store::Builder::default().build())
         .run(tauri::generate_context!())

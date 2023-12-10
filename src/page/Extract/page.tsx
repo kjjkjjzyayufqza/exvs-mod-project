@@ -201,6 +201,7 @@ export default function ExtractFilePage() {
       if (e.type == "Item") {
         const index = originAllFileIndex.indexOf(e.fileIndex!);
         if (index > -1) {
+          e.originalFileIndex = e.fileIndex;
           e.fileIndex = index;
         }
       }
