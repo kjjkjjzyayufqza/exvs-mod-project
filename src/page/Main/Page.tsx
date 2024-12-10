@@ -1,58 +1,53 @@
-import { Button } from "@mantine/core";
+import { Button } from "@/components/ui/button"
 import { useAppSelector, useAppDispatch } from "../../hooks";
 import { changeName } from "../../stateManager/slice/stuSlice";
-import { getConfig, storeConfig } from "../../module/storeConfig";
-import { useEffect } from "react";
-import { Command } from "@tauri-apps/api/shell";
-import { open } from "@tauri-apps/api/dialog";
-import { readBinaryFile } from "@tauri-apps/api/fs";
-import Pako from "pako";
-import { invoke } from "@tauri-apps/api/tauri";
-import { Buffer } from "buffer";
+import { useEffect, useState } from "react";
+import { ask, open } from "@tauri-apps/plugin-dialog";
+import { readFile, writeFile } from "@tauri-apps/plugin-fs";
+import { Resource, invoke } from '@tauri-apps/api/core';
 
 export default function MainPage() {
   const dispatch = useAppDispatch();
   const stu = useAppSelector((state) => state.stu);
 
-  const save = async () => {
-    // await storeConfig.set("config", {
-    //   inputFileUrl: "a",
-    //   outputFileUrl: "b",
-    // });
-    // await storeConfig.save();
-
-    await invoke("save_buffer_to_file", {
-      path: "./a.bin",
-      buffer: Array.from(Buffer.alloc(0x1000)),
-    });
-  };
+  const save = async () => { };
   const get = async () => {
-    const a = await getConfig();
-    // const a = await storeConfig.get("inputFileUrl");
-    console.log(a);
+    const selected = await open({ multiple: false, directory: false });
+    let timeList = []
+    for (let i = 0; i < 1; i++) {
+      console.log(`Test ${i + 1}`); // 输出测试次数
+      const startTime = performance.now();
+      const byte = await readFile(selected as any);
+      const endTime = performance.now();
+      const duration = endTime - startTime; // 计算持续时间
+      timeList.push(duration)
+    }
+    // 计算平均时间
+    const average = timeList.reduce((a, b) => a + b) / timeList.length;
+    console.log(`Average time: ${average.toFixed(2)} ms`); // 输出平均时间
   };
 
-  const test = async () => {
-    const a = await open({});
-    const b = await readBinaryFile(a as string);
-    const input = new Uint8Array(b);
-    //... fill input data here
-    console.log(b.length);
-    // const command = new Command("node", ["..\\src\\outSrc\\test.js", `${b.toString()}`]);
-    // command.on("close", (data) => {
-    //   console.log(
-    //     `command finished with code ${data.code} and signal ${data.signal}`
-    //   );
-    // });
-    // command.on("error", (error) => console.error(`command error: "${error}"`));
-    // command.stdout.on("data", (line) => console.log(line));
-    // command.stderr.on("data", (line) => console.log(line));
+  const invokeTest = async () => {
+    const selected = await open({ multiple: false, directory: false });
+    let timeList = []
+    for (let i = 0; i < 1; i++) {
+      console.log(`Test ${i + 1}`); // 输出测试次数
+      const startTime = performance.now();
+      const content = await invoke("read_file", { path: selected });
+      const endTime = performance.now();
+      const duration = endTime - startTime; // 计算持续时间
+      timeList.push(duration)
+    }
+    // 计算平均时间
+    const average = timeList.reduce((a, b) => a + b) / timeList.length;
+    console.log(`Average time: ${average.toFixed(2)} ms`); // 输出平均时间
+  }
 
-    // const child = await command.spawn();
-    // console.log("pid:", child.pid);
-  };
+  const [file, setFile] = useState<any>(null);
 
-  useEffect(() => {}, []);
+  const test = async () => { };
+
+  useEffect(() => { }, []);
 
   return (
     <div>
@@ -62,8 +57,12 @@ export default function MainPage() {
         <button onClick={() => dispatch(changeName("王武"))}>王武</button>
         <button onClick={() => dispatch(changeName("刘叔"))}>刘叔</button>
       </div>
-      <Button onClick={save}>Save Test</Button>
-      <Button onClick={test}>Test</Button>
+      <Button onClick={save}>
+        Save Test
+      </Button>
+      <Button onClick={get}>Read file test</Button>
+      <Button onClick={invokeTest}>Invoke Test</Button>
+      <>{file}</>
     </div>
   );
 }

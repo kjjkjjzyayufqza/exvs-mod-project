@@ -1,4 +1,4 @@
-import { open } from "@tauri-apps/api/dialog";
+import { open } from '@tauri-apps/plugin-dialog';
 import { useForm } from "@mantine/form";
 import {
   Button,
@@ -15,7 +15,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import { setOutputFileUrl } from "../../stateManager/configStore/configStore";
 import { updateConfig } from "../../module/storeConfig";
-import { bufferReader } from "../../module/reader";
 import { FileWithPath } from "react-dropzone";
 import {
   Fhm2dData,
@@ -24,13 +23,12 @@ import {
   getFileType,
 } from "../../models/fhm2d";
 import {
-  createDir,
+  mkdir,
   exists,
-  writeBinaryFile,
+  writeFile,
   writeTextFile,
-} from "@tauri-apps/api/fs";
+} from "@tauri-apps/plugin-fs";
 import { CusProgressBar } from "../../components/CusProgressBar";
-import { invoke } from "@tauri-apps/api/tauri";
 import {
   notificationsType,
   showNotification,
@@ -64,7 +62,7 @@ export default function ExtractFilePage() {
   //   []
   // );
 
-  const OpenFile = async (file: File) => {
+  const OpenFile = async (file: File | null) => {
     if (file) {
       form.setFieldValue("inputFileUrl", file.name);
       setFileData(file);
@@ -82,8 +80,7 @@ export default function ExtractFilePage() {
   };
 
   const createFileInfo = async (file: FileWithPath) => {
-    const contents = await bufferReader(file);
-
+    const contents:any = null
     const Magic = contents.slice(0, 0x4).toString("hex");
     let data!: Fhm2dData | PS4FhmData;
     if (Magic.toUpperCase() == "B9B7B2CD") {
@@ -95,7 +92,7 @@ export default function ExtractFilePage() {
     const outDir = `${form.values.outputFileUrl}\\${file.name.split(".")[0]}`;
 
     // Create the meta file
-    writeBinaryFile(`${outDir}_meta.bin`, data.MetaData)
+    writeFile(`${outDir}_meta.bin`, data.MetaData)
       .then((res) => {})
       .catch((err) => {
         console.log("save error", err);
@@ -131,7 +128,7 @@ export default function ExtractFilePage() {
 
     const dirExists = await exists(outDir);
     if (!dirExists) {
-      await createDir(outDir, { recursive: true });
+      await mkdir(outDir, { recursive: true });
     }
     // create list to store type
     let typeList: string[] = [];
@@ -175,7 +172,7 @@ export default function ExtractFilePage() {
         fileName: outFileName,
         fileUrl: `.\\${form.values.inputFileUrl.split(".")[0]}\\${outFileName}`,
       });
-      writeBinaryFile(`${outDir}\\${outFileName}`, BufferData, {})
+      writeFile(`${outDir}\\${outFileName}`, BufferData, {})
         .then((res) => {
           setProgressbarValue((prevValue) => ({
             ...prevValue,
@@ -256,7 +253,7 @@ export default function ExtractFilePage() {
                 {...form.getInputProps("inputFileUrl")}
               />
 
-              <Group position="right" mt="md">
+              <Group mt="md">
                 <FileButton onChange={OpenFile}>
                   {(props) => (
                     <Button variant="outline" {...props}>
@@ -274,7 +271,7 @@ export default function ExtractFilePage() {
                 {...form.getInputProps("outputFileUrl")}
               />
 
-              <Group position="right" mt="md">
+              <Group mt="md">
                 <Button variant="outline" onClick={() => OpenPath()}>
                   Select Path
                 </Button>
@@ -300,7 +297,7 @@ export default function ExtractFilePage() {
           </Grid.Col>
           <Grid.Col span={6}>
             <Box>
-              <Text size="sm" weight={500} mt="xl">
+              <Text size="sm" mt="xl">
                 Form values:
               </Text>
               <Code block mt={5}>
@@ -312,7 +309,7 @@ export default function ExtractFilePage() {
               </Code>
             </Box>
             <Box>
-              <Text size="sm" weight={500} mt="xl">
+              <Text size="sm" mt="xl">
                 Data values:
               </Text>
               <Code block mt={5} className="overflow-auto h-auto">

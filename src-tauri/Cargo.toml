@@ -1,26 +1,25 @@
 [package]
-name = "tauri-app"
-version = "0.0.0"
+name = "app"
+version = "0.1.0"
 description = "A Tauri App"
 authors = ["you"]
 license = ""
 repository = ""
 edition = "2021"
+rust-version = "1.70"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "lib"]
+
 [build-dependencies]
-tauri-build = { version = "1.4", features = [] }
+tauri-build = { version = "2.0.3", features = [] }
 
 [dependencies]
-tauri = { version = "1.4", features = [ "shell-all", "window-unminimize", "window-unmaximize", "window-start-dragging", "window-show", "window-minimize", "window-close", "window-hide", "window-maximize", "path-all", "fs-all", "dialog-all"] }
-serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tauri-plugin-store = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
-tokio = { version = "1.32.0", features = ["full"] }
-flate2 = "1.0"
-
-[features]
-# this feature is used for production builds or when `devPath` points to the filesystem
-# DO NOT REMOVE!!
-custom-protocol = ["tauri/custom-protocol"]
+serde = { version = "1.0", features = ["derive"] }
+tauri = { version = "2.1.0", features = [] }
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"

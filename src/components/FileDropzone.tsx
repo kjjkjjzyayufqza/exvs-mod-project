@@ -13,32 +13,43 @@ export const FileDropzone: FC<FileDropzoneModel> = ({ props, fileReturn }) => {
       onDrop={fileReturn}
       onReject={(files) => console.log("rejected files", files)}
       {...props}
+      
     >
       <Group
-        position="center"
-        spacing="xl"
-        style={{ minHeight: rem(220), pointerEvents: "none" }}
+        justify="center"
+        gap="xl"
+        mih={220}
+        style={{ pointerEvents: "none" }}
       >
         <Dropzone.Accept>
           <IconUpload
-            size="3.2rem"
+            style={{
+              width: rem(52),
+              height: rem(52),
+              color: "var(--mantine-color-blue-6)",
+            }}
             stroke={1.5}
-            color={
-              theme.colors[theme.primaryColor][
-                theme.colorScheme === "dark" ? 4 : 6
-              ]
-            }
           />
         </Dropzone.Accept>
         <Dropzone.Reject>
           <IconX
-            size="3.2rem"
+            style={{
+              width: rem(52),
+              height: rem(52),
+              color: "var(--mantine-color-red-6)",
+            }}
             stroke={1.5}
-            color={theme.colors.red[theme.colorScheme === "dark" ? 4 : 6]}
           />
         </Dropzone.Reject>
         <Dropzone.Idle>
-          <IconPhoto size="3.2rem" stroke={1.5} />
+          <IconPhoto
+            style={{
+              width: rem(52),
+              height: rem(52),
+              color: "var(--mantine-color-dimmed)",
+            }}
+            stroke={1.5}
+          />
         </Dropzone.Idle>
 
         <div>

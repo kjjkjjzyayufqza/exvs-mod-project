@@ -243,7 +243,6 @@ class SubData {
   FileSize!: number
   Unk1!: number
   ChunkCount!: number
-  ChunkBinaryCount!: number
   FileIndex!: number
   BufferData!: Buffer
   CompBufferData!: { Size: number; CompBufferData: Buffer }[]

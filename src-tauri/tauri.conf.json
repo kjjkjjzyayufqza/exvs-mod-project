@@ -1,74 +1,38 @@
 {
+  "productName": "tauri-app",
+  "version": "0.1.0",
+  "identifier": "com.tauri.dev",
   "build": {
+    "frontendDist": "./src",
+    "devUrl": "http://localhost:3000",
     "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build",
-    "devPath": "http://localhost:1420",
-    "distDir": "../dist",
-    "withGlobalTauri": false
+    "beforeBuildCommand": "pnpm build"
   },
-  "package": {
-    "productName": "tauri-app",
-    "version": "0.0.0"
-  },
-  "tauri": {
-    "allowlist": {
-      "all": false,
-      "shell": {
-        "all": true,
-        "open": true,
-        "scope": [
-          {
-            "name": "node",
-            "cmd": "node",
-            "args": ["..\\src\\outSrc\\test.js", { "validator": "\\S+" }]
-          }
-        ]
-      },
-      "dialog": {
-        "all": true
-      },
-      "fs": {
-        "all": true,
-        "scope": ["**"]
-      },
-      "path": {
-        "all": true
-      },
-      "window": {
-        "all": false,
-        "close": true,
-        "hide": true,
-        "show": true,
-        "maximize": true,
-        "minimize": true,
-        "unmaximize": true,
-        "unminimize": true,
-        "startDragging": true
+  "app": {
+    "windows": [
+      {
+        "title": "tauri-app",
+        "width": 1500,
+        "height": 600,
+        "resizable": true,
+        "fullscreen": false
       }
-    },
-    "bundle": {
-      "active": true,
-      "targets": "all",
-      "identifier": "com.moovooTauri.dev",
-      "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ]
-    },
+    ],
     "security": {
       "csp": null
     },
-    "windows": [
-      {
-        "fullscreen": false,
-        "resizable": true,
-        "title": "tauri-app",
-        "width": 1280,
-        "height": 720
-      }
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
     ]
-  }
+  },
+  "$schema": "../node_modules/@tauri-apps/cli/schema.json"
 }

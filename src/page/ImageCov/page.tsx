@@ -1,4 +1,3 @@
-import { Button, Card, CardBody, Container } from "@chakra-ui/react";
 import {
   FC,
   ReactNode,
@@ -10,6 +9,7 @@ import {
 import { useDropzone } from "react-dropzone";
 import Buffer from "buffer";
 import { NutexbCard } from "./NutexbCard";
+import { Button, Container } from "@mantine/core";
 
 const baseStyle = {
   flex: 1,
