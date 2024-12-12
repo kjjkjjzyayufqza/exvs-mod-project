@@ -1,20 +1,6 @@
 import { open } from '@tauri-apps/plugin-dialog';
-import { useForm } from "@mantine/form";
-import {
-  Button,
-  TextInput,
-  Code,
-  Text,
-  Box,
-  Grid,
-  Group,
-  FileButton,
-} from "@mantine/core";
-import ReactJson from "react-json-view";
-import { useEffect, useMemo, useState } from "react";
-import { useAppDispatch, useAppSelector } from "../../hooks";
-import { setOutputFileUrl } from "../../stateManager/configStore/configStore";
-import { updateConfig } from "../../module/storeConfig";
+import { useEffect, useState } from "react";
+import JsonView from '@uiw/react-json-view';
 import { FileWithPath } from "react-dropzone";
 import {
   Fhm2dData,
@@ -28,13 +14,9 @@ import {
   writeFile,
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
-import { CusProgressBar } from "../../components/CusProgressBar";
-import {
-  notificationsType,
-  showNotification,
-} from "../../module/notifications";
 import { Buffer } from "buffer";
 import pako from "pako";
+import Container from '../../layout/Container';
 
 interface FromModel {
   inputFileUrl: string;
@@ -42,8 +24,6 @@ interface FromModel {
 }
 
 export default function ExtractFilePage() {
-  const dispatch = useAppDispatch();
-  const config = useAppSelector((state) => state.configStore);
   const [fileData, setFileData] = useState<FileWithPath>();
   const [fhm2dData, setfhm2dData] = useState<PS4FhmData | Fhm2dData>(null!);
   const [progressbarValue, setProgressbarValue] = useState<{
@@ -57,14 +37,8 @@ export default function ExtractFilePage() {
   });
   const [previewData, setPreviewData] = useState<Object>({});
 
-  // const counter: Worker = useMemo(
-  //   () => new Worker(new URL("count.ts", import.meta.url), { type: "module" }),
-  //   []
-  // );
-
   const OpenFile = async (file: File | null) => {
     if (file) {
-      form.setFieldValue("inputFileUrl", file.name);
       setFileData(file);
       createFileInfo(file);
     }
@@ -73,14 +47,11 @@ export default function ExtractFilePage() {
   const OpenPath = async () => {
     const path = await open({ directory: true });
     if (path) {
-      form.setFieldValue("outputFileUrl", path as string);
-      dispatch(setOutputFileUrl(path as string));
-      dispatch(updateConfig({ key: "outputFileUrl", value: path }));
     }
   };
 
   const createFileInfo = async (file: FileWithPath) => {
-    const contents:any = null
+    const contents: any = null
     const Magic = contents.slice(0, 0x4).toString("hex");
     let data!: Fhm2dData | PS4FhmData;
     if (Magic.toUpperCase() == "B9B7B2CD") {
@@ -89,14 +60,13 @@ export default function ExtractFilePage() {
       data = new PS4FhmData(contents);
     }
 
-    const outDir = `${form.values.outputFileUrl}\\${file.name.split(".")[0]}`;
+    const outDir = ``;
 
     // Create the meta file
     writeFile(`${outDir}_meta.bin`, data.MetaData)
-      .then((res) => {})
+      .then((res) => { })
       .catch((err) => {
         console.log("save error", err);
-        showNotification(notificationsType.Warning, "Extract Error");
       });
     if (data) {
       setfhm2dData(data);
@@ -119,12 +89,8 @@ export default function ExtractFilePage() {
   };
 
   const startExtractFile = async () => {
-    const outDir = `${form.values.outputFileUrl}\\${
-      form.values.inputFileUrl.split(".")[0]
-    }`;
-    const jsonDir = `${form.values.outputFileUrl}\\${
-      form.values.inputFileUrl.split(".")[0]
-    }.json`;
+    const outDir = ''
+    const jsonDir = ''
 
     const dirExists = await exists(outDir);
     if (!dirExists) {
@@ -170,7 +136,7 @@ export default function ExtractFilePage() {
       }
       fileUrl.push({
         fileName: outFileName,
-        fileUrl: `.\\${form.values.inputFileUrl.split(".")[0]}\\${outFileName}`,
+        fileUrl: ''
       });
       writeFile(`${outDir}\\${outFileName}`, BufferData, {})
         .then((res) => {
@@ -182,7 +148,6 @@ export default function ExtractFilePage() {
         })
         .catch((err) => {
           console.log("save error", err);
-          showNotification(notificationsType.Warning, "Extract Error");
         });
     });
 
@@ -221,14 +186,13 @@ export default function ExtractFilePage() {
     };
     writeTextFile(`${jsonDir}`, JSON.stringify(outputMeta), {})
       .then((res) => {
-        showNotification(notificationsType.Success);
       })
       .catch((err) => {
         console.log("save error", err);
       });
   };
 
-  const form = useForm<FromModel>({
+  const [form, setForm] = useState({
     initialValues: {
       inputFileUrl: "",
       outputFileUrl: "",
@@ -236,93 +200,17 @@ export default function ExtractFilePage() {
   });
 
   useEffect(() => {
-    // form.setFieldValue("inputFileUrl", config.inputFileUrl);
-    form.setFieldValue("outputFileUrl", config.outputFileUrl);
-  }, [config]);
+  }, []);
 
   return (
-    <div>
+    <Container>
       <h1>Extract .FHM2D</h1>
       <div className="p-5">
-        <Grid>
-          <Grid.Col span={6}>
-            <Box>
-              <TextInput
-                label="Input File Url"
-                placeholder="inputFileUrl"
-                {...form.getInputProps("inputFileUrl")}
-              />
-
-              <Group mt="md">
-                <FileButton onChange={OpenFile}>
-                  {(props) => (
-                    <Button variant="outline" {...props}>
-                      Select File
-                    </Button>
-                  )}
-                </FileButton>
-              </Group>
-            </Box>
-            <Box>
-              <TextInput
-                label="Output File Url"
-                placeholder="outputFileUrl"
-                mt="md"
-                {...form.getInputProps("outputFileUrl")}
-              />
-
-              <Group mt="md">
-                <Button variant="outline" onClick={() => OpenPath()}>
-                  Select Path
-                </Button>
-              </Group>
-            </Box>
-            <Group>
-              <Button
-                disabled={form.values.inputFileUrl == ""}
-                onClick={async () => {
-                  await startExtractFile();
-                }}
-              >
-                Extract
-              </Button>
-            </Group>
-            <Box mt={10}>
-              <CusProgressBar
-                value={progressbarValue.value}
-                min={progressbarValue.min}
-                max={progressbarValue.max}
-              />
-            </Box>
-          </Grid.Col>
-          <Grid.Col span={6}>
-            <Box>
-              <Text size="sm" mt="xl">
-                Form values:
-              </Text>
-              <Code block mt={5}>
-                <ReactJson
-                  src={form.values}
-                  displayDataTypes={false}
-                  name={null}
-                />
-              </Code>
-            </Box>
-            <Box>
-              <Text size="sm" mt="xl">
-                Data values:
-              </Text>
-              <Code block mt={5} className="overflow-auto h-auto">
-                <ReactJson
-                  src={previewData}
-                  displayDataTypes={false}
-                  name={null}
-                />
-              </Code>
-            </Box>
-          </Grid.Col>
-        </Grid>
+        <JsonView
+          value={previewData}
+          displayDataTypes={false}
+        />
       </div>
-    </div>
+    </Container>
   );
 }

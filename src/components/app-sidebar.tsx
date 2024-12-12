@@ -10,47 +10,17 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { Link } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
 import MainPage from "../page/Main/page"
 import ExtractFilePage from "../page/Extract/page"
 import DDSConversion from "../page/ImageCov/page"
 import FileEdit from "../page/FIleEdit/page"
-
-// Menu items.
-export const RouterItems = [
-    {
-        title: "Home",
-        url: "/",
-        icon: Home,
-        element: <MainPage />
-    },
-    {
-        title: "Extract",
-        url: "/Extract",
-        icon: Home,
-        element: <ExtractFilePage />
-    },
-    {
-        title: "Repack",
-        url: "/Repack",
-        icon: Home,
-        element: <MainPage />
-    },
-    {
-        url: "/DDSConversion",
-        title: "DDSConversion",
-        icon: Home,
-        element: <DDSConversion />
-    },
-    {
-        title: "FileEdit",
-        url: "/FileEdit",
-        icon: Home,
-        element: <FileEdit />
-    },
-]
+import { useEffect, useState } from "react"
+import { RouterItems } from "../router/router"
 
 export function AppSidebar() {
+    let location = useLocation()
+
     return (
         <Sidebar>
             <SidebarContent>

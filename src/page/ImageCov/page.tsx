@@ -9,7 +9,6 @@ import {
 import { useDropzone } from "react-dropzone";
 import Buffer from "buffer";
 import { NutexbCard } from "./NutexbCard";
-import { Button, Container } from "@mantine/core";
 
 const baseStyle = {
   flex: 1,
@@ -67,7 +66,7 @@ export default function DDSConversion() {
   useEffect(() => {}, []);
 
   return (
-    <Container className="justify-between items-center flex flex-col p-24">
+    <div className="justify-between items-center flex flex-col p-24">
       <div></div>
 
       <div className="container gap-5">
@@ -83,9 +82,8 @@ export default function DDSConversion() {
           </div>
           <div className="pt-3 grid gap-4">{nutexbCardList}</div>
         </div>
-        <Button>Cov</Button>
       </div>
       <div></div>
-    </Container>
+    </div>
   );
 }

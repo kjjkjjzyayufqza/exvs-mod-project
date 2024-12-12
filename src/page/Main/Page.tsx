@@ -1,15 +1,12 @@
 import { Button } from "@/components/ui/button"
-import { useAppSelector, useAppDispatch } from "../../hooks";
-import { changeName } from "../../stateManager/slice/stuSlice";
 import { useEffect, useState } from "react";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { Resource, invoke } from '@tauri-apps/api/core';
+import { useCounterStore } from "../../store/configStore";
 
 export default function MainPage() {
-  const dispatch = useAppDispatch();
-  const stu = useAppSelector((state) => state.stu);
-
+  const { count, increment, decrement } = useCounterStore();
   const save = async () => { };
   const get = async () => {
     const selected = await open({ multiple: false, directory: false });
@@ -45,17 +42,15 @@ export default function MainPage() {
 
   const [file, setFile] = useState<any>(null);
 
-  const test = async () => { };
-
   useEffect(() => { }, []);
 
   return (
     <div>
       Hello World
       <div>
-        <div>我叫{stu.name}</div>
-        <button onClick={() => dispatch(changeName("王武"))}>王武</button>
-        <button onClick={() => dispatch(changeName("刘叔"))}>刘叔</button>
+        <div>Count: {count}</div>
+        <Button onClick={() => { increment() }}>increment</Button>
+        <Button onClick={() => { decrement() }}>decrement</Button>
       </div>
       <Button onClick={save}>
         Save Test

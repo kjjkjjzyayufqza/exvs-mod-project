@@ -3,7 +3,6 @@ import { Buffer } from "buffer";
 import { writeFile, BaseDirectory } from "@tauri-apps/plugin-fs";
 import { NUTEXImageFormat, NutexbFileModel } from "../../models/nutexb";
 import { ConvertFormat, DDSFormat } from "../../models/dds";
-import { Card } from "@mantine/core";
 
 export const NutexbCard: FC<{ file: File }> = ({ file }) => {
   if (!file) {
@@ -101,8 +100,8 @@ export const NutexbCard: FC<{ file: File }> = ({ file }) => {
   };
 
   return (
-    <Card>
+    <div>
       {file.name} - {file.size} bytes
-    </Card>
+    </div>
   );
 };

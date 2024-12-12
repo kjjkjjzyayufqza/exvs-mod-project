@@ -1,6 +1,5 @@
 import { Buffer } from 'buffer'
 import { ErrorMessage } from './error'
-import { notificationsType, showNotification } from '../module/notifications'
 import pako from 'pako'
 
 export enum Fhm2dType {
@@ -87,7 +86,7 @@ export class PS4FhmData {
   readFileMagic () {
     const Magic = this.bufferData.slice(0, 0x4).toString('hex')
     if (Magic.toUpperCase() != '9992CD90') {
-      showNotification(notificationsType.Warning, ErrorMessage.magicIncorrect)
+      // showNotification(notificationsType.Warning, ErrorMessage.magicIncorrect)
       throw new Error(ErrorMessage.magicIncorrect)
     } else {
       return Magic
@@ -186,7 +185,7 @@ export class Fhm2dData {
   readFileMagic () {
     const Magic = this.bufferData.slice(0, 0x4).toString('hex')
     if (Magic.toUpperCase() != 'B9B7B2CD') {
-      showNotification(notificationsType.Warning, ErrorMessage.magicIncorrect)
+      // showNotification(notificationsType.Warning, ErrorMessage.magicIncorrect)
       throw new Error(ErrorMessage.magicIncorrect)
     } else {
       return Magic

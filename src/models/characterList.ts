@@ -1,6 +1,5 @@
 import { Buffer } from "buffer";
 import { CommandsData } from "./commandsData";
-import { notificationsType, showNotification } from "../module/notifications";
 import { ErrorMessage } from "./error";
 import { BaseDirectory, writeFile } from "@tauri-apps/plugin-fs";
 
@@ -48,7 +47,7 @@ export class CharacterList {
   readFileMagic(): string {
     const Magic = this.bufferData.slice(0, 0x4).toString("hex");
     if (Magic.toUpperCase() != "A9B8ABCD") {
-      showNotification(notificationsType.Warning, ErrorMessage.magicIncorrect);
+      // showNotification(notificationsType.Warning, ErrorMessage.magicIncorrect);
       throw new Error(ErrorMessage.magicIncorrect);
     } else {
       return Magic;
