@@ -3,11 +3,12 @@ import { useEffect, useState } from "react";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { Resource, invoke } from '@tauri-apps/api/core';
-import { useCounterStore } from "../../store/configStore";
+import Container from "../../layout/Container";
+import { useConfigStore } from "../../store/configStore";
+import JsonView from "@uiw/react-json-view";
 
 export default function MainPage() {
-  const { count, increment, decrement } = useCounterStore();
-  const save = async () => { };
+  const { store } = useConfigStore();
   const get = async () => {
     const selected = await open({ multiple: false, directory: false });
     let timeList = []
@@ -40,24 +41,31 @@ export default function MainPage() {
     console.log(`Average time: ${average.toFixed(2)} ms`); // 输出平均时间
   }
 
-  const [file, setFile] = useState<any>(null);
+  const [savedConfig, setSavedConfig] = useState<any>({});
+  const getConfig = async () => {
+    const data = await store?.entries();
+    setSavedConfig(data ?? {})
+  }
 
-  useEffect(() => { }, []);
+
+  useEffect(() => {
+    getConfig()
+  }, []);
 
   return (
-    <div>
+    <Container>
       Hello World
       <div>
-        <div>Count: {count}</div>
-        <Button onClick={() => { increment() }}>increment</Button>
-        <Button onClick={() => { decrement() }}>decrement</Button>
+        <JsonView
+          value={savedConfig}
+          displayDataTypes={false}
+        />
       </div>
-      <Button onClick={save}>
+      <Button>
         Save Test
       </Button>
       <Button onClick={get}>Read file test</Button>
       <Button onClick={invokeTest}>Invoke Test</Button>
-      <>{file}</>
-    </div>
+    </Container>
   );
 }

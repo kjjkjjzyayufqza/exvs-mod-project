@@ -19,8 +19,6 @@ import { useEffect, useState } from "react"
 import { RouterItems } from "../router/router"
 
 export function AppSidebar() {
-    let location = useLocation()
-
     return (
         <Sidebar>
             <SidebarContent>

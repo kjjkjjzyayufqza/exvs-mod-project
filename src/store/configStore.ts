@@ -1,13 +1,15 @@
 import { create } from "zustand";
+import { Store } from "@tauri-apps/plugin-store";
+import { ConfigState } from "../models/conifgStoreModel";
 
-interface CounterState {
-  count: number;
-  increment: () => void;
-  decrement: () => void;
-}
+export const useConfigStore = create<ConfigState>((set) => ({
+  store: null,
+  initStore: async () => {
+    //init the tauri store
+    const _store = await Store.load("settings.json");
+    set({ store: _store });
 
-export const useCounterStore = create<CounterState>((set) => ({
-  count: 0,
-  increment: () => set((state) => ({ count: state.count + 1 })),
-  decrement: () => set((state) => ({ count: state.count - 1 })),
+    //debug
+    _store.set("test", "test");
+  },
 }));
