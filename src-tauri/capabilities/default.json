@@ -9,12 +9,29 @@
     "core:default",
     "fs:default",
     "fs:allow-write-file",
+    "dialog:default",
     "store:default",
+    "shell:allow-execute",
     {
       "identifier": "fs:allow-exists",
       "allow": [
         {
           "path": "*/**"
+        }
+      ]
+    },
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "exec-sh",
+          "cmd": "sh",
+          "args": [
+            "-c",
+            {
+              "validator": "\\S+"
+            }
+          ]
         }
       ]
     }

@@ -1,0 +1,142 @@
+import { FileEdit, FolderOpen } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useState, useEffect } from "react";
+import { FileDialog } from './FileDialog';
+import { readDir } from "@tauri-apps/plugin-fs";
+import { FileInfo } from "../../../store/numatbStore";
+
+interface FileListProps {
+  files: FileInfo[];
+  isLoading: boolean;
+  folderPath: string;
+  onFileSelect: (file: FileInfo) => void;
+  resetConversion: () => void;
+}
+
+const FILE_TYPES = [
+  { value: "all", label: "All Files" },
+  { value: "numatb", label: ".numatb" },
+  { value: "nutexb", label: ".nutexb" },
+  { value: "numdlb", label: ".numdlb" },
+  { value: "numshb", label: ".numshb" }
+];
+
+export function FileList({ files, isLoading, folderPath, onFileSelect, resetConversion }: FileListProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [fileType, setFileType] = useState("all");
+  const [localFiles, setLocalFiles] = useState<FileInfo[]>(files);
+  
+  useEffect(() => {
+    setLocalFiles(files);
+  }, [files]);
+
+  const handleSearch = async (query: string, type: string = fileType) => {
+    setSearchQuery(query);
+    
+    if (!folderPath) return;
+
+    try {
+      const entries = await readDir(folderPath);
+      const filteredEntries = entries
+        .filter((entry) => {
+          const matchesSearch = entry.name?.toLowerCase().includes(query.toLowerCase());
+          const matchesType = type === "all" || entry.name?.endsWith(`.${type}`);
+          return entry.isFile && matchesSearch && matchesType;
+        })
+        .map(entry => ({
+          name: entry.name || "",
+          path: folderPath + "/" + entry.name
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+      setLocalFiles(filteredEntries);
+    } catch (error) {
+      console.error("Error reading directory:", error);
+    }
+  };
+
+  const handleFileTypeChange = (type: string) => {
+    setFileType(type);
+    handleSearch(searchQuery, type);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-32 text-gray-500">
+        Loading files...
+      </div>
+    );
+  }
+
+  if (files.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-32 text-gray-500">
+        <FolderOpen className="h-8 w-8 mb-2 opacity-50" />
+        {folderPath ? 'No files found in this folder' : 'Select a folder to view files'}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <Input
+          placeholder="Search files..."
+          value={searchQuery}
+          onChange={(e) => handleSearch(e.target.value)}
+          className="flex-1"
+        />
+        <Select value={fileType} onValueChange={handleFileTypeChange}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="File type" />
+          </SelectTrigger>
+          <SelectContent>
+            {FILE_TYPES.map(type => (
+              <SelectItem key={type.value} value={type.value}>
+                {type.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2 overflow-auto max-h-[60vh]">
+        {localFiles.map((file: FileInfo, index: number) => (
+          <div
+            key={index}
+            className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-md transition-colors border"
+          >
+            <div className="flex items-center space-x-3">
+              <FileEdit className="h-4 w-4 text-gray-500" />
+              <span className="truncate">{file.name}</span>
+            </div>
+            {file.name.endsWith('.numatb') && (
+              <Dialog onOpenChange={(open) => !open && resetConversion()}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="hover:bg-gray-100"
+                    onClick={() => onFileSelect(file)}
+                  >
+                    Edit
+                  </Button>
+                </DialogTrigger>
+                <DialogContent  className="sm:max-w-[725px] max-h-[80vh] overflow-y-auto">
+                  <FileDialog file={file} />
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

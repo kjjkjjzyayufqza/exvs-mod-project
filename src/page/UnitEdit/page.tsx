@@ -5,10 +5,10 @@ import { exists, BaseDirectory, readFile, writeFile } from "@tauri-apps/plugin-f
 import { CharacterList } from "../../models/characterList";
 import { Buffer } from "buffer";
 import _ from "lodash";
-export default function FileEdit() {
+export default function UnitEdit() {
   const handleFile = async () => {
     const file = await open({});
-    const fileData = await readFile(file?.path as string);
+    const fileData = await readFile(file as string);
     const data = new CharacterList(Buffer.from(fileData));
     // setCharacterListData(data);
 
