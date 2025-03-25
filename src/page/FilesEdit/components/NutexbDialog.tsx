@@ -1,6 +1,8 @@
 import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,12 +17,12 @@ interface NutexbDialogProps {
 export function NutexbDialog({ file }: NutexbDialogProps) {
   const [imageData, setImageData] = useState<string | null>(null);
   const store = useNutexbStore();
-  const { 
-    nutexbData, 
-    isConverting, 
-    error, 
-    previewImagePath, 
-    selectedFormat, 
+  const {
+    nutexbData,
+    isConverting,
+    error,
+    previewImagePath,
+    selectedFormat,
     hasMipmaps,
     setSelectedFormat,
     setHasMipmaps,
@@ -32,14 +34,14 @@ export function NutexbDialog({ file }: NutexbDialogProps) {
     if (nutexbData) {
       setSelectedFormat(nutexbData.imageFormat.replace(/"/g, '') as ImageFormat);
       setHasMipmaps((nutexbData.footer.mipmap_count || 0) > 1);
-      
+
       // Load image data if preview path is available
       if (previewImagePath) {
         loadImageData(previewImagePath);
       }
     }
   }, [nutexbData, previewImagePath, setSelectedFormat, setHasMipmaps]);
-  
+
   // Function to load image data using Tauri's filesystem API
   const loadImageData = async (imagePath: string) => {
     try {
@@ -87,7 +89,7 @@ export function NutexbDialog({ file }: NutexbDialogProps) {
 
   if (nutexbData && previewImagePath) {
     const { footer } = nutexbData;
-    
+
     return (
       <>
         <DialogHeader>
@@ -126,28 +128,87 @@ export function NutexbDialog({ file }: NutexbDialogProps) {
             </div>
           </Card>
 
-          {/* Image preview */}
-          <div className="flex justify-center my-6">
-            {imageData ? (
-              <img 
-                src={imageData} 
-                alt="Texture preview" 
-                className="max-w-full max-h-[300px] object-contain border rounded-md shadow-sm"
-              />
-            ) : (
-              <div className="flex items-center justify-center h-[300px] w-full border rounded-md shadow-sm bg-gray-50">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                <span className="ml-3">Loading image...</span>
-              </div>
-            )}
+          {/* Image preview with zoom/pan */}
+          <div className="my-6">
+            <Card className="overflow-hidden [transform-style:preserve-3d] min-h-[400px]" style={{ willChange: 'transform' }}>
+              <AspectRatio ratio={1} className="bg-muted [backface-visibility:hidden] flex items-center justify-center">
+                {imageData ? (
+                  <TransformWrapper
+                    initialScale={0.8}
+                    minScale={0.5}
+                    maxScale={4}
+                    centerOnInit
+                    smooth
+                    doubleClick={{ disabled: false }}
+                    limitToBounds={false}
+                    wheel={{ step: 0.05 }}
+                  >
+                    {({ zoomIn, zoomOut, resetTransform }) => (
+                      <>
+                        <TransformComponent
+                          wrapperClass="!w-full [transform-style:preserve-3d] flex items-center justify-center"
+                          contentClass="!w-full [backface-visibility:hidden] flex items-center justify-center"
+                          wrapperStyle={{ willChange: 'transform', height: '100%' }}
+                        >
+                          <img
+                            src={imageData}
+                            alt="Texture preview"
+                            className="w-full h-full object-contain [image-rendering:optimizeSpeed] [transform:translateZ(0)] mx-auto"
+                            style={{
+                              imageRendering: '-webkit-optimize-contrast',
+                              backfaceVisibility: 'hidden',
+                              perspective: 1000,
+                              transform: 'translate3d(0,0,0)',
+                              display: 'block',
+                              margin: 'auto'
+                            }}
+                          />
+                        </TransformComponent>
+                        <div className="absolute bottom-4 right-4 flex gap-2">
+                          <Button
+                            variant="secondary"
+                            size="icon"
+                            onClick={() => zoomIn()}
+                            className="h-8 w-8 rounded-full bg-white/80 hover:bg-white/90"
+                          >
+                            +
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="icon"
+                            onClick={() => zoomOut()}
+                            className="h-8 w-8 rounded-full bg-white/80 hover:bg-white/90"
+                          >
+                            -
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="icon"
+                            onClick={() => resetTransform()}
+                            className="h-8 w-8 rounded-full bg-white/80 hover:bg-white/90"
+                          >
+                            ↺
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </TransformWrapper>
+                ) : (
+                  <div className="flex items-center justify-center h-full w-full bg-gray-50">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                    <span className="ml-3">Loading image...</span>
+                  </div>
+                )}
+              </AspectRatio>
+            </Card>
           </div>
 
           {/* Format selection and options */}
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="format-select">Image Format</Label>
-              <Select 
-                value={selectedFormat} 
+              <Select
+                value={selectedFormat}
                 onValueChange={(value) => setSelectedFormat(value as ImageFormat)}
               >
                 <SelectTrigger id="format-select">
@@ -179,8 +240,8 @@ export function NutexbDialog({ file }: NutexbDialogProps) {
             </div>
 
             <div className="flex items-center space-x-2">
-              <Checkbox 
-                id="mipmaps" 
+              <Checkbox
+                id="mipmaps"
                 checked={hasMipmaps}
                 onCheckedChange={(checked) => setHasMipmaps(checked === true)}
               />
@@ -189,8 +250,8 @@ export function NutexbDialog({ file }: NutexbDialogProps) {
           </div>
 
           {/* Replace button */}
-          <Button 
-            className="w-full" 
+          <Button
+            className="w-full"
             onClick={replaceTexture}
           >
             Replace Texture

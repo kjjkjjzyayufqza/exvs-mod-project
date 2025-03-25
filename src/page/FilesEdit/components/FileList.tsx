@@ -130,7 +130,7 @@ export function FileList({ files, isLoading, folderPath, onFileSelect, resetConv
                     Edit
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[725px] max-h-[80vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-[1000px] max-h-[80vh] overflow-y-auto">
                   {file.name.endsWith('.numatb') && <FileDialog file={file} />}
                   {file.name.endsWith('.nutexb') && <NutexbDialog file={file} />}
                 </DialogContent>
