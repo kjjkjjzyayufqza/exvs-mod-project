@@ -6,14 +6,31 @@ import { FolderOpen } from "lucide-react";
 import { readDir } from "@tauri-apps/plugin-fs";
 import { FileList } from "./components/FileList";
 import { FileInfo, useNumatbStore } from "../../store/numatbStore";
+import { useNutexbStore } from "../../store/nutexbStore";
 
 export default function FilesEdit() {
   const [folderPath, setFolderPath] = useState("");
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const convertFile = useNumatbStore((e) => e.convertFile);
-  const resetConversion = useNumatbStore((e) => e.resetConversion);
+  const convertNumatbFile = useNumatbStore((e) => e.convertFile);
+  const resetNumatbConversion = useNumatbStore((e) => e.resetConversion);
+  
+  const convertNutexbFile = useNutexbStore((e) => e.convertFile);
+  const resetNutexbConversion = useNutexbStore((e) => e.resetConversion);
+  
+  const convertFile = (file: FileInfo) => {
+    if (file.name.endsWith('.numatb')) {
+      convertNumatbFile(file);
+    } else if (file.name.endsWith('.nutexb')) {
+      convertNutexbFile(file);
+    }
+  };
+  
+  const resetConversion = () => {
+    resetNumatbConversion();
+    resetNutexbConversion();
+  };
 
   const handleFolderSelect = async () => {
     const selected = await open({

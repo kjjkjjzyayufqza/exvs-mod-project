@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { useState, useEffect } from "react";
 import { FileDialog } from './FileDialog';
+import { NutexbDialog } from './NutexbDialog';
 import { readDir } from "@tauri-apps/plugin-fs";
 import { FileInfo } from "../../../store/numatbStore";
 
@@ -117,7 +118,7 @@ export function FileList({ files, isLoading, folderPath, onFileSelect, resetConv
               <FileEdit className="h-4 w-4 text-gray-500" />
               <span className="truncate">{file.name}</span>
             </div>
-            {file.name.endsWith('.numatb') && (
+            {(file.name.endsWith('.numatb') || file.name.endsWith('.nutexb')) && (
               <Dialog onOpenChange={(open) => !open && resetConversion()}>
                 <DialogTrigger asChild>
                   <Button
@@ -129,8 +130,9 @@ export function FileList({ files, isLoading, folderPath, onFileSelect, resetConv
                     Edit
                   </Button>
                 </DialogTrigger>
-                <DialogContent  className="sm:max-w-[725px] max-h-[80vh] overflow-y-auto">
-                  <FileDialog file={file} />
+                <DialogContent className="sm:max-w-[725px] max-h-[80vh] overflow-y-auto">
+                  {file.name.endsWith('.numatb') && <FileDialog file={file} />}
+                  {file.name.endsWith('.nutexb') && <NutexbDialog file={file} />}
                 </DialogContent>
               </Dialog>
             )}
