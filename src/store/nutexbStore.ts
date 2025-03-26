@@ -230,20 +230,19 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
       // Get the directory of the original nutexb file
       const fileDir = await dirname(selectedFile.path);
       const nutexbData = get().nutexbData;
-      
       if (!nutexbData) {
         throw new Error("No nutexb data available");
       }
 
       // Construct the output path to overwrite the original file
       const outputPath = selectedFile.path;
-      
+      console.log("nutexbData.footer.string:", nutexbData.footer.string);
       // Build command with format and mipmaps options
-      let command = `${toolPath} ${imageFile} ${outputPath} --format ${selectedFormat}`;
+      let command = `${toolPath} ${imageFile} ${outputPath} --format ${selectedFormat} --nutexb-name=${nutexbData.footer.string}`;
       if (!hasMipmaps) {
         command += " --no-mipmaps";
       }
-      
+      console.log("Command:", command);
       // Execute command
       const result = await invoke('exec_shell_command', { command });
       if (typeof result === 'string') {
