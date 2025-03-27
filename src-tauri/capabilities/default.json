@@ -9,6 +9,12 @@
     "core:default",
     "fs:default",
     "fs:allow-write-file",
+    "fs:allow-read-text-file",
+    "fs:allow-resource-read-recursive",
+    {
+      "identifier": "fs:scope",
+      "allow": [{ "path": "*/**" }]
+    },
     "dialog:default",
     "store:default",
     "shell:allow-execute",

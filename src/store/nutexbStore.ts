@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { invoke } from "@tauri-apps/api/core";
-import { exists, readTextFile } from "@tauri-apps/plugin-fs";
-import { resourceDir } from "@tauri-apps/api/path";
+import { exists, mkdir, readTextFile } from "@tauri-apps/plugin-fs";
+import { resourceDir, dirname, basename, join } from "@tauri-apps/api/path";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { dirname, basename } from "@tauri-apps/api/path";
+
+const CONVERT_DIR_NAME = ".\\__convert";
 
 export interface FileInfo {
   name: string;
@@ -113,9 +114,22 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
         throw new Error(`Tool not found: ${toolPath}`);
       }
 
-      // Prepare output file path
+      // Prepare output directory and file path
+      const dirPath = await dirname(file.path);
+      const convertDirPath = await join(dirPath, CONVERT_DIR_NAME);
+      
+      // Create convert directory if it doesn't exist
+      const convertExists = await exists(convertDirPath);
+      if (!convertExists) {
+        try {
+          await mkdir(convertDirPath, { recursive: true });
+        } catch (error) {
+          throw new Error(`Failed to create convert directory: ${error}`);
+        }
+      }
+      
       const outputFileName = file.name.replace('.nutexb', '_convert.png');
-      const outputPath = file.path.replace(file.name, outputFileName);
+      const outputPath = await join(convertDirPath, outputFileName);
       
       // Execute command
       const commandPromise = invoke('exec_shell_command', { 
@@ -163,7 +177,7 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
         if (!outputExists) {
           throw new Error("Output PNG file not found after command execution");
         }
-        
+        console.log("Output Path:", outputPath);
         set({ 
           nutexbData: { 
             footer: nutexbInfo as NutexbFooter,
