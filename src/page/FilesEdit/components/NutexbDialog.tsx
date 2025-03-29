@@ -97,18 +97,14 @@ export function NutexbDialog({ file }: NutexbDialogProps) {
         </DialogHeader>
         <div className="space-y-6">
           {/* Metadata section */}
-          <Card className="p-4 grid grid-cols-2 gap-2">
-            <div className="space-y-1">
+          <Card className="p-4 grid grid-cols-5">
+            <div className="space-y-1 col-span-5">
               <Label className="text-xs text-gray-500">Name</Label>
               <p className="font-medium">{footer.string}</p>
             </div>
             <div className="space-y-1">
               <Label className="text-xs text-gray-500">Dimensions</Label>
               <p className="font-medium">{footer.width}x{footer.height}x{footer.depth}</p>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-gray-500">Format</Label>
-              <p className="font-medium">{footer.image_format}</p>
             </div>
             <div className="space-y-1">
               <Label className="text-xs text-gray-500">Image Format</Label>
@@ -122,7 +118,7 @@ export function NutexbDialog({ file }: NutexbDialogProps) {
               <Label className="text-xs text-gray-500">Layer Count</Label>
               <p className="font-medium">{footer.layer_count}</p>
             </div>
-            <div className="space-y-1 col-span-2">
+            <div className="space-y-1">
               <Label className="text-xs text-gray-500">Data Size</Label>
               <p className="font-medium">{footer.data_size} bytes</p>
             </div>

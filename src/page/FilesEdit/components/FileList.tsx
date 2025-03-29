@@ -12,9 +12,11 @@ import {
 import { useState, useEffect } from "react";
 import { FileDialog } from './FileDialog';
 import { NutexbDialog } from './NutexbDialog';
+import { FileInfo as NumatbFileInfo } from "../../../store/numatbStore";
+import { FileInfo as NutexbFileInfo, useNutexbStore } from "../../../store/nutexbStore";
 import { readDir } from "@tauri-apps/plugin-fs";
-import { FileInfo } from "../../../store/numatbStore";
 
+type FileInfo = NumatbFileInfo | NutexbFileInfo | any;
 interface FileListProps {
   files: FileInfo[];
   isLoading: boolean;
@@ -35,14 +37,15 @@ export function FileList({ files, isLoading, folderPath, onFileSelect, resetConv
   const [searchQuery, setSearchQuery] = useState("");
   const [fileType, setFileType] = useState("all");
   const [localFiles, setLocalFiles] = useState<FileInfo[]>(files);
-  
+  const getFileInfos = useNutexbStore((e) => e.getFileInfos);
+
   useEffect(() => {
     setLocalFiles(files);
   }, [files]);
 
   const handleSearch = async (query: string, type: string = fileType) => {
     setSearchQuery(query);
-    
+
     if (!folderPath) return;
 
     try {
@@ -117,6 +120,9 @@ export function FileList({ files, isLoading, folderPath, onFileSelect, resetConv
             <div className="flex items-center space-x-3">
               <FileEdit className="h-4 w-4 text-gray-500" />
               <span className="truncate">{file.name}</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <span className="truncate">{file.string}</span>
             </div>
             {(file.name.endsWith('.numatb') || file.name.endsWith('.nutexb')) && (
               <Dialog onOpenChange={(open) => !open && resetConversion()}>

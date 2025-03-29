@@ -52,3 +52,34 @@ export function generateFileStructure(data: Entry[]): string {
   return result;
 }
 
+export function findNutexbString(data: Uint8Array): string | null {
+  const preFix = new TextEncoder().encode("46XT");
+  const dataLength = data.length;
+  const searchLength = preFix.length;
+  let foundOffset = null
+  for (let i = 0; i <= dataLength - searchLength; i++) {
+    let found = true;
+    for (let j = 0; j < searchLength; j++) {
+      if (data[i + j] !== preFix[j]) {
+        found = false;
+        break;
+      }
+    }
+    if (found) {
+      foundOffset = i;
+      break;
+    }
+  }
+
+  //read string to end when data not equal 0x00
+  if (foundOffset !== null) {
+    let stringEnd = foundOffset + searchLength;
+    while (stringEnd < dataLength && data[stringEnd] !== 0x00) {
+      stringEnd++;
+    }
+    const stringData = data.slice(foundOffset, stringEnd);
+    const str = new TextDecoder().decode(stringData);
+    return str.replace("46XT", "");
+  }
+  return null;
+}

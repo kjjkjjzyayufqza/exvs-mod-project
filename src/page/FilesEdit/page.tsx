@@ -2,23 +2,33 @@ import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FolderOpen } from "lucide-react";
-import { readDir } from "@tauri-apps/plugin-fs";
+import { FolderOpen, Loader2 } from "lucide-react";
+import { readDir, readFile } from "@tauri-apps/plugin-fs";
 import { FileList } from "./components/FileList";
-import { FileInfo, useNumatbStore } from "../../store/numatbStore";
+import { CONVERT_DIR_NAME, FileInfo as NumatbFileInfo, useNumatbStore } from "../../store/numatbStore";
+import { FileInfo as NutexbFileInfo } from "../../store/nutexbStore";
 import { useNutexbStore } from "../../store/nutexbStore";
+import { Button } from "../../components/ui/button";
+import { resourceDir } from "@tauri-apps/api/path";
+import { invoke } from "@tauri-apps/api/core";
+import { findNutexbString } from "../../module/commonFunc";
+
+type FileInfo = NumatbFileInfo | NutexbFileInfo;
 
 export default function FilesEdit() {
   const [folderPath, setFolderPath] = useState("");
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [handleDebugRepack, setHandleDebugRepack] = useState(false);
 
   const convertNumatbFile = useNumatbStore((e) => e.convertFile);
   const resetNumatbConversion = useNumatbStore((e) => e.resetConversion);
-  
+
   const convertNutexbFile = useNutexbStore((e) => e.convertFile);
   const resetNutexbConversion = useNutexbStore((e) => e.resetConversion);
-  
+
+  const getFileInfos = useNutexbStore((e) => e.getFileInfos);
+
   const convertFile = (file: FileInfo) => {
     if (file.name.endsWith('.numatb')) {
       convertNumatbFile(file);
@@ -26,7 +36,7 @@ export default function FilesEdit() {
       convertNutexbFile(file);
     }
   };
-  
+
   const resetConversion = () => {
     resetNumatbConversion();
     resetNutexbConversion();
@@ -43,12 +53,30 @@ export default function FilesEdit() {
       setIsLoading(true);
       try {
         const entries = await readDir(selected);
-        const filteredEntries = entries
+        const filteredEntries: any[] = entries
           .filter((entry) => entry.isFile)
+          .filter((entry) => {
+            // remove "__convert" folder and files
+            if (entry.name === CONVERT_DIR_NAME) {
+              return false;
+            } else {
+              return true;
+            }
+          })
           .map(entry => ({
             name: entry.name || "",
             path: selected + "/" + entry.name
           })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        for (const file of filteredEntries) {
+          if (file.name.endsWith('.nutexb')) {
+            const fileBuffer = await readFile(file.path);
+            const string = findNutexbString(fileBuffer);
+            if (string !== null) {
+              file.string = string;
+            }
+          }
+        }
+        console.log("done")
         setFiles(filteredEntries);
       } catch (error) {
         console.error("Error reading directory:", error);
@@ -57,6 +85,21 @@ export default function FilesEdit() {
       }
     }
   };
+
+  const handleTestRepack = async () => {
+    try {
+      setHandleDebugRepack(true);
+      const toolPath = "E:\\XB\\解包\\com\\compression.js";
+      const filePath = folderPath + "_structure.json"
+      const command = `node ${toolPath} ${filePath} -r`;
+      const result = await invoke("exec_shell_command", { command });
+      console.log("Repack result:", result);
+      setHandleDebugRepack(false);
+    } catch (error) {
+      console.error("Error during repack:", error);
+      setHandleDebugRepack(false);
+    }
+  }
 
   return (
     <div className="h-full flex flex-col p-6 bg-gray-50/30">
@@ -79,7 +122,12 @@ export default function FilesEdit() {
           </div>
         </div>
       </div>
-
+      <div className="mb-4 flex gap-2">
+        <Button onClick={handleTestRepack} disabled={handleDebugRepack} size="sm">
+          {handleDebugRepack && <Loader2 className="animate-spin" />}
+          Repack
+        </Button>
+      </div>
       <div className="grid grid-cols-2 gap-6 flex-1">
         <div className="col-span-2 bg-white rounded-lg shadow-sm border p-4">
           <h3 className="text-lg font-semibold mb-4 text-gray-700">Files</h3>

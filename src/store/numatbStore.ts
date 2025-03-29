@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { exists, mkdir, readTextFile } from "@tauri-apps/plugin-fs";
 import { resourceDir, dirname, join } from "@tauri-apps/api/path";
 
-const CONVERT_DIR_NAME = "__convert";
+export const CONVERT_DIR_NAME = "__convert";
 
 export interface FileInfo {
   name: string;
