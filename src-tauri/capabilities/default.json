@@ -30,14 +30,9 @@
       "identifier": "shell:allow-execute",
       "allow": [
         {
-          "name": "exec-sh",
-          "cmd": "sh",
-          "args": [
-            "-c",
-            {
-              "validator": "\\S+"
-            }
-          ]
+          "name": "exec-node",
+          "cmd": "node",
+          "args": true
         }
       ]
     }

@@ -26,7 +26,7 @@ pub fn read_file(path: &str) -> Response {
 }
 
 #[tauri::command]
-pub async fn exec_shell_command(command: &str) -> Result<String, String> {
+pub fn exec_shell_command(command: &str) -> Result<String, String> {
     let output = if cfg!(target_os = "windows") {
         Command::new("cmd")
             .args(["/C", command])

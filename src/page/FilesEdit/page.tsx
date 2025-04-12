@@ -12,6 +12,7 @@ import { Button } from "../../components/ui/button";
 import { resourceDir } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { findNutexbString } from "../../module/commonFunc";
+import { Command } from '@tauri-apps/plugin-shell';
 
 type FileInfo = NumatbFileInfo | NutexbFileInfo;
 
@@ -91,9 +92,15 @@ export default function FilesEdit() {
       setHandleDebugRepack(true);
       const toolPath = "E:\\XB\\解包\\com\\compression.js";
       const filePath = folderPath + "_structure.json"
-      const command = `node ${toolPath} ${filePath} -r`;
-      const result = await invoke("exec_shell_command", { command });
-      console.log("Repack result:", result);
+      const command = await Command.create('exec-node', [
+        toolPath,
+        filePath,
+        "-r"
+      ], { encoding: 'utf-8' }).execute();
+      if(command.code !== 0) {
+        console.error("Repack failed:", command.stderr);
+      }
+      console.log("Repack completed");
       setHandleDebugRepack(false);
     } catch (error) {
       console.error("Error during repack:", error);
