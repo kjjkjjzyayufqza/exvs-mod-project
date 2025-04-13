@@ -59,9 +59,45 @@ export default function UnitList() {
     if (searchQuery.trim() === "") {
       setFilteredUnits(units);
     } else {
-      const filtered = units.filter(unit =>
-        unit.unitId.toString().includes(searchQuery)
-      );
+      const query = searchQuery.toLowerCase();
+      const filtered = units.filter(unit => {
+        // Search by Unit ID
+        if (unit.unitId.toString().toLowerCase().includes(query)) {
+          return true;
+        }
+        
+        // Search by Model File Name
+        if (unit.modelFileName.toLowerCase().includes(query)) {
+          return true;
+        }
+        
+        // Search by Aleo File Name
+        if (unit.aleoFileName.toLowerCase().includes(query)) {
+          return true;
+        }
+        
+        // Search by Nu3bank File Name
+        if (unit.nu3bankFileName.toLowerCase().includes(query)) {
+          return true;
+        }
+        
+        // Search by Ammo File Name
+        if (unit.ammoFileName.toLowerCase().includes(query)) {
+          return true;
+        }
+        
+        // Search by MSC File Name
+        if (unit.mscFileName.toLowerCase().includes(query)) {
+          return true;
+        }
+        
+        // Search by Anime File Name
+        if (unit.animeFileName.toLowerCase().includes(query)) {
+          return true;
+        }
+        
+        return false;
+      });
       setFilteredUnits(filtered);
     }
   }, [searchQuery, units]);
@@ -92,7 +128,7 @@ export default function UnitList() {
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by Unit ID"
+              placeholder="Search by Unit ID, Model File, or Hash (e.g., 0xe2e0021f)"
               className="pl-10"
             />
           </div>
