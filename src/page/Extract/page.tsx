@@ -4,6 +4,7 @@ import JsonView from '@uiw/react-json-view';
 import { FileWithPath } from "react-dropzone";
 import {
   ExtractFHMData,
+  ExtractType,
   Fhm2dData,
   PS4FhmData,
 } from "../../models/fhm2d";
@@ -64,8 +65,8 @@ export default function ExtractFilePage() {
   });
   const [previewData, setPreviewData] = useState<Object>({});
   const [isExportMeta, setIsExportMeta] = useState(false);
-  const [extractAsFolderWithStructure, setExtractAsFolderWithStructure] = useState(false);
-  const [extractAsSingleFolder, setExtractAsSingleFolder] = useState(true);
+  const [extractType, setExtractType] = useState<ExtractType>(ExtractType.SingleFolder);
+  const [createSubfolder, setCreateSubfolder] = useState(false);
 
   const createFileInfo = async (fileBuffer: Buffer) => {
     const Magic = fileBuffer.slice(0, 0x4).toString("hex");
@@ -159,14 +160,25 @@ export default function ExtractFilePage() {
       form.setValue("inputFilePath", inputFilePath);
       tryReadFHM2DFile(inputFilePath);
     }
-    const outputFolderPath: any = await store?.get("outputFolderPath")
+    
+    // Try to get the outputFolderPath from the form or fall back to the global setting
+    const outputFolderPath: any = await store?.get("outputFolderPath") || await store?.get("extractOutputPath");
     form.setValue("outputFolderPath", outputFolderPath);
   }
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
-    ExtractFHMData(fhm2dData, data.outputFolderPath, extractAsFolderWithStructure, extractAsSingleFolder);
+    // update output path if createSubfolder
+    if(createSubfolder) {
+      const inputPath = form.getValues("inputFilePath");
+      if (inputPath) {
+        const fileName = inputPath.split(/[/\\]/).pop()?.split('.').slice(0, -1).join('.');
+        if (fileName) {
+          data.outputFolderPath = `${data.outputFolderPath}/${fileName}`;
+        }
+      }
+    }
+    ExtractFHMData(fhm2dData, data.outputFolderPath, extractType);
   }
-
 
   useEffect(() => {
     initFromData()
@@ -233,28 +245,44 @@ export default function ExtractFilePage() {
                       Export meta file
                     </label>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox checked={extractAsFolderWithStructure}
-                      onClick={() => {
-                        setExtractAsFolderWithStructure(!extractAsFolderWithStructure)
-                      }} />
-                    <label
-                      htmlFor="terms"
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                      Extract as folder with structure
-                    </label>
+                  <div className="flex flex-col space-y-2">
+                    <p className="text-sm font-medium">Extract Type</p>
+                    <ToggleGroup type="single" value={extractType} onValueChange={(value) => setExtractType(value as ExtractType)} variant="outline" className="justify-start gap-1">
+                      <ToggleGroupItem value={ExtractType.SingleFolder}>
+                        Single Folder
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value={ExtractType.FolderWithStructure}>
+                        With Structure
+                      </ToggleGroupItem>
+                    </ToggleGroup>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Checkbox checked={extractAsSingleFolder}
+                    <Checkbox 
+                      checked={createSubfolder}
                       onClick={() => {
-                        setExtractAsSingleFolder(!extractAsSingleFolder)
-                      }} />
+                        const newValue = !createSubfolder;
+                        setCreateSubfolder(newValue);
+                        // Update output path display
+                        const currentPath = form.getValues("outputFolderPath");
+                        if (currentPath) {
+                          const inputPath = form.getValues("inputFilePath");
+                          if (inputPath) {
+                            const fileName = inputPath.split(/[/\\]/).pop()?.split('.').slice(0, -1).join('.');
+                            if (fileName) {
+                              const newPath = newValue 
+                                ? `${currentPath}/${fileName}`
+                                : currentPath.split('/').slice(0, -1).join('/');
+                              form.setValue("outputFolderPath", newPath);
+                            }
+                          }
+                        }
+                      }}
+                    />
                     <label
                       htmlFor="terms"
                       className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                     >
-                      Extract as single folder
+                      Create subfolder using input filename
                     </label>
                   </div>
                 </div>

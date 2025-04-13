@@ -1,7 +1,9 @@
 import { Buffer } from "buffer";
 import { ErrorMessage } from "./error";
 import pako from "pako";
-import { writeFile } from "@tauri-apps/plugin-fs";
+import { writeFile, mkdir, exists } from "@tauri-apps/plugin-fs";
+import { path } from "@tauri-apps/api";
+import { basename } from "@tauri-apps/api/path";
 
 export enum Fhm2dType {
   PS4GundamVersus = "PS4GundamVersus",
@@ -452,10 +454,12 @@ function createFolderStructureXB(data: SubFileStructure[]) {
   return root;
 }
 
-export function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: string, outputAsSingleFolder: boolean = true, outputAsFolderWithStructure: boolean = false) {
-  if (!outputAsSingleFolder && !outputAsFolderWithStructure) {
-    throw new Error(ErrorMessage.extractOptionNotSelected);
-  }
+export enum ExtractType {
+  SingleFolder = "single",
+  FolderWithStructure = "structure",
+}
+
+export function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: string, type: ExtractType) {
   if (fhm2d._TYPE_ == Fhm2dType.PS4GundamVersus) {
     throw new Error(ErrorMessage.notSupport);
   } else if (fhm2d._TYPE_ == Fhm2dType.Xboost) {
@@ -473,7 +477,7 @@ export function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: string, ou
 
     const extractFolderStructure = createFolderStructureXB(fhm2d.SubFileStructure);
     const errorInfo: any = {};
-    subFileData.forEach((sub, i) => {
+    subFileData.forEach(async (sub, i) => {
       //解压 Chunk
       let BufferData: Buffer;
       let decompressData: Uint8Array[] = [];
@@ -502,18 +506,33 @@ export function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: string, ou
           };
         }
       }
-      console.log("write file", outDir + `/${i}${typeList[i]}`);
-      if (outputAsSingleFolder) {
-        //type 1
-        console.log("write file", outDir + `/${i}${typeList[i]}`);
-        // writeFile(outDir + `/${i}${typeList[i]}`, BufferData)
-        //   .then(() => {})
-        //   .catch((err) => {
-        //     console.log("write file error", err);
-        //   });
-      }
+      if (type === ExtractType.SingleFolder) {
+        const outputPath = `${outDir}/${i}${typeList[i]}`;
+        const fileNameNoExt = await basename(outDir);
+        const outputStructure = generateOutputStructure(fhm2d, typeList, fileNameNoExt, {});
 
-      if (outputAsFolderWithStructure) {
+        //if path not exists, create the path
+        const dirExists = await exists(outDir);
+        if (!dirExists) {
+          await mkdir(outDir, { recursive: true });
+        }
+
+        //write json_structure
+        writeFile(outDir + "_structure.json", Buffer.from(JSON.stringify(outputStructure, null, 2))).then(()=>{
+          console.log("write file", outDir + "_structure.json");
+        }).catch((err) => {
+          console.log("write file error", err);
+        })
+
+        writeFile(outputPath, BufferData)
+          .then(() => {
+            console.log("write file", outputPath);
+          })
+          .catch((err) => {
+            console.log("write file error", err);
+          });
+      } else if (type === ExtractType.FolderWithStructure) {
+        throw new Error(ErrorMessage.notSupport);
         //type 2
         //if fileNameNoExt not exists, we create
         // if (!fs.existsSync(path.join(fileNameNoExt))) {
@@ -523,6 +542,22 @@ export function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: string, ou
       }
     });
   }
+}
+
+function generateOutputStructure(fhm2d: PS4FhmData | Fhm2dData, typeList: string[], fileNameNoExt: string, errorInfoMap: Record<number, any>) {
+  return {
+    Magic: fhm2d.MetaHeader,
+    Fhm2dTotalCount: fhm2d.FileCount,
+    SubFileData: fhm2d.SubFileData.map((e, i) => ({
+      index: i,
+      fileType: typeList[i],
+      fileIndex: e.FileIndex,
+      fileUrl: `.\\${fileNameNoExt}\\${i}${typeList[i]}`,
+      ...(errorInfoMap[i] || {}),
+    })),
+    SubFileStructure: fhm2d.SubFileStructure,
+    SubFileParseStructure: createFolderStructureXB(fhm2d.SubFileStructure),
+  };
 }
 
 function countOnesInBinary(num: number): number {

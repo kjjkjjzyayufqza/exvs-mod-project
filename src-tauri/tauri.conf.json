@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "identifier": "com.tauri.app.extract",
   "build": {
-    "frontendDist": "./src",
+    "frontendDist": "../dist",
     "devUrl": "http://localhost:3000",
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build"
