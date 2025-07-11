@@ -1,4 +1,4 @@
-from msc import *
+from msclang_msc import *
 from argparse import ArgumentParser
 # Try and install pycparser if it's not found 
 try:
@@ -739,7 +739,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
     elif t == c_ast.Break:
         nodeOut.append(Command(0x4, [loopParent]))
     elif t == c_ast.Continue:
-        nodeOut.append(Command(0x4, [parentLoopCondition]))
+        nodeOut.append(Command(0x5, [parentLoopCondition])) # DEBUG origin
     elif t == c_ast.Switch:
         if type(node.cond) == c_ast.ID:
             compiledVariable = compileNode(node.cond,loopParent, parentLoopCondition)
@@ -1029,7 +1029,7 @@ def preprocess(filepath):
     except:
         pass
 
-    with open(filepath, 'r') as f:
+    with open(filepath, 'r', encoding='utf-8') as f:
         return removeComments(f.read())
 
 # Compile contents of the file to a string
@@ -1050,7 +1050,7 @@ def main(arguments):
         compileString(preprocess(file))
 
 def handle_EXVS2_2E_to_AE(args):
-    file_name = os.path.basename(os.path.splitext(args.files[0])[0]) + '.mscsb'
+    file_name = args.filename or os.path.basename(os.path.splitext(args.files[0])[0]) + '.mscsb'
     target_index1 = bytes([0x8A, 0x00, 0x01, 0x00, 0x01, 0x8A, 0x00, 0x00, 0x00, 0x10, 0x8B, 0x00, 0x00, 0x01])
     target_index2 = bytes([0x8A, 0x00, 0x01, 0x00, 0x01, 0x8A, 0x00, 0x00, 0x00, 0x11, 0x8B, 0x00, 0x00, 0x01])
     target_index3 = bytes([0x8A, 0x00, 0x01, 0x00, 0x01, 0x8A, 0x00, 0x00, 0x00, 0x12, 0x8B, 0x00, 0x00, 0x01])

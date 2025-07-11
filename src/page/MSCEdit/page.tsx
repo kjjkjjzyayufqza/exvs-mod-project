@@ -3,52 +3,21 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FolderOpen, Loader2 } from "lucide-react";
-import { readDir, readFile } from "@tauri-apps/plugin-fs";
-import { FileList } from "./components/FileList";
-import { CONVERT_DIR_NAME, FileInfo as NumatbFileInfo, useNumatbStore } from "../../store/numatbStore";
-import { FileInfo as NutexbFileInfo } from "../../store/nutexbStore";
-import { useNutexbStore } from "../../store/nutexbStore";
-import { Button } from "../../components/ui/button";
-import { resourceDir } from "@tauri-apps/api/path";
-import { invoke } from "@tauri-apps/api/core";
-import { findNutexbString } from "../../module/commonFunc";
+import { readDir } from "@tauri-apps/plugin-fs";
+import { Button } from "@/components/ui/button";
 import { Command } from '@tauri-apps/plugin-shell';
+import { FileList } from "./components/FileList";
 
-// Extend FileInfo to include possible properties
-interface ExtendedFileInfo extends NumatbFileInfo, NutexbFileInfo {
-  previewPath?: string | null;
-  string?: string;  // Make string property optional
+interface FileInfo {
+  name: string;
+  path: string;
 }
 
-type FileInfo = ExtendedFileInfo;
-
-export default function FilesEdit() {
+export default function MSCEdit() {
   const [folderPath, setFolderPath] = useState("");
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [handleDebugRepack, setHandleDebugRepack] = useState(false);
-
-  const convertNumatbFile = useNumatbStore((e) => e.convertFile);
-  const resetNumatbConversion = useNumatbStore((e) => e.resetConversion);
-
-  const convertNutexbFile = useNutexbStore((e) => e.convertFile);
-  const resetNutexbConversion = useNutexbStore((e) => e.resetConversion);
-
-  const getNutexbFileInfos = useNutexbStore((e) => e.getFileInfos);
-  const cacheNutexbFile = useNutexbStore((e) => e.cacheFile);
-
-  const convertFile = (file: FileInfo) => {
-    if (file.name.endsWith('.numatb')) {
-      convertNumatbFile(file);
-    } else if (file.name.endsWith('.nutexb')) {
-      convertNutexbFile(file);
-    }
-  };
-
-  const resetConversion = () => {
-    resetNumatbConversion();
-    resetNutexbConversion();
-  };
 
   const handleFolderSelect = async () => {
     const selected = await open({
@@ -61,38 +30,18 @@ export default function FilesEdit() {
       setIsLoading(true);
       try {
         const entries = await readDir(selected);
-        const filteredEntries: any[] = entries
+        const filteredEntries = entries
           .filter((entry) => entry.isFile)
           .filter((entry) => {
-            // remove "__convert" folder and files
-            if (entry.name === CONVERT_DIR_NAME) {
-              return false;
-            } else {
-              return true;
-            }
+            // Only show .bin and .c files
+            return entry.name?.endsWith('.bin') || entry.name?.endsWith('.c') || entry.name?.endsWith('.txt');
           })
           .map(entry => ({
             name: entry.name || "",
             path: selected + "/" + entry.name
-          })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-        for (const file of filteredEntries) {
-          if (file.name.endsWith('.nutexb')) {
-            // Get file info
-            try {
-              // const info = await getNutexbFileInfos(file);
-              // file.string = info.string;
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
-              // Try to cache the file for preview
-              const cache = await cacheNutexbFile(file);
-              if (cache) {
-                file.previewPath = cache.outputPath;
-                file.string = cache.nutexbInfo.string;
-              }
-            } catch (e) {
-              console.error("Error processing Nutexb file:", e);
-            }
-          }
-        }
         setFiles(filteredEntries);
       } catch (error) {
         console.error("Error reading directory:", error);
@@ -126,7 +75,7 @@ export default function FilesEdit() {
   return (
     <div className="h-full flex flex-col p-6 bg-gray-50/30">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold tracking-tight mb-4">Files Editor</h2>
+        <h2 className="text-2xl font-bold tracking-tight mb-4">MSC Editor</h2>
         <div className="max-w-xl">
           <Label htmlFor="folder-input" className="text-sm font-medium mb-2 block text-gray-600">
             Select Folder
@@ -150,15 +99,13 @@ export default function FilesEdit() {
           Repack
         </Button>
       </div>
-      <div className="grid grid-cols-2 gap-6 flex-1">
-        <div className="col-span-2 bg-white rounded-lg shadow-sm border p-4">
-          <h3 className="text-lg font-semibold mb-4 text-gray-700">Files</h3>
+      <div className="grid grid-cols-1 gap-6 flex-1">
+        <div className="col-span-1 bg-white rounded-lg shadow-sm border p-4">
+          <h3 className="text-lg font-semibold mb-4 text-gray-700">MSC Files</h3>
           <FileList
             files={files}
             isLoading={isLoading}
             folderPath={folderPath}
-            onFileSelect={convertFile}
-            resetConversion={resetConversion}
           />
         </div>
       </div>

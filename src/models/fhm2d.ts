@@ -4,6 +4,7 @@ import pako from "pako";
 import { writeFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { path } from "@tauri-apps/api";
 import { basename } from "@tauri-apps/api/path";
+import { toast } from "sonner";
 
 export enum Fhm2dType {
   PS4GundamVersus = "PS4GundamVersus",
@@ -50,6 +51,7 @@ export class PS4FhmData {
   MetaData: Buffer;
   FileTypeCount: number;
   FileCount: number;
+  UnkCount: number;
   private StreamReader: Buffer;
   FileTypeData: FileTypeData[];
   SubFileData: SubData[];
@@ -67,6 +69,7 @@ export class PS4FhmData {
     this.MetaData = this.bufferData.slice(0, this.MetaDataSize);
     this.FileTypeCount = this.MetaData.readUInt32LE(0x30);
     this.FileCount = this.MetaData.readUInt32LE(0x34);
+    this.UnkCount = this.MetaData.readUInt32LE(0x38); // not sure, no to check
 
     this.StreamReader = this.MetaData;
     this.FileTypeData = this.createFileTypeDataArray();
@@ -133,6 +136,7 @@ export class Fhm2dData {
   MetaHeader: number;
   FileTypeCount: number;
   FileCount: number;
+  UnkCount: number;
   private StreamReader: Buffer;
   FileTypeData: FileTypeData[];
   SubFileData: SubData[];
@@ -157,6 +161,7 @@ export class Fhm2dData {
     this.MetaHeader = this.MetaData.readUInt32LE(0);
     this.FileTypeCount = this.MetaData.readUInt32LE(0x18);
     this.FileCount = this.MetaData.readUInt32LE(0x1c);
+    this.UnkCount = this.MetaData.readUInt32LE(0x20);
     this.StreamReader = this.MetaData;
     this.FileTypeData = this.createFileTypeDataArray();
 
@@ -383,22 +388,9 @@ function createFolderStructureXB(data: SubFileStructure[]) {
   const fileCounts = [0];
 
   for (const item of data) {
-    let fileUrlName = folderCounts[folderCounts.length - 1];
-    // let url = folderStack
-    //   .map((e) => {
-    //     return `\\${fileUrlName}`;
-    //   })
-    //   .join("");
-
     if (item.type === "Folder") {
       let folderName;
       folderName = `${folderCounts[folderCounts.length - 1]++}`;
-      // if (item.unk3 == 1) {
-      //   folderName = `Folder_${folderCounts[folderCounts.length - 1]++}_link`;
-      // } else {
-      //   folderName = `Folder_${folderCounts[folderCounts.length - 1]++}`;
-      // }
-
       let unk1 = item.unk1 ?? undefined;
       let unk2 = item.unk2 ?? undefined;
       let unk3 = item.unk3 ?? undefined;
@@ -420,13 +412,6 @@ function createFolderStructureXB(data: SubFileStructure[]) {
     } else if (item.type === "Item") {
       let itemName;
       itemName = `${item.fileIndex}`;
-      // if (item.unk3 == 1) {
-      //   // itemName = `Item${fileCounts[fileCounts.length - 1]++}_copy`;
-      //   itemName = `Item_${item.fileIndex}_link`;
-      // } else {
-      //   // itemName = `Item${fileCounts[fileCounts.length - 1]++}`;
-      //   itemName = `Item_${item.fileIndex}`;
-      // }
       let unk1 = item.unk1 ?? undefined;
       let unk2 = item.unk2 ?? undefined;
       let unk3 = item.unk3 ?? undefined;
@@ -448,9 +433,6 @@ function createFolderStructureXB(data: SubFileStructure[]) {
     }
   }
 
-  // printFolderStructure(root, "");
-  // fs.writeFileSync("./test.json", JSON.stringify(root));
-  // console.log("File Json Return Done");
   return root;
 }
 
@@ -475,7 +457,14 @@ export function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: string, ty
     }
     const subFileData = fhm2d.getSortSubFileData();
 
-    const extractFolderStructure = createFolderStructureXB(fhm2d.SubFileStructure);
+    // Update file structure index
+    fhm2d.SubFileStructure.forEach((e) => {
+      if (e.type === "Item") {
+        // 这里是让每个文件的index和文件名一致
+        e.originalFileIndex = e.fileIndex;
+      }
+    });
+
     const errorInfo: any = {};
     subFileData.forEach(async (sub, i) => {
       //解压 Chunk
@@ -518,11 +507,13 @@ export function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: string, ty
         }
 
         //write json_structure
-        writeFile(outDir + "_structure.json", Buffer.from(JSON.stringify(outputStructure, null, 2))).then(()=>{
-          console.log("write file", outDir + "_structure.json");
-        }).catch((err) => {
-          console.log("write file error", err);
-        })
+        writeFile(outDir + "_structure.json", Buffer.from(JSON.stringify(outputStructure, null, 2)))
+          .then(() => {
+            console.log("write file", outDir + "_structure.json");
+          })
+          .catch((err) => {
+            console.log("write file error", err);
+          });
 
         writeFile(outputPath, BufferData)
           .then(() => {
@@ -548,6 +539,7 @@ function generateOutputStructure(fhm2d: PS4FhmData | Fhm2dData, typeList: string
   return {
     Magic: fhm2d.MetaHeader,
     Fhm2dTotalCount: fhm2d.FileCount,
+    UnkCount: fhm2d.UnkCount,
     SubFileData: fhm2d.SubFileData.map((e, i) => ({
       index: i,
       fileType: typeList[i],

@@ -11,6 +11,7 @@
     "fs:allow-write-file",
     "fs:allow-read-text-file",
     "fs:allow-resource-read-recursive",
+    "fs:allow-write-text-file",
     {
       "identifier": "fs:scope",
       "allow": [{ "path": "*/**" }]
@@ -32,6 +33,16 @@
         {
           "name": "exec-node",
           "cmd": "node",
+          "args": true
+        },
+        {
+          "name": "exec-python",
+          "cmd": "python",
+          "args": true
+        },
+        {
+          "name": "exec-cmd",
+          "cmd": "cmd",
           "args": true
         }
       ]

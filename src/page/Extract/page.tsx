@@ -66,7 +66,7 @@ export default function ExtractFilePage() {
   const [previewData, setPreviewData] = useState<Object>({});
   const [isExportMeta, setIsExportMeta] = useState(false);
   const [extractType, setExtractType] = useState<ExtractType>(ExtractType.SingleFolder);
-  const [createSubfolder, setCreateSubfolder] = useState(false);
+  const [createSubfolder, setCreateSubfolder] = useState(true);
 
   const createFileInfo = async (fileBuffer: Buffer) => {
     const Magic = fileBuffer.slice(0, 0x4).toString("hex");
@@ -142,6 +142,18 @@ export default function ExtractFilePage() {
       store?.set(value, selected as any);
       form.setValue(value, selected as any);
       tryReadFHM2DFile(selected as any);
+      
+      // Update output path if createSubfolder is enabled
+      if (createSubfolder) {
+        const currentOutputPath = form.getValues("outputFolderPath");
+        if (currentOutputPath) {
+          const fileName = (selected as string).split(/[/\\]/).pop()?.split('.').slice(0, -1).join('.');
+          if (fileName) {
+            const newPath = `${currentOutputPath}/${fileName}`;
+            form.setValue("outputFolderPath", newPath);
+          }
+        }
+      }
     }
   }
 

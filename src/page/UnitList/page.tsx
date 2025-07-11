@@ -2,11 +2,12 @@ import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Loader2 } from "lucide-react";
-import { readFile } from "@tauri-apps/plugin-fs";
+import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { resourceDir } from "@tauri-apps/api/path";
 import { useConfigStore } from "../../store/configStore";
 import { ExtractFHMData, ExtractType, Fhm2dData } from "../../models/fhm2d";
 import { Buffer } from "buffer";
+import { toast } from "sonner";
 
 // Define the UnitData interface based on the sample provided
 interface UnitData {
@@ -65,37 +66,37 @@ export default function UnitList() {
         if (unit.unitId.toString().toLowerCase().includes(query)) {
           return true;
         }
-        
+
         // Search by Model File Name
         if (unit.modelFileName.toLowerCase().includes(query)) {
           return true;
         }
-        
+
         // Search by Aleo File Name
         if (unit.aleoFileName.toLowerCase().includes(query)) {
           return true;
         }
-        
+
         // Search by Nu3bank File Name
         if (unit.nu3bankFileName.toLowerCase().includes(query)) {
           return true;
         }
-        
+
         // Search by Ammo File Name
         if (unit.ammoFileName.toLowerCase().includes(query)) {
           return true;
         }
-        
+
         // Search by MSC File Name
         if (unit.mscFileName.toLowerCase().includes(query)) {
           return true;
         }
-        
+
         // Search by Anime File Name
         if (unit.animeFileName.toLowerCase().includes(query)) {
           return true;
         }
-        
+
         return false;
       });
       setFilteredUnits(filtered);
@@ -110,12 +111,19 @@ export default function UnitList() {
   // Handle extract button click for specific file type
   const handleExtract = async (fileType: string, fileName: string) => {
     const filePath = `${obDplCachePath}\\${fileName}.fhm2d`;
+    console.log(filePath);
+    
+    // Create backup file
+    const backupFilePath = `${obDplCachePath}\\${fileName}_bak.fhm2d`;
+    const fileBuffer = await readFile(filePath);
+    await writeFile(backupFilePath, fileBuffer);
+    
     const upperCaseHashName = fileName.split('0x')[1].toUpperCase();
     const outputPath = `${extractOutputPath}\\0x${upperCaseHashName}`;
-    const fileBuffer = await readFile(filePath);
     const fhm = new Fhm2dData(Buffer.from(fileBuffer))
     ExtractFHMData(fhm, outputPath, ExtractType.SingleFolder);
     console.log(fhm);
+    toast.success(`Extracted ${fileType}`)
   };
 
   return (

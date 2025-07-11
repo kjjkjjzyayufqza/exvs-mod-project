@@ -65,6 +65,7 @@ interface NutexbStore {
   setSelectedFormat: (format: ImageFormat) => void;
   setHasMipmaps: (hasMipmaps: boolean) => void;
   replaceTexture: () => Promise<void>;
+  cacheFile: (file: FileInfo) => Promise<{ nutexbInfo: Partial<NutexbFooter>; imageFormat: string; outputPath: string } | null>;
 }
 
 const resourcePath = await resourceDir();
@@ -297,6 +298,72 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
       set({ error: errorMessage });
     } finally {
       set({ isConverting: false });
+    }
+  },
+
+  cacheFile: async (file) => {
+    if (!file.name.endsWith(".nutexb")) return null;
+
+    try {
+      // Check if input file exists
+      const inputFileExists = await exists(file.path);
+      if (!inputFileExists) {
+        console.error(`Input file not found for caching: ${file.path}`);
+        return null;
+      }
+
+      // Check if the tool exists
+      const toolExists = await exists(toolPath);
+      if (!toolExists) {
+        console.error(`Tool not found for caching: ${toolPath}`);
+        return null;
+      }
+
+      // Prepare output directory and file path
+      const dirPath = await dirname(file.path);
+      const convertDirPath = await join(dirPath, CONVERT_DIR_NAME);
+
+      // Create convert directory if it doesn't exist
+      const convertExists = await exists(convertDirPath);
+      if (!convertExists) {
+        try {
+          await mkdir(convertDirPath, { recursive: true });
+        } catch (error) {
+          console.error(`Failed to create convert directory for caching: ${error}`);
+          return null;
+        }
+      }
+
+      const outputFileName = file.name.replace(".nutexb", "_convert.png");
+      const outputPath = await join(convertDirPath, outputFileName);
+
+      // Execute command to generate the preview
+      const commandPromise = invoke("exec_shell_command", {
+        command: `${toolPath} ${file.path} ${outputPath}`,
+      });
+
+      // Race between command execution and timeout (use a shorter timeout for caching)
+      const result = await Promise.race([commandPromise, new Promise((_, reject) => setTimeout(() => reject(new Error("Caching timed out")), 5000))]);
+      if (typeof result === "string") {
+        // Verify output file exists
+        const { nutexbInfo } = get().parseNutexbInfo(result);
+        const outputExists = await exists(outputPath);
+        if (!outputExists) {
+          console.error("Output PNG file not found after caching");
+          return null;
+        }
+        return {
+          nutexbInfo: nutexbInfo,
+          imageFormat: nutexbInfo.image_format || "",
+          outputPath,
+        };
+      } else {
+        console.error("Invalid command result during caching");
+        return null;
+      }
+    } catch (error) {
+      console.error("Error during texture caching:", error);
+      return null;
     }
   },
 }));

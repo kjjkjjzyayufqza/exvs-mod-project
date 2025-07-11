@@ -1,4 +1,4 @@
-import { FileEdit, FolderOpen } from "lucide-react";
+import { FileEdit, FolderOpen, Image } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -15,8 +15,16 @@ import { NutexbDialog } from './NutexbDialog';
 import { FileInfo as NumatbFileInfo } from "../../../store/numatbStore";
 import { FileInfo as NutexbFileInfo, useNutexbStore } from "../../../store/nutexbStore";
 import { readDir } from "@tauri-apps/plugin-fs";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
-type FileInfo = NumatbFileInfo | NutexbFileInfo | any;
+// Extend FileInfo to include possible properties
+interface ExtendedFileInfo extends NumatbFileInfo, NutexbFileInfo {
+  previewPath?: string | null;
+  string?: string;  // Make string property optional
+}
+
+type FileInfo = ExtendedFileInfo;
+
 interface FileListProps {
   files: FileInfo[];
   isLoading: boolean;
@@ -118,12 +126,39 @@ export function FileList({ files, isLoading, folderPath, onFileSelect, resetConv
             className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-md transition-colors border"
           >
             <div className="flex items-center space-x-3">
-              <FileEdit className="h-4 w-4 text-gray-500" />
+              {file.previewPath ? (
+                <div className="w-xs flex items-center justify-center overflow-hidden rounded-sm">
+                  <img 
+                    src={convertFileSrc(file.previewPath)} 
+                    alt="Preview" 
+                    className="h-full object-cover"
+                    onError={(e) => {
+                      // Hide the broken image
+                      e.currentTarget.style.display = 'none';
+                      
+                      // Create an error indicator safely
+                      const parent = e.currentTarget.parentElement;
+                      if (parent) {
+                        const errorIcon = document.createElement('span');
+                        errorIcon.className = "h-4 w-4 text-gray-500";
+                        errorIcon.textContent = "!";
+                        parent.appendChild(errorIcon);
+                      }
+                    }}
+                  />
+                </div>
+              ) : file.name.endsWith('.nutexb') ? (
+                <Image className="h-4 w-4 text-gray-500" />
+              ) : (
+                <FileEdit className="h-4 w-4 text-gray-500" />
+              )}
               <span className="truncate">{file.name}</span>
             </div>
-            <div className="flex items-center space-x-3">
-              <span className="truncate">{file.string}</span>
-            </div>
+            {file.string && (
+              <div className="flex items-center space-x-3">
+                <span className="truncate">{file.string}</span>
+              </div>
+            )}
             {(file.name.endsWith('.numatb') || file.name.endsWith('.nutexb')) && (
               <Dialog onOpenChange={(open) => !open && resetConversion()}>
                 <DialogTrigger asChild>

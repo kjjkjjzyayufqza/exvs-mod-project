@@ -3,11 +3,12 @@
 # LICENSE or go to https://github.com/jam1garner/pymsc/blob/master/LICENSE #
 # for full license details.                                                #
 #**************************************************************************#
-from msc import *
+from mscdec_msc import *
 import sys, os, time, os.path, timeit
 from argparse import ArgumentParser
 from struct import unpack, pack
 from math import isnan
+import logging
 
 scriptNames = {}
 scriptOffsets = []
@@ -49,8 +50,11 @@ def updateScriptReference(popped, index, scriptName):
                 if not popped[index].parameters[1] in scriptCalledVars[scriptName]:
                     scriptCalledVars[scriptName].append(popped[index].parameters[1])
     except:
-        print(scriptName)
+        logging.info(scriptName)
         raise
+
+funcName = "a"
+iteration = 0
 
 #script - mscScript object
 #startIndex - index in the script to start at, used for recursively evaluating all paths
@@ -58,8 +62,19 @@ def updateScriptReference(popped, index, scriptName):
 #endPosition - when to stop searching (i.e. when the stack is empty and paths recombine)
 #depth - used to determine whether or not a path can be abandoned
 def emuScript(script, startIndex, stack, passCount, endPosition=None, depth=0):
-    global clearedPaths,scriptCalledVars, mscFile
+    global clearedPaths,scriptCalledVars, mscFile, funcName, iteration
+    
+    if depth > 990:
+        return False
+    
     scriptName = scriptNames[script.bounds[0]]
+    if scriptName != funcName:
+        logging.info(''.join([funcName, " iterated ", str(iteration), " times"]))
+        funcName = scriptName
+        iteration = 0
+    else:
+        iteration = iteration + 1
+    
     if endPosition == None:
         clearedPaths = []
     try:
@@ -76,28 +91,30 @@ def emuScript(script, startIndex, stack, passCount, endPosition=None, depth=0):
                     popped.append(stack.pop())
             except:
                 pass
-
+            
             #First pass
             if passCount == 0:
                 #if the command is a function call
                 if script[i].command in [0x2f, 0x30, 0x31]:
                     updateScriptReference(popped, 0, scriptName)
-                #if the command is a printf
+                #if the command is a logging.infof
                 if script[i].command == 0x2c and popped[-1].command in [0xA, 0xD]:
                     if type(popped[-1].parameters[0]) != str:
                         popped[-1].parameters[0] = mscFile.strings[popped[-1].parameters[0]]
                 #if the command in a sys call
                 if script[i].command == 0x2d:
-                    if script[i].parameters[1] == 0:
-                        updateScriptReference(popped, 0, scriptName)
-                    elif script[i].parameters[1] == 3:
-                        updateScriptReference(popped, 0, scriptName)
-                    elif script[i].parameters[1] == 0x29:
-                        updateScriptReference(popped, 1, scriptName)
-                    elif script[i].parameters[1] == 0x29:
-                        updateScriptReference(popped, 2, scriptName)
+                    #script[i].parameters[1] = sys number
+                    poppedIndex = 0
+                    for x in popped:
+                        if len(x.parameters) > 0:
+                            try:
+                                if x.parameters[0] > 0x50: #ignore first few func where it might be wrongly identified as a reference. Might be wrong and we need to investigate manually 
+                                    updateScriptReference(popped, poppedIndex, scriptName)
+                            except TypeError:
+                                logging.info("Ignore Script Ref for x.parameters[0]")
+                        poppedIndex = poppedIndex + 1
                 #If gv16 flag is enabled and it is setting GlobalVar16
-                if script[i].command == 0x1C and script[i].parameters[0] == 0x1 and gvIsOffset[script[i].parameters[1]]:
+                if script[i].command == 0x1C and script[i].parameters[0] == 0x1: #and gvIsOffset[script[i].parameters[1]]:
                     updateScriptReference(popped, 0, scriptName)
             elif passCount >= 1:
                 if script[i].command in [0x1C, 0x41] and scriptName in scriptCalledVars:
@@ -126,9 +143,15 @@ def emuScript(script, startIndex, stack, passCount, endPosition=None, depth=0):
             if script[i].command in [0x34, 0x35]:
                 jumpIndex = script.getIndexOfInstruction(script[i].parameters[0])
                 endOfBlock = jumpIndex
-                if script[jumpIndex - 1].command in [4, 5, 0x36]:
+                if script[jumpIndex - 1].command in [4, 5, 0x36] and iteration < 100000:
+                    if iteration == 10000 :
+                        logging.info(''.join(["iteration exceeded 10000, aborting recursive search"]))
+                        raise Exception("iteration exceeded 10000, aborting recursive search")
                     endOfBlock = script.getIndexOfInstruction(script[jumpIndex - 1].parameters[0])
-                    finished = emuScript(script, jumpIndex, stack, passCount, endOfBlock, depth+1)
+                    if iteration >= 2000: # i dont know how to fix it, so i just [endOfBlock - depth] to avoid infinite loop
+                        finished = emuScript(script, jumpIndex, stack, passCount, endOfBlock - depth, depth+1)
+                    else:
+                        finished = emuScript(script, jumpIndex, stack, passCount, endOfBlock, depth+1)
                 elif len(stack) > 0:
                     finished = emuScript(script, jumpIndex, stack, passCount, jumpIndex, depth+1)
                 if not script[i].commandPosition in clearedPaths:
@@ -213,7 +236,7 @@ def disasm(fname):
     for i,script in enumerate(mscFile):
         clearedPaths = []
         emuScript(script, 0, [], 2)
-        pickTypes(script)
+        #pickTypes(script)
 
         jumpPositions = {}
         for cmd in script:

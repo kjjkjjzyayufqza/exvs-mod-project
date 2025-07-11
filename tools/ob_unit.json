@@ -690,6 +690,21 @@
     "constAnimeExists": true
   },
   {
+    "unitId": 5012001,
+    "modelFileName": "0xd890d272",
+    "constModelExists": true,
+    "aleoFileName": "0x23cb47b5",
+    "constAleoExists": true,
+    "nu3bankFileName": "0x18d46feb",
+    "constNu3bankExists": true,
+    "ammoFileName": "0x07004f7b",
+    "constAmmoExists": true,
+    "mscFileName": "0x56fb7563",
+    "constMscExists": true,
+    "animeFileName": "0xf656faf1",
+    "constAnimeExists": true
+  },
+  {
     "unitId": 5013001,
     "modelFileName": "0xcdfc22b5",
     "constModelExists": true,
@@ -762,6 +777,21 @@
     "mscFileName": "0x7a41c15c",
     "constMscExists": true,
     "animeFileName": "0xdaec4ece",
+    "constAnimeExists": true
+  },
+  {
+    "unitId": 7004002,
+    "modelFileName": "0x6d2337f7",
+    "constModelExists": true,
+    "aleoFileName": "0x9678a230",
+    "constAleoExists": true,
+    "nu3bankFileName": "0x346edbd4",
+    "constNu3bankExists": true,
+    "ammoFileName": "0xb2b3aafe",
+    "constAmmoExists": true,
+    "mscFileName": "0xe34890e6",
+    "constMscExists": true,
+    "animeFileName": "0x43e51f74",
     "constAnimeExists": true
   },
   {
@@ -1235,8 +1265,8 @@
     "constModelExists": true,
     "aleoFileName": "0x2bd96151",
     "constAleoExists": true,
-    "nu3bankFileName": "0x547a66c8",
-    "constNu3bankExists": false,
+    "nu3bankFileName": "0x89cf18b5",
+    "constNu3bankExists": true,
     "ammoFileName": "0x0f12699f",
     "constAmmoExists": true,
     "mscFileName": "0x5ee95387",
@@ -1400,8 +1430,8 @@
     "constModelExists": true,
     "aleoFileName": "0x49112dee",
     "constAleoExists": true,
-    "nu3bankFileName": "0x547a66c8",
-    "constNu3bankExists": false,
+    "nu3bankFileName": "0x720e05b0",
+    "constNu3bankExists": true,
     "ammoFileName": "0x6dda2520",
     "constAmmoExists": true,
     "mscFileName": "0x3c211f38",
@@ -2220,6 +2250,21 @@
     "constAnimeExists": true
   },
   {
+    "unitId": 21013001,
+    "modelFileName": "0x9f141aaa",
+    "constModelExists": false,
+    "aleoFileName": "0x644f8f6d",
+    "constAleoExists": false,
+    "nu3bankFileName": "0x5f50a733",
+    "constNu3bankExists": false,
+    "ammoFileName": "0x408487a3",
+    "constAmmoExists": false,
+    "mscFileName": "0x117fbdbb",
+    "constMscExists": false,
+    "animeFileName": "0xb1d23229",
+    "constAnimeExists": false
+  },
+  {
     "unitId": 21015001,
     "modelFileName": "0xccd61019",
     "constModelExists": true,
@@ -2882,17 +2927,17 @@
   {
     "unitId": 33002002,
     "modelFileName": "0x44dab319",
-    "constModelExists": true,
+    "constModelExists": false,
     "aleoFileName": "0xbf8126de",
-    "constAleoExists": true,
+    "constAleoExists": false,
     "nu3bankFileName": "0x1d975f3a",
     "constNu3bankExists": true,
     "ammoFileName": "0x9b4a2e10",
-    "constAmmoExists": true,
+    "constAmmoExists": false,
     "mscFileName": "0xcab11408",
-    "constMscExists": true,
+    "constMscExists": false,
     "animeFileName": "0x6a1c9b9a",
-    "constAnimeExists": true
+    "constAnimeExists": false
   },
   {
     "unitId": 33003001,
@@ -3390,6 +3435,21 @@
     "constAnimeExists": true
   },
   {
+    "unitId": 45006001,
+    "modelFileName": "0xbcd2b446",
+    "constModelExists": false,
+    "aleoFileName": "0x47892181",
+    "constAleoExists": false,
+    "nu3bankFileName": "0x7c9609df",
+    "constNu3bankExists": false,
+    "ammoFileName": "0x6342294f",
+    "constAmmoExists": false,
+    "mscFileName": "0x32b91357",
+    "constMscExists": false,
+    "animeFileName": "0x92149cc5",
+    "constAnimeExists": false
+  },
+  {
     "unitId": 46001001,
     "modelFileName": "0xd8ecbc21",
     "constModelExists": true,
@@ -3780,6 +3840,21 @@
     "constAnimeExists": true
   },
   {
+    "unitId": 53005001,
+    "modelFileName": "0xb4cb91e9",
+    "constModelExists": true,
+    "aleoFileName": "0x4f90042e",
+    "constAleoExists": true,
+    "nu3bankFileName": "0x748f2c70",
+    "constNu3bankExists": true,
+    "ammoFileName": "0x6b5b0ce0",
+    "constAmmoExists": true,
+    "mscFileName": "0x3aa036f8",
+    "constMscExists": true,
+    "animeFileName": "0x9a0db96a",
+    "constAnimeExists": true
+  },
+  {
     "unitId": 55001001,
     "modelFileName": "0x520e4aa0",
     "constModelExists": true,
@@ -3867,6 +3942,21 @@
     "mscFileName": "0x34167159",
     "constMscExists": true,
     "animeFileName": "0x94bbfecb",
+    "constAnimeExists": true
+  },
+  {
+    "unitId": 57002002,
+    "modelFileName": "0x237487f2",
+    "constModelExists": true,
+    "aleoFileName": "0xd82f1235",
+    "constAleoExists": true,
+    "nu3bankFileName": "0x7a396bd1",
+    "constNu3bankExists": true,
+    "ammoFileName": "0xfce41afb",
+    "constAmmoExists": true,
+    "mscFileName": "0xad1f20e3",
+    "constMscExists": true,
+    "animeFileName": "0x0db2af71",
     "constAnimeExists": true
   },
   {
@@ -4093,6 +4183,21 @@
     "constMscExists": true,
     "animeFileName": "0xfb4b3d7f",
     "constAnimeExists": true
+  },
+  {
+    "unitId": 68002001,
+    "modelFileName": "0xc5e75143",
+    "constModelExists": false,
+    "aleoFileName": "0x3ebcc484",
+    "constAleoExists": false,
+    "nu3bankFileName": "0x05a3ecda",
+    "constNu3bankExists": false,
+    "ammoFileName": "0x1a77cc4a",
+    "constAmmoExists": false,
+    "mscFileName": "0x4b8cf652",
+    "constMscExists": false,
+    "animeFileName": "0xeb2179c0",
+    "constAnimeExists": false
   },
   {
     "unitId": 101002001,
@@ -5355,6 +5460,21 @@
     "constAnimeExists": true
   },
   {
+    "unitId": 505712001,
+    "modelFileName": "0x32b92371",
+    "constModelExists": true,
+    "aleoFileName": "0x59076307",
+    "constAleoExists": true,
+    "nu3bankFileName": "0x62184b59",
+    "constNu3bankExists": true,
+    "ammoFileName": "0xed29be78",
+    "constAmmoExists": true,
+    "mscFileName": "0xbcd28460",
+    "constMscExists": true,
+    "animeFileName": "0x1c7f0bf2",
+    "constAnimeExists": true
+  },
+  {
     "unitId": 507001001,
     "modelFileName": "0x13905537",
     "constModelExists": true,
@@ -6395,8 +6515,8 @@
     "constModelExists": true,
     "aleoFileName": "0x9ef9d284",
     "constAleoExists": true,
-    "nu3bankFileName": "0x547a66c8",
-    "constNu3bankExists": false,
+    "nu3bankFileName": "0xa5e6fada",
+    "constNu3bankExists": true,
     "ammoFileName": "0x2ad70ffb",
     "constAmmoExists": true,
     "mscFileName": "0x7b2c35e3",
@@ -7648,6 +7768,21 @@
     "constMscExists": true,
     "animeFileName": "0x207f9626",
     "constAnimeExists": true
+  },
+  {
+    "unitId": 521712001,
+    "modelFileName": "0x5f843b66",
+    "constModelExists": false,
+    "aleoFileName": "0x343a7b10",
+    "constAleoExists": false,
+    "nu3bankFileName": "0x0f25534e",
+    "constNu3bankExists": false,
+    "ammoFileName": "0x8014a66f",
+    "constAmmoExists": false,
+    "mscFileName": "0xd1ef9c77",
+    "constMscExists": false,
+    "animeFileName": "0x714213e5",
+    "constAnimeExists": false
   },
   {
     "unitId": 522001001,
@@ -9405,6 +9540,21 @@
     "constAnimeExists": true
   },
   {
+    "unitId": 545705001,
+    "modelFileName": "0x4846e9af",
+    "constModelExists": false,
+    "aleoFileName": "0x23f8a9d9",
+    "constAleoExists": false,
+    "nu3bankFileName": "0x18e78187",
+    "constNu3bankExists": false,
+    "ammoFileName": "0x97d674a6",
+    "constAmmoExists": false,
+    "mscFileName": "0xc62d4ebe",
+    "constMscExists": false,
+    "animeFileName": "0x6680c12c",
+    "constAnimeExists": false
+  },
+  {
     "unitId": 546001001,
     "modelFileName": "0x43c3f766",
     "constModelExists": false,
@@ -9945,6 +10095,21 @@
     "constAnimeExists": true
   },
   {
+    "unitId": 553701001,
+    "modelFileName": "0xfb94f115",
+    "constModelExists": true,
+    "aleoFileName": "0x902ab163",
+    "constAleoExists": true,
+    "nu3bankFileName": "0xab35993d",
+    "constNu3bankExists": true,
+    "ammoFileName": "0x24046c1c",
+    "constAmmoExists": true,
+    "mscFileName": "0x75ff5604",
+    "constMscExists": true,
+    "animeFileName": "0xd552d996",
+    "constAnimeExists": true
+  },
+  {
     "unitId": 554601001,
     "modelFileName": "0x3501fff5",
     "constModelExists": false,
@@ -9990,6 +10155,21 @@
     "constAnimeExists": true
   },
   {
+    "unitId": 566002001,
+    "modelFileName": "0x26fe420f",
+    "constModelExists": false,
+    "aleoFileName": "0x468a9c8f",
+    "constAleoExists": true,
+    "nu3bankFileName": "0x547a66c8",
+    "constNu3bankExists": false,
+    "ammoFileName": "0xf96edf06",
+    "constAmmoExists": false,
+    "mscFileName": "0xa895e51e",
+    "constMscExists": false,
+    "animeFileName": "0x08386a8c",
+    "constAnimeExists": false
+  },
+  {
     "unitId": 566701001,
     "modelFileName": "0xfdd3727a",
     "constModelExists": true,
@@ -10017,6 +10197,21 @@
     "mscFileName": "0xa9093f7b",
     "constMscExists": false,
     "animeFileName": "0x09a4b0e9",
+    "constAnimeExists": false
+  },
+  {
+    "unitId": 566703001,
+    "modelFileName": "0x03ae9b24",
+    "constModelExists": false,
+    "aleoFileName": "0x6810db52",
+    "constAleoExists": false,
+    "nu3bankFileName": "0x547a66c8",
+    "constNu3bankExists": false,
+    "ammoFileName": "0xdc3e062d",
+    "constAmmoExists": false,
+    "mscFileName": "0x8dc53c35",
+    "constMscExists": false,
+    "animeFileName": "0x2d68b3a7",
     "constAnimeExists": false
   },
   {
@@ -11070,6 +11265,21 @@
     "constAnimeExists": true
   },
   {
+    "unitId": 705012001,
+    "modelFileName": "0xa25cf6c0",
+    "constModelExists": true,
+    "aleoFileName": "0x59076307",
+    "constAleoExists": true,
+    "nu3bankFileName": "0x62184b59",
+    "constNu3bankExists": true,
+    "ammoFileName": "0x7dcc6bc9",
+    "constAmmoExists": true,
+    "mscFileName": "0x2c3751d1",
+    "constMscExists": true,
+    "animeFileName": "0x8c9ade43",
+    "constAnimeExists": true
+  },
+  {
     "unitId": 707001001,
     "modelFileName": "0x30d26618",
     "constModelExists": true,
@@ -11510,8 +11720,8 @@
     "constModelExists": true,
     "aleoFileName": "0x9ef9d284",
     "constAleoExists": true,
-    "nu3bankFileName": "0x547a66c8",
-    "constNu3bankExists": false,
+    "nu3bankFileName": "0xa5e6fada",
+    "constNu3bankExists": true,
     "ammoFileName": "0xba32da4a",
     "constAmmoExists": true,
     "mscFileName": "0xebc9e052",
@@ -12133,6 +12343,21 @@
     "constMscExists": true,
     "animeFileName": "0xb09a4397",
     "constAnimeExists": true
+  },
+  {
+    "unitId": 721012001,
+    "modelFileName": "0xcf61eed7",
+    "constModelExists": false,
+    "aleoFileName": "0x343a7b10",
+    "constAleoExists": false,
+    "nu3bankFileName": "0x0f25534e",
+    "constNu3bankExists": false,
+    "ammoFileName": "0x10f173de",
+    "constAmmoExists": false,
+    "mscFileName": "0x410a49c6",
+    "constMscExists": false,
+    "animeFileName": "0xe1a7c654",
+    "constAnimeExists": false
   },
   {
     "unitId": 723001001,
@@ -13140,6 +13365,21 @@
     "constAnimeExists": true
   },
   {
+    "unitId": 745005001,
+    "modelFileName": "0xd8a33c1e",
+    "constModelExists": false,
+    "aleoFileName": "0x23f8a9d9",
+    "constAleoExists": false,
+    "nu3bankFileName": "0x18e78187",
+    "constNu3bankExists": false,
+    "ammoFileName": "0x0733a117",
+    "constAmmoExists": false,
+    "mscFileName": "0x56c89b0f",
+    "constMscExists": false,
+    "animeFileName": "0xf665149d",
+    "constAnimeExists": false
+  },
+  {
     "unitId": 746001001,
     "modelFileName": "0x9accfe40",
     "constModelExists": true,
@@ -13425,6 +13665,21 @@
     "constAnimeExists": true
   },
   {
+    "unitId": 753001001,
+    "modelFileName": "0x6b7124a4",
+    "constModelExists": true,
+    "aleoFileName": "0x902ab163",
+    "constAleoExists": true,
+    "nu3bankFileName": "0xab35993d",
+    "constNu3bankExists": true,
+    "ammoFileName": "0xb4e1b9ad",
+    "constAmmoExists": true,
+    "mscFileName": "0xe51a83b5",
+    "constMscExists": true,
+    "animeFileName": "0x45b70c27",
+    "constAnimeExists": true
+  },
+  {
     "unitId": 756001001,
     "modelFileName": "0x01e301a4",
     "constModelExists": true,
@@ -13558,6 +13813,21 @@
     "constMscExists": true,
     "animeFileName": "0x99416558",
     "constAnimeExists": true
+  },
+  {
+    "unitId": 766003001,
+    "modelFileName": "0x934b4e95",
+    "constModelExists": false,
+    "aleoFileName": "0x6810db52",
+    "constAleoExists": false,
+    "nu3bankFileName": "0x547a66c8",
+    "constNu3bankExists": false,
+    "ammoFileName": "0x4cdbd39c",
+    "constAmmoExists": false,
+    "mscFileName": "0x1d20e984",
+    "constMscExists": false,
+    "animeFileName": "0xbd8d6616",
+    "constAnimeExists": false
   },
   {
     "unitId": 767001001,
@@ -13921,18 +14191,18 @@
   },
   {
     "unitId": 999037001,
-    "modelFileName": "0x7c45e54c",
-    "constModelExists": true,
-    "aleoFileName": "0x871e708b",
-    "constAleoExists": true,
-    "nu3bankFileName": "0xbc0158d5",
-    "constNu3bankExists": true,
-    "ammoFileName": "0xa3d57845",
-    "constAmmoExists": true,
-    "mscFileName": "0xf22e425d",
-    "constMscExists": true,
-    "animeFileName": "0x5283cdcf",
-    "constAnimeExists": true
+    "modelFileName": "0xf33db4c5",
+    "constModelExists": false,
+    "aleoFileName": "0x08662102",
+    "constAleoExists": false,
+    "nu3bankFileName": "0x3379095c",
+    "constNu3bankExists": false,
+    "ammoFileName": "0x2cad29cc",
+    "constAmmoExists": false,
+    "mscFileName": "0x7d5613d4",
+    "constMscExists": false,
+    "animeFileName": "0xddfb9c46",
+    "constAnimeExists": false
   },
   {
     "unitId": 999038001,
@@ -14037,6 +14307,21 @@
     "mscFileName": "0xe7086a7e",
     "constMscExists": false,
     "animeFileName": "0x47a5e5ec",
+    "constAnimeExists": false
+  },
+  {
+    "unitId": 999051001,
+    "modelFileName": "0x46950776",
+    "constModelExists": false,
+    "aleoFileName": "0xbdce92b1",
+    "constAleoExists": false,
+    "nu3bankFileName": "0x547a66c8",
+    "constNu3bankExists": false,
+    "ammoFileName": "0x99059a7f",
+    "constAmmoExists": false,
+    "mscFileName": "0xc8fea067",
+    "constMscExists": false,
+    "animeFileName": "0x68532ff5",
     "constAnimeExists": false
   },
   {
