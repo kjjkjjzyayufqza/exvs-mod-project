@@ -1,0 +1,2400 @@
+{
+  "Magic": 10,
+  "Fhm2dTotalCount": 43,
+  "UnkCount": 4,
+  "SubFileData": [
+    {
+      "index": 0,
+      "fileType": ".nutexb",
+      "fileIndex": 0,
+      "fileUrl": ".\\0x6E12EA88\\0.nutexb"
+    },
+    {
+      "index": 1,
+      "fileType": ".nutexb",
+      "fileIndex": 1,
+      "fileUrl": ".\\0x6E12EA88\\1.nutexb"
+    },
+    {
+      "index": 2,
+      "fileType": ".nutexb",
+      "fileIndex": 2,
+      "fileUrl": ".\\0x6E12EA88\\2.nutexb"
+    },
+    {
+      "index": 3,
+      "fileType": ".nutexb",
+      "fileIndex": 3,
+      "fileUrl": ".\\0x6E12EA88\\3.nutexb"
+    },
+    {
+      "index": 4,
+      "fileType": ".nutexb",
+      "fileIndex": 4,
+      "fileUrl": ".\\0x6E12EA88\\4.nutexb"
+    },
+    {
+      "index": 5,
+      "fileType": ".nutexb",
+      "fileIndex": 5,
+      "fileUrl": ".\\0x6E12EA88\\5.nutexb"
+    },
+    {
+      "index": 6,
+      "fileType": ".nutexb",
+      "fileIndex": 6,
+      "fileUrl": ".\\0x6E12EA88\\6.nutexb"
+    },
+    {
+      "index": 7,
+      "fileType": ".nutexb",
+      "fileIndex": 7,
+      "fileUrl": ".\\0x6E12EA88\\7.nutexb"
+    },
+    {
+      "index": 8,
+      "fileType": ".nutexb",
+      "fileIndex": 8,
+      "fileUrl": ".\\0x6E12EA88\\8.nutexb"
+    },
+    {
+      "index": 9,
+      "fileType": ".nutexb",
+      "fileIndex": 9,
+      "fileUrl": ".\\0x6E12EA88\\9.nutexb"
+    },
+    {
+      "index": 10,
+      "fileType": ".nusktb",
+      "fileIndex": 10,
+      "fileUrl": ".\\0x6E12EA88\\10.nusktb"
+    },
+    {
+      "index": 11,
+      "fileType": ".nusktb",
+      "fileIndex": 11,
+      "fileUrl": ".\\0x6E12EA88\\11.nusktb"
+    },
+    {
+      "index": 12,
+      "fileType": ".nusktb",
+      "fileIndex": 12,
+      "fileUrl": ".\\0x6E12EA88\\12.nusktb"
+    },
+    {
+      "index": 13,
+      "fileType": ".numatb",
+      "fileIndex": 13,
+      "fileUrl": ".\\0x6E12EA88\\13.numatb"
+    },
+    {
+      "index": 14,
+      "fileType": ".numatb",
+      "fileIndex": 14,
+      "fileUrl": ".\\0x6E12EA88\\14.numatb"
+    },
+    {
+      "index": 15,
+      "fileType": ".numatb",
+      "fileIndex": 15,
+      "fileUrl": ".\\0x6E12EA88\\15.numatb"
+    },
+    {
+      "index": 16,
+      "fileType": ".numatb",
+      "fileIndex": 16,
+      "fileUrl": ".\\0x6E12EA88\\16.numatb"
+    },
+    {
+      "index": 17,
+      "fileType": ".numatb",
+      "fileIndex": 17,
+      "fileUrl": ".\\0x6E12EA88\\17.numatb"
+    },
+    {
+      "index": 18,
+      "fileType": ".numatb",
+      "fileIndex": 18,
+      "fileUrl": ".\\0x6E12EA88\\18.numatb"
+    },
+    {
+      "index": 19,
+      "fileType": ".numatb",
+      "fileIndex": 19,
+      "fileUrl": ".\\0x6E12EA88\\19.numatb"
+    },
+    {
+      "index": 20,
+      "fileType": ".numatb",
+      "fileIndex": 20,
+      "fileUrl": ".\\0x6E12EA88\\20.numatb"
+    },
+    {
+      "index": 21,
+      "fileType": ".numatb",
+      "fileIndex": 21,
+      "fileUrl": ".\\0x6E12EA88\\21.numatb"
+    },
+    {
+      "index": 22,
+      "fileType": ".numshb",
+      "fileIndex": 22,
+      "fileUrl": ".\\0x6E12EA88\\22.numshb"
+    },
+    {
+      "index": 23,
+      "fileType": ".numshb",
+      "fileIndex": 23,
+      "fileUrl": ".\\0x6E12EA88\\23.numshb"
+    },
+    {
+      "index": 24,
+      "fileType": ".numshb",
+      "fileIndex": 24,
+      "fileUrl": ".\\0x6E12EA88\\24.numshb"
+    },
+    {
+      "index": 25,
+      "fileType": ".numdlb",
+      "fileIndex": 25,
+      "fileUrl": ".\\0x6E12EA88\\25.numdlb"
+    },
+    {
+      "index": 26,
+      "fileType": ".numdlb",
+      "fileIndex": 26,
+      "fileUrl": ".\\0x6E12EA88\\26.numdlb"
+    },
+    {
+      "index": 27,
+      "fileType": ".numdlb",
+      "fileIndex": 27,
+      "fileUrl": ".\\0x6E12EA88\\27.numdlb"
+    },
+    {
+      "index": 28,
+      "fileType": ".nuhlpb",
+      "fileIndex": 28,
+      "fileUrl": ".\\0x6E12EA88\\28.nuhlpb"
+    },
+    {
+      "index": 29,
+      "fileType": ".nuhlpb",
+      "fileIndex": 29,
+      "fileUrl": ".\\0x6E12EA88\\29.nuhlpb"
+    },
+    {
+      "index": 30,
+      "fileType": ".nuhlpb",
+      "fileIndex": 30,
+      "fileUrl": ".\\0x6E12EA88\\30.nuhlpb"
+    },
+    {
+      "index": 31,
+      "fileType": ".nudnbb",
+      "fileIndex": 31,
+      "fileUrl": ".\\0x6E12EA88\\31.nudnbb"
+    },
+    {
+      "index": 32,
+      "fileType": ".bin",
+      "fileIndex": 32,
+      "fileUrl": ".\\0x6E12EA88\\32.bin"
+    },
+    {
+      "index": 33,
+      "fileType": ".bin",
+      "fileIndex": 33,
+      "fileUrl": ".\\0x6E12EA88\\33.bin"
+    },
+    {
+      "index": 34,
+      "fileType": ".bin",
+      "fileIndex": 34,
+      "fileUrl": ".\\0x6E12EA88\\34.bin"
+    },
+    {
+      "index": 35,
+      "fileType": ".bin",
+      "fileIndex": 35,
+      "fileUrl": ".\\0x6E12EA88\\35.bin"
+    },
+    {
+      "index": 36,
+      "fileType": ".bin",
+      "fileIndex": 36,
+      "fileUrl": ".\\0x6E12EA88\\36.bin"
+    },
+    {
+      "index": 37,
+      "fileType": ".bin",
+      "fileIndex": 37,
+      "fileUrl": ".\\0x6E12EA88\\37.bin"
+    },
+    {
+      "index": 38,
+      "fileType": ".bin",
+      "fileIndex": 38,
+      "fileUrl": ".\\0x6E12EA88\\38.bin"
+    },
+    {
+      "index": 39,
+      "fileType": ".bin",
+      "fileIndex": 39,
+      "fileUrl": ".\\0x6E12EA88\\39.bin"
+    },
+    {
+      "index": 40,
+      "fileType": ".bin",
+      "fileIndex": 40,
+      "fileUrl": ".\\0x6E12EA88\\40.bin"
+    },
+    {
+      "index": 41,
+      "fileType": ".bin",
+      "fileIndex": 41,
+      "fileUrl": ".\\0x6E12EA88\\41.bin"
+    },
+    {
+      "index": 42,
+      "fileType": ".bin",
+      "fileIndex": 42,
+      "fileUrl": ".\\0x6E12EA88\\42.bin"
+    }
+  ],
+  "SubFileStructure": [
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 9,
+      "unk2": "00000000",
+      "unk3": 0,
+      "unk4": 0
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 34,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 34
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 38,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 38
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 3,
+      "unk2": "00000000",
+      "unk3": 0,
+      "unk4": 0
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 10,
+      "unk2": "00000000",
+      "unk3": 0,
+      "unk4": 0
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 11,
+      "unk2": "10000000",
+      "unk3": 0,
+      "originalFileIndex": 11
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 8,
+      "unk2": "00000000",
+      "unk3": 32,
+      "unk4": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 0,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 0
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 4,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 4
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 3,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 3
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 6,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 6
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 2,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 2
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 8,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 8
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 1,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 5,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 5
+    },
+    {
+      "type": "EndMark",
+      "endMarkCount": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 16,
+      "unk2": "21000000",
+      "unk3": 1,
+      "originalFileIndex": 16
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 8,
+      "unk2": "00000000",
+      "unk3": 32,
+      "unk4": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 8,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 8
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 2,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 2
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 6,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 6
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 3,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 3
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 4,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 4
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 5,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 5
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 7,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 7
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 0,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 0
+    },
+    {
+      "type": "EndMark",
+      "endMarkCount": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 15,
+      "unk2": "21000000",
+      "unk3": 1,
+      "originalFileIndex": 15
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 22,
+      "unk2": "30000000",
+      "unk3": 0,
+      "originalFileIndex": 22
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 26,
+      "unk2": "40000000",
+      "unk3": 0,
+      "originalFileIndex": 26
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 33,
+      "unk2": "50000000",
+      "unk3": 0,
+      "originalFileIndex": 33
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 8,
+      "unk2": "00000000",
+      "unk3": 32,
+      "unk4": 2
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 6,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 6
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 3,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 3
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 4,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 4
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 5,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 5
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 8,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 8
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 7,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 7
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 0,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 0
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 1,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 1
+    },
+    {
+      "type": "EndMark",
+      "endMarkCount": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 14,
+      "unk2": "21000000",
+      "unk3": 2,
+      "originalFileIndex": 14
+    },
+    {
+      "type": "EndMark",
+      "endMarkCount": 1
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 10,
+      "unk2": "00000000",
+      "unk3": 0,
+      "unk4": 0
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 10,
+      "unk2": "10000000",
+      "unk3": 0,
+      "originalFileIndex": 10
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 8,
+      "unk2": "00000000",
+      "unk3": 32,
+      "unk4": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 0,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 0
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 4,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 4
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 3,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 3
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 6,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 6
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 2,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 2
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 8,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 8
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 1,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 5,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 5
+    },
+    {
+      "type": "EndMark",
+      "endMarkCount": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 13,
+      "unk2": "21000000",
+      "unk3": 1,
+      "originalFileIndex": 13
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 8,
+      "unk2": "00000000",
+      "unk3": 32,
+      "unk4": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 6,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 6
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 4,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 4
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 3,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 3
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 7,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 7
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 0,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 0
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 8,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 8
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 2,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 2
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 5,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 5
+    },
+    {
+      "type": "EndMark",
+      "endMarkCount": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 17,
+      "unk2": "21000000",
+      "unk3": 1,
+      "originalFileIndex": 17
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 23,
+      "unk2": "30000000",
+      "unk3": 0,
+      "originalFileIndex": 23
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 27,
+      "unk2": "40000000",
+      "unk3": 0,
+      "originalFileIndex": 27
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 37,
+      "unk2": "50000000",
+      "unk3": 0,
+      "originalFileIndex": 37
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 8,
+      "unk2": "00000000",
+      "unk3": 32,
+      "unk4": 2
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 6,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 6
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 4,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 4
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 3,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 3
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 7,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 7
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 0,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 0
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 8,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 8
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 2,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 2
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 5,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 5
+    },
+    {
+      "type": "EndMark",
+      "endMarkCount": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 18,
+      "unk2": "21000000",
+      "unk3": 2,
+      "originalFileIndex": 18
+    },
+    {
+      "type": "EndMark",
+      "endMarkCount": 1
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 10,
+      "unk2": "00000000",
+      "unk3": 0,
+      "unk4": 0
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 12,
+      "unk2": "10000000",
+      "unk3": 0,
+      "originalFileIndex": 12
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 8,
+      "unk2": "00000000",
+      "unk3": 32,
+      "unk4": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 0,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 0
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 4,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 4
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 3,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 3
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 6,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 6
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 2,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 2
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 8,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 8
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 1,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 5,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 5
+    },
+    {
+      "type": "EndMark",
+      "endMarkCount": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 21,
+      "unk2": "21000000",
+      "unk3": 1,
+      "originalFileIndex": 21
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 8,
+      "unk2": "00000000",
+      "unk3": 32,
+      "unk4": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 6,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 6
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 4,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 4
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 3,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 3
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 7,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 7
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 0,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 0
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 8,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 8
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 2,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 2
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 5,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 5
+    },
+    {
+      "type": "EndMark",
+      "endMarkCount": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 20,
+      "unk2": "21000000",
+      "unk3": 1,
+      "originalFileIndex": 20
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 24,
+      "unk2": "30000000",
+      "unk3": 0,
+      "originalFileIndex": 24
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 25,
+      "unk2": "40000000",
+      "unk3": 0,
+      "originalFileIndex": 25
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 39,
+      "unk2": "50000000",
+      "unk3": 0,
+      "originalFileIndex": 39
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 8,
+      "unk2": "00000000",
+      "unk3": 32,
+      "unk4": 2
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 6,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 6
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 4,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 4
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 3,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 3
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 7,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 7
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 0,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 0
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 8,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 8
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 2,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 2
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 5,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 5
+    },
+    {
+      "type": "EndMark",
+      "endMarkCount": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 19,
+      "unk2": "21000000",
+      "unk3": 2,
+      "originalFileIndex": 19
+    },
+    {
+      "type": "EndMark",
+      "endMarkCount": 2
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 2,
+      "unk2": "00000000",
+      "unk3": 0,
+      "unk4": 0
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 2,
+      "unk2": "00000000",
+      "unk3": 0,
+      "unk4": 0
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 36,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 36
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 40,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 40
+    },
+    {
+      "type": "EndMark",
+      "endMarkCount": 1
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 2,
+      "unk2": "00000000",
+      "unk3": 0,
+      "unk4": 0
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 35,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 35
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 32,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 32
+    },
+    {
+      "type": "EndMark",
+      "endMarkCount": 2
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 1,
+      "unk2": "00000000",
+      "unk3": 0,
+      "unk4": 0
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 9,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 9
+    },
+    {
+      "type": "EndMark",
+      "endMarkCount": 1
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 3,
+      "unk2": "00000000",
+      "unk3": 0,
+      "unk4": 0
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 28,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 28
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 29,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 29
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 30,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 30
+    },
+    {
+      "type": "EndMark",
+      "endMarkCount": 1
+    },
+    {
+      "type": "Folder",
+      "unk1": "00000000",
+      "folderCount": 1,
+      "unk2": "00000000",
+      "unk3": 0,
+      "unk4": 0
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 31,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 31
+    },
+    {
+      "type": "EndMark",
+      "endMarkCount": 1
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 41,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 41
+    },
+    {
+      "type": "Item",
+      "unk1": "00000000",
+      "fileIndex": 42,
+      "unk2": "00000000",
+      "unk3": 0,
+      "originalFileIndex": 42
+    },
+    {
+      "type": "EndMark",
+      "endMarkCount": 1
+    }
+  ],
+  "SubFileParseStructure": {
+    "name": "Root",
+    "children": [
+      {
+        "type": "Folder",
+        "name": "0",
+        "link": false,
+        "unk1": "00000000",
+        "unk2": "00000000",
+        "unk3": 0,
+        "children": [
+          {
+            "type": "Item",
+            "name": "34",
+            "link": false,
+            "unk1": "00000000",
+            "unk2": "00000000",
+            "unk3": 0
+          },
+          {
+            "type": "Item",
+            "name": "38",
+            "link": false,
+            "unk1": "00000000",
+            "unk2": "00000000",
+            "unk3": 0
+          },
+          {
+            "type": "Folder",
+            "name": "0",
+            "link": false,
+            "unk1": "00000000",
+            "unk2": "00000000",
+            "unk3": 0,
+            "children": [
+              {
+                "type": "Folder",
+                "name": "0",
+                "link": false,
+                "unk1": "00000000",
+                "unk2": "00000000",
+                "unk3": 0,
+                "children": [
+                  {
+                    "type": "Item",
+                    "name": "11",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "10000000",
+                    "unk3": 0
+                  },
+                  {
+                    "type": "Folder",
+                    "name": "0",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "00000000",
+                    "unk3": 32,
+                    "children": [
+                      {
+                        "type": "Item",
+                        "name": "0",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "4",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "3",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "6",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "2",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "8",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "1",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "5",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      }
+                    ]
+                  },
+                  {
+                    "type": "Item",
+                    "name": "16",
+                    "link": true,
+                    "unk1": "00000000",
+                    "unk2": "21000000",
+                    "unk3": 1
+                  },
+                  {
+                    "type": "Folder",
+                    "name": "1",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "00000000",
+                    "unk3": 32,
+                    "children": [
+                      {
+                        "type": "Item",
+                        "name": "8",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "2",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "6",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "3",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "4",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "5",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "7",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "0",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      }
+                    ]
+                  },
+                  {
+                    "type": "Item",
+                    "name": "15",
+                    "link": true,
+                    "unk1": "00000000",
+                    "unk2": "21000000",
+                    "unk3": 1
+                  },
+                  {
+                    "type": "Item",
+                    "name": "22",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "30000000",
+                    "unk3": 0
+                  },
+                  {
+                    "type": "Item",
+                    "name": "26",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "40000000",
+                    "unk3": 0
+                  },
+                  {
+                    "type": "Item",
+                    "name": "33",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "50000000",
+                    "unk3": 0
+                  },
+                  {
+                    "type": "Folder",
+                    "name": "2",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "00000000",
+                    "unk3": 32,
+                    "children": [
+                      {
+                        "type": "Item",
+                        "name": "6",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "3",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "4",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "5",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "8",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "7",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "0",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "1",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      }
+                    ]
+                  },
+                  {
+                    "type": "Item",
+                    "name": "14",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "21000000",
+                    "unk3": 2
+                  }
+                ]
+              },
+              {
+                "type": "Folder",
+                "name": "1",
+                "link": false,
+                "unk1": "00000000",
+                "unk2": "00000000",
+                "unk3": 0,
+                "children": [
+                  {
+                    "type": "Item",
+                    "name": "10",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "10000000",
+                    "unk3": 0
+                  },
+                  {
+                    "type": "Folder",
+                    "name": "0",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "00000000",
+                    "unk3": 32,
+                    "children": [
+                      {
+                        "type": "Item",
+                        "name": "0",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "4",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "3",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "6",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "2",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "8",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "1",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "5",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      }
+                    ]
+                  },
+                  {
+                    "type": "Item",
+                    "name": "13",
+                    "link": true,
+                    "unk1": "00000000",
+                    "unk2": "21000000",
+                    "unk3": 1
+                  },
+                  {
+                    "type": "Folder",
+                    "name": "1",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "00000000",
+                    "unk3": 32,
+                    "children": [
+                      {
+                        "type": "Item",
+                        "name": "6",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "4",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "3",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "7",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "0",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "8",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "2",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "5",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      }
+                    ]
+                  },
+                  {
+                    "type": "Item",
+                    "name": "17",
+                    "link": true,
+                    "unk1": "00000000",
+                    "unk2": "21000000",
+                    "unk3": 1
+                  },
+                  {
+                    "type": "Item",
+                    "name": "23",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "30000000",
+                    "unk3": 0
+                  },
+                  {
+                    "type": "Item",
+                    "name": "27",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "40000000",
+                    "unk3": 0
+                  },
+                  {
+                    "type": "Item",
+                    "name": "37",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "50000000",
+                    "unk3": 0
+                  },
+                  {
+                    "type": "Folder",
+                    "name": "2",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "00000000",
+                    "unk3": 32,
+                    "children": [
+                      {
+                        "type": "Item",
+                        "name": "6",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "4",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "3",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "7",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "0",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "8",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "2",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "5",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      }
+                    ]
+                  },
+                  {
+                    "type": "Item",
+                    "name": "18",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "21000000",
+                    "unk3": 2
+                  }
+                ]
+              },
+              {
+                "type": "Folder",
+                "name": "2",
+                "link": false,
+                "unk1": "00000000",
+                "unk2": "00000000",
+                "unk3": 0,
+                "children": [
+                  {
+                    "type": "Item",
+                    "name": "12",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "10000000",
+                    "unk3": 0
+                  },
+                  {
+                    "type": "Folder",
+                    "name": "0",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "00000000",
+                    "unk3": 32,
+                    "children": [
+                      {
+                        "type": "Item",
+                        "name": "0",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "4",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "3",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "6",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "2",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "8",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "1",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "5",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      }
+                    ]
+                  },
+                  {
+                    "type": "Item",
+                    "name": "21",
+                    "link": true,
+                    "unk1": "00000000",
+                    "unk2": "21000000",
+                    "unk3": 1
+                  },
+                  {
+                    "type": "Folder",
+                    "name": "1",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "00000000",
+                    "unk3": 32,
+                    "children": [
+                      {
+                        "type": "Item",
+                        "name": "6",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "4",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "3",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "7",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "0",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "8",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "2",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "5",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      }
+                    ]
+                  },
+                  {
+                    "type": "Item",
+                    "name": "20",
+                    "link": true,
+                    "unk1": "00000000",
+                    "unk2": "21000000",
+                    "unk3": 1
+                  },
+                  {
+                    "type": "Item",
+                    "name": "24",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "30000000",
+                    "unk3": 0
+                  },
+                  {
+                    "type": "Item",
+                    "name": "25",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "40000000",
+                    "unk3": 0
+                  },
+                  {
+                    "type": "Item",
+                    "name": "39",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "50000000",
+                    "unk3": 0
+                  },
+                  {
+                    "type": "Folder",
+                    "name": "2",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "00000000",
+                    "unk3": 32,
+                    "children": [
+                      {
+                        "type": "Item",
+                        "name": "6",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "4",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "3",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "7",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "0",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "8",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "2",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      },
+                      {
+                        "type": "Item",
+                        "name": "5",
+                        "link": false,
+                        "unk1": "00000000",
+                        "unk2": "00000000",
+                        "unk3": 0
+                      }
+                    ]
+                  },
+                  {
+                    "type": "Item",
+                    "name": "19",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "21000000",
+                    "unk3": 2
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Folder",
+            "name": "1",
+            "link": false,
+            "unk1": "00000000",
+            "unk2": "00000000",
+            "unk3": 0,
+            "children": [
+              {
+                "type": "Folder",
+                "name": "0",
+                "link": false,
+                "unk1": "00000000",
+                "unk2": "00000000",
+                "unk3": 0,
+                "children": [
+                  {
+                    "type": "Item",
+                    "name": "36",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "00000000",
+                    "unk3": 0
+                  },
+                  {
+                    "type": "Item",
+                    "name": "40",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "00000000",
+                    "unk3": 0
+                  }
+                ]
+              },
+              {
+                "type": "Folder",
+                "name": "1",
+                "link": false,
+                "unk1": "00000000",
+                "unk2": "00000000",
+                "unk3": 0,
+                "children": [
+                  {
+                    "type": "Item",
+                    "name": "35",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "00000000",
+                    "unk3": 0
+                  },
+                  {
+                    "type": "Item",
+                    "name": "32",
+                    "link": false,
+                    "unk1": "00000000",
+                    "unk2": "00000000",
+                    "unk3": 0
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Folder",
+            "name": "2",
+            "link": false,
+            "unk1": "00000000",
+            "unk2": "00000000",
+            "unk3": 0,
+            "children": [
+              {
+                "type": "Item",
+                "name": "9",
+                "link": false,
+                "unk1": "00000000",
+                "unk2": "00000000",
+                "unk3": 0
+              }
+            ]
+          },
+          {
+            "type": "Folder",
+            "name": "3",
+            "link": false,
+            "unk1": "00000000",
+            "unk2": "00000000",
+            "unk3": 0,
+            "children": [
+              {
+                "type": "Item",
+                "name": "28",
+                "link": false,
+                "unk1": "00000000",
+                "unk2": "00000000",
+                "unk3": 0
+              },
+              {
+                "type": "Item",
+                "name": "29",
+                "link": false,
+                "unk1": "00000000",
+                "unk2": "00000000",
+                "unk3": 0
+              },
+              {
+                "type": "Item",
+                "name": "30",
+                "link": false,
+                "unk1": "00000000",
+                "unk2": "00000000",
+                "unk3": 0
+              }
+            ]
+          },
+          {
+            "type": "Folder",
+            "name": "4",
+            "link": false,
+            "unk1": "00000000",
+            "unk2": "00000000",
+            "unk3": 0,
+            "children": [
+              {
+                "type": "Item",
+                "name": "31",
+                "link": false,
+                "unk1": "00000000",
+                "unk2": "00000000",
+                "unk3": 0
+              }
+            ]
+          },
+          {
+            "type": "Item",
+            "name": "41",
+            "link": false,
+            "unk1": "00000000",
+            "unk2": "00000000",
+            "unk3": 0
+          },
+          {
+            "type": "Item",
+            "name": "42",
+            "link": false,
+            "unk1": "00000000",
+            "unk2": "00000000",
+            "unk3": 0
+          }
+        ]
+      }
+    ]
+  }
+}

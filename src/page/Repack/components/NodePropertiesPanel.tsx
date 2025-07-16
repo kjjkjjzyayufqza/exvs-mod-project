@@ -5,38 +5,199 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Trash2, Edit3, Save, X, Folder, FileText, Calendar, HardDrive } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Textarea } from "@/components/ui/textarea";
+import { Trash2, Edit3, Save, X, Folder, FileText, Calendar, HardDrive, Copy } from "lucide-react";
+import { TreeDataItem } from "@/lib/utils";
+import { useRepackStore } from "@/store/repackStore";
+import { toast } from 'sonner';
 
-interface TreeDataItem {
-  id: string;
-  name: string;
+interface ExtendedTreeDataItem extends TreeDataItem {
   icon?: any;
   selectedIcon?: any;
   openIcon?: any;
-  children?: TreeDataItem[];
   actions?: React.ReactNode;
   onClick?: () => void;
   draggable?: boolean;
   droppable?: boolean;
   disabled?: boolean;
-  data?: {
-    type: 'folder' | 'file';
-    size?: number;
-    path?: string;
-    lastModified?: Date;
-  };
 }
 
 interface NodePropertiesPanelProps {
-  selectedItem: TreeDataItem | undefined;
+  selectedItem: ExtendedTreeDataItem | undefined;
   onRename: (nodeId: string, newName: string) => void;
   onDelete: (nodeId: string) => void;
+  onFileTypeChange: (nodeId: string, fileType: string) => void;
+  onPropertyChange: (nodeId: string, property: string, value: string | number) => void;
 }
 
-export function NodePropertiesPanel({ selectedItem, onRename, onDelete }: NodePropertiesPanelProps) {
+// File type options based on getFileType function
+const fileTypeOptions = [
+  { value: ".nushdb", label: ".nushdb", type: 0xa },
+  { value: ".nutexb", label: ".nutexb", type: 0xb },
+  { value: ".nusktb", label: ".nusktb", type: 0xc },
+  { value: ".numatb", label: ".numatb", type: 0xd },
+  { value: ".numshb", label: ".numshb", type: 0xe },
+  { value: ".numdlb", label: ".numdlb", type: 0xf },
+  { value: ".nuhlpb", label: ".nuhlpb", type: 0x13 },
+  { value: ".nus3bank", label: ".nus3bank", type: 0x14 },
+  { value: ".nudnbb", label: ".nudnbb", type: 0x17 },
+  { value: ".nufxlb", label: ".nufxlb", type: 0x18 },
+  { value: ".nurpdb", label: ".nurpdb", type: 0x19 },
+  { value: ".bin", label: ".bin", type: 0 },
+];
+
+// EditableProperty component moved outside to prevent re-creation on each render
+const EditableProperty = ({
+  label,
+  value,
+  property,
+  editable = false,
+  type = 'input',
+  editingProperty,
+  editValue,
+  validationError,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
+  onValueChange
+}: {
+  label: string;
+  value: string | number | undefined;
+  property: string;
+  editable?: boolean;
+  type?: 'input' | 'textarea';
+  editingProperty: string | null;
+  editValue: string;
+  validationError: string;
+  onStartEdit: (property: string, value: string | number) => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+  onValueChange: (value: string) => void;
+}) => {
+  const isEditing = editingProperty === property;
+  const displayValue = value !== undefined ? String(value) : '';
+
+  if (type === 'textarea') {
+    return (
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">{label}</Label>
+        {editable && !isEditing ? (
+          <div className="space-y-2">
+            <div className="text-sm text-muted-foreground font-mono p-2 bg-muted rounded-md min-h-[60px] whitespace-pre-wrap break-all">
+              {displayValue || 'No value'}
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full"
+              onClick={() => onStartEdit(property, value || '')}
+            >
+              <Edit3 className="h-3 w-3 mr-2" />
+              Edit
+            </Button>
+          </div>
+        ) : editable && isEditing ? (
+          <div className="space-y-2">
+            <Textarea
+              value={editValue}
+              onChange={(e) => onValueChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && e.ctrlKey) onSaveEdit();
+                if (e.key === 'Escape') onCancelEdit();
+              }}
+              className="min-h-[60px]"
+            />
+            <div className="flex gap-2">
+              <Button size="sm" onClick={onSaveEdit} className="flex-1">
+                <Save className="h-3 w-3 mr-2" />
+                Save
+              </Button>
+              <Button size="sm" variant="outline" onClick={onCancelEdit} className="flex-1">
+                <X className="h-3 w-3 mr-2" />
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="text-sm text-muted-foreground font-mono p-2 bg-muted rounded-md min-h-[60px] whitespace-pre-wrap break-all">
+            {displayValue || 'No value'}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex justify-between items-center">
+      <Label className="text-sm font-medium">{label}</Label>
+      {editable && !isEditing ? (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground font-mono">
+            {displayValue}
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 w-6 p-0"
+            onClick={() => onStartEdit(property, value || '')}
+          >
+            <Edit3 className="h-3 w-3" />
+          </Button>
+        </div>
+      ) : editable && isEditing ? (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <Input
+              value={editValue}
+              onChange={(e) => onValueChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onSaveEdit();
+                if (e.key === 'Escape') onCancelEdit();
+              }}
+              onFocus={(e) => {
+                // Move cursor to end of text when focused
+                const target = e.target;
+                setTimeout(() => {
+                  target.selectionStart = target.value.length;
+                  target.selectionEnd = target.value.length;
+                }, 0);
+              }}
+              className={`h-6 w-20 text-sm ${validationError ? 'border-red-500' : ''}`}
+              autoFocus
+            />
+            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={onSaveEdit}>
+              <Save className="h-3 w-3" />
+            </Button>
+            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={onCancelEdit}>
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+          {validationError && (
+            <div className="text-xs text-red-500 mt-1">
+              {validationError}
+            </div>
+          )}
+        </div>
+      ) : (
+        <span className="text-sm text-muted-foreground font-mono">
+          {displayValue}
+        </span>
+      )}
+    </div>
+  );
+};
+
+export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTypeChange, onPropertyChange }: NodePropertiesPanelProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [editingProperty, setEditingProperty] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<string>("");
+  const [validationError, setValidationError] = useState<string>("");
+  
+  const { isIndexExists, isFileIndexExists, copyNode } = useRepackStore();
 
   const handleStartEdit = () => {
     if (selectedItem) {
@@ -68,6 +229,62 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete }: NodePr
     setIsDeleteDialogOpen(false);
   };
 
+  const handleCopy = () => {
+    if (selectedItem) {
+      copyNode(selectedItem.id);
+      
+      // Show success message
+      const itemType = selectedItem.data?.type || 'item';
+      const itemTypeText = itemType === 'Folder' ? 'folder' : 'file';
+      const childrenCount = selectedItem.children ? selectedItem.children.length : 0;
+      const childrenText = childrenCount > 0 ? ` (including ${childrenCount} items)` : '';
+      
+      toast.success(`Successfully copied ${itemTypeText}: "${selectedItem.name}"${childrenText}`);
+    }
+  };
+
+  const handleFileTypeChange = (newFileType: string) => {
+    if (selectedItem) {
+      onFileTypeChange(selectedItem.id, newFileType);
+    }
+  };
+
+  const handleStartPropertyEdit = (property: string, currentValue: string | number) => {
+    setEditingProperty(property);
+    setEditValue(String(currentValue));
+    setValidationError("");
+  };
+
+  const handleSavePropertyEdit = () => {
+    if (selectedItem && editingProperty) {
+      // Clear previous validation error
+      setValidationError("");
+      
+      const value = editingProperty.includes('Index') || editingProperty.includes('unk')
+        ? (editingProperty.startsWith('unk') ? editValue : parseInt(editValue) || 0)
+        : editValue;
+      
+      // Validate index for duplicates (only for index, not fileIndex)
+      if (editingProperty === 'index' && selectedItem.data?.type === 'Item') {
+        const newIndex = parseInt(editValue) || 0;
+        if (newIndex !== selectedItem.data.index && isIndexExists(newIndex)) {
+          setValidationError(`Index ${newIndex} already exists in SubFileData`);
+          return;
+        }
+      }
+      
+      onPropertyChange(selectedItem.id, editingProperty, value);
+      setEditingProperty(null);
+      setEditValue("");
+    }
+  };
+
+  const handleCancelPropertyEdit = () => {
+    setEditingProperty(null);
+    setEditValue("");
+    setValidationError("");
+  };
+
   const formatFileSize = (bytes: number | undefined): string => {
     if (!bytes) return "0 B";
     const sizes = ['B', 'KB', 'MB', 'GB'];
@@ -96,7 +313,7 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete }: NodePr
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          {selectedItem.data?.type === 'folder' ? (
+          {selectedItem.data?.type === 'Folder' ? (
             <Folder className="h-5 w-5" />
           ) : (
             <FileText className="h-5 w-5" />
@@ -118,6 +335,14 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete }: NodePr
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleSaveEdit();
                   if (e.key === 'Escape') handleCancelEdit();
+                }}
+                onFocus={(e) => {
+                  // Move cursor to end of text when focused
+                  const target = e.target;
+                  setTimeout(() => {
+                    target.selectionStart = target.value.length;
+                    target.selectionEnd = target.value.length;
+                  }, 0);
                 }}
                 autoFocus
                 className="flex-1"
@@ -150,68 +375,217 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete }: NodePr
             </span>
           </div>
 
-          <div className="flex justify-between items-center">
-            <Label className="text-sm font-medium">ID</Label>
-            <span className="text-sm text-muted-foreground font-mono">
-              {selectedItem.id}
-            </span>
-          </div>
+          {selectedItem.data?.fileUrl !== undefined && (
+            <EditableProperty
+              label="File URL"
+              value={selectedItem.data.fileUrl}
+              property="fileUrl"
+              editable={true}
+              type="textarea"
+              editingProperty={editingProperty}
+              editValue={editValue}
+              validationError={validationError}
+              onStartEdit={handleStartPropertyEdit}
+              onSaveEdit={handleSavePropertyEdit}
+              onCancelEdit={handleCancelPropertyEdit}
+              onValueChange={setEditValue}
+            />
+          )}
 
-          {selectedItem.data?.path && (
+          {selectedItem.data?.fileType && (
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">File Type</Label>
+              <Select
+                value={selectedItem.data.fileType}
+                onValueChange={handleFileTypeChange}
+              >
+                <SelectTrigger className="w-32 h-8 text-sm">
+                  <SelectValue placeholder="Select file type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {fileTypeOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {selectedItem.data?.fileIndex !== undefined && (
+            <EditableProperty
+              label="File Index"
+              value={selectedItem.data.fileIndex}
+              property="fileIndex"
+              editable={selectedItem.data?.type === 'Item'}
+              editingProperty={editingProperty}
+              editValue={editValue}
+              validationError={validationError}
+              onStartEdit={handleStartPropertyEdit}
+              onSaveEdit={handleSavePropertyEdit}
+              onCancelEdit={handleCancelPropertyEdit}
+              onValueChange={setEditValue}
+            />
+          )}
+
+          {selectedItem.data?.originalFileIndex !== undefined && (
+            <EditableProperty
+              label="Original File Index"
+              value={selectedItem.data.originalFileIndex}
+              property="originalFileIndex"
+              editable={selectedItem.data?.type === 'Item'}
+              editingProperty={editingProperty}
+              editValue={editValue}
+              validationError={validationError}
+              onStartEdit={handleStartPropertyEdit}
+              onSaveEdit={handleSavePropertyEdit}
+              onCancelEdit={handleCancelPropertyEdit}
+              onValueChange={setEditValue}
+            />
+          )}
+
+          {selectedItem.data?.type === 'Item' && selectedItem.data?.isError !== undefined && (
             <div className="flex justify-between items-center">
-              <Label className="text-sm font-medium">Path</Label>
-              <span className="text-sm text-muted-foreground font-mono truncate max-w-32">
-                {selectedItem.data.path}
+              <Label className="text-sm font-medium">Is Error</Label>
+              <span className="text-sm text-muted-foreground">
+                {selectedItem.data.isError ? 'Yes' : 'No'}
               </span>
             </div>
           )}
 
-          {selectedItem.data?.size !== undefined && (
+          {selectedItem.data?.type === 'Item' && selectedItem.data?.originChunkCount !== undefined && (
             <div className="flex justify-between items-center">
-              <Label className="text-sm font-medium flex items-center gap-1">
-                <HardDrive className="h-4 w-4" />
-                Size
-              </Label>
+              <Label className="text-sm font-medium">Origin Chunk Count</Label>
               <span className="text-sm text-muted-foreground">
-                {formatFileSize(selectedItem.data.size)}
+                {selectedItem.data.originChunkCount}
               </span>
             </div>
           )}
 
-          {selectedItem.data?.lastModified && (
+          {selectedItem.data?.type === 'Item' && selectedItem.data?.errorOriginSize !== undefined && (
             <div className="flex justify-between items-center">
-              <Label className="text-sm font-medium flex items-center gap-1">
-                <Calendar className="h-4 w-4" />
-                Modified
-              </Label>
+              <Label className="text-sm font-medium">Error Origin Size</Label>
               <span className="text-sm text-muted-foreground">
-                {selectedItem.data.lastModified.toLocaleDateString()}
+                {formatFileSize(selectedItem.data.errorOriginSize)}
+              </span>
+            </div>
+          )}
+
+          {selectedItem.data?.type === 'Item' && selectedItem.data?.errorCompBufferData && (
+            <div className="flex justify-between items-center">
+              <Label className="text-sm font-medium">Error Comp Buffer Data</Label>
+              <span className="text-sm text-muted-foreground">
+                [Object]
+              </span>
+            </div>
+          )}
+
+          {selectedItem.data?.type === 'Item' && selectedItem.data?.originBinChunkBuffer && (
+            <div className="flex justify-between items-center">
+              <Label className="text-sm font-medium">Origin Bin Chunk Buffer</Label>
+              <span className="text-sm text-muted-foreground">
+                [Object]
+              </span>
+            </div>
+          )}
+
+          {selectedItem.data?.type === 'Folder' && selectedItem.data?.folderCount !== undefined && (
+            <div className="flex justify-between items-center">
+              <Label className="text-sm font-medium">Folder Count</Label>
+              <span className="text-sm text-muted-foreground">
+                {selectedItem.data.folderCount}
+              </span>
+            </div>
+          )}
+
+          {selectedItem.data?.unk1 !== undefined && (
+            <EditableProperty
+              label="Unk1"
+              value={selectedItem.data.unk1}
+              property="unk1"
+              editable={true}
+              editingProperty={editingProperty}
+              editValue={editValue}
+              validationError={validationError}
+              onStartEdit={handleStartPropertyEdit}
+              onSaveEdit={handleSavePropertyEdit}
+              onCancelEdit={handleCancelPropertyEdit}
+              onValueChange={setEditValue}
+            />
+          )}
+
+          {selectedItem.data?.unk2 !== undefined && (
+            <EditableProperty
+              label="Unk2"
+              value={selectedItem.data.unk2}
+              property="unk2"
+              editable={true}
+              editingProperty={editingProperty}
+              editValue={editValue}
+              validationError={validationError}
+              onStartEdit={handleStartPropertyEdit}
+              onSaveEdit={handleSavePropertyEdit}
+              onCancelEdit={handleCancelPropertyEdit}
+              onValueChange={setEditValue}
+            />
+          )}
+
+          {selectedItem.data?.unk3 !== undefined && (
+            <EditableProperty
+              label="Unk3"
+              value={selectedItem.data.unk3}
+              property="unk3"
+              editable={selectedItem.data?.type === 'Item' || selectedItem.data?.type === 'Folder'}
+              editingProperty={editingProperty}
+              editValue={editValue}
+              validationError={validationError}
+              onStartEdit={handleStartPropertyEdit}
+              onSaveEdit={handleSavePropertyEdit}
+              onCancelEdit={handleCancelPropertyEdit}
+              onValueChange={setEditValue}
+            />
+          )}
+
+          {selectedItem.data?.unk4 !== undefined && (
+            <EditableProperty
+              label="Unk4"
+              value={selectedItem.data.unk4}
+              property="unk4"
+              editable={selectedItem.data?.type === 'Folder'}
+              editingProperty={editingProperty}
+              editValue={editValue}
+              validationError={validationError}
+              onStartEdit={handleStartPropertyEdit}
+              onSaveEdit={handleSavePropertyEdit}
+              onCancelEdit={handleCancelPropertyEdit}
+              onValueChange={setEditValue}
+            />
+          )}
+
+          {selectedItem.data?.link && (
+            <div className="flex justify-between items-center">
+              <Label className="text-sm font-medium">Link</Label>
+              <span className="text-sm text-muted-foreground">
+                {selectedItem.data.link ? 'Yes' : 'No'}
               </span>
             </div>
           )}
         </div>
-
         <Separator />
-
-        {/* Attributes Section */}
-        <div className="space-y-3">
-          <Label className="text-sm font-medium">Attributes</Label>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className={`p-2 rounded text-center ${selectedItem.draggable ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'}`}>
-              Draggable
-            </div>
-            <div className={`p-2 rounded text-center ${selectedItem.droppable ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'}`}>
-              Droppable
-            </div>
-          </div>
-        </div>
-
-        <Separator />
-
         {/* Actions Section */}
         <div className="space-y-2">
           <Label className="text-sm font-medium">Actions</Label>
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={handleCopy}
+            >
+              <Copy className="h-4 w-4 mr-2" />
+              Copy
+            </Button>
             <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
               <DialogTrigger asChild>
                 <Button
@@ -229,7 +603,7 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete }: NodePr
                   <DialogTitle>Confirm Delete</DialogTitle>
                   <DialogDescription>
                     Are you sure you want to delete "{selectedItem.name}"? This action cannot be undone.
-                    {selectedItem.data?.type === 'folder' && selectedItem.children && selectedItem.children.length > 0 && (
+                    {selectedItem.data?.type === 'Folder' && selectedItem.children && selectedItem.children.length > 0 && (
                       <span className="block mt-2 text-red-600 font-medium">
                         This folder contains {selectedItem.children.length} item(s) which will also be deleted.
                       </span>
