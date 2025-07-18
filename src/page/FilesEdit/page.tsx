@@ -2,9 +2,10 @@ import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FolderOpen, Loader2 } from "lucide-react";
+import { FolderOpen, Loader2, Plus } from "lucide-react";
 import { readDir, readFile } from "@tauri-apps/plugin-fs";
 import { FileList } from "./components/FileList";
+import { FileTypeDialog } from "./components/FileTypeDialog";
 import { CONVERT_DIR_NAME, FileInfo as NumatbFileInfo, useNumatbStore } from "../../store/numatbStore";
 import { FileInfo as NutexbFileInfo } from "../../store/nutexbStore";
 import { useNutexbStore } from "../../store/nutexbStore";
@@ -48,6 +49,51 @@ export default function FilesEdit() {
   const resetConversion = () => {
     resetNumatbConversion();
     resetNutexbConversion();
+  };
+
+  const handleFileTypeSelect = async (fileType: string) => {
+    console.log("File creation completed for type:", fileType);
+    
+    // Refresh the file list after successful file creation
+    if (folderPath) {
+      setIsLoading(true);
+      try {
+        const entries = await readDir(folderPath);
+        const filteredEntries: any[] = entries
+          .filter((entry) => entry.isFile)
+          .filter((entry) => {
+            // remove "__convert" folder and files
+            if (entry.name === CONVERT_DIR_NAME) {
+              return false;
+            } else {
+              return true;
+            }
+          })
+          .map(entry => ({
+            name: entry.name || "",
+            path: folderPath + "/" + entry.name
+          })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        
+        for (const file of filteredEntries) {
+          if (file.name.endsWith('.nutexb')) {
+            try {
+              const cache = await cacheNutexbFile(file);
+              if (cache) {
+                file.previewPath = cache.outputPath;
+                file.string = cache.nutexbInfo.string;
+              }
+            } catch (e) {
+              console.error("Error processing Nutexb file:", e);
+            }
+          }
+        }
+        setFiles(filteredEntries);
+      } catch (error) {
+        console.error("Error refreshing directory:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
   };
 
   const handleFolderSelect = async () => {
@@ -152,7 +198,18 @@ export default function FilesEdit() {
       </div>
       <div className="grid grid-cols-2 gap-6 flex-1">
         <div className="col-span-2 bg-white rounded-lg shadow-sm border p-4">
-          <h3 className="text-lg font-semibold mb-4 text-gray-700">Files</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-700">Files</h3>
+            <FileTypeDialog 
+              onFileTypeSelect={handleFileTypeSelect}
+              currentDirectory={folderPath}
+            >
+              <Button size="sm" variant="outline" className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Add File
+              </Button>
+            </FileTypeDialog>
+          </div>
           <FileList
             files={files}
             isLoading={isLoading}

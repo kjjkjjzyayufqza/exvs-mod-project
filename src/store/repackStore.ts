@@ -98,13 +98,9 @@ export const useRepackStore = create<RepackStoreState>((set, get) => ({
     const { completeProjectData, treeData } = get()
     if (!completeProjectData) return null
 
-    // Convert treeData back to the required format
-    // The convertTreeDataToStructure function now handles:
-    // 1. Extracting SubFileData from tree structure
-    // 2. Sorting SubFileData by file type (.nutexb first, .bin last)
-    // 3. Reassigning sequential fileIndex values (0, 1, 2...)
-    // 4. Updating SubFileStructure items with correct fileIndex mappings
-    const { SubFileData, SubFileStructure } = convertTreeDataToStructure(treeData)
+    // Simply extract data from tree without any sorting or index modification
+    // This preserves the original order and indices exactly as they were loaded
+    const { SubFileData, SubFileStructure } = convertTreeDataToStructureWithoutModification(treeData)
 
     // Update Fhm2dTotalCount to current file count
     const updatedData = {
@@ -151,65 +147,23 @@ export const useRepackStore = create<RepackStoreState>((set, get) => ({
     return completeProjectData.SubFileData.some(item => item.fileIndex === fileIndex)
   },
 
-  // Helper function to recalculate all indices after deletion (similar to export logic)
+  // Helper function to recalculate count after deletion without modifying indices
   recalculateIndices: () => {
     const { treeData, completeProjectData } = get()
     if (!completeProjectData) return
 
-    // Extract SubFileData from current tree structure
-    const { SubFileData } = convertTreeDataToStructure(treeData)
+    // Extract SubFileData from current tree structure without modifications
+    const { SubFileData } = convertTreeDataToStructureWithoutModification(treeData)
 
-    // Sort and reassign indices using the same logic as export
-    const sortedSubFileData = sortSubFileData(SubFileData)
-
-    // Create mapping from old fileIndex to new fileIndex
-    const fileIndexMapping = new Map<number, number>()
-    sortedSubFileData.forEach((item, newIndex) => {
-      // Find the original item to get its original fileIndex
-      const originalItem = SubFileData.find(orig => orig.fileType === item.fileType && orig.fileUrl === item.fileUrl && orig.index === item.index)
-      if (originalItem) {
-        fileIndexMapping.set(originalItem.fileIndex, newIndex)
-      }
-    })
-
-    // Update tree data with new indices
-    const updateTreeDataIndices = (items: TreeDataItem[]): TreeDataItem[] => {
-      return items.map(item => {
-        if (item.data?.type === 'Item' && item.data.fileIndex !== undefined) {
-          const newFileIndex = fileIndexMapping.get(item.data.fileIndex)
-          const newIndex = newFileIndex !== undefined ? newFileIndex : item.data.fileIndex
-          return {
-            ...item,
-            data: {
-              ...item.data,
-              index: newIndex,
-              fileIndex: newIndex,
-              originalFileIndex: newIndex
-            }
-          }
-        }
-        if (item.children) {
-          return {
-            ...item,
-            children: updateTreeDataIndices(item.children)
-          }
-        }
-        return item
-      })
-    }
-
-    const updatedTreeData = updateTreeDataIndices(treeData)
-
-    // Update complete project data with new indices
+    // Update complete project data count only, preserve original indices
     const updatedCompleteProjectData = {
       ...completeProjectData,
-      Fhm2dTotalCount: sortedSubFileData.length,
-      SubFileData: sortedSubFileData
+      Fhm2dTotalCount: SubFileData.length,
+      SubFileData: SubFileData
     }
 
     set({
-      completeProjectData: updatedCompleteProjectData,
-      treeData: updatedTreeData
+      completeProjectData: updatedCompleteProjectData
     })
   },
 
@@ -337,161 +291,9 @@ export const useRepackStore = create<RepackStoreState>((set, get) => ({
   }
 }))
 
-// Helper function to extract SubFileData from tree structure
-function extractSubFileDataFromTree (treeData: TreeDataItem[]): SubFileDataItem[] {
-  const subFileData: SubFileDataItem[] = []
-  const seenFileIndices = new Set<number>()
 
-  console.log('--- Extracting SubFileData from tree structure ---')
 
-  const processItems = (items: TreeDataItem[]) => {
-    items.forEach(item => {
-      if (item.data?.type === 'Item' && item.data.fileType && item.data.fileIndex !== undefined) {
-        // Only add if we haven't seen this fileIndex before
-        if (!seenFileIndices.has(item.data.fileIndex)) {
-          // Validate required fields for Items
-          if (item.data.originalFileIndex === undefined || item.data.originalFileIndex === null) {
-            throw new Error(`Missing originalFileIndex for item: ${item.name}`)
-          }
-          if (!item.data.fileUrl) {
-            throw new Error(`Missing fileUrl for item: ${item.name}`)
-          }
 
-          // Extract original values from tree data
-          // Use originalFileIndex as both index and fileIndex for mapping purposes
-          const originalIndex = item.data.originalFileIndex
-          const originalFileIndex = item.data.originalFileIndex
-
-          // console.log(`  Extracting item: ${item.name}, originalIndex:${originalIndex}, originalFileIndex:${originalFileIndex}, currentFileIndex:${item.data.fileIndex}, fileType:${item.data.fileType}`);
-
-          subFileData.push({
-            index: originalIndex, // Use original index
-            fileType: item.data.fileType,
-            fileIndex: originalFileIndex, // Use original fileIndex for mapping
-            fileUrl: item.data.fileUrl,
-            isError: item.data.isError,
-            originChunkCount: item.data.originChunkCount,
-            errorCompBufferData: item.data.errorCompBufferData,
-            errorOriginSize: item.data.errorOriginSize,
-            originBinChunkBuffer: item.data.originBinChunkBuffer
-          })
-
-          seenFileIndices.add(item.data.fileIndex)
-        } else {
-          console.log(`  Skipping duplicate fileIndex: ${item.data.fileIndex} for item: ${item.name}`)
-        }
-      }
-      if (item.children) {
-        processItems(item.children)
-      }
-    })
-  }
-
-  processItems(treeData)
-  console.log(`--- Extracted ${subFileData.length} items from tree ---`)
-  return subFileData
-}
-
-// Helper function to create mapping from original fileIndex to new sorted position
-function createFileIndexMapping (originalData: SubFileDataItem[], sortedData: SubFileDataItem[]): Map<number, number> {
-  const mapping = new Map<number, number>()
-
-  console.log('--- Creating FileIndex Mapping ---')
-
-  // Create mapping from original fileIndex to new sequential position by matching fileUrl
-  sortedData.forEach((sortedItem, newPosition) => {
-    // Find the corresponding original item by fileUrl
-    const originalItem = originalData.find(orig => orig.fileUrl === sortedItem.fileUrl)
-    if (originalItem) {
-      // Map original fileIndex to new sequential position
-      // originalItem.fileIndex contains the original fileIndex from tree data
-      // newPosition is the new sequential position (0, 1, 2, ...)
-      mapping.set(originalItem.fileIndex, newPosition)
-      // console.log(`  Mapping: originalFileIndex ${originalItem.fileIndex} -> newPosition ${newPosition} (${sortedItem.fileUrl})`);
-    }
-  })
-
-  console.log('--- Mapping Created ---')
-  return mapping
-}
-
-// Helper function to generate SubFileStructure with correct fileIndex values
-function generateSubFileStructureWithMapping (treeData: TreeDataItem[], fileIndexMapping: Map<number, number>): SubFileStructureItem[] {
-  const subFileStructure: SubFileStructureItem[] = []
-
-  const processItems = (items: TreeDataItem[], depth: number = 0) => {
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
-      
-      if (item.data?.type === 'Folder') {
-        // Calculate actual folder count based on current children
-        const actualFolderCount = item.children ? item.children.length : 0
-
-        subFileStructure.push({
-          type: 'Folder',
-          Name: item.name,
-          unk1: item.data.unk1,
-          unk2: item.data.unk2,
-          unk3: item.data.unk3,
-          unk4: item.data.unk4,
-          folderCount: actualFolderCount
-        })
-
-        // Process children
-        if (item.children && item.children.length > 0) {
-          processItems(item.children, depth + 1)
-        }
-
-        // Calculate endMarkCount based on folder nesting level
-        // Check if this is the last item at current level and we need to close multiple levels
-        let endMarkCount = 1
-        
-        // Check if this is the last item in its parent's children array
-        const isLastInParent = i === items.length - 1
-        
-        if (isLastInParent && depth > 0) {
-          // This folder is the last child at its level
-          // We might need to close multiple levels if this is nested deeply
-          endMarkCount = 1
-        }
-
-        subFileStructure.push({
-          type: 'EndMark',
-          endMarkCount: endMarkCount
-        })
-      } else if (item.data?.type === 'Item' && item.data.originalFileIndex !== undefined) {
-        // Use the original fileIndex values without mapping
-        // Preserve the original fileIndex as requested by user
-        const originalFileIndex = item.data.originalFileIndex
-        const currentFileIndex = item.data.fileIndex
-
-        if (currentFileIndex === undefined) {
-          console.warn(`Item "${item.name}" has undefined fileIndex, skipping`)
-          continue
-        }
-
-        // Use the original fileIndex directly without any mapping
-        // This preserves the original fileIndex values (1,7,6,13...) instead of forcing (0,1,2,3...)
-        // console.log(`SubFileStructure Item: "${item.name}", using original fileIndex: ${currentFileIndex}, originalFileIndex: ${originalFileIndex}`);
-
-        subFileStructure.push({
-          type: 'Item',
-          Name: item.name,
-          unk1: item.data.unk1,
-          unk2: item.data.unk2,
-          unk3: item.data.unk3,
-          fileIndex: currentFileIndex, // Use original fileIndex without mapping
-          originalFileIndex: originalFileIndex // Keep original unchanged
-        })
-      }
-    }
-  }
-
-  processItems(treeData)
-  
-  // Post-process to optimize EndMark sequences
-  return optimizeEndMarks(subFileStructure)
-}
 
 // Helper function to optimize consecutive EndMarks into single EndMark with higher endMarkCount
 function optimizeEndMarks(structure: SubFileStructureItem[]): SubFileStructureItem[] {
@@ -526,55 +328,112 @@ function optimizeEndMarks(structure: SubFileStructureItem[]): SubFileStructureIt
   return optimized
 }
 
-// Main function to convert tree data back to structure format
-function convertTreeDataToStructure (treeData: TreeDataItem[]): {
+
+
+
+
+// New function to convert tree data without any modifications to preserve original order
+function convertTreeDataToStructureWithoutModification (treeData: TreeDataItem[]): {
   SubFileData: SubFileDataItem[]
   SubFileStructure: SubFileStructureItem[]
 } {
-  console.log('=== EXPORT DEBUG: Starting convertTreeDataToStructure ===')
 
-  // Step 1: Extract SubFileData from tree structure
-  const extractedSubFileData = extractSubFileDataFromTree(treeData)
-  console.log('Step 1 - Extracted SubFileData (before sorting):')
-  extractedSubFileData.forEach((item, idx) => {
-    // console.log(`  [${idx}] originalIndex:${item.index}, originalFileIndex:${item.fileIndex}, fileType:${item.fileType}, fileUrl:${item.fileUrl}`);
-  })
+  // Step 1: Extract SubFileData from tree structure without modifications
+  const extractedSubFileData = extractSubFileDataFromTreeWithoutModification(treeData)
 
-  // Step 2: Sort SubFileData by file type and reassign indices
-  const sortedSubFileData = sortSubFileData(extractedSubFileData)
-  console.log('Step 2 - Sorted SubFileData (after sorting with sequential indices):')
-  sortedSubFileData.forEach((item, idx) => {
-    // console.log(`  [${idx}] newIndex:${item.index}, newFileIndex:${item.fileIndex}, fileType:${item.fileType}, fileUrl:${item.fileUrl}`);
-  })
 
-  // Verify that indices are sequential
-  const expectedIndices = sortedSubFileData.map((_, idx) => idx)
-  const actualIndices = sortedSubFileData.map(item => item.index)
-  const actualFileIndices = sortedSubFileData.map(item => item.fileIndex)
+  // Step 2: Sort SubFileData by file type and reassign indices  
+  const sortedSubFileData = sortSubFileDataByType(extractedSubFileData)
 
-  console.log('Index verification:')
-  console.log(`  Expected indices: [${expectedIndices.join(', ')}]`)
-  console.log(`  Actual indices: [${actualIndices.join(', ')}]`)
-  console.log(`  Actual fileIndices: [${actualFileIndices.join(', ')}]`)
-  console.log(`  Indices are sequential: ${JSON.stringify(actualIndices) === JSON.stringify(expectedIndices)}`)
-  console.log(`  FileIndices are sequential: ${JSON.stringify(actualFileIndices) === JSON.stringify(expectedIndices)}`)
+  // Step 3: Generate SubFileStructure preserving original fileIndex values
+  const subFileStructure = generateSubFileStructureWithoutMapping(treeData)
 
-  // Step 3: Generate SubFileStructure using original fileIndex values
-  // No mapping needed since we preserve original fileIndex values
-  const subFileStructure = generateSubFileStructureWithMapping(treeData, new Map())
+  // Step 4: Store reference copies before index reassignment
+  const tempSubFileData1 = JSON.parse(JSON.stringify(sortedSubFileData))
+  const tempSubFileStructure1 = JSON.parse(JSON.stringify(subFileStructure))
 
-  console.log('=== EXPORT DEBUG: Completed convertTreeDataToStructure ===')
+  // Step 5: Reassign sequential indices and update SubFileStructure
+  const { finalSubFileData, finalSubFileStructure } = reassignSequentialIndices(sortedSubFileData, subFileStructure)
+
 
   return {
-    SubFileData: sortedSubFileData,
-    SubFileStructure: subFileStructure
+    SubFileData: finalSubFileData,
+    SubFileStructure: finalSubFileStructure
   }
 }
 
-// Helper function to sort SubFileData according to fileTypeOptions order
-function sortSubFileData (data: SubFileDataItem[]): SubFileDataItem[] {
+// New function to reassign sequential indices and update SubFileStructure accordingly
+function reassignSequentialIndices(
+  subFileData: SubFileDataItem[], 
+  subFileStructure: SubFileStructureItem[]
+): {
+  finalSubFileData: SubFileDataItem[]
+  finalSubFileStructure: SubFileStructureItem[]
+} {
+  
+  // Create deep copies to avoid mutation
+  const finalSubFileData = JSON.parse(JSON.stringify(subFileData))
+  const finalSubFileStructure = JSON.parse(JSON.stringify(subFileStructure))
+  
+  // Step 1: Create mapping table for fileIndex changes
+  const fileIndexMapping = new Map<number, number>()
+  
+  console.log('--- Building fileIndex mapping table ---')
+  for (let i = 0; i < finalSubFileData.length; i++) {
+    const item = finalSubFileData[i]
+    
+    // If index needs to be changed, record the mapping
+    if (item.index !== i) {
+      const originalFileIndex = item.fileIndex
+      const newFileIndex = i
+      
+      fileIndexMapping.set(originalFileIndex, newFileIndex)
+      console.log(`  Mapping: fileIndex ${originalFileIndex} -> ${newFileIndex}`)
+    }
+  }
+  
+  // Step 2: Update all SubFileData indices
+  console.log('--- Updating SubFileData indices ---')
+  for (let i = 0; i < finalSubFileData.length; i++) {
+    const item = finalSubFileData[i]
+    
+    if (item.index !== i) {
+      console.log(`  Item ${i}: updating index ${item.index} -> ${i}, fileIndex ${item.fileIndex} -> ${i}`)
+      item.index = i
+      item.fileIndex = i
+    }
+  }
+  
+  // Step 3: Update all SubFileStructure fileIndex values using mapping table
+  console.log('--- Updating SubFileStructure fileIndex values ---')
+  for (let j = 0; j < finalSubFileStructure.length; j++) {
+    const structureItem = finalSubFileStructure[j]
+    
+    if (structureItem.type === 'Item' && structureItem.fileIndex !== undefined) {
+      const originalFileIndex = structureItem.fileIndex
+      
+      // Check if this fileIndex needs to be updated according to our mapping
+      if (fileIndexMapping.has(originalFileIndex)) {
+        const newFileIndex = fileIndexMapping.get(originalFileIndex)!
+        
+        console.log(`  SubFileStructure[${j}]: updating fileIndex ${originalFileIndex} -> ${newFileIndex}`)
+        structureItem.fileIndex = newFileIndex
+      }
+    }
+  }
+  
+  console.log('--- Sequential indices reassignment completed ---')
+  
+  return {
+    finalSubFileData,
+    finalSubFileStructure
+  }
+}
+
+// Helper function to sort SubFileData by file type only
+function sortSubFileDataByType (data: SubFileDataItem[]): SubFileDataItem[] {
   const fileTypeOrder = [
-    '.nutexb', // 0xb (first priority as requested)
+    '.nutexb', // 0xb (first priority)
     '.nushdb', // 0xa
     '.nusktb', // 0xc
     '.numatb', // 0xd
@@ -588,8 +447,9 @@ function sortSubFileData (data: SubFileDataItem[]): SubFileDataItem[] {
     '.bin' // 0 (last)
   ]
 
-  // Sort by file type only, preserve original order within same file type
-  // This maintains the original fileIndex values and order within each file type
+  console.log('--- Sorting SubFileData by fle type only ---')
+
+  // Sort by file type only, preserve original indices
   const sortedData = data.sort((a, b) => {
     const aTypeIndex = fileTypeOrder.indexOf(a.fileType)
     const bTypeIndex = fileTypeOrder.indexOf(b.fileType)
@@ -598,18 +458,129 @@ function sortSubFileData (data: SubFileDataItem[]): SubFileDataItem[] {
     const aTypeOrder = aTypeIndex === -1 ? fileTypeOrder.length : aTypeIndex
     const bTypeOrder = bTypeIndex === -1 ? fileTypeOrder.length : bTypeIndex
 
-    // Only compare by file type, maintain original order within same type
     return aTypeOrder - bTypeOrder
   })
 
-  // Only reassign index for SubFileData array position, preserve original fileIndex
-  // This ensures SubFileData has continuous array indices but keeps original fileIndex values
-  return sortedData.map((item, newPosition) => {
-    return {
-      ...item,
-      index: newPosition, // Sequential index for SubFileData array position
-      fileIndex: item.fileIndex, // Preserve original fileIndex value
-      fileUrl: item.fileUrl // Preserve the complete original File URL
+  return sortedData
+}
+
+// Helper function to extract SubFileData from tree structure without any modifications
+function extractSubFileDataFromTreeWithoutModification (treeData: TreeDataItem[]): SubFileDataItem[] {
+  const subFileData: SubFileDataItem[] = []
+  const seenFileIndices = new Set<number>()
+
+  const processItems = (items: TreeDataItem[]) => {
+    items.forEach(item => {
+      if (item.data?.type === 'Item' && item.data.fileType && item.data.fileIndex !== undefined) {
+        // Only add if we haven't seen this fileIndex before
+        if (!seenFileIndices.has(item.data.fileIndex)) {
+          // Validate required fields for Items
+          if (item.data.originalFileIndex === undefined || item.data.originalFileIndex === null) {
+            throw new Error(`Missing originalFileIndex for item: ${item.name}`)
+          }
+          if (!item.data.fileUrl) {
+            throw new Error(`Missing fileUrl for item: ${item.name}`)
+          }
+
+          // Preserve original index and fileIndex exactly as they were
+          // Use the current fileIndex as both index and fileIndex to maintain consistency
+          const currentFileIndex = item.data.fileIndex
+          const currentIndex = item.data.fileIndex // Use fileIndex as index to maintain consistency
+
+
+          subFileData.push({
+            index: currentIndex, // Use fileIndex as index to maintain consistency  
+            fileType: item.data.fileType,
+            fileIndex: currentFileIndex, // Preserve original fileIndex
+            fileUrl: item.data.fileUrl,
+            isError: item.data.isError,
+            originChunkCount: item.data.originChunkCount,
+            errorCompBufferData: item.data.errorCompBufferData,
+            errorOriginSize: item.data.errorOriginSize,
+            originBinChunkBuffer: item.data.originBinChunkBuffer
+          })
+
+          seenFileIndices.add(item.data.fileIndex)
+        } else {
+        }
+      }
+      if (item.children) {
+        processItems(item.children)
+      }
+    })
+  }
+
+  processItems(treeData)
+  
+  // Sort by fileIndex to maintain original order
+  subFileData.sort((a, b) => a.fileIndex - b.fileIndex)
+  
+  return subFileData
+}
+
+// Helper function to generate SubFileStructure without any mapping modifications
+function generateSubFileStructureWithoutMapping (treeData: TreeDataItem[]): SubFileStructureItem[] {
+  const subFileStructure: SubFileStructureItem[] = []
+
+  const processItems = (items: TreeDataItem[], depth: number = 0) => {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      
+      if (item.data?.type === 'Folder') {
+        // Calculate actual folder count based on current children
+        const actualFolderCount = item.children ? item.children.length : 0
+
+        subFileStructure.push({
+          type: 'Folder',
+          Name: item.name,
+          unk1: item.data.unk1,
+          unk2: item.data.unk2,
+          unk3: item.data.unk3,
+          unk4: item.data.unk4,
+          folderCount: actualFolderCount
+        })
+
+        // Process children
+        if (item.children && item.children.length > 0) {
+          processItems(item.children, depth + 1)
+        }
+
+        // Calculate endMarkCount based on folder nesting level
+        let endMarkCount = 1
+        
+        // Check if this is the last item in its parent's children array
+        const isLastInParent = i === items.length - 1
+        
+        if (isLastInParent && depth > 0) {
+          // This folder is the last child at its level
+          endMarkCount = 1
+        }
+
+        subFileStructure.push({
+          type: 'EndMark',
+          endMarkCount: endMarkCount
+        })
+      } else if (item.data?.type === 'Item' && item.data.fileIndex !== undefined) {
+        // Preserve original fileIndex without any modifications
+        const currentFileIndex = item.data.fileIndex
+        const originalFileIndex = item.data.originalFileIndex || item.data.fileIndex
+
+
+        subFileStructure.push({
+          type: 'Item',
+          Name: item.name,
+          unk1: item.data.unk1,
+          unk2: item.data.unk2,
+          unk3: item.data.unk3,
+          fileIndex: currentFileIndex, // Preserve original fileIndex
+          originalFileIndex: originalFileIndex // Keep original unchanged
+        })
+      }
     }
-  })
+  }
+
+  processItems(treeData)
+  
+  // Post-process to optimize EndMark sequences
+  return optimizeEndMarks(subFileStructure)
 }

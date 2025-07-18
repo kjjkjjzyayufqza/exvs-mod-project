@@ -66,6 +66,7 @@ interface NutexbStore {
   setHasMipmaps: (hasMipmaps: boolean) => void;
   replaceTexture: () => Promise<void>;
   cacheFile: (file: FileInfo) => Promise<{ nutexbInfo: Partial<NutexbFooter>; imageFormat: string; outputPath: string } | null>;
+  convertImageToNutexb: (imagePath: string, outputPath: string, nutexbName: string) => Promise<void>;
 }
 
 const resourcePath = await resourceDir();
@@ -364,6 +365,68 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
     } catch (error) {
       console.error("Error during texture caching:", error);
       return null;
+    }
+  },
+
+  convertImageToNutexb: async (imagePath, outputPath, nutexbName) => {
+    const { selectedFormat, hasMipmaps } = get();
+    
+    try {
+      set({ isConverting: true, error: null });
+
+      // Check if image file exists
+      const imageExists = await exists(imagePath);
+      if (!imageExists) {
+        throw new Error(`Image file not found: ${imagePath}`);
+      }
+
+      // Check if the tool exists
+      const toolExists = await exists(toolPath);
+      if (!toolExists) {
+        throw new Error(`Tool not found: ${toolPath}`);
+      }
+
+      // Build command with format and mipmaps options
+      let command = `${toolPath} ${imagePath} ${outputPath} --format ${selectedFormat} --nutexb-name=${nutexbName}`;
+      if (!hasMipmaps) {
+        command += " --no-mipmaps";
+      }
+
+      console.log("Converting image to nutexb:", command);
+      
+      // Execute command with timeout
+      const commandPromise = invoke("exec_shell_command", { command });
+      const result = await Promise.race([
+        commandPromise, 
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Conversion timed out")), 15000))
+      ]);
+
+      if (typeof result === "string") {
+        // Verify output file exists
+        const outputExists = await exists(outputPath);
+        if (!outputExists) {
+          throw new Error("Output nutexb file not found after conversion");
+        }
+        console.log("Image to nutexb conversion successful");
+      } else {
+        throw new Error("Invalid command result during conversion");
+      }
+    } catch (error) {
+      console.error("Error in image to nutexb conversion:", error);
+      let errorMessage = "Failed to convert image to nutexb";
+      if (error instanceof Error) {
+        if (error.message.includes("timed out")) {
+          errorMessage = "Conversion took too long to complete";
+        } else if (error.message.includes("not found")) {
+          errorMessage = "Required file or tool not found";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      set({ error: errorMessage });
+      throw error;
+    } finally {
+      set({ isConverting: false });
     }
   },
 }));

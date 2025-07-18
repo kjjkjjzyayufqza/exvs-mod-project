@@ -592,6 +592,8 @@ export default function RepackPage() {
     }
   };
 
+
+
   const handlePropertyChange = (nodeId: string, property: string, value: string | number) => {
     const updateNodeRecursively = (nodes: TreeDataItem[]): TreeDataItem[] => {
       return nodes.map(node => {
@@ -791,7 +793,8 @@ export default function RepackPage() {
       <div className="mb-8">
         <h2 className="text-2xl font-bold tracking-tight mb-4">Repack Manager</h2>
         <p className="text-gray-600 mb-4">
-          Manage your project structure with drag & drop, rename, add and delete operations.
+          Manage your project structure with drag & drop, rename, add and delete operations.<br/>
+          <span className="text-2xl">记得用解包工具解包一次，再打包一次，再解包一次的json来导入，否则会出错</span>
         </p>
 
         <div className="flex gap-2 mb-4">
