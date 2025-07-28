@@ -2,7 +2,7 @@ import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FolderOpen, Loader2, Plus, ImageIcon } from "lucide-react";
+import { FolderOpen, Loader2, Plus, ImageIcon, Bug } from "lucide-react";
 import { readDir, readFile, exists } from "@tauri-apps/plugin-fs";
 import { FileList } from "./components/FileList";
 import { FileTypeDialog } from "./components/FileTypeDialog";
@@ -29,6 +29,7 @@ export default function FilesEdit() {
   const [isLoading, setIsLoading] = useState(false);
   const [handleDebugRepack, setHandleDebugRepack] = useState(false);
   const [isConvertingNutexb, setIsConvertingNutexb] = useState(false);
+  const [isBatchReplacing, setIsBatchReplacing] = useState(false);
 
   const convertNumatbFile = useNumatbStore((e) => e.convertFile);
   const resetNumatbConversion = useNumatbStore((e) => e.resetConversion);
@@ -228,6 +229,120 @@ export default function FilesEdit() {
     }
   }
 
+  const handleBatchReplaceNutexb = async () => {
+    try {
+      // Open file dialog to select replacement image
+      const imageFile = await open({
+        multiple: false,
+        filters: [
+          {
+            name: "Image Files",
+            extensions: ["png", "jpg", "jpeg", "bmp", "gif", "webp", "tiff", "tif"],
+          },
+        ],
+      });
+
+      if (!imageFile || Array.isArray(imageFile)) {
+        return;
+      }
+
+      setIsBatchReplacing(true);
+
+      // Get all nutexb files
+      const nutexbFiles = files.filter(file => file.name.endsWith('.nutexb'));
+      
+      if (nutexbFiles.length === 0) {
+        console.log("No nutexb files found");
+        return;
+      }
+
+      console.log(`Starting batch replacement for ${nutexbFiles.length} nutexb files with image: ${imageFile}`);
+
+      // Get tool path
+      const resourcePath = await resourceDir();
+      const toolPath = resourcePath + "/tools/ultimate_tex_cli.exe";
+
+      // Check if the tool exists
+      const toolExists = await exists(toolPath);
+      if (!toolExists) {
+        throw new Error(`Tool not found: ${toolPath}`);
+      }
+
+      // Process each nutexb file
+      for (const file of nutexbFiles) {
+        try {
+          console.log(`Processing ${file.name}...`);
+          
+          // First convert the file to get nutexb data with format information
+          await convertNutexbFile(file);
+          
+          // Get the converted nutexb data to access format and mipmap info
+          const nutexbData = useNutexbStore.getState().nutexbData;
+          if (!nutexbData) {
+            console.error(`No nutexb data available for ${file.name}, skipping...`);
+            continue;
+          }
+
+          const selectedFormat = nutexbData.imageFormat.replace(/"/g, "");
+          const hasMipmaps = (nutexbData.footer.mipmap_count || 0) > 1;
+          const nutexbString = nutexbData.footer.string;
+          
+          // Build command to replace texture while preserving properties
+          let command = `${toolPath} ${imageFile} ${file.path} --format ${selectedFormat} --nutexb-name=${nutexbString}`;
+          if (!hasMipmaps) {
+            command += " --no-mipmaps";
+          }
+          
+          console.log(`Executing command: ${command}`);
+          
+          // Execute command with timeout
+          const commandPromise = invoke("exec_shell_command", { command });
+          const result = await Promise.race([
+            commandPromise, 
+            new Promise((_, reject) => setTimeout(() => reject(new Error(`Replacement timed out for ${file.name}`)), 15000))
+          ]);
+
+          if (typeof result === "string") {
+            console.log(`Successfully replaced ${file.name}`);
+          } else {
+            console.error(`Failed to replace ${file.name}: Invalid command result`);
+          }
+        } catch (error) {
+          console.error(`Error replacing ${file.name}:`, error);
+        }
+      }
+
+      console.log("Batch replacement completed");
+
+      // Refresh the file list to update previews
+      if (folderPath) {
+        setIsLoading(true);
+        try {
+          // Clear existing previews and re-scan
+          const updatedFiles = files.map(file => ({
+            ...file,
+            previewPath: undefined
+          }));
+          setFiles(updatedFiles);
+
+          // Trigger re-conversion of nutexb files for new previews
+          setTimeout(async () => {
+            await handleConvertAllNutexb();
+          }, 1000);
+        } catch (error) {
+          console.error("Error refreshing after batch replacement:", error);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+
+    } catch (error) {
+      console.error("Error during batch replacement:", error);
+    } finally {
+      setIsBatchReplacing(false);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col p-6 bg-gray-50/30">
       <div className="mb-8">
@@ -263,6 +378,16 @@ export default function FilesEdit() {
           {isConvertingNutexb && <Loader2 className="animate-spin mr-2" />}
           <ImageIcon className="h-4 w-4 mr-2" />
           Convert Nutexb to PNG
+        </Button>
+        <Button 
+          onClick={handleBatchReplaceNutexb} 
+          disabled={isBatchReplacing || files.filter(f => f.name.endsWith('.nutexb')).length === 0} 
+          size="sm"
+          variant="destructive"
+        >
+          {isBatchReplacing && <Loader2 className="animate-spin mr-2" />}
+          <Bug className="h-4 w-4 mr-2" />
+          Debug Replace All Nutexb
         </Button>
       </div>
       <div className="grid grid-cols-2 gap-6 flex-1">
