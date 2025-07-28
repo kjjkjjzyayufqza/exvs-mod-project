@@ -10,6 +10,152 @@ export interface FileInfo {
   path: string;
 }
 
+// Param ID type definitions based on common patterns
+export type ParamDataType = 'Boolean' | 'Float' | 'Float1' | 'String1' | 'Vector4' | 'Sampler' | 'Unk7';
+
+// Comprehensive param_id type mapping
+export const PARAM_TYPE_MAPPING: Record<string, ParamDataType> = {
+  // Boolean types
+  'ReceiveShadow': 'Boolean',
+  'UseAmbientOcclusionMap': 'Boolean',
+  'UseMetallicMap': 'Boolean',
+  'UseRoughnessMap': 'Boolean',
+  'UseNormalMap': 'Boolean',
+  'UseEmissiveMap': 'Boolean',
+  'NormalMapBc5': 'Boolean',
+  
+  // Float1 types
+  'CustomFloat0': 'Float1',
+  'CustomFloat1': 'Float1',
+  'CustomFloat2': 'Float1',
+  'CustomFloat3': 'Float1',
+  'CustomFloat4': 'Float1',
+  'CustomFloat5': 'Float1',
+  'CustomFloat7': 'Float1',
+  'CustomFloat8': 'Float1',
+  'CustomFloat9': 'Float1',
+  'EmissiveScale': 'Float1',
+  
+  // Float types
+  'CustomInteger0': 'Float',
+  
+  // String1 types (textures and paths)
+  'BaseColorMap': 'String1',
+  'EmissiveMap': 'String1',
+  'NormalMap': 'String1',
+  'AmbientOcclusionMap': 'String1',
+  'RoughnessMap': 'String1',
+  'MetallicMap': 'String1',
+  'DiffuseCubeMap': 'String1',
+  'Texture1': 'String1',
+  
+  // Vector4 types
+  'CustomVector0': 'Vector4',
+  'CustomVector2': 'Vector4',
+  'CustomVector3': 'Vector4',
+  
+  // Color/Unk7 types
+  'CustomColor0': 'Unk7',
+  'CustomColor1': 'Unk7',
+  'CustomColor2': 'Unk7',
+  
+  // Sampler types
+  'DiffuseSampler': 'Sampler',
+};
+
+// Get param type with fallback detection
+export const getParamType = (paramId: string, currentData: AttributeData): ParamDataType => {
+  // First check our mapping
+  if (PARAM_TYPE_MAPPING[paramId]) {
+    return PARAM_TYPE_MAPPING[paramId];
+  }
+  
+  // Fallback to detecting from current data
+  if (currentData.Boolean !== undefined) return 'Boolean';
+  if (currentData.Float !== undefined) return 'Float';
+  if (currentData.Float1 !== undefined) return 'Float1';
+  if (currentData.String1 !== undefined) return 'String1';
+  if (currentData.Vector4 !== undefined) return 'Vector4';
+  if (currentData.Sampler !== undefined) return 'Sampler';
+  if (currentData.Unk7 !== undefined) return 'Unk7';
+  
+  // Default fallback
+  return 'Float1';
+};
+
+// Get default value for a param type
+export const getDefaultValueForType = (dataType: ParamDataType): AttributeData => {
+  switch (dataType) {
+    case 'Boolean':
+      return { Boolean: 0 };
+    case 'Float':
+      return { Float: 0.0 };
+    case 'Float1':
+      return { Float1: 0.0 };
+    case 'String1':
+      return { String1: "" };
+    case 'Vector4':
+      return { Vector4: { x: 0.0, y: 0.0, z: 0.0, w: 0.0 } };
+    case 'Unk7':
+      return { Unk7: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 } };
+    case 'Sampler':
+      return {
+        Sampler: {
+          wraps: "Repeat",
+          wrapt: "Repeat",
+          wrapr: "Repeat",
+          min_filter: "LinearMipmapLinear",
+          mag_filter: "Linear",
+          texture_filtering_type: "Default2",
+          border_color: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
+          unk11: 0,
+          unk12: 1098907648,
+          lod_bias: -1.0,
+          max_anisotropy: "One"
+        }
+      };
+    default:
+      return { Float1: 0.0 };
+  }
+};
+
+// Common attribute templates
+export const COMMON_ATTRIBUTES = [
+  'ReceiveShadow',
+  'UseAmbientOcclusionMap',
+  'UseMetallicMap',
+  'UseRoughnessMap',
+  'UseNormalMap',
+  'UseEmissiveMap',
+  'NormalMapBc5',
+  'CustomFloat0',
+  'CustomFloat1',
+  'CustomFloat2',
+  'CustomFloat3',
+  'CustomFloat4',
+  'CustomFloat5',
+  'CustomFloat7',
+  'CustomFloat8',
+  'CustomFloat9',
+  'EmissiveScale',
+  'CustomInteger0',
+  'BaseColorMap',
+  'EmissiveMap',
+  'NormalMap',
+  'AmbientOcclusionMap',
+  'RoughnessMap',
+  'MetallicMap',
+  'DiffuseCubeMap',
+  'Texture1',
+  'CustomVector0',
+  'CustomVector2',
+  'CustomVector3',
+  'CustomColor0',
+  'CustomColor1',
+  'CustomColor2',
+  'DiffuseSampler',
+];
+
 // Updated type definitions to match the new JSON structure
 interface AttributeData {
   Boolean?: number;
@@ -78,7 +224,9 @@ interface NumatbStore {
   setSelectedFile: (file: FileInfo | null) => void;
   resetConversion: () => void;
   convertFile: (file: FileInfo) => Promise<void>;
-  updateTextureAttribute: (materialIndex: number, attributeIndex: number, newValue: string) => void;
+  updateAttribute: (materialIndex: number, attributeIndex: number, newValue: any, dataType: ParamDataType) => void;
+  addAttribute: (materialIndex: number, paramId: string) => void;
+  removeAttribute: (materialIndex: number, attributeIndex: number) => void;
   saveFile: () => Promise<void>;
 }
 
@@ -99,13 +247,108 @@ export const useNumatbStore = create<NumatbStore>((set, get) => ({
     numatbData: null
   }),
 
-  updateTextureAttribute: (materialIndex: number, attributeIndex: number, newValue: string) => {
+  updateAttribute: (materialIndex: number, attributeIndex: number, newValue: any, dataType: ParamDataType) => {
     const state = get();
     if (!state.numatbData) return;
 
     const newData = { ...state.numatbData };
     if (newData.Matl?.V16?.entries?.[materialIndex]?.attributes?.[attributeIndex]) {
-      newData.Matl.V16.entries[materialIndex].attributes[attributeIndex].param.data.String1 = newValue;
+      const attribute = newData.Matl.V16.entries[materialIndex].attributes[attributeIndex];
+      
+      // Clear all data types first
+      attribute.param.data = {};
+      
+      // Set the appropriate data type
+      switch (dataType) {
+        case 'Boolean':
+          attribute.param.data.Boolean = parseInt(newValue) || 0;
+          break;
+        case 'Float':
+          attribute.param.data.Float = parseFloat(newValue) || 0;
+          break;
+        case 'Float1':
+          attribute.param.data.Float1 = parseFloat(newValue) || 0;
+          break;
+        case 'String1':
+          attribute.param.data.String1 = newValue || "";
+          break;
+        case 'Vector4':
+          if (typeof newValue === 'object' && newValue !== null) {
+            attribute.param.data.Vector4 = {
+              x: parseFloat(newValue.x) || 0,
+              y: parseFloat(newValue.y) || 0,
+              z: parseFloat(newValue.z) || 0,
+              w: parseFloat(newValue.w) || 0,
+            };
+          }
+          break;
+        case 'Unk7':
+          if (typeof newValue === 'object' && newValue !== null) {
+            attribute.param.data.Unk7 = {
+              r: parseFloat(newValue.r) || 0,
+              g: parseFloat(newValue.g) || 0,
+              b: parseFloat(newValue.b) || 0,
+              a: parseFloat(newValue.a) || 0,
+            };
+          }
+          break;
+        case 'Sampler':
+          // Sampler is complex, keep original for now
+          if (typeof newValue === 'object' && newValue !== null) {
+            attribute.param.data.Sampler = newValue;
+          }
+          break;
+      }
+      
+      set({ numatbData: newData });
+    }
+  },
+
+  addAttribute: (materialIndex: number, paramId: string) => {
+    const state = get();
+    if (!state.numatbData) return;
+
+    const newData = { ...state.numatbData };
+    if (newData.Matl?.V16?.entries?.[materialIndex]) {
+      const material = newData.Matl.V16.entries[materialIndex];
+      
+      // Check if attribute already exists
+      const existingIndex = material.attributes.findIndex(attr => attr.param_id === paramId);
+      if (existingIndex !== -1) {
+        console.warn(`Attribute ${paramId} already exists`);
+        return;
+      }
+
+      // Get the appropriate data type and default value
+      const dataType = getParamType(paramId, {} as AttributeData);
+      const defaultData = getDefaultValueForType(dataType);
+
+      // Create new attribute
+      const newAttribute: MaterialAttribute = {
+        param_id: paramId,
+        param: {
+          data: defaultData
+        }
+      };
+
+      // Add to attributes array
+      material.attributes.push(newAttribute);
+      
+      set({ numatbData: newData });
+    }
+  },
+
+  removeAttribute: (materialIndex: number, attributeIndex: number) => {
+    const state = get();
+    if (!state.numatbData) return;
+
+    const newData = { ...state.numatbData };
+    if (newData.Matl?.V16?.entries?.[materialIndex]?.attributes?.[attributeIndex]) {
+      const material = newData.Matl.V16.entries[materialIndex];
+      
+      // Remove the attribute
+      material.attributes.splice(attributeIndex, 1);
+      
       set({ numatbData: newData });
     }
   },

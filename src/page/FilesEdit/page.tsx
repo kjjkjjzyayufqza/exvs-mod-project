@@ -2,15 +2,15 @@ import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FolderOpen, Loader2, Plus } from "lucide-react";
-import { readDir, readFile } from "@tauri-apps/plugin-fs";
+import { FolderOpen, Loader2, Plus, ImageIcon } from "lucide-react";
+import { readDir, readFile, exists } from "@tauri-apps/plugin-fs";
 import { FileList } from "./components/FileList";
 import { FileTypeDialog } from "./components/FileTypeDialog";
 import { CONVERT_DIR_NAME, FileInfo as NumatbFileInfo, useNumatbStore } from "../../store/numatbStore";
 import { FileInfo as NutexbFileInfo } from "../../store/nutexbStore";
 import { useNutexbStore } from "../../store/nutexbStore";
 import { Button } from "../../components/ui/button";
-import { resourceDir } from "@tauri-apps/api/path";
+import { resourceDir, dirname, join } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { findNutexbString } from "../../module/commonFunc";
 import { Command } from '@tauri-apps/plugin-shell';
@@ -28,6 +28,7 @@ export default function FilesEdit() {
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [handleDebugRepack, setHandleDebugRepack] = useState(false);
+  const [isConvertingNutexb, setIsConvertingNutexb] = useState(false);
 
   const convertNumatbFile = useNumatbStore((e) => e.convertFile);
   const resetNumatbConversion = useNumatbStore((e) => e.resetConversion);
@@ -49,6 +50,22 @@ export default function FilesEdit() {
   const resetConversion = () => {
     resetNumatbConversion();
     resetNutexbConversion();
+  };
+
+  const checkExistingPreview = async (file: FileInfo, folderPath: string) => {
+    try {
+      const convertDirPath = await join(folderPath, CONVERT_DIR_NAME);
+      const outputFileName = file.name.replace(".nutexb", "_convert.png");
+      const previewPath = await join(convertDirPath, outputFileName);
+      
+      const previewExists = await exists(previewPath);
+      if (previewExists) {
+        return previewPath;
+      }
+    } catch (e) {
+      console.error("Error checking existing preview:", e);
+    }
+    return null;
   };
 
   const handleFileTypeSelect = async (fileType: string) => {
@@ -74,16 +91,26 @@ export default function FilesEdit() {
             path: folderPath + "/" + entry.name
           })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
         
+        // Get file info and check for existing previews
         for (const file of filteredEntries) {
           if (file.name.endsWith('.nutexb')) {
             try {
-              const cache = await cacheNutexbFile(file);
-              if (cache) {
-                file.previewPath = cache.outputPath;
-                file.string = cache.nutexbInfo.string;
+              const info = await getNutexbFileInfos(file);
+              file.string = info.string;
+              
+              // Check for existing preview
+              const existingPreview = await checkExistingPreview(file, folderPath);
+              if (existingPreview) {
+                file.previewPath = existingPreview;
+              }
+              
+              // Keep existing previewPath if available from previous state
+              const existingFile = files.find(f => f.name === file.name);
+              if (existingFile?.previewPath && !file.previewPath) {
+                file.previewPath = existingFile.previewPath;
               }
             } catch (e) {
-              console.error("Error processing Nutexb file:", e);
+              console.error("Error getting Nutexb file info:", e);
             }
           }
         }
@@ -121,21 +148,21 @@ export default function FilesEdit() {
             name: entry.name || "",
             path: selected + "/" + entry.name
           })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        
+        // Get file info and check for existing previews
         for (const file of filteredEntries) {
           if (file.name.endsWith('.nutexb')) {
-            // Get file info
             try {
-              // const info = await getNutexbFileInfos(file);
-              // file.string = info.string;
-
-              // Try to cache the file for preview
-              const cache = await cacheNutexbFile(file);
-              if (cache) {
-                file.previewPath = cache.outputPath;
-                file.string = cache.nutexbInfo.string;
+              const info = await getNutexbFileInfos(file);
+              file.string = info.string;
+              
+              // Check for existing preview
+              const existingPreview = await checkExistingPreview(file, selected);
+              if (existingPreview) {
+                file.previewPath = existingPreview;
               }
             } catch (e) {
-              console.error("Error processing Nutexb file:", e);
+              console.error("Error getting Nutexb file info:", e);
             }
           }
         }
@@ -145,6 +172,38 @@ export default function FilesEdit() {
       } finally {
         setIsLoading(false);
       }
+    }
+  };
+
+  const handleConvertAllNutexb = async () => {
+    setIsConvertingNutexb(true);
+    try {
+      const nutexbFiles = files.filter(file => file.name.endsWith('.nutexb'));
+      const updatedFiles = [...files];
+      
+      for (const file of nutexbFiles) {
+        try {
+          const cache = await cacheNutexbFile(file);
+          if (cache) {
+            const index = updatedFiles.findIndex(f => f.name === file.name);
+            if (index !== -1) {
+              updatedFiles[index] = {
+                ...updatedFiles[index],
+                previewPath: cache.outputPath,
+                string: cache.nutexbInfo.string || updatedFiles[index].string
+              };
+            }
+          }
+        } catch (e) {
+          console.error("Error converting Nutexb file:", file.name, e);
+        }
+      }
+      
+      setFiles(updatedFiles);
+    } catch (error) {
+      console.error("Error during batch conversion:", error);
+    } finally {
+      setIsConvertingNutexb(false);
     }
   };
 
@@ -194,6 +253,16 @@ export default function FilesEdit() {
         <Button onClick={handleTestRepack} disabled={handleDebugRepack} size="sm">
           {handleDebugRepack && <Loader2 className="animate-spin" />}
           Repack
+        </Button>
+        <Button 
+          onClick={handleConvertAllNutexb} 
+          disabled={isConvertingNutexb || files.filter(f => f.name.endsWith('.nutexb')).length === 0} 
+          size="sm"
+          variant="outline"
+        >
+          {isConvertingNutexb && <Loader2 className="animate-spin mr-2" />}
+          <ImageIcon className="h-4 w-4 mr-2" />
+          Convert Nutexb to PNG
         </Button>
       </div>
       <div className="grid grid-cols-2 gap-6 flex-1">

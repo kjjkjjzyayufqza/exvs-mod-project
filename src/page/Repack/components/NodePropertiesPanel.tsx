@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,6 +11,7 @@ import { Trash2, Edit3, Save, X, Folder, FileText, Calendar, HardDrive, Copy } f
 import { TreeDataItem } from "@/lib/utils";
 import { useRepackStore } from "@/store/repackStore";
 import { toast } from 'sonner';
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogOverlay, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface ExtendedTreeDataItem extends TreeDataItem {
   icon?: any;
@@ -196,7 +196,7 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
   const [editingProperty, setEditingProperty] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>("");
   const [validationError, setValidationError] = useState<string>("");
-  
+
   const { isIndexExists, isFileIndexExists, copyNode } = useRepackStore();
 
   const handleStartEdit = () => {
@@ -232,13 +232,13 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
   const handleCopy = () => {
     if (selectedItem) {
       copyNode(selectedItem.id);
-      
+
       // Show success message
       const itemType = selectedItem.data?.type || 'item';
       const itemTypeText = itemType === 'Folder' ? 'folder' : 'file';
       const childrenCount = selectedItem.children ? selectedItem.children.length : 0;
       const childrenText = childrenCount > 0 ? ` (including ${childrenCount} items)` : '';
-      
+
       toast.success(`Successfully copied ${itemTypeText}: "${selectedItem.name}"${childrenText}`);
     }
   };
@@ -259,11 +259,11 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
     if (selectedItem && editingProperty) {
       // Clear previous validation error
       setValidationError("");
-      
+
       const value = editingProperty.includes('Index') || editingProperty.includes('unk')
         ? (editingProperty.startsWith('unk') ? editValue : parseInt(editValue) || 0)
         : editValue;
-      
+
       // Validate index for duplicates (only for index, not fileIndex)
       if (editingProperty === 'index' && selectedItem.data?.type === 'Item') {
         const newIndex = parseInt(editValue) || 0;
@@ -272,7 +272,7 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
           return;
         }
       }
-      
+
       onPropertyChange(selectedItem.id, editingProperty, value);
       setEditingProperty(null);
       setEditValue("");
@@ -586,8 +586,9 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
               <Copy className="h-4 w-4 mr-2" />
               Copy
             </Button>
-            <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-              <DialogTrigger asChild>
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+              {/* <AlertDialogOverlay className="none" /> */}
+              <AlertDialogTrigger asChild>
                 <Button
                   variant="destructive"
                   size="sm"
@@ -597,29 +598,29 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
                   <Trash2 className="h-4 w-4 mr-2" />
                   Delete
                 </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Confirm Delete</DialogTitle>
-                  <DialogDescription>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
+                  <AlertDialogDescription>
                     Are you sure you want to delete "{selectedItem.name}"? This action cannot be undone.
                     {selectedItem.data?.type === 'Folder' && selectedItem.children && selectedItem.children.length > 0 && (
                       <span className="block mt-2 text-red-600 font-medium">
                         This folder contains {selectedItem.children.length} item(s) which will also be deleted.
                       </span>
                     )}
-                  </DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
                   <Button variant="outline" onClick={handleDeleteCancel}>
                     Cancel
                   </Button>
                   <Button variant="destructive" onClick={handleDeleteConfirm}>
                     Delete
                   </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
           {selectedItem.id === 'root' && (
             <p className="text-xs text-muted-foreground">

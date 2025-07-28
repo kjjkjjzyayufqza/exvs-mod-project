@@ -4,21 +4,255 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Save, RotateCcw } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, Save, RotateCcw, Trash2, Plus } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import { FileInfo, useNumatbStore } from "../../../store/numatbStore";
+import { FileInfo, useNumatbStore, getParamType, ParamDataType, COMMON_ATTRIBUTES } from "../../../store/numatbStore";
 
 interface FileDialogProps {
   file: FileInfo;
 }
 
+// Component for adding new attributes
+interface AddAttributeProps {
+  materialIndex: number;
+  existingAttributes: string[];
+  onAdd: (paramId: string) => void;
+}
+
+function AddAttributeComponent({ materialIndex, existingAttributes, onAdd }: AddAttributeProps) {
+  const [selectedAttribute, setSelectedAttribute] = useState<string>("");
+  
+  // Filter out already existing attributes
+  const availableAttributes = COMMON_ATTRIBUTES.filter(
+    attr => !existingAttributes.includes(attr)
+  );
+
+  const handleAdd = () => {
+    if (selectedAttribute) {
+      onAdd(selectedAttribute);
+      setSelectedAttribute("");
+    }
+  };
+
+  if (availableAttributes.length === 0) {
+    return (
+      <div className="text-xs text-gray-400 p-2">
+        All common attributes are already added
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center space-x-2">
+      <Select value={selectedAttribute} onValueChange={setSelectedAttribute}>
+        <SelectTrigger className="flex-1 h-8 text-xs">
+          <SelectValue placeholder="Select attribute to add..." />
+        </SelectTrigger>
+        <SelectContent>
+          {availableAttributes.map((attr) => (
+            <SelectItem key={attr} value={attr} className="text-xs">
+              {attr}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button
+        onClick={handleAdd}
+        disabled={!selectedAttribute}
+        size="sm"
+        className="h-8 px-2"
+      >
+        <Plus className="h-3 w-3" />
+      </Button>
+    </div>
+  );
+}
+
+// Component for editing different data types
+interface AttributeEditorProps {
+  attribute: any;
+  materialIndex: number;
+  attributeIndex: number;
+  onUpdate: (value: any, dataType: ParamDataType) => void;
+  onDelete: () => void;
+}
+
+function AttributeEditor({ attribute, materialIndex, attributeIndex, onUpdate, onDelete }: AttributeEditorProps) {
+  const dataType = getParamType(attribute.param_id, attribute.param.data);
+  const data = attribute.param.data;
+
+  const handleUpdate = (newValue: any) => {
+    onUpdate(newValue, dataType);
+  };
+
+  const renderEditor = () => {
+    switch (dataType) {
+      case 'Boolean':
+        return (
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id={`${materialIndex}-${attributeIndex}-bool`}
+              checked={data.Boolean === 1}
+              onCheckedChange={(checked) => handleUpdate(checked ? 1 : 0)}
+            />
+            <Label htmlFor={`${materialIndex}-${attributeIndex}-bool`} className="text-sm">
+              {data.Boolean === 1 ? 'True' : 'False'}
+            </Label>
+          </div>
+        );
+
+      case 'Float':
+      case 'Float1':
+        return (
+          <Input
+            type="number"
+            step="0.01"
+            value={data.Float !== undefined ? data.Float : data.Float1 || 0}
+            onChange={(e) => handleUpdate(parseFloat(e.target.value) || 0)}
+            className="text-sm"
+          />
+        );
+
+      case 'String1':
+        return (
+          <Input
+            value={data.String1 || ""}
+            onChange={(e) => handleUpdate(e.target.value)}
+            placeholder="Enter text..."
+            className="text-sm font-mono"
+          />
+        );
+
+      case 'Vector4':
+        const vector = data.Vector4 || { x: 0, y: 0, z: 0, w: 0 };
+        return (
+          <div className="grid grid-cols-4 gap-1">
+            <Input
+              type="number"
+              step="0.01"
+              placeholder="X"
+              value={vector.x}
+              onChange={(e) => handleUpdate({ ...vector, x: parseFloat(e.target.value) || 0 })}
+              className="text-xs"
+            />
+            <Input
+              type="number"
+              step="0.01"
+              placeholder="Y"
+              value={vector.y}
+              onChange={(e) => handleUpdate({ ...vector, y: parseFloat(e.target.value) || 0 })}
+              className="text-xs"
+            />
+            <Input
+              type="number"
+              step="0.01"
+              placeholder="Z"
+              value={vector.z}
+              onChange={(e) => handleUpdate({ ...vector, z: parseFloat(e.target.value) || 0 })}
+              className="text-xs"
+            />
+            <Input
+              type="number"
+              step="0.01"
+              placeholder="W"
+              value={vector.w}
+              onChange={(e) => handleUpdate({ ...vector, w: parseFloat(e.target.value) || 0 })}
+              className="text-xs"
+            />
+          </div>
+        );
+
+      case 'Unk7':
+        const color = data.Unk7 || { r: 0, g: 0, b: 0, a: 0 };
+        return (
+          <div className="grid grid-cols-4 gap-1">
+            <Input
+              type="number"
+              step="0.01"
+              placeholder="R"
+              value={color.r}
+              onChange={(e) => handleUpdate({ ...color, r: parseFloat(e.target.value) || 0 })}
+              className="text-xs"
+            />
+            <Input
+              type="number"
+              step="0.01"
+              placeholder="G"
+              value={color.g}
+              onChange={(e) => handleUpdate({ ...color, g: parseFloat(e.target.value) || 0 })}
+              className="text-xs"
+            />
+            <Input
+              type="number"
+              step="0.01"
+              placeholder="B"
+              value={color.b}
+              onChange={(e) => handleUpdate({ ...color, b: parseFloat(e.target.value) || 0 })}
+              className="text-xs"
+            />
+            <Input
+              type="number"
+              step="0.01"
+              placeholder="A"
+              value={color.a}
+              onChange={(e) => handleUpdate({ ...color, a: parseFloat(e.target.value) || 0 })}
+              className="text-xs"
+            />
+          </div>
+        );
+
+      case 'Sampler':
+        return (
+          <div className="text-xs text-gray-500 p-2 bg-gray-50 rounded">
+            Sampler (Complex - Read Only)
+          </div>
+        );
+
+      default:
+        return (
+          <div className="text-xs text-gray-400">
+            Unknown type
+          </div>
+        );
+    }
+  };
+
+  return (
+    <div className="flex items-center space-x-2">
+      <div className="flex-1">
+        {renderEditor()}
+      </div>
+      <Button
+        onClick={onDelete}
+        variant="outline"
+        size="sm"
+        className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+      >
+        <Trash2 className="h-3 w-3" />
+      </Button>
+    </div>
+  );
+}
+
 export function FileDialog({ file }: FileDialogProps) {
   const store = useNumatbStore();
-  const { numatbData, isConverting, isSaving, error, updateTextureAttribute, saveFile, convertFile } = store;
+  const { numatbData, isConverting, isSaving, error, updateAttribute, addAttribute, removeAttribute, saveFile, convertFile } = store;
   const [hasChanges, setHasChanges] = useState(false);
 
-  const handleTexturePathChange = (materialIndex: number, attributeIndex: number, newValue: string) => {
-    updateTextureAttribute(materialIndex, attributeIndex, newValue);
+  const handleAttributeUpdate = (materialIndex: number, attributeIndex: number, newValue: any, dataType: ParamDataType) => {
+    updateAttribute(materialIndex, attributeIndex, newValue, dataType);
+    setHasChanges(true);
+  };
+
+  const handleAddAttribute = (materialIndex: number, paramId: string) => {
+    addAttribute(materialIndex, paramId);
+    setHasChanges(true);
+  };
+
+  const handleRemoveAttribute = (materialIndex: number, attributeIndex: number) => {
+    removeAttribute(materialIndex, attributeIndex);
     setHasChanges(true);
   };
 
@@ -120,6 +354,7 @@ export function FileDialog({ file }: FileDialogProps) {
                     <span className="text-sm text-gray-500">{material.shader_label}</span>
                   </div>
                   
+                  {/* Texture paths section */}
                   <div className="space-y-3">
                     <Label className="text-sm font-medium">Texture Paths</Label>
                     {material.attributes
@@ -129,43 +364,63 @@ export function FileDialog({ file }: FileDialogProps) {
                         return (
                           <div key={index} className="space-y-2">
                             <Label className="text-xs text-gray-600">{attribute.param_id}</Label>
-                            <Input
-                              value={attribute.param.data.String1 || ""}
-                              onChange={(e) => handleTexturePathChange(materialIndex, attributeIndex, e.target.value)}
-                              placeholder="Texture path..."
-                              className="font-mono text-sm"
+                            <AttributeEditor
+                              attribute={attribute}
+                              materialIndex={materialIndex}
+                              attributeIndex={attributeIndex}
+                              onUpdate={(value, dataType) => handleAttributeUpdate(materialIndex, attributeIndex, value, dataType)}
+                              onDelete={() => handleRemoveAttribute(materialIndex, attributeIndex)}
                             />
                           </div>
                         );
                       })}
                   </div>
                   
-                  {/* Show other attributes as read-only */}
-                  <div className="pt-2 border-t">
-                    <Label className="text-xs text-gray-500 mb-2 block">Other Attributes (Read-only)</Label>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
+                  <Separator />
+                  
+                  {/* Other attributes section */}
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">Other Attributes</Label>
+                    <div className="grid grid-cols-1 gap-3">
                       {material.attributes
                         .filter(attr => attr.param.data.String1 === undefined)
-                        .slice(0, 8) // Show only first 8 to avoid clutter
-                        .map((attribute, index) => (
-                          <div key={index} className="text-gray-500">
-                            <span className="font-medium">{attribute.param_id}:</span>{" "}
-                            <span>
-                              {attribute.param.data.Boolean !== undefined ? `Boolean(${attribute.param.data.Boolean})` :
-                               attribute.param.data.Float !== undefined ? `Float(${attribute.param.data.Float})` :
-                               attribute.param.data.Float1 !== undefined ? `Float1(${attribute.param.data.Float1})` :
-                               attribute.param.data.Vector4 ? `Vector4(${attribute.param.data.Vector4.x}, ${attribute.param.data.Vector4.y}, ${attribute.param.data.Vector4.z}, ${attribute.param.data.Vector4.w})` :
-                               attribute.param.data.Unk7 ? `Color(${attribute.param.data.Unk7.r}, ${attribute.param.data.Unk7.g}, ${attribute.param.data.Unk7.b}, ${attribute.param.data.Unk7.a})` :
-                               attribute.param.data.Sampler ? "Sampler" : "Unknown"}
-                            </span>
-                          </div>
-                        ))}
-                      {material.attributes.filter(attr => attr.param.data.String1 === undefined).length > 8 && (
-                        <div className="text-gray-400 text-xs">
-                          +{material.attributes.filter(attr => attr.param.data.String1 === undefined).length - 8} more...
-                        </div>
-                      )}
+                        .map((attribute, index) => {
+                          const attributeIndex = material.attributes.findIndex(attr => attr === attribute);
+                          const dataType = getParamType(attribute.param_id, attribute.param.data);
+                          
+                          return (
+                            <div key={index} className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-xs text-gray-600 font-medium">
+                                  {attribute.param_id}
+                                </Label>
+                                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
+                                  {dataType}
+                                </span>
+                              </div>
+                              <AttributeEditor
+                                attribute={attribute}
+                                materialIndex={materialIndex}
+                                attributeIndex={attributeIndex}
+                                onUpdate={(value, dataType) => handleAttributeUpdate(materialIndex, attributeIndex, value, dataType)}
+                                onDelete={() => handleRemoveAttribute(materialIndex, attributeIndex)}
+                              />
+                            </div>
+                          );
+                        })}
                     </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Add new attribute section */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Add New Attribute</Label>
+                    <AddAttributeComponent
+                      materialIndex={materialIndex}
+                      existingAttributes={material.attributes.map(attr => attr.param_id)}
+                      onAdd={(paramId) => handleAddAttribute(materialIndex, paramId)}
+                    />
                   </div>
                 </div>
               </Card>

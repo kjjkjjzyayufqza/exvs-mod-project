@@ -439,6 +439,7 @@ function sortSubFileDataByType (data: SubFileDataItem[]): SubFileDataItem[] {
     '.numatb', // 0xd
     '.numshb', // 0xe
     '.numdlb', // 0xf
+    '.nuanmb', // 0x11
     '.nuhlpb', // 0x13
     '.nus3bank', // 0x14
     '.nudnbb', // 0x17
@@ -562,9 +563,6 @@ function generateSubFileStructureWithoutMapping (treeData: TreeDataItem[]): SubF
         })
       } else if (item.data?.type === 'Item' && item.data.fileIndex !== undefined) {
         // Preserve original fileIndex without any modifications
-        const currentFileIndex = item.data.fileIndex
-        const originalFileIndex = item.data.originalFileIndex || item.data.fileIndex
-
 
         subFileStructure.push({
           type: 'Item',
@@ -572,8 +570,8 @@ function generateSubFileStructureWithoutMapping (treeData: TreeDataItem[]): SubF
           unk1: item.data.unk1,
           unk2: item.data.unk2,
           unk3: item.data.unk3,
-          fileIndex: currentFileIndex, // Preserve original fileIndex
-          originalFileIndex: originalFileIndex // Keep original unchanged
+          fileIndex: item.data.fileIndex,
+          originalFileIndex: item.data.originalFileIndex
         })
       }
     }
