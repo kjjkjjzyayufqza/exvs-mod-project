@@ -229,38 +229,77 @@ export default function FilesEdit() {
     }
   }
 
+  const convertPngToJpg = async (pngPath: string): Promise<string> => {
+    try {
+      // Read PNG file using Tauri's filesystem API
+      const imageBytes = await readFile(pngPath);
+      const base64 = btoa(
+        Array.from(new Uint8Array(imageBytes))
+          .map(b => String.fromCharCode(b))
+          .join('')
+      );
+      const pngDataUrl = `data:image/png;base64,${base64}`;
+
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          if (!ctx) {
+            reject(new Error('Failed to get canvas context'));
+            return;
+          }
+
+          // Set canvas dimensions to match image
+          canvas.width = img.width;
+          canvas.height = img.height;
+
+          // Fill with white background (JPG doesn't support transparency)
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          // Draw the image
+          ctx.drawImage(img, 0, 0);
+
+          // Convert to JPG blob
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              reject(new Error('Failed to convert PNG to JPG'));
+              return;
+            }
+
+            // Create object URL for the JPG blob
+            const jpgUrl = URL.createObjectURL(blob);
+            resolve(jpgUrl);
+          }, 'image/jpeg', 0.9); // 90% quality
+        };
+
+        img.onerror = () => {
+          reject(new Error('Failed to load PNG image'));
+        };
+
+        // Load the PNG using base64 data URL to avoid canvas tainting
+        img.src = pngDataUrl;
+      });
+    } catch (error) {
+      throw new Error(`Failed to read PNG file: ${error}`);
+    }
+  };
+
   const handleBatchReplaceNutexb = async () => {
     try {
-      
+      setIsBatchReplacing(true);
+
       // Get all nutexb files
-      const nutexbFiles = files.filter(file => 
-        file.string?.includes('_roughness') || file.string?.includes('_normal')
-      );
+      const nutexbFiles = files.filter(file => file.name.endsWith('.nutexb'));
       
       if (nutexbFiles.length === 0) {
         console.log("No nutexb files found");
         return;
       }
 
-      // Open file dialog to select replacement image
-      const imageFile = await open({
-        multiple: false,
-        filters: [
-          {
-            name: "Image Files",
-            extensions: ["png", "jpg", "jpeg", "bmp", "gif", "webp", "tiff", "tif"],
-          },
-        ],
-      });
-
-      if (!imageFile || Array.isArray(imageFile)) {
-        return;
-      }
-
-      setIsBatchReplacing(true);
-
-
-      console.log(`Starting batch replacement for ${nutexbFiles.length} nutexb files with image: ${imageFile}`);
+      console.log(`Starting batch replacement for ${nutexbFiles.length} nutexb files`);
 
       // Get tool path
       const resourcePath = await resourceDir();
@@ -277,10 +316,21 @@ export default function FilesEdit() {
         try {
           console.log(`Processing ${file.name}...`);
           
-          // First convert the file to get nutexb data with format information
+          // Step 1: Convert nutexb to PNG
+          const cache = await cacheNutexbFile(file);
+          if (!cache || !cache.outputPath) {
+            console.error(`Failed to convert ${file.name} to PNG, skipping...`);
+            continue;
+          }
+
+          console.log(`Converted ${file.name} to PNG: ${cache.outputPath}`);
+
+          // Step 2: Convert PNG to JPG
+          const jpgBlob = await convertPngToJpg(cache.outputPath);
+          console.log(`Converted PNG to JPG for ${file.name}`);
+
+          // Step 3: Get nutexb data to access format and mipmap info
           await convertNutexbFile(file);
-          
-          // Get the converted nutexb data to access format and mipmap info
           const nutexbData = useNutexbStore.getState().nutexbData;
           if (!nutexbData) {
             console.error(`No nutexb data available for ${file.name}, skipping...`);
@@ -290,9 +340,24 @@ export default function FilesEdit() {
           const selectedFormat = nutexbData.imageFormat.replace(/"/g, "");
           const hasMipmaps = (nutexbData.footer.mipmap_count || 0) > 1;
           const nutexbString = nutexbData.footer.string;
+
+          // Step 4: Create temporary JPG file path
+          const convertDirPath = await join(folderPath, CONVERT_DIR_NAME);
+          const jpgFileName = file.name.replace(".nutexb", "_temp.jpg");
+          const jpgPath = await join(convertDirPath, jpgFileName);
+
+          // Step 5: Save JPG blob to file system
+          const response = await fetch(jpgBlob);
+          const jpgArrayBuffer = await response.arrayBuffer();
+          const jpgUint8Array = new Uint8Array(jpgArrayBuffer);
           
-          // Build command to replace texture while preserving properties
-          let command = `${toolPath} ${imageFile} ${file.path} --format ${selectedFormat} --nutexb-name=${nutexbString}`;
+          // Write JPG file
+          const { writeFile } = await import("@tauri-apps/plugin-fs");
+          await writeFile(jpgPath, jpgUint8Array);
+          console.log(`Saved JPG file: ${jpgPath}`);
+
+          // Step 6: Replace nutexb with JPG
+          let command = `${toolPath} ${jpgPath} ${file.path} --format ${selectedFormat} --nutexb-name=${nutexbString}`;
           if (!hasMipmaps) {
             command += " --no-mipmaps";
           }
@@ -307,12 +372,25 @@ export default function FilesEdit() {
           ]);
 
           if (typeof result === "string") {
-            console.log(`Successfully replaced ${file.name}`);
+            console.log(`Successfully replaced ${file.name} with JPG`);
           } else {
             console.error(`Failed to replace ${file.name}: Invalid command result`);
           }
+
+          // Cleanup: Remove temporary JPG file
+          try {
+            const { remove } = await import("@tauri-apps/plugin-fs");
+            await remove(jpgPath);
+            console.log(`Cleaned up temporary JPG file: ${jpgPath}`);
+          } catch (cleanupError) {
+            console.warn(`Failed to cleanup temporary file ${jpgPath}:`, cleanupError);
+          }
+
+          // Cleanup: Revoke object URL
+          URL.revokeObjectURL(jpgBlob);
+
         } catch (error) {
-          console.error(`Error replacing ${file.name}:`, error);
+          console.error(`Error processing ${file.name}:`, error);
         }
       }
 
