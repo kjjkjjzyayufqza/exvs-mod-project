@@ -58,7 +58,7 @@ export default function FilesEdit() {
       const convertDirPath = await join(folderPath, CONVERT_DIR_NAME);
       const outputFileName = file.name.replace(".nutexb", "_convert.png");
       const previewPath = await join(convertDirPath, outputFileName);
-
+      
       const previewExists = await exists(previewPath);
       if (previewExists) {
         return previewPath;
@@ -71,7 +71,7 @@ export default function FilesEdit() {
 
   const handleFileTypeSelect = async (fileType: string) => {
     console.log("File creation completed for type:", fileType);
-
+    
     // Refresh the file list after successful file creation
     if (folderPath) {
       setIsLoading(true);
@@ -91,20 +91,20 @@ export default function FilesEdit() {
             name: entry.name || "",
             path: folderPath + "/" + entry.name
           })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-
+        
         // Get file info and check for existing previews
         for (const file of filteredEntries) {
           if (file.name.endsWith('.nutexb')) {
             try {
               const info = await getNutexbFileInfos(file);
               file.string = info.string;
-
+              
               // Check for existing preview
               const existingPreview = await checkExistingPreview(file, folderPath);
               if (existingPreview) {
                 file.previewPath = existingPreview;
               }
-
+              
               // Keep existing previewPath if available from previous state
               const existingFile = files.find(f => f.name === file.name);
               if (existingFile?.previewPath && !file.previewPath) {
@@ -149,14 +149,14 @@ export default function FilesEdit() {
             name: entry.name || "",
             path: selected + "/" + entry.name
           })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-
+        
         // Get file info and check for existing previews
         for (const file of filteredEntries) {
           if (file.name.endsWith('.nutexb')) {
             try {
               const info = await getNutexbFileInfos(file);
               file.string = info.string;
-
+              
               // Check for existing preview
               const existingPreview = await checkExistingPreview(file, selected);
               if (existingPreview) {
@@ -181,7 +181,7 @@ export default function FilesEdit() {
     try {
       const nutexbFiles = files.filter(file => file.name.endsWith('.nutexb'));
       const updatedFiles = [...files];
-
+      
       for (const file of nutexbFiles) {
         try {
           const cache = await cacheNutexbFile(file);
@@ -199,7 +199,7 @@ export default function FilesEdit() {
           console.error("Error converting Nutexb file:", file.name, e);
         }
       }
-
+      
       setFiles(updatedFiles);
     } catch (error) {
       console.error("Error during batch conversion:", error);
@@ -231,12 +231,12 @@ export default function FilesEdit() {
 
   const handleBatchReplaceNutexb = async () => {
     try {
-
+      
       // Get all nutexb files
-      const nutexbFiles = files.filter(file =>
+      const nutexbFiles = files.filter(file => 
         file.string?.includes('_roughness') || file.string?.includes('_normal')
       );
-
+      
       if (nutexbFiles.length === 0) {
         console.log("No nutexb files found");
         return;
@@ -249,101 +249,105 @@ export default function FilesEdit() {
       // Get tool paths
       const resourcePath = await resourceDir();
       const ultimateTexPath = resourcePath + "/tools/ultimate_tex_cli.exe";
-      const pngquantPath = resourcePath + "/tools/pngquant.exe";
+      const imagineerPath = resourcePath + "/tools/imagineer.exe";
 
       // Check if tools exist
       const ultimateTexExists = await exists(ultimateTexPath);
-      const pngquantExists = await exists(pngquantPath);
-
+      const imagineerExists = await exists(imagineerPath);
+      
       if (!ultimateTexExists) {
         throw new Error(`Tool not found: ${ultimateTexPath}`);
       }
-
-      if (!pngquantExists) {
-        throw new Error(`Tool not found: ${pngquantPath}`);
+      
+      if (!imagineerExists) {
+        throw new Error(`Tool not found: ${imagineerPath}`);
       }
 
       // Process each nutexb file
       for (const file of nutexbFiles) {
-        console.log(`Processing ${file.name}...`);
-
-        // Step 1: Convert nutexb to png
-        const cache = await cacheNutexbFile(file);
-        if (!cache || !cache.outputPath) {
-          console.error(`Failed to convert ${file.name} to PNG, skipping...`);
-          throw new Error(`Failed to convert ${file.name} to PNG, skipping...`);
-        }
-
-        const pngPath = cache.outputPath;
-        console.log(`Converted ${file.name} to PNG: ${pngPath}`);
-
-        // Step 2: Optimize png using pngquant.exe
-        const optimizedPath = pngPath.replace('.png', '_test.png');
-
-        // Use Command API for better Windows encoding support
-        const pngquantCommand = Command.create('exec-cmd', [
-          "/c",
-          pngquantPath,
-          '--quality=0-1',
-          '--output', optimizedPath,
-          pngPath,
-          "--speed=1",
-          "--force"
-        ], { encoding: 'utf-8' });
-
-        const pngquantResult = await pngquantCommand.execute();
-        if (pngquantResult.code !== 0) {
-          console.error(`Failed to optimize PNG for ${file.name}:`, pngquantResult.stderr);
-          throw new Error(`Failed to optimize PNG for ${file.name}:`);
-        }
-        console.log(`Successfully optimized PNG: ${optimizedPath}`);
-
-        // Step 3: Get nutexb data for format information
-        await convertNutexbFile(file);
-        const nutexbData = useNutexbStore.getState().nutexbData;
-
-        if (!nutexbData) {
-          console.error(`No nutexb data available for ${file.name}, skipping...`);
-          throw new Error(`No nutexb data available for ${file.name}, skipping...`);
-        }
-
-        const selectedFormat = nutexbData.imageFormat.replace(/"/g, "");
-        const hasMipmaps = (nutexbData.footer.mipmap_count || 0) > 1;
-        const nutexbString = nutexbData.footer.string;
-
-        // Step 4: Replace nutexb with optimized png using ultimate_tex_cli.exe
-        const replaceArgs = [optimizedPath, file.path, '--format', selectedFormat, '--nutexb-name=' + nutexbString];
-        if (!hasMipmaps) {
-          replaceArgs.push('--no-mipmaps');
-        }
-
-        // Use Command API for better Windows encoding support
-        const replaceCommand = Command.create('exec-cmd', [
-          "/c",
-          ultimateTexPath,
-          ...replaceArgs
-        ], { encoding: 'utf-8' });
-
-        console.log(`Replacing nutexb with optimized PNG: ${ultimateTexPath} ${replaceArgs.join(' ')}`);
-
-        // Execute replacement command with timeout
-        const replacePromise = replaceCommand.execute();
-        const replaceResult = await Promise.race([
-          replacePromise,
-          new Promise((_, reject) => setTimeout(() => reject(new Error(`Replacement timed out for ${file.name}`)), 15000))
-        ]);
-
-        if (replaceResult && typeof replaceResult === 'object' && 'code' in replaceResult) {
-          const result = replaceResult as { code: number; stderr?: string };
-          if (result.code === 0) {
-            console.log(`Successfully replaced ${file.name} with optimized PNG`);
-          } else {
-            console.error(`Failed to replace ${file.name}:`, result.stderr || 'Unknown error');
+        try {
+          console.log(`Processing ${file.name}...`);
+          
+          // Step 1: Convert nutexb to png
+          const cache = await cacheNutexbFile(file);
+          if (!cache || !cache.outputPath) {
+            console.error(`Failed to convert ${file.name} to PNG, skipping...`);
+            continue;
           }
-        } else {
-          console.error(`Failed to replace ${file.name}: Invalid command result`);
-        }
+          
+          const pngPath = cache.outputPath;
+          console.log(`Converted ${file.name} to PNG: ${pngPath}`);
+          
+          // Step 2: Convert png to jpg using imagineer.exe
+          const jpgPath = pngPath.replace('.png', '.png');
+          
+          // Use Command API for better Windows encoding support
+          const imagineerCommand = Command.create('exec-cmd', [
+            "/c",
+            imagineerPath,
+            '-i', pngPath,
+            '-o', jpgPath,
+            '--jpeg-encoding-quality', '10'
+          ], { encoding: 'utf-8' });
+          
+          console.log(`Converting PNG to JPG: ${imagineerPath} -i "${pngPath}" -o "${jpgPath}" --jpeg-encoding-quality 50`);
+          
+          const imagineerResult = await imagineerCommand.execute();
+          if (imagineerResult.code !== 0) {
+            console.error(`Failed to convert PNG to JPG for ${file.name}:`, imagineerResult.stderr);
+            continue;
+          }
+          console.log(`Successfully converted PNG to JPG: ${jpgPath}`);
+          
+          // Step 3: Get nutexb data for format information
+          await convertNutexbFile(file);
+          const nutexbData = useNutexbStore.getState().nutexbData;
+          
+          if (!nutexbData) {
+            console.error(`No nutexb data available for ${file.name}, skipping...`);
+            continue;
+          }
 
+          const selectedFormat = nutexbData.imageFormat.replace(/"/g, "");
+          const hasMipmaps = (nutexbData.footer.mipmap_count || 0) > 1;
+          const nutexbString = nutexbData.footer.string;
+          
+          // Step 4: Replace nutexb with jpg using ultimate_tex_cli.exe
+          const replaceArgs = [jpgPath, file.path, '--format', selectedFormat, '--nutexb-name=' + nutexbString];
+          if (!hasMipmaps) {
+            replaceArgs.push('--no-mipmaps');
+          }
+          
+          // Use Command API for better Windows encoding support
+          const replaceCommand = Command.create('exec-cmd', [
+            "/c",
+            ultimateTexPath,
+            ...replaceArgs
+          ], { encoding: 'utf-8' });
+          
+          console.log(`Replacing nutexb with JPG: ${ultimateTexPath} ${replaceArgs.join(' ')}`);
+          
+          // Execute replacement command with timeout
+          const replacePromise = replaceCommand.execute();
+          const replaceResult = await Promise.race([
+            replacePromise, 
+            new Promise((_, reject) => setTimeout(() => reject(new Error(`Replacement timed out for ${file.name}`)), 15000))
+          ]);
+
+          if (replaceResult && typeof replaceResult === 'object' && 'code' in replaceResult) {
+            const result = replaceResult as { code: number; stderr?: string };
+            if (result.code === 0) {
+              console.log(`Successfully replaced ${file.name} with JPG`);
+            } else {
+              console.error(`Failed to replace ${file.name}:`, result.stderr || 'Unknown error');
+            }
+          } else {
+            console.error(`Failed to replace ${file.name}: Invalid command result`);
+          }
+          
+        } catch (error) {
+          console.error(`Error processing ${file.name}:`, error);
+        }
       }
 
       console.log("Batch replacement completed");
@@ -403,9 +407,9 @@ export default function FilesEdit() {
           {handleDebugRepack && <Loader2 className="animate-spin" />}
           Repack
         </Button>
-        <Button
-          onClick={handleConvertAllNutexb}
-          disabled={isConvertingNutexb || files.filter(f => f.name.endsWith('.nutexb')).length === 0}
+        <Button 
+          onClick={handleConvertAllNutexb} 
+          disabled={isConvertingNutexb || files.filter(f => f.name.endsWith('.nutexb')).length === 0} 
           size="sm"
           variant="outline"
         >
@@ -413,9 +417,9 @@ export default function FilesEdit() {
           <ImageIcon className="h-4 w-4 mr-2" />
           Convert Nutexb to PNG
         </Button>
-        <Button
-          onClick={handleBatchReplaceNutexb}
-          disabled={isBatchReplacing || files.filter(f => f.name.endsWith('.nutexb')).length === 0}
+        <Button 
+          onClick={handleBatchReplaceNutexb} 
+          disabled={isBatchReplacing || files.filter(f => f.name.endsWith('.nutexb')).length === 0} 
           size="sm"
           variant="destructive"
         >
@@ -428,7 +432,7 @@ export default function FilesEdit() {
         <div className="col-span-2 bg-white rounded-lg shadow-sm border p-4">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-700">Files</h3>
-            <FileTypeDialog
+            <FileTypeDialog 
               onFileTypeSelect={handleFileTypeSelect}
               currentDirectory={folderPath}
             >

@@ -35,6 +35,7 @@ export const PARAM_TYPE_MAPPING: Record<string, ParamDataType> = {
   'CustomFloat8': 'Float1',
   'CustomFloat9': 'Float1',
   'EmissiveScale': 'Float1',
+  'CosinePower': 'Float1',
   
   // Float types
   'CustomInteger0': 'Float',
@@ -58,6 +59,8 @@ export const PARAM_TYPE_MAPPING: Record<string, ParamDataType> = {
   'CustomColor0': 'Unk7',
   'CustomColor1': 'Unk7',
   'CustomColor2': 'Unk7',
+  'Diffuse': 'Unk7',
+  'Specular': 'Unk7',
   
   // Sampler types
   'DiffuseSampler': 'Sampler',
@@ -119,6 +122,41 @@ export const getDefaultValueForType = (dataType: ParamDataType): AttributeData =
   }
 };
 
+// Parameter-specific default values based on JSON data
+export const PARAM_SPECIFIC_DEFAULTS: Record<string, AttributeData> = {
+  'Diffuse': {
+    Unk7: {
+      r: 1.0,
+      g: 1.0,
+      b: 1.0,
+      a: 1.0
+    }
+  },
+  'Specular': {
+    Unk7: {
+      r: 1.0,
+      g: 1.0,
+      b: 1.0,
+      a: 1.0
+    }
+  },
+  'CosinePower': {
+    Float1: 20.0
+  }
+};
+
+// Get default value for a specific parameter
+export const getDefaultValueForParam = (paramId: string): AttributeData => {
+  // Check if we have a specific default for this parameter
+  if (PARAM_SPECIFIC_DEFAULTS[paramId]) {
+    return PARAM_SPECIFIC_DEFAULTS[paramId];
+  }
+  
+  // Fall back to type-based default
+  const dataType = getParamType(paramId, {} as AttributeData);
+  return getDefaultValueForType(dataType);
+};
+
 // Common attribute templates
 export const COMMON_ATTRIBUTES = [
   'ReceiveShadow',
@@ -138,6 +176,7 @@ export const COMMON_ATTRIBUTES = [
   'CustomFloat8',
   'CustomFloat9',
   'EmissiveScale',
+  'CosinePower',
   'CustomInteger0',
   'BaseColorMap',
   'EmissiveMap',
@@ -153,6 +192,8 @@ export const COMMON_ATTRIBUTES = [
   'CustomColor0',
   'CustomColor1',
   'CustomColor2',
+  'Diffuse',
+  'Specular',
   'DiffuseSampler',
 ];
 
@@ -319,9 +360,8 @@ export const useNumatbStore = create<NumatbStore>((set, get) => ({
         return;
       }
 
-      // Get the appropriate data type and default value
-      const dataType = getParamType(paramId, {} as AttributeData);
-      const defaultData = getDefaultValueForType(dataType);
+      // Get the parameter-specific default value
+      const defaultData = getDefaultValueForParam(paramId);
 
       // Create new attribute
       const newAttribute: MaterialAttribute = {
