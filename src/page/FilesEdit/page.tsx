@@ -3,7 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FolderOpen, Loader2, Plus, ImageIcon, Bug } from "lucide-react";
-import { readDir, readFile, exists } from "@tauri-apps/plugin-fs";
+import { readDir, readFile, exists, writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { FileList } from "./components/FileList";
 import { FileTypeDialog } from "./components/FileTypeDialog";
 import { CONVERT_DIR_NAME, FileInfo as NumatbFileInfo, useNumatbStore } from "../../store/numatbStore";
@@ -14,6 +14,7 @@ import { resourceDir, dirname, join } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { findNutexbString } from "../../module/commonFunc";
 import { Command } from '@tauri-apps/plugin-shell';
+
 
 // Extend FileInfo to include possible properties
 interface ExtendedFileInfo extends NumatbFileInfo, NutexbFileInfo {
@@ -30,6 +31,7 @@ export default function FilesEdit() {
   const [handleDebugRepack, setHandleDebugRepack] = useState(false);
   const [isConvertingNutexb, setIsConvertingNutexb] = useState(false);
   const [isBatchReplacing, setIsBatchReplacing] = useState(false);
+  const [isDebuggingNumatb, setIsDebuggingNumatb] = useState(false);
 
   const convertNumatbFile = useNumatbStore((e) => e.convertFile);
   const resetNumatbConversion = useNumatbStore((e) => e.resetConversion);
@@ -234,6 +236,227 @@ export default function FilesEdit() {
 
       // Get all nutexb files
       const nutexbFiles = files.filter(file =>
+        // file.string?.includes('_roughness') || file.string?.includes('_normal')
+        // file.string?.includes('_roughness')
+        file.name.includes('nutexb')
+      );
+
+      if (nutexbFiles.length === 0) {
+        console.log("No nutexb files found");
+        return;
+      }
+
+      // Open file dialog to select replacement image
+      const imageFile = await open({
+        multiple: false,
+        filters: [
+          {
+            name: "Image Files",
+            extensions: ["png", "jpg", "jpeg", "bmp", "gif", "webp", "tiff", "tif"],
+          },
+        ],
+      });
+
+      if (!imageFile || Array.isArray(imageFile)) {
+        return;
+      }
+
+      setIsBatchReplacing(true);
+
+
+      console.log(`Starting batch replacement for ${nutexbFiles.length} nutexb files with image: ${imageFile}`);
+
+      // Get tool path
+      const resourcePath = await resourceDir();
+      const toolPath = resourcePath + "/tools/ultimate_tex_cli.exe";
+
+      // Check if the tool exists
+      const toolExists = await exists(toolPath);
+      if (!toolExists) {
+        throw new Error(`Tool not found: ${toolPath}`);
+      }
+
+      // Process each nutexb file
+      for (const file of nutexbFiles) {
+        try {
+          console.log(`Processing ${file.name}...`);
+
+          // First convert the file to get nutexb data with format information
+          await convertNutexbFile(file);
+
+          // Get the converted nutexb data to access format and mipmap info
+          const nutexbData = useNutexbStore.getState().nutexbData;
+          if (!nutexbData) {
+            console.error(`No nutexb data available for ${file.name}, skipping...`);
+            continue;
+          }
+
+          const selectedFormat = nutexbData.imageFormat.replace(/"/g, "");
+          const hasMipmaps = (nutexbData.footer.mipmap_count || 0) > 1;
+          const nutexbString = nutexbData.footer.string;
+
+          // Build command to replace texture while preserving properties
+          let command = `${toolPath} ${imageFile} ${file.path} --format ${selectedFormat} --nutexb-name=${nutexbString}`;
+          if (!hasMipmaps) {
+            command += " --no-mipmaps";
+          }
+
+          console.log(`Executing command: ${command}`);
+
+          // Execute command with timeout
+          const commandPromise = invoke("exec_shell_command", { command });
+          const result = await Promise.race([
+            commandPromise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error(`Replacement timed out for ${file.name}`)), 15000))
+          ]);
+
+          if (typeof result === "string") {
+            console.log(`Successfully replaced ${file.name}`);
+          } else {
+            console.error(`Failed to replace ${file.name}: Invalid command result`);
+          }
+        } catch (error) {
+          console.error(`Error replacing ${file.name}:`, error);
+        }
+      }
+
+      console.log("Batch replacement completed");
+
+      // Refresh the file list to update previews
+      if (folderPath) {
+        setIsLoading(true);
+        try {
+          // Clear existing previews and re-scan
+          const updatedFiles = files.map(file => ({
+            ...file,
+            previewPath: undefined
+          }));
+          setFiles(updatedFiles);
+
+          // Trigger re-conversion of nutexb files for new previews
+          setTimeout(async () => {
+            await handleConvertAllNutexb();
+          }, 1000);
+        } catch (error) {
+          console.error("Error refreshing after batch replacement:", error);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+
+    } catch (error) {
+      console.error("Error during batch replacement:", error);
+    } finally {
+      setIsBatchReplacing(false);
+    }
+  };
+
+  const handleDebugNumatb = async () => {
+    try {
+      setIsDebuggingNumatb(true);
+
+      // Get all numatb files
+      const numatbFiles = files.filter(file => file.name.endsWith('.numatb'));
+
+      if (numatbFiles.length === 0) {
+        console.log("No numatb files found");
+        return;
+      }
+
+      console.log(`Starting debug processing for ${numatbFiles.length} numatb files`);
+
+      // Get tool path
+      const resourcePath = await resourceDir();
+      const toolPath = resourcePath + "/tools/ssbh_data_json.exe";
+
+      // Check if the tool exists
+      const toolExists = await exists(toolPath);
+      if (!toolExists) {
+        throw new Error(`Tool not found: ${toolPath}`);
+      }
+
+      // Process each numatb file
+      for (const file of numatbFiles) {
+        console.log(`Processing ${file.name}...`);
+
+        const baseName = file.name.replace('.numatb', '');
+        const jsonPath = await join(folderPath, `${baseName}.json`);
+
+        // Step 1: Convert numatb to json
+        console.log(`Converting ${file.name} to JSON...`);
+        const convertToJsonCommand = await invoke('exec_shell_command', {
+          command: `${toolPath} ${file.path} ${jsonPath}`
+        });
+
+        if (typeof convertToJsonCommand !== "string") {
+          console.error(`Failed to convert ${file.name} to JSON:`, convertToJsonCommand);
+          continue;
+        }
+
+        // Step 2: Read and modify JSON file
+        console.log(`Modifying JSON file for ${file.name}...`);
+        const jsonBuffer = await readTextFile(jsonPath);
+        const jsonContent = JSON.parse(jsonBuffer);
+        jsonContent.minor_version = 6;
+        for (const entry of jsonContent.entries) {
+          //只做第二个有shader_label的numatb
+          if (entry.shader_label != "") {
+            switch (entry.shader_label) {
+              // case "FeRendererMovable":
+              //   entry.shader_label = "FeStandard";
+              //   break;
+              case "FeRendererMovableVertexColor":
+                entry.shader_label = "vstgStandard_VertexColor";
+                break;
+              case "FeRendererMovableBlend2MultiUV":
+                // entry.shader_label = "vstgStandard_Blend2VC_MultiUV_VC";  // 不知道是哪个
+                // vstgStandard_Blend2VC_MultiUV_VC_LSMap
+                entry.shader_label = "vstgStandard_MultiUV_LightAndShadowMap"; //应该是这个
+                break;
+                // debug
+              // case "FeStandard":
+              //   entry.shader_label = "FeRendererMovable";
+              //   break;
+              default:
+                break;
+            }
+            entry.textures.forEach((texture: any) => {
+              // _sky 保留DiffuseMap
+              if (texture.param_id == "DiffuseMap" && !texture.data.includes("_sky")) {
+                texture.param_id = "BaseColorMap";
+              }
+            });
+          }
+
+        }
+
+        // Write modified JSON back
+        await writeTextFile(jsonPath, JSON.stringify(jsonContent, null, 2));
+
+        // Step 3: Convert json back to numatb
+        console.log(`Converting JSON back to numatb for ${file.name}...`);
+        const convertToNumatbCommand = await invoke('exec_shell_command', {
+          command: `${toolPath} ${jsonPath} ${file.path}`
+        });
+
+        if (typeof convertToNumatbCommand !== "string") {
+          console.error(`Failed to convert JSON back to numatb for ${file.name}:`, convertToNumatbCommand);
+          continue;
+        }
+      }
+      console.log("Numatb debug processing completed");
+    } catch (error) {
+      console.error("Error during numatb debug processing:", error);
+    } finally {
+      setIsDebuggingNumatb(false);
+    }
+  };
+
+  const handleBatchReplaceNutexb_With_Optimize = async () => {
+    try {
+
+      // Get all nutexb files
+      const nutexbFiles = files.filter(file =>
         file.string?.includes('_roughness') || file.string?.includes('_normal')
       );
 
@@ -377,6 +600,51 @@ export default function FilesEdit() {
     }
   };
 
+  const [isDebuggingReadJsonFiles, setIsDebuggingReadJsonFiles] = useState(false);
+  const handleDebugReadJsonFiles = async () => {
+    try {
+      setIsDebuggingReadJsonFiles(true);
+
+      // Get all numatb files
+      const jsonFiles = files.filter(file => file.name.endsWith('.json'));
+
+      if (jsonFiles.length === 0) {
+        console.log("No json files found");
+        return;
+      }
+      const newSet = new Set<string>();
+
+      // Process each numatb file
+      for (const file of jsonFiles) {
+
+        const baseName = file.name.replace('.json', '');
+        const jsonPath = await join(folderPath, `${baseName}.json`);
+        // Step 2: Read and modify JSON file
+        const jsonBuffer = await readTextFile(jsonPath);
+        const jsonContent = JSON.parse(jsonBuffer);
+        jsonContent.minor_version = 6;
+        for (const entry of jsonContent.entries) {
+          //只做第二个有shader_label的numatb
+          if (entry.shader_label != "") {
+            // console.log("Find, ", jsonPath);
+            newSet.add(entry.shader_label);
+            // if textures.param_id is DiffuseMap, log the jsonPath
+            entry.textures.forEach((texture: any) => {
+              if (texture.param_id == "DiffuseMap") {
+                console.log("Find DiffuseMap, ", jsonPath);
+              }
+            });
+          }
+
+        }
+      }
+      console.log(newSet);
+    } catch (error) {
+    } finally {
+      setIsDebuggingReadJsonFiles(false);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col p-6 bg-gray-50/30">
       <div className="mb-8">
@@ -421,9 +689,41 @@ export default function FilesEdit() {
         >
           {isBatchReplacing && <Loader2 className="animate-spin mr-2" />}
           <Bug className="h-4 w-4 mr-2" />
-          Debug Replace All Nutexb
+          Debug Replace All Nutexb with selected image
+        </Button>
+        <Button
+          onClick={handleBatchReplaceNutexb_With_Optimize}
+          disabled={isBatchReplacing || files.filter(f => f.name.endsWith('.nutexb')).length === 0}
+          size="sm"
+          variant="destructive"
+        >
+          {isBatchReplacing && <Loader2 className="animate-spin mr-2" />}
+          <Bug className="h-4 w-4 mr-2" />
+          Debug Auto Replace Normal and Roughness Nutexb
+        </Button>
+
+      </div>
+      <div className="mb-4 flex gap-2">
+        <Button
+          onClick={handleDebugNumatb}
+          disabled={isDebuggingNumatb || files.filter(f => f.name.endsWith('.numatb')).length === 0}
+          size="sm"
+        >
+          {isDebuggingNumatb && <Loader2 className="animate-spin mr-2" />}
+          <Bug className="h-4 w-4 mr-2" />
+          Debug Numatb Files
+        </Button>
+        <Button
+          onClick={handleDebugReadJsonFiles}
+          disabled={isDebuggingReadJsonFiles || files.filter(f => f.name.endsWith('.json')).length === 0}
+          size="sm"
+        >
+          {isDebuggingReadJsonFiles && <Loader2 className="animate-spin mr-2" />}
+          <Bug className="h-4 w-4 mr-2" />
+          Debug Read Json Files
         </Button>
       </div>
+
       <div className="grid grid-cols-2 gap-6 flex-1">
         <div className="col-span-2 bg-white rounded-lg shadow-sm border p-4">
           <div className="flex items-center justify-between mb-4">
