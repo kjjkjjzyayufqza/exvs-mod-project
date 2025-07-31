@@ -402,18 +402,26 @@ export default function FilesEdit() {
           //只做第二个有shader_label的numatb
           if (entry.shader_label != "") {
             switch (entry.shader_label) {
-              // case "FeRendererMovable":
+              // case "FeRendererMovable": // --保留
+              //   entry.shader_label = "FeStandard";
+              //   break;
+              // case "FeRendererStatic": // --保留
               //   entry.shader_label = "FeStandard";
               //   break;
               case "FeRendererMovableVertexColor":
-                entry.shader_label = "vstgStandard_VertexColor";
+                entry.shader_label = "vstgStandard_VertexColor"; // 这个一定要换，不然有些贴图变白
                 break;
               case "FeRendererMovableBlend2MultiUV":
                 // entry.shader_label = "vstgStandard_Blend2VC_MultiUV_VC";  // 不知道是哪个
                 // vstgStandard_Blend2VC_MultiUV_VC_LSMap
                 entry.shader_label = "vstgStandard_MultiUV_LightAndShadowMap"; //应该是这个
                 break;
-                // debug
+              // case "FeRendererMovableMultiUVVertexColorAO":
+              //   entry.shader_label = "";
+                break;
+              case "vsngTransparent_BeforeEffect": // 比如水面，透明贴图 --保留
+                break
+              // debug
               // case "FeStandard":
               //   entry.shader_label = "FeRendererMovable";
               //   break;
@@ -632,6 +640,7 @@ export default function FilesEdit() {
             entry.textures.forEach((texture: any) => {
               if (texture.param_id == "DiffuseMap") {
                 console.log("Find DiffuseMap, ", jsonPath);
+                console.log(texture.data);
               }
             });
           }
@@ -715,7 +724,7 @@ export default function FilesEdit() {
         </Button>
         <Button
           onClick={handleDebugReadJsonFiles}
-          disabled={isDebuggingReadJsonFiles || files.filter(f => f.name.endsWith('.json')).length === 0}
+          disabled={isDebuggingReadJsonFiles}
           size="sm"
         >
           {isDebuggingReadJsonFiles && <Loader2 className="animate-spin mr-2" />}
