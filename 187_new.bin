@@ -1,0 +1,207 @@
+# ========== 方向光照设置 ==========
+directional_lighting_rot_x,-51          # 主方向光X轴旋转角度（度）
+directional_lighting_rot_y,-73          # 主方向光Y轴旋转角度（度）
+directional_lighting_rot_z,17.694       # 主方向光Z轴旋转角度（度）
+directional_lighting_color_r,1          # 主方向光颜色 - 红色分量（0-1）
+directional_lighting_color_g,0.999      # 主方向光颜色 - 绿色分量（0-1）
+directional_lighting_color_b,0.977      # 主方向光颜色 - 蓝色分量（0-1）
+directional_lighting_intensity,5        # 主方向光强度值
+
+# ========== 基于图像的光照(IBL) ==========
+ibl_lighting_intensity,1                # IBL环境光照强度
+
+# ========== 阴影设置 ==========
+shadow_add_color_r,0                    # 阴影区域添加颜色 - 红色分量
+shadow_add_color_g,0                    # 阴影区域添加颜色 - 绿色分量
+shadow_add_color_b,0                    # 阴影区域添加颜色 - 蓝色分量
+
+# ========== 环境光遮蔽(AO)设置 ==========
+ao_blend_color_r,0                      # AO混合颜色 - 红色分量
+ao_blend_color_g,0                      # AO混合颜色 - 绿色分量
+ao_blend_color_b,0                      # AO混合颜色 - 蓝色分量
+
+# ========== 阴影裁剪设置 ==========
+shadow_near_clip,5                      # 阴影近裁剪距离
+shadow_far_clip,600                     # 阴影远裁剪距离 (基于原shadow_frustum参数)
+
+# ========== 雾效设置 ==========
+fog_rgb_boost,2                         # 雾效RGB颜色增强倍数
+fog_alpha_boost,0.85                    # 雾效透明度增强倍数
+fog_zenith_length,0.09                  # 天顶雾效长度
+fog_zenith_ratio_power,0.11             # 天顶雾效比例幂次
+fog_horizon_length,1                    # 地平线雾效长度
+
+# ========== 地图雾效设置 ==========
+mapfog_width,10000                      # 地图雾效宽度范围
+mapfog_height,10000                     # 地图雾效高度范围
+mapfog_center_x,0                       # 地图雾效中心X坐标
+mapfog_center_y,0                       # 地图雾效中心Y坐标
+mapfog_atten_start,0                    # 地图雾效衰减开始距离
+mapfog_atten_end,0.45                   # 地图雾效衰减结束距离
+
+# ========== 后处理效果设置 ==========
+# ------ 泛光效果 (Bloom) ------
+pfx_bloom_enable,1                      # 启用泛光效果 (基于yebis_able转换)
+pfx_bloom_bright_threshold,1            # 泛光亮度阈值 (基于yebis_glare_threshold)
+pfx_bloom_blend_value,0.6               # 泛光混合强度
+pfx_bloom_scale,0.25                    # 泛光缩放比例
+pfx_bloom_miplevel,5                    # 泛光Mipmap等级
+
+# ------ 光束效果 (Light Shaft) ------
+pfx_lightshaft_enable,0                 # 启用光束效果 (基于light_shaft_able转换)
+pfx_lightshaft_blur_size,7              # 光束模糊大小
+pfx_lightshaft_blur_power,0.7           # 光束模糊强度
+pfx_lightshaft_samples,16               # 光束采样数量
+pfx_lightshaft_buffer_scale,0.5         # 光束缓冲区缩放
+pfx_lightshaft_color_r,2.07             # 光束颜色 - 红色分量 (基于原light_shaft_l_color)
+pfx_lightshaft_color_b,1.54             # 光束颜色 - 蓝色分量
+pfx_lightshaft_offset,0                 # 光束偏移量
+pfx_lightshaft_scale,4.87               # 光束缩放系数 (基于原light_shaft_length)
+pfx_lightshaft_exp,-1                   # 光束指数衰减
+pfx_lightshaft_sharpness,0              # 光束锐化程度
+
+# ------ 抗锯齿效果 (FXAA) ------
+pfx_fxaa_enable,1                       # 启用FXAA抗锯齿 (1=启用, 0=禁用)
+
+# ------ 屏幕空间环境光遮蔽 (SSAO) ------
+pfx_ssao_enable,1                       # 启用SSAO效果 (1=启用, 0=禁用)
+pfx_ssao_standard_deviation,4           # SSAO标准偏差
+pfx_ssao_radius,1.35                    # SSAO采样半径
+pfx_ssao_sample_rotate_num,1            # SSAO旋转采样数量
+pfx_ssao_sample_radius_num,5            # SSAO半径采样数量
+pfx_ssao_distance_threshold,3           # SSAO距离阈值
+pfx_ssao_max_occlusion,0.71             # SSAO最大遮蔽强度
+pfx_ssao_radius_fixed_distance,50       # SSAO固定距离半径
+pfx_ssao_min_radius_at_nearplane,0      # 近平面最小半径
+pfx_ssao_allow_z_diff,0.5               # SSAO允许Z轴差异
+
+# ========== 特效环境设置 ==========
+# ------ 地面特效颜色 ------
+effect_ground_color_r,0.794             # 地面特效颜色 - 红色分量
+effect_ground_color_g,0.676             # 地面特效颜色 - 绿色分量
+effect_ground_color_b,0.546             # 地面特效颜色 - 蓝色分量
+
+# ------ 偏移光照特效 ------
+effect_offset_lighting_color_r,0        # 偏移光照颜色 - 红色分量
+effect_offset_lighting_color_g,0        # 偏移光照颜色 - 绿色分量
+effect_offset_lighting_color_b,0        # 偏移光照颜色 - 蓝色分量
+effect_offset_lighting_intensity,0      # 偏移光照强度
+
+# ------ 风力特效 ------
+effect_wind_velocity_x,1                # 风力速度X方向分量
+effect_wind_velocity_y,0                # 风力速度Y方向分量
+effect_wind_velocity_z,0                # 风力速度Z方向分量
+
+# ------ 水面特效 ------
+effect_water_height_offset,4            # 水面高度偏移
+effect_water_velocity_x,-0.5            # 水面流动速度X方向
+effect_water_velocity_z,-0.1            # 水面流动速度Z方向
+
+# ========== 边界设置 ==========
+border_able,1                           # 启用边界功能 (1=启用, 0=禁用)
+border_grid_num_x,7                     # 边界网格X方向数量
+border_grid_num_y,7                     # 边界网格Y方向数量
+border_offset_x,0                       # 边界X轴偏移
+border_offset_y,0                       # 边界Y轴偏移
+border_limit_y,1000                     # 边界Y轴限制高度
+
+# ========== XZ平面投影设置 ==========
+projXZ_enable,0                         # 启用XZ投影 (1=启用, 0=禁用)
+projXZ_div_x,2000                       # XZ投影X方向分割数
+projXZ_div_y,2000                       # XZ投影Y方向分割数
+projXZ_speed_u,0.1                      # XZ投影U方向速度
+projXZ_speed_v,0.1                      # XZ投影V方向速度
+
+# ========== 颜色分级设置 ==========
+color_grading_enable,0                  # 启用颜色分级 (保持原值)
+color_grading_3dbg_enable,1             # 启用3D背景颜色分级
+color_grading_3dms_enable,1             # 启用3D主场景颜色分级
+color_grading_3dfx_enable,0             # 启用3D特效颜色分级
+
+# ========== 曲线编辑器设置 ==========
+# ------ 背景颜色曲线 (BG - Background) ------
+# BGR - 背景红色通道曲线 (基于原color_correct_contrast_r等参数优化)
+curveedit_BGR_size,2                    # 背景红色曲线控制点数量
+curveedit_BGR_value_0_x,0               # 背景红色曲线第0个控制点X坐标
+curveedit_BGR_value_0_y,0.01            # 背景红色曲线第0个控制点Y坐标 (基于color_correct_bias_r)
+curveedit_BGR_value_1_x,1               # 背景红色曲线第1个控制点X坐标
+curveedit_BGR_value_1_y,1.05            # 背景红色曲线第1个控制点Y坐标 (基于color_correct_contrast_r)
+
+# BGG - 背景绿色通道曲线
+curveedit_BGG_size,2                    # 背景绿色曲线控制点数量
+curveedit_BGG_value_0_x,0               # 背景绿色曲线第0个控制点X坐标
+curveedit_BGG_value_0_y,0.01            # 背景绿色曲线第0个控制点Y坐标 (基于color_correct_bias_g)
+curveedit_BGG_value_1_x,1               # 背景绿色曲线第1个控制点X坐标
+curveedit_BGG_value_1_y,1.05            # 背景绿色曲线第1个控制点Y坐标 (基于color_correct_contrast_g)
+
+# BGB - 背景蓝色通道曲线
+curveedit_BGB_size,2                    # 背景蓝色曲线控制点数量
+curveedit_BGB_value_0_x,0               # 背景蓝色曲线第0个控制点X坐标
+curveedit_BGB_value_0_y,0               # 背景蓝色曲线第0个控制点Y坐标 (基于color_correct_bias_b)
+curveedit_BGB_value_1_x,1               # 背景蓝色曲线第1个控制点X坐标
+curveedit_BGB_value_1_y,1.04            # 背景蓝色曲线第1个控制点Y坐标 (基于color_correct_contrast_b)
+
+# BGA - 背景透明度通道曲线
+curveedit_BGA_size,2                    # 背景透明度曲线控制点数量
+curveedit_BGA_value_0_x,0               # 背景透明度曲线第0个控制点X坐标
+curveedit_BGA_value_0_y,0               # 背景透明度曲线第0个控制点Y坐标
+curveedit_BGA_value_1_x,1               # 背景透明度曲线第1个控制点X坐标
+curveedit_BGA_value_1_y,1               # 背景透明度曲线第1个控制点Y坐标
+
+# ------ 主场景颜色曲线 (MS - Main Scene) ------
+# MSR - 主场景红色通道曲线 (基于饱和度和对比度调整)
+curveedit_MSR_size,2                    # 主场景红色曲线控制点数量
+curveedit_MSR_value_0_x,0               # 主场景红色曲线第0个控制点X坐标
+curveedit_MSR_value_0_y,0.01            # 主场景红色曲线第0个控制点Y坐标
+curveedit_MSR_value_1_x,1               # 主场景红色曲线第1个控制点X坐标
+curveedit_MSR_value_1_y,1.04            # 主场景红色曲线第1个控制点Y坐标 (基于saturate_r * contrast_r)
+
+# MSG - 主场景绿色通道曲线
+curveedit_MSG_size,2                    # 主场景绿色曲线控制点数量
+curveedit_MSG_value_0_x,0               # 主场景绿色曲线第0个控制点X坐标
+curveedit_MSG_value_0_y,0.01            # 主场景绿色曲线第0个控制点Y坐标
+curveedit_MSG_value_1_x,1               # 主场景绿色曲线第1个控制点X坐标
+curveedit_MSG_value_1_y,1.05            # 主场景绿色曲线第1个控制点Y坐标 (基于saturate_g * contrast_g)
+
+# MSB - 主场景蓝色通道曲线
+curveedit_MSB_size,2                    # 主场景蓝色曲线控制点数量
+curveedit_MSB_value_0_x,0               # 主场景蓝色曲线第0个控制点X坐标
+curveedit_MSB_value_0_y,0               # 主场景蓝色曲线第0个控制点Y坐标
+curveedit_MSB_value_1_x,1               # 主场景蓝色曲线第1个控制点X坐标
+curveedit_MSB_value_1_y,1.02            # 主场景蓝色曲线第1个控制点Y坐标 (基于saturate_b * contrast_b)
+
+# MSA - 主场景透明度通道曲线
+curveedit_MSA_size,2                    # 主场景透明度曲线控制点数量
+curveedit_MSA_value_0_x,0               # 主场景透明度曲线第0个控制点X坐标
+curveedit_MSA_value_0_y,0               # 主场景透明度曲线第0个控制点Y坐标
+curveedit_MSA_value_1_x,1               # 主场景透明度曲线第1个控制点X坐标
+curveedit_MSA_value_1_y,1               # 主场景透明度曲线第1个控制点Y坐标 (基于brightness)
+
+# ------ 特效颜色曲线 (FX - Effects) ------
+# FXR - 特效红色通道曲线
+curveedit_FXR_size,2                    # 特效红色曲线控制点数量
+curveedit_FXR_value_0_x,0               # 特效红色曲线第0个控制点X坐标
+curveedit_FXR_value_0_y,0               # 特效红色曲线第0个控制点Y坐标
+curveedit_FXR_value_1_x,1               # 特效红色曲线第1个控制点X坐标
+curveedit_FXR_value_1_y,1               # 特效红色曲线第1个控制点Y坐标
+
+# FXG - 特效绿色通道曲线
+curveedit_FXG_size,2                    # 特效绿色曲线控制点数量
+curveedit_FXG_value_0_x,0               # 特效绿色曲线第0个控制点X坐标
+curveedit_FXG_value_0_y,0               # 特效绿色曲线第0个控制点Y坐标
+curveedit_FXG_value_1_x,1               # 特效绿色曲线第1个控制点X坐标
+curveedit_FXG_value_1_y,1               # 特效绿色曲线第1个控制点Y坐标
+
+# FXB - 特效蓝色通道曲线
+curveedit_FXB_size,2                    # 特效蓝色曲线控制点数量
+curveedit_FXB_value_0_x,0               # 特效蓝色曲线第0个控制点X坐标
+curveedit_FXB_value_0_y,0               # 特效蓝色曲线第0个控制点Y坐标
+curveedit_FXB_value_1_x,1               # 特效蓝色曲线第1个控制点X坐标
+curveedit_FXB_value_1_y,1               # 特效蓝色曲线第1个控制点Y坐标
+
+# FXA - 特效透明度通道曲线
+curveedit_FXA_size,2                    # 特效透明度曲线控制点数量
+curveedit_FXA_value_0_x,0               # 特效透明度曲线第0个控制点X坐标
+curveedit_FXA_value_0_y,0               # 特效透明度曲线第0个控制点Y坐标
+curveedit_FXA_value_1_x,1               # 特效透明度曲线第1个控制点X坐标
+curveedit_FXA_value_1_y,1               # 特效透明度曲线第1个控制点Y坐标

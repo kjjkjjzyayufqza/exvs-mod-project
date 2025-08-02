@@ -374,7 +374,6 @@ export default function FilesEdit() {
       if (!toolExists) {
         throw new Error(`Tool not found: ${toolPath}`);
       }
-
       // Process each numatb file
       for (const file of numatbFiles) {
         console.log(`Processing ${file.name}...`);
@@ -399,6 +398,18 @@ export default function FilesEdit() {
         const jsonContent = JSON.parse(jsonBuffer);
         jsonContent.minor_version = 6;
         for (const entry of jsonContent.entries) {
+          //处理第一个numatb
+          // 颜色出现不对或者白色才把DiffuseMap换成BaseColorMap，仅限第一个numatb
+          // check is first numatb
+          if (entry.shader_label == "") {
+            entry.textures.forEach((texture: any) => {
+              // 跳过_sky的DiffuseMap， skydome必须用DiffuseMap
+              if (texture.param_id == "DiffuseMap" && !texture.data.includes("_sky")) {
+                texture.param_id = "BaseColorMap";
+              }
+            });
+          }
+
           //只做第二个有shader_label的numatb
           if (entry.shader_label != "") {
             switch (entry.shader_label) {
@@ -416,11 +427,13 @@ export default function FilesEdit() {
                 // vstgStandard_Blend2VC_MultiUV_VC_LSMap
                 entry.shader_label = "vstgStandard_MultiUV_LightAndShadowMap"; //应该是这个
                 break;
-              // case "FeRendererMovableMultiUVVertexColorAO":
-              //   entry.shader_label = "";
-                break;
-              case "vsngTransparent_BeforeEffect": // 比如水面，透明贴图 --保留
-                break
+                // case "FeRendererMovableMultiUVVertexColorAO":
+                //   entry.shader_label = "";
+                // case "vsngTransparentReflectionMultiUV_BeforeEffect":
+                //   entry.shader_label = "";
+                // break;
+              // case "vsngTransparent_BeforeEffect": // 比如水面，透明贴图 --保留
+              //   break
               // debug
               // case "FeStandard":
               //   entry.shader_label = "FeRendererMovable";
