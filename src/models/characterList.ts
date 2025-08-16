@@ -39,7 +39,7 @@ export class CharacterList {
       const character_id_startOffset_buffer = this.bufferData.slice(0x20 + commandsBuffer.byteLength + i * 0x4);
       CharacterIds.push(character_id_startOffset_buffer.readInt32LE(0));
 
-      const character_info_startOffset_buffer = this.bufferData.slice(0x20 + commandsBuffer.byteLength + id_padding + i * 0x13c);
+      const character_info_startOffset_buffer = this.bufferData.slice(0x20 + commandsBuffer.byteLength + id_padding + i * this.CharacterInfoEachSize);
       this.CharacterData.push(new CharacterData(this.bufferData, character_info_startOffset_buffer, CharacterIds[i]));
     }
   }
