@@ -181,90 +181,79 @@ export class CharacterDataOB {
     this.UnkId0 = StreamReader.readInt32LE(0x0);
     this.UnkId1 = StreamReader.readInt32LE(0x4);
     this.UnkId2 = StreamReader.readInt32LE(0x8);
-    this.ms_igh_r = StreamReader.slice(0xc, 0xc + 0x4).toString("hex");
-    this.ms_vs_r = StreamReader.slice(0x10, 0x10 + 0x4).toString("hex");
-
-    const nameOffset = StreamReader.readInt32LE(0x14);
-    this.CharacterNameOffset = new StringNameData(nameOffset, buffer);
-
-    this.UnkId3 = StreamReader.readInt32LE(0x1c);
-    this.UnkId4 = StreamReader.readInt32LE(0x20);
-    this.UnkId5 = StreamReader.readInt32LE(0x24);
-    this.ms_vs_l = StreamReader.slice(0x28, 0x28 + 0x4).toString("hex");
+    this.UnkId3 = StreamReader.readInt32LE(0xc);
+    this.ms_igh_r = StreamReader.readInt32LE(0x10);
+    this.ms_vs_r = StreamReader.readInt32LE(0x14);
+    this.UnkHash1 = StreamReader.readInt32LE(0x18);
+    this.CharacterNameOffset = new StringNameData(StreamReader.readInt32LE(0x1c), buffer);
+    this.UnkId4 = StreamReader.readInt32LE(0x24);
+    this.UnkId5 = StreamReader.readInt32LE(0x28);
     this.UnkId6 = StreamReader.readInt32LE(0x2c);
-    this.UnkHash1 = StreamReader.slice(0x30, 0x30 + 0x4).toString("hex");
-    this.UnkHash1_1 = StreamReader.slice(0x38, 0x38 + 0x4).toString("hex");
-    this.UnkHash2 = StreamReader.slice(0x3c, 0x3c + 0x4).toString("hex");
-    this.UnkId7 = StreamReader.readInt32LE(0x40);
-
-    this.UnkStringOffset1 = new StringNameData(StreamReader.readInt32LE(0x44), buffer);
-
-    this.pilotID = StreamReader.slice(0x4c, 0x4c + 0x4).toString("hex");
-    this.LMBCutIn = StreamReader.slice(0x50, 0x50 + 0x4).toString("hex");
-
-    this.UnkStringOffset2 = new StringNameData(StreamReader.readInt32LE(0x54), buffer);
-
-    this.UnkStringOffset3 = new StringNameData(StreamReader.readInt32LE(0x5c), buffer);
-
-    this.UnkStringOffset4 = new StringNameData(StreamReader.readInt32LE(0x68), buffer);
-
-    this.UnkStringOffset5 = new StringNameData(StreamReader.readInt32LE(0x70), buffer);
-
-    this.UnkStringOffset6 = new StringNameData(StreamReader.readInt32LE(0x7c), buffer);
-
-    this.UnkHash_2_1 = StreamReader.slice(0x84, 0x84 + 0x4).toString("hex");
-    this.LMBBoost = StreamReader.slice(0x88, 0x88 + 0x4).toString("hex");
-    this.SeriesId = StreamReader.slice(0x8c, 0x8c + 0x4).toString("hex");
-
-    this.UnkStringOffset7 = new StringNameData(StreamReader.readInt32LE(0x90), buffer);
-
-    this.UnkStringOffset8 = new StringNameData(StreamReader.readInt32LE(0x98), buffer);
-
-    this.unkHash6 = StreamReader.slice(0xa0, 0xa0 + 0x4).toString("hex");
-    this.MS_card_icon_index = StreamReader.readInt32LE(0xa4);
-    this.UnkHash7 = StreamReader.slice(0xa8, 0xa8 + 0x4).toString("hex");
-    this.UnkHash8 = StreamReader.slice(0xac, 0xac + 0x4).toString("hex");
-    this.UnkId8 = StreamReader.readInt32LE(0xb0);
-    this.UnkId9 = StreamReader.readInt32LE(0xb4);
-    this.UnkHash9 = StreamReader.slice(0xb8, 0xb8 + 0x4).toString("hex");
-    this.UnkHash9_1 = StreamReader.slice(0xbc, 0xbc + 0x4).toString("hex");
-    this.UnkId9_1 = StreamReader.readInt32LE(0xc0);
-    this.MS_state = StreamReader.readInt32LE(0xc4);
-
-    this.UnkStringOffset9 = new StringNameData(StreamReader.readInt32LE(0xc8), buffer);
-
-    this.UnkHash10 = StreamReader.slice(0xd0, 0xd0 + 0x4).toString("hex");
-    this.CharacterId_Unique = StreamReader.readInt32LE(0xd4);
-
-    this.UnkStringOffset10 = new StringNameData(StreamReader.readInt32LE(0xd8), buffer);
-
-    this.UnkId10 = StreamReader.readInt32LE(0xe0);
-
-    this.UnkStringOffset11 = new StringNameData(StreamReader.readInt32LE(0xe4), buffer);
-
-    this.SelectPage_Pilot_LMB_HASH = StreamReader.slice(0xec, 0xec + 0x4).toString("hex");
-    this.UnkId11 = StreamReader.readInt32LE(0xf0);
-    this.UnkHash11 = StreamReader.slice(0xf4, 0xf4 + 0x4).toString("hex");
-    this.ms_ms_l = StreamReader.slice(0xf8, 0xf8 + 0x4).toString("hex");
-    this.vs_p_r = StreamReader.slice(0xfc, 0xfc + 0x4).toString("hex");
-
-    this.UnkStringOffset12 = new StringNameData(StreamReader.readInt32LE(0x100), buffer);
-
-    this.EX_Pilot_LMB_HASH = StreamReader.slice(0x108, 0x108 + 0x4).toString("hex");
-
-    this.UnkStringOffset13 = new StringNameData(StreamReader.readInt32LE(0x10c), buffer);
-
-    this.rnk_m_l = StreamReader.slice(0x114, 0x114 + 0x4).toString("hex");
-    this.UnkId11_1 = StreamReader.readInt32LE(0x118);
-    this.ms_crs = StreamReader.slice(0x11c, 0x11c + 0x4).toString("hex");
-
-    this.UnkStringOffset14 = new StringNameData(StreamReader.readInt32LE(0x120), buffer);
-
-    this.ms_ms_s = StreamReader.slice(0x128, 0x128 + 0x4).toString("hex");
-    this.vs_p_l = StreamReader.slice(0x12c, 0x12c + 0x4).toString("hex");
-    this.ms_mn = StreamReader.slice(0x130, 0x130 + 0x4).toString("hex");
-    this.sc_p = StreamReader.slice(0x134, 0x134 + 0x4).toString("hex");
-    this.UnkId12 = StreamReader.readInt32LE(0x138);
+    this.UnkHash2 = StreamReader.readInt32LE(0x30);
+    this.ms_vs_l = StreamReader.readInt32LE(0x34);
+    this.UnkId7 = StreamReader.readInt32LE(0x38);
+    this.UnkHash3 = StreamReader.readInt32LE(0x3c);
+    this.UnkHash4 = StreamReader.readInt32LE(0x40);
+    this.UnkHash5 = StreamReader.readInt32LE(0x4c);
+    this.UnkHash6 = StreamReader.readInt32LE(0x50);
+    this.UnkId8 = StreamReader.readInt32LE(0x54);
+    this.sticker1 = StreamReader.readInt32LE(0x5c);
+    this.UnkHash7 = StreamReader.readInt32LE(0x64);
+    this.UnkStringOffset1 = new StringNameData(StreamReader.readInt32LE(0x68), buffer);
+    this.UnkHash8 = StreamReader.readInt32LE(0x74);
+    this.LMBPilotClothing = StreamReader.readInt32LE(0x78);
+    this.UnkStringOffset2 = new StringNameData(StreamReader.readInt32LE(0x7c), buffer);
+    this.UnkStringOffset3 = new StringNameData(StreamReader.readInt32LE(0x84), buffer);
+    this.UnkStringOffset4 = new StringNameData(StreamReader.readInt32LE(0x90), buffer);
+    this.UnkStringOffset5 = new StringNameData(StreamReader.readInt32LE(0x98), buffer);
+    this.UnkStringOffset6 = new StringNameData(StreamReader.readInt32LE(0xa4), buffer);
+    this.EX_Pilot_Clothin_LMB_HASH = StreamReader.readInt32LE(0xb0);
+    this.UnkHash9 = StreamReader.readInt32LE(0xb4);
+    this.UnkStringOffset7 = new StringNameData(StreamReader.readInt32LE(0xb8), buffer);
+    this.UnkStringOffset8 = new StringNameData(StreamReader.readInt32LE(0xc0), buffer);
+    this.UnkHash10 = StreamReader.readInt32LE(0xcc);
+    this.vs_p_r_c02 = StreamReader.readInt32LE(0xd0);
+    this.unkId9 = StreamReader.readInt32LE(0xd4);
+    this.UnkHash11 = StreamReader.readInt32LE(0xd8);
+    this.sticker_t01 = StreamReader.readInt32LE(0xe0);
+    this.UnkHash12 = StreamReader.readInt32LE(0xe4);
+    this.UnkHash13 = StreamReader.readInt32LE(0xe8);
+    this.unkId10 = StreamReader.readInt32LE(0xec);
+    this.unkId11 = StreamReader.readInt32LE(0xf0);
+    this.vs_p_l_c02 = StreamReader.readInt32LE(0xf4);
+    this.unkId12 = StreamReader.readInt32LE(0x108);
+    this.ms_tracker = StreamReader.readInt32LE(0x110);
+    this.UnkHash14 = StreamReader.readInt32LE(0x114);
+    this.UnkHash15 = StreamReader.readInt32LE(0x11c);
+    this.UnkHash16 = StreamReader.readInt32LE(0x120);
+    this.UnkHash17 = StreamReader.readInt32LE(0x124);
+    this.UnkStringOffset9 = new StringNameData(StreamReader.readInt32LE(0x130), buffer);
+    this.UnkHash18 = StreamReader.readInt32LE(0x138);
+    this.MS_card_icon_index = StreamReader.readInt32LE(0x13c);
+    this.UnkStringOffset10 = new StringNameData(StreamReader.readInt32LE(0x140), buffer);
+    this.UnkHash19 = StreamReader.readInt32LE(0x148);
+    this.unkId13 = StreamReader.readInt32LE(0x14c);
+    this.UnkHash20 = StreamReader.readInt32LE(0x150);
+    this.UnkStringOffset11 = new StringNameData(StreamReader.readInt32LE(0x154), buffer);
+    this.LMBCutIn = StreamReader.readInt32LE(0x15c);
+    this.sticker_t05 = StreamReader.readInt32LE(0x160);
+    this.SeriesId = StreamReader.readInt32LE(0x164);
+    this.UnkHash21 = StreamReader.readInt32LE(0x16c);
+    this.ms_ms_l = StreamReader.readInt32LE(0x17c);
+    this.vs_p_r = StreamReader.readInt32LE(0x184);
+    this.UnkStringOffset12 = new StringNameData(StreamReader.readInt32LE(0x188), buffer);
+    this.LMBBoost = StreamReader.readInt32LE(0x190);
+    this.UnkHash22 = StreamReader.readInt32LE(0x194);
+    this.UnkStringOffset13 = new StringNameData(StreamReader.readInt32LE(0x198), buffer);
+    this.rnk_m_l = StreamReader.readInt32LE(0x1a0);
+    this.ms_crs = StreamReader.readInt32LE(0x1a8);
+    this.UnkStringOffset14 = new StringNameData(StreamReader.readInt32LE(0x1ac), buffer);
+    this.UnkHash23 = StreamReader.readInt32LE(0x1b8);
+    this.ms_ms_s = StreamReader.readInt32LE(0x1bc);
+    this.vs_p_l = StreamReader.readInt32LE(0x1c0);
+    this.ms_mn = StreamReader.readInt32LE(0x1c8);
+    this.sc_p = StreamReader.readInt32LE(0x1cc);
+    this.unkId14 = StreamReader.readInt32LE(0x1d0);
   }
 }
 
@@ -293,7 +282,7 @@ function stringNameReadToEnd(startOffset: number, buffer: Buffer): Buffer {
   return result;
 }
 
-export function CharacterListOutPut(characterList: CharacterListOB, path: string) {
+export function CharacterListOBOutPut(characterList: CharacterListOB, path: string) {
   //write the file
   const outputFileName = path + "/test.bin";
   let headerBuffer = Buffer.alloc(0x20);
@@ -333,137 +322,153 @@ export function CharacterListOutPut(characterList: CharacterListOB, path: string
   // write the character data
   let unitDataBuffer = Buffer.alloc(characterList.CharacterData.length * 0x13c);
   for (let i = 0; i < characterList.CharacterData.length; i++) {
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].UnkId0, i * 0x13c + 0x0);
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].UnkId1, i * 0x13c + 0x4);
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].UnkId2, i * 0x13c + 0x8);
-    unitDataBuffer.write(characterList.CharacterData[i].ms_igh_r, i * 0x13c + 0xc, 0x4, "hex");
-    unitDataBuffer.write(characterList.CharacterData[i].ms_vs_r, i * 0x13c + 0x10, 0x4, "hex");
-
-    // stringNameData offset
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x14);
-    visualBuffer = Buffer.concat([visualBuffer, characterList.CharacterData[i].CharacterNameOffset.StringBufferData]);
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, characterList.CharacterData[i].CharacterNameOffset.StringBufferData]);
-
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].UnkId3, i * 0x13c + 0x1c);
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].UnkId4, i * 0x13c + 0x20);
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].UnkId5, i * 0x13c + 0x24);
-    unitDataBuffer.write(characterList.CharacterData[i].ms_vs_l, i * 0x13c + 0x28, 0x4, "hex");
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].UnkId6, i * 0x13c + 0x2c);
-    unitDataBuffer.write(characterList.CharacterData[i].UnkHash1, i * 0x13c + 0x30, 0x4, "hex");
-    unitDataBuffer.write(characterList.CharacterData[i].UnkHash1_1, i * 0x13c + 0x38, 0x4, "hex");
-    unitDataBuffer.write(characterList.CharacterData[i].UnkHash2, i * 0x13c + 0x3c, 0x4, "hex");
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].UnkId7, i * 0x13c + 0x40);
-
-    // stringNameData offset
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x44);
-    visualBuffer = Buffer.concat([visualBuffer, characterList.CharacterData[i].UnkStringOffset1.StringBufferData]);
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, characterList.CharacterData[i].UnkStringOffset1.StringBufferData]);
-
-    unitDataBuffer.write(characterList.CharacterData[i].pilotID, i * 0x13c + 0x4c, 0x4, "hex");
-    unitDataBuffer.write(characterList.CharacterData[i].LMBCutIn, i * 0x13c + 0x50, 0x4, "hex");
-
-    // stringNameData offset
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x54);
-    visualBuffer = Buffer.concat([visualBuffer, characterList.CharacterData[i].UnkStringOffset2.StringBufferData]);
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, characterList.CharacterData[i].UnkStringOffset2.StringBufferData]);
-
-    // stringNameData offset
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x5c);
-    visualBuffer = Buffer.concat([visualBuffer, characterList.CharacterData[i].UnkStringOffset3.StringBufferData]);
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, characterList.CharacterData[i].UnkStringOffset3.StringBufferData]);
-
-    // stringNameData offset
+    const char = characterList.CharacterData[i];
+    
+    unitDataBuffer.writeInt32LE(char.UnkId0, i * 0x13c + 0x0);
+    unitDataBuffer.writeInt32LE(char.UnkId1, i * 0x13c + 0x4);
+    unitDataBuffer.writeInt32LE(char.UnkId2, i * 0x13c + 0x8);
+    unitDataBuffer.writeInt32LE(char.UnkId3, i * 0x13c + 0xc);
+    unitDataBuffer.writeInt32LE(char.ms_igh_r, i * 0x13c + 0x10);
+    unitDataBuffer.writeInt32LE(char.ms_vs_r, i * 0x13c + 0x14);
+    
+    // stringNameData offset for CharacterNameOffset
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x1c);
+    visualBuffer = Buffer.concat([visualBuffer, char.CharacterNameOffset.StringBufferData]);
+    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.CharacterNameOffset.StringBufferData]);
+    
+    unitDataBuffer.writeInt32LE(char.UnkId4, i * 0x13c + 0x24);
+    unitDataBuffer.writeInt32LE(char.UnkId5, i * 0x13c + 0x28);
+    unitDataBuffer.writeInt32LE(char.UnkId6, i * 0x13c + 0x2c);
+    unitDataBuffer.writeInt32LE(char.UnkHash2, i * 0x13c + 0x30);
+    unitDataBuffer.writeInt32LE(char.ms_vs_l, i * 0x13c + 0x34);
+    unitDataBuffer.writeInt32LE(char.UnkId7, i * 0x13c + 0x38);
+    unitDataBuffer.writeInt32LE(char.UnkHash3, i * 0x13c + 0x3c);
+    unitDataBuffer.writeInt32LE(char.UnkHash4, i * 0x13c + 0x40);
+    unitDataBuffer.writeInt32LE(char.UnkHash5, i * 0x13c + 0x4c);
+    unitDataBuffer.writeInt32LE(char.UnkHash6, i * 0x13c + 0x50);
+    unitDataBuffer.writeInt32LE(char.UnkId8, i * 0x13c + 0x54);
+    unitDataBuffer.writeInt32LE(char.sticker1, i * 0x13c + 0x5c);
+    unitDataBuffer.writeInt32LE(char.UnkHash7, i * 0x13c + 0x64);
+    
+    // stringNameData offset for UnkStringOffset1
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x68);
-    visualBuffer = Buffer.concat([visualBuffer, characterList.CharacterData[i].UnkStringOffset4.StringBufferData]);
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, characterList.CharacterData[i].UnkStringOffset4.StringBufferData]);
-
-    // stringNameData offset
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x70);
-    visualBuffer = Buffer.concat([visualBuffer, characterList.CharacterData[i].UnkStringOffset5.StringBufferData]);
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, characterList.CharacterData[i].UnkStringOffset5.StringBufferData]);
-
-    // stringNameData offset
+    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset1.StringBufferData]);
+    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset1.StringBufferData]);
+    
+    unitDataBuffer.writeInt32LE(char.UnkHash8, i * 0x13c + 0x74);
+    unitDataBuffer.writeInt32LE(char.LMBPilotClothing, i * 0x13c + 0x78);
+    
+    // stringNameData offset for UnkStringOffset2
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x7c);
-    visualBuffer = Buffer.concat([visualBuffer, characterList.CharacterData[i].UnkStringOffset6.StringBufferData]);
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, characterList.CharacterData[i].UnkStringOffset6.StringBufferData]);
-
-    unitDataBuffer.write(characterList.CharacterData[i].UnkHash_2_1, i * 0x13c + 0x84, 0x4, "hex");
-    unitDataBuffer.write(characterList.CharacterData[i].LMBBoost, i * 0x13c + 0x88, 0x4, "hex");
-    unitDataBuffer.write(characterList.CharacterData[i].SeriesId, i * 0x13c + 0x8c, 0x4, "hex");
-
-    // stringNameData offset
+    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset2.StringBufferData]);
+    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset2.StringBufferData]);
+    
+    // stringNameData offset for UnkStringOffset3
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x84);
+    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset3.StringBufferData]);
+    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset3.StringBufferData]);
+    
+    // stringNameData offset for UnkStringOffset4
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x90);
-    visualBuffer = Buffer.concat([visualBuffer, characterList.CharacterData[i].UnkStringOffset7.StringBufferData]);
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, characterList.CharacterData[i].UnkStringOffset7.StringBufferData]);
-
-    // stringNameData offset
+    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset4.StringBufferData]);
+    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset4.StringBufferData]);
+    
+    // stringNameData offset for UnkStringOffset5
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x98);
-    visualBuffer = Buffer.concat([visualBuffer, characterList.CharacterData[i].UnkStringOffset8.StringBufferData]);
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, characterList.CharacterData[i].UnkStringOffset8.StringBufferData]);
-
-    unitDataBuffer.write(characterList.CharacterData[i].unkHash6, i * 0x13c + 0xa0, 0x4, "hex");
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].MS_card_icon_index, i * 0x13c + 0xa4);
-    unitDataBuffer.write(characterList.CharacterData[i].UnkHash7, i * 0x13c + 0xa8, 0x4, "hex");
-    unitDataBuffer.write(characterList.CharacterData[i].UnkHash8, i * 0x13c + 0xac, 0x4, "hex");
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].UnkId8, i * 0x13c + 0xb0);
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].UnkId9, i * 0x13c + 0xb4);
-    unitDataBuffer.write(characterList.CharacterData[i].UnkHash9, i * 0x13c + 0xb8, 0x4, "hex");
-    unitDataBuffer.write(characterList.CharacterData[i].UnkHash9_1, i * 0x13c + 0xbc, 0x4, "hex");
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].UnkId9_1, i * 0x13c + 0xc0);
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].MS_state, i * 0x13c + 0xc4);
-
-    // stringNameData offset
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0xc8);
-    visualBuffer = Buffer.concat([visualBuffer, characterList.CharacterData[i].UnkStringOffset9.StringBufferData]);
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, characterList.CharacterData[i].UnkStringOffset9.StringBufferData]);
-
-    unitDataBuffer.write(characterList.CharacterData[i].UnkHash10, i * 0x13c + 0xd0, 0x4, "hex");
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].CharacterId_Unique, i * 0x13c + 0xd4);
-
-    // stringNameData offset
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0xd8);
-    visualBuffer = Buffer.concat([visualBuffer, characterList.CharacterData[i].UnkStringOffset10.StringBufferData]);
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, characterList.CharacterData[i].UnkStringOffset10.StringBufferData]);
-
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].UnkId10, i * 0x13c + 0xe0);
-
-    // stringNameData offset
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0xe4);
-    visualBuffer = Buffer.concat([visualBuffer, characterList.CharacterData[i].UnkStringOffset11.StringBufferData]);
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, characterList.CharacterData[i].UnkStringOffset11.StringBufferData]);
-
-    unitDataBuffer.write(characterList.CharacterData[i].SelectPage_Pilot_LMB_HASH, i * 0x13c + 0xec, 0x4, "hex");
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].UnkId11, i * 0x13c + 0xf0);
-    unitDataBuffer.write(characterList.CharacterData[i].UnkHash11, i * 0x13c + 0xf4, 0x4, "hex");
-    unitDataBuffer.write(characterList.CharacterData[i].ms_ms_l, i * 0x13c + 0xf8, 0x4, "hex");
-    unitDataBuffer.write(characterList.CharacterData[i].vs_p_r, i * 0x13c + 0xfc, 0x4, "hex");
-
-    // stringNameData offset
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x100);
-    visualBuffer = Buffer.concat([visualBuffer, characterList.CharacterData[i].UnkStringOffset12.StringBufferData]);
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, characterList.CharacterData[i].UnkStringOffset12.StringBufferData]);
-
-    unitDataBuffer.write(characterList.CharacterData[i].EX_Pilot_LMB_HASH, i * 0x13c + 0x108, 0x4, "hex");
-
-    // stringNameData offset
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x10c);
-    visualBuffer = Buffer.concat([visualBuffer, characterList.CharacterData[i].UnkStringOffset13.StringBufferData]);
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, characterList.CharacterData[i].UnkStringOffset13.StringBufferData]);
-
-    unitDataBuffer.write(characterList.CharacterData[i].rnk_m_l, i * 0x13c + 0x114, 0x4, "hex");
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].UnkId11_1, i * 0x13c + 0x118);
-    unitDataBuffer.write(characterList.CharacterData[i].ms_crs, i * 0x13c + 0x11c, 0x4, "hex");
-
-    // stringNameData offset
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x120);
-    visualBuffer = Buffer.concat([visualBuffer, characterList.CharacterData[i].UnkStringOffset14.StringBufferData]);
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, characterList.CharacterData[i].UnkStringOffset14.StringBufferData]);
-
-    unitDataBuffer.write(characterList.CharacterData[i].ms_ms_s, i * 0x13c + 0x128, 0x4, "hex");
-    unitDataBuffer.write(characterList.CharacterData[i].vs_p_l, i * 0x13c + 0x12c, 0x4, "hex");
-    unitDataBuffer.write(characterList.CharacterData[i].ms_mn, i * 0x13c + 0x130, 0x4, "hex");
-    unitDataBuffer.write(characterList.CharacterData[i].sc_p, i * 0x13c + 0x134, 0x4, "hex");
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].UnkId12, i * 0x13c + 0x138);
+    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset5.StringBufferData]);
+    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset5.StringBufferData]);
+    
+    // stringNameData offset for UnkStringOffset6
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0xa4);
+    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset6.StringBufferData]);
+    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset6.StringBufferData]);
+    
+    unitDataBuffer.writeInt32LE(char.EX_Pilot_Clothin_LMB_HASH, i * 0x13c + 0xb0);
+    unitDataBuffer.writeInt32LE(char.UnkHash9, i * 0x13c + 0xb4);
+    
+    // stringNameData offset for UnkStringOffset7
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0xb8);
+    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset7.StringBufferData]);
+    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset7.StringBufferData]);
+    
+    // stringNameData offset for UnkStringOffset8
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0xc0);
+    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset8.StringBufferData]);
+    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset8.StringBufferData]);
+    
+    unitDataBuffer.writeInt32LE(char.UnkHash10, i * 0x13c + 0xcc);
+    unitDataBuffer.writeInt32LE(char.vs_p_r_c02, i * 0x13c + 0xd0);
+    unitDataBuffer.writeInt32LE(char.unkId9, i * 0x13c + 0xd4);
+    unitDataBuffer.writeInt32LE(char.UnkHash11, i * 0x13c + 0xd8);
+    unitDataBuffer.writeInt32LE(char.sticker_t01, i * 0x13c + 0xe0);
+    unitDataBuffer.writeInt32LE(char.UnkHash12, i * 0x13c + 0xe4);
+    unitDataBuffer.writeInt32LE(char.UnkHash13, i * 0x13c + 0xe8);
+    unitDataBuffer.writeInt32LE(char.unkId10, i * 0x13c + 0xec);
+    unitDataBuffer.writeInt32LE(char.unkId11, i * 0x13c + 0xf0);
+    unitDataBuffer.writeInt32LE(char.vs_p_l_c02, i * 0x13c + 0xf4);
+    unitDataBuffer.writeInt32LE(char.unkId12, i * 0x13c + 0x108);
+    unitDataBuffer.writeInt32LE(char.ms_tracker, i * 0x13c + 0x110);
+    unitDataBuffer.writeInt32LE(char.UnkHash14, i * 0x13c + 0x114);
+    unitDataBuffer.writeInt32LE(char.UnkHash15, i * 0x13c + 0x11c);
+    unitDataBuffer.writeInt32LE(char.UnkHash16, i * 0x13c + 0x120);
+    unitDataBuffer.writeInt32LE(char.UnkHash17, i * 0x13c + 0x124);
+    
+    // stringNameData offset for UnkStringOffset9
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x130);
+    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset9.StringBufferData]);
+    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset9.StringBufferData]);
+    
+    unitDataBuffer.writeInt32LE(char.UnkHash18, i * 0x13c + 0x138);
+    unitDataBuffer.writeInt32LE(char.MS_card_icon_index, i * 0x13c + 0x13c);
+    
+    // stringNameData offset for UnkStringOffset10
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x140);
+    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset10.StringBufferData]);
+    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset10.StringBufferData]);
+    
+    unitDataBuffer.writeInt32LE(char.UnkHash19, i * 0x13c + 0x148);
+    unitDataBuffer.writeInt32LE(char.unkId13, i * 0x13c + 0x14c);
+    unitDataBuffer.writeInt32LE(char.UnkHash20, i * 0x13c + 0x150);
+    
+    // stringNameData offset for UnkStringOffset11
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x154);
+    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset11.StringBufferData]);
+    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset11.StringBufferData]);
+    
+    unitDataBuffer.writeInt32LE(char.LMBCutIn, i * 0x13c + 0x15c);
+    unitDataBuffer.writeInt32LE(char.sticker_t05, i * 0x13c + 0x160);
+    unitDataBuffer.writeInt32LE(char.SeriesId, i * 0x13c + 0x164);
+    unitDataBuffer.writeInt32LE(char.UnkHash21, i * 0x13c + 0x16c);
+    unitDataBuffer.writeInt32LE(char.ms_ms_l, i * 0x13c + 0x17c);
+    unitDataBuffer.writeInt32LE(char.vs_p_r, i * 0x13c + 0x184);
+    
+    // stringNameData offset for UnkStringOffset12
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x188);
+    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset12.StringBufferData]);
+    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset12.StringBufferData]);
+    
+    unitDataBuffer.writeInt32LE(char.LMBBoost, i * 0x13c + 0x190);
+    unitDataBuffer.writeInt32LE(char.UnkHash22, i * 0x13c + 0x194);
+    
+    // stringNameData offset for UnkStringOffset13
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x198);
+    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset13.StringBufferData]);
+    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset13.StringBufferData]);
+    
+    unitDataBuffer.writeInt32LE(char.rnk_m_l, i * 0x13c + 0x1a0);
+    unitDataBuffer.writeInt32LE(char.ms_crs, i * 0x13c + 0x1a8);
+    
+    // stringNameData offset for UnkStringOffset14
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x1ac);
+    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset14.StringBufferData]);
+    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset14.StringBufferData]);
+    
+    unitDataBuffer.writeInt32LE(char.UnkHash23, i * 0x13c + 0x1b8);
+    unitDataBuffer.writeInt32LE(char.ms_ms_s, i * 0x13c + 0x1bc);
+    unitDataBuffer.writeInt32LE(char.vs_p_l, i * 0x13c + 0x1c0);
+    unitDataBuffer.writeInt32LE(char.ms_mn, i * 0x13c + 0x1c8);
+    unitDataBuffer.writeInt32LE(char.sc_p, i * 0x13c + 0x1cc);
+    unitDataBuffer.writeInt32LE(char.unkId14, i * 0x13c + 0x1d0);
   }
 
   const outBuffer = Buffer.concat([headerBuffer, commandsBuffer, unitIdBuffer, unitDataBuffer, stringNameDataBuffer]);
