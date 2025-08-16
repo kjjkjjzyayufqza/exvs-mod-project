@@ -5,6 +5,7 @@ import { CharacterForm } from "./CharacterForm";
 import { Button } from "../../../components/ui/button";
 import { Plus } from "lucide-react";
 import { Buffer } from "buffer";
+import { cloneCharacterDataOB } from "../../../module/commonFunc";
 
 interface CharacterEditorProps {
   characterListData?: CharacterListOB;
@@ -74,6 +75,44 @@ export const CharacterEditor: FC<CharacterEditorProps> = ({
     }
   };
 
+  const handleCopyCharacter = (index: number) => {
+    try {
+      const characterToCopy = characterListData.CharacterData[index];
+      if (!characterToCopy) return;
+      
+      // Find the next available character ID (max ID + 1)
+      const newCharacterId = Math.max(...characterListData.CharacterData.map(c => c.CharacterId), 0) + 1;
+      
+      // Clone the character with the new ID
+      const clonedCharacter = cloneCharacterDataOB(
+        characterToCopy,
+        newCharacterId,
+        characterListData.bufferData
+      );
+      
+      const newCharacterData = [...characterListData.CharacterData, clonedCharacter];
+      
+      // Create a proper CharacterListOB instance
+      const updatedCharacterList = Object.assign(
+        Object.create(Object.getPrototypeOf(characterListData)),
+        characterListData,
+        {
+          CharacterData: newCharacterData,
+          CharacterCount: newCharacterData.length,
+        }
+      );
+      
+      onChange(updatedCharacterList);
+      
+      // Select the new cloned character
+      const newIndex = newCharacterData.length - 1;
+      setSelectedCharacter(clonedCharacter);
+      setSelectedIndex(newIndex);
+    } catch (error) {
+      console.error('Error during copy operation:', error);
+    }
+  };
+
   const handleAddCharacter = () => {
     // Create a new character with default values
     const newCharacterId = Math.max(...characterListData.CharacterData.map(c => c.CharacterId), 0) + 1;
@@ -120,6 +159,7 @@ export const CharacterEditor: FC<CharacterEditorProps> = ({
           selectedIndex={selectedIndex}
           onSelect={handleSelectCharacter}
           onDelete={handleDeleteCharacter}
+          onCopy={handleCopyCharacter}
         />
       </div>
 

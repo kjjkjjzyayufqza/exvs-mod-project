@@ -10,6 +10,7 @@ interface CharacterListProps {
   selectedIndex: number;
   onSelect: (character: CharacterDataOB, index: number) => void;
   onDelete: (index: number) => void;
+  onCopy: (index: number) => void;
 }
 
 export const CharacterList: FC<CharacterListProps> = ({
@@ -17,6 +18,7 @@ export const CharacterList: FC<CharacterListProps> = ({
   selectedIndex,
   onSelect,
   onDelete,
+  onCopy,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -41,10 +43,14 @@ export const CharacterList: FC<CharacterListProps> = ({
     onDelete(originalIndex);
   };
 
+  const handleCopy = (originalIndex: number) => {
+    onCopy(originalIndex);
+  };
+
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col min-h-0">
       {/* Search Box */}
-      <div className="relative mb-4">
+      <div className="relative mb-4 flex-shrink-0">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
         <Input
           placeholder="Search by Character ID..."
@@ -56,14 +62,14 @@ export const CharacterList: FC<CharacterListProps> = ({
 
       {/* Results Info */}
       {searchTerm.trim() && (
-        <div className="text-sm text-muted-foreground mb-2">
+        <div className="text-sm text-muted-foreground mb-2 flex-shrink-0">
           Found {filteredCharacters.length} of {characters.length} characters
         </div>
       )}
 
       {/* Character List */}
-      <ScrollArea className="flex-1">
-        <div className="space-y-2">
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="space-y-2 pr-3">
           {filteredCharacters.length > 0 ? (
             filteredCharacters.map(({ character, originalIndex }) => (
               <CharacterCard
@@ -73,6 +79,7 @@ export const CharacterList: FC<CharacterListProps> = ({
                 isSelected={originalIndex === selectedIndex}
                 onClick={() => handleSelect(character, originalIndex)}
                 onDelete={() => handleDelete(originalIndex)}
+                onCopy={() => handleCopy(originalIndex)}
               />
             ))
           ) : searchTerm.trim() ? (

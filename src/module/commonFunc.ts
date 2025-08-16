@@ -1,3 +1,5 @@
+import textIndexJson from "../../tools/text_index.json";
+import { Buffer } from 'buffer';
 interface Item {
   type: string;
   unk1: string;
@@ -82,4 +84,237 @@ export function findNutexbString(data: Uint8Array): string | null {
     return str.replace("46XT", "");
   }
   return null;
+}
+
+export type HexCharMapping = Record<string, string>;
+
+type CompiledEntry = { bytes: number[]; char: string };
+type CompiledMapping = {
+	firstByteToEntries: Map<number, CompiledEntry[]>;
+	maxByteLength: number;
+};
+
+const defaultHexCharMapping: HexCharMapping = textIndexJson as HexCharMapping;
+let cachedCompiledDefault: CompiledMapping | null = null;
+
+function compileHexMapping(mapping: HexCharMapping): CompiledMapping {
+	const firstByteToEntries = new Map<number, CompiledEntry[]>();
+	let maxByteLength = 0;
+
+	for (const [hexKeyRaw, charValue] of Object.entries(mapping)) {
+		const hexKey = hexKeyRaw.trim().toUpperCase();
+		if (hexKey.length === 0 || hexKey.length % 2 !== 0) {
+			continue;
+		}
+		const bytes: number[] = [];
+		for (let i = 0; i < hexKey.length; i += 2) {
+			bytes.push(parseInt(hexKey.slice(i, i + 2), 16));
+		}
+		if (bytes.length === 0) {
+			continue;
+		}
+		const first = bytes[0]!
+		const entry: CompiledEntry = { bytes, char: charValue };
+		if (!firstByteToEntries.has(first)) {
+			firstByteToEntries.set(first, []);
+		}
+		firstByteToEntries.get(first)!.push(entry);
+		if (bytes.length > maxByteLength) {
+			maxByteLength = bytes.length;
+		}
+	}
+
+	for (const list of firstByteToEntries.values()) {
+		list.sort((a, b) => b.bytes.length - a.bytes.length);
+	}
+
+	return { firstByteToEntries, maxByteLength };
+}
+
+function getCompiledDefault(): CompiledMapping {
+	if (!cachedCompiledDefault) {
+		cachedCompiledDefault = compileHexMapping(defaultHexCharMapping);
+	}
+	return cachedCompiledDefault;
+}
+
+export function decodeBufferWithMapping(
+	data: Uint8Array,
+	mapping?: HexCharMapping
+): string {
+	const view = data;
+	const compiled = mapping ? compileHexMapping(mapping) : getCompiledDefault();
+	let offset = 0;
+	let result = "";
+
+	while (offset < view.length) {
+		const byte = view[offset]!;
+		if (byte === 0x00) {
+			break;
+		}
+		const candidates = compiled.firstByteToEntries.get(byte);
+		let matched = false;
+		if (candidates && candidates.length > 0) {
+			for (const entry of candidates) {
+				const bytes = entry.bytes;
+				if (offset + bytes.length > view.length) {
+					continue;
+				}
+				let ok = true;
+				for (let i = 0; i < bytes.length; i++) {
+					if (view[offset + i] !== bytes[i]) {
+						ok = false;
+						break;
+					}
+				}
+				if (ok) {
+					result += entry.char;
+					offset += bytes.length;
+					matched = true;
+					break;
+				}
+			}
+		}
+		if (!matched) {
+			// No mapping matched; consume one byte to avoid infinite loop
+			result += "?";
+			offset += 1;
+		}
+	}
+
+	return result;
+}
+
+export function decodeBufferWithTextIndexMapping(data: Uint8Array): string {
+	return decodeBufferWithMapping(data, undefined);
+}
+
+/**
+ * Deep clone a CharacterDataOB object with a new character ID
+ * @param character - The character to clone
+ * @param newCharacterId - The new character ID
+ * @param bufferData - The source buffer data
+ * @returns A new CharacterDataOB instance
+ */
+export function cloneCharacterDataOB(
+	character: any, 
+	newCharacterId: number, 
+	bufferData: Buffer
+): any {
+	// Helper function to deep clone StringNameData
+	const cloneStringNameData = (stringData: any): any => {
+		if (!stringData || !stringData.StringBufferData) {
+			return {
+				Offset: 0,
+				StringBufferData: Buffer.alloc(1, 0) // Default empty buffer with null terminator
+			};
+		}
+		// Create a deep copy of the buffer
+		const newBuffer = Buffer.alloc(stringData.StringBufferData.length);
+		stringData.StringBufferData.copy(newBuffer);
+		return {
+			Offset: stringData.Offset,
+			StringBufferData: newBuffer
+		};
+	};
+	
+	// Create a new character object with all the same properties
+	const clonedCharacter = {
+		CharacterId: newCharacterId,
+		UnkId0: character.UnkId0,
+		UnkId1: character.UnkId1,
+		UnkId2: character.UnkId2,
+		UnkId3: character.UnkId3,
+		ms_igh_r: character.ms_igh_r,
+		ms_vs_r: character.ms_vs_r,
+		UnkHash1: character.UnkHash1,
+		CharacterNameOffset: cloneStringNameData(character.CharacterNameOffset),
+		UnkId4: character.UnkId4,
+		UnkId5: character.UnkId5,
+		UnkId6: character.UnkId6,
+		UnkHash2: character.UnkHash2,
+		ms_vs_l: character.ms_vs_l,
+		UnkId7: character.UnkId7,
+		UnkHash3: character.UnkHash3,
+		UnkHash4: character.UnkHash4,
+		UnkHash4_0: character.UnkHash4_0,
+		UnkHash4_1: character.UnkHash4_1,
+		UnkHash5: character.UnkHash5,
+		UnkHash6: character.UnkHash6,
+		UnkId8: character.UnkId8,
+		UnkHash7: character.UnkHash7,
+		sticker1: character.sticker1,
+		UnkHash8: character.UnkHash8,
+		UnkStringOffset1: cloneStringNameData(character.UnkStringOffset1),
+		UnkHash9_1: character.UnkHash9_1,
+		UnkHash9: character.UnkHash9,
+		LMBPilotClothing: character.LMBPilotClothing,
+		UnkStringOffset2: cloneStringNameData(character.UnkStringOffset2),
+		UnkStringOffset3: cloneStringNameData(character.UnkStringOffset3),
+		UnkStringOffset4: cloneStringNameData(character.UnkStringOffset4),
+		UnkStringOffset5: cloneStringNameData(character.UnkStringOffset5),
+		UnkStringOffset6: cloneStringNameData(character.UnkStringOffset6),
+		UnkHash9_2: character.UnkHash9_2,
+		EX_Pilot_Clothin_LMB_HASH: character.EX_Pilot_Clothin_LMB_HASH,
+		UnkHash10: character.UnkHash10,
+		UnkStringOffset7: cloneStringNameData(character.UnkStringOffset7),
+		UnkStringOffset8: cloneStringNameData(character.UnkStringOffset8),
+		UnkHash10_1: character.UnkHash10_1,
+		UnkHash11: character.UnkHash11,
+		vs_p_r_c02: character.vs_p_r_c02,
+		unkId9: character.unkId9,
+		UnkHash12: character.UnkHash12,
+		sticker_t01: character.sticker_t01,
+		UnkHash13: character.UnkHash13,
+		UnkHash14: character.UnkHash14,
+		unkId10: character.unkId10,
+		unkId11: character.unkId11,
+		vs_p_l_c02: character.vs_p_l_c02,
+		UnkHash14_1: character.UnkHash14_1,
+		unkId12: character.unkId12,
+		unkId12_1: character.unkId12_1,
+		unkId13: character.unkId13,
+		unkId14: character.unkId14,
+		ms_tracker: character.ms_tracker,
+		UnkHash15: character.UnkHash15,
+		UnkHash15_1: character.UnkHash15_1,
+		UnkHash16: character.UnkHash16,
+		UnkHash17: character.UnkHash17,
+		UnkHash17_1: character.UnkHash17_1,
+		UnkHash18: character.UnkHash18,
+		UnkStringOffset9: cloneStringNameData(character.UnkStringOffset9),
+		UnkHash19: character.UnkHash19,
+		MS_card_icon_index: character.MS_card_icon_index,
+		UnkStringOffset10: cloneStringNameData(character.UnkStringOffset10),
+		UnkHash20: character.UnkHash20,
+		unkId15: character.unkId15,
+		UnkHash21: character.UnkHash21,
+		UnkStringOffset11: cloneStringNameData(character.UnkStringOffset11),
+		LMBCutIn: character.LMBCutIn,
+		sticker_t05: character.sticker_t05,
+		SeriesId: character.SeriesId,
+		UnkHash21_1: character.UnkHash21_1,
+		UnkHash22: character.UnkHash22,
+		UnkHash22_0: character.UnkHash22_0,
+		UnkHash22_1: character.UnkHash22_1,
+		ms_ms_l: character.ms_ms_l,
+		vs_p_r: character.vs_p_r,
+		UnkStringOffset12: cloneStringNameData(character.UnkStringOffset12),
+		LMBBoost: character.LMBBoost,
+		UnkHash23: character.UnkHash23,
+		UnkStringOffset13: cloneStringNameData(character.UnkStringOffset13),
+		rnk_m_l: character.rnk_m_l,
+		unkId15_1: character.unkId15_1,
+		ms_crs: character.ms_crs,
+		UnkStringOffset14: cloneStringNameData(character.UnkStringOffset14),
+		UnkHash23_1: character.UnkHash23_1,
+		UnkHash24: character.UnkHash24,
+		ms_ms_s: character.ms_ms_s,
+		vs_p_l: character.vs_p_l,
+		ms_mn: character.ms_mn,
+		sc_p: character.sc_p,
+		unkId16: character.unkId16
+	};
+	
+	return clonedCharacter;
 }

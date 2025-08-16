@@ -1,10 +1,12 @@
 import { FC, useState, useEffect } from "react";
+import { Buffer } from "buffer";
 import { CharacterDataOB } from "../../../models/characterListOB";
 import { ScrollArea } from "../../../components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
 import { Button } from "../../../components/ui/button";
 import { Save } from "lucide-react";
 import { FormFieldGroup } from "./FormFieldGroup";
+import { StringFieldGroup } from "./StringFieldGroup";
 
 interface CharacterFormProps {
   character: CharacterDataOB;
@@ -18,6 +20,7 @@ export const CharacterForm: FC<CharacterFormProps> = ({
   onChange,
 }) => {
   const [formData, setFormData] = useState<Record<string, number>>({});
+  const [stringFormData, setStringFormData] = useState<Record<string, string>>({});
   const [hasChanges, setHasChanges] = useState(false);
 
   // Initialize form data when character changes
@@ -103,13 +106,40 @@ export const CharacterForm: FC<CharacterFormProps> = ({
       sc_p: character.sc_p,
       unkId16: character.unkId16,
     };
+
+    const initialStringData: Record<string, string> = {
+      CharacterNameOffset: character.CharacterNameOffset?.StringBufferData?.toString('hex').toUpperCase() || '',
+      UnkStringOffset1: character.UnkStringOffset1?.StringBufferData?.toString('hex').toUpperCase() || '',
+      UnkStringOffset2: character.UnkStringOffset2?.StringBufferData?.toString('hex').toUpperCase() || '',
+      UnkStringOffset3: character.UnkStringOffset3?.StringBufferData?.toString('hex').toUpperCase() || '',
+      UnkStringOffset4: character.UnkStringOffset4?.StringBufferData?.toString('hex').toUpperCase() || '',
+      UnkStringOffset5: character.UnkStringOffset5?.StringBufferData?.toString('hex').toUpperCase() || '',
+      UnkStringOffset6: character.UnkStringOffset6?.StringBufferData?.toString('hex').toUpperCase() || '',
+      UnkStringOffset7: character.UnkStringOffset7?.StringBufferData?.toString('hex').toUpperCase() || '',
+      UnkStringOffset8: character.UnkStringOffset8?.StringBufferData?.toString('hex').toUpperCase() || '',
+      UnkStringOffset9: character.UnkStringOffset9?.StringBufferData?.toString('hex').toUpperCase() || '',
+      UnkStringOffset10: character.UnkStringOffset10?.StringBufferData?.toString('hex').toUpperCase() || '',
+      UnkStringOffset11: character.UnkStringOffset11?.StringBufferData?.toString('hex').toUpperCase() || '',
+      UnkStringOffset12: character.UnkStringOffset12?.StringBufferData?.toString('hex').toUpperCase() || '',
+      UnkStringOffset13: character.UnkStringOffset13?.StringBufferData?.toString('hex').toUpperCase() || '',
+      UnkStringOffset14: character.UnkStringOffset14?.StringBufferData?.toString('hex').toUpperCase() || '',
+    };
     
     setFormData(initialData);
+    setStringFormData(initialStringData);
     setHasChanges(false);
   }, [character]);
 
   const handleFieldChange = (fieldName: string, value: number) => {
     setFormData(prev => ({
+      ...prev,
+      [fieldName]: value
+    }));
+    setHasChanges(true);
+  };
+
+  const handleStringFieldChange = (fieldName: string, value: string) => {
+    setStringFormData(prev => ({
       ...prev,
       [fieldName]: value
     }));
@@ -124,6 +154,22 @@ export const CharacterForm: FC<CharacterFormProps> = ({
     Object.keys(formData).forEach(key => {
       if (key in updatedCharacter) {
         (updatedCharacter as any)[key] = formData[key];
+      }
+    });
+
+    // Update all string fields by converting hex strings back to Buffer
+    Object.keys(stringFormData).forEach(key => {
+      if (key in updatedCharacter && stringFormData[key]) {
+        try {
+          const hexString = stringFormData[key];
+          const buffer = Buffer.from(hexString, 'hex');
+          (updatedCharacter as any)[key] = {
+            ...((updatedCharacter as any)[key] || {}),
+            StringBufferData: buffer
+          };
+        } catch (error) {
+          console.warn(`Failed to convert hex string for field ${key}:`, error);
+        }
       }
     });
 
@@ -259,6 +305,30 @@ export const CharacterForm: FC<CharacterFormProps> = ({
     }
   ];
 
+  // Define string field groups for StringNameData
+  const stringFieldGroups = [
+    {
+      title: "String Name Data",
+      fields: [
+        { name: "CharacterNameOffset", label: "Character Name Offset (0x1C)", value: stringFormData.CharacterNameOffset },
+        { name: "UnkStringOffset1", label: "Unknown String Offset 1 (0x68)", value: stringFormData.UnkStringOffset1 },
+        { name: "UnkStringOffset2", label: "Unknown String Offset 2 (0x7C)", value: stringFormData.UnkStringOffset2 },
+        { name: "UnkStringOffset3", label: "Unknown String Offset 3 (0x84)", value: stringFormData.UnkStringOffset3 },
+        { name: "UnkStringOffset4", label: "Unknown String Offset 4 (0x90)", value: stringFormData.UnkStringOffset4 },
+        { name: "UnkStringOffset5", label: "Unknown String Offset 5 (0x98)", value: stringFormData.UnkStringOffset5 },
+        { name: "UnkStringOffset6", label: "Unknown String Offset 6 (0xA4)", value: stringFormData.UnkStringOffset6 },
+        { name: "UnkStringOffset7", label: "Unknown String Offset 7 (0xB8)", value: stringFormData.UnkStringOffset7 },
+        { name: "UnkStringOffset8", label: "Unknown String Offset 8 (0xC0)", value: stringFormData.UnkStringOffset8 },
+        { name: "UnkStringOffset9", label: "Unknown String Offset 9 (0x134)", value: stringFormData.UnkStringOffset9 },
+        { name: "UnkStringOffset10", label: "Unknown String Offset 10 (0x144)", value: stringFormData.UnkStringOffset10 },
+        { name: "UnkStringOffset11", label: "Unknown String Offset 11 (0x158)", value: stringFormData.UnkStringOffset11 },
+        { name: "UnkStringOffset12", label: "Unknown String Offset 12 (0x18C)", value: stringFormData.UnkStringOffset12 },
+        { name: "UnkStringOffset13", label: "Unknown String Offset 13 (0x19C)", value: stringFormData.UnkStringOffset13 },
+        { name: "UnkStringOffset14", label: "Unknown String Offset 14 (0x1B0)", value: stringFormData.UnkStringOffset14 },
+      ]
+    }
+  ];
+
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
@@ -284,6 +354,19 @@ export const CharacterForm: FC<CharacterFormProps> = ({
                 <FormFieldGroup
                   fields={group.fields}
                   onChange={handleFieldChange}
+                />
+              </CardContent>
+            </Card>
+          ))}
+          {stringFieldGroups.map((group, groupIndex) => (
+            <Card key={`string-${groupIndex}`}>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">{group.title}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <StringFieldGroup
+                  fields={group.fields}
+                  onChange={handleStringFieldChange}
                 />
               </CardContent>
             </Card>
