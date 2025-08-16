@@ -79,6 +79,7 @@ export class CharacterDataOB {
   UnkHash5: number // 0x4c
   UnkHash6: number // 0x50
   UnkId8: number // 0x54
+  UnkHash7: number // 0x58
   sticker1: number // 0x5c
   // 0x60 empty
   UnkHash7: number // 0x64
@@ -317,161 +318,184 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
 
   //create a visual file buffer size for calculate the name offset
   //the visualBuffer will end when the character data end
-  let visualBuffer = Buffer.alloc(0x20 + characterList.CommandsCount * 0x4 + characterList.CommandsCount * 0xc + characterList.CharacterData.length * 0x4 + characterList.CharacterData.length * 0x13c)
+  let visualBuffer = Buffer.alloc(
+    0x20 + characterList.CommandsCount * 0x4 + characterList.CommandsCount * 0xc + characterList.CharacterData.length * 0x4 + characterList.CharacterData.length * characterList.CharacterInfoEachSize
+  )
 
   //create the name buffer
   let stringNameDataBuffer = Buffer.alloc(0)
 
   // write the character data
-  let unitDataBuffer = Buffer.alloc(characterList.CharacterData.length * 0x13c)
+  let unitDataBuffer = Buffer.alloc(characterList.CharacterData.length * characterList.CharacterInfoEachSize)
   for (let i = 0; i < characterList.CharacterData.length; i++) {
     const char = characterList.CharacterData[i]
+    const baseOffset = i * characterList.CharacterInfoEachSize
 
-    unitDataBuffer.writeInt32LE(char.UnkId0, i * 0x13c + 0x0)
-    unitDataBuffer.writeInt32LE(char.UnkId1, i * 0x13c + 0x4)
-    unitDataBuffer.writeInt32LE(char.UnkId2, i * 0x13c + 0x8)
-    unitDataBuffer.writeInt32LE(char.UnkId3, i * 0x13c + 0xc)
-    unitDataBuffer.writeInt32LE(char.ms_igh_r, i * 0x13c + 0x10)
-    unitDataBuffer.writeInt32LE(char.ms_vs_r, i * 0x13c + 0x14)
+    unitDataBuffer.writeInt32LE(char.UnkId0, baseOffset + 0x0)
+    unitDataBuffer.writeInt32LE(char.UnkId1, baseOffset + 0x4)
+    unitDataBuffer.writeInt32LE(char.UnkId2, baseOffset + 0x8)
+    unitDataBuffer.writeInt32LE(char.UnkId3, baseOffset + 0xc)
+    unitDataBuffer.writeInt32LE(char.ms_igh_r, baseOffset + 0x10)
+    unitDataBuffer.writeInt32LE(char.ms_vs_r, baseOffset + 0x14)
+    unitDataBuffer.writeInt32LE(char.UnkHash1, baseOffset + 0x18)
 
     // stringNameData offset for CharacterNameOffset
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x1c)
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x1c)
     visualBuffer = Buffer.concat([visualBuffer, char.CharacterNameOffset.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.CharacterNameOffset.StringBufferData])
 
-    unitDataBuffer.writeInt32LE(char.UnkId4, i * 0x13c + 0x24)
-    unitDataBuffer.writeInt32LE(char.UnkId5, i * 0x13c + 0x28)
-    unitDataBuffer.writeInt32LE(char.UnkId6, i * 0x13c + 0x2c)
-    unitDataBuffer.writeInt32LE(char.UnkHash2, i * 0x13c + 0x30)
-    unitDataBuffer.writeInt32LE(char.ms_vs_l, i * 0x13c + 0x34)
-    unitDataBuffer.writeInt32LE(char.UnkId7, i * 0x13c + 0x38)
-    unitDataBuffer.writeInt32LE(char.UnkHash3, i * 0x13c + 0x3c)
-    unitDataBuffer.writeInt32LE(char.UnkHash4, i * 0x13c + 0x40)
-    unitDataBuffer.writeInt32LE(char.UnkHash5, i * 0x13c + 0x4c)
-    unitDataBuffer.writeInt32LE(char.UnkHash6, i * 0x13c + 0x50)
-    unitDataBuffer.writeInt32LE(char.UnkId8, i * 0x13c + 0x54)
-    unitDataBuffer.writeInt32LE(char.sticker1, i * 0x13c + 0x5c)
-    unitDataBuffer.writeInt32LE(char.UnkHash7, i * 0x13c + 0x64)
+    // 0x20 empty
+
+    unitDataBuffer.writeInt32LE(char.UnkId4, baseOffset + 0x24)
+    unitDataBuffer.writeInt32LE(char.UnkId5, baseOffset + 0x28)
+    unitDataBuffer.writeInt32LE(char.UnkId6, baseOffset + 0x2c)
+    unitDataBuffer.writeInt32LE(char.UnkHash2, baseOffset + 0x30)
+    unitDataBuffer.writeInt32LE(char.ms_vs_l, baseOffset + 0x34)
+    unitDataBuffer.writeInt32LE(char.UnkId7, baseOffset + 0x38)
+    unitDataBuffer.writeInt32LE(char.UnkHash3, baseOffset + 0x3c)
+    unitDataBuffer.writeInt32LE(char.UnkHash4, baseOffset + 0x40)
+    unitDataBuffer.writeInt32LE(char.UnkHash5, baseOffset + 0x4c)
+    unitDataBuffer.writeInt32LE(char.UnkHash6, baseOffset + 0x50)
+    unitDataBuffer.writeInt32LE(char.UnkId8, baseOffset + 0x54)
+    unitDataBuffer.writeInt32LE(char.sticker1, baseOffset + 0x5c)
+    unitDataBuffer.writeInt32LE(char.UnkHash7, baseOffset + 0x64)
 
     // stringNameData offset for UnkStringOffset1
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x68)
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x68)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset1.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset1.StringBufferData])
 
-    unitDataBuffer.writeInt32LE(char.UnkHash8, i * 0x13c + 0x74)
-    unitDataBuffer.writeInt32LE(char.LMBPilotClothing, i * 0x13c + 0x78)
+    unitDataBuffer.writeInt32LE(char.UnkHash8, baseOffset + 0x74)
+    unitDataBuffer.writeInt32LE(char.LMBPilotClothing, baseOffset + 0x78)
 
     // stringNameData offset for UnkStringOffset2
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x7c)
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x7c)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset2.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset2.StringBufferData])
 
     // stringNameData offset for UnkStringOffset3
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x84)
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x84)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset3.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset3.StringBufferData])
 
     // stringNameData offset for UnkStringOffset4
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x90)
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x90)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset4.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset4.StringBufferData])
 
     // stringNameData offset for UnkStringOffset5
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x98)
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x98)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset5.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset5.StringBufferData])
 
     // stringNameData offset for UnkStringOffset6
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0xa4)
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0xa4)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset6.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset6.StringBufferData])
 
-    unitDataBuffer.writeInt32LE(char.EX_Pilot_Clothin_LMB_HASH, i * 0x13c + 0xb0)
-    unitDataBuffer.writeInt32LE(char.UnkHash9, i * 0x13c + 0xb4)
+    unitDataBuffer.writeInt32LE(char.EX_Pilot_Clothin_LMB_HASH, baseOffset + 0xb0)
+    unitDataBuffer.writeInt32LE(char.UnkHash9, baseOffset + 0xb4)
 
     // stringNameData offset for UnkStringOffset7
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0xb8)
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0xb8)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset7.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset7.StringBufferData])
 
     // stringNameData offset for UnkStringOffset8
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0xc0)
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0xc0)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset8.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset8.StringBufferData])
 
-    unitDataBuffer.writeInt32LE(char.UnkHash10, i * 0x13c + 0xcc)
-    unitDataBuffer.writeInt32LE(char.vs_p_r_c02, i * 0x13c + 0xd0)
-    unitDataBuffer.writeInt32LE(char.unkId9, i * 0x13c + 0xd4)
-    unitDataBuffer.writeInt32LE(char.UnkHash11, i * 0x13c + 0xd8)
-    unitDataBuffer.writeInt32LE(char.sticker_t01, i * 0x13c + 0xe0)
-    unitDataBuffer.writeInt32LE(char.UnkHash12, i * 0x13c + 0xe4)
-    unitDataBuffer.writeInt32LE(char.UnkHash13, i * 0x13c + 0xe8)
-    unitDataBuffer.writeInt32LE(char.unkId10, i * 0x13c + 0xec)
-    unitDataBuffer.writeInt32LE(char.unkId11, i * 0x13c + 0xf0)
-    unitDataBuffer.writeInt32LE(char.vs_p_l_c02, i * 0x13c + 0xf4)
-    unitDataBuffer.writeInt32LE(char.unkId12, i * 0x13c + 0x108)
-    unitDataBuffer.writeInt32LE(char.ms_tracker, i * 0x13c + 0x110)
-    unitDataBuffer.writeInt32LE(char.UnkHash14, i * 0x13c + 0x114)
-    unitDataBuffer.writeInt32LE(char.UnkHash15, i * 0x13c + 0x11c)
-    unitDataBuffer.writeInt32LE(char.UnkHash16, i * 0x13c + 0x120)
-    unitDataBuffer.writeInt32LE(char.UnkHash17, i * 0x13c + 0x124)
+    unitDataBuffer.writeInt32LE(char.UnkHash10, baseOffset + 0xcc)
+    unitDataBuffer.writeInt32LE(char.vs_p_r_c02, baseOffset + 0xd0)
+    unitDataBuffer.writeInt32LE(char.unkId9, baseOffset + 0xd4)
+    unitDataBuffer.writeInt32LE(char.UnkHash11, baseOffset + 0xd8)
+    unitDataBuffer.writeInt32LE(char.sticker_t01, baseOffset + 0xe0)
+    unitDataBuffer.writeInt32LE(char.UnkHash12, baseOffset + 0xe4)
+    unitDataBuffer.writeInt32LE(char.UnkHash13, baseOffset + 0xe8)
+    unitDataBuffer.writeInt32LE(char.unkId10, baseOffset + 0xec)
+    unitDataBuffer.writeInt32LE(char.unkId11, baseOffset + 0xf0)
+    unitDataBuffer.writeInt32LE(char.vs_p_l_c02, baseOffset + 0xf4)
+    unitDataBuffer.writeInt32LE(char.unkId12, baseOffset + 0x100)
+    // 0x104 empty
+    unitDataBuffer.writeInt32LE(char.unkId13, baseOffset + 0x108)
+    unitDataBuffer.writeInt32LE(char.unkId14, baseOffset + 0x10c)
+    // 0x110 empty
+    unitDataBuffer.writeInt32LE(char.ms_tracker, baseOffset + 0x114)
+    unitDataBuffer.writeInt32LE(char.UnkHash14, baseOffset + 0x118)
+    // 0x11c empty
+    unitDataBuffer.writeInt32LE(char.UnkHash15, baseOffset + 0x120)
+    // 0x124 empty
+    unitDataBuffer.writeInt32LE(char.UnkHash16, baseOffset + 0x128)
+    // 0x12c empty
+    unitDataBuffer.writeInt32LE(char.UnkHash17, baseOffset + 0x130)
 
     // stringNameData offset for UnkStringOffset9
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x130)
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x134)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset9.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset9.StringBufferData])
 
-    unitDataBuffer.writeInt32LE(char.UnkHash18, i * 0x13c + 0x138)
-    unitDataBuffer.writeInt32LE(char.MS_card_icon_index, i * 0x13c + 0x13c)
+    unitDataBuffer.writeInt32LE(char.UnkHash18, baseOffset + 0x13c)
+    unitDataBuffer.writeInt32LE(char.MS_card_icon_index, baseOffset + 0x140)
 
     // stringNameData offset for UnkStringOffset10
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x140)
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x144)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset10.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset10.StringBufferData])
 
-    unitDataBuffer.writeInt32LE(char.UnkHash19, i * 0x13c + 0x148)
-    unitDataBuffer.writeInt32LE(char.unkId13, i * 0x13c + 0x14c)
-    unitDataBuffer.writeInt32LE(char.UnkHash20, i * 0x13c + 0x150)
+    unitDataBuffer.writeInt32LE(char.UnkHash19, baseOffset + 0x14c)
+    unitDataBuffer.writeInt32LE(char.unkId15, baseOffset + 0x150)
+    unitDataBuffer.writeInt32LE(char.UnkHash20, baseOffset + 0x154)
 
     // stringNameData offset for UnkStringOffset11
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x154)
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x158)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset11.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset11.StringBufferData])
 
-    unitDataBuffer.writeInt32LE(char.LMBCutIn, i * 0x13c + 0x15c)
-    unitDataBuffer.writeInt32LE(char.sticker_t05, i * 0x13c + 0x160)
-    unitDataBuffer.writeInt32LE(char.SeriesId, i * 0x13c + 0x164)
-    unitDataBuffer.writeInt32LE(char.UnkHash21, i * 0x13c + 0x16c)
-    unitDataBuffer.writeInt32LE(char.ms_ms_l, i * 0x13c + 0x17c)
-    unitDataBuffer.writeInt32LE(char.vs_p_r, i * 0x13c + 0x184)
+    unitDataBuffer.writeInt32LE(char.LMBCutIn, baseOffset + 0x160)
+    unitDataBuffer.writeInt32LE(char.sticker_t05, baseOffset + 0x164)
+    unitDataBuffer.writeInt32LE(char.SeriesId, baseOffset + 0x168)
+    // 0x16c empty
+    unitDataBuffer.writeInt32LE(char.UnkHash21, baseOffset + 0x170)
+    // 0x174 empty
+    // 0x178 empty
+    // 0x17c empty
+    unitDataBuffer.writeInt32LE(char.ms_ms_l, baseOffset + 0x180)
+    // 0x184 empty
+    unitDataBuffer.writeInt32LE(char.vs_p_r, baseOffset + 0x188)
 
     // stringNameData offset for UnkStringOffset12
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x188)
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x18c)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset12.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset12.StringBufferData])
 
-    unitDataBuffer.writeInt32LE(char.LMBBoost, i * 0x13c + 0x190)
-    unitDataBuffer.writeInt32LE(char.UnkHash22, i * 0x13c + 0x194)
+    unitDataBuffer.writeInt32LE(char.LMBBoost, baseOffset + 0x194)
+    unitDataBuffer.writeInt32LE(char.UnkHash22, baseOffset + 0x198)
 
     // stringNameData offset for UnkStringOffset13
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x198)
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x19c)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset13.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset13.StringBufferData])
 
-    unitDataBuffer.writeInt32LE(char.rnk_m_l, i * 0x13c + 0x1a0)
-    unitDataBuffer.writeInt32LE(char.ms_crs, i * 0x13c + 0x1a8)
+    // 0x1a0 empty
+    unitDataBuffer.writeInt32LE(char.rnk_m_l, baseOffset + 0x1a4)
+    // 0x1a8 empty
+    unitDataBuffer.writeInt32LE(char.ms_crs, baseOffset + 0x1ac)
 
     // stringNameData offset for UnkStringOffset14
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, i * 0x13c + 0x1ac)
+    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x1b0)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset14.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset14.StringBufferData])
 
-    unitDataBuffer.writeInt32LE(char.UnkHash23, i * 0x13c + 0x1b8)
-    unitDataBuffer.writeInt32LE(char.ms_ms_s, i * 0x13c + 0x1bc)
-    unitDataBuffer.writeInt32LE(char.vs_p_l, i * 0x13c + 0x1c0)
-    unitDataBuffer.writeInt32LE(char.ms_mn, i * 0x13c + 0x1c8)
-    unitDataBuffer.writeInt32LE(char.sc_p, i * 0x13c + 0x1cc)
-    unitDataBuffer.writeInt32LE(char.unkId14, i * 0x13c + 0x1d0)
+    // 0x1b4 empty
+    // 0x1b8 empty
+    unitDataBuffer.writeInt32LE(char.UnkHash23, baseOffset + 0x1bc)
+    unitDataBuffer.writeInt32LE(char.ms_ms_s, baseOffset + 0x1c0)
+    unitDataBuffer.writeInt32LE(char.vs_p_l, baseOffset + 0x1c4)
+    // 0x1c8 empty
+    unitDataBuffer.writeInt32LE(char.ms_mn, baseOffset + 0x1cc)
+    unitDataBuffer.writeInt32LE(char.sc_p, baseOffset + 0x1d0)
+    unitDataBuffer.writeInt32LE(char.unkId16, baseOffset + 0x1d4)
   }
 
   const outBuffer = Buffer.concat([headerBuffer, commandsBuffer, unitIdBuffer, unitDataBuffer, stringNameDataBuffer])

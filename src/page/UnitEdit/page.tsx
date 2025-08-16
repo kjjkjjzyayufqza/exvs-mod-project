@@ -4,7 +4,7 @@ import { exists, BaseDirectory, readFile, writeFile } from "@tauri-apps/plugin-f
 import { Buffer } from "buffer";
 import _ from "lodash";
 import { Button } from "../../components/ui/button";
-import { CharacterDataOB, CharacterListOB } from "../../models/characterListOB";
+import { CharacterDataOB, CharacterListOB, CharacterListOBOutPut } from "../../models/characterListOB";
 export default function UnitEdit() {
   const [characterListData, setCharacterListData] = useState<CharacterListOB>();
   const [newCharacter, setNewCharacter] = useState<CharacterDataOB>();
@@ -22,7 +22,7 @@ export default function UnitEdit() {
     const path = (await open({
       directory: true,
     })) as string;
-    // if (characterListData) CharacterListOutPut(characterListData, path);
+    if (characterListData) CharacterListOBOutPut(characterListData, path);
   };
 
   const handleAddNewCharacter = () => {
