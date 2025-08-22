@@ -188,7 +188,7 @@ export function FileList({ files, isLoading, folderPath }: FileListProps) {
       // Open the file in VSCode using shell commands
       const command = await Command.create('exec-cmd', [
         "/C",
-        "code",
+        "cursor",
         file.path
       ]).execute();
       if (command.code !== 0) {
@@ -219,7 +219,7 @@ export function FileList({ files, isLoading, folderPath }: FileListProps) {
       case 'c':
         return [
           {
-            label: "Open VSCode",
+            label: "Open Cursor",
             onClick: () => handleOpenInVSCode(file),
             className: BUTTON_STYLES.edit
           },

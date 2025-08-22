@@ -7,11 +7,13 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
+import { DualValueProperty } from "@/components/ui/dual-value-property";
 import { Trash2, Edit3, Save, X, Folder, FileText, Calendar, HardDrive, Copy } from "lucide-react";
 import { TreeDataItem } from "@/lib/utils";
 import { useRepackStore } from "@/store/repackStore";
 import { toast } from 'sonner';
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogOverlay, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { hexDisplayToInt32 } from "@/module/commonFunc";
 
 interface ExtendedTreeDataItem extends TreeDataItem {
   icon?: any;
@@ -47,6 +49,7 @@ const fileTypeOptions = [
   { value: ".nurpdb", label: ".nurpdb", type: 0x19 },
   { value: ".bin", label: ".bin", type: 0 },
 ];
+
 
 // EditableProperty component moved outside to prevent re-creation on each render
 const EditableProperty = ({
@@ -260,9 +263,27 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
       // Clear previous validation error
       setValidationError("");
 
-      const value = editingProperty.includes('Index') || editingProperty.includes('unk')
-        ? (editingProperty.startsWith('unk') ? editValue : parseInt(editValue) || 0)
-        : editValue;
+      let value: string | number;
+
+      // Special handling for unk3 property
+      if (editingProperty === 'unk3') {
+        try {
+          // Try to parse as hex first (if it contains spaces or is 8 chars)
+          if (editValue.includes(' ') || (editValue.replace(/\s+/g, '').length === 8 && /^[0-9A-F\s]+$/i.test(editValue))) {
+            value = hexDisplayToInt32(editValue);
+          } else {
+            // Parse as integer
+            value = parseInt(editValue) || 0;
+          }
+        } catch (error) {
+          setValidationError('Invalid hex or integer format');
+          return;
+        }
+      } else if (editingProperty.includes('Index') || editingProperty.includes('unk')) {
+        value = editingProperty.startsWith('unk') ? editValue : parseInt(editValue) || 0;
+      } else {
+        value = editValue;
+      }
 
       // Validate index for duplicates (only for index, not fileIndex)
       if (editingProperty === 'index' && selectedItem.data?.type === 'Item') {
@@ -532,7 +553,7 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
           )}
 
           {selectedItem.data?.unk3 !== undefined && (
-            <EditableProperty
+            <DualValueProperty
               label="Unk3"
               value={selectedItem.data.unk3}
               property="unk3"
@@ -544,11 +565,12 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
               onSaveEdit={handleSavePropertyEdit}
               onCancelEdit={handleCancelPropertyEdit}
               onValueChange={setEditValue}
+              showHex={true}
             />
           )}
 
           {selectedItem.data?.unk4 !== undefined && (
-            <EditableProperty
+            <DualValueProperty
               label="Unk4"
               value={selectedItem.data.unk4}
               property="unk4"
@@ -560,6 +582,7 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
               onSaveEdit={handleSavePropertyEdit}
               onCancelEdit={handleCancelPropertyEdit}
               onValueChange={setEditValue}
+              showHex={true}
             />
           )}
 

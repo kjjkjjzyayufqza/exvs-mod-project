@@ -262,7 +262,7 @@ export function cloneCharacterDataOB(
 		UnkHash10_1: character.UnkHash10_1,
 		UnkHash11: character.UnkHash11,
 		vs_p_r_c02: character.vs_p_r_c02,
-		unkId9: character.unkId9,
+		characterUniqueId: character.characterUniqueId,
 		UnkHash12: character.UnkHash12,
 		sticker_t01: character.sticker_t01,
 		UnkHash13: character.UnkHash13,
@@ -317,4 +317,76 @@ export function cloneCharacterDataOB(
 	};
 	
 	return clonedCharacter;
+}
+
+/**
+ * Convert int32 to hex string with byte reversal for display
+ * @param value - The int32 value
+ * @returns Hex string formatted as "XX XX XX XX"
+ */
+export function int32ToHexDisplay(value: number): string {
+  // Convert to unsigned 32-bit integer
+  const unsigned = value >>> 0;
+  
+  // Convert to hex and pad to 8 characters
+  const hex = unsigned.toString(16).toUpperCase().padStart(8, '0');
+  
+  // Reverse byte order and add spaces
+  const bytes = [];
+  for (let i = 6; i >= 0; i -= 2) {
+    bytes.push(hex.substr(i, 2));
+  }
+  
+  return bytes.join(' ');
+}
+
+/**
+ * Convert hex display string to int32
+ * @param hexDisplay - Hex string in format "XX XX XX XX" or "XXXXXXXX"
+ * @returns The int32 value
+ */
+export function hexDisplayToInt32(hexDisplay: string): number {
+  // Remove spaces and convert to uppercase
+  const hex = hexDisplay.replace(/\s+/g, '').toUpperCase();
+  
+  // Validate hex string
+  if (!/^[0-9A-F]{8}$/.test(hex)) {
+    throw new Error('Invalid hex format. Expected 8 hex characters.');
+  }
+  
+  // Reverse byte order
+  const reversedHex = hex.substr(6, 2) + hex.substr(4, 2) + hex.substr(2, 2) + hex.substr(0, 2);
+  
+  // Convert to signed 32-bit integer
+  const unsigned = parseInt(reversedHex, 16);
+  return unsigned | 0; // Convert to signed 32-bit
+}
+
+/**
+ * Validate hex input string
+ * @param input - The input string to validate
+ * @returns Object with isValid boolean and formatted string
+ */
+export function validateHexInput(input: string): { isValid: boolean; formatted: string; error?: string } {
+  // Remove spaces and convert to uppercase
+  const cleaned = input.replace(/\s+/g, '').toUpperCase();
+  
+  // Check if it's valid hex
+  if (!/^[0-9A-F]*$/.test(cleaned)) {
+    return { isValid: false, formatted: input, error: 'Only hex characters (0-9, A-F) are allowed' };
+  }
+  
+  // Check length
+  if (cleaned.length > 8) {
+    return { isValid: false, formatted: input, error: 'Hex value cannot exceed 8 characters' };
+  }
+  
+  // Format with spaces for display
+  const formatted = cleaned.match(/.{1,2}/g)?.join(' ') || cleaned;
+  
+  return { 
+    isValid: cleaned.length === 8, 
+    formatted,
+    error: cleaned.length !== 8 ? 'Hex value must be exactly 8 characters' : undefined
+  };
 }

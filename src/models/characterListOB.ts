@@ -110,7 +110,7 @@ export class CharacterDataOB {
   UnkHash10_1: number // 0xc8
   UnkHash11: number // 0xcc
   vs_p_r_c02: number // 0xd0
-  unkId9: number // 0xd4
+  characterUniqueId: number // 0xd4 - Character Unique ID
   UnkHash12: number // 0xd8
   // 0xdc empty
   sticker_t01: number // 0xe0
@@ -221,7 +221,7 @@ export class CharacterDataOB {
     this.UnkHash10_1 = StreamReader.readInt32LE(0xc8)
     this.UnkHash11 = StreamReader.readInt32LE(0xcc)
     this.vs_p_r_c02 = StreamReader.readInt32LE(0xd0)
-    this.unkId9 = StreamReader.readInt32LE(0xd4)
+    this.characterUniqueId = StreamReader.readInt32LE(0xd4)
     this.UnkHash12 = StreamReader.readInt32LE(0xd8)
     this.sticker_t01 = StreamReader.readInt32LE(0xe0)
     this.UnkHash13 = StreamReader.readInt32LE(0xe4)
@@ -303,7 +303,7 @@ function stringNameReadToEnd (startOffset: number, buffer: Buffer): Buffer {
 
 export function CharacterListOBOutPut (characterList: CharacterListOB, path: string) {
   //write the file
-  const outputFileName = path + '/test.bin'
+  const outputFileName = path + '/0.bin'
   let headerBuffer = Buffer.alloc(0x20)
   // write magic, convert string to buffer eg "A9B8ABCD" to 0xA9 0xB8 0xAB 0xCD
   headerBuffer.write(characterList.Magic, 0x0, 0, 'hex')
@@ -431,7 +431,7 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
     unitDataBuffer.writeInt32LE(char.UnkHash10_1, baseOffset + 0xc8)
     unitDataBuffer.writeInt32LE(char.UnkHash11, baseOffset + 0xcc)
     unitDataBuffer.writeInt32LE(char.vs_p_r_c02, baseOffset + 0xd0)
-    unitDataBuffer.writeInt32LE(char.unkId9, baseOffset + 0xd4)
+    unitDataBuffer.writeInt32LE(char.characterUniqueId, baseOffset + 0xd4)
     unitDataBuffer.writeInt32LE(char.UnkHash12, baseOffset + 0xd8)
     unitDataBuffer.writeInt32LE(char.sticker_t01, baseOffset + 0xe0)
     unitDataBuffer.writeInt32LE(char.UnkHash13, baseOffset + 0xe4)

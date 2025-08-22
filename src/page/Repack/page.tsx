@@ -919,7 +919,7 @@ export default function RepackPage() {
             )}
           </CardHeader>
           <CardContent>
-            <div className="border rounded-lg p-4 max-h-[600px] overflow-hidden">
+            <div className="border rounded-lg p-4 overflow-hidden">
               <Tree
                 ref={treeRef}
                 data={treeData}
