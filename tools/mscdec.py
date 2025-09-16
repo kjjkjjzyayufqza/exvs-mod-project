@@ -1,13 +1,16 @@
 from mscdec_msc import *
-from xml_info import MscXmlInfo, VariableLabel, getXmlInfoPath
+from xml_info import MscXmlInfo, getXmlInfoPath
 from argparse import ArgumentParser
 import ast2str as c_ast
 from disasmlib import disasm as mscsb_disasm
 from disasmlib import Label, ScriptRef
-import operator, os, timeit
+import operator
+import os
+import timeit
 import math
 import logging
 import re
+import sys
 
 class DecompilerError(Exception):
     def __init__(self,*args,**kwargs):
@@ -898,6 +901,8 @@ def handle_sys_1_0x10001_0x10_var1_pointer_funcs(file_name, log_file):
     func_index = "sys_1(0x10001, 0x10, var1, "
     line_count = 0
     target_func = None
+    
+    # Step 1: Find the target function from sys_1 call
     for line in content:
         line_count += 1
         if func_index in line:
@@ -907,41 +912,102 @@ def handle_sys_1_0x10001_0x10_var1_pointer_funcs(file_name, log_file):
             target_func = re.search(r'sys_1\(0x10001, 0x10, var1, (\w+)\(', line).group(1)
             # hardcode the target_func name to "int func_981(int arg0)"
             target_func = "int " + target_func + "(int arg0)"
+            break
             
-    # the second loop to find the target_func name
+    # Step 2: Replace hex pointers with function names and collect switch cases
     line_count = 0 # reset
     if not target_func:
         return
+        
+    target_func_start_line = None
+    target_func_end_line = None
+    switch_cases = []
+    
     for line in content:
         line_count += 1
         if target_func in line:
+            target_func_start_line = line_count - 1
+            
+            # Find function boundaries using brace counting
+            brace_count = 0
+            found_opening_brace = False
+            
             for current_index in range(line_count - 1, len(content)):
-                if 'return var1;' in content[current_index]:
+                current_line = content[current_index]
+                
+                # Count braces to find function end
+                brace_count += current_line.count('{') - current_line.count('}')
+                if '{' in current_line:
+                    found_opening_brace = True
+                
+                if found_opening_brace and brace_count == 0:
+                    target_func_end_line = current_index
                     break
-                # only match "var1 = 0x"
-                if 'var1 = 0x' in content[current_index]:
-                    original_line = content[current_index]
+                    
+                if 'return var1;' in current_line:
+                    target_func_end_line = current_index
+                    break
+                    
+                # Look for condition comparisons and collect switch cases BEFORE replacement
+                if '== arg0' in current_line:
+                    condition_match = re.search(r'0x([0-9a-fA-F]+)\s*==\s*arg0', current_line)
+                    if condition_match:
+                        # Find the corresponding assignment in nearby lines
+                        assignment_line_index = current_index + 1
+                        while assignment_line_index < len(content):
+                            assignment_line = content[assignment_line_index]
+                            if 'var1 = 0x' in assignment_line:
+                                pointer_match = re.search(r'var1 = (0x[0-9a-fA-F]+);', assignment_line)
+                                if pointer_match:
+                                    condition_hex = condition_match.group(1)  # This is our switch case value
+                                    pointer_value = pointer_match.group(1)
+                                    pointer_value_int = int(pointer_value, 16) + 0x30
+                                    
+                                    # Find function name from log
+                                    for log_line in log_content:
+                                        if f'pointer: {str(pointer_value_int)}]' in log_line:
+                                            function_name = re.search(r'func_name: (\w+), pointer: \d+', log_line).group(1)
+                                            # Collect switch case info using the condition hex value
+                                            switch_cases.append((condition_hex, function_name))
+                                            break
+                                break
+                            elif '}' in assignment_line or 'else' in assignment_line:
+                                break
+                            assignment_line_index += 1
+                
+                # Process hex pointer replacements
+                if 'var1 = 0x' in current_line:
+                    original_line = current_line
                     pointer = re.search(r'var1 = 0x[0-9a-fA-F]+;', original_line)
-                    if(pointer):
+                    if pointer:
                         # find the pointer value and + 0x30 and format it remove ";"
                         pointer_value = re.search(r'var1 = (0x[0-9a-fA-F]+);', original_line).group(1)
-                        pointer_value = int(pointer_value, 16) + 0x30
+                        pointer_value_int = int(pointer_value, 16) + 0x30
+                        
                         for log_line in log_content:
-                            if f'pointer: {str(pointer_value)}]' in log_line:
+                            if f'pointer: {str(pointer_value_int)}]' in log_line:
                                 function_name = re.search(r'func_name: (\w+), pointer: \d+', log_line).group(1)
                                 replaced_str = re.sub(
                                     r'(var1 = 0x[0-9a-fA-F]+;)',
                                     r'var1 = ' + function_name + r';',
                                     original_line)
+                                data_block.append([content[current_index], replaced_str])
                                 break
-                        data_block.append([content[current_index], replaced_str])
-    # write
+            break
+    
+    # Step 3: Write replaced content first
     with open(file_name, 'w', encoding='utf-8') as f:
         for line in content:
             for data in data_block:
                 if data[0] in line:
                     line = data[1]
             f.write(line)
+    
+    # Step 4: Convert to switch-case if we have enough cases
+    if len(switch_cases) >= 5 and target_func_start_line is not None and target_func_end_line is not None:
+        convert_target_function_to_switch(file_name, target_func.split('(')[0].replace('int ', ''), 
+                                         switch_cases, target_func_start_line, target_func_end_line)
+        print(f"Converted {target_func.split('(')[0].replace('int ', '')} to switch-case with {len(switch_cases)} cases")
 
 def handle_var3_sys_0_0x700000_0_var1_0xa_pointer_funcs(file_name, log_file):
     # this function only for handle the new version msc
@@ -999,6 +1065,178 @@ def handle_var3_sys_0_0x700000_0_var1_0xa_pointer_funcs(file_name, log_file):
                     line = data[1]
             f.write(line)
 
+def convert_target_function_to_switch(file_name, func_name, switch_cases, start_line, end_line):
+    """
+    Convert a specific function to switch-case based on collected cases.
+    This is more targeted than the general conversion function.
+    """
+    with open(file_name, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+    
+    # Generate new switch-case function lines
+    new_func_lines = generate_switch_case_function_lines(func_name, switch_cases)
+    
+    # Replace the function lines
+    lines[start_line:end_line+1] = new_func_lines
+    
+    # Write back to file
+    with open(file_name, 'w', encoding='utf-8') as f:
+        f.writelines(lines)
+
+def extract_switch_cases_from_conditions(func_body):
+    """
+    Extract switch cases from condition comparisons like (0x7a0a9153 == arg0)
+    """
+    import re
+    
+    switch_cases = []
+    
+    # Pattern to find condition-assignment pairs
+    # Look for: if (0xHEXVALUE == arg0) { var1 = func_XXX; }
+    # or: else if (0xHEXVALUE == arg0) { var1 = func_XXX; }
+    patterns = [
+        # Standard if condition with function assignment
+        r'(?:else\s+)?if\s*\(\s*0x([0-9a-fA-F]+)\s*==\s*arg0\s*\)\s*\{\s*var1\s*=\s*(func_\d+);\s*\}',
+        # Multiline pattern where assignment is on next lines
+        r'(?:else\s+)?if\s*\(\s*0x([0-9a-fA-F]+)\s*==\s*arg0\s*\)[^}]*?var1\s*=\s*(func_\d+);'
+    ]
+    
+    for pattern in patterns:
+        for match in re.finditer(pattern, func_body, re.DOTALL):
+            hex_value = match.group(1)
+            func_name = match.group(2)
+            # Avoid duplicates
+            if (hex_value, func_name) not in switch_cases:
+                switch_cases.append((hex_value, func_name))
+    
+    return switch_cases
+
+def convert_nested_if_else_to_switch(file_name):
+    """
+    Convert nested if-else structures to switch-case statements.
+    This function targets functions with large nested if-else chains that
+    assign function pointers based on hexadecimal comparisons.
+    """
+    with open(file_name, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+    
+    import re
+    
+    # Find function boundaries by line-by-line parsing
+    functions_to_convert = []
+    i = 0
+    
+    while i < len(lines):
+        line = lines[i].strip()
+        
+        # Look for function start pattern: int func_name(int arg0)
+        func_start_match = re.match(r'int\s+(\w+)\(int\s+arg0\)', line)
+        if func_start_match:
+            func_name = func_start_match.group(1)
+            func_start_line = i
+            
+            # Find the opening brace
+            brace_count = 0
+            func_lines = []
+            j = i
+            
+            # Find opening brace
+            while j < len(lines) and '{' not in lines[j]:
+                j += 1
+            
+            if j >= len(lines):
+                i += 1
+                continue
+                
+            # Count braces to find function end
+            for k in range(j, len(lines)):
+                func_lines.append(lines[k])
+                brace_count += lines[k].count('{') - lines[k].count('}')
+                if brace_count == 0:
+                    func_end_line = k
+                    break
+            else:
+                i += 1
+                continue
+            
+            # Analyze if this function is a candidate for conversion
+            func_body = ''.join(func_lines)
+            
+            # Check for var1 declaration and return var1
+            if 'int var1;' in func_body and 'return var1;' in func_body:
+                # Count hex comparisons and function assignments
+                hex_comparisons = re.findall(r'0x[0-9a-fA-F]+\s*==\s*arg0', func_body)
+                var1_assignments = re.findall(r'var1\s*=\s*func_\d+;', func_body)
+                
+                # Only convert if there are many cases (indicating a dispatcher function)
+                if len(hex_comparisons) >= 5 and len(var1_assignments) >= 5:
+                    switch_cases = extract_switch_cases_from_conditions(func_body)
+                    if len(switch_cases) >= 5:  # Minimum cases to warrant switch conversion
+                        functions_to_convert.append({
+                            'name': func_name,
+                            'start_line': func_start_line,
+                            'end_line': func_end_line,
+                            'cases': switch_cases
+                        })
+            
+            i = func_end_line + 1
+        else:
+            i += 1
+    
+    # Convert functions to switch-case
+    if functions_to_convert:
+        # Process from bottom to top to maintain line indices
+        functions_to_convert.reverse()
+        
+        for func_info in functions_to_convert:
+            new_func_lines = generate_switch_case_function_lines(func_info['name'], func_info['cases'])
+            # Replace the function lines
+            lines[func_info['start_line']:func_info['end_line']+1] = new_func_lines
+        
+        with open(file_name, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+        
+        func_names = [f['name'] for f in functions_to_convert]
+        print(f"Converted {len(functions_to_convert)} functions to switch-case: {', '.join(func_names)}")
+    else:
+        print("No suitable functions found for if-else to switch-case conversion")
+
+def generate_switch_case_function_lines(func_name, switch_cases):
+    """
+    Generate a switch-case function as a list of lines from extracted cases.
+    """
+    if not switch_cases:
+        return []
+    
+    lines = []
+    lines.append(f"int {func_name}(int arg0)\n")
+    lines.append("{\n")
+    lines.append("    int var1;\n")
+    lines.append("    switch(arg0) {\n")
+    
+    # Sort cases by hex value for better readability
+    sorted_cases = sorted(switch_cases, key=lambda x: int(x[0], 16))
+    
+    for hex_value, func_ref in sorted_cases:
+        lines.append(f"        case 0x{hex_value}:\n")
+        lines.append(f"            var1 = {func_ref};\n")
+        lines.append("            break;\n")
+    
+    lines.append("        default:\n")
+    lines.append("            var1 = 0; // Default case - no function found\n")
+    lines.append("            break;\n")
+    lines.append("    }\n")
+    lines.append("    return var1;\n")
+    
+    return lines
+
+def generate_switch_case_function(func_name, switch_cases):
+    """
+    Generate a switch-case function body from extracted cases.
+    """
+    lines = generate_switch_case_function_lines(func_name, switch_cases)
+    return ''.join(lines)
+
 def handle_exvs2_pointer_funcs(args):
     file_name = args.filename or os.path.basename(os.path.splitext(args.file)[0]) + '.c'
     log_file = args.log or 'log.txt'
@@ -1006,6 +1244,11 @@ def handle_exvs2_pointer_funcs(args):
     handle_sys_1_0x10001_0x10_var1_pointer_funcs(file_name, log_file)
     handle_var3_sys_0_0x700000_0_var1_0xa_pointer_funcs(file_name, log_file)
     print("EXVS2 Function pointer replaced successfully!")
+    
+    # Optionally run general if-else to switch-case conversion for other functions
+    # This will catch any remaining functions that weren't handled by the specific handlers
+    print("Running additional switch-case conversion for remaining functions...")
+    convert_nested_if_else_to_switch(file_name)
 
 # 设置日志配置
 def setup_logging(log_file):

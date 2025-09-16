@@ -11,7 +11,7 @@ export interface FileInfo {
 }
 
 // Param ID type definitions based on common patterns
-export type ParamDataType = 'Boolean' | 'Float' | 'Float1' | 'String1' | 'Vector4' | 'Sampler' | 'Unk7';
+export type ParamDataType = 'Boolean' | 'Float' | 'Float1' | 'String' | 'String1' | 'Vector4' | 'Sampler' | 'Unk7';
 
 // Comprehensive param_id type mapping
 export const PARAM_TYPE_MAPPING: Record<string, ParamDataType> = {
@@ -40,7 +40,7 @@ export const PARAM_TYPE_MAPPING: Record<string, ParamDataType> = {
   // Float types
   'CustomInteger0': 'Float',
   
-  // String1 types (textures and paths)
+  // String1 types (textures and paths) - numatb conversion uses String1
   'BaseColorMap': 'String1',
   'EmissiveMap': 'String1',
   'NormalMap': 'String1',
@@ -77,6 +77,7 @@ export const getParamType = (paramId: string, currentData: AttributeData): Param
   if (currentData.Boolean !== undefined) return 'Boolean';
   if (currentData.Float !== undefined) return 'Float';
   if (currentData.Float1 !== undefined) return 'Float1';
+  if (currentData.String !== undefined) return 'String';
   if (currentData.String1 !== undefined) return 'String1';
   if (currentData.Vector4 !== undefined) return 'Vector4';
   if (currentData.Sampler !== undefined) return 'Sampler';
@@ -95,6 +96,8 @@ export const getDefaultValueForType = (dataType: ParamDataType): AttributeData =
       return { Float: 0.0 };
     case 'Float1':
       return { Float1: 0.0 };
+    case 'String':
+      return { String: "" };
     case 'String1':
       return { String1: "" };
     case 'Vector4':
@@ -202,6 +205,7 @@ interface AttributeData {
   Boolean?: number;
   Float?: number;
   Float1?: number;
+  String?: string;
   String1?: string;
   Vector4?: {
     x: number;
@@ -266,8 +270,10 @@ interface NumatbStore {
   resetConversion: () => void;
   convertFile: (file: FileInfo) => Promise<void>;
   updateAttribute: (materialIndex: number, attributeIndex: number, newValue: any, dataType: ParamDataType) => void;
+  updateMaterialLabel: (materialIndex: number, newLabel: string) => void;
   addAttribute: (materialIndex: number, paramId: string) => void;
   removeAttribute: (materialIndex: number, attributeIndex: number) => void;
+  addMaterialEntry: () => void;
   saveFile: () => Promise<void>;
 }
 
@@ -309,6 +315,9 @@ export const useNumatbStore = create<NumatbStore>((set, get) => ({
           break;
         case 'Float1':
           attribute.param.data.Float1 = parseFloat(newValue) || 0;
+          break;
+        case 'String':
+          attribute.param.data.String = newValue || "";
           break;
         case 'String1':
           attribute.param.data.String1 = newValue || "";
@@ -378,6 +387,17 @@ export const useNumatbStore = create<NumatbStore>((set, get) => ({
     }
   },
 
+  updateMaterialLabel: (materialIndex: number, newLabel: string) => {
+    const state = get();
+    if (!state.numatbData) return;
+
+    const newData = { ...state.numatbData };
+    if (newData.Matl?.V16?.entries?.[materialIndex]) {
+      newData.Matl.V16.entries[materialIndex].material_label = newLabel;
+      set({ numatbData: newData });
+    }
+  },
+
   removeAttribute: (materialIndex: number, attributeIndex: number) => {
     const state = get();
     if (!state.numatbData) return;
@@ -389,6 +409,177 @@ export const useNumatbStore = create<NumatbStore>((set, get) => ({
       // Remove the attribute
       material.attributes.splice(attributeIndex, 1);
       
+      set({ numatbData: newData });
+    }
+  },
+
+  addMaterialEntry: () => {
+    const state = get();
+    if (!state.numatbData) return;
+
+    const newData = { ...state.numatbData };
+    if (newData.Matl?.V16) {
+      // Create a new material entry based on the template from model.json
+      const newEntry: MaterialEntry = {
+        material_label: "prb_new",
+        attributes: [
+          {
+            param_id: "UseSpecularMap",
+            param: { data: { Boolean: 0 } }
+          },
+          {
+            param_id: "UseEmissiveMap",
+            param: { data: { Boolean: 1 } }
+          },
+          {
+            param_id: "CustomInteger0",
+            param: { data: { Float: 0.0 } }
+          },
+          {
+            param_id: "UseNormalMap",
+            param: { data: { Boolean: 1 } }
+          },
+          {
+            param_id: "CustomFloat7",
+            param: { data: { Float1: 1.0 } }
+          },
+          {
+            param_id: "CustomVector0",
+            param: { data: { Vector4: { x: 0.0, y: 0.0, z: 0.0, w: 0.0 } } }
+          },
+          {
+            param_id: "CustomFloat8",
+            param: { data: { Float1: 1.0 } }
+          },
+          {
+            param_id: "ReceiveShadow",
+            param: { data: { Boolean: 1 } }
+          },
+          {
+            param_id: "CustomVector3",
+            param: { data: { Vector4: { x: 1.0, y: 1.0, z: 1.0, w: 1.0 } } }
+          },
+          {
+            param_id: "CustomVector2",
+            param: { data: { Vector4: { x: 1.0, y: 1.0, z: 1.0, w: 1.0 } } }
+          },
+          {
+            param_id: "Texture1",
+            param: { data: { String1: "../../textures/" } }
+          },
+          {
+            param_id: "CustomFloat1",
+            param: { data: { Float1: 1.0 } }
+          },
+          {
+            param_id: "NormalMap",
+            param: { data: { String1: "../../textures/" } }
+          },
+          {
+            param_id: "CustomFloat3",
+            param: { data: { Float1: 1.0 } }
+          },
+          {
+            param_id: "CustomColor0",
+            param: { data: { Unk7: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 } } }
+          },
+          {
+            param_id: "CustomColor1",
+            param: { data: { Unk7: { r: 1.0, g: 1.0, b: 1.0, a: 1.0 } } }
+          },
+          {
+            param_id: "CustomColor2",
+            param: { data: { Unk7: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 } } }
+          },
+          {
+            param_id: "DiffuseSampler",
+            param: {
+              data: {
+                Sampler: {
+                  wraps: "Repeat",
+                  wrapt: "Repeat",
+                  wrapr: "Repeat",
+                  min_filter: "LinearMipmapLinear",
+                  mag_filter: "Linear",
+                  texture_filtering_type: "Default2",
+                  border_color: { r: 0.0, g: 0.0, b: 0.0, a: 0.0 },
+                  unk11: 0,
+                  unk12: 1098907648,
+                  lod_bias: -1.0,
+                  max_anisotropy: "One"
+                }
+              }
+            }
+          },
+          {
+            param_id: "UseRoughnessMap",
+            param: { data: { Boolean: 1 } }
+          },
+          {
+            param_id: "CustomFloat0",
+            param: { data: { Float1: 0.1 } }
+          },
+          {
+            param_id: "RoughnessMap",
+            param: { data: { String1: "../../textures/" } }
+          },
+          {
+            param_id: "CustomFloat2",
+            param: { data: { Float1: 1.0 } }
+          },
+          {
+            param_id: "UseAmbientOcclusionMap",
+            param: { data: { Boolean: 1 } }
+          },
+          {
+            param_id: "CustomFloat4",
+            param: { data: { Float1: 1.0 } }
+          },
+          {
+            param_id: "AmbientOcclusionMap",
+            param: { data: { String1: "../../textures/" } }
+          },
+          {
+            param_id: "NormalMapBc5",
+            param: { data: { Boolean: 0 } }
+          },
+          {
+            param_id: "CustomFloat9",
+            param: { data: { Float1: 1.0 } }
+          },
+          {
+            param_id: "CustomFloat5",
+            param: { data: { Float1: 0.0 } }
+          },
+          {
+            param_id: "EmissiveMap",
+            param: { data: { String1: "../../textures/" } }
+          },
+          {
+            param_id: "UseMetallicMap",
+            param: { data: { Boolean: 1 } }
+          },
+          {
+            param_id: "EmissiveScale",
+            param: { data: { Float1: 0.0 } }
+          },
+          {
+            param_id: "BaseColorMap",
+            param: { data: { String1: "../../textures/" } }
+          },
+          {
+            param_id: "MetallicMap",
+            param: { data: { String1: "../../textures/" } }
+          },
+          {
+            param_id: "DiffuseCubeMap",
+            param: { data: { String1: "../../../share/textures/barispecular00_cubemap" } }
+          }
+        ],
+        shader_label: "vsngCharaBasic"
+      };
+
+      newData.Matl.V16.entries.push(newEntry);
       set({ numatbData: newData });
     }
   },

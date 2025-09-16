@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
 import { DualValueProperty } from "@/components/ui/dual-value-property";
-import { Trash2, Edit3, Save, X, Folder, FileText, Calendar, HardDrive, Copy } from "lucide-react";
+import { Trash2, Edit3, Save, X, Folder, FileText, Calendar, HardDrive, Copy, Clipboard, Info } from "lucide-react";
 import { TreeDataItem } from "@/lib/utils";
 import { useRepackStore } from "@/store/repackStore";
 import { toast } from 'sonner';
@@ -32,6 +32,8 @@ interface NodePropertiesPanelProps {
   onDelete: (nodeId: string) => void;
   onFileTypeChange: (nodeId: string, fileType: string) => void;
   onPropertyChange: (nodeId: string, property: string, value: string | number) => void;
+  copiedItem: TreeDataItem | null;
+  onPaste: () => void;
 }
 
 // File type options based on getFileType function
@@ -192,7 +194,7 @@ const EditableProperty = ({
   );
 };
 
-export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTypeChange, onPropertyChange }: NodePropertiesPanelProps) {
+export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTypeChange, onPropertyChange, copiedItem, onPaste }: NodePropertiesPanelProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -320,11 +322,45 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
           <CardTitle>Properties</CardTitle>
           <CardDescription>Select an item to view its properties</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="text-center text-muted-foreground py-8">
             <Folder className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p>No item selected</p>
           </div>
+          
+          {/* Clipboard Status - Show even when no item is selected */}
+          {copiedItem && (
+            <>
+              <Separator />
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Clipboard</Label>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2">
+                    <Info className="h-4 w-4 text-blue-600" />
+                    <span className="text-sm font-medium text-blue-900">
+                      {copiedItem.name}
+                    </span>
+                    <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
+                      {copiedItem.data?.type || 'Unknown'}
+                    </span>
+                    {copiedItem.data?.type === 'Item' && copiedItem.data?.fileType && (
+                      <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded-full">
+                        {copiedItem.data.fileType}
+                      </span>
+                    )}
+                    {copiedItem.data?.type === 'Folder' && copiedItem.children && (
+                      <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
+                        {copiedItem.children.length} items
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Select a folder to paste this item
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
     );
@@ -596,6 +632,40 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
           )}
         </div>
         <Separator />
+
+        {/* Clipboard Status */}
+        {copiedItem && (
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Clipboard</Label>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-center gap-2">
+                <Info className="h-4 w-4 text-blue-600" />
+                <span className="text-sm font-medium text-blue-900">
+                  {copiedItem.name}
+                </span>
+                <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
+                  {copiedItem.data?.type || 'Unknown'}
+                </span>
+                {copiedItem.data?.type === 'Item' && copiedItem.data?.fileType && (
+                  <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded-full">
+                    {copiedItem.data.fileType}
+                  </span>
+                )}
+                {copiedItem.data?.type === 'Folder' && copiedItem.children && (
+                  <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
+                    {copiedItem.children.length} items
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-blue-600 mt-1">
+                Select a folder to paste this item
+              </p>
+            </div>
+          </div>
+        )}
+
+        <Separator />
+        
         {/* Actions Section */}
         <div className="space-y-2">
           <Label className="text-sm font-medium">Actions</Label>
@@ -645,6 +715,18 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
               </AlertDialogContent>
             </AlertDialog>
           </div>
+          {copiedItem && (
+            <Button
+              onClick={onPaste}
+              disabled={!selectedItem || selectedItem.data?.type !== 'Folder'}
+              variant="outline"
+              size="sm"
+              className="w-full"
+            >
+              <Clipboard className="h-4 w-4 mr-2" />
+              Paste
+            </Button>
+          )}
           {selectedItem.id === 'root' && (
             <p className="text-xs text-muted-foreground">
               Root node cannot be deleted

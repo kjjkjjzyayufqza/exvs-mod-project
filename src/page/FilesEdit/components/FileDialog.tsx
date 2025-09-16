@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Save, RotateCcw, Trash2, Plus } from "lucide-react";
+import { Loader2, Save, RotateCcw, Trash2, Plus, Edit3, X } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { FileInfo, useNumatbStore, getParamType, ParamDataType, COMMON_ATTRIBUTES } from "../../../store/numatbStore";
 
@@ -112,6 +112,16 @@ function AttributeEditor({ attribute, materialIndex, attributeIndex, onUpdate, o
             value={data.Float !== undefined ? data.Float : data.Float1 || 0}
             onChange={(e) => handleUpdate(parseFloat(e.target.value) || 0)}
             className="text-sm"
+          />
+        );
+
+      case 'String':
+        return (
+          <Input
+            value={data.String || ""}
+            onChange={(e) => handleUpdate(e.target.value)}
+            placeholder="Enter text..."
+            className="text-sm font-mono"
           />
         );
 
@@ -238,8 +248,15 @@ function AttributeEditor({ attribute, materialIndex, attributeIndex, onUpdate, o
 
 export function FileDialog({ file }: FileDialogProps) {
   const store = useNumatbStore();
-  const { numatbData, isConverting, isSaving, error, updateAttribute, addAttribute, removeAttribute, saveFile, convertFile } = store;
+  const { numatbData, isConverting, isSaving, error, updateAttribute, updateMaterialLabel, addAttribute, removeAttribute, addMaterialEntry, saveFile, convertFile } = store;
   const [hasChanges, setHasChanges] = useState(false);
+  const [editingLabel, setEditingLabel] = useState<number | null>(null);
+  const [editingLabelValue, setEditingLabelValue] = useState<string>("");
+
+  // Helper function to check if an attribute is a string type
+  const isStringAttribute = (attr: any) => {
+    return attr.param.data.String !== undefined || attr.param.data.String1 !== undefined;
+  };
 
   const handleAttributeUpdate = (materialIndex: number, attributeIndex: number, newValue: any, dataType: ParamDataType) => {
     updateAttribute(materialIndex, attributeIndex, newValue, dataType);
@@ -253,6 +270,30 @@ export function FileDialog({ file }: FileDialogProps) {
 
   const handleRemoveAttribute = (materialIndex: number, attributeIndex: number) => {
     removeAttribute(materialIndex, attributeIndex);
+    setHasChanges(true);
+  };
+
+  const handleStartEditLabel = (materialIndex: number, currentLabel: string) => {
+    setEditingLabel(materialIndex);
+    setEditingLabelValue(currentLabel);
+  };
+
+  const handleSaveLabelEdit = (materialIndex: number) => {
+    if (editingLabelValue.trim() !== "") {
+      updateMaterialLabel(materialIndex, editingLabelValue.trim());
+      setHasChanges(true);
+    }
+    setEditingLabel(null);
+    setEditingLabelValue("");
+  };
+
+  const handleCancelLabelEdit = () => {
+    setEditingLabel(null);
+    setEditingLabelValue("");
+  };
+
+  const handleAddMaterialEntry = () => {
+    addMaterialEntry();
     setHasChanges(true);
   };
 
@@ -307,7 +348,7 @@ export function FileDialog({ file }: FileDialogProps) {
           <DialogTitle>Edit {file.name}</DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4">
+        <div className="space-y-3">
           {/* Action buttons */}
           <div className="flex justify-between items-center">
             <div className="flex space-x-2">
@@ -335,6 +376,17 @@ export function FileDialog({ file }: FileDialogProps) {
                 <RotateCcw className="h-4 w-4" />
                 <span>Reset</span>
               </Button>
+
+              <Button
+                onClick={handleAddMaterialEntry}
+                disabled={isConverting || isSaving}
+                variant="outline"
+                size="sm"
+                className="flex items-center space-x-2"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add Entry</span>
+              </Button>
             </div>
             
             {hasChanges && (
@@ -345,24 +397,74 @@ export function FileDialog({ file }: FileDialogProps) {
           <Separator />
 
           {/* Materials list */}
-          <div className="space-y-6 max-h-[60vh] overflow-y-auto">
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
             {materials.map((material, materialIndex) => (
-              <Card key={materialIndex} className="p-4">
-                <div className="space-y-4">
+              <Card key={materialIndex} className="p-3">
+                <div className="space-y-3">
+                  {/* Material label with edit functionality */}
                   <div className="flex items-center justify-between">
-                    <h4 className="font-semibold text-lg">{material.material_label}</h4>
+                    {editingLabel === materialIndex ? (
+                      <div className="flex items-center space-x-2 flex-1">
+                        <Input
+                          value={editingLabelValue}
+                          onChange={(e) => setEditingLabelValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleSaveLabelEdit(materialIndex);
+                            }
+                            if (e.key === 'Escape') {
+                              handleCancelLabelEdit();
+                            }
+                          }}
+                          autoFocus
+                          className="text-lg font-semibold"
+                          placeholder="Enter material label..."
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleSaveLabelEdit(materialIndex)}
+                          className="h-6 w-6 p-0"
+                          title="Save (Enter)"
+                        >
+                          <Save className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleCancelLabelEdit}
+                          className="h-6 w-6 p-0"
+                          title="Cancel (Escape)"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-2">
+                        <h4 className="font-semibold text-lg">{material.material_label}</h4>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleStartEditLabel(materialIndex, material.material_label)}
+                          className="h-6 w-6 p-0"
+                          title="Edit label"
+                        >
+                          <Edit3 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
                     <span className="text-sm text-gray-500">{material.shader_label}</span>
                   </div>
                   
                   {/* Texture paths section */}
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <Label className="text-sm font-medium">Texture Paths</Label>
                     {material.attributes
-                      .filter(attr => attr.param.data.String1 !== undefined)
+                      .filter(attr => isStringAttribute(attr))
                       .map((attribute, index) => {
                         const attributeIndex = material.attributes.findIndex(attr => attr === attribute);
                         return (
-                          <div key={index} className="space-y-2">
+                          <div key={index} className="space-y-1">
                             <Label className="text-xs text-gray-600">{attribute.param_id}</Label>
                             <AttributeEditor
                               attribute={attribute}
@@ -376,14 +478,14 @@ export function FileDialog({ file }: FileDialogProps) {
                       })}
                   </div>
                   
-                  <Separator />
+                  <Separator className="my-2" />
                   
                   {/* Other attributes section */}
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <Label className="text-sm font-medium">Other Attributes</Label>
-                    <div className="grid grid-cols-1 gap-3">
+                    <div className="grid grid-cols-1 gap-2">
                       {material.attributes
-                        .filter(attr => attr.param.data.String1 === undefined)
+                        .filter(attr => !isStringAttribute(attr))
                         .map((attribute, index) => {
                           const attributeIndex = material.attributes.findIndex(attr => attr === attribute);
                           const dataType = getParamType(attribute.param_id, attribute.param.data);
@@ -394,7 +496,7 @@ export function FileDialog({ file }: FileDialogProps) {
                                 <Label className="text-xs text-gray-600 font-medium">
                                   {attribute.param_id}
                                 </Label>
-                                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
+                                <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded text-[10px]">
                                   {dataType}
                                 </span>
                               </div>
@@ -411,10 +513,10 @@ export function FileDialog({ file }: FileDialogProps) {
                     </div>
                   </div>
 
-                  <Separator />
+                  <Separator className="my-2" />
 
                   {/* Add new attribute section */}
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     <Label className="text-sm font-medium">Add New Attribute</Label>
                     <AddAttributeComponent
                       materialIndex={materialIndex}

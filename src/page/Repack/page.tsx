@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { Label } from "@/components/ui/label";
-import { Plus, RefreshCw, Download, Upload, Folder, FileText, ChevronRight, ChevronDown, Clipboard, Info } from "lucide-react";
+import { Plus, RefreshCw, Download, Upload, Folder, FileText, ChevronRight, ChevronDown } from "lucide-react";
 import { Tree } from "react-arborist";
 import { NodePropertiesPanel } from "./components/NodePropertiesPanel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -832,44 +832,8 @@ export default function RepackPage() {
             <Plus className="h-4 w-4 mr-2" />
             Add File
           </Button>
-          <Button
-            onClick={handlePaste}
-            disabled={!selectedItem || selectedItem.data?.type !== 'Folder' || !copiedItem}
-            variant="outline"
-            size="sm"
-          >
-            <Clipboard className="h-4 w-4 mr-2" />
-            Paste
-          </Button>
         </div>
 
-        {/* Clipboard Status */}
-        {copiedItem && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-            <div className="flex items-center gap-2">
-              <Info className="h-4 w-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-900">
-                Clipboard: {copiedItem.name}
-              </span>
-              <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
-                {copiedItem.data?.type || 'Unknown'}
-              </span>
-              {copiedItem.data?.type === 'Item' && copiedItem.data?.fileType && (
-                <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded-full">
-                  {copiedItem.data.fileType}
-                </span>
-              )}
-              {copiedItem.data?.type === 'Folder' && copiedItem.children && (
-                <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
-                  {copiedItem.children.length} items
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-blue-600 mt-1">
-              Select a folder and click "Paste" to paste this item
-            </p>
-          </div>
-        )}
 
         {/* File Path Input Fields */}
         <div className="space-y-4 mb-6">
@@ -951,6 +915,8 @@ export default function RepackPage() {
             onDelete={deleteNode}
             onFileTypeChange={handleFileTypeChange}
             onPropertyChange={handlePropertyChange}
+            copiedItem={copiedItem}
+            onPaste={handlePaste}
           />
         </div>
       </div>
