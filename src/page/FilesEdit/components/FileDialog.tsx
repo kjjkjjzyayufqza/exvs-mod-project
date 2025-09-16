@@ -434,6 +434,7 @@ export function FileDialog({ file }: FileDialogProps) {
   const [hasChanges, setHasChanges] = useState(false);
   const [editingLabel, setEditingLabel] = useState<number | null>(null);
   const [editingLabelValue, setEditingLabelValue] = useState<string>("");
+  const [selectedMaterialIndex, setSelectedMaterialIndex] = useState<number>(0);
 
 
   const handleAttributeUpdate = useCallback((materialIndex: number, attributeIndex: number, newValue: any, dataType: ParamDataType) => {
@@ -471,9 +472,11 @@ export function FileDialog({ file }: FileDialogProps) {
   }, []);
 
   const handleAddMaterialEntry = useCallback(() => {
+    const currentLength = numatbData?.Matl?.V16?.entries?.length || 0;
     addMaterialEntry();
     setHasChanges(true);
-  }, [addMaterialEntry]);
+    setSelectedMaterialIndex(currentLength); // Select the newly added material
+  }, [addMaterialEntry, numatbData]);
 
   const handleSave = useCallback(async () => {
     await saveFile();
@@ -519,6 +522,13 @@ export function FileDialog({ file }: FileDialogProps) {
 
   if (numatbData) {
     const materials = numatbData.Matl?.V16?.entries || [];
+
+    // Ensure selectedMaterialIndex is valid
+    if (selectedMaterialIndex >= materials.length && materials.length > 0) {
+      setSelectedMaterialIndex(materials.length - 1);
+    } else if (materials.length === 0) {
+      setSelectedMaterialIndex(0);
+    }
 
     return (
       <>
@@ -574,24 +584,58 @@ export function FileDialog({ file }: FileDialogProps) {
 
           <Separator />
 
-          {/* Materials list */}
-          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-            {materials.map((material, materialIndex) => (
-              <MaterialCard
-                key={`material-${materialIndex}-${material.material_label}`}
-                material={material}
-                materialIndex={materialIndex}
-                editingLabel={editingLabel}
-                editingLabelValue={editingLabelValue}
-                onStartEditLabel={handleStartEditLabel}
-                onSaveLabelEdit={handleSaveLabelEdit}
-                onCancelLabelEdit={handleCancelLabelEdit}
-                onAddAttribute={handleAddAttribute}
-                onAttributeUpdate={handleAttributeUpdate}
-                onRemoveAttribute={handleRemoveAttribute}
-                setEditingLabelValue={setEditingLabelValue}
-              />
-            ))}
+          {/* Materials list and detail view */}
+          <div className="flex gap-4 h-[60vh]">
+            {/* Left side: Material list */}
+            <div className="w-64 flex-shrink-0">
+              <div className="border rounded-lg p-2 h-full">
+                <Label className="text-sm font-medium mb-2 block">Materials ({materials.length})</Label>
+                <div className="space-y-1 max-h-full overflow-y-auto">
+                  {materials.map((material, materialIndex) => (
+                    <div
+                      key={`material-list-${materialIndex}`}
+                      className={`p-2 rounded cursor-pointer text-sm transition-colors ${
+                        selectedMaterialIndex === materialIndex
+                          ? 'bg-blue-100 border border-blue-300'
+                          : 'hover:bg-gray-100'
+                      }`}
+                      onClick={() => setSelectedMaterialIndex(materialIndex)}
+                      title={`${material.material_label} (${material.attributes?.length || 0} attributes)`}
+                    >
+                      <div className="truncate font-medium">
+                        {material.material_label || `Material ${materialIndex + 1}`}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">
+                        {material.shader_label}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        {material.attributes?.length || 0} attributes
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Right side: Material detail */}
+            <div className="flex-1 overflow-y-auto">
+              {materials[selectedMaterialIndex] && (
+                <MaterialCard
+                  key={`material-detail-${selectedMaterialIndex}`}
+                  material={materials[selectedMaterialIndex]}
+                  materialIndex={selectedMaterialIndex}
+                  editingLabel={editingLabel}
+                  editingLabelValue={editingLabelValue}
+                  onStartEditLabel={handleStartEditLabel}
+                  onSaveLabelEdit={handleSaveLabelEdit}
+                  onCancelLabelEdit={handleCancelLabelEdit}
+                  onAddAttribute={handleAddAttribute}
+                  onAttributeUpdate={handleAttributeUpdate}
+                  onRemoveAttribute={handleRemoveAttribute}
+                  setEditingLabelValue={setEditingLabelValue}
+                />
+              )}
+            </div>
           </div>
         </div>
       </>
