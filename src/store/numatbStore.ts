@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { immer } from 'zustand/middleware/immer';
 import { invoke } from "@tauri-apps/api/core";
 import { exists, mkdir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { resourceDir, dirname, join } from "@tauri-apps/api/path";
@@ -277,7 +278,8 @@ interface NumatbStore {
   saveFile: () => Promise<void>;
 }
 
-export const useNumatbStore = create<NumatbStore>((set, get) => ({
+export const useNumatbStore = create<NumatbStore>()(
+  immer((set, get) => ({
   selectedFile: null,
   numatbData: null,
   isConverting: false,
@@ -295,12 +297,10 @@ export const useNumatbStore = create<NumatbStore>((set, get) => ({
   }),
 
   updateAttribute: (materialIndex: number, attributeIndex: number, newValue: any, dataType: ParamDataType) => {
-    const state = get();
-    if (!state.numatbData) return;
+    set((state) => {
+      if (!state.numatbData?.Matl?.V16?.entries?.[materialIndex]?.attributes?.[attributeIndex]) return;
 
-    const newData = { ...state.numatbData };
-    if (newData.Matl?.V16?.entries?.[materialIndex]?.attributes?.[attributeIndex]) {
-      const attribute = newData.Matl.V16.entries[materialIndex].attributes[attributeIndex];
+      const attribute = state.numatbData.Matl.V16.entries[materialIndex].attributes[attributeIndex];
       
       // Clear all data types first
       attribute.param.data = {};
@@ -349,21 +349,17 @@ export const useNumatbStore = create<NumatbStore>((set, get) => ({
           }
           break;
       }
-      
-      set({ numatbData: newData });
-    }
+    });
   },
 
   addAttribute: (materialIndex: number, paramId: string) => {
-    const state = get();
-    if (!state.numatbData) return;
+    set((state) => {
+      if (!state.numatbData?.Matl?.V16?.entries?.[materialIndex]) return;
 
-    const newData = { ...state.numatbData };
-    if (newData.Matl?.V16?.entries?.[materialIndex]) {
-      const material = newData.Matl.V16.entries[materialIndex];
+      const material = state.numatbData.Matl.V16.entries[materialIndex];
       
       // Check if attribute already exists
-      const existingIndex = material.attributes.findIndex(attr => attr.param_id === paramId);
+      const existingIndex = material.attributes.findIndex((attr: MaterialAttribute) => attr.param_id === paramId);
       if (existingIndex !== -1) {
         console.warn(`Attribute ${paramId} already exists`);
         return;
@@ -382,43 +378,29 @@ export const useNumatbStore = create<NumatbStore>((set, get) => ({
 
       // Add to attributes array
       material.attributes.push(newAttribute);
-      
-      set({ numatbData: newData });
-    }
+    });
   },
 
   updateMaterialLabel: (materialIndex: number, newLabel: string) => {
-    const state = get();
-    if (!state.numatbData) return;
-
-    const newData = { ...state.numatbData };
-    if (newData.Matl?.V16?.entries?.[materialIndex]) {
-      newData.Matl.V16.entries[materialIndex].material_label = newLabel;
-      set({ numatbData: newData });
-    }
+    set((state) => {
+      if (!state.numatbData?.Matl?.V16?.entries?.[materialIndex]) return;
+      state.numatbData.Matl.V16.entries[materialIndex].material_label = newLabel;
+    });
   },
 
   removeAttribute: (materialIndex: number, attributeIndex: number) => {
-    const state = get();
-    if (!state.numatbData) return;
-
-    const newData = { ...state.numatbData };
-    if (newData.Matl?.V16?.entries?.[materialIndex]?.attributes?.[attributeIndex]) {
-      const material = newData.Matl.V16.entries[materialIndex];
+    set((state) => {
+      if (!state.numatbData?.Matl?.V16?.entries?.[materialIndex]?.attributes?.[attributeIndex]) return;
       
+      const material = state.numatbData.Matl.V16.entries[materialIndex];
       // Remove the attribute
       material.attributes.splice(attributeIndex, 1);
-      
-      set({ numatbData: newData });
-    }
+    });
   },
 
   addMaterialEntry: () => {
-    const state = get();
-    if (!state.numatbData) return;
-
-    const newData = { ...state.numatbData };
-    if (newData.Matl?.V16) {
+    set((state) => {
+      if (!state.numatbData?.Matl?.V16) return;
       // Create a new material entry based on the template from model.json
       const newEntry: MaterialEntry = {
         material_label: "prb_new",
@@ -579,9 +561,8 @@ export const useNumatbStore = create<NumatbStore>((set, get) => ({
         shader_label: "vsngCharaBasic"
       };
 
-      newData.Matl.V16.entries.push(newEntry);
-      set({ numatbData: newData });
-    }
+      state.numatbData.Matl.V16.entries.push(newEntry);
+    });
   },
 
   saveFile: async () => {
@@ -744,4 +725,5 @@ export const useNumatbStore = create<NumatbStore>((set, get) => ({
       set({ isConverting: false });
     }
   }
-}));
+  }))
+);

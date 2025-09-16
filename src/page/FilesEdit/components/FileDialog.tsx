@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, memo } from "react";
 import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +21,7 @@ interface AddAttributeProps {
   onAdd: (paramId: string) => void;
 }
 
-function AddAttributeComponent({ materialIndex, existingAttributes, onAdd }: AddAttributeProps) {
+const AddAttributeComponent = memo(function AddAttributeComponent({ materialIndex, existingAttributes, onAdd }: AddAttributeProps) {
   const [selectedAttribute, setSelectedAttribute] = useState<string>("");
   
   // Filter out already existing attributes
@@ -29,12 +29,12 @@ function AddAttributeComponent({ materialIndex, existingAttributes, onAdd }: Add
     attr => !existingAttributes.includes(attr)
   );
 
-  const handleAdd = () => {
+  const handleAdd = useCallback(() => {
     if (selectedAttribute) {
       onAdd(selectedAttribute);
       setSelectedAttribute("");
     }
-  };
+  }, [selectedAttribute, onAdd]);
 
   if (availableAttributes.length === 0) {
     return (
@@ -68,7 +68,7 @@ function AddAttributeComponent({ materialIndex, existingAttributes, onAdd }: Add
       </Button>
     </div>
   );
-}
+});
 
 // Component for editing different data types
 interface AttributeEditorProps {
@@ -79,13 +79,13 @@ interface AttributeEditorProps {
   onDelete: () => void;
 }
 
-function AttributeEditor({ attribute, materialIndex, attributeIndex, onUpdate, onDelete }: AttributeEditorProps) {
+const AttributeEditor = memo(function AttributeEditor({ attribute, materialIndex, attributeIndex, onUpdate, onDelete }: AttributeEditorProps) {
   const dataType = getParamType(attribute.param_id, attribute.param.data);
   const data = attribute.param.data;
 
-  const handleUpdate = (newValue: any) => {
+  const handleUpdate = useCallback((newValue: any) => {
     onUpdate(newValue, dataType);
-  };
+  }, [onUpdate, dataType]);
 
   const renderEditor = () => {
     switch (dataType) {
@@ -244,7 +244,189 @@ function AttributeEditor({ attribute, materialIndex, attributeIndex, onUpdate, o
       </Button>
     </div>
   );
+});
+
+// Optimized Material component to prevent unnecessary re-renders
+interface MaterialCardProps {
+  material: any;
+  materialIndex: number;
+  editingLabel: number | null;
+  editingLabelValue: string;
+  onStartEditLabel: (materialIndex: number, currentLabel: string) => void;
+  onSaveLabelEdit: (materialIndex: number) => void;
+  onCancelLabelEdit: () => void;
+  onAddAttribute: (materialIndex: number, paramId: string) => void;
+  onAttributeUpdate: (materialIndex: number, attributeIndex: number, newValue: any, dataType: ParamDataType) => void;
+  onRemoveAttribute: (materialIndex: number, attributeIndex: number) => void;
+  setEditingLabelValue: (value: string) => void;
 }
+
+const MaterialCard = memo(function MaterialCard({
+  material,
+  materialIndex,
+  editingLabel,
+  editingLabelValue,
+  onStartEditLabel,
+  onSaveLabelEdit,
+  onCancelLabelEdit,
+  onAddAttribute,
+  onAttributeUpdate,
+  onRemoveAttribute,
+  setEditingLabelValue
+}: MaterialCardProps) {
+  // Helper function to check if an attribute is a string type
+  const isStringAttribute = useCallback((attr: any) => {
+    return attr.param.data.String !== undefined || attr.param.data.String1 !== undefined;
+  }, []);
+
+  const handleAttributeUpdate = useCallback((newValue: any, dataType: ParamDataType, attributeIndex: number) => {
+    onAttributeUpdate(materialIndex, attributeIndex, newValue, dataType);
+  }, [materialIndex, onAttributeUpdate]);
+
+  const handleRemoveAttribute = useCallback((attributeIndex: number) => {
+    onRemoveAttribute(materialIndex, attributeIndex);
+  }, [materialIndex, onRemoveAttribute]);
+
+  const handleAddAttribute = useCallback((paramId: string) => {
+    onAddAttribute(materialIndex, paramId);
+  }, [materialIndex, onAddAttribute]);
+
+  const handleStartEditLabel = useCallback(() => {
+    onStartEditLabel(materialIndex, material.material_label);
+  }, [materialIndex, material.material_label, onStartEditLabel]);
+
+  const handleSaveLabelEdit = useCallback(() => {
+    onSaveLabelEdit(materialIndex);
+  }, [materialIndex, onSaveLabelEdit]);
+
+  return (
+    <Card className="p-3">
+      <div className="space-y-3">
+        {/* Material label with edit functionality */}
+        <div className="flex items-center justify-between">
+          {editingLabel === materialIndex ? (
+            <div className="flex items-center space-x-2 flex-1">
+              <Input
+                value={editingLabelValue}
+                onChange={(e) => setEditingLabelValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSaveLabelEdit();
+                  }
+                  if (e.key === 'Escape') {
+                    onCancelLabelEdit();
+                  }
+                }}
+                autoFocus
+                className="text-lg font-semibold"
+                placeholder="Enter material label..."
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleSaveLabelEdit}
+                className="h-6 w-6 p-0"
+                title="Save (Enter)"
+              >
+                <Save className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onCancelLabelEdit}
+                className="h-6 w-6 p-0"
+                title="Cancel (Escape)"
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-2">
+              <h4 className="font-semibold text-lg">{material.material_label}</h4>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleStartEditLabel}
+                className="h-6 w-6 p-0"
+                title="Edit label"
+              >
+                <Edit3 className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
+          <span className="text-sm text-gray-500">{material.shader_label}</span>
+        </div>
+        
+        {/* Texture paths section */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Texture Paths</Label>
+          {material.attributes
+            .map((attribute: any, attributeIndex: number) => ({ attribute, attributeIndex }))
+            .filter(({ attribute }: any) => isStringAttribute(attribute))
+            .map(({ attribute, attributeIndex }: any) => (
+              <div key={`${materialIndex}-${attributeIndex}-${attribute.param_id}`} className="space-y-1">
+                <Label className="text-xs text-gray-600">{attribute.param_id}</Label>
+                <AttributeEditor
+                  attribute={attribute}
+                  materialIndex={materialIndex}
+                  attributeIndex={attributeIndex}
+                  onUpdate={(value, dataType) => handleAttributeUpdate(value, dataType, attributeIndex)}
+                  onDelete={() => handleRemoveAttribute(attributeIndex)}
+                />
+              </div>
+            ))}
+        </div>
+        
+        <Separator className="my-2" />
+        
+        {/* Other attributes section */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Other Attributes</Label>
+          <div className="grid grid-cols-1 gap-2">
+            {material.attributes
+              .map((attribute: any, attributeIndex: number) => ({ attribute, attributeIndex }))
+              .filter(({ attribute }: any) => !isStringAttribute(attribute))
+              .map(({ attribute, attributeIndex }: any) => {
+                const dataType = getParamType(attribute.param_id, attribute.param.data);
+                
+                return (
+                  <div key={`${materialIndex}-${attributeIndex}-${attribute.param_id}`} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs text-gray-600 font-medium">
+                        {attribute.param_id}
+                      </Label>
+                      <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded text-[10px]">
+                        {dataType}
+                      </span>
+                    </div>
+                    <AttributeEditor
+                      attribute={attribute}
+                      materialIndex={materialIndex}
+                      attributeIndex={attributeIndex}
+                      onUpdate={(value, dataType) => handleAttributeUpdate(value, dataType, attributeIndex)}
+                      onDelete={() => handleRemoveAttribute(attributeIndex)}
+                    />
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+
+        <Separator className="my-2" />
+
+        {/* Add new attribute section */}
+        <div className="space-y-1">
+          <Label className="text-sm font-medium">Add New Attribute</Label>
+          <AddAttributeComponent
+            materialIndex={materialIndex}
+            existingAttributes={material.attributes.map((attr: any) => attr.param_id)}
+            onAdd={handleAddAttribute}
+          />
+        </div>
+      </div>
+    </Card>
+  );
+});
 
 export function FileDialog({ file }: FileDialogProps) {
   const store = useNumatbStore();
@@ -253,59 +435,55 @@ export function FileDialog({ file }: FileDialogProps) {
   const [editingLabel, setEditingLabel] = useState<number | null>(null);
   const [editingLabelValue, setEditingLabelValue] = useState<string>("");
 
-  // Helper function to check if an attribute is a string type
-  const isStringAttribute = (attr: any) => {
-    return attr.param.data.String !== undefined || attr.param.data.String1 !== undefined;
-  };
 
-  const handleAttributeUpdate = (materialIndex: number, attributeIndex: number, newValue: any, dataType: ParamDataType) => {
+  const handleAttributeUpdate = useCallback((materialIndex: number, attributeIndex: number, newValue: any, dataType: ParamDataType) => {
     updateAttribute(materialIndex, attributeIndex, newValue, dataType);
     setHasChanges(true);
-  };
+  }, [updateAttribute]);
 
-  const handleAddAttribute = (materialIndex: number, paramId: string) => {
+  const handleAddAttribute = useCallback((materialIndex: number, paramId: string) => {
     addAttribute(materialIndex, paramId);
     setHasChanges(true);
-  };
+  }, [addAttribute]);
 
-  const handleRemoveAttribute = (materialIndex: number, attributeIndex: number) => {
+  const handleRemoveAttribute = useCallback((materialIndex: number, attributeIndex: number) => {
     removeAttribute(materialIndex, attributeIndex);
     setHasChanges(true);
-  };
+  }, [removeAttribute]);
 
-  const handleStartEditLabel = (materialIndex: number, currentLabel: string) => {
+  const handleStartEditLabel = useCallback((materialIndex: number, currentLabel: string) => {
     setEditingLabel(materialIndex);
     setEditingLabelValue(currentLabel);
-  };
+  }, []);
 
-  const handleSaveLabelEdit = (materialIndex: number) => {
+  const handleSaveLabelEdit = useCallback((materialIndex: number) => {
     if (editingLabelValue.trim() !== "") {
       updateMaterialLabel(materialIndex, editingLabelValue.trim());
       setHasChanges(true);
     }
     setEditingLabel(null);
     setEditingLabelValue("");
-  };
+  }, [editingLabelValue, updateMaterialLabel]);
 
-  const handleCancelLabelEdit = () => {
+  const handleCancelLabelEdit = useCallback(() => {
     setEditingLabel(null);
     setEditingLabelValue("");
-  };
+  }, []);
 
-  const handleAddMaterialEntry = () => {
+  const handleAddMaterialEntry = useCallback(() => {
     addMaterialEntry();
     setHasChanges(true);
-  };
+  }, [addMaterialEntry]);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     await saveFile();
     setHasChanges(false);
-  };
+  }, [saveFile]);
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     convertFile(file);
     setHasChanges(false);
-  };
+  }, [convertFile, file]);
 
   if (isConverting) {
     return (
@@ -399,133 +577,20 @@ export function FileDialog({ file }: FileDialogProps) {
           {/* Materials list */}
           <div className="space-y-4 max-h-[60vh] overflow-y-auto">
             {materials.map((material, materialIndex) => (
-              <Card key={materialIndex} className="p-3">
-                <div className="space-y-3">
-                  {/* Material label with edit functionality */}
-                  <div className="flex items-center justify-between">
-                    {editingLabel === materialIndex ? (
-                      <div className="flex items-center space-x-2 flex-1">
-                        <Input
-                          value={editingLabelValue}
-                          onChange={(e) => setEditingLabelValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              handleSaveLabelEdit(materialIndex);
-                            }
-                            if (e.key === 'Escape') {
-                              handleCancelLabelEdit();
-                            }
-                          }}
-                          autoFocus
-                          className="text-lg font-semibold"
-                          placeholder="Enter material label..."
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleSaveLabelEdit(materialIndex)}
-                          className="h-6 w-6 p-0"
-                          title="Save (Enter)"
-                        >
-                          <Save className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={handleCancelLabelEdit}
-                          className="h-6 w-6 p-0"
-                          title="Cancel (Escape)"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center space-x-2">
-                        <h4 className="font-semibold text-lg">{material.material_label}</h4>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleStartEditLabel(materialIndex, material.material_label)}
-                          className="h-6 w-6 p-0"
-                          title="Edit label"
-                        >
-                          <Edit3 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
-                    <span className="text-sm text-gray-500">{material.shader_label}</span>
-                  </div>
-                  
-                  {/* Texture paths section */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Texture Paths</Label>
-                    {material.attributes
-                      .filter(attr => isStringAttribute(attr))
-                      .map((attribute, index) => {
-                        const attributeIndex = material.attributes.findIndex(attr => attr === attribute);
-                        return (
-                          <div key={index} className="space-y-1">
-                            <Label className="text-xs text-gray-600">{attribute.param_id}</Label>
-                            <AttributeEditor
-                              attribute={attribute}
-                              materialIndex={materialIndex}
-                              attributeIndex={attributeIndex}
-                              onUpdate={(value, dataType) => handleAttributeUpdate(materialIndex, attributeIndex, value, dataType)}
-                              onDelete={() => handleRemoveAttribute(materialIndex, attributeIndex)}
-                            />
-                          </div>
-                        );
-                      })}
-                  </div>
-                  
-                  <Separator className="my-2" />
-                  
-                  {/* Other attributes section */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Other Attributes</Label>
-                    <div className="grid grid-cols-1 gap-2">
-                      {material.attributes
-                        .filter(attr => !isStringAttribute(attr))
-                        .map((attribute, index) => {
-                          const attributeIndex = material.attributes.findIndex(attr => attr === attribute);
-                          const dataType = getParamType(attribute.param_id, attribute.param.data);
-                          
-                          return (
-                            <div key={index} className="space-y-1">
-                              <div className="flex items-center justify-between">
-                                <Label className="text-xs text-gray-600 font-medium">
-                                  {attribute.param_id}
-                                </Label>
-                                <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded text-[10px]">
-                                  {dataType}
-                                </span>
-                              </div>
-                              <AttributeEditor
-                                attribute={attribute}
-                                materialIndex={materialIndex}
-                                attributeIndex={attributeIndex}
-                                onUpdate={(value, dataType) => handleAttributeUpdate(materialIndex, attributeIndex, value, dataType)}
-                                onDelete={() => handleRemoveAttribute(materialIndex, attributeIndex)}
-                              />
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </div>
-
-                  <Separator className="my-2" />
-
-                  {/* Add new attribute section */}
-                  <div className="space-y-1">
-                    <Label className="text-sm font-medium">Add New Attribute</Label>
-                    <AddAttributeComponent
-                      materialIndex={materialIndex}
-                      existingAttributes={material.attributes.map(attr => attr.param_id)}
-                      onAdd={(paramId) => handleAddAttribute(materialIndex, paramId)}
-                    />
-                  </div>
-                </div>
-              </Card>
+              <MaterialCard
+                key={`material-${materialIndex}-${material.material_label}`}
+                material={material}
+                materialIndex={materialIndex}
+                editingLabel={editingLabel}
+                editingLabelValue={editingLabelValue}
+                onStartEditLabel={handleStartEditLabel}
+                onSaveLabelEdit={handleSaveLabelEdit}
+                onCancelLabelEdit={handleCancelLabelEdit}
+                onAddAttribute={handleAddAttribute}
+                onAttributeUpdate={handleAttributeUpdate}
+                onRemoveAttribute={handleRemoveAttribute}
+                setEditingLabelValue={setEditingLabelValue}
+              />
             ))}
           </div>
         </div>
