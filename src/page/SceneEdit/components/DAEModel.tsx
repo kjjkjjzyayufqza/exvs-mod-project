@@ -3,6 +3,7 @@ import { useLoader } from '@react-three/fiber';
 import { ColladaLoader } from 'three-stdlib';
 import { TransformControls } from '@react-three/drei';
 import { ModelState, SubModelState } from '../../../store/sceneStore';
+import { BoundingBoxGrid } from './BoundingBoxGrid';
 import * as THREE from 'three';
 
 interface DAEModelProps {
@@ -228,34 +229,48 @@ function DAEModelInner({ modelState, mode, isSelected, selectedSubModelId, onCli
                                 }}
                             >
                                 <mesh geometry={geometry} material={material} />
-                            </group>
-                            {isSubModelSelected && subMeshRefs.current[subModel.id] && (
-                                <TransformControls
-                                    object={subMeshRefs.current[subModel.id]}
-                                    mode={mode}
-                                    showX
-                                    showY
-                                    showZ
-                                    size={1}
-                                    space="world"
-                                    onObjectChange={() => handleObjectChange(subModel.id)}
-                                />
-                            )}
+                           </group>
+                           {isSubModelSelected && subMeshRefs.current[subModel.id] && (
+                               <>
+                                   <BoundingBoxGrid
+                                       target={subMeshRefs.current[subModel.id]}
+                                       visible={true}
+                                       color="#ffff00"
+                                   />
+                                   <TransformControls
+                                       object={subMeshRefs.current[subModel.id]}
+                                       mode={mode}
+                                       showX
+                                       showY
+                                       showZ
+                                       size={1}
+                                       space="world"
+                                       onObjectChange={() => handleObjectChange(subModel.id)}
+                                   />
+                               </>
+                           )}
                         </group>
                     );
                 })}
             </group>
             {isSelected && !selectedSubModelId && isModelReady && meshRef.current && (
-                <TransformControls
-                    object={meshRef.current}
-                    mode={mode}
-                    showX
-                    showY
-                    showZ
-                    size={1}
-                    space="world"
-                    onObjectChange={() => handleObjectChange()}
-                />
+                <>
+                    <BoundingBoxGrid
+                        target={meshRef.current}
+                        visible={true}
+                        color="#00ff00"
+                    />
+                    <TransformControls
+                        object={meshRef.current}
+                        mode={mode}
+                        showX
+                        showY
+                        showZ
+                        size={1}
+                        space="world"
+                        onObjectChange={() => handleObjectChange()}
+                    />
+                </>
             )}
         </>
     );

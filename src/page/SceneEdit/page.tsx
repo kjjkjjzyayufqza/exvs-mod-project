@@ -4,6 +4,7 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import { useSceneStore, ModelState } from "../../store/sceneStore";
 import { ControlPanel } from "./components/ControlPanel";
 import { DAEModel } from "./components/DAEModel";
+import { BoundingBoxGrid } from "./components/BoundingBoxGrid";
 
 interface BoxProps {
     boxState: ModelState;
@@ -63,16 +64,23 @@ function Box({ boxState, color, mode, isSelected, onClick, onTransform }: BoxPro
                 <meshStandardMaterial color={color} />
             </mesh>
             {isSelected && isMeshReady && (
-                <TransformControls
-                    object={meshRef.current}
-                    mode={mode}
-                    showX
-                    showY
-                    showZ
-                    size={1}
-                    space="world"
-                    onObjectChange={handleObjectChange}
-                />
+                <>
+                    <BoundingBoxGrid
+                        target={meshRef.current}
+                        visible={true}
+                        color="#00ffff"
+                    />
+                    <TransformControls
+                        object={meshRef.current}
+                        mode={mode}
+                        showX
+                        showY
+                        showZ
+                        size={1}
+                        space="world"
+                        onObjectChange={handleObjectChange}
+                    />
+                </>
             )}
         </>
     );
