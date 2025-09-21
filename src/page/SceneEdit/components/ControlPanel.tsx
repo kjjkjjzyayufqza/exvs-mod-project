@@ -11,6 +11,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../co
 
 interface ControlPanelProps {
     selectedModelId: string | null;
+    selectedSubModelId: string | null;
     selectedModelState: ModelState | null;
     onUpdateModelTransform: (modelState: ModelState) => void;
     getInitialModelState: (modelId: string) => ModelState | null;
@@ -75,7 +76,7 @@ function PropertyInput({ label, value, onChange, axis }: PropertyInputProps) {
     );
 }
 
-export function ControlPanel({ selectedModelId, selectedModelState, onUpdateModelTransform, getInitialModelState }: ControlPanelProps) {
+export function ControlPanel({ selectedModelId, selectedSubModelId, selectedModelState, onUpdateModelTransform, getInitialModelState }: ControlPanelProps) {
     const [isControlsCollapsed, setIsControlsCollapsed] = useState(false);
     const [isPropertiesCollapsed, setIsPropertiesCollapsed] = useState(false);
 
@@ -187,9 +188,16 @@ export function ControlPanel({ selectedModelId, selectedModelState, onUpdateMode
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs text-white/80">当前选中:</span>
-                                    <Badge variant="secondary" className="bg-white/10 text-white border-white/20 text-xs">
-                                        {selectedModelId || 'None'}
-                                    </Badge>
+                                    <div className="flex flex-col gap-1">
+                                        <Badge variant="secondary" className="bg-white/10 text-white border-white/20 text-xs">
+                                            {selectedModelState?.name || 'None'}
+                                        </Badge>
+                                        {selectedSubModelId && (
+                                            <Badge variant="outline" className="bg-blue-500/10 text-blue-300 border-blue-500/20 text-xs">
+                                                {selectedModelState?.subModels?.find(sub => sub.id === selectedSubModelId)?.name || selectedSubModelId}
+                                            </Badge>
+                                        )}
+                                    </div>
                                 </div>
                                 <Separator className="bg-white/10" />
                                 <div className="grid grid-cols-2 gap-2 text-xs text-white/80">

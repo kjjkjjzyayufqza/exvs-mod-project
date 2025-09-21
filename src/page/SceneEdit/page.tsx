@@ -1,6 +1,6 @@
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, TransformControls } from "@react-three/drei";
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { useSceneStore, ModelState } from "../../store/sceneStore";
 import { ControlPanel } from "./components/ControlPanel";
 import { DAEModel } from "./components/DAEModel";
@@ -45,6 +45,7 @@ function Box({ boxState, color, mode, isSelected, onClick, onTransform }: BoxPro
             if (meshRef.current) {
                 const updatedModelState: ModelState = {
                     id: boxState.id,
+                    name: boxState.name,
                     type: 'box',
                     position: meshRef.current.position.toArray(),
                     rotation: meshRef.current.rotation.toArray().slice(0, 3),
@@ -81,8 +82,10 @@ export default function SceneEdit() {
     const {
         models,
         selectedModelId,
+        selectedSubModelId,
         transformMode,
         setSelectedModel,
+        setSelectedSubModel,
         clearSelection,
         setTransformMode,
         updateModelTransform,
@@ -94,13 +97,13 @@ export default function SceneEdit() {
         canRedo
     } = useSceneStore();
 
-    const handleBoxClick = (boxId: string) => {
+    const handleBoxClick = useCallback((boxId: string) => {
         setSelectedModel(boxId);
-    };
+    }, [setSelectedModel]);
 
-    const handleTransform = (boxState: any) => {
+    const handleTransform = useCallback((boxState: any) => {
         updateModelTransform(boxState);
-    };
+    }, [updateModelTransform]);
 
     const handleCanvasClick = (event: any) => {
         // 只有当点击的不是模型时才清除选择
@@ -174,6 +177,7 @@ export default function SceneEdit() {
         <div className="w-full h-[calc(100vh-28px)] bg-gray-800 relative">
             <ControlPanel
                 selectedModelId={selectedModelId}
+                selectedSubModelId={selectedSubModelId}
                 selectedModelState={selectedModelState}
                 onUpdateModelTransform={updateModelTransform}
                 getInitialModelState={getInitialModelState}
@@ -210,7 +214,9 @@ export default function SceneEdit() {
                                 modelState={modelState}
                                 mode={transformMode}
                                 isSelected={selectedModelId === modelState.id}
+                                selectedSubModelId={selectedSubModelId}
                                 onClick={handleBoxClick}
+                                onSubModelClick={setSelectedSubModel}
                                 onTransform={handleTransform}
                             />
                         );

@@ -5,6 +5,7 @@ export type ModelType = 'box' | 'dae';
 
 export interface ModelState {
     id: string;
+    name: string;
     type: ModelType;
     position: [number, number, number];
     rotation: [number, number, number];
@@ -12,6 +13,17 @@ export interface ModelState {
     // For external models
     filePath?: string;
     color?: string; // For box models
+    // For DAE models with multiple geometries
+    subModels?: SubModelState[];
+}
+
+export interface SubModelState {
+    id: string;
+    name: string;
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+    geometryIndex: number;
 }
 
 export interface SceneState {
@@ -24,6 +36,7 @@ export interface SceneState {
 
     // Selection
     selectedModelId: string | null;
+    selectedSubModelId: string | null;
 
     // Transform mode
     transformMode: 'translate' | 'rotate' | 'scale';
@@ -34,6 +47,7 @@ export interface SceneState {
 
     // Actions
     setSelectedModel: (modelId: string) => void;
+    setSelectedSubModel: (subModelId: string) => void;
     clearSelection: () => void;
     setTransformMode: (mode: 'translate' | 'rotate' | 'scale') => void;
     updateModelTransform: (modelState: ModelState) => void;
@@ -50,8 +64,7 @@ export interface SceneState {
 }
 
 const initialModels: Record<string, ModelState> = {
-    box1: { id: 'box1', type: 'box', position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1], color: 'orange' },
-    box2: { id: 'box2', type: 'box', position: [2, 1, -1], rotation: [0, 0, 0], scale: [1, 1, 1], color: 'blue' }
+
 };
 
 const initialHistory: ModelState[][] = [Object.values(initialModels)];
@@ -63,6 +76,7 @@ export const useSceneStore = create<SceneState>()(
         isLoading: false,
         loadingError: null,
         selectedModelId: 'box1',
+        selectedSubModelId: null,
         transformMode: 'translate',
         history: initialHistory,
         historyIndex: 0,
@@ -71,12 +85,27 @@ export const useSceneStore = create<SceneState>()(
         setSelectedModel: (modelId: string) => {
             set((state) => {
                 state.selectedModelId = modelId;
+                state.selectedSubModelId = null; // Clear sub-model selection when selecting main model
+            });
+        },
+
+        setSelectedSubModel: (subModelId: string) => {
+            set((state) => {
+                state.selectedSubModelId = subModelId;
+                // Find the parent model and set it as selected too
+                const parentModel = Object.values(state.models).find(model =>
+                    model.subModels?.some(subModel => subModel.id === subModelId)
+                );
+                if (parentModel) {
+                    state.selectedModelId = parentModel.id;
+                }
             });
         },
 
         clearSelection: () => {
             set((state) => {
                 state.selectedModelId = null;
+                state.selectedSubModelId = null;
             });
         },
 
@@ -161,12 +190,16 @@ export const useSceneStore = create<SceneState>()(
 
                 console.log('Created blob URL:', blobUrl);
 
-                // Generate unique model ID
-                const modelId = `dae_model_${Date.now()}`;
+                // Extract filename from path and generate unique model ID
+                const fileName = selected.split(/[/\\]/).pop() || 'unknown.dae';
+                const baseName = fileName.replace('.dae', '');
+                const modelId = `dae_${baseName}_${Date.now()}`;
+                const modelName = baseName;
 
                 // Create model state
                 const daeModelState: ModelState = {
                     id: modelId,
+                    name: modelName,
                     type: 'dae',
                     position: [0, 0, 0],
                     rotation: [0, 0, 0],
@@ -216,24 +249,28 @@ export const useSceneStore = create<SceneState>()(
 
                 // Read file content
                 const fileContent = await readFile(filePath);
-                
+
                 // Convert to text for DAE (XML) files
                 const textContent = new TextDecoder().decode(fileContent);
-                
+
                 console.log('DAE file content length:', textContent.length);
-                
+
                 // Create blob URL for Three.js loader
                 const blob = new Blob([textContent], { type: 'application/xml' });
                 const blobUrl = URL.createObjectURL(blob);
 
                 console.log('Created blob URL:', blobUrl);
 
-                // Generate unique model ID
-                const modelId = `dae_model_${Date.now()}`;
+                // Extract filename from path and generate unique model ID
+                const fileName = filePath.split(/[/\\]/).pop() || 'unknown.dae';
+                const baseName = fileName.replace('.dae', '');
+                const modelId = `dae_${baseName}_${Date.now()}`;
+                const modelName = baseName;
 
                 // Create model state
                 const daeModelState: ModelState = {
                     id: modelId,
+                    name: modelName,
                     type: 'dae',
                     position: [0, 0, 0],
                     rotation: [0, 0, 0],
