@@ -1,4 +1,5 @@
 import { useRef, useEffect, useMemo } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
 interface BoundingBoxGridProps {
@@ -9,6 +10,7 @@ interface BoundingBoxGridProps {
 
 export function BoundingBoxGrid({ target, visible = true, color = '#00ff00' }: BoundingBoxGridProps) {
     const lineRef = useRef<THREE.LineSegments>(null);
+    const highlightRef = useRef<THREE.LineSegments>(null);
     
     // Calculate bounding box and create grid geometry
     const gridGeometry = useMemo(() => {
@@ -55,15 +57,42 @@ export function BoundingBoxGrid({ target, visible = true, color = '#00ff00' }: B
         if (lineRef.current && gridGeometry) {
             lineRef.current.geometry = gridGeometry;
         }
+        if (highlightRef.current && gridGeometry) {
+            highlightRef.current.geometry = gridGeometry;
+        }
     }, [gridGeometry]);
+
+    // Add pulsing animation effect
+    useFrame((state) => {
+        if (lineRef.current && highlightRef.current) {
+            const time = state.clock.elapsedTime;
+            const pulse = Math.sin(time * 4) * 0.3 + 0.7; // Pulsing between 0.4 and 1.0
+
+            // Update main bounding box opacity
+            const mainMaterial = lineRef.current.material as THREE.LineBasicMaterial;
+            mainMaterial.opacity = 0.8 + pulse * 0.2;
+
+            // Update highlight layer opacity
+            const highlightMaterial = highlightRef.current.material as THREE.LineBasicMaterial;
+            highlightMaterial.opacity = 0.4 + pulse * 0.2;
+        }
+    });
 
     if (!gridGeometry || !visible) return null;
 
     return (
-        <lineSegments ref={lineRef}>
-            <bufferGeometry attach="geometry" {...gridGeometry} />
-            <lineBasicMaterial attach="material" color={color} transparent opacity={0.8} />
-        </lineSegments>
+        <>
+            {/* Main bounding box with higher opacity */}
+            <lineSegments ref={lineRef}>
+                <bufferGeometry attach="geometry" {...gridGeometry} />
+                <lineBasicMaterial attach="material" color={color} transparent opacity={1.0} linewidth={2} />
+            </lineSegments>
+            {/* Additional highlight layer for more visibility */}
+            <lineSegments ref={highlightRef}>
+                <bufferGeometry attach="geometry" {...gridGeometry} />
+                <lineBasicMaterial attach="material" color="#ffffff" transparent opacity={1} linewidth={1} />
+            </lineSegments>
+        </>
     );
 }
 
