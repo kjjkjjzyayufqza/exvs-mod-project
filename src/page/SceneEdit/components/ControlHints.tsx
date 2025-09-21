@@ -3,6 +3,11 @@ import { BoxState } from '../../../store/sceneStore';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
+import { Button } from '../../../components/ui/button';
+import { Badge } from '../../../components/ui/badge';
+import { Separator } from '../../../components/ui/separator';
+import { RotateCcw, Copy, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../components/ui/collapsible';
 
 interface ControlHintsProps {
     selectedBoxId: string | null;
@@ -14,9 +19,10 @@ interface PropertyInputProps {
     label: string;
     value: number;
     onChange: (value: number) => void;
+    axis: 'x' | 'y' | 'z';
 }
 
-function PropertyInput({ label, value, onChange }: PropertyInputProps) {
+function PropertyInput({ label, value, onChange, axis }: PropertyInputProps) {
     const [inputValue, setInputValue] = useState(value.toString());
 
     useEffect(() => {
@@ -46,24 +52,26 @@ function PropertyInput({ label, value, onChange }: PropertyInputProps) {
     };
 
     return (
-        <div className="flex items-center gap-2">
-            <Label htmlFor={label} className="w-6 text-xs text-muted-foreground">
+        <div className="flex flex-col gap-1">
+            <div className={`text-xs font-medium p-1 rounded-md text-center text-white bg-white/10`}>
                 {label}
-            </Label>
+            </div>
             <Input
-                id={label}
                 type="text"
                 value={inputValue}
                 onChange={handleInputChange}
                 onBlur={handleBlur}
                 onKeyDown={handleKeyDown}
-                className="w-16 h-6 text-xs px-1 text-white"
+                className={`h-8 text-xs text-center bg-black/50 border transition-colors border-white/20 focus:border-white/40 text-white`}
             />
         </div>
     );
 }
 
 export function ControlHints({ selectedBoxId, selectedBoxState, onUpdateBoxTransform }: ControlHintsProps) {
+    const [isControlsCollapsed, setIsControlsCollapsed] = useState(false);
+    const [isPropertiesCollapsed, setIsPropertiesCollapsed] = useState(false);
+
     const handlePropertyChange = (property: 'position' | 'rotation' | 'scale', axis: 0 | 1 | 2, value: number) => {
         if (!selectedBoxState) return;
 
@@ -75,99 +83,169 @@ export function ControlHints({ selectedBoxId, selectedBoxState, onUpdateBoxTrans
         onUpdateBoxTransform(newBoxState);
     };
 
+    const resetProperty = (property: 'position' | 'rotation' | 'scale') => {
+        if (!selectedBoxState) return;
+
+        const defaultValue: [number, number, number] = property === 'scale' ? [1, 1, 1] : [0, 0, 0];
+        const newBoxState: BoxState = {
+            ...selectedBoxState,
+            [property]: defaultValue
+        };
+
+        onUpdateBoxTransform(newBoxState);
+    };
+
+    const copyProperty = (property: 'position' | 'rotation' | 'scale') => {
+        if (!selectedBoxState) return;
+        const value = selectedBoxState[property];
+        navigator.clipboard.writeText(`${value[0]}, ${value[1]}, ${value[2]}`);
+    };
+
+    const PropertySection = ({ title, property }: {
+        title: string;
+        property: 'position' | 'rotation' | 'scale';
+    }) => (
+        <div className="space-y-2">
+            <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium text-white">{title}</Label>
+                <div className="flex gap-1">
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => copyProperty(property)}
+                        className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                        title="复制值"
+                    >
+                        <Copy className="h-3 w-3" />
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => resetProperty(property)}
+                        className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                        title="重置"
+                    >
+                        <RotateCcw className="h-3 w-3" />
+                    </Button>
+                </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+                <PropertyInput
+                    label="X"
+                    axis="x"
+                    value={selectedBoxState![property][0]}
+                    onChange={(value) => handlePropertyChange(property, 0, value)}
+                />
+                <PropertyInput
+                    label="Y"
+                    axis="y"
+                    value={selectedBoxState![property][1]}
+                    onChange={(value) => handlePropertyChange(property, 1, value)}
+                />
+                <PropertyInput
+                    label="Z"
+                    axis="z"
+                    value={selectedBoxState![property][2]}
+                    onChange={(value) => handlePropertyChange(property, 2, value)}
+                />
+            </div>
+        </div>
+    );
+
     return (
-        <div className="absolute top-4 left-4 z-50 space-y-3">
+        <div className="absolute top-4 left-4 z-50 space-y-2">
             {/* Controls Card */}
-            <Card className="w-64 bg-black/80 backdrop-blur-sm border-gray-700">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm text-white">Controls</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-1">
-                    <div className="text-xs text-gray-300 space-y-1">
-                        <p className="font-semibold text-white">Selected: {selectedBoxId || 'None'}</p>
-                        <p>W: XYZ translate</p>
-                        <p>E: rotate</p>
-                        <p>R: scale</p>
-                        <p>Ctrl+Z: Undo</p>
-                        <p>Ctrl+Y: Redo</p>
-                    </div>
-                </CardContent>
-            </Card>
+            <Collapsible open={!isControlsCollapsed} onOpenChange={(open) => setIsControlsCollapsed(!open)}>
+                <Card className="w-72 bg-black/90 backdrop-blur-lg border-white/10">
+                    <CardHeader className="p-1 border-b border-white/10">
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="text-sm text-white">
+                                控制面板
+                            </CardTitle>
+                            <CollapsibleTrigger asChild>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                                >
+                                    <ChevronLeft className={`h-3 w-3 transition-transform duration-200 ${isControlsCollapsed ? 'rotate-180' : ''}`} />
+                                </Button>
+                            </CollapsibleTrigger>
+                        </div>
+                    </CardHeader>
+                    <CollapsibleContent>
+                        <CardContent className="p-1">
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs text-white/80">当前选中:</span>
+                                    <Badge variant="secondary" className="bg-white/10 text-white border-white/20 text-xs">
+                                        {selectedBoxId || 'None'}
+                                    </Badge>
+                                </div>
+                                <Separator className="bg-white/10" />
+                                <div className="grid grid-cols-2 gap-2 text-xs text-white/80">
+                                    <div className="space-y-0.5">
+                                        <div className="flex items-center gap-1">
+                                            <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">W</kbd>
+                                            <span className="text-xs">平移</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">E</kbd>
+                                            <span className="text-xs">旋转</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">R</kbd>
+                                            <span className="text-xs">缩放</span>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-0.5">
+                                        <div className="flex items-center gap-1">
+                                            <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">Ctrl+Z</kbd>
+                                            <span className="text-xs">撤销</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">Ctrl+Y</kbd>
+                                            <span className="text-xs">重做</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </CollapsibleContent>
+                </Card>
+            </Collapsible>
 
             {/* Properties Card */}
             {selectedBoxState && (
-                <Card className="w-64 bg-black/80 backdrop-blur-sm border-gray-700">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm text-white">Transform</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                        {/* Position */}
-                        <div className="space-y-2">
-                            <Label className="text-xs font-semibold text-white">Position</Label>
-                            <div className="grid grid-cols-3 gap-2">
-                                <PropertyInput
-                                    label="X"
-                                    value={selectedBoxState.position[0]}
-                                    onChange={(value) => handlePropertyChange('position', 0, value)}
-                                />
-                                <PropertyInput
-                                    label="Y"
-                                    value={selectedBoxState.position[1]}
-                                    onChange={(value) => handlePropertyChange('position', 1, value)}
-                                />
-                                <PropertyInput
-                                    label="Z"
-                                    value={selectedBoxState.position[2]}
-                                    onChange={(value) => handlePropertyChange('position', 2, value)}
-                                />
+                <Collapsible open={!isPropertiesCollapsed} onOpenChange={(open) => setIsPropertiesCollapsed(!open)}>
+                    <Card className="w-72 bg-black/90 backdrop-blur-lg border-white/10">
+                        <CardHeader className="p-1 border-b border-white/10">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-sm text-white">
+                                    变换属性
+                                </CardTitle>
+                                <CollapsibleTrigger asChild>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                                    >
+                                        <ChevronLeft className={`h-3 w-3 transition-transform duration-200 ${isPropertiesCollapsed ? 'rotate-180' : ''}`} />
+                                    </Button>
+                                </CollapsibleTrigger>
                             </div>
-                        </div>
-
-                        {/* Rotation */}
-                        <div className="space-y-2">
-                            <Label className="text-xs font-semibold text-white">Rotation</Label>
-                            <div className="grid grid-cols-3 gap-2">
-                                <PropertyInput
-                                    label="X"
-                                    value={selectedBoxState.rotation[0]}
-                                    onChange={(value) => handlePropertyChange('rotation', 0, value)}
-                                />
-                                <PropertyInput
-                                    label="Y"
-                                    value={selectedBoxState.rotation[1]}
-                                    onChange={(value) => handlePropertyChange('rotation', 1, value)}
-                                />
-                                <PropertyInput
-                                    label="Z"
-                                    value={selectedBoxState.rotation[2]}
-                                    onChange={(value) => handlePropertyChange('rotation', 2, value)}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Scale */}
-                        <div className="space-y-2">
-                            <Label className="text-xs font-semibold text-white">Scale</Label>
-                            <div className="grid grid-cols-3 gap-2">
-                                <PropertyInput
-                                    label="X"
-                                    value={selectedBoxState.scale[0]}
-                                    onChange={(value) => handlePropertyChange('scale', 0, value)}
-                                />
-                                <PropertyInput
-                                    label="Y"
-                                    value={selectedBoxState.scale[1]}
-                                    onChange={(value) => handlePropertyChange('scale', 1, value)}
-                                />
-                                <PropertyInput
-                                    label="Z"
-                                    value={selectedBoxState.scale[2]}
-                                    onChange={(value) => handlePropertyChange('scale', 2, value)}
-                                />
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+                        </CardHeader>
+                        <CollapsibleContent>
+                            <CardContent className="p-1 space-y-3">
+                                <PropertySection title="位置" property="position" />
+                                <Separator className="bg-white/10" />
+                                <PropertySection title="旋转" property="rotation" />
+                                <Separator className="bg-white/10" />
+                                <PropertySection title="缩放" property="scale" />
+                            </CardContent>
+                        </CollapsibleContent>
+                    </Card>
+                </Collapsible>
             )}
         </div>
     );
