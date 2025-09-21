@@ -6,15 +6,18 @@ import { Label } from '../../../components/ui/label';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
 import { Separator } from '../../../components/ui/separator';
-import { RotateCcw, Copy, ChevronLeft, ChevronRight } from 'lucide-react';
+import { RotateCcw, Copy, ChevronLeft, ChevronRight, List, ChevronDown, ChevronUp } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../components/ui/collapsible';
 
 interface ControlPanelProps {
+    models: Record<string, ModelState>;
     selectedModelId: string | null;
     selectedSubModelId: string | null;
     selectedModelState: ModelState | null;
     onUpdateModelTransform: (modelState: ModelState) => void;
     getInitialModelState: (modelId: string) => ModelState | null;
+    onModelSelect: (modelId: string) => void;
+    onSubModelSelect: (subModelId: string) => void;
 }
 
 interface PropertyInputProps {
@@ -76,9 +79,10 @@ function PropertyInput({ label, value, onChange, axis }: PropertyInputProps) {
     );
 }
 
-export function ControlPanel({ selectedModelId, selectedSubModelId, selectedModelState, onUpdateModelTransform, getInitialModelState }: ControlPanelProps) {
+export function ControlPanel({ models, selectedModelId, selectedSubModelId, selectedModelState, onUpdateModelTransform, getInitialModelState, onModelSelect, onSubModelSelect }: ControlPanelProps) {
     const [isControlsCollapsed, setIsControlsCollapsed] = useState(false);
     const [isPropertiesCollapsed, setIsPropertiesCollapsed] = useState(false);
+    const [isModelListCollapsed, setIsModelListCollapsed] = useState(false);
 
     const handlePropertyChange = (property: 'position' | 'rotation' | 'scale', axis: 0 | 1 | 2, value: number) => {
         if (!selectedModelState) return;
@@ -109,6 +113,62 @@ export function ControlPanel({ selectedModelId, selectedSubModelId, selectedMode
         if (!selectedModelState) return;
         const value = selectedModelState[property];
         navigator.clipboard.writeText(`${value[0]}, ${value[1]}, ${value[2]}`);
+    };
+
+    const ModelList = () => {
+        const modelEntries = Object.values(models);
+
+        return (
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+                {modelEntries.length === 0 ? (
+                    <div className="text-xs text-white/60 text-center py-4">
+                        No models in scene
+                    </div>
+                ) : (
+                    modelEntries.map((model) => (
+                        <div key={model.id} className="space-y-1">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => onModelSelect(model.id)}
+                                className={`w-full justify-start h-8 text-left text-xs ${selectedModelId === model.id
+                                        ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                        : 'text-white/80 hover:text-white hover:bg-white/10'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-2 w-full">
+                                    <Badge variant="outline" className="text-xs px-1 py-0">
+                                        {model.type}
+                                    </Badge>
+                                    <span className="truncate flex-1">{model.name}</span>
+                                </div>
+                            </Button>
+                            {selectedModelId === model.id && model.subModels && model.subModels.length > 0 && (
+                                <div className="ml-4 space-y-1">
+                                    {model.subModels.map((subModel) => (
+                                        <Button
+                                            key={subModel.id}
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => onSubModelSelect(subModel.id)}
+                                            className={`w-full justify-start h-6 text-left text-xs ${selectedSubModelId === subModel.id
+                                                    ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                                                    : 'text-white/60 hover:text-white hover:bg-white/10'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-2 w-full">
+                                                <span className="text-xs opacity-60">└</span>
+                                                <span className="truncate flex-1">{subModel.name}</span>
+                                            </div>
+                                        </Button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ))
+                )}
+            </div>
+        );
     };
 
     const PropertySection = ({ title, property }: {
@@ -264,6 +324,36 @@ export function ControlPanel({ selectedModelId, selectedSubModelId, selectedMode
                     </Card>
                 </Collapsible>
             )}
+
+
+            {/* Model List Card */}
+            <Collapsible open={!isModelListCollapsed} onOpenChange={(open) => setIsModelListCollapsed(!open)}>
+                <Card className="w-72 bg-black/90 backdrop-blur-lg border-white/10">
+                    <CardHeader className="p-1 border-b border-white/10">
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="text-sm text-white flex items-center gap-2">
+                                <List className="h-4 w-4" />
+                                模型列表
+                            </CardTitle>
+                            <CollapsibleTrigger asChild>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                                >
+                                    {isModelListCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+                                </Button>
+                            </CollapsibleTrigger>
+                        </div>
+                    </CardHeader>
+                    <CollapsibleContent>
+                        <CardContent className="p-1">
+                            <ModelList />
+                        </CardContent>
+                    </CollapsibleContent>
+                </Card>
+            </Collapsible>
+
         </div>
     );
 }

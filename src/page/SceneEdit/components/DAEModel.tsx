@@ -122,7 +122,10 @@ function DAEModelInner({ modelState, mode, isSelected, selectedSubModelId, onCli
 
     const handleClick = (event: any) => {
         event.stopPropagation();
-        onClick(modelState.id);
+        // Only allow parent model selection when no sub-model transform controls are active
+        if (!selectedSubModelId) {
+            onClick(modelState.id);
+        }
     };
 
     const handleObjectChange = (subModelId?: string) => {
@@ -218,7 +221,10 @@ function DAEModelInner({ modelState, mode, isSelected, selectedSubModelId, onCli
                                 scale={subModel.scale}
                                 onClick={(event) => {
                                     event.stopPropagation();
-                                    onSubModelClick(subModel.id);
+                                    // Only allow sub-model selection when main model transform controls are not active
+                                    if (!isSelected || selectedSubModelId) {
+                                        onSubModelClick(subModel.id);
+                                    }
                                 }}
                             >
                                 <mesh geometry={geometry} material={material} />

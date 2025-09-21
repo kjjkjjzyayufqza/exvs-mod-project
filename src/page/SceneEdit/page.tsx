@@ -165,6 +165,8 @@ export default function SceneEdit() {
         const loadInitialDAEModel = async () => {
             try {
                 await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_0.dae");
+                await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_1.dae");
+                await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_2.dae");
             } catch (error) {
                 console.error('Failed to load initial DAE model:', error);
             }
@@ -176,11 +178,14 @@ export default function SceneEdit() {
     return (
         <div className="w-full h-[calc(100vh-28px)] bg-gray-800 relative">
             <ControlPanel
+                models={models}
                 selectedModelId={selectedModelId}
                 selectedSubModelId={selectedSubModelId}
                 selectedModelState={selectedModelState}
                 onUpdateModelTransform={updateModelTransform}
                 getInitialModelState={getInitialModelState}
+                onModelSelect={setSelectedModel}
+                onSubModelSelect={setSelectedSubModel}
             />
 
             <Canvas
