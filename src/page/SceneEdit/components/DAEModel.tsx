@@ -84,12 +84,15 @@ function DAEModelInner({ modelState, mode, isSelected, selectedSubModelId, onCli
 
                 setSubModelStates(newSubModels);
 
-                // Update the model state with sub-models
-                const updatedModelState: ModelState = {
-                    ...modelState,
-                    subModels: newSubModels
-                };
-                onTransform(updatedModelState);
+                // Only update the model state if sub-models don't exist
+                // Use setTimeout to avoid updating during render
+                setTimeout(() => {
+                    const updatedModelState: ModelState = {
+                        ...modelState,
+                        subModels: newSubModels
+                    };
+                    onTransform(updatedModelState);
+                }, 0);
             } else {
                 // If sub-models already exist, just set them
                 setSubModelStates(modelState.subModels);
@@ -98,11 +101,11 @@ function DAEModelInner({ modelState, mode, isSelected, selectedSubModelId, onCli
             setIsModelReady(true);
             console.log('DAEModelInner: Sub-models initialized');
         }
-    }, [collada]); // Only depend on collada
+    }, [collada]); // Only depend on collada to prevent circular updates
 
     // Sync sub-models from modelState when they change (but not during initialization)
     useEffect(() => {
-        if (isInitializedRef.current && modelState.subModels) {
+        if (isInitializedRef.current && modelState.subModels && modelState.subModels.length > 0) {
             setSubModelStates(modelState.subModels);
         }
     }, [modelState.subModels]);
