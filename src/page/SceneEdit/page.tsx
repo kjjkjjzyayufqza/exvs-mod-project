@@ -2,7 +2,7 @@ import { Canvas } from "@react-three/fiber";
 import { OrbitControls, TransformControls } from "@react-three/drei";
 import { useRef, useEffect, useState } from "react";
 import { useSceneStore, BoxState } from "../../store/sceneStore";
-import { ControlHints } from "./components/ControlHints";
+import { ControlPanel } from "./components/ControlPanel";
 
 interface BoxProps {
     boxState: BoxState;
@@ -84,6 +84,7 @@ export default function SceneEdit() {
         clearSelection,
         setTransformMode,
         updateBoxTransform,
+        getInitialBoxState,
         undo,
         redo,
         canUndo,
@@ -155,10 +156,11 @@ export default function SceneEdit() {
 
     return (
         <div className="w-full h-[calc(100vh-28px)] bg-gray-800 relative">
-            <ControlHints
+            <ControlPanel
                 selectedBoxId={selectedBoxId}
                 selectedBoxState={selectedBoxState}
                 onUpdateBoxTransform={updateBoxTransform}
+                getInitialBoxState={getInitialBoxState}
             />
 
             <Canvas

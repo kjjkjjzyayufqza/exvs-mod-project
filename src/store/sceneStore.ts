@@ -27,6 +27,7 @@ export interface SceneState {
     clearSelection: () => void;
     setTransformMode: (mode: 'translate' | 'rotate' | 'scale') => void;
     updateBoxTransform: (boxState: BoxState) => void;
+    getInitialBoxState: (boxId: string) => BoxState | null;
     undo: () => void;
     redo: () => void;
     canUndo: () => boolean;
@@ -80,6 +81,10 @@ export const useSceneStore = create<SceneState>()(
                 state.history = newHistory;
                 state.historyIndex = newHistory.length - 1;
             });
+        },
+
+        getInitialBoxState: (boxId: string) => {
+            return initialBoxes[boxId] || null;
         },
 
         undo: () => {

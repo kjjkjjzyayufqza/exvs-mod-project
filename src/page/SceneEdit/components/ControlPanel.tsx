@@ -9,10 +9,11 @@ import { Separator } from '../../../components/ui/separator';
 import { RotateCcw, Copy, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../components/ui/collapsible';
 
-interface ControlHintsProps {
+interface ControlPanelProps {
     selectedBoxId: string | null;
     selectedBoxState: BoxState | null;
     onUpdateBoxTransform: (boxState: BoxState) => void;
+    getInitialBoxState: (boxId: string) => BoxState | null;
 }
 
 interface PropertyInputProps {
@@ -68,7 +69,7 @@ function PropertyInput({ label, value, onChange, axis }: PropertyInputProps) {
     );
 }
 
-export function ControlHints({ selectedBoxId, selectedBoxState, onUpdateBoxTransform }: ControlHintsProps) {
+export function ControlPanel({ selectedBoxId, selectedBoxState, onUpdateBoxTransform, getInitialBoxState }: ControlPanelProps) {
     const [isControlsCollapsed, setIsControlsCollapsed] = useState(false);
     const [isPropertiesCollapsed, setIsPropertiesCollapsed] = useState(false);
 
@@ -84,12 +85,14 @@ export function ControlHints({ selectedBoxId, selectedBoxState, onUpdateBoxTrans
     };
 
     const resetProperty = (property: 'position' | 'rotation' | 'scale') => {
-        if (!selectedBoxState) return;
+        if (!selectedBoxState || !selectedBoxId) return;
 
-        const defaultValue: [number, number, number] = property === 'scale' ? [1, 1, 1] : [0, 0, 0];
+        const initialBoxState = getInitialBoxState(selectedBoxId);
+        if (!initialBoxState) return;
+
         const newBoxState: BoxState = {
             ...selectedBoxState,
-            [property]: defaultValue
+            [property]: initialBoxState[property]
         };
 
         onUpdateBoxTransform(newBoxState);
