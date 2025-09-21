@@ -275,6 +275,8 @@ interface NumatbStore {
   addAttribute: (materialIndex: number, paramId: string) => void;
   removeAttribute: (materialIndex: number, attributeIndex: number) => void;
   addMaterialEntry: () => void;
+  copyMaterialAsNew: (materialIndex: number) => void;
+  removeMaterialEntry: (materialIndex: number) => void;
   saveFile: () => Promise<void>;
 }
 
@@ -395,6 +397,42 @@ export const useNumatbStore = create<NumatbStore>()(
       const material = state.numatbData.Matl.V16.entries[materialIndex];
       // Remove the attribute
       material.attributes.splice(attributeIndex, 1);
+    });
+  },
+
+  copyMaterialAsNew: (materialIndex: number) => {
+    set((state) => {
+      if (!state.numatbData?.Matl?.V16) return;
+      const materials = state.numatbData.Matl.V16.entries;
+      if (!materials || materialIndex < 0 || materialIndex >= materials.length) return;
+
+      const sourceMaterial = materials[materialIndex];
+
+      // Deep clone the material with a new label
+      const copiedMaterial: MaterialEntry = {
+        material_label: `${sourceMaterial.material_label}_copy`,
+        shader_label: sourceMaterial.shader_label,
+        attributes: sourceMaterial.attributes.map(attr => ({
+          param_id: attr.param_id,
+          param: {
+            data: JSON.parse(JSON.stringify(attr.param.data)) // Deep clone
+          }
+        }))
+      };
+
+      // Add the copied material to the end
+      state.numatbData!.Matl!.V16.entries.push(copiedMaterial);
+    });
+  },
+
+  removeMaterialEntry: (materialIndex: number) => {
+    set((state) => {
+      if (!state.numatbData?.Matl?.V16) return;
+      const materials = state.numatbData.Matl.V16.entries;
+      if (!materials || materialIndex < 0 || materialIndex >= materials.length) return;
+
+      // Remove the material at the specified index
+      materials.splice(materialIndex, 1);
     });
   },
 

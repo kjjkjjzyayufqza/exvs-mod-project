@@ -1,12 +1,13 @@
 import { useState, useCallback, memo } from "react";
 import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Save, RotateCcw, Trash2, Plus, Edit3, X } from "lucide-react";
+import { Loader2, Save, RotateCcw, Trash2, Plus, Edit3, X, Copy } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { FileInfo, useNumatbStore, getParamType, ParamDataType, COMMON_ATTRIBUTES } from "../../../store/numatbStore";
 
@@ -430,11 +431,12 @@ const MaterialCard = memo(function MaterialCard({
 
 export function FileDialog({ file }: FileDialogProps) {
   const store = useNumatbStore();
-  const { numatbData, isConverting, isSaving, error, updateAttribute, updateMaterialLabel, addAttribute, removeAttribute, addMaterialEntry, saveFile, convertFile } = store;
+  const { numatbData, isConverting, isSaving, error, updateAttribute, updateMaterialLabel, addAttribute, removeAttribute, addMaterialEntry, copyMaterialAsNew, removeMaterialEntry, saveFile, convertFile } = store;
   const [hasChanges, setHasChanges] = useState(false);
   const [editingLabel, setEditingLabel] = useState<number | null>(null);
   const [editingLabelValue, setEditingLabelValue] = useState<string>("");
   const [selectedMaterialIndex, setSelectedMaterialIndex] = useState<number>(0);
+  const [materialToDelete, setMaterialToDelete] = useState<number | null>(null);
 
 
   const handleAttributeUpdate = useCallback((materialIndex: number, attributeIndex: number, newValue: any, dataType: ParamDataType) => {
@@ -477,6 +479,32 @@ export function FileDialog({ file }: FileDialogProps) {
     setHasChanges(true);
     setSelectedMaterialIndex(currentLength); // Select the newly added material
   }, [addMaterialEntry, numatbData]);
+
+  const handleCopyMaterialAsNew = useCallback(() => {
+    const currentLength = numatbData?.Matl?.V16?.entries?.length || 0;
+    copyMaterialAsNew(selectedMaterialIndex);
+    setHasChanges(true);
+    setSelectedMaterialIndex(currentLength); // Select the newly copied material
+  }, [copyMaterialAsNew, selectedMaterialIndex, numatbData]);
+
+  const handleRemoveMaterialEntry = useCallback((materialIndex: number) => {
+    const materials = numatbData?.Matl?.V16?.entries || [];
+    removeMaterialEntry(materialIndex);
+    setHasChanges(true);
+
+    // Adjust selected index after removal
+    if (materialIndex < selectedMaterialIndex) {
+      // If we removed an item before the selected one, shift the selection
+      setSelectedMaterialIndex(selectedMaterialIndex - 1);
+    } else if (materialIndex === selectedMaterialIndex) {
+      // If we removed the selected item, select the previous one or first one
+      if (materials.length > 1) {
+        setSelectedMaterialIndex(Math.max(0, materialIndex - 1));
+      } else {
+        setSelectedMaterialIndex(0);
+      }
+    }
+  }, [removeMaterialEntry, selectedMaterialIndex, numatbData]);
 
   const handleSave = useCallback(async () => {
     await saveFile();
@@ -575,6 +603,17 @@ export function FileDialog({ file }: FileDialogProps) {
                 <Plus className="h-4 w-4" />
                 <span>Add Entry</span>
               </Button>
+
+              <Button
+                onClick={handleCopyMaterialAsNew}
+                disabled={isConverting || isSaving || !materials[selectedMaterialIndex]}
+                variant="outline"
+                size="sm"
+                className="flex items-center space-x-2"
+              >
+                <Copy className="h-4 w-4" />
+                <span>Copy as New</span>
+              </Button>
             </div>
             
             {hasChanges && (
@@ -594,7 +633,7 @@ export function FileDialog({ file }: FileDialogProps) {
                   {materials.map((material, materialIndex) => (
                     <div
                       key={`material-list-${materialIndex}`}
-                      className={`p-2 rounded cursor-pointer text-sm transition-colors ${
+                      className={`group flex items-center justify-between p-2 rounded cursor-pointer text-sm transition-colors ${
                         selectedMaterialIndex === materialIndex
                           ? 'bg-blue-100 border border-blue-300'
                           : 'hover:bg-gray-100'
@@ -602,14 +641,56 @@ export function FileDialog({ file }: FileDialogProps) {
                       onClick={() => setSelectedMaterialIndex(materialIndex)}
                       title={`${material.material_label} (${material.attributes?.length || 0} attributes)`}
                     >
-                      <div className="truncate font-medium">
-                        {material.material_label || `Material ${materialIndex + 1}`}
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate font-medium">
+                          {material.material_label || `Material ${materialIndex + 1}`}
+                        </div>
+                        <div className="text-xs text-gray-500 truncate">
+                          {material.shader_label}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          {material.attributes?.length || 0} attributes
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-500 truncate">
-                        {material.shader_label}
-                      </div>
-                      <div className="text-xs text-gray-400 mt-1">
-                        {material.attributes?.length || 0} attributes
+                      <div className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMaterialToDelete(materialIndex);
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Material</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete "{material.material_label || `Material ${materialIndex + 1}`}"?
+                                This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => {
+                                  if (materialToDelete !== null) {
+                                    handleRemoveMaterialEntry(materialToDelete);
+                                    setMaterialToDelete(null);
+                                  }
+                                }}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </div>
                   ))}
