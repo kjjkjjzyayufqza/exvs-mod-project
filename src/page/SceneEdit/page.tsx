@@ -1,16 +1,16 @@
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, TransformControls } from "@react-three/drei";
 import { useRef, useEffect, useState } from "react";
-import { useSceneStore, BoxState } from "../../store/sceneStore";
+import { useSceneStore, ModelState } from "../../store/sceneStore";
 import { ControlPanel } from "./components/ControlPanel";
 
 interface BoxProps {
-    boxState: BoxState;
+    boxState: ModelState;
     color: string;
     mode: 'translate' | 'rotate' | 'scale';
     isSelected: boolean;
     onClick: (id: string) => void;
-    onTransform: (boxState: BoxState) => void;
+    onTransform: (modelState: ModelState) => void;
 }
 
 function Box({ boxState, color, mode, isSelected, onClick, onTransform }: BoxProps) {
@@ -42,13 +42,13 @@ function Box({ boxState, color, mode, isSelected, onClick, onTransform }: BoxPro
         // Set new timeout to save after 300ms of no changes
         timeoutRef.current = window.setTimeout(() => {
             if (meshRef.current) {
-                const updatedBoxState: BoxState = {
+                const updatedModelState: ModelState = {
                     id: boxState.id,
                     position: meshRef.current.position.toArray(),
                     rotation: meshRef.current.rotation.toArray().slice(0, 3),
                     scale: meshRef.current.scale.toArray()
                 };
-                onTransform(updatedBoxState);
+                onTransform(updatedModelState);
             }
         }, 300);
     };
@@ -77,14 +77,14 @@ function Box({ boxState, color, mode, isSelected, onClick, onTransform }: BoxPro
 
 export default function SceneEdit() {
     const {
-        boxes,
-        selectedBoxId,
+        models,
+        selectedModelId,
         transformMode,
-        setSelectedBox,
+        setSelectedModel,
         clearSelection,
         setTransformMode,
-        updateBoxTransform,
-        getInitialBoxState,
+        updateModelTransform,
+        getInitialModelState,
         undo,
         redo,
         canUndo,
@@ -92,11 +92,11 @@ export default function SceneEdit() {
     } = useSceneStore();
 
     const handleBoxClick = (boxId: string) => {
-        setSelectedBox(boxId);
+        setSelectedModel(boxId);
     };
 
     const handleTransform = (boxState: any) => {
-        updateBoxTransform(boxState);
+        updateModelTransform(boxState);
     };
 
     const handleCanvasClick = (event: any) => {
@@ -152,15 +152,15 @@ export default function SceneEdit() {
         };
     }, []);
 
-    const selectedBoxState = selectedBoxId ? boxes[selectedBoxId] : null;
+    const selectedModelState = selectedModelId ? models[selectedModelId] : null;
 
     return (
         <div className="w-full h-[calc(100vh-28px)] bg-gray-800 relative">
             <ControlPanel
-                selectedBoxId={selectedBoxId}
-                selectedBoxState={selectedBoxState}
-                onUpdateBoxTransform={updateBoxTransform}
-                getInitialBoxState={getInitialBoxState}
+                selectedModelId={selectedModelId}
+                selectedModelState={selectedModelState}
+                onUpdateModelTransform={updateModelTransform}
+                getInitialModelState={getInitialModelState}
             />
 
             <Canvas
@@ -186,13 +186,13 @@ export default function SceneEdit() {
                 <ambientLight intensity={0.5} />
                 <directionalLight position={[10, 10, 5]} intensity={1} />
 
-                {Object.values(boxes).map((boxState) => (
+                {Object.values(models).map((modelState) => (
                     <Box
-                        key={boxState.id}
-                        boxState={boxState}
-                        color={boxState.id === 'box1' ? 'orange' : 'blue'}
+                        key={modelState.id}
+                        boxState={modelState}
+                        color={modelState.id === 'box1' ? 'orange' : 'blue'}
                         mode={transformMode}
-                        isSelected={selectedBoxId === boxState.id}
+                        isSelected={selectedModelId === modelState.id}
                         onClick={handleBoxClick}
                         onTransform={handleTransform}
                     />

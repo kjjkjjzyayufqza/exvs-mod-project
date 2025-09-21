@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 
-export interface BoxState {
+export interface ModelState {
     id: string;
     position: [number, number, number];
     rotation: [number, number, number];
@@ -9,57 +9,57 @@ export interface BoxState {
 }
 
 export interface SceneState {
-    // Box management
-    boxes: Record<string, BoxState>;
+    // Model management
+    models: Record<string, ModelState>;
 
     // Selection
-    selectedBoxId: string | null;
+    selectedModelId: string | null;
 
     // Transform mode
     transformMode: 'translate' | 'rotate' | 'scale';
 
     // History management
-    history: BoxState[][];
+    history: ModelState[][];
     historyIndex: number;
 
     // Actions
-    setSelectedBox: (boxId: string) => void;
+    setSelectedModel: (modelId: string) => void;
     clearSelection: () => void;
     setTransformMode: (mode: 'translate' | 'rotate' | 'scale') => void;
-    updateBoxTransform: (boxState: BoxState) => void;
-    getInitialBoxState: (boxId: string) => BoxState | null;
+    updateModelTransform: (modelState: ModelState) => void;
+    getInitialModelState: (modelId: string) => ModelState | null;
     undo: () => void;
     redo: () => void;
     canUndo: () => boolean;
     canRedo: () => boolean;
 }
 
-const initialBoxes: Record<string, BoxState> = {
+const initialModels: Record<string, ModelState> = {
     box1: { id: 'box1', position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
     box2: { id: 'box2', position: [2, 1, -1], rotation: [0, 0, 0], scale: [1, 1, 1] }
 };
 
-const initialHistory: BoxState[][] = [Object.values(initialBoxes)];
+const initialHistory: ModelState[][] = [Object.values(initialModels)];
 
 export const useSceneStore = create<SceneState>()(
     immer((set, get) => ({
         // Initial state
-        boxes: initialBoxes,
-        selectedBoxId: 'box1',
+        models: initialModels,
+        selectedModelId: 'box1',
         transformMode: 'translate',
         history: initialHistory,
         historyIndex: 0,
 
         // Actions
-        setSelectedBox: (boxId: string) => {
+        setSelectedModel: (modelId: string) => {
             set((state) => {
-                state.selectedBoxId = boxId;
+                state.selectedModelId = modelId;
             });
         },
 
         clearSelection: () => {
             set((state) => {
-                state.selectedBoxId = null;
+                state.selectedModelId = null;
             });
         },
 
@@ -69,13 +69,13 @@ export const useSceneStore = create<SceneState>()(
             });
         },
 
-        updateBoxTransform: (boxState: BoxState) => {
+        updateModelTransform: (modelState: ModelState) => {
             set((state) => {
-                // Update the box
-                state.boxes[boxState.id] = boxState;
+                // Update the model
+                state.models[modelState.id] = modelState;
 
                 // Save to history
-                const newHistoryState = Object.values(state.boxes);
+                const newHistoryState = Object.values(state.models);
                 const newHistory = state.history.slice(0, state.historyIndex + 1);
                 newHistory.push(newHistoryState);
                 state.history = newHistory;
@@ -83,8 +83,8 @@ export const useSceneStore = create<SceneState>()(
             });
         },
 
-        getInitialBoxState: (boxId: string) => {
-            return initialBoxes[boxId] || null;
+        getInitialModelState: (modelId: string) => {
+            return initialModels[modelId] || null;
         },
 
         undo: () => {
@@ -92,12 +92,12 @@ export const useSceneStore = create<SceneState>()(
                 if (state.historyIndex > 0) {
                     const newIndex = state.historyIndex - 1;
                     const previousState = state.history[newIndex];
-                    const newBoxes = previousState.reduce((acc, box) => {
-                        acc[box.id] = box;
+                    const newModels = previousState.reduce((acc, model) => {
+                        acc[model.id] = model;
                         return acc;
-                    }, {} as Record<string, BoxState>);
+                    }, {} as Record<string, ModelState>);
 
-                    state.boxes = newBoxes;
+                    state.models = newModels;
                     state.historyIndex = newIndex;
                 }
             });
@@ -108,12 +108,12 @@ export const useSceneStore = create<SceneState>()(
                 if (state.historyIndex < state.history.length - 1) {
                     const newIndex = state.historyIndex + 1;
                     const nextState = state.history[newIndex];
-                    const newBoxes = nextState.reduce((acc, box) => {
-                        acc[box.id] = box;
+                    const newModels = nextState.reduce((acc, model) => {
+                        acc[model.id] = model;
                         return acc;
-                    }, {} as Record<string, BoxState>);
+                    }, {} as Record<string, ModelState>);
 
-                    state.boxes = newBoxes;
+                    state.models = newModels;
                     state.historyIndex = newIndex;
                 }
             });

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BoxState } from '../../../store/sceneStore';
+import { ModelState } from '../../../store/sceneStore';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
@@ -10,10 +10,10 @@ import { RotateCcw, Copy, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../components/ui/collapsible';
 
 interface ControlPanelProps {
-    selectedBoxId: string | null;
-    selectedBoxState: BoxState | null;
-    onUpdateBoxTransform: (boxState: BoxState) => void;
-    getInitialBoxState: (boxId: string) => BoxState | null;
+    selectedModelId: string | null;
+    selectedModelState: ModelState | null;
+    onUpdateModelTransform: (modelState: ModelState) => void;
+    getInitialModelState: (modelId: string) => ModelState | null;
 }
 
 interface PropertyInputProps {
@@ -69,38 +69,38 @@ function PropertyInput({ label, value, onChange, axis }: PropertyInputProps) {
     );
 }
 
-export function ControlPanel({ selectedBoxId, selectedBoxState, onUpdateBoxTransform, getInitialBoxState }: ControlPanelProps) {
+export function ControlPanel({ selectedModelId, selectedModelState, onUpdateModelTransform, getInitialModelState }: ControlPanelProps) {
     const [isControlsCollapsed, setIsControlsCollapsed] = useState(false);
     const [isPropertiesCollapsed, setIsPropertiesCollapsed] = useState(false);
 
     const handlePropertyChange = (property: 'position' | 'rotation' | 'scale', axis: 0 | 1 | 2, value: number) => {
-        if (!selectedBoxState) return;
+        if (!selectedModelState) return;
 
-        const newBoxState: BoxState = {
-            ...selectedBoxState,
-            [property]: selectedBoxState[property].map((v, i) => i === axis ? value : v) as [number, number, number]
+        const newModelState: ModelState = {
+            ...selectedModelState,
+            [property]: selectedModelState[property].map((v, i) => i === axis ? value : v) as [number, number, number]
         };
 
-        onUpdateBoxTransform(newBoxState);
+        onUpdateModelTransform(newModelState);
     };
 
     const resetProperty = (property: 'position' | 'rotation' | 'scale') => {
-        if (!selectedBoxState || !selectedBoxId) return;
+        if (!selectedModelState || !selectedModelId) return;
 
-        const initialBoxState = getInitialBoxState(selectedBoxId);
-        if (!initialBoxState) return;
+        const initialModelState = getInitialModelState(selectedModelId);
+        if (!initialModelState) return;
 
-        const newBoxState: BoxState = {
-            ...selectedBoxState,
-            [property]: initialBoxState[property]
+        const newModelState: ModelState = {
+            ...selectedModelState,
+            [property]: initialModelState[property]
         };
 
-        onUpdateBoxTransform(newBoxState);
+        onUpdateModelTransform(newModelState);
     };
 
     const copyProperty = (property: 'position' | 'rotation' | 'scale') => {
-        if (!selectedBoxState) return;
-        const value = selectedBoxState[property];
+        if (!selectedModelState) return;
+        const value = selectedModelState[property];
         navigator.clipboard.writeText(`${value[0]}, ${value[1]}, ${value[2]}`);
     };
 
@@ -136,19 +136,19 @@ export function ControlPanel({ selectedBoxId, selectedBoxState, onUpdateBoxTrans
                 <PropertyInput
                     label="X"
                     axis="x"
-                    value={selectedBoxState![property][0]}
+                    value={selectedModelState![property][0]}
                     onChange={(value) => handlePropertyChange(property, 0, value)}
                 />
                 <PropertyInput
                     label="Y"
                     axis="y"
-                    value={selectedBoxState![property][1]}
+                    value={selectedModelState![property][1]}
                     onChange={(value) => handlePropertyChange(property, 1, value)}
                 />
                 <PropertyInput
                     label="Z"
                     axis="z"
-                    value={selectedBoxState![property][2]}
+                    value={selectedModelState![property][2]}
                     onChange={(value) => handlePropertyChange(property, 2, value)}
                 />
             </div>
@@ -182,7 +182,7 @@ export function ControlPanel({ selectedBoxId, selectedBoxState, onUpdateBoxTrans
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs text-white/80">当前选中:</span>
                                     <Badge variant="secondary" className="bg-white/10 text-white border-white/20 text-xs">
-                                        {selectedBoxId || 'None'}
+                                        {selectedModelId || 'None'}
                                     </Badge>
                                 </div>
                                 <Separator className="bg-white/10" />
@@ -219,7 +219,7 @@ export function ControlPanel({ selectedBoxId, selectedBoxState, onUpdateBoxTrans
             </Collapsible>
 
             {/* Properties Card */}
-            {selectedBoxState && (
+            {selectedModelState && (
                 <Collapsible open={!isPropertiesCollapsed} onOpenChange={(open) => setIsPropertiesCollapsed(!open)}>
                     <Card className="w-72 bg-black/90 backdrop-blur-lg border-white/10">
                         <CardHeader className="p-1 border-b border-white/10">
