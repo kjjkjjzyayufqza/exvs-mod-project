@@ -69,7 +69,21 @@ export function FileList({ files, isLoading, folderPath, onFileSelect, resetConv
           path: folderPath + "/" + entry.name
         }))
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-      setLocalFiles(filteredEntries);
+
+      // 保留原有的nutexb预览和字符串信息
+      const enrichedEntries = filteredEntries.map(filteredFile => {
+        const originalFile = files.find(f => f.name === filteredFile.name);
+        if (originalFile) {
+          return {
+            ...filteredFile,
+            previewPath: originalFile.previewPath,
+            string: originalFile.string
+          };
+        }
+        return filteredFile;
+      });
+
+      setLocalFiles(enrichedEntries);
     } catch (error) {
       console.error("Error reading directory:", error);
     }

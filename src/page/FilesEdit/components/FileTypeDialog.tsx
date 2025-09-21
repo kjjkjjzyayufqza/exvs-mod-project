@@ -3,7 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileImage, Plus } from "lucide-react";
-import { NutexbImportDialog } from "../../Repack/components/NutexbImportDialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { NutexbImportPanel } from "./NutexbImportPanel";
 
 interface FileTypeDialogProps {
   onFileTypeSelect: (fileType: string) => void;
@@ -17,7 +18,6 @@ export function FileTypeDialog({ onFileTypeSelect, children, currentDirectory }:
 
   const handleFileTypeSelect = (fileType: string) => {
     setSelectedFileType(fileType);
-    // Don't close the dialog, show the import dialog instead
   };
 
   const handleImportComplete = (filePath: string) => {
@@ -41,65 +41,98 @@ export function FileTypeDialog({ onFileTypeSelect, children, currentDirectory }:
     },
   ];
 
+  const renderContent = () => {
+    if (!selectedFileType) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center text-gray-500">
+            <FileImage className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p className="text-lg font-medium">Select a file type</p>
+            <p className="text-sm">Choose from the list on the left to get started</p>
+          </div>
+        </div>
+      );
+    }
+
+    switch (selectedFileType) {
+      case "nutexb":
+        return (
+          <div className="h-full">
+            <NutexbImportPanel
+              currentDirectory={currentDirectory}
+              onImportComplete={handleImportComplete}
+              onClose={handleClose}
+            />
+          </div>
+        );
+      default:
+        return (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center text-gray-500">
+              <Plus className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium">Coming Soon</p>
+              <p className="text-sm">This file type is not yet supported</p>
+            </div>
+          </div>
+        );
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[800px]">
-        {!selectedFileType ? (
-          <>
-            <DialogHeader>
-              <DialogTitle>Select File Type</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <p className="text-sm text-gray-600">
-                Choose the type of file you want to create:
-              </p>
-              <div className="grid gap-3">
+      <DialogContent className="sm:max-w-[1000px] max-h-[80vh]">
+        <DialogHeader>
+          <DialogTitle>Add New File</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-12 gap-4 h-[600px]">
+          {/* Left sidebar - File types */}
+          <div className="col-span-4 border-r pr-4">
+            <div className="mb-4">
+              <p className="text-sm font-medium text-gray-700">Choose file type</p>
+              <p className="text-xs text-gray-500 mt-1">Select the type of file you want to create</p>
+            </div>
+            <ScrollArea className="h-[500px]">
+              <div className="space-y-2">
                 {fileTypes.map((fileType) => (
                   <Card
                     key={fileType.id}
-                    className={`cursor-pointer transition-all hover:shadow-md ${
-                      fileType.supported ? 'hover:border-blue-300' : 'opacity-50 cursor-not-allowed'
-                    }`}
+                    className={`cursor-pointer transition-all ${selectedFileType === fileType.id
+                        ? 'border-blue-500 bg-blue-50 shadow-sm'
+                        : 'hover:shadow-sm hover:border-gray-300'
+                      } ${fileType.supported ? '' : 'opacity-50 cursor-not-allowed'}`}
                     onClick={() => fileType.supported && handleFileTypeSelect(fileType.id)}
                   >
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-blue-50">
-                          <fileType.icon className="h-5 w-5 text-blue-600" />
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <div className={`p-2 rounded-lg ${selectedFileType === fileType.id ? 'bg-blue-100' : 'bg-gray-50'
+                          }`}>
+                          <fileType.icon className={`h-4 w-4 ${selectedFileType === fileType.id ? 'text-blue-600' : 'text-gray-600'
+                            }`} />
                         </div>
-                        <div className="flex-1">
-                          <CardTitle className="text-base">{fileType.name}</CardTitle>
-                          <CardDescription className="text-sm">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm">{fileType.name}</p>
+                          <p className="text-xs text-gray-600 mt-1 line-clamp-2">
                             {fileType.description}
-                          </CardDescription>
+                          </p>
                         </div>
-                        {fileType.supported && (
-                          <Button size="sm" variant="outline">
-                            Select
-                          </Button>
-                        )}
-                        {!fileType.supported && (
-                          <span className="text-xs text-gray-400 px-2 py-1 bg-gray-100 rounded">
-                            Coming Soon
-                          </span>
-                        )}
                       </div>
-                    </CardHeader>
+                    </CardContent>
                   </Card>
                 ))}
               </div>
-            </div>
-          </>
-        ) : selectedFileType === "nutexb" ? (
-          <NutexbImportDialog
-            currentDirectory={currentDirectory}
-            onImportComplete={handleImportComplete}
-            onClose={handleClose}
-          />
-        ) : null}
+            </ScrollArea>
+          </div>
+
+          {/* Right content area */}
+          <div className="col-span-8">
+            <ScrollArea className="h-[550px]">
+              {renderContent()}
+            </ScrollArea>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

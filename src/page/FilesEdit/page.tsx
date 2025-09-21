@@ -10,6 +10,8 @@ import { CONVERT_DIR_NAME, FileInfo as NumatbFileInfo, useNumatbStore } from "..
 import { FileInfo as NutexbFileInfo } from "../../store/nutexbStore";
 import { useNutexbStore } from "../../store/nutexbStore";
 import { Button } from "../../components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ChevronDown } from "lucide-react";
 import { resourceDir, dirname, join } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { findNutexbString } from "../../module/commonFunc";
@@ -753,6 +755,7 @@ export default function FilesEdit() {
   };
 
   const [isDebuggingReadJsonFiles, setIsDebuggingReadJsonFiles] = useState(false);
+  const [isDebugToolsOpen, setIsDebugToolsOpen] = useState(false);
   const handleDebugReadJsonFiles = async () => {
     try {
       setIsDebuggingReadJsonFiles(true);
@@ -834,47 +837,61 @@ export default function FilesEdit() {
           <ImageIcon className="h-4 w-4 mr-2" />
           Convert Nutexb to PNG
         </Button>
-        <Button
-          onClick={handleBatchReplaceNutexb}
-          disabled={isBatchReplacing || files.filter(f => f.name.endsWith('.nutexb')).length === 0}
-          size="sm"
-          variant="destructive"
-        >
-          {isBatchReplacing && <Loader2 className="animate-spin mr-2" />}
-          <Bug className="h-4 w-4 mr-2" />
-          Debug Replace All Nutexb with selected image
-        </Button>
-        <Button
-          onClick={handleBatchReplaceNutexb_With_Optimize}
-          disabled={isBatchReplacing || files.filter(f => f.name.endsWith('.nutexb')).length === 0}
-          size="sm"
-          variant="destructive"
-        >
-          {isBatchReplacing && <Loader2 className="animate-spin mr-2" />}
-          <Bug className="h-4 w-4 mr-2" />
-          Debug Auto Replace Normal and Roughness Nutexb
-        </Button>
-
       </div>
-      <div className="mb-4 flex gap-2">
-        <Button
-          onClick={handleDebugNumatb}
-          disabled={isDebuggingNumatb || files.filter(f => f.name.endsWith('.numatb')).length === 0}
-          size="sm"
-        >
-          {isDebuggingNumatb && <Loader2 className="animate-spin mr-2" />}
-          <Bug className="h-4 w-4 mr-2" />
-          Debug Numatb Files
-        </Button>
-        <Button
-          onClick={handleDebugReadJsonFiles}
-          disabled={isDebuggingReadJsonFiles}
-          size="sm"
-        >
-          {isDebuggingReadJsonFiles && <Loader2 className="animate-spin mr-2" />}
-          <Bug className="h-4 w-4 mr-2" />
-          Debug Read Json Files
-        </Button>
+      <div className="mb-4">
+        <Collapsible open={isDebugToolsOpen} onOpenChange={setIsDebugToolsOpen}>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" className="w-full justify-start p-2 h-auto">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Bug className="h-4 w-4" />
+                Debug Tools
+                <ChevronDown className={`h-4 w-4 transition-transform ${isDebugToolsOpen ? 'rotate-180' : ''}`} />
+              </div>
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-2">
+            <div className="flex gap-2 flex-wrap p-2 pt-0">
+              <Button
+                onClick={handleBatchReplaceNutexb}
+                disabled={isBatchReplacing || files.filter(f => f.name.endsWith('.nutexb')).length === 0}
+                size="sm"
+                variant="destructive"
+              >
+                {isBatchReplacing && <Loader2 className="animate-spin mr-2" />}
+                <Bug className="h-4 w-4 mr-2" />
+                Debug Replace All Nutexb with selected image
+              </Button>
+              <Button
+                onClick={handleBatchReplaceNutexb_With_Optimize}
+                disabled={isBatchReplacing || files.filter(f => f.name.endsWith('.nutexb')).length === 0}
+                size="sm"
+                variant="destructive"
+              >
+                {isBatchReplacing && <Loader2 className="animate-spin mr-2" />}
+                <Bug className="h-4 w-4 mr-2" />
+                Debug Auto Replace Normal and Roughness Nutexb
+              </Button>
+              <Button
+                onClick={handleDebugNumatb}
+                disabled={isDebuggingNumatb || files.filter(f => f.name.endsWith('.numatb')).length === 0}
+                size="sm"
+              >
+                {isDebuggingNumatb && <Loader2 className="animate-spin mr-2" />}
+                <Bug className="h-4 w-4 mr-2" />
+                Debug Numatb Files
+              </Button>
+              <Button
+                onClick={handleDebugReadJsonFiles}
+                disabled={isDebuggingReadJsonFiles}
+                size="sm"
+              >
+                {isDebuggingReadJsonFiles && <Loader2 className="animate-spin mr-2" />}
+                <Bug className="h-4 w-4 mr-2" />
+                Debug Read Json Files
+              </Button>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       </div>
 
       <div className="grid grid-cols-2 gap-6 flex-1">

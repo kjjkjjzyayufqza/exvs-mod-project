@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef } from "react";
-import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,17 +13,17 @@ import { basename, join, dirname } from "@tauri-apps/api/path";
 import { ImageFormat, useNutexbStore } from "../../../store/nutexbStore";
 import { toast } from "sonner";
 
-interface NutexbImportDialogProps {
+interface NutexbImportPanelProps {
   currentDirectory?: string;
   onImportComplete?: (filePath: string) => void;
   onClose?: () => void;
 }
 
-export function NutexbImportDialog({ 
-  currentDirectory, 
-  onImportComplete, 
-  onClose 
-}: NutexbImportDialogProps) {
+export function NutexbImportPanel({
+  currentDirectory,
+  onImportComplete,
+  onClose
+}: NutexbImportPanelProps) {
   const [selectedImagePath, setSelectedImagePath] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [nutexbName, setNutexbName] = useState<string>("");
@@ -170,9 +169,6 @@ export function NutexbImportDialog({
   if (isConverting) {
     return (
       <div className="flex flex-col items-center justify-center p-8 space-y-4">
-        <DialogHeader>
-          <DialogTitle>Create Nutexb File</DialogTitle>
-        </DialogHeader>
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
         <span className="text-gray-600">Converting image to nutexb...</span>
       </div>
@@ -180,11 +176,8 @@ export function NutexbImportDialog({
   }
 
   return (
-    <>
-      <DialogHeader>
-        <DialogTitle>Create Nutexb File</DialogTitle>
-      </DialogHeader>
-      
+    <div>
+
       <div className="space-y-6">
         {error && (
           <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -335,6 +328,6 @@ export function NutexbImportDialog({
           </>
         )}
       </div>
-    </>
+    </div>
   );
 } 

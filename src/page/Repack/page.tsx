@@ -25,7 +25,7 @@ function CustomNode({ node, style, dragHandle }: {
 }) {
   const Icon = node.isLeaf ? FileText : Folder;
   const nodeData = node.data.data;
-  
+
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent triggering selection when clicking toggle
     node.toggle();
@@ -57,10 +57,10 @@ function CustomNode({ node, style, dragHandle }: {
           )}
         </button>
       )}
-      
+
       {/* Spacer for leaf nodes to align with folder content */}
       {node.isLeaf && <div className="w-4 flex-shrink-0" />}
-      
+
       <Icon
         className={`h-4 w-4 ${node.isLeaf ? 'text-gray-600' : 'text-blue-600'} flex-shrink-0`}
       />
@@ -327,17 +327,17 @@ export default function RepackPage() {
     const nodeType = type === 'folder' ? 'Folder' : 'Item';
     const newNodeName = nodeType === 'Folder' ? 'New Folder' : 'New File.bin';
     const newId = uuidv4();
-    
+
     // Calculate new index and fileIndex for Items
     let newIndex = index;
     let newFileIndex = index;
-    
+
     if (nodeType === 'Item') {
       // Calculate maximum available index and fileIndex from SubFileData
       newIndex = getMaxAvailableIndex();
       newFileIndex = getMaxAvailableFileIndex();
     }
-    
+
     const newNode: TreeDataItem = {
       id: newId,
       name: newNodeName,
@@ -404,13 +404,13 @@ export default function RepackPage() {
         fileIndex: newFileIndex,
         fileUrl: `.\\${completeProjectData.SubFileData[0]?.fileUrl.match(/\\([^\\]+)\\/)?.[1] || 'unknown'}\\${newFileIndex}.bin`
       };
-      
+
       const updatedCompleteProjectData = {
         ...completeProjectData,
         Fhm2dTotalCount: completeProjectData.Fhm2dTotalCount + 1,
         SubFileData: [...completeProjectData.SubFileData, newSubFileDataItem]
       };
-      
+
       setCompleteProjectData(updatedCompleteProjectData);
     }
 
@@ -555,7 +555,7 @@ export default function RepackPage() {
 
     const newTreeData = deleteNodesRecursively(treeData);
     setTreeData(newTreeData);
-    
+
     // Recalculate all indices after deletion using export logic
     setTimeout(() => {
       recalculateIndices();
@@ -583,11 +583,11 @@ export default function RepackPage() {
   const handlePaste = () => {
     if (selectedItem && selectedItem.data?.type === 'Folder' && copiedItem) {
       pasteNode(selectedItem.id);
-      
+
       // Show success message
       const itemType = copiedItem.data?.type || 'item';
       const itemTypeText = itemType === 'Folder' ? 'folder' : 'file';
-      
+
       toast.success(`Successfully pasted ${itemTypeText} "${copiedItem.name}" into "${selectedItem.name}"`);
     }
   };
@@ -790,11 +790,11 @@ export default function RepackPage() {
 
   return (
     <div className="h-full flex flex-col p-6 bg-gray-50/30">
-      <div className="mb-8">
+      <div>
         <h2 className="text-2xl font-bold tracking-tight mb-4">Repack Manager</h2>
         <p className="text-gray-600 mb-4">
-          Manage your project structure with drag & drop, rename, add and delete operations.<br/>
-          <span className="text-2xl">记得用解包工具解包一次，再打包一次，再解包一次的json来导入，否则会出错</span>
+          Manage your project structure with drag & drop, rename, add and delete operations.<br />
+          <span className="text-2xl">对于GVS的文件，记得用解包工具解包一次，再打包一次，再解包一次的json来导入，否则会出错</span>
         </p>
 
         <div className="flex gap-2 mb-4">
@@ -810,10 +810,6 @@ export default function RepackPage() {
           <Button onClick={handleExport} variant="outline" size="sm">
             <Download className="h-4 w-4 mr-2" />
             Export
-          </Button>
-          <Button onClick={handleImport} variant="outline" size="sm">
-            <Upload className="h-4 w-4 mr-2" />
-            Import JSON
           </Button>
           <Button
             onClick={() => selectedItem && addNewNode(selectedItem.id, 'folder')}
@@ -863,9 +859,6 @@ export default function RepackPage() {
           </div>
         </div>
       </div>
-
-
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
         {/* Tree View Panel */}
         <Card className="lg:col-span-2">
