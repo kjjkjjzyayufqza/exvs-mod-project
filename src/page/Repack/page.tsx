@@ -2,10 +2,11 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { Label } from "@/components/ui/label";
-import { Plus, RefreshCw, Download, Upload, Folder, FileText, ChevronRight, ChevronDown } from "lucide-react";
+import { Plus, RefreshCw, Download, Upload, Folder, FileText, ChevronRight, ChevronDown, FileCode } from "lucide-react";
 import { Tree } from "react-arborist";
 import { NodePropertiesPanel } from "./components/NodePropertiesPanel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import type { NodeApi } from "react-arborist";
 import { open } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
@@ -16,6 +17,7 @@ import {
   convertSubFileStructureToTreeData,
 } from "@/lib/utils";
 import { useRepackStore } from "@/store/repackStore";
+import { repackTemplates, type RepackTemplate } from "@/models/repackTemplateJson";
 
 // Custom Node component for React Arborist
 function CustomNode({ node, style, dragHandle }: {
@@ -112,6 +114,7 @@ export default function RepackPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFilePath, setSelectedFilePath] = useState("");
   const [exportFilePath, setExportFilePath] = useState("");
+  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
   const treeRef = useRef<any>(null);
 
   // Handle export file path selection
@@ -592,6 +595,118 @@ export default function RepackPage() {
     }
   };
 
+  const handleAddTemplate = (template: RepackTemplate) => {
+    if (!selectedItem || selectedItem.data?.type !== 'Folder') {
+      toast.error("Please select a folder to add the template");
+      return;
+    }
+
+    // Convert template data to TreeDataItem format
+    const convertTemplateItemToTreeData = (templateItem: any, parentPath: string = ""): TreeDataItem[] => {
+      const result: TreeDataItem[] = [];
+
+      for (const item of templateItem) {
+        const newId = uuidv4();
+        const itemName = item.Name || `item_${item.type}`;
+
+        if (item.type === 'Folder') {
+          const folderNode: TreeDataItem = {
+            id: newId,
+            name: itemName,
+            children: [], // Will be populated later
+            data: {
+              type: 'Folder',
+              index: getMaxAvailableIndex(),
+              folderCount: item.folderCount || 0,
+              unk1: item.unk1 || "00000000",
+              unk2: item.unk2 || "00000000",
+              unk3: item.unk3 || 0,
+              unk4: item.unk4 || 0
+            }
+          };
+          result.push(folderNode);
+        } else if (item.type === 'Item') {
+          const fileIndex = getMaxAvailableFileIndex();
+          const itemNode: TreeDataItem = {
+            id: newId,
+            name: `${itemName}.bin`,
+            data: {
+              type: 'Item',
+              index: getMaxAvailableIndex(),
+              fileType: '.bin',
+              fileIndex: fileIndex,
+              fileUrl: `./${itemName}.bin`,
+              originalFileIndex: item.originalFileIndex || fileIndex,
+              unk1: item.unk1 || "00000000",
+              unk2: item.unk2 || "00000000",
+              unk3: item.unk3 || 0
+            }
+          };
+          result.push(itemNode);
+
+          // Add to completeProjectData.SubFileData if available
+          if (completeProjectData && itemNode.data?.index !== undefined) {
+            const newSubFileDataItem = {
+              index: itemNode.data.index,
+              fileType: '.bin',
+              fileIndex: fileIndex,
+              fileUrl: `.\\${itemName}.bin`
+            };
+
+            const updatedCompleteProjectData = {
+              ...completeProjectData,
+              Fhm2dTotalCount: completeProjectData.Fhm2dTotalCount + 1,
+              SubFileData: [...completeProjectData.SubFileData, newSubFileDataItem]
+            };
+
+            setCompleteProjectData(updatedCompleteProjectData);
+          }
+        }
+        // Skip EndMark items as they are not needed in tree structure
+      }
+
+      return result;
+    };
+
+    // Add template items to the selected folder
+    const templateTreeItems = convertTemplateItemToTreeData(template.data);
+
+    const addItemsToFolder = (nodes: TreeDataItem[]): TreeDataItem[] => {
+      return nodes.map(node => {
+        if (node.id === selectedItem!.id && node.data?.type === 'Folder') {
+          const children = node.children || [];
+          const newChildren = [...children, ...templateTreeItems];
+
+          // Update folderCount
+          const updatedData = {
+            ...node.data,
+            folderCount: newChildren.length
+          };
+
+          return {
+            ...node,
+            children: newChildren,
+            data: updatedData
+          };
+        }
+        if (node.children) {
+          return {
+            ...node,
+            children: addItemsToFolder(node.children)
+          };
+        }
+        return node;
+      });
+    };
+
+    const newTreeData = addItemsToFolder(treeData);
+    setTreeData(newTreeData);
+
+    // Close dialog and show success message
+    setIsTemplateDialogOpen(false);
+    toast.success(`Successfully added "${template.name}" template to "${selectedItem.name}"`);
+  };
+
 
 
   const handlePropertyChange = (nodeId: string, property: string, value: string | number) => {
@@ -828,6 +943,44 @@ export default function RepackPage() {
             <Plus className="h-4 w-4 mr-2" />
             Add File
           </Button>
+          <Dialog open={isTemplateDialogOpen} onOpenChange={setIsTemplateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                disabled={!selectedItem || selectedItem.data?.type !== 'Folder'}
+                variant="outline"
+                size="sm"
+              >
+                <FileCode className="h-4 w-4 mr-2" />
+                Add Template
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl">
+              <DialogHeader>
+                <DialogTitle>Select Template</DialogTitle>
+                <DialogDescription>
+                  Choose a template to add to the selected folder. Make sure you have selected a folder in the project structure first.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 py-4">
+                {repackTemplates.map((template, index) => (
+                  <Card
+                    key={index}
+                    className="cursor-pointer hover:shadow-md transition-shadow"
+                    onClick={() => handleAddTemplate(template)}
+                  >
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg">{template.name}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <CardDescription className="text-sm">
+                        {template.description}
+                      </CardDescription>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
 
