@@ -2,6 +2,7 @@ import { Canvas } from "@react-three/fiber";
 import { OrbitControls, TransformControls } from "@react-three/drei";
 import { useRef, useEffect, useState } from "react";
 import { useSceneStore, BoxState } from "../../store/sceneStore";
+import { ControlHints } from "./components/ControlHints";
 
 interface BoxProps {
     boxState: BoxState;
@@ -150,18 +151,15 @@ export default function SceneEdit() {
         };
     }, []);
 
+    const selectedBoxState = selectedBoxId ? boxes[selectedBoxId] : null;
+
     return (
-        <div className="w-full h-screen bg-gray-800 relative">
-            <div className="absolute top-4 left-4 z-50 text-white bg-black bg-opacity-50 backdrop-blur-sm p-3 rounded-lg text-sm">
-                <div className="text-xs text-gray-300 space-y-1 mb-2">
-                    <p className="font-semibold">Selected: {selectedBoxId || 'None'}</p>
-                    <p>W: XYZ translate</p>
-                    <p>E: rotate</p>
-                    <p>R: scale</p>
-                    <p>Ctrl+Z: Undo</p>
-                    <p>Ctrl+Y: Redo</p>
-                </div>
-            </div>
+        <div className="w-full h-[calc(100vh-28px)] bg-gray-800 relative">
+            <ControlHints
+                selectedBoxId={selectedBoxId}
+                selectedBoxState={selectedBoxState}
+                onUpdateBoxTransform={updateBoxTransform}
+            />
 
             <Canvas
                 camera={{ position: [8, 8, 8], fov: 30 }}
