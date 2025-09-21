@@ -57,8 +57,11 @@ interface NutexbStore {
   previewImagePath: string | null;
   selectedFormat: ImageFormat;
   hasMipmaps: boolean;
+  fileInfoCache: Map<string, { info: FileInfo; timestamp: number; fileSize: number }>;
+  toolExistsCache: { exists: boolean; timestamp: number } | null;
   parseNutexbInfo: (output: string) => { nutexbInfo: Partial<NutexbFooter>; imageFormat: string };
   getFileInfos: (file: FileInfo) => Promise<FileInfo>;
+  batchGetFileInfos: (files: FileInfo[]) => Promise<FileInfo[]>;
   setSelectedFile: (file: FileInfo | null) => void;
   resetConversion: () => void;
   convertFile: (file: FileInfo) => Promise<void>;
@@ -67,6 +70,8 @@ interface NutexbStore {
   replaceTexture: () => Promise<void>;
   cacheFile: (file: FileInfo) => Promise<{ nutexbInfo: Partial<NutexbFooter>; imageFormat: string; outputPath: string } | null>;
   convertImageToNutexb: (imagePath: string, outputPath: string, nutexbName: string) => Promise<void>;
+  clearCache: () => void;
+  checkToolExists: () => Promise<boolean>;
 }
 
 const resourcePath = await resourceDir();
@@ -80,6 +85,8 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
   previewImagePath: null,
   selectedFormat: "BC7RgbaUnorm",
   hasMipmaps: true,
+  fileInfoCache: new Map(),
+  toolExistsCache: null,
 
   // Helper function to parse nutexb information from command output
   parseNutexbInfo: (output: string): { nutexbInfo: Partial<NutexbFooter>; imageFormat: string } => {
@@ -116,6 +123,10 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
     return new Promise(async (resolve, reject) => {
       try {
         const filePath = file.path;
+        
+        // Always fetch fresh data - no time-based caching
+        // (Cache is only used for duplicate requests within the same batch)
+
         const command = `${toolPath} ${filePath} --info`;
         const result = await invoke("exec_shell_command", { command });
 
@@ -124,7 +135,17 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
         }
 
         const { nutexbInfo } = get().parseNutexbInfo(result);
-        resolve({ ...file, ...nutexbInfo });
+        const fileInfo = { ...file, ...nutexbInfo };
+        
+        // Store result without time-based caching (only for deduplication within same batch)
+        const cache = get().fileInfoCache;
+        cache.set(filePath, {
+          info: fileInfo,
+          timestamp: Date.now(),
+          fileSize: 0
+        });
+        
+        resolve(fileInfo);
       } catch (error) {
         console.error("Error getting file info:", error);
         reject(`Failed to get file info: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -428,5 +449,54 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
     } finally {
       set({ isConverting: false });
     }
+  },
+
+  checkToolExists: async (): Promise<boolean> => {
+    // Always check tool existence fresh - no caching
+    try {
+      const toolExists = await exists(toolPath);
+      set({ toolExistsCache: { exists: toolExists, timestamp: Date.now() } });
+      return toolExists;
+    } catch (e) {
+      console.error("Error checking tool existence:", e);
+      return false;
+    }
+  },
+
+  batchGetFileInfos: async (files: FileInfo[]): Promise<FileInfo[]> => {
+    const results: FileInfo[] = [];
+    const cache = get().fileInfoCache;
+    
+    // Check tool exists once for the entire batch
+    const toolExists = await get().checkToolExists();
+    if (!toolExists) {
+      throw new Error(`Tool not found: ${toolPath}`);
+    }
+    
+    // Clear previous cache to ensure fresh reads
+    cache.clear();
+    
+    // Process all files fresh (no time-based caching)
+    console.log(`Processing ${files.length} files (fresh read)`);
+    
+    for (const file of files) {
+      try {
+        const info = await get().getFileInfos(file);
+        results.push(info);
+      } catch (error) {
+        console.error(`Error processing ${file.name}:`, error);
+        // Add file without extra info if processing fails
+        results.push(file);
+      }
+    }
+    
+    return results;
+  },
+
+  clearCache: () => {
+    set({
+      fileInfoCache: new Map(),
+      toolExistsCache: null
+    });
   },
 }));

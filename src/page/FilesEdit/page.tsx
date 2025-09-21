@@ -28,6 +28,7 @@ export default function FilesEdit() {
   const [folderPath, setFolderPath] = useState("");
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 0 });
   const [handleDebugRepack, setHandleDebugRepack] = useState(false);
   const [isConvertingNutexb, setIsConvertingNutexb] = useState(false);
   const [isBatchReplacing, setIsBatchReplacing] = useState(false);
@@ -40,6 +41,7 @@ export default function FilesEdit() {
   const resetNutexbConversion = useNutexbStore((e) => e.resetConversion);
 
   const getNutexbFileInfos = useNutexbStore((e) => e.getFileInfos);
+  const batchGetNutexbFileInfos = useNutexbStore((e) => e.batchGetFileInfos);
   const cacheNutexbFile = useNutexbStore((e) => e.cacheFile);
 
   const convertFile = (file: FileInfo) => {
@@ -77,6 +79,8 @@ export default function FilesEdit() {
     // Refresh the file list after successful file creation
     if (folderPath) {
       setIsLoading(true);
+      setLoadingProgress({ current: 0, total: 0 });
+      
       try {
         const entries = await readDir(folderPath);
         const filteredEntries: any[] = entries
@@ -94,34 +98,97 @@ export default function FilesEdit() {
             path: folderPath + "/" + entry.name
           })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
-        // Get file info and check for existing previews
-        for (const file of filteredEntries) {
-          if (file.name.endsWith('.nutexb')) {
+        // PHASE 1: Immediately show basic file list
+        setFiles(filteredEntries);
+        setIsLoading(false);
+        
+        // PHASE 2: Load nutexb details in background
+        const nutexbFiles = filteredEntries.filter(file => file.name.endsWith('.nutexb'));
+        
+        if (nutexbFiles.length > 0) {
+          console.log(`Background refreshing ${nutexbFiles.length} nutexb files...`);
+          setLoadingProgress({ current: 0, total: nutexbFiles.length });
+          
+          const startTime = performance.now();
+          const batchSize = 10;
+          const batches = [];
+          
+          for (let i = 0; i < nutexbFiles.length; i += batchSize) {
+            const batch = nutexbFiles.slice(i, i + batchSize);
+            batches.push(batch);
+          }
+          
+          let processedCount = 0;
+          
+          for (const batch of batches) {
             try {
-              const info = await getNutexbFileInfos(file);
-              file.string = info.string;
+              // Use batch processing for better performance
+              const batchResults = await batchGetNutexbFileInfos(batch);
+              
+              // Process preview checks in parallel
+              const previewPromises = batch.map(async (file, index) => {
+                const info = batchResults[index];
+                if (info?.string) {
+                  file.string = info.string;
+                }
+                
+                try {
+                  const existingPreview = await checkExistingPreview(file, folderPath);
+                  if (existingPreview) {
+                    file.previewPath = existingPreview;
+                  }
+                } catch (e) {
+                  console.error(`Error checking preview for ${file.name}:`, e);
+                }
 
-              // Check for existing preview
-              const existingPreview = await checkExistingPreview(file, folderPath);
-              if (existingPreview) {
-                file.previewPath = existingPreview;
-              }
-
-              // Keep existing previewPath if available from previous state
-              const existingFile = files.find(f => f.name === file.name);
-              if (existingFile?.previewPath && !file.previewPath) {
-                file.previewPath = existingFile.previewPath;
-              }
+                // Keep existing previewPath if available from previous state
+                const existingFile = files.find(f => f.name === file.name);
+                if (existingFile?.previewPath && !file.previewPath) {
+                  file.previewPath = existingFile.previewPath;
+                }
+                
+                processedCount++;
+                setLoadingProgress({ current: processedCount, total: nutexbFiles.length });
+                
+                return file;
+              });
+              
+              await Promise.all(previewPromises);
+              
+              // Update UI progressively
+              setFiles(currentFiles => [...currentFiles]);
             } catch (e) {
-              console.error("Error getting Nutexb file info:", e);
+              console.error(`Error processing batch:`, e);
+              // Continue with individual processing as fallback
+              for (const file of batch) {
+                try {
+                  const info = await getNutexbFileInfos(file);
+                  file.string = info.string;
+                  
+                  const existingPreview = await checkExistingPreview(file, folderPath);
+                  if (existingPreview) {
+                    file.previewPath = existingPreview;
+                  }
+                } catch (fileError) {
+                  console.error(`Error processing ${file.name}:`, fileError);
+                }
+                
+                processedCount++;
+                setLoadingProgress({ current: processedCount, total: nutexbFiles.length });
+              }
+              
+              setFiles(currentFiles => [...currentFiles]);
             }
           }
+          
+          const endTime = performance.now();
+          console.log(`Background nutexb refresh completed in ${(endTime - startTime).toFixed(2)} ms`);
+          setLoadingProgress({ current: 0, total: 0 });
         }
-        setFiles(filteredEntries);
       } catch (error) {
         console.error("Error refreshing directory:", error);
-      } finally {
         setIsLoading(false);
+        setLoadingProgress({ current: 0, total: 0 });
       }
     }
   };
@@ -135,6 +202,7 @@ export default function FilesEdit() {
     if (selected && !Array.isArray(selected)) {
       setFolderPath(selected);
       setIsLoading(true);
+      
       try {
         const entries = await readDir(selected);
         const filteredEntries: any[] = entries
@@ -152,27 +220,90 @@ export default function FilesEdit() {
             path: selected + "/" + entry.name
           })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
-        // Get file info and check for existing previews
-        for (const file of filteredEntries) {
-          if (file.name.endsWith('.nutexb')) {
-            try {
-              const info = await getNutexbFileInfos(file);
-              file.string = info.string;
-
-              // Check for existing preview
-              const existingPreview = await checkExistingPreview(file, selected);
-              if (existingPreview) {
-                file.previewPath = existingPreview;
-              }
-            } catch (e) {
-              console.error("Error getting Nutexb file info:", e);
-            }
-          }
-        }
+        // PHASE 1: Immediately show basic file list to user
         setFiles(filteredEntries);
+        setIsLoading(false); // User can see files immediately
+        
+        // PHASE 2: Load nutexb details in background (non-blocking)
+        const nutexbFiles = filteredEntries.filter(file => file.name.endsWith('.nutexb'));
+        
+        if (nutexbFiles.length > 0) {
+          console.log(`Loading ${nutexbFiles.length} nutexb files in background...`);
+          const startTime = performance.now();
+          
+          // Process in batches to avoid overwhelming the system
+          const batchSize = 10;
+          const batches = [];
+          
+          for (let i = 0; i < nutexbFiles.length; i += batchSize) {
+            const batch = nutexbFiles.slice(i, i + batchSize);
+            batches.push(batch);
+          }
+          
+          // Process batches with progressive updates using optimized batch processing
+          for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+            const batch = batches[batchIndex];
+            
+            try {
+              // Use batch processing for better performance
+              const batchResults = await batchGetNutexbFileInfos(batch);
+              
+              // Process preview checks in parallel
+              const previewPromises = batch.map(async (file, index) => {
+                const info = batchResults[index];
+                if (info?.string) {
+                  file.string = info.string;
+                }
+                
+                try {
+                  const existingPreview = await checkExistingPreview(file, selected);
+                  if (existingPreview) {
+                    file.previewPath = existingPreview;
+                  }
+                } catch (e) {
+                  console.error(`Error checking preview for ${file.name}:`, e);
+                }
+                
+                return file;
+              });
+              
+              await Promise.all(previewPromises);
+            } catch (e) {
+              console.error(`Error processing batch ${batchIndex + 1}:`, e);
+              // Fallback to individual processing
+              for (const file of batch) {
+                try {
+                  const info = await getNutexbFileInfos(file);
+                  file.string = info.string;
+                  
+                  const existingPreview = await checkExistingPreview(file, selected);
+                  if (existingPreview) {
+                    file.previewPath = existingPreview;
+                  }
+                } catch (fileError) {
+                  console.error(`Error processing ${file.name}:`, fileError);
+                }
+              }
+            }
+            
+            // Update progress and UI
+            const processedSoFar = (batchIndex + 1) * batchSize;
+            const currentProgress = Math.min(processedSoFar, nutexbFiles.length);
+            setLoadingProgress({ current: currentProgress, total: nutexbFiles.length });
+            
+            // Update UI progressively after each batch
+            setFiles(currentFiles => [...currentFiles]);
+            
+            console.log(`Batch ${batchIndex + 1}/${batches.length} completed (${currentProgress}/${nutexbFiles.length} files)`);
+          }
+          
+          const endTime = performance.now();
+          console.log(`Background nutexb processing completed in ${(endTime - startTime).toFixed(2)} ms`);
+          setLoadingProgress({ current: 0, total: 0 });
+        }
+        
       } catch (error) {
         console.error("Error reading directory:", error);
-      } finally {
         setIsLoading(false);
       }
     }
@@ -749,7 +880,21 @@ export default function FilesEdit() {
       <div className="grid grid-cols-2 gap-6 flex-1">
         <div className="col-span-2 bg-white rounded-lg shadow-sm border p-4">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-700">Files</h3>
+            <div className="flex items-center gap-3">
+              <h3 className="text-lg font-semibold text-gray-700">Files</h3>
+              {loadingProgress.total > 0 && (
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading nutexb files: {loadingProgress.current}/{loadingProgress.total}</span>
+                  <div className="w-32 bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(loadingProgress.current / loadingProgress.total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
             <FileTypeDialog
               onFileTypeSelect={handleFileTypeSelect}
               currentDirectory={folderPath}
