@@ -13,9 +13,7 @@ interface DAEModelProps {
     modelState: ModelState;
     mode: 'translate' | 'rotate' | 'scale';
     isSelected: boolean;
-    selectedSubModelId: string | null;
     onClick: (id: string) => void;
-    onSubModelClick: (subModelId: string) => void;
     onTransform: (modelState: ModelState) => void;
 }
 
@@ -83,7 +81,7 @@ function ErrorBox({ error }: { error: Error }) {
 }
 
 // Inner DAE model component
-function DAEModelInner({ modelState, mode, isSelected, selectedSubModelId, onClick, onSubModelClick, onTransform }: DAEModelProps) {
+function DAEModelInner({ modelState, mode, isSelected, onClick, onTransform }: DAEModelProps) {
     const meshRef = useRef<THREE.Group>(null);
     const subMeshRefs = useRef<Record<string, THREE.Group>>({});
     const timeoutRef = useRef<number | null>(null);
@@ -224,9 +222,10 @@ function DAEModelInner({ modelState, mode, isSelected, selectedSubModelId, onCli
     const handleSubModelClick = useCallback((subModelId: string) => {
         return (event: any) => {
             event.stopPropagation();
-            onSubModelClick(subModelId);
+            // 点击子模型时，自动选中父模型而不是子模型
+            onClick(modelState.id);
         };
-    }, [onSubModelClick]);
+    }, [onClick, modelState.id]);
 
     // 使用useMemo缓存几何体和材质提取，避免重复计算
     const { geometries, materials } = useMemo(() => {
@@ -266,8 +265,6 @@ function DAEModelInner({ modelState, mode, isSelected, selectedSubModelId, onCli
 
                     if (!geometry || !material) return null;
 
-                    const isSubModelSelected = selectedSubModelId === subModel.id;
-
                     return (
                         <group key={subModel.id}>
                             <group
@@ -281,30 +278,30 @@ function DAEModelInner({ modelState, mode, isSelected, selectedSubModelId, onCli
                             >
                                 <mesh geometry={geometry} material={material} />
                            </group>
-                           {isSubModelSelected && subMeshRefs.current[subModel.id] && (
-                               <>
-                                   <BoundingBoxGrid
-                                       target={subMeshRefs.current[subModel.id]}
-                                       visible={true}
-                                       color="#ffff00"
-                                   />
-                                   <TransformControls
-                                       object={subMeshRefs.current[subModel.id]}
-                                       mode={mode}
-                                       showX
-                                       showY
-                                       showZ
-                                       size={1}
-                                       space="world"
-                                       onObjectChange={() => handleObjectChange(subModel.id)}
-                                   />
-                               </>
-                           )}
                         </group>
                     );
                 })}
             </group>
-            {/* 移除父模型的变换控制器和边界框 - 只操作子模型 */}
+            {/* 当父模型被选中时，显示边界框和变换控制器 */}
+            {isSelected && meshRef.current && (
+                <>
+                    <BoundingBoxGrid
+                        target={meshRef.current}
+                        visible={true}
+                        color="#00ffff"
+                    />
+                    <TransformControls
+                        object={meshRef.current}
+                        mode={mode}
+                        showX
+                        showY
+                        showZ
+                        size={1}
+                        space="world"
+                        onObjectChange={() => handleObjectChange()}
+                    />
+                </>
+            )}
         </>
     );
 }

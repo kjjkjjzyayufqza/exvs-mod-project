@@ -36,7 +36,6 @@ export interface SceneState {
 
     // Selection
     selectedModelId: string | null;
-    selectedSubModelId: string | null;
 
     // Transform mode
     transformMode: 'translate' | 'rotate' | 'scale';
@@ -47,7 +46,6 @@ export interface SceneState {
 
     // Actions
     setSelectedModel: (modelId: string) => void;
-    setSelectedSubModel: (subModelId: string) => void;
     clearSelection: () => void;
     setTransformMode: (mode: 'translate' | 'rotate' | 'scale') => void;
     updateModelTransform: (modelState: ModelState) => void;
@@ -76,7 +74,6 @@ export const useSceneStore = create<SceneState>()(
         isLoading: false,
         loadingError: null,
         selectedModelId: 'box1',
-        selectedSubModelId: null,
         transformMode: 'translate',
         history: initialHistory,
         historyIndex: 0,
@@ -85,27 +82,12 @@ export const useSceneStore = create<SceneState>()(
         setSelectedModel: (modelId: string) => {
             set((state) => {
                 state.selectedModelId = modelId;
-                state.selectedSubModelId = null; // Clear sub-model selection when selecting main model
-            });
-        },
-
-        setSelectedSubModel: (subModelId: string) => {
-            set((state) => {
-                state.selectedSubModelId = subModelId;
-                // Find the parent model and set it as selected too
-                const parentModel = Object.values(state.models).find(model =>
-                    model.subModels?.some(subModel => subModel.id === subModelId)
-                );
-                if (parentModel) {
-                    state.selectedModelId = parentModel.id;
-                }
             });
         },
 
         clearSelection: () => {
             set((state) => {
                 state.selectedModelId = null;
-                state.selectedSubModelId = null;
             });
         },
 

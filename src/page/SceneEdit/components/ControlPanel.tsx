@@ -12,12 +12,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../co
 interface ControlPanelProps {
     models: Record<string, ModelState>;
     selectedModelId: string | null;
-    selectedSubModelId: string | null;
     selectedModelState: ModelState | null;
     onUpdateModelTransform: (modelState: ModelState) => void;
     getInitialModelState: (modelId: string) => ModelState | null;
     onModelSelect: (modelId: string) => void;
-    onSubModelSelect: (subModelId: string) => void;
 }
 
 interface PropertyInputProps {
@@ -79,7 +77,7 @@ function PropertyInput({ label, value, onChange, axis }: PropertyInputProps) {
     );
 }
 
-export function ControlPanel({ models, selectedModelId, selectedSubModelId, selectedModelState, onUpdateModelTransform, getInitialModelState, onModelSelect, onSubModelSelect }: ControlPanelProps) {
+export function ControlPanel({ models, selectedModelId, selectedModelState, onUpdateModelTransform, getInitialModelState, onModelSelect }: ControlPanelProps) {
     const [isControlsCollapsed, setIsControlsCollapsed] = useState(false);
     const [isPropertiesCollapsed, setIsPropertiesCollapsed] = useState(false);
     const [isModelListCollapsed, setIsModelListCollapsed] = useState(false);
@@ -117,72 +115,35 @@ export function ControlPanel({ models, selectedModelId, selectedSubModelId, sele
 
     const ModelList = () => {
         const modelEntries = Object.values(models);
-        
-        // 收集所有子模型
-        const allSubModels: Array<{
-            subModel: any;
-            parentModel: ModelState;
-        }> = [];
-        
-        modelEntries.forEach(model => {
-            if (model.subModels && model.subModels.length > 0) {
-                model.subModels.forEach(subModel => {
-                    allSubModels.push({
-                        subModel,
-                        parentModel: model
-                    });
-                });
-            } else {
-                // 对于没有子模型的模型（如Box），将其本身作为一个项目
-                allSubModels.push({
-                    subModel: {
-                        id: model.id,
-                        name: model.name,
-                        position: model.position,
-                        rotation: model.rotation,
-                        scale: model.scale
-                    },
-                    parentModel: model
-                });
-            }
-        });
 
         return (
             <div className="space-y-1 max-h-48 overflow-y-auto">
-                {allSubModels.length === 0 ? (
+                {modelEntries.length === 0 ? (
                     <div className="text-xs text-white/60 text-center py-4">
                         No models in scene
                     </div>
                 ) : (
-                    allSubModels.map(({ subModel, parentModel }) => (
+                    modelEntries.map((model) => (
                         <Button
-                            key={subModel.id}
+                            key={model.id}
                             variant="ghost"
                             size="sm"
                             onClick={() => {
-                                // 对于有子模型的情况，选择子模型
-                                if (parentModel.subModels && parentModel.subModels.length > 0) {
-                                    onSubModelSelect(subModel.id);
-                                } else {
-                                    // 对于简单模型，选择父模型
-                                    onModelSelect(subModel.id);
-                                }
+                                onModelSelect(model.id);
                             }}
                             className={`w-full justify-start h-8 text-left text-xs ${
-                                (parentModel.subModels && parentModel.subModels.length > 0
-                                    ? selectedSubModelId === subModel.id
-                                    : selectedModelId === subModel.id)
+                                selectedModelId === model.id
                                     ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                                     : 'text-white/80 hover:text-white hover:bg-white/10'
                             }`}
                         >
                             <div className="flex items-center gap-2 w-full">
                                 <Badge variant="outline" className="text-xs px-1 py-0">
-                                    {parentModel.type}
+                                    {model.type}
                                 </Badge>
-                                <span className="truncate flex-1">{subModel.name}</span>
-                                {parentModel.subModels && parentModel.subModels.length > 0 && (
-                                    <span className="text-xs text-white/40">({parentModel.name})</span>
+                                <span className="truncate flex-1">{model.name}</span>
+                                {model.subModels && model.subModels.length > 0 && (
+                                    <span className="text-xs text-white/40">({model.subModels.length} 子模型)</span>
                                 )}
                             </div>
                         </Button>
@@ -269,16 +230,9 @@ export function ControlPanel({ models, selectedModelId, selectedSubModelId, sele
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs text-white/80">当前选中:</span>
-                                    <div className="flex flex-col gap-1">
-                                        <Badge variant="secondary" className="bg-white/10 text-white border-white/20 text-xs">
-                                            {selectedModelState?.name || 'None'}
-                                        </Badge>
-                                        {selectedSubModelId && (
-                                            <Badge variant="outline" className="bg-blue-500/10 text-blue-300 border-blue-500/20 text-xs">
-                                                {selectedModelState?.subModels?.find(sub => sub.id === selectedSubModelId)?.name || selectedSubModelId}
-                                            </Badge>
-                                        )}
-                                    </div>
+                                    <Badge variant="secondary" className="bg-white/10 text-white border-white/20 text-xs">
+                                        {selectedModelState?.name || 'None'}
+                                    </Badge>
                                 </div>
                                 <Separator className="bg-white/10" />
                                 <div className="grid grid-cols-2 gap-2 text-xs text-white/80">

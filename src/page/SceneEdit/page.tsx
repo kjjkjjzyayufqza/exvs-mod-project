@@ -90,10 +90,8 @@ export default function SceneEdit() {
     const {
         models,
         selectedModelId,
-        selectedSubModelId,
         transformMode,
         setSelectedModel,
-        setSelectedSubModel,
         clearSelection,
         setTransformMode,
         updateModelTransform,
@@ -175,6 +173,7 @@ export default function SceneEdit() {
                 await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_0.dae");
                 await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_1.dae");
                 await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_2.dae");
+                await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\body.dae");
             } catch (error) {
                 console.error('Failed to load initial DAE model:', error);
             }
@@ -188,16 +187,14 @@ export default function SceneEdit() {
             <ControlPanel
                 models={models}
                 selectedModelId={selectedModelId}
-                selectedSubModelId={selectedSubModelId}
                 selectedModelState={selectedModelState}
                 onUpdateModelTransform={updateModelTransform}
                 getInitialModelState={getInitialModelState}
                 onModelSelect={setSelectedModel}
-                onSubModelSelect={setSelectedSubModel}
             />
 
             <Canvas
-                camera={{ position: [8, 8, 8], fov: 30, near: 0.1, far: 100000000 }}
+                camera={{ position: [300, 300, 300], fov: 30, near: 0.1, far: 100000000 }}
                 style={{ background: '#1a1a1a' }}
                 className="z-10"
                 onClick={handleCanvasClick}
@@ -227,9 +224,7 @@ export default function SceneEdit() {
                                 modelState={modelState}
                                 mode={transformMode}
                                 isSelected={selectedModelId === modelState.id}
-                                selectedSubModelId={selectedSubModelId}
                                 onClick={handleBoxClick}
-                                onSubModelClick={setSelectedSubModel}
                                 onTransform={handleTransform}
                             />
                         );
