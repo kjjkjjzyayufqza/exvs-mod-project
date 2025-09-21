@@ -123,10 +123,8 @@ function DAEModelInner({ modelState, mode, isSelected, selectedSubModelId, onCli
 
     const handleClick = (event: any) => {
         event.stopPropagation();
-        // Only allow parent model selection when no sub-model transform controls are active
-        if (!selectedSubModelId) {
-            onClick(modelState.id);
-        }
+        // 对于DAE模型，不允许选择父模型，只能选择子模型
+        // 如果没有子模型被选择，则什么都不做
     };
 
     const handleObjectChange = (subModelId?: string) => {
@@ -222,10 +220,8 @@ function DAEModelInner({ modelState, mode, isSelected, selectedSubModelId, onCli
                                 scale={subModel.scale}
                                 onClick={(event) => {
                                     event.stopPropagation();
-                                    // Only allow sub-model selection when main model transform controls are not active
-                                    if (!isSelected || selectedSubModelId) {
-                                        onSubModelClick(subModel.id);
-                                    }
+                                    // 直接选择子模型
+                                    onSubModelClick(subModel.id);
                                 }}
                             >
                                 <mesh geometry={geometry} material={material} />
@@ -253,25 +249,7 @@ function DAEModelInner({ modelState, mode, isSelected, selectedSubModelId, onCli
                     );
                 })}
             </group>
-            {isSelected && !selectedSubModelId && isModelReady && meshRef.current && (
-                <>
-                    <BoundingBoxGrid
-                        target={meshRef.current}
-                        visible={true}
-                        color="#00ff00"
-                    />
-                    <TransformControls
-                        object={meshRef.current}
-                        mode={mode}
-                        showX
-                        showY
-                        showZ
-                        size={1}
-                        space="world"
-                        onObjectChange={() => handleObjectChange()}
-                    />
-                </>
-            )}
+            {/* 移除父模型的变换控制器和边界框 - 只操作子模型 */}
         </>
     );
 }
