@@ -1,10 +1,13 @@
-import { useRef, useEffect, useState, Suspense } from 'react';
+import { useRef, useEffect, useState, Suspense, useMemo, useCallback } from 'react';
 import { useLoader } from '@react-three/fiber';
 import { ColladaLoader } from 'three-stdlib';
 import { TransformControls } from '@react-three/drei';
 import { ModelState, SubModelState } from '../../../store/sceneStore';
 import { BoundingBoxGrid } from './BoundingBoxGrid';
 import * as THREE from 'three';
+
+// 全局模型缓存
+const modelCache = new Map<string, any>();
 
 interface DAEModelProps {
     modelState: ModelState;
@@ -14,6 +17,48 @@ interface DAEModelProps {
     onClick: (id: string) => void;
     onSubModelClick: (subModelId: string) => void;
     onTransform: (modelState: ModelState) => void;
+}
+
+// 自定义Hook用于管理模型缓存和加载
+function useDAEModel(filePath: string) {
+    const [collada, setCollada] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<Error | null>(null);
+
+    useEffect(() => {
+        // 检查缓存
+        if (modelCache.has(filePath)) {
+            console.log('DAEModel: Using cached model for:', filePath);
+            setCollada(modelCache.get(filePath));
+            setIsLoading(false);
+            return;
+        }
+
+        // 如果没有缓存，则加载模型
+        console.log('DAEModel: Loading new model from:', filePath);
+        setIsLoading(true);
+        setError(null);
+
+        const loader = new ColladaLoader();
+        loader.load(
+            filePath,
+            (loadedCollada) => {
+                console.log('DAEModel: Model loaded and cached:', filePath);
+                // 缓存加载的模型
+                modelCache.set(filePath, loadedCollada);
+                setCollada(loadedCollada);
+                setIsLoading(false);
+            },
+            undefined,
+            (loadError) => {
+                console.error('DAEModel: Failed to load model:', loadError);
+                setError(new Error(`Failed to load model: ${loadError.message || 'Unknown error'}`));
+                setIsLoading(false);
+            }
+        );
+    }, [filePath]);
+
+    return { collada, isLoading, error };
 }
 
 // Loading fallback component
@@ -46,12 +91,8 @@ function DAEModelInner({ modelState, mode, isSelected, selectedSubModelId, onCli
     const [subModelStates, setSubModelStates] = useState<SubModelState[]>([]);
     const isInitializedRef = useRef(false);
 
-    console.log('DAEModelInner: Loading model from:', modelState.filePath);
-
-    // Load DAE file using ColladaLoader
-    const collada = useLoader(ColladaLoader, modelState.filePath!);
-
-    console.log('DAEModelInner: Collada loaded:', collada);
+    // 使用自定义Hook加载模型（带缓存）
+    const { collada, isLoading, error } = useDAEModel(modelState.filePath!);
 
     // Initialize sub-models when collada is loaded (only once)
     useEffect(() => {
@@ -63,7 +104,7 @@ function DAEModelInner({ modelState, mode, isSelected, selectedSubModelId, onCli
             const geometries: THREE.BufferGeometry[] = [];
             const geometryNames: string[] = [];
 
-            collada.scene.traverse((child) => {
+            collada.scene.traverse((child: THREE.Object3D) => {
                 if (child instanceof THREE.Mesh && child.geometry) {
                     geometries.push(child.geometry);
                     geometryNames.push(child.name || `geom_${geometries.length - 1}`);
@@ -121,13 +162,8 @@ function DAEModelInner({ modelState, mode, isSelected, selectedSubModelId, onCli
         }
     }, [modelState.position, modelState.rotation, modelState.scale]);
 
-    const handleClick = (event: any) => {
-        event.stopPropagation();
-        // 对于DAE模型，不允许选择父模型，只能选择子模型
-        // 如果没有子模型被选择，则什么都不做
-    };
-
-    const handleObjectChange = (subModelId?: string) => {
+    // 使用useCallback优化handleObjectChange函数
+    const handleObjectChange = useCallback((subModelId?: string) => {
         // Clear previous timeout
         if (timeoutRef.current) {
             clearTimeout(timeoutRef.current);
@@ -176,26 +212,49 @@ function DAEModelInner({ modelState, mode, isSelected, selectedSubModelId, onCli
                 onTransform(updatedModelState);
             }
         }, 300);
-    };
+    }, [modelState, subModelStates, onTransform]);
 
-    if (!collada) {
-        console.log('DAEModelInner: Collada not loaded yet, showing loading box');
-        return <LoadingBox />;
-    }
+    // 使用useCallback优化点击处理函数
+    const handleClick = useCallback((event: any) => {
+        event.stopPropagation();
+        // 对于DAE模型，不允许选择父模型，只能选择子模型
+        // 如果没有子模型被选择，则什么都不做
+    }, []);
+
+    const handleSubModelClick = useCallback((subModelId: string) => {
+        return (event: any) => {
+            event.stopPropagation();
+            onSubModelClick(subModelId);
+        };
+    }, [onSubModelClick]);
+
+    // 使用useMemo缓存几何体和材质提取，避免重复计算
+    const { geometries, materials } = useMemo(() => {
+        const geometries: THREE.BufferGeometry[] = [];
+        const materials: THREE.Material[] = [];
+
+        if (collada && collada.scene) {
+            collada.scene.traverse((child: THREE.Object3D) => {
+                if (child instanceof THREE.Mesh) {
+                    geometries.push(child.geometry);
+                    materials.push(child.material);
+                }
+            });
+        }
+
+        return { geometries, materials };
+    }, [collada]);
 
     console.log('DAEModelInner: Rendering sub-models:', subModelStates);
 
-    // Extract geometries and materials from the collada scene
-    const geometries: THREE.BufferGeometry[] = [];
-    const materials: THREE.Material[] = [];
+    // 如果有错误，显示错误框
+    if (error) {
+        return <ErrorBox error={error} />;
+    }
 
-    if (collada.scene) {
-        collada.scene.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-                geometries.push(child.geometry);
-                materials.push(child.material);
-            }
-        });
+    // 如果正在加载，显示加载框
+    if (isLoading || !collada) {
+        return <LoadingBox />;
     }
 
     return (
@@ -218,11 +277,7 @@ function DAEModelInner({ modelState, mode, isSelected, selectedSubModelId, onCli
                                 position={subModel.position}
                                 rotation={subModel.rotation}
                                 scale={subModel.scale}
-                                onClick={(event) => {
-                                    event.stopPropagation();
-                                    // 直接选择子模型
-                                    onSubModelClick(subModel.id);
-                                }}
+                                onClick={handleSubModelClick(subModel.id)}
                             >
                                 <mesh geometry={geometry} material={material} />
                            </group>
