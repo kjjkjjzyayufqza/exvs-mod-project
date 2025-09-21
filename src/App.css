@@ -173,3 +173,9 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Custom text selection colors for PropertySection inputs */
+input::selection {
+  background-color: #3b82f6; /* Blue background */
+  color: white; /* White text for contrast */
+}

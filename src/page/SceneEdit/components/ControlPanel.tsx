@@ -37,7 +37,13 @@ function PropertyInput({ label, value, onChange, axis }: PropertyInputProps) {
     const handleBlur = () => {
         const numValue = parseFloat(inputValue);
         if (!isNaN(numValue)) {
-            onChange(numValue);
+            // Only update if the value has actually changed
+            if (Math.abs(numValue - value) > 0.001) {
+                onChange(numValue);
+            } else {
+                // Reset to original value if no significant change
+                setInputValue(value.toFixed(3));
+            }
         } else {
             setInputValue(value.toFixed(3));
         }

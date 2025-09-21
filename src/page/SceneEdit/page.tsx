@@ -3,6 +3,7 @@ import { OrbitControls, TransformControls } from "@react-three/drei";
 import { useRef, useEffect, useState } from "react";
 import { useSceneStore, ModelState } from "../../store/sceneStore";
 import { ControlPanel } from "./components/ControlPanel";
+import { DAEModel } from "./components/DAEModel";
 
 interface BoxProps {
     boxState: ModelState;
@@ -44,6 +45,7 @@ function Box({ boxState, color, mode, isSelected, onClick, onTransform }: BoxPro
             if (meshRef.current) {
                 const updatedModelState: ModelState = {
                     id: boxState.id,
+                    type: 'box',
                     position: meshRef.current.position.toArray(),
                     rotation: meshRef.current.rotation.toArray().slice(0, 3),
                     scale: meshRef.current.scale.toArray()
@@ -85,6 +87,7 @@ export default function SceneEdit() {
         setTransformMode,
         updateModelTransform,
         getInitialModelState,
+        loadSpecificDAEModel,
         undo,
         redo,
         canUndo,
@@ -154,6 +157,19 @@ export default function SceneEdit() {
 
     const selectedModelState = selectedModelId ? models[selectedModelId] : null;
 
+    // Load DAE model on scene initialization
+    useEffect(() => {
+        const loadInitialDAEModel = async () => {
+            try {
+                await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_0.dae");
+            } catch (error) {
+                console.error('Failed to load initial DAE model:', error);
+            }
+        };
+
+        loadInitialDAEModel();
+    }, []);
+
     return (
         <div className="w-full h-[calc(100vh-28px)] bg-gray-800 relative">
             <ControlPanel
@@ -164,7 +180,7 @@ export default function SceneEdit() {
             />
 
             <Canvas
-                camera={{ position: [8, 8, 8], fov: 30 }}
+                camera={{ position: [8, 8, 8], fov: 30, near: 0.1, far: 100000000 }}
                 style={{ background: '#1a1a1a' }}
                 className="z-10"
                 onClick={handleCanvasClick}
@@ -186,17 +202,32 @@ export default function SceneEdit() {
                 <ambientLight intensity={0.5} />
                 <directionalLight position={[10, 10, 5]} intensity={1} />
 
-                {Object.values(models).map((modelState) => (
-                    <Box
-                        key={modelState.id}
-                        boxState={modelState}
-                        color={modelState.id === 'box1' ? 'orange' : 'blue'}
-                        mode={transformMode}
-                        isSelected={selectedModelId === modelState.id}
-                        onClick={handleBoxClick}
-                        onTransform={handleTransform}
-                    />
-                ))}
+                {Object.values(models).map((modelState) => {
+                    if (modelState.type === 'dae') {
+                        return (
+                            <DAEModel
+                                key={modelState.id}
+                                modelState={modelState}
+                                mode={transformMode}
+                                isSelected={selectedModelId === modelState.id}
+                                onClick={handleBoxClick}
+                                onTransform={handleTransform}
+                            />
+                        );
+                    } else {
+                        return (
+                            <Box
+                                key={modelState.id}
+                                boxState={modelState}
+                                color={modelState.id === 'box1' ? 'orange' : 'blue'}
+                                mode={transformMode}
+                                isSelected={selectedModelId === modelState.id}
+                                onClick={handleBoxClick}
+                                onTransform={handleTransform}
+                            />
+                        );
+                    }
+                })}
 
                 <OrbitControls
                     makeDefault
