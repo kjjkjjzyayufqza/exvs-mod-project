@@ -11,13 +11,32 @@ export interface TemplateItem {
   endMarkCount?: number;
 }
 
+export interface ModelTemplateItem {
+  type: 'Folder' | 'Item' | 'EndMark';
+  Name?: string;
+  unk1?: string;
+  unk2?: string;
+  unk3?: number;
+  unk4?: number;
+  folderCount?: number;
+  endMarkCount?: number;
+  // Note: fileIndex and originalFileIndex will be calculated dynamically
+}
+
+export interface ModelTemplate {
+  name: string;
+  description: string;
+  data: ModelTemplateItem[];
+}
+
 export interface RepackTemplate {
   name: string;
   description: string;
   data: TemplateItem[];
 }
 
-export const repackTemplates: RepackTemplate[] = [
+// Internal model templates without hardcoded indices - these define structure only
+export const modelTemplates: ModelTemplate[] = [
   {
     name: "Model",
     description: "Model Folder Structure",
@@ -36,9 +55,7 @@ export const repackTemplates: RepackTemplate[] = [
         "Name": "92",
         "unk1": "00000000",
         "unk2": "10000000",
-        "unk3": 0,
-        "fileIndex": 105,
-        "originalFileIndex": 92
+        "unk3": 0
       },
       {
         "type": "Folder",
@@ -58,9 +75,7 @@ export const repackTemplates: RepackTemplate[] = [
         "Name": "153",
         "unk1": "00000000",
         "unk2": "21000000",
-        "unk3": 1,
-        "fileIndex": 167,
-        "originalFileIndex": 153
+        "unk3": 1
       },
       {
         "type": "Folder",
@@ -80,36 +95,28 @@ export const repackTemplates: RepackTemplate[] = [
         "Name": "115",
         "unk1": "00000000",
         "unk2": "21000000",
-        "unk3": 1,
-        "fileIndex": 129,
-        "originalFileIndex": 115
+        "unk3": 1
       },
       {
         "type": "Item",
         "Name": "173",
         "unk1": "00000000",
         "unk2": "30000000",
-        "unk3": 0,
-        "fileIndex": 189,
-        "originalFileIndex": 173
+        "unk3": 0
       },
       {
         "type": "Item",
         "Name": "193",
         "unk1": "00000000",
         "unk2": "40000000",
-        "unk3": 0,
-        "fileIndex": 210,
-        "originalFileIndex": 193
+        "unk3": 0
       },
       {
         "type": "Item",
         "Name": "238",
         "unk1": "00000000",
         "unk2": "50000000",
-        "unk3": 0,
-        "fileIndex": 256,
-        "originalFileIndex": 238
+        "unk3": 0
       },
       {
         "type": "EndMark",
@@ -118,3 +125,50 @@ export const repackTemplates: RepackTemplate[] = [
     ]
   }
 ];
+
+// Function to convert modelTemplates to repackTemplates with dynamic index calculation
+export function createRepackTemplatesFromModelTemplates(
+  getMaxAvailableIndex: () => number,
+  getMaxAvailableFileIndex: () => number
+): RepackTemplate[] {
+  return modelTemplates.map(modelTemplate => {
+    let currentIndex = getMaxAvailableIndex();
+    let currentFileIndex = getMaxAvailableFileIndex();
+    
+    const processedData: TemplateItem[] = modelTemplate.data.map(item => {
+      if (item.type === 'Item') {
+        const processedItem: TemplateItem = {
+          ...item,
+          fileIndex: currentFileIndex,
+          originalFileIndex: currentIndex
+        };
+        currentIndex++;
+        currentFileIndex++;
+        return processedItem;
+      } else {
+        // For Folder and EndMark types, just copy as is
+        return { ...item } as TemplateItem;
+      }
+    });
+
+    return {
+      name: modelTemplate.name,
+      description: modelTemplate.description,
+      data: processedData
+    };
+  });
+}
+
+// Export repackTemplates using modelTemplates - will be updated dynamically
+export let repackTemplates: RepackTemplate[] = [];
+
+// Function to update repackTemplates with current indices
+export function updateRepackTemplates(
+  getMaxAvailableIndex: () => number,
+  getMaxAvailableFileIndex: () => number
+): void {
+  repackTemplates = createRepackTemplatesFromModelTemplates(
+    getMaxAvailableIndex,
+    getMaxAvailableFileIndex
+  );
+}

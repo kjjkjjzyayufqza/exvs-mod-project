@@ -17,7 +17,7 @@ import {
   convertSubFileStructureToTreeData,
 } from "@/lib/utils";
 import { useRepackStore } from "@/store/repackStore";
-import { repackTemplates, type RepackTemplate } from "@/models/repackTemplateJson";
+import { repackTemplates, updateRepackTemplates, type RepackTemplate } from "@/models/repackTemplateJson";
 
 // Custom Node component for React Arborist
 function CustomNode({ node, style, dragHandle }: {
@@ -601,7 +601,7 @@ export default function RepackPage() {
       return;
     }
 
-    // Convert template data to TreeDataItem format
+    // Convert template data to TreeDataItem format with proper index calculation
     const convertTemplateItemToTreeData = (templateItem: any, parentPath: string = ""): TreeDataItem[] => {
       const result: TreeDataItem[] = [];
 
@@ -610,13 +610,16 @@ export default function RepackPage() {
         const itemName = item.Name || `item_${item.type}`;
 
         if (item.type === 'Folder') {
+          // Calculate new index for folders same as add file logic
+          const newIndex = getMaxAvailableIndex();
+          
           const folderNode: TreeDataItem = {
             id: newId,
             name: itemName,
             children: [], // Will be populated later
             data: {
               type: 'Folder',
-              index: getMaxAvailableIndex(),
+              index: newIndex,
               folderCount: item.folderCount || 0,
               unk1: item.unk1 || "00000000",
               unk2: item.unk2 || "00000000",
@@ -626,17 +629,20 @@ export default function RepackPage() {
           };
           result.push(folderNode);
         } else if (item.type === 'Item') {
-          const fileIndex = getMaxAvailableFileIndex();
+          // Calculate new index and fileIndex same as add file logic
+          const newIndex = getMaxAvailableIndex();
+          const newFileIndex = getMaxAvailableFileIndex();
+          
           const itemNode: TreeDataItem = {
             id: newId,
             name: `${itemName}.bin`,
             data: {
               type: 'Item',
-              index: getMaxAvailableIndex(),
+              index: newIndex,
               fileType: '.bin',
-              fileIndex: fileIndex,
+              fileIndex: newFileIndex,
               fileUrl: `./${itemName}.bin`,
-              originalFileIndex: item.originalFileIndex || fileIndex,
+              originalFileIndex: newIndex, // Use newIndex like in add file logic, not hardcoded
               unk1: item.unk1 || "00000000",
               unk2: item.unk2 || "00000000",
               unk3: item.unk3 || 0
@@ -644,13 +650,13 @@ export default function RepackPage() {
           };
           result.push(itemNode);
 
-          // Add to completeProjectData.SubFileData if available
-          if (completeProjectData && itemNode.data?.index !== undefined) {
+          // Add to completeProjectData.SubFileData if available (same as add file logic)
+          if (completeProjectData) {
             const newSubFileDataItem = {
-              index: itemNode.data.index,
+              index: newIndex,
               fileType: '.bin',
-              fileIndex: fileIndex,
-              fileUrl: `.\\${itemName}.bin`
+              fileIndex: newFileIndex,
+              fileUrl: `.\\${completeProjectData.SubFileData[0]?.fileUrl.match(/\\([^\\]+)\\/)?.[1] || 'unknown'}\\${newFileIndex}.bin`
             };
 
             const updatedCompleteProjectData = {
@@ -943,7 +949,13 @@ export default function RepackPage() {
             <Plus className="h-4 w-4 mr-2" />
             Add File
           </Button>
-          <Dialog open={isTemplateDialogOpen} onOpenChange={setIsTemplateDialogOpen}>
+          <Dialog open={isTemplateDialogOpen} onOpenChange={(open) => {
+            if (open) {
+              // Update templates with current dynamic indices before showing dialog
+              updateRepackTemplates(getMaxAvailableIndex, getMaxAvailableFileIndex);
+            }
+            setIsTemplateDialogOpen(open);
+          }}>
             <DialogTrigger asChild>
               <Button
                 disabled={!selectedItem || selectedItem.data?.type !== 'Folder'}
