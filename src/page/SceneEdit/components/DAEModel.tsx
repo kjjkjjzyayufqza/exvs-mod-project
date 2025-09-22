@@ -1,9 +1,10 @@
-import { useRef, useEffect, useState, Suspense, useMemo, useCallback } from 'react';
+import { useRef, useEffect, useState, Suspense, useMemo, useCallback, memo } from 'react';
 import { useLoader } from '@react-three/fiber';
 import { ColladaLoader } from 'three-stdlib';
 import { TransformControls } from '@react-three/drei';
 import { ModelState, SubModelState } from '../../../store/sceneStore';
 import { BoundingBoxGrid } from './BoundingBoxGrid';
+import { SelectionManager } from '../utils/SelectionManager';
 import * as THREE from 'three';
 
 // 全局模型缓存
@@ -12,9 +13,8 @@ const modelCache = new Map<string, any>();
 interface DAEModelProps {
     modelState: ModelState;
     mode: 'translate' | 'rotate' | 'scale';
-    isSelected: boolean;
-    onClick: (id: string) => void;
     onTransform: (modelState: ModelState) => void;
+    selectionManager?: SelectionManager;
 }
 
 // 自定义Hook用于管理模型缓存和加载
@@ -81,12 +81,13 @@ function ErrorBox({ error }: { error: Error }) {
 }
 
 // Inner DAE model component
-function DAEModelInner({ modelState, mode, isSelected, onClick, onTransform }: DAEModelProps) {
+function DAEModelInner({ modelState, mode, onTransform, selectionManager }: DAEModelProps) {
     const meshRef = useRef<THREE.Group>(null);
     const subMeshRefs = useRef<Record<string, THREE.Group>>({});
     const timeoutRef = useRef<number | null>(null);
     const [isModelReady, setIsModelReady] = useState(false);
     const [subModelStates, setSubModelStates] = useState<SubModelState[]>([]);
+    const [isSelected, setIsSelected] = useState(false);
     const isInitializedRef = useRef(false);
 
     // 使用自定义Hook加载模型（带缓存）
@@ -167,6 +168,11 @@ function DAEModelInner({ modelState, mode, isSelected, onClick, onTransform }: D
             clearTimeout(timeoutRef.current);
         }
 
+        // 立即更新SelectionManager的选中框
+        if (selectionManager) {
+            selectionManager.updateSelectionBox();
+        }
+
         // Set new timeout to save after 300ms of no changes
         timeoutRef.current = window.setTimeout(() => {
             if (subModelId && subMeshRefs.current[subModelId]) {
@@ -210,22 +216,45 @@ function DAEModelInner({ modelState, mode, isSelected, onClick, onTransform }: D
                 onTransform(updatedModelState);
             }
         }, 300);
-    }, [modelState, subModelStates, onTransform]);
+    }, [modelState, subModelStates, onTransform, selectionManager]);
+
+    // 注册到SelectionManager并监听选中状态变化
+    useEffect(() => {
+        if (meshRef.current && selectionManager) {
+            // 设置模型ID到userData中
+            meshRef.current.userData.modelId = modelState.id;
+
+            // 注册为可选择对象
+            selectionManager.registerSelectableObject(meshRef.current);
+
+            // 监听选中状态变化
+            const handleSelectionChange = (selectedObject: THREE.Object3D | null) => {
+                const isCurrentlySelected = selectedObject?.userData?.modelId === modelState.id;
+                setIsSelected(isCurrentlySelected);
+            };
+
+            selectionManager.addSelectionChangeCallback(handleSelectionChange);
+
+            return () => {
+                // 清理
+                selectionManager.unregisterSelectableObject(meshRef.current!);
+                selectionManager.removeSelectionChangeCallback(handleSelectionChange);
+            };
+        }
+    }, [meshRef.current, selectionManager, modelState.id]);
 
     // 使用useCallback优化点击处理函数
     const handleClick = useCallback((event: any) => {
         event.stopPropagation();
-        // 对于DAE模型，不允许选择父模型，只能选择子模型
-        // 如果没有子模型被选择，则什么都不做
+        // 点击事件现在由SelectionManager处理
     }, []);
 
     const handleSubModelClick = useCallback((subModelId: string) => {
         return (event: any) => {
             event.stopPropagation();
-            // 点击子模型时，自动选中父模型而不是子模型
-            onClick(modelState.id);
+            // 点击事件现在由SelectionManager处理
         };
-    }, [onClick, modelState.id]);
+    }, []);
 
     // 使用useMemo缓存几何体和材质提取，避免重复计算
     const { geometries, materials } = useMemo(() => {
@@ -244,7 +273,7 @@ function DAEModelInner({ modelState, mode, isSelected, onClick, onTransform }: D
         return { geometries, materials };
     }, [collada]);
 
-    console.log('DAEModelInner: Rendering sub-models:', subModelStates);
+    // console.log('DAEModelInner: Rendering sub-models:', subModelStates);
 
     // 如果有错误，显示错误框
     if (error) {
@@ -277,7 +306,7 @@ function DAEModelInner({ modelState, mode, isSelected, onClick, onTransform }: D
                                 onClick={handleSubModelClick(subModel.id)}
                             >
                                 <mesh geometry={geometry} material={material} />
-                           </group>
+                            </group>
                         </group>
                     );
                 })}
@@ -306,8 +335,7 @@ function DAEModelInner({ modelState, mode, isSelected, onClick, onTransform }: D
     );
 }
 
-// Main DAE model component with error boundary
-export function DAEModel(props: DAEModelProps) {
+export const DAEModel = function DAEModel(props: DAEModelProps) {
     return (
         <Suspense fallback={<LoadingBox />}>
             <DAEModelInner {...props} />

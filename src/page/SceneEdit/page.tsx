@@ -5,6 +5,8 @@ import { useSceneStore, ModelState } from "../../store/sceneStore";
 import { ControlPanel } from "./components/ControlPanel";
 import { DAEModel } from "./components/DAEModel";
 import { BoundingBoxGrid } from "./components/BoundingBoxGrid";
+import { SelectionManager } from "./utils/SelectionManager";
+import * as THREE from 'three';
 
 interface BoxProps {
     boxState: ModelState;
@@ -103,6 +105,8 @@ export default function SceneEdit() {
         canRedo
     } = useSceneStore();
 
+    const selectionManagerRef = useRef<SelectionManager | null>(null);
+
     const handleBoxClick = useCallback((boxId: string) => {
         setSelectedModel(boxId);
     }, [setSelectedModel]);
@@ -116,8 +120,47 @@ export default function SceneEdit() {
         // 检查事件对象是否有 intersections 且没有相交对象
         if (event.intersections && event.intersections.length === 0) {
             clearSelection();
+            // 同时清除SelectionManager的选中状态
+            if (selectionManagerRef.current) {
+                selectionManagerRef.current.clearSelection();
+            }
         }
     };
+
+    // 初始化SelectionManager
+    const initializeSelectionManager = useCallback((scene: THREE.Scene, camera: THREE.Camera, canvas: HTMLCanvasElement) => {
+        if (!selectionManagerRef.current) {
+            selectionManagerRef.current = new SelectionManager(scene, camera);
+            
+            // 监听选中状态变化，但避免循环更新
+            selectionManagerRef.current.addSelectionChangeCallback((selectedObject) => {
+                if (selectedObject) {
+                    const modelId = selectedObject.userData?.modelId;
+                    if (modelId && modelId !== selectedModelId) {
+                        // 只有当选中的模型ID真正改变时才更新store
+                        setSelectedModel(modelId);
+                    }
+                } else if (selectedModelId !== null) {
+                    // 只有当当前有选中模型时才清除选择
+                    clearSelection();
+                }
+            });
+
+            // 添加点击事件监听
+            const handleClick = (event: MouseEvent) => {
+                selectionManagerRef.current?.handleClick(event, canvas);
+            };
+
+            canvas.addEventListener('click', handleClick);
+
+            // 返回清理函数
+            return () => {
+                canvas.removeEventListener('click', handleClick);
+                selectionManagerRef.current?.dispose();
+                selectionManagerRef.current = null;
+            };
+        }
+    }, [setSelectedModel, clearSelection, selectedModelId]);
 
     useEffect(() => {
         const handleKeyPress = (event: KeyboardEvent) => {
@@ -198,6 +241,10 @@ export default function SceneEdit() {
                 style={{ background: '#1a1a1a' }}
                 className="z-10"
                 onClick={handleCanvasClick}
+                onCreated={({ scene, camera, gl }) => {
+                    // 初始化SelectionManager
+                    initializeSelectionManager(scene, camera, gl.domElement);
+                }}
                 onPointerDown={(event) => {
                     // 阻止鼠标滚轮按下时的页面滚动
                     if (event.button === 1) { // 中键
@@ -223,9 +270,8 @@ export default function SceneEdit() {
                                 key={modelState.id}
                                 modelState={modelState}
                                 mode={transformMode}
-                                isSelected={selectedModelId === modelState.id}
-                                onClick={handleBoxClick}
                                 onTransform={handleTransform}
+                                selectionManager={selectionManagerRef.current || undefined}
                             />
                         );
                     } else {
