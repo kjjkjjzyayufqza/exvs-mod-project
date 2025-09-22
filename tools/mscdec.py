@@ -835,58 +835,58 @@ class RedirectStdoutToFile:
 
 def handle_func_241_pointer_funcs(file_name, log_file):
     # this function only for handle the normal msc
-    # check the output.c file, find the functions index string "func_241(0x6d00aeaa" only do when have this string
+    # scan the entire output.c file and replace all func_241 pointer calls
     # 1. read your output.c file => rename args.file to .c extension
     with open(file_name, 'r', encoding='utf-8') as f:
         content = f.readlines()
-    
+
     with open(log_file, "r") as log:
         log_content = log.readlines()
-        
+
     data_block = []
-    
-    # 2. find the function index string
-    func_index = "func_241(0x6d00aeaa"
-    line_count = 0
-    for line in content:
-        line_count += 1
-        # 3. start replace the function pointer to the real function name
-        # e.g func_241(0x6d00aeaa, 0xf805); => find 0xf805 in log.txt, get the function name, the log like [func_name: func_%i, pointer: %i]
-        # use 0xf805 + 0x30 = 0xf835 and convert it to decimal => 63541 then find in the log.txt and get the function_name
-        # so the result will be func_241(0x6d00aeaa, func_name);
-        # 3.1 Locate to the function and start read line by line
-        if func_index in line:
-            for current_index in range(line_count - 1, len(content)):
-                if '}' in content[current_index]:
-                    break
-                original_line = content[current_index]
-                # 3.2 Find the pointer in the line
-                pointer = re.search(r'func_241\(\s*0x[0-9a-fA-F]+,\s*(0x[0-9a-fA-F]+)\s*\);', original_line)
-                if(pointer):
-                    # 3.3 Get the pointer value and + 0x30
-                    pointer_value = int(pointer.group(1), 16) + 0x30
-                    # 3.4 Find the function name by pointer value
-                    for log_line in log_content:
-                        if f'pointer: {str(pointer_value)}]' in log_line:
-                            function_name = re.search(r'func_name: (\w+), pointer: \d+', log_line).group(1)
-                            # 3.5 Replace the pointer to the function name, only replace the 2 arguments function
-                            # e.g func_241(0x6d00aeaa, 0xf805); => func_241(0x6d00aeaa, func_1);
-                            # e.g func_241(0x9cf36e1b, 0xf94d); => func_241(0x9cf36e1b, func_2);
-                            replaced_str = re.sub(
-                                r'(func_241\(\s*0x[0-9a-fA-F]+,\s*)0x[0-9a-fA-F]+(\s*\);)',
-                                r'\1' + function_name + r'\2',
-                                original_line)
-                            break
-                    print("pointer_value: ", pointer_value)
-                    data_block.append([content[current_index], replaced_str])
+
+    # 2. scan all lines for func_241 calls
+    for line_index, line in enumerate(content):
+        # 3. Find all func_241 calls with hex pointer as second argument
+        # Pattern matches: func_241(0xHEX, 0xHEX);
+        pointer_match = re.search(r'func_241\(\s*0x[0-9a-fA-F]+,\s*(0x[0-9a-fA-F]+)\s*\);', line)
+        if pointer_match:
+            original_line = line
+            pointer_hex = pointer_match.group(1)
+
+            # 3.1 Get the pointer value and + 0x30
+            pointer_value = int(pointer_hex, 16) + 0x30
+
+            # 3.2 Find the function name by pointer value in log
+            function_name = None
+            for log_line in log_content:
+                if f'pointer: {str(pointer_value)}]' in log_line:
+                    function_name_match = re.search(r'func_name: (\w+), pointer: \d+', log_line)
+                    if function_name_match:
+                        function_name = function_name_match.group(1)
+                        break
+
+            if function_name:
+                # 3.3 Replace the pointer to the function name
+                # e.g func_241(0x6d00aeaa, 0xf805); => func_241(0x6d00aeaa, func_1);
+                replaced_str = re.sub(
+                    r'(func_241\(\s*0x[0-9a-fA-F]+,\s*)0x[0-9a-fA-F]+(\s*\);)',
+                    r'\1' + function_name + r'\2',
+                    original_line)
+                print(f"Replacing pointer {pointer_hex} with function {function_name}")
+                data_block.append([original_line, replaced_str])
 
     # 4. Write the replaced content to the file
     with open(file_name, 'w', encoding='utf-8') as f:
         for line in content:
-            for data in data_block:
-                if data[0] in line:
-                    line = data[1]
-            f.write(line)
+            replaced = False
+            for original, replacement in data_block:
+                if line == original:
+                    f.write(replacement)
+                    replaced = True
+                    break
+            if not replaced:
+                f.write(line)
 
 def handle_sys_1_0x10001_0x10_var1_pointer_funcs(file_name, log_file):
     # this function only for handle the new version msc
