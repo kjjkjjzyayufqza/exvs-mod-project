@@ -51,6 +51,7 @@ export interface SceneState {
     // Actions
     setSelectedModel: (modelId: string) => void;
     clearSelection: () => void;
+    clearAllModels: () => void;
     setTransformMode: (mode: 'translate' | 'rotate' | 'scale') => void;
     updateModelTransform: (modelState: ModelState) => void;
     getInitialModelState: (modelId: string) => ModelState | null;
@@ -95,6 +96,24 @@ export const useSceneStore = create<SceneState>()(
         clearSelection: () => {
             set((state) => {
                 state.selectedModelId = null;
+            });
+        },
+
+        clearAllModels: () => {
+            set((state) => {
+                // Clear all models
+                state.models = {};
+
+                // Clear selection
+                state.selectedModelId = null;
+
+                // Reset history to initial empty state
+                state.history = [[]];
+                state.historyIndex = 0;
+
+                // Clear loading states
+                state.isLoading = false;
+                state.loadingError = null;
             });
         },
 

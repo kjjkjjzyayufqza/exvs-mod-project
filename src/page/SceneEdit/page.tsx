@@ -6,6 +6,7 @@ import { ControlPanel } from "./components/ControlPanel";
 import { DAEModel } from "./components/DAEModel";
 import { BoundingBoxGrid } from "./components/BoundingBoxGrid";
 import { SelectionManager } from "./utils/SelectionManager";
+import { PostProcessing } from "./components/PostProcessing";
 import * as THREE from 'three';
 
 interface BoxProps {
@@ -95,6 +96,7 @@ export default function SceneEdit() {
         transformMode,
         setSelectedModel,
         clearSelection,
+        clearAllModels,
         setTransformMode,
         updateModelTransform,
         getInitialModelState,
@@ -231,6 +233,9 @@ export default function SceneEdit() {
     useEffect(() => {
         const loadInitialDAEModel = async () => {
             try {
+                // Clear all existing models before loading new ones
+                clearAllModels();
+
                 await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_0.dae");
                 await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_1.dae");
                 await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_2.dae");
@@ -241,7 +246,7 @@ export default function SceneEdit() {
         };
 
         loadInitialDAEModel();
-    }, []);
+    }, [clearAllModels]);
 
     // Sync SelectionManager when selectedModelId changes
     useEffect(() => {
@@ -318,9 +323,11 @@ export default function SceneEdit() {
 
                 <OrbitControls
                     makeDefault
-                    enableDamping={true}
+                    enableDamping={false}
                     dampingFactor={1}
                 />
+
+                <PostProcessing />
             </Canvas>
         </div>
     );

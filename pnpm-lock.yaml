@@ -143,6 +143,9 @@ importers:
       pako:
         specifier: ^2.1.0
         version: 2.1.0
+      postprocessing:
+        specifier: ^6.37.8
+        version: 6.37.8(three@0.180.0)
       react:
         specifier: ^19.1.0
         version: 19.1.0
