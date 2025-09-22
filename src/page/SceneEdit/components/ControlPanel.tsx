@@ -10,6 +10,8 @@ import { TexturePanel } from './TexturePanel';
 import { PropertySection } from './PropertySection';
 import { ModelList } from './ModelList';
 import { ImportPanel } from './ImportPanel';
+import { VdkConfigPanel } from './VdkConfigPanel';
+import { VdkObjectInfo } from '../../../types/vdk';
 
 interface ControlPanelProps {
     models: Record<string, ModelState>;
@@ -18,16 +20,34 @@ interface ControlPanelProps {
     onUpdateModelTransform: (modelState: ModelState) => void;
     getInitialModelState: (modelId: string) => ModelState | null;
     onModelSelect: (modelId: string) => void;
+    vdkObjectInfos: Map<number, VdkObjectInfo>;
+    isVdkLoading: boolean;
+    vdkLoadingError: string | null;
+    onLoadVdkConfig: () => Promise<void>;
+    onApplyVdkConfig: () => Promise<void>;
 }
 
 
 
-export function ControlPanel({ models, selectedModelId, selectedModelState, onUpdateModelTransform, getInitialModelState, onModelSelect }: ControlPanelProps) {
+export function ControlPanel({
+    models,
+    selectedModelId,
+    selectedModelState,
+    onUpdateModelTransform,
+    getInitialModelState,
+    onModelSelect,
+    vdkObjectInfos,
+    isVdkLoading,
+    vdkLoadingError,
+    onLoadVdkConfig,
+    onApplyVdkConfig
+}: ControlPanelProps) {
     const { removeModel, toggleModelLock } = useSceneStore();
     const [isControlsCollapsed, setIsControlsCollapsed] = useState(false);
     const [isPropertiesCollapsed, setIsPropertiesCollapsed] = useState(false);
     const [isModelListCollapsed, setIsModelListCollapsed] = useState(false);
     const [isTextureCollapsed, setIsTextureCollapsed] = useState(false);
+    const [isVdkConfigCollapsed, setIsVdkConfigCollapsed] = useState(false);
 
     const handlePropertyChange = (property: 'position' | 'rotation' | 'scale', axis: 0 | 1 | 2, value: number) => {
         if (!selectedModelState) return;
@@ -250,8 +270,16 @@ export function ControlPanel({ models, selectedModelId, selectedModelState, onUp
             </div>
 
             {/* Right Panel - Import Panel */}
-            <div className="absolute top-4 right-4 z-50">
+            <div className="absolute top-4 right-4 z-50 space-y-2 max-h-[calc(100vh-6rem)] overflow-y-auto custom-scrollbar-thin">
                 <ImportPanel />
+                {/* VDK Configuration Panel */}
+                <VdkConfigPanel
+                    vdkObjectInfos={vdkObjectInfos}
+                    isVdkLoading={isVdkLoading}
+                    vdkLoadingError={vdkLoadingError}
+                    onLoadConfig={onLoadVdkConfig}
+                    onApplyConfig={onApplyVdkConfig}
+                />
             </div>
         </>
     );

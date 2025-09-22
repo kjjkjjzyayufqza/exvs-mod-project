@@ -114,7 +114,12 @@ export default function SceneEdit() {
         undo,
         redo,
         canUndo,
-        canRedo
+        canRedo,
+        vdkObjectInfos,
+        isVdkLoading,
+        vdkLoadingError,
+        loadVdkConfig,
+        applyVdkConfigToScene
     } = useSceneStore();
 
     const selectionManagerRef = useRef<SelectionManager | null>(null);
@@ -126,6 +131,14 @@ export default function SceneEdit() {
     const handleTransform = useCallback((boxState: any) => {
         updateModelTransform(boxState);
     }, [updateModelTransform]);
+
+    const handleLoadVdkConfig = useCallback(async () => {
+        await loadVdkConfig('35.bin');
+    }, [loadVdkConfig]);
+
+    const handleApplyVdkConfig = useCallback(async () => {
+        await applyVdkConfigToScene();
+    }, [applyVdkConfigToScene]);
 
     const handleCanvasClick = (event: any) => {
         // 只有当点击的不是模型时才清除选择
@@ -245,24 +258,32 @@ export default function SceneEdit() {
 
     const selectedModelState = selectedModelId ? models[selectedModelId] : null;
 
-    // Load DAE model on scene initialization
+    // Load DAE model and VDK config on scene initialization
     useEffect(() => {
-        const loadInitialDAEModel = async () => {
+        const loadInitialScene = async () => {
             try {
                 // Clear all existing models before loading new ones
                 clearAllModels();
 
+                // Load DAE models
                 await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_0.dae");
                 await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_1.dae");
                 await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_2.dae");
                 await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\body.dae");
+
+                // Load VDK configuration after models are loaded
+                await loadVdkConfig('E:\\XB\\解包\\gundamv\\16F73C97\\0\\0\\1\\35.bin');
+
+                // Apply VDK configuration to the scene
+                await applyVdkConfigToScene();
+
             } catch (error) {
-                console.error('Failed to load initial DAE model:', error);
+                console.error('Failed to load initial scene:', error);
             }
         };
 
-        loadInitialDAEModel();
-    }, [clearAllModels]);
+        loadInitialScene();
+    }, [clearAllModels, loadSpecificDAEModel, loadVdkConfig, applyVdkConfigToScene]);
 
     // Sync SelectionManager when selectedModelId changes
     useEffect(() => {
@@ -282,6 +303,11 @@ export default function SceneEdit() {
                 onUpdateModelTransform={updateModelTransform}
                 getInitialModelState={getInitialModelState}
                 onModelSelect={setSelectedModel}
+                vdkObjectInfos={vdkObjectInfos}
+                isVdkLoading={isVdkLoading}
+                vdkLoadingError={vdkLoadingError}
+                onLoadVdkConfig={handleLoadVdkConfig}
+                onApplyVdkConfig={handleApplyVdkConfig}
             />
 
             <Canvas

@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
+import { VdkConfig, VdkObjectInfo } from '../types/vdk';
+import { loadVdkConfig, groupVdkObjects } from '../utils/vdkParser';
 
 export type ModelType = 'box' | 'dae';
 
@@ -49,6 +51,12 @@ export interface SceneState {
     history: ModelState[][];
     historyIndex: number;
 
+    // VDK Configuration
+    vdkConfigs: VdkConfig[];
+    vdkObjectInfos: Map<number, VdkObjectInfo>;
+    isVdkLoading: boolean;
+    vdkLoadingError: string | null;
+
     // Actions
     setSelectedModel: (modelId: string) => void;
     clearSelection: () => void;
@@ -70,6 +78,12 @@ export interface SceneState {
     // Texture actions
     setSubModelTexture: (modelId: string, subModelId: string, texturePath: string) => Promise<void>;
     removeSubModelTexture: (modelId: string, subModelId: string) => void;
+
+    // VDK Configuration actions
+    loadVdkConfig: (filePath: string) => Promise<void>;
+    applyVdkConfigToScene: () => Promise<void>;
+    setVdkLoading: (loading: boolean) => void;
+    setVdkLoadingError: (error: string | null) => void;
 }
 
 const initialModels: Record<string, ModelState> = {
@@ -88,6 +102,12 @@ export const useSceneStore = create<SceneState>()(
         transformMode: 'translate',
         history: initialHistory,
         historyIndex: 0,
+
+        // VDK Configuration initial state
+        vdkConfigs: [],
+        vdkObjectInfos: new Map(),
+        isVdkLoading: false,
+        vdkLoadingError: null,
 
         // Actions
         setSelectedModel: (modelId: string) => {
@@ -461,6 +481,102 @@ export const useSceneStore = create<SceneState>()(
             });
 
             console.log('Texture removed for subModel:', subModelId);
+        },
+
+        // VDK Configuration actions implementation
+        loadVdkConfig: async (filePath: string) => {
+            try {
+                set((state) => {
+                    state.isVdkLoading = true;
+                    state.vdkLoadingError = null;
+                });
+
+                console.log('Loading VDK config from:', filePath);
+                const configs = await loadVdkConfig(filePath);
+                const objectInfos = groupVdkObjects(configs);
+
+                set((state) => {
+                    state.vdkConfigs = configs;
+                    state.vdkObjectInfos = objectInfos;
+                    state.isVdkLoading = false;
+                });
+
+                console.log('VDK config loaded successfully:', configs.length, 'configs,', objectInfos.size, 'unique objects');
+            } catch (error) {
+                console.error('Failed to load VDK config:', error);
+                set((state) => {
+                    state.vdkLoadingError = error instanceof Error ? error.message : 'Unknown error occurred';
+                    state.isVdkLoading = false;
+                });
+            }
+        },
+
+        applyVdkConfigToScene: async () => {
+            const state = get();
+            const { vdkObjectInfos, models, addExternalModel } = state;
+
+            console.log('Applying VDK config to scene...');
+
+            // Process each VDK object info
+            for (const [objectNumber, objectInfo] of vdkObjectInfos) {
+                console.log(`Processing VDK object ${objectNumber}, count: ${objectInfo.count}`);
+
+                // Find existing scene models that match this object number (add +1 to index)
+                const sceneModels = Object.values(models).filter(model =>
+                    model.name.startsWith('scene_') &&
+                    model.name === `scene_${objectNumber + 1}`
+                );
+
+                if (sceneModels.length === 0) {
+                    console.warn(`No scene model found for VDK object ${objectNumber}`);
+                    continue;
+                }
+
+                const baseSceneModel = sceneModels[0];
+
+                // Update the base model with VDK config
+                const updatedModel: ModelState = {
+                    ...baseSceneModel,
+                    position: objectInfo.position,
+                    rotation: objectInfo.rotation,
+                };
+
+                // Apply the update
+                state.updateModelTransform(updatedModel);
+
+                // If we need more instances than we have, create duplicates
+                if (objectInfo.count > sceneModels.length) {
+                    const instancesToCreate = objectInfo.count - sceneModels.length;
+                    console.log(`Creating ${instancesToCreate} additional instances for object ${objectNumber}`);
+
+                    for (let i = 0; i < instancesToCreate; i++) {
+                        const duplicateId = `scene_${objectNumber}_duplicate_${i + 1}`;
+                        const duplicateModel: ModelState = {
+                            ...baseSceneModel,
+                            id: duplicateId,
+                            name: `scene_${objectNumber}_duplicate_${i + 1}`,
+                            position: objectInfo.position,
+                            rotation: objectInfo.rotation,
+                        };
+
+                        addExternalModel(duplicateModel);
+                    }
+                }
+            }
+
+            console.log('VDK config applied to scene successfully');
+        },
+
+        setVdkLoading: (loading: boolean) => {
+            set((state) => {
+                state.isVdkLoading = loading;
+            });
+        },
+
+        setVdkLoadingError: (error: string | null) => {
+            set((state) => {
+                state.vdkLoadingError = error;
+            });
         },
     }))
 );
