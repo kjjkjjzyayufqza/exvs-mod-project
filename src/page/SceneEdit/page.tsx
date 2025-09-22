@@ -225,6 +225,15 @@ export default function SceneEdit() {
         loadInitialDAEModel();
     }, []);
 
+    // Sync SelectionManager when selectedModelId changes
+    useEffect(() => {
+        if (selectionManagerRef.current && selectedModelId) {
+            selectionManagerRef.current.setSelectedById(selectedModelId);
+        } else if (selectionManagerRef.current && !selectedModelId) {
+            selectionManagerRef.current.clearSelection();
+        }
+    }, [selectedModelId]);
+
     return (
         <div className="w-full h-[calc(100vh-28px)] bg-gray-800 relative">
             <ControlPanel
