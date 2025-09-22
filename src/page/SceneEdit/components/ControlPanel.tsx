@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ModelState } from '../../../store/sceneStore';
+import { ModelState, useSceneStore } from '../../../store/sceneStore';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
@@ -23,6 +23,7 @@ interface ControlPanelProps {
 
 
 export function ControlPanel({ models, selectedModelId, selectedModelState, onUpdateModelTransform, getInitialModelState, onModelSelect }: ControlPanelProps) {
+    const { removeModel, toggleModelLock } = useSceneStore();
     const [isControlsCollapsed, setIsControlsCollapsed] = useState(false);
     const [isPropertiesCollapsed, setIsPropertiesCollapsed] = useState(false);
     const [isModelListCollapsed, setIsModelListCollapsed] = useState(false);
@@ -206,6 +207,8 @@ export function ControlPanel({ models, selectedModelId, selectedModelState, onUp
                                     models={models}
                                     selectedModelId={selectedModelId}
                                     onModelSelect={onModelSelect}
+                                    onModelRemove={removeModel}
+                                    onModelLockToggle={toggleModelLock}
                                 />
                             </CardContent>
                         </CollapsibleContent>

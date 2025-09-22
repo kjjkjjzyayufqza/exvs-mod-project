@@ -4,6 +4,10 @@ export interface SelectionChangeCallback {
   (selectedObject: THREE.Object3D | null): void;
 }
 
+export interface IsModelLockedCallback {
+  (modelId: string): boolean;
+}
+
 export class SelectionManager {
   private scene: THREE.Scene;
   private camera: THREE.Camera;
@@ -11,6 +15,7 @@ export class SelectionManager {
   private selectedObject: THREE.Object3D | null = null;
   private selectionBox: THREE.BoxHelper | null = null;
   private callbacks: Set<SelectionChangeCallback> = new Set();
+  private isModelLockedCallback: IsModelLockedCallback | null = null;
   private selectableObjects: THREE.Object3D[] = [];
   private isTransforming: boolean = false;
   private mouseDownPosition: THREE.Vector2 | null = null;
@@ -46,6 +51,11 @@ export class SelectionManager {
   // 移除选中状态变化回调
   removeSelectionChangeCallback(callback: SelectionChangeCallback) {
     this.callbacks.delete(callback);
+  }
+
+  // 设置模型锁定检查回调
+  setIsModelLockedCallback(callback: IsModelLockedCallback) {
+    this.isModelLockedCallback = callback;
   }
 
   // 设置变换状态
@@ -121,6 +131,12 @@ export class SelectionManager {
       }
 
       if (this.selectableObjects.includes(targetObject)) {
+        // Check if the model is locked before selecting
+        const modelId = targetObject.userData?.modelId;
+        if (modelId && this.isModelLockedCallback && this.isModelLockedCallback(modelId)) {
+          // Model is locked, don't select it
+          return;
+        }
         this.setSelected(targetObject);
       }
     } else {
@@ -148,6 +164,11 @@ export class SelectionManager {
 
   // 通过ID选中对象
   setSelectedById(objectId: string) {
+    // Check if the model is locked before selecting
+    if (this.isModelLockedCallback && this.isModelLockedCallback(objectId)) {
+      // Model is locked, don't select it
+      return;
+    }
     const object = this.findObjectById(objectId);
     this.setSelected(object);
   }

@@ -12,6 +12,7 @@ export interface ModelState {
     position: [number, number, number];
     rotation: [number, number, number];
     scale: [number, number, number];
+    isLocked?: boolean; // Whether the model is locked from selection and transformation
     // For external models
     filePath?: string;
     color?: string; // For box models
@@ -52,6 +53,8 @@ export interface SceneState {
     setSelectedModel: (modelId: string) => void;
     clearSelection: () => void;
     clearAllModels: () => void;
+    removeModel: (modelId: string) => void;
+    toggleModelLock: (modelId: string) => void;
     setTransformMode: (mode: 'translate' | 'rotate' | 'scale') => void;
     updateModelTransform: (modelState: ModelState) => void;
     getInitialModelState: (modelId: string) => ModelState | null;
@@ -89,7 +92,11 @@ export const useSceneStore = create<SceneState>()(
         // Actions
         setSelectedModel: (modelId: string) => {
             set((state) => {
-                state.selectedModelId = modelId;
+                const model = state.models[modelId];
+                // Only allow selection if the model exists and is not locked
+                if (model && !model.isLocked) {
+                    state.selectedModelId = modelId;
+                }
             });
         },
 
@@ -117,6 +124,47 @@ export const useSceneStore = create<SceneState>()(
             });
         },
 
+        removeModel: (modelId: string) => {
+            set((state) => {
+                // Remove the model from the models record
+                delete state.models[modelId];
+
+                // Clear selection if the removed model was selected
+                if (state.selectedModelId === modelId) {
+                    state.selectedModelId = null;
+                }
+
+                // Save to history
+                const newHistoryState = Object.values(state.models);
+                const newHistory = state.history.slice(0, state.historyIndex + 1);
+                newHistory.push(newHistoryState);
+                state.history = newHistory;
+                state.historyIndex = newHistory.length - 1;
+            });
+        },
+
+        toggleModelLock: (modelId: string) => {
+            set((state) => {
+                const model = state.models[modelId];
+                if (model) {
+                    // Toggle the lock state
+                    model.isLocked = !model.isLocked;
+
+                    // If model is being locked and it's currently selected, clear selection
+                    if (model.isLocked && state.selectedModelId === modelId) {
+                        state.selectedModelId = null;
+                    }
+
+                    // Save to history
+                    const newHistoryState = Object.values(state.models);
+                    const newHistory = state.history.slice(0, state.historyIndex + 1);
+                    newHistory.push(newHistoryState);
+                    state.history = newHistory;
+                    state.historyIndex = newHistory.length - 1;
+                }
+            });
+        },
+
         setTransformMode: (mode: 'translate' | 'rotate' | 'scale') => {
             set((state) => {
                 state.transformMode = mode;
@@ -125,15 +173,19 @@ export const useSceneStore = create<SceneState>()(
 
         updateModelTransform: (modelState: ModelState) => {
             set((state) => {
-                // Update the model
-                state.models[modelState.id] = modelState;
+                const model = state.models[modelState.id];
+                // Only allow transformation if the model exists and is not locked
+                if (model && !model.isLocked) {
+                    // Update the model
+                    state.models[modelState.id] = modelState;
 
-                // Save to history
-                const newHistoryState = Object.values(state.models);
-                const newHistory = state.history.slice(0, state.historyIndex + 1);
-                newHistory.push(newHistoryState);
-                state.history = newHistory;
-                state.historyIndex = newHistory.length - 1;
+                    // Save to history
+                    const newHistoryState = Object.values(state.models);
+                    const newHistory = state.history.slice(0, state.historyIndex + 1);
+                    newHistory.push(newHistoryState);
+                    state.history = newHistory;
+                    state.historyIndex = newHistory.length - 1;
+                }
             });
         },
 

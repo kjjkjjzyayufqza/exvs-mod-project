@@ -144,6 +144,12 @@ export default function SceneEdit() {
         if (!selectionManagerRef.current) {
             selectionManagerRef.current = new SelectionManager(scene, camera);
             
+            // 设置模型锁定检查回调
+            selectionManagerRef.current.setIsModelLockedCallback((modelId: string) => {
+                const model = models[modelId];
+                return model?.isLocked || false;
+            });
+
             // 监听选中状态变化，但避免循环更新
             selectionManagerRef.current.addSelectionChangeCallback((selectedObject) => {
                 if (selectedObject) {
