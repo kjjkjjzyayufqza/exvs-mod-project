@@ -29,7 +29,7 @@ export function ModelList({ models, selectedModelId, onModelSelect, onModelRemov
                                 ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                                 : 'text-white/80 hover:text-white hover:bg-white/10'
                         } ${model.isLocked ? 'opacity-60' : ''}`}
-                        onClick={() => !model.isLocked && onModelSelect(model.id)}
+                        onClick={() => onModelSelect(model.id)}
                     >
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                             <Badge variant="outline" className="text-xs px-1 py-0">

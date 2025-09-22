@@ -93,8 +93,8 @@ export const useSceneStore = create<SceneState>()(
         setSelectedModel: (modelId: string) => {
             set((state) => {
                 const model = state.models[modelId];
-                // Only allow selection if the model exists and is not locked
-                if (model && !model.isLocked) {
+                // Allow selection if the model exists (even if locked)
+                if (model) {
                     state.selectedModelId = modelId;
                 }
             });
@@ -149,11 +149,6 @@ export const useSceneStore = create<SceneState>()(
                 if (model) {
                     // Toggle the lock state
                     model.isLocked = !model.isLocked;
-
-                    // If model is being locked and it's currently selected, clear selection
-                    if (model.isLocked && state.selectedModelId === modelId) {
-                        state.selectedModelId = null;
-                    }
 
                     // Save to history
                     const newHistoryState = Object.values(state.models);

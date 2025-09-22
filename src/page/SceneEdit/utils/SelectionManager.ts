@@ -131,12 +131,6 @@ export class SelectionManager {
       }
 
       if (this.selectableObjects.includes(targetObject)) {
-        // Check if the model is locked before selecting
-        const modelId = targetObject.userData?.modelId;
-        if (modelId && this.isModelLockedCallback && this.isModelLockedCallback(modelId)) {
-          // Model is locked, don't select it
-          return;
-        }
         this.setSelected(targetObject);
       }
     } else {
@@ -164,11 +158,6 @@ export class SelectionManager {
 
   // 通过ID选中对象
   setSelectedById(objectId: string) {
-    // Check if the model is locked before selecting
-    if (this.isModelLockedCallback && this.isModelLockedCallback(objectId)) {
-      // Model is locked, don't select it
-      return;
-    }
     const object = this.findObjectById(objectId);
     this.setSelected(object);
   }

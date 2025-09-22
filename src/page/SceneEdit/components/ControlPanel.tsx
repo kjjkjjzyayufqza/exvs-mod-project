@@ -156,6 +156,7 @@ export function ControlPanel({ models, selectedModelId, selectedModelState, onUp
                                         onPropertyChange={handlePropertyChange}
                                         onResetProperty={resetProperty}
                                         onCopyProperty={copyProperty}
+                                        disabled={selectedModelState!.isLocked}
                                     />
                                     <Separator className="bg-white/10" />
                                     <PropertySection
@@ -165,6 +166,7 @@ export function ControlPanel({ models, selectedModelId, selectedModelState, onUp
                                         onPropertyChange={handlePropertyChange}
                                         onResetProperty={resetProperty}
                                         onCopyProperty={copyProperty}
+                                        disabled={selectedModelState!.isLocked}
                                     />
                                     <Separator className="bg-white/10" />
                                     <PropertySection
@@ -174,6 +176,7 @@ export function ControlPanel({ models, selectedModelId, selectedModelState, onUp
                                         onPropertyChange={handlePropertyChange}
                                         onResetProperty={resetProperty}
                                         onCopyProperty={copyProperty}
+                                        disabled={selectedModelState!.isLocked}
                                     />
                                 </CardContent>
                             </CollapsibleContent>

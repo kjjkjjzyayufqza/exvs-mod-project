@@ -6,9 +6,10 @@ interface PropertyInputProps {
     value: number;
     onChange: (value: number) => void;
     axis: 'x' | 'y' | 'z';
+    disabled?: boolean;
 }
 
-export function PropertyInput({ label, value, onChange, axis }: PropertyInputProps) {
+export function PropertyInput({ label, value, onChange, axis, disabled = false }: PropertyInputProps) {
     const [inputValue, setInputValue] = useState(value.toString());
 
     useEffect(() => {
@@ -54,7 +55,8 @@ export function PropertyInput({ label, value, onChange, axis }: PropertyInputPro
                 onChange={handleInputChange}
                 onBlur={handleBlur}
                 onKeyDown={handleKeyDown}
-                className={`h-8 text-xs text-center bg-black/50 border transition-colors border-white/20 focus:border-white/40 text-white`}
+                disabled={disabled}
+                className={`h-8 text-xs text-center bg-black/50 border transition-colors border-white/20 focus:border-white/40 text-white ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             />
         </div>
     );
