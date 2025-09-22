@@ -1,5 +1,5 @@
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, TransformControls } from "@react-three/drei";
+import { OrbitControls, TransformControls, useHelper } from "@react-three/drei";
 import { useRef, useEffect, useState, useCallback } from "react";
 import { useSceneStore, ModelState } from "../../store/sceneStore";
 import { ControlPanel } from "./components/ControlPanel";
@@ -8,6 +8,16 @@ import { BoundingBoxGrid } from "./components/BoundingBoxGrid";
 import { SelectionManager } from "./utils/SelectionManager";
 import { PostProcessing } from "./components/PostProcessing";
 import * as THREE from 'three';
+import { DirectionalLightHelper } from 'three';
+
+function LightWithHelper() {
+    const lightRef = useRef<THREE.DirectionalLight>(null);
+    useHelper(lightRef as any, DirectionalLightHelper, 50);
+
+    return (
+        <directionalLight ref={lightRef} position={[400, 400, 350]} intensity={1} />
+    );
+}
 
 interface BoxProps {
     boxState: ModelState;
@@ -293,7 +303,7 @@ export default function SceneEdit() {
                 }}
             >
                 <ambientLight intensity={0.5} />
-                <directionalLight position={[10, 10, 5]} intensity={1} />
+                <LightWithHelper />
 
                 {Object.values(models).map((modelState) => {
                     if (modelState.type === 'dae') {

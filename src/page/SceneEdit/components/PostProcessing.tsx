@@ -25,7 +25,7 @@ export function PostProcessing() {
             <SSAO />
 
             {/* Color and tone effects */}
-            <ToneMapping />
+            {/* <ToneMapping /> */}
 
             {/* Final effects */}
         </EffectComposer>
