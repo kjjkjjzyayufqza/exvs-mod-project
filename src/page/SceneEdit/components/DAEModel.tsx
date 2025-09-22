@@ -262,21 +262,53 @@ function DAEModelInner({ modelState, mode, onTransform, selectionManager }: DAEM
     }, []);
 
     // 使用useMemo缓存几何体和材质提取，避免重复计算
-    const { geometries, materials } = useMemo(() => {
+    const { geometries, originalMaterials } = useMemo(() => {
         const geometries: THREE.BufferGeometry[] = [];
-        const materials: THREE.Material[] = [];
+        const originalMaterials: THREE.Material[] = [];
 
         if (collada && collada.scene) {
             collada.scene.traverse((child: THREE.Object3D) => {
                 if (child instanceof THREE.Mesh) {
                     geometries.push(child.geometry);
-                    materials.push(child.material);
+                    originalMaterials.push(child.material);
                 }
             });
         }
 
-        return { geometries, materials };
+        return { geometries, originalMaterials };
     }, [collada]);
+
+    // 创建带有自定义贴图的材质
+    const materials = useMemo(() => {
+        return originalMaterials.map((originalMaterial, index) => {
+            // 找到对应geometryIndex的子模型
+            const subModel = subModelStates.find(sm => sm.geometryIndex === index);
+            
+            if (subModel && subModel.textureBlob) {
+                // 如果有自定义贴图，创建新材质
+                const texture = new THREE.TextureLoader().load(subModel.textureBlob);
+                texture.flipY = false; // DAE模型通常需要这个设置
+                texture.wrapS = THREE.RepeatWrapping;
+                texture.wrapT = THREE.RepeatWrapping;
+                
+                // 创建新的材质，保持原材质的其他属性
+                const newMaterial = originalMaterial.clone();
+                if (newMaterial instanceof THREE.MeshStandardMaterial || 
+                    newMaterial instanceof THREE.MeshBasicMaterial ||
+                    newMaterial instanceof THREE.MeshLambertMaterial ||
+                    newMaterial instanceof THREE.MeshPhongMaterial) {
+                    newMaterial.map = texture;
+                    newMaterial.needsUpdate = true;
+                }
+                
+                console.log(`Applied texture to subModel ${subModel.name} (geometryIndex: ${index})`);
+                return newMaterial;
+            }
+            
+            // 如果没有自定义贴图，使用原材质
+            return originalMaterial;
+        });
+    }, [originalMaterials, subModelStates]);
 
     // console.log('DAEModelInner: Rendering sub-models:', subModelStates);
 

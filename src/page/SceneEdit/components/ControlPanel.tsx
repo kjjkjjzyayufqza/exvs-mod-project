@@ -8,6 +8,7 @@ import { Badge } from '../../../components/ui/badge';
 import { Separator } from '../../../components/ui/separator';
 import { RotateCcw, Copy, ChevronLeft, ChevronRight, List, ChevronDown, ChevronUp } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../components/ui/collapsible';
+import { TexturePanel } from './TexturePanel';
 
 interface ControlPanelProps {
     models: Record<string, ModelState>;
@@ -81,6 +82,7 @@ export function ControlPanel({ models, selectedModelId, selectedModelState, onUp
     const [isControlsCollapsed, setIsControlsCollapsed] = useState(false);
     const [isPropertiesCollapsed, setIsPropertiesCollapsed] = useState(false);
     const [isModelListCollapsed, setIsModelListCollapsed] = useState(false);
+    const [isTextureCollapsed, setIsTextureCollapsed] = useState(false);
 
     const handlePropertyChange = (property: 'position' | 'rotation' | 'scale', axis: 0 | 1 | 2, value: number) => {
         if (!selectedModelState) return;
@@ -205,7 +207,7 @@ export function ControlPanel({ models, selectedModelId, selectedModelState, onUp
     );
 
     return (
-        <div className="absolute top-4 left-4 z-50 space-y-2">
+        <div className="absolute top-4 left-4 z-50 space-y-2 max-h-[calc(100vh-2rem)] overflow-y-auto custom-scrollbar-thin">
             {/* Controls Card */}
             <Collapsible open={!isControlsCollapsed} onOpenChange={(open) => setIsControlsCollapsed(!open)}>
                 <Card className="w-72 bg-black/90 backdrop-blur-lg border-white/10">
@@ -220,7 +222,7 @@ export function ControlPanel({ models, selectedModelId, selectedModelState, onUp
                                     variant="ghost"
                                     className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
                                 >
-                                    <ChevronLeft className={`h-3 w-3 transition-transform duration-200 ${isControlsCollapsed ? 'rotate-180' : ''}`} />
+                                    {isControlsCollapsed ? <ChevronDown className="h-3 w-3 transition-transform duration-200" /> : <ChevronUp className="h-3 w-3 transition-transform duration-200" />}
                                 </Button>
                             </CollapsibleTrigger>
                         </div>
@@ -282,7 +284,7 @@ export function ControlPanel({ models, selectedModelId, selectedModelState, onUp
                                         variant="ghost"
                                         className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
                                     >
-                                        <ChevronLeft className={`h-3 w-3 transition-transform duration-200 ${isPropertiesCollapsed ? 'rotate-180' : ''}`} />
+                                        {isPropertiesCollapsed ? <ChevronDown className="h-3 w-3 transition-transform duration-200" /> : <ChevronUp className="h-3 w-3 transition-transform duration-200" />}
                                     </Button>
                                 </CollapsibleTrigger>
                             </div>
@@ -324,6 +326,36 @@ export function ControlPanel({ models, selectedModelId, selectedModelState, onUp
                     <CollapsibleContent>
                         <CardContent className="p-1">
                             <ModelList />
+                        </CardContent>
+                    </CollapsibleContent>
+                </Card>
+            </Collapsible>
+
+            {/* Texture Panel */}
+            <Collapsible open={!isTextureCollapsed} onOpenChange={(open) => setIsTextureCollapsed(!open)}>
+                <Card className="w-72 bg-black/90 backdrop-blur-lg border-white/10">
+                    <CardHeader className="p-1 border-b border-white/10">
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="text-sm text-white">
+                                贴图设置
+                            </CardTitle>
+                            <CollapsibleTrigger asChild>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                                >
+                                    {isTextureCollapsed ? <ChevronDown className="h-3 w-3 transition-transform duration-200" /> : <ChevronUp className="h-3 w-3 transition-transform duration-200" />}
+                                </Button>
+                            </CollapsibleTrigger>
+                        </div>
+                    </CardHeader>
+                    <CollapsibleContent>
+                        <CardContent className="p-1">
+                            <TexturePanel
+                                models={models}
+                                selectedModelId={selectedModelId}
+                            />
                         </CardContent>
                     </CollapsibleContent>
                 </Card>

@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { open } from '@tauri-apps/plugin-dialog';
+import { readFile } from '@tauri-apps/plugin-fs';
 
 export type ModelType = 'box' | 'dae';
 
@@ -24,6 +26,8 @@ export interface SubModelState {
     rotation: [number, number, number];
     scale: [number, number, number];
     geometryIndex: number;
+    texturePath?: string; // 贴图文件路径
+    textureBlob?: string; // 贴图的blob URL
 }
 
 export interface SceneState {
@@ -59,6 +63,9 @@ export interface SceneState {
     redo: () => void;
     canUndo: () => boolean;
     canRedo: () => boolean;
+    // Texture actions
+    setSubModelTexture: (modelId: string, subModelId: string, texturePath: string) => Promise<void>;
+    removeSubModelTexture: (modelId: string, subModelId: string) => void;
 }
 
 const initialModels: Record<string, ModelState> = {
@@ -135,10 +142,6 @@ export const useSceneStore = create<SceneState>()(
                     state.isLoading = true;
                     state.loadingError = null;
                 });
-
-                // Import Tauri dialog at runtime to avoid bundling issues
-                const { open } = await import('@tauri-apps/plugin-dialog');
-                const { readFile } = await import('@tauri-apps/plugin-fs');
 
                 // Open file dialog to select DAE file
                 const selected = await open({
@@ -225,9 +228,6 @@ export const useSceneStore = create<SceneState>()(
                 });
 
                 console.log('Loading specific DAE file:', filePath);
-
-                // Import Tauri fs at runtime
-                const { readFile } = await import('@tauri-apps/plugin-fs');
 
                 // Read file content
                 const fileContent = await readFile(filePath);
@@ -337,6 +337,70 @@ export const useSceneStore = create<SceneState>()(
 
         canRedo: () => {
             return get().historyIndex < get().history.length - 1;
+        },
+
+        // Texture actions implementation
+        setSubModelTexture: async (modelId: string, subModelId: string, texturePath: string) => {
+            try {
+                // Read image file
+                const fileContent = await readFile(texturePath);
+                
+                // Create blob URL for the texture
+                const blob = new Blob([fileContent as BlobPart]);
+                const blobUrl = URL.createObjectURL(blob);
+
+                set((state) => {
+                    const model = state.models[modelId];
+                    if (model && model.subModels) {
+                        const subModel = model.subModels.find(sm => sm.id === subModelId);
+                        if (subModel) {
+                            subModel.texturePath = texturePath;
+                            subModel.textureBlob = blobUrl;
+                        }
+                    }
+
+                    // Save to history
+                    const newHistoryState = Object.values(state.models);
+                    const newHistory = state.history.slice(0, state.historyIndex + 1);
+                    newHistory.push(newHistoryState);
+                    state.history = newHistory;
+                    state.historyIndex = newHistory.length - 1;
+                });
+
+                console.log('Texture set successfully for subModel:', subModelId);
+
+            } catch (error) {
+                console.error('Failed to set texture:', error);
+                set((state) => {
+                    state.loadingError = error instanceof Error ? error.message : 'Failed to load texture';
+                });
+            }
+        },
+
+        removeSubModelTexture: (modelId: string, subModelId: string) => {
+            set((state) => {
+                const model = state.models[modelId];
+                if (model && model.subModels) {
+                    const subModel = model.subModels.find(sm => sm.id === subModelId);
+                    if (subModel) {
+                        // Clean up blob URL if it exists
+                        if (subModel.textureBlob) {
+                            URL.revokeObjectURL(subModel.textureBlob);
+                        }
+                        subModel.texturePath = undefined;
+                        subModel.textureBlob = undefined;
+                    }
+                }
+
+                // Save to history
+                const newHistoryState = Object.values(state.models);
+                const newHistory = state.history.slice(0, state.historyIndex + 1);
+                newHistory.push(newHistoryState);
+                state.history = newHistory;
+                state.historyIndex = newHistory.length - 1;
+            });
+
+            console.log('Texture removed for subModel:', subModelId);
         },
     }))
 );
