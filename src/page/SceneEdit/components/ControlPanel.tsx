@@ -207,7 +207,7 @@ export function ControlPanel({ models, selectedModelId, selectedModelState, onUp
     );
 
     return (
-        <div className="absolute top-4 left-4 z-50 space-y-2 max-h-[calc(100vh-2rem)] overflow-y-auto custom-scrollbar-thin">
+        <div className="absolute top-4 left-4 z-50 space-y-2 max-h-[calc(100vh-6rem)] overflow-y-auto custom-scrollbar-thin">
             {/* Controls Card */}
             <Collapsible open={!isControlsCollapsed} onOpenChange={(open) => setIsControlsCollapsed(!open)}>
                 <Card className="w-72 bg-black/90 backdrop-blur-lg border-white/10">
@@ -309,7 +309,6 @@ export function ControlPanel({ models, selectedModelId, selectedModelState, onUp
                     <CardHeader className="p-1 border-b border-white/10">
                         <div className="flex items-center justify-between">
                             <CardTitle className="text-sm text-white flex items-center gap-2">
-                                <List className="h-4 w-4" />
                                 模型列表
                             </CardTitle>
                             <CollapsibleTrigger asChild>
