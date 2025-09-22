@@ -48,13 +48,13 @@ export function ImportPanel() {
 
     return (
         <Card className="w-72 bg-black/90 backdrop-blur-lg border-white/10">
-            <CardHeader className="p-3 border-b border-white/10">
+            <CardHeader className="p-1 border-b border-white/10">
                 <CardTitle className="text-sm text-white flex items-center gap-2">
                     <File className="h-4 w-4" />
                     模型导入
                 </CardTitle>
             </CardHeader>
-            <CardContent className="p-3">
+            <CardContent className="p-1">
                 <div className="space-y-3">
                     {loadingError && (
                         <div className="p-2 bg-red-500/20 border border-red-500/30 rounded text-xs text-red-300">
@@ -65,7 +65,7 @@ export function ImportPanel() {
                     <Button
                         onClick={handleImportModels}
                         disabled={isLoading}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                        className="w-full text-white hover:bg-white/10  cursor-pointer bg-white/20"
                     >
                         {isLoading ? (
                             <div className="flex items-center gap-2">
@@ -79,10 +79,6 @@ export function ImportPanel() {
                             </div>
                         )}
                     </Button>
-
-                    <div className="text-xs text-white/60 text-center">
-                        支持多选 DAE 模型文件
-                    </div>
                 </div>
             </CardContent>
         </Card>
