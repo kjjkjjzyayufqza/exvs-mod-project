@@ -1,17 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ModelState } from '../../../store/sceneStore';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
-import { Input } from '../../../components/ui/input';
-import { Label } from '../../../components/ui/label';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
 import { Separator } from '../../../components/ui/separator';
-import { RotateCcw, Copy, ChevronLeft, ChevronRight, List, ChevronDown, ChevronUp, Upload, File } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../components/ui/collapsible';
 import { TexturePanel } from './TexturePanel';
-import { open } from '@tauri-apps/plugin-dialog';
-import { useSceneStore } from '../../../store/sceneStore';
-import { toast } from 'sonner';
+import { PropertySection } from './PropertySection';
+import { ModelList } from './ModelList';
+import { ImportPanel } from './ImportPanel';
 
 interface ControlPanelProps {
     models: Record<string, ModelState>;
@@ -22,149 +20,7 @@ interface ControlPanelProps {
     onModelSelect: (modelId: string) => void;
 }
 
-interface PropertyInputProps {
-    label: string;
-    value: number;
-    onChange: (value: number) => void;
-    axis: 'x' | 'y' | 'z';
-}
 
-function PropertyInput({ label, value, onChange, axis }: PropertyInputProps) {
-    const [inputValue, setInputValue] = useState(value.toString());
-
-    useEffect(() => {
-        setInputValue(value.toFixed(3));
-    }, [value]);
-
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setInputValue(e.target.value);
-    };
-
-    const handleBlur = () => {
-        const numValue = parseFloat(inputValue);
-        if (!isNaN(numValue)) {
-            // Only update if the value has actually changed
-            if (Math.abs(numValue - value) > 0.001) {
-                onChange(numValue);
-            } else {
-                // Reset to original value if no significant change
-                setInputValue(value.toFixed(3));
-            }
-        } else {
-            setInputValue(value.toFixed(3));
-        }
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter') {
-            handleBlur();
-        } else if (e.key === 'Escape') {
-            setInputValue(value.toFixed(3));
-            (e.target as HTMLInputElement).blur();
-        }
-    };
-
-    return (
-        <div className="flex flex-col gap-1">
-            <div className={`text-xs font-medium p-1 rounded-md text-center text-white bg-white/10`}>
-                {label}
-            </div>
-            <Input
-                type="text"
-                value={inputValue}
-                onChange={handleInputChange}
-                onBlur={handleBlur}
-                onKeyDown={handleKeyDown}
-                className={`h-8 text-xs text-center bg-black/50 border transition-colors border-white/20 focus:border-white/40 text-white`}
-            />
-        </div>
-    );
-}
-
-// Import Panel Component
-function ImportPanel() {
-    const { loadSpecificDAEModel, isLoading, loadingError } = useSceneStore();
-
-    const handleImportModels = async () => {
-        try {
-            // Open file dialog to select multiple DAE files
-            const selectedFiles = await open({
-                multiple: true,
-                filters: [{
-                    name: 'DAE Files',
-                    extensions: ['dae']
-                }]
-            });
-
-            if (!selectedFiles || (Array.isArray(selectedFiles) && selectedFiles.length === 0)) {
-                return;
-            }
-
-            // Handle both single file (string) and multiple files (string[])
-            const filePaths = Array.isArray(selectedFiles) ? selectedFiles : [selectedFiles];
-
-            toast.info(`开始导入 ${filePaths.length} 个模型文件...`);
-
-            // Load each DAE model
-            for (const filePath of filePaths) {
-                try {
-                    await loadSpecificDAEModel(filePath);
-                    toast.success(`成功导入: ${filePath.split(/[/\\]/).pop()}`);
-                } catch (error) {
-                    console.error(`Failed to load DAE model ${filePath}:`, error);
-                    toast.error(`导入失败: ${filePath.split(/[/\\]/).pop()}`);
-                }
-            }
-
-            toast.success(`完成导入 ${filePaths.length} 个模型文件`);
-        } catch (error) {
-            console.error('Error importing models:', error);
-            toast.error('导入模型时发生错误');
-        }
-    };
-
-    return (
-        <Card className="w-72 bg-black/90 backdrop-blur-lg border-white/10">
-            <CardHeader className="p-3 border-b border-white/10">
-                <CardTitle className="text-sm text-white flex items-center gap-2">
-                    <File className="h-4 w-4" />
-                    模型导入
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3">
-                <div className="space-y-3">
-                    {loadingError && (
-                        <div className="p-2 bg-red-500/20 border border-red-500/30 rounded text-xs text-red-300">
-                            {loadingError}
-                        </div>
-                    )}
-
-                    <Button
-                        onClick={handleImportModels}
-                        disabled={isLoading}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                        {isLoading ? (
-                            <div className="flex items-center gap-2">
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                导入中...
-                            </div>
-                        ) : (
-                            <div className="flex items-center gap-2">
-                                <Upload className="h-4 w-4" />
-                                选择模型文件
-                            </div>
-                        )}
-                    </Button>
-
-                    <div className="text-xs text-white/60 text-center">
-                        支持多选 DAE 模型文件
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
-    );
-}
 
 export function ControlPanel({ models, selectedModelId, selectedModelState, onUpdateModelTransform, getInitialModelState, onModelSelect }: ControlPanelProps) {
     const [isControlsCollapsed, setIsControlsCollapsed] = useState(false);
@@ -203,96 +59,7 @@ export function ControlPanel({ models, selectedModelId, selectedModelState, onUp
         navigator.clipboard.writeText(`${value[0]}, ${value[1]}, ${value[2]}`);
     };
 
-    const ModelList = () => {
-        const modelEntries = Object.values(models);
 
-        return (
-            <div className="space-y-1 max-h-48 overflow-y-auto">
-                {modelEntries.length === 0 ? (
-                    <div className="text-xs text-white/60 text-center py-4">
-                        No models in scene
-                    </div>
-                ) : (
-                    modelEntries.map((model) => (
-                        <Button
-                            key={model.id}
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                                onModelSelect(model.id);
-                            }}
-                            className={`w-full justify-start h-8 text-left text-xs ${
-                                selectedModelId === model.id
-                                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                                    : 'text-white/80 hover:text-white hover:bg-white/10'
-                            }`}
-                        >
-                            <div className="flex items-center gap-2 w-full">
-                                <Badge variant="outline" className="text-xs px-1 py-0">
-                                    {model.type}
-                                </Badge>
-                                <span className="truncate flex-1">{model.name}</span>
-                                {model.subModels && model.subModels.length > 0 && (
-                                    <span className="text-xs text-white/40">({model.subModels.length} 子模型)</span>
-                                )}
-                            </div>
-                        </Button>
-                    ))
-                )}
-            </div>
-        );
-    };
-
-    const PropertySection = ({ title, property }: {
-        title: string;
-        property: 'position' | 'rotation' | 'scale';
-    }) => (
-        <div className="space-y-2">
-            <div className="flex items-center justify-between">
-                <Label className="text-xs font-medium text-white">{title}</Label>
-                <div className="flex gap-1">
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => copyProperty(property)}
-                        className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
-                        title="复制值"
-                    >
-                        <Copy className="h-3 w-3" />
-                    </Button>
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => resetProperty(property)}
-                        className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
-                        title="重置"
-                    >
-                        <RotateCcw className="h-3 w-3" />
-                    </Button>
-                </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-                <PropertyInput
-                    label="X"
-                    axis="x"
-                    value={selectedModelState![property][0]}
-                    onChange={(value) => handlePropertyChange(property, 0, value)}
-                />
-                <PropertyInput
-                    label="Y"
-                    axis="y"
-                    value={selectedModelState![property][1]}
-                    onChange={(value) => handlePropertyChange(property, 1, value)}
-                />
-                <PropertyInput
-                    label="Z"
-                    axis="z"
-                    value={selectedModelState![property][2]}
-                    onChange={(value) => handlePropertyChange(property, 2, value)}
-                />
-            </div>
-        </div>
-    );
 
     return (
         <>
@@ -381,11 +148,32 @@ export function ControlPanel({ models, selectedModelId, selectedModelState, onUp
                             </CardHeader>
                             <CollapsibleContent>
                                 <CardContent className="p-1 space-y-3">
-                                    <PropertySection title="位置" property="position" />
+                                    <PropertySection
+                                        title="位置"
+                                        property="position"
+                                        selectedModelState={selectedModelState!}
+                                        onPropertyChange={handlePropertyChange}
+                                        onResetProperty={resetProperty}
+                                        onCopyProperty={copyProperty}
+                                    />
                                     <Separator className="bg-white/10" />
-                                    <PropertySection title="旋转" property="rotation" />
+                                    <PropertySection
+                                        title="旋转"
+                                        property="rotation"
+                                        selectedModelState={selectedModelState!}
+                                        onPropertyChange={handlePropertyChange}
+                                        onResetProperty={resetProperty}
+                                        onCopyProperty={copyProperty}
+                                    />
                                     <Separator className="bg-white/10" />
-                                    <PropertySection title="缩放" property="scale" />
+                                    <PropertySection
+                                        title="缩放"
+                                        property="scale"
+                                        selectedModelState={selectedModelState!}
+                                        onPropertyChange={handlePropertyChange}
+                                        onResetProperty={resetProperty}
+                                        onCopyProperty={copyProperty}
+                                    />
                                 </CardContent>
                             </CollapsibleContent>
                         </Card>
@@ -414,7 +202,11 @@ export function ControlPanel({ models, selectedModelId, selectedModelState, onUp
                         </CardHeader>
                         <CollapsibleContent>
                             <CardContent className="p-1">
-                                <ModelList />
+                                <ModelList
+                                    models={models}
+                                    selectedModelId={selectedModelId}
+                                    onModelSelect={onModelSelect}
+                                />
                             </CardContent>
                         </CollapsibleContent>
                     </Card>
