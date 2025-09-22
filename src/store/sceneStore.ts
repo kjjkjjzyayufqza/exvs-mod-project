@@ -519,7 +519,7 @@ export const useSceneStore = create<SceneState>()(
 
             // Process each VDK object info
             for (const [objectNumber, objectInfo] of vdkObjectInfos) {
-                console.log(`Processing VDK object ${objectNumber}, count: ${objectInfo.count}`);
+                console.log(`Processing VDK object ${objectNumber}, count: ${objectInfo.count}, positions: ${objectInfo.positions.length}`);
 
                 // Find existing scene models that match this object number (add +1 to index)
                 const sceneModels = Object.values(models).filter(model =>
@@ -533,33 +533,37 @@ export const useSceneStore = create<SceneState>()(
                 }
 
                 const baseSceneModel = sceneModels[0];
+                console.log(`VDK Debug: Found base scene model: ${baseSceneModel.name}`);
 
-                // Update the base model with VDK config
-                const updatedModel: ModelState = {
-                    ...baseSceneModel,
-                    position: objectInfo.position,
-                    rotation: objectInfo.rotation,
-                };
+                // Create instances for each position in the VDK config
+                for (let i = 0; i < objectInfo.positions.length; i++) {
+                    const position = objectInfo.positions[i];
+                    const rotation = objectInfo.rotations[i];
 
-                // Apply the update
-                state.updateModelTransform(updatedModel);
+                    console.log(`VDK Debug: Creating instance ${i} at position [${position.join(', ')}], rotation [${rotation.join(', ')}]`);
 
-                // If we need more instances than we have, create duplicates
-                if (objectInfo.count > sceneModels.length) {
-                    const instancesToCreate = objectInfo.count - sceneModels.length;
-                    console.log(`Creating ${instancesToCreate} additional instances for object ${objectNumber}`);
-
-                    for (let i = 0; i < instancesToCreate; i++) {
-                        const duplicateId = `scene_${objectNumber}_duplicate_${i + 1}`;
+                    if (i === 0) {
+                        // Update the base model with the first VDK config
+                        const updatedModel: ModelState = {
+                            ...baseSceneModel,
+                            position: position,
+                            rotation: rotation,
+                        };
+                        state.updateModelTransform(updatedModel);
+                        console.log(`VDK Debug: Updated base model ${baseSceneModel.name} with position [${position.join(', ')}]`);
+                    } else {
+                        // Create duplicate models for additional instances
+                        const duplicateId = `scene_${objectNumber}_instance_${i}`;
                         const duplicateModel: ModelState = {
                             ...baseSceneModel,
                             id: duplicateId,
-                            name: `scene_${objectNumber}_duplicate_${i + 1}`,
-                            position: objectInfo.position,
-                            rotation: objectInfo.rotation,
+                            name: `scene_${objectNumber}_instance_${i}`,
+                            position: position,
+                            rotation: rotation,
                         };
 
                         addExternalModel(duplicateModel);
+                        console.log(`VDK Debug: Created duplicate model ${duplicateId} at position [${position.join(', ')}]`);
                     }
                 }
             }

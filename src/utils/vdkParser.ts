@@ -32,14 +32,20 @@ export function parseVdkConfig(content: string): VdkConfig[] {
                 case 'VDK_ROTATION_X':
                 case 'VDK_ROTATION_Y':
                 case 'VDK_ROTATION_Z':
-                    config[key as keyof VdkConfig] = parseFloat(value);
+                    const numValue = parseFloat(value);
+                    if (!isNaN(numValue)) {
+                        (config as any)[key] = numValue;
+                    }
                     break;
                 case 'VDK_PLACEMENT_NAME':
                     config.VDK_PLACEMENT_NAME = value;
                     break;
                 case 'VDK_OBJECTNUMBER':
                 case 'VDK_PROGRAMID':
-                    config[key as keyof VdkConfig] = parseInt(value, 10);
+                    const intValue = parseInt(value, 10);
+                    if (!isNaN(intValue)) {
+                        (config as any)[key] = intValue;
+                    }
                     break;
                 case 'VDK_HITPOINT':
                     config.VDK_HITPOINT = value;
@@ -59,9 +65,9 @@ export function parseVdkConfig(content: string): VdkConfig[] {
 }
 
 /**
- * Group VDK OBJECT configurations by object number and count instances
+ * Group VDK OBJECT configurations by object number and collect all positions/rotations
  * @param configs Array of VDK configurations
- * @returns Map of object number to object info with count
+ * @returns Map of object number to object info with all positions and rotations
  */
 export function groupVdkObjects(configs: VdkConfig[]): Map<number, VdkObjectInfo> {
     const objectMap = new Map<number, VdkObjectInfo>();
@@ -69,35 +75,49 @@ export function groupVdkObjects(configs: VdkConfig[]): Map<number, VdkObjectInfo
     // Filter only OBJECT type configs
     const objectConfigs = configs.filter(config => config.VDK_TYPE === 'OBJECT');
 
-    // Count instances for each object number
-    const countMap = new Map<number, number>();
+    // Group configs by object number and collect all positions/rotations
     for (const config of objectConfigs) {
         if (config.VDK_OBJECTNUMBER !== undefined) {
-            countMap.set(config.VDK_OBJECTNUMBER, (countMap.get(config.VDK_OBJECTNUMBER) || 0) + 1);
+            const objectNumber = config.VDK_OBJECTNUMBER;
+
+            if (!objectMap.has(objectNumber)) {
+                // Create new entry for this object number
+                objectMap.set(objectNumber, {
+                    objectNumber: objectNumber,
+                    programId: config.VDK_PROGRAMID || 0,
+                    hitPoint: config.VDK_HITPOINT || 'UNBREAKABLE',
+                    shadowCast: config.VDK_SHADOW_CAST || false,
+                    positions: [],
+                    rotations: [],
+                    count: 0
+                });
+            }
+
+            // Add this config's position and rotation to the arrays
+            const objectInfo = objectMap.get(objectNumber)!;
+            objectInfo.positions.push([
+                config.VDK_POSITION_X || 0,
+                config.VDK_POSITION_Y || 0,
+                config.VDK_POSITION_Z || 0
+            ]);
+            objectInfo.rotations.push([
+                config.VDK_ROTATION_X || 0,
+                config.VDK_ROTATION_Y || 0,
+                config.VDK_ROTATION_Z || 0
+            ]);
+            objectInfo.count += 1;
+
+            console.log(`VDK Debug: Added config for object ${objectNumber}, position: [${objectInfo.positions[objectInfo.positions.length - 1]}], total count: ${objectInfo.count}`);
         }
     }
 
-    // Create object info for each unique object number
-    for (const config of objectConfigs) {
-        if (config.VDK_OBJECTNUMBER !== undefined && !objectMap.has(config.VDK_OBJECTNUMBER)) {
-            objectMap.set(config.VDK_OBJECTNUMBER, {
-                objectNumber: config.VDK_OBJECTNUMBER,
-                programId: config.VDK_PROGRAMID || 0,
-                hitPoint: config.VDK_HITPOINT || 'UNBREAKABLE',
-                shadowCast: config.VDK_SHADOW_CAST || false,
-                position: [
-                    config.VDK_POSITION_X || 0,
-                    config.VDK_POSITION_Y || 0,
-                    config.VDK_POSITION_Z || 0
-                ],
-                rotation: [
-                    config.VDK_ROTATION_X || 0,
-                    config.VDK_ROTATION_Y || 0,
-                    config.VDK_ROTATION_Z || 0
-                ],
-                count: countMap.get(config.VDK_OBJECTNUMBER) || 1
-            });
-        }
+    // Debug: Log final grouped results
+    console.log('VDK Debug: Final grouped objects:');
+    for (const [objectNumber, objectInfo] of objectMap) {
+        console.log(`  Object ${objectNumber}: ${objectInfo.count} instances`);
+        objectInfo.positions.forEach((pos, index) => {
+            console.log(`    Instance ${index}: position [${pos.join(', ')}], rotation [${objectInfo.rotations[index].join(', ')}]`);
+        });
     }
 
     return objectMap;

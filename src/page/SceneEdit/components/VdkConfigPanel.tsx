@@ -142,9 +142,15 @@ export function VdkConfigPanel({
                                         </div>
                                     </div>
 
-                                    <div className="text-xs text-white/60">
-                                        <div>位置: [{objectInfo.position.map(v => v.toFixed(1)).join(', ')}]</div>
-                                        <div>旋转: [{objectInfo.rotation.map(v => v.toFixed(1)).join(', ')}]</div>
+                                    {/* Show all positions and rotations */}
+                                    <div className="space-y-1">
+                                        <div className="text-xs text-white/60 font-medium">实例位置:</div>
+                                        {objectInfo.positions.map((position, index) => (
+                                            <div key={index} className="text-xs text-white/70 pl-2 border-l border-white/20">
+                                                <div>实例 {index}: 位置 [{position.map(v => v.toFixed(1)).join(', ')}]</div>
+                                                <div className="pl-4">旋转 [{objectInfo.rotations[index].map(v => v.toFixed(1)).join(', ')}]</div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             ))}

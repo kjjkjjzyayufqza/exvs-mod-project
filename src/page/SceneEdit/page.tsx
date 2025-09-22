@@ -133,7 +133,7 @@ export default function SceneEdit() {
     }, [updateModelTransform]);
 
     const handleLoadVdkConfig = useCallback(async () => {
-        await loadVdkConfig('35.bin');
+        await loadVdkConfig('E:\\XB\\解包\\gundamv\\16F73C97\\0\\0\\1\\35.bin');
     }, [loadVdkConfig]);
 
     const handleApplyVdkConfig = useCallback(async () => {
