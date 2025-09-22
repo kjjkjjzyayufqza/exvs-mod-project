@@ -12,7 +12,7 @@ import {
 
 export function PostProcessing() {
     return (
-        <EffectComposer>
+        <EffectComposer enableNormalPass>
             {/* Anti-aliasing effects */}
             <FXAA />
             <SMAA />
