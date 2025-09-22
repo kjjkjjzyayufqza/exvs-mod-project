@@ -13,6 +13,9 @@ export class SelectionManager {
   private callbacks: Set<SelectionChangeCallback> = new Set();
   private selectableObjects: THREE.Object3D[] = [];
   private isTransforming: boolean = false;
+  private mouseDownPosition: THREE.Vector2 | null = null;
+  private isDragging: boolean = false;
+  private dragThreshold: number = 5; // 拖拽阈值，超过此距离视为拖拽
 
   constructor(scene: THREE.Scene, camera: THREE.Camera) {
     this.scene = scene;
@@ -50,10 +53,52 @@ export class SelectionManager {
     this.isTransforming = transforming;
   }
 
+  // 处理鼠标按下事件
+  handleMouseDown(event: MouseEvent, canvas: HTMLCanvasElement) {
+    // 只处理左键按下
+    if (event.button !== 0) return;
+
+    const rect = canvas.getBoundingClientRect();
+    this.mouseDownPosition = new THREE.Vector2(event.clientX - rect.left, event.clientY - rect.top);
+    this.isDragging = false;
+  }
+
+  // 处理鼠标移动事件
+  handleMouseMove(event: MouseEvent, canvas: HTMLCanvasElement) {
+    if (this.mouseDownPosition && !this.isDragging) {
+      const rect = canvas.getBoundingClientRect();
+      const currentPosition = new THREE.Vector2(event.clientX - rect.left, event.clientY - rect.top);
+      const distance = this.mouseDownPosition.distanceTo(currentPosition);
+
+      if (distance > this.dragThreshold) {
+        this.isDragging = true;
+      }
+    }
+  }
+
+  // 处理鼠标释放事件
+  handleMouseUp(event: MouseEvent) {
+    // 只处理左键释放
+    if (event.button !== 0) return;
+
+    this.mouseDownPosition = null;
+  }
+
   // 处理鼠标点击事件
   handleClick(event: MouseEvent, canvas: HTMLCanvasElement) {
     // 如果正在变换中，忽略点击事件
     if (this.isTransforming) {
+      return;
+    }
+
+    // 如果是拖拽操作结束，不处理选择
+    if (this.isDragging) {
+      this.isDragging = false;
+      return;
+    }
+
+    // 只处理左键点击
+    if (event.button !== 0) {
       return;
     }
 

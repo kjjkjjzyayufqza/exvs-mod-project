@@ -146,15 +146,33 @@ export default function SceneEdit() {
                 }
             });
 
-            // 添加点击事件监听
+            // 添加鼠标事件监听
+            const handleMouseDown = (event: MouseEvent) => {
+                selectionManagerRef.current?.handleMouseDown(event, canvas);
+            };
+
+            const handleMouseMove = (event: MouseEvent) => {
+                selectionManagerRef.current?.handleMouseMove(event, canvas);
+            };
+
+            const handleMouseUp = (event: MouseEvent) => {
+                selectionManagerRef.current?.handleMouseUp(event);
+            };
+
             const handleClick = (event: MouseEvent) => {
                 selectionManagerRef.current?.handleClick(event, canvas);
             };
 
+            canvas.addEventListener('mousedown', handleMouseDown);
+            canvas.addEventListener('mousemove', handleMouseMove);
+            canvas.addEventListener('mouseup', handleMouseUp);
             canvas.addEventListener('click', handleClick);
 
             // 返回清理函数
             return () => {
+                canvas.removeEventListener('mousedown', handleMouseDown);
+                canvas.removeEventListener('mousemove', handleMouseMove);
+                canvas.removeEventListener('mouseup', handleMouseUp);
                 canvas.removeEventListener('click', handleClick);
                 selectionManagerRef.current?.dispose();
                 selectionManagerRef.current = null;
