@@ -12,6 +12,7 @@ export class SelectionManager {
   private selectionBox: THREE.BoxHelper | null = null;
   private callbacks: Set<SelectionChangeCallback> = new Set();
   private selectableObjects: THREE.Object3D[] = [];
+  private isTransforming: boolean = false;
 
   constructor(scene: THREE.Scene, camera: THREE.Camera) {
     this.scene = scene;
@@ -44,16 +45,26 @@ export class SelectionManager {
     this.callbacks.delete(callback);
   }
 
+  // 设置变换状态
+  setTransforming(transforming: boolean) {
+    this.isTransforming = transforming;
+  }
+
   // 处理鼠标点击事件
   handleClick(event: MouseEvent, canvas: HTMLCanvasElement) {
+    // 如果正在变换中，忽略点击事件
+    if (this.isTransforming) {
+      return;
+    }
+
     const rect = canvas.getBoundingClientRect();
     const mouse = new THREE.Vector2();
-    
+
     mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
     this.raycaster.setFromCamera(mouse, this.camera);
-    
+
     // 只检测注册的可选择对象
     const intersects = this.raycaster.intersectObjects(this.selectableObjects, true);
 
@@ -63,7 +74,7 @@ export class SelectionManager {
       while (targetObject.parent && !this.selectableObjects.includes(targetObject)) {
         targetObject = targetObject.parent;
       }
-      
+
       if (this.selectableObjects.includes(targetObject)) {
         this.setSelected(targetObject);
       }

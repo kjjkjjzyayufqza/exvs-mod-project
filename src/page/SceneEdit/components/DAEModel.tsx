@@ -168,13 +168,18 @@ function DAEModelInner({ modelState, mode, onTransform, selectionManager }: DAEM
             clearTimeout(timeoutRef.current);
         }
 
-        // 立即更新SelectionManager的选中框
+        // 开始变换，禁用选择
         if (selectionManager) {
+            selectionManager.setTransforming(true);
             selectionManager.updateSelectionBox();
         }
 
         // Set new timeout to save after 300ms of no changes
         timeoutRef.current = window.setTimeout(() => {
+            // 变换完成，允许选择
+            if (selectionManager) {
+                selectionManager.setTransforming(false);
+            }
             if (subModelId && subMeshRefs.current[subModelId]) {
                 // Update sub-model transform
                 const subMesh = subMeshRefs.current[subModelId];
