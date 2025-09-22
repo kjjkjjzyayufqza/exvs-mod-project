@@ -6,9 +6,12 @@ import { Label } from '../../../components/ui/label';
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
 import { Separator } from '../../../components/ui/separator';
-import { RotateCcw, Copy, ChevronLeft, ChevronRight, List, ChevronDown, ChevronUp } from 'lucide-react';
+import { RotateCcw, Copy, ChevronLeft, ChevronRight, List, ChevronDown, ChevronUp, Upload, File } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../components/ui/collapsible';
 import { TexturePanel } from './TexturePanel';
+import { open } from '@tauri-apps/plugin-dialog';
+import { useSceneStore } from '../../../store/sceneStore';
+import { toast } from 'sonner';
 
 interface ControlPanelProps {
     models: Record<string, ModelState>;
@@ -75,6 +78,91 @@ function PropertyInput({ label, value, onChange, axis }: PropertyInputProps) {
                 className={`h-8 text-xs text-center bg-black/50 border transition-colors border-white/20 focus:border-white/40 text-white`}
             />
         </div>
+    );
+}
+
+// Import Panel Component
+function ImportPanel() {
+    const { loadSpecificDAEModel, isLoading, loadingError } = useSceneStore();
+
+    const handleImportModels = async () => {
+        try {
+            // Open file dialog to select multiple DAE files
+            const selectedFiles = await open({
+                multiple: true,
+                filters: [{
+                    name: 'DAE Files',
+                    extensions: ['dae']
+                }]
+            });
+
+            if (!selectedFiles || (Array.isArray(selectedFiles) && selectedFiles.length === 0)) {
+                return;
+            }
+
+            // Handle both single file (string) and multiple files (string[])
+            const filePaths = Array.isArray(selectedFiles) ? selectedFiles : [selectedFiles];
+
+            toast.info(`开始导入 ${filePaths.length} 个模型文件...`);
+
+            // Load each DAE model
+            for (const filePath of filePaths) {
+                try {
+                    await loadSpecificDAEModel(filePath);
+                    toast.success(`成功导入: ${filePath.split(/[/\\]/).pop()}`);
+                } catch (error) {
+                    console.error(`Failed to load DAE model ${filePath}:`, error);
+                    toast.error(`导入失败: ${filePath.split(/[/\\]/).pop()}`);
+                }
+            }
+
+            toast.success(`完成导入 ${filePaths.length} 个模型文件`);
+        } catch (error) {
+            console.error('Error importing models:', error);
+            toast.error('导入模型时发生错误');
+        }
+    };
+
+    return (
+        <Card className="w-72 bg-black/90 backdrop-blur-lg border-white/10">
+            <CardHeader className="p-3 border-b border-white/10">
+                <CardTitle className="text-sm text-white flex items-center gap-2">
+                    <File className="h-4 w-4" />
+                    模型导入
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3">
+                <div className="space-y-3">
+                    {loadingError && (
+                        <div className="p-2 bg-red-500/20 border border-red-500/30 rounded text-xs text-red-300">
+                            {loadingError}
+                        </div>
+                    )}
+
+                    <Button
+                        onClick={handleImportModels}
+                        disabled={isLoading}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                        {isLoading ? (
+                            <div className="flex items-center gap-2">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                导入中...
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2">
+                                <Upload className="h-4 w-4" />
+                                选择模型文件
+                            </div>
+                        )}
+                    </Button>
+
+                    <div className="text-xs text-white/60 text-center">
+                        支持多选 DAE 模型文件
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
     );
 }
 
@@ -207,76 +295,16 @@ export function ControlPanel({ models, selectedModelId, selectedModelState, onUp
     );
 
     return (
-        <div className="absolute top-4 left-4 z-50 space-y-2 max-h-[calc(100vh-6rem)] overflow-y-auto custom-scrollbar-thin">
-            {/* Controls Card */}
-            <Collapsible open={!isControlsCollapsed} onOpenChange={(open) => setIsControlsCollapsed(!open)}>
-                <Card className="w-72 bg-black/90 backdrop-blur-lg border-white/10">
-                    <CardHeader className="p-1 border-b border-white/10">
-                        <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm text-white">
-                                控制面板
-                            </CardTitle>
-                            <CollapsibleTrigger asChild>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
-                                >
-                                    {isControlsCollapsed ? <ChevronDown className="h-3 w-3 transition-transform duration-200" /> : <ChevronUp className="h-3 w-3 transition-transform duration-200" />}
-                                </Button>
-                            </CollapsibleTrigger>
-                        </div>
-                    </CardHeader>
-                    <CollapsibleContent>
-                        <CardContent className="p-1">
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-xs text-white/80">当前选中:</span>
-                                    <Badge variant="secondary" className="bg-white/10 text-white border-white/20 text-xs">
-                                        {selectedModelState?.name || 'None'}
-                                    </Badge>
-                                </div>
-                                <Separator className="bg-white/10" />
-                                <div className="grid grid-cols-2 gap-2 text-xs text-white/80">
-                                    <div className="space-y-0.5">
-                                        <div className="flex items-center gap-1">
-                                            <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">W</kbd>
-                                            <span className="text-xs">平移</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">E</kbd>
-                                            <span className="text-xs">旋转</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">R</kbd>
-                                            <span className="text-xs">缩放</span>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-0.5">
-                                        <div className="flex items-center gap-1">
-                                            <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">Ctrl+Z</kbd>
-                                            <span className="text-xs">撤销</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">Ctrl+Y</kbd>
-                                            <span className="text-xs">重做</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </CollapsibleContent>
-                </Card>
-            </Collapsible>
-
-            {/* Properties Card */}
-            {selectedModelState && (
-                <Collapsible open={!isPropertiesCollapsed} onOpenChange={(open) => setIsPropertiesCollapsed(!open)}>
+        <>
+            {/* Left Panel - Control Panels */}
+            <div className="absolute top-4 left-4 z-50 space-y-2 max-h-[calc(100vh-6rem)] overflow-y-auto custom-scrollbar-thin">
+                {/* Controls Card */}
+                <Collapsible open={!isControlsCollapsed} onOpenChange={(open) => setIsControlsCollapsed(!open)}>
                     <Card className="w-72 bg-black/90 backdrop-blur-lg border-white/10">
                         <CardHeader className="p-1 border-b border-white/10">
                             <div className="flex items-center justify-between">
                                 <CardTitle className="text-sm text-white">
-                                    变换属性
+                                    控制面板
                                 </CardTitle>
                                 <CollapsibleTrigger asChild>
                                     <Button
@@ -284,82 +312,149 @@ export function ControlPanel({ models, selectedModelId, selectedModelState, onUp
                                         variant="ghost"
                                         className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
                                     >
-                                        {isPropertiesCollapsed ? <ChevronDown className="h-3 w-3 transition-transform duration-200" /> : <ChevronUp className="h-3 w-3 transition-transform duration-200" />}
+                                        {isControlsCollapsed ? <ChevronDown className="h-3 w-3 transition-transform duration-200" /> : <ChevronUp className="h-3 w-3 transition-transform duration-200" />}
                                     </Button>
                                 </CollapsibleTrigger>
                             </div>
                         </CardHeader>
                         <CollapsibleContent>
-                            <CardContent className="p-1 space-y-3">
-                                <PropertySection title="位置" property="position" />
-                                <Separator className="bg-white/10" />
-                                <PropertySection title="旋转" property="rotation" />
-                                <Separator className="bg-white/10" />
-                                <PropertySection title="缩放" property="scale" />
+                            <CardContent className="p-1">
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs text-white/80">当前选中:</span>
+                                        <Badge variant="secondary" className="bg-white/10 text-white border-white/20 text-xs">
+                                            {selectedModelState?.name || 'None'}
+                                        </Badge>
+                                    </div>
+                                    <Separator className="bg-white/10" />
+                                    <div className="grid grid-cols-2 gap-2 text-xs text-white/80">
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center gap-1">
+                                                <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">W</kbd>
+                                                <span className="text-xs">平移</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">E</kbd>
+                                                <span className="text-xs">旋转</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">R</kbd>
+                                                <span className="text-xs">缩放</span>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center gap-1">
+                                                <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">Ctrl+Z</kbd>
+                                                <span className="text-xs">撤销</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">Ctrl+Y</kbd>
+                                                <span className="text-xs">重做</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </CardContent>
                         </CollapsibleContent>
                     </Card>
                 </Collapsible>
-            )}
+
+                {/* Properties Card */}
+                {selectedModelState && (
+                    <Collapsible open={!isPropertiesCollapsed} onOpenChange={(open) => setIsPropertiesCollapsed(!open)}>
+                        <Card className="w-72 bg-black/90 backdrop-blur-lg border-white/10">
+                            <CardHeader className="p-1 border-b border-white/10">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-sm text-white">
+                                        变换属性
+                                    </CardTitle>
+                                    <CollapsibleTrigger asChild>
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                                        >
+                                            {isPropertiesCollapsed ? <ChevronDown className="h-3 w-3 transition-transform duration-200" /> : <ChevronUp className="h-3 w-3 transition-transform duration-200" />}
+                                        </Button>
+                                    </CollapsibleTrigger>
+                                </div>
+                            </CardHeader>
+                            <CollapsibleContent>
+                                <CardContent className="p-1 space-y-3">
+                                    <PropertySection title="位置" property="position" />
+                                    <Separator className="bg-white/10" />
+                                    <PropertySection title="旋转" property="rotation" />
+                                    <Separator className="bg-white/10" />
+                                    <PropertySection title="缩放" property="scale" />
+                                </CardContent>
+                            </CollapsibleContent>
+                        </Card>
+                    </Collapsible>
+                )}
 
 
-            {/* Model List Card */}
-            <Collapsible open={!isModelListCollapsed} onOpenChange={(open) => setIsModelListCollapsed(!open)}>
-                <Card className="w-72 bg-black/90 backdrop-blur-lg border-white/10">
-                    <CardHeader className="p-1 border-b border-white/10">
-                        <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm text-white flex items-center gap-2">
-                                模型列表
-                            </CardTitle>
-                            <CollapsibleTrigger asChild>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
-                                >
-                                    {isModelListCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
-                                </Button>
-                            </CollapsibleTrigger>
-                        </div>
-                    </CardHeader>
-                    <CollapsibleContent>
-                        <CardContent className="p-1">
-                            <ModelList />
-                        </CardContent>
-                    </CollapsibleContent>
-                </Card>
-            </Collapsible>
+                {/* Model List Card */}
+                <Collapsible open={!isModelListCollapsed} onOpenChange={(open) => setIsModelListCollapsed(!open)}>
+                    <Card className="w-72 bg-black/90 backdrop-blur-lg border-white/10">
+                        <CardHeader className="p-1 border-b border-white/10">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-sm text-white flex items-center gap-2">
+                                    模型列表
+                                </CardTitle>
+                                <CollapsibleTrigger asChild>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                                    >
+                                        {isModelListCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+                                    </Button>
+                                </CollapsibleTrigger>
+                            </div>
+                        </CardHeader>
+                        <CollapsibleContent>
+                            <CardContent className="p-1">
+                                <ModelList />
+                            </CardContent>
+                        </CollapsibleContent>
+                    </Card>
+                </Collapsible>
 
-            {/* Texture Panel */}
-            <Collapsible open={!isTextureCollapsed} onOpenChange={(open) => setIsTextureCollapsed(!open)}>
-                <Card className="w-72 bg-black/90 backdrop-blur-lg border-white/10">
-                    <CardHeader className="p-1 border-b border-white/10">
-                        <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm text-white">
-                                贴图设置
-                            </CardTitle>
-                            <CollapsibleTrigger asChild>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
-                                >
-                                    {isTextureCollapsed ? <ChevronDown className="h-3 w-3 transition-transform duration-200" /> : <ChevronUp className="h-3 w-3 transition-transform duration-200" />}
-                                </Button>
-                            </CollapsibleTrigger>
-                        </div>
-                    </CardHeader>
-                    <CollapsibleContent>
-                        <CardContent className="p-1">
-                            <TexturePanel
-                                models={models}
-                                selectedModelId={selectedModelId}
-                            />
-                        </CardContent>
-                    </CollapsibleContent>
-                </Card>
-            </Collapsible>
+                {/* Texture Panel */}
+                <Collapsible open={!isTextureCollapsed} onOpenChange={(open) => setIsTextureCollapsed(!open)}>
+                    <Card className="w-72 bg-black/90 backdrop-blur-lg border-white/10">
+                        <CardHeader className="p-1 border-b border-white/10">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-sm text-white">
+                                    贴图设置
+                                </CardTitle>
+                                <CollapsibleTrigger asChild>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                                    >
+                                        {isTextureCollapsed ? <ChevronDown className="h-3 w-3 transition-transform duration-200" /> : <ChevronUp className="h-3 w-3 transition-transform duration-200" />}
+                                    </Button>
+                                </CollapsibleTrigger>
+                            </div>
+                        </CardHeader>
+                        <CollapsibleContent>
+                            <CardContent className="p-1">
+                                <TexturePanel
+                                    models={models}
+                                    selectedModelId={selectedModelId}
+                                />
+                            </CardContent>
+                        </CollapsibleContent>
+                    </Card>
+                </Collapsible>
+            </div>
 
-        </div>
+            {/* Right Panel - Import Panel */}
+            <div className="absolute top-4 right-4 z-50">
+                <ImportPanel />
+            </div>
+        </>
     );
 }
