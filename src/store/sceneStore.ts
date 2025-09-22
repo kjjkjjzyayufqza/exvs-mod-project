@@ -149,13 +149,7 @@ export const useSceneStore = create<SceneState>()(
                 if (model) {
                     // Toggle the lock state
                     model.isLocked = !model.isLocked;
-
-                    // Save to history
-                    const newHistoryState = Object.values(state.models);
-                    const newHistory = state.history.slice(0, state.historyIndex + 1);
-                    newHistory.push(newHistoryState);
-                    state.history = newHistory;
-                    state.historyIndex = newHistory.length - 1;
+                    // Note: Lock/unlock operations are not saved to history
                 }
             });
         },

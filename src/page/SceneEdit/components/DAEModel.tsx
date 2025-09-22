@@ -348,8 +348,8 @@ function DAEModelInner({ modelState, mode, onTransform, selectionManager }: DAEM
                     );
                 })}
             </group>
-            {/* 当父模型被选中时，显示边界框和变换控制器 */}
-            {isSelected && meshRef.current && (
+            {/* 当父模型被选中且未被锁定时，显示边界框和变换控制器 */}
+            {isSelected && meshRef.current && !modelState.isLocked && (
                 <>
                     <BoundingBoxGrid
                         target={meshRef.current}

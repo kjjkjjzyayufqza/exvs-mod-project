@@ -76,7 +76,7 @@ function Box({ boxState, color, mode, isSelected, onClick, onTransform }: BoxPro
                 <boxGeometry args={[1, 1, 1]} />
                 <meshStandardMaterial color={color} />
             </mesh>
-            {isSelected && isMeshReady && (
+            {isSelected && isMeshReady && !boxState.isLocked && (
                 <>
                     <BoundingBoxGrid
                         target={meshRef.current}
