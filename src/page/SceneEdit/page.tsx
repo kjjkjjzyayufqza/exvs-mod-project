@@ -286,13 +286,6 @@ export default function SceneEdit() {
                 await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_1.dae");
                 await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_2.dae");
                 await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\body.dae");
-
-                // Load VDK configuration after models are loaded
-                await loadVdkConfig('E:\\XB\\解包\\gundamv\\16F73C97\\0\\0\\1\\35.bin');
-
-                // Apply VDK configuration to the scene
-                await applyVdkConfigToScene();
-
             } catch (error) {
                 console.error('Failed to load initial scene:', error);
             }
