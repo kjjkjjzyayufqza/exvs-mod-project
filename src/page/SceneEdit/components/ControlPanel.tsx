@@ -24,7 +24,6 @@ interface ControlPanelProps {
     isVdkLoading: boolean;
     vdkLoadingError: string | null;
     onLoadVdkConfig: () => Promise<void>;
-    onApplyVdkConfig: () => Promise<void>;
 }
 
 
@@ -39,8 +38,7 @@ export function ControlPanel({
     vdkObjectInfos,
     isVdkLoading,
     vdkLoadingError,
-    onLoadVdkConfig,
-    onApplyVdkConfig
+    onLoadVdkConfig
 }: ControlPanelProps) {
     const { removeModel, toggleModelLock } = useSceneStore();
     const [isControlsCollapsed, setIsControlsCollapsed] = useState(false);
@@ -278,7 +276,6 @@ export function ControlPanel({
                     isVdkLoading={isVdkLoading}
                     vdkLoadingError={vdkLoadingError}
                     onLoadConfig={onLoadVdkConfig}
-                    onApplyConfig={onApplyVdkConfig}
                 />
             </div>
         </>

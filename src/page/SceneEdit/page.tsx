@@ -7,6 +7,7 @@ import { DAEModel } from "./components/DAEModel";
 import { BoundingBoxGrid } from "./components/BoundingBoxGrid";
 import { SelectionManager } from "./utils/SelectionManager";
 import { PostProcessing } from "./components/PostProcessing";
+import { open } from '@tauri-apps/plugin-dialog';
 import * as THREE from 'three';
 import { DirectionalLightHelper } from 'three';
 
@@ -133,12 +134,27 @@ export default function SceneEdit() {
     }, [updateModelTransform]);
 
     const handleLoadVdkConfig = useCallback(async () => {
-        await loadVdkConfig('E:\\XB\\解包\\gundamv\\16F73C97\\0\\0\\1\\35.bin');
-    }, [loadVdkConfig]);
+        try {
+            const selectedFile = await open({
+                multiple: false,
+                filters: [{
+                    name: 'VDK Files',
+                    extensions: ['bin']
+                }]
+            });
 
-    const handleApplyVdkConfig = useCallback(async () => {
-        await applyVdkConfigToScene();
-    }, [applyVdkConfigToScene]);
+            if (!selectedFile || typeof selectedFile !== 'string') {
+                return;
+            }
+
+            // Load VDK config
+            await loadVdkConfig(selectedFile);
+            // Apply to scene immediately
+            await applyVdkConfigToScene();
+        } catch (error) {
+            console.error('Failed to load and apply VDK config:', error);
+        }
+    }, [loadVdkConfig, applyVdkConfigToScene]);
 
     const handleCanvasClick = (event: any) => {
         // 只有当点击的不是模型时才清除选择
@@ -307,7 +323,6 @@ export default function SceneEdit() {
                 isVdkLoading={isVdkLoading}
                 vdkLoadingError={vdkLoadingError}
                 onLoadVdkConfig={handleLoadVdkConfig}
-                onApplyVdkConfig={handleApplyVdkConfig}
             />
 
             <Canvas

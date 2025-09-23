@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
 import { Separator } from '../../../components/ui/separator';
-import { ChevronDown, ChevronUp, FileText, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, FileText, Upload, Loader2 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../components/ui/collapsible';
 import { VdkObjectInfo } from '../../../types/vdk';
 
@@ -12,30 +12,18 @@ interface VdkConfigPanelProps {
     isVdkLoading: boolean;
     vdkLoadingError: string | null;
     onLoadConfig: () => Promise<void>;
-    onApplyConfig: () => Promise<void>;
 }
 
 export function VdkConfigPanel({
     vdkObjectInfos,
     isVdkLoading,
     vdkLoadingError,
-    onLoadConfig,
-    onApplyConfig
+    onLoadConfig
 }: VdkConfigPanelProps) {
     const [isCollapsed, setIsCollapsed] = useState(false);
-    const [isApplying, setIsApplying] = useState(false);
 
     const handleLoadConfig = async () => {
         await onLoadConfig();
-    };
-
-    const handleApplyConfig = async () => {
-        setIsApplying(true);
-        try {
-            await onApplyConfig();
-        } finally {
-            setIsApplying(false);
-        }
     };
 
     return (
@@ -60,40 +48,24 @@ export function VdkConfigPanel({
                 </CardHeader>
                 <CollapsibleContent>
                     <CardContent className="p-1 space-y-3">
-                        {/* Action Buttons */}
-                        <div className="space-y-2">
-                            <Button
-                                onClick={handleLoadConfig}
-                                disabled={isVdkLoading}
-                                className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs"
-                                size="sm"
-                            >
-                                {isVdkLoading ? (
-                                    <>
-                                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                        加载中...
-                                    </>
-                                ) : (
-                                    '加载VDK配置'
-                                )}
-                            </Button>
-
-                            <Button
-                                onClick={handleApplyConfig}
-                                disabled={isVdkLoading || vdkObjectInfos.size === 0 || isApplying}
-                                className="w-full bg-green-600 hover:bg-green-700 text-white text-xs"
-                                size="sm"
-                            >
-                                {isApplying ? (
-                                    <>
-                                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                        应用中...
-                                    </>
-                                ) : (
-                                    '应用到场景'
-                                )}
-                            </Button>
-                        </div>
+                        {/* Action Button */}
+                        <Button
+                            onClick={handleLoadConfig}
+                            disabled={isVdkLoading}
+                            className="w-full text-white hover:bg-white/10 cursor-pointer bg-white/20"
+                        >
+                            {isVdkLoading ? (
+                                <div className="flex items-center gap-2">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                    加载中...
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2">
+                                    <Upload className="h-4 w-4" />
+                                    加载VDK配置
+                                </div>
+                            )}
+                        </Button>
 
                         {/* Error Display */}
                         {vdkLoadingError && (
@@ -144,11 +116,40 @@ export function VdkConfigPanel({
 
                                     {/* Show all positions and rotations */}
                                     <div className="space-y-1">
-                                        <div className="text-xs text-white/60 font-medium">实例位置:</div>
+                                        <div className="text-xs text-white/60 font-medium">实例详情:</div>
                                         {objectInfo.positions.map((position, index) => (
                                             <div key={index} className="text-xs text-white/70 pl-2 border-l border-white/20">
                                                 <div>实例 {index}: 位置 [{position.map(v => v.toFixed(1)).join(', ')}]</div>
                                                 <div className="pl-4">旋转 [{objectInfo.rotations[index].map(v => v.toFixed(1)).join(', ')}]</div>
+                                                {/* Show shockwave properties if they exist */}
+                                                {(objectInfo.breakShockwaveRadius[index] > 0 || objectInfo.breakShockwavePower[index] > 0) && (
+                                                    <div className="pl-4 text-orange-300">
+                                                        冲击波: 半径 {objectInfo.breakShockwaveRadius[index]?.toFixed(1) || 0}, 
+                                                        威力 {objectInfo.breakShockwavePower[index]?.toFixed(1) || 0}
+                                                    </div>
+                                                )}
+                                                {/* Show substitute placements if they exist */}
+                                                {objectInfo.substitutePlacements[index] && Array.isArray(objectInfo.substitutePlacements[index]) && (objectInfo.substitutePlacements[index] as number[]).length > 0 && (
+                                                    <div className="pl-4 text-blue-300">
+                                                        替代位置: [{(objectInfo.substitutePlacements[index] as number[]).join(', ')}]
+                                                    </div>
+                                                )}
+                                                {objectInfo.substitutePlacements[index] && typeof objectInfo.substitutePlacements[index] === 'number' && (
+                                                    <div className="pl-4 text-blue-300">
+                                                        替代位置: {objectInfo.substitutePlacements[index] as number}
+                                                    </div>
+                                                )}
+                                                {/* Show camera bind placements if they exist */}
+                                                {objectInfo.cameraBindPlacements[index] && Array.isArray(objectInfo.cameraBindPlacements[index]) && (objectInfo.cameraBindPlacements[index] as number[]).length > 0 && (
+                                                    <div className="pl-4 text-green-300">
+                                                        相机绑定: [{(objectInfo.cameraBindPlacements[index] as number[]).join(', ')}]
+                                                    </div>
+                                                )}
+                                                {objectInfo.cameraBindPlacements[index] && typeof objectInfo.cameraBindPlacements[index] === 'number' && (
+                                                    <div className="pl-4 text-green-300">
+                                                        相机绑定: {objectInfo.cameraBindPlacements[index] as number}
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
