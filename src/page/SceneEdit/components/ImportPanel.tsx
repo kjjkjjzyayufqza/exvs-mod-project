@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { useState } from 'react';
 
 export function ImportPanel() {
-    const { loadSpecificDAEModel, isLoading, loadingError } = useSceneStore();
+    const { loadSpecificDAEModel, loadHavokModelFromFile, isLoading, loadingError } = useSceneStore();
     const [isCollapsed, setIsCollapsed] = useState(false);
 
     const handleImportModels = async () => {
@@ -47,6 +47,16 @@ export function ImportPanel() {
         } catch (error) {
             console.error('Error importing models:', error);
             toast.error('导入模型时发生错误');
+        }
+    };
+
+    const handleImportHavokModel = async () => {
+        try {
+            await loadHavokModelFromFile();
+            toast.success('Havok模型导入成功');
+        } catch (error) {
+            console.error('Error importing Havok model:', error);
+            toast.error('导入Havok模型时发生错误');
         }
     };
 
@@ -92,6 +102,24 @@ export function ImportPanel() {
                                     <div className="flex items-center gap-2">
                                         <Upload className="h-4 w-4" />
                                         选择模型文件
+                                    </div>
+                                )}
+                            </Button>
+
+                            <Button
+                                onClick={handleImportHavokModel}
+                                disabled={isLoading}
+                                className="w-full text-white hover:bg-purple-500/20 cursor-pointer bg-purple-500/30"
+                            >
+                                {isLoading ? (
+                                    <div className="flex items-center gap-2">
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                        导入中...
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <Upload className="h-4 w-4" />
+                                        导入Havok XML
                                     </div>
                                 )}
                             </Button>

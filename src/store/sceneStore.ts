@@ -6,7 +6,7 @@ import { VdkConfig, VdkObjectInfo } from '../types/vdk';
 import { loadVdkConfig, groupVdkObjects } from '../utils/vdkParser';
 import { exportSceneToFile, importSceneFromFile } from '../utils/sceneExporter';
 
-export type ModelType = 'box' | 'dae';
+export type ModelType = 'box' | 'dae' | 'havok';
 
 export interface ModelState {
     id: string;
@@ -71,6 +71,7 @@ export interface SceneState {
     addExternalModel: (modelState: ModelState) => void;
     loadDAEModelFromFile: () => Promise<void>;
     loadSpecificDAEModel: (filePath: string) => Promise<void>;
+    loadHavokModelFromFile: () => Promise<void>;
     setLoading: (loading: boolean) => void;
     setLoadingError: (error: string | null) => void;
     undo: () => void;
@@ -371,6 +372,81 @@ export const useSceneStore = create<SceneState>()(
                 set((state) => {
                     state.loadingError = error instanceof Error ? error.message : 'Unknown error occurred';
                     state.isLoading = false;
+                });
+            }
+        },
+
+        loadHavokModelFromFile: async () => {
+            try {
+                set((state) => {
+                    state.isLoading = true;
+                    state.loadingError = null;
+                });
+
+                const selected = await open({
+                    multiple: false,
+                    filters: [{
+                        name: 'Havok XML Files',
+                        extensions: ['xml', 'hkt']
+                    }]
+                });
+
+                if (!selected) {
+                    set((state) => {
+                        state.isLoading = false;
+                    });
+                    return;
+                }
+
+                console.log('Selected Havok file:', selected);
+
+                // Read file content
+                const fileContent = await readFile(selected);
+                const textContent = new TextDecoder().decode(fileContent);
+                
+                // Create blob URL for the parser
+                const blob = new Blob([textContent], { type: 'application/xml' });
+                const blobUrl = URL.createObjectURL(blob);
+
+                // Extract filename and generate unique model ID
+                const fileName = selected.split(/[/\\]/).pop() || 'unknown.xml';
+                const baseName = fileName.replace(/\.(xml|hkt)$/, '');
+                const modelId = `havok_${baseName}_${Date.now()}`;
+
+                const havokModelState: ModelState = {
+                    id: modelId,
+                    name: baseName,
+                    type: 'havok',
+                    position: [0, 0, 0],
+                    rotation: [0, 0, 0],
+                    scale: [1, 1, 1],
+                    isLocked: false,
+                    filePath: blobUrl,
+                    originalFilePath: selected
+                };
+
+                console.log('Adding Havok model:', havokModelState);
+
+                set((state) => {
+                    state.models[modelId] = havokModelState;
+                    state.selectedModelId = modelId;
+                    state.isLoading = false;
+
+                    // Save to history
+                    const newHistoryState = Object.values(state.models);
+                    const newHistory = state.history.slice(0, state.historyIndex + 1);
+                    newHistory.push(newHistoryState);
+                    state.history = newHistory;
+                    state.historyIndex = newHistory.length - 1;
+                });
+
+                console.log('Havok model added successfully');
+
+            } catch (error) {
+                console.error('Failed to load Havok model:', error);
+                set((state) => {
+                    state.isLoading = false;
+                    state.loadingError = `Failed to load Havok file: ${error}`;
                 });
             }
         },

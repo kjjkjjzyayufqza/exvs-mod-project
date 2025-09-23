@@ -4,6 +4,7 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import { useSceneStore, ModelState } from "../../store/sceneStore";
 import { ControlPanel } from "./components/ControlPanel";
 import { DAEModel } from "./components/DAEModel";
+import { HavokModel } from "./components/HavokModel";
 import { BoundingBoxGrid } from "./components/BoundingBoxGrid";
 import { SelectionManager } from "./utils/SelectionManager";
 import { PostProcessing } from "./components/PostProcessing";
@@ -281,11 +282,11 @@ export default function SceneEdit() {
                 // Clear all existing models before loading new ones
                 clearAllModels();
 
-                // Load DAE models
-                await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_0.dae");
-                await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_1.dae");
-                await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_2.dae");
-                await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\body.dae");
+                // // Load DAE models
+                // await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_0.dae");
+                // await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_1.dae");
+                // await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_2.dae");
+                // await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\body.dae");
             } catch (error) {
                 console.error('Failed to load initial scene:', error);
             }
@@ -349,6 +350,16 @@ export default function SceneEdit() {
                     if (modelState.type === 'dae') {
                         return (
                             <DAEModel
+                                key={modelState.id}
+                                modelState={modelState}
+                                mode={transformMode}
+                                onTransform={handleTransform}
+                                selectionManager={selectionManagerRef.current || undefined}
+                            />
+                        );
+                    } else if (modelState.type === 'havok') {
+                        return (
+                            <HavokModel
                                 key={modelState.id}
                                 modelState={modelState}
                                 mode={transformMode}
