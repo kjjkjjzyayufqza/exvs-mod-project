@@ -11,6 +11,7 @@ import { PropertySection } from './PropertySection';
 import { ModelList } from './ModelList';
 import { ImportPanel } from './ImportPanel';
 import { VdkConfigPanel } from './VdkConfigPanel';
+import { SceneExportPanel } from './SceneExportPanel';
 import { VdkObjectInfo } from '../../../types/vdk';
 
 interface ControlPanelProps {
@@ -270,6 +271,12 @@ export function ControlPanel({
             {/* Right Panel - Import Panel */}
             <div className="absolute top-4 right-4 z-50 space-y-2 max-h-[calc(100vh-6rem)] overflow-y-auto custom-scrollbar-thin">
                 <ImportPanel />
+                
+                {/* Scene Export/Import Panel */}
+                <div className="w-80">
+                    <SceneExportPanel />
+                </div>
+                
                 {/* VDK Configuration Panel */}
                 <VdkConfigPanel
                     vdkObjectInfos={vdkObjectInfos}

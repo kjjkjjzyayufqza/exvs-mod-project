@@ -4,6 +4,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { VdkConfig, VdkObjectInfo } from '../types/vdk';
 import { loadVdkConfig, groupVdkObjects } from '../utils/vdkParser';
+import { exportSceneToFile, importSceneFromFile } from '../utils/sceneExporter';
 
 export type ModelType = 'box' | 'dae';
 
@@ -16,7 +17,8 @@ export interface ModelState {
     scale: [number, number, number];
     isLocked?: boolean; // Whether the model is locked from selection and transformation
     // For external models
-    filePath?: string;
+    filePath?: string; // Blob URL for Three.js loader
+    originalFilePath?: string; // Original file path for export/import
     color?: string; // For box models
     // For DAE models with multiple geometries
     subModels?: SubModelState[];
@@ -84,6 +86,10 @@ export interface SceneState {
     applyVdkConfigToScene: () => Promise<void>;
     setVdkLoading: (loading: boolean) => void;
     setVdkLoadingError: (error: string | null) => void;
+
+    // Scene Export/Import actions
+    exportScene: (sceneName?: string) => Promise<void>;
+    importScene: () => Promise<void>;
 }
 
 const initialModels: Record<string, ModelState> = {
@@ -269,7 +275,8 @@ export const useSceneStore = create<SceneState>()(
                     position: [0, 0, 0],
                     rotation: [0, 0, 0],
                     scale: [1, 1, 1],
-                    filePath: blobUrl
+                    filePath: blobUrl,
+                    originalFilePath: selected
                 };
 
                 console.log('Adding DAE model:', daeModelState);
@@ -337,7 +344,8 @@ export const useSceneStore = create<SceneState>()(
                     position: [0, 0, 0],
                     rotation: [0, 0, 0],
                     scale: [1, 1, 1],
-                    filePath: blobUrl
+                    filePath: blobUrl,
+                    originalFilePath: filePath
                 };
 
                 console.log('Adding DAE model:', daeModelState);
@@ -581,6 +589,151 @@ export const useSceneStore = create<SceneState>()(
             set((state) => {
                 state.vdkLoadingError = error;
             });
+        },
+
+        // Scene Export/Import actions implementation
+        exportScene: async (sceneName?: string) => {
+            try {
+                const state = get();
+                
+                set((state) => {
+                    state.isLoading = true;
+                    state.loadingError = null;
+                });
+
+                await exportSceneToFile(state, sceneName);
+
+                set((state) => {
+                    state.isLoading = false;
+                });
+
+                console.log('Scene exported successfully');
+            } catch (error) {
+                console.error('Failed to export scene:', error);
+                set((state) => {
+                    state.loadingError = error instanceof Error ? error.message : 'Unknown error occurred';
+                    state.isLoading = false;
+                });
+                throw error;
+            }
+        },
+
+        importScene: async () => {
+            try {
+                set((state) => {
+                    state.isLoading = true;
+                    state.loadingError = null;
+                });
+
+                const importResult = await importSceneFromFile();
+
+                if (!importResult) {
+                    // User cancelled the import
+                    set((state) => {
+                        state.isLoading = false;
+                    });
+                    return;
+                }
+
+                const { models, vdkConfigs, vdkObjectInfos, sceneName, timestamp } = importResult;
+
+                // Replace current scene with imported data
+                set((state) => {
+                    // Clear current scene
+                    state.models = {};
+                    state.selectedModelId = null;
+                    state.vdkConfigs = [];
+                    state.vdkObjectInfos = new Map();
+
+                    // Load imported data
+                    state.models = models;
+                    state.vdkConfigs = vdkConfigs;
+                    state.vdkObjectInfos = vdkObjectInfos;
+
+                    // Reset history with new models
+                    const newHistoryState = Object.values(models);
+                    state.history = [newHistoryState];
+                    state.historyIndex = 0;
+
+                    // Clear loading state
+                    state.isLoading = false;
+                });
+
+                console.log(`Scene "${sceneName}" imported successfully from ${timestamp}`);
+                console.log('Imported models:', Object.keys(models).length);
+                console.log('Imported VDK configs:', vdkConfigs.length);
+
+                // Reload DAE models that have original file paths
+                const daeModelsToReload = Object.values(models).filter(model => 
+                    model.type === 'dae' && model.originalFilePath && !model.filePath?.startsWith('blob:')
+                );
+
+                if (daeModelsToReload.length > 0) {
+                    console.log('Reloading DAE models from original file paths:', 
+                        daeModelsToReload.map(m => m.name));
+                    
+                    // Reload each DAE model to create blob URLs
+                    for (const model of daeModelsToReload) {
+                        try {
+                            console.log(`Reloading DAE model: ${model.name} from ${model.originalFilePath}`);
+                            
+                            // Read file content
+                            const fileContent = await readFile(model.originalFilePath!);
+                            const textContent = new TextDecoder().decode(fileContent);
+                            
+                            // Create blob URL for Three.js loader
+                            const blob = new Blob([textContent], { type: 'application/xml' });
+                            const blobUrl = URL.createObjectURL(blob);
+                            
+                            // Update the model with the new blob URL
+                            set((state) => {
+                                const stateModel = state.models[model.id];
+                                if (stateModel) {
+                                    stateModel.filePath = blobUrl;
+                                }
+                            });
+                            
+                            console.log(`Successfully reloaded DAE model: ${model.name}`);
+                        } catch (error) {
+                            console.warn(`Failed to reload DAE model ${model.name}:`, error);
+                            // Keep the original file path as fallback
+                        }
+                    }
+                }
+
+                // For models that had blob URLs, we need to reload their textures
+                const modelsWithBlobTextures = Object.values(models).filter(model => 
+                    model.subModels?.some(subModel => subModel.texturePath && !subModel.textureBlob)
+                );
+
+                if (modelsWithBlobTextures.length > 0) {
+                    console.warn('Some models have texture paths that need to be reloaded:', 
+                        modelsWithBlobTextures.map(m => m.name));
+                    
+                    // Attempt to reload textures for sub-models
+                    for (const model of modelsWithBlobTextures) {
+                        if (model.subModels) {
+                            for (const subModel of model.subModels) {
+                                if (subModel.texturePath && !subModel.textureBlob) {
+                                    try {
+                                        await get().setSubModelTexture(model.id, subModel.id, subModel.texturePath);
+                                    } catch (error) {
+                                        console.warn(`Failed to reload texture for ${model.name}/${subModel.name}:`, error);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+            } catch (error) {
+                console.error('Failed to import scene:', error);
+                set((state) => {
+                    state.loadingError = error instanceof Error ? error.message : 'Unknown error occurred';
+                    state.isLoading = false;
+                });
+                throw error;
+            }
         },
     }))
 );
