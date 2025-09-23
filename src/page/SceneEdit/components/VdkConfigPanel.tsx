@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui
 import { Button } from '../../../components/ui/button';
 import { Badge } from '../../../components/ui/badge';
 import { Separator } from '../../../components/ui/separator';
-import { ChevronDown, ChevronUp, FileText, Upload, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Upload, Loader2 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../components/ui/collapsible';
 import { VdkObjectInfo } from '../../../types/vdk';
 
@@ -31,8 +31,7 @@ export function VdkConfigPanel({
             <Card className="w-72 bg-black/90 backdrop-blur-lg border-white/10">
                 <CardHeader className="p-1 border-b border-white/10">
                     <div className="flex items-center justify-between">
-                        <CardTitle className="text-sm text-white flex items-center gap-2">
-                            <FileText className="h-4 w-4" />
+                        <CardTitle className="text-sm text-white">
                             VDK配置
                         </CardTitle>
                         <CollapsibleTrigger asChild>

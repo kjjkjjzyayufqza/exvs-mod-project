@@ -273,9 +273,7 @@ export function ControlPanel({
                 <ImportPanel />
                 
                 {/* Scene Export/Import Panel */}
-                <div className="w-80">
-                    <SceneExportPanel />
-                </div>
+                <SceneExportPanel />
                 
                 {/* VDK Configuration Panel */}
                 <VdkConfigPanel
