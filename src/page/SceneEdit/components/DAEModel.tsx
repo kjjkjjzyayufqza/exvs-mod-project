@@ -153,13 +153,23 @@ function DAEModelInner({ modelState, mode, onTransform, selectionManager }: DAEM
 
     // Update mesh transform when modelState changes
     useEffect(() => {
-        if (meshRef.current) {
-            console.log('DAEModelInner: Setting up model transform');
+        if (meshRef.current && isModelReady) {
+            console.log('DAEModelInner: Setting up model transform', modelState.id, modelState.position, modelState.rotation, modelState.scale);
             meshRef.current.position.set(...modelState.position);
             meshRef.current.rotation.set(...modelState.rotation);
             meshRef.current.scale.set(...modelState.scale);
         }
-    }, [modelState.position, modelState.rotation, modelState.scale]);
+    }, [modelState.position, modelState.rotation, modelState.scale, isModelReady]);
+
+    // Additional effect to handle model state changes that might occur after initial setup
+    useEffect(() => {
+        if (meshRef.current && isModelReady) {
+            console.log('DAEModelInner: Model state changed, updating transform', modelState.id, modelState.position, modelState.rotation, modelState.scale);
+            meshRef.current.position.set(...modelState.position);
+            meshRef.current.rotation.set(...modelState.rotation);
+            meshRef.current.scale.set(...modelState.scale);
+        }
+    }, [modelState, isModelReady]);
 
     // 使用useCallback优化handleObjectChange函数
     const handleObjectChange = useCallback((subModelId?: string) => {
