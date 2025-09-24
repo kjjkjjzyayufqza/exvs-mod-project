@@ -7,6 +7,7 @@ import { Separator } from '../../../components/ui/separator';
 import { ScrollArea } from '../../../components/ui/scroll-area';
 import { Image, Upload, X, FileImage } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../../components/ui/tooltip';
 
 interface TexturePanelProps {
     models: Record<string, ModelState>;
@@ -54,17 +55,31 @@ function SubModelTextureItem({ modelId, subModel, onSelectTexture, onRemoveTextu
             {/* SubModel Info */}
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-medium text-white truncate">
-                        {subModel.name}
-                    </span>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className="text-sm font-medium text-white truncate max-w-[140px] cursor-default">
+                                {subModel.name}
+                            </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>{subModel.name}</p>
+                        </TooltipContent>
+                    </Tooltip>
                     <Badge variant="outline" className="text-xs px-1 py-0 text-white/60 border-white/20">
                         #{subModel.geometryIndex}
                     </Badge>
                 </div>
                 {subModel.texturePath && (
-                    <div className="text-xs text-white/60 truncate">
-                        {subModel.texturePath.split(/[/\\]/).pop()}
-                    </div>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <div className="text-xs text-white/60 truncate max-w-[140px] cursor-default">
+                                {subModel.texturePath.split(/[/\\]/).pop()}
+                            </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>{subModel.texturePath}</p>
+                        </TooltipContent>
+                    </Tooltip>
                 )}
             </div>
 
