@@ -195,7 +195,4 @@ export {
     PRESET_CONFIGS
 };
 
-// Run main function if this file is executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-    main();
-}
+main();

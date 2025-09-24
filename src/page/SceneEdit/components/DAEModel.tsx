@@ -24,6 +24,14 @@ function useDAEModel(filePath: string) {
     const [error, setError] = useState<Error | null>(null);
 
     useEffect(() => {
+        // 如果filePath是本地文件路径（不是blob URL），等待重新加载
+        if (filePath && !filePath.startsWith('blob:')) {
+            console.log('DAEModel: Waiting for blob URL reload, current path:', filePath);
+            setIsLoading(true);
+            setError(null);
+            setCollada(null);
+            return;
+        }
         // 检查缓存
         if (modelCache.has(filePath)) {
             console.log('DAEModel: Using cached model for:', filePath);
@@ -293,28 +301,28 @@ function DAEModelInner({ modelState, mode, onTransform, selectionManager }: DAEM
         return originalMaterials.map((originalMaterial, index) => {
             // 找到对应geometryIndex的子模型
             const subModel = subModelStates.find(sm => sm.geometryIndex === index);
-            
+
             if (subModel && subModel.textureBlob) {
                 // 如果有自定义贴图，创建新材质
                 const texture = new THREE.TextureLoader().load(subModel.textureBlob);
                 texture.flipY = false; // DAE模型通常需要这个设置
                 texture.wrapS = THREE.RepeatWrapping;
                 texture.wrapT = THREE.RepeatWrapping;
-                
+
                 // 创建新的材质，保持原材质的其他属性
                 const newMaterial = originalMaterial.clone();
-                if (newMaterial instanceof THREE.MeshStandardMaterial || 
+                if (newMaterial instanceof THREE.MeshStandardMaterial ||
                     newMaterial instanceof THREE.MeshBasicMaterial ||
                     newMaterial instanceof THREE.MeshLambertMaterial ||
                     newMaterial instanceof THREE.MeshPhongMaterial) {
                     newMaterial.map = texture;
                     newMaterial.needsUpdate = true;
                 }
-                
+
                 console.log(`Applied texture to subModel ${subModel.name} (geometryIndex: ${index})`);
                 return newMaterial;
             }
-            
+
             // 如果没有自定义贴图，使用原材质
             return originalMaterial;
         });
