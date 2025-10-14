@@ -117,10 +117,13 @@ export default function SceneEdit() {
         redo,
         canUndo,
         canRedo,
+        vdkConfigs,
         vdkObjectInfos,
         isVdkLoading,
         vdkLoadingError,
         loadVdkConfig,
+        saveVdkConfig,
+        addVdkObject,
         applyVdkConfigToScene
     } = useSceneStore();
 
@@ -313,10 +316,13 @@ export default function SceneEdit() {
                 onUpdateModelTransform={updateModelTransform}
                 getInitialModelState={getInitialModelState}
                 onModelSelect={setSelectedModel}
+                vdkConfigs={vdkConfigs}
                 vdkObjectInfos={vdkObjectInfos}
                 isVdkLoading={isVdkLoading}
                 vdkLoadingError={vdkLoadingError}
                 onLoadVdkConfig={handleLoadVdkConfig}
+                onSaveVdkConfig={saveVdkConfig}
+                onAddVdkObject={addVdkObject}
             />
 
             <Canvas

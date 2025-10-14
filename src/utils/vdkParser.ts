@@ -1,5 +1,13 @@
 import { readTextFile } from '@tauri-apps/plugin-fs'
 import { VdkConfig, VdkObjectInfo } from '../types/vdk'
+import { ModelState } from '../store/sceneStore'
+
+/**
+ * Format number to match original VDK format (always show one decimal place)
+ */
+function formatNumber(num: number): string {
+  return num.toFixed(1)
+}
 
 /**
  * Parse VDK configuration from text content
@@ -21,7 +29,7 @@ export function parseVdkConfig (content: string): VdkConfig[] {
       const key = pairs[i]?.trim()
       const value = pairs[i + 1]?.trim()
 
-      if (!key || !value) continue
+      if (!key) continue
 
       switch (key) {
         case 'VDK_TYPE':
@@ -113,7 +121,7 @@ export function parseVdkConfig (content: string): VdkConfig[] {
           if (!isNaN(lifeMax)) config.VDK_PROP_LIFE_MAX = lifeMax
           break
         case 'VDK_PLACEMENT_NAME':
-          config.VDK_PLACEMENT_NAME = value
+          config.VDK_PLACEMENT_NAME = value || ''
           break
         case 'VDK_HITPOINT':
           config.VDK_HITPOINT = value
@@ -219,6 +227,248 @@ export function groupVdkObjects (configs: VdkConfig[]): Map<number, VdkObjectInf
   }
 
   return objectMap
+}
+
+/**
+ * Serialize VDK configurations back to text format
+ * @param configs Array of VDK configurations
+ * @returns Text content in VDK format
+ */
+export function serializeVdkConfig (configs: VdkConfig[]): string {
+  const configLines: string[] = []
+
+  for (const config of configs) {
+    const lineParts: string[] = []
+
+    // Add each property in the correct order (comma-separated key,value format)
+    if (config.VDK_TYPE) {
+      lineParts.push('VDK_TYPE', config.VDK_TYPE)
+    }
+    if (config.VDK_INITIAL_SPAWN !== undefined) {
+      lineParts.push('VDK_INITIAL_SPAWN', config.VDK_INITIAL_SPAWN ? 'TRUE' : 'FALSE')
+    }
+    if (config.VDK_POSITION_X !== undefined) {
+      lineParts.push('VDK_POSITION_X', formatNumber(config.VDK_POSITION_X))
+    }
+    if (config.VDK_POSITION_Y !== undefined) {
+      lineParts.push('VDK_POSITION_Y', formatNumber(config.VDK_POSITION_Y))
+    }
+    if (config.VDK_POSITION_Z !== undefined) {
+      lineParts.push('VDK_POSITION_Z', formatNumber(config.VDK_POSITION_Z))
+    }
+    if (config.VDK_ROTATION_X !== undefined) {
+      lineParts.push('VDK_ROTATION_X', formatNumber(config.VDK_ROTATION_X))
+    }
+    if (config.VDK_ROTATION_Y !== undefined) {
+      lineParts.push('VDK_ROTATION_Y', formatNumber(config.VDK_ROTATION_Y))
+    }
+    if (config.VDK_ROTATION_Z !== undefined) {
+      lineParts.push('VDK_ROTATION_Z', formatNumber(config.VDK_ROTATION_Z))
+    }
+    // All configurations should have VDK_PLACEMENT_NAME field
+    lineParts.push('VDK_PLACEMENT_NAME', config.VDK_PLACEMENT_NAME || '')
+    if (config.VDK_OBJECTNUMBER !== undefined) {
+      lineParts.push('VDK_OBJECTNUMBER', config.VDK_OBJECTNUMBER.toString())
+    }
+    if (config.VDK_PROGRAMID !== undefined) {
+      lineParts.push('VDK_PROGRAMID', config.VDK_PROGRAMID.toString())
+    }
+    if (config.VDK_HITPOINT) {
+      lineParts.push('VDK_HITPOINT', config.VDK_HITPOINT)
+    }
+    if (config.VDK_SHADOW_CAST !== undefined) {
+      lineParts.push('VDK_SHADOW_CAST', config.VDK_SHADOW_CAST ? 'TRUE' : 'FALSE')
+    }
+    if (config.VDK_EFFECT_ID) {
+      lineParts.push('VDK_EFFECT_ID', config.VDK_EFFECT_ID)
+    }
+    if (config.VDK_EFFECT_TIME_OFFSET !== undefined) {
+      lineParts.push('VDK_EFFECT_TIME_OFFSET', config.VDK_EFFECT_TIME_OFFSET.toString())
+    }
+    if (config.VDK_SCALE_X !== undefined) {
+      lineParts.push('VDK_SCALE_X', config.VDK_SCALE_X.toFixed(1))
+    }
+    if (config.VDK_SCALE_Y !== undefined) {
+      lineParts.push('VDK_SCALE_Y', config.VDK_SCALE_Y.toFixed(1))
+    }
+    if (config.VDK_SCALE_Z !== undefined) {
+      lineParts.push('VDK_SCALE_Z', config.VDK_SCALE_Z.toFixed(1))
+    }
+    if (config.VDK_SE_ID) {
+      lineParts.push('VDK_SE_ID', config.VDK_SE_ID)
+    }
+    if (config.VDK_SE_TIME_OFFSET !== undefined) {
+      lineParts.push('VDK_SE_TIME_OFFSET', config.VDK_SE_TIME_OFFSET.toString())
+    }
+    if (config.VDK_PROP_RELEASE_ATTACH !== undefined) {
+      lineParts.push('VDK_PROP_RELEASE_ATTACH', config.VDK_PROP_RELEASE_ATTACH ? 'TRUE' : 'FALSE')
+    }
+    if (config.VDK_PROP_IMPULSE_EFFECT_WEAK_ID) {
+      lineParts.push('VDK_PROP_IMPULSE_EFFECT_WEAK_ID', config.VDK_PROP_IMPULSE_EFFECT_WEAK_ID)
+    }
+    if (config.VDK_PROP_IMPULSE_EFFECT_STRONG_ID) {
+      lineParts.push('VDK_PROP_IMPULSE_EFFECT_STRONG_ID', config.VDK_PROP_IMPULSE_EFFECT_STRONG_ID)
+    }
+    if (config.VDK_PROP_IMPULSE_EFFECT_RESTRAINT_RATIO !== undefined) {
+      lineParts.push('VDK_PROP_IMPULSE_EFFECT_RESTRAINT_RATIO', config.VDK_PROP_IMPULSE_EFFECT_RESTRAINT_RATIO.toFixed(1))
+    }
+    if (config.VDK_PROP_IMPULSE_EFFECT_SCALE !== undefined) {
+      lineParts.push('VDK_PROP_IMPULSE_EFFECT_SCALE', config.VDK_PROP_IMPULSE_EFFECT_SCALE.toFixed(1))
+    }
+    if (config.VDK_PROP_IMPULSE_EFFECT_STRENGTH !== undefined) {
+      lineParts.push('VDK_PROP_IMPULSE_EFFECT_STRENGTH', config.VDK_PROP_IMPULSE_EFFECT_STRENGTH.toFixed(1))
+    }
+    if (config.VDK_PROP_DISAPPEAR_EFFECT_ID) {
+      lineParts.push('VDK_PROP_DISAPPEAR_EFFECT_ID', config.VDK_PROP_DISAPPEAR_EFFECT_ID)
+    }
+    if (config.VDK_PROP_LIFE_MAX !== undefined) {
+      lineParts.push('VDK_PROP_LIFE_MAX', config.VDK_PROP_LIFE_MAX.toString())
+    }
+    if (config.VDK_BREAK_SHOCKWAVE_RADIUS !== undefined) {
+      lineParts.push('VDK_BREAK_SHOCKWAVE_RADIUS', config.VDK_BREAK_SHOCKWAVE_RADIUS.toFixed(1))
+    }
+    if (config.VDK_BREAK_SHOCKWAVE_POWER !== undefined) {
+      lineParts.push('VDK_BREAK_SHOCKWAVE_POWER', config.VDK_BREAK_SHOCKWAVE_POWER.toFixed(1))
+    }
+    if (config.VDK_SUBSTITUTE_PLACEMENT !== undefined) {
+      if (Array.isArray(config.VDK_SUBSTITUTE_PLACEMENT)) {
+        config.VDK_SUBSTITUTE_PLACEMENT.forEach(placement => {
+          lineParts.push('VDK_SUBSTITUTE_PLACEMENT', placement.toString())
+        })
+      } else {
+        lineParts.push('VDK_SUBSTITUTE_PLACEMENT', config.VDK_SUBSTITUTE_PLACEMENT.toString())
+      }
+    }
+    if (config.VDK_CAMERA_BIND_PLACEMENT !== undefined) {
+      if (Array.isArray(config.VDK_CAMERA_BIND_PLACEMENT)) {
+        config.VDK_CAMERA_BIND_PLACEMENT.forEach(placement => {
+          lineParts.push('VDK_CAMERA_BIND_PLACEMENT', placement.toString())
+        })
+      } else {
+        lineParts.push('VDK_CAMERA_BIND_PLACEMENT', config.VDK_CAMERA_BIND_PLACEMENT.toString())
+      }
+    }
+
+    if (lineParts.length > 0) {
+      configLines.push(lineParts.join(','))
+    }
+  }
+
+  return configLines.join('\n')
+}
+
+/**
+ * Extract VDK configurations from current scene models
+ * @param models Current scene models
+ * @param originalVdkConfigs Original VDK configurations (for non-position data)
+ * @returns Array of VDK configurations reflecting current scene state
+ */
+export function extractVdkConfigsFromScene (models: Record<string, any>, originalVdkConfigs: VdkConfig[]): VdkConfig[] {
+  const extractedConfigs: VdkConfig[] = []
+
+  // Create a map of scene models by their calculated object number for quick lookup
+  const sceneModelsByObjectNumber = new Map<number, ModelState[]>()
+
+  for (const model of Object.values(models) as ModelState[]) {
+    if (!model.name.startsWith('scene_')) continue
+
+    const baseMatch = model.name.match(/^scene_(\d+)$/)
+    const instanceMatch = model.name.match(/^scene_(\d+)_instance_(\d+)$/)
+
+    let objectNumber: number
+    if (baseMatch) {
+      objectNumber = parseInt(baseMatch[1], 10) - 1
+    } else if (instanceMatch) {
+      objectNumber = parseInt(instanceMatch[1], 10) - 1
+    } else {
+      continue
+    }
+
+    if (!sceneModelsByObjectNumber.has(objectNumber)) {
+      sceneModelsByObjectNumber.set(objectNumber, [])
+    }
+    sceneModelsByObjectNumber.get(objectNumber)!.push(model)
+  }
+
+  // Process all original VDK configs
+  for (const originalConfig of originalVdkConfigs) {
+    if (originalConfig.VDK_TYPE !== 'OBJECT') {
+      // Copy non-OBJECT configs as-is
+      extractedConfigs.push({ ...originalConfig })
+    } else {
+      // For OBJECT configs, check if there are corresponding scene models
+      const objectNumber = originalConfig.VDK_OBJECTNUMBER!
+      const sceneModels = sceneModelsByObjectNumber.get(objectNumber) || []
+
+      if (sceneModels.length === 0) {
+        // No scene models found, keep original config
+        extractedConfigs.push({ ...originalConfig })
+      } else {
+        // Sort scene models to ensure consistent ordering
+        sceneModels.sort((a, b) => {
+          const aIsBase = !a.name.includes('_instance_')
+          const bIsBase = !b.name.includes('_instance_')
+          if (aIsBase && !bIsBase) return -1
+          if (!aIsBase && bIsBase) return 1
+          return a.name.localeCompare(b.name)
+        })
+
+        // Create one VDK config for each scene model
+        for (const sceneModel of sceneModels) {
+          extractedConfigs.push({
+            ...originalConfig,
+            VDK_POSITION_X: sceneModel.position[0],
+            VDK_POSITION_Y: sceneModel.position[1],
+            VDK_POSITION_Z: sceneModel.position[2],
+            VDK_ROTATION_X: sceneModel.rotation[0],
+            VDK_ROTATION_Y: sceneModel.rotation[1],
+            VDK_ROTATION_Z: sceneModel.rotation[2]
+          })
+        }
+      }
+    }
+  }
+
+  // Handle manually added objects that don't have original configs
+  for (const [objectNumber, sceneModels] of sceneModelsByObjectNumber) {
+    // Check if this object number already has configs from original VDK
+    const hasOriginalConfig = originalVdkConfigs.some(config =>
+      config.VDK_TYPE === 'OBJECT' && config.VDK_OBJECTNUMBER === objectNumber
+    )
+
+    if (!hasOriginalConfig) {
+      // Sort scene models
+      sceneModels.sort((a, b) => {
+        const aIsBase = !a.name.includes('_instance_')
+        const bIsBase = !b.name.includes('_instance_')
+        if (aIsBase && !bIsBase) return -1
+        if (!aIsBase && bIsBase) return 1
+        return a.name.localeCompare(b.name)
+      })
+
+      // Create VDK configs for manually added objects
+      for (const sceneModel of sceneModels) {
+        console.log(`Creating VDK config for manually added object ${objectNumber}`)
+        extractedConfigs.push({
+          VDK_TYPE: 'OBJECT',
+          VDK_INITIAL_SPAWN: true,
+          VDK_POSITION_X: sceneModel.position[0],
+          VDK_POSITION_Y: sceneModel.position[1],
+          VDK_POSITION_Z: sceneModel.position[2],
+          VDK_ROTATION_X: sceneModel.rotation[0],
+          VDK_ROTATION_Y: sceneModel.rotation[1],
+          VDK_ROTATION_Z: sceneModel.rotation[2],
+          VDK_PLACEMENT_NAME: '',
+          VDK_OBJECTNUMBER: objectNumber,
+          VDK_PROGRAMID: 0,
+          VDK_HITPOINT: 'UNBREAKABLE',
+          VDK_SHADOW_CAST: true
+        })
+      }
+    }
+  }
+
+  return extractedConfigs
 }
 
 /**

@@ -12,7 +12,7 @@ import { ModelList } from './ModelList';
 import { ImportPanel } from './ImportPanel';
 import { VdkConfigPanel } from './VdkConfigPanel';
 import { SceneExportPanel } from './SceneExportPanel';
-import { VdkObjectInfo } from '../../../types/vdk';
+import { VdkObjectInfo, VdkConfig } from '../../../types/vdk';
 
 interface ControlPanelProps {
     models: Record<string, ModelState>;
@@ -21,10 +21,13 @@ interface ControlPanelProps {
     onUpdateModelTransform: (modelState: ModelState) => void;
     getInitialModelState: (modelId: string) => ModelState | null;
     onModelSelect: (modelId: string) => void;
+    vdkConfigs: VdkConfig[];
     vdkObjectInfos: Map<number, VdkObjectInfo>;
     isVdkLoading: boolean;
     vdkLoadingError: string | null;
     onLoadVdkConfig: () => Promise<void>;
+    onSaveVdkConfig: () => Promise<void>;
+    onAddVdkObject: (objectNumber: number, position: [number, number, number], rotation: [number, number, number]) => void;
 }
 
 
@@ -36,10 +39,13 @@ export function ControlPanel({
     onUpdateModelTransform,
     getInitialModelState,
     onModelSelect,
+    vdkConfigs,
     vdkObjectInfos,
     isVdkLoading,
     vdkLoadingError,
-    onLoadVdkConfig
+    onLoadVdkConfig,
+    onSaveVdkConfig,
+    onAddVdkObject
 }: ControlPanelProps) {
     const { removeModel, toggleModelLock } = useSceneStore();
     const [isControlsCollapsed, setIsControlsCollapsed] = useState(false);
@@ -328,10 +334,13 @@ export function ControlPanel({
 
                     {/* VDK Configuration Panel */}
                     <VdkConfigPanel
+                        vdkConfigs={vdkConfigs}
                         vdkObjectInfos={vdkObjectInfos}
                         isVdkLoading={isVdkLoading}
                         vdkLoadingError={vdkLoadingError}
                         onLoadConfig={onLoadVdkConfig}
+                        onSaveConfig={onSaveVdkConfig}
+                        onAddVdkObject={onAddVdkObject}
                     />
                 </div>
             )}

@@ -57,7 +57,7 @@ function SubModelTextureItem({ modelId, subModel, onSelectTexture, onRemoveTextu
                 <div className="flex items-center gap-2 mb-1">
                     <Tooltip>
                         <TooltipTrigger asChild>
-                            <span className="text-sm font-medium text-white truncate max-w-[140px] cursor-default">
+                            <span className="text-sm font-medium text-white truncate max-w-[100px] cursor-default">
                                 {subModel.name}
                             </span>
                         </TooltipTrigger>

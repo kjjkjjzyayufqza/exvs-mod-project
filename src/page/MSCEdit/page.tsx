@@ -7,6 +7,7 @@ import { readDir } from "@tauri-apps/plugin-fs";
 import { Button } from "@/components/ui/button";
 import { Command } from '@tauri-apps/plugin-shell';
 import { FileList } from "./components/FileList";
+import { resourceDir } from "@tauri-apps/api/path";
 
 interface FileInfo {
   name: string;
@@ -59,7 +60,9 @@ export default function MSCEdit() {
       const command = await Command.create('exec-node', [
         toolPath,
         filePath,
-        "-r"
+        "-r",
+        "-com-path",
+        folderPath.split("\\").slice(0, -1).join("\\") + "\\"
       ], { encoding: 'utf-8' }).execute();
       if (command.code !== 0) {
         console.error("Repack failed:", command.stderr);
