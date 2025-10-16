@@ -243,7 +243,6 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
       const itemTypeText = itemType === 'Folder' ? 'folder' : 'file';
       const childrenCount = selectedItem.children ? selectedItem.children.length : 0;
       const childrenText = childrenCount > 0 ? ` (including ${childrenCount} items)` : '';
-
       toast.success(`Successfully copied ${itemTypeText}: "${selectedItem.name}"${childrenText}`);
     }
   };

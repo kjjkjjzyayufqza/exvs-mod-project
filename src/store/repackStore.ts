@@ -198,6 +198,7 @@ export const useRepackStore = create<RepackStoreState>((set, get) => ({
       }
 
       const copiedNode = copyWithNewIds(nodeToCopy)
+      console.log("[DEBUG] copiedNode", copiedNode);
       set({ copiedItem: copiedNode })
     }
   },

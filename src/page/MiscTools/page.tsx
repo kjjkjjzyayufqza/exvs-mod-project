@@ -2,8 +2,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Container from "../../layout/Container"
 import { Separator } from "@/components/ui/separator"
-import { Wrench, FileText, Calculator, Palette, File } from "lucide-react"
+import { Wrench, FileText, Calculator, Palette, File, FileJson } from "lucide-react"
 import { FBXItemRename } from "./components/fbx-item-rename/FBXItemRename"
+import { TemplateJsonGenerator } from "./components/template-json-generator/TemplateJsonGenerator"
 
 export default function MiscToolsPage() {
   return (
@@ -104,6 +105,22 @@ export default function MiscToolsPage() {
             </CardHeader>
             <CardContent>
               <FBXItemRename />
+            </CardContent>
+          </Card>
+
+          {/* Template JSON Generator */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <FileJson className="h-5 w-5" />
+                Template JSON Generator
+              </CardTitle>
+              <CardDescription>
+                Generate template JSON files by scanning folder structures
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TemplateJsonGenerator />
             </CardContent>
           </Card>
         </div>
