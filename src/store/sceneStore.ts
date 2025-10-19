@@ -863,28 +863,6 @@ export const useSceneStore = create<SceneState>()(
 
                 const { models, vdkConfigs, vdkObjectInfos, sceneName, timestamp } = importResult;
 
-                // Replace current scene with imported data
-                set((state) => {
-                    // Clear current scene
-                    state.models = {};
-                    state.selectedModelId = null;
-                    state.vdkConfigs = [];
-                    state.vdkObjectInfos = new Map();
-
-                    // Load imported data
-                    state.models = models;
-                    state.vdkConfigs = vdkConfigs;
-                    state.vdkObjectInfos = vdkObjectInfos;
-
-                    // Reset history with new models
-                    const newHistoryState = Object.values(models);
-                    state.history = [newHistoryState];
-                    state.historyIndex = 0;
-
-                    // Clear loading state
-                    state.isLoading = false;
-                });
-
                 console.log(`Scene "${sceneName}" imported successfully from ${timestamp}`);
                 console.log('Imported models:', Object.keys(models).length);
                 console.log('Imported VDK configs:', vdkConfigs.length);
@@ -911,13 +889,8 @@ export const useSceneStore = create<SceneState>()(
                             const blob = new Blob([textContent], { type: 'application/xml' });
                             const blobUrl = URL.createObjectURL(blob);
                             
-                            // Update the model with the new blob URL
-                            set((state) => {
-                                const stateModel = state.models[model.id];
-                                if (stateModel) {
-                                    stateModel.filePath = blobUrl;
-                                }
-                            });
+                            // Update the model with the new blob URL (in the imported models object)
+                            models[model.id].filePath = blobUrl;
                             
                             console.log(`Successfully reloaded DAE model: ${model.name}`);
                         } catch (error) {
@@ -927,30 +900,101 @@ export const useSceneStore = create<SceneState>()(
                     }
                 }
 
-                // For models that had blob URLs, we need to reload their textures
-                const modelsWithBlobTextures = Object.values(models).filter(model => 
+                // Reload Havok models that have original file paths
+                const havokModelsToReload = Object.values(models).filter(model => 
+                    model.type === 'havok' && model.originalFilePath && !model.filePath?.startsWith('blob:')
+                );
+
+                if (havokModelsToReload.length > 0) {
+                    console.log('Reloading Havok models from original file paths:', 
+                        havokModelsToReload.map(m => m.name));
+                    
+                    // Reload each Havok model to create blob URLs
+                    for (const model of havokModelsToReload) {
+                        try {
+                            console.log(`Reloading Havok model: ${model.name} from ${model.originalFilePath}`);
+                            
+                            // Read file content
+                            const fileContent = await readFile(model.originalFilePath!);
+                            const textContent = new TextDecoder().decode(fileContent);
+                            
+                            // Create blob URL for the parser
+                            const blob = new Blob([textContent], { type: 'application/xml' });
+                            const blobUrl = URL.createObjectURL(blob);
+                            
+                            // Update the model with the new blob URL (in the imported models object)
+                            models[model.id].filePath = blobUrl;
+                            
+                            console.log(`Successfully reloaded Havok model: ${model.name}`);
+                        } catch (error) {
+                            console.warn(`Failed to reload Havok model ${model.name}:`, error);
+                            // Keep the original file path as fallback
+                        }
+                    }
+                }
+
+                // Reload textures for sub-models (without triggering history)
+                const modelsWithTextures = Object.values(models).filter(model => 
                     model.subModels?.some(subModel => subModel.texturePath && !subModel.textureBlob)
                 );
 
-                if (modelsWithBlobTextures.length > 0) {
-                    console.warn('Some models have texture paths that need to be reloaded:', 
-                        modelsWithBlobTextures.map(m => m.name));
+                if (modelsWithTextures.length > 0) {
+                    console.log('Reloading textures for models:', 
+                        modelsWithTextures.map(m => m.name));
                     
-                    // Attempt to reload textures for sub-models
-                    for (const model of modelsWithBlobTextures) {
+                    // Reload textures for sub-models
+                    for (const model of modelsWithTextures) {
                         if (model.subModels) {
                             for (const subModel of model.subModels) {
                                 if (subModel.texturePath && !subModel.textureBlob) {
                                     try {
-                                        await get().setSubModelTexture(model.id, subModel.id, subModel.texturePath);
+                                        console.log(`Reloading texture for ${model.name}/${subModel.name} from ${subModel.texturePath}`);
+                                        
+                                        // Read image file
+                                        const fileContent = await readFile(subModel.texturePath);
+                                        
+                                        // Create blob URL for the texture
+                                        const blob = new Blob([fileContent as BlobPart]);
+                                        const blobUrl = URL.createObjectURL(blob);
+                                        
+                                        // Update the subModel with the new blob URL (in the imported models object)
+                                        subModel.textureBlob = blobUrl;
+                                        
+                                        console.log(`Successfully reloaded texture for ${model.name}/${subModel.name}`);
                                     } catch (error) {
                                         console.warn(`Failed to reload texture for ${model.name}/${subModel.name}:`, error);
+                                        // Keep the texture path as fallback
                                     }
                                 }
                             }
                         }
                     }
                 }
+
+                // Replace current scene with imported data (after all async operations are complete)
+                // This ensures we only update the state once and create only one history entry
+                set((state) => {
+                    // Clear current scene
+                    state.models = {};
+                    state.selectedModelId = null;
+                    state.vdkConfigs = [];
+                    state.vdkObjectInfos = new Map();
+
+                    // Load imported data (with all blob URLs already created)
+                    state.models = models;
+                    state.vdkConfigs = vdkConfigs;
+                    state.vdkObjectInfos = vdkObjectInfos;
+
+                    // Reset history with new models - only ONE history entry for the entire import
+                    const newHistoryState = Object.values(models);
+                    state.history = [newHistoryState];
+                    state.historyIndex = 0;
+
+                    // Clear loading state
+                    state.isLoading = false;
+                });
+
+                console.log('Scene import completed successfully');
 
             } catch (error) {
                 console.error('Failed to import scene:', error);
