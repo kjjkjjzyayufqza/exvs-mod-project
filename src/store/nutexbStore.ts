@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import { exists, mkdir, readTextFile } from "@tauri-apps/plugin-fs";
+import { exists, mkdir, readTextFile, readFile } from "@tauri-apps/plugin-fs";
 import { resourceDir, dirname, basename, join } from "@tauri-apps/api/path";
 import { open, save } from "@tauri-apps/plugin-dialog";
 
@@ -59,6 +59,7 @@ interface NutexbStore {
   hasMipmaps: boolean;
   fileInfoCache: Map<string, { info: FileInfo; timestamp: number; fileSize: number }>;
   toolExistsCache: { exists: boolean; timestamp: number } | null;
+  readNutexbTextureName: (filePath: string) => Promise<string>;
   parseNutexbInfo: (output: string) => { nutexbInfo: Partial<NutexbFooter>; imageFormat: string };
   getFileInfos: (file: FileInfo) => Promise<FileInfo>;
   batchGetFileInfos: (files: FileInfo[]) => Promise<FileInfo[]>;
@@ -87,6 +88,49 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
   hasMipmaps: true,
   fileInfoCache: new Map(),
   toolExistsCache: null,
+
+  // Helper function to read texture name from nutexb file binary data
+  readNutexbTextureName: async (filePath: string): Promise<string> => {
+    try {
+      // Read the entire file as binary data
+      const fileData = await readFile(filePath);
+      const fileSize = fileData.length;
+
+      // Calculate offset: fileSize - 0x70
+      const nameOffset = fileSize - 0x70;
+
+      if (nameOffset < 0 || nameOffset + 4 > fileSize) {
+        throw new Error("Invalid file size or format");
+      }
+
+      // Check for "46XT" prefix (0x34, 0x36, 0x58, 0x54)
+      const prefix = fileData.slice(nameOffset, nameOffset + 4);
+      if (prefix[0] !== 0x34 || prefix[1] !== 0x36 || prefix[2] !== 0x58 || prefix[3] !== 0x54) {
+        throw new Error("Invalid nutexb format: missing 46XT prefix");
+      }
+
+      // Read string starting from nameOffset + 4 until null terminator (0x00)
+      const stringStart = nameOffset + 4;
+      let stringEnd = stringStart;
+
+      while (stringEnd < fileSize && fileData[stringEnd] !== 0x00) {
+        stringEnd++;
+      }
+
+      if (stringEnd === stringStart) {
+        throw new Error("Empty texture name");
+      }
+
+      // Convert bytes to string
+      const nameBytes = fileData.slice(stringStart, stringEnd);
+      const textureName = new TextDecoder('utf-8').decode(nameBytes);
+
+      return textureName;
+    } catch (error) {
+      console.error("Error reading nutexb texture name:", error);
+      throw error;
+    }
+  },
 
   // Helper function to parse nutexb information from command output
   parseNutexbInfo: (output: string): { nutexbInfo: Partial<NutexbFooter>; imageFormat: string } => {
@@ -192,6 +236,10 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
         throw new Error(`Tool not found: ${toolPath}`);
       }
 
+      // Read the real texture name from the nutexb file
+      const textureName = await get().readNutexbTextureName(file.path);
+      console.log("Real texture name:", textureName);
+
       // Prepare output directory and file path
       const dirPath = await dirname(file.path);
       const convertDirPath = await join(dirPath, CONVERT_DIR_NAME);
@@ -206,7 +254,7 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
         }
       }
 
-      const outputFileName = file.name.replace(".nutexb", "_convert.png");
+      const outputFileName = `${textureName}.png`;
       const outputPath = await join(convertDirPath, outputFileName);
 
       // Execute command
@@ -341,6 +389,9 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
         return null;
       }
 
+      // Read the real texture name from the nutexb file
+      const textureName = await get().readNutexbTextureName(file.path);
+
       // Prepare output directory and file path
       const dirPath = await dirname(file.path);
       const convertDirPath = await join(dirPath, CONVERT_DIR_NAME);
@@ -356,7 +407,7 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
         }
       }
 
-      const outputFileName = file.name.replace(".nutexb", "_convert.png");
+      const outputFileName = `${textureName}.png`;
       const outputPath = await join(convertDirPath, outputFileName);
 
       // Execute command to generate the preview
