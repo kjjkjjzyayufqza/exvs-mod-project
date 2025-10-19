@@ -24,6 +24,7 @@ export interface TreeDataItem {
     errorCompBufferData?: any;
     errorOriginSize?: number;
     originBinChunkBuffer?: any;
+    isExample?: boolean;
   };
 }
 

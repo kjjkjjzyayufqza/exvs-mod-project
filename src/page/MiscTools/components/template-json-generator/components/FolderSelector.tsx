@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { open } from "@tauri-apps/plugin-dialog"
 import { readDir } from "@tauri-apps/plugin-fs"
 import { FolderOpen, Loader2, AlertTriangle } from "lucide-react"
+import { useTemplateStore } from "@/store/templateStore"
 
 interface FileInfo {
     name: string
@@ -72,6 +73,7 @@ export function FolderSelector({
     setCompleteProjectData,
     setSettings
 }: FolderSelectorProps) {
+    const { resetAll } = useTemplateStore()
     const handleFolderSelect = async () => {
         try {
             const selected = await open({
@@ -80,8 +82,8 @@ export function FolderSelector({
             })
 
             if (selected && !Array.isArray(selected)) {
-                setSelectedFolder(selected)
                 await scanFolder(selected)
+                setSelectedFolder(selected) // Set selected folder after resetting store
             }
         } catch (error) {
             console.error("Error selecting folder:", error)
@@ -121,6 +123,8 @@ export function FolderSelector({
     const scanFolder = async (folderPath: string) => {
         setIsLoading(true)
         try {
+            // Reset all store data when selecting a new folder
+            resetAll()
             // Check if there's a /data directory
             const entries = await readDir(folderPath)
             const dataDir = entries.find(entry => entry.name === 'data' && entry.isDirectory)
@@ -206,7 +210,7 @@ export function FolderSelector({
 
             // Set complete project data
             setCompleteProjectData({
-                Magic: 0xBAC5B45F, // Using the magic from the example file
+                Magic: 0, // Using the magic from the example file
                 Fhm2dTotalCount: subFileData.length,
                 UnkCount: 0,
                 SubFileData: subFileData,

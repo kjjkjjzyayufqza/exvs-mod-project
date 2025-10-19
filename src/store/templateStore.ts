@@ -240,10 +240,16 @@ export const useTemplateStore = create<TemplateStoreState>((set, get) => ({
         const renameNodeRecursively = (nodes: TreeDataItem[]): TreeDataItem[] => {
             return nodes.map(node => {
                 if (node.id === nodeId) {
+                    const updatedData = node.data ? {
+                        ...node.data,
+                        // If node is currently an example, convert it to non-example when renaming
+                        isExample: node.data.isExample ? false : node.data.isExample
+                    } : undefined
+
                     const updatedNode = {
                         ...node,
                         name: newName,
-                        data: node.data
+                        data: updatedData
                     }
 
                     set({ selectedItem: updatedNode })
@@ -495,6 +501,11 @@ export const useTemplateStore = create<TemplateStoreState>((set, get) => ({
                     const updatedData = {
                         ...node.data,
                         [property]: value
+                    }
+
+                    // If updating name or fileUrl and node is currently an example, convert it to non-example
+                    if ((property === 'name' || property === 'fileUrl') && node.data.isExample) {
+                        updatedData.isExample = false
                     }
 
                     const updatedNode: TreeDataItem = {

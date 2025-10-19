@@ -10,9 +10,9 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog"
 import { FolderSelector } from "./components/FolderSelector"
-import { FileSettings } from "./components/FileSettings"
 import { ProjectStructure } from "./components/ProjectStructure"
 import { useTemplateStore } from "@/store/templateStore"
+import { writeTextFile } from "@tauri-apps/plugin-fs"
 
 export function TemplateJsonGenerator() {
     const [isOpen, setIsOpen] = useState(false)
@@ -37,6 +37,119 @@ export function TemplateJsonGenerator() {
 
     const handleSettingChange = (key: keyof typeof settings, value: string) => {
         setSettings({ ...settings, [key]: value })
+    }
+
+    const handleGenerateJson = async () => {
+        if (!selectedFolder || !completeProjectData) {
+            alert("Please select a folder and ensure data is loaded first.")
+            return
+        }
+
+        try {
+            // Generate SubFileStructure from current tree data
+            const generateSubFileStructure = (): any[] => {
+                const structure: any[] = []
+                let fileIndexCounter = 0
+
+                const processTreeNode = (node: any, depth: number = 0): void => {
+                    if (node.data?.type === 'Folder') {
+                        // Add folder entry
+                        structure.push({
+                            type: 'Folder',
+                            unk1: node.data.unk1 || "00000000",
+                            folderCount: node.children?.length || 0,
+                            unk2: node.data.unk2 || "00000000",
+                            unk3: node.data.unk3 || 32,
+                            unk4: node.data.unk4 || 1
+                        })
+
+                        // Process children
+                        if (node.children && node.children.length > 0) {
+                            node.children.forEach((child: any) => {
+                                processTreeNode(child, depth + 1)
+                            })
+                        }
+
+                        // Add EndMark after folder contents
+                        structure.push({
+                            type: 'EndMark',
+                            endMarkCount: 1
+                        })
+
+                    } else if (node.data?.type === 'Item') {
+                        // Add item entry with sequential fileIndex
+                        structure.push({
+                            type: 'Item',
+                            unk1: node.data.unk1 || "00000000",
+                            fileIndex: fileIndexCounter,
+                            unk2: node.data.unk2 || "00000000",
+                            unk3: node.data.unk3 || 0,
+                            originalFileIndex: fileIndexCounter
+                        })
+                        fileIndexCounter++
+                    }
+                }
+
+                // Process all root level nodes
+                treeData.forEach(node => processTreeNode(node))
+
+                return structure
+            }
+
+            // Generate SubFileData based on tree structure
+            const generateSubFileData = (): any[] => {
+                const subFileData: any[] = []
+                let fileIndexCounter = 0
+
+                const processTreeNode = (node: any): void => {
+                    if (node.data?.type === 'Item') {
+                        // Find corresponding file info
+                        const fileInfo = files.find(f =>
+                            f.path.replace(/\\/g, '/') === (node.data.fileUrl || '').replace(/\\/g, '/')
+                        )
+
+                        subFileData.push({
+                            index: fileIndexCounter,
+                            fileType: node.data.fileType || '.bin',
+                            fileIndex: fileIndexCounter,
+                            fileUrl: node.data.fileUrl || `.\\unknown\\${fileIndexCounter}.bin`
+                        })
+                        fileIndexCounter++
+                    }
+
+                    // Process children recursively
+                    if (node.children && node.children.length > 0) {
+                        node.children.forEach((child: any) => processTreeNode(child))
+                    }
+                }
+
+                // Process all root level nodes
+                treeData.forEach(node => processTreeNode(node))
+
+                return subFileData
+            }
+
+            // Generate updated data
+            const subFileStructure = generateSubFileStructure()
+            const subFileData = generateSubFileData()
+
+            // Generate the JSON data with synchronized fileIndex
+            const jsonData = {
+                SubFileData: subFileData,
+                SubFileStructure: subFileStructure
+            }
+
+            // Create the data.json file path (same level as /data folder)
+            const dataJsonPath = `${selectedFolder}/data.json`
+
+            // Write the JSON file
+            await writeTextFile(dataJsonPath, JSON.stringify(jsonData, null, 2))
+
+            alert(`data.json generated successfully at: ${dataJsonPath}`)
+        } catch (error) {
+            console.error("Error generating data.json:", error)
+            alert("Failed to generate data.json. Please check the console for details.")
+        }
     }
 
     return (
@@ -71,21 +184,12 @@ export function TemplateJsonGenerator() {
                             setSettings={setSettings}
                         />
 
-                        <FileSettings
-                            files={files}
-                            settings={settings}
-                            nutexbFiles={nutexbFiles}
-                            completeProjectData={completeProjectData}
-                            treeData={treeData}
-                            selectedItem={selectedItem}
-                            copiedItem={copiedItem}
-                            onSettingChange={handleSettingChange}
-                            onResetAll={resetAll}
-                        />
-
                         <ProjectStructure
                             files={files}
                             settings={settings}
+                            completeProjectData={completeProjectData}
+                            selectedFolder={selectedFolder}
+                            onGenerateJson={handleGenerateJson}
                         />
                     </TabsContent>
                 </Tabs>

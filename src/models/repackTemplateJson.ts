@@ -42,17 +42,8 @@ export const modelTemplates: ModelTemplate[] = [
     description: "Model Folder Structure",
     data: [
       {
-        "type": "Folder",
-        "Name": "8",
-        "unk1": "00000000",
-        "unk2": "00000000",
-        "unk3": 0,
-        "unk4": 0,
-        "folderCount": 8
-      },
-      {
         "type": "Item",
-        "Name": "92",
+        "Name": "1",
         "unk1": "00000000",
         "unk2": "10000000",
         "unk3": 0
@@ -72,7 +63,7 @@ export const modelTemplates: ModelTemplate[] = [
       },
       {
         "type": "Item",
-        "Name": "153",
+        "Name": "2",
         "unk1": "00000000",
         "unk2": "21000000",
         "unk3": 1
@@ -92,36 +83,32 @@ export const modelTemplates: ModelTemplate[] = [
       },
       {
         "type": "Item",
-        "Name": "115",
+        "Name": "3",
         "unk1": "00000000",
         "unk2": "21000000",
         "unk3": 1
       },
       {
         "type": "Item",
-        "Name": "173",
+        "Name": "4",
         "unk1": "00000000",
         "unk2": "30000000",
         "unk3": 0
       },
       {
         "type": "Item",
-        "Name": "193",
+        "Name": "5",
         "unk1": "00000000",
         "unk2": "40000000",
         "unk3": 0
       },
       {
         "type": "Item",
-        "Name": "238",
+        "Name": "6",
         "unk1": "00000000",
         "unk2": "50000000",
         "unk3": 0
       },
-      {
-        "type": "EndMark",
-        "endMarkCount": 1
-      }
     ]
   }
 ];
