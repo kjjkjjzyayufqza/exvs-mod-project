@@ -24,10 +24,9 @@ export function NutexbImportPanel({
   onImportComplete,
   onClose
 }: NutexbImportPanelProps) {
-  const [selectedImagePath, setSelectedImagePath] = useState<string | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [nutexbName, setNutexbName] = useState<string>("");
-  const [outputFileName, setOutputFileName] = useState<string>("");
+  const [selectedImagePaths, setSelectedImagePaths] = useState<string[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<{[key: string]: string}>({});
+  const [fileNames, setFileNames] = useState<{[key: string]: {baseName: string, displayName: string}}>({});
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -48,18 +47,18 @@ export function NutexbImportPanel({
     setIsDragOver(false);
 
     const files = Array.from(e.dataTransfer.files);
-    const imageFile = files.find(file => 
-      file.type.startsWith('image/') || 
+    const imageFiles = files.filter(file =>
+      file.type.startsWith('image/') ||
       /\.(png|jpg|jpeg|bmp|gif|webp|tiff|tif)$/i.test(file.name)
     );
 
-    if (imageFile) {
+    if (imageFiles.length > 0) {
       // For drag and drop, we'll use file selection dialog instead
       // since Web File API doesn't provide file paths
-      toast.info("Please use the file selection button to choose your image");
+      toast.info(`Found ${imageFiles.length} image file(s). Please use the file selection button to choose your images`);
       await handleFileSelect();
     } else {
-      toast.error("Please drop an image file (PNG, JPG, BMP, etc.)");
+      toast.error("Please drop image files (PNG, JPG, BMP, etc.)");
     }
   }, []);
 
@@ -77,7 +76,7 @@ export function NutexbImportPanel({
   const handleFileSelect = async () => {
     try {
       const selected = await open({
-        multiple: false,
+        multiple: true,
         filters: [
           {
             name: "Image Files",
@@ -86,84 +85,127 @@ export function NutexbImportPanel({
         ],
       });
 
-      if (selected && typeof selected === "string") {
-        await handleImageFile(selected);
+      if (selected) {
+        const filePaths = Array.isArray(selected) ? selected : [selected];
+        await handleImageFiles(filePaths);
       }
     } catch (error) {
-      console.error("Error selecting file:", error);
-      toast.error("Failed to select file");
+      console.error("Error selecting files:", error);
+      toast.error("Failed to select files");
     }
   };
 
-  // Process selected image file
-  const handleImageFile = async (imagePath: string) => {
+  // Process selected image files
+  const handleImageFiles = async (imagePaths: string[]) => {
     try {
-      setSelectedImagePath(imagePath);
-      
-      // Generate default names
-      const fileName = await basename(imagePath);
-      const nameWithoutExt = fileName.replace(/\.[^/.]+$/, "");
-      setNutexbName(nameWithoutExt);
-      setOutputFileName(nameWithoutExt + ".nutexb");
+      setSelectedImagePaths(imagePaths);
 
-      // Load image preview
-      const imageBytes = await readFile(imagePath);
-      const base64 = btoa(
-        Array.from(new Uint8Array(imageBytes))
-          .map(b => String.fromCharCode(b))
-          .join('')
-      );
-      setImagePreview(`data:image/png;base64,${base64}`);
+      // Generate file names and load previews for all files
+      const previews: {[key: string]: string} = {};
+      const names: {[key: string]: {baseName: string, displayName: string}} = {};
+
+      for (const imagePath of imagePaths) {
+        try {
+          // Generate file names
+          const fullFileName = await basename(imagePath);
+          const baseName = fullFileName.replace(/\.[^/.]+$/, ""); // Remove extension
+
+          names[imagePath] = {
+            baseName: baseName,
+            displayName: fullFileName
+          };
+
+          // Load image preview
+          const imageBytes = await readFile(imagePath);
+          const base64 = btoa(
+            Array.from(new Uint8Array(imageBytes))
+              .map(b => String.fromCharCode(b))
+              .join('')
+          );
+          previews[imagePath] = `data:image/png;base64,${base64}`;
+        } catch (error) {
+          console.error(`Error loading preview for ${imagePath}:`, error);
+        }
+      }
+
+      setFileNames(names);
+      setImagePreviews(previews);
     } catch (error) {
-      console.error("Error processing image file:", error);
-      toast.error("Failed to process image file");
+      console.error("Error processing image files:", error);
+      toast.error("Failed to process image files");
     }
   };
 
-  // Handle conversion
+  // Handle batch conversion
   const handleConvert = async () => {
-    if (!selectedImagePath || !outputFileName || !nutexbName) {
-      toast.error("Please provide all required information");
+    if (selectedImagePaths.length === 0) {
+      toast.error("Please select at least one image file");
       return;
     }
 
     try {
-      const outputDir = currentDirectory || await dirname(selectedImagePath);
-      const outputPath = await join(outputDir, outputFileName);
-      
-      await convertImageToNutexb(selectedImagePath, outputPath, nutexbName);
-      
-      toast.success(`Successfully converted to ${outputFileName}`);
-      
-      if (onImportComplete) {
-        onImportComplete(outputPath);
+      const outputDir = currentDirectory || await dirname(selectedImagePaths[0]);
+      const convertedPaths: string[] = [];
+
+      for (const imagePath of selectedImagePaths) {
+        const fileInfo = fileNames[imagePath];
+        if (!fileInfo) continue;
+
+        // Use the base name as both nutexb name and output filename
+        const outputFileName = `${fileInfo.baseName}.nutexb`;
+        const outputPath = await join(outputDir, outputFileName);
+
+        // Use baseName as the nutexb name
+        await convertImageToNutexb(imagePath, outputPath, fileInfo.baseName);
+        convertedPaths.push(outputPath);
       }
-      
+
+      toast.success(`Successfully converted ${selectedImagePaths.length} image(s)`);
+
+      // Call onImportComplete for each converted file
+      if (onImportComplete) {
+        convertedPaths.forEach(path => onImportComplete(path));
+      }
+
       // Reset and close
       handleReset();
       if (onClose) {
         onClose();
       }
     } catch (error) {
-      console.error("Conversion failed:", error);
+      console.error("Batch conversion failed:", error);
       // Error is already handled in the store
     }
   };
 
   // Reset form
   const handleReset = () => {
-    setSelectedImagePath(null);
-    setImagePreview(null);
-    setNutexbName("");
-    setOutputFileName("");
+    setSelectedImagePaths([]);
+    setImagePreviews({});
+    setFileNames({});
     resetConversion();
   };
 
-  const handleRemoveImage = () => {
-    setSelectedImagePath(null);
-    setImagePreview(null);
-    setNutexbName("");
-    setOutputFileName("");
+  const handleRemoveImage = (imagePath?: string) => {
+    if (imagePath) {
+      // Remove specific image
+      setSelectedImagePaths(prev => prev.filter(path => path !== imagePath));
+      setImagePreviews(prev => {
+        const newPreviews = {...prev};
+        delete newPreviews[imagePath];
+        return newPreviews;
+      });
+      setFileNames(prev => {
+        const newNames = {...prev};
+        delete newNames[imagePath];
+        return newNames;
+      });
+    } else {
+      // Remove all images
+      setSelectedImagePaths([]);
+      setImagePreviews({});
+      setFileNames({});
+    }
   };
 
   if (isConverting) {
@@ -186,7 +228,7 @@ export function NutexbImportPanel({
         )}
 
         {/* File Selection Area */}
-        {!selectedImagePath ? (
+        {selectedImagePaths.length === 0 ? (
           <Card
             className={`border-2 border-dashed transition-colors cursor-pointer ${
               isDragOver 
@@ -201,10 +243,10 @@ export function NutexbImportPanel({
             <div className="flex flex-col items-center justify-center p-8 text-center">
               <Upload className="h-12 w-12 text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Select or drop an image file
+                Select or drop image files
               </h3>
               <p className="text-sm text-gray-500 mb-4">
-                Supports PNG, JPG, BMP, GIF, WebP, TIFF formats
+                Supports PNG, JPG, BMP, GIF, WebP, TIFF formats (batch selection supported)
               </p>
               <Button variant="outline" type="button">
                 Browse Files
@@ -212,60 +254,63 @@ export function NutexbImportPanel({
             </div>
           </Card>
         ) : (
-          /* Selected Image Preview */
+          /* Selected Images List */
           <Card className="p-4">
-            <div className="flex items-start gap-4">
-              <div className="flex-1">
-                <div className="flex items-center justify-between mb-3">
-                  <Label className="text-sm font-medium">Selected Image</Label>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={handleRemoveImage}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-                {imagePreview && (
-                  <AspectRatio ratio={16/9} className="bg-muted rounded-lg overflow-hidden">
-                    <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="w-full h-full object-contain"
-                    />
-                  </AspectRatio>
-                )}
-              </div>
+            <div className="flex items-center justify-between mb-3">
+              <Label className="text-sm font-medium">
+                Selected Images ({selectedImagePaths.length})
+              </Label>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleRemoveImage()}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 gap-3 max-h-60 overflow-y-auto">
+              {selectedImagePaths.map((imagePath, index) => {
+                const fileInfo = fileNames[imagePath];
+                return (
+                  <div key={imagePath} className="flex items-center gap-3 p-2 border rounded-lg">
+                    <div className="w-12 h-12 bg-muted rounded overflow-hidden flex-shrink-0">
+                      {imagePreviews[imagePath] && (
+                        <img
+                          src={imagePreviews[imagePath]}
+                          alt={`Preview ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{fileInfo?.displayName || imagePath.split(/[/\\]/).pop()}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Base name: {fileInfo?.baseName} → {fileInfo?.baseName}.nutexb
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {index + 1} of {selectedImagePaths.length}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemoveImage(imagePath)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
           </Card>
         )}
 
-        {selectedImagePath && (
+        {selectedImagePaths.length > 0 && (
           <>
             {/* Configuration */}
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="nutexb-name">Nutexb Name</Label>
-                <Input
-                  id="nutexb-name"
-                  value={nutexbName}
-                  onChange={(e) => setNutexbName(e.target.value)}
-                  placeholder="Enter texture name"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="output-filename">Output File Name</Label>
-                <Input
-                  id="output-filename"
-                  value={outputFileName}
-                  onChange={(e) => setOutputFileName(e.target.value)}
-                  placeholder="Enter output filename"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="format-select">Image Format</Label>
+                <Label htmlFor="format-select">Image Format (applied to all files)</Label>
                 <Select
                   value={selectedFormat}
                   onValueChange={(value) => setSelectedFormat(value as ImageFormat)}
@@ -317,12 +362,12 @@ export function NutexbImportPanel({
               >
                 Reset
               </Button>
-              <Button 
+              <Button
                 onClick={handleConvert}
-                disabled={!selectedImagePath || !outputFileName || !nutexbName}
+                disabled={selectedImagePaths.length === 0}
                 className="flex-1"
               >
-                Convert to Nutexb
+                Convert All to Nutexb
               </Button>
             </div>
           </>
