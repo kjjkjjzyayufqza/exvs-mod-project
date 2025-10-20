@@ -1,0 +1,184 @@
+[
+  {
+    "mesh": "main_turret",
+    "baseColor": "D:/output/愛荷華級戰艦/M71.jpg",
+    "normal": "D:/output/愛荷華級戰艦/M71_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/M71_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/M71_specular.png"
+  },
+  {
+    "mesh": "main_gun_barrel",
+    "baseColor": "D:/output/愛荷華級戰艦/M71.jpg",
+    "normal": "D:/output/愛荷華級戰艦/M71_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/M71_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/M71_specular.png"
+  },
+  {
+    "mesh": "secondary_turret",
+    "baseColor": "D:/output/愛荷華級戰艦/127S4.jpg",
+    "normal": "D:/output/愛荷華級戰艦/127S4_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/127S4_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/127S4_specular.png"
+  },
+  {
+    "mesh": "secondary_gun_barrel",
+    "baseColor": "D:/output/愛荷華級戰艦/127S4.jpg",
+    "normal": "D:/output/愛荷華級戰艦/127S4_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/127S4_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/127S4_specular.png"
+  },
+  {
+    "mesh": "machine_gun_FCS",
+    "baseColor": "D:/output/愛荷華級戰艦/RFIII.png",
+    "normal": "D:/output/愛荷華級戰艦/RFIII_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/RFIII_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/RFIII_specular.png"
+  },
+  {
+    "mesh": "hull_001",
+    "baseColor": "D:/output/愛荷華級戰艦/B.jpg",
+    "normal": "D:/output/愛荷華級戰艦/B_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/B_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/B_specular.png"
+  },
+  {
+    "mesh": "searchlight",
+    "baseColor": "D:/output/愛荷華級戰艦/SCL.jpg",
+    "normal": "D:/output/愛荷華級戰艦/SCL_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/SCL_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/SCL_specular.png"
+  },
+  {
+    "mesh": "mast",
+    "baseColor": "D:/output/愛荷華級戰艦/T.bmp",
+    "normal": "D:/output/愛荷華級戰艦/T_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/T_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/T_specular.png"
+  },
+  {
+    "mesh": "rigging_parts_001",
+    "baseColor": "D:/output/愛荷華級戰艦/BB3.jpg",
+    "normal": "D:/output/愛荷華級戰艦/BB3_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/BB3_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/BB3_specular.png"
+  },
+  {
+    "mesh": "hatch",
+    "baseColor": "D:/output/愛荷華級戰艦/DP2.jpg",
+    "normal": "D:/output/愛荷華級戰艦/DP2_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/DP2_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/DP2_specular.png"
+  },
+  {
+    "mesh": "davit1",
+    "baseColor": "D:/output/愛荷華級戰艦/BBDS.jpg",
+    "normal": "D:/output/愛荷華級戰艦/BBDS_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/BBDS_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/BBDS_specular.png"
+  },
+  {
+    "mesh": "boat",
+    "baseColor": "D:/output/愛荷華級戰艦/BA9.jpg",
+    "normal": "D:/output/愛荷華級戰艦/BA9_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/BA9_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/BA9_specular.png"
+  },
+  {
+    "mesh": "anchor1",
+    "baseColor": "D:/output/愛荷華級戰艦/AN4.jpg",
+    "normal": "D:/output/愛荷華級戰艦/AN4_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/AN4_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/AN4_specular.png"
+  },
+  {
+    "mesh": "rudder",
+    "baseColor": "D:/output/愛荷華級戰艦/RDS.jpg",
+    "normal": "D:/output/愛荷華級戰艦/RDS_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/RDS_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/RDS_specular.png"
+  },
+  {
+    "mesh": "screw_001",
+    "baseColor": "D:/output/愛荷華級戰艦/Sk.jpg",
+    "normal": "D:/output/愛荷華級戰艦/Sk_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/Sk_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/Sk_specular.png"
+  },
+  {
+    "mesh": "handrail_inner",
+    "baseColor": "D:/output/愛荷華級戰艦/HL.png",
+    "normal": "D:/output/愛荷華級戰艦/HL_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/HL_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/HL_specular.png"
+  },
+  {
+    "mesh": "catapult",
+    "baseColor": "D:/output/愛荷華級戰艦/CP.png",
+    "normal": "D:/output/愛荷華級戰艦/CP_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/CP_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/CP_specular.png"
+  },
+  {
+    "mesh": "crane",
+    "baseColor": "D:/output/愛荷華級戰艦/CRN.png",
+    "normal": "D:/output/愛荷華級戰艦/CRN_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/CRN_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/CRN_specular.png"
+  },
+  {
+    "mesh": "SK2_radar_inner",
+    "baseColor": "D:/output/愛荷華級戰艦/SK2.png",
+    "normal": "D:/output/愛荷華級戰艦/SK2_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/SK2_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/SK2_specular.png"
+  },
+  {
+    "mesh": "SK2_radar_outer",
+    "baseColor": "D:/output/愛荷華級戰艦/SK2.png",
+    "normal": "D:/output/愛荷華級戰艦/SK2_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/SK2_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/SK2_specular.png"
+  },
+  {
+    "mesh": "radar",
+    "baseColor": "D:/output/愛荷華級戰艦/OP.png",
+    "normal": "D:/output/愛荷華級戰艦/OP_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/OP_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/OP_specular.png"
+  },
+  {
+    "mesh": "rangefinder",
+    "baseColor": "D:/output/愛荷華級戰艦/RFIII.png",
+    "normal": "D:/output/愛荷華級戰艦/RFIII_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/RFIII_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/RFIII_specular.png"
+  },
+  {
+    "mesh": "net_container",
+    "baseColor": "D:/output/愛荷華級戰艦/fnet.png",
+    "normal": "D:/output/愛荷華級戰艦/fnet_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/fnet_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/fnet_specular.png"
+  },
+  {
+    "mesh": "m20mm_machine_gun",
+    "baseColor": "D:/output/愛荷華級戰艦/20AAII.png",
+    "normal": "D:/output/愛荷華級戰艦/20AAII_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/20AAII_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/20AAII_specular.png"
+  },
+  {
+    "mesh": "m40mm_machine_gun",
+    "baseColor": "D:/output/愛荷華級戰艦/4BF.png",
+    "normal": "D:/output/愛荷華級戰艦/4BF_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/4BF_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/4BF_specular.png"
+  },
+  {
+    "mesh": "handrail_outer",
+    "baseColor": "D:/output/愛荷華級戰艦/HL.png",
+    "normal": "D:/output/愛荷華級戰艦/HL_normal.png",
+    "ambient": "D:/output/愛荷華級戰艦/HL_ambient.png",
+    "specular": "D:/output/愛荷華級戰艦/HL_specular.png"
+  }
+]

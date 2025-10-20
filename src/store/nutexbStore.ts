@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import { exists, mkdir, readTextFile, readFile } from "@tauri-apps/plugin-fs";
+import { exists, mkdir, readTextFile } from "@tauri-apps/plugin-fs";
 import { resourceDir, dirname, basename, join } from "@tauri-apps/api/path";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { readNutexbTextureName } from "../utils/nutexbUtils";
 
 const CONVERT_DIR_NAME = ".\\__convert";
 
@@ -90,47 +91,7 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
   toolExistsCache: null,
 
   // Helper function to read texture name from nutexb file binary data
-  readNutexbTextureName: async (filePath: string): Promise<string> => {
-    try {
-      // Read the entire file as binary data
-      const fileData = await readFile(filePath);
-      const fileSize = fileData.length;
-
-      // Calculate offset: fileSize - 0x70
-      const nameOffset = fileSize - 0x70;
-
-      if (nameOffset < 0 || nameOffset + 4 > fileSize) {
-        throw new Error("Invalid file size or format");
-      }
-
-      // Check for "46XT" prefix (0x34, 0x36, 0x58, 0x54)
-      const prefix = fileData.slice(nameOffset, nameOffset + 4);
-      if (prefix[0] !== 0x34 || prefix[1] !== 0x36 || prefix[2] !== 0x58 || prefix[3] !== 0x54) {
-        throw new Error("Invalid nutexb format: missing 46XT prefix");
-      }
-
-      // Read string starting from nameOffset + 4 until null terminator (0x00)
-      const stringStart = nameOffset + 4;
-      let stringEnd = stringStart;
-
-      while (stringEnd < fileSize && fileData[stringEnd] !== 0x00) {
-        stringEnd++;
-      }
-
-      if (stringEnd === stringStart) {
-        throw new Error("Empty texture name");
-      }
-
-      // Convert bytes to string
-      const nameBytes = fileData.slice(stringStart, stringEnd);
-      const textureName = new TextDecoder('utf-8').decode(nameBytes);
-
-      return textureName;
-    } catch (error) {
-      console.error("Error reading nutexb texture name:", error);
-      throw error;
-    }
-  },
+  readNutexbTextureName: readNutexbTextureName,
 
   // Helper function to parse nutexb information from command output
   parseNutexbInfo: (output: string): { nutexbInfo: Partial<NutexbFooter>; imageFormat: string } => {
