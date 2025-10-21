@@ -2,10 +2,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Container from "../../layout/Container"
 import { Separator } from "@/components/ui/separator"
-import { Wrench, FileText, Calculator, Palette, File, FileJson, ImageIcon } from "lucide-react"
+import { Wrench, FileText, Calculator, Palette, File, FileJson, ImageIcon, FileEdit } from "lucide-react"
 import { FBXItemRename } from "./components/fbx-item-rename/FBXItemRename"
 import { TemplateJsonGenerator } from "./components/template-json-generator/TemplateJsonGenerator"
 import { ImgToNutexbTool } from "./components/img-to-nutexb/ImgToNutexbTool"
+import { NumatbEditor } from "./components/numatb-editor/NumatbEditor"
 
 export default function MiscToolsPage() {
   return (
@@ -138,6 +139,22 @@ export default function MiscToolsPage() {
             </CardHeader>
             <CardContent>
               <ImgToNutexbTool />
+            </CardContent>
+          </Card>
+
+          {/* Numatb Editor */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <FileEdit className="h-5 w-5" />
+                Numatb Editor
+              </CardTitle>
+              <CardDescription>
+                Edit material properties in .numatb files
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <NumatbEditor />
             </CardContent>
           </Card>
         </div>
