@@ -2,9 +2,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Container from "../../layout/Container"
 import { Separator } from "@/components/ui/separator"
-import { Wrench, FileText, Calculator, Palette, File, FileJson } from "lucide-react"
+import { Wrench, FileText, Calculator, Palette, File, FileJson, ImageIcon } from "lucide-react"
 import { FBXItemRename } from "./components/fbx-item-rename/FBXItemRename"
 import { TemplateJsonGenerator } from "./components/template-json-generator/TemplateJsonGenerator"
+import { ImgToNutexbTool } from "./components/img-to-nutexb/ImgToNutexbTool"
 
 export default function MiscToolsPage() {
   return (
@@ -121,6 +122,22 @@ export default function MiscToolsPage() {
             </CardHeader>
             <CardContent>
               <TemplateJsonGenerator />
+            </CardContent>
+          </Card>
+
+          {/* Image to Nutexb Converter */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <ImageIcon className="h-5 w-5" />
+                Image to Nutexb
+              </CardTitle>
+              <CardDescription>
+                Convert image files to nutexb format with custom output directory
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ImgToNutexbTool />
             </CardContent>
           </Card>
         </div>

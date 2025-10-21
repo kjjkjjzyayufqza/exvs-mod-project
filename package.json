@@ -53,6 +53,7 @@
     "flowbite": "^3.1.2",
     "framer-motion": "^12.23.24",
     "immer": "^10.1.3",
+    "json-edit-react": "^1.29.0",
     "leva": "^0.10.0",
     "lodash": "^4.17.21",
     "lucide-react": "^0.545.0",
