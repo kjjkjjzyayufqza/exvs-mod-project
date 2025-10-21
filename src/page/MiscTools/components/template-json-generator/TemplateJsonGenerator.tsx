@@ -46,16 +46,34 @@ export function TemplateJsonGenerator() {
         }
 
         try {
+            let maxExistingFileIndex = -1;
+
+            const findMaxFileIndex = (nodes: any[]) => {
+                nodes.forEach(node => {
+                    if (node.data?.type === 'Item' && node.data?.fileIndex !== undefined) {
+                        if (node.data.fileIndex > maxExistingFileIndex) {
+                            maxExistingFileIndex = node.data.fileIndex;
+                        }
+                    }
+                    if (node.children) {
+                        findMaxFileIndex(node.children);
+                    }
+                });
+            };
+
+            findMaxFileIndex(treeData);
+
             // Generate SubFileStructure from current tree data
             const generateSubFileStructure = (): any[] => {
                 const structure: any[] = []
-                let fileIndexCounter = 0
+                let fileIndexCounter = maxExistingFileIndex + 1;
 
                 const processTreeNode = (node: any, depth: number = 0): void => {
                     if (node.data?.type === 'Folder') {
                         // Add folder entry
                         structure.push({
                             type: 'Folder',
+                            Name: node.name,
                             unk1: node.data.unk1 || "00000000",
                             folderCount: node.children?.length || 0,
                             unk2: node.data.unk2 || "00000000",
@@ -80,13 +98,19 @@ export function TemplateJsonGenerator() {
                         // Add item entry with sequential fileIndex
                         structure.push({
                             type: 'Item',
+                            Name: node.name,
                             unk1: node.data.unk1 || "00000000",
-                            fileIndex: fileIndexCounter,
+                            // Use existing fileIndex if available, otherwise assign a new one
+                            fileIndex: node.data.fileIndex !== undefined ? node.data.fileIndex : fileIndexCounter,
                             unk2: node.data.unk2 || "00000000",
                             unk3: node.data.unk3 || 0,
-                            originalFileIndex: fileIndexCounter
+                            // Use existing originalFileIndex if available, otherwise assign a new one
+                            originalFileIndex: node.data.originalFileIndex !== undefined ? node.data.originalFileIndex : fileIndexCounter
                         })
-                        fileIndexCounter++
+                        // Only increment counter if we assigned a new fileIndex
+                        if (node.data.fileIndex === undefined) {
+                            fileIndexCounter++;
+                        }
                     }
                 }
 

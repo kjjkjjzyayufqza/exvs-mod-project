@@ -108,7 +108,8 @@ export default function RepackPage() {
     getMaxAvailableFileIndex,
     recalculateIndices,
     copiedItem,
-    pasteNode
+    pasteNode,
+    mergeExistingTemplate
   } = useRepackStore();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -909,6 +910,62 @@ export default function RepackPage() {
     }
   };
 
+  const handleImportExistingTemplate = async () => {
+    if (!selectedItem || selectedItem.data?.type !== 'Folder') {
+      toast.error("Please select a folder to add the existing template");
+      return;
+    }
+
+    try {
+      // Open file dialog to select JSON file
+      const selectedFile = await open({
+        filters: [
+          {
+            name: 'JSON Files',
+            extensions: ['json']
+          }
+        ],
+        multiple: false
+      });
+
+      if (!selectedFile) {
+        return;
+      }
+
+      // Read the JSON file content
+      const jsonContent = await readTextFile(selectedFile as string);
+      const parsedData = JSON.parse(jsonContent);
+
+      // Validate that the file contains only SubFileData and SubFileStructure
+      if (!parsedData.SubFileData || !Array.isArray(parsedData.SubFileData)) {
+        toast.error("Invalid template file: Missing or invalid SubFileData array");
+        return;
+      }
+
+      if (!parsedData.SubFileStructure || !Array.isArray(parsedData.SubFileStructure)) {
+        toast.error("Invalid template file: Missing or invalid SubFileStructure array");
+        return;
+      }
+
+      // Check for extra fields that shouldn't be present
+      const allowedKeys = ['SubFileData', 'SubFileStructure'];
+      const extraKeys = Object.keys(parsedData).filter(key => !allowedKeys.includes(key));
+
+      if (extraKeys.length > 0) {
+        toast.warning(`Template file contains extra fields (${extraKeys.join(', ')}) that will be ignored`);
+      }
+
+      // Call the store method to merge the template data
+      mergeExistingTemplate(parsedData.SubFileData, parsedData.SubFileStructure);
+
+      toast.success(`Successfully imported existing template into "${selectedItem.name}"`);
+
+    } catch (error) {
+      console.error("Error importing existing template:", error);
+      toast.error("Failed to import existing template: " + (error as Error).message);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col p-6 bg-gray-50/30">
       <div>
@@ -948,6 +1005,15 @@ export default function RepackPage() {
           >
             <Plus className="h-4 w-4 mr-2" />
             Add File
+          </Button>
+          <Button
+            onClick={handleImportExistingTemplate}
+            disabled={!selectedItem || selectedItem.data?.type !== 'Folder'}
+            variant="outline"
+            size="sm"
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            Add Existing Template
           </Button>
           <Dialog open={isTemplateDialogOpen} onOpenChange={(open) => {
             if (open) {

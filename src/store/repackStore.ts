@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
-import { TreeDataItem } from '@/lib/utils'
+import { TreeDataItem, convertSubFileStructureToTreeData } from '@/lib/utils'
 
 interface SubFileDataItem {
   index: number
@@ -59,6 +59,7 @@ interface RepackStoreState {
   isIndexExists: (index: number) => boolean
   isFileIndexExists: (fileIndex: number) => boolean
   recalculateIndices: () => void
+  mergeExistingTemplate: (subFileData: SubFileDataItem[], subFileStructure: SubFileStructureItem[]) => void
 }
 
 export const useRepackStore = create<RepackStoreState>((set, get) => ({
@@ -198,7 +199,7 @@ export const useRepackStore = create<RepackStoreState>((set, get) => ({
       }
 
       const copiedNode = copyWithNewIds(nodeToCopy)
-      console.log("[DEBUG] copiedNode", copiedNode);
+      console.log('[DEBUG] copiedNode', copiedNode)
       set({ copiedItem: copiedNode })
     }
   },
@@ -289,61 +290,176 @@ export const useRepackStore = create<RepackStoreState>((set, get) => ({
 
     const newTreeData = addNodeToParent(treeData)
     set({ treeData: newTreeData })
+  },
+
+  // Merge existing template data into current project
+  mergeExistingTemplate: (importedSubFileData: SubFileDataItem[], importedSubFileStructure: SubFileStructureItem[]) => {
+    const { completeProjectData, treeData, selectedItem } = get()
+    if (!completeProjectData || !selectedItem || selectedItem.data?.type !== 'Folder') {
+      return
+    }
+
+    try {
+      // Step 1: Recalculate indices for imported data
+      const currentMaxFileIndex = get().getMaxAvailableFileIndex()
+      const currentMaxIndex = get().getMaxAvailableIndex()
+
+      // Create mapping for fileIndex updates
+      const fileIndexMapping = new Map<number, number>()
+
+      // Process imported SubFileData - recalculate indices and fix fileUrl paths
+      const updatedImportedSubFileData = importedSubFileData.map((item, index) => {
+        const newFileIndex = currentMaxFileIndex + index
+        const newIndex = currentMaxIndex + index
+
+        // Store mapping for updating SubFileStructure
+        fileIndexMapping.set(item.fileIndex, newFileIndex)
+
+        // Fix fileUrl to be relative to data directory
+        let updatedFileUrl = item.fileUrl
+        if (updatedFileUrl && updatedFileUrl.includes('/data/')) {
+          // Extract path after /data/
+          const dataIndex = updatedFileUrl.indexOf('/data/')
+          if (dataIndex !== -1) {
+            const pathAfterData = updatedFileUrl.substring(dataIndex + 6) // +6 to skip "/data/"
+            updatedFileUrl = `.\\${pathAfterData.replace(/\//g, '\\')}`
+          }
+        } else if (updatedFileUrl && updatedFileUrl.includes('\\data\\')) {
+          // Handle Windows-style paths
+          const dataIndex = updatedFileUrl.indexOf('\\data\\')
+          if (dataIndex !== -1) {
+            const pathAfterData = updatedFileUrl.substring(dataIndex + 6) // +6 to skip "\data\"
+            updatedFileUrl = `.\\${pathAfterData}`
+          }
+        }
+
+        return {
+          ...item,
+          index: newIndex,
+          fileIndex: newFileIndex,
+          fileUrl: updatedFileUrl
+        }
+      })
+
+      // Process imported SubFileStructure - update fileIndex references and preserve Name fields
+      const updatedImportedSubFileStructure = importedSubFileStructure.map(item => {
+        if (item.type === 'Folder') {
+          return {
+            ...item,
+            Name: item.Name
+          }
+        }
+        if (item.type === 'Item' && item.fileIndex !== undefined && fileIndexMapping.has(item.fileIndex)) {
+          return {
+            ...item,
+            fileIndex: fileIndexMapping.get(item.fileIndex)!,
+            // Preserve Name field from imported data
+            Name: item.Name
+          }
+        }
+        // For Folder and other types, preserve Name field as well
+        return {
+          ...item,
+          Name: item.Name
+        }
+      })
+
+      // Step 2: Convert imported SubFileStructure to TreeDataItem format
+      const importedTreeData = convertSubFileStructureToTreeData(updatedImportedSubFileStructure, updatedImportedSubFileData)
+
+      // Step 3: Add imported tree data to selected folder
+      const addItemsToSelectedFolder = (nodes: TreeDataItem[]): TreeDataItem[] => {
+        return nodes.map(node => {
+          if (node.id === selectedItem!.id && node.data?.type === 'Folder') {
+            const children = node.children || []
+            const newChildren = [...children, ...importedTreeData]
+
+            // Update folderCount
+            const updatedData = {
+              ...node.data,
+              folderCount: newChildren.length
+            }
+
+            return {
+              ...node,
+              children: newChildren,
+              data: updatedData
+            }
+          }
+          if (node.children) {
+            return {
+              ...node,
+              children: addItemsToSelectedFolder(node.children)
+            }
+          }
+          return node
+        })
+      }
+
+      const newTreeData = addItemsToSelectedFolder(treeData)
+
+      // Step 4: Merge SubFileData and SubFileStructure into completeProjectData
+      const updatedCompleteProjectData = {
+        ...completeProjectData,
+        Fhm2dTotalCount: completeProjectData.Fhm2dTotalCount + updatedImportedSubFileData.length,
+        SubFileData: [...completeProjectData.SubFileData, ...updatedImportedSubFileData],
+        SubFileStructure: [...completeProjectData.SubFileStructure, ...updatedImportedSubFileStructure]
+      }
+
+      // Step 5: Update store
+      set({
+        treeData: newTreeData,
+        completeProjectData: updatedCompleteProjectData
+      })
+    } catch (error) {
+      console.error('Error merging existing template:', error)
+      throw error // Re-throw to let caller handle the error
+    }
   }
 }))
 
-
-
-
-
 // Helper function to optimize consecutive EndMarks into single EndMark with higher endMarkCount
-function optimizeEndMarks(structure: SubFileStructureItem[]): SubFileStructureItem[] {
+function optimizeEndMarks (structure: SubFileStructureItem[]): SubFileStructureItem[] {
   const optimized: SubFileStructureItem[] = []
-  
+
   for (let i = 0; i < structure.length; i++) {
     const current = structure[i]
-    
+
     if (current.type === 'EndMark') {
       let totalEndMarkCount = current.endMarkCount || 1
       let j = i + 1
-      
+
       // Count consecutive EndMarks
       while (j < structure.length && structure[j].type === 'EndMark') {
         totalEndMarkCount += structure[j].endMarkCount || 1
         j++
       }
-      
+
       // Add single optimized EndMark
       optimized.push({
         type: 'EndMark',
         endMarkCount: totalEndMarkCount
       })
-      
+
       // Skip the consecutive EndMarks we just processed
       i = j - 1
     } else {
       optimized.push(current)
     }
   }
-  
+
   return optimized
 }
-
-
-
-
 
 // New function to convert tree data without any modifications to preserve original order
 function convertTreeDataToStructureWithoutModification (treeData: TreeDataItem[]): {
   SubFileData: SubFileDataItem[]
   SubFileStructure: SubFileStructureItem[]
 } {
-
   // Step 1: Extract SubFileData from tree structure without modifications
   const extractedSubFileData = extractSubFileDataFromTreeWithoutModification(treeData)
 
-
-  // Step 2: Sort SubFileData by file type and reassign indices  
+  // Step 2: Sort SubFileData by file type and reassign indices
   const sortedSubFileData = sortSubFileDataByType(extractedSubFileData)
 
   // Step 3: Generate SubFileStructure preserving original fileIndex values
@@ -356,7 +472,6 @@ function convertTreeDataToStructureWithoutModification (treeData: TreeDataItem[]
   // Step 5: Reassign sequential indices and update SubFileStructure
   const { finalSubFileData, finalSubFileStructure } = reassignSequentialIndices(sortedSubFileData, subFileStructure)
 
-
   return {
     SubFileData: finalSubFileData,
     SubFileStructure: finalSubFileStructure
@@ -364,67 +479,66 @@ function convertTreeDataToStructureWithoutModification (treeData: TreeDataItem[]
 }
 
 // New function to reassign sequential indices and update SubFileStructure accordingly
-function reassignSequentialIndices(
-  subFileData: SubFileDataItem[], 
+function reassignSequentialIndices (
+  subFileData: SubFileDataItem[],
   subFileStructure: SubFileStructureItem[]
 ): {
   finalSubFileData: SubFileDataItem[]
   finalSubFileStructure: SubFileStructureItem[]
 } {
-  
   // Create deep copies to avoid mutation
   const finalSubFileData = JSON.parse(JSON.stringify(subFileData))
   const finalSubFileStructure = JSON.parse(JSON.stringify(subFileStructure))
-  
+
   // Step 1: Create mapping table for fileIndex changes
   const fileIndexMapping = new Map<number, number>()
-  
+
   console.log('--- Building fileIndex mapping table ---')
   for (let i = 0; i < finalSubFileData.length; i++) {
     const item = finalSubFileData[i]
-    
+
     // If index needs to be changed, record the mapping
     if (item.index !== i) {
       const originalFileIndex = item.fileIndex
       const newFileIndex = i
-      
+
       fileIndexMapping.set(originalFileIndex, newFileIndex)
       console.log(`  Mapping: fileIndex ${originalFileIndex} -> ${newFileIndex}`)
     }
   }
-  
+
   // Step 2: Update all SubFileData indices
   console.log('--- Updating SubFileData indices ---')
   for (let i = 0; i < finalSubFileData.length; i++) {
     const item = finalSubFileData[i]
-    
+
     if (item.index !== i) {
       console.log(`  Item ${i}: updating index ${item.index} -> ${i}, fileIndex ${item.fileIndex} -> ${i}`)
       item.index = i
       item.fileIndex = i
     }
   }
-  
+
   // Step 3: Update all SubFileStructure fileIndex values using mapping table
   console.log('--- Updating SubFileStructure fileIndex values ---')
   for (let j = 0; j < finalSubFileStructure.length; j++) {
     const structureItem = finalSubFileStructure[j]
-    
+
     if (structureItem.type === 'Item' && structureItem.fileIndex !== undefined) {
       const originalFileIndex = structureItem.fileIndex
-      
+
       // Check if this fileIndex needs to be updated according to our mapping
       if (fileIndexMapping.has(originalFileIndex)) {
         const newFileIndex = fileIndexMapping.get(originalFileIndex)!
-        
+
         console.log(`  SubFileStructure[${j}]: updating fileIndex ${originalFileIndex} -> ${newFileIndex}`)
         structureItem.fileIndex = newFileIndex
       }
     }
   }
-  
+
   console.log('--- Sequential indices reassignment completed ---')
-  
+
   return {
     finalSubFileData,
     finalSubFileStructure
@@ -489,9 +603,8 @@ function extractSubFileDataFromTreeWithoutModification (treeData: TreeDataItem[]
           const currentFileIndex = item.data.fileIndex
           const currentIndex = item.data.fileIndex // Use fileIndex as index to maintain consistency
 
-
           subFileData.push({
-            index: currentIndex, // Use fileIndex as index to maintain consistency  
+            index: currentIndex, // Use fileIndex as index to maintain consistency
             fileType: item.data.fileType,
             fileIndex: currentFileIndex, // Preserve original fileIndex
             fileUrl: item.data.fileUrl,
@@ -513,10 +626,10 @@ function extractSubFileDataFromTreeWithoutModification (treeData: TreeDataItem[]
   }
 
   processItems(treeData)
-  
+
   // Sort by fileIndex to maintain original order
   subFileData.sort((a, b) => a.fileIndex - b.fileIndex)
-  
+
   return subFileData
 }
 
@@ -527,7 +640,7 @@ function generateSubFileStructureWithoutMapping (treeData: TreeDataItem[]): SubF
   const processItems = (items: TreeDataItem[], depth: number = 0) => {
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
-      
+
       if (item.data?.type === 'Folder') {
         // Calculate actual folder count based on current children
         const actualFolderCount = item.children ? item.children.length : 0
@@ -549,10 +662,10 @@ function generateSubFileStructureWithoutMapping (treeData: TreeDataItem[]): SubF
 
         // Calculate endMarkCount based on folder nesting level
         let endMarkCount = 1
-        
+
         // Check if this is the last item in its parent's children array
         const isLastInParent = i === items.length - 1
-        
+
         if (isLastInParent && depth > 0) {
           // This folder is the last child at its level
           endMarkCount = 1
@@ -579,7 +692,7 @@ function generateSubFileStructureWithoutMapping (treeData: TreeDataItem[]): SubF
   }
 
   processItems(treeData)
-  
+
   // Post-process to optimize EndMark sequences
   return optimizeEndMarks(subFileStructure)
 }
