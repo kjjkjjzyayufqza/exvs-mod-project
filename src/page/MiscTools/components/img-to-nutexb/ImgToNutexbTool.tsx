@@ -32,6 +32,7 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [outputPath, setOutputPath] = useState<string>("");
   const [isOpen, setIsOpen] = useState(false);
+  const [conversionProgress, setConversionProgress] = useState<{ current: number; total: number; currentFile?: string; failedFiles: string[] } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -42,6 +43,7 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
     setSelectedFormat,
     setHasMipmaps,
     convertImageToNutexb,
+    convertImageToNutexbInternal,
     resetConversion
   } = useNutexbStore();
 
@@ -128,18 +130,17 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
     }
   };
 
-  // Process selected image files
+  // Process selected image files with optimized preview loading
   const handleImageFiles = async (imagePaths: string[]) => {
     try {
       setSelectedImagePaths(imagePaths);
 
       // Generate file names and load previews for all files
-      const previews: {[key: string]: string} = {};
       const names: {[key: string]: {baseName: string, displayName: string}} = {};
 
+      // First pass: generate file names (fast)
       for (const imagePath of imagePaths) {
         try {
-          // Generate file names
           const fullFileName = await basename(imagePath);
           const baseName = fullFileName.replace(/\.[^/.]+$/, ""); // Remove extension
 
@@ -147,29 +148,61 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
             baseName: baseName,
             displayName: fullFileName
           };
-
-          // Load image preview
-          const imageBytes = await readFile(imagePath);
-          const base64 = btoa(
-            Array.from(new Uint8Array(imageBytes))
-              .map(b => String.fromCharCode(b))
-              .join('')
-          );
-          previews[imagePath] = `data:image/png;base64,${base64}`;
         } catch (error) {
-          console.error(`Error loading preview for ${imagePath}:`, error);
+          console.error(`Error processing filename for ${imagePath}:`, error);
         }
       }
 
       setFileNames(names);
-      setImagePreviews(previews);
+
+      // Second pass: load previews in batches to avoid overwhelming the system
+      const batchSize = 10; // Process 10 previews at a time
+      const previews: {[key: string]: string} = {};
+
+      for (let i = 0; i < imagePaths.length; i += batchSize) {
+        const batch = imagePaths.slice(i, i + batchSize);
+        const batchPromises = batch.map(async (imagePath) => {
+          try {
+            // Load compressed preview (limit size for performance)
+            const imageBytes = await readFile(imagePath);
+
+            // For previews, limit the size and use a more efficient encoding
+            // Only create preview for the first 50KB to keep it lightweight
+            const maxPreviewSize = 50 * 1024; // 50KB limit
+            const previewBytes = imageBytes.length > maxPreviewSize
+              ? imageBytes.slice(0, maxPreviewSize)
+              : imageBytes;
+
+            const base64 = btoa(
+              Array.from(new Uint8Array(previewBytes))
+                .map(b => String.fromCharCode(b))
+                .join('')
+            );
+            previews[imagePath] = `data:image/png;base64,${base64}`;
+          } catch (error) {
+            console.error(`Error loading preview for ${imagePath}:`, error);
+            // Use a placeholder for failed previews
+            previews[imagePath] = '';
+          }
+        });
+
+        await Promise.all(batchPromises);
+
+        // Update previews incrementally to show progress
+        setImagePreviews(prev => ({ ...prev, ...previews }));
+
+        // Small delay to prevent UI blocking
+        if (i + batchSize < imagePaths.length) {
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+      }
     } catch (error) {
       console.error("Error processing image files:", error);
       toast.error("Failed to process image files");
     }
   };
 
-  // Handle batch conversion
+  // Handle batch conversion with concurrency control
   const handleConvert = async () => {
     if (selectedImagePaths.length === 0) {
       toast.error("Please select at least one image file");
@@ -182,32 +215,77 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
     }
 
     try {
+      setConversionProgress({ current: 0, total: selectedImagePaths.length, failedFiles: [] });
+
       const convertedPaths: string[] = [];
+      const failedFiles: string[] = [];
+      const maxConcurrency = 3; // Limit concurrent conversions
 
-      for (const imagePath of selectedImagePaths) {
-        const fileInfo = fileNames[imagePath];
-        if (!fileInfo) continue;
+      // Process files in batches
+      for (let i = 0; i < selectedImagePaths.length; i += maxConcurrency) {
+        const batch = selectedImagePaths.slice(i, i + maxConcurrency);
+        const batchPromises = batch.map(async (imagePath, batchIndex) => {
+          const globalIndex = i + batchIndex;
+          const fileInfo = fileNames[imagePath];
+          if (!fileInfo) return null;
 
-        // Use the base name as both nutexb name and output filename
-        const outputFileName = `${fileInfo.baseName}.nutexb`;
-        const outputPathFull = await join(outputPath, outputFileName);
+          try {
+            setConversionProgress(prev => prev ? {
+              ...prev,
+              currentFile: fileInfo.displayName
+            } : null);
 
-        // Use baseName as the nutexb name
-        await convertImageToNutexb(imagePath, outputPathFull, fileInfo.baseName);
-        convertedPaths.push(outputPathFull);
+            // Use the base name as both nutexb name and output filename
+            const outputFileName = `${fileInfo.baseName}.nutexb`;
+            const outputPathFull = await join(outputPath, outputFileName);
+
+            // Use baseName as the nutexb name - call the internal conversion without setting global state
+            await convertImageToNutexbInternal(imagePath, outputPathFull, fileInfo.baseName);
+            convertedPaths.push(outputPathFull);
+
+            setConversionProgress(prev => prev ? {
+              ...prev,
+              current: globalIndex + 1
+            } : null);
+
+            return outputPathFull;
+          } catch (error) {
+            console.error(`Failed to convert ${fileInfo.displayName}:`, error);
+            failedFiles.push(fileInfo.displayName);
+            return null;
+          }
+        });
+
+        await Promise.all(batchPromises);
       }
 
-      toast.success(`Successfully converted ${selectedImagePaths.length} image(s) to nutexb format`);
+      setConversionProgress(null);
 
-      // Reset and close
-      handleReset();
-      setIsOpen(false);
-      if (onClose) {
-        onClose();
+      const successCount = convertedPaths.length;
+      const failureCount = failedFiles.length;
+
+      if (successCount > 0) {
+        toast.success(`Successfully converted ${successCount} image(s) to nutexb format${failureCount > 0 ? `. ${failureCount} failed.` : ''}`);
+      }
+
+      if (failureCount > 0) {
+        toast.error(`Failed to convert ${failureCount} file(s): ${failedFiles.slice(0, 3).join(', ')}${failureCount > 3 ? '...' : ''}`);
+      }
+
+      // Only close modal if all files failed
+      if (successCount === 0 && failureCount > 0) {
+        setIsOpen(false);
+        if (onClose) onClose();
+      }
+
+      // Reset form only if all conversions succeeded
+      if (successCount > 0 && failureCount === 0) {
+        handleReset();
       }
     } catch (error) {
       console.error("Batch conversion failed:", error);
-      // Error is already handled in the store
+      setConversionProgress(null);
+      toast.error("Batch conversion failed");
     }
   };
 
@@ -216,6 +294,7 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
     setSelectedImagePaths([]);
     setImagePreviews({});
     setFileNames({});
+    setConversionProgress(null);
     resetConversion();
   };
 
@@ -241,11 +320,37 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
     }
   };
 
-  if (isConverting) {
+  if (isConverting || conversionProgress) {
     return (
       <div className="flex flex-col items-center justify-center p-8 space-y-4">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-        <span className="text-gray-600">Converting image to nutexb...</span>
+        {conversionProgress ? (
+          <div className="w-full max-w-md space-y-2">
+            <div className="text-center">
+              <span className="text-gray-600">
+                Converting {conversionProgress.current} of {conversionProgress.total} images...
+              </span>
+            </div>
+            {conversionProgress.currentFile && (
+              <div className="text-center text-sm text-gray-500 truncate">
+                Current: {conversionProgress.currentFile}
+              </div>
+            )}
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${(conversionProgress.current / conversionProgress.total) * 100}%` }}
+              ></div>
+            </div>
+            {conversionProgress.failedFiles.length > 0 && (
+              <div className="text-center text-sm text-red-600">
+                Failed: {conversionProgress.failedFiles.length} files
+              </div>
+            )}
+          </div>
+        ) : (
+          <span className="text-gray-600">Converting image to nutexb...</span>
+        )}
       </div>
     );
   }
@@ -340,15 +445,24 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
           <div className="grid grid-cols-1 gap-3 max-h-60 overflow-y-auto">
             {selectedImagePaths.map((imagePath, index) => {
               const fileInfo = fileNames[imagePath];
+              const hasPreview = imagePreviews[imagePath] !== undefined;
+              const previewLoaded = imagePreviews[imagePath] !== '';
+
               return (
                 <div key={imagePath} className="flex items-center gap-3 p-2 border rounded-lg">
-                  <div className="w-12 h-12 bg-muted rounded overflow-hidden flex-shrink-0">
-                    {imagePreviews[imagePath] && (
-                      <img
-                        src={imagePreviews[imagePath]}
-                        alt={`Preview ${index + 1}`}
-                        className="w-full h-full object-cover"
-                      />
+                  <div className="w-12 h-12 bg-muted rounded overflow-hidden flex-shrink-0 flex items-center justify-center">
+                    {hasPreview ? (
+                      previewLoaded ? (
+                        <img
+                          src={imagePreviews[imagePath]}
+                          alt={`Preview ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-4 h-4 border border-gray-300 rounded-full border-t-transparent animate-spin"></div>
+                      )
+                    ) : (
+                      <FileImage className="w-6 h-6 text-gray-400" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">

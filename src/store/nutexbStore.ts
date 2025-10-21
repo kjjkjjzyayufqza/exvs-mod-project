@@ -72,6 +72,7 @@ interface NutexbStore {
   replaceTexture: () => Promise<void>;
   cacheFile: (file: FileInfo) => Promise<{ nutexbInfo: Partial<NutexbFooter>; imageFormat: string; outputPath: string } | null>;
   convertImageToNutexb: (imagePath: string, outputPath: string, nutexbName: string) => Promise<void>;
+  convertImageToNutexbInternal: (imagePath: string, outputPath: string, nutexbName: string) => Promise<void>;
   clearCache: () => void;
   checkToolExists: () => Promise<boolean>;
 }
@@ -403,7 +404,7 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
 
   convertImageToNutexb: async (imagePath, outputPath, nutexbName) => {
     const { selectedFormat, hasMipmaps } = get();
-    
+
     try {
       set({ isConverting: true, error: null });
 
@@ -426,11 +427,11 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
       }
 
       console.log("Converting image to nutexb:", command);
-      
+
       // Execute command with timeout
       const commandPromise = invoke("exec_shell_command", { command });
       const result = await Promise.race([
-        commandPromise, 
+        commandPromise,
         new Promise((_, reject) => setTimeout(() => reject(new Error("Conversion timed out")), 15000))
       ]);
 
@@ -460,6 +461,53 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
       throw error;
     } finally {
       set({ isConverting: false });
+    }
+  },
+
+  convertImageToNutexbInternal: async (imagePath, outputPath, nutexbName) => {
+    const { selectedFormat, hasMipmaps } = get();
+
+    try {
+      // Check if image file exists
+      const imageExists = await exists(imagePath);
+      if (!imageExists) {
+        throw new Error(`Image file not found: ${imagePath}`);
+      }
+
+      // Check if the tool exists
+      const toolExists = await exists(toolPath);
+      if (!toolExists) {
+        throw new Error(`Tool not found: ${toolPath}`);
+      }
+
+      // Build command with format and mipmaps options
+      let command = `${toolPath} ${imagePath} ${outputPath} --format ${selectedFormat} --nutexb-name=${nutexbName}`;
+      if (!hasMipmaps) {
+        command += " --no-mipmaps";
+      }
+
+      console.log("Converting image to nutexb (internal):", command);
+
+      // Execute command with timeout
+      const commandPromise = invoke("exec_shell_command", { command });
+      const result = await Promise.race([
+        commandPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Conversion timed out")), 15000))
+      ]);
+
+      if (typeof result === "string") {
+        // Verify output file exists
+        const outputExists = await exists(outputPath);
+        if (!outputExists) {
+          throw new Error("Output nutexb file not found after conversion");
+        }
+        console.log("Image to nutexb conversion successful (internal)");
+      } else {
+        throw new Error("Invalid command result during conversion");
+      }
+    } catch (error) {
+      console.error("Error in image to nutexb conversion (internal):", error);
+      throw error;
     }
   },
 
