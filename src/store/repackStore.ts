@@ -59,7 +59,7 @@ interface RepackStoreState {
   isIndexExists: (index: number) => boolean
   isFileIndexExists: (fileIndex: number) => boolean
   recalculateIndices: () => void
-  mergeExistingTemplate: (subFileData: SubFileDataItem[], subFileStructure: SubFileStructureItem[]) => void
+  mergeExistingTemplate: (subFileData: SubFileDataItem[], subFileStructure: SubFileStructureItem[], customPath?: string) => void
 }
 
 export const useRepackStore = create<RepackStoreState>((set, get) => ({
@@ -293,7 +293,7 @@ export const useRepackStore = create<RepackStoreState>((set, get) => ({
   },
 
   // Merge existing template data into current project
-  mergeExistingTemplate: (importedSubFileData: SubFileDataItem[], importedSubFileStructure: SubFileStructureItem[]) => {
+  mergeExistingTemplate: (importedSubFileData: SubFileDataItem[], importedSubFileStructure: SubFileStructureItem[], customPath?: string) => {
     const { completeProjectData, treeData, selectedItem } = get()
     if (!completeProjectData || !selectedItem || selectedItem.data?.type !== 'Folder') {
       return
@@ -315,21 +315,43 @@ export const useRepackStore = create<RepackStoreState>((set, get) => ({
         // Store mapping for updating SubFileStructure
         fileIndexMapping.set(item.fileIndex, newFileIndex)
 
-        // Fix fileUrl to be relative to data directory
+        // Fix fileUrl to be relative to data directory or use custom path
         let updatedFileUrl = item.fileUrl
-        if (updatedFileUrl && updatedFileUrl.includes('/data/')) {
-          // Extract path after /data/
-          const dataIndex = updatedFileUrl.indexOf('/data/')
-          if (dataIndex !== -1) {
-            const pathAfterData = updatedFileUrl.substring(dataIndex + 6) // +6 to skip "/data/"
-            updatedFileUrl = `.\\${pathAfterData.replace(/\//g, '\\')}`
+        if (customPath) {
+          // Use custom path if provided
+          // Extract original path after /data/ or \data\
+          let originPath = ''
+          if (updatedFileUrl && updatedFileUrl.includes('/data/')) {
+            const dataIndex = updatedFileUrl.indexOf('/data/')
+            if (dataIndex !== -1) {
+              originPath = updatedFileUrl.substring(dataIndex + 6).replace(/\//g, '\\') // +6 to skip "/data/"
+            }
+          } else if (updatedFileUrl && updatedFileUrl.includes('\\data\\')) {
+            const dataIndex = updatedFileUrl.indexOf('\\data\\')
+            if (dataIndex !== -1) {
+              originPath = updatedFileUrl.substring(dataIndex + 6) // +6 to skip "\data\"
+            }
+          } else {
+            // If no data directory found, use the whole path
+            originPath = updatedFileUrl.replace(/\//g, '\\')
           }
-        } else if (updatedFileUrl && updatedFileUrl.includes('\\data\\')) {
-          // Handle Windows-style paths
-          const dataIndex = updatedFileUrl.indexOf('\\data\\')
-          if (dataIndex !== -1) {
-            const pathAfterData = updatedFileUrl.substring(dataIndex + 6) // +6 to skip "\data\"
-            updatedFileUrl = `.\\${pathAfterData}`
+          updatedFileUrl = `${customPath}\\${originPath}`
+        } else {
+          // Default behavior: relative to data directory
+          if (updatedFileUrl && updatedFileUrl.includes('/data/')) {
+            // Extract path after /data/
+            const dataIndex = updatedFileUrl.indexOf('/data/')
+            if (dataIndex !== -1) {
+              const pathAfterData = updatedFileUrl.substring(dataIndex + 6) // +6 to skip "/data/"
+              updatedFileUrl = `.\\${pathAfterData.replace(/\//g, '\\')}`
+            }
+          } else if (updatedFileUrl && updatedFileUrl.includes('\\data\\')) {
+            // Handle Windows-style paths
+            const dataIndex = updatedFileUrl.indexOf('\\data\\')
+            if (dataIndex !== -1) {
+              const pathAfterData = updatedFileUrl.substring(dataIndex + 6) // +6 to skip "\data\"
+              updatedFileUrl = `.\\${pathAfterData}`
+            }
           }
         }
 

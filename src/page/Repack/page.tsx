@@ -7,6 +7,8 @@ import { Tree } from "react-arborist";
 import { NodePropertiesPanel } from "./components/NodePropertiesPanel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
 import type { NodeApi } from "react-arborist";
 import { open } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
@@ -116,6 +118,8 @@ export default function RepackPage() {
   const [selectedFilePath, setSelectedFilePath] = useState("");
   const [exportFilePath, setExportFilePath] = useState("");
   const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
+  const [isCustomPathPopoverOpen, setIsCustomPathPopoverOpen] = useState(false);
+  const [customPath, setCustomPath] = useState("");
   const treeRef = useRef<any>(null);
 
   // Handle export file path selection
@@ -910,12 +914,17 @@ export default function RepackPage() {
     }
   };
 
-  const handleImportExistingTemplate = async () => {
+  const handleImportExistingTemplate = () => {
     if (!selectedItem || selectedItem.data?.type !== 'Folder') {
       toast.error("Please select a folder to add the existing template");
       return;
     }
 
+    // Show the custom path popover
+    setIsCustomPathPopoverOpen(true);
+  };
+
+  const handleCustomPathSubmit = async () => {
     try {
       // Open file dialog to select JSON file
       const selectedFile = await open({
@@ -955,10 +964,15 @@ export default function RepackPage() {
         toast.warning(`Template file contains extra fields (${extraKeys.join(', ')}) that will be ignored`);
       }
 
-      // Call the store method to merge the template data
-      mergeExistingTemplate(parsedData.SubFileData, parsedData.SubFileStructure);
+      // Call the store method to merge the template data with custom path
+      const finalCustomPath = customPath.trim() || undefined;
+      mergeExistingTemplate(parsedData.SubFileData, parsedData.SubFileStructure, finalCustomPath);
 
-      toast.success(`Successfully imported existing template into "${selectedItem.name}"`);
+      // Close popover and reset custom path
+      setIsCustomPathPopoverOpen(false);
+      setCustomPath("");
+
+      toast.success(`Successfully imported existing template into "${selectedItem!.name}"`);
 
     } catch (error) {
       console.error("Error importing existing template:", error);
@@ -1006,15 +1020,58 @@ export default function RepackPage() {
             <Plus className="h-4 w-4 mr-2" />
             Add File
           </Button>
-          <Button
-            onClick={handleImportExistingTemplate}
-            disabled={!selectedItem || selectedItem.data?.type !== 'Folder'}
-            variant="outline"
-            size="sm"
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            Add Existing Template
-          </Button>
+          <Popover open={isCustomPathPopoverOpen} onOpenChange={setIsCustomPathPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                onClick={handleImportExistingTemplate}
+                disabled={!selectedItem || selectedItem.data?.type !== 'Folder'}
+                variant="outline"
+                size="sm"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Add Existing Template
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <h4 className="font-medium leading-none">Custom Path (Optional)</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Enter a custom path to prepend to all file URLs. Leave empty to use default behavior.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="custom-path">Custom Path</Label>
+                  <Input
+                    id="custom-path"
+                    placeholder="e.g., .\\custom\\path"
+                    value={customPath}
+                    onChange={(e) => setCustomPath(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleCustomPathSubmit();
+                      }
+                    }}
+                  />
+                </div>
+                <div className="flex justify-end space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setIsCustomPathPopoverOpen(false);
+                      setCustomPath("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={handleCustomPathSubmit}>
+                    Select Template File
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
           <Dialog open={isTemplateDialogOpen} onOpenChange={(open) => {
             if (open) {
               // Update templates with current dynamic indices before showing dialog

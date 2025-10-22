@@ -63,10 +63,51 @@ export function TemplateJsonGenerator() {
 
             findMaxFileIndex(treeData);
 
+            // Create a unified fileIndex mapping for all items in the tree
+            const createFileIndexMapping = (): Map<string, number> => {
+                const fileIndexMap = new Map<string, number>()
+                const processedFileUrls = new Set<string>()
+                let fileIndexCounter = 0
+
+                const processTreeNode = (node: any): void => {
+                    if (node.data?.type === 'Item') {
+                        // Format fileUrl to use backslashes for mapping key
+                        const originalFileUrl = node.data.fileUrl || ''
+                        const formattedFileUrl = originalFileUrl.replace(/\//g, '\\')
+
+                        // Skip if this fileUrl has already been processed
+                        if (processedFileUrls.has(formattedFileUrl)) {
+                            return
+                        }
+
+                        // Mark as processed
+                        processedFileUrls.add(formattedFileUrl)
+
+                        // Use existing fileIndex if available, otherwise assign sequential
+                        const fileIndex = node.data.fileIndex !== undefined ? node.data.fileIndex : fileIndexCounter
+                        fileIndexMap.set(node.data.fileUrl || node.name, fileIndex)
+
+                        // Only increment counter if we assigned a new fileIndex
+                        if (node.data.fileIndex === undefined) {
+                            fileIndexCounter++
+                        }
+                    }
+
+                    // Process children recursively
+                    if (node.children && node.children.length > 0) {
+                        node.children.forEach((child: any) => processTreeNode(child))
+                    }
+                }
+
+                // Process all root level nodes
+                treeData.forEach(node => processTreeNode(node))
+
+                return fileIndexMap
+            }
+
             // Generate SubFileStructure from current tree data
-            const generateSubFileStructure = (): any[] => {
+            const generateSubFileStructure = (fileIndexMap: Map<string, number>): any[] => {
                 const structure: any[] = []
-                let fileIndexCounter = maxExistingFileIndex + 1;
 
                 const processTreeNode = (node: any, depth: number = 0): void => {
                     if (node.data?.type === 'Folder') {
@@ -95,22 +136,18 @@ export function TemplateJsonGenerator() {
                         })
 
                     } else if (node.data?.type === 'Item') {
-                        // Add item entry with sequential fileIndex
+                        // Get fileIndex from the unified mapping
+                        const fileIndex = fileIndexMap.get(node.data.fileUrl || node.name)!
+
                         structure.push({
                             type: 'Item',
                             Name: node.name,
                             unk1: node.data.unk1 || "00000000",
-                            // Use existing fileIndex if available, otherwise assign a new one
-                            fileIndex: node.data.fileIndex !== undefined ? node.data.fileIndex : fileIndexCounter,
+                            fileIndex: fileIndex,
                             unk2: node.data.unk2 || "00000000",
                             unk3: node.data.unk3 || 0,
-                            // Use existing originalFileIndex if available, otherwise assign a new one
-                            originalFileIndex: node.data.originalFileIndex !== undefined ? node.data.originalFileIndex : fileIndexCounter
+                            originalFileIndex: fileIndex
                         })
-                        // Only increment counter if we assigned a new fileIndex
-                        if (node.data.fileIndex === undefined) {
-                            fileIndexCounter++;
-                        }
                     }
                 }
 
@@ -121,24 +158,40 @@ export function TemplateJsonGenerator() {
             }
 
             // Generate SubFileData based on tree structure
-            const generateSubFileData = (): any[] => {
+            const generateSubFileData = (fileIndexMap: Map<string, number>): any[] => {
                 const subFileData: any[] = []
-                let fileIndexCounter = 0
+                const processedFileUrls = new Set<string>()
+                let sequentialIndex = 0
 
                 const processTreeNode = (node: any): void => {
                     if (node.data?.type === 'Item') {
+                        // Format fileUrl to use backslashes
+                        const originalFileUrl = node.data.fileUrl || ''
+                        const formattedFileUrl = originalFileUrl.replace(/\//g, '\\')
+
+                        // Skip if this fileUrl has already been processed
+                        if (processedFileUrls.has(formattedFileUrl)) {
+                            return
+                        }
+
+                        // Mark as processed
+                        processedFileUrls.add(formattedFileUrl)
+
+                        // Get fileIndex from the unified mapping
+                        const fileIndex = fileIndexMap.get(node.data.fileUrl || node.name)!
+
                         // Find corresponding file info
                         const fileInfo = files.find(f =>
                             f.path.replace(/\\/g, '/') === (node.data.fileUrl || '').replace(/\\/g, '/')
                         )
 
                         subFileData.push({
-                            index: fileIndexCounter,
+                            index: sequentialIndex,
                             fileType: node.data.fileType || '.bin',
-                            fileIndex: fileIndexCounter,
-                            fileUrl: node.data.fileUrl || `.\\unknown\\${fileIndexCounter}.bin`
+                            fileIndex: fileIndex,
+                            fileUrl: formattedFileUrl || `.\\unknown\\${fileIndex}.bin`
                         })
-                        fileIndexCounter++
+                        sequentialIndex++
                     }
 
                     // Process children recursively
@@ -153,9 +206,12 @@ export function TemplateJsonGenerator() {
                 return subFileData
             }
 
-            // Generate updated data
-            const subFileStructure = generateSubFileStructure()
-            const subFileData = generateSubFileData()
+            // Create unified fileIndex mapping
+            const fileIndexMap = createFileIndexMapping()
+
+            // Generate updated data using the unified mapping
+            const subFileStructure = generateSubFileStructure(fileIndexMap)
+            const subFileData = generateSubFileData(fileIndexMap)
 
             // Generate the JSON data with synchronized fileIndex
             const jsonData = {
