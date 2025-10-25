@@ -2,89 +2,13 @@ import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tree } from "react-arborist"
 import type { NodeApi } from "react-arborist"
+import { CustomTreeNode } from "@/components/CustomTreeNode"
 import { Button } from "@/components/ui/button"
-import { Plus, Folder, FileText, ChevronRight, ChevronDown, Download } from "lucide-react"
+import { Plus, Download } from "lucide-react"
 import { TreeDataItem } from "@/lib/utils"
 import { useTemplateStore } from "@/store/templateStore"
 import { NodePropertiesPanel } from "../../../../Repack/components/NodePropertiesPanel"
 
-// Custom Node component for React Arborist
-function CustomNode({ node, style, dragHandle }: {
-    node: NodeApi<TreeDataItem>;
-    style: React.CSSProperties;
-    dragHandle?: (el: HTMLDivElement | null) => void
-}) {
-    const Icon = node.isLeaf ? FileText : Folder;
-    const nodeData = node.data.data;
-
-    const handleToggle = (e: React.MouseEvent) => {
-        e.stopPropagation(); // Prevent triggering selection when clicking toggle
-        node.toggle();
-    };
-
-    const handleNodeClick = () => {
-        node.select();
-    };
-
-    return (
-        <div
-            ref={dragHandle}
-            style={style}
-            className={`flex items-center gap-1 px-2 py-1 hover:bg-gray-100 cursor-pointer rounded ${node.isSelected ? 'bg-blue-100 text-blue-900' : ''
-                } ${node.isFocused ? 'ring-2 ring-blue-500' : ''}`}
-            onClick={handleNodeClick}
-        >
-            {/* Toggle arrow for folders */}
-            {!node.isLeaf && (
-                <button
-                    onClick={handleToggle}
-                    className="p-0.5 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
-                    aria-label={node.isOpen ? "Collapse folder" : "Expand folder"}
-                >
-                    {node.isOpen ? (
-                        <ChevronDown className="h-3 w-3 text-gray-500" />
-                    ) : (
-                        <ChevronRight className="h-3 w-3 text-gray-500" />
-                    )}
-                </button>
-            )}
-
-            {/* Spacer for leaf nodes to align with folder content */}
-            {node.isLeaf && <div className="w-4 flex-shrink-0" />}
-
-            <Icon
-                className={`h-4 w-4 ${node.isLeaf ? 'text-gray-600' : 'text-blue-600'} flex-shrink-0`}
-            />
-            <span className="text-sm select-none flex-1 min-w-0">
-                {node.isEditing ? (
-                    <input
-                        type="text"
-                        defaultValue={node.data.name}
-                        onBlur={(e) => node.submit(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                node.submit(e.currentTarget.value);
-                            } else if (e.key === 'Escape') {
-                                node.reset();
-                            }
-                        }}
-                        className="px-1 py-0 text-sm border rounded focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
-                        autoFocus
-                    />
-                ) : (
-                    <span className={`truncate ${nodeData?.isExample ? 'text-red-600 font-medium' : ''}`}>
-                        {node.data.name}
-                    </span>
-                )}
-            </span>
-            {nodeData?.type === 'Item' && nodeData.fileType && (
-                <span className="text-xs text-gray-500 ml-auto flex-shrink-0">
-                    {nodeData.fileType}
-                </span>
-            )}
-        </div>
-    );
-}
 
 interface FileInfo {
     name: string
@@ -325,8 +249,9 @@ export function ProjectStructure({
                     exampleFileIndex++;
                 }
 
-                // numatb2 (only add if different from numatb1 or if both exist)
+                // numatb2 - always create, use actual file if exists, otherwise Example
                 if (numatb2Index !== -1 && numatb2Index !== numatb1Index) {
+                    // Use actual numatb2 file (only if different from numatb1)
                     treeItems.push({
                         id: 'numatb2_item',
                         name: files[numatb2Index].name,
@@ -343,8 +268,8 @@ export function ProjectStructure({
                             isExample: false
                         }
                     });
-                } else if (numatb1Index === -1 || numatb2Index === numatb1Index) {
-                    // Create second numatb as Example if first doesn't exist or they are the same
+                } else {
+                    // Always create second numatb as Example (either because no file provided or same as first)
                     treeItems.push({
                         id: 'numatb2_item',
                         name: 'Example2.numatb',
@@ -602,7 +527,7 @@ export function ProjectStructure({
                                                 node.data.name.toLowerCase().includes(term.toLowerCase())
                                             }
                                         >
-                                            {CustomNode}
+                                            {(props) => <CustomTreeNode {...props} enableExampleHighlight={true} />}
                                         </Tree>
                                     </div>
                                 </CardContent>
