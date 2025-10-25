@@ -7,6 +7,8 @@ import { FBXItemRename } from "./components/fbx-item-rename/FBXItemRename"
 import { TemplateJsonGenerator } from "./components/template-json-generator/TemplateJsonGenerator"
 import { ImgToNutexbTool } from "./components/img-to-nutexb/ImgToNutexbTool"
 import { NumatbEditor } from "./components/numatb-editor/NumatbEditor"
+import { ImageCompressTool } from "./components/image-compress/ImageCompressTool"
+import { ImageResizeTool } from "./components/image-resize/ImageResizeTool"
 
 export default function MiscToolsPage() {
   return (
@@ -155,6 +157,38 @@ export default function MiscToolsPage() {
             </CardHeader>
             <CardContent>
               <NumatbEditor />
+            </CardContent>
+          </Card>
+
+          {/* Image Compressor */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <ImageIcon className="h-5 w-5" />
+                Image Compressor
+              </CardTitle>
+              <CardDescription>
+                Compress PNG images to reduce file size while maintaining quality
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ImageCompressTool />
+            </CardContent>
+          </Card>
+
+          {/* Image Resizer */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <ImageIcon className="h-5 w-5" />
+                Image Resizer
+              </CardTitle>
+              <CardDescription>
+                Resize images to specified dimensions with batch processing support
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ImageResizeTool />
             </CardContent>
           </Card>
         </div>
