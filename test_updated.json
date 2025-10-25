@@ -56,20 +56,6 @@
     "specular": "D:/output/愛荷華級戰艦/T_specular.png"
   },
   {
-    "mesh": "rigging_parts_001",
-    "baseColor": "D:/output/愛荷華級戰艦/BB3.jpg",
-    "normal": "D:/output/愛荷華級戰艦/BB3_normal.png",
-    "ambient": "D:/output/愛荷華級戰艦/BB3_ambient.png",
-    "specular": "D:/output/愛荷華級戰艦/BB3_specular.png"
-  },
-  {
-    "mesh": "hatch",
-    "baseColor": "D:/output/愛荷華級戰艦/DP2.jpg",
-    "normal": "D:/output/愛荷華級戰艦/DP2_normal.png",
-    "ambient": "D:/output/愛荷華級戰艦/DP2_ambient.png",
-    "specular": "D:/output/愛荷華級戰艦/DP2_specular.png"
-  },
-  {
     "mesh": "davit1",
     "baseColor": "D:/output/愛荷華級戰艦/BBDS.jpg",
     "normal": "D:/output/愛荷華級戰艦/BBDS_normal.png",
@@ -152,27 +138,6 @@
     "normal": "D:/output/愛荷華級戰艦/RFIII_normal.png",
     "ambient": "D:/output/愛荷華級戰艦/RFIII_ambient.png",
     "specular": "D:/output/愛荷華級戰艦/RFIII_specular.png"
-  },
-  {
-    "mesh": "net_container",
-    "baseColor": "D:/output/愛荷華級戰艦/fnet.png",
-    "normal": "D:/output/愛荷華級戰艦/fnet_normal.png",
-    "ambient": "D:/output/愛荷華級戰艦/fnet_ambient.png",
-    "specular": "D:/output/愛荷華級戰艦/fnet_specular.png"
-  },
-  {
-    "mesh": "m20mm_machine_gun",
-    "baseColor": "D:/output/愛荷華級戰艦/20AAII.png",
-    "normal": "D:/output/愛荷華級戰艦/20AAII_normal.png",
-    "ambient": "D:/output/愛荷華級戰艦/20AAII_ambient.png",
-    "specular": "D:/output/愛荷華級戰艦/20AAII_specular.png"
-  },
-  {
-    "mesh": "m40mm_machine_gun",
-    "baseColor": "D:/output/愛荷華級戰艦/4BF.png",
-    "normal": "D:/output/愛荷華級戰艦/4BF_normal.png",
-    "ambient": "D:/output/愛荷華級戰艦/4BF_ambient.png",
-    "specular": "D:/output/愛荷華級戰艦/4BF_specular.png"
   },
   {
     "mesh": "handrail_outer",

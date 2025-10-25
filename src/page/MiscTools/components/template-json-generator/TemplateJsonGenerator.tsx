@@ -270,6 +270,7 @@ export function TemplateJsonGenerator() {
                             completeProjectData={completeProjectData}
                             selectedFolder={selectedFolder}
                             onGenerateJson={handleGenerateJson}
+                            mode="Model"
                         />
                     </TabsContent>
                 </Tabs>

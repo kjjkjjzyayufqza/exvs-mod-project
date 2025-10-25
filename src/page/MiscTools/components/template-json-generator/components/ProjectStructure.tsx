@@ -38,13 +38,15 @@ export function ProjectStructure({
     settings,
     completeProjectData,
     selectedFolder,
-    onGenerateJson
+    onGenerateJson,
+    mode = 'Model'
 }: {
     files: FileInfo[]
     settings: TemplateSettings
     completeProjectData: TemplateProjectData | null
     selectedFolder: string
     onGenerateJson: () => void
+    mode?: string
 }) {
     const treeRef = useRef<any>(null)
     const {
@@ -527,7 +529,7 @@ export function ProjectStructure({
                                                 node.data.name.toLowerCase().includes(term.toLowerCase())
                                             }
                                         >
-                                            {(props) => <CustomTreeNode {...props} enableExampleHighlight={true} />}
+                                            {(props) => <CustomTreeNode {...props} enableExampleHighlight={true} mode={mode} />}
                                         </Tree>
                                     </div>
                                 </CardContent>

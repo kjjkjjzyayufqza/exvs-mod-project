@@ -1,4 +1,5 @@
-import { Folder, FileText, ChevronRight, ChevronDown } from "lucide-react"
+import { Folder, FileText, ChevronRight, ChevronDown, AlertTriangle } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import type { NodeApi } from "react-arborist"
 import type { TreeDataItem } from "@/lib/utils"
 
@@ -7,16 +8,38 @@ interface CustomTreeNodeProps {
   style: React.CSSProperties;
   dragHandle?: (el: HTMLDivElement | null) => void;
   enableExampleHighlight?: boolean;
+  mode?: string;
 }
 
 export function CustomTreeNode({
   node,
   style,
   dragHandle,
-  enableExampleHighlight = false
+  enableExampleHighlight = false,
+  mode = 'Model'
 }: CustomTreeNodeProps) {
   const Icon = node.isLeaf ? FileText : Folder;
   const nodeData = node.data.data;
+
+  // Check if this is a Texture Folder and needs warning
+  const showBarispecularWarning = mode === 'Model' &&
+    nodeData?.type === 'Folder' &&
+    node.data.name?.includes('Textures Folder') &&
+    !hasBarispecularFile(node);
+
+  // Helper function to check if Texture Folder contains barispecular file
+  function hasBarispecularFile(folderNode: NodeApi<TreeDataItem>): boolean {
+    if (!folderNode.children) return false;
+
+    return folderNode.children.some(child => {
+      const childData = child.data.data;
+      if (childData?.type === 'Item' && childData.fileType === '.nutexb') {
+        // Check if filename matches barispecular pattern
+        return /barispecular/i.test(child.data.name);
+      }
+      return false;
+    });
+  }
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent triggering selection when clicking toggle
@@ -82,6 +105,20 @@ export function CustomTreeNode({
         <span className="text-xs text-gray-500 ml-auto flex-shrink-0">
           {nodeData.fileType}
         </span>
+      )}
+
+      {/* Barispecular warning for Texture Folders in Model mode */}
+      {showBarispecularWarning && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <AlertTriangle className="h-4 w-4 text-yellow-500 ml-2 flex-shrink-0 cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Missing barispecular texture file</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       )}
     </div>
   );
