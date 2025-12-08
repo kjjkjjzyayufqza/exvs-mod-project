@@ -197,9 +197,10 @@ export function decodeBufferWithTextIndexMapping(data: Uint8Array): string {
  * @returns A new CharacterDataOB instance
  */
 export function cloneCharacterDataOB(
-	character: any, 
-	newCharacterId: number, 
-	bufferData: Buffer
+	character: any,
+	newCharacterId: number,
+	bufferData: Buffer,
+	newCharacterUniqueId?: number
 ): any {
 	// Helper function to deep clone StringNameData
 	const cloneStringNameData = (stringData: any): any => {
@@ -221,7 +222,7 @@ export function cloneCharacterDataOB(
 	// Create a new character object with all the same properties
 	const clonedCharacter = {
 		CharacterId: newCharacterId,
-		UnkId0: character.UnkId0,
+		indexInSeries: character.indexInSeries,
 		UnkId1: character.UnkId1,
 		UnkId2: character.UnkId2,
 		UnkId3: character.UnkId3,
@@ -262,7 +263,7 @@ export function cloneCharacterDataOB(
 		UnkHash10_1: character.UnkHash10_1,
 		UnkHash11: character.UnkHash11,
 		vs_p_r_c02: character.vs_p_r_c02,
-		characterUniqueId: character.characterUniqueId,
+		characterUniqueId: newCharacterUniqueId !== undefined ? newCharacterUniqueId : character.characterUniqueId,
 		UnkHash12: character.UnkHash12,
 		sticker_t01: character.sticker_t01,
 		UnkHash13: character.UnkHash13,

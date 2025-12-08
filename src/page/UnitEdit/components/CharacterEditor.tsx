@@ -79,15 +79,23 @@ export const CharacterEditor: FC<CharacterEditorProps> = ({
     try {
       const characterToCopy = characterListData.CharacterData[index];
       if (!characterToCopy) return;
-      
-      // Find the next available character ID (max ID + 1)
-      const newCharacterId = Math.max(...characterListData.CharacterData.map(c => c.CharacterId), 0) + 1;
-      
-      // Clone the character with the new ID
+
+      // Use the copied character's ID as the base, find next available ID
+      const existingIds = new Set(characterListData.CharacterData.map(c => c.CharacterId));
+      let newCharacterId = characterToCopy.CharacterId;
+      while (existingIds.has(newCharacterId)) {
+        newCharacterId++;
+      }
+
+      // Find the next available character unique ID (max unique ID + 1)
+      const newCharacterUniqueId = Math.max(...characterListData.CharacterData.map(c => c.characterUniqueId || 0), 0) + 1;
+
+      // Clone the character with the new IDs
       const clonedCharacter = cloneCharacterDataOB(
         characterToCopy,
         newCharacterId,
-        characterListData.bufferData
+        characterListData.bufferData,
+        newCharacterUniqueId
       );
       
       const newCharacterData = [...characterListData.CharacterData, clonedCharacter];
@@ -169,6 +177,7 @@ export const CharacterEditor: FC<CharacterEditorProps> = ({
           <CharacterForm
             character={selectedCharacter}
             characterId={selectedCharacter.CharacterId}
+            allCharacters={characterListData.CharacterData}
             onChange={handleUpdateCharacter}
           />
         ) : (

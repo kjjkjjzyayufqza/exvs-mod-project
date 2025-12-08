@@ -54,22 +54,22 @@ export function PropertySection({
                 <PropertyInput
                     label="X"
                     axis="x"
-                    value={selectedModelState[property][0]}
-                    onChange={(value) => onPropertyChange(property, 0, value)}
+                    value={property === 'rotation' ? selectedModelState[property][0] * 180 / Math.PI : selectedModelState[property][0]}
+                    onChange={(value) => onPropertyChange(property, 0, property === 'rotation' ? value * Math.PI / 180 : value)}
                     disabled={disabled}
                 />
                 <PropertyInput
                     label="Y"
                     axis="y"
-                    value={selectedModelState[property][1]}
-                    onChange={(value) => onPropertyChange(property, 1, value)}
+                    value={property === 'rotation' ? selectedModelState[property][1] * 180 / Math.PI : selectedModelState[property][1]}
+                    onChange={(value) => onPropertyChange(property, 1, property === 'rotation' ? value * Math.PI / 180 : value)}
                     disabled={disabled}
                 />
                 <PropertyInput
                     label="Z"
                     axis="z"
-                    value={selectedModelState[property][2]}
-                    onChange={(value) => onPropertyChange(property, 2, value)}
+                    value={property === 'rotation' ? selectedModelState[property][2] * 180 / Math.PI : selectedModelState[property][2]}
+                    onChange={(value) => onPropertyChange(property, 2, property === 'rotation' ? value * Math.PI / 180 : value)}
                     disabled={disabled}
                 />
             </div>

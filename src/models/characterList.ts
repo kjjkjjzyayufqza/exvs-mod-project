@@ -57,7 +57,7 @@ export class CharacterList {
 
 export class CharacterData {
   CharacterId: number; // id
-  UnkId0: number; // 0x0
+  indexInSeries: number; // 0x0
   UnkId1: number; // 0x4
   UnkId2: number; // 0x8
   ms_igh_r: string; // 0xc
@@ -123,7 +123,7 @@ export class CharacterData {
     let StreamReader = startBufferData;
 
     this.CharacterId = CharacterId;
-    this.UnkId0 = StreamReader.readInt32LE(0x0);
+    this.indexInSeries = StreamReader.readInt32LE(0x0);
     this.UnkId1 = StreamReader.readInt32LE(0x4);
     this.UnkId2 = StreamReader.readInt32LE(0x8);
     this.ms_igh_r = StreamReader.slice(0xc, 0xc + 0x4).toString("hex");
@@ -278,7 +278,7 @@ export function CharacterListOutPut(characterList: CharacterList, path: string) 
   // write the character data
   let unitDataBuffer = Buffer.alloc(characterList.CharacterData.length * 0x13c);
   for (let i = 0; i < characterList.CharacterData.length; i++) {
-    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].UnkId0, i * 0x13c + 0x0);
+    unitDataBuffer.writeInt32LE(characterList.CharacterData[i].indexInSeries, i * 0x13c + 0x0);
     unitDataBuffer.writeInt32LE(characterList.CharacterData[i].UnkId1, i * 0x13c + 0x4);
     unitDataBuffer.writeInt32LE(characterList.CharacterData[i].UnkId2, i * 0x13c + 0x8);
     unitDataBuffer.write(characterList.CharacterData[i].ms_igh_r, i * 0x13c + 0xc, 0x4, "hex");

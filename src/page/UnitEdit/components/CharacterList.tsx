@@ -69,7 +69,7 @@ export const CharacterList: FC<CharacterListProps> = ({
 
       {/* Character List */}
       <ScrollArea className="flex-1 min-h-0">
-        <div className="space-y-2 pr-3">
+        <div className="space-y-2 pr-3 py-2 px-1">
           {filteredCharacters.length > 0 ? (
             filteredCharacters.map(({ character, originalIndex }) => (
               <CharacterCard

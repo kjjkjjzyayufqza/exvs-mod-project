@@ -1,11 +1,14 @@
 import { FC } from "react";
 import { Input } from "../../../components/ui/input";
 import { Label } from "../../../components/ui/label";
+import { cn } from "../../../lib/utils";
 
 interface FormField {
   name: string;
   label: string;
   value: number;
+  inputClassName?: string;
+  labelClassName?: string;
 }
 
 interface FormFieldGroupProps {
@@ -27,7 +30,7 @@ export const FormFieldGroup: FC<FormFieldGroupProps> = ({
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {fields.map((field) => (
         <div key={field.name} className="space-y-2">
-          <Label htmlFor={field.name} className="text-sm font-medium">
+          <Label htmlFor={field.name} className={cn("text-sm font-medium", field.labelClassName)}>
             {field.label}
           </Label>
           <Input
@@ -35,7 +38,7 @@ export const FormFieldGroup: FC<FormFieldGroupProps> = ({
             type="number"
             value={field.value || 0}
             onChange={(e) => handleInputChange(field.name, e.target.value)}
-            className="w-full"
+            className={cn("w-full", field.inputClassName)}
             placeholder="Enter value..."
           />
         </div>

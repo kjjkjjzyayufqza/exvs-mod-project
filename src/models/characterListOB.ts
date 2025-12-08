@@ -57,7 +57,7 @@ export class CharacterListOB {
 
 export class CharacterDataOB {
   CharacterId: number // id
-  UnkId0: number // 0x0
+  indexInSeries: number // 0x0
   UnkId1: number // 0x4
   UnkId2: number // 0x8
   UnkId3: number // 0xc
@@ -110,7 +110,7 @@ export class CharacterDataOB {
   UnkHash10_1: number // 0xc8
   UnkHash11: number // 0xcc
   vs_p_r_c02: number // 0xd0
-  characterUniqueId: number // 0xd4 - Character Unique ID
+  MS_card_icon_index: number // 0xd4
   UnkHash12: number // 0xd8
   // 0xdc empty
   sticker_t01: number // 0xe0
@@ -137,7 +137,7 @@ export class CharacterDataOB {
   UnkStringOffset9: StringNameData // 0x134
   // 0x138 empty
   UnkHash19: number // 0x13c //不知道是什么，有8个.bin
-  MS_card_icon_index: number // 0x140
+  characterUniqueId: number // 0x140 - Character Unique ID
   UnkStringOffset10: StringNameData // 0x144
   // 0x148 empty
   UnkHash20: number // 0x14c
@@ -180,7 +180,7 @@ export class CharacterDataOB {
     let StreamReader = startBufferData
 
     this.CharacterId = CharacterId
-    this.UnkId0 = StreamReader.readInt32LE(0x0)
+    this.indexInSeries = StreamReader.readInt32LE(0x0)
     this.UnkId1 = StreamReader.readInt32LE(0x4)
     this.UnkId2 = StreamReader.readInt32LE(0x8)
     this.UnkId3 = StreamReader.readInt32LE(0xc)
@@ -221,7 +221,7 @@ export class CharacterDataOB {
     this.UnkHash10_1 = StreamReader.readInt32LE(0xc8)
     this.UnkHash11 = StreamReader.readInt32LE(0xcc)
     this.vs_p_r_c02 = StreamReader.readInt32LE(0xd0)
-    this.characterUniqueId = StreamReader.readInt32LE(0xd4)
+    this.characterUniqueId = StreamReader.readInt32LE(0x140)
     this.UnkHash12 = StreamReader.readInt32LE(0xd8)
     this.sticker_t01 = StreamReader.readInt32LE(0xe0)
     this.UnkHash13 = StreamReader.readInt32LE(0xe4)
@@ -243,7 +243,7 @@ export class CharacterDataOB {
     this.UnkHash18 = StreamReader.readInt32LE(0x130)
     this.UnkStringOffset9 = new StringNameData(StreamReader.readInt32LE(0x134), buffer)
     this.UnkHash19 = StreamReader.readInt32LE(0x13c)
-    this.MS_card_icon_index = StreamReader.readInt32LE(0x140)
+    this.MS_card_icon_index = StreamReader.readInt32LE(0xd4)
     this.UnkStringOffset10 = new StringNameData(StreamReader.readInt32LE(0x144), buffer)
     this.UnkHash20 = StreamReader.readInt32LE(0x14c)
     this.unkId15 = StreamReader.readInt32LE(0x150)
@@ -346,7 +346,7 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
     const char = characterList.CharacterData[i]
     const baseOffset = i * characterList.CharacterInfoEachSize
 
-    unitDataBuffer.writeInt32LE(char.UnkId0, baseOffset + 0x0)
+    unitDataBuffer.writeInt32LE(char.indexInSeries, baseOffset + 0x0)
     unitDataBuffer.writeInt32LE(char.UnkId1, baseOffset + 0x4)
     unitDataBuffer.writeInt32LE(char.UnkId2, baseOffset + 0x8)
     unitDataBuffer.writeInt32LE(char.UnkId3, baseOffset + 0xc)
@@ -431,7 +431,7 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
     unitDataBuffer.writeInt32LE(char.UnkHash10_1, baseOffset + 0xc8)
     unitDataBuffer.writeInt32LE(char.UnkHash11, baseOffset + 0xcc)
     unitDataBuffer.writeInt32LE(char.vs_p_r_c02, baseOffset + 0xd0)
-    unitDataBuffer.writeInt32LE(char.characterUniqueId, baseOffset + 0xd4)
+    unitDataBuffer.writeInt32LE(char.characterUniqueId, baseOffset + 0x140)
     unitDataBuffer.writeInt32LE(char.UnkHash12, baseOffset + 0xd8)
     unitDataBuffer.writeInt32LE(char.sticker_t01, baseOffset + 0xe0)
     unitDataBuffer.writeInt32LE(char.UnkHash13, baseOffset + 0xe4)
@@ -460,7 +460,7 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset9.StringBufferData])
 
     unitDataBuffer.writeInt32LE(char.UnkHash19, baseOffset + 0x13c)
-    unitDataBuffer.writeInt32LE(char.MS_card_icon_index, baseOffset + 0x140)
+    unitDataBuffer.writeInt32LE(char.MS_card_icon_index, baseOffset + 0xd4)
 
     // stringNameData offset for UnkStringOffset10
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x144)

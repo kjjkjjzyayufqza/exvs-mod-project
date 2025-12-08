@@ -11,12 +11,14 @@ import { StringFieldGroup } from "./StringFieldGroup";
 interface CharacterFormProps {
   character: CharacterDataOB;
   characterId: number;
+  allCharacters: CharacterDataOB[];
   onChange: (character: CharacterDataOB) => void;
 }
 
 export const CharacterForm: FC<CharacterFormProps> = ({
   character,
   characterId,
+  allCharacters,
   onChange,
 }) => {
   const [formData, setFormData] = useState<Record<string, number>>({});
@@ -27,7 +29,7 @@ export const CharacterForm: FC<CharacterFormProps> = ({
   useEffect(() => {
     const initialData: Record<string, number> = {
       CharacterId: character.CharacterId,
-      UnkId0: character.UnkId0,
+      indexInSeries: character.indexInSeries,
       UnkId1: character.UnkId1,
       UnkId2: character.UnkId2,
       UnkId3: character.UnkId3,
@@ -177,20 +179,28 @@ export const CharacterForm: FC<CharacterFormProps> = ({
     setHasChanges(false);
   };
 
+  // Check for unique ID conflicts
+  const isCharacterUniqueIdDuplicate = allCharacters.some((otherChar, index) =>
+    otherChar.characterUniqueId === formData.characterUniqueId &&
+    allCharacters.findIndex(c => c.characterUniqueId === formData.characterUniqueId) !==
+    allCharacters.findIndex(c => c.CharacterId === characterId)
+  );
+
   // Define field groups for better organization
   const fieldGroups = [
     {
       title: "Basic Information",
       fields: [
         { name: "CharacterId", label: "Character ID", value: formData.CharacterId },
-        { name: "SeriesId", label: "Series ID", value: formData.SeriesId },
-        { name: "MS_card_icon_index", label: "Card Icon Index", value: formData.MS_card_icon_index },
+        { name: "SeriesId", label: "Series ID (0x168)", value: formData.SeriesId },
+        { name: "MS_card_icon_index", label: "Card Icon Index (0xd4)", value: formData.MS_card_icon_index },
+        { name: "indexInSeries", label: "Index in Series (0x00)", value: formData.indexInSeries },
+        { name: "characterUniqueId", label: "Character Unique ID (0x140)", value: formData.characterUniqueId, labelClassName: isCharacterUniqueIdDuplicate ? "text-red-600" : "" },
       ]
     },
     {
       title: "Unknown IDs (0x00-0x0F)",
       fields: [
-        { name: "UnkId0", label: "Unknown ID 0 (0x00)", value: formData.UnkId0 },
         { name: "UnkId1", label: "Unknown ID 1 (0x04)", value: formData.UnkId1 },
         { name: "UnkId2", label: "Unknown ID 2 (0x08)", value: formData.UnkId2 },
         { name: "UnkId3", label: "Unknown ID 3 (0x0C)", value: formData.UnkId3 },
@@ -291,7 +301,6 @@ export const CharacterForm: FC<CharacterFormProps> = ({
         { name: "UnkId6", label: "Unknown ID 6 (0x2C)", value: formData.UnkId6 },
         { name: "UnkId7", label: "Unknown ID 7 (0x38)", value: formData.UnkId7 },
         { name: "UnkId8", label: "Unknown ID 8 (0x54)", value: formData.UnkId8 },
-        { name: "characterUniqueId", label: "Character Unique ID (0xD4)", value: formData.characterUniqueId },
         { name: "unkId10", label: "Unknown ID 10 (0xEC)", value: formData.unkId10 },
         { name: "unkId11", label: "Unknown ID 11 (0xF0)", value: formData.unkId11 },
         { name: "unkId12", label: "Unknown ID 12 (0x100)", value: formData.unkId12 },
