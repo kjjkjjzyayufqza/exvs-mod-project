@@ -10,10 +10,12 @@ pub fn run() {
         .plugin(tauri_plugin_persisted_scope::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
+        .manage(commands::WatcherState::default())
         .invoke_handler(tauri::generate_handler![
             commands::my_custom_command,
             commands::read_file,
-            commands::exec_shell_command
+            commands::exec_shell_command,
+            commands::watch_folder
         ])
         .setup(|app| {
             #[cfg(debug_assertions)] // only include this code on debug builds

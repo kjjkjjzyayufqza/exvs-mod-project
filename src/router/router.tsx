@@ -10,6 +10,7 @@ import MSCEdit from "../page/MSCEdit/page"
 import RepackPage from "../page/Repack/page"
 import SceneEdit from "../page/SceneEdit/page"
 import MiscToolsPage from "../page/MiscTools/page"
+import TestEditorPage from "../page/TestEditor/page"
 // Menu items.
 export const RouterItems = [
     {
@@ -77,5 +78,11 @@ export const RouterItems = [
         url: "/MiscTools",
         icon: Wrench,
         element: <MiscToolsPage />
+    },
+    {
+        title: "Test editor",
+        url: "/TestEditor",
+        icon: FileCode,
+        element: <TestEditorPage />
     }
 ]
