@@ -8,4 +8,8 @@ export interface ConfigState {
   obDplCachePath?: string;
   extractOutputPath?: string;
   imgToNutexbOutputPath?: string;
+  repackInputPath?: string;
+  
+  // Methods to update settings
+  setRepackInputPath: (path: string) => Promise<void>;
 }
