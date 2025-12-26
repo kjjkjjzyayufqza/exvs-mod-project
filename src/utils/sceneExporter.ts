@@ -66,7 +66,7 @@ export function convertSceneStateToExportData(
         const exportedModel: ExportedModelData = {
             id: model.id,
             name: model.name,
-            type: model.type,
+            type: model.type as 'box' | 'dae',
             index: index,
             position: model.position,
             rotation: model.rotation,
