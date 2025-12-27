@@ -10,17 +10,17 @@ export function TopNavBar() {
   };
 
   const handleRepackClick = () => {
-    setIsRepackModalOpen(true);
+    setIsRepackModalOpen((prev) => !prev);
   };
 
   return (
     <>
-      <div className="fixed top-0 left-0 right-0 h-10 bg-gray-100 border-b border-border flex items-center px-4 gap-2 z-50">
+      <div className="fixed top-0 left-0 right-0 h-8 bg-gray-100 border-b border-border flex items-center px-3 gap-1.5 z-50">
         <Button
           variant="ghost"
           size="sm"
           onClick={handleOptionsClick}
-          className="h-8 px-3 text-sm hover:bg-gray-200"
+          className="h-6 px-2 text-xs hover:bg-gray-200"
         >
           Options
         </Button>
@@ -28,7 +28,7 @@ export function TopNavBar() {
           variant="ghost"
           size="sm"
           onClick={handleRepackClick}
-          className="h-8 px-3 text-sm hover:bg-gray-200"
+          className="h-6 px-2 text-xs hover:bg-gray-200"
         >
           Repack
         </Button>

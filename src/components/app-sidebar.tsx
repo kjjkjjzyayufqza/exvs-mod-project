@@ -1,4 +1,5 @@
-import { Calendar, Home, Inbox, Search, Settings } from "lucide-react"
+import * as React from "react"
+import { Link } from "react-router-dom"
 
 import {
     Sidebar,
@@ -9,17 +10,13 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
+    SidebarRail,
 } from "@/components/ui/sidebar"
-import { Link, useLocation } from "react-router-dom"
-import MainPage from "../page/Main/page"
-import ExtractFilePage from "../page/Extract/page"
-import FileEdit from "../page/UnitEdit/page"
-import { useEffect, useState } from "react"
 import { RouterItems } from "../router/router"
 
-export function AppSidebar() {
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     return (
-        <Sidebar>
+        <Sidebar {...props}>
             <SidebarContent>
                 <SidebarGroup>
                     <SidebarGroupLabel>Application</SidebarGroupLabel>
@@ -41,6 +38,7 @@ export function AppSidebar() {
                     </SidebarGroupContent>
                 </SidebarGroup>
             </SidebarContent>
+            <SidebarRail />
         </Sidebar>
     )
 }
