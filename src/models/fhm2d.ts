@@ -3,8 +3,9 @@ import { ErrorMessage } from "./error";
 import pako from "pako";
 import { writeFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { path } from "@tauri-apps/api";
-import { basename } from "@tauri-apps/api/path";
+import { basename, dirname } from "@tauri-apps/api/path";
 import { toast } from "sonner";
+import { applyNumdlbBaseNameToStructureObject } from "@/lib/fhm2dExportFormatFunc";
 
 export enum Fhm2dType {
   PS4GundamVersus = "PS4GundamVersus",
@@ -441,7 +442,7 @@ export enum ExtractType {
   FolderWithStructure = "structure",
 }
 
-export function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: string, type: ExtractType) {
+export async function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: string, type: ExtractType): Promise<void> {
   if (fhm2d._TYPE_ == Fhm2dType.PS4GundamVersus) {
     throw new Error(ErrorMessage.notSupport);
   } else if (fhm2d._TYPE_ == Fhm2dType.Xboost) {
@@ -466,7 +467,19 @@ export function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: string, ty
     });
 
     const errorInfo: any = {};
-    subFileData.forEach(async (sub, i) => {
+
+    // Prepare output structure once for the whole extraction.
+    // This avoids rewriting the JSON structure file for every subfile.
+    const fileNameNoExt = await basename(outDir);
+    if (type === ExtractType.SingleFolder) {
+      const dirExists = await exists(outDir);
+      if (!dirExists) {
+        await mkdir(outDir, { recursive: true });
+      }
+    }
+
+    for (let i = 0; i < subFileData.length; i++) {
+      const sub = subFileData[i]!;
       //解压 Chunk
       let BufferData: Buffer;
       let decompressData: Uint8Array[] = [];
@@ -497,31 +510,8 @@ export function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: string, ty
       }
       if (type === ExtractType.SingleFolder) {
         const outputPath = `${outDir}/${i}${typeList[i]}`;
-        const fileNameNoExt = await basename(outDir);
-        const outputStructure = generateOutputStructure(fhm2d, typeList, fileNameNoExt, {});
-
-        //if path not exists, create the path
-        const dirExists = await exists(outDir);
-        if (!dirExists) {
-          await mkdir(outDir, { recursive: true });
-        }
-
-        //write json_structure
-        writeFile(outDir + "_structure.json", Buffer.from(JSON.stringify(outputStructure, null, 2)))
-          .then(() => {
-            console.log("write file", outDir + "_structure.json");
-          })
-          .catch((err) => {
-            console.log("write file error", err);
-          });
-
-        writeFile(outputPath, BufferData)
-          .then(() => {
-            console.log("write file", outputPath);
-          })
-          .catch((err) => {
-            console.log("write file error", err);
-          });
+        await writeFile(outputPath, BufferData);
+        console.log("write file", outputPath);
       } else if (type === ExtractType.FolderWithStructure) {
         throw new Error(ErrorMessage.notSupport);
         //type 2
@@ -531,7 +521,33 @@ export function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: string, ty
         // }
         // createFoldersAndFilesFromJsonWithBuffer(extractFolderStructure, `${fileNameNoExt}`, i, `/${i}${typeList[i]}`, BufferData);
       }
-    });
+    }
+
+    if (type === ExtractType.SingleFolder) {
+      const outputStructure = generateOutputStructure(fhm2d, typeList, fileNameNoExt, errorInfo);
+
+      await writeFile(outDir + "_structure.json", Buffer.from(JSON.stringify(outputStructure, null, 2)));
+      console.log("write file", outDir + "_structure.json");
+
+      try {
+        const rootDir = await dirname(outDir);
+        const testStructure = JSON.parse(JSON.stringify(outputStructure));
+        const updated = await applyNumdlbBaseNameToStructureObject(testStructure, {
+          rootDir,
+          concurrency: 1,
+          rewriteFileUrl: true,
+        });
+        await writeFile(outDir + "_structure_test.json", Buffer.from(JSON.stringify(updated, null, 2)));
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const fallback = {
+          ...outputStructure,
+          __namingError: errorMessage,
+        };
+        console.error("applyNumdlbBaseNameToStructureObject failed:", errorMessage);
+        await writeFile(outDir + "_structure_test.json", Buffer.from(JSON.stringify(fallback, null, 2)));
+      }
+    }
   }
 }
 

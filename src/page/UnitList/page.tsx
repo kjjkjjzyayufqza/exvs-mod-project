@@ -121,7 +121,9 @@ export default function UnitList() {
     const upperCaseHashName = fileName.split('0x')[1].toUpperCase();
     const outputPath = `${extractOutputPath}\\0x${upperCaseHashName}`;
     const fhm = new Fhm2dData(Buffer.from(fileBuffer))
-    ExtractFHMData(fhm, outputPath, ExtractType.SingleFolder);
+    void ExtractFHMData(fhm, outputPath, ExtractType.SingleFolder).catch((err) => {
+      console.error("ExtractFHMData failed:", err);
+    });
     console.log(fhm);
     toast.success(`Extracted ${fileType}`)
   };

@@ -137,7 +137,15 @@ export default function ExtractFilePage() {
   }
 
   const openSelectFileDialog = async (value: any) => {
-    const selected = await open({ multiple: false, directory: false });
+    // Get the last used input file path as default
+    const lastInputPath = form.getValues("inputFilePath");
+    const defaultPath = lastInputPath ? lastInputPath.split(/[/\\]/).slice(0, -1).join('\\') : undefined;
+    
+    const selected = await open({ 
+      multiple: false, 
+      directory: false,
+      defaultPath: defaultPath
+    });
     if (selected) {
       store?.set(value, selected as any);
       form.setValue(value, selected as any);
@@ -158,7 +166,26 @@ export default function ExtractFilePage() {
   }
 
   const openSelectFolderDialog = async (value: any) => {
-    const selected = await open({ multiple: false, directory: true });
+    // Get the last used output folder path as default, independent from input file path
+    const lastOutputPath = form.getValues("outputFolderPath");
+    let defaultPath = lastOutputPath;
+    
+    // If createSubfolder is enabled and path includes subfolder, get parent directory
+    if (createSubfolder && lastOutputPath) {
+      const inputPath = form.getValues("inputFilePath");
+      if (inputPath) {
+        const fileName = inputPath.split(/[/\\]/).pop()?.split('.').slice(0, -1).join('.');
+        if (fileName && lastOutputPath.endsWith(fileName)) {
+          defaultPath = lastOutputPath.split(/[/\\]/).slice(0, -1).join('\\');
+        }
+      }
+    }
+    
+    const selected = await open({ 
+      multiple: false, 
+      directory: true,
+      defaultPath: defaultPath || undefined
+    });
     console.log(selected);
     if (selected) {
       store?.set(value, selected as any);
@@ -189,7 +216,13 @@ export default function ExtractFilePage() {
         }
       }
     }
-    ExtractFHMData(fhm2dData, data.outputFolderPath, extractType);
+    try {
+      await ExtractFHMData(fhm2dData, data.outputFolderPath, extractType);
+      toast.success(`Extract completed: ${data.outputFolderPath}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(`Extract failed: ${message}`);
+    }
   }
 
   useEffect(() => {
@@ -308,7 +341,7 @@ export default function ExtractFilePage() {
             style={vscodeTheme}
             value={previewData}
             displayDataTypes={false}
-            collapsed={1}
+            collapsed={true}
           />
         </div>
       </div>
