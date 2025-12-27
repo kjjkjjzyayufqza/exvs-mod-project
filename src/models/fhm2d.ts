@@ -5,7 +5,7 @@ import { writeFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { path } from "@tauri-apps/api";
 import { basename, dirname } from "@tauri-apps/api/path";
 import { toast } from "sonner";
-import { applyNumdlbBaseNameToStructureObject } from "@/lib/fhm2dExportFormatFunc";
+import { applyNumdlbBaseNameToStructureObject } from "@/lib/fhm2d_characterModelFormatFuc";
 
 export enum Fhm2dType {
   PS4GundamVersus = "PS4GundamVersus",
@@ -478,9 +478,10 @@ export async function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: stri
       }
     }
 
+    // Step 1: Decompress all files and store in memory
+    const decompressedFiles: { index: number; buffer: Buffer }[] = [];
     for (let i = 0; i < subFileData.length; i++) {
       const sub = subFileData[i]!;
-      //解压 Chunk
       let BufferData: Buffer;
       let decompressData: Uint8Array[] = [];
       if (sub._isNeedDeComp == false) {
@@ -498,7 +499,6 @@ export async function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: stri
           sub.CompBufferData.map((_e) => {
             BufferData = Buffer.concat([BufferData, _e.CompBufferData]);
           });
-          //update the sub, update isError = true
           errorInfo[i] = {
             isError: true,
             originChunkCount: sub.ChunkCount,
@@ -508,45 +508,63 @@ export async function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: stri
           };
         }
       }
-      if (type === ExtractType.SingleFolder) {
-        const outputPath = `${outDir}/${i}${typeList[i]}`;
-        await writeFile(outputPath, BufferData);
-        console.log("write file", outputPath);
-      } else if (type === ExtractType.FolderWithStructure) {
-        throw new Error(ErrorMessage.notSupport);
-        //type 2
-        //if fileNameNoExt not exists, we create
-        // if (!fs.existsSync(path.join(fileNameNoExt))) {
-        //   fs.mkdirSync(path.join(fileNameNoExt));
-        // }
-        // createFoldersAndFilesFromJsonWithBuffer(extractFolderStructure, `${fileNameNoExt}`, i, `/${i}${typeList[i]}`, BufferData);
-      }
+      decompressedFiles.push({ index: i, buffer: BufferData });
     }
 
     if (type === ExtractType.SingleFolder) {
+      // Step 2: Generate structure and apply naming logic
       const outputStructure = generateOutputStructure(fhm2d, typeList, fileNameNoExt, errorInfo);
-
-      await writeFile(outDir + "_structure.json", Buffer.from(JSON.stringify(outputStructure, null, 2)));
-      console.log("write file", outDir + "_structure.json");
+      let finalStructure: any = outputStructure;
 
       try {
         const rootDir = await dirname(outDir);
-        const testStructure = JSON.parse(JSON.stringify(outputStructure));
-        const updated = await applyNumdlbBaseNameToStructureObject(testStructure, {
+        
+        // Create file data map from decompressed files
+        const fileDataMap = new Map<number, Uint8Array>();
+        for (const fileData of decompressedFiles) {
+          const fileIndex = subFileData[fileData.index]?.FileIndex ?? fileData.index;
+          fileDataMap.set(fileIndex, new Uint8Array(fileData.buffer));
+        }
+
+        finalStructure = await applyNumdlbBaseNameToStructureObject(outputStructure, {
           rootDir,
           concurrency: 1,
           rewriteFileUrl: true,
+          fileDataMap,
         });
-        await writeFile(outDir + "_structure_test.json", Buffer.from(JSON.stringify(updated, null, 2)));
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
-        const fallback = {
+        console.error("applyNumdlbBaseNameToStructureObject failed:", errorMessage);
+        finalStructure = {
           ...outputStructure,
           __namingError: errorMessage,
         };
-        console.error("applyNumdlbBaseNameToStructureObject failed:", errorMessage);
-        await writeFile(outDir + "_structure_test.json", Buffer.from(JSON.stringify(fallback, null, 2)));
       }
+
+      // Step 3: Write files using the new naming from finalStructure
+      for (const fileData of decompressedFiles) {
+        const structureItem = finalStructure.SubFileData.find((item: any) => item.index === fileData.index);
+        if (structureItem && structureItem.fileUrl) {
+          // Extract filename from fileUrl (e.g., ".\0x092B6B4A\body_normal.numdlb" -> "body_normal.numdlb")
+          const fileUrl = structureItem.fileUrl.replace(/^\.[\\/]/, "");
+          const pathParts = fileUrl.split(/[\\/]/);
+          const fileName = pathParts[pathParts.length - 1];
+          const outputPath = `${outDir}/${fileName}`;
+          await writeFile(outputPath, fileData.buffer);
+          console.log("write file", outputPath);
+        } else {
+          // Fallback to old naming if structure item not found
+          const outputPath = `${outDir}/${fileData.index}${typeList[fileData.index]}`;
+          await writeFile(outputPath, fileData.buffer);
+          console.log("write file (fallback)", outputPath);
+        }
+      }
+
+      // Step 4: Write structure.json
+      await writeFile(outDir + "_structure.json", Buffer.from(JSON.stringify(finalStructure, null, 2)));
+      console.log("write file", outDir + "_structure.json");
+    } else if (type === ExtractType.FolderWithStructure) {
+      throw new Error(ErrorMessage.notSupport);
     }
   }
 }
