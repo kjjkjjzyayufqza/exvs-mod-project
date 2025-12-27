@@ -13,7 +13,6 @@ import {
 import { Link, useLocation } from "react-router-dom"
 import MainPage from "../page/Main/page"
 import ExtractFilePage from "../page/Extract/page"
-import DDSConversion from "../page/ImageCov/page"
 import FileEdit from "../page/UnitEdit/page"
 import { useEffect, useState } from "react"
 import { RouterItems } from "../router/router"

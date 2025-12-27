@@ -1,6 +1,5 @@
 import MainPage from "../page/Main/page"
 import ExtractFilePage from "../page/Extract/page"
-import DDSConversion from "../page/ImageCov/page"
 import { Calendar, Home, Inbox, List, Search, Settings, FileCode, Package, Edit, Map, Wrench } from "lucide-react"
 import UnitEdit from "../page/UnitEdit/page"
 import FilesEdit from "../page/FilesEdit/page"
@@ -30,12 +29,6 @@ export const RouterItems = [
         url: "/Repack",
         icon: Package,
         element: <RepackPage />
-    },
-    {
-        url: "/DDSConversion",
-        title: "DDSConversion",
-        icon: Home,
-        element: <DDSConversion />
     },
     {
         title: "Unit Edit",

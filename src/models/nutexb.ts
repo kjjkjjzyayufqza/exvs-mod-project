@@ -1,6 +1,13 @@
-import { DDsFileModel } from "./dds";
-
-export interface NutexbFileModel extends DDsFileModel {
+export interface NutexbFileModel {
+  Height: number;
+  Width: number;
+  Format: NUTEXImageFormat;
+  Depth: number;
+  MipCount: number;
+  ArrayCount: number;
+  ImageSize: number;
+  Name: string;
+  Buffer: Buffer;
   Padding2: number;
   Padding3: number;
   Unk2: number;
