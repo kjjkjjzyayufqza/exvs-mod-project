@@ -6,17 +6,19 @@ import { Outlet } from "react-router"
 
 export default function SidebarLayout() {
   return (
-    <div className="flex h-svh flex-col">
-      <TopNavBar />
-      <SidebarProvider className="flex flex-1 min-h-0">
-        <AppSidebar />
-        <main className="flex flex-1 flex-col bg-background overflow-hidden">
-          <div className="min-w-0 p-6 flex-1 overflow-auto">
-            <Outlet />
+    <>
+      <SidebarProvider>
+        <div className="flex h-svh w-full">
+          <AppSidebar />
+          <div className="flex flex-1 flex-col min-w-0">
+            <TopNavBar />
+            <main className="flex-1 overflow-auto p-6">
+              <Outlet />
+            </main>
           </div>
-        </main>
+        </div>
         <Toaster />
       </SidebarProvider>
-    </div>
+    </>
   )
 }
