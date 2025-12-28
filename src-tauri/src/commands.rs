@@ -64,6 +64,7 @@ pub fn exec_shell_command(command: &str) -> Result<String, String> {
 }
 
 #[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TestTreeNode {
     pub id: String,
     pub name: String,
@@ -74,6 +75,7 @@ pub struct TestTreeNode {
 }
 
 #[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FolderChangeOp {
     pub r#type: String,
     pub node: TestTreeNode,
@@ -82,6 +84,7 @@ pub struct FolderChangeOp {
 }
 
 #[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FolderChangePayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub full_tree: Option<Vec<TestTreeNode>>,

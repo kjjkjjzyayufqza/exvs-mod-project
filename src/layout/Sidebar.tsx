@@ -8,11 +8,11 @@ export default function SidebarLayout() {
   return (
     <>
       <SidebarProvider>
-        <div className="flex h-svh w-full">
-          <AppSidebar />
-          <div className="flex flex-1 flex-col min-w-0">
-            <TopNavBar />
-            <main className="flex-1 overflow-auto p-6">
+        <div className="flex flex-col h-svh w-full">
+          <TopNavBar />
+          <div className="flex flex-1 min-h-0">
+            <AppSidebar />
+            <main className="flex-1 overflow-auto p-4">
               <Outlet />
             </main>
           </div>

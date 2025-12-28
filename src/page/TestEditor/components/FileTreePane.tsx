@@ -47,11 +47,12 @@ export function FileTreePane({
   const selection = useMemo(() => selectedId ?? undefined, [selectedId]);
 
   const NodeRow = ({ node, style }: NodeRendererProps<TestTreeNode>) => {
-    const Icon = node.isLeaf ? File : node.isOpen ? ChevronDown : ChevronRight;
+    const isDir = node.data.isDir;
+    const Icon = isDir ? (node.isOpen ? ChevronDown : ChevronRight) : File;
 
     const handleClick = () => {
       onSelect(node.data);
-      if (!node.isLeaf) {
+      if (isDir) {
         node.toggle();
       }
     };
@@ -108,6 +109,8 @@ export function FileTreePane({
               indent={16}
               rowHeight={28}
               openByDefault={false}
+              // Ensure directories remain internal nodes even when children are temporarily filtered out.
+              childrenAccessor={(node) => (node.isDir ? node.children ?? [] : node.children ?? null)}
               selection={selection}
               onSelect={(nodes: NodeApi<TestTreeNode>[]) => onSelect(nodes[0]?.data ?? null)}
             >

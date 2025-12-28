@@ -3,6 +3,7 @@ export type TestTreeNode = {
   name: string;
   path: string;
   isDir: boolean;
+  isLeaf?: boolean;
   children?: TestTreeNode[];
 };
 

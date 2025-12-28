@@ -12,6 +12,31 @@ import { FileTreePane } from "./components/FileTreePane";
 const WATCH_EVENT = "test-editor:folder-change";
 const WATCH_COMMAND = "watch_folder";
 
+type RawTreeNode = Partial<TestTreeNode> & {
+  id: string;
+  name: string;
+  path: string;
+  isDir?: boolean;
+  is_dir?: boolean;
+  children?: RawTreeNode[];
+};
+
+function normalizeNode(node: RawTreeNode): TestTreeNode {
+  const isDir = node.isDir ?? node.is_dir ?? false;
+  const children = node.children?.map(normalizeNode);
+  return {
+    id: node.id,
+    name: node.name,
+    path: node.path,
+    isDir,
+    children: isDir ? children ?? [] : undefined,
+  };
+}
+
+function normalizeTree(nodes: RawTreeNode[] = []): TestTreeNode[] {
+  return nodes.map(normalizeNode);
+}
+
 function findNode(nodes: TestTreeNode[], id: string | null): TestTreeNode | null {
   if (!id) return null;
   for (const node of nodes) {
@@ -84,14 +109,14 @@ function upsertNode(nodes: TestTreeNode[], incoming: TestTreeNode, parentId?: st
 
 function applyPayload(current: TestTreeNode[], payload?: FolderChangePayload): TestTreeNode[] {
   if (!payload) return current;
-  if (payload.fullTree) return payload.fullTree;
+  if (payload.fullTree) return normalizeTree(payload.fullTree);
   if (!payload.ops) return current;
 
   return payload.ops.reduce((acc, op) => {
     if (op.type === "remove") {
       return removeNode(acc, op.node.id);
     }
-    return upsertNode(acc, op.node, op.parentId);
+    return upsertNode(acc, normalizeNode(op.node), op.parentId);
   }, current);
 }
 
@@ -99,22 +124,22 @@ function filterTree(nodes: TestTreeNode[], term: string): TestTreeNode[] {
   if (!term) return nodes;
   const lower = term.toLowerCase();
 
-  const walk = (items: TestTreeNode[]): TestTreeNode[] => {
+  const walk = (items: TestTreeNode[], includeAll: boolean): TestTreeNode[] => {
     const next: TestTreeNode[] = [];
     for (const item of items) {
       const nameHit = item.name.toLowerCase().includes(lower);
-      const childHits = item.children ? walk(item.children) : [];
-      if (nameHit || childHits.length > 0) {
-        // Preserve leaf-ness: files should not get empty children arrays that make them expandable.
-        const children =
-          item.isDir && childHits.length === 0 ? [] : childHits.length > 0 ? childHits : undefined;
-        next.push({ ...item, children });
+      const childHits = item.children ? walk(item.children, includeAll || nameHit) : [];
+      const hasChildHits = childHits.length > 0;
+      if (nameHit || hasChildHits) {
+        // If this node matches, keep all its children (unfiltered) for navigation; otherwise keep only matching descendants.
+        const children = nameHit ? item.children ?? [] : childHits;
+        next.push({ ...item, children, isLeaf: !item.isDir });
       }
     }
     return next;
   };
 
-  return walk(nodes);
+  return walk(nodes, false);
 }
 
 const TestEditorPage = () => {
@@ -148,8 +173,8 @@ const TestEditorPage = () => {
 
       const directoryPath = Array.isArray(selected) ? selected[0] : selected;
       setCurrentDir(directoryPath);
-      const initial = await invoke<TestTreeNode[]>(WATCH_COMMAND, { path: directoryPath });
-      setTreeData(initial ?? []);
+      const initial = await invoke<RawTreeNode[]>(WATCH_COMMAND, { path: directoryPath });
+      setTreeData(normalizeTree(initial ?? []));
       setSelectedId(null);
     } catch (error) {
       console.error(error);
