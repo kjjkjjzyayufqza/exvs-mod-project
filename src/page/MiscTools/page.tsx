@@ -11,7 +11,7 @@ import { ImageResizeTool } from "./components/image-resize/ImageResizeTool"
 
 export default function MiscToolsPage() {
   return (
-    <div>
+    <div className="h-full">
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold">Misc Tools</h1>

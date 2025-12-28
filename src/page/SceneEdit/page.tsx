@@ -308,7 +308,7 @@ export default function SceneEdit() {
     }, [selectedModelId]);
 
     return (
-        <div>
+        <div className="h-full">
             <ControlPanel
                 models={models}
                 selectedModelId={selectedModelId}

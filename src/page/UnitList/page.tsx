@@ -129,7 +129,7 @@ export default function UnitList() {
   };
 
   return (
-    <div>
+    <div className="h-full">
       <div className="mb-8">
         <h2 className="text-2xl font-bold tracking-tight mb-4">Unit List</h2>
         <div className="max-w-xl">

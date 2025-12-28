@@ -804,7 +804,7 @@ export default function FilesEdit() {
   };
 
   return (
-    <div>
+    <div className="h-full">
       <div className="mb-8">
         <h2 className="text-2xl font-bold tracking-tight mb-4">Files Editor</h2>
         <div className="max-w-xl">

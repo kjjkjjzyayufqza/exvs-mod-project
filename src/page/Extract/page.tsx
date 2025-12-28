@@ -229,9 +229,9 @@ export default function ExtractFilePage() {
   }, []);
 
   return (
-    <div>
+    <div className="h-full flex flex-col">
       <h1>Extract .FHM2D</h1>
-      <div className="grid grid-cols-2">
+      <div className="grid grid-cols-2 flex-1 min-h-0">
         <div>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
@@ -335,7 +335,7 @@ export default function ExtractFilePage() {
             </form>
           </Form>
         </div>
-        <div className='mt-2 rounded-md p-4 h-96 overflow-auto'>
+        <div className='mt-2 rounded-md p-4 overflow-auto'>
           <JsonView
             style={vscodeTheme}
             value={previewData}

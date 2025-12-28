@@ -69,7 +69,7 @@ export default function ConfigPage() {
   }, [store]);
 
   return (
-    <div>
+    <div className="h-full">
       <div className="flex flex-col space-y-6">
         <h1 className="text-2xl font-bold">Configuration</h1>
         

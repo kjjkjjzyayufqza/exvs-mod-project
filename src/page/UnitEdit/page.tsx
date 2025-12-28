@@ -57,7 +57,7 @@ export default function UnitEdit() {
   };
 
   return (
-    <div>
+    <div className="h-full">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
