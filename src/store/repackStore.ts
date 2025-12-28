@@ -620,25 +620,41 @@ function extractSubFileDataFromTreeWithoutModification (treeData: TreeDataItem[]
             throw new Error(`Missing fileUrl for item: ${item.name}`)
           }
 
-          // Preserve original index and fileIndex exactly as they were
           // Use the current fileIndex as both index and fileIndex to maintain consistency
           const currentFileIndex = item.data.fileIndex
-          const currentIndex = item.data.fileIndex // Use fileIndex as index to maintain consistency
+          const currentIndex = item.data.fileIndex
 
-          subFileData.push({
-            index: currentIndex, // Use fileIndex as index to maintain consistency
-            fileType: item.data.fileType,
-            fileIndex: currentFileIndex, // Preserve original fileIndex
-            fileUrl: item.data.fileUrl,
-            isError: item.data.isError,
-            originChunkCount: item.data.originChunkCount,
-            errorCompBufferData: item.data.errorCompBufferData,
-            errorOriginSize: item.data.errorOriginSize,
-            originBinChunkBuffer: item.data.originBinChunkBuffer
-          })
+          // If we have the original SubFileData, use it as base and update only necessary fields
+          if (item.data._originalSubFileData) {
+            subFileData.push({
+              ...item.data._originalSubFileData, // Preserve all original fields
+              index: currentIndex, // Update index
+              fileType: item.data.fileType, // Update fileType (might have been changed)
+              fileIndex: currentFileIndex, // Update fileIndex
+              fileUrl: item.data.fileUrl, // Update fileUrl (might have been changed)
+              // Update optional fields that might have been modified
+              isError: item.data.isError,
+              originChunkCount: item.data.originChunkCount,
+              errorCompBufferData: item.data.errorCompBufferData,
+              errorOriginSize: item.data.errorOriginSize,
+              originBinChunkBuffer: item.data.originBinChunkBuffer
+            })
+          } else {
+            // Fallback: create new SubFileData item with known fields only
+            subFileData.push({
+              index: currentIndex,
+              fileType: item.data.fileType,
+              fileIndex: currentFileIndex,
+              fileUrl: item.data.fileUrl,
+              isError: item.data.isError,
+              originChunkCount: item.data.originChunkCount,
+              errorCompBufferData: item.data.errorCompBufferData,
+              errorOriginSize: item.data.errorOriginSize,
+              originBinChunkBuffer: item.data.originBinChunkBuffer
+            })
+          }
 
           seenFileIndices.add(item.data.fileIndex)
-        } else {
         }
       }
       if (item.children) {

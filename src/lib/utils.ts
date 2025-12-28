@@ -25,6 +25,8 @@ export interface TreeDataItem {
     errorOriginSize?: number;
     originBinChunkBuffer?: any;
     isExample?: boolean;
+    // Store the complete original SubFileData item to preserve all fields
+    _originalSubFileData?: any;
   };
 }
 
@@ -116,7 +118,9 @@ export const convertSubFileStructureToTreeData = (structureData: any[], subFileD
           originChunkCount: fileInfo.originChunkCount,
           errorCompBufferData: fileInfo.errorCompBufferData,
           errorOriginSize: fileInfo.errorOriginSize,
-          originBinChunkBuffer: fileInfo.originBinChunkBuffer
+          originBinChunkBuffer: fileInfo.originBinChunkBuffer,
+          // Store the complete original SubFileData item to preserve all fields
+          _originalSubFileData: fileInfo
         }
       };
 

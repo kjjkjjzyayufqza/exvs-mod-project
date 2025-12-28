@@ -213,10 +213,11 @@ const TestEditorPage = () => {
       return;
     }
 
-    // If there are unsaved changes, show dialog
+    // If there are unsaved changes, show dialog but don't change selection
     if (hasUnsavedChanges && selectedJsonPath !== node.path) {
       setPendingJsonPath(node.path);
       setShowUnsavedDialog(true);
+      // Don't change selectedId - keep the current JSON file selected
       return;
     }
 
@@ -228,11 +229,29 @@ const TestEditorPage = () => {
   const handleDiscardChanges = useCallback(() => {
     if (pendingJsonPath) {
       setSelectedJsonPath(pendingJsonPath);
-      setPendingJsonPath(null);
       setHasUnsavedChanges(false);
+      
+      // Find and select the new JSON file node
+      const findNodeByPath = (nodes: TestTreeNode[], path: string): TestTreeNode | null => {
+        for (const node of nodes) {
+          if (node.path === path) return node;
+          if (node.children) {
+            const found = findNodeByPath(node.children, path);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      
+      const newNode = findNodeByPath(treeData, pendingJsonPath);
+      if (newNode) {
+        setSelectedId(newNode.id);
+      }
+      
+      setPendingJsonPath(null);
     }
     setShowUnsavedDialog(false);
-  }, [pendingJsonPath]);
+  }, [pendingJsonPath, treeData]);
 
   const handleCancelSelection = useCallback(() => {
     setPendingJsonPath(null);
@@ -247,18 +266,20 @@ const TestEditorPage = () => {
           className="h-full rounded-lg border bg-background"
         >
           <ResizablePanel defaultSize={"15%"} minSize={"10%"}>
-            <div className="h-full p-2">
-              <FileTreePane
-                data={filteredData}
-                onSelect={handleFileSelect}
-                selectedId={selectedId}
-                searchTerm={searchTerm}
-                onSearchChange={setSearchTerm}
-                onPickFolder={handlePickFolder}
-                isLoading={isLoading}
-                currentDir={currentDir}
-              />
-            </div>
+          <div className="h-full p-2">
+            <FileTreePane
+              data={filteredData}
+              onSelect={handleFileSelect}
+              selectedId={selectedId}
+              searchTerm={searchTerm}
+              onSearchChange={setSearchTerm}
+              onPickFolder={handlePickFolder}
+              isLoading={isLoading}
+              currentDir={currentDir}
+              currentJsonPath={selectedJsonPath}
+              hasUnsavedChanges={hasUnsavedChanges}
+            />
+          </div>
           </ResizablePanel>
 
           <ResizableHandle withHandle />

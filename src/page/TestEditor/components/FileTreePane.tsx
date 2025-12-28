@@ -15,6 +15,8 @@ type FileTreePaneProps = {
   onPickFolder: () => void;
   isLoading?: boolean;
   currentDir?: string;
+  currentJsonPath?: string | null;
+  hasUnsavedChanges?: boolean;
 };
 
 export function FileTreePane({
@@ -26,6 +28,8 @@ export function FileTreePane({
   onPickFolder,
   isLoading = false,
   currentDir,
+  currentJsonPath,
+  hasUnsavedChanges = false,
 }: FileTreePaneProps) {
   const empty = data.length === 0;
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -46,9 +50,49 @@ export function FileTreePane({
 
   const selection = useMemo(() => selectedId ?? undefined, [selectedId]);
 
+  // Check if a node is in the path to the current JSON file
+  const isInJsonPath = useMemo(() => {
+    if (!currentJsonPath) return new Set<string>();
+    
+    const pathSet = new Set<string>();
+    
+    // Function to find the JSON node and mark all ancestors
+    const findAndMarkPath = (nodes: TestTreeNode[], targetPath: string, ancestors: string[] = []): boolean => {
+      for (const node of nodes) {
+        const currentAncestors = [...ancestors, node.path];
+        
+        // If this is the target JSON file, mark all ancestors
+        if (node.path === targetPath) {
+          ancestors.forEach(path => pathSet.add(path));
+          pathSet.add(node.path);
+          return true;
+        }
+        
+        // If this is a directory, search its children
+        if (node.isDir && node.children) {
+          if (findAndMarkPath(node.children, targetPath, currentAncestors)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+    
+    findAndMarkPath(data, currentJsonPath);
+    return pathSet;
+  }, [currentJsonPath, data]);
+
   const NodeRow = ({ node, style }: NodeRendererProps<TestTreeNode>) => {
     const isDir = node.data.isDir;
     const Icon = isDir ? (node.isOpen ? ChevronDown : ChevronRight) : File;
+    
+    // Check if this is the current JSON file being edited
+    const isCurrentJson = !isDir && 
+                          node.data.name.toLowerCase().endsWith('.json') && 
+                          currentJsonPath === node.data.path;
+    
+    // Check if this node is in the path to the current JSON file
+    const isInPath = isInJsonPath.has(node.data.path);
 
     const handleClick = () => {
       onSelect(node.data);
@@ -57,12 +101,21 @@ export function FileTreePane({
       }
     };
 
+    // Determine background color based on state
+    let bgClass = "hover:bg-muted";
+    if (node.isSelected) {
+      bgClass = "bg-primary/10 text-primary";
+    } else if (isInPath) {
+      // Yellow highlight for nodes in the path to current JSON file
+      bgClass = hasUnsavedChanges 
+        ? "bg-yellow-200/80 dark:bg-yellow-900/40 hover:bg-yellow-200 dark:hover:bg-yellow-900/50" 
+        : "bg-yellow-100/60 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/30";
+    }
+
     return (
       <div
         style={style}
-        className={`flex items-center gap-1 px-1.5 py-0.5 ${
-          node.isSelected ? "bg-primary/10 text-primary" : "hover:bg-muted"
-        }`}
+        className={`flex items-center gap-1 px-1.5 py-0.5 ${bgClass}`}
         onClick={handleClick}
         title={node.data.name}
       >

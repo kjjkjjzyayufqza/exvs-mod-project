@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { toast } from "sonner";
 import { Tree, type NodeApi } from "react-arborist";
-import { Plus } from "lucide-react";
-import { readTextFile } from "@tauri-apps/plugin-fs";
+import { Plus, Save } from "lucide-react";
+import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -156,6 +156,7 @@ export default function RepackFolderStructureView({
     recalculateIndices,
     completeProjectData,
     setCompleteProjectData,
+    exportProjectData,
   } = useRepackStore();
 
   const treeRef = useRef<any>(null);
@@ -163,6 +164,7 @@ export default function RepackFolderStructureView({
   const [treeHeight, setTreeHeight] = useState(480);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [loadedFilePath, setLoadedFilePath] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -254,6 +256,60 @@ export default function RepackFolderStructureView({
       onUnsavedChanges(hasUnsavedChanges);
     }
   }, [hasUnsavedChanges, onUnsavedChanges]);
+
+  const handleSave = useCallback(async () => {
+    if (!loadedFilePath) {
+      toast.error("No file loaded to save");
+      return;
+    }
+
+    if (!completeProjectData) {
+      toast.error("No data to save");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const exportData = exportProjectData();
+      
+      if (!exportData) {
+        toast.error("Failed to export project data");
+        return;
+      }
+
+      // Create JSON string with proper formatting
+      const jsonString = JSON.stringify(exportData, null, 2);
+
+      // Write to the loaded file path
+      await writeTextFile(loadedFilePath, jsonString);
+
+      // Reset unsaved changes state
+      setHasUnsavedChanges(false);
+      
+      const fileName = loadedFilePath.split(/[\\/]/).pop();
+      toast.success(`Successfully saved: ${fileName}`);
+    } catch (error) {
+      console.error("Error saving file:", error);
+      toast.error("Failed to save file: " + (error as Error).message);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [loadedFilePath, completeProjectData, exportProjectData]);
+
+  // Handle Ctrl+S / Cmd+S keyboard shortcut for saving
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (hasUnsavedChanges && loadedFilePath) {
+          handleSave();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [hasUnsavedChanges, loadedFilePath, handleSave]);
 
   const selection = useMemo(() => selectedItem?.id ?? undefined, [selectedItem?.id]);
 
@@ -399,15 +455,34 @@ export default function RepackFolderStructureView({
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <CardTitle>Project Structure</CardTitle>
-                  <CardDescription>Drag and drop items to reorganize the structure</CardDescription>
+                  <CardDescription>
+                    Drag and drop items to reorganize the structure
+                    {loadedFilePath && (
+                      <span className="ml-2 text-xs">
+                        • {loadedFilePath.split(/[\\/]/).pop()}
+                        {hasUnsavedChanges && <span className="text-yellow-600 dark:text-yellow-500"> (unsaved)</span>}
+                      </span>
+                    )}
+                  </CardDescription>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-1">
+                  <Button
+                    onClick={handleSave}
+                    disabled={!hasUnsavedChanges || !loadedFilePath || isSaving}
+                    variant={hasUnsavedChanges ? "default" : "outline"}
+                    size="sm"
+                    title="Save changes (Ctrl+S)"
+                  >
+                    <Save className="h-4 w-4" />
+                    {isSaving ? "Saving..." : "Save"}
+                  </Button>
                   <Button
                     onClick={() => selectedItem && addNewNode(selectedItem.id, "folder")}
                     disabled={!canAddChild}
+                    variant="outline"
                     size="sm"
                   >
-                    <Plus className="h-4 w-4 mr-2" />
+                    <Plus className="h-4 w-4" />
                     Add Folder
                   </Button>
                   <Button
@@ -416,7 +491,7 @@ export default function RepackFolderStructureView({
                     variant="outline"
                     size="sm"
                   >
-                    <Plus className="h-4 w-4 mr-2" />
+                    <Plus className="h-4 w-4" />
                     Add File
                   </Button>
                 </div>
