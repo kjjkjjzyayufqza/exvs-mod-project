@@ -4,7 +4,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
-import EmptyStage from "./components/EmptyStage";
+import MainView from "./components/MainView";
 import InfoPanel from "./components/InfoPanel";
 import { FolderChangePayload, TestTreeNode } from "./types";
 import { FileTreePane } from "./components/FileTreePane";
@@ -212,7 +212,7 @@ const TestEditorPage = () => {
 
         <ResizablePanel defaultSize={"50%"} minSize={"35%"}>
           <div className="h-full p-2">
-            <EmptyStage />
+            <MainView />
           </div>
         </ResizablePanel>
 
