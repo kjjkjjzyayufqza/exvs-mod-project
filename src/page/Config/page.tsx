@@ -1,6 +1,5 @@
 import { open } from '@tauri-apps/plugin-dialog';
 import { useEffect } from "react";
-import Container from '../../layout/Container';
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -70,7 +69,7 @@ export default function ConfigPage() {
   }, [store]);
 
   return (
-    <Container>
+    <div>
       <div className="flex flex-col space-y-6">
         <h1 className="text-2xl font-bold">Configuration</h1>
         
@@ -128,6 +127,6 @@ export default function ConfigPage() {
           </CardContent>
         </Card>
       </div>
-    </Container>
+    </div>
   );
 }

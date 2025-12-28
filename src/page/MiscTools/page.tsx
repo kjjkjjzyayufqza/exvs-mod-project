@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import Container from "../../layout/Container"
 import { Separator } from "@/components/ui/separator"
 import { Wrench, FileText, Calculator, Palette, File, FileJson, ImageIcon, FileEdit } from "lucide-react"
 import { FBXItemRename } from "./components/fbx-item-rename/FBXItemRename"
@@ -12,7 +11,7 @@ import { ImageResizeTool } from "./components/image-resize/ImageResizeTool"
 
 export default function MiscToolsPage() {
   return (
-    <Container>
+    <div>
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold">Misc Tools</h1>
@@ -193,6 +192,6 @@ export default function MiscToolsPage() {
           </Card>
         </div>
       </div>
-    </Container>
+    </div>
   );
 }

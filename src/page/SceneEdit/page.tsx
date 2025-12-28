@@ -308,7 +308,7 @@ export default function SceneEdit() {
     }, [selectedModelId]);
 
     return (
-        <div className="w-full h-[calc(100vh-28px)] bg-gray-800 relative">
+        <div>
             <ControlPanel
                 models={models}
                 selectedModelId={selectedModelId}

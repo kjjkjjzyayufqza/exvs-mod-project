@@ -907,7 +907,7 @@ export default function RepackPage() {
   };
 
   return (
-    <div className="h-full flex flex-col p-6 bg-gray-50/30">
+    <div>
       <div>
         <h2 className="text-2xl font-bold tracking-tight mb-4">Repack Manager</h2>
         <p className="text-gray-600 mb-4">

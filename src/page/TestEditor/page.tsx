@@ -163,7 +163,7 @@ const TestEditorPage = () => {
   const selectedNode = useMemo(() => findNode(treeData, selectedId), [treeData, selectedId]);
 
   return (
-    <div className="h-full w-full p-4">
+    <div>
       <ResizablePanelGroup
         orientation="horizontal"
         className="h-full rounded-lg border bg-background"

@@ -15,7 +15,7 @@ export function TopNavBar() {
 
   return (
     <>
-      <div className="fixed top-0 left-0 right-0 h-8 bg-gray-100 border-b border-border flex items-center px-3 gap-1.5 z-50">
+      <div className="sticky top-0 w-full h-8 bg-gray-100 border-b border-border flex items-center px-3 gap-1.5 z-50 flex-shrink-0">
         <Button
           variant="ghost"
           size="sm"

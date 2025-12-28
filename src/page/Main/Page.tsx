@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { Resource, invoke } from '@tauri-apps/api/core';
-import Container from "../../layout/Container";
 import { useConfigStore } from "../../store/configStore";
 import JsonView from "@uiw/react-json-view";
 
@@ -53,7 +52,7 @@ export default function MainPage() {
   }, []);
 
   return (
-    <Container>
+    <div>
       Hello World
       <div>
         <JsonView
@@ -66,6 +65,6 @@ export default function MainPage() {
       </Button>
       <Button onClick={get}>Read file test</Button>
       <Button onClick={invokeTest}>Invoke Test</Button>
-    </Container>
+    </div>
   );
 }

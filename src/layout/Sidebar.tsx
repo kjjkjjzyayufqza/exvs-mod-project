@@ -7,11 +7,11 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
+      <SidebarInset className="flex flex-col h-screen overflow-hidden">
         <TopNavBar />
-        <main className="flex flex-col w-full h-full overflow-auto pt-8 p-4">
+        <div className="p-6">
           {children}
-        </main>
+        </div>
       </SidebarInset>
       <Toaster />
     </SidebarProvider>

@@ -11,7 +11,6 @@ import {
 import {
   writeFile,
 } from "@tauri-apps/plugin-fs";
-import Container from '../../layout/Container';
 import { Button } from "@/components/ui/button"
 import {
   Form,
@@ -230,7 +229,7 @@ export default function ExtractFilePage() {
   }, []);
 
   return (
-    <Container>
+    <div>
       <h1>Extract .FHM2D</h1>
       <div className="grid grid-cols-2">
         <div>
@@ -345,6 +344,6 @@ export default function ExtractFilePage() {
           />
         </div>
       </div>
-    </Container>
+    </div>
   );
 }
