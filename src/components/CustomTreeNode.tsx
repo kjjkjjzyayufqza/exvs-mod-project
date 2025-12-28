@@ -53,9 +53,12 @@ export function CustomTreeNode({
   return (
     <div
       ref={dragHandle}
-      style={style}
-      className={`flex items-center gap-1 px-2 py-1 hover:bg-gray-100 cursor-pointer rounded ${node.isSelected ? 'bg-blue-100 text-blue-900' : ''
-        } ${node.isFocused ? 'ring-2 ring-blue-500' : ''}`}
+      style={{
+        ...style,
+        outline: node.isSelected || node.isFocused ? '2px solid rgb(59 130 246)' : 'none',
+        outlineOffset: '-2px',
+      }}
+      className={`flex items-center gap-1 px-2 py-1 hover:bg-gray-100 cursor-pointer rounded ${node.isSelected ? 'bg-blue-100 text-blue-900' : ''}`}
       onClick={handleNodeClick}
     >
       {/* Toggle arrow for folders */}

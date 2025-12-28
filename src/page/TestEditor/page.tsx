@@ -4,6 +4,16 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import MainView from "./components/MainView";
 import InfoPanel from "./components/InfoPanel";
 import { FolderChangePayload, TestTreeNode } from "./types";
@@ -148,6 +158,10 @@ const TestEditorPage = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentDir, setCurrentDir] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedJsonPath, setSelectedJsonPath] = useState<string | null>(null);
+  const [pendingJsonPath, setPendingJsonPath] = useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
 
   useEffect(() => {
     let unlisten: UnlistenFn | undefined;
@@ -187,44 +201,102 @@ const TestEditorPage = () => {
   const filteredData = useMemo(() => filterTree(treeData, searchTerm), [treeData, searchTerm]);
   const selectedNode = useMemo(() => findNode(treeData, selectedId), [treeData, selectedId]);
 
+  const handleFileSelect = useCallback((node: TestTreeNode | null) => {
+    if (!node || node.isDir) {
+      setSelectedId(node?.id ?? null);
+      return;
+    }
+
+    // Check if it's a JSON file
+    if (!node.name.toLowerCase().endsWith('.json')) {
+      setSelectedId(node.id);
+      return;
+    }
+
+    // If there are unsaved changes, show dialog
+    if (hasUnsavedChanges && selectedJsonPath !== node.path) {
+      setPendingJsonPath(node.path);
+      setShowUnsavedDialog(true);
+      return;
+    }
+
+    // Load the JSON file
+    setSelectedJsonPath(node.path);
+    setSelectedId(node.id);
+  }, [hasUnsavedChanges, selectedJsonPath]);
+
+  const handleDiscardChanges = useCallback(() => {
+    if (pendingJsonPath) {
+      setSelectedJsonPath(pendingJsonPath);
+      setPendingJsonPath(null);
+      setHasUnsavedChanges(false);
+    }
+    setShowUnsavedDialog(false);
+  }, [pendingJsonPath]);
+
+  const handleCancelSelection = useCallback(() => {
+    setPendingJsonPath(null);
+    setShowUnsavedDialog(false);
+  }, []);
+
   return (
-    <div className="h-full">
-      <ResizablePanelGroup
-        orientation="horizontal"
-        className="h-full rounded-lg border bg-background"
-      >
-        <ResizablePanel defaultSize={"25%"} minSize={"20%"}>
-          <div className="h-full p-2">
-            <FileTreePane
-              data={filteredData}
-              onSelect={(node) => setSelectedId(node?.id ?? null)}
-              selectedId={selectedId}
-              searchTerm={searchTerm}
-              onSearchChange={setSearchTerm}
-              onPickFolder={handlePickFolder}
-              isLoading={isLoading}
-              currentDir={currentDir}
-            />
-          </div>
-        </ResizablePanel>
+    <>
+      <div className="h-full text-xs **:text-xs">
+        <ResizablePanelGroup
+          orientation="horizontal"
+          className="h-full rounded-lg border bg-background"
+        >
+          <ResizablePanel defaultSize={"15%"} minSize={"10%"}>
+            <div className="h-full p-2">
+              <FileTreePane
+                data={filteredData}
+                onSelect={handleFileSelect}
+                selectedId={selectedId}
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
+                onPickFolder={handlePickFolder}
+                isLoading={isLoading}
+                currentDir={currentDir}
+              />
+            </div>
+          </ResizablePanel>
 
-        <ResizableHandle withHandle />
+          <ResizableHandle withHandle />
 
-        <ResizablePanel defaultSize={"50%"} minSize={"35%"}>
-          <div className="h-full p-2">
-            <MainView />
-          </div>
-        </ResizablePanel>
+          <ResizablePanel defaultSize={"45%"} minSize={"35%"}>
+            <div className="h-full p-2 bg-gray-200">
+              <MainView 
+                jsonFilePath={selectedJsonPath}
+                onUnsavedChanges={setHasUnsavedChanges}
+              />
+            </div>
+          </ResizablePanel>
 
-        <ResizableHandle withHandle />
+          <ResizableHandle withHandle />
 
-        <ResizablePanel defaultSize={"25%"} minSize={"20%"}>
-          <div className="h-full p-2">
-            <InfoPanel selected={selectedNode} />
-          </div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </div>
+          <ResizablePanel defaultSize={"15%"} minSize={"10%"}>
+            <div className="h-full p-2">
+              <InfoPanel selected={selectedNode} />
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
+
+      <AlertDialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes in the current file. Do you want to discard them and load the new file?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelSelection}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDiscardChanges}>Discard Changes</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };
 

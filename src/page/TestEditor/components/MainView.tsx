@@ -1,12 +1,18 @@
 import { useMemo, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import RepackFolderStructureView from "./RepackFolderStructureView";
 
 type StageTab = {
   name: string;
   value: string;
   content?: React.ReactNode;
-  render?: () => React.ReactNode;
+  render?: (props: MainViewProps) => React.ReactNode;
 };
+
+interface MainViewProps {
+  jsonFilePath?: string | null;
+  onUnsavedChanges?: (hasChanges: boolean) => void;
+}
 
 const tabs: StageTab[] = [
   {
@@ -27,9 +33,19 @@ const tabs: StageTab[] = [
       </div>
     ),
   },
+  {
+    name: "Folder structure",
+    value: "folder-structure",
+    render: (props: MainViewProps) => (
+      <RepackFolderStructureView 
+        jsonFilePath={props.jsonFilePath}
+        onUnsavedChanges={props.onUnsavedChanges}
+      />
+    ),
+  },
 ];
 
-const MainView = () => {
+const MainView = ({ jsonFilePath, onUnsavedChanges }: MainViewProps) => {
   const [activeTab, setActiveTab] = useState<string>(tabs[0]?.value ?? "3d");
 
   return (
@@ -43,10 +59,16 @@ const MainView = () => {
           ))}
         </TabsList>
         {tabs.map((tab) => (
-          <TabsContent key={tab.value} value={tab.value} className="flex-1 w-full h-full">
-            <div className="flex h-full items-center justify-center p-4 text-sm text-muted-foreground">
-              {tab.render ? tab.render() : tab.content}
-            </div>
+          <TabsContent key={tab.value} value={tab.value} className="flex-1 h-full w-full">
+            {tab.value === "folder-structure" ? (
+              <div className="h-full w-full p-2">
+                {tab.render ? tab.render({ jsonFilePath, onUnsavedChanges }) : tab.content}
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-center p-4 text-sm text-muted-foreground">
+                {tab.render ? tab.render({ jsonFilePath, onUnsavedChanges }) : tab.content}
+              </div>
+            )}
           </TabsContent>
         ))}
       </Tabs>
