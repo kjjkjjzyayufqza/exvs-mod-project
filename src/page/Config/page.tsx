@@ -1,4 +1,3 @@
-import { open } from '@tauri-apps/plugin-dialog';
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,7 +23,7 @@ const formSchema = z.object({
 })
 
 export default function ConfigPage() {
-  const { store } = useConfigStore();
+  const { store, setSetting } = useConfigStore();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -33,15 +32,6 @@ export default function ConfigPage() {
       extractOutputPath: "",
     },
   })
-
-  const openSelectFolderDialog = async (value: "obDplCachePath" | "extractOutputPath") => {
-    const selected = await open({ multiple: false, directory: true });
-    if (selected) {
-      store?.set(value, selected as any);
-      form.setValue(value, selected as any);
-      toast(`${value} path updated`);
-    }
-  }
 
   const initFormData = async () => {
     if (store) {
@@ -54,14 +44,14 @@ export default function ConfigPage() {
   }
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
-    if (store) {
-      await store.set("obDplCachePath", data.obDplCachePath);
-      await store.set("extractOutputPath", data.extractOutputPath);
-      await store.save();
-      toast("Configuration saved successfully");
-    } else {
+    if (!store) {
       toast("Store not initialized, please try again");
+      return;
     }
+
+    await setSetting("obDplCachePath", data.obDplCachePath);
+    await setSetting("extractOutputPath", data.extractOutputPath);
+    toast("Configuration saved successfully");
   }
 
   useEffect(() => {
@@ -91,7 +81,12 @@ export default function ConfigPage() {
                         <FilePathInput
                           placeholder="Select OB dplcache_release folder..."
                           {...field}
-                          onClick={() => openSelectFolderDialog("obDplCachePath")} />
+                          storeKey="obDplCachePath"
+                          picker={{
+                            kind: "folder",
+                            multiple: false,
+                          }}
+                        />
                       </FormControl>
                       <FormDescription>
                         Path to OB dplcache_release directory
@@ -111,7 +106,12 @@ export default function ConfigPage() {
                         <FilePathInput
                           placeholder="Select extract output folder..."
                           {...field}
-                          onClick={() => openSelectFolderDialog("extractOutputPath")} />
+                          storeKey="extractOutputPath"
+                          picker={{
+                            kind: "folder",
+                            multiple: false,
+                          }}
+                        />
                       </FormControl>
                       <FormDescription>
                         Default directory for extracted files

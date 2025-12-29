@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { Label } from "@/components/ui/label";
 import { X } from "lucide-react";
-import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile, readDir } from "@tauri-apps/plugin-fs";
 import { dirname } from "@tauri-apps/api/path";
 import { toast } from "sonner";
@@ -19,27 +18,10 @@ interface RepackModalProps {
 }
 
 export default function RepackModal({ isOpen, onClose }: RepackModalProps) {
-  const { repackInputPath, setRepackInputPath } = useConfigStore();
+  const { repackInputPath } = useConfigStore();
   const { exportProjectData } = useRepackStore();
   const [isRepacking, setIsRepacking] = useState(false);
   const nodeRef = useRef(null);
-
-  // Handle folder selection
-  const handleSelectFolder = async () => {
-    try {
-      const selected = await open({
-        multiple: false,
-        directory: true,
-      });
-
-      if (selected) {
-        await setRepackInputPath(selected as string);
-      }
-    } catch (error) {
-      console.error("Error selecting folder:", error);
-      toast.error("Failed to select folder: " + (error as Error).message);
-    }
-  };
 
   // Handle import operation
   const handleRepack = async () => {
@@ -246,7 +228,11 @@ export default function RepackModal({ isOpen, onClose }: RepackModalProps) {
                   placeholder="Click to select input folder..."
                   value={repackInputPath}
                   readOnly
-                  onClick={handleSelectFolder}
+                  storeKey="repackInputPath"
+                  picker={{
+                    kind: "folder",
+                    multiple: false,
+                  }}
                   className="cursor-pointer"
                 />
                 <p className="text-xs text-muted-foreground">

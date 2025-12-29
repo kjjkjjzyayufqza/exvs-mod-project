@@ -32,6 +32,27 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     await _store.save();
   },
 
+  getSetting: async <T = unknown,>(key: string): Promise<T | undefined> => {
+    const { store } = get();
+    if (!store) return undefined;
+    const value = await store.get(key);
+    return value as T | undefined;
+  },
+
+  setSetting: async (key: string, value: unknown): Promise<void> => {
+    const { store } = get();
+    if (!store) return;
+
+    await store.set(key, value);
+    await store.save();
+
+    // Keep known fields in sync for components that rely on Zustand state.
+    if (key === "obDplCachePath") set({ obDplCachePath: String(value ?? "") });
+    if (key === "extractOutputPath") set({ extractOutputPath: String(value ?? "") });
+    if (key === "imgToNutexbOutputPath") set({ imgToNutexbOutputPath: String(value ?? "") });
+    if (key === "repackInputPath") set({ repackInputPath: String(value ?? "") });
+  },
+
   setRepackInputPath: async (path: string) => {
     const { store } = get();
     if (store) {

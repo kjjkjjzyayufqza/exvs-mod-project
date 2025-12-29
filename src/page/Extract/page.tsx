@@ -1,5 +1,4 @@
-import { open } from '@tauri-apps/plugin-dialog';
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import JsonView from '@uiw/react-json-view';
 import { FileWithPath } from "react-dropzone";
 import {
@@ -12,6 +11,7 @@ import {
   writeFile,
 } from "@tauri-apps/plugin-fs";
 import { Button } from "@/components/ui/button"
+import { Progress } from "@/components/ui/progress"
 import {
   Form,
   FormControl,
@@ -33,6 +33,7 @@ import { Card, CardDescription, CardHeader } from '../../components/ui/card';
 import { Checkbox } from '../../components/ui/checkbox';
 import { ToggleGroup, ToggleGroupItem } from '../../components/ui/toggle-group';
 import { vscodeTheme } from '@uiw/react-json-view/vscode';
+import { Loader2 } from "lucide-react";
 
 const formSchema = z.object({
   inputFilePath: z.string(),
@@ -53,19 +54,31 @@ export default function ExtractFilePage() {
 
   const [fileData, setFileData] = useState<FileWithPath>();
   const [fhm2dData, setfhm2dData] = useState<PS4FhmData | Fhm2dData>(null!);
-  const [progressbarValue, setProgressbarValue] = useState<{
-    value: number;
-    min: number;
-    max: number;
-  }>({
-    value: 0,
-    min: 0,
-    max: 100,
-  });
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractProgress, setExtractProgress] = useState(0);
+  const [, startTransition] = useTransition();
   const [previewData, setPreviewData] = useState<Object>({});
   const [isExportMeta, setIsExportMeta] = useState(false);
   const [extractType, setExtractType] = useState<ExtractType>(ExtractType.SingleFolder);
   const [createSubfolder, setCreateSubfolder] = useState(true);
+
+  useEffect(() => {
+    if (!isExtracting) return;
+
+    const timer = window.setInterval(() => {
+      startTransition(() => {
+        setExtractProgress((current) => {
+          if (current >= 90) return current;
+          const step = Math.floor(Math.random() * 4) + 1; // 1..4
+          return Math.min(90, current + step);
+        });
+      });
+    }, 120);
+
+    return () => window.clearInterval(timer);
+  }, [isExtracting, startTransition]);
+
+  const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
   const createFileInfo = async (fileBuffer: Buffer) => {
     const Magic = fileBuffer.slice(0, 0x4).toString("hex");
@@ -135,63 +148,6 @@ export default function ExtractFilePage() {
     createFileInfo(Buffer.from(fileBuffer));
   }
 
-  const openSelectFileDialog = async (value: any) => {
-    // Get the last used input file path as default
-    const lastInputPath = form.getValues("inputFilePath");
-    const defaultPath = lastInputPath ? lastInputPath.split(/[/\\]/).slice(0, -1).join('\\') : undefined;
-    
-    const selected = await open({ 
-      multiple: false, 
-      directory: false,
-      defaultPath: defaultPath
-    });
-    if (selected) {
-      store?.set(value, selected as any);
-      form.setValue(value, selected as any);
-      tryReadFHM2DFile(selected as any);
-      
-      // Update output path if createSubfolder is enabled
-      if (createSubfolder) {
-        const currentOutputPath = form.getValues("outputFolderPath");
-        if (currentOutputPath) {
-          const fileName = (selected as string).split(/[/\\]/).pop()?.split('.').slice(0, -1).join('.');
-          if (fileName) {
-            const newPath = `${currentOutputPath}/${fileName}`;
-            form.setValue("outputFolderPath", newPath);
-          }
-        }
-      }
-    }
-  }
-
-  const openSelectFolderDialog = async (value: any) => {
-    // Get the last used output folder path as default, independent from input file path
-    const lastOutputPath = form.getValues("outputFolderPath");
-    let defaultPath = lastOutputPath;
-    
-    // If createSubfolder is enabled and path includes subfolder, get parent directory
-    if (createSubfolder && lastOutputPath) {
-      const inputPath = form.getValues("inputFilePath");
-      if (inputPath) {
-        const fileName = inputPath.split(/[/\\]/).pop()?.split('.').slice(0, -1).join('.');
-        if (fileName && lastOutputPath.endsWith(fileName)) {
-          defaultPath = lastOutputPath.split(/[/\\]/).slice(0, -1).join('\\');
-        }
-      }
-    }
-    
-    const selected = await open({ 
-      multiple: false, 
-      directory: true,
-      defaultPath: defaultPath || undefined
-    });
-    console.log(selected);
-    if (selected) {
-      store?.set(value, selected as any);
-      form.setValue(value, selected as any);
-    }
-  }
-
   const initFromData = async () => {
     const inputFilePath: any = await store?.get("inputFilePath")
     if (inputFilePath) {
@@ -205,6 +161,8 @@ export default function ExtractFilePage() {
   }
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
+    if (isExtracting) return;
+
     // update output path if createSubfolder
     if(createSubfolder) {
       const inputPath = form.getValues("inputFilePath");
@@ -215,12 +173,22 @@ export default function ExtractFilePage() {
         }
       }
     }
+
+    setIsExtracting(true);
+    startTransition(() => setExtractProgress(0));
     try {
       await ExtractFHMData(fhm2dData, data.outputFolderPath, extractType);
       toast.success(`Extract completed: ${data.outputFolderPath}`);
+      startTransition(() => setExtractProgress(100));
+      await sleep(600);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       toast.error(`Extract failed: ${message}`);
+      startTransition(() => setExtractProgress(100));
+      await sleep(600);
+    } finally {
+      setIsExtracting(false);
+      startTransition(() => setExtractProgress(0));
     }
   }
 
@@ -245,9 +213,16 @@ export default function ExtractFilePage() {
                       <FilePathInput
                         placeholder="..."
                         {...field}
-                        onClick={() => {
-                          openSelectFileDialog("inputFilePath")
-                        }} />
+                        storeKey="inputFilePath"
+                        picker={{
+                          kind: "file",
+                          multiple: false,
+                        }}
+                        onPickedValue={(picked) => {
+                          if (Array.isArray(picked)) return;
+                          tryReadFHM2DFile(picked);
+                        }}
+                      />
                     </FormControl>
                     <FormDescription>
                       Drop or select the fhm2d file
@@ -266,9 +241,12 @@ export default function ExtractFilePage() {
                       <FilePathInput
                         placeholder="..."
                         {...field}
-                        onClick={() => {
-                          openSelectFolderDialog("outputFolderPath")
-                        }} />
+                        storeKey="outputFolderPath"
+                        picker={{
+                          kind: "folder",
+                          multiple: false,
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -331,7 +309,17 @@ export default function ExtractFilePage() {
                   </div>
                 </div>
               </div>
-              <Button type="submit">Extract</Button>
+              <Button type="submit" disabled={isExtracting}>
+                {isExtracting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Extracting...
+                  </>
+                ) : (
+                  "Extract"
+                )}
+              </Button>
+              <Progress value={extractProgress} className="w-full" />
             </form>
           </Form>
         </div>

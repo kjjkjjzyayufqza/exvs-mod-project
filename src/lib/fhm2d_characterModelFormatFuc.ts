@@ -722,13 +722,19 @@ export async function applyNumdlbBaseNameToStructureObject(
     }
   }
 
-  // Step 5: Classify and rename files in folder "0\\1\\0" by magic.
+  // Step 5: Classify and rename files under folder "0\\1\\*" by magic.
+  // This must cover multiple folders such as:
+  // - 0\\1\\0
+  // - 0\\1\\1
+  // - ...
+  // - 0\\1\\1000
+  // Rule:
   // - If magic is "RGDL", use ".rgdprm"
   // - Otherwise, use ".hkt"
-  const folder010 = findFolderNodeByPath(parseRoot, ["0", "1", "0"]);
-  if (folder010) {
+  const folder01 = findFolderNodeByPath(parseRoot, ["0", "1"]);
+  if (folder01) {
     const indices: number[] = [];
-    collectItemFileIndices(folder010, indices);
+    collectItemFileIndices(folder01, indices);
 
     const binItems = indices
       .map((idx) => fileIndexToSubFileData.get(idx))
@@ -758,7 +764,19 @@ export async function applyNumdlbBaseNameToStructureObject(
   }
 
   // Step 6: Rename nutexb files based on the internal name (footer "46XT" at fileSize - 0x70).
+  // Note: internal names can be duplicated. We must de-duplicate file names to avoid collisions:
+  // - <name>.nutexb
+  // - <name>_1.nutexb
+  // - <name>_2.nutexb
   const nutexbItems = structure.SubFileData.filter((e) => (e.fileType || "").toLowerCase() === ".nutexb");
+
+  // Track used fileUrl keys to ensure renaming does not introduce collisions.
+  // This is stricter than per-folder uniqueness and matches the final validation behavior.
+  const usedFileUrlKeys = new Set<string>();
+  for (const item of structure.SubFileData) {
+    const key = normalizeWindowsLikePathForCompare(item.fileUrl || "");
+    if (key) usedFileUrlKeys.add(key);
+  }
   for (const e of nutexbItems) {
     const sep = getPathSeparatorFromFileUrl(e.fileUrl);
     const segments = splitPathSegments(e.fileUrl);
@@ -823,8 +841,31 @@ export async function applyNumdlbBaseNameToStructureObject(
     }
 
     const prefixSegments = segments.slice(0, -1);
-    e.fileBaseName = textureName;
-    e.fileUrl = buildFileUrl(prefixSegments, `${textureName}.nutexb`, sep);
+
+    // Remove current key before assigning a new url, so the item does not conflict with itself.
+    const oldKey = normalizeWindowsLikePathForCompare(e.fileUrl || "");
+    if (oldKey) usedFileUrlKeys.delete(oldKey);
+
+    const ext = ".nutexb";
+    const baseName = textureName;
+    let suffix = 0;
+    while (suffix < 10000) {
+      const name = suffix === 0 ? baseName : `${baseName}_${suffix}`;
+      const candidateUrl = buildFileUrl(prefixSegments, `${name}${ext}`, sep);
+      const candidateKey = normalizeWindowsLikePathForCompare(candidateUrl);
+      if (!candidateKey || usedFileUrlKeys.has(candidateKey)) {
+        suffix++;
+        continue;
+      }
+      usedFileUrlKeys.add(candidateKey);
+      e.fileBaseName = name;
+      e.fileUrl = candidateUrl;
+      break;
+    }
+
+    if (suffix >= 10000) {
+      throw new Error(`Failed to assign a unique nutexb name: baseName=${baseName} fileIndex=${e.fileIndex}`);
+    }
   }
 
   // Final validation: fail fast on name collisions.

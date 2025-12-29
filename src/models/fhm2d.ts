@@ -541,7 +541,28 @@ export async function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: stri
         };
       }
 
-      // Step 3: Write files using the new naming from finalStructure
+      // Step 3: Sync fileBaseName from SubFileData to SubFileStructure Name field
+      if (finalStructure.SubFileData && finalStructure.SubFileStructure) {
+        // Create a map of fileIndex to fileBaseName
+        const fileIndexToBaseName = new Map<number, string>();
+        for (const subFileItem of finalStructure.SubFileData) {
+          if (subFileItem.fileBaseName) {
+            fileIndexToBaseName.set(subFileItem.fileIndex, subFileItem.fileBaseName);
+          }
+        }
+
+        // Update SubFileStructure Name field
+        for (const structureItem of finalStructure.SubFileStructure) {
+          if (structureItem.type === 'Item' && structureItem.fileIndex !== undefined) {
+            const baseName = fileIndexToBaseName.get(structureItem.fileIndex);
+            if (baseName) {
+              structureItem.Name = baseName;
+            }
+          }
+        }
+      }
+
+      // Step 4: Write files using the new naming from finalStructure
       for (const fileData of decompressedFiles) {
         const structureItem = finalStructure.SubFileData.find((item: any) => item.index === fileData.index);
         if (structureItem && structureItem.fileUrl) {
@@ -560,7 +581,7 @@ export async function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: stri
         }
       }
 
-      // Step 4: Write structure.json
+      // Step 5: Write structure.json
       await writeFile(outDir + "_structure.json", Buffer.from(JSON.stringify(finalStructure, null, 2)));
       console.log("write file", outDir + "_structure.json");
     } else if (type === ExtractType.FolderWithStructure) {
