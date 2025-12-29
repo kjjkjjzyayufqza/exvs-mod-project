@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import {
@@ -18,9 +17,11 @@ import MainView from "./components/MainView";
 import InfoPanel from "./components/InfoPanel";
 import { FolderChangePayload, TestTreeNode } from "./types";
 import { FileTreePane } from "./components/FileTreePane";
+import { useConfigStore } from "@/store/configStore";
 
 const WATCH_EVENT = "test-editor:folder-change";
 const WATCH_COMMAND = "watch_folder";
+const TEST_EDITOR_FOLDER_STORE_KEY = "testEditorFolder";
 
 type RawTreeNode = Partial<TestTreeNode> & {
   id: string;
@@ -153,6 +154,7 @@ function filterTree(nodes: TestTreeNode[], term: string): TestTreeNode[] {
 }
 
 const TestEditorPage = () => {
+  const getSetting = useConfigStore((s) => s.getSetting);
   const [treeData, setTreeData] = useState<TestTreeNode[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -179,13 +181,9 @@ const TestEditorPage = () => {
     };
   }, []);
 
-  const handlePickFolder = useCallback(async () => {
+  const loadFolder = useCallback(async (directoryPath: string) => {
     setIsLoading(true);
     try {
-      const selected = await open({ directory: true, multiple: false });
-      if (!selected) return;
-
-      const directoryPath = Array.isArray(selected) ? selected[0] : selected;
       setCurrentDir(directoryPath);
       const initial = await invoke<RawTreeNode[]>(WATCH_COMMAND, { path: directoryPath });
       setTreeData(normalizeTree(initial ?? []));
@@ -197,6 +195,16 @@ const TestEditorPage = () => {
       setIsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    const hydrate = async () => {
+      const saved = await getSetting<string>(TEST_EDITOR_FOLDER_STORE_KEY);
+      if (!saved) return;
+      await loadFolder(saved);
+    };
+
+    hydrate();
+  }, [getSetting, loadFolder]);
 
   const filteredData = useMemo(() => filterTree(treeData, searchTerm), [treeData, searchTerm]);
   const selectedNode = useMemo(() => findNode(treeData, selectedId), [treeData, selectedId]);
@@ -273,7 +281,8 @@ const TestEditorPage = () => {
               selectedId={selectedId}
               searchTerm={searchTerm}
               onSearchChange={setSearchTerm}
-              onPickFolder={handlePickFolder}
+              onPickFolder={loadFolder}
+              folderStoreKey={TEST_EDITOR_FOLDER_STORE_KEY}
               isLoading={isLoading}
               currentDir={currentDir}
               currentJsonPath={selectedJsonPath}

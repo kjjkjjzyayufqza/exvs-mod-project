@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Tree, type NodeApi, type NodeRendererProps } from "react-arborist";
 import { Search, FolderOpen, Loader2, ChevronRight, ChevronDown, Folder, File } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { FilePathInput } from "@/components/ui/filePathInput";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { TestTreeNode } from "../types";
 
@@ -12,7 +12,8 @@ type FileTreePaneProps = {
   selectedId?: string | null;
   searchTerm: string;
   onSearchChange: (value: string) => void;
-  onPickFolder: () => void;
+  onPickFolder: (folderPath: string) => void;
+  folderStoreKey: string;
   isLoading?: boolean;
   currentDir?: string;
   currentJsonPath?: string | null;
@@ -26,6 +27,7 @@ export function FileTreePane({
   searchTerm,
   onSearchChange,
   onPickFolder,
+  folderStoreKey,
   isLoading = false,
   currentDir,
   currentJsonPath,
@@ -53,21 +55,21 @@ export function FileTreePane({
   // Check if a node is in the path to the current JSON file
   const isInJsonPath = useMemo(() => {
     if (!currentJsonPath) return new Set<string>();
-    
+
     const pathSet = new Set<string>();
-    
+
     // Function to find the JSON node and mark all ancestors
     const findAndMarkPath = (nodes: TestTreeNode[], targetPath: string, ancestors: string[] = []): boolean => {
       for (const node of nodes) {
         const currentAncestors = [...ancestors, node.path];
-        
+
         // If this is the target JSON file, mark all ancestors
         if (node.path === targetPath) {
           ancestors.forEach(path => pathSet.add(path));
           pathSet.add(node.path);
           return true;
         }
-        
+
         // If this is a directory, search its children
         if (node.isDir && node.children) {
           if (findAndMarkPath(node.children, targetPath, currentAncestors)) {
@@ -77,7 +79,7 @@ export function FileTreePane({
       }
       return false;
     };
-    
+
     findAndMarkPath(data, currentJsonPath);
     return pathSet;
   }, [currentJsonPath, data]);
@@ -85,12 +87,12 @@ export function FileTreePane({
   const NodeRow = ({ node, style }: NodeRendererProps<TestTreeNode>) => {
     const isDir = node.data.isDir;
     const Icon = isDir ? (node.isOpen ? ChevronDown : ChevronRight) : File;
-    
+
     // Check if this is the current JSON file being edited
-    const isCurrentJson = !isDir && 
-                          node.data.name.toLowerCase().endsWith('.json') && 
-                          currentJsonPath === node.data.path;
-    
+    const isCurrentJson = !isDir &&
+      node.data.name.toLowerCase().endsWith('.json') &&
+      currentJsonPath === node.data.path;
+
     // Check if this node is in the path to the current JSON file
     const isInPath = isInJsonPath.has(node.data.path);
 
@@ -107,8 +109,8 @@ export function FileTreePane({
       bgClass = "bg-primary/10 text-primary";
     } else if (isInPath) {
       // Yellow highlight for nodes in the path to current JSON file
-      bgClass = hasUnsavedChanges 
-        ? "bg-yellow-200/80 dark:bg-yellow-900/40 hover:bg-yellow-200 dark:hover:bg-yellow-900/50" 
+      bgClass = hasUnsavedChanges
+        ? "bg-yellow-200/80 dark:bg-yellow-900/40 hover:bg-yellow-200 dark:hover:bg-yellow-900/50"
         : "bg-yellow-100/60 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/30";
     }
 
@@ -128,12 +130,21 @@ export function FileTreePane({
   return (
     <Card className="flex h-full flex-col">
       <CardHeader className="space-y-0 p-3 pb-1">
-        <div className="flex items-center justify-between gap-1.5">
-          <CardTitle className="text-sm">File list</CardTitle>
-          <Button onClick={onPickFolder} disabled={isLoading} size="sm" className="h-7 px-2">
-            {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <FolderOpen className="h-3 w-3" />}
-            <span className="ml-1.5">Choose folder</span>
-          </Button>
+        <div className="flex w-full">
+          <div className="flex items-center w-full">
+            {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderOpen className="h-3.5 w-3.5" />}
+            <FilePathInput
+              storeKey={folderStoreKey}
+              picker={{ kind: "folder", multiple: false }}
+              onPickedValue={(picked) => {
+                if (Array.isArray(picked)) return;
+                onPickFolder(picked);
+              }}
+              disabled={isLoading}
+              placeholder="Choose folder..."
+              className="h-7 w-full text-xs"
+            />
+          </div>
         </div>
         <div className="relative">
           <Search className="absolute left-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
