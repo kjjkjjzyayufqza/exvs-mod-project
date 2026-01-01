@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Tree, type NodeApi, type NodeRendererProps } from "react-arborist";
 import { Search, FolderOpen, Loader2, ChevronRight, ChevronDown, Folder, File } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ type FileTreePaneProps = {
   currentDir?: string;
   currentJsonPath?: string | null;
   hasUnsavedChanges?: boolean;
+  dirtyTopLevelFolderNames?: string[];
 };
 
 export function FileTreePane({
@@ -32,6 +33,7 @@ export function FileTreePane({
   currentDir,
   currentJsonPath,
   hasUnsavedChanges = false,
+  dirtyTopLevelFolderNames = [],
 }: FileTreePaneProps) {
   const empty = data.length === 0;
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -51,6 +53,26 @@ export function FileTreePane({
   }, []);
 
   const selection = useMemo(() => selectedId ?? undefined, [selectedId]);
+
+  const dirtyTopLevelSet = useMemo(() => new Set(dirtyTopLevelFolderNames), [dirtyTopLevelFolderNames]);
+
+  const resolveTopLevelName = useCallback(
+    (nodePath: string): string | null => {
+      if (!currentDir) return null;
+      const normalize = (input: string) => input.replace(/\\/g, "/");
+      const normalizedRoot = normalize(currentDir).replace(/\/+$/, "");
+      const normalizedNode = normalize(nodePath);
+      if (!normalizedNode.startsWith(normalizedRoot)) return null;
+      const relative = normalizedNode.slice(normalizedRoot.length).replace(/^\/+/, "");
+      if (!relative) return null;
+      const segments = relative.split("/");
+      if (segments.length === 1 && !relative.includes("/")) {
+        return segments[0];
+      }
+      return null;
+    },
+    [currentDir]
+  );
 
   // Check if a node is in the path to the current JSON file
   const isInJsonPath = useMemo(() => {
@@ -114,6 +136,9 @@ export function FileTreePane({
         : "bg-yellow-100/60 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/30";
     }
 
+    const topLevelName = resolveTopLevelName(node.data.path);
+    const isTopLevelDirty = Boolean(topLevelName && dirtyTopLevelSet.has(topLevelName));
+
     return (
       <div
         style={style}
@@ -121,6 +146,13 @@ export function FileTreePane({
         onClick={handleClick}
         title={node.data.name}
       >
+        {isTopLevelDirty && (
+          <span
+            className="h-2 w-2 rounded-full bg-yellow-400"
+            aria-label="Folder changed"
+            title="Folder changed"
+          />
+        )}
         <Icon className="h-3 w-3 shrink-0 text-muted-foreground" />
         <span className="truncate">{node.data.name}</span>
       </div>
@@ -129,22 +161,24 @@ export function FileTreePane({
 
   return (
     <Card className="flex h-full flex-col">
-      <CardHeader className="space-y-0 p-3 pb-1">
-        <div className="flex w-full">
-          <div className="flex items-center w-full">
-            {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderOpen className="h-3.5 w-3.5" />}
-            <FilePathInput
-              storeKey={folderStoreKey}
-              picker={{ kind: "folder", multiple: false }}
-              onPickedValue={(picked) => {
-                if (Array.isArray(picked)) return;
-                onPickFolder(picked);
-              }}
-              disabled={isLoading}
-              placeholder="Choose folder..."
-              className="h-7 w-full text-xs"
-            />
-          </div>
+      <CardHeader className="space-y-1 p-3 pb-1">
+        <div className="relative">
+          {isLoading ? (
+            <Loader2 className="absolute left-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
+          ) : (
+            <FolderOpen className="absolute left-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          )}
+          <FilePathInput
+            storeKey={folderStoreKey}
+            picker={{ kind: "folder", multiple: false }}
+            onPickedValue={(picked) => {
+              if (Array.isArray(picked)) return;
+              onPickFolder(picked);
+            }}
+            disabled={isLoading}
+            placeholder="Choose folder..."
+            className="h-7 pl-7 text-xs"
+          />
         </div>
         <div className="relative">
           <Search className="absolute left-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />

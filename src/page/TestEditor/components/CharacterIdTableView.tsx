@@ -416,39 +416,39 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                         const { row, idx } = item;
 
                                         return (
-                                        <div
-                                            key={virtualItem.key}
-                                            style={{
-                                                position: "absolute",
-                                                top: 0,
-                                                left: 0,
-                                                width: "100%",
-                                                height: `${virtualItem.size}px`,
-                                                transform: `translateY(${virtualItem.start}px)`,
-                                            }}
-                                        >
                                             <div
-                                                className={cn(
-                                                    "border rounded-md px-2 py-2 cursor-pointer hover:bg-accent/50 transition-colors h-full flex items-center justify-between gap-2",
-                                                    idx === selectedIndex && "ring-2 ring-inset ring-primary bg-accent"
-                                                )}
-                                                onClick={() => handleSelect(idx)}
+                                                key={virtualItem.key}
+                                                style={{
+                                                    position: "absolute",
+                                                    top: 0,
+                                                    left: 0,
+                                                    width: "100%",
+                                                    height: `${virtualItem.size}px`,
+                                                    transform: `translateY(${virtualItem.start}px)`,
+                                                }}
                                             >
-                                                <div className="text-sm font-medium truncate">ID: {row.CharacterId}</div>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        openDeleteDialog(idx);
-                                                    }}
-                                                    title="Delete"
+                                                <div
+                                                    className={cn(
+                                                        "border rounded-md px-2 py-2 cursor-pointer hover:bg-accent/50 transition-colors h-full flex items-center justify-between gap-2",
+                                                        idx === selectedIndex && "ring-2 ring-inset ring-primary bg-accent"
+                                                    )}
+                                                    onClick={() => handleSelect(idx)}
                                                 >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </Button>
+                                                    <div className="text-sm font-medium truncate">ID: {row.CharacterId}</div>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            openDeleteDialog(idx);
+                                                        }}
+                                                        title="Delete"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </Button>
+                                                </div>
                                             </div>
-                                        </div>
                                         );
                                     })}
                                 </div>
@@ -471,7 +471,7 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                     </div>
 
                                     <ScrollArea className="flex-1 min-h-0">
-                                        <div className="space-y-4 pr-4">
+                                        <div className="space-y-2 pr-2">
                                             <DualValueProperty
                                                 label="Character ID"
                                                 value={selectedRow.CharacterId}
@@ -484,92 +484,115 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                 onSaveEdit={handleSaveEdit}
                                                 onCancelEdit={handleCancelEdit}
                                                 onValueChange={setEditValue}
+                                                onValidationErrorChange={setValidationError}
                                                 showHex={false}
+                                                variant="compact"
+                                                editOnRowClick
                                             />
 
-                                            <DualValueProperty
-                                                label="Model"
-                                                value={selectedRow.Model}
-                                                property="Model"
-                                                editable
-                                                editingProperty={editingProperty}
-                                                editValue={editValue}
-                                                validationError={validationError}
-                                                onStartEdit={handleStartEdit}
-                                                onSaveEdit={handleSaveEdit}
-                                                onCancelEdit={handleCancelEdit}
-                                                onValueChange={setEditValue}
-                                            />
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <DualValueProperty
+                                                    label="Model"
+                                                    value={selectedRow.Model}
+                                                    property="Model"
+                                                    editable
+                                                    editingProperty={editingProperty}
+                                                    editValue={editValue}
+                                                    validationError={validationError}
+                                                    onStartEdit={handleStartEdit}
+                                                    onSaveEdit={handleSaveEdit}
+                                                    onCancelEdit={handleCancelEdit}
+                                                    onValueChange={setEditValue}
+                                                    onValidationErrorChange={setValidationError}
+                                                    variant="compact"
+                                                    editOnRowClick
+                                                />
 
-                                            <DualValueProperty
-                                                label="Effect"
-                                                value={selectedRow.Effect}
-                                                property="Effect"
-                                                editable
-                                                editingProperty={editingProperty}
-                                                editValue={editValue}
-                                                validationError={validationError}
-                                                onStartEdit={handleStartEdit}
-                                                onSaveEdit={handleSaveEdit}
-                                                onCancelEdit={handleCancelEdit}
-                                                onValueChange={setEditValue}
-                                            />
+                                                <DualValueProperty
+                                                    label="Effect"
+                                                    value={selectedRow.Effect}
+                                                    property="Effect"
+                                                    editable
+                                                    editingProperty={editingProperty}
+                                                    editValue={editValue}
+                                                    validationError={validationError}
+                                                    onStartEdit={handleStartEdit}
+                                                    onSaveEdit={handleSaveEdit}
+                                                    onCancelEdit={handleCancelEdit}
+                                                    onValueChange={setEditValue}
+                                                    onValidationErrorChange={setValidationError}
+                                                    variant="compact"
+                                                    editOnRowClick
+                                                />
 
-                                            <DualValueProperty
-                                                label="Sound"
-                                                value={selectedRow.Sound}
-                                                property="Sound"
-                                                editable
-                                                editingProperty={editingProperty}
-                                                editValue={editValue}
-                                                validationError={validationError}
-                                                onStartEdit={handleStartEdit}
-                                                onSaveEdit={handleSaveEdit}
-                                                onCancelEdit={handleCancelEdit}
-                                                onValueChange={setEditValue}
-                                            />
+                                                <DualValueProperty
+                                                    label="Sound"
+                                                    value={selectedRow.Sound}
+                                                    property="Sound"
+                                                    editable
+                                                    editingProperty={editingProperty}
+                                                    editValue={editValue}
+                                                    validationError={validationError}
+                                                    onStartEdit={handleStartEdit}
+                                                    onSaveEdit={handleSaveEdit}
+                                                    onCancelEdit={handleCancelEdit}
+                                                    onValueChange={setEditValue}
+                                                    onValidationErrorChange={setValidationError}
+                                                    variant="compact"
+                                                    editOnRowClick
+                                                />
 
-                                            <DualValueProperty
-                                                label="Param"
-                                                value={selectedRow.Param}
-                                                property="Param"
-                                                editable
-                                                editingProperty={editingProperty}
-                                                editValue={editValue}
-                                                validationError={validationError}
-                                                onStartEdit={handleStartEdit}
-                                                onSaveEdit={handleSaveEdit}
-                                                onCancelEdit={handleCancelEdit}
-                                                onValueChange={setEditValue}
-                                            />
+                                                <DualValueProperty
+                                                    label="Param"
+                                                    value={selectedRow.Param}
+                                                    property="Param"
+                                                    editable
+                                                    editingProperty={editingProperty}
+                                                    editValue={editValue}
+                                                    validationError={validationError}
+                                                    onStartEdit={handleStartEdit}
+                                                    onSaveEdit={handleSaveEdit}
+                                                    onCancelEdit={handleCancelEdit}
+                                                    onValueChange={setEditValue}
+                                                    onValidationErrorChange={setValidationError}
+                                                    variant="compact"
+                                                    editOnRowClick
+                                                />
 
-                                            <DualValueProperty
-                                                label="MSC"
-                                                value={selectedRow.Msc}
-                                                property="Msc"
-                                                editable
-                                                editingProperty={editingProperty}
-                                                editValue={editValue}
-                                                validationError={validationError}
-                                                onStartEdit={handleStartEdit}
-                                                onSaveEdit={handleSaveEdit}
-                                                onCancelEdit={handleCancelEdit}
-                                                onValueChange={setEditValue}
-                                            />
+                                                <DualValueProperty
+                                                    label="MSC"
+                                                    value={selectedRow.Msc}
+                                                    property="Msc"
+                                                    editable
+                                                    editingProperty={editingProperty}
+                                                    editValue={editValue}
+                                                    validationError={validationError}
+                                                    onStartEdit={handleStartEdit}
+                                                    onSaveEdit={handleSaveEdit}
+                                                    onCancelEdit={handleCancelEdit}
+                                                    onValueChange={setEditValue}
+                                                    onValidationErrorChange={setValidationError}
+                                                    variant="compact"
+                                                    editOnRowClick
+                                                />
 
-                                            <DualValueProperty
-                                                label="Motion"
-                                                value={selectedRow.Motion}
-                                                property="Motion"
-                                                editable
-                                                editingProperty={editingProperty}
-                                                editValue={editValue}
-                                                validationError={validationError}
-                                                onStartEdit={handleStartEdit}
-                                                onSaveEdit={handleSaveEdit}
-                                                onCancelEdit={handleCancelEdit}
-                                                onValueChange={setEditValue}
-                                            />
+                                                <DualValueProperty
+                                                    label="Motion"
+                                                    value={selectedRow.Motion}
+                                                    property="Motion"
+                                                    editable
+                                                    editingProperty={editingProperty}
+                                                    editValue={editValue}
+                                                    validationError={validationError}
+                                                    onStartEdit={handleStartEdit}
+                                                    onSaveEdit={handleSaveEdit}
+                                                    onCancelEdit={handleCancelEdit}
+                                                    onValueChange={setEditValue}
+                                                    onValidationErrorChange={setValidationError}
+                                                    variant="compact"
+                                                    editOnRowClick
+                                                />
+                                            </div>
                                         </div>
                                     </ScrollArea>
                                 </>

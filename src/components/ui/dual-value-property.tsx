@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Edit3, Save, X, Hash } from "lucide-react";
+import { Edit3, Save, X } from "lucide-react";
 import { toast } from 'sonner';
 import { int32ToHexDisplay, hexDisplayToInt32, validateHexInput } from "@/module/commonFunc";
 
@@ -19,7 +19,10 @@ interface DualValuePropertyProps {
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onValueChange: (value: string) => void;
+  onValidationErrorChange?: (message: string) => void;
   showHex?: boolean; // Option to hide hex display for simple int32 properties
+  variant?: "default" | "compact";
+  editOnRowClick?: boolean;
 }
 
 /**
@@ -38,21 +41,31 @@ export function DualValueProperty({
   onSaveEdit,
   onCancelEdit,
   onValueChange,
-  showHex = true
+  onValidationErrorChange,
+  showHex = true,
+  variant = "default",
+  editOnRowClick = false,
 }: DualValuePropertyProps) {
   const [editFormat, setEditFormat] = useState<'int32' | 'hex'>('int32');
   const isEditing = editingProperty === property;
   const displayValue = value !== undefined ? value : 0;
   const hexValue = showHex ? int32ToHexDisplay(displayValue) : '';
 
+  const resolvedEditFormat = useMemo(() => {
+    if (!showHex) return "int32" as const;
+    return editFormat;
+  }, [editFormat, showHex]);
+
   const handleStartEdit = (format: 'int32' | 'hex') => {
-    setEditFormat(format);
+    const nextFormat = showHex ? format : "int32";
+    setEditFormat(nextFormat);
     const initialValue = format === 'hex' ? hexValue : String(displayValue);
     onStartEdit(property, initialValue);
   };
 
   const handleFormatChange = (newFormat: 'int32' | 'hex') => {
     if (!isEditing) return;
+    if (!showHex) return;
     
     try {
       let convertedValue: string;
@@ -70,6 +83,7 @@ export function DualValueProperty({
       
       setEditFormat(newFormat);
       onValueChange(convertedValue);
+      onValidationErrorChange?.("");
     } catch (error) {
       // If conversion fails, keep current format
       toast.error('Invalid value for conversion');
@@ -79,7 +93,7 @@ export function DualValueProperty({
   const handleSave = () => {
     try {
       let finalValue: number;
-      if (editFormat === 'hex') {
+      if (resolvedEditFormat === 'hex') {
         finalValue = hexDisplayToInt32(editValue);
       } else {
         finalValue = parseInt(editValue) || 0;
@@ -87,6 +101,7 @@ export function DualValueProperty({
       
       // Update the edit value to the int32 value before saving
       onValueChange(String(finalValue));
+      onValidationErrorChange?.("");
       onSaveEdit();
     } catch (error) {
       toast.error('Invalid value format');
@@ -112,7 +127,131 @@ export function DualValueProperty({
     );
   }
 
-  // Editable display
+  // Compact editable display - card style with vertical layout
+  if (editable && variant === "compact") {
+    const startEditOnRowClick = editOnRowClick && !isEditing;
+    const containerBaseClass = "group relative space-y-2 rounded-md border p-3";
+
+    const CardContent = (
+      <div className={containerBaseClass}>
+        {/* Label at top */}
+        <Label className="text-xs font-medium text-muted-foreground">
+          {label}
+        </Label>
+
+        {/* Input with add-ons style - two separate inputs */}
+        {showHex ? (
+          <div className="flex rounded-md shadow-xs">
+            <Input
+              value={isEditing && resolvedEditFormat === "int32" ? editValue : String(displayValue)}
+              onChange={isEditing && resolvedEditFormat === "int32" ? (e) => {
+                const newValue = e.target.value;
+                onValidationErrorChange?.("");
+                onValueChange(newValue);
+              } : undefined}
+              onKeyDown={isEditing && resolvedEditFormat === "int32" ? (e) => {
+                if (e.key === "Enter") handleSave();
+                if (e.key === "Escape") onCancelEdit();
+              } : undefined}
+              onClick={!isEditing && startEditOnRowClick ? () => handleStartEdit("int32") : (isEditing && resolvedEditFormat !== "int32" ? () => handleFormatChange("int32") : undefined)}
+              readOnly={!isEditing || resolvedEditFormat !== "int32"}
+              placeholder="Int32"
+              className={[
+                "h-8 font-mono text-sm shadow-none rounded-l-md rounded-r-none -mr-px",
+                !isEditing || resolvedEditFormat !== "int32" ? "cursor-pointer hover:bg-accent/20" : "",
+                isEditing && resolvedEditFormat === "int32" && validationError ? "border-red-500" : "",
+              ].join(" ")}
+              autoFocus={isEditing && resolvedEditFormat === "int32"}
+              aria-invalid={isEditing && resolvedEditFormat === "int32" && validationError ? true : undefined}
+              title={!isEditing ? "Click to edit" : (resolvedEditFormat !== "int32" ? "Click to switch to Int32 format" : validationError || undefined)}
+            />
+            <Input
+              value={isEditing && resolvedEditFormat === "hex" ? editValue : hexValue}
+              onChange={isEditing && resolvedEditFormat === "hex" ? (e) => {
+                const newValue = e.target.value;
+                const validation = validateHexInput(newValue);
+                onValueChange(validation.formatted);
+                onValidationErrorChange?.(validation.isValid ? "" : validation.error ?? "Invalid hex format");
+              } : undefined}
+              onKeyDown={isEditing && resolvedEditFormat === "hex" ? (e) => {
+                if (e.key === "Enter") handleSave();
+                if (e.key === "Escape") onCancelEdit();
+              } : undefined}
+              onClick={!isEditing && startEditOnRowClick ? () => handleStartEdit("hex") : (isEditing && resolvedEditFormat !== "hex" ? () => handleFormatChange("hex") : undefined)}
+              readOnly={!isEditing || resolvedEditFormat !== "hex"}
+              placeholder="XX XX XX XX"
+              className={[
+                "h-8 font-mono text-sm shadow-none rounded-r-md rounded-l-none -ml-px",
+                !isEditing || resolvedEditFormat !== "hex" ? "cursor-pointer hover:bg-accent/20" : "",
+                isEditing && resolvedEditFormat === "hex" && validationError ? "border-red-500" : "",
+              ].join(" ")}
+              autoFocus={isEditing && resolvedEditFormat === "hex"}
+              aria-invalid={isEditing && resolvedEditFormat === "hex" && validationError ? true : undefined}
+              title={!isEditing ? "Click to edit" : (resolvedEditFormat !== "hex" ? "Click to switch to Hex format" : validationError || undefined)}
+            />
+          </div>
+        ) : (
+          <Input
+            value={isEditing ? editValue : String(displayValue)}
+            onChange={isEditing ? (e) => {
+              const newValue = e.target.value;
+              onValidationErrorChange?.("");
+              onValueChange(newValue);
+            } : undefined}
+            onKeyDown={isEditing ? (e) => {
+              if (e.key === "Enter") handleSave();
+              if (e.key === "Escape") onCancelEdit();
+            } : undefined}
+            onClick={!isEditing && startEditOnRowClick ? () => handleStartEdit("int32") : undefined}
+            readOnly={!isEditing}
+            placeholder="Integer value"
+            className={[
+              "h-8 font-mono text-sm",
+              !isEditing ? "cursor-pointer hover:bg-accent/20" : "",
+              validationError ? "border-red-500" : "",
+            ].join(" ")}
+            autoFocus={isEditing}
+            aria-invalid={validationError ? true : undefined}
+            title={validationError || (!isEditing ? "Click to edit" : undefined)}
+          />
+        )}
+
+        {/* Validation error */}
+        {isEditing && validationError && (
+          <div className="text-[11px] text-red-500">
+            {validationError}
+          </div>
+        )}
+
+        {/* Action buttons - only show when editing or when not using editOnRowClick */}
+        {isEditing ? (
+          <div className="flex items-center justify-end gap-1">
+            <Button size="icon" className="h-7 w-7" onClick={handleSave} title="Save">
+              <Save className="h-3.5 w-3.5" />
+            </Button>
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onCancelEdit} title="Cancel">
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ) : !editOnRowClick && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full h-7"
+            onClick={() => handleStartEdit("int32")}
+            title="Edit"
+          >
+            <Edit3 className="h-3 w-3 mr-1.5" />
+            Edit
+          </Button>
+        )}
+      </div>
+    );
+
+    return CardContent;
+  }
+
+  // Editable display (default)
   return (
     <div className="space-y-2">
       <Label className="text-sm font-medium">{label}</Label>
@@ -157,7 +296,7 @@ export function DualValueProperty({
                 variant="outline"
                 onClick={() => handleStartEdit('hex')}
               >
-                <Hash className="h-3 w-3 mr-2" />
+                <Edit3 className="h-3 w-3 mr-2" />
                 Edit Hex
               </Button>
             </div>
@@ -179,7 +318,7 @@ export function DualValueProperty({
           {showHex && (
             <ToggleGroup
               type="single"
-              value={editFormat}
+              value={resolvedEditFormat}
               onValueChange={(value) => value && handleFormatChange(value as 'int32' | 'hex')}
               className="justify-start"
             >
@@ -197,11 +336,13 @@ export function DualValueProperty({
             value={editValue}
             onChange={(e) => {
               const newValue = e.target.value;
-              if (showHex && editFormat === 'hex') {
+              if (showHex && resolvedEditFormat === 'hex') {
                 const validation = validateHexInput(newValue);
                 onValueChange(validation.formatted);
+                onValidationErrorChange?.(validation.isValid ? "" : validation.error ?? "Invalid hex format");
               } else {
                 onValueChange(newValue);
+                onValidationErrorChange?.("");
               }
             }}
             onKeyDown={(e) => {
@@ -209,22 +350,13 @@ export function DualValueProperty({
               if (e.key === 'Escape') onCancelEdit();
             }}
             placeholder={
-              showHex && editFormat === 'hex' 
+              showHex && resolvedEditFormat === 'hex' 
                 ? 'XX XX XX XX' 
                 : 'Integer value'
             }
             className={validationError ? 'border-red-500' : ''}
             autoFocus
           />
-          
-          {/* Helper text */}
-          <div className="text-xs text-muted-foreground">
-            {showHex && editFormat === 'hex' 
-              ? 'Enter hex bytes separated by spaces (e.g., "8C FB 6D AE")'
-              : 'Enter integer value (e.g., "-1368523892")'
-            }
-          </div>
-          
           {/* Validation error */}
           {validationError && (
             <div className="text-xs text-red-500">

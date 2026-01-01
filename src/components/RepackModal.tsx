@@ -7,10 +7,10 @@ import { X } from "lucide-react";
 import { readTextFile, readDir } from "@tauri-apps/plugin-fs";
 import { dirname } from "@tauri-apps/api/path";
 import { toast } from "sonner";
-import { Command } from "@tauri-apps/plugin-shell";
 import { useConfigStore } from "@/store/configStore";
 import { useRepackStore } from "@/store/repackStore";
 import { convertSubFileStructureToTreeData } from "@/lib/utils";
+import { repackFolderUsingStructure } from "@/utils/repackRunner";
 
 interface RepackModalProps {
   isOpen: boolean;
@@ -149,29 +149,12 @@ export default function RepackModal({ isOpen, onClose }: RepackModalProps) {
         setTreeData(convertedData);
         setSelectedItem(null);
 
-        // Run external repack tool similar to Files Editor
         try {
-          const toolPath = "E:\\XB\\解包\\com\\compression.js";
-          const normalizedJsonFilePath = jsonFilePath.replace(/\//g, "\\");
-          const normalizedInputPath = repackInputPath.replace(/\//g, "\\");
-          const comPath =
-            normalizedInputPath.split("\\").slice(0, -1).join("\\") + "\\";
-
-          const command = await Command.create(
-            "exec-node",
-            [toolPath, normalizedJsonFilePath, "-r", "-com-path", comPath],
-            { encoding: "utf-8" }
-          ).execute();
-
-          if (command.code !== 0) {
-            console.error("Repack failed:", command.stderr);
-            toast.error(
-              "Repack failed: " + (command.stderr || "Unknown error")
-            );
-          } else {
-            console.log("Repack completed");
-            toast.success(successMessage + "\nRepacked from: " + jsonFilePath);
-          }
+          await repackFolderUsingStructure({
+            structurePath: jsonFilePath,
+            inputFolderPath: repackInputPath,
+          });
+          toast.success(successMessage + "\nRepacked from: " + jsonFilePath);
         } catch (repackError) {
           console.error("Error during repack:", repackError);
           toast.error(

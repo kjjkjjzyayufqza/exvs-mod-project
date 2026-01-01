@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { toast } from "sonner";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,6 +19,7 @@ import InfoPanel from "./components/InfoPanel";
 import { FolderChangePayload, TestTreeNode } from "./types";
 import { FileTreePane } from "./components/FileTreePane";
 import { useConfigStore } from "@/store/configStore";
+import ListeningRepackDialog from "./components/ListeningRepackDialog";
 
 const WATCH_EVENT = "test-editor:folder-change";
 const WATCH_COMMAND = "watch_folder";
@@ -153,6 +155,25 @@ function filterTree(nodes: TestTreeNode[], term: string): TestTreeNode[] {
   return walk(nodes, false);
 }
 
+function normalizeSlashes(input: string): string {
+  return input.replace(/\\/g, "/");
+}
+
+function getTopLevelFolderName(nodePath: string, rootPath: string, isDir?: boolean): string | null {
+  if (!nodePath || !rootPath) return null;
+  const normalizedRoot = normalizeSlashes(rootPath).replace(/\/+$/, "");
+  const normalizedNode = normalizeSlashes(nodePath);
+  if (!normalizedNode.startsWith(normalizedRoot)) return null;
+  const relative = normalizedNode.slice(normalizedRoot.length).replace(/^\/+/, "");
+  if (!relative) return null;
+  const segments = relative.split("/");
+  if (segments.length === 1 && !relative.includes("/")) {
+    // This is either a top-level folder or a root-level file; only keep folders.
+    return isDir === false ? null : segments[0];
+  }
+  return segments[0] ?? null;
+}
+
 const TestEditorPage = () => {
   const getSetting = useConfigStore((s) => s.getSetting);
   const [treeData, setTreeData] = useState<TestTreeNode[]>([]);
@@ -164,13 +185,46 @@ const TestEditorPage = () => {
   const [pendingJsonPath, setPendingJsonPath] = useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const [dirtyFolders, setDirtyFolders] = useState<Set<string>>(new Set());
+  const [isRepackDialogOpen, setIsRepackDialogOpen] = useState(false);
+  const pendingPayloadsRef = useRef<FolderChangePayload[]>([]);
+  const rafIdRef = useRef<number | null>(null);
+
+  const flushPendingPayloads = useCallback(() => {
+    const queued = pendingPayloadsRef.current;
+    pendingPayloadsRef.current = [];
+    rafIdRef.current = null;
+    if (!queued.length) return;
+
+    setTreeData((prev) => queued.reduce((acc, payload) => applyPayload(acc, payload), prev));
+
+    const nextDirty = new Set<string>();
+    queued.forEach((payload) => {
+      payload.ops?.forEach((op) => {
+        const topLevel = getTopLevelFolderName(op.node.path, currentDir, (op.node as any).isDir ?? (op.node as any).is_dir);
+        if (!topLevel) return;
+        nextDirty.add(topLevel);
+      });
+    });
+
+    if (nextDirty.size > 0) {
+      setDirtyFolders((prev) => {
+        const merged = new Set(prev);
+        nextDirty.forEach((name) => merged.add(name));
+        return merged;
+      });
+    }
+  }, [currentDir]);
 
   useEffect(() => {
     let unlisten: UnlistenFn | undefined;
 
     const setup = async () => {
       unlisten = await listen<FolderChangePayload>(WATCH_EVENT, (event) => {
-        setTreeData((prev) => applyPayload(prev, event.payload));
+        pendingPayloadsRef.current.push(event.payload);
+        if (rafIdRef.current === null) {
+          rafIdRef.current = requestAnimationFrame(flushPendingPayloads);
+        }
       });
     };
 
@@ -178,8 +232,13 @@ const TestEditorPage = () => {
 
     return () => {
       unlisten?.();
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      pendingPayloadsRef.current = [];
     };
-  }, []);
+  }, [flushPendingPayloads]);
 
   const loadFolder = useCallback(async (directoryPath: string) => {
     setIsLoading(true);
@@ -188,6 +247,7 @@ const TestEditorPage = () => {
       const initial = await invoke<RawTreeNode[]>(WATCH_COMMAND, { path: directoryPath });
       setTreeData(normalizeTree(initial ?? []));
       setSelectedId(null);
+      setDirtyFolders(new Set());
     } catch (error) {
       console.error(error);
       toast.error("Failed to start folder watch");
@@ -208,6 +268,8 @@ const TestEditorPage = () => {
 
   const filteredData = useMemo(() => filterTree(treeData, searchTerm), [treeData, searchTerm]);
   const selectedNode = useMemo(() => findNode(treeData, selectedId), [treeData, selectedId]);
+  const dirtyFolderList = useMemo(() => Array.from(dirtyFolders), [dirtyFolders]);
+  const hasDirtyFolders = dirtyFolderList.length > 0;
 
   const handleFileSelect = useCallback((node: TestTreeNode | null) => {
     if (!node || node.isDir) {
@@ -238,7 +300,7 @@ const TestEditorPage = () => {
     if (pendingJsonPath) {
       setSelectedJsonPath(pendingJsonPath);
       setHasUnsavedChanges(false);
-      
+
       // Find and select the new JSON file node
       const findNodeByPath = (nodes: TestTreeNode[], path: string): TestTreeNode | null => {
         for (const node of nodes) {
@@ -250,12 +312,12 @@ const TestEditorPage = () => {
         }
         return null;
       };
-      
+
       const newNode = findNodeByPath(treeData, pendingJsonPath);
       if (newNode) {
         setSelectedId(newNode.id);
       }
-      
+
       setPendingJsonPath(null);
     }
     setShowUnsavedDialog(false);
@@ -266,36 +328,67 @@ const TestEditorPage = () => {
     setShowUnsavedDialog(false);
   }, []);
 
+  const handleRepackSuccess = useCallback((folderName: string) => {
+    setDirtyFolders((prev) => {
+      if (!prev.has(folderName)) return prev;
+      const next = new Set(prev);
+      next.delete(folderName);
+      return next;
+    });
+  }, []);
+
+  const handleRepackComplete = useCallback(() => {
+    setIsRepackDialogOpen(false);
+  }, []);
+
   return (
     <>
-      <div className="h-full text-xs **:text-xs">
+      <div className="h-full text-xs **:text-xs relative">
+        <div className="flex flex-row justify-between">
+          <div></div>
+          <div className="flex items-end">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!hasDirtyFolders}
+              onClick={() => setIsRepackDialogOpen(true)}
+              className="relative"
+            >
+              Repack
+              {hasDirtyFolders && (
+                <span className="ml-2 inline-flex h-2 w-2 rounded-full bg-yellow-400" aria-label="Dirty folders" />
+              )}
+            </Button>
+          </div>
+        </div>
         <ResizablePanelGroup
           orientation="horizontal"
           className="h-full rounded-lg border bg-background"
         >
           <ResizablePanel defaultSize={"15%"} minSize={"10%"}>
-          <div className="h-full p-2">
-            <FileTreePane
-              data={filteredData}
-              onSelect={handleFileSelect}
-              selectedId={selectedId}
-              searchTerm={searchTerm}
-              onSearchChange={setSearchTerm}
-              onPickFolder={loadFolder}
-              folderStoreKey={TEST_EDITOR_FOLDER_STORE_KEY}
-              isLoading={isLoading}
-              currentDir={currentDir}
-              currentJsonPath={selectedJsonPath}
-              hasUnsavedChanges={hasUnsavedChanges}
-            />
-          </div>
+            <div className="h-full p-2">
+              <FileTreePane
+                data={filteredData}
+                onSelect={handleFileSelect}
+                selectedId={selectedId}
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
+                onPickFolder={loadFolder}
+                folderStoreKey={TEST_EDITOR_FOLDER_STORE_KEY}
+                isLoading={isLoading}
+                currentDir={currentDir}
+                currentJsonPath={selectedJsonPath}
+                hasUnsavedChanges={hasUnsavedChanges}
+                dirtyTopLevelFolderNames={dirtyFolderList}
+              />
+            </div>
           </ResizablePanel>
 
           <ResizableHandle withHandle />
 
           <ResizablePanel defaultSize={"45%"} minSize={"35%"}>
             <div className="h-full p-2 bg-gray-200">
-              <MainView 
+              <MainView
                 jsonFilePath={selectedJsonPath}
                 folderPath={currentDir}
                 onUnsavedChanges={setHasUnsavedChanges}
@@ -312,6 +405,15 @@ const TestEditorPage = () => {
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>
+
+      <ListeningRepackDialog
+        open={isRepackDialogOpen}
+        onOpenChange={setIsRepackDialogOpen}
+        rootDir={currentDir}
+        dirtyFolders={dirtyFolderList}
+        onFolderRepacked={handleRepackSuccess}
+        onComplete={handleRepackComplete}
+      />
 
       <AlertDialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
         <AlertDialogContent>
