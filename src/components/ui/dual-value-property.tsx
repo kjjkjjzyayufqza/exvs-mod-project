@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,8 @@ interface DualValuePropertyProps {
   showHex?: boolean; // Option to hide hex display for simple int32 properties
   variant?: "default" | "compact";
   editOnRowClick?: boolean;
+  mode?: "toggle" | "live";
+  onCommit?: (value: number) => void;
 }
 
 /**
@@ -45,11 +47,23 @@ export function DualValueProperty({
   showHex = true,
   variant = "default",
   editOnRowClick = false,
+  mode = "toggle",
+  onCommit,
 }: DualValuePropertyProps) {
   const [editFormat, setEditFormat] = useState<'int32' | 'hex'>('int32');
   const isEditing = editingProperty === property;
   const displayValue = value !== undefined ? value : 0;
   const hexValue = showHex ? int32ToHexDisplay(displayValue) : '';
+  const [liveIntDraft, setLiveIntDraft] = useState<string>(String(displayValue));
+  const [liveHexDraft, setLiveHexDraft] = useState<string>(hexValue);
+  const [liveValidationError, setLiveValidationError] = useState<string>("");
+
+  useEffect(() => {
+    if (mode !== "live") return;
+    setLiveIntDraft(String(displayValue));
+    setLiveHexDraft(hexValue);
+    setLiveValidationError("");
+  }, [displayValue, hexValue, mode]);
 
   const resolvedEditFormat = useMemo(() => {
     if (!showHex) return "int32" as const;
@@ -131,6 +145,112 @@ export function DualValueProperty({
   if (editable && variant === "compact") {
     const startEditOnRowClick = editOnRowClick && !isEditing;
     const containerBaseClass = "group relative space-y-2 rounded-md border p-3";
+
+    if (mode === "live") {
+      const commit = (nextValue: number) => {
+        if (!onCommit) return;
+        onCommit(nextValue);
+      };
+
+      return (
+        <div className={containerBaseClass}>
+          <Label className="text-xs font-medium text-muted-foreground">
+            {label}
+          </Label>
+
+          {showHex ? (
+            <div className="flex rounded-md shadow-xs">
+              <Input
+                value={liveIntDraft}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setLiveIntDraft(next);
+                  setLiveValidationError("");
+
+                  const trimmed = next.trim();
+                  if (!trimmed) {
+                    commit(0);
+                    return;
+                  }
+
+                  if (!/^-?\d+$/.test(trimmed)) {
+                    setLiveValidationError("Invalid int32 value");
+                    return;
+                  }
+
+                  commit(Number.parseInt(trimmed, 10) | 0);
+                }}
+                placeholder="Int32"
+                className={[
+                  "h-8 font-mono text-sm shadow-none rounded-l-md rounded-r-none -mr-px",
+                  liveValidationError ? "border-red-500" : "",
+                ].join(" ")}
+                aria-invalid={liveValidationError ? true : undefined}
+                title={liveValidationError || undefined}
+              />
+              <Input
+                value={liveHexDraft}
+                onChange={(e) => {
+                  const validation = validateHexInput(e.target.value);
+                  setLiveHexDraft(validation.formatted);
+                  setLiveValidationError(validation.isValid ? "" : validation.error ?? "Invalid hex format");
+
+                  if (!validation.isValid) return;
+
+                  try {
+                    commit(hexDisplayToInt32(validation.formatted));
+                  } catch (error) {
+                    setLiveValidationError(error instanceof Error ? error.message : "Invalid hex format");
+                  }
+                }}
+                placeholder="XX XX XX XX"
+                className={[
+                  "h-8 font-mono text-sm shadow-none rounded-r-md rounded-l-none -ml-px",
+                  liveValidationError ? "border-red-500" : "",
+                ].join(" ")}
+                aria-invalid={liveValidationError ? true : undefined}
+                title={liveValidationError || undefined}
+              />
+            </div>
+          ) : (
+            <Input
+              value={liveIntDraft}
+              onChange={(e) => {
+                const next = e.target.value;
+                setLiveIntDraft(next);
+                setLiveValidationError("");
+
+                const trimmed = next.trim();
+                if (!trimmed) {
+                  commit(0);
+                  return;
+                }
+
+                if (!/^-?\d+$/.test(trimmed)) {
+                  setLiveValidationError("Invalid int32 value");
+                  return;
+                }
+
+                commit(Number.parseInt(trimmed, 10) | 0);
+              }}
+              placeholder="Int32"
+              className={[
+                "h-8 font-mono text-sm",
+                liveValidationError ? "border-red-500" : "",
+              ].join(" ")}
+              aria-invalid={liveValidationError ? true : undefined}
+              title={liveValidationError || undefined}
+            />
+          )}
+
+          {liveValidationError && (
+            <div className="text-[11px] text-red-500">
+              {liveValidationError}
+            </div>
+          )}
+        </div>
+      );
+    }
 
     const CardContent = (
       <div className={containerBaseClass}>

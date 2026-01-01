@@ -22,7 +22,6 @@ import { CharacterIdTable, CharacterIdTableData, buildCharacterIdTableBuffer } f
 import { cn } from "@/lib/utils";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { DualValueProperty } from "@/components/ui/dual-value-property";
-import { hexDisplayToInt32 } from "@/module/commonFunc";
 
 interface CharacterIdTableViewProps {
     folderPath: string;
@@ -36,29 +35,12 @@ type LoadState =
     | { status: "error"; filePath: string; message: string }
     | { status: "ready"; filePath: string; table: CharacterIdTable };
 
-function parseInt32Input(value: string): number {
-    const trimmed = value.trim();
-    if (!trimmed) return 0;
-    const n = Number(trimmed);
-    if (Number.isFinite(n)) return Math.trunc(n);
-
-    try {
-        return hexDisplayToInt32(trimmed);
-    } catch {
-        return 0;
-    }
-}
-
 export default function CharacterIdTableView({ folderPath, isActive, onUnsavedChanges }: CharacterIdTableViewProps) {
     const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
     const [selectedIndex, setSelectedIndex] = useState<number>(-1);
     const [searchTerm, setSearchTerm] = useState("");
     const [hasChanges, setHasChanges] = useState(false);
     const deferredSearchTerm = useDeferredValue(searchTerm);
-
-    const [editingProperty, setEditingProperty] = useState<string | null>(null);
-    const [editValue, setEditValue] = useState<string>("");
-    const [validationError, setValidationError] = useState<string>("");
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [deleteCandidateIndex, setDeleteCandidateIndex] = useState<number | null>(null);
@@ -72,14 +54,11 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
         setSelectedIndex(-1);
         setSearchTerm("");
         setHasChanges(false);
-        setEditingProperty(null);
-        setEditValue("");
-        setValidationError("");
         onUnsavedChanges?.(false);
     }, [onUnsavedChanges]);
 
     const resolveFilePath = useCallback(async () => {
-        return await join(folderPath, "0x036B9E67", "characteridtable.bin");
+        return await join(folderPath, "0x036B9E67", "character_id_table.bin");
     }, [folderPath]);
 
     const load = useCallback(async () => {
@@ -156,9 +135,6 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
 
     const handleSelect = useCallback((index: number) => {
         setSelectedIndex(index);
-        setEditingProperty(null);
-        setEditValue("");
-        setValidationError("");
     }, []);
 
     const updateSelectedRowField = useCallback((key: keyof CharacterIdTableData, value: number) => {
@@ -250,28 +226,6 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
 
         setSelectedIndex(tableData.length);
     }, [onUnsavedChanges, tableData.length, updateTable]);
-
-    const handleStartEdit = useCallback((property: string, value: string | number) => {
-        setEditingProperty(property);
-        setEditValue(String(value));
-        setValidationError("");
-    }, []);
-
-    const handleCancelEdit = useCallback(() => {
-        setEditingProperty(null);
-        setEditValue("");
-        setValidationError("");
-    }, []);
-
-    const handleSaveEdit = useCallback(() => {
-        if (!editingProperty) return;
-        if (selectedIndex < 0) return;
-
-        const key = editingProperty as keyof CharacterIdTableData;
-        const value = parseInt32Input(editValue);
-        updateSelectedRowField(key, value);
-        handleCancelEdit();
-    }, [editValue, editingProperty, handleCancelEdit, selectedIndex, updateSelectedRowField]);
 
     const handleSaveFile = useCallback(async () => {
         if (loadState.status !== "ready") return;
@@ -477,17 +431,17 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                 value={selectedRow.CharacterId}
                                                 property="CharacterId"
                                                 editable
-                                                editingProperty={editingProperty}
-                                                editValue={editValue}
-                                                validationError={validationError}
-                                                onStartEdit={handleStartEdit}
-                                                onSaveEdit={handleSaveEdit}
-                                                onCancelEdit={handleCancelEdit}
-                                                onValueChange={setEditValue}
-                                                onValidationErrorChange={setValidationError}
+                                                editingProperty={null}
+                                                editValue=""
+                                                validationError=""
+                                                onStartEdit={() => {}}
+                                                onSaveEdit={() => {}}
+                                                onCancelEdit={() => {}}
+                                                onValueChange={() => {}}
                                                 showHex={false}
                                                 variant="compact"
-                                                editOnRowClick
+                                                mode="live"
+                                                onCommit={(nextValue) => updateSelectedRowField("CharacterId", nextValue)}
                                             />
 
                                             <div className="grid grid-cols-2 gap-2">
@@ -496,16 +450,16 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     value={selectedRow.Model}
                                                     property="Model"
                                                     editable
-                                                    editingProperty={editingProperty}
-                                                    editValue={editValue}
-                                                    validationError={validationError}
-                                                    onStartEdit={handleStartEdit}
-                                                    onSaveEdit={handleSaveEdit}
-                                                    onCancelEdit={handleCancelEdit}
-                                                    onValueChange={setEditValue}
-                                                    onValidationErrorChange={setValidationError}
                                                     variant="compact"
-                                                    editOnRowClick
+                                                    editingProperty={null}
+                                                    editValue=""
+                                                    validationError=""
+                                                    onStartEdit={() => {}}
+                                                    onSaveEdit={() => {}}
+                                                    onCancelEdit={() => {}}
+                                                    onValueChange={() => {}}
+                                                    mode="live"
+                                                    onCommit={(nextValue) => updateSelectedRowField("Model", nextValue)}
                                                 />
 
                                                 <DualValueProperty
@@ -513,16 +467,16 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     value={selectedRow.Effect}
                                                     property="Effect"
                                                     editable
-                                                    editingProperty={editingProperty}
-                                                    editValue={editValue}
-                                                    validationError={validationError}
-                                                    onStartEdit={handleStartEdit}
-                                                    onSaveEdit={handleSaveEdit}
-                                                    onCancelEdit={handleCancelEdit}
-                                                    onValueChange={setEditValue}
-                                                    onValidationErrorChange={setValidationError}
                                                     variant="compact"
-                                                    editOnRowClick
+                                                    editingProperty={null}
+                                                    editValue=""
+                                                    validationError=""
+                                                    onStartEdit={() => {}}
+                                                    onSaveEdit={() => {}}
+                                                    onCancelEdit={() => {}}
+                                                    onValueChange={() => {}}
+                                                    mode="live"
+                                                    onCommit={(nextValue) => updateSelectedRowField("Effect", nextValue)}
                                                 />
 
                                                 <DualValueProperty
@@ -530,16 +484,16 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     value={selectedRow.Sound}
                                                     property="Sound"
                                                     editable
-                                                    editingProperty={editingProperty}
-                                                    editValue={editValue}
-                                                    validationError={validationError}
-                                                    onStartEdit={handleStartEdit}
-                                                    onSaveEdit={handleSaveEdit}
-                                                    onCancelEdit={handleCancelEdit}
-                                                    onValueChange={setEditValue}
-                                                    onValidationErrorChange={setValidationError}
                                                     variant="compact"
-                                                    editOnRowClick
+                                                    editingProperty={null}
+                                                    editValue=""
+                                                    validationError=""
+                                                    onStartEdit={() => {}}
+                                                    onSaveEdit={() => {}}
+                                                    onCancelEdit={() => {}}
+                                                    onValueChange={() => {}}
+                                                    mode="live"
+                                                    onCommit={(nextValue) => updateSelectedRowField("Sound", nextValue)}
                                                 />
 
                                                 <DualValueProperty
@@ -547,16 +501,16 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     value={selectedRow.Param}
                                                     property="Param"
                                                     editable
-                                                    editingProperty={editingProperty}
-                                                    editValue={editValue}
-                                                    validationError={validationError}
-                                                    onStartEdit={handleStartEdit}
-                                                    onSaveEdit={handleSaveEdit}
-                                                    onCancelEdit={handleCancelEdit}
-                                                    onValueChange={setEditValue}
-                                                    onValidationErrorChange={setValidationError}
                                                     variant="compact"
-                                                    editOnRowClick
+                                                    editingProperty={null}
+                                                    editValue=""
+                                                    validationError=""
+                                                    onStartEdit={() => {}}
+                                                    onSaveEdit={() => {}}
+                                                    onCancelEdit={() => {}}
+                                                    onValueChange={() => {}}
+                                                    mode="live"
+                                                    onCommit={(nextValue) => updateSelectedRowField("Param", nextValue)}
                                                 />
 
                                                 <DualValueProperty
@@ -564,16 +518,16 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     value={selectedRow.Msc}
                                                     property="Msc"
                                                     editable
-                                                    editingProperty={editingProperty}
-                                                    editValue={editValue}
-                                                    validationError={validationError}
-                                                    onStartEdit={handleStartEdit}
-                                                    onSaveEdit={handleSaveEdit}
-                                                    onCancelEdit={handleCancelEdit}
-                                                    onValueChange={setEditValue}
-                                                    onValidationErrorChange={setValidationError}
                                                     variant="compact"
-                                                    editOnRowClick
+                                                    editingProperty={null}
+                                                    editValue=""
+                                                    validationError=""
+                                                    onStartEdit={() => {}}
+                                                    onSaveEdit={() => {}}
+                                                    onCancelEdit={() => {}}
+                                                    onValueChange={() => {}}
+                                                    mode="live"
+                                                    onCommit={(nextValue) => updateSelectedRowField("Msc", nextValue)}
                                                 />
 
                                                 <DualValueProperty
@@ -581,16 +535,16 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     value={selectedRow.Motion}
                                                     property="Motion"
                                                     editable
-                                                    editingProperty={editingProperty}
-                                                    editValue={editValue}
-                                                    validationError={validationError}
-                                                    onStartEdit={handleStartEdit}
-                                                    onSaveEdit={handleSaveEdit}
-                                                    onCancelEdit={handleCancelEdit}
-                                                    onValueChange={setEditValue}
-                                                    onValidationErrorChange={setValidationError}
                                                     variant="compact"
-                                                    editOnRowClick
+                                                    editingProperty={null}
+                                                    editValue=""
+                                                    validationError=""
+                                                    onStartEdit={() => {}}
+                                                    onSaveEdit={() => {}}
+                                                    onCancelEdit={() => {}}
+                                                    onValueChange={() => {}}
+                                                    mode="live"
+                                                    onCommit={(nextValue) => updateSelectedRowField("Motion", nextValue)}
                                                 />
                                             </div>
                                         </div>
