@@ -1,4 +1,3 @@
-import textIndexJson from "../../tools/text_index.json";
 import { Buffer } from 'buffer';
 interface Item {
   type: string;
@@ -86,108 +85,7 @@ export function findNutexbString(data: Uint8Array): string | null {
   return null;
 }
 
-export type HexCharMapping = Record<string, string>;
-
-type CompiledEntry = { bytes: number[]; char: string };
-type CompiledMapping = {
-	firstByteToEntries: Map<number, CompiledEntry[]>;
-	maxByteLength: number;
-};
-
-const defaultHexCharMapping: HexCharMapping = textIndexJson as HexCharMapping;
-let cachedCompiledDefault: CompiledMapping | null = null;
-
-function compileHexMapping(mapping: HexCharMapping): CompiledMapping {
-	const firstByteToEntries = new Map<number, CompiledEntry[]>();
-	let maxByteLength = 0;
-
-	for (const [hexKeyRaw, charValue] of Object.entries(mapping)) {
-		const hexKey = hexKeyRaw.trim().toUpperCase();
-		if (hexKey.length === 0 || hexKey.length % 2 !== 0) {
-			continue;
-		}
-		const bytes: number[] = [];
-		for (let i = 0; i < hexKey.length; i += 2) {
-			bytes.push(parseInt(hexKey.slice(i, i + 2), 16));
-		}
-		if (bytes.length === 0) {
-			continue;
-		}
-		const first = bytes[0]!
-		const entry: CompiledEntry = { bytes, char: charValue };
-		if (!firstByteToEntries.has(first)) {
-			firstByteToEntries.set(first, []);
-		}
-		firstByteToEntries.get(first)!.push(entry);
-		if (bytes.length > maxByteLength) {
-			maxByteLength = bytes.length;
-		}
-	}
-
-	for (const list of firstByteToEntries.values()) {
-		list.sort((a, b) => b.bytes.length - a.bytes.length);
-	}
-
-	return { firstByteToEntries, maxByteLength };
-}
-
-function getCompiledDefault(): CompiledMapping {
-	if (!cachedCompiledDefault) {
-		cachedCompiledDefault = compileHexMapping(defaultHexCharMapping);
-	}
-	return cachedCompiledDefault;
-}
-
-export function decodeBufferWithMapping(
-	data: Uint8Array,
-	mapping?: HexCharMapping
-): string {
-	const view = data;
-	const compiled = mapping ? compileHexMapping(mapping) : getCompiledDefault();
-	let offset = 0;
-	let result = "";
-
-	while (offset < view.length) {
-		const byte = view[offset]!;
-		if (byte === 0x00) {
-			break;
-		}
-		const candidates = compiled.firstByteToEntries.get(byte);
-		let matched = false;
-		if (candidates && candidates.length > 0) {
-			for (const entry of candidates) {
-				const bytes = entry.bytes;
-				if (offset + bytes.length > view.length) {
-					continue;
-				}
-				let ok = true;
-				for (let i = 0; i < bytes.length; i++) {
-					if (view[offset + i] !== bytes[i]) {
-						ok = false;
-						break;
-					}
-				}
-				if (ok) {
-					result += entry.char;
-					offset += bytes.length;
-					matched = true;
-					break;
-				}
-			}
-		}
-		if (!matched) {
-			// No mapping matched; consume one byte to avoid infinite loop
-			result += "?";
-			offset += 1;
-		}
-	}
-
-	return result;
-}
-
-export function decodeBufferWithTextIndexMapping(data: Uint8Array): string {
-	return decodeBufferWithMapping(data, undefined);
-}
+// Removed text index mapping functionality (text_index.json) to avoid implicit name mapping in UI.
 
 /**
  * Deep clone a CharacterDataOB object with a new character ID

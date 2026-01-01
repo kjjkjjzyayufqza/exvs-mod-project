@@ -5,7 +5,6 @@ import { Button } from "../../../components/ui/button";
 import { Badge } from "../../../components/ui/badge";
 import { Trash2, Copy } from "lucide-react";
 import { cn } from "../../../lib/utils";
-import { decodeBufferWithTextIndexMapping } from "../../../module/commonFunc";
 
 interface CharacterCardProps {
   character: CharacterDataOB;
@@ -54,15 +53,6 @@ export const CharacterCard: FC<CharacterCardProps> = ({
             
             <div className="text-sm text-muted-foreground space-y-1">
               <div>Series: {character.SeriesId}</div>
-              <div className="w-60">
-                Name: {
-                  character.CharacterNameOffset?.StringBufferData
-                    ? decodeBufferWithTextIndexMapping(
-                        new Uint8Array(character.CharacterNameOffset.StringBufferData)
-                      ) || 'N/A'
-                    : 'N/A'
-                }
-              </div>
             </div>
           </div>
           
