@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import RepackFolderStructureView from "./RepackFolderStructureView";
+import CharacterIdTableView from "./CharacterIdTableView";
 
 type StageTab = {
   name: string;
@@ -11,6 +12,7 @@ type StageTab = {
 
 interface MainViewProps {
   jsonFilePath?: string | null;
+  folderPath?: string | null;
   onUnsavedChanges?: (hasChanges: boolean) => void;
 }
 
@@ -43,31 +45,63 @@ const tabs: StageTab[] = [
       />
     ),
   },
+  {
+    name: "Character ID Table",
+    value: "character-id-table",
+    render: (props: MainViewProps) => (
+      <CharacterIdTableView
+        folderPath={props.folderPath ?? ""}
+        isActive={false}
+        onUnsavedChanges={props.onUnsavedChanges}
+      />
+    ),
+  },
 ];
 
-const MainView = ({ jsonFilePath, onUnsavedChanges }: MainViewProps) => {
+const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges }: MainViewProps) => {
   const [activeTab, setActiveTab] = useState<string>(tabs[0]?.value ?? "3d");
   const [folderStructureHasUnsaved, setFolderStructureHasUnsaved] = useState(false);
+  const [characterIdTableHasUnsaved, setCharacterIdTableHasUnsaved] = useState(false);
 
   const handleUnsavedChanges = useCallback((hasChanges: boolean) => {
     setFolderStructureHasUnsaved(hasChanges);
     onUnsavedChanges?.(hasChanges);
   }, [onUnsavedChanges]);
 
+  const handleCharacterIdTableUnsaved = useCallback((hasChanges: boolean) => {
+    setCharacterIdTableHasUnsaved(hasChanges);
+  }, []);
+
   const resolvedTabs = useMemo<StageTab[]>(() => {
     return tabs.map((tab) => {
-      if (tab.value !== "folder-structure") return tab;
-      return {
-        ...tab,
-        render: (props: MainViewProps) => (
-          <RepackFolderStructureView
-            jsonFilePath={props.jsonFilePath}
-            onUnsavedChanges={handleUnsavedChanges}
-          />
-        ),
-      };
+      if (tab.value === "folder-structure") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <RepackFolderStructureView
+              jsonFilePath={props.jsonFilePath}
+              onUnsavedChanges={handleUnsavedChanges}
+            />
+          ),
+        };
+      }
+
+      if (tab.value === "character-id-table") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <CharacterIdTableView
+              folderPath={props.folderPath ?? ""}
+              isActive={activeTab === "character-id-table"}
+              onUnsavedChanges={handleCharacterIdTableUnsaved}
+            />
+          ),
+        };
+      }
+
+      return tab;
     });
-  }, [handleUnsavedChanges]);
+  }, [activeTab, handleCharacterIdTableUnsaved, handleUnsavedChanges]);
 
   return (
     <div className="flex h-full w-full">
@@ -85,19 +119,26 @@ const MainView = ({ jsonFilePath, onUnsavedChanges }: MainViewProps) => {
                     title="Unsaved changes"
                   />
                 )}
+                {tab.value === "character-id-table" && characterIdTableHasUnsaved && (
+                  <span
+                    className="h-2 w-2 rounded-full bg-yellow-500"
+                    aria-label="Unsaved changes"
+                    title="Unsaved changes"
+                  />
+                )}
               </span>
             </TabsTrigger>
           ))}
         </TabsList>
         {resolvedTabs.map((tab) => (
           <TabsContent key={tab.value} value={tab.value} className="flex-1 h-full w-full p-0 m-0">
-            {tab.value === "folder-structure" ? (
+            {tab.value === "folder-structure" || tab.value === "character-id-table" ? (
               <div className="h-full w-full p-0 m-0">
-                {tab.render ? tab.render({ jsonFilePath, onUnsavedChanges }) : tab.content}
+                {tab.render ? tab.render({ jsonFilePath, folderPath, onUnsavedChanges }) : tab.content}
               </div>
             ) : (
               <div className="flex h-full items-center justify-center p-4 text-sm text-muted-foreground">
-                {tab.render ? tab.render({ jsonFilePath, onUnsavedChanges }) : tab.content}
+                {tab.render ? tab.render({ jsonFilePath, folderPath, onUnsavedChanges }) : tab.content}
               </div>
             )}
           </TabsContent>

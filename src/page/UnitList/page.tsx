@@ -5,7 +5,7 @@ import { Search, Loader2 } from "lucide-react";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { resourceDir } from "@tauri-apps/api/path";
 import { useConfigStore } from "../../store/configStore";
-import { ExtractFHMData, ExtractType, Fhm2dData } from "../../models/fhm2d";
+import { ExtractFHMData, ExtractType, Fhm2dData, Fhm2d_type_format } from "../../models/fhm2d";
 import { Buffer } from "buffer";
 import { toast } from "sonner";
 
@@ -42,7 +42,7 @@ export default function UnitList() {
         setIsLoading(true);
         const resourcePath = await resourceDir();
         const fileData = await readFile(resourcePath + "/tools/ob_unit.json");
-        const data = JSON.parse(new TextDecoder().decode(fileData as ArrayBuffer)) as UnitData[];
+        const data = JSON.parse(new TextDecoder().decode(fileData)) as UnitData[];
         setUnits(data);
         setFilteredUnits(data);
       } catch (error) {
@@ -121,7 +121,7 @@ export default function UnitList() {
     const upperCaseHashName = fileName.split('0x')[1].toUpperCase();
     const outputPath = `${extractOutputPath}\\0x${upperCaseHashName}`;
     const fhm = new Fhm2dData(Buffer.from(fileBuffer))
-    void ExtractFHMData(fhm, outputPath, ExtractType.SingleFolder).catch((err) => {
+    void ExtractFHMData(fhm, outputPath, ExtractType.SingleFolder, Fhm2d_type_format.fhm2d_character).catch((err) => {
       console.error("ExtractFHMData failed:", err);
     });
     console.log(fhm);

@@ -297,6 +297,7 @@ const TestEditorPage = () => {
             <div className="h-full p-2 bg-gray-200">
               <MainView 
                 jsonFilePath={selectedJsonPath}
+                folderPath={currentDir}
                 onUnsavedChanges={setHasUnsavedChanges}
               />
             </div>

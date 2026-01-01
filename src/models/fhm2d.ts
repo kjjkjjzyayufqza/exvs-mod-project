@@ -7,6 +7,10 @@ import { basename, dirname } from "@tauri-apps/api/path";
 import { toast } from "sonner";
 import { applyNumdlbBaseNameToStructureObject } from "@/lib/fhm2d_characterModelFormatFuc";
 
+export enum Fhm2d_type_format {
+  fhm2d_character = "fhm2d_character",
+}
+
 export enum Fhm2dType {
   PS4GundamVersus = "PS4GundamVersus",
   Xboost = "Xboost",
@@ -442,7 +446,12 @@ export enum ExtractType {
   FolderWithStructure = "structure",
 }
 
-export async function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: string, type: ExtractType): Promise<void> {
+export async function ExtractFHMData(
+  fhm2d: Fhm2dData | PS4FhmData,
+  outDir: string,
+  type: ExtractType,
+  format?: Fhm2d_type_format
+): Promise<void> {
   if (fhm2d._TYPE_ == Fhm2dType.PS4GundamVersus) {
     throw new Error(ErrorMessage.notSupport);
   } else if (fhm2d._TYPE_ == Fhm2dType.Xboost) {
@@ -517,21 +526,30 @@ export async function ExtractFHMData(fhm2d: Fhm2dData | PS4FhmData, outDir: stri
       let finalStructure: any = outputStructure;
 
       try {
-        const rootDir = await dirname(outDir);
-        
-        // Create file data map from decompressed files
-        const fileDataMap = new Map<number, Uint8Array>();
-        for (const fileData of decompressedFiles) {
-          const fileIndex = subFileData[fileData.index]?.FileIndex ?? fileData.index;
-          fileDataMap.set(fileIndex, new Uint8Array(fileData.buffer));
-        }
+        switch (format) {
+          case Fhm2d_type_format.fhm2d_character: {
+            const rootDir = await dirname(outDir);
 
-        finalStructure = await applyNumdlbBaseNameToStructureObject(outputStructure, {
-          rootDir,
-          concurrency: 1,
-          rewriteFileUrl: true,
-          fileDataMap,
-        });
+            // Create file data map from decompressed files (keyed by FileIndex)
+            const fileDataMap = new Map<number, Uint8Array>();
+            for (const fileData of decompressedFiles) {
+              const fileIndex = subFileData[fileData.index]?.FileIndex ?? fileData.index;
+              fileDataMap.set(fileIndex, new Uint8Array(fileData.buffer));
+            }
+
+            finalStructure = await applyNumdlbBaseNameToStructureObject(outputStructure, {
+              rootDir,
+              concurrency: 1,
+              rewriteFileUrl: true,
+              fileDataMap,
+            });
+            break;
+          }
+          default: {
+            finalStructure = outputStructure;
+            break;
+          }
+        }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
         console.error("applyNumdlbBaseNameToStructureObject failed:", errorMessage);

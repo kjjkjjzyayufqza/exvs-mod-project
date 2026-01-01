@@ -5,6 +5,7 @@ import {
   ExtractFHMData,
   ExtractType,
   Fhm2dData,
+  Fhm2d_type_format,
   PS4FhmData,
 } from "../../models/fhm2d";
 import {
@@ -177,7 +178,7 @@ export default function ExtractFilePage() {
     setIsExtracting(true);
     startTransition(() => setExtractProgress(0));
     try {
-      await ExtractFHMData(fhm2dData, data.outputFolderPath, extractType);
+      await ExtractFHMData(fhm2dData, data.outputFolderPath, extractType, Fhm2d_type_format.fhm2d_character);
       toast.success(`Extract completed: ${data.outputFolderPath}`);
       startTransition(() => setExtractProgress(100));
       await sleep(600);
