@@ -2,6 +2,7 @@ import { Buffer } from 'buffer'
 import { CommandsData } from './commandsData'
 import { ErrorMessage } from './error'
 import { BaseDirectory, writeFile } from '@tauri-apps/plugin-fs'
+import { obfDecryptBytes, obfEncryptBytes, obfDecodeToUtf8String, obfEncodeFromUtf8String } from '../utils/obfString'
 
 export enum MS_state_type {
   Enable = 1,
@@ -279,13 +280,55 @@ export class CharacterDataOB {
 class StringNameData {
   Offset: number
   StringBufferData: Buffer
+  Utf8String: string
   constructor (nameOffset: number, stringBufferData: Buffer) {
     this.Offset = nameOffset
     this.StringBufferData = stringNameReadToEnd(nameOffset, stringBufferData)
+    this.Utf8String = obfDecodeToUtf8String(this.StringBufferData)
+  }
+
+  /**
+   * Decode this obfuscated 0x00-terminated string buffer.
+   * If `inPlace` is true, this instance's `StringBufferData` will be replaced with the decoded buffer.
+   */
+  decode (inPlace = false): Buffer {
+    const decoded = Buffer.from(obfDecryptBytes(this.StringBufferData))
+    if (inPlace) this.StringBufferData = decoded
+    return decoded
+  }
+
+  /**
+   * Encode this plain 0x00-terminated string buffer.
+   * If `inPlace` is true, this instance's `StringBufferData` will be replaced with the encoded buffer.
+   */
+  encode (inPlace = false): Buffer {
+    const encoded = Buffer.from(obfEncryptBytes(this.StringBufferData))
+    if (inPlace) this.StringBufferData = encoded
+    return encoded
+  }
+
+  /**
+   * Refresh `Utf8String` from the current `StringBufferData`.
+   */
+  refreshUtf8StringFromBuffer (): string {
+    this.Utf8String = obfDecodeToUtf8String(this.StringBufferData)
+    return this.Utf8String
+  }
+
+  /**
+   * If `Utf8String` differs from what the current `StringBufferData` decodes to,
+   * rebuild `StringBufferData` from `Utf8String` (0x00-terminated, obfuscated).
+   */
+  applyUtf8StringToBufferIfChanged (): Buffer {
+    const current = obfDecodeToUtf8String(this.StringBufferData)
+    if (current !== this.Utf8String) {
+      this.StringBufferData = Buffer.from(obfEncodeFromUtf8String(this.Utf8String))
+    }
+    return this.StringBufferData
   }
 }
 
-// read to 0x00 is end, remark we need add 0x00 at end
+// Read bytes until the first 0x00 terminator; the returned buffer always includes the terminator.
 function stringNameReadToEnd (startOffset: number, buffer: Buffer): Buffer {
   // let buffer slice from startOffset to end
   let result: Buffer = Buffer.alloc(0)
@@ -340,6 +383,18 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
   //create the name buffer
   let stringNameDataBuffer = Buffer.alloc(0)
 
+  const ensureStringBufferMatchesUtf8 = (data: any) => {
+    if (!data || !data.StringBufferData) return
+    if (typeof data.Utf8String !== 'string') {
+      data.Utf8String = obfDecodeToUtf8String(data.StringBufferData)
+      return
+    }
+    const current = obfDecodeToUtf8String(data.StringBufferData)
+    if (current !== data.Utf8String) {
+      data.StringBufferData = Buffer.from(obfEncodeFromUtf8String(data.Utf8String))
+    }
+  }
+
   // write the character data
   let unitDataBuffer = Buffer.alloc(characterList.CharacterData.length * characterList.CharacterInfoEachSize)
   for (let i = 0; i < characterList.CharacterData.length; i++) {
@@ -355,6 +410,7 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
     unitDataBuffer.writeInt32LE(char.UnkHash1, baseOffset + 0x18)
 
     // stringNameData offset for CharacterNameOffset
+    ensureStringBufferMatchesUtf8(char.CharacterNameOffset)
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x1c)
     visualBuffer = Buffer.concat([visualBuffer, char.CharacterNameOffset.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.CharacterNameOffset.StringBufferData])
@@ -379,6 +435,7 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
     unitDataBuffer.writeInt32LE(char.UnkHash8, baseOffset + 0x64)
 
     // stringNameData offset for UnkStringOffset1
+    ensureStringBufferMatchesUtf8(char.UnkStringOffset1)
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x68)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset1.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset1.StringBufferData])
@@ -387,11 +444,13 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
     unitDataBuffer.writeInt32LE(char.LMBPilotClothing, baseOffset + 0x78)
 
     // stringNameData offset for UnkStringOffset2
+    ensureStringBufferMatchesUtf8(char.UnkStringOffset2)
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x7c)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset2.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset2.StringBufferData])
 
     // stringNameData offset for UnkStringOffset3
+    ensureStringBufferMatchesUtf8(char.UnkStringOffset3)
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x84)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset3.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset3.StringBufferData])
@@ -399,16 +458,19 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
     unitDataBuffer.writeInt32LE(char.UnkHash9_1, baseOffset + 0x8c)
 
     // stringNameData offset for UnkStringOffset4
+    ensureStringBufferMatchesUtf8(char.UnkStringOffset4)
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x90)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset4.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset4.StringBufferData])
 
     // stringNameData offset for UnkStringOffset5
+    ensureStringBufferMatchesUtf8(char.UnkStringOffset5)
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x98)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset5.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset5.StringBufferData])
 
     // stringNameData offset for UnkStringOffset6
+    ensureStringBufferMatchesUtf8(char.UnkStringOffset6)
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0xa4)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset6.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset6.StringBufferData])
@@ -419,11 +481,13 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
     unitDataBuffer.writeInt32LE(char.SeriesId, baseOffset + 0xb4)
 
     // stringNameData offset for UnkStringOffset7
+    ensureStringBufferMatchesUtf8(char.UnkStringOffset7)
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0xb8)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset7.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset7.StringBufferData])
 
     // stringNameData offset for UnkStringOffset8
+    ensureStringBufferMatchesUtf8(char.UnkStringOffset8)
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0xc0)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset8.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset8.StringBufferData])
@@ -455,6 +519,7 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
     unitDataBuffer.writeInt32LE(char.UnkHash18, baseOffset + 0x130)
 
     // stringNameData offset for UnkStringOffset9
+    ensureStringBufferMatchesUtf8(char.UnkStringOffset9)
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x134)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset9.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset9.StringBufferData])
@@ -463,6 +528,7 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
     unitDataBuffer.writeInt32LE(char.MS_card_icon_index, baseOffset + 0xd4)
 
     // stringNameData offset for UnkStringOffset10
+    ensureStringBufferMatchesUtf8(char.UnkStringOffset10)
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x144)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset10.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset10.StringBufferData])
@@ -472,6 +538,7 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
     unitDataBuffer.writeInt32LE(char.UnkHash21, baseOffset + 0x154)
 
     // stringNameData offset for UnkStringOffset11
+    ensureStringBufferMatchesUtf8(char.UnkStringOffset11)
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x158)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset11.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset11.StringBufferData])
@@ -487,6 +554,7 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
     unitDataBuffer.writeInt32LE(char.vs_p_r, baseOffset + 0x188)
 
     // stringNameData offset for UnkStringOffset12
+    ensureStringBufferMatchesUtf8(char.UnkStringOffset12)
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x18c)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset12.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset12.StringBufferData])
@@ -495,6 +563,7 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
     unitDataBuffer.writeInt32LE(char.UnkHash23, baseOffset + 0x198)
 
     // stringNameData offset for UnkStringOffset13
+    ensureStringBufferMatchesUtf8(char.UnkStringOffset13)
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x19c)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset13.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset13.StringBufferData])
@@ -505,6 +574,7 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
     unitDataBuffer.writeInt32LE(char.ms_crs, baseOffset + 0x1ac)
 
     // stringNameData offset for UnkStringOffset14
+    ensureStringBufferMatchesUtf8(char.UnkStringOffset14)
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x1b0)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset14.StringBufferData])
     stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset14.StringBufferData])

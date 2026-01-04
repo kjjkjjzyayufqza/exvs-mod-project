@@ -7,6 +7,7 @@ import { Button } from "../../../components/ui/button";
 import { Save } from "lucide-react";
 import { FormFieldGroup } from "./FormFieldGroup";
 import { StringFieldGroup } from "./StringFieldGroup";
+import { obfDecodeToUtf8String } from "../../../utils/obfString";
 
 interface CharacterFormProps {
   character: CharacterDataOB;
@@ -167,7 +168,8 @@ export const CharacterForm: FC<CharacterFormProps> = ({
           const buffer = Buffer.from(hexString, 'hex');
           (updatedCharacter as any)[key] = {
             ...((updatedCharacter as any)[key] || {}),
-            StringBufferData: buffer
+            StringBufferData: buffer,
+            Utf8String: obfDecodeToUtf8String(buffer)
           };
         } catch (error) {
           console.warn(`Failed to convert hex string for field ${key}:`, error);

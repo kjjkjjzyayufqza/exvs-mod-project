@@ -1,4 +1,5 @@
 import { Buffer } from 'buffer';
+import { obfDecodeToUtf8String } from '../utils/obfString';
 interface Item {
   type: string;
   unk1: string;
@@ -105,7 +106,8 @@ export function cloneCharacterDataOB(
 		if (!stringData || !stringData.StringBufferData) {
 			return {
 				Offset: 0,
-				StringBufferData: Buffer.alloc(1, 0) // Default empty buffer with null terminator
+				StringBufferData: Buffer.alloc(1, 0), // Default empty buffer with null terminator
+				Utf8String: ""
 			};
 		}
 		// Create a deep copy of the buffer
@@ -113,7 +115,8 @@ export function cloneCharacterDataOB(
 		stringData.StringBufferData.copy(newBuffer);
 		return {
 			Offset: stringData.Offset,
-			StringBufferData: newBuffer
+			StringBufferData: newBuffer,
+			Utf8String: typeof stringData.Utf8String === "string" ? stringData.Utf8String : obfDecodeToUtf8String(newBuffer)
 		};
 	};
 	

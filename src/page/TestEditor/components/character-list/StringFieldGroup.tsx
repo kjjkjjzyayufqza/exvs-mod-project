@@ -12,10 +12,6 @@ interface StringFieldGroupProps {
   onChange: (fieldName: string, value: string) => void;
 }
 
-function normalizeHexInput(inputValue: string): string {
-  return inputValue.replace(/[^0-9A-Fa-f]/g, "").toUpperCase();
-}
-
 export function StringFieldGroup({ fields, onChange }: StringFieldGroupProps) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -28,9 +24,9 @@ export function StringFieldGroup({ fields, onChange }: StringFieldGroupProps) {
             id={field.name}
             type="text"
             value={field.value || ""}
-            onChange={(e) => onChange(field.name, normalizeHexInput(e.target.value))}
-            className="w-full h-8 font-mono text-xs"
-            placeholder="Enter hex string..."
+            onChange={(e) => onChange(field.name, e.target.value)}
+            className="w-full h-8 text-xs"
+            placeholder="Enter UTF-8 text..."
             maxLength={200}
           />
         </div>

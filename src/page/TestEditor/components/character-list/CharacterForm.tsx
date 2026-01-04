@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Buffer } from "buffer";
+import { obfEncodeFromUtf8String } from "@/utils/obfString";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -12,10 +13,6 @@ interface CharacterFormProps {
   character: CharacterDataOB;
   characterId: number;
   onChange: (character: CharacterDataOB) => void;
-}
-
-function isEven(n: number): boolean {
-  return n % 2 === 0;
 }
 
 export function CharacterForm({ character, characterId, onChange }: CharacterFormProps) {
@@ -108,21 +105,21 @@ export function CharacterForm({ character, characterId, onChange }: CharacterFor
     };
 
     const initialStringData: Record<string, string> = {
-      CharacterNameOffset: character.CharacterNameOffset?.StringBufferData?.toString("hex").toUpperCase() || "",
-      UnkStringOffset1: character.UnkStringOffset1?.StringBufferData?.toString("hex").toUpperCase() || "",
-      UnkStringOffset2: character.UnkStringOffset2?.StringBufferData?.toString("hex").toUpperCase() || "",
-      UnkStringOffset3: character.UnkStringOffset3?.StringBufferData?.toString("hex").toUpperCase() || "",
-      UnkStringOffset4: character.UnkStringOffset4?.StringBufferData?.toString("hex").toUpperCase() || "",
-      UnkStringOffset5: character.UnkStringOffset5?.StringBufferData?.toString("hex").toUpperCase() || "",
-      UnkStringOffset6: character.UnkStringOffset6?.StringBufferData?.toString("hex").toUpperCase() || "",
-      UnkStringOffset7: character.UnkStringOffset7?.StringBufferData?.toString("hex").toUpperCase() || "",
-      UnkStringOffset8: character.UnkStringOffset8?.StringBufferData?.toString("hex").toUpperCase() || "",
-      UnkStringOffset9: character.UnkStringOffset9?.StringBufferData?.toString("hex").toUpperCase() || "",
-      UnkStringOffset10: character.UnkStringOffset10?.StringBufferData?.toString("hex").toUpperCase() || "",
-      UnkStringOffset11: character.UnkStringOffset11?.StringBufferData?.toString("hex").toUpperCase() || "",
-      UnkStringOffset12: character.UnkStringOffset12?.StringBufferData?.toString("hex").toUpperCase() || "",
-      UnkStringOffset13: character.UnkStringOffset13?.StringBufferData?.toString("hex").toUpperCase() || "",
-      UnkStringOffset14: character.UnkStringOffset14?.StringBufferData?.toString("hex").toUpperCase() || "",
+      CharacterNameOffset: character.CharacterNameOffset?.Utf8String || "",
+      UnkStringOffset1: character.UnkStringOffset1?.Utf8String || "",
+      UnkStringOffset2: character.UnkStringOffset2?.Utf8String || "",
+      UnkStringOffset3: character.UnkStringOffset3?.Utf8String || "",
+      UnkStringOffset4: character.UnkStringOffset4?.Utf8String || "",
+      UnkStringOffset5: character.UnkStringOffset5?.Utf8String || "",
+      UnkStringOffset6: character.UnkStringOffset6?.Utf8String || "",
+      UnkStringOffset7: character.UnkStringOffset7?.Utf8String || "",
+      UnkStringOffset8: character.UnkStringOffset8?.Utf8String || "",
+      UnkStringOffset9: character.UnkStringOffset9?.Utf8String || "",
+      UnkStringOffset10: character.UnkStringOffset10?.Utf8String || "",
+      UnkStringOffset11: character.UnkStringOffset11?.Utf8String || "",
+      UnkStringOffset12: character.UnkStringOffset12?.Utf8String || "",
+      UnkStringOffset13: character.UnkStringOffset13?.Utf8String || "",
+      UnkStringOffset14: character.UnkStringOffset14?.Utf8String || "",
     };
 
     setFormData(initialData);
@@ -143,18 +140,13 @@ export function CharacterForm({ character, characterId, onChange }: CharacterFor
 
       Object.keys(nextString).forEach((key) => {
         if (!(key in updatedCharacter)) return;
-        const hexString = nextString[key] || "";
-        if (!hexString) return;
-        if (!isEven(hexString.length)) return;
-        try {
-          const buffer = Buffer.from(hexString, "hex");
-          updatedCharacter[key] = {
-            ...(updatedCharacter[key] || {}),
-            StringBufferData: buffer,
-          };
-        } catch {
-          // Ignore invalid hex updates while typing
-        }
+        const utf8 = nextString[key] ?? "";
+        const buffer = Buffer.from(obfEncodeFromUtf8String(utf8));
+        updatedCharacter[key] = {
+          ...(updatedCharacter[key] || {}),
+          StringBufferData: buffer,
+          Utf8String: utf8,
+        };
       });
 
       onChange(updatedCharacter as CharacterDataOB);
