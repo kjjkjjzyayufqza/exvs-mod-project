@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Tree, type NodeApi, type NodeRendererProps } from "react-arborist";
-import { Search, FolderOpen, Loader2, ChevronRight, ChevronDown, Folder, File } from "lucide-react";
+import { Search, FolderOpen, Loader2, ChevronRight, ChevronDown, Folder, File, ExternalLink } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import { exists } from "@tauri-apps/plugin-fs";
+import { openPath } from "@tauri-apps/plugin-opener";
+import { toast } from "sonner";
 import { TestTreeNode } from "../types";
 
 type FileTreePaneProps = {
@@ -106,6 +115,62 @@ export function FileTreePane({
     return pathSet;
   }, [currentJsonPath, data]);
 
+  const getParentDirPath = useCallback((rawPath: string): string | null => {
+    const trimmed = rawPath.replace(/[\\/]+$/, "");
+    const lastSlash = trimmed.lastIndexOf("/");
+    const lastBackslash = trimmed.lastIndexOf("\\");
+    const idx = Math.max(lastSlash, lastBackslash);
+    if (idx < 0) return null;
+
+    const parent = trimmed.slice(0, idx);
+    if (/^[a-zA-Z]:$/.test(parent)) return `${parent}\\`;
+    if (parent === "" && trimmed.startsWith("/")) return "/";
+    return parent;
+  }, []);
+
+  const openAnyPath = useCallback(async (rawPath: string) => {
+    try {
+      const isWindowsPath = /^[a-zA-Z]:[\\/]/.test(rawPath) || rawPath.startsWith("\\\\");
+      const normalizedPath = isWindowsPath ? rawPath.replace(/\//g, "\\") : rawPath.replace(/\\/g, "/");
+
+      if (normalizedPath.includes('"')) {
+        toast.error('Invalid path: contains a quote character (")');
+        return;
+      }
+
+      const pathExists = await exists(normalizedPath);
+      if (!pathExists) {
+        toast.error("Path does not exist");
+        return;
+      }
+
+      await openPath(normalizedPath);
+    } catch (error) {
+      console.error("Error opening path:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(message ? `Failed to open: ${message}` : "Failed to open");
+    }
+  }, []);
+
+  const handleOpenNodePath = useCallback(
+    async (node: TestTreeNode) => {
+      await openAnyPath(node.path);
+    },
+    [openAnyPath]
+  );
+
+  const handleOpenNodeFolder = useCallback(
+    async (node: TestTreeNode) => {
+      const folderPath = node.isDir ? node.path : getParentDirPath(node.path);
+      if (!folderPath) {
+        toast.error("Cannot resolve folder path");
+        return;
+      }
+      await openAnyPath(folderPath);
+    },
+    [getParentDirPath, openAnyPath]
+  );
+
   const NodeRow = ({ node, style }: NodeRendererProps<TestTreeNode>) => {
     const isDir = node.data.isDir;
     const Icon = isDir ? (node.isOpen ? ChevronDown : ChevronRight) : File;
@@ -140,22 +205,38 @@ export function FileTreePane({
     const isTopLevelDirty = Boolean(topLevelName && dirtyTopLevelSet.has(topLevelName));
 
     return (
-      <div
-        style={style}
-        className={`flex items-center gap-1 px-1.5 py-0.5 ${bgClass}`}
-        onClick={handleClick}
-        title={node.data.name}
-      >
-        {isTopLevelDirty && (
-          <span
-            className="h-2 w-2 rounded-full bg-yellow-400"
-            aria-label="Folder changed"
-            title="Folder changed"
-          />
-        )}
-        <Icon className="h-3 w-3 shrink-0 text-muted-foreground" />
-        <span className="truncate">{node.data.name}</span>
-      </div>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div
+            style={style}
+            className={`flex items-center gap-1 px-1.5 py-0.5 ${bgClass}`}
+            onClick={handleClick}
+            title={node.data.name}
+          >
+            {isTopLevelDirty && (
+              <span
+                className="h-2 w-2 rounded-full bg-yellow-400"
+                aria-label="Folder changed"
+                title="Folder changed"
+              />
+            )}
+            <Icon className="h-3 w-3 shrink-0 text-muted-foreground" />
+            <span className="truncate">{node.data.name}</span>
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-48">
+          {!isDir && (
+            <ContextMenuItem onClick={() => handleOpenNodePath(node.data)} className="flex items-center gap-2">
+              <ExternalLink className="h-4 w-4" />
+              <span>Open File</span>
+            </ContextMenuItem>
+          )}
+          <ContextMenuItem onClick={() => handleOpenNodeFolder(node.data)} className="flex items-center gap-2">
+            <ExternalLink className="h-4 w-4" />
+            <span>Open Folder</span>
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
     );
   };
 

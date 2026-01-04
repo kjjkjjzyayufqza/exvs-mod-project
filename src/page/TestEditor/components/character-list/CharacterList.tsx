@@ -46,7 +46,7 @@ export function CharacterList({ characters, selectedIndex, onSelect, onDelete, o
           placeholder="Search by Character ID..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
+          className="pl-10 h-8"
         />
       </div>
 

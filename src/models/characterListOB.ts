@@ -102,7 +102,7 @@ export class CharacterDataOB {
   // 0xa8 empty
   // 0xac empty
   EX_Pilot_Clothin_LMB_HASH: number // 0xb0
-  UnkHash10: number // 0xb4
+  SeriesId: number // 0xb4
   UnkStringOffset7: StringNameData // 0xb8
   // 0xbc empty
   UnkStringOffset8: StringNameData // 0xc0
@@ -147,7 +147,7 @@ export class CharacterDataOB {
   // 0x15c empty
   LMBCutIn: number // 0x160
   sticker_t05: number // 0x164
-  SeriesId: number // 0x168
+  unkId9: number // 0x168
   UnkHash21_1: number // 0x16c
   UnkHash22: number // 0x170 //不知道是什么，有8个.bin
   // 0x174 empty
@@ -215,7 +215,7 @@ export class CharacterDataOB {
     this.UnkStringOffset6 = new StringNameData(StreamReader.readInt32LE(0xa4), buffer)
     this.UnkHash9_2 = StreamReader.readInt32LE(0xa0)
     this.EX_Pilot_Clothin_LMB_HASH = StreamReader.readInt32LE(0xb0)
-    this.UnkHash10 = StreamReader.readInt32LE(0xb4)
+    this.SeriesId = StreamReader.readInt32LE(0xb4)
     this.UnkStringOffset7 = new StringNameData(StreamReader.readInt32LE(0xb8), buffer)
     this.UnkStringOffset8 = new StringNameData(StreamReader.readInt32LE(0xc0), buffer)
     this.UnkHash10_1 = StreamReader.readInt32LE(0xc8)
@@ -251,7 +251,7 @@ export class CharacterDataOB {
     this.UnkStringOffset11 = new StringNameData(StreamReader.readInt32LE(0x158), buffer)
     this.LMBCutIn = StreamReader.readInt32LE(0x160)
     this.sticker_t05 = StreamReader.readInt32LE(0x164)
-    this.SeriesId = StreamReader.readInt32LE(0x168)
+    this.unkId9 = StreamReader.readInt32LE(0x168)
     this.UnkHash21_1 = StreamReader.readInt32LE(0x16c)
     this.UnkHash22 = StreamReader.readInt32LE(0x170)
     this.UnkHash22_0 = StreamReader.readInt32LE(0x178)
@@ -416,7 +416,7 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
     unitDataBuffer.writeInt32LE(char.UnkHash9_2, baseOffset + 0xa0)
 
     unitDataBuffer.writeInt32LE(char.EX_Pilot_Clothin_LMB_HASH, baseOffset + 0xb0)
-    unitDataBuffer.writeInt32LE(char.UnkHash10, baseOffset + 0xb4)
+    unitDataBuffer.writeInt32LE(char.SeriesId, baseOffset + 0xb4)
 
     // stringNameData offset for UnkStringOffset7
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0xb8)
@@ -478,7 +478,7 @@ export function CharacterListOBOutPut (characterList: CharacterListOB, path: str
 
     unitDataBuffer.writeInt32LE(char.LMBCutIn, baseOffset + 0x160)
     unitDataBuffer.writeInt32LE(char.sticker_t05, baseOffset + 0x164)
-    unitDataBuffer.writeInt32LE(char.SeriesId, baseOffset + 0x168)
+    unitDataBuffer.writeInt32LE(char.unkId9, baseOffset + 0x168)
     unitDataBuffer.writeInt32LE(char.UnkHash21_1, baseOffset + 0x16c)
     unitDataBuffer.writeInt32LE(char.UnkHash22, baseOffset + 0x170)
     unitDataBuffer.writeInt32LE(char.UnkHash22_0, baseOffset + 0x178)
@@ -635,7 +635,7 @@ export function buildCharacterListBuffer (characterList: CharacterListOB): Buffe
     unitDataBuffer.writeInt32LE(char.UnkHash9_2, baseOffset + 0xa0)
 
     unitDataBuffer.writeInt32LE(char.EX_Pilot_Clothin_LMB_HASH, baseOffset + 0xb0)
-    unitDataBuffer.writeInt32LE(char.UnkHash10, baseOffset + 0xb4)
+    unitDataBuffer.writeInt32LE(char.SeriesId, baseOffset + 0xb4)
 
     unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0xb8)
     visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset7.StringBufferData])
@@ -690,7 +690,7 @@ export function buildCharacterListBuffer (characterList: CharacterListOB): Buffe
 
     unitDataBuffer.writeInt32LE(char.LMBCutIn, baseOffset + 0x160)
     unitDataBuffer.writeInt32LE(char.sticker_t05, baseOffset + 0x164)
-    unitDataBuffer.writeInt32LE(char.SeriesId, baseOffset + 0x168)
+    unitDataBuffer.writeInt32LE(char.unkId9, baseOffset + 0x168)
     unitDataBuffer.writeInt32LE(char.UnkHash21_1, baseOffset + 0x16c)
     unitDataBuffer.writeInt32LE(char.UnkHash22, baseOffset + 0x170)
     unitDataBuffer.writeInt32LE(char.UnkHash22_0, baseOffset + 0x178)

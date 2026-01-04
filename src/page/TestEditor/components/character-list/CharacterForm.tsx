@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { DualValueProperty } from "@/components/ui/dual-value-property";
 import type { CharacterDataOB } from "@/models/characterListOB";
 import { StringFieldGroup } from "./StringFieldGroup";
+import { SeriesIdPickerPopover } from "./SeriesIdPickerPopover";
 
 interface CharacterFormProps {
   character: CharacterDataOB;
@@ -54,7 +55,7 @@ export function CharacterForm({ character, characterId, onChange }: CharacterFor
       UnkHash9_1: character.UnkHash9_1,
       UnkHash9_2: character.UnkHash9_2,
       EX_Pilot_Clothin_LMB_HASH: character.EX_Pilot_Clothin_LMB_HASH,
-      UnkHash10: character.UnkHash10,
+      SeriesId: character.SeriesId,
       UnkHash10_1: character.UnkHash10_1,
       UnkHash11: character.UnkHash11,
       vs_p_r_c02: character.vs_p_r_c02,
@@ -85,7 +86,7 @@ export function CharacterForm({ character, characterId, onChange }: CharacterFor
       UnkHash21: character.UnkHash21,
       LMBCutIn: character.LMBCutIn,
       sticker_t05: character.sticker_t05,
-      SeriesId: character.SeriesId,
+      unkId9: character.unkId9,
       UnkHash21_1: character.UnkHash21_1,
       UnkHash22: character.UnkHash22,
       UnkHash22_0: character.UnkHash22_0,
@@ -191,7 +192,8 @@ export function CharacterForm({ character, characterId, onChange }: CharacterFor
         title: "Basic Information",
         fields: [
           { name: "CharacterId", label: "Character ID" },
-          { name: "SeriesId", label: "Series ID (0x168)" },
+          { name: "SeriesId", label: "Series ID (0xB4)" },
+          { name: "unkId9", label: "Unknow (0x168)" },
           { name: "MS_card_icon_index", label: "Card Icon Index (0xd4)" },
           { name: "indexInSeries", label: "Index in Series (0x00)" },
           { name: "characterUniqueId", label: "Character Unique ID (0x140)" },
@@ -267,7 +269,6 @@ export function CharacterForm({ character, characterId, onChange }: CharacterFor
           { name: "UnkHash9", label: "Hash 9 (0x74)" },
           { name: "UnkHash9_1", label: "Hash 9_1 (0x8C)" },
           { name: "UnkHash9_2", label: "Hash 9_2 (0xA0)" },
-          { name: "UnkHash10", label: "Hash 10 (0xB4)" },
           { name: "UnkHash10_1", label: "Hash 10_1 (0xC8)" },
           { name: "UnkHash11", label: "Hash 11 (0xCC)" },
           { name: "UnkHash12", label: "Hash 12 (0xD8)" },
@@ -361,6 +362,13 @@ export function CharacterForm({ character, characterId, onChange }: CharacterFor
                   <DualValueProperty
                     key={field.name}
                     label={field.label}
+                    labelExtra={
+                      field.name === "SeriesId" ? (
+                        <SeriesIdPickerPopover
+                          onSelect={(id) => handleFieldChange("SeriesId", id)}
+                        />
+                      ) : undefined
+                    }
                     value={formData[field.name] ?? 0}
                     property={field.name}
                     editable

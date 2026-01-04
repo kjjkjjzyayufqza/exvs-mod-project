@@ -14,7 +14,11 @@
     "fs:allow-write-text-file",
     {
       "identifier": "fs:scope",
-      "allow": [{ "path": "*/**" }]
+      "allow": [
+        {
+          "path": "*/**"
+        }
+      ]
     },
     "dialog:default",
     "store:default",
@@ -44,6 +48,14 @@
           "name": "exec-cmd",
           "cmd": "cmd",
           "args": true
+        }
+      ]
+    },
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        {
+          "path": "*/**"
         }
       ]
     }

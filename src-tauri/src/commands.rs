@@ -1,6 +1,4 @@
-use notify::{
-    Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
-};
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use std::{
     fs,
@@ -41,14 +39,9 @@ pub fn read_file(path: &str) -> Response {
 #[tauri::command]
 pub fn exec_shell_command(command: &str) -> Result<String, String> {
     let output = if cfg!(target_os = "windows") {
-        Command::new("cmd")
-            .args(["/C", command])
-            .output()
+        Command::new("cmd").args(["/C", command]).output()
     } else {
-        Command::new("sh")
-            .arg("-c")
-            .arg(command)
-            .output()
+        Command::new("sh").arg("-c").arg(command).output()
     };
 
     match output {
@@ -185,9 +178,7 @@ fn convert_event(event: &Event) -> Option<FolderChangePayload> {
                 }
             }
         }
-        EventKind::Modify(notify::event::ModifyKind::Name(
-            notify::event::RenameMode::Both,
-        )) => {
+        EventKind::Modify(notify::event::ModifyKind::Name(notify::event::RenameMode::Both)) => {
             if event.paths.len() == 2 {
                 // treat as remove old + add new
                 let from = &event.paths[0];
@@ -293,12 +284,10 @@ fn build_tree(path: &Path) -> Result<Vec<TestTreeNode>, String> {
     }
 
     // Sort to mimic common explorer ordering: folders first, then files; case-insensitive name.
-    children.sort_by(|a, b| {
-        match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        }
+    children.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
     });
 
     Ok(children)

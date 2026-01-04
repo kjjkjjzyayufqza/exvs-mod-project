@@ -9,6 +9,7 @@ import { int32ToHexDisplay, hexDisplayToInt32, validateHexInput } from "@/module
 
 interface DualValuePropertyProps {
   label: string;
+  labelExtra?: React.ReactNode;
   value: number | undefined;
   property: string;
   editable?: boolean;
@@ -33,6 +34,7 @@ interface DualValuePropertyProps {
  */
 export function DualValueProperty({
   label,
+  labelExtra,
   value,
   property,
   editable = false,
@@ -126,7 +128,10 @@ export function DualValueProperty({
   if (!editable) {
     return (
       <div className="flex justify-between items-center">
-        <Label className="text-sm font-medium">{label}</Label>
+        <div className="flex items-center gap-2 min-w-0">
+          <Label className="text-sm font-medium truncate">{label}</Label>
+          {labelExtra}
+        </div>
         {showHex ? (
           <div className="flex items-center gap-4 text-sm text-muted-foreground font-mono">
             <span title="Int32 value">{displayValue}</span>
@@ -154,9 +159,12 @@ export function DualValueProperty({
 
       return (
         <div className={containerBaseClass}>
-          <Label className="text-xs font-medium text-muted-foreground">
-            {label}
-          </Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-xs font-medium text-muted-foreground truncate">
+              {label}
+            </Label>
+            {labelExtra}
+          </div>
 
           {showHex ? (
             <div className="flex rounded-md shadow-xs">
@@ -254,10 +262,12 @@ export function DualValueProperty({
 
     const CardContent = (
       <div className={containerBaseClass}>
-        {/* Label at top */}
-        <Label className="text-xs font-medium text-muted-foreground">
-          {label}
-        </Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label className="text-xs font-medium text-muted-foreground truncate">
+            {label}
+          </Label>
+          {labelExtra}
+        </div>
 
         {/* Input with add-ons style - two separate inputs */}
         {showHex ? (
@@ -374,7 +384,10 @@ export function DualValueProperty({
   // Editable display (default)
   return (
     <div className="space-y-2">
-      <Label className="text-sm font-medium">{label}</Label>
+      <div className="flex items-center justify-between gap-2">
+        <Label className="text-sm font-medium truncate">{label}</Label>
+        {labelExtra}
+      </div>
       
       {!isEditing ? (
         <div className="space-y-2">
