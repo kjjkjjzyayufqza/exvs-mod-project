@@ -56,6 +56,29 @@ pub fn exec_shell_command(command: &str) -> Result<String, String> {
     }
 }
 
+#[tauri::command]
+pub fn nutexb_read_info(input_path: &str) -> Result<crate::nutexb_lib::NutexbInfo, String> {
+    crate::nutexb_lib::read_nutexb_info(input_path)
+}
+
+#[tauri::command]
+pub fn nutexb_export_dds(input_path: &str, output_path: &str) -> Result<(), String> {
+    crate::nutexb_lib::ensure_parent_dir(output_path)?;
+    crate::nutexb_lib::export_nutexb_to_dds(input_path, output_path)
+}
+
+#[tauri::command]
+pub fn nutexb_export_png_uncompressed(input_path: &str, output_path: &str) -> Result<(), String> {
+    crate::nutexb_lib::ensure_parent_dir(output_path)?;
+    crate::nutexb_lib::export_nutexb_to_png(input_path, output_path)
+}
+
+#[tauri::command]
+pub fn nutexb_export_png(input_path: &str, output_path: &str) -> Result<(), String> {
+    crate::nutexb_lib::ensure_parent_dir(output_path)?;
+    crate::nutexb_lib::export_nutexb_to_png(input_path, output_path)
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestTreeNode {

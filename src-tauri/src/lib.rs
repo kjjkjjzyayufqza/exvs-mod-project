@@ -1,6 +1,7 @@
 use tauri::Manager;
 
 mod commands;
+mod nutexb_lib;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -16,7 +17,11 @@ pub fn run() {
             commands::my_custom_command,
             commands::read_file,
             commands::exec_shell_command,
-            commands::watch_folder
+            commands::watch_folder,
+            commands::nutexb_read_info,
+            commands::nutexb_export_dds,
+            commands::nutexb_export_png_uncompressed,
+            commands::nutexb_export_png
         ])
         .setup(|app| {
             #[cfg(debug_assertions)] // only include this code on debug builds

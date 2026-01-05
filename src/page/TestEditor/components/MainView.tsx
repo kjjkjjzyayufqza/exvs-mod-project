@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import RepackFolderStructureView from "./RepackFolderStructureView";
 import CharacterIdTableView from "./CharacterIdTableView";
 import CharacterListView from "./CharacterListView";
+import SeriesListView from "./SeriesListView";
 
 type StageTab = {
   name: string;
@@ -68,6 +69,17 @@ const tabs: StageTab[] = [
       />
     ),
   },
+  {
+    name: "Series List",
+    value: "series-list",
+    render: (props: MainViewProps) => (
+      <CharacterListView
+        folderPath={props.folderPath ?? ""}
+        isActive={false}
+        onUnsavedChanges={props.onUnsavedChanges}
+      />
+    ),
+  },
 ];
 
 const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges }: MainViewProps) => {
@@ -75,6 +87,7 @@ const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges }: MainViewProps)
   const [folderStructureHasUnsaved, setFolderStructureHasUnsaved] = useState(false);
   const [characterIdTableHasUnsaved, setCharacterIdTableHasUnsaved] = useState(false);
   const [characterListHasUnsaved, setCharacterListHasUnsaved] = useState(false);
+  const [seriesListHasUnsaved, setSeriesListHasUnsaved] = useState(false);
 
   const handleUnsavedChanges = useCallback((hasChanges: boolean) => {
     setFolderStructureHasUnsaved(hasChanges);
@@ -87,6 +100,10 @@ const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges }: MainViewProps)
 
   const handleCharacterListUnsaved = useCallback((hasChanges: boolean) => {
     setCharacterListHasUnsaved(hasChanges);
+  }, []);
+
+  const handleSeriesListUnsaved = useCallback((hasChanges: boolean) => {
+    setSeriesListHasUnsaved(hasChanges);
   }, []);
 
   const resolvedTabs = useMemo<StageTab[]>(() => {
@@ -129,9 +146,22 @@ const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges }: MainViewProps)
         };
       }
 
+      if (tab.value === "series-list") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <SeriesListView
+              folderPath={props.folderPath ?? ""}
+              isActive={activeTab === "series-list"}
+              onUnsavedChanges={handleSeriesListUnsaved}
+            />
+          ),
+        };
+      }
+
       return tab;
     });
-  }, [activeTab, handleCharacterIdTableUnsaved, handleCharacterListUnsaved, handleUnsavedChanges]);
+  }, [activeTab, handleCharacterIdTableUnsaved, handleCharacterListUnsaved, handleSeriesListUnsaved, handleUnsavedChanges]);
 
   return (
     <div className="flex h-full w-full">
@@ -163,21 +193,20 @@ const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges }: MainViewProps)
                     title="Unsaved changes"
                   />
                 )}
+                {tab.value === "series-list" && seriesListHasUnsaved && (
+                  <span
+                    className="h-2 w-2 rounded-full bg-yellow-500"
+                    aria-label="Unsaved changes"
+                    title="Unsaved changes"
+                  />
+                )}
               </span>
             </TabsTrigger>
           ))}
         </TabsList>
         {resolvedTabs.map((tab) => (
           <TabsContent key={tab.value} value={tab.value} className="flex-1 h-full w-full p-0 m-0">
-            {tab.value === "folder-structure" || tab.value === "character-id-table" || tab.value === "character-list" ? (
-              <div className="h-full w-full p-0 m-0">
-                {tab.render ? tab.render({ jsonFilePath, folderPath, onUnsavedChanges }) : tab.content}
-              </div>
-            ) : (
-              <div className="flex h-full items-center justify-center p-4 text-sm text-muted-foreground">
-                {tab.render ? tab.render({ jsonFilePath, folderPath, onUnsavedChanges }) : tab.content}
-              </div>
-            )}
+            {tab.render ? tab.render({ jsonFilePath, folderPath, onUnsavedChanges }) : tab.content}
           </TabsContent>
         ))}
       </Tabs>

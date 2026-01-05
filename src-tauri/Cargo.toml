@@ -28,3 +28,7 @@ tauri-plugin-shell = "2.3.3"
 tauri-plugin-store = "2.4.1"
 notify = "8.2.0"
 tauri-plugin-opener = "2"
+
+nutexb = { git = "https://github.com/kjjkjjzyayufqza/nutexb", features = ["ddsfile"] }
+image = "0.25.9"
+image_dds = { version = "0.7.2", features = ["ddsfile", "image"] }

@@ -256,7 +256,7 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
 
     if (loadState.status === "loading") {
         return (
-            <div className="h-full w-full p-2">
+            <div className="h-full w-full">
                 <Card className="h-full flex flex-col">
                     <CardHeader>
                         <CardTitle>Character ID Table</CardTitle>
@@ -273,7 +273,7 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
 
     if (loadState.status === "error") {
         return (
-            <div className="h-full w-full p-4">
+            <div className="h-full w-full">
                 <Card>
                     <CardHeader>
                         <CardTitle>Character ID Table</CardTitle>
@@ -309,7 +309,7 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
     }
 
     return (
-        <div className="h-full w-full p-2">
+        <div className="h-full w-full">
             <Card className="h-full flex flex-col">
                 <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-4">
@@ -434,10 +434,10 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                 editingProperty={null}
                                                 editValue=""
                                                 validationError=""
-                                                onStartEdit={() => {}}
-                                                onSaveEdit={() => {}}
-                                                onCancelEdit={() => {}}
-                                                onValueChange={() => {}}
+                                                onStartEdit={() => { }}
+                                                onSaveEdit={() => { }}
+                                                onCancelEdit={() => { }}
+                                                onValueChange={() => { }}
                                                 showHex={false}
                                                 variant="compact"
                                                 mode="live"
@@ -454,10 +454,10 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     editingProperty={null}
                                                     editValue=""
                                                     validationError=""
-                                                    onStartEdit={() => {}}
-                                                    onSaveEdit={() => {}}
-                                                    onCancelEdit={() => {}}
-                                                    onValueChange={() => {}}
+                                                    onStartEdit={() => { }}
+                                                    onSaveEdit={() => { }}
+                                                    onCancelEdit={() => { }}
+                                                    onValueChange={() => { }}
                                                     mode="live"
                                                     onCommit={(nextValue) => updateSelectedRowField("Model", nextValue)}
                                                 />
@@ -471,10 +471,10 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     editingProperty={null}
                                                     editValue=""
                                                     validationError=""
-                                                    onStartEdit={() => {}}
-                                                    onSaveEdit={() => {}}
-                                                    onCancelEdit={() => {}}
-                                                    onValueChange={() => {}}
+                                                    onStartEdit={() => { }}
+                                                    onSaveEdit={() => { }}
+                                                    onCancelEdit={() => { }}
+                                                    onValueChange={() => { }}
                                                     mode="live"
                                                     onCommit={(nextValue) => updateSelectedRowField("Effect", nextValue)}
                                                 />
@@ -488,10 +488,10 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     editingProperty={null}
                                                     editValue=""
                                                     validationError=""
-                                                    onStartEdit={() => {}}
-                                                    onSaveEdit={() => {}}
-                                                    onCancelEdit={() => {}}
-                                                    onValueChange={() => {}}
+                                                    onStartEdit={() => { }}
+                                                    onSaveEdit={() => { }}
+                                                    onCancelEdit={() => { }}
+                                                    onValueChange={() => { }}
                                                     mode="live"
                                                     onCommit={(nextValue) => updateSelectedRowField("Sound", nextValue)}
                                                 />
@@ -505,10 +505,10 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     editingProperty={null}
                                                     editValue=""
                                                     validationError=""
-                                                    onStartEdit={() => {}}
-                                                    onSaveEdit={() => {}}
-                                                    onCancelEdit={() => {}}
-                                                    onValueChange={() => {}}
+                                                    onStartEdit={() => { }}
+                                                    onSaveEdit={() => { }}
+                                                    onCancelEdit={() => { }}
+                                                    onValueChange={() => { }}
                                                     mode="live"
                                                     onCommit={(nextValue) => updateSelectedRowField("Param", nextValue)}
                                                 />
@@ -522,10 +522,10 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     editingProperty={null}
                                                     editValue=""
                                                     validationError=""
-                                                    onStartEdit={() => {}}
-                                                    onSaveEdit={() => {}}
-                                                    onCancelEdit={() => {}}
-                                                    onValueChange={() => {}}
+                                                    onStartEdit={() => { }}
+                                                    onSaveEdit={() => { }}
+                                                    onCancelEdit={() => { }}
+                                                    onValueChange={() => { }}
                                                     mode="live"
                                                     onCommit={(nextValue) => updateSelectedRowField("Msc", nextValue)}
                                                 />
@@ -539,10 +539,10 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     editingProperty={null}
                                                     editValue=""
                                                     validationError=""
-                                                    onStartEdit={() => {}}
-                                                    onSaveEdit={() => {}}
-                                                    onCancelEdit={() => {}}
-                                                    onValueChange={() => {}}
+                                                    onStartEdit={() => { }}
+                                                    onSaveEdit={() => { }}
+                                                    onCancelEdit={() => { }}
+                                                    onValueChange={() => { }}
                                                     mode="live"
                                                     onCommit={(nextValue) => updateSelectedRowField("Motion", nextValue)}
                                                 />

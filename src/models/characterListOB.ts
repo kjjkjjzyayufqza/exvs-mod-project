@@ -286,46 +286,6 @@ class StringNameData {
     this.StringBufferData = stringNameReadToEnd(nameOffset, stringBufferData)
     this.Utf8String = obfDecodeToUtf8String(this.StringBufferData)
   }
-
-  /**
-   * Decode this obfuscated 0x00-terminated string buffer.
-   * If `inPlace` is true, this instance's `StringBufferData` will be replaced with the decoded buffer.
-   */
-  decode (inPlace = false): Buffer {
-    const decoded = Buffer.from(obfDecryptBytes(this.StringBufferData))
-    if (inPlace) this.StringBufferData = decoded
-    return decoded
-  }
-
-  /**
-   * Encode this plain 0x00-terminated string buffer.
-   * If `inPlace` is true, this instance's `StringBufferData` will be replaced with the encoded buffer.
-   */
-  encode (inPlace = false): Buffer {
-    const encoded = Buffer.from(obfEncryptBytes(this.StringBufferData))
-    if (inPlace) this.StringBufferData = encoded
-    return encoded
-  }
-
-  /**
-   * Refresh `Utf8String` from the current `StringBufferData`.
-   */
-  refreshUtf8StringFromBuffer (): string {
-    this.Utf8String = obfDecodeToUtf8String(this.StringBufferData)
-    return this.Utf8String
-  }
-
-  /**
-   * If `Utf8String` differs from what the current `StringBufferData` decodes to,
-   * rebuild `StringBufferData` from `Utf8String` (0x00-terminated, obfuscated).
-   */
-  applyUtf8StringToBufferIfChanged (): Buffer {
-    const current = obfDecodeToUtf8String(this.StringBufferData)
-    if (current !== this.Utf8String) {
-      this.StringBufferData = Buffer.from(obfEncodeFromUtf8String(this.Utf8String))
-    }
-    return this.StringBufferData
-  }
 }
 
 // Read bytes until the first 0x00 terminator; the returned buffer always includes the terminator.

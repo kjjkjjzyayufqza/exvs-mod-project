@@ -7,10 +7,10 @@ import { RefreshCw, Save } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CharacterListOB, buildCharacterListBuffer } from "@/models/characterListOB";
-import { CharacterEditor } from "./character-list/CharacterEditor";
+import { SeriesList, buildSeriesListBuffer } from "@/models/seriesList";
+import { SeriesEditor } from "./series-list/SeriesEditor";
 
-interface CharacterListViewProps {
+interface SeriesListViewProps {
   folderPath: string;
   isActive: boolean;
   onUnsavedChanges?: (hasChanges: boolean) => void;
@@ -20,15 +20,15 @@ type LoadState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error"; filePath: string; message: string }
-  | { status: "ready"; filePath: string; list: CharacterListOB };
+  | { status: "ready"; filePath: string; list: SeriesList };
 
-export default function CharacterListView({ folderPath, isActive, onUnsavedChanges }: CharacterListViewProps) {
+export default function SeriesListView({ folderPath, isActive, onUnsavedChanges }: SeriesListViewProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [hasChanges, setHasChanges] = useState(false);
   const lastLoadedKeyRef = useRef<string>("");
 
   const resolveFilePath = useCallback(async () => {
-    return await join(folderPath, "0xDFD38C70", "character_list.bin");
+    return await join(folderPath, "0xb7367090", "series_list.bin");
   }, [folderPath]);
 
   const resetEditorState = useCallback(() => {
@@ -47,7 +47,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
     setLoadState({ status: "loading" });
     try {
       const fileData = await readFile(filePath);
-      const list = new CharacterListOB(Buffer.from(fileData));
+      const list = new SeriesList(Buffer.from(fileData));
       setLoadState({ status: "ready", filePath, list });
       resetEditorState();
     } catch (error) {
@@ -59,14 +59,14 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
 
   useEffect(() => {
     if (!isActive) return;
-    const key = `${folderPath}::characterlist`;
+    const key = `${folderPath}::serieslist`;
     if (key === lastLoadedKeyRef.current) return;
     lastLoadedKeyRef.current = key;
     void load();
   }, [folderPath, isActive, load]);
 
   const handleEditorChange = useCallback(
-    (next: CharacterListOB) => {
+    (next: SeriesList) => {
       setLoadState((prev) => {
         if (prev.status !== "ready") return prev;
         return { ...prev, list: next };
@@ -80,7 +80,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
   const fileMeta = useMemo(() => {
     if (loadState.status !== "ready") return null;
     return {
-      count: loadState.list.CharacterCount,
+      count: loadState.list.SeriesCount,
       commands: loadState.list.CommandsCount,
     };
   }, [loadState]);
@@ -97,14 +97,14 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
         // Ignore backup failures
       }
 
-      const buffer = buildCharacterListBuffer(loadState.list);
+      const buffer = buildSeriesListBuffer(loadState.list);
       await writeFile(filePath, buffer);
-      toast.success("Saved character_list.bin");
+      toast.success("Saved series_list.bin");
       setHasChanges(false);
       onUnsavedChanges?.(false);
     } catch (error) {
       console.error(error);
-      toast.error("Failed to save character_list.bin");
+      toast.error("Failed to save series_list.bin");
     }
   }, [loadState, onUnsavedChanges]);
 
@@ -117,10 +117,10 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
       <div className="h-full w-full">
         <Card className="h-full flex flex-col">
           <CardHeader>
-            <CardTitle>Character List</CardTitle>
+            <CardTitle>Series List</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="text-sm text-muted-foreground">Loading character_list.bin...</div>
+            <div className="text-sm text-muted-foreground">Loading series_list.bin...</div>
           </CardContent>
         </Card>
       </div>
@@ -132,7 +132,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
       <div className="h-full w-full">
         <Card>
           <CardHeader>
-            <CardTitle>Character List</CardTitle>
+            <CardTitle>Series List</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="text-sm text-muted-foreground">
@@ -159,7 +159,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
   if (loadState.status !== "ready") {
     return (
       <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground">
-        Select this tab to load character_list.bin
+        Select this tab to load series_list.bin
       </div>
     );
   }
@@ -170,11 +170,11 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <CardTitle>Character List</CardTitle>
+              <CardTitle>Series List</CardTitle>
               <div className="text-xs text-muted-foreground break-all mt-1">{loadState.filePath}</div>
               {fileMeta && (
                 <div className="text-xs text-muted-foreground mt-1">
-                  Loaded: {fileMeta.count} characters, {fileMeta.commands} commands
+                  Loaded: {fileMeta.count} series, {fileMeta.commands} commands
                 </div>
               )}
             </div>
@@ -197,12 +197,10 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
         </CardHeader>
 
         <CardContent className="flex-1 min-h-0">
-          <CharacterEditor characterListData={loadState.list} onChange={handleEditorChange} />
+          <SeriesEditor seriesListData={loadState.list} onChange={handleEditorChange} />
         </CardContent>
       </Card>
     </div>
   );
 }
-
-
 

@@ -192,7 +192,7 @@ export function CharacterForm({ character, characterId, onChange }: CharacterFor
         ],
       },
       {
-        title: "Unknown IDs (0x00-0x0F)",
+        title: "Unknown IDs",
         fields: [
           { name: "UnkId1", label: "Unknown ID 1 (0x04)" },
           { name: "UnkId2", label: "Unknown ID 2 (0x08)" },
