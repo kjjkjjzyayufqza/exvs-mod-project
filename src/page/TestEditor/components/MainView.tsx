@@ -73,7 +73,7 @@ const tabs: StageTab[] = [
     name: "Series List",
     value: "series-list",
     render: (props: MainViewProps) => (
-      <CharacterListView
+      <SeriesListView
         folderPath={props.folderPath ?? ""}
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}

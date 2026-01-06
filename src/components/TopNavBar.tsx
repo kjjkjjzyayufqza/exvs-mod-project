@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import RepackModal from "./RepackModal";
+import Fhm2dInitModal from "./Fhm2dInitModal";
 
 export function TopNavBar() {
   const [isRepackModalOpen, setIsRepackModalOpen] = useState(false);
+  const [isFhm2dInitModalOpen, setIsFhm2dInitModalOpen] = useState(false);
 
   const handleOptionsClick = () => {
     // Options button - no action for now
@@ -11,6 +13,10 @@ export function TopNavBar() {
 
   const handleRepackClick = () => {
     setIsRepackModalOpen((prev) => !prev);
+  };
+
+  const handleFhm2dInitClick = () => {
+    setIsFhm2dInitModalOpen((prev) => !prev);
   };
 
   return (
@@ -32,11 +38,24 @@ export function TopNavBar() {
         >
           Repack
         </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleFhm2dInitClick}
+          className="h-6 px-2 text-xs hover:bg-gray-200"
+        >
+          FHM2D Init
+        </Button>
       </div>
       
       <RepackModal 
         isOpen={isRepackModalOpen} 
         onClose={() => setIsRepackModalOpen(false)} 
+      />
+
+      <Fhm2dInitModal
+        isOpen={isFhm2dInitModalOpen}
+        onClose={() => setIsFhm2dInitModalOpen(false)}
       />
     </>
   );

@@ -6,9 +6,11 @@ import { path } from "@tauri-apps/api";
 import { basename, dirname } from "@tauri-apps/api/path";
 import { toast } from "sonner";
 import { applyNumdlbBaseNameToStructureObject } from "@/lib/fhm2d_characterModelFormatFuc";
+import { applyNutexbInternalNameToStructureObject } from "@/lib/fhm2d_allNutexbFormatFuc";
 
 export enum Fhm2d_type_format {
   fhm2d_character = "fhm2d_character",
+  fhm2d_all_nutexb = "fhm2d_all_nutexb",
 }
 
 export enum Fhm2dType {
@@ -123,7 +125,7 @@ export class PS4FhmData {
     return subDataArray;
   }
 
-  // 因为 PS4的文件不是按照FileIndex来进行排序的，所以这样要这样处理
+  // PS4 files are not stored in FileIndex order, so we sort them before use.
   getSortSubFileData() {
     return this.SubFileData.sort((a, b) => a.FileIndex - b.FileIndex);
   }
@@ -210,7 +212,7 @@ export class Fhm2dData {
     for (let i = 0; i < this.FileCount; i++) {
       const subData = new SubData(this._TYPE_, this.StreamReader, this.BodyCompData);
       subDataArray.push(subData);
-      this.StreamReader = this.StreamReader.slice(subData._Length); //需要特殊处理
+      this.StreamReader = this.StreamReader.slice(subData._Length);
     }
     return subDataArray;
   }
@@ -239,9 +241,9 @@ class SubData {
   OriginChunkBinaryBuffer!: Buffer;
   FileIndex!: number;
   BufferData!: Buffer;
-  CompBufferData!: { Size: number; CompBufferData: Buffer }[];
+  CompBufferData!: { Size: number; IsCompressed: boolean; CompBufferData: Buffer }[];
   _Length!: number;
-  _isNeedDeComp: boolean = true; //有些文件本身没有经过压缩
+  _isNeedDeComp: boolean = true; // Some files contain compressed pages; others are stored as plain data.
   constructor(_TYPE_: Fhm2dType, meta: Buffer, body: Buffer) {
     if (_TYPE_ == Fhm2dType.PS4GundamVersus) {
       this.StartOffset = meta.readUInt32LE(0);
@@ -256,40 +258,69 @@ class SubData {
       this.Unk1 = meta.readUInt32LE(0x18);
       this.ChunkCount = meta.readUInt32LE(0x1c);
       this.FileIndex = meta.readUInt32LE(0x28);
-      this.OriginChunkBinaryBuffer = readChunkBinaryToEnd(meta, 0x2c, this.ChunkCount);
 
-      let BINARY_COUNT = 0;
+      // Xboost FHM2D splits each file payload into 0x10000-byte pages (the last page may be smaller).
+      // A bitmap at 0x2C describes each page:
+      // - bit = 1: this page is stored as raw deflate (inflateRaw)
+      // - bit = 0: this page is stored as plain data and must be copied as-is
+      //
+      // `ChunkCount` is the number of compressed pages (number of 1-bits), not the total page count.
+      const pageCount = Math.ceil(this.FileSize / 0x10000);
+      const bitmapLength = Math.ceil(pageCount / 8);
+      this.OriginChunkBinaryBuffer = meta.slice(0x2c, 0x2c + bitmapLength);
+
       if (this.ChunkCount > 0) {
-        let chunkPaddingStartOffset = 0x2c;
-        let padding = 0;
-        let temp = 0;
-        while (BINARY_COUNT != this.ChunkCount) {
-          temp = meta.readUInt8(chunkPaddingStartOffset + padding);
-          padding++;
-          BINARY_COUNT += countOnesInBinary(temp);
-        }
-
-        const eachChunkSizeStartOffset = 0x2c + padding;
-        let offset: number = this.StartOffset;
+        // Read compressed sizes table (one entry per compressed page).
+        const eachChunkSizeStartOffset = 0x2c + bitmapLength;
+        const compSizes: number[] = [];
         for (let i = 0; i < this.ChunkCount; i++) {
-          const Size = meta.readInt32LE(eachChunkSizeStartOffset + i * 0x8);
-          this.CompBufferData.push({
-            Size: Size,
-            CompBufferData: body.slice(offset, offset + Size),
-          });
-          offset += Size;
+          compSizes.push(meta.readInt32LE(eachChunkSizeStartOffset + i * 0x8));
         }
-        // 获取整个块信息的大小
-        this._Length = 0x2c + padding + 0x8 * this.ChunkCount;
-      }
-      if (this.ChunkCount == 0) {
-        //假如没有chunk的话，那么就是没有经过压缩的文件，那直接获取这个文件的大小就可以了
 
+        let offset = this.StartOffset;
+        let compIndex = 0;
+        for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {
+          const byteIndex = pageIndex >> 3;
+          const bitInByte = pageIndex & 7;
+          const flagByte = this.OriginChunkBinaryBuffer[byteIndex] ?? 0;
+          const isCompressed = ((flagByte >> bitInByte) & 1) === 1;
+
+          if (isCompressed) {
+            const size = compSizes[compIndex++];
+            if (typeof size !== "number" || size <= 0) {
+              throw new Error(`Invalid compressed size at page ${pageIndex}: ${size}`);
+            }
+            this.CompBufferData.push({
+              Size: size,
+              IsCompressed: true,
+              CompBufferData: body.slice(offset, offset + size),
+            });
+            offset += size;
+          } else {
+            const remaining = this.FileSize - pageIndex * 0x10000;
+            const rawSize = Math.min(0x10000, remaining);
+            this.CompBufferData.push({
+              Size: rawSize,
+              IsCompressed: false,
+              CompBufferData: body.slice(offset, offset + rawSize),
+            });
+            offset += rawSize;
+          }
+        }
+
+        if (compIndex !== this.ChunkCount) {
+          throw new Error(`Compressed page count mismatch: expected ${this.ChunkCount}, used ${compIndex}`);
+        }
+
+        // Total meta entry length: header (0x2C) + bitmap + size table.
+        this._Length = 0x2c + bitmapLength + 0x8 * this.ChunkCount;
+      } else {
+        // No compressed pages: the file is stored as plain data.
         this.CompBufferData.push({
           Size: this.FileSize,
+          IsCompressed: false,
           CompBufferData: body.slice(this.StartOffset, this.StartOffset + this.FileSize),
         });
-        // 获取整个块信息的大小
         this._Length = 0x2c;
         this._isNeedDeComp = false;
       }
@@ -320,7 +351,7 @@ function createSubFileStructure(file: Buffer, _TYPE_: Fhm2dType): SubFileStructu
           folderCount: Data.readInt32LE(0x5),
           unk2: Data.slice(0x9, 0xd).toString("hex"),
           unk3: Data.readInt32LE(0x11),
-          unk4: _TYPE_ == Fhm2dType.Xboost && Data.readInt32LE(0x19), // 只有XB 才有这个
+          unk4: _TYPE_ == Fhm2dType.Xboost && Data.readInt32LE(0x19), // Only Xboost includes this field.
         };
         Items.push(item);
         if (_TYPE_ == Fhm2dType.Xboost) {
@@ -455,9 +486,9 @@ export async function ExtractFHMData(
   if (fhm2d._TYPE_ == Fhm2dType.PS4GundamVersus) {
     throw new Error(ErrorMessage.notSupport);
   } else if (fhm2d._TYPE_ == Fhm2dType.Xboost) {
-    //2. write the data
-    //2.1 为什么要getSortSubFileData，因为fhm2中记录文件类型的是在头部，比如第一个文件类型是0(.bin)，但是在下面每个文件记录的信息里
-    //他可以是不按顺序排序的，所以我们需要sort一下，然后按顺序写入类型
+    // Write the extracted data.
+    // We sort by FileIndex because the type list is defined in the header order,
+    // while file records may not be stored in FileIndex order.
     // create list to store type
     let typeList = [];
     for (let i of fhm2d.FileTypeData) {
@@ -470,7 +501,7 @@ export async function ExtractFHMData(
     // Update file structure index
     fhm2d.SubFileStructure.forEach((e) => {
       if (e.type === "Item") {
-        // 这里是让每个文件的index和文件名一致
+        // Keep the original fileIndex so callers can map structure items back to file data.
         e.originalFileIndex = e.fileIndex;
       }
     });
@@ -492,21 +523,25 @@ export async function ExtractFHMData(
     for (let i = 0; i < subFileData.length; i++) {
       const sub = subFileData[i]!;
       let BufferData: Buffer;
-      let decompressData: Uint8Array[] = [];
+      const decompressData: Uint8Array[] = [];
       if (sub._isNeedDeComp == false) {
         BufferData = sub.CompBufferData[0].CompBufferData;
       } else {
         try {
-          sub.CompBufferData.map((_e, subIndex) => {
-            let temp = pako.inflateRaw(_e.CompBufferData);
+          sub.CompBufferData.forEach((chunk) => {
+            if (!chunk.IsCompressed) {
+              decompressData.push(new Uint8Array(chunk.CompBufferData));
+              return;
+            }
+            const temp = pako.inflateRaw(new Uint8Array(chunk.CompBufferData));
             decompressData.push(temp);
           });
           BufferData = Buffer.concat(decompressData);
         } catch (error) {
           console.error("Error in ", i, typeList[i], "Offset", sub.StartOffset + "|" + sub.StartOffset.toString(16));
           BufferData = Buffer.alloc(0);
-          sub.CompBufferData.map((_e) => {
-            BufferData = Buffer.concat([BufferData, _e.CompBufferData]);
+          sub.CompBufferData.forEach((chunk) => {
+            BufferData = Buffer.concat([BufferData, chunk.CompBufferData]);
           });
           errorInfo[i] = {
             isError: true,
@@ -541,6 +576,19 @@ export async function ExtractFHMData(
               rootDir,
               concurrency: 1,
               rewriteFileUrl: true,
+              fileDataMap,
+            });
+            break;
+          }
+          case Fhm2d_type_format.fhm2d_all_nutexb: {
+            // Create file data map from decompressed files (keyed by FileIndex)
+            const fileDataMap = new Map<number, Uint8Array>();
+            for (const fileData of decompressedFiles) {
+              const fileIndex = subFileData[fileData.index]?.FileIndex ?? fileData.index;
+              fileDataMap.set(fileIndex, new Uint8Array(fileData.buffer));
+            }
+
+            finalStructure = await applyNutexbInternalNameToStructureObject(outputStructure, {
               fileDataMap,
             });
             break;
@@ -625,24 +673,4 @@ function generateOutputStructure(fhm2d: PS4FhmData | Fhm2dData, typeList: string
   };
 }
 
-function countOnesInBinary(num: number): number {
-  // 将十进制数字转换为二进制字符串
-  const binaryString: string = num.toString(2);
-
-  // 使用正则表达式匹配二进制字符串中的所有1，并计算其个数
-  const onesCount: number = (binaryString.match(/1/g) || []).length;
-
-  return onesCount;
-}
-
-function readChunkBinaryToEnd(meta: Buffer, offset: number, chunkCount: number): Buffer {
-  let padding = 0;
-  let temp = 0;
-  let BINARY_COUNT = 0;
-  while (BINARY_COUNT != chunkCount) {
-    temp = meta.readUInt8(offset + padding);
-    padding++;
-    BINARY_COUNT += countOnesInBinary(temp);
-  }
-  return meta.slice(offset, offset + padding);
-}
+// Helper functions removed: bitmap length is derived from page count, not from counting 1-bits.

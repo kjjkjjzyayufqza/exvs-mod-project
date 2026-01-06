@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { readFile, writeFile } from "@tauri-apps/plugin-fs";
+import { readDir, readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
+import { invoke } from "@tauri-apps/api/core";
 import { Buffer } from "buffer";
 import { toast } from "sonner";
-import { RefreshCw, Save } from "lucide-react";
+import { RefreshCw, Save, Image as ImageIcon, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,13 +23,28 @@ type LoadState =
   | { status: "error"; filePath: string; message: string }
   | { status: "ready"; filePath: string; list: SeriesList };
 
+type SeriesImageCountState =
+  | { status: "idle"; dirPath: string }
+  | { status: "loading"; dirPath: string }
+  | { status: "error"; dirPath: string; message: string }
+  | { status: "ready"; dirPath: string; count: number };
+
 export default function SeriesListView({ folderPath, isActive, onUnsavedChanges }: SeriesListViewProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [hasChanges, setHasChanges] = useState(false);
+  const [isRefreshingNutexb, setIsRefreshingNutexb] = useState(false);
+  const [seriesImageCountState, setSeriesImageCountState] = useState<SeriesImageCountState>({
+    status: "idle",
+    dirPath: "",
+  });
   const lastLoadedKeyRef = useRef<string>("");
 
   const resolveFilePath = useCallback(async () => {
     return await join(folderPath, "0xb7367090", "series_list.bin");
+  }, [folderPath]);
+
+  const resolveSeriesImageConvertDir = useCallback(async () => {
+    return await join(folderPath, "0xA0253AA0", "__convert");
   }, [folderPath]);
 
   const resetEditorState = useCallback(() => {
@@ -64,6 +80,37 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
     lastLoadedKeyRef.current = key;
     void load();
   }, [folderPath, isActive, load]);
+
+  const loadSeriesImageCount = useCallback(async () => {
+    if (!folderPath) {
+      setSeriesImageCountState({ status: "error", dirPath: "", message: "Folder path is empty" });
+      return;
+    }
+
+    const dirPath = await resolveSeriesImageConvertDir();
+    setSeriesImageCountState({ status: "loading", dirPath });
+    try {
+      const entries = await readDir(dirPath);
+      const count = entries.filter((e) => {
+        if (!e.isFile) return false;
+        const name = (e.name || "").toLowerCase();
+        return /^ser_ms_\d{3}\.png$/.test(name);
+      }).length;
+      setSeriesImageCountState({ status: "ready", dirPath, count });
+    } catch (error) {
+      setSeriesImageCountState({
+        status: "error",
+        dirPath,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }, [folderPath, resolveSeriesImageConvertDir]);
+
+  useEffect(() => {
+    if (!isActive) return;
+    if (!folderPath) return;
+    void loadSeriesImageCount();
+  }, [folderPath, isActive, loadSeriesImageCount]);
 
   const handleEditorChange = useCallback(
     (next: SeriesList) => {
@@ -107,6 +154,36 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
       toast.error("Failed to save series_list.bin");
     }
   }, [loadState, onUnsavedChanges]);
+
+  const handleRefreshNutexb = useCallback(async () => {
+    if (!folderPath) {
+      toast.error("Folder path is empty");
+      return;
+    }
+
+    try {
+      setIsRefreshingNutexb(true);
+      const seriesImageDir = await join(folderPath, "0xA0253AA0");
+      const result = await invoke<{ converted: number; failed: number; skipped: number }>(
+        "nutexb_batch_export_png",
+        {
+          rootDir: seriesImageDir,
+          outputMode: "root_convert",
+          overwrite: true,
+        }
+      );
+      toast.success(`Converted ${result.converted} nutexb file(s) to PNG`);
+      if (result.failed > 0) {
+        toast.error(`Failed to convert ${result.failed} file(s)`);
+      }
+      void loadSeriesImageCount();
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to refresh nutexb previews");
+    } finally {
+      setIsRefreshingNutexb(false);
+    }
+  }, [folderPath, loadSeriesImageCount]);
 
   if (!isActive) {
     return <div className="h-full w-full" />;
@@ -171,17 +248,40 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <CardTitle>Series List</CardTitle>
-              <div className="text-xs text-muted-foreground break-all mt-1">{loadState.filePath}</div>
+              <div className="text-xs text-muted-foreground break-all mt-1">Series List: {loadState.filePath}</div>
               {fileMeta && (
                 <div className="text-xs text-muted-foreground mt-1">
                   Loaded: {fileMeta.count} series, {fileMeta.commands} commands
                 </div>
               )}
+              <div className="text-xs text-muted-foreground break-all mt-2">
+                Series Image List: {seriesImageCountState.dirPath || "-"}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Loaded:{" "}
+                {seriesImageCountState.status === "ready"
+                  ? `${seriesImageCountState.count} png`
+                  : seriesImageCountState.status === "loading"
+                    ? "Loading..."
+                    : seriesImageCountState.status === "error"
+                      ? "Failed"
+                      : "-"}
+              </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <Button size="sm" variant="outline" onClick={() => void load()} className="inline-flex items-center gap-2">
                 <RefreshCw className="w-4 h-4" />
                 Reload
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void handleRefreshNutexb()}
+                disabled={isRefreshingNutexb || !folderPath}
+                className="inline-flex items-center gap-2"
+              >
+                {isRefreshingNutexb ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+                Refresh Nutexb
               </Button>
               <Button
                 size="sm"
@@ -197,7 +297,11 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
         </CardHeader>
 
         <CardContent className="flex-1 min-h-0">
-          <SeriesEditor seriesListData={loadState.list} onChange={handleEditorChange} />
+          <SeriesEditor
+            seriesListData={loadState.list}
+            seriesImageConvertDirPath={seriesImageCountState.dirPath}
+            onChange={handleEditorChange}
+          />
         </CardContent>
       </Card>
     </div>

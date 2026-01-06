@@ -14,19 +14,27 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import type { SeriesData, SeriesList } from "@/models/seriesList";
-import { SeriesData as SeriesDataClass } from "@/models/seriesList";
 import { SeriesForm } from "./SeriesForm";
 import { SeriesList as SeriesListComponent } from "./SeriesList";
 
 interface SeriesEditorProps {
   seriesListData?: SeriesList;
+  seriesImageConvertDirPath?: string;
   onChange: (data: SeriesList) => void;
 }
 
-export function SeriesEditor({ seriesListData, onChange }: SeriesEditorProps) {
+export function SeriesEditor({ seriesListData, seriesImageConvertDirPath, onChange }: SeriesEditorProps) {
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteCandidateIndex, setDeleteCandidateIndex] = useState<number | null>(null);
+
+  const isSeriesIdTaken = useCallback(
+    (nextId: number) => {
+      if (!seriesListData) return false;
+      return seriesListData.SeriesData.some((s, i) => i !== selectedIndex && s.SeriesId === nextId);
+    },
+    [seriesListData, selectedIndex]
+  );
 
   const selectedSeries = useMemo<SeriesData | null>(() => {
     if (!seriesListData) return null;
@@ -114,7 +122,7 @@ export function SeriesEditor({ seriesListData, onChange }: SeriesEditorProps) {
 
       const clonedSeries: SeriesData = {
         SeriesId: newSeriesId,
-        unk1: seriesToCopy.unk1,
+        iconFileIndex: seriesToCopy.iconFileIndex,
         unk2: seriesToCopy.unk2,
         unk3: seriesToCopy.unk3,
         unk4: seriesToCopy.unk4,
@@ -150,7 +158,7 @@ export function SeriesEditor({ seriesListData, onChange }: SeriesEditorProps) {
     const newSeriesId = Math.max(...seriesListData.SeriesData.map((s) => s.SeriesId), 0) + 1;
     const newSeries: SeriesData = {
       SeriesId: newSeriesId,
-      unk1: 0,
+      iconFileIndex: 0,
       unk2: 0,
       unk3: 0,
       unk4: 0,
@@ -195,6 +203,7 @@ export function SeriesEditor({ seriesListData, onChange }: SeriesEditorProps) {
 
         <SeriesListComponent
           seriesData={seriesListData.SeriesData}
+          seriesImageConvertDirPath={seriesImageConvertDirPath}
           selectedIndex={selectedIndex}
           onSelect={handleSelect}
           onDelete={openDeleteDialog}
@@ -204,7 +213,13 @@ export function SeriesEditor({ seriesListData, onChange }: SeriesEditorProps) {
 
       <div className="flex-1 border rounded-lg p-4 overflow-hidden flex flex-col min-h-0">
         {selectedSeries ? (
-          <SeriesForm series={selectedSeries} index={selectedIndex} onChange={handleUpdateSeries} />
+          <SeriesForm
+            series={selectedSeries}
+            index={selectedIndex}
+            seriesImageConvertDirPath={seriesImageConvertDirPath}
+            isSeriesIdTaken={isSeriesIdTaken}
+            onChange={handleUpdateSeries}
+          />
         ) : (
           <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
             Select a series to edit

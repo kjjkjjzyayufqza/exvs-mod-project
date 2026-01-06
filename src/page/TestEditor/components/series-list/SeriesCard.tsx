@@ -1,21 +1,32 @@
 import { Copy, Trash2 } from "lucide-react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { SeriesData } from "@/models/seriesList";
+import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
+import { formatSeriesImageFileName } from "./seriesImage";
 
 interface SeriesCardProps {
   series: SeriesData;
   index: number;
+  seriesImageConvertDirPath?: string;
   isSelected: boolean;
   onClick: () => void;
   onDelete: () => void;
   onCopy: () => void;
 }
 
-export function SeriesCard({ series, index, isSelected, onClick, onDelete, onCopy }: SeriesCardProps) {
-  const thumbnailSrc = "/tauri.svg";
+export function SeriesCard({ series, index, seriesImageConvertDirPath, isSelected, onClick, onDelete, onCopy }: SeriesCardProps) {
+  const fileName = formatSeriesImageFileName(series.iconFileIndex);
+  const imageFilePath = (() => {
+    if (!seriesImageConvertDirPath || !fileName) return null;
+    const sep = getPathSeparatorFromFileUrl(seriesImageConvertDirPath);
+    if (seriesImageConvertDirPath.endsWith(sep)) return `${seriesImageConvertDirPath}${fileName}`;
+    return `${seriesImageConvertDirPath}${sep}${fileName}`;
+  })();
+  const thumbnailSrc = imageFilePath ? convertFileSrc(imageFilePath) : "/tauri.svg";
 
   return (
     <div
@@ -26,8 +37,15 @@ export function SeriesCard({ series, index, isSelected, onClick, onDelete, onCop
       onClick={onClick}
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        <div className="h-16 w-16 shrink-0 overflow-hidden rounded border bg-white">
-          <img src={thumbnailSrc} alt={series.unkStr1?.Utf8String || ""} className="h-full w-full object-contain" />
+        <div className="h-12 w-24 shrink-0 overflow-hidden rounded border bg-black">
+          <img
+            src={thumbnailSrc}
+            alt={series.unkStr1?.Utf8String || ""}
+            className="h-full w-full object-contain"
+            onError={(e) => {
+              e.currentTarget.src = "/tauri.svg";
+            }}
+          />
         </div>
         <div className="min-w-0">
           <TooltipProvider>
@@ -55,7 +73,7 @@ export function SeriesCard({ series, index, isSelected, onClick, onDelete, onCop
         <Button
           variant="ghost"
           size="sm"
-          className="text-blue-600 hover:text-blue-600 hover:bg-blue-50"
+          className="text-blue-600 hover:text-blue-600 hover:bg-blue-50 p-0"
           onClick={(e) => {
             e.stopPropagation();
             onCopy();
@@ -67,7 +85,7 @@ export function SeriesCard({ series, index, isSelected, onClick, onDelete, onCop
         <Button
           variant="ghost"
           size="sm"
-          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+          className="text-destructive hover:text-destructive hover:bg-destructive/10 p-0"
           onClick={(e) => {
             e.stopPropagation();
             onDelete();

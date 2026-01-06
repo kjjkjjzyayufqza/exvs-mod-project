@@ -9,13 +9,14 @@ import { SeriesCard } from "./SeriesCard";
 
 interface SeriesListProps {
   seriesData: SeriesData[];
+  seriesImageConvertDirPath?: string;
   selectedIndex: number;
   onSelect: (index: number) => void;
   onDelete: (index: number) => void;
   onCopy: (index: number) => void;
 }
 
-export function SeriesList({ seriesData, selectedIndex, onSelect, onDelete, onCopy }: SeriesListProps) {
+export function SeriesList({ seriesData, seriesImageConvertDirPath, selectedIndex, onSelect, onDelete, onCopy }: SeriesListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const deferredSearchTerm = useDeferredValue(searchTerm);
 
@@ -88,6 +89,7 @@ export function SeriesList({ seriesData, selectedIndex, onSelect, onDelete, onCo
                 <SeriesCard
                   series={row}
                   index={idx}
+                  seriesImageConvertDirPath={seriesImageConvertDirPath}
                   isSelected={idx === selectedIndex}
                   onClick={() => onSelect(idx)}
                   onDelete={() => onDelete(idx)}

@@ -525,7 +525,6 @@ function reassignSequentialIndices (
       const newFileIndex = i
 
       fileIndexMapping.set(originalFileIndex, newFileIndex)
-      console.log(`  Mapping: fileIndex ${originalFileIndex} -> ${newFileIndex}`)
     }
   }
 

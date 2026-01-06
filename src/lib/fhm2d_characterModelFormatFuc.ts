@@ -2,6 +2,14 @@ import { basename } from "@tauri-apps/api/path";
 import { Buffer } from "buffer";
 import { getFileType } from "@/models/fhm2d";
 
+import {
+  assertNoDuplicateFileUrls,
+  buildFileUrl,
+  getPathSeparatorFromFileUrl,
+  normalizeWindowsLikePathForCompare,
+  splitPathSegments,
+} from "@/lib/fhm2d_fileUrlUtils";
+
 type PathSeparator = "/" | "\\";
 
 export interface Fhm2dSubFileDataItem {
@@ -16,49 +24,6 @@ export interface Fhm2dSubFileDataItem {
 export interface Fhm2dStructureObject {
   SubFileData: Fhm2dSubFileDataItem[];
   [key: string]: unknown;
-}
-
-function normalizeWindowsLikePathForCompare(p: string): string {
-  // Normalize to a Windows-like comparable key:
-  // - backslashes
-  // - collapse duplicate separators
-  // - trim
-  // - case-insensitive
-  return p
-    .trim()
-    .replace(/\//g, "\\")
-    .replace(/\\+/g, "\\")
-    .toLowerCase();
-}
-
-export function assertNoDuplicateFileUrls(structure: Fhm2dStructureObject): void {
-  const map = new Map<string, Fhm2dSubFileDataItem[]>();
-  for (const item of structure.SubFileData) {
-    const url = item.fileUrl || "";
-    const key = normalizeWindowsLikePathForCompare(url);
-    if (!key) continue;
-    const list = map.get(key);
-    if (list) list.push(item);
-    else map.set(key, [item]);
-  }
-
-  const duplicates: Array<{ fileUrl: string; items: Fhm2dSubFileDataItem[] }> = [];
-  for (const [key, items] of map.entries()) {
-    if (items.length > 1) {
-      duplicates.push({ fileUrl: key, items });
-    }
-  }
-
-  if (duplicates.length > 0) {
-    const details = duplicates
-      .slice(0, 20)
-      .map((d) => {
-        const indices = d.items.map((i) => i.fileIndex).join(", ");
-        return `${d.fileUrl} <- fileIndex: [${indices}]`;
-      })
-      .join("\n");
-    throw new Error(`Duplicate fileUrl detected (${duplicates.length}):\n${details}`);
-  }
 }
 
 type SubFileParseNode =
@@ -109,21 +74,6 @@ function normalizeSeparatorsToBackslash(p: string): string {
 
 function stripLeadingDotSlash(p: string): string {
   return p.replace(/^(\.\/|\.\\)+/g, "");
-}
-
-function splitPathSegments(p: string): string[] {
-  const trimmed = stripLeadingDotSlash(p);
-  return trimmed.split(/[\\/]+/g).filter(Boolean);
-}
-
-function getPathSeparatorFromFileUrl(fileUrl: string): PathSeparator {
-  return fileUrl.includes("\\") ? "\\" : "/";
-}
-
-function buildFileUrl(prefixSegments: string[], fileName: string, sep: PathSeparator): string {
-  const base = prefixSegments.join(sep);
-  if (base.length === 0) return `.${sep}${fileName}`;
-  return `.${sep}${base}${sep}${fileName}`;
 }
 
 /**

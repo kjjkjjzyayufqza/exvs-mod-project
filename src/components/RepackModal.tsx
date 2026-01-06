@@ -175,7 +175,7 @@ export default function RepackModal({ isOpen, onClose }: RepackModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed left-0 right-0 bottom-0 top-8 z-40 pointer-events-none flex items-center justify-center">
+    <div className="fixed left-0 right-0 bottom-0 top-8 z-10 pointer-events-none flex items-center justify-center">
       <Draggable
         nodeRef={nodeRef}
         handle=".drag-handle"

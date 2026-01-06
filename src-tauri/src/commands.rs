@@ -79,6 +79,20 @@ pub fn nutexb_export_png(input_path: &str, output_path: &str) -> Result<(), Stri
     crate::nutexb_lib::export_nutexb_to_png(input_path, output_path)
 }
 
+#[tauri::command]
+pub async fn nutexb_batch_export_png(
+    root_dir: String,
+    output_mode: String,
+    overwrite: bool,
+) -> Result<crate::nutexb_lib::BatchExportSummary, String> {
+    let mode = crate::nutexb_lib::OutputMode::parse(output_mode.as_str())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::nutexb_lib::batch_export_folder_to_png(root_dir.as_str(), mode, overwrite)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestTreeNode {
