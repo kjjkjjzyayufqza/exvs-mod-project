@@ -7,15 +7,25 @@ import { Separator } from "@/components/ui/separator";
 import { DualValueProperty } from "@/components/ui/dual-value-property";
 import type { CharacterDataOB } from "@/models/characterListOB";
 import { StringFieldGroup } from "./StringFieldGroup";
-import { SeriesIdPickerPopover } from "./SeriesIdPickerPopover";
+import { SeriesIdPickerItem, SeriesIdPickerPopover } from "./SeriesIdPickerPopover";
 
 interface CharacterFormProps {
   character: CharacterDataOB;
   characterId: number;
+  seriesIdPickerItems: SeriesIdPickerItem[];
+  seriesIdPickerLoading?: boolean;
+  seriesIdPickerError?: string | null;
   onChange: (character: CharacterDataOB) => void;
 }
 
-export function CharacterForm({ character, characterId, onChange }: CharacterFormProps) {
+export function CharacterForm({
+  character,
+  characterId,
+  seriesIdPickerItems,
+  seriesIdPickerLoading,
+  seriesIdPickerError,
+  onChange,
+}: CharacterFormProps) {
   const [formData, setFormData] = useState<Record<string, number>>({});
   const [stringFormData, setStringFormData] = useState<Record<string, string>>({});
   const formDataRef = useRef<Record<string, number>>({});
@@ -358,6 +368,9 @@ export function CharacterForm({ character, characterId, onChange }: CharacterFor
                       field.name === "SeriesId" ? (
                         <SeriesIdPickerPopover
                           onSelect={(id) => handleFieldChange("SeriesId", id)}
+                          items={seriesIdPickerItems}
+                          isLoading={seriesIdPickerLoading}
+                          error={seriesIdPickerError}
                         />
                       ) : undefined
                     }

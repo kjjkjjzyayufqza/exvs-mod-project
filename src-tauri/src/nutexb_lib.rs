@@ -9,7 +9,9 @@ use std::{
 use std::collections::HashSet;
 
 use image_dds::image::RgbaImage;
+use image_dds::{dds_from_image, ImageFormat as DdsImageFormat, Mipmaps, Quality};
 use nutexb::NutexbFile;
+use nutexb::NutexbFormat;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -77,6 +79,14 @@ pub struct BatchExportSummary {
     pub failed: u32,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesImageReplaceSummary {
+    pub output_nutexb_path: String,
+    pub preview_png_path: String,
+    pub nutexb_name: String,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum OutputMode {
     RootConvert,
@@ -118,11 +128,14 @@ pub fn batch_export_folder_to_png(
             OutputMode::PerFileConvert => make_per_file_convert_output_path(&file_path)?,
         };
 
-        // Resolve output name collisions inside the same directory:
-        // - If the file already exists in the output folder, or
-        // - If another file in this batch already used the same output name,
-        // then rename to `{fileName}_{i}.png` (i starts from 1).
-        let out_path = resolve_unique_output_path(&out_path, &mut used_output_paths)?;
+        // Resolve output name collisions inside the same directory.
+        //
+        // Important behavior:
+        // - Always avoid collisions within this batch (in-memory): if another input would produce the same output path,
+        //   rename to `{fileName}_{i}.png` (i starts from 1).
+        // - When overwrite=false, also avoid overwriting existing files on disk by applying the same suffix strategy.
+        // - When overwrite=true, do NOT rename just because a file already exists on disk; it will be overwritten.
+        let out_path = resolve_unique_output_path(&out_path, &mut used_output_paths, overwrite)?;
 
         // Keep legacy behavior: when overwrite=false, treat existing file as skipped.
         // Note: with unique-path resolution above, this will only happen if the output name
@@ -145,7 +158,11 @@ pub fn batch_export_folder_to_png(
     Ok(BatchExportSummary { converted, skipped, failed })
 }
 
-fn resolve_unique_output_path(base: &Path, used: &mut HashSet<PathBuf>) -> Result<PathBuf, String> {
+fn resolve_unique_output_path(
+    base: &Path,
+    used: &mut HashSet<PathBuf>,
+    overwrite: bool,
+) -> Result<PathBuf, String> {
     let parent = base.parent().ok_or_else(|| "Invalid output path".to_string())?;
     let stem = base
         .file_stem()
@@ -156,14 +173,16 @@ fn resolve_unique_output_path(base: &Path, used: &mut HashSet<PathBuf>) -> Resul
     let ext = base.extension().and_then(|e| e.to_str()).unwrap_or("png");
 
     let mut candidate = base.to_path_buf();
-    if !candidate.exists() && !used.contains(&candidate) {
+    let disk_collision = !overwrite && candidate.exists();
+    if !disk_collision && !used.contains(&candidate) {
         used.insert(candidate.clone());
         return Ok(candidate);
     }
 
     for i in 1..=10000u32 {
         candidate = parent.join(format!("{stem}_{i}.{ext}"));
-        if candidate.exists() || used.contains(&candidate) {
+        let disk_collision = !overwrite && candidate.exists();
+        if disk_collision || used.contains(&candidate) {
             continue;
         }
         used.insert(candidate.clone());
@@ -239,4 +258,110 @@ fn sanitize_file_name(input: &str) -> String {
     } else {
         out
     }
+}
+
+fn format_series_ms_index(icon_file_index: i32) -> Result<String, String> {
+    if icon_file_index < 1 || icon_file_index > 999 {
+        return Err("iconFileIndex must be between 1 and 999".to_string());
+    }
+    Ok(format!("{:03}", icon_file_index))
+}
+
+fn nutexb_format_to_dds_image_format(fmt: NutexbFormat) -> DdsImageFormat {
+    match fmt {
+        NutexbFormat::R8Unorm => DdsImageFormat::R8Unorm,
+        NutexbFormat::R8G8B8A8Unorm => DdsImageFormat::Rgba8Unorm,
+        NutexbFormat::R8G8B8A8Srgb => DdsImageFormat::Rgba8UnormSrgb,
+        NutexbFormat::B8G8R8A8Unorm => DdsImageFormat::Bgra8Unorm,
+        NutexbFormat::B8G8R8A8Srgb => DdsImageFormat::Bgra8UnormSrgb,
+        NutexbFormat::BC1Unorm => DdsImageFormat::BC1RgbaUnorm,
+        NutexbFormat::BC1Srgb => DdsImageFormat::BC1RgbaUnormSrgb,
+        NutexbFormat::BC2Unorm => DdsImageFormat::BC2RgbaUnorm,
+        NutexbFormat::BC2Srgb => DdsImageFormat::BC2RgbaUnormSrgb,
+        NutexbFormat::BC3Unorm => DdsImageFormat::BC3RgbaUnorm,
+        NutexbFormat::BC3Srgb => DdsImageFormat::BC3RgbaUnormSrgb,
+        NutexbFormat::BC4Unorm => DdsImageFormat::BC4RUnorm,
+        NutexbFormat::BC4Snorm => DdsImageFormat::BC4RSnorm,
+        NutexbFormat::BC5Unorm => DdsImageFormat::BC5RgUnorm,
+        NutexbFormat::BC5Snorm => DdsImageFormat::BC5RgSnorm,
+        NutexbFormat::BC6Ufloat => DdsImageFormat::BC6hRgbUfloat,
+        NutexbFormat::BC6Sfloat => DdsImageFormat::BC6hRgbSfloat,
+        NutexbFormat::BC7Unorm => DdsImageFormat::BC7RgbaUnorm,
+        NutexbFormat::BC7Srgb => DdsImageFormat::BC7RgbaUnormSrgb,
+        _ => DdsImageFormat::BC7RgbaUnorm,
+    }
+}
+
+fn validate_series_nutexb_file_name(file_name: &str, icon_file_index: i32) -> Result<(), String> {
+    let idx = format_series_ms_index(icon_file_index)?;
+    let expected = format!("ser_ms_{idx}.nutexb");
+    if file_name != expected {
+        return Err(format!(
+            "Invalid fileName: expected \"{expected}\" for iconFileIndex={icon_file_index}"
+        ));
+    }
+    Ok(())
+}
+
+pub fn series_image_replace_from_png(
+    series_image_dir: &str,
+    series_image_convert_dir: &str,
+    icon_file_index: i32,
+    file_name: &str,
+    png_path: &str,
+) -> Result<SeriesImageReplaceSummary, String> {
+    validate_series_nutexb_file_name(file_name, icon_file_index)?;
+    let idx = format_series_ms_index(icon_file_index)?;
+    let base_name = format!("ser_ms_{idx}");
+
+    let series_dir = PathBuf::from(series_image_dir);
+    let convert_dir = PathBuf::from(series_image_convert_dir);
+
+    let out_nutexb_path = series_dir.join(format!("{base_name}.nutexb"));
+    let preview_png_path = convert_dir.join(format!("{base_name}.png"));
+
+    if let Some(parent) = out_nutexb_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    if let Some(parent) = preview_png_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+
+    // Load PNG -> DDS -> Nutexb (pure Rust; no external tools).
+    let dyn_img = image::open(png_path).map_err(|e| e.to_string())?;
+    let rgba: RgbaImage = dyn_img.to_rgba8();
+
+    let (nutexb_name, dds_format, mipmaps) = if out_nutexb_path.exists() {
+        let existing = NutexbFile::read_from_file(&out_nutexb_path).map_err(|e| e.to_string())?;
+        let name = existing.footer.string.to_string();
+        let format = nutexb_format_to_dds_image_format(existing.footer.image_format);
+        let mipmaps = if existing.footer.mipmap_count <= 1 {
+            Mipmaps::Disabled
+        } else {
+            Mipmaps::GeneratedExact(existing.footer.mipmap_count)
+        };
+        (name, format, mipmaps)
+    } else {
+        // For a new series, set the internal nutexb name to the base name.
+        let name = sanitize_file_name(&base_name);
+        (name, DdsImageFormat::BC7RgbaUnorm, Mipmaps::GeneratedAutomatic)
+    };
+
+    let dds = dds_from_image(&rgba, dds_format, Quality::Normal, mipmaps).map_err(|e| e.to_string())?;
+    let nutexb = NutexbFile::from_dds(&dds, nutexb_name.clone()).map_err(|e| e.to_string())?;
+    nutexb
+        .write_to_file(&out_nutexb_path)
+        .map_err(|e| e.to_string())?;
+
+    // Refresh preview PNG at the fixed series mapping path (ser_ms_###.png).
+    export_nutexb_to_png(
+        out_nutexb_path.to_string_lossy().as_ref(),
+        preview_png_path.to_string_lossy().as_ref(),
+    )?;
+
+    Ok(SeriesImageReplaceSummary {
+        output_nutexb_path: out_nutexb_path.to_string_lossy().to_string(),
+        preview_png_path: preview_png_path.to_string_lossy().to_string(),
+        nutexb_name,
+    })
 }

@@ -93,6 +93,27 @@ pub async fn nutexb_batch_export_png(
     .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+pub async fn series_image_replace_from_png(
+    series_image_dir: String,
+    series_image_convert_dir: String,
+    icon_file_index: i32,
+    file_name: String,
+    png_path: String,
+) -> Result<crate::nutexb_lib::SeriesImageReplaceSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::nutexb_lib::series_image_replace_from_png(
+            series_image_dir.as_str(),
+            series_image_convert_dir.as_str(),
+            icon_file_index,
+            file_name.as_str(),
+            png_path.as_str(),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestTreeNode {

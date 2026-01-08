@@ -18,13 +18,17 @@ import { CharacterDataOB as CharacterDataOBClass } from "@/models/characterListO
 import { cloneCharacterDataOB } from "@/module/commonFunc";
 import { CharacterForm } from "./CharacterForm";
 import { CharacterList } from "./CharacterList";
+import type { SeriesIdPickerItem } from "./SeriesIdPickerPopover";
 
 interface CharacterEditorProps {
   characterListData?: CharacterListOB;
+  seriesIdPickerItems: SeriesIdPickerItem[];
+  seriesIdPickerLoading?: boolean;
+  seriesIdPickerError?: string | null;
   onChange: (data: CharacterListOB) => void;
 }
 
-export function CharacterEditor({ characterListData, onChange }: CharacterEditorProps) {
+export function CharacterEditor({ characterListData, seriesIdPickerItems, seriesIdPickerLoading, seriesIdPickerError, onChange }: CharacterEditorProps) {
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteCandidateIndex, setDeleteCandidateIndex] = useState<number | null>(null);
@@ -174,6 +178,9 @@ export function CharacterEditor({ characterListData, onChange }: CharacterEditor
           <CharacterForm
             character={selectedCharacter}
             characterId={selectedCharacter.CharacterId}
+            seriesIdPickerItems={seriesIdPickerItems}
+            seriesIdPickerLoading={seriesIdPickerLoading}
+            seriesIdPickerError={seriesIdPickerError}
             onChange={handleUpdateCharacter}
           />
         ) : (

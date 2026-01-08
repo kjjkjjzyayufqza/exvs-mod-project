@@ -63,7 +63,8 @@ export class SeriesData {
   unkStr1: StringNameData // 0x0C (int32 offset -> StringNameData)
   unk4: number // 0x10
   unk5: number // 0x14
-  unk6: number // 0x18
+  // Position/index used for character list ordering.
+  characterListPosition: number // 0x18
 
   constructor (buffer: Buffer, offset: number, SeriesId: number) {
     this.SeriesId = SeriesId
@@ -73,7 +74,7 @@ export class SeriesData {
     this.unkStr1 = new StringNameData(buffer.readInt32LE(offset + 0xc), buffer)
     this.unk4 = buffer.readInt32LE(offset + 0x10)
     this.unk5 = buffer.readInt32LE(offset + 0x14)
-    this.unk6 = buffer.readInt32LE(offset + 0x18)
+    this.characterListPosition = buffer.readInt32LE(offset + 0x18)
   }
 }
 
@@ -163,7 +164,7 @@ export function buildSeriesListBuffer (list: SeriesList): Buffer {
 
     dataBuffer.writeInt32LE(row.unk4, base + 0x10)
     dataBuffer.writeInt32LE(row.unk5, base + 0x14)
-    dataBuffer.writeInt32LE(row.unk6, base + 0x18)
+    dataBuffer.writeInt32LE(row.characterListPosition, base + 0x18)
   }
 
   const outBuffer = Buffer.concat([headerBuffer, commandsBuffer, seriesIdBuffer, dataBuffer, stringNameDataBuffer])

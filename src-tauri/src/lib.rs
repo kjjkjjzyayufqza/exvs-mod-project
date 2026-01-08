@@ -22,7 +22,8 @@ pub fn run() {
             commands::nutexb_export_dds,
             commands::nutexb_export_png_uncompressed,
             commands::nutexb_export_png,
-            commands::nutexb_batch_export_png
+            commands::nutexb_batch_export_png,
+            commands::series_image_replace_from_png
         ])
         .setup(|app| {
             #[cfg(debug_assertions)] // only include this code on debug builds

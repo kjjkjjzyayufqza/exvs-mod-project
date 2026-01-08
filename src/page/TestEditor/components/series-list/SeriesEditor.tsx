@@ -127,7 +127,7 @@ export function SeriesEditor({ seriesListData, seriesImageConvertDirPath, onChan
         unk3: seriesToCopy.unk3,
         unk4: seriesToCopy.unk4,
         unk5: seriesToCopy.unk5,
-        unk6: seriesToCopy.unk6,
+        characterListPosition: seriesToCopy.characterListPosition,
         unkStr1: {
           Offset: 0,
           StringBufferData: seriesToCopy.unkStr1?.StringBufferData
@@ -163,7 +163,7 @@ export function SeriesEditor({ seriesListData, seriesImageConvertDirPath, onChan
       unk3: 0,
       unk4: 0,
       unk5: 0,
-      unk6: 0,
+      characterListPosition: 0,
       unkStr1: {
         Offset: 0,
         StringBufferData: Buffer.from([0]),

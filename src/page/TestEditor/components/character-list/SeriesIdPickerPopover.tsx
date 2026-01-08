@@ -6,30 +6,21 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { X } from "lucide-react";
 
-type SeriesIdPickerItem = {
+export type SeriesIdPickerItem = {
   id: number;
   label: string;
   previewSrc: string;
 };
 
-export function SeriesIdPickerPopover(props: { onSelect: (id: number) => void }) {
-  const { onSelect } = props;
+export function SeriesIdPickerPopover(props: {
+  onSelect: (id: number) => void;
+  items: SeriesIdPickerItem[];
+  isLoading?: boolean;
+  error?: string | null;
+}) {
+  const { onSelect, items, isLoading, error } = props;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-
-  const items = useMemo<SeriesIdPickerItem[]>(
-    () => [
-      { id: 0, label: "None", previewSrc: "/tauri.svg" },
-      { id: 1, label: "Sample A", previewSrc: "/vite.svg" },
-      { id: 2, label: "Sample B", previewSrc: "/tauri.svg" },
-      { id: 3, label: "Sample C", previewSrc: "/vite.svg" },
-      { id: 10, label: "Sample 10", previewSrc: "/tauri.svg" },
-      { id: 33, label: "Sample 33", previewSrc: "/vite.svg" },
-      { id: 99, label: "Sample 99", previewSrc: "/tauri.svg" },
-      { id: 123, label: "Sample 123", previewSrc: "/vite.svg" },
-    ],
-    []
-  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -84,20 +75,32 @@ export function SeriesIdPickerPopover(props: { onSelect: (id: number) => void })
             className="h-8"
           />
           <Separator />
-          <ScrollArea className="h-[320px] pr-2">
+          {isLoading && (
+            <div className="text-xs text-muted-foreground">Loading series list...</div>
+          )}
+          {!isLoading && error && (
+            <div className="text-xs text-destructive">Failed to load series list</div>
+          )}
+          <ScrollArea className="h-[600px] pr-2">
             <div className="space-y-1">
               {filtered.map((it) => (
                 <button
                   key={it.id}
                   type="button"
                   className="w-full flex items-center gap-3 rounded-md border px-2 py-2 text-left hover:bg-accent/30"
-                  onClick={() => onSelect(it.id)}
+                  onClick={() => {
+                    onSelect(it.id);
+                    setOpen(false);
+                  }}
                 >
                   <img
                     src={it.previewSrc}
                     alt={it.label}
-                    className="h-8 w-8 rounded bg-muted object-contain"
+                    className="h-12 w-24 rounded bg-black object-contain"
                     loading="lazy"
+                    onError={(e) => {
+                      e.currentTarget.src = "/tauri.svg";
+                    }}
                   />
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium truncate">{it.label}</div>

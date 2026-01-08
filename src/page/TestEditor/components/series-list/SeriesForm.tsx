@@ -8,6 +8,7 @@ import type { SeriesData } from "@/models/seriesList";
 import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
 import { DualValueProperty } from "@/components/ui/dual-value-property";
 import { formatSeriesImageFileName } from "./seriesImage";
+import { SeriesImageReplaceDialog } from "./SeriesImageReplaceDialog";
 
 interface SeriesFormProps {
   series: SeriesData;
@@ -22,6 +23,7 @@ export function SeriesForm({ series, index, seriesImageConvertDirPath, isSeriesI
   const [editValue, setEditValue] = useState<string>("");
   const [validationError, setValidationError] = useState<string>("");
   const editValueRef = useRef<string>("");
+  const [previewVersion, setPreviewVersion] = useState(0);
 
   const handleStartEdit = useCallback((property: string, value: string | number) => {
     setEditingProperty(property);
@@ -69,7 +71,7 @@ export function SeriesForm({ series, index, seriesImageConvertDirPath, isSeriesI
   }, [editingProperty, isSeriesIdTaken, onChange, series, validationError]);
 
   const handleNumberChange = useCallback(
-    (field: keyof Pick<SeriesData, "iconFileIndex" | "unk2" | "unk3" | "unk4" | "unk5" | "unk6">) =>
+    (field: keyof Pick<SeriesData, "iconFileIndex" | "unk2" | "unk3" | "unk4" | "unk5" | "characterListPosition">) =>
       (e: ChangeEvent<HTMLInputElement>) => {
         const value = Number(e.target.value) || 0;
         onChange({ ...series, [field]: value });
@@ -99,19 +101,34 @@ export function SeriesForm({ series, index, seriesImageConvertDirPath, isSeriesI
     if (seriesImageConvertDirPath.endsWith(sep)) return `${seriesImageConvertDirPath}${imageFileName}`;
     return `${seriesImageConvertDirPath}${sep}${imageFileName}`;
   })();
-  const thumbnailSrc = imageFilePath ? convertFileSrc(imageFilePath) : "/tauri.svg";
+  const thumbnailSrc = (() => {
+    if (!imageFilePath) return "/tauri.svg";
+    const base = convertFileSrc(imageFilePath);
+    const q = base.includes("?") ? "&" : "?";
+    return `${base}${q}v=${previewVersion}`;
+  })();
 
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="pb-3">
         <div className="flex items-start gap-4">
-          <div className="h-24 w-48 shrink-0 overflow-hidden rounded border bg-black">
-            <img
-              src={thumbnailSrc}
-              alt={seriesName || "Series"}
-              className="h-full w-full object-contain"
-              onError={(e) => {
-                e.currentTarget.src = "/tauri.svg";
+          <div className="shrink-0 space-y-2">
+            <div className="h-24 w-48 overflow-hidden rounded border bg-black">
+              <img
+                src={thumbnailSrc}
+                alt={seriesName || "Series"}
+                className="h-full w-full object-contain"
+                onError={(e) => {
+                  e.currentTarget.src = "/tauri.svg";
+                }}
+              />
+            </div>
+            <SeriesImageReplaceDialog
+              iconFileIndex={series.iconFileIndex}
+              seriesImageConvertDirPath={seriesImageConvertDirPath}
+              onApplied={(nextIconFileIndex) => {
+                onChange({ ...series, iconFileIndex: nextIconFileIndex });
+                setPreviewVersion((v) => v + 1);
               }}
             />
           </div>
@@ -157,9 +174,9 @@ export function SeriesForm({ series, index, seriesImageConvertDirPath, isSeriesI
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="iconFileIndex">iconFileIndex</Label>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground min-h-8 leading-snug">
                   Points to image index in 0xA0253AA0.fhm2d.
                 </div>
                 <Input
@@ -170,8 +187,9 @@ export function SeriesForm({ series, index, seriesImageConvertDirPath, isSeriesI
                 />
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="unk2">unk2</Label>
+                <div className="text-xs text-muted-foreground min-h-8 leading-snug" />
                 <Input
                   id="unk2"
                   type="number"
@@ -180,8 +198,9 @@ export function SeriesForm({ series, index, seriesImageConvertDirPath, isSeriesI
                 />
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="unk3">unk3</Label>
+                <div className="text-xs text-muted-foreground min-h-8 leading-snug" />
                 <Input
                   id="unk3"
                   type="number"
@@ -190,8 +209,9 @@ export function SeriesForm({ series, index, seriesImageConvertDirPath, isSeriesI
                 />
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="unk4">unk4</Label>
+                <div className="text-xs text-muted-foreground min-h-8 leading-snug" />
                 <Input
                   id="unk4"
                   type="number"
@@ -200,8 +220,9 @@ export function SeriesForm({ series, index, seriesImageConvertDirPath, isSeriesI
                 />
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="unk5">unk5</Label>
+                <div className="text-xs text-muted-foreground min-h-8 leading-snug" />
                 <Input
                   id="unk5"
                   type="number"
@@ -210,13 +231,16 @@ export function SeriesForm({ series, index, seriesImageConvertDirPath, isSeriesI
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="unk6">unk6</Label>
+              <div className="space-y-1">
+                <Label htmlFor="characterListPosition">characterListPosition</Label>
+                <div className="text-xs text-muted-foreground min-h-8 leading-snug">
+                  Position/index used for character list ordering.
+                </div>
                 <Input
-                  id="unk6"
+                  id="characterListPosition"
                   type="number"
-                  value={series.unk6}
-                  onChange={handleNumberChange("unk6")}
+                  value={series.characterListPosition}
+                  onChange={handleNumberChange("characterListPosition")}
                 />
               </div>
             </div>
