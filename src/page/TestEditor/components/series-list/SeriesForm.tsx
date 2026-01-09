@@ -15,6 +15,7 @@ interface SeriesFormProps {
   index: number;
   seriesImageConvertDirPath?: string;
   seriesImageSeriesBaseNameOrder?: Array<string | null>;
+  onRefreshSeriesImages?: () => Promise<void> | void;
   isSeriesIdTaken?: (nextId: number) => boolean;
   onChange: (updated: SeriesData) => void;
 }
@@ -24,6 +25,7 @@ export function SeriesForm({
   index,
   seriesImageConvertDirPath,
   seriesImageSeriesBaseNameOrder,
+  onRefreshSeriesImages,
   isSeriesIdTaken,
   onChange,
 }: SeriesFormProps) {
@@ -136,6 +138,7 @@ export function SeriesForm({
               iconFileIndex={series.iconFileIndex}
               seriesImageConvertDirPath={seriesImageConvertDirPath}
               seriesImageSeriesBaseNameOrder={seriesImageSeriesBaseNameOrder}
+            onRefreshSeriesImages={onRefreshSeriesImages}
               onApplied={(nextIconFileIndex) => {
                 onChange({ ...series, iconFileIndex: nextIconFileIndex });
                 setPreviewVersion((v) => v + 1);

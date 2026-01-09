@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { dirname } from "@tauri-apps/api/path";
+import { dirname, join } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
+import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -15,9 +16,11 @@ import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
 import {
   formatSeriesNutexbFileNameFromBaseName,
   formatSeriesPngFileNameFromBaseName,
+  extractA0253FirstFolderSeriesBaseNameOrder,
   resolveMappedSeriesBaseName,
   tryParseStrictSeriesMsIndex,
 } from "./seriesImage";
+import { appendSeriesIconToStructureJson, computeNextSerMsIndex } from "./seriesStructure";
 
 type ReplaceSummary = {
   outputNutexbPath: string;
@@ -29,6 +32,7 @@ interface SeriesImageReplaceDialogProps {
   iconFileIndex: number;
   seriesImageConvertDirPath?: string;
   seriesImageSeriesBaseNameOrder?: Array<string | null>;
+  onRefreshSeriesImages?: () => Promise<void> | void;
   onApplied: (nextIconFileIndex: number) => void;
 }
 
@@ -36,10 +40,12 @@ export function SeriesImageReplaceDialog({
   iconFileIndex,
   seriesImageConvertDirPath,
   seriesImageSeriesBaseNameOrder,
+  onRefreshSeriesImages,
   onApplied,
 }: SeriesImageReplaceDialogProps) {
   const [openState, setOpenState] = useState(false);
   const [isReplacing, setIsReplacing] = useState(false);
+  const [isAppending, setIsAppending] = useState(false);
   const [pngPath, setPngPath] = useState<string>("");
   const [previewVersion, setPreviewVersion] = useState(0);
 
@@ -72,7 +78,8 @@ export function SeriesImageReplaceDialog({
   }, [baseName, seriesImageConvertDirPath, seriesImageSeriesBaseNameOrder, strictMsIndex]);
 
   const canEdit = Boolean(seriesImageConvertDirPath);
-  const canApply = canEdit && Boolean(pngPath) && !validationError && !isReplacing;
+  const canApply = canEdit && Boolean(pngPath) && !validationError && !isReplacing && !isAppending;
+  const canAppend = canEdit && Boolean(pngPath) && !isAppending && !isReplacing;
 
   const previewSrc = useMemo(() => {
     // Prefer showing the selected PNG (what will be applied).
@@ -142,6 +149,69 @@ export function SeriesImageReplaceDialog({
       setIsReplacing(false);
     }
   }, [baseName, iconFileIndex, onApplied, pngPath, seriesImageConvertDirPath, strictMsIndex, targetNutexbName, validationError]);
+
+  const handleCreateNew = useCallback(async () => {
+    if (!seriesImageConvertDirPath) {
+      toast.error("Series image convert folder is not available");
+      return;
+    }
+    if (!pngPath) {
+      toast.error("Please select a PNG file");
+      return;
+    }
+    setIsAppending(true);
+    try {
+      const seriesImageDir = await dirname(seriesImageConvertDirPath);
+      const projectRootDir = await dirname(seriesImageDir);
+      const structurePath = await join(projectRootDir, "0xA0253AA0_structure.json");
+
+      const structRaw = await readFile(structurePath);
+      const structText = new TextDecoder().decode(structRaw);
+      const structJson = JSON.parse(structText);
+
+      const seriesBaseNameOrder = extractA0253FirstFolderSeriesBaseNameOrder(structJson);
+      const nextSerMsIndex = computeNextSerMsIndex(seriesBaseNameOrder);
+      if (!nextSerMsIndex) {
+        toast.error("No available ser_ms index (max 999)");
+        return;
+      }
+
+      const nextBaseName = `ser_ms_${nextSerMsIndex.toString().padStart(3, "0")}`;
+      const nextIconFileIndex = seriesBaseNameOrder.length;
+
+      const { nextStructJson } = appendSeriesIconToStructureJson(structJson, {
+        baseName: nextBaseName,
+      });
+
+      const targetNutexb = `${nextBaseName}.nutexb`;
+
+      const seriesImageDirParent = seriesImageDir;
+      const replaceResult = await invoke<ReplaceSummary>("series_image_replace_from_png", {
+        seriesImageDir: seriesImageDirParent,
+        seriesImageConvertDir: seriesImageConvertDirPath,
+        iconFileIndex: nextSerMsIndex,
+        fileName: targetNutexb,
+        pngPath,
+      });
+
+      const encoded = new TextEncoder().encode(JSON.stringify(nextStructJson, null, 2));
+      await writeFile(structurePath, encoded);
+
+      toast.success(`Created series image: ${replaceResult.nutexbName}`);
+
+      onApplied(nextIconFileIndex);
+      if (onRefreshSeriesImages) {
+        await onRefreshSeriesImages();
+      }
+      setPreviewVersion((v) => v + 1);
+      setOpenState(false);
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Failed to create new series icon");
+    } finally {
+      setIsAppending(false);
+    }
+  }, [onApplied, onRefreshSeriesImages, pngPath, seriesImageConvertDirPath]);
 
   return (
     <Dialog open={openState} onOpenChange={setOpenState}>
@@ -273,8 +343,11 @@ export function SeriesImageReplaceDialog({
           {validationError && <div className="text-sm text-destructive">{validationError}</div>}
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setOpenState(false)} disabled={isReplacing}>
+            <Button variant="outline" onClick={() => setOpenState(false)} disabled={isReplacing || isAppending}>
               Cancel
+            </Button>
+            <Button onClick={() => void handleCreateNew()} disabled={!canAppend}>
+              {isAppending ? "Creating..." : "Create New"}
             </Button>
             <Button onClick={() => void handleApply()} disabled={!canApply}>
               {isReplacing ? "Replacing..." : "Apply"}

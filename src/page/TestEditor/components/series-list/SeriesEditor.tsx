@@ -21,10 +21,17 @@ interface SeriesEditorProps {
   seriesListData?: SeriesList;
   seriesImageConvertDirPath?: string;
   seriesImageSeriesBaseNameOrder?: Array<string | null>;
+  onRefreshSeriesImages?: () => Promise<void> | void;
   onChange: (data: SeriesList) => void;
 }
 
-export function SeriesEditor({ seriesListData, seriesImageConvertDirPath, seriesImageSeriesBaseNameOrder, onChange }: SeriesEditorProps) {
+export function SeriesEditor({
+  seriesListData,
+  seriesImageConvertDirPath,
+  seriesImageSeriesBaseNameOrder,
+  onRefreshSeriesImages,
+  onChange,
+}: SeriesEditorProps) {
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteCandidateIndex, setDeleteCandidateIndex] = useState<number | null>(null);
@@ -251,6 +258,7 @@ export function SeriesEditor({ seriesListData, seriesImageConvertDirPath, series
             index={selectedIndex}
             seriesImageConvertDirPath={seriesImageConvertDirPath}
             seriesImageSeriesBaseNameOrder={seriesImageSeriesBaseNameOrder}
+            onRefreshSeriesImages={onRefreshSeriesImages}
             isSeriesIdTaken={isSeriesIdTaken}
             onChange={handleUpdateSeries}
           />

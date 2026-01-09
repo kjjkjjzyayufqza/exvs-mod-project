@@ -305,6 +305,7 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
             seriesListData={loadState.list}
             seriesImageConvertDirPath={seriesImageCountState.dirPath}
             seriesImageSeriesBaseNameOrder={seriesImageCountState.status === "ready" ? seriesImageCountState.seriesBaseNameOrder : []}
+            onRefreshSeriesImages={loadSeriesImageCount}
             onChange={handleEditorChange}
           />
         </CardContent>
