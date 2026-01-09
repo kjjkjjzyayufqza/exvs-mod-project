@@ -6,20 +6,31 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils";
 import type { SeriesData } from "@/models/seriesList";
 import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
-import { formatSeriesImageFileName } from "./seriesImage";
+import { formatSeriesPngFileNameFromBaseName, resolveMappedSeriesBaseName } from "./seriesImage";
 
 interface SeriesCardProps {
   series: SeriesData;
   index: number;
   seriesImageConvertDirPath?: string;
+  seriesImageSeriesBaseNameOrder?: Array<string | null>;
   isSelected: boolean;
   onClick: () => void;
   onDelete: () => void;
   onCopy: () => void;
 }
 
-export function SeriesCard({ series, index, seriesImageConvertDirPath, isSelected, onClick, onDelete, onCopy }: SeriesCardProps) {
-  const fileName = formatSeriesImageFileName(series.iconFileIndex);
+export function SeriesCard({
+  series,
+  index,
+  seriesImageConvertDirPath,
+  seriesImageSeriesBaseNameOrder,
+  isSelected,
+  onClick,
+  onDelete,
+  onCopy,
+}: SeriesCardProps) {
+  const baseName = resolveMappedSeriesBaseName(seriesImageSeriesBaseNameOrder, series.iconFileIndex);
+  const fileName = baseName ? formatSeriesPngFileNameFromBaseName(baseName) : null;
   const imageFilePath = (() => {
     if (!seriesImageConvertDirPath || !fileName) return null;
     const sep = getPathSeparatorFromFileUrl(seriesImageConvertDirPath);

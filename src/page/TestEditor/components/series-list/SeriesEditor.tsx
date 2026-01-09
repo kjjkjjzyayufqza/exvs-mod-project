@@ -20,10 +20,11 @@ import { SeriesList as SeriesListComponent } from "./SeriesList";
 interface SeriesEditorProps {
   seriesListData?: SeriesList;
   seriesImageConvertDirPath?: string;
+  seriesImageSeriesBaseNameOrder?: Array<string | null>;
   onChange: (data: SeriesList) => void;
 }
 
-export function SeriesEditor({ seriesListData, seriesImageConvertDirPath, onChange }: SeriesEditorProps) {
+export function SeriesEditor({ seriesListData, seriesImageConvertDirPath, seriesImageSeriesBaseNameOrder, onChange }: SeriesEditorProps) {
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteCandidateIndex, setDeleteCandidateIndex] = useState<number | null>(null);
@@ -154,16 +155,47 @@ export function SeriesEditor({ seriesListData, seriesImageConvertDirPath, onChan
 
   const handleAdd = useCallback(() => {
     if (!seriesListData) return;
-    
-    const newSeriesId = Math.max(...seriesListData.SeriesData.map((s) => s.SeriesId), 0) + 1;
+
+    const rows = seriesListData.SeriesData;
+    const existingIds = new Set(rows.map((s) => (s.SeriesId | 0)));
+    const selectedSeriesId = selectedIndex >= 0 ? (rows[selectedIndex]?.SeriesId ?? 0) : 0;
+    const preferNegative = selectedSeriesId < 0;
+
+    const getNextSeriesId = (): number => {
+      const positiveIds = rows.map((s) => (s.SeriesId | 0)).filter((id) => id > 0);
+      const negativeIds = rows.map((s) => (s.SeriesId | 0)).filter((id) => id < 0);
+
+      const maxPositive = positiveIds.length > 0 ? Math.max(...positiveIds) : 0;
+      const minNegative = negativeIds.length > 0 ? Math.min(...negativeIds) : 0;
+
+      let candidate = preferNegative
+        ? (negativeIds.length > 0 ? (minNegative - 1) : -1)
+        : (positiveIds.length > 0 ? (maxPositive + 1) : 1);
+
+      while (existingIds.has(candidate)) {
+        candidate = preferNegative ? (candidate - 1) : (candidate + 1);
+      }
+      return candidate | 0;
+    };
+
+    const maxPlusOne = (getter: (row: SeriesData) => number): number => {
+      let max = 0;
+      for (const row of rows) {
+        const v = getter(row);
+        if (Number.isFinite(v) && v > max) max = v;
+      }
+      return (max | 0) + 1;
+    };
+
+    const newSeriesId = getNextSeriesId();
     const newSeries: SeriesData = {
       SeriesId: newSeriesId,
       iconFileIndex: 0,
-      unk2: 0,
-      unk3: 0,
-      unk4: 0,
-      unk5: 0,
-      characterListPosition: 0,
+      unk2: maxPlusOne((s) => s.unk2),
+      unk3: maxPlusOne((s) => s.unk3),
+      unk4: maxPlusOne((s) => s.unk4),
+      unk5: maxPlusOne((s) => s.unk5),
+      characterListPosition: maxPlusOne((s) => s.characterListPosition),
       unkStr1: {
         Offset: 0,
         StringBufferData: Buffer.from([0]),
@@ -180,7 +212,7 @@ export function SeriesEditor({ seriesListData, seriesImageConvertDirPath, onChan
     });
 
     setSelectedIndex(seriesListData.SeriesData.length);
-  }, [seriesListData, updateList]);
+  }, [seriesListData, selectedIndex, updateList]);
 
   if (!seriesListData) {
     return (
@@ -204,6 +236,7 @@ export function SeriesEditor({ seriesListData, seriesImageConvertDirPath, onChan
         <SeriesListComponent
           seriesData={seriesListData.SeriesData}
           seriesImageConvertDirPath={seriesImageConvertDirPath}
+          seriesImageSeriesBaseNameOrder={seriesImageSeriesBaseNameOrder}
           selectedIndex={selectedIndex}
           onSelect={handleSelect}
           onDelete={openDeleteDialog}
@@ -217,6 +250,7 @@ export function SeriesEditor({ seriesListData, seriesImageConvertDirPath, onChan
             series={selectedSeries}
             index={selectedIndex}
             seriesImageConvertDirPath={seriesImageConvertDirPath}
+            seriesImageSeriesBaseNameOrder={seriesImageSeriesBaseNameOrder}
             isSeriesIdTaken={isSeriesIdTaken}
             onChange={handleUpdateSeries}
           />

@@ -11,19 +11,19 @@ import { SeriesCard } from "./SeriesCard";
 interface SeriesListProps {
   seriesData: SeriesData[];
   seriesImageConvertDirPath?: string;
+  seriesImageSeriesBaseNameOrder?: Array<string | null>;
   selectedIndex: number;
   onSelect: (index: number) => void;
   onDelete: (index: number) => void;
   onCopy: (index: number) => void;
 }
 
-type SortKey = "none" | "index" | "name" | "SeriesId" | "iconFileIndex" | "unk2" | "unk3" | "unk4" | "unk5" | "characterListPosition";
+type SortKey = "none" | "index" | "SeriesId" | "iconFileIndex" | "unk2" | "unk3" | "unk4" | "unk5" | "characterListPosition";
 
 const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
   { value: "none", label: "No sort" },
   { value: "index", label: "Index (min → max)" },
-  { value: "name", label: "Name (A → Z)" },
-  { value: "SeriesId", label: "SeriesId (min → max)" },
+  { value: "SeriesId", label: "SeriesId (positive → negative)" },
   { value: "iconFileIndex", label: "iconFileIndex (min → max)" },
   { value: "unk2", label: "unk2 (min → max)" },
   { value: "unk3", label: "unk3 (min → max)" },
@@ -32,7 +32,15 @@ const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
   { value: "characterListPosition", label: "characterListPosition (min → max)" },
 ];
 
-export function SeriesList({ seriesData, seriesImageConvertDirPath, selectedIndex, onSelect, onDelete, onCopy }: SeriesListProps) {
+export function SeriesList({
+  seriesData,
+  seriesImageConvertDirPath,
+  seriesImageSeriesBaseNameOrder,
+  selectedIndex,
+  onSelect,
+  onDelete,
+  onCopy,
+}: SeriesListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [sortKey, setSortKey] = useState<SortKey>("none");
@@ -60,8 +68,6 @@ export function SeriesList({ seriesData, seriesImageConvertDirPath, selectedInde
       switch (sortKey) {
         case "index":
           return idx;
-        case "name":
-          return row.unkStr1?.Utf8String || "";
         case "SeriesId":
           return row.SeriesId;
         case "iconFileIndex":
@@ -87,6 +93,21 @@ export function SeriesList({ seriesData, seriesImageConvertDirPath, selectedInde
       const bv = getValue(b.row, b.idx);
 
       if (isNumberLike(av) && isNumberLike(bv)) {
+        // For SeriesId, sort positive values first, then negative values
+        if (sortKey === "SeriesId") {
+          const aIsPositive = av > 0;
+          const bIsPositive = bv > 0;
+          
+          // Positive values come before negative values
+          if (aIsPositive && !bIsPositive) return -1;
+          if (!aIsPositive && bIsPositive) return 1;
+          
+          // Within same sign group, sort by value (min → max)
+          if (av !== bv) return av - bv;
+          return a.idx - b.idx;
+        }
+        
+        // For other numeric fields, use standard min → max sorting
         if (av !== bv) return av - bv;
         return a.idx - b.idx;
       }
@@ -178,6 +199,7 @@ export function SeriesList({ seriesData, seriesImageConvertDirPath, selectedInde
                   series={row}
                   index={idx}
                   seriesImageConvertDirPath={seriesImageConvertDirPath}
+                  seriesImageSeriesBaseNameOrder={seriesImageSeriesBaseNameOrder}
                   isSelected={idx === selectedIndex}
                   onClick={() => onSelect(idx)}
                   onDelete={() => onDelete(idx)}

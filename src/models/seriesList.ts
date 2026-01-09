@@ -57,8 +57,8 @@ export class SeriesList {
 export class SeriesData {
   SeriesId: number // id
   // Points to image index in 0xA0253AA0.fhm2d.
-  iconFileIndex: number // 0x00
-  unk2: number // 0x04
+  unk2: number // 0x00
+  iconFileIndex: number // 0x04
   unk3: number // 0x08
   unkStr1: StringNameData // 0x0C (int32 offset -> StringNameData)
   unk4: number // 0x10
@@ -68,8 +68,9 @@ export class SeriesData {
 
   constructor (buffer: Buffer, offset: number, SeriesId: number) {
     this.SeriesId = SeriesId
-    this.iconFileIndex = buffer.readInt32LE(offset + 0x0)
-    this.unk2 = buffer.readInt32LE(offset + 0x4)
+    // Swap iconFileIndex and unk2 (binary layout fix)
+    this.unk2 = buffer.readInt32LE(offset + 0x0)
+    this.iconFileIndex = buffer.readInt32LE(offset + 0x4)
     this.unk3 = buffer.readInt32LE(offset + 0x8)
     this.unkStr1 = new StringNameData(buffer.readInt32LE(offset + 0xc), buffer)
     this.unk4 = buffer.readInt32LE(offset + 0x10)
@@ -153,8 +154,9 @@ export function buildSeriesListBuffer (list: SeriesList): Buffer {
   for (let i = 0; i < list.SeriesData.length; i++) {
     const row = list.SeriesData[i]
     const base = i * 0x1C
-    dataBuffer.writeInt32LE(row.iconFileIndex, base + 0x0)
-    dataBuffer.writeInt32LE(row.unk2, base + 0x4)
+    // Swap iconFileIndex and unk2 (binary layout fix)
+    dataBuffer.writeInt32LE(row.unk2, base + 0x0)
+    dataBuffer.writeInt32LE(row.iconFileIndex, base + 0x4)
     dataBuffer.writeInt32LE(row.unk3, base + 0x8)
 
     ensureStringBufferMatchesUtf8(row.unkStr1)

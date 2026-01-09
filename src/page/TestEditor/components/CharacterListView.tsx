@@ -11,6 +11,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CharacterListOB, buildCharacterListBuffer } from "@/models/characterListOB";
 import { SeriesList } from "@/models/seriesList";
 import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
+import {
+  extractA0253FirstFolderSeriesBaseNameOrder,
+  formatSeriesPngFileNameFromBaseName,
+  resolveMappedSeriesBaseName,
+} from "./series-list/seriesImage";
 import { CharacterEditor } from "./character-list/CharacterEditor";
 import type { SeriesIdPickerItem } from "./character-list/SeriesIdPickerPopover";
 
@@ -54,6 +59,10 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
     return await join(folderPath, "0xA0253AA0", "__convert");
   }, [folderPath]);
 
+  const resolveSeriesImageStructureJsonPath = useCallback(async () => {
+    return await join(folderPath, "0xA0253AA0_structure.json");
+  }, [folderPath]);
+
   const resetEditorState = useCallback(() => {
     setHasChanges(false);
     onUnsavedChanges?.(false);
@@ -95,9 +104,17 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
       const list = new SeriesList(Buffer.from(fileData));
 
       const sep = getPathSeparatorFromFileUrl(convertDirPath);
+      const structurePath = await resolveSeriesImageStructureJsonPath();
+      const structRaw = await readFile(structurePath);
+      const structText = new TextDecoder().decode(structRaw);
+      const structJson = JSON.parse(structText);
+      const seriesBaseNameOrder = extractA0253FirstFolderSeriesBaseNameOrder(structJson);
+
       const toPreviewSrc = (iconFileIndex: number) => {
-        if (!Number.isFinite(iconFileIndex) || iconFileIndex < 1 || iconFileIndex > 999) return "/tauri.svg";
-        const png = `ser_ms_${String(iconFileIndex).padStart(3, "0")}.png`;
+        const baseName = resolveMappedSeriesBaseName(seriesBaseNameOrder, iconFileIndex);
+        if (!baseName) return "/tauri.svg";
+        const png = formatSeriesPngFileNameFromBaseName(baseName);
+        if (!png) return "/tauri.svg";
         const full = convertDirPath.endsWith(sep) ? `${convertDirPath}${png}` : `${convertDirPath}${sep}${png}`;
         return convertFileSrc(full);
       };
@@ -123,7 +140,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
         message: error instanceof Error ? error.message : "Unknown error",
       });
     }
-  }, [folderPath, resolveSeriesImageConvertDir, resolveSeriesListFilePath]);
+  }, [folderPath, resolveSeriesImageConvertDir, resolveSeriesImageStructureJsonPath, resolveSeriesListFilePath]);
 
   useEffect(() => {
     if (!isActive) return;

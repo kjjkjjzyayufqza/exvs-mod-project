@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { dirname } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -12,6 +12,12 @@ import { Label } from "@/components/ui/label";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
 import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
+import {
+  formatSeriesNutexbFileNameFromBaseName,
+  formatSeriesPngFileNameFromBaseName,
+  resolveMappedSeriesBaseName,
+  tryParseStrictSeriesMsIndex,
+} from "./seriesImage";
 
 type ReplaceSummary = {
   outputNutexbPath: string;
@@ -19,50 +25,51 @@ type ReplaceSummary = {
   nutexbName: string;
 };
 
-function parseSeriesNutexbFileName(fileName: string): { iconFileIndex: number } | null {
-  const trimmed = fileName.trim();
-  const m = /^ser_ms_(\d{3})\.nutexb$/.exec(trimmed);
-  if (!m) return null;
-  const idx = Number.parseInt(m[1] ?? "", 10);
-  if (!Number.isFinite(idx) || idx < 1 || idx > 999) return null;
-  return { iconFileIndex: idx };
-}
-
-function formatSeriesNutexbFileName(iconFileIndex: number): string {
-  if (!Number.isFinite(iconFileIndex) || iconFileIndex < 1 || iconFileIndex > 999) return "";
-  return `ser_ms_${String(iconFileIndex).padStart(3, "0")}.nutexb`;
-}
-
-function formatSeriesPreviewPng(iconFileIndex: number): string {
-  if (!Number.isFinite(iconFileIndex) || iconFileIndex < 1 || iconFileIndex > 999) return "";
-  return `ser_ms_${String(iconFileIndex).padStart(3, "0")}.png`;
-}
-
 interface SeriesImageReplaceDialogProps {
   iconFileIndex: number;
   seriesImageConvertDirPath?: string;
+  seriesImageSeriesBaseNameOrder?: Array<string | null>;
   onApplied: (nextIconFileIndex: number) => void;
 }
 
-export function SeriesImageReplaceDialog({ iconFileIndex, seriesImageConvertDirPath, onApplied }: SeriesImageReplaceDialogProps) {
+export function SeriesImageReplaceDialog({
+  iconFileIndex,
+  seriesImageConvertDirPath,
+  seriesImageSeriesBaseNameOrder,
+  onApplied,
+}: SeriesImageReplaceDialogProps) {
   const [openState, setOpenState] = useState(false);
   const [isReplacing, setIsReplacing] = useState(false);
   const [pngPath, setPngPath] = useState<string>("");
-  const [fileName, setFileName] = useState<string>(() => formatSeriesNutexbFileName(iconFileIndex));
   const [previewVersion, setPreviewVersion] = useState(0);
 
-  useEffect(() => {
-    if (!openState) return;
-    setPngPath("");
-    setFileName(formatSeriesNutexbFileName(iconFileIndex));
-  }, [iconFileIndex, openState]);
+  const baseName = useMemo(
+    () => resolveMappedSeriesBaseName(seriesImageSeriesBaseNameOrder, iconFileIndex),
+    [iconFileIndex, seriesImageSeriesBaseNameOrder]
+  );
+  const strictMsIndex = useMemo(() => (baseName ? tryParseStrictSeriesMsIndex(baseName) : null), [baseName]);
+  const targetNutexbName = useMemo(
+    () => (baseName ? formatSeriesNutexbFileNameFromBaseName(baseName) : null),
+    [baseName]
+  );
+  const currentPreviewPngName = useMemo(
+    () => (baseName ? formatSeriesPngFileNameFromBaseName(baseName) : null),
+    [baseName]
+  );
 
-  const parsed = useMemo(() => parseSeriesNutexbFileName(fileName), [fileName]);
   const validationError = useMemo(() => {
-    if (!fileName.trim()) return "File name is required";
-    if (!parsed) return "File name must match: ser_ms_###.nutexb (001-999)";
+    if (!seriesImageConvertDirPath) return "Series image convert folder is not available";
+    if (!baseName) {
+      const max =
+        seriesImageSeriesBaseNameOrder && seriesImageSeriesBaseNameOrder.length > 0
+          ? seriesImageSeriesBaseNameOrder.length - 1
+          : -1;
+      return `iconFileIndex is out of range (0 - ${max})`;
+    }
+    // Backend only supports strict "ser_ms_###" mapping for replace.
+    if (strictMsIndex === null) return `Unsupported series Name "${baseName}" for replace (backend expects "ser_ms_###")`;
     return "";
-  }, [fileName, parsed]);
+  }, [baseName, seriesImageConvertDirPath, seriesImageSeriesBaseNameOrder, strictMsIndex]);
 
   const canEdit = Boolean(seriesImageConvertDirPath);
   const canApply = canEdit && Boolean(pngPath) && !validationError && !isReplacing;
@@ -72,13 +79,12 @@ export function SeriesImageReplaceDialog({ iconFileIndex, seriesImageConvertDirP
     if (pngPath) return convertFileSrc(pngPath);
     if (!seriesImageConvertDirPath) return null;
 
-    const previewFile = formatSeriesPreviewPng(iconFileIndex);
-    if (!previewFile) return null;
+    if (!currentPreviewPngName) return null;
 
     const sep = getPathSeparatorFromFileUrl(seriesImageConvertDirPath);
     const base = seriesImageConvertDirPath.endsWith(sep)
-      ? `${seriesImageConvertDirPath}${previewFile}`
-      : `${seriesImageConvertDirPath}${sep}${previewFile}`;
+      ? `${seriesImageConvertDirPath}${currentPreviewPngName}`
+      : `${seriesImageConvertDirPath}${sep}${currentPreviewPngName}`;
 
     const url = convertFileSrc(base);
     const q = url.includes("?") ? "&" : "?";
@@ -105,8 +111,12 @@ export function SeriesImageReplaceDialog({ iconFileIndex, seriesImageConvertDirP
       toast.error("Please select a PNG file");
       return;
     }
-    if (validationError || !parsed) {
-      toast.error(validationError || "Invalid file name");
+    if (validationError || !targetNutexbName) {
+      toast.error(validationError || "Invalid iconFileIndex mapping");
+      return;
+    }
+    if (!baseName || strictMsIndex === null) {
+      toast.error(validationError || "Unsupported series Name");
       return;
     }
 
@@ -116,13 +126,13 @@ export function SeriesImageReplaceDialog({ iconFileIndex, seriesImageConvertDirP
       const result = await invoke<ReplaceSummary>("series_image_replace_from_png", {
         seriesImageDir,
         seriesImageConvertDir: seriesImageConvertDirPath,
-        iconFileIndex: parsed.iconFileIndex,
-        fileName: fileName.trim(),
+        iconFileIndex: strictMsIndex,
+        fileName: targetNutexbName,
         pngPath,
       });
 
       toast.success(`Updated series image: ${result.nutexbName}`);
-      onApplied(parsed.iconFileIndex);
+      onApplied(iconFileIndex);
       setPreviewVersion((v) => v + 1);
       setOpenState(false);
     } catch (e) {
@@ -131,7 +141,7 @@ export function SeriesImageReplaceDialog({ iconFileIndex, seriesImageConvertDirP
     } finally {
       setIsReplacing(false);
     }
-  }, [fileName, onApplied, parsed, pngPath, seriesImageConvertDirPath, validationError]);
+  }, [baseName, iconFileIndex, onApplied, pngPath, seriesImageConvertDirPath, strictMsIndex, targetNutexbName, validationError]);
 
   return (
     <Dialog open={openState} onOpenChange={setOpenState}>
@@ -231,17 +241,19 @@ export function SeriesImageReplaceDialog({ iconFileIndex, seriesImageConvertDirP
 
           <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="series-nutexb-file-name">Nutexb File Name</Label>
+            <Label htmlFor="series-nutexb-file-name">Target Nutexb (by iconFileIndex index)</Label>
             <Input
               id="series-nutexb-file-name"
-              value={fileName}
-              onChange={(e) => setFileName(e.target.value)}
-              placeholder="ser_ms_001.nutexb"
-              disabled={isReplacing}
+              value={targetNutexbName ?? ""}
+              readOnly
+              placeholder="(out of range)"
             />
             <div className="text-xs text-muted-foreground min-h-8 leading-snug">
-              Must match <span className="font-mono">ser_ms_###.nutexb</span> (001-999). This will be mapped by{" "}
-              <span className="font-mono">iconFileIndex</span>.
+              The file is resolved from <span className="font-mono">0xA0253AA0_structure.json</span> using{" "}
+              <span className="font-mono">iconFileIndex</span> as a 0-based index.
+              {seriesImageSeriesBaseNameOrder && seriesImageSeriesBaseNameOrder.length > 0 && (
+                <> Mapped entries: <span className="font-mono">{seriesImageSeriesBaseNameOrder.length}</span>.</>
+              )}
             </div>
           </div>
 

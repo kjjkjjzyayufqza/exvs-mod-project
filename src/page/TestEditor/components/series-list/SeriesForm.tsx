@@ -7,18 +7,26 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import type { SeriesData } from "@/models/seriesList";
 import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
 import { DualValueProperty } from "@/components/ui/dual-value-property";
-import { formatSeriesImageFileName } from "./seriesImage";
+import { formatSeriesPngFileNameFromBaseName, resolveMappedSeriesBaseName } from "./seriesImage";
 import { SeriesImageReplaceDialog } from "./SeriesImageReplaceDialog";
 
 interface SeriesFormProps {
   series: SeriesData;
   index: number;
   seriesImageConvertDirPath?: string;
+  seriesImageSeriesBaseNameOrder?: Array<string | null>;
   isSeriesIdTaken?: (nextId: number) => boolean;
   onChange: (updated: SeriesData) => void;
 }
 
-export function SeriesForm({ series, index, seriesImageConvertDirPath, isSeriesIdTaken, onChange }: SeriesFormProps) {
+export function SeriesForm({
+  series,
+  index,
+  seriesImageConvertDirPath,
+  seriesImageSeriesBaseNameOrder,
+  isSeriesIdTaken,
+  onChange,
+}: SeriesFormProps) {
   const [editingProperty, setEditingProperty] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>("");
   const [validationError, setValidationError] = useState<string>("");
@@ -94,7 +102,8 @@ export function SeriesForm({ series, index, seriesImageConvertDirPath, isSeriesI
   );
 
   const seriesName = series.unkStr1?.Utf8String || "";
-  const imageFileName = formatSeriesImageFileName(series.iconFileIndex);
+  const baseName = resolveMappedSeriesBaseName(seriesImageSeriesBaseNameOrder, series.iconFileIndex);
+  const imageFileName = baseName ? formatSeriesPngFileNameFromBaseName(baseName) : null;
   const imageFilePath = (() => {
     if (!seriesImageConvertDirPath || !imageFileName) return null;
     const sep = getPathSeparatorFromFileUrl(seriesImageConvertDirPath);
@@ -126,6 +135,7 @@ export function SeriesForm({ series, index, seriesImageConvertDirPath, isSeriesI
             <SeriesImageReplaceDialog
               iconFileIndex={series.iconFileIndex}
               seriesImageConvertDirPath={seriesImageConvertDirPath}
+              seriesImageSeriesBaseNameOrder={seriesImageSeriesBaseNameOrder}
               onApplied={(nextIconFileIndex) => {
                 onChange({ ...series, iconFileIndex: nextIconFileIndex });
                 setPreviewVersion((v) => v + 1);
@@ -175,6 +185,16 @@ export function SeriesForm({ series, index, seriesImageConvertDirPath, isSeriesI
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
+                <Label htmlFor="unk2">unk2</Label>
+                <div className="text-xs text-muted-foreground min-h-8 leading-snug" />
+                <Input
+                  id="unk2"
+                  type="number"
+                  value={series.unk2}
+                  onChange={handleNumberChange("unk2")}
+                />
+              </div>
+              <div className="space-y-1">
                 <Label htmlFor="iconFileIndex">iconFileIndex</Label>
                 <div className="text-xs text-muted-foreground min-h-8 leading-snug">
                   Points to image index in 0xA0253AA0.fhm2d.
@@ -186,18 +206,6 @@ export function SeriesForm({ series, index, seriesImageConvertDirPath, isSeriesI
                   onChange={handleNumberChange("iconFileIndex")}
                 />
               </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="unk2">unk2</Label>
-                <div className="text-xs text-muted-foreground min-h-8 leading-snug" />
-                <Input
-                  id="unk2"
-                  type="number"
-                  value={series.unk2}
-                  onChange={handleNumberChange("unk2")}
-                />
-              </div>
-
               <div className="space-y-1">
                 <Label htmlFor="unk3">unk3</Label>
                 <div className="text-xs text-muted-foreground min-h-8 leading-snug" />

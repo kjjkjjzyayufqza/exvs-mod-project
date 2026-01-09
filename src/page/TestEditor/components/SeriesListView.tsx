@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { readDir, readFile, writeFile } from "@tauri-apps/plugin-fs";
+import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { Buffer } from "buffer";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SeriesList, buildSeriesListBuffer } from "@/models/seriesList";
 import { SeriesEditor } from "./series-list/SeriesEditor";
+import { extractA0253FirstFolderSeriesBaseNameOrder } from "./series-list/seriesImage";
 
 interface SeriesListViewProps {
   folderPath: string;
@@ -27,7 +28,7 @@ type SeriesImageCountState =
   | { status: "idle"; dirPath: string }
   | { status: "loading"; dirPath: string }
   | { status: "error"; dirPath: string; message: string }
-  | { status: "ready"; dirPath: string; count: number };
+  | { status: "ready"; dirPath: string; count: number; seriesBaseNameOrder: Array<string | null> };
 
 export default function SeriesListView({ folderPath, isActive, onUnsavedChanges }: SeriesListViewProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
@@ -45,6 +46,10 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
 
   const resolveSeriesImageConvertDir = useCallback(async () => {
     return await join(folderPath, "0xA0253AA0", "__convert");
+  }, [folderPath]);
+
+  const resolveSeriesImageStructureJsonPath = useCallback(async () => {
+    return await join(folderPath, "0xA0253AA0_structure.json");
   }, [folderPath]);
 
   const resetEditorState = useCallback(() => {
@@ -90,13 +95,12 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
     const dirPath = await resolveSeriesImageConvertDir();
     setSeriesImageCountState({ status: "loading", dirPath });
     try {
-      const entries = await readDir(dirPath);
-      const count = entries.filter((e) => {
-        if (!e.isFile) return false;
-        const name = (e.name || "").toLowerCase();
-        return /^ser_ms_\d{3}\.png$/.test(name);
-      }).length;
-      setSeriesImageCountState({ status: "ready", dirPath, count });
+      const structurePath = await resolveSeriesImageStructureJsonPath();
+      const raw = await readFile(structurePath);
+      const text = new TextDecoder().decode(raw);
+      const json = JSON.parse(text);
+      const seriesBaseNameOrder = extractA0253FirstFolderSeriesBaseNameOrder(json);
+      setSeriesImageCountState({ status: "ready", dirPath, count: seriesBaseNameOrder.length, seriesBaseNameOrder });
     } catch (error) {
       setSeriesImageCountState({
         status: "error",
@@ -104,7 +108,7 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
         message: error instanceof Error ? error.message : "Unknown error",
       });
     }
-  }, [folderPath, resolveSeriesImageConvertDir]);
+  }, [folderPath, resolveSeriesImageConvertDir, resolveSeriesImageStructureJsonPath]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -300,6 +304,7 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
           <SeriesEditor
             seriesListData={loadState.list}
             seriesImageConvertDirPath={seriesImageCountState.dirPath}
+            seriesImageSeriesBaseNameOrder={seriesImageCountState.status === "ready" ? seriesImageCountState.seriesBaseNameOrder : []}
             onChange={handleEditorChange}
           />
         </CardContent>
