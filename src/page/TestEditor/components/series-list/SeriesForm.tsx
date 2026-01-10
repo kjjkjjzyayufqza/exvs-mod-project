@@ -1,14 +1,40 @@
-import { ChangeEvent, useCallback, useRef, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { SeriesData } from "@/models/seriesList";
 import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
-import { DualValueProperty } from "@/components/ui/dual-value-property";
 import { formatSeriesPngFileNameFromBaseName, resolveMappedSeriesBaseName } from "./seriesImage";
 import { SeriesImageReplaceDialog } from "./SeriesImageReplaceDialog";
+
+const FormSchema = z.object({
+  SeriesId: z.number().int(),
+  unk2: z.number().int(),
+  iconFileIndex: z.number().int(),
+  unk3: z.number().int(),
+  seriesName: z.string(),
+  unk4: z.number().int(),
+  unk5: z.number().int(),
+  characterListPosition: z.number().int(),
+});
+
+type FormData = z.infer<typeof FormSchema>;
 
 interface SeriesFormProps {
   series: SeriesData;
@@ -29,79 +55,63 @@ export function SeriesForm({
   isSeriesIdTaken,
   onChange,
 }: SeriesFormProps) {
-  const [editingProperty, setEditingProperty] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState<string>("");
-  const [validationError, setValidationError] = useState<string>("");
-  const editValueRef = useRef<string>("");
   const [previewVersion, setPreviewVersion] = useState(0);
 
-  const handleStartEdit = useCallback((property: string, value: string | number) => {
-    setEditingProperty(property);
-    const next = String(value ?? "");
-    setEditValue(next);
-    editValueRef.current = next;
-    setValidationError("");
-  }, []);
+  const form = useForm<FormData>({
+    resolver: zodResolver(FormSchema),
+    defaultValues: {
+      SeriesId: series.SeriesId,
+      unk2: series.unk2,
+      iconFileIndex: series.iconFileIndex,
+      unk3: series.unk3,
+      seriesName: series.unkStr1?.Utf8String || "",
+      unk4: series.unk4,
+      unk5: series.unk5,
+      characterListPosition: series.characterListPosition,
+    },
+  });
 
-  const handleCancelEdit = useCallback(() => {
-    setEditingProperty(null);
-    setEditValue("");
-    editValueRef.current = "";
-    setValidationError("");
-  }, []);
+  // Sync form values when series data changes
+  useEffect(() => {
+    form.reset({
+      SeriesId: series.SeriesId,
+      unk2: series.unk2,
+      iconFileIndex: series.iconFileIndex,
+      unk3: series.unk3,
+      seriesName: series.unkStr1?.Utf8String || "",
+      unk4: series.unk4,
+      unk5: series.unk5,
+      characterListPosition: series.characterListPosition,
+    });
+  }, [series, form]);
 
-  const handleValueChange = useCallback((value: string) => {
-    setEditValue(value);
-    editValueRef.current = value;
-  }, []);
-
-  const handleSaveEdit = useCallback(() => {
-    if (!editingProperty) return;
-    if (validationError) return;
-
-    if (editingProperty === "SeriesId") {
-      const trimmed = editValueRef.current.trim();
-      const parsed = trimmed ? Number.parseInt(trimmed, 10) : 0;
-      const nextId = Number.isFinite(parsed) ? (parsed | 0) : 0;
-
-      if (isSeriesIdTaken?.(nextId)) {
-        setValidationError("Series ID already exists");
-        return;
-      }
-
-      onChange({ ...series, SeriesId: nextId });
-      setEditingProperty(null);
-      setEditValue("");
-      editValueRef.current = "";
-      setValidationError("");
+  const onSubmit = useCallback((data: FormData) => {
+    // Validate SeriesId uniqueness
+    if (isSeriesIdTaken?.(data.SeriesId)) {
+      form.setError("SeriesId", {
+        type: "manual",
+        message: "Series ID already exists"
+      });
       return;
     }
 
-    setEditingProperty(null);
-  }, [editingProperty, isSeriesIdTaken, onChange, series, validationError]);
-
-  const handleNumberChange = useCallback(
-    (field: keyof Pick<SeriesData, "iconFileIndex" | "unk2" | "unk3" | "unk4" | "unk5" | "characterListPosition">) =>
-      (e: ChangeEvent<HTMLInputElement>) => {
-        const value = Number(e.target.value) || 0;
-        onChange({ ...series, [field]: value });
+    const updatedSeries: SeriesData = {
+      ...series,
+      SeriesId: data.SeriesId,
+      unk2: data.unk2,
+      iconFileIndex: data.iconFileIndex,
+      unk3: data.unk3,
+      unkStr1: {
+        ...series.unkStr1,
+        Utf8String: data.seriesName,
       },
-    [series, onChange]
-  );
+      unk4: data.unk4,
+      unk5: data.unk5,
+      characterListPosition: data.characterListPosition,
+    };
 
-  const handleNameChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      const newName = e.target.value;
-      onChange({
-        ...series,
-        unkStr1: {
-          ...series.unkStr1,
-          Utf8String: newName,
-        },
-      });
-    },
-    [series, onChange]
-  );
+    onChange(updatedSeries);
+  }, [form, isSeriesIdTaken, onChange, series]);
 
   const seriesName = series.unkStr1?.Utf8String || "";
   const baseName = resolveMappedSeriesBaseName(seriesImageSeriesBaseNameOrder, series.iconFileIndex);
@@ -120,145 +130,205 @@ export function SeriesForm({
   })();
 
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="pb-3">
-        <div className="flex items-start gap-4">
-          <div className="shrink-0 space-y-2">
-            <div className="h-24 w-48 overflow-hidden rounded border bg-black">
-              <img
-                src={thumbnailSrc}
-                alt={seriesName || "Series"}
-                className="h-full w-full object-contain"
-                onError={(e) => {
-                  e.currentTarget.src = "/tauri.svg";
-                }}
-              />
-            </div>
-            <SeriesImageReplaceDialog
-              iconFileIndex={series.iconFileIndex}
-              seriesImageConvertDirPath={seriesImageConvertDirPath}
-              seriesImageSeriesBaseNameOrder={seriesImageSeriesBaseNameOrder}
-            onRefreshSeriesImages={onRefreshSeriesImages}
-              onApplied={(nextIconFileIndex) => {
-                onChange({ ...series, iconFileIndex: nextIconFileIndex });
-                setPreviewVersion((v) => v + 1);
-              }}
-            />
-          </div>
-          <div className="flex-1 min-w-0 space-y-2">
-            <CardTitle className="text-lg">Series Details</CardTitle>
-            <div className="text-xs text-muted-foreground">
-              <div>ID: {series.SeriesId}</div>
-              <div>Index: {index}</div>
-              <div>Image: {imageFileName ?? "-"}</div>
-            </div>
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent className="flex-1 min-h-0">
-        <ScrollArea className="h-full pr-4">
-          <div className="space-y-4">
-            <DualValueProperty
-              label="Series ID"
-              value={series.SeriesId}
-              property="SeriesId"
-              editable
-              editingProperty={editingProperty}
-              editValue={editValue}
-              validationError={validationError}
-              onStartEdit={handleStartEdit}
-              onSaveEdit={handleSaveEdit}
-              onCancelEdit={handleCancelEdit}
-              onValueChange={handleValueChange}
-              onValidationErrorChange={setValidationError}
-              variant="compact"
-              showHex={true}
-            />
-
-            <div className="space-y-2">
-              <Label htmlFor="series-name">Series Name</Label>
-              <Input
-                id="series-name"
-                value={seriesName}
-                onChange={handleNameChange}
-                placeholder="Enter series name"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label htmlFor="unk2">unk2</Label>
-                <div className="text-xs text-muted-foreground min-h-8 leading-snug" />
-                <Input
-                  id="unk2"
-                  type="number"
-                  value={series.unk2}
-                  onChange={handleNumberChange("unk2")}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="iconFileIndex">iconFileIndex</Label>
-                <div className="text-xs text-muted-foreground min-h-8 leading-snug">
-                  Points to image index in 0xA0253AA0.fhm2d.
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="h-full flex flex-col">
+        <Card className="h-full flex flex-col">
+          <CardHeader className="pb-3">
+            <div className="flex items-start gap-4">
+              <div className="shrink-0 space-y-2">
+                <div className="h-24 w-48 overflow-hidden rounded border bg-black">
+                  <img
+                    src={thumbnailSrc}
+                    alt={seriesName || "Series"}
+                    className="h-full w-full object-contain"
+                    onError={(e) => {
+                      e.currentTarget.src = "/tauri.svg";
+                    }}
+                  />
                 </div>
-                <Input
-                  id="iconFileIndex"
-                  type="number"
-                  value={series.iconFileIndex}
-                  onChange={handleNumberChange("iconFileIndex")}
+                <SeriesImageReplaceDialog
+                  iconFileIndex={series.iconFileIndex}
+                  seriesImageConvertDirPath={seriesImageConvertDirPath}
+                  seriesImageSeriesBaseNameOrder={seriesImageSeriesBaseNameOrder}
+                  onRefreshSeriesImages={onRefreshSeriesImages}
+                  onApplied={(nextIconFileIndex) => {
+                    form.setValue("iconFileIndex", nextIconFileIndex);
+                    setPreviewVersion((v) => v + 1);
+                  }}
                 />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="unk3">unk3</Label>
-                <div className="text-xs text-muted-foreground min-h-8 leading-snug" />
-                <Input
-                  id="unk3"
-                  type="number"
-                  value={series.unk3}
-                  onChange={handleNumberChange("unk3")}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="unk4">unk4</Label>
-                <div className="text-xs text-muted-foreground min-h-8 leading-snug" />
-                <Input
-                  id="unk4"
-                  type="number"
-                  value={series.unk4}
-                  onChange={handleNumberChange("unk4")}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="unk5">unk5</Label>
-                <div className="text-xs text-muted-foreground min-h-8 leading-snug" />
-                <Input
-                  id="unk5"
-                  type="number"
-                  value={series.unk5}
-                  onChange={handleNumberChange("unk5")}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="characterListPosition">characterListPosition</Label>
-                <div className="text-xs text-muted-foreground min-h-8 leading-snug">
-                  Position/index used for character list ordering.
+              <div className="flex-1 min-w-0 space-y-2">
+                <CardTitle className="text-lg">Series Details</CardTitle>
+                <div className="text-xs text-muted-foreground">
+                  <div>ID: {series.SeriesId}</div>
+                  <div>Index: {index}</div>
+                  <div>Image: {imageFileName ?? "-"}</div>
                 </div>
-                <Input
-                  id="characterListPosition"
-                  type="number"
-                  value={series.characterListPosition}
-                  onChange={handleNumberChange("characterListPosition")}
-                />
               </div>
             </div>
-          </div>
-        </ScrollArea>
-      </CardContent>
-    </Card>
+          </CardHeader>
+
+          <CardContent className="flex-1 min-h-0">
+            <ScrollArea className="h-full pr-4">
+              <div className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="SeriesId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Series ID</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          placeholder="Enter series ID"
+                          {...field}
+                          onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="seriesName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Series Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter series name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="unk2"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>unk2</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="iconFileIndex"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>iconFileIndex</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Points to image index in 0xA0253AA0.fhm2d.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="unk3"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>unk3</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="unk4"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>unk4</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="unk5"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>unk5</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="characterListPosition"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>characterListPosition</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Position/index used for character list ordering.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <Button type="submit" className="w-full mt-4">
+                  Save Changes
+                </Button>
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      </form>
+    </Form>
   );
 }
 

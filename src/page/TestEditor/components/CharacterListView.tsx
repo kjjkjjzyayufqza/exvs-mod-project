@@ -4,10 +4,17 @@ import { join } from "@tauri-apps/api/path";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Buffer } from "buffer";
 import { toast } from "sonner";
-import { RefreshCw, Save } from "lucide-react";
+import { RefreshCw, Save, Info } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { CharacterListOB, buildCharacterListBuffer } from "@/models/characterListOB";
 import { SeriesList } from "@/models/seriesList";
 import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
@@ -45,6 +52,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
     convertDirPath: "",
   });
   const [hasChanges, setHasChanges] = useState(false);
+  const [isInfoDialogOpen, setIsInfoDialogOpen] = useState(false);
   const lastLoadedKeyRef = useRef<string>("");
 
   const resolveFilePath = useCallback(async () => {
@@ -119,16 +127,15 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
         return convertFileSrc(full);
       };
 
-      const items: SeriesIdPickerItem[] = [
-        { id: 0, label: "None", previewSrc: "/tauri.svg" },
-        ...list.SeriesData
-          .map((s) => ({
-            id: s.SeriesId,
-            label: s.unkStr1?.Utf8String || `Series ${s.SeriesId}`,
-            previewSrc: toPreviewSrc(s.iconFileIndex),
-          }))
-          .sort((a, b) => a.id - b.id),
-      ];
+      const items: SeriesIdPickerItem[] = list.SeriesData.map((s) => ({
+        id: s.SeriesId,
+        iconFileIndex: s.iconFileIndex,
+        label: s.unkStr1?.Utf8String || `Series ${s.SeriesId}`,
+        previewSrc: toPreviewSrc(s.iconFileIndex),
+      })).sort((a, b) => {
+        if (a.iconFileIndex !== b.iconFileIndex) return a.iconFileIndex - b.iconFileIndex;
+        return a.id - b.id;
+      });
 
       setSeriesPickerState({ status: "ready", filePath, convertDirPath, items });
     } catch (error) {
@@ -271,6 +278,15 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
               </Button>
               <Button
                 size="sm"
+                variant="outline"
+                onClick={() => setIsInfoDialogOpen(true)}
+                className="inline-flex items-center gap-2"
+              >
+                <Info className="w-4 h-4" />
+                Info
+              </Button>
+              <Button
+                size="sm"
                 onClick={() => void handleSaveFile()}
                 disabled={!hasChanges}
                 className="inline-flex items-center gap-2"
@@ -285,13 +301,32 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
         <CardContent className="flex-1 min-h-0">
           <CharacterEditor
             characterListData={loadState.list}
-            seriesIdPickerItems={seriesPickerState.status === "ready" ? seriesPickerState.items : [{ id: 0, label: "None", previewSrc: "/tauri.svg" }]}
+            seriesIdPickerItems={
+              seriesPickerState.status === "ready"
+                ? seriesPickerState.items
+                : []
+            }
             seriesIdPickerLoading={seriesPickerState.status === "loading" || seriesPickerState.status === "idle"}
             seriesIdPickerError={seriesPickerState.status === "error" ? seriesPickerState.message : null}
             onChange={handleEditorChange}
           />
         </CardContent>
       </Card>
+
+      <Dialog open={isInfoDialogOpen} onOpenChange={setIsInfoDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Info</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-2 pt-2">
+                <p>1. 自动加载0xb7367090\series_list.bin</p>
+                <p>2. 图片mapping自0xA0253AA0\__convert</p>
+                <p>3. 图片透过0xA0253AA0_structure.json来mapping原有顺序</p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

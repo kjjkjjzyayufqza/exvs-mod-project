@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { dirname, join } from "@tauri-apps/api/path";
-import { open } from "@tauri-apps/plugin-dialog";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 
@@ -10,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FilePathInput } from "@/components/ui/filePathInput";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
 import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
@@ -98,17 +98,13 @@ export function SeriesImageReplaceDialog({
     return `${url}${q}v=${previewVersion}`;
   }, [iconFileIndex, pngPath, previewVersion, seriesImageConvertDirPath]);
 
-  const handlePickPng = useCallback(async () => {
-    try {
-      const selected = await open({
-        multiple: false,
-        filters: [{ name: "PNG", extensions: ["png"] }],
-      });
-      if (!selected || Array.isArray(selected)) return;
-      setPngPath(selected);
-    } catch (e) {
-      console.error(e);
-      toast.error("Failed to pick PNG");
+  const handlePngPicked = useCallback((picked: string | string[]) => {
+    if (Array.isArray(picked)) {
+      if (picked.length > 0) {
+        setPngPath(picked[0]);
+      }
+    } else {
+      setPngPath(picked);
     }
   }, []);
 
@@ -329,12 +325,19 @@ export function SeriesImageReplaceDialog({
 
           <div className="space-y-2">
             <Label htmlFor="series-replace-png">Source PNG</Label>
-            <div className="flex gap-2">
-              <Input id="series-replace-png" value={pngPath} readOnly placeholder="Select a PNG file..." />
-              <Button variant="outline" onClick={handlePickPng} disabled={isReplacing}>
-                Browse
-              </Button>
-            </div>
+            <FilePathInput
+              id="series-replace-png"
+              value={pngPath}
+              placeholder="Select a PNG file..."
+              picker={{
+                kind: "file",
+                multiple: false,
+                title: "Select PNG file",
+                filters: [{ name: "PNG", extensions: ["png"] }],
+              }}
+              onPickedValue={handlePngPicked}
+              disabled={isReplacing}
+            />
             <div className="text-xs text-muted-foreground min-h-8 leading-snug">
               The PNG will be converted in Rust (no external executables).
             </div>

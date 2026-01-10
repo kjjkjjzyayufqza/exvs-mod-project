@@ -2804,7 +2804,7 @@ dependencies = [
 [[package]]
 name = "nutexb"
 version = "0.7.0"
-source = "git+https://github.com/kjjkjjzyayufqza/nutexb#35c2cdaaff9c211f146df9ece0235db15968b6bc"
+source = "git+https://github.com/kjjkjjzyayufqza/nutexb#d8d8a4c251ae5d3416da8ca65f957e2e77a1176e"
 dependencies = [
  "binrw",
  "ddsfile",

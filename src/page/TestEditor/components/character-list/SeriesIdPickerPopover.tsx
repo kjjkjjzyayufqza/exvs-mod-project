@@ -4,10 +4,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
-import { X } from "lucide-react";
+import { SkipForward, X } from "lucide-react";
 
 export type SeriesIdPickerItem = {
   id: number;
+  iconFileIndex: number;
   label: string;
   previewSrc: string;
 };
@@ -17,16 +18,29 @@ export function SeriesIdPickerPopover(props: {
   items: SeriesIdPickerItem[];
   isLoading?: boolean;
   error?: string | null;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const { onSelect, items, isLoading, error } = props;
-  const [open, setOpen] = useState(false);
+  const [openInternal, setOpenInternal] = useState(false);
+  const open = props.open ?? openInternal;
+  const setOpen = props.onOpenChange ?? setOpenInternal;
   const [query, setQuery] = useState("");
+
+  const sorted = useMemo(() => {
+    const copy = [...items];
+    copy.sort((a, b) => {
+      if (a.iconFileIndex !== b.iconFileIndex) return a.iconFileIndex - b.iconFileIndex;
+      return a.id - b.id;
+    });
+    return copy;
+  }, [items]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((it) => it.label.toLowerCase().includes(q) || String(it.id).includes(q));
-  }, [items, query]);
+    if (!q) return sorted;
+    return sorted.filter((it) => it.label.toLowerCase().includes(q) || String(it.id).includes(q));
+  }, [sorted, query]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -35,11 +49,11 @@ export function SeriesIdPickerPopover(props: {
           type="button"
           variant="ghost"
           size="icon"
-          className="h-6 w-6"
+          className="m-0 p-0 h-4"
           aria-label="Open Series ID picker"
           title="Open Series ID picker"
         >
-          ?
+          <SkipForward />
         </Button>
       </PopoverTrigger>
       <PopoverContent

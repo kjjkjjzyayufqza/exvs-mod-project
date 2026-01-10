@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +27,8 @@ interface DualValuePropertyProps {
   editOnRowClick?: boolean;
   mode?: "toggle" | "live";
   onCommit?: (value: number) => void;
+  onLiveIntInputFocus?: (e: React.FocusEvent<HTMLInputElement>) => void;
+  onLiveIntInputClick?: (e: React.MouseEvent<HTMLInputElement>) => void;
 }
 
 /**
@@ -51,6 +54,8 @@ export function DualValueProperty({
   editOnRowClick = false,
   mode = "toggle",
   onCommit,
+  onLiveIntInputFocus,
+  onLiveIntInputClick,
 }: DualValuePropertyProps) {
   const [editFormat, setEditFormat] = useState<'int32' | 'hex'>('int32');
   const isEditing = editingProperty === property;
@@ -188,6 +193,8 @@ export function DualValueProperty({
 
                   commit(Number.parseInt(trimmed, 10) | 0);
                 }}
+                onFocus={onLiveIntInputFocus}
+                onClick={onLiveIntInputClick}
                 placeholder="Int32"
                 className={[
                   "h-8 font-mono text-sm shadow-none rounded-l-md rounded-r-none -mr-px",
@@ -212,6 +219,8 @@ export function DualValueProperty({
                   }
                 }}
                 placeholder="XX XX XX XX"
+                onFocus={onLiveIntInputFocus}
+                onClick={onLiveIntInputClick}
                 className={[
                   "h-8 font-mono text-sm shadow-none rounded-r-md rounded-l-none -ml-px",
                   liveValidationError ? "border-red-500" : "",
@@ -241,6 +250,8 @@ export function DualValueProperty({
 
                 commit(Number.parseInt(trimmed, 10) | 0);
               }}
+              onFocus={onLiveIntInputFocus}
+              onClick={onLiveIntInputClick}
               placeholder="Int32"
               className={[
                 "h-8 font-mono text-sm",

@@ -33,6 +33,11 @@ export function CharacterEditor({ characterListData, seriesIdPickerItems, series
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteCandidateIndex, setDeleteCandidateIndex] = useState<number | null>(null);
 
+  const getNextCharacterUniqueId = useCallback(() => {
+    if (!characterListData) return 1;
+    return Math.max(...characterListData.CharacterData.map((c) => c.characterUniqueId || 0), 0) + 1;
+  }, [characterListData]);
+
   const selectedCharacter = useMemo<CharacterDataOB | null>(() => {
     if (!characterListData) return null;
     if (selectedIndex < 0) return null;
@@ -117,7 +122,7 @@ export function CharacterEditor({ characterListData, seriesIdPickerItems, series
       let newCharacterId = characterToCopy.CharacterId;
       while (existingIds.has(newCharacterId)) newCharacterId++;
 
-      const newCharacterUniqueId = Math.max(...characterListData.CharacterData.map((c) => c.characterUniqueId || 0), 0) + 1;
+      const newCharacterUniqueId = getNextCharacterUniqueId();
       const clonedCharacter = cloneCharacterDataOB(characterToCopy, newCharacterId, characterListData.bufferData, newCharacterUniqueId);
 
       updateList((prevList) => {
@@ -130,13 +135,14 @@ export function CharacterEditor({ characterListData, seriesIdPickerItems, series
 
       setSelectedIndex(characterListData.CharacterData.length);
     },
-    [characterListData, updateList]
+    [characterListData, getNextCharacterUniqueId, updateList]
   );
 
   const handleAdd = useCallback(() => {
     if (!characterListData) return;
     const newCharacterId = Math.max(...characterListData.CharacterData.map((c) => c.CharacterId), 0) + 1;
     const newCharacter = new CharacterDataOBClass(Buffer.alloc(0x2000), Buffer.alloc(0x1d8), newCharacterId);
+    newCharacter.characterUniqueId = getNextCharacterUniqueId();
 
     updateList((prevList) => {
       const nextRows = [...prevList.CharacterData, newCharacter];
@@ -147,7 +153,7 @@ export function CharacterEditor({ characterListData, seriesIdPickerItems, series
     });
 
     setSelectedIndex(characterListData.CharacterData.length);
-  }, [characterListData, updateList]);
+  }, [characterListData, getNextCharacterUniqueId, updateList]);
 
   if (!characterListData) {
     return <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground">Select this tab to load character_list.bin</div>;

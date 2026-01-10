@@ -28,6 +28,7 @@ export function CharacterForm({
 }: CharacterFormProps) {
   const [formData, setFormData] = useState<Record<string, number>>({});
   const [stringFormData, setStringFormData] = useState<Record<string, string>>({});
+  const [seriesIdPickerOpen, setSeriesIdPickerOpen] = useState(false);
   const formDataRef = useRef<Record<string, number>>({});
   const stringFormDataRef = useRef<Record<string, string>>({});
 
@@ -371,6 +372,8 @@ export function CharacterForm({
                           items={seriesIdPickerItems}
                           isLoading={seriesIdPickerLoading}
                           error={seriesIdPickerError}
+                          open={seriesIdPickerOpen}
+                          onOpenChange={setSeriesIdPickerOpen}
                         />
                       ) : undefined
                     }
@@ -388,6 +391,16 @@ export function CharacterForm({
                     editOnRowClick={false}
                     mode="live"
                     onCommit={(nextValue) => handleFieldChange(field.name, nextValue)}
+                    onLiveIntInputFocus={
+                      field.name === "SeriesId"
+                        ? () => setSeriesIdPickerOpen(true)
+                        : undefined
+                    }
+                    onLiveIntInputClick={
+                      field.name === "SeriesId"
+                        ? () => setSeriesIdPickerOpen(true)
+                        : undefined
+                    }
                   />
                 ))}
               </div>

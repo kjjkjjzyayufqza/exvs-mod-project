@@ -4,10 +4,17 @@ import { join } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { Buffer } from "buffer";
 import { toast } from "sonner";
-import { RefreshCw, Save, Image as ImageIcon, Loader2 } from "lucide-react";
+import { RefreshCw, Save, Image as ImageIcon, Loader2, Info } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { SeriesList, buildSeriesListBuffer } from "@/models/seriesList";
 import { SeriesEditor } from "./series-list/SeriesEditor";
 import { extractA0253FirstFolderSeriesBaseNameOrder } from "./series-list/seriesImage";
@@ -34,6 +41,7 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [hasChanges, setHasChanges] = useState(false);
   const [isRefreshingNutexb, setIsRefreshingNutexb] = useState(false);
+  const [isInfoDialogOpen, setIsInfoDialogOpen] = useState(false);
   const [seriesImageCountState, setSeriesImageCountState] = useState<SeriesImageCountState>({
     status: "idle",
     dirPath: "",
@@ -289,6 +297,15 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
               </Button>
               <Button
                 size="sm"
+                variant="outline"
+                onClick={() => setIsInfoDialogOpen(true)}
+                className="inline-flex items-center gap-2"
+              >
+                <Info className="w-4 h-4" />
+                Info
+              </Button>
+              <Button
+                size="sm"
                 onClick={() => void handleSaveFile()}
                 disabled={!hasChanges}
                 className="inline-flex items-center gap-2"
@@ -310,6 +327,21 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
           />
         </CardContent>
       </Card>
+
+      <Dialog open={isInfoDialogOpen} onOpenChange={setIsInfoDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Info</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-2 pt-2">
+                <p>1. 自动加载0xb7367090\series_list.bin</p>
+                <p>2. 图片mapping自0xA0253AA0\__convert</p>
+                <p>3. 图片透过0xA0253AA0_structure.json来mapping原有顺序</p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

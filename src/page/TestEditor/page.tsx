@@ -349,7 +349,6 @@ const TestEditorPage = () => {
           <div className="flex items-end">
             <Button
               size="sm"
-              variant="outline"
               disabled={!hasDirtyFolders}
               onClick={() => setIsRepackDialogOpen(true)}
               className="relative"
