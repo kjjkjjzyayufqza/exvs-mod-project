@@ -1,5 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
+import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { join } from "@tauri-apps/api/path";
 import { Buffer } from "buffer";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Save, RefreshCw, Plus, Trash2, Search, Copy } from "lucide-react";
+import { Save, RefreshCw, Plus, Trash2, Search, Copy, Clipboard } from "lucide-react";
 import { CharacterIdTable, CharacterIdTableData, buildCharacterIdTableBuffer } from "@/models/characterIdTable";
 import { cn } from "@/lib/utils";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -35,6 +36,40 @@ type LoadState =
     | { status: "error"; filePath: string; message: string }
     | { status: "ready"; filePath: string; table: CharacterIdTable };
 
+const CLIPBOARD_PREFIX = "CHARACTER_ID_TABLE_FIELDS_V1";
+const REQUIRED_FIELD_KEYS = ["Model", "Effect", "Sound", "Param", "Msc", "Motion"] as const;
+
+type ClipboardPayload = {
+    version: 1;
+    sourceCharacterId: number;
+    fields: Pick<CharacterIdTableData, (typeof REQUIRED_FIELD_KEYS)[number]>;
+};
+
+const isValidNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+
+const parseClipboardPayload = (text: string): ClipboardPayload | null => {
+    const prefix = `${CLIPBOARD_PREFIX}\n`;
+    if (!text.startsWith(prefix)) return null;
+    const jsonText = text.slice(prefix.length).trim();
+    if (!jsonText) return null;
+
+    try {
+        const parsed = JSON.parse(jsonText) as Partial<ClipboardPayload> | null;
+        if (!parsed || parsed.version !== 1) return null;
+        if (!isValidNumber(parsed.sourceCharacterId)) return null;
+        if (!parsed.fields || typeof parsed.fields !== "object") return null;
+
+        for (const key of REQUIRED_FIELD_KEYS) {
+            const value = (parsed.fields as Record<string, unknown>)[key];
+            if (!isValidNumber(value)) return null;
+        }
+
+        return parsed as ClipboardPayload;
+    } catch {
+        return null;
+    }
+};
+
 export default function CharacterIdTableView({ folderPath, isActive, onUnsavedChanges }: CharacterIdTableViewProps) {
     const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
     const [selectedIndex, setSelectedIndex] = useState<number>(-1);
@@ -44,6 +79,9 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [deleteCandidateIndex, setDeleteCandidateIndex] = useState<number | null>(null);
+    const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
+    const [pasteCandidate, setPasteCandidate] = useState<ClipboardPayload | null>(null);
+    const [clipboardPayload, setClipboardPayload] = useState<ClipboardPayload | null>(null);
 
     const lastLoadedKeyRef = useRef<string>("");
     const listParentRef = useRef<HTMLDivElement | null>(null);
@@ -61,7 +99,7 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
         return await join(folderPath, "0x036B9E67", "character_id_table.bin");
     }, [folderPath]);
 
-    const load = useCallback(async () => {
+    const load = useCallback(async (options?: { preserveSelectionId?: number | null }) => {
         if (!folderPath) {
             setLoadState({ status: "error", filePath: "", message: "Folder path is empty" });
             resetEditorState();
@@ -76,13 +114,20 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
             const table = new CharacterIdTable(Buffer.from(fileData));
             console.log("table", table);
             setLoadState({ status: "ready", filePath, table });
-            resetEditorState();
+            if (options?.preserveSelectionId !== undefined && options?.preserveSelectionId !== null) {
+                const nextIndex = table.CharacterData.findIndex((row) => row.CharacterId === options.preserveSelectionId);
+                setSelectedIndex(nextIndex);
+                setHasChanges(false);
+                onUnsavedChanges?.(false);
+            } else {
+                resetEditorState();
+            }
         } catch (error) {
             console.error("error", error);
             setLoadState({ status: "error", filePath, message: error instanceof Error ? error.message : "Unknown error" });
             resetEditorState();
         }
-    }, [folderPath, resetEditorState, resolveFilePath]);
+    }, [folderPath, onUnsavedChanges, resetEditorState, resolveFilePath]);
 
     useEffect(() => {
         if (!isActive) return;
@@ -162,6 +207,31 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
         onUnsavedChanges?.(true);
     }, [loadState.status, onUnsavedChanges, selectedIndex, updateTable]);
 
+    const updateSelectedRowFields = useCallback((fields: ClipboardPayload["fields"]) => {
+        if (loadState.status !== "ready") return;
+        if (selectedIndex < 0) return;
+
+        updateTable((prevTable) => {
+            const nextRows = [...prevTable.CharacterData];
+            const current = nextRows[selectedIndex];
+            if (!current) return prevTable;
+
+            nextRows[selectedIndex] = {
+                ...current,
+                ...fields,
+            } as CharacterIdTableData;
+
+            const next = Object.assign(Object.create(Object.getPrototypeOf(prevTable)), prevTable, {
+                CharacterData: nextRows,
+                CharacterCount: nextRows.length,
+            });
+            return next;
+        });
+
+        setHasChanges(true);
+        onUnsavedChanges?.(true);
+    }, [loadState.status, onUnsavedChanges, selectedIndex, updateTable]);
+
     const handleDelete = useCallback(
         (index: number) => {
             updateTable((prevTable) => {
@@ -200,6 +270,85 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
         handleDelete(deleteCandidateIndex);
         closeDeleteDialog();
     }, [closeDeleteDialog, deleteCandidateIndex, handleDelete]);
+
+    const handleCopyFields = useCallback(async () => {
+        if (!selectedRow) return;
+        const payload: ClipboardPayload = {
+            version: 1,
+            sourceCharacterId: selectedRow.CharacterId,
+            fields: {
+                Model: selectedRow.Model,
+                Effect: selectedRow.Effect,
+                Sound: selectedRow.Sound,
+                Param: selectedRow.Param,
+                Msc: selectedRow.Msc,
+                Motion: selectedRow.Motion,
+            },
+        };
+
+        try {
+            const text = `${CLIPBOARD_PREFIX}\n${JSON.stringify(payload)}`;
+            await writeText(text);
+            setClipboardPayload(payload);
+            toast.success("Copied fields to clipboard");
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to copy fields");
+        }
+    }, [selectedRow]);
+
+    const refreshClipboardPayload = useCallback(async () => {
+        try {
+            const text = await readText();
+            const parsed = parseClipboardPayload(text);
+            setClipboardPayload(parsed);
+        } catch {
+            setClipboardPayload(null);
+        }
+    }, []);
+
+    const readClipboardPayload = useCallback(async () => {
+        try {
+            const text = await readText();
+            return parseClipboardPayload(text);
+        } catch {
+            return null;
+        }
+    }, []);
+
+    const attemptPasteFromClipboard = useCallback(async (options?: { silent?: boolean }) => {
+        if (!selectedRow) return;
+        const parsed = await readClipboardPayload();
+        if (!parsed) {
+            if (!options?.silent) {
+                toast.error("Clipboard does not contain character table fields");
+            }
+            return;
+        }
+        if (parsed.sourceCharacterId === selectedRow.CharacterId) {
+            if (!options?.silent) {
+                toast.error("Clipboard fields are from the same Character ID");
+            }
+            return;
+        }
+        setPasteCandidate(parsed);
+        setPasteDialogOpen(true);
+    }, [readClipboardPayload, selectedRow]);
+
+    const handlePasteRequest = useCallback(async () => {
+        await attemptPasteFromClipboard();
+    }, [attemptPasteFromClipboard]);
+
+    const closePasteDialog = useCallback(() => {
+        setPasteDialogOpen(false);
+        setPasteCandidate(null);
+    }, []);
+
+    const confirmPaste = useCallback(() => {
+        if (!pasteCandidate) return;
+        updateSelectedRowFields(pasteCandidate.fields);
+        closePasteDialog();
+    }, [closePasteDialog, pasteCandidate, updateSelectedRowFields]);
 
     const handleAdd = useCallback(() => {
         updateTable((prevTable) => {
@@ -276,13 +425,40 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
             toast.success("Saved characteridtable.bin");
             setHasChanges(false);
             onUnsavedChanges?.(false);
-            await load();
+            await load({ preserveSelectionId: selectedRow?.CharacterId ?? null });
         } catch (error) {
             console.error(error);
             toast.error("Failed to save characteridtable.bin");
         }
-    }, [loadState, onUnsavedChanges]);
+    }, [load, loadState, onUnsavedChanges, selectedRow?.CharacterId]);
 
+    useEffect(() => {
+        if (!isActive || !selectedRow) {
+            setClipboardPayload(null);
+            return;
+        }
+        void refreshClipboardPayload();
+    }, [isActive, refreshClipboardPayload, selectedRow?.CharacterId]);
+
+    useEffect(() => {
+        if (!isActive || !selectedRow) return;
+
+        const handlePaste = (event: ClipboardEvent) => {
+            const target = event.target as HTMLElement | null;
+            if (target) {
+                const tag = target.tagName;
+                if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) {
+                    return;
+                }
+            }
+            void attemptPasteFromClipboard({ silent: true });
+        };
+
+        document.addEventListener("paste", handlePaste);
+        return () => {
+            document.removeEventListener("paste", handlePaste);
+        };
+    }, [attemptPasteFromClipboard, isActive, selectedRow]);
     if (!isActive) {
         return <div className="h-full w-full" />;
     }
@@ -470,6 +646,21 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                             Values can be edited as int32 or hex
                                         </div>
                                     </div>
+                                    <div className="flex flex-wrap items-center gap-2 mb-4">
+                                        <Button size="sm" variant="outline" onClick={() => void handleCopyFields()}>
+                                            <Copy className="w-4 h-4 mr-2" />
+                                            Copy fields
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => void handlePasteRequest()}
+                                            disabled={!clipboardPayload || clipboardPayload.sourceCharacterId === selectedRow.CharacterId}
+                                        >
+                                            <Clipboard className="w-4 h-4 mr-2" />
+                                            Paste fields
+                                        </Button>
+                                    </div>
 
                                     <ScrollArea className="flex-1 min-h-0">
                                         <div className="space-y-2 pr-2">
@@ -634,6 +825,70 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                         <AlertDialogCancel onClick={closeDeleteDialog}>Cancel</AlertDialogCancel>
                         <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">
                             Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog
+                open={pasteDialogOpen}
+                onOpenChange={(open) => {
+                    if (open) {
+                        setPasteDialogOpen(true);
+                        return;
+                    }
+                    closePasteDialog();
+                }}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Overwrite fields</AlertDialogTitle>
+                        <AlertDialogDescription asChild>
+                            <div className="space-y-2">
+                                {pasteCandidate ? (
+                                    <>
+                                        <div className="text-sm text-muted-foreground">
+                                            This will overwrite the selected row with values copied from Character ID {pasteCandidate.sourceCharacterId}.
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 text-sm">
+                                            <div className="text-muted-foreground">Model</div>
+                                            <div>
+                                                {selectedRow?.Model} → {pasteCandidate.fields.Model}
+                                            </div>
+                                            <div className="text-muted-foreground">Effect</div>
+                                            <div>
+                                                {selectedRow?.Effect} → {pasteCandidate.fields.Effect}
+                                            </div>
+                                            <div className="text-muted-foreground">Sound</div>
+                                            <div>
+                                                {selectedRow?.Sound} → {pasteCandidate.fields.Sound}
+                                            </div>
+                                            <div className="text-muted-foreground">Param</div>
+                                            <div>
+                                                {selectedRow?.Param} → {pasteCandidate.fields.Param}
+                                            </div>
+                                            <div className="text-muted-foreground">MSC</div>
+                                            <div>
+                                                {selectedRow?.Msc} → {pasteCandidate.fields.Msc}
+                                            </div>
+                                            <div className="text-muted-foreground">Motion</div>
+                                            <div>
+                                                {selectedRow?.Motion} → {pasteCandidate.fields.Motion}
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="text-sm text-muted-foreground">
+                                        Clipboard data is unavailable.
+                                    </div>
+                                )}
+                            </div>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={closePasteDialog}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmPaste} className="bg-blue-600 hover:bg-blue-700">
+                            Overwrite
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
