@@ -118,9 +118,7 @@ export function CharacterEditor({ characterListData, seriesIdPickerItems, series
       const characterToCopy = characterListData.CharacterData[index];
       if (!characterToCopy) return;
 
-      const existingIds = new Set(characterListData.CharacterData.map((c) => c.CharacterId));
-      let newCharacterId = characterToCopy.CharacterId;
-      while (existingIds.has(newCharacterId)) newCharacterId++;
+      const newCharacterId = characterToCopy.CharacterId + 1;
 
       const newCharacterUniqueId = getNextCharacterUniqueId();
       const clonedCharacter = cloneCharacterDataOB(characterToCopy, newCharacterId, characterListData.bufferData, newCharacterUniqueId);

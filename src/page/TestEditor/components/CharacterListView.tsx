@@ -190,11 +190,22 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
         // Ignore backup failures
       }
 
-      const buffer = buildCharacterListBuffer(loadState.list);
+      const sortedRows = [...loadState.list.CharacterData].sort((a, b) => {
+        const aIsPositive = a.CharacterId >= 0;
+        const bIsPositive = b.CharacterId >= 0;
+        if (aIsPositive !== bIsPositive) return aIsPositive ? -1 : 1;
+        return a.CharacterId - b.CharacterId;
+      });
+      const sortedList = Object.assign(Object.create(Object.getPrototypeOf(loadState.list)), loadState.list, {
+        CharacterData: sortedRows,
+        CharacterCount: sortedRows.length,
+      });
+      const buffer = buildCharacterListBuffer(sortedList);
       await writeFile(filePath, buffer);
       toast.success("Saved character_list.bin");
       setHasChanges(false);
       onUnsavedChanges?.(false);
+      await load();
     } catch (error) {
       console.error(error);
       toast.error("Failed to save character_list.bin");

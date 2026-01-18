@@ -17,7 +17,7 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Save, RefreshCw, Plus, Trash2, Search } from "lucide-react";
+import { Save, RefreshCw, Plus, Trash2, Search, Copy } from "lucide-react";
 import { CharacterIdTable, CharacterIdTableData, buildCharacterIdTableBuffer } from "@/models/characterIdTable";
 import { cn } from "@/lib/utils";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -227,6 +227,28 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
         setSelectedIndex(tableData.length);
     }, [onUnsavedChanges, tableData.length, updateTable]);
 
+    const handleCopy = useCallback((index: number) => {
+        updateTable((prevTable) => {
+            const sourceRow = prevTable.CharacterData[index];
+            if (!sourceRow) return prevTable;
+            const newRow: CharacterIdTableData = {
+                ...sourceRow,
+                CharacterId: sourceRow.CharacterId + 1,
+            };
+            const nextRows = [...prevTable.CharacterData, newRow];
+            const next = Object.assign(Object.create(Object.getPrototypeOf(prevTable)), prevTable, {
+                CharacterData: nextRows,
+                CharacterCount: nextRows.length,
+            });
+            return next;
+        });
+
+        const newIndex = tableData.length;
+        setSelectedIndex(newIndex);
+        setHasChanges(true);
+        onUnsavedChanges?.(true);
+    }, [onUnsavedChanges, tableData.length, updateTable]);
+
     const handleSaveFile = useCallback(async () => {
         if (loadState.status !== "ready") return;
         const filePath = loadState.filePath;
@@ -239,11 +261,22 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                 // Ignore backup failures
             }
 
-            const buffer = buildCharacterIdTableBuffer(loadState.table);
+            const sortedRows = [...loadState.table.CharacterData].sort((a, b) => {
+                const aIsPositive = a.CharacterId >= 0;
+                const bIsPositive = b.CharacterId >= 0;
+                if (aIsPositive !== bIsPositive) return aIsPositive ? -1 : 1;
+                return a.CharacterId - b.CharacterId;
+            });
+            const sortedTable = Object.assign(Object.create(Object.getPrototypeOf(loadState.table)), loadState.table, {
+                CharacterData: sortedRows,
+                CharacterCount: sortedRows.length,
+            });
+            const buffer = buildCharacterIdTableBuffer(sortedTable);
             await writeFile(filePath, buffer);
             toast.success("Saved characteridtable.bin");
             setHasChanges(false);
             onUnsavedChanges?.(false);
+            await load();
         } catch (error) {
             console.error(error);
             toast.error("Failed to save characteridtable.bin");
@@ -389,18 +422,32 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     onClick={() => handleSelect(idx)}
                                                 >
                                                     <div className="text-sm font-medium truncate">ID: {row.CharacterId}</div>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            openDeleteDialog(idx);
-                                                        }}
-                                                        title="Delete"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </Button>
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="text-blue-600 hover:text-blue-600 hover:bg-blue-50"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleCopy(idx);
+                                                            }}
+                                                            title="Copy as new"
+                                                        >
+                                                            <Copy className="w-4 h-4" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                openDeleteDialog(idx);
+                                                            }}
+                                                            title="Delete"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </Button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         );

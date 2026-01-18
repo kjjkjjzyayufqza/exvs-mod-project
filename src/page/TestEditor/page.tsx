@@ -175,6 +175,7 @@ function getTopLevelFolderName(nodePath: string, rootPath: string, isDir?: boole
 }
 
 const TestEditorPage = () => {
+  const store = useConfigStore((s) => s.store);
   const getSetting = useConfigStore((s) => s.getSetting);
   const [treeData, setTreeData] = useState<TestTreeNode[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -258,13 +259,14 @@ const TestEditorPage = () => {
 
   useEffect(() => {
     const hydrate = async () => {
+      if (!store) return;
       const saved = await getSetting<string>(TEST_EDITOR_FOLDER_STORE_KEY);
       if (!saved) return;
       await loadFolder(saved);
     };
 
     hydrate();
-  }, [getSetting, loadFolder]);
+  }, [store, getSetting, loadFolder]);
 
   const filteredData = useMemo(() => filterTree(treeData, searchTerm), [treeData, searchTerm]);
   const selectedNode = useMemo(() => findNode(treeData, selectedId), [treeData, selectedId]);

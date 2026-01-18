@@ -156,11 +156,22 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
         // Ignore backup failures
       }
 
-      const buffer = buildSeriesListBuffer(loadState.list);
+      const sortedRows = [...loadState.list.SeriesData].sort((a, b) => {
+        const aIsPositive = a.SeriesId >= 0;
+        const bIsPositive = b.SeriesId >= 0;
+        if (aIsPositive !== bIsPositive) return aIsPositive ? -1 : 1;
+        return a.SeriesId - b.SeriesId;
+      });
+      const sortedList = Object.assign(Object.create(Object.getPrototypeOf(loadState.list)), loadState.list, {
+        SeriesData: sortedRows,
+        SeriesCount: sortedRows.length,
+      });
+      const buffer = buildSeriesListBuffer(sortedList);
       await writeFile(filePath, buffer);
       toast.success("Saved series_list.bin");
       setHasChanges(false);
       onUnsavedChanges?.(false);
+      await load();
     } catch (error) {
       console.error(error);
       toast.error("Failed to save series_list.bin");

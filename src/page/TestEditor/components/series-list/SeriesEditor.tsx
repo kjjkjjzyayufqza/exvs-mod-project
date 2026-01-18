@@ -124,9 +124,7 @@ export function SeriesEditor({
       const seriesToCopy = seriesListData.SeriesData[index];
       if (!seriesToCopy) return;
 
-      const existingIds = new Set(seriesListData.SeriesData.map((s) => s.SeriesId));
-      let newSeriesId = seriesToCopy.SeriesId;
-      while (existingIds.has(newSeriesId)) newSeriesId++;
+      const newSeriesId = seriesToCopy.SeriesId + 1;
 
       const clonedSeries: SeriesData = {
         SeriesId: newSeriesId,
