@@ -42,6 +42,13 @@ const FHM2D_ITEMS: InitListItem[] = [
         format: Fhm2d_type_format.fhm2d_all_nutexb,
         formatLabel: "all_nutexb",
     },
+    {
+        id: "card_icon_list",
+        name: "Card Icon List",
+        hash: "0x49235031",
+        format: Fhm2d_type_format.fhm2d_all_nutexb,
+        formatLabel: "all_nutexb",
+    },
 ];
 
 function buildHashFileName(hash: string): string {
