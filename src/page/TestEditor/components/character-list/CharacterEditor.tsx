@@ -22,16 +22,21 @@ import type { SeriesIdPickerItem } from "./SeriesIdPickerPopover";
 
 interface CharacterEditorProps {
   characterListData?: CharacterListOB;
+  selectedIndex?: number;
   seriesIdPickerItems: SeriesIdPickerItem[];
   seriesIdPickerLoading?: boolean;
   seriesIdPickerError?: string | null;
   onChange: (data: CharacterListOB) => void;
+  onSelectChange?: (index: number) => void;
 }
 
-export function CharacterEditor({ characterListData, seriesIdPickerItems, seriesIdPickerLoading, seriesIdPickerError, onChange }: CharacterEditorProps) {
-  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
+export function CharacterEditor({ characterListData, selectedIndex: controlledSelectedIndex, seriesIdPickerItems, seriesIdPickerLoading, seriesIdPickerError, onChange, onSelectChange }: CharacterEditorProps) {
+  const [internalSelectedIndex, setInternalSelectedIndex] = useState<number>(-1);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteCandidateIndex, setDeleteCandidateIndex] = useState<number | null>(null);
+
+  const isControlled = controlledSelectedIndex !== undefined && onSelectChange !== undefined;
+  const selectedIndex = isControlled ? controlledSelectedIndex : internalSelectedIndex;
 
   const getNextCharacterUniqueId = useCallback(() => {
     if (!characterListData) return 1;
@@ -60,8 +65,12 @@ export function CharacterEditor({ characterListData, seriesIdPickerItems, series
   );
 
   const handleSelect = useCallback((index: number) => {
-    setSelectedIndex(index);
-  }, []);
+    if (isControlled) {
+      onSelectChange?.(index);
+    } else {
+      setInternalSelectedIndex(index);
+    }
+  }, [isControlled, onSelectChange]);
 
   const handleUpdateCharacter = useCallback(
     (updatedCharacter: CharacterDataOB) => {
@@ -103,11 +112,17 @@ export function CharacterEditor({ characterListData, seriesIdPickerItems, series
       });
     });
 
-    setSelectedIndex((prev) => {
-      if (prev === deleteCandidateIndex) return -1;
-      if (prev > deleteCandidateIndex) return prev - 1;
-      return prev;
-    });
+    const nextSelectedIndex = (() => {
+      if (selectedIndex === deleteCandidateIndex) return -1;
+      if (selectedIndex > deleteCandidateIndex) return selectedIndex - 1;
+      return selectedIndex;
+    })();
+
+    if (isControlled) {
+      onSelectChange?.(nextSelectedIndex);
+    } else {
+      setInternalSelectedIndex(nextSelectedIndex);
+    }
 
     closeDeleteDialog();
   }, [characterListData, closeDeleteDialog, deleteCandidateIndex, updateList]);
@@ -131,9 +146,14 @@ export function CharacterEditor({ characterListData, seriesIdPickerItems, series
         });
       });
 
-      setSelectedIndex(characterListData.CharacterData.length);
+      const nextIndex = characterListData.CharacterData.length;
+      if (isControlled) {
+        onSelectChange?.(nextIndex);
+      } else {
+        setInternalSelectedIndex(nextIndex);
+      }
     },
-    [characterListData, getNextCharacterUniqueId, updateList]
+    [characterListData, getNextCharacterUniqueId, isControlled, onSelectChange, updateList]
   );
 
   const handleAdd = useCallback(() => {
@@ -150,8 +170,13 @@ export function CharacterEditor({ characterListData, seriesIdPickerItems, series
       });
     });
 
-    setSelectedIndex(characterListData.CharacterData.length);
-  }, [characterListData, getNextCharacterUniqueId, updateList]);
+    const nextIndex = characterListData.CharacterData.length;
+    if (isControlled) {
+      onSelectChange?.(nextIndex);
+    } else {
+      setInternalSelectedIndex(nextIndex);
+    }
+  }, [characterListData, getNextCharacterUniqueId, isControlled, onSelectChange, updateList]);
 
   if (!characterListData) {
     return <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground">Select this tab to load character_list.bin</div>;

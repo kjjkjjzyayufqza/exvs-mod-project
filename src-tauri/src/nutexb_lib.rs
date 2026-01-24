@@ -374,3 +374,68 @@ pub fn series_image_replace_from_png(
         nutexb_name,
     })
 }
+
+pub fn card_icon_replace_from_png(
+    nutexb_path: &str,
+    convert_dir: &str,
+    png_path: &str,
+) -> Result<SeriesImageReplaceSummary, String> {
+    let out_nutexb_path = PathBuf::from(nutexb_path);
+    let convert_dir = PathBuf::from(convert_dir);
+
+    if let Some(parent) = out_nutexb_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::create_dir_all(&convert_dir).map_err(|e| e.to_string())?;
+
+    let dyn_img = image::open(png_path).map_err(|e| e.to_string())?;
+    let rgba: RgbaImage = dyn_img.to_rgba8();
+
+    fn max_mipmap_count_for_size(width: u32, height: u32) -> u32 {
+        let max_dim = width.max(height).max(1);
+        32 - max_dim.leading_zeros()
+    }
+
+    let (nutexb_name, dds_format, mipmaps) = if out_nutexb_path.exists() {
+        let existing = NutexbFile::read_from_file(&out_nutexb_path).map_err(|e| e.to_string())?;
+        let name = existing.footer.string.to_string();
+        let format = nutexb_format_to_dds_image_format(existing.footer.image_format);
+        let max_mips = max_mipmap_count_for_size(rgba.width().max(1), rgba.height().max(1));
+        let requested_mips = existing.footer.mipmap_count.min(max_mips);
+        let mipmaps = if requested_mips <= 1 {
+            Mipmaps::Disabled
+        } else {
+            Mipmaps::GeneratedExact(requested_mips)
+        };
+        (name, format, mipmaps)
+    } else {
+        let base_name = out_nutexb_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("texture");
+        let name = sanitize_file_name(base_name);
+        (name, DdsImageFormat::BC7RgbaUnorm, Mipmaps::GeneratedAutomatic)
+    };
+
+    let dds = dds_from_image(&rgba, dds_format, Quality::Normal, mipmaps).map_err(|e| e.to_string())?;
+    let nutexb = NutexbFile::from_dds(&dds, nutexb_name.clone()).map_err(|e| e.to_string())?;
+    nutexb
+        .write_to_file(&out_nutexb_path)
+        .map_err(|e| e.to_string())?;
+
+    let preview_name = sanitize_file_name(nutexb_name.as_str());
+    let preview_png_path = convert_dir.join(format!("{preview_name}.png"));
+    if let Some(parent) = preview_png_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    export_nutexb_to_png(
+        out_nutexb_path.to_string_lossy().as_ref(),
+        preview_png_path.to_string_lossy().as_ref(),
+    )?;
+
+    Ok(SeriesImageReplaceSummary {
+        output_nutexb_path: out_nutexb_path.to_string_lossy().to_string(),
+        preview_png_path: preview_png_path.to_string_lossy().to_string(),
+        nutexb_name,
+    })
+}

@@ -65,6 +65,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
   const [importPreview, setImportPreview] = useState<CharaJsonImportPreview | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [editorResetKey, setEditorResetKey] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const lastLoadedKeyRef = useRef<string>("");
 
   const resolveFilePath = useCallback(async () => {
@@ -170,6 +171,15 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
     void loadSeriesPicker();
   }, [folderPath, isActive, load, loadSeriesPicker]);
 
+  useEffect(() => {
+    if (loadState.status !== "ready") return;
+    setSelectedIndex((prev) => {
+      if (loadState.list.CharacterData.length === 0) return -1;
+      if (prev < 0) return prev;
+      return Math.min(prev, loadState.list.CharacterData.length - 1);
+    });
+  }, [loadState]);
+
   const handleEditorChange = useCallback(
     (next: CharacterListOB) => {
       setLoadState((prev) => {
@@ -181,6 +191,10 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
     },
     [onUnsavedChanges]
   );
+
+  const handleEditorSelectChange = useCallback((index: number) => {
+    setSelectedIndex(index);
+  }, []);
 
   const fileMeta = useMemo(() => {
     if (loadState.status !== "ready") return null;
@@ -418,6 +432,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
           <CharacterEditor
             key={editorResetKey}
             characterListData={loadState.list}
+            selectedIndex={selectedIndex}
             seriesIdPickerItems={
               seriesPickerState.status === "ready"
                 ? seriesPickerState.items
@@ -426,6 +441,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
             seriesIdPickerLoading={seriesPickerState.status === "loading" || seriesPickerState.status === "idle"}
             seriesIdPickerError={seriesPickerState.status === "error" ? seriesPickerState.message : null}
             onChange={handleEditorChange}
+            onSelectChange={handleEditorSelectChange}
           />
         </CardContent>
       </Card>

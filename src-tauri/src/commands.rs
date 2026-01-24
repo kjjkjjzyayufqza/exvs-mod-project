@@ -114,6 +114,23 @@ pub async fn series_image_replace_from_png(
     .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+pub async fn card_icon_replace_from_png(
+    nutexb_path: String,
+    convert_dir: String,
+    png_path: String,
+) -> Result<crate::nutexb_lib::SeriesImageReplaceSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::nutexb_lib::card_icon_replace_from_png(
+            nutexb_path.as_str(),
+            convert_dir.as_str(),
+            png_path.as_str(),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestTreeNode {

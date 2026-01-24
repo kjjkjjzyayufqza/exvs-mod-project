@@ -4,6 +4,7 @@ import RepackFolderStructureView from "./RepackFolderStructureView";
 import CharacterIdTableView from "./CharacterIdTableView";
 import CharacterListView from "./CharacterListView";
 import SeriesListView from "./SeriesListView";
+import CardIconListView from "./CardIconListView";
 
 type StageTab = {
   name: string;
@@ -74,6 +75,17 @@ const tabs: StageTab[] = [
     value: "series-list",
     render: (props: MainViewProps) => (
       <SeriesListView
+        folderPath={props.folderPath ?? ""}
+        isActive={false}
+        onUnsavedChanges={props.onUnsavedChanges}
+      />
+    ),
+  },
+  {
+    name: "Card Icon List",
+    value: "card-icon-list",
+    render: (props: MainViewProps) => (
+      <CardIconListView
         folderPath={props.folderPath ?? ""}
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}
@@ -154,6 +166,19 @@ const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges }: MainViewProps)
               folderPath={props.folderPath ?? ""}
               isActive={activeTab === "series-list"}
               onUnsavedChanges={handleSeriesListUnsaved}
+            />
+          ),
+        };
+      }
+
+      if (tab.value === "card-icon-list") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <CardIconListView
+              folderPath={props.folderPath ?? ""}
+              isActive={activeTab === "card-icon-list"}
+              onUnsavedChanges={props.onUnsavedChanges}
             />
           ),
         };
