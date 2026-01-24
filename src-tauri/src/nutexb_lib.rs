@@ -329,7 +329,7 @@ pub fn series_image_replace_from_png(
 
     // Load PNG -> DDS -> Nutexb (pure Rust; no external tools).
     let dyn_img = image::open(png_path).map_err(|e| e.to_string())?;
-    let mut rgba: RgbaImage = dyn_img.to_rgba8();
+    let rgba: RgbaImage = dyn_img.to_rgba8();
 
     fn max_mipmap_count_for_size(width: u32, height: u32) -> u32 {
         let max_dim = width.max(height).max(1);
@@ -340,21 +340,9 @@ pub fn series_image_replace_from_png(
         let existing = NutexbFile::read_from_file(&out_nutexb_path).map_err(|e| e.to_string())?;
         let name = existing.footer.string.to_string();
         let format = nutexb_format_to_dds_image_format(existing.footer.image_format);
-        let target_width = existing.footer.width.max(1);
-        let target_height = existing.footer.height.max(1);
-
-        // Keep output dimensions consistent with the existing texture to avoid invalid mip chains
-        // and downstream consumers relying on fixed dimensions.
-        if rgba.width() != target_width || rgba.height() != target_height {
-            rgba = image::imageops::resize(
-                &rgba,
-                target_width,
-                target_height,
-                image::imageops::FilterType::Lanczos3,
-            );
-        }
-
-        let max_mips = max_mipmap_count_for_size(target_width, target_height);
+        // Use the source PNG dimensions as the new target size.
+        // Note: changing dimensions may affect downstream consumers expecting fixed sizes.
+        let max_mips = max_mipmap_count_for_size(rgba.width().max(1), rgba.height().max(1));
         let requested_mips = existing.footer.mipmap_count.min(max_mips);
         let mipmaps = if requested_mips <= 1 {
             Mipmaps::Disabled

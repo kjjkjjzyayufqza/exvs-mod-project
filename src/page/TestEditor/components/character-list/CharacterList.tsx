@@ -1,7 +1,6 @@
 import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-
 import { Input } from "@/components/ui/input";
 import type { CharacterDataOB } from "@/models/characterListOB";
 import { cn } from "@/lib/utils";
