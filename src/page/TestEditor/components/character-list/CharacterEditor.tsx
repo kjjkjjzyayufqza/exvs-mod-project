@@ -26,11 +26,23 @@ interface CharacterEditorProps {
   seriesIdPickerItems: SeriesIdPickerItem[];
   seriesIdPickerLoading?: boolean;
   seriesIdPickerError?: string | null;
+  cardIconConvertDirPath?: string;
+  cardIconNameOrder?: Array<string | null>;
   onChange: (data: CharacterListOB) => void;
   onSelectChange?: (index: number) => void;
 }
 
-export function CharacterEditor({ characterListData, selectedIndex: controlledSelectedIndex, seriesIdPickerItems, seriesIdPickerLoading, seriesIdPickerError, onChange, onSelectChange }: CharacterEditorProps) {
+export function CharacterEditor({
+  characterListData,
+  selectedIndex: controlledSelectedIndex,
+  seriesIdPickerItems,
+  seriesIdPickerLoading,
+  seriesIdPickerError,
+  cardIconConvertDirPath,
+  cardIconNameOrder,
+  onChange,
+  onSelectChange,
+}: CharacterEditorProps) {
   const [internalSelectedIndex, setInternalSelectedIndex] = useState<number>(-1);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteCandidateIndex, setDeleteCandidateIndex] = useState<number | null>(null);
@@ -196,6 +208,8 @@ export function CharacterEditor({ characterListData, selectedIndex: controlledSe
         <CharacterList
           characters={characterListData.CharacterData}
           selectedIndex={selectedIndex}
+          cardIconConvertDirPath={cardIconConvertDirPath}
+          cardIconNameOrder={cardIconNameOrder}
           onSelect={handleSelect}
           onDelete={openDeleteDialog}
           onCopy={handleCopy}

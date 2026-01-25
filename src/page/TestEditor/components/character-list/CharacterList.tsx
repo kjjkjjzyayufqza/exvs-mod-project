@@ -9,18 +9,28 @@ import { CharacterCard } from "./CharacterCard";
 interface CharacterListProps {
   characters: CharacterDataOB[];
   selectedIndex: number;
+  cardIconConvertDirPath?: string;
+  cardIconNameOrder?: Array<string | null>;
   onSelect: (index: number) => void;
   onDelete: (index: number) => void;
   onCopy: (index: number) => void;
 }
 
-export function CharacterList({ characters, selectedIndex, onSelect, onDelete, onCopy }: CharacterListProps) {
+export function CharacterList({
+  characters,
+  selectedIndex,
+  cardIconConvertDirPath,
+  cardIconNameOrder,
+  onSelect,
+  onDelete,
+  onCopy,
+}: CharacterListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const deferredSearchTerm = useDeferredValue(searchTerm);
 
   const listParentRef = useRef<HTMLDivElement | null>(null);
   const getListScrollElement = useCallback(() => listParentRef.current, []);
-  const estimateRowSize = useCallback(() => 56, []);
+  const estimateRowSize = useCallback(() => 96, []);
 
   const filteredRows = useMemo(() => {
     const term = deferredSearchTerm.trim();
@@ -84,6 +94,8 @@ export function CharacterList({ characters, selectedIndex, onSelect, onDelete, o
                 <CharacterCard
                   character={row}
                   index={idx}
+                  cardIconConvertDirPath={cardIconConvertDirPath}
+                  cardIconNameOrder={cardIconNameOrder}
                   isSelected={idx === selectedIndex}
                   onClick={() => onSelect(idx)}
                   onDelete={() => onDelete(idx)}

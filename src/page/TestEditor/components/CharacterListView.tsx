@@ -19,6 +19,7 @@ import {
 import { CharacterListOB, buildCharacterListBuffer } from "@/models/characterListOB";
 import { SeriesList } from "@/models/seriesList";
 import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
+import { extractCardIconItems } from "./card-icon-list/cardIconStructure";
 import {
   extractA0253FirstFolderSeriesBaseNameOrder,
   formatSeriesPngFileNameFromBaseName,
@@ -51,9 +52,20 @@ type SeriesPickerState =
   | { status: "error"; filePath: string; convertDirPath: string; message: string }
   | { status: "ready"; filePath: string; convertDirPath: string; items: SeriesIdPickerItem[] };
 
+type CardIconMapState =
+  | { status: "idle"; filePath: string; convertDirPath: string }
+  | { status: "loading"; filePath: string; convertDirPath: string }
+  | { status: "error"; filePath: string; convertDirPath: string; message: string }
+  | { status: "ready"; filePath: string; convertDirPath: string; nameOrder: Array<string | null> };
+
 export default function CharacterListView({ folderPath, isActive, onUnsavedChanges }: CharacterListViewProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [seriesPickerState, setSeriesPickerState] = useState<SeriesPickerState>({
+    status: "idle",
+    filePath: "",
+    convertDirPath: "",
+  });
+  const [cardIconMapState, setCardIconMapState] = useState<CardIconMapState>({
     status: "idle",
     filePath: "",
     convertDirPath: "",
@@ -82,6 +94,14 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
 
   const resolveSeriesImageStructureJsonPath = useCallback(async () => {
     return await join(folderPath, "0xA0253AA0_structure.json");
+  }, [folderPath]);
+
+  const resolveCardIconStructureJsonPath = useCallback(async () => {
+    return await join(folderPath, "0x49235031_structure.json");
+  }, [folderPath]);
+
+  const resolveCardIconConvertDir = useCallback(async () => {
+    return await join(folderPath, "0x49235031", "__convert");
   }, [folderPath]);
 
   const resetEditorState = useCallback(() => {
@@ -162,6 +182,34 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
     }
   }, [folderPath, resolveSeriesImageConvertDir, resolveSeriesImageStructureJsonPath, resolveSeriesListFilePath]);
 
+  const loadCardIconMap = useCallback(async () => {
+    if (!folderPath) {
+      setCardIconMapState({ status: "error", filePath: "", convertDirPath: "", message: "Folder path is empty" });
+      return;
+    }
+
+    const filePath = await resolveCardIconStructureJsonPath();
+    const convertDirPath = await resolveCardIconConvertDir();
+    setCardIconMapState({ status: "loading", filePath, convertDirPath });
+
+    try {
+      const raw = await readFile(filePath);
+      const text = new TextDecoder().decode(raw);
+      const json = JSON.parse(text);
+      const items = extractCardIconItems(json);
+      const nameOrder = items.map((it) => it.name);
+      setCardIconMapState({ status: "ready", filePath, convertDirPath, nameOrder });
+    } catch (error) {
+      console.error(error);
+      setCardIconMapState({
+        status: "error",
+        filePath,
+        convertDirPath,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }, [folderPath, resolveCardIconConvertDir, resolveCardIconStructureJsonPath]);
+
   useEffect(() => {
     if (!isActive) return;
     const key = `${folderPath}::characterlist`;
@@ -169,7 +217,8 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
     lastLoadedKeyRef.current = key;
     void load();
     void loadSeriesPicker();
-  }, [folderPath, isActive, load, loadSeriesPicker]);
+    void loadCardIconMap();
+  }, [folderPath, isActive, load, loadCardIconMap, loadSeriesPicker]);
 
   useEffect(() => {
     if (loadState.status !== "ready") return;
@@ -309,6 +358,12 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
     }
   }, [importPreview, isImporting, loadState, onUnsavedChanges]);
 
+  const handleReloadAll = useCallback(() => {
+    void load();
+    void loadSeriesPicker();
+    void loadCardIconMap();
+  }, [load, loadCardIconMap, loadSeriesPicker]);
+
   if (!isActive) {
     return <div className="h-full w-full" />;
   }
@@ -347,7 +402,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
               )}
             </div>
             <div className="text-sm text-destructive">{loadState.message}</div>
-            <Button size="sm" onClick={() => void load()} className="inline-flex items-center gap-2">
+            <Button size="sm" onClick={handleReloadAll} className="inline-flex items-center gap-2">
               <RefreshCw className="w-4 h-4" />
               Reload
             </Button>
@@ -380,7 +435,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
               )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <Button size="sm" variant="outline" onClick={() => void load()} className="inline-flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={handleReloadAll} className="inline-flex items-center gap-2">
                 <RefreshCw className="w-4 h-4" />
                 Reload
               </Button>
@@ -440,6 +495,8 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
             }
             seriesIdPickerLoading={seriesPickerState.status === "loading" || seriesPickerState.status === "idle"}
             seriesIdPickerError={seriesPickerState.status === "error" ? seriesPickerState.message : null}
+            cardIconConvertDirPath={cardIconMapState.convertDirPath}
+            cardIconNameOrder={cardIconMapState.status === "ready" ? cardIconMapState.nameOrder : []}
             onChange={handleEditorChange}
             onSelectChange={handleEditorSelectChange}
           />

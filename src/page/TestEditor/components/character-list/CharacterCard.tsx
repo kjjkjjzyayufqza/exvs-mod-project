@@ -1,19 +1,49 @@
+import { useMemo } from "react";
 import { Copy, Trash2 } from "lucide-react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { CharacterDataOB } from "@/models/characterListOB";
+import { buildCardIconPreviewPath } from "../card-icon-list/cardIconUtils";
 
 interface CharacterCardProps {
   character: CharacterDataOB;
   index: number;
+  cardIconConvertDirPath?: string;
+  cardIconNameOrder?: Array<string | null>;
   isSelected: boolean;
   onClick: () => void;
   onDelete: () => void;
   onCopy: () => void;
 }
 
-export function CharacterCard({ character, index, isSelected, onClick, onDelete, onCopy }: CharacterCardProps) {
+export function CharacterCard({
+  character,
+  index,
+  cardIconConvertDirPath,
+  cardIconNameOrder,
+  isSelected,
+  onClick,
+  onDelete,
+  onCopy,
+}: CharacterCardProps) {
+  const characterName = character.CharacterNameOffset?.Utf8String || "";
+  const cardIconName = useMemo(() => {
+    const iconIndex = character.MS_card_icon_index;
+    if (!cardIconNameOrder) return null;
+    if (!Number.isFinite(iconIndex) || iconIndex < 0) return null;
+    return cardIconNameOrder[iconIndex] ?? null;
+  }, [cardIconNameOrder, character.MS_card_icon_index]);
+
+  const previewPath = useMemo(() => {
+    if (!cardIconConvertDirPath || !cardIconName) return null;
+    return buildCardIconPreviewPath(cardIconConvertDirPath, cardIconName);
+  }, [cardIconConvertDirPath, cardIconName]);
+
+  const thumbnailSrc = previewPath ? convertFileSrc(previewPath) : "/tauri.svg";
+
   return (
     <div
       className={cn(
@@ -22,10 +52,37 @@ export function CharacterCard({ character, index, isSelected, onClick, onDelete,
       )}
       onClick={onClick}
     >
-      <div className="min-w-0">
-        <div className="text-sm font-medium truncate">ID: {character.CharacterId}</div>
-        <div className="text-xs text-muted-foreground truncate">
-          Index: {index} · Series: {character.SeriesId}
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="h-12 w-24 shrink-0 overflow-hidden rounded border bg-black">
+          <img
+            src={thumbnailSrc}
+            alt={characterName}
+            className="h-full w-full object-contain"
+            onError={(e) => {
+              e.currentTarget.src = "/tauri.svg";
+            }}
+          />
+        </div>
+
+        <div className="min-w-0">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="text-sm font-medium line-clamp-2 wrap-break-word">
+                  {characterName || `Character ${character.CharacterId}`}
+                </div>
+              </TooltipTrigger>
+              {characterName && (
+                <TooltipContent>
+                  <p>{characterName}</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
+
+          <div className="text-xs text-muted-foreground space-y-0.5">
+            <div>ID: {character.CharacterId}</div>
+          </div>
         </div>
       </div>
 
@@ -33,7 +90,7 @@ export function CharacterCard({ character, index, isSelected, onClick, onDelete,
         <Button
           variant="ghost"
           size="sm"
-          className="text-blue-600 hover:text-blue-600 hover:bg-blue-50"
+          className="text-blue-600 hover:text-blue-600 hover:bg-blue-50 p-0"
           onClick={(e) => {
             e.stopPropagation();
             onCopy();
@@ -45,7 +102,7 @@ export function CharacterCard({ character, index, isSelected, onClick, onDelete,
         <Button
           variant="ghost"
           size="sm"
-          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+          className="text-destructive hover:text-destructive hover:bg-destructive/10 p-0"
           onClick={(e) => {
             e.stopPropagation();
             onDelete();
