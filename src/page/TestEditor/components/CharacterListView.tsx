@@ -20,6 +20,7 @@ import { CharacterListOB, buildCharacterListBuffer } from "@/models/characterLis
 import { SeriesList } from "@/models/seriesList";
 import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
 import { extractCardIconItems } from "./card-icon-list/cardIconStructure";
+import { buildCardIconPreviewPath } from "./card-icon-list/cardIconUtils";
 import {
   extractA0253FirstFolderSeriesBaseNameOrder,
   formatSeriesPngFileNameFromBaseName,
@@ -56,7 +57,13 @@ type CardIconMapState =
   | { status: "idle"; filePath: string; convertDirPath: string }
   | { status: "loading"; filePath: string; convertDirPath: string }
   | { status: "error"; filePath: string; convertDirPath: string; message: string }
-  | { status: "ready"; filePath: string; convertDirPath: string; nameOrder: Array<string | null> };
+  | {
+      status: "ready";
+      filePath: string;
+      convertDirPath: string;
+      nameOrder: Array<string | null>;
+      pickerItems: Array<{ index: number; name: string | null; previewSrc: string }>;
+    };
 
 export default function CharacterListView({ folderPath, isActive, onUnsavedChanges }: CharacterListViewProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
@@ -198,7 +205,12 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
       const json = JSON.parse(text);
       const items = extractCardIconItems(json);
       const nameOrder = items.map((it) => it.name);
-      setCardIconMapState({ status: "ready", filePath, convertDirPath, nameOrder });
+      const pickerItems = items.map((it) => {
+        const previewPath = it.name ? buildCardIconPreviewPath(convertDirPath, it.name) : null;
+        const previewSrc = previewPath ? convertFileSrc(previewPath) : "/tauri.svg";
+        return { index: it.itemIndex, name: it.name, previewSrc };
+      });
+      setCardIconMapState({ status: "ready", filePath, convertDirPath, nameOrder, pickerItems });
     } catch (error) {
       console.error(error);
       setCardIconMapState({
@@ -497,6 +509,9 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
             seriesIdPickerError={seriesPickerState.status === "error" ? seriesPickerState.message : null}
             cardIconConvertDirPath={cardIconMapState.convertDirPath}
             cardIconNameOrder={cardIconMapState.status === "ready" ? cardIconMapState.nameOrder : []}
+            cardIconIndexPickerItems={cardIconMapState.status === "ready" ? cardIconMapState.pickerItems : []}
+            cardIconIndexPickerLoading={cardIconMapState.status === "loading" || cardIconMapState.status === "idle"}
+            cardIconIndexPickerError={cardIconMapState.status === "error" ? cardIconMapState.message : null}
             onChange={handleEditorChange}
             onSelectChange={handleEditorSelectChange}
           />

@@ -19,6 +19,7 @@ import { cloneCharacterDataOB } from "@/module/commonFunc";
 import { CharacterForm } from "./CharacterForm";
 import { CharacterList } from "./CharacterList";
 import type { SeriesIdPickerItem } from "./SeriesIdPickerPopover";
+import type { CardIconIndexPickerItem } from "./CardIconIndexPickerPopover";
 
 interface CharacterEditorProps {
   characterListData?: CharacterListOB;
@@ -28,6 +29,9 @@ interface CharacterEditorProps {
   seriesIdPickerError?: string | null;
   cardIconConvertDirPath?: string;
   cardIconNameOrder?: Array<string | null>;
+  cardIconIndexPickerItems: CardIconIndexPickerItem[];
+  cardIconIndexPickerLoading?: boolean;
+  cardIconIndexPickerError?: string | null;
   onChange: (data: CharacterListOB) => void;
   onSelectChange?: (index: number) => void;
 }
@@ -40,6 +44,9 @@ export function CharacterEditor({
   seriesIdPickerError,
   cardIconConvertDirPath,
   cardIconNameOrder,
+  cardIconIndexPickerItems,
+  cardIconIndexPickerLoading,
+  cardIconIndexPickerError,
   onChange,
   onSelectChange,
 }: CharacterEditorProps) {
@@ -224,6 +231,9 @@ export function CharacterEditor({
             seriesIdPickerItems={seriesIdPickerItems}
             seriesIdPickerLoading={seriesIdPickerLoading}
             seriesIdPickerError={seriesIdPickerError}
+            cardIconIndexPickerItems={cardIconIndexPickerItems}
+            cardIconIndexPickerLoading={cardIconIndexPickerLoading}
+            cardIconIndexPickerError={cardIconIndexPickerError}
             onChange={handleUpdateCharacter}
           />
         ) : (

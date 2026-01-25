@@ -8,6 +8,7 @@ import { DualValueProperty } from "@/components/ui/dual-value-property";
 import type { CharacterDataOB } from "@/models/characterListOB";
 import { StringFieldGroup } from "./StringFieldGroup";
 import { SeriesIdPickerItem, SeriesIdPickerPopover } from "./SeriesIdPickerPopover";
+import { CardIconIndexPickerItem, CardIconIndexPickerPopover } from "./CardIconIndexPickerPopover";
 
 interface CharacterFormProps {
   character: CharacterDataOB;
@@ -15,6 +16,9 @@ interface CharacterFormProps {
   seriesIdPickerItems: SeriesIdPickerItem[];
   seriesIdPickerLoading?: boolean;
   seriesIdPickerError?: string | null;
+  cardIconIndexPickerItems: CardIconIndexPickerItem[];
+  cardIconIndexPickerLoading?: boolean;
+  cardIconIndexPickerError?: string | null;
   onChange: (character: CharacterDataOB) => void;
 }
 
@@ -24,11 +28,15 @@ export function CharacterForm({
   seriesIdPickerItems,
   seriesIdPickerLoading,
   seriesIdPickerError,
+  cardIconIndexPickerItems,
+  cardIconIndexPickerLoading,
+  cardIconIndexPickerError,
   onChange,
 }: CharacterFormProps) {
   const [formData, setFormData] = useState<Record<string, number>>({});
   const [stringFormData, setStringFormData] = useState<Record<string, string>>({});
   const [seriesIdPickerOpen, setSeriesIdPickerOpen] = useState(false);
+  const [cardIconIndexPickerOpen, setCardIconIndexPickerOpen] = useState(false);
   const formDataRef = useRef<Record<string, number>>({});
   const stringFormDataRef = useRef<Record<string, string>>({});
 
@@ -375,6 +383,15 @@ export function CharacterForm({
                           open={seriesIdPickerOpen}
                           onOpenChange={setSeriesIdPickerOpen}
                         />
+                      ) : field.name === "MS_card_icon_index" ? (
+                        <CardIconIndexPickerPopover
+                          onSelect={(idx) => handleFieldChange("MS_card_icon_index", idx)}
+                          items={cardIconIndexPickerItems}
+                          isLoading={cardIconIndexPickerLoading}
+                          error={cardIconIndexPickerError}
+                          open={cardIconIndexPickerOpen}
+                          onOpenChange={setCardIconIndexPickerOpen}
+                        />
                       ) : undefined
                     }
                     value={formData[field.name] ?? 0}
@@ -394,11 +411,15 @@ export function CharacterForm({
                     onLiveIntInputFocus={
                       field.name === "SeriesId"
                         ? () => setSeriesIdPickerOpen(true)
+                        : field.name === "MS_card_icon_index"
+                          ? () => setCardIconIndexPickerOpen(true)
                         : undefined
                     }
                     onLiveIntInputClick={
                       field.name === "SeriesId"
                         ? () => setSeriesIdPickerOpen(true)
+                        : field.name === "MS_card_icon_index"
+                          ? () => setCardIconIndexPickerOpen(true)
                         : undefined
                     }
                   />
