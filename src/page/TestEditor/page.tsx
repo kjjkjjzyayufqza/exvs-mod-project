@@ -174,6 +174,27 @@ function getTopLevelFolderName(nodePath: string, rootPath: string, isDir?: boole
   return segments[0] ?? null;
 }
 
+function getDirtyFolderNameFromPath(nodePath: string, rootPath: string, isDir?: boolean): string | null {
+  const topLevel = getTopLevelFolderName(nodePath, rootPath, isDir);
+  if (topLevel) return topLevel;
+
+  // If a root-level *_structure.json changed, it should mark the corresponding folder as dirty.
+  if (isDir === false && nodePath && rootPath) {
+    const normalizedRoot = normalizeSlashes(rootPath).replace(/\/+$/, "");
+    const normalizedNode = normalizeSlashes(nodePath);
+    if (!normalizedNode.startsWith(normalizedRoot)) return null;
+    const relative = normalizedNode.slice(normalizedRoot.length).replace(/^\/+/, "");
+    if (!relative || relative.includes("/")) return null;
+    const lower = relative.toLowerCase();
+    const suffix = "_structure.json";
+    if (!lower.endsWith(suffix)) return null;
+    const base = relative.slice(0, -suffix.length);
+    return base || null;
+  }
+
+  return null;
+}
+
 const TestEditorPage = () => {
   const store = useConfigStore((s) => s.store);
   const getSetting = useConfigStore((s) => s.getSetting);
@@ -202,9 +223,10 @@ const TestEditorPage = () => {
     const nextDirty = new Set<string>();
     queued.forEach((payload) => {
       payload.ops?.forEach((op) => {
-        const topLevel = getTopLevelFolderName(op.node.path, currentDir, (op.node as any).isDir ?? (op.node as any).is_dir);
-        if (!topLevel) return;
-        nextDirty.add(topLevel);
+        const isDir = (op.node as any).isDir ?? (op.node as any).is_dir;
+        const name = getDirtyFolderNameFromPath(op.node.path, currentDir, isDir);
+        if (!name) return;
+        nextDirty.add(name);
       });
     });
 

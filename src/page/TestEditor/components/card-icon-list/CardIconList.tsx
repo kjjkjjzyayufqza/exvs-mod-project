@@ -15,6 +15,8 @@ interface CardIconListProps {
   onSelect: (index: number) => void;
   onReplaced: () => Promise<void> | void;
   onRemove: (item: CardIconItem) => void;
+  onMove: (fromIndex: number, toIndex: number) => void;
+  isUpdating?: boolean;
 }
 
 export function CardIconList({
@@ -25,6 +27,8 @@ export function CardIconList({
   onSelect,
   onReplaced,
   onRemove,
+  onMove,
+  isUpdating = false,
 }: CardIconListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const deferredSearchTerm = useDeferredValue(searchTerm);
@@ -42,10 +46,21 @@ export function CardIconList({
     });
   }, [items, deferredSearchTerm]);
 
+  const getItemKey = useCallback(
+    (index: number) => {
+      const it = filteredItems[index];
+      if (!it) return index;
+      const stable = it.fileIndex ?? it.fileUrl ?? it.name;
+      return stable ?? index;
+    },
+    [filteredItems]
+  );
+
   const rowVirtualizer = useVirtualizer({
     count: filteredItems.length,
     getScrollElement: getListScrollElement,
     estimateSize: estimateRowSize,
+    getItemKey,
     overscan: 10,
   });
 
@@ -100,6 +115,9 @@ export function CardIconList({
                   onEdit={() => onSelect(item.itemIndex)}
                   onReplaced={onReplaced}
                   onRemove={() => onRemove(item)}
+                  totalCount={items.length}
+                  isUpdating={isUpdating}
+                  onMove={(toIndex) => onMove(item.itemIndex, toIndex)}
                 />
               </div>
             );

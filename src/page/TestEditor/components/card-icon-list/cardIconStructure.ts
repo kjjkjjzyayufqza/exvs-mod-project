@@ -12,6 +12,45 @@ export type CardIconItem = {
   fileUrl?: string | null;
 };
 
+function collectDirectCardIconItemIndices(items: Array<Record<string, any>>): number[] {
+  let depth = 0;
+  let firstFolderDepth: number | null = null;
+  let collecting = false;
+  const indices: number[] = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const type = String(it?.type ?? "");
+
+    if (type === "Folder") {
+      depth += 1;
+      if (firstFolderDepth === null) {
+        firstFolderDepth = depth;
+        collecting = true;
+      }
+      continue;
+    }
+
+    if (type === "Item") {
+      if (!collecting || firstFolderDepth === null) continue;
+      if (depth !== firstFolderDepth) continue;
+      indices.push(i);
+      continue;
+    }
+
+    if (type === "EndMark") {
+      const cRaw = Number(it?.endMarkCount);
+      const c = Number.isFinite(cRaw) && cRaw > 0 ? Math.trunc(cRaw) : 1;
+      depth = Math.max(0, depth - c);
+      if (collecting && firstFolderDepth !== null && depth < firstFolderDepth) {
+        break;
+      }
+    }
+  }
+
+  return indices;
+}
+
 function parseDirectCardIconItems(items: Array<Record<string, any>>): CardIconItem[] {
   let depth = 0;
   let firstFolderDepth: number | null = null;
@@ -59,6 +98,109 @@ export function extractCardIconItems(structureJson: unknown): CardIconItem[] {
   const items: Array<Record<string, any>> = Array.isArray(root?.SubFileStructure) ? root.SubFileStructure : [];
   if (items.length === 0) return [];
   return parseDirectCardIconItems(items);
+}
+
+export function moveCardIconInStructureJson(
+  structJson: unknown,
+  params: { fromIndex: number; toIndex: number }
+): { nextStructJson: StructureJson } {
+  const cloned: StructureJson = JSON.parse(JSON.stringify(structJson ?? {}));
+  const subFileStructure: Array<Record<string, any>> = Array.isArray(cloned.SubFileStructure) ? cloned.SubFileStructure : [];
+  if (subFileStructure.length === 0) {
+    throw new Error("SubFileStructure is empty");
+  }
+
+  const itemIndices = collectDirectCardIconItemIndices(subFileStructure);
+  const total = itemIndices.length;
+  if (total === 0) {
+    throw new Error("No direct card icon items found in SubFileStructure");
+  }
+
+  const fromIndex = Math.trunc(params.fromIndex);
+  const toIndex = Math.trunc(params.toIndex);
+  if (fromIndex < 0 || fromIndex >= total) {
+    throw new Error(`fromIndex out of range: ${fromIndex}`);
+  }
+  if (toIndex < 0 || toIndex >= total) {
+    throw new Error(`toIndex out of range: ${toIndex}`);
+  }
+  if (fromIndex === toIndex) {
+    return { nextStructJson: cloned };
+  }
+
+  const directItems = itemIndices.map((idx) => subFileStructure[idx]);
+  const [moved] = directItems.splice(fromIndex, 1);
+  directItems.splice(toIndex, 0, moved);
+
+  for (let i = 0; i < itemIndices.length; i++) {
+    subFileStructure[itemIndices[i]] = directItems[i];
+  }
+
+  cloned.SubFileStructure = subFileStructure;
+  return { nextStructJson: cloned };
+}
+
+function normalizeFileIndex(value: unknown): number | null {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.trunc(n);
+}
+
+export function reorderCardIconsInStructureJson(
+  structJson: unknown,
+  desiredFileIndexOrder: Array<number | null>
+): { nextStructJson: StructureJson } {
+  const cloned: StructureJson = JSON.parse(JSON.stringify(structJson ?? {}));
+  const subFileStructure: Array<Record<string, any>> = Array.isArray(cloned.SubFileStructure) ? cloned.SubFileStructure : [];
+  if (subFileStructure.length === 0) {
+    throw new Error("SubFileStructure is empty");
+  }
+
+  const itemIndices = collectDirectCardIconItemIndices(subFileStructure);
+  if (itemIndices.length === 0) {
+    throw new Error("No direct card icon items found in SubFileStructure");
+  }
+
+  const buckets = new Map<string, Array<Record<string, any>>>();
+  const put = (key: string, entry: Record<string, any>) => {
+    const arr = buckets.get(key);
+    if (arr) {
+      arr.push(entry);
+      return;
+    }
+    buckets.set(key, [entry]);
+  };
+
+  for (const idx of itemIndices) {
+    const entry = subFileStructure[idx];
+    const fileIndex = normalizeFileIndex(entry?.fileIndex);
+    const key = fileIndex === null ? "null" : String(fileIndex);
+    put(key, entry);
+  }
+
+  const nextDirectItems: Array<Record<string, any>> = [];
+  for (const desired of desiredFileIndexOrder) {
+    const key = desired === null ? "null" : String(Math.trunc(desired));
+    const arr = buckets.get(key);
+    if (!arr || arr.length === 0) continue;
+    const moved = arr.shift();
+    if (moved) nextDirectItems.push(moved);
+  }
+
+  // Append anything not explicitly ordered (keeps original relative order per bucket).
+  for (const arr of buckets.values()) {
+    for (const entry of arr) {
+      nextDirectItems.push(entry);
+    }
+  }
+
+  const count = Math.min(itemIndices.length, nextDirectItems.length);
+  for (let i = 0; i < count; i++) {
+    subFileStructure[itemIndices[i]] = nextDirectItems[i];
+  }
+
+  cloned.SubFileStructure = subFileStructure;
+  return { nextStructJson: cloned };
 }
 
 function resolveFileUrlPrefix(subFileData: Array<Record<string, any>>): string {

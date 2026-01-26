@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CardIconList } from "./card-icon-list/CardIconList";
 import { CardIconAddDialog } from "./card-icon-list/CardIconAddDialog";
-import { extractCardIconItems, removeCardIconFromStructureJson } from "./card-icon-list/cardIconStructure";
+import { extractCardIconItems, reorderCardIconsInStructureJson, removeCardIconFromStructureJson } from "./card-icon-list/cardIconStructure";
 
 interface CardIconListViewProps {
   folderPath: string;
@@ -23,11 +23,12 @@ type LoadState =
   | { status: "error"; filePath: string; message: string }
   | { status: "ready"; filePath: string; items: ReturnType<typeof extractCardIconItems>; convertDirPath: string };
 
-export default function CardIconListView({ folderPath, isActive }: CardIconListViewProps) {
+export default function CardIconListView({ folderPath, isActive, onUnsavedChanges }: CardIconListViewProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [isRefreshingNutexb, setIsRefreshingNutexb] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [hasPendingOrderChanges, setHasPendingOrderChanges] = useState(false);
   const lastLoadedKeyRef = useRef<string>("");
 
   const resolveStructurePath = useCallback(async () => {
@@ -69,11 +70,13 @@ export default function CardIconListView({ folderPath, isActive }: CardIconListV
       }));
       const convertDirPath = await resolveConvertDir();
       setLoadState({ status: "ready", filePath, items: enrichedItems, convertDirPath });
+      setHasPendingOrderChanges(false);
+      onUnsavedChanges?.(false);
     } catch (error) {
       console.error(error);
       setLoadState({ status: "error", filePath, message: error instanceof Error ? error.message : "Unknown error" });
     }
-  }, [folderPath, resolveConvertDir, resolveStructurePath]);
+  }, [folderPath, onUnsavedChanges, resolveConvertDir, resolveStructurePath]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -157,6 +160,75 @@ export default function CardIconListView({ folderPath, isActive }: CardIconListV
     }
   }, [folderPath, isUpdating, load, resolveStructurePath]);
 
+  const applyMoveInMemory = useCallback((items: Array<{ itemIndex: number; fileIndex: number | null; name: string | null; fileUrl?: string | null }>, fromIndex: number, toIndex: number) => {
+    const total = items.length;
+    const nextFrom = Math.max(0, Math.min(total - 1, Math.trunc(fromIndex)));
+    const nextTo = Math.max(0, Math.min(total - 1, Math.trunc(toIndex)));
+    if (nextFrom === nextTo) return items;
+    const reordered = [...items];
+    const [moved] = reordered.splice(nextFrom, 1);
+    reordered.splice(nextTo, 0, moved);
+    return reordered.map((it, idx) => ({ ...it, itemIndex: idx }));
+  }, []);
+
+  const persistOrderFromItems = useCallback(async (items: Array<{ fileIndex: number | null }>) => {
+    const structurePath = await resolveStructurePath();
+    const raw = await readTextFile(structurePath);
+    const json = JSON.parse(raw);
+    const desiredOrder = items.map((it) => it.fileIndex ?? null);
+    const { nextStructJson } = reorderCardIconsInStructureJson(json, desiredOrder);
+    await writeTextFile(structurePath, JSON.stringify(nextStructJson, null, 2));
+  }, [resolveStructurePath]);
+
+  const handleMoveItem = useCallback((fromIndex: number, toIndex: number) => {
+    if (loadState.status !== "ready") return;
+    const total = loadState.items.length;
+    const nextFrom = Math.max(0, Math.min(total - 1, Math.trunc(fromIndex)));
+    const nextTo = Math.max(0, Math.min(total - 1, Math.trunc(toIndex)));
+    if (nextFrom === nextTo) return;
+
+    const selectedItem = loadState.items.find((it) => it.itemIndex === selectedIndex) ?? null;
+    const selectedKey = selectedItem?.fileIndex ?? selectedItem?.name ?? null;
+
+    const nextItems = applyMoveInMemory(loadState.items, nextFrom, nextTo);
+
+    setLoadState((prev) => (prev.status === "ready" ? { ...prev, items: nextItems } : prev));
+    setHasPendingOrderChanges(true);
+    onUnsavedChanges?.(true);
+
+    if (selectedKey !== null) {
+      const nextSelectedIndex = nextItems.findIndex((it) => (it.fileIndex ?? it.name ?? null) === selectedKey);
+      if (nextSelectedIndex >= 0) {
+        setSelectedIndex(nextSelectedIndex);
+      }
+    }
+  }, [applyMoveInMemory, loadState, onUnsavedChanges, selectedIndex]);
+
+  const handleSaveOrder = useCallback(async () => {
+    if (loadState.status !== "ready") return;
+    if (!hasPendingOrderChanges) return;
+    if (!folderPath) {
+      toast.error("Folder path is empty");
+      return;
+    }
+    if (isUpdating) return;
+
+    setIsUpdating(true);
+    try {
+      await persistOrderFromItems(loadState.items);
+      toast.success("Saved card icon order");
+      await load();
+    } catch (error) {
+      console.error(error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      toast.error(`Failed to save order: ${message}`);
+    } finally {
+      setIsUpdating(false);
+    }
+  }, [folderPath, hasPendingOrderChanges, isUpdating, load, loadState, persistOrderFromItems]);
+
+  // Move only updates memory; JSON is written only by the top Save button.
+
   if (!isActive) {
     return <div className="h-full w-full" />;
   }
@@ -231,6 +303,9 @@ export default function CardIconListView({ folderPath, isActive }: CardIconListV
                 <RefreshCw className="w-4 h-4" />
                 Reload
               </Button>
+              <Button size="sm" onClick={() => void handleSaveOrder()} disabled={isUpdating || !hasPendingOrderChanges}>
+                Save
+              </Button>
               <Button
                 size="sm"
                 variant="outline"
@@ -261,6 +336,8 @@ export default function CardIconListView({ folderPath, isActive }: CardIconListV
             onSelect={setSelectedIndex}
             onReplaced={load}
             onRemove={handleRemoveItem}
+            onMove={handleMoveItem}
+            isUpdating={isUpdating}
           />
         </CardContent>
       </Card>
