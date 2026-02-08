@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -18,11 +19,17 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Save, RefreshCw, Plus, Trash2, Search, Copy, Clipboard } from "lucide-react";
+import { Save, RefreshCw, Plus, Trash2, Search, Copy, Clipboard, Download, Upload } from "lucide-react";
 import { CharacterIdTable, CharacterIdTableData, buildCharacterIdTableBuffer } from "@/models/characterIdTable";
 import { cn } from "@/lib/utils";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { DualValueProperty } from "@/components/ui/dual-value-property";
+import {
+    applyCharacterIdTableImport,
+    exportCharacterIdTableToJsonFile,
+    pickCharacterIdTableImportPreview,
+    type CharacterIdTableImportPreview,
+} from "./character-id-table/CharacterIdTableJson";
 
 interface CharacterIdTableViewProps {
     folderPath: string;
@@ -76,6 +83,11 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
     const [searchTerm, setSearchTerm] = useState("");
     const [hasChanges, setHasChanges] = useState(false);
     const deferredSearchTerm = useDeferredValue(searchTerm);
+
+    const [isExporting, setIsExporting] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
+    const [importPreview, setImportPreview] = useState<CharacterIdTableImportPreview | null>(null);
+    const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [deleteCandidateIndex, setDeleteCandidateIndex] = useState<number | null>(null);
@@ -432,6 +444,79 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
         }
     }, [load, loadState, onUnsavedChanges, selectedRow?.CharacterId]);
 
+    const handleExportJson = useCallback(async () => {
+        if (loadState.status !== "ready") return;
+        if (isExporting) return;
+
+        setIsExporting(true);
+        try {
+            const result = await exportCharacterIdTableToJsonFile(loadState.table);
+            if (!result) return;
+            toast.success(`Exported ${result.count} rows`);
+        } catch (error) {
+            console.error(error);
+            const message = error instanceof Error ? error.message : "Unknown error";
+            toast.error(`Failed to export JSON: ${message}`);
+        } finally {
+            setIsExporting(false);
+        }
+    }, [isExporting, loadState]);
+
+    const handlePickImportJson = useCallback(async () => {
+        if (loadState.status !== "ready") return;
+        if (isImporting) return;
+
+        setIsImporting(true);
+        try {
+            const preview = await pickCharacterIdTableImportPreview();
+            if (!preview) return;
+
+            if (preview.validCount === 0) {
+                toast.error("Invalid JSON: no valid entries found");
+                return;
+            }
+
+            setImportPreview(preview);
+            setIsImportDialogOpen(true);
+        } catch (error) {
+            console.error(error);
+            const message = error instanceof Error ? error.message : "Unknown error";
+            toast.error(`Failed to import JSON: ${message}`);
+        } finally {
+            setIsImporting(false);
+        }
+    }, [isImporting, loadState]);
+
+    const handleConfirmImport = useCallback(() => {
+        if (loadState.status !== "ready") return;
+        if (!importPreview) return;
+        if (isImporting) return;
+
+        setIsImporting(true);
+        try {
+            const nextTable = applyCharacterIdTableImport(loadState.table, importPreview.rows);
+            setLoadState((prev) => {
+                if (prev.status !== "ready") return prev;
+                return { ...prev, table: nextTable };
+            });
+
+            setSelectedIndex(-1);
+            setSearchTerm("");
+            setHasChanges(true);
+            onUnsavedChanges?.(true);
+
+            setIsImportDialogOpen(false);
+            setImportPreview(null);
+            toast.success(`Imported ${importPreview.validCount} rows`);
+        } catch (error) {
+            console.error(error);
+            const message = error instanceof Error ? error.message : "Unknown error";
+            toast.error(`Failed to apply import: ${message}`);
+        } finally {
+            setIsImporting(false);
+        }
+    }, [importPreview, isImporting, loadState, onUnsavedChanges]);
+
     useEffect(() => {
         if (!isActive || !selectedRow) {
             setClipboardPayload(null);
@@ -535,6 +620,28 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                             <Button size="sm" variant="outline" onClick={() => void load()} className="inline-flex items-center gap-2">
                                 <RefreshCw className="w-4 h-4" />
                                 Reload
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void handlePickImportJson()}
+                                disabled={isImporting || isExporting}
+                                className="inline-flex items-center gap-2"
+                                title="Import character id table from JSON"
+                            >
+                                <Upload className="w-4 h-4" />
+                                Import JSON
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void handleExportJson()}
+                                disabled={isExporting || isImporting || loadState.table.CharacterData.length === 0}
+                                className="inline-flex items-center gap-2"
+                                title="Export character id table to JSON"
+                            >
+                                <Download className="w-4 h-4" />
+                                Export JSON
                             </Button>
                             <Button size="sm" onClick={() => void handleSaveFile()} disabled={!hasChanges} className="inline-flex items-center gap-2">
                                 <Save className="w-4 h-4" />
@@ -893,6 +1000,74 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <Dialog
+                open={isImportDialogOpen}
+                onOpenChange={(open) => {
+                    if (open) {
+                        setIsImportDialogOpen(true);
+                        return;
+                    }
+                    setIsImportDialogOpen(false);
+                    setImportPreview(null);
+                }}
+            >
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Import Character ID Table JSON</DialogTitle>
+                        <DialogDescription>
+                            {importPreview ? (
+                                <>
+                                    <div className="mt-2 space-y-1">
+                                        <div className="break-all">File: {importPreview.filePath}</div>
+                                        <div>
+                                            Total: {importPreview.totalCount} · Valid: {importPreview.validCount} · Invalid: {importPreview.invalidCount}
+                                            {importPreview.duplicateIds.length > 0 ? ` · Duplicates: ${importPreview.duplicateIds.length}` : ""}
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <>No file selected</>
+                            )}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {importPreview && (
+                        <div className="space-y-2">
+                            <div className="text-sm font-medium">IDs to import ({importPreview.ids.length})</div>
+                            <div className="max-h-56 overflow-auto border rounded-md p-2 text-xs font-mono whitespace-pre-wrap">
+                                {importPreview.ids.slice(0, 500).join(", ")}
+                                {importPreview.ids.length > 500 ? `\n... and ${importPreview.ids.length - 500} more` : ""}
+                            </div>
+                            {importPreview.duplicateIds.length > 0 && (
+                                <div className="text-xs text-muted-foreground">
+                                    Duplicate IDs detected (will be imported as-is): {importPreview.duplicateIds.slice(0, 100).join(", ")}
+                                    {importPreview.duplicateIds.length > 100 ? ` ... and ${importPreview.duplicateIds.length - 100} more` : ""}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setIsImportDialogOpen(false);
+                                setImportPreview(null);
+                            }}
+                            disabled={isImporting}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={() => void handleConfirmImport()}
+                            disabled={!importPreview || importPreview.validCount === 0 || isImporting}
+                        >
+                            Import
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

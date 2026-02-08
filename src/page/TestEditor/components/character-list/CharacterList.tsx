@@ -1,6 +1,7 @@
-import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
-import { Search } from "lucide-react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { CircleXIcon, Search } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { CharacterDataOB } from "@/models/characterListOB";
 import { cn } from "@/lib/utils";
@@ -27,10 +28,16 @@ export function CharacterList({
 }: CharacterListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const deferredSearchTerm = useDeferredValue(searchTerm);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const listParentRef = useRef<HTMLDivElement | null>(null);
   const getListScrollElement = useCallback(() => listParentRef.current, []);
   const estimateRowSize = useCallback(() => 96, []);
+
+  const lastSelectedIndexRef = useRef<number>(-1);
+  useEffect(() => {
+    if (selectedIndex >= 0) lastSelectedIndexRef.current = selectedIndex;
+  }, [selectedIndex]);
 
   const filteredRows = useMemo(() => {
     const term = deferredSearchTerm.trim();
@@ -47,16 +54,52 @@ export function CharacterList({
     overscan: 10,
   });
 
+  const prevHasDeferredSearchRef = useRef(false);
+  useEffect(() => {
+    const hasDeferredSearch = deferredSearchTerm.trim().length > 0;
+    const prevHasDeferredSearch = prevHasDeferredSearchRef.current;
+    prevHasDeferredSearchRef.current = hasDeferredSearch;
+
+    if (!prevHasDeferredSearch || hasDeferredSearch) return;
+
+    const targetIndex = lastSelectedIndexRef.current;
+    if (targetIndex < 0 || targetIndex >= characters.length) return;
+
+    // Wait one frame for virtualizer to observe the new count,
+    // then scroll to the previously selected row.
+    requestAnimationFrame(() => {
+      rowVirtualizer.scrollToIndex(targetIndex, { align: "center" });
+    });
+  }, [characters.length, deferredSearchTerm, rowVirtualizer]);
+
+  const handleClearInput = useCallback(() => {
+    setSearchTerm("");
+    inputRef.current?.focus();
+  }, []);
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="relative mb-3">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
         <Input
+          ref={inputRef}
           placeholder="Search by Character ID..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 h-8"
+          className="pl-10 pr-8 h-8"
         />
+        {searchTerm.length > 0 && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={handleClearInput}
+            className="text-muted-foreground focus-visible:ring-ring/50 absolute inset-y-0 right-0 rounded-l-none hover:bg-transparent"
+          >
+            <CircleXIcon className="w-4 h-4" />
+            <span className="sr-only">Clear input</span>
+          </Button>
+        )}
       </div>
 
       {searchTerm.trim() && (
