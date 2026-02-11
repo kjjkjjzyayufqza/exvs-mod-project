@@ -378,6 +378,7 @@ export function CharacterForm({
                         <SeriesIdPickerPopover
                           onSelect={(id) => handleFieldChange("SeriesId", id)}
                           items={seriesIdPickerItems}
+                          selectedValue={formData.SeriesId}
                           isLoading={seriesIdPickerLoading}
                           error={seriesIdPickerError}
                           open={seriesIdPickerOpen}
@@ -387,6 +388,7 @@ export function CharacterForm({
                         <CardIconIndexPickerPopover
                           onSelect={(idx) => handleFieldChange("MS_card_icon_index", idx)}
                           items={cardIconIndexPickerItems}
+                          selectedValue={formData.MS_card_icon_index}
                           isLoading={cardIconIndexPickerLoading}
                           error={cardIconIndexPickerError}
                           open={cardIconIndexPickerOpen}

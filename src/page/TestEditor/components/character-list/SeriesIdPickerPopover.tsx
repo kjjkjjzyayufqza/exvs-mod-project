@@ -11,12 +11,13 @@ export type SeriesIdPickerItem = {
 export function SeriesIdPickerPopover(props: {
   onSelect: (id: number) => void;
   items: SeriesIdPickerItem[];
+  selectedValue?: number;
   isLoading?: boolean;
   error?: string | null;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
-  const { onSelect, items, isLoading, error, open, onOpenChange } = props;
+  const { onSelect, items, selectedValue, isLoading, error, open, onOpenChange } = props;
 
   const iconIndexById = useMemo(() => {
     const map = new Map<number, number>();
@@ -41,6 +42,7 @@ export function SeriesIdPickerPopover(props: {
       triggerAriaLabel="Open Series ID picker"
       onSelect={onSelect}
       items={pickerItems}
+      selectedValue={selectedValue}
       isLoading={isLoading}
       error={error}
       open={open}

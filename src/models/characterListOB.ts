@@ -589,20 +589,40 @@ export function buildCharacterListBuffer (characterList: CharacterListOB): Buffe
     unitIdBuffer.writeInt32LE(characterList.CharacterData[i].CharacterId, i * 0x4)
   }
 
-  let visualBuffer = Buffer.alloc(
+  const stringDataStartOffset =
     0x20 +
-      characterList.CommandsCount * 0x4 +
-      characterList.CommandsCount * 0xc +
-      characterList.CharacterData.length * 0x4 +
-      characterList.CharacterData.length * characterList.CharacterInfoEachSize
-  )
+    characterList.CommandsCount * 0x4 +
+    characterList.CommandsCount * 0xc +
+    characterList.CharacterData.length * 0x4 +
+    characterList.CharacterData.length * characterList.CharacterInfoEachSize
 
-  let stringNameDataBuffer = Buffer.alloc(0)
+  const stringChunks: Buffer[] = []
+  let cumulativeStringOffset = stringDataStartOffset
+
   const unitDataBuffer = Buffer.alloc(characterList.CharacterData.length * characterList.CharacterInfoEachSize)
+
+  const STRING_FIELDS = [
+    'CharacterNameOffset', 'UnkStringOffset1', 'UnkStringOffset2', 'UnkStringOffset3',
+    'UnkStringOffset4', 'UnkStringOffset5', 'UnkStringOffset6', 'UnkStringOffset7',
+    'UnkStringOffset8', 'UnkStringOffset9', 'UnkStringOffset10', 'UnkStringOffset11',
+    'UnkStringOffset12', 'UnkStringOffset13', 'UnkStringOffset14',
+  ] as const
+
+  const STRING_OFFSET_SLOTS = [
+    0x1c, 0x68, 0x7c, 0x84, 0x90, 0x98, 0xa4, 0xb8, 0xc0,
+    0x134, 0x144, 0x158, 0x18c, 0x19c, 0x1b0,
+  ] as const
 
   for (let i = 0; i < characterList.CharacterData.length; i++) {
     const char = characterList.CharacterData[i]
     const baseOffset = i * characterList.CharacterInfoEachSize
+
+    for (let j = 0; j < STRING_FIELDS.length; j++) {
+      const buf = char[STRING_FIELDS[j]].StringBufferData
+      unitDataBuffer.writeInt32LE(cumulativeStringOffset, baseOffset + STRING_OFFSET_SLOTS[j])
+      stringChunks.push(buf)
+      cumulativeStringOffset += buf.length
+    }
 
     unitDataBuffer.writeInt32LE(char.indexInSeries, baseOffset + 0x0)
     unitDataBuffer.writeInt32LE(char.UnkId1, baseOffset + 0x4)
@@ -611,10 +631,6 @@ export function buildCharacterListBuffer (characterList: CharacterListOB): Buffe
     unitDataBuffer.writeInt32LE(char.ms_igh_r, baseOffset + 0x10)
     unitDataBuffer.writeInt32LE(char.ms_vs_r, baseOffset + 0x14)
     unitDataBuffer.writeInt32LE(char.UnkHash1, baseOffset + 0x18)
-
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x1c)
-    visualBuffer = Buffer.concat([visualBuffer, char.CharacterNameOffset.StringBufferData])
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.CharacterNameOffset.StringBufferData])
 
     unitDataBuffer.writeInt32LE(char.UnkId4, baseOffset + 0x24)
     unitDataBuffer.writeInt32LE(char.UnkId5, baseOffset + 0x28)
@@ -633,51 +649,20 @@ export function buildCharacterListBuffer (characterList: CharacterListOB): Buffe
     unitDataBuffer.writeInt32LE(char.sticker1, baseOffset + 0x5c)
     unitDataBuffer.writeInt32LE(char.UnkHash8, baseOffset + 0x64)
 
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x68)
-    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset1.StringBufferData])
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset1.StringBufferData])
-
     unitDataBuffer.writeInt32LE(char.UnkHash9, baseOffset + 0x74)
     unitDataBuffer.writeInt32LE(char.LMBPilotClothing, baseOffset + 0x78)
 
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x7c)
-    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset2.StringBufferData])
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset2.StringBufferData])
-
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x84)
-    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset3.StringBufferData])
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset3.StringBufferData])
-
     unitDataBuffer.writeInt32LE(char.UnkHash9_1, baseOffset + 0x8c)
-
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x90)
-    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset4.StringBufferData])
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset4.StringBufferData])
-
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x98)
-    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset5.StringBufferData])
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset5.StringBufferData])
-
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0xa4)
-    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset6.StringBufferData])
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset6.StringBufferData])
 
     unitDataBuffer.writeInt32LE(char.UnkHash9_2, baseOffset + 0xa0)
 
     unitDataBuffer.writeInt32LE(char.EX_Pilot_Clothin_LMB_HASH, baseOffset + 0xb0)
     unitDataBuffer.writeInt32LE(char.SeriesId, baseOffset + 0xb4)
 
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0xb8)
-    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset7.StringBufferData])
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset7.StringBufferData])
-
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0xc0)
-    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset8.StringBufferData])
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset8.StringBufferData])
-
     unitDataBuffer.writeInt32LE(char.UnkHash10_1, baseOffset + 0xc8)
     unitDataBuffer.writeInt32LE(char.UnkHash11, baseOffset + 0xcc)
     unitDataBuffer.writeInt32LE(char.vs_p_r_c02, baseOffset + 0xd0)
+    unitDataBuffer.writeInt32LE(char.MS_card_icon_index, baseOffset + 0xd4)
     unitDataBuffer.writeInt32LE(char.characterUniqueId, baseOffset + 0x140)
     unitDataBuffer.writeInt32LE(char.UnkHash12, baseOffset + 0xd8)
     unitDataBuffer.writeInt32LE(char.sticker_t01, baseOffset + 0xe0)
@@ -699,24 +684,11 @@ export function buildCharacterListBuffer (characterList: CharacterListOB): Buffe
     unitDataBuffer.writeInt32LE(char.UnkHash17_1, baseOffset + 0x12c)
     unitDataBuffer.writeInt32LE(char.UnkHash18, baseOffset + 0x130)
 
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x134)
-    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset9.StringBufferData])
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset9.StringBufferData])
-
     unitDataBuffer.writeInt32LE(char.UnkHash19, baseOffset + 0x13c)
-    unitDataBuffer.writeInt32LE(char.MS_card_icon_index, baseOffset + 0xd4)
-
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x144)
-    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset10.StringBufferData])
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset10.StringBufferData])
 
     unitDataBuffer.writeInt32LE(char.UnkHash20, baseOffset + 0x14c)
     unitDataBuffer.writeInt32LE(char.unkId15, baseOffset + 0x150)
     unitDataBuffer.writeInt32LE(char.UnkHash21, baseOffset + 0x154)
-
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x158)
-    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset11.StringBufferData])
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset11.StringBufferData])
 
     unitDataBuffer.writeInt32LE(char.LMBCutIn, baseOffset + 0x160)
     unitDataBuffer.writeInt32LE(char.sticker_t05, baseOffset + 0x164)
@@ -728,24 +700,12 @@ export function buildCharacterListBuffer (characterList: CharacterListOB): Buffe
     unitDataBuffer.writeInt32LE(char.ms_ms_l, baseOffset + 0x180)
     unitDataBuffer.writeInt32LE(char.vs_p_r, baseOffset + 0x188)
 
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x18c)
-    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset12.StringBufferData])
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset12.StringBufferData])
-
     unitDataBuffer.writeInt32LE(char.LMBBoost, baseOffset + 0x194)
     unitDataBuffer.writeInt32LE(char.UnkHash23, baseOffset + 0x198)
-
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x19c)
-    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset13.StringBufferData])
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset13.StringBufferData])
 
     unitDataBuffer.writeInt32LE(char.rnk_m_l, baseOffset + 0x1a4)
     unitDataBuffer.writeInt32LE(char.unkId15_1, baseOffset + 0x1a8)
     unitDataBuffer.writeInt32LE(char.ms_crs, baseOffset + 0x1ac)
-
-    unitDataBuffer.writeInt32LE(visualBuffer.byteLength, baseOffset + 0x1b0)
-    visualBuffer = Buffer.concat([visualBuffer, char.UnkStringOffset14.StringBufferData])
-    stringNameDataBuffer = Buffer.concat([stringNameDataBuffer, char.UnkStringOffset14.StringBufferData])
 
     unitDataBuffer.writeInt32LE(char.UnkHash23_1, baseOffset + 0x1b8)
     unitDataBuffer.writeInt32LE(char.UnkHash24, baseOffset + 0x1bc)
@@ -756,6 +716,7 @@ export function buildCharacterListBuffer (characterList: CharacterListOB): Buffe
     unitDataBuffer.writeInt32LE(char.unkId16, baseOffset + 0x1d4)
   }
 
+  const stringNameDataBuffer = Buffer.concat(stringChunks)
   const outBuffer = Buffer.concat([headerBuffer, commandsBuffer, unitIdBuffer, unitDataBuffer, stringNameDataBuffer])
   outBuffer.writeInt32LE(outBuffer.byteLength, 0x8)
   return outBuffer

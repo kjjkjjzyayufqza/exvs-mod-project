@@ -292,7 +292,10 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
       toast.success("Saved character_list.bin");
       setHasChanges(false);
       onUnsavedChanges?.(false);
-      await load();
+      setLoadState((prev) => {
+        if (prev.status !== "ready") return prev;
+        return { ...prev, list: sortedList };
+      });
     } catch (error) {
       console.error(error);
       toast.error("Failed to save character_list.bin");

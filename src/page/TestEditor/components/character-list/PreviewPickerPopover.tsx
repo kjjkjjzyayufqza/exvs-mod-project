@@ -20,6 +20,7 @@ interface PreviewPickerPopoverProps {
   triggerAriaLabel: string;
   onSelect: (value: number) => void;
   items: PreviewPickerItem[];
+  selectedValue?: number;
   isLoading?: boolean;
   error?: string | null;
   open?: boolean;
@@ -33,6 +34,7 @@ export function PreviewPickerPopover({
   triggerAriaLabel,
   onSelect,
   items,
+  selectedValue,
   isLoading,
   error,
   open: openProp,
@@ -65,6 +67,11 @@ export function PreviewPickerPopover({
     });
   }, [deferredQuery, sortedItems]);
 
+  const selectedItem = useMemo(() => {
+    if (selectedValue === undefined) return null;
+    return sortedItems.find((it) => it.value === selectedValue) ?? null;
+  }, [sortedItems, selectedValue]);
+
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
   const getListScrollElement = useCallback(() => scrollElement, [scrollElement]);
   const estimateRowSize = useCallback(() => 76, []);
@@ -81,6 +88,18 @@ export function PreviewPickerPopover({
     if (!scrollElement) return;
     rowVirtualizer.measure();
   }, [open, rowVirtualizer, scrollElement, filteredItems.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!scrollElement) return;
+    if (selectedValue === undefined) return;
+    const idx = filteredItems.findIndex((it) => it.value === selectedValue);
+    if (idx >= 0) {
+      requestAnimationFrame(() => {
+        rowVirtualizer.scrollToIndex(idx, { align: "center" });
+      });
+    }
+  }, [open, scrollElement, selectedValue, filteredItems, rowVirtualizer]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -120,6 +139,29 @@ export function PreviewPickerPopover({
             <X className="h-4 w-4" />
           </Button>
         </div>
+
+        {selectedItem && (
+          <div className="px-3 py-2 border-b bg-muted/30">
+            <div className="text-xs text-muted-foreground mb-1">Selected</div>
+            <div className="flex items-center gap-2">
+              <img
+                src={selectedItem.previewSrc}
+                alt={selectedItem.label}
+                className="h-8 w-16 rounded bg-black object-contain shrink-0"
+                loading="lazy"
+                onError={(e) => {
+                  e.currentTarget.src = "/tauri.svg";
+                }}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium truncate">{selectedItem.label}</div>
+                <div className="text-xs text-muted-foreground font-mono">
+                  {selectedItem.secondaryText ?? `Value: ${selectedItem.value}`}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="p-3 space-y-2">
           <Input
@@ -161,7 +203,10 @@ export function PreviewPickerPopover({
                   >
                     <button
                       type="button"
-                      className="w-full flex items-center gap-3 rounded-md border px-2 py-2 text-left hover:bg-accent/30"
+                      className={cn(
+                        "w-full flex items-center gap-3 rounded-md border px-2 py-2 text-left hover:bg-accent/30",
+                        it.value === selectedValue && "border-primary bg-primary/10"
+                      )}
                       onClick={() => {
                         onSelect(it.value);
                         setOpen(false);

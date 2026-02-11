@@ -11,12 +11,13 @@ export type CardIconIndexPickerItem = {
 export function CardIconIndexPickerPopover(props: {
   onSelect: (index: number) => void;
   items: CardIconIndexPickerItem[];
+  selectedValue?: number;
   isLoading?: boolean;
   error?: string | null;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
-  const { onSelect, items, isLoading, error, open, onOpenChange } = props;
+  const { onSelect, items, selectedValue, isLoading, error, open, onOpenChange } = props;
 
   const pickerItems = useMemo<PreviewPickerItem[]>(() => {
     return items.map((it) => ({
@@ -33,6 +34,7 @@ export function CardIconIndexPickerPopover(props: {
       triggerAriaLabel="Open Card Icon Index picker"
       onSelect={onSelect}
       items={pickerItems}
+      selectedValue={selectedValue}
       isLoading={isLoading}
       error={error}
       open={open}
