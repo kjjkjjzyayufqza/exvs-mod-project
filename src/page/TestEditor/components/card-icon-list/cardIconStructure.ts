@@ -333,10 +333,22 @@ export function appendCardIconToStructureJson(
 export function removeCardIconFromStructureJson(
   structJson: unknown,
   targetIndex: number
+): { nextStructJson: StructureJson; removedFileIndex: number };
+export function removeCardIconFromStructureJson(
+  structJson: unknown,
+  target: { itemIndex?: number; fileIndex?: number | null }
+): { nextStructJson: StructureJson; removedFileIndex: number };
+export function removeCardIconFromStructureJson(
+  structJson: unknown,
+  target: number | { itemIndex?: number; fileIndex?: number | null }
 ): { nextStructJson: StructureJson; removedFileIndex: number } {
   const cloned: StructureJson = JSON.parse(JSON.stringify(structJson ?? {}));
-  const subFileData: Array<Record<string, any>> = Array.isArray(cloned.SubFileData) ? cloned.SubFileData : [];
+  let subFileData: Array<Record<string, any>> = Array.isArray(cloned.SubFileData) ? cloned.SubFileData : [];
   const subFileStructure: Array<Record<string, any>> = Array.isArray(cloned.SubFileStructure) ? cloned.SubFileStructure : [];
+
+  const targetIndex = typeof target === "number" ? Math.trunc(target) : (typeof target?.itemIndex === "number" ? Math.trunc(target.itemIndex) : null);
+  const targetFileIndexRaw = typeof target === "object" && target ? target.fileIndex : null;
+  const targetFileIndex = typeof targetFileIndexRaw === "number" && Number.isFinite(targetFileIndexRaw) ? Math.trunc(targetFileIndexRaw) : null;
 
   let depth = 0;
   let firstFolderDepth: number | null = null;
@@ -362,12 +374,20 @@ export function removeCardIconFromStructureJson(
 
     if (type === "Item") {
       if (collecting && firstFolderDepth !== null && depth === firstFolderDepth) {
-        itemCounter += 1;
-        if (itemCounter === targetIndex) {
-          removedIndex = i;
-          const fileIndexRaw = Number(it?.fileIndex);
-          removedFileIndex = Number.isFinite(fileIndexRaw) ? Math.trunc(fileIndexRaw) : null;
-          break;
+        const fileIndex = normalizeFileIndex(it?.fileIndex);
+        if (targetFileIndex !== null) {
+          if (fileIndex === targetFileIndex) {
+            removedIndex = i;
+            removedFileIndex = targetFileIndex;
+            break;
+          }
+        } else if (targetIndex !== null) {
+          itemCounter += 1;
+          if (itemCounter === targetIndex) {
+            removedIndex = i;
+            removedFileIndex = fileIndex;
+            break;
+          }
         }
       }
       continue;
@@ -402,6 +422,41 @@ export function removeCardIconFromStructureJson(
     throw new Error(`SubFileData entry not found for fileIndex=${removedFileIndex}`);
   }
   subFileData.splice(dataIndex, 1);
+
+  // Renumber SubFileData/index and synchronize SubFileStructure fileIndex.
+  // Many consumers expect fileIndex/index to be contiguous: 0..N-1.
+  const oldToNew = new Map<number, number>();
+  const seen = new Set<number>();
+  const indexed = subFileData.map((entry, originalPos) => {
+    const old = normalizeFileIndex(entry?.fileIndex);
+    if (old === null) {
+      throw new Error("SubFileData contains an entry with invalid fileIndex");
+    }
+    return { entry, originalPos, old };
+  });
+  indexed.sort((a, b) => (a.old - b.old) || (a.originalPos - b.originalPos));
+  for (let i = 0; i < indexed.length; i++) {
+    const { entry, old } = indexed[i];
+    if (seen.has(old)) {
+      throw new Error(`Duplicate fileIndex found in SubFileData: ${old}`);
+    }
+    seen.add(old);
+    oldToNew.set(old, i);
+    entry.index = i;
+    entry.fileIndex = i;
+  }
+  subFileData = indexed.map((x) => x.entry);
+
+  for (const it of subFileStructure) {
+    if (String(it?.type ?? "") !== "Item") continue;
+    const old = normalizeFileIndex(it?.fileIndex);
+    if (old === null) continue;
+    const next = oldToNew.get(old);
+    if (next === undefined) {
+      throw new Error(`SubFileStructure references missing fileIndex=${old}`);
+    }
+    it.fileIndex = next;
+  }
 
   updateFolderCount(folderEntry, subFileStructure, -1);
   if (typeof cloned.Fhm2dTotalCount === "number") {

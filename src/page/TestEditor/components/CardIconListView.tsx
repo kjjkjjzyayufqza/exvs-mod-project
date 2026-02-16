@@ -136,7 +136,7 @@ export default function CardIconListView({ folderPath, isActive, onUnsavedChange
     }
   }, [folderPath, isRefreshingNutexb, load, resolveRootDir]);
 
-  const handleRemoveItem = useCallback(async (item: { itemIndex: number; fileUrl?: string | null }) => {
+  const handleRemoveItem = useCallback(async (item: { itemIndex: number; fileIndex: number | null; fileUrl?: string | null }) => {
     if (!folderPath) {
       toast.error("Folder path is empty");
       return;
@@ -147,7 +147,10 @@ export default function CardIconListView({ folderPath, isActive, onUnsavedChange
       const structurePath = await resolveStructurePath();
       const raw = await readTextFile(structurePath);
       const json = JSON.parse(raw);
-      const { nextStructJson } = removeCardIconFromStructureJson(json, item.itemIndex);
+      const { nextStructJson } = removeCardIconFromStructureJson(json, {
+        fileIndex: item.fileIndex,
+        itemIndex: item.itemIndex,
+      });
       await writeTextFile(structurePath, JSON.stringify(nextStructJson, null, 2));
       toast.success("Removed card icon");
       await load();
