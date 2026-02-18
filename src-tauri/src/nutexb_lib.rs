@@ -1,12 +1,12 @@
 use serde::Serialize;
+use std::collections::HashSet;
 use std::{
-    fs::File,
     fs,
+    fs::File,
     io::{BufWriter, Write},
     path::Path,
-    path::{PathBuf},
+    path::PathBuf,
 };
-use std::collections::HashSet;
 
 use image_dds::image::RgbaImage;
 use image_dds::{dds_from_image, ImageFormat as DdsImageFormat, Mipmaps, Quality};
@@ -149,13 +149,20 @@ pub fn batch_export_folder_to_png(
             fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
 
-        match export_nutexb_to_png(file_path.to_string_lossy().as_ref(), out_path.to_string_lossy().as_ref()) {
+        match export_nutexb_to_png(
+            file_path.to_string_lossy().as_ref(),
+            out_path.to_string_lossy().as_ref(),
+        ) {
             Ok(_) => converted += 1,
             Err(_) => failed += 1,
         }
     }
 
-    Ok(BatchExportSummary { converted, skipped, failed })
+    Ok(BatchExportSummary {
+        converted,
+        skipped,
+        failed,
+    })
 }
 
 fn resolve_unique_output_path(
@@ -163,7 +170,9 @@ fn resolve_unique_output_path(
     used: &mut HashSet<PathBuf>,
     overwrite: bool,
 ) -> Result<PathBuf, String> {
-    let parent = base.parent().ok_or_else(|| "Invalid output path".to_string())?;
+    let parent = base
+        .parent()
+        .ok_or_else(|| "Invalid output path".to_string())?;
     let stem = base
         .file_stem()
         .and_then(|s| s.to_str())
@@ -225,7 +234,9 @@ fn collect_nutexb_files(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String
 }
 
 fn make_root_convert_output_path(root: &Path, nutexb_path: &Path) -> Result<PathBuf, String> {
-    let parent = nutexb_path.parent().ok_or_else(|| "Invalid nutexb path".to_string())?;
+    let parent = nutexb_path
+        .parent()
+        .ok_or_else(|| "Invalid nutexb path".to_string())?;
     let rel_dir = parent.strip_prefix(root).unwrap_or(parent);
     let convert_dir = root.join("__convert").join(rel_dir);
 
@@ -235,7 +246,9 @@ fn make_root_convert_output_path(root: &Path, nutexb_path: &Path) -> Result<Path
 }
 
 fn make_per_file_convert_output_path(nutexb_path: &Path) -> Result<PathBuf, String> {
-    let parent = nutexb_path.parent().ok_or_else(|| "Invalid nutexb path".to_string())?;
+    let parent = nutexb_path
+        .parent()
+        .ok_or_else(|| "Invalid nutexb path".to_string())?;
     let convert_dir = parent.join("__convert");
 
     let nutexb = NutexbFile::read_from_file(nutexb_path).map_err(|e| e.to_string())?;
@@ -353,10 +366,15 @@ pub fn series_image_replace_from_png(
     } else {
         // For a new series, set the internal nutexb name to the base name.
         let name = sanitize_file_name(&base_name);
-        (name, DdsImageFormat::BC7RgbaUnorm, Mipmaps::GeneratedAutomatic)
+        (
+            name,
+            DdsImageFormat::BC7RgbaUnorm,
+            Mipmaps::GeneratedAutomatic,
+        )
     };
 
-    let dds = dds_from_image(&rgba, dds_format, Quality::Normal, mipmaps).map_err(|e| e.to_string())?;
+    let dds =
+        dds_from_image(&rgba, dds_format, Quality::Normal, mipmaps).map_err(|e| e.to_string())?;
     let nutexb = NutexbFile::from_dds(&dds, nutexb_name.clone()).map_err(|e| e.to_string())?;
     nutexb
         .write_to_file(&out_nutexb_path)
@@ -414,10 +432,15 @@ pub fn card_icon_replace_from_png(
             .and_then(|s| s.to_str())
             .unwrap_or("texture");
         let name = sanitize_file_name(base_name);
-        (name, DdsImageFormat::BC7RgbaUnorm, Mipmaps::GeneratedAutomatic)
+        (
+            name,
+            DdsImageFormat::BC7RgbaUnorm,
+            Mipmaps::GeneratedAutomatic,
+        )
     };
 
-    let dds = dds_from_image(&rgba, dds_format, Quality::Normal, mipmaps).map_err(|e| e.to_string())?;
+    let dds =
+        dds_from_image(&rgba, dds_format, Quality::Normal, mipmaps).map_err(|e| e.to_string())?;
     let nutexb = NutexbFile::from_dds(&dds, nutexb_name.clone()).map_err(|e| e.to_string())?;
     nutexb
         .write_to_file(&out_nutexb_path)
