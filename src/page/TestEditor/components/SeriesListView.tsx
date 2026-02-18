@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { readFile, writeFile } from "@tauri-apps/plugin-fs";
-import { join } from "@tauri-apps/api/path";
+import { exists, readFile, writeFile } from "@tauri-apps/plugin-fs";
+import { dirname, join } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
+import { openPath } from "@tauri-apps/plugin-opener";
 import { Buffer } from "buffer";
 import { toast } from "sonner";
-import { RefreshCw, Save, Image as ImageIcon, Loader2, Info } from "lucide-react";
+import { RefreshCw, Save, Image as ImageIcon, Loader2, Info, FolderOpen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -208,6 +209,42 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
     }
   }, [folderPath, loadSeriesImageCount]);
 
+  const handleOpenPath = useCallback(async (rawPath: string) => {
+    try {
+      const isWindowsPath = /^[a-zA-Z]:[\\/]/.test(rawPath) || rawPath.startsWith("\\\\");
+      const normalizedPath = isWindowsPath ? rawPath.replace(/\//g, "\\") : rawPath.replace(/\\/g, "/");
+
+      if (normalizedPath.includes('"')) {
+        toast.error('Invalid path: contains a quote character (")');
+        return;
+      }
+
+      const pathExists = await exists(normalizedPath);
+      if (!pathExists) {
+        toast.error("Path does not exist");
+        return;
+      }
+
+      await openPath(normalizedPath);
+    } catch (error) {
+      console.error("Error opening path:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(message ? `Failed to open: ${message}` : "Failed to open");
+    }
+  }, []);
+
+  const handleOpenSeriesListFolder = useCallback(async () => {
+    if (loadState.status !== "ready") return;
+    const folderPathToOpen = await dirname(loadState.filePath);
+    await handleOpenPath(folderPathToOpen);
+  }, [loadState, handleOpenPath]);
+
+  const handleOpenSeriesImageFolder = useCallback(async () => {
+    const dirPath = seriesImageCountState.dirPath;
+    if (!dirPath) return;
+    await handleOpenPath(dirPath);
+  }, [seriesImageCountState.dirPath, handleOpenPath]);
+
   if (!isActive) {
     return <div className="h-full w-full" />;
   }
@@ -271,14 +308,36 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <CardTitle>Series List</CardTitle>
-              <div className="text-xs text-muted-foreground break-all mt-1">Series List: {loadState.filePath}</div>
+              <div className="text-xs text-muted-foreground break-all mt-1 flex items-center gap-1">
+                Series List: {loadState.filePath}
+                <button
+                  type="button"
+                  onClick={() => void handleOpenSeriesListFolder()}
+                  className="shrink-0 p-0.5 rounded hover:bg-accent hover:text-accent-foreground"
+                  title="Open folder"
+                  aria-label="Open folder"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" />
+                </button>
+              </div>
               {fileMeta && (
                 <div className="text-xs text-muted-foreground mt-1">
                   Loaded: {fileMeta.count} series, {fileMeta.commands} commands
                 </div>
               )}
-              <div className="text-xs text-muted-foreground break-all mt-2">
+              <div className="text-xs text-muted-foreground break-all mt-2 flex items-center gap-1">
                 Series Image List: {seriesImageCountState.dirPath || "-"}
+                {seriesImageCountState.dirPath && (
+                  <button
+                    type="button"
+                    onClick={() => void handleOpenSeriesImageFolder()}
+                    className="shrink-0 p-0.5 rounded hover:bg-accent hover:text-accent-foreground"
+                    title="Open folder"
+                    aria-label="Open folder"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
               <div className="text-xs text-muted-foreground mt-1">
                 Loaded:{" "}

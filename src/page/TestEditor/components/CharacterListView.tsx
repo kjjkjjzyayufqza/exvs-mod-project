@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { readFile, writeFile } from "@tauri-apps/plugin-fs";
-import { join } from "@tauri-apps/api/path";
+import { exists, readFile, writeFile } from "@tauri-apps/plugin-fs";
+import { dirname, join } from "@tauri-apps/api/path";
+import { openPath } from "@tauri-apps/plugin-opener";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Buffer } from "buffer";
 import { toast } from "sonner";
-import { Download, Upload, RefreshCw, Save, Info } from "lucide-react";
+import { Download, Upload, RefreshCw, Save, Info, FolderOpen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -265,6 +266,36 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
     };
   }, [loadState]);
 
+  const handleOpenPath = useCallback(async (rawPath: string) => {
+    try {
+      const isWindowsPath = /^[a-zA-Z]:[\\/]/.test(rawPath) || rawPath.startsWith("\\\\");
+      const normalizedPath = isWindowsPath ? rawPath.replace(/\//g, "\\") : rawPath.replace(/\\/g, "/");
+
+      if (normalizedPath.includes('"')) {
+        toast.error('Invalid path: contains a quote character (")');
+        return;
+      }
+
+      const pathExists = await exists(normalizedPath);
+      if (!pathExists) {
+        toast.error("Path does not exist");
+        return;
+      }
+
+      await openPath(normalizedPath);
+    } catch (error) {
+      console.error("Error opening path:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(message ? `Failed to open: ${message}` : "Failed to open");
+    }
+  }, []);
+
+  const handleOpenCharacterListFolder = useCallback(async () => {
+    if (loadState.status !== "ready") return;
+    const folderPathToOpen = await dirname(loadState.filePath);
+    await handleOpenPath(folderPathToOpen);
+  }, [loadState, handleOpenPath]);
+
   const handleSaveFile = useCallback(async () => {
     if (loadState.status !== "ready") return;
     const filePath = loadState.filePath;
@@ -442,7 +473,18 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <CardTitle>Character List</CardTitle>
-              <div className="text-xs text-muted-foreground break-all mt-1">{loadState.filePath}</div>
+              <div className="text-xs text-muted-foreground break-all mt-1 flex items-center gap-1">
+                {loadState.filePath}
+                <button
+                  type="button"
+                  onClick={() => void handleOpenCharacterListFolder()}
+                  className="shrink-0 p-0.5 rounded hover:bg-accent hover:text-accent-foreground"
+                  title="Open folder"
+                  aria-label="Open folder"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" />
+                </button>
+              </div>
               {fileMeta && (
                 <div className="text-xs text-muted-foreground mt-1">
                   Loaded: {fileMeta.count} characters, {fileMeta.commands} commands

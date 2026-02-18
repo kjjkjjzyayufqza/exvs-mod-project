@@ -320,7 +320,7 @@ export function SeriesForm({
                   />
                 </div>
 
-                <Button type="submit" className="w-full mt-4">
+                <Button type="submit" disabled={!form.formState.isDirty} className="w-full mt-4">
                   Save Changes
                 </Button>
               </div>
