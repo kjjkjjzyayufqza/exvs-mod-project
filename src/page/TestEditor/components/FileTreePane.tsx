@@ -62,6 +62,17 @@ export function FileTreePane({
   }, []);
 
   const selection = useMemo(() => selectedId ?? undefined, [selectedId]);
+  const treeRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (selectedId && treeRef.current) {
+      // Small delay to ensure the node is rendered or tree is ready
+      const timer = setTimeout(() => {
+        treeRef.current.scrollTo(selectedId, "center");
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedId]);
 
   const dirtyTopLevelSet = useMemo(() => new Set(dirtyTopLevelFolderNames), [dirtyTopLevelFolderNames]);
 
@@ -282,6 +293,7 @@ export function FileTreePane({
             </div>
           ) : (
             <Tree
+              ref={treeRef}
               data={data}
               width="100%"
               height={treeHeight}

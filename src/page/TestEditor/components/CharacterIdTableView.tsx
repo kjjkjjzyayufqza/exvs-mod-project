@@ -20,7 +20,7 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Save, RefreshCw, Plus, Trash2, Search, Copy, Clipboard, Download, Upload, FolderOpen } from "lucide-react";
+import { Save, RefreshCw, Plus, Trash2, Search, Copy, Clipboard, Download, Upload, FolderOpen, PackageOpen } from "lucide-react";
 import { CharacterIdTable, CharacterIdTableData, buildCharacterIdTableBuffer } from "@/models/characterIdTable";
 import { cn } from "@/lib/utils";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -31,11 +31,16 @@ import {
     pickCharacterIdTableImportPreview,
     type CharacterIdTableImportPreview,
 } from "./character-id-table/CharacterIdTableJson";
+import { useConfigStore } from "@/store/configStore";
+import { AssetRefInfo, getAssetRefInfo } from "./character-id-table/assetRef";
+import { CharacterAssetField } from "./character-id-table/CharacterAssetField";
+import { extractAsset } from "./character-id-table/extractFhm2d";
 
 interface CharacterIdTableViewProps {
     folderPath: string;
     isActive: boolean;
     onUnsavedChanges?: (hasChanges: boolean) => void;
+    onRevealTreeFolder?: (path: string) => void;
 }
 
 type LoadState =
@@ -78,17 +83,31 @@ const parseClipboardPayload = (text: string): ClipboardPayload | null => {
     }
 };
 
-export default function CharacterIdTableView({ folderPath, isActive, onUnsavedChanges }: CharacterIdTableViewProps) {
+export default function CharacterIdTableView({ folderPath, isActive, onUnsavedChanges, onRevealTreeFolder }: CharacterIdTableViewProps) {
     const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
     const [selectedIndex, setSelectedIndex] = useState<number>(-1);
     const [searchTerm, setSearchTerm] = useState("");
     const [hasChanges, setHasChanges] = useState(false);
     const deferredSearchTerm = useDeferredValue(searchTerm);
 
+    const getSetting = useConfigStore((s) => s.getSetting);
+    const [obDplCachePath, setObDplCachePath] = useState("");
+    const [extractOutputPath, setExtractOutputPath] = useState("");
+    const [isExtractingAll, setIsExtractingAll] = useState(false);
+
+    useEffect(() => {
+        const loadConfig = async () => {
+            setObDplCachePath(await getSetting<string>("obDplCachePath") || "");
+            setExtractOutputPath(await getSetting<string>("extractOutputPath") || "");
+        };
+        loadConfig();
+    }, [getSetting]);
+
     const [isExporting, setIsExporting] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
     const [importPreview, setImportPreview] = useState<CharacterIdTableImportPreview | null>(null);
     const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+    const [isExtractConfirmOpen, setIsExtractConfirmOpen] = useState(false);
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [deleteCandidateIndex, setDeleteCandidateIndex] = useState<number | null>(null);
@@ -167,6 +186,54 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
         if (selectedIndex < 0) return null;
         return tableData[selectedIndex] ?? null;
     }, [selectedIndex, tableData]);
+
+    const assetRefs = useMemo(() => {
+        if (!selectedRow) return null;
+        const refs: Record<string, AssetRefInfo> = {};
+        
+        // Use a promise-based approach in a separate effect or handle synchronously if possible.
+        // Since getAssetRefInfo is async (due to join), we'll pre-calculate basic info and 
+        // let the component handle the rest, or use a state.
+        return refs;
+    }, [selectedRow]);
+
+    const [resolvedAssetRefs, setResolvedAssetRefs] = useState<Record<string, AssetRefInfo>>({});
+
+    useEffect(() => {
+        if (!selectedRow) {
+            setResolvedAssetRefs({});
+            return;
+        }
+
+        const resolve = async () => {
+            const refs: Record<string, AssetRefInfo> = {};
+            for (const key of REQUIRED_FIELD_KEYS) {
+                const val = (selectedRow as any)[key];
+                refs[key] = await getAssetRefInfo(key, val, obDplCachePath, folderPath);
+            }
+            setResolvedAssetRefs(refs);
+        };
+        resolve();
+    }, [selectedRow, obDplCachePath, folderPath]);
+
+    const handleExtractAll = useCallback(async () => {
+        if (!selectedRow || isExtractingAll) return;
+        setIsExtractingAll(true);
+        
+        const results = [];
+        for (const key of REQUIRED_FIELD_KEYS) {
+            const asset = resolvedAssetRefs[key];
+            if (asset && asset.rawValue !== 0) {
+                results.push(await extractAsset(asset, extractOutputPath));
+            }
+        }
+
+        setIsExtractingAll(false);
+        const successCount = results.filter(r => r.success).length;
+        if (successCount > 0) {
+            toast.success(`Successfully extracted ${successCount} assets`);
+        }
+    }, [selectedRow, isExtractingAll, resolvedAssetRefs, extractOutputPath]);
 
     const deleteCandidateRow = useMemo(() => {
         if (deleteCandidateIndex === null) return null;
@@ -807,6 +874,16 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                             <Clipboard className="w-4 h-4 mr-2" />
                                             Paste fields
                                         </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            onClick={() => setIsExtractConfirmOpen(true)}
+                                            disabled={isExtractingAll || !obDplCachePath}
+                                            title="Extract all non-zero assets for this character"
+                                        >
+                                            <PackageOpen className="w-4 h-4 mr-2" />
+                                            {isExtractingAll ? "Extracting..." : "Extract All Assets"}
+                                        </Button>
                                     </div>
 
                                     <ScrollArea className="flex-1 min-h-0">
@@ -845,6 +922,13 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     onValueChange={() => { }}
                                                     mode="live"
                                                     onCommit={(nextValue) => updateSelectedRowField("Model", nextValue)}
+                                                    labelExtra={resolvedAssetRefs["Model"] && (
+                                                        <CharacterAssetField 
+                                                            asset={resolvedAssetRefs["Model"]} 
+                                                            extractOutputPath={extractOutputPath}
+                                                            onReveal={onRevealTreeFolder}
+                                                        />
+                                                    )}
                                                 />
 
                                                 <DualValueProperty
@@ -862,6 +946,13 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     onValueChange={() => { }}
                                                     mode="live"
                                                     onCommit={(nextValue) => updateSelectedRowField("Effect", nextValue)}
+                                                    labelExtra={resolvedAssetRefs["Effect"] && (
+                                                        <CharacterAssetField 
+                                                            asset={resolvedAssetRefs["Effect"]} 
+                                                            extractOutputPath={extractOutputPath}
+                                                            onReveal={onRevealTreeFolder}
+                                                        />
+                                                    )}
                                                 />
 
                                                 <DualValueProperty
@@ -879,6 +970,13 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     onValueChange={() => { }}
                                                     mode="live"
                                                     onCommit={(nextValue) => updateSelectedRowField("Sound", nextValue)}
+                                                    labelExtra={resolvedAssetRefs["Sound"] && (
+                                                        <CharacterAssetField 
+                                                            asset={resolvedAssetRefs["Sound"]} 
+                                                            extractOutputPath={extractOutputPath}
+                                                            onReveal={onRevealTreeFolder}
+                                                        />
+                                                    )}
                                                 />
 
                                                 <DualValueProperty
@@ -896,6 +994,13 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     onValueChange={() => { }}
                                                     mode="live"
                                                     onCommit={(nextValue) => updateSelectedRowField("Param", nextValue)}
+                                                    labelExtra={resolvedAssetRefs["Param"] && (
+                                                        <CharacterAssetField 
+                                                            asset={resolvedAssetRefs["Param"]} 
+                                                            extractOutputPath={extractOutputPath}
+                                                            onReveal={onRevealTreeFolder}
+                                                        />
+                                                    )}
                                                 />
 
                                                 <DualValueProperty
@@ -913,6 +1018,13 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     onValueChange={() => { }}
                                                     mode="live"
                                                     onCommit={(nextValue) => updateSelectedRowField("Msc", nextValue)}
+                                                    labelExtra={resolvedAssetRefs["Msc"] && (
+                                                        <CharacterAssetField 
+                                                            asset={resolvedAssetRefs["Msc"]} 
+                                                            extractOutputPath={extractOutputPath}
+                                                            onReveal={onRevealTreeFolder}
+                                                        />
+                                                    )}
                                                 />
 
                                                 <DualValueProperty
@@ -930,6 +1042,13 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     onValueChange={() => { }}
                                                     mode="live"
                                                     onCommit={(nextValue) => updateSelectedRowField("Motion", nextValue)}
+                                                    labelExtra={resolvedAssetRefs["Motion"] && (
+                                                        <CharacterAssetField 
+                                                            asset={resolvedAssetRefs["Motion"]} 
+                                                            extractOutputPath={extractOutputPath}
+                                                            onReveal={onRevealTreeFolder}
+                                                        />
+                                                    )}
                                                 />
                                             </div>
                                         </div>
@@ -944,6 +1063,32 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                     </div>
                 </CardContent>
             </Card>
+
+            <AlertDialog
+                open={isExtractConfirmOpen}
+                onOpenChange={setIsExtractConfirmOpen}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Extract All Assets</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to extract all assets for Character ID {selectedRow?.CharacterId}?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={() => {
+                                setIsExtractConfirmOpen(false);
+                                void handleExtractAll();
+                            }}
+                            className="bg-black hover:bg-black/90 text-white"
+                        >
+                            Extract all
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             <AlertDialog
                 open={deleteDialogOpen}

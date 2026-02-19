@@ -17,6 +17,7 @@ interface MainViewProps {
   jsonFilePath?: string | null;
   folderPath?: string | null;
   onUnsavedChanges?: (hasChanges: boolean) => void;
+  onRevealTreeFolder?: (path: string) => void;
 }
 
 const tabs: StageTab[] = [
@@ -94,7 +95,7 @@ const tabs: StageTab[] = [
   },
 ];
 
-const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges }: MainViewProps) => {
+const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFolder }: MainViewProps) => {
   const [activeTab, setActiveTab] = useState<string>(tabs[0]?.value ?? "3d");
   const [folderStructureHasUnsaved, setFolderStructureHasUnsaved] = useState(false);
   const [characterIdTableHasUnsaved, setCharacterIdTableHasUnsaved] = useState(false);
@@ -140,6 +141,7 @@ const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges }: MainViewProps)
               folderPath={props.folderPath ?? ""}
               isActive={activeTab === "character-id-table"}
               onUnsavedChanges={handleCharacterIdTableUnsaved}
+              onRevealTreeFolder={props.onRevealTreeFolder}
             />
           ),
         };
@@ -231,7 +233,7 @@ const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges }: MainViewProps)
         </TabsList>
         {resolvedTabs.map((tab) => (
           <TabsContent key={tab.value} value={tab.value} className="flex-1 h-full w-full p-0 m-0">
-            {tab.render ? tab.render({ jsonFilePath, folderPath, onUnsavedChanges }) : tab.content}
+            {tab.render ? tab.render({ jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFolder }) : tab.content}
           </TabsContent>
         ))}
       </Tabs>

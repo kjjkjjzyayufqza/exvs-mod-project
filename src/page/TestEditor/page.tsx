@@ -212,6 +212,33 @@ const TestEditorPage = () => {
   const pendingPayloadsRef = useRef<FolderChangePayload[]>([]);
   const rafIdRef = useRef<number | null>(null);
 
+  const revealInTreeByPath = useCallback((targetPath: string) => {
+    // 1. Clear search term
+    setSearchTerm("");
+
+    // 2. Find node in full treeData
+    const findNodeByPath = (nodes: TestTreeNode[], path: string): TestTreeNode | null => {
+      const normalizedTarget = path.replace(/\\/g, "/").toLowerCase();
+      for (const node of nodes) {
+        const normalizedNodePath = node.path.replace(/\\/g, "/").toLowerCase();
+        if (normalizedNodePath === normalizedTarget && node.isDir) return node;
+        if (node.children) {
+          const found = findNodeByPath(node.children, path);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+
+    const node = findNodeByPath(treeData, targetPath);
+    if (node) {
+      setSelectedId(node.id);
+      toast.success(`Revealed folder: ${node.name}`);
+    } else {
+      toast.error("Folder not found in current workspace root");
+    }
+  }, [treeData]);
+
   const flushPendingPayloads = useCallback(() => {
     const queued = pendingPayloadsRef.current;
     pendingPayloadsRef.current = [];
@@ -415,6 +442,7 @@ const TestEditorPage = () => {
                 jsonFilePath={selectedJsonPath}
                 folderPath={currentDir}
                 onUnsavedChanges={setHasUnsavedChanges}
+                onRevealTreeFolder={revealInTreeByPath}
               />
             </div>
           </ResizablePanel>
