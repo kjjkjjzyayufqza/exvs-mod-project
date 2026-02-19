@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Buffer } from "buffer";
 import { obfEncodeFromUtf8String } from "@/utils/obfString";
+import { checkStringCoverage, getDefaultRanges } from "@/utils/exvsStringAllowedRanges";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -327,6 +328,18 @@ export function CharacterForm({
     [formData]
   );
 
+  const stringFieldErrors = useMemo(() => {
+    const ranges = getDefaultRanges();
+    const errors: Record<string, boolean> = {};
+    for (const [key, value] of Object.entries(stringFormData)) {
+      if (typeof value === "string" && value.length > 0) {
+        const result = checkStringCoverage(value, ranges);
+        errors[key] = !result.ok;
+      }
+    }
+    return errors;
+  }, [stringFormData]);
+
   const stringFieldGroups = useMemo(
     () => [
       {
@@ -436,7 +449,7 @@ export function CharacterForm({
               <div className="text-base font-bold text-foreground">
                 {group.title}
               </div>
-              <StringFieldGroup fields={group.fields} onChange={handleStringFieldChange} />
+              <StringFieldGroup fields={group.fields} onChange={handleStringFieldChange} fieldErrors={stringFieldErrors} />
               <Separator />
             </div>
           ))}

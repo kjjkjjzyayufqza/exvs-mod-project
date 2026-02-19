@@ -33,8 +33,16 @@ import {
   applyCharaJsonImportToList,
   exportCharaJsonToFile,
   pickCharaJsonImportPreview,
+  CHARACTER_STRING_FIELDS,
+  CHARACTER_STRING_FIELD_LABELS,
   type CharaJsonImportPreview,
 } from "./character-list/CharaJson";
+import {
+  checkStringCoverage,
+  getDefaultRanges,
+  getSuggestedJapaneseReplacement,
+  type MissingCodepoint,
+} from "@/utils/exvsStringAllowedRanges";
 
 interface CharacterListViewProps {
   folderPath: string;
@@ -84,6 +92,10 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
   const [isImporting, setIsImporting] = useState(false);
   const [importPreview, setImportPreview] = useState<CharaJsonImportPreview | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [fontCoverageErrorDialogOpen, setFontCoverageErrorDialogOpen] = useState(false);
+  const [fontCoverageErrors, setFontCoverageErrors] = useState<
+    Array<{ characterId: number; fieldName: string; fieldLabel: string; missing: MissingCodepoint[] }>
+  >([]);
   const [editorResetKey, setEditorResetKey] = useState(0);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const lastLoadedKeyRef = useRef<string>("");
@@ -296,7 +308,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
     await handleOpenPath(folderPathToOpen);
   }, [loadState, handleOpenPath]);
 
-  const handleSaveFile = useCallback(async () => {
+  const performSave = useCallback(async () => {
     if (loadState.status !== "ready") return;
     const filePath = loadState.filePath;
     try {
@@ -332,6 +344,42 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
       toast.error("Failed to save character_list.bin");
     }
   }, [loadState, onUnsavedChanges]);
+
+  const handleSaveFile = useCallback(async () => {
+    if (loadState.status !== "ready") return;
+    const ranges = getDefaultRanges();
+    const errors: Array<{ characterId: number; fieldName: string; fieldLabel: string; missing: MissingCodepoint[] }> = [];
+
+    for (const char of loadState.list.CharacterData) {
+      for (const fieldName of CHARACTER_STRING_FIELDS) {
+        const field = (char as unknown as Record<string, unknown>)[fieldName];
+        const str = field && typeof field === "object" && "Utf8String" in field ? String((field as { Utf8String: string }).Utf8String ?? "") : "";
+        if (str.length === 0) continue;
+        const result = checkStringCoverage(str, ranges);
+        if (!result.ok) {
+          errors.push({
+            characterId: char.CharacterId,
+            fieldName,
+            fieldLabel: CHARACTER_STRING_FIELD_LABELS[fieldName] ?? fieldName,
+            missing: result.missing,
+          });
+        }
+      }
+    }
+
+    if (errors.length > 0) {
+      setFontCoverageErrors(errors);
+      setFontCoverageErrorDialogOpen(true);
+      return;
+    }
+
+    await performSave();
+  }, [loadState, performSave]);
+
+  const handleForceSave = useCallback(async () => {
+    setFontCoverageErrorDialogOpen(false);
+    await performSave();
+  }, [performSave]);
 
   const handleExportCharaJson = useCallback(async () => {
     if (loadState.status !== "ready") return;
@@ -642,6 +690,50 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
               className="inline-flex items-center gap-2"
             >
               Import
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={fontCoverageErrorDialogOpen} onOpenChange={setFontCoverageErrorDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Font Coverage Errors</DialogTitle>
+            <DialogDescription asChild>
+              <p>
+                The following characters are not in the game font set and will render as &quot;*&quot;.
+                Consider replacing with Japanese equivalents (e.g. 産 instead of 產).
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 min-h-0 overflow-auto space-y-3">
+            {fontCoverageErrors.map((err, idx) => (
+              <div key={idx} className="border rounded-md p-3 text-sm space-y-2">
+                <div className="font-medium">
+                  Character ID {err.characterId} · {err.fieldLabel}
+                </div>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  {err.missing.map((m) => {
+                    const suggested = getSuggestedJapaneseReplacement(m.cp);
+                    return (
+                      <div key={m.cp}>
+                        {m.char} ({m.hex})
+                        {suggested ? ` → suggest: ${suggested}` : ""}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFontCoverageErrorDialogOpen(false)}>
+              Close
+            </Button>
+            <Button onClick={() => void handleForceSave()}>
+              Force Save
             </Button>
           </DialogFooter>
         </DialogContent>

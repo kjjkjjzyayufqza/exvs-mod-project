@@ -6,7 +6,7 @@ import { obfEncodeFromUtf8String } from "@/utils/obfString";
 import { CharacterDataOB as CharacterDataOBClass } from "@/models/characterListOB";
 import type { CharacterDataOB, CharacterListOB } from "@/models/characterListOB";
 
-const CHARACTER_STRING_FIELDS = [
+export const CHARACTER_STRING_FIELDS = [
   "CharacterNameOffset",
   "UnkStringOffset1",
   "UnkStringOffset2",
@@ -23,6 +23,24 @@ const CHARACTER_STRING_FIELDS = [
   "UnkStringOffset13",
   "UnkStringOffset14",
 ] as const;
+
+export const CHARACTER_STRING_FIELD_LABELS: Record<string, string> = {
+  CharacterNameOffset: "Character Name (0x1C)",
+  UnkStringOffset1: "Unknown String 1 (0x68)",
+  UnkStringOffset2: "Unknown String 2 (0x7C)",
+  UnkStringOffset3: "Unknown String 3 (0x84)",
+  UnkStringOffset4: "Unknown String 4 (0x90)",
+  UnkStringOffset5: "Unknown String 5 (0x98)",
+  UnkStringOffset6: "Unknown String 6 (0xA4)",
+  UnkStringOffset7: "Unknown String 7 (0xB8)",
+  UnkStringOffset8: "Unknown String 8 (0xC0)",
+  UnkStringOffset9: "Unknown String 9 (0x134)",
+  UnkStringOffset10: "Unknown String 10 (0x144)",
+  UnkStringOffset11: "Unknown String 11 (0x158)",
+  UnkStringOffset12: "Unknown String 12 (0x18C)",
+  UnkStringOffset13: "Unknown String 13 (0x19C)",
+  UnkStringOffset14: "Unknown String 14 (0x1B0)",
+};
 
 export type CharaJsonRow = Record<string, unknown> & { id: number };
 
