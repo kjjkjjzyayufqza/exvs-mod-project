@@ -97,7 +97,6 @@ export function NutexbPreview({ path }: NutexbPreviewProps) {
         src={previewSrc}
         alt={info.name}
         className="w-full rounded border object-contain"
-        style={{ imageRendering: "pixelated" }}
       />
       <div className="space-y-1 text-xs">
         <div className="flex items-center justify-between gap-2">

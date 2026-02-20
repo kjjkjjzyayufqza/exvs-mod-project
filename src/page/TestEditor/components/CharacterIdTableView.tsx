@@ -92,12 +92,14 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
 
     const getSetting = useConfigStore((s) => s.getSetting);
     const [obDplCachePath, setObDplCachePath] = useState("");
+    const [obModPath, setObModPath] = useState("");
     const [extractOutputPath, setExtractOutputPath] = useState("");
     const [isExtractingAll, setIsExtractingAll] = useState(false);
 
     useEffect(() => {
         const loadConfig = async () => {
             setObDplCachePath(await getSetting<string>("obDplCachePath") || "");
+            setObModPath(await getSetting<string>("obModPath") || "");
             setExtractOutputPath(await getSetting<string>("extractOutputPath") || "");
         };
         loadConfig();
@@ -209,12 +211,12 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
             const refs: Record<string, AssetRefInfo> = {};
             for (const key of REQUIRED_FIELD_KEYS) {
                 const val = (selectedRow as any)[key];
-                refs[key] = await getAssetRefInfo(key, val, obDplCachePath, folderPath);
+                refs[key] = await getAssetRefInfo(key, val, obDplCachePath, obModPath, folderPath);
             }
             setResolvedAssetRefs(refs);
         };
         resolve();
-    }, [selectedRow, obDplCachePath, folderPath]);
+    }, [selectedRow, obDplCachePath, obModPath, folderPath]);
 
     const handleExtractAll = useCallback(async () => {
         if (!selectedRow || isExtractingAll) return;
@@ -286,6 +288,10 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
         setHasChanges(true);
         onUnsavedChanges?.(true);
     }, [loadState.status, onUnsavedChanges, selectedIndex, updateTable]);
+
+    const handleAssetFieldUpdate = useCallback((fieldKey: string, newValue: number) => {
+        updateSelectedRowField(fieldKey as keyof CharacterIdTableData, newValue);
+    }, [updateSelectedRowField]);
 
     const updateSelectedRowFields = useCallback((fields: ClipboardPayload["fields"]) => {
         if (loadState.status !== "ready") return;
@@ -925,8 +931,10 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     labelExtra={resolvedAssetRefs["Model"] && (
                                                         <CharacterAssetField 
                                                             asset={resolvedAssetRefs["Model"]} 
+                                                            projectRootDir={folderPath}
                                                             extractOutputPath={extractOutputPath}
                                                             onReveal={onRevealTreeFolder}
+                                                            onFieldUpdate={handleAssetFieldUpdate}
                                                         />
                                                     )}
                                                 />
@@ -949,8 +957,10 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     labelExtra={resolvedAssetRefs["Effect"] && (
                                                         <CharacterAssetField 
                                                             asset={resolvedAssetRefs["Effect"]} 
+                                                            projectRootDir={folderPath}
                                                             extractOutputPath={extractOutputPath}
                                                             onReveal={onRevealTreeFolder}
+                                                            onFieldUpdate={handleAssetFieldUpdate}
                                                         />
                                                     )}
                                                 />
@@ -973,8 +983,10 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     labelExtra={resolvedAssetRefs["Sound"] && (
                                                         <CharacterAssetField 
                                                             asset={resolvedAssetRefs["Sound"]} 
+                                                            projectRootDir={folderPath}
                                                             extractOutputPath={extractOutputPath}
                                                             onReveal={onRevealTreeFolder}
+                                                            onFieldUpdate={handleAssetFieldUpdate}
                                                         />
                                                     )}
                                                 />
@@ -997,8 +1009,10 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     labelExtra={resolvedAssetRefs["Param"] && (
                                                         <CharacterAssetField 
                                                             asset={resolvedAssetRefs["Param"]} 
+                                                            projectRootDir={folderPath}
                                                             extractOutputPath={extractOutputPath}
                                                             onReveal={onRevealTreeFolder}
+                                                            onFieldUpdate={handleAssetFieldUpdate}
                                                         />
                                                     )}
                                                 />
@@ -1021,8 +1035,10 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     labelExtra={resolvedAssetRefs["Msc"] && (
                                                         <CharacterAssetField 
                                                             asset={resolvedAssetRefs["Msc"]} 
+                                                            projectRootDir={folderPath}
                                                             extractOutputPath={extractOutputPath}
                                                             onReveal={onRevealTreeFolder}
+                                                            onFieldUpdate={handleAssetFieldUpdate}
                                                         />
                                                     )}
                                                 />
@@ -1045,8 +1061,10 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                     labelExtra={resolvedAssetRefs["Motion"] && (
                                                         <CharacterAssetField 
                                                             asset={resolvedAssetRefs["Motion"]} 
+                                                            projectRootDir={folderPath}
                                                             extractOutputPath={extractOutputPath}
                                                             onReveal={onRevealTreeFolder}
+                                                            onFieldUpdate={handleAssetFieldUpdate}
                                                         />
                                                     )}
                                                 />

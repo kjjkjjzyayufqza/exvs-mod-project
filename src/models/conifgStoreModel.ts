@@ -8,6 +8,7 @@ export interface ConfigState {
 
   // Settings that will be stored in the config store
   obDplCachePath?: string;
+  obModPath?: string;
   extractOutputPath?: string;
   imgToNutexbOutputPath?: string;
   repackInputPath?: string;

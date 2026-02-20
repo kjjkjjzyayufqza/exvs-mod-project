@@ -19,6 +19,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 
 const formSchema = z.object({
   obDplCachePath: z.string(),
+  obModPath: z.string(),
   extractOutputPath: z.string()
 })
 
@@ -29,6 +30,7 @@ export default function ConfigPage() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       obDplCachePath: "",
+      obModPath: "",
       extractOutputPath: "",
     },
   })
@@ -37,6 +39,9 @@ export default function ConfigPage() {
     if (store) {
       const obDplCachePath: string = await store.get("obDplCachePath") || "";
       form.setValue("obDplCachePath", obDplCachePath);
+
+      const obModPath: string = await store.get("obModPath") || "";
+      form.setValue("obModPath", obModPath);
       
       const extractOutputPath: string = await store.get("extractOutputPath") || "";
       form.setValue("extractOutputPath", extractOutputPath);
@@ -50,6 +55,7 @@ export default function ConfigPage() {
     }
 
     await setSetting("obDplCachePath", data.obDplCachePath);
+    await setSetting("obModPath", data.obModPath);
     await setSetting("extractOutputPath", data.extractOutputPath);
     toast("Configuration saved successfully");
   }
@@ -96,6 +102,31 @@ export default function ConfigPage() {
                   )}
                 />
                 
+                <FormField
+                  control={form.control}
+                  name="obModPath"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>OB Mod Directory</FormLabel>
+                      <FormControl>
+                        <FilePathInput
+                          placeholder="Select OB mod folder..."
+                          {...field}
+                          storeKey="obModPath"
+                          picker={{
+                            kind: "folder",
+                            multiple: false,
+                          }}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Path to OB mod directory used by Character ID Table checks
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <FormField
                   control={form.control}
                   name="extractOutputPath"

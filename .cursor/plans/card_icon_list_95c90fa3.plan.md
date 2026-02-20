@@ -14,6 +14,7 @@ todos:
   - id: integrate-tab
     content: Add a new `Card Icon List` tab in `src/page/TestEditor/components/MainView.tsx` and ensure it only loads when active (same pattern as existing views).
     status: pending
+isProject: false
 ---
 
 ## 现有 `SeriesList.tsx` 完整功能梳理
@@ -227,7 +228,7 @@ Card Icon List 会实现一个更通用的解析函数（同目录新增 util）
 ## 预计改动文件
 
 - 新增：`src/page/TestEditor/components/CardIconListView.tsx`
-- 新增：`src/page/TestEditor/components/card-icon-list/*`（拆分子组件：Card、List、Dialog、结构 JSON util；保持项目风格）
+- 新增：`src/page/TestEditor/components/card-icon-list/`*（拆分子组件：Card、List、Dialog、结构 JSON util；保持项目风格）
 - 修改：`src/page/TestEditor/components/MainView.tsx`（新增 Tab & unsaved 指示如需要）
 
 ## 验收标准
@@ -238,3 +239,4 @@ Card Icon List 会实现一个更通用的解析函数（同目录新增 util）
 - `Add` 选中一个 nutexb 后能追加到列表末尾并写回结构 JSON
 - `Remove` 能删除选中项并写回结构 JSON
 - 全程不依赖 Node 的 `fs/path`，不出现 `TODO/FIXME`，代码/注释均为英文
+

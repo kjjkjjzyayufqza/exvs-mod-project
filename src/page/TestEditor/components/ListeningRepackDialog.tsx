@@ -125,20 +125,20 @@ export default function ListeningRepackDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Repack Changes</DialogTitle>
           <DialogDescription>
             Folders with detected changes will be repacked using their <code>_structure.json</code>.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="space-y-3 min-h-0 flex-1 overflow-hidden">
           {isLoading ? (
             <div className="text-sm text-muted-foreground">Preparing list...</div>
           ) : entries.length === 0 ? (
             <div className="text-sm text-muted-foreground">No folders to repack.</div>
           ) : (
-            <ScrollArea className="max-h-64 pr-4">
+            <ScrollArea className="h-full pr-4">
               <div className="space-y-2">
                 {entries.map((entry) => (
                   <label

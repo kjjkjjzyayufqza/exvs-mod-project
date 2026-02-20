@@ -1,5 +1,6 @@
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
+use serde_json::Value;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -126,6 +127,108 @@ pub async fn card_icon_replace_from_png(
             convert_dir.as_str(),
             png_path.as_str(),
         )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyAssetAsNewResult {
+    pub new_hash_hex: String,
+    pub new_raw_value: i32,
+    pub new_folder_path: String,
+    pub new_structure_json_path: String,
+    pub updated_file_url_count: usize,
+}
+
+#[tauri::command]
+pub async fn copy_asset_as_new(
+    project_root_dir: String,
+    old_hash_hex: String,
+    seed: String,
+    _field_key: String,
+) -> Result<CopyAssetAsNewResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = PathBuf::from(project_root_dir);
+        if !root.is_dir() {
+            return Err("Project root directory does not exist".to_string());
+        }
+
+        let normalized_old_hash = normalize_hash_hex(&old_hash_hex)?;
+        let new_crc_u32 = crc32_ieee(seed.as_bytes());
+        let new_hash_hex = format!("0x{:08X}", new_crc_u32);
+        let new_raw_value = new_crc_u32 as i32;
+
+        if new_hash_hex.eq_ignore_ascii_case(&normalized_old_hash) {
+            return Err("Computed hash equals the source hash; use a different seed".to_string());
+        }
+
+        let old_folder = root.join(&normalized_old_hash);
+        let old_struct = root.join(format!("{normalized_old_hash}_structure.json"));
+        let new_folder = root.join(&new_hash_hex);
+        let new_struct = root.join(format!("{new_hash_hex}_structure.json"));
+
+        if !old_folder.is_dir() {
+            return Err(format!("Source folder not found: {}", old_folder.display()));
+        }
+        if !old_struct.is_file() {
+            return Err(format!("Source structure JSON not found: {}", old_struct.display()));
+        }
+        if new_folder.exists() || new_struct.exists() {
+            return Err(format!("Target already exists: {}", new_hash_hex));
+        }
+
+        let old_struct_text = fs::read_to_string(&old_struct).map_err(|e| {
+            format!(
+                "Failed to read source structure JSON {}: {}",
+                old_struct.display(),
+                e
+            )
+        })?;
+        let mut struct_value: Value = serde_json::from_str(&old_struct_text).map_err(|e| {
+            format!(
+                "Failed to parse source structure JSON {}: {}",
+                old_struct.display(),
+                e
+            )
+        })?;
+
+        let mut updated_file_url_count = 0usize;
+        replace_file_url_hash(
+            &mut struct_value,
+            &normalized_old_hash,
+            &new_hash_hex,
+            &mut updated_file_url_count,
+        );
+
+        let serialized = serde_json::to_string_pretty(&struct_value)
+            .map_err(|e| format!("Failed to serialize new structure JSON: {e}"))?;
+        fs::write(&new_struct, serialized).map_err(|e| {
+            format!(
+                "Failed to write new structure JSON {}: {}",
+                new_struct.display(),
+                e
+            )
+        })?;
+
+        if let Err(copy_err) = copy_dir_recursive(&old_folder, &new_folder) {
+            let _ = cleanup_artifacts(&new_struct, &new_folder);
+            return Err(format!(
+                "Failed to copy source folder {} -> {}: {}",
+                old_folder.display(),
+                new_folder.display(),
+                copy_err
+            ));
+        }
+
+        Ok(CopyAssetAsNewResult {
+            new_hash_hex,
+            new_raw_value,
+            new_folder_path: normalize_path(&new_folder),
+            new_structure_json_path: normalize_path(&new_struct),
+            updated_file_url_count,
+        })
     })
     .await
     .map_err(|e| e.to_string())?
@@ -418,4 +521,123 @@ fn normalize_path(path: &Path) -> String {
     } else {
         raw
     }
+}
+
+fn normalize_hash_hex(input: &str) -> Result<String, String> {
+    let trimmed = input.trim();
+    if trimmed.len() != 10 || !trimmed.starts_with("0x") {
+        return Err(format!("Invalid hash format: {input}"));
+    }
+    let hex = &trimmed[2..];
+    if !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!("Invalid hash format: {input}"));
+    }
+    Ok(format!("0x{}", hex.to_ascii_uppercase()))
+}
+
+fn crc32_ieee(bytes: &[u8]) -> u32 {
+    let mut crc = 0xFFFF_FFFFu32;
+    for &b in bytes {
+        crc ^= b as u32;
+        for _ in 0..8 {
+            if (crc & 1) != 0 {
+                crc = (crc >> 1) ^ 0xEDB8_8320;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+    !crc
+}
+
+fn replace_file_url_hash(
+    value: &mut Value,
+    old_hash_hex: &str,
+    new_hash_hex: &str,
+    updated_count: &mut usize,
+) {
+    match value {
+        Value::Object(map) => {
+            for (key, child) in map.iter_mut() {
+                if key == "fileUrl" {
+                    if let Value::String(original) = child {
+                        let replaced =
+                            replace_ascii_case_insensitive(original.as_str(), old_hash_hex, new_hash_hex);
+                        if replaced != *original {
+                            *original = replaced;
+                            *updated_count += 1;
+                        }
+                    }
+                } else {
+                    replace_file_url_hash(child, old_hash_hex, new_hash_hex, updated_count);
+                }
+            }
+        }
+        Value::Array(items) => {
+            for child in items.iter_mut() {
+                replace_file_url_hash(child, old_hash_hex, new_hash_hex, updated_count);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn replace_ascii_case_insensitive(input: &str, from: &str, to: &str) -> String {
+    let input_lower = input.to_ascii_lowercase();
+    let from_lower = from.to_ascii_lowercase();
+    if from_lower.is_empty() {
+        return input.to_string();
+    }
+
+    let mut result = String::with_capacity(input.len());
+    let mut cursor = 0usize;
+
+    while let Some(rel_idx) = input_lower[cursor..].find(&from_lower) {
+        let start = cursor + rel_idx;
+        let end = start + from_lower.len();
+        result.push_str(&input[cursor..start]);
+        result.push_str(to);
+        cursor = end;
+    }
+
+    result.push_str(&input[cursor..]);
+    result
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), std::io::Error> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        let metadata = entry.metadata()?;
+        if metadata.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else if metadata.is_file() {
+            fs::copy(&src_path, &dst_path)?;
+        }
+    }
+    Ok(())
+}
+
+fn cleanup_artifacts(new_struct: &Path, new_folder: &Path) -> Result<(), String> {
+    if new_struct.exists() {
+        fs::remove_file(new_struct).map_err(|e| {
+            format!(
+                "Failed to clean up generated structure JSON {}: {}",
+                new_struct.display(),
+                e
+            )
+        })?;
+    }
+    if new_folder.exists() {
+        fs::remove_dir_all(new_folder).map_err(|e| {
+            format!(
+                "Failed to clean up generated folder {}: {}",
+                new_folder.display(),
+                e
+            )
+        })?;
+    }
+    Ok(())
 }

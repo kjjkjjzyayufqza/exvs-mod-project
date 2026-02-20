@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { dirname } from "@tauri-apps/api/path";
 import { exists } from "@tauri-apps/plugin-fs";
 import { openPath } from "@tauri-apps/plugin-opener";
@@ -14,6 +14,16 @@ import {
   Copy
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Popover,
   PopoverContent,
@@ -22,21 +32,49 @@ import {
 import { AssetRefInfo } from "./assetRef";
 import { extractAsset } from "./extractFhm2d";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { copyAssetAsNew } from "./copyAssetAsNew";
 
 interface CharacterAssetFieldProps {
   asset: AssetRefInfo;
+  projectRootDir: string;
   extractOutputPath: string;
   onReveal?: (path: string) => void;
+  onFieldUpdate?: (fieldKey: string, newValue: number) => void;
+}
+
+function crc32Hex(input: string): string {
+  const bytes = new TextEncoder().encode(input);
+  let crc = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) {
+    crc ^= bytes[i];
+    for (let j = 0; j < 8; j++) {
+      if ((crc & 1) !== 0) {
+        crc = (crc >>> 1) ^ 0xedb88320;
+      } else {
+        crc >>>= 1;
+      }
+    }
+  }
+  const out = (~crc) >>> 0;
+  return `0x${out.toString(16).toUpperCase().padStart(8, "0")}`;
 }
 
 export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   asset,
+  projectRootDir,
   extractOutputPath,
   onReveal,
+  onFieldUpdate,
 }) => {
   const [sourceExists, setSourceExists] = useState<boolean | null>(null);
+  const [modExists, setModExists] = useState<boolean | null>(null);
   const [workspaceExists, setWorkspaceExists] = useState<boolean | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
+  const [copySeed, setCopySeed] = useState("");
+  const [isCopyingAsNew, setIsCopyingAsNew] = useState(false);
+  const trimmedSeed = copySeed.trim();
+  const nextHashPreview = useMemo(() => crc32Hex(trimmedSeed), [trimmedSeed]);
 
   useEffect(() => {
     const checkExists = async () => {
@@ -51,9 +89,15 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
       } else {
         setWorkspaceExists(false);
       }
+
+      if (asset.modFilePath) {
+        setModExists(await exists(asset.modFilePath));
+      } else {
+        setModExists(false);
+      }
     };
     checkExists();
-  }, [asset.sourceFilePath, asset.workspaceFolderPath]);
+  }, [asset.sourceFilePath, asset.workspaceFolderPath, asset.modFilePath]);
 
   const handleExtract = async () => {
     setIsExtracting(true);
@@ -84,9 +128,59 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     }
   };
 
+  const handleOpenModFolder = async () => {
+    if (!asset.modFilePath) return;
+    try {
+      const folderPath = await dirname(asset.modFilePath);
+      await openPath(folderPath);
+    } catch (err) {
+      console.error("Failed to open mod folder:", err);
+      toast.error("Failed to open mod folder");
+    }
+  };
+
   const handleCopyPath = async (path: string) => {
     await writeText(path);
     toast.success("Path copied to clipboard");
+  };
+
+  const handleConfirmCopyAsNew = async () => {
+    if (!trimmedSeed) {
+      toast.error("Please enter a seed string");
+      return;
+    }
+    if (!projectRootDir) {
+      toast.error("Project root path is not configured");
+      return;
+    }
+
+    setIsCopyingAsNew(true);
+    try {
+      const result = await copyAssetAsNew({
+        projectRootDir,
+        oldHashHex: asset.hashHex,
+        seed: trimmedSeed,
+        fieldKey: asset.fieldKey,
+      });
+
+      onFieldUpdate?.(asset.fieldKey, result.newRawValue);
+      onReveal?.(result.newFolderPath);
+      setCopyDialogOpen(false);
+      setCopySeed("");
+
+      toast.success(`Copied as new: ${result.newHashHex}`, {
+        description: `Updated fileUrl entries: ${result.updatedFileUrlCount}`,
+        action: {
+          label: "Open New Folder",
+          onClick: () => openPath(result.newFolderPath),
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(message || "Failed to copy as new");
+    } finally {
+      setIsCopyingAsNew(false);
+    }
   };
 
   const isZero = asset.rawValue === 0;
@@ -104,6 +198,12 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
           label="OB" 
           tooltip={sourceExists ? "Source .fhm2d exists. Click to open folder." : "Source .fhm2d missing"} 
           onClick={sourceExists ? handleOpenSourceFolder : undefined}
+        />
+        <StatusIcon 
+          exists={modExists} 
+          label="MOD" 
+          tooltip={modExists ? "Mod .fhm2d exists. Click to open folder." : "Mod .fhm2d missing"} 
+          onClick={modExists ? handleOpenModFolder : undefined}
         />
         <StatusIcon 
           exists={workspaceExists} 
@@ -157,6 +257,20 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
                   </div>
                 </div>
               </div>
+
+              <div className="flex flex-col gap-1 overflow-hidden">
+                <span className="text-[10px] font-bold uppercase text-muted-foreground">Mod (MOD)</span>
+                <div className="flex items-center justify-between gap-2 overflow-hidden">
+                  <span className="text-xs truncate flex-1 bg-muted/30 p-1 rounded" title={asset.modFilePath}>
+                    {asset.modFilePath || "Not configured"}
+                  </span>
+                  <div className="flex gap-1 shrink-0">
+                    <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleCopyPath(asset.modFilePath)} disabled={!asset.modFilePath}>
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="flex flex-col gap-2 pt-2 border-t">
@@ -180,10 +294,65 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
                 <ExternalLink className="h-3.5 w-3.5" />
                 Open Extracted Folder
               </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full justify-start gap-2"
+                onClick={() => setCopyDialogOpen(true)}
+                disabled={!workspaceExists}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copy as New
+              </Button>
             </div>
           </div>
         </PopoverContent>
       </Popover>
+
+      <Dialog open={copyDialogOpen} onOpenChange={setCopyDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Copy as New</DialogTitle>
+            <DialogDescription>
+              Enter a seed string. The app will compute CRC32 and create a new asset folder and structure JSON.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor={`copy-seed-${asset.fieldKey}`}>Seed String</Label>
+              <Input
+                id={`copy-seed-${asset.fieldKey}`}
+                value={copySeed}
+                onChange={(e) => setCopySeed(e.target.value)}
+                placeholder="e.g. model_new_variant"
+                disabled={isCopyingAsNew}
+              />
+            </div>
+
+            <div className="text-xs rounded border bg-muted/40 p-2 space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Current</span>
+                <span className="font-mono">{asset.hashHex}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">CRC32 Preview</span>
+                <span className="font-mono">{nextHashPreview}</span>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCopyDialogOpen(false)} disabled={isCopyingAsNew}>
+              Cancel
+            </Button>
+            <Button onClick={() => void handleConfirmCopyAsNew()} disabled={isCopyingAsNew || !trimmedSeed}>
+              {isCopyingAsNew ? "Copying..." : "Copy as New"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

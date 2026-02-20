@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TestTreeNode } from "../types";
+import { ImagePreview, isImageFile } from "./ImagePreview";
 import { NutexbPreview } from "./NutexbPreview";
 
 const TAB_ITEMS = [
@@ -22,6 +23,8 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
 
   const isNutexb =
     !selected?.isDir && selected?.name.toLowerCase().endsWith(".nutexb");
+  const isImage =
+    !selected?.isDir && selected?.name && isImageFile(selected.name);
 
   const renderInfoContent = () => {
     if (!selected) {
@@ -51,6 +54,11 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
         {isNutexb && (
           <div className="border-t pt-3">
             <NutexbPreview path={selected.path} />
+          </div>
+        )}
+        {isImage && !isNutexb && (
+          <div className="border-t pt-3">
+            <ImagePreview path={selected.path} />
           </div>
         )}
       </div>

@@ -25,7 +25,8 @@ pub fn run() {
             commands::nutexb_export_png,
             commands::nutexb_batch_export_png,
             commands::series_image_replace_from_png,
-            commands::card_icon_replace_from_png
+            commands::card_icon_replace_from_png,
+            commands::copy_asset_as_new
         ])
         .setup(|app| {
             #[cfg(debug_assertions)] // only include this code on debug builds
