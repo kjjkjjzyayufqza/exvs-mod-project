@@ -10,7 +10,7 @@ use std::{
         Arc, Mutex,
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tauri::{
     ipc::{InvokeBody, Response},
@@ -208,7 +208,8 @@ pub async fn watch_folder(
         .watch(&canonical, RecursiveMode::Recursive)
         .map_err(|e| e.to_string())?;
 
-    let handle = thread::spawn(move || watch_loop(app_handle, rx, stop_flag_clone));
+    let canonical_for_loop = canonical.clone();
+    let handle = thread::spawn(move || watch_loop(app_handle, rx, stop_flag_clone, canonical_for_loop));
 
     let active = ActiveWatcher {
         _watcher: watcher,
@@ -221,18 +222,50 @@ pub async fn watch_folder(
     Ok(initial_tree)
 }
 
-fn watch_loop(app: AppHandle, rx: Receiver<notify::Result<Event>>, stop: Arc<AtomicBool>) {
-    while !stop.load(Ordering::Relaxed) {
-        match rx.recv_timeout(Duration::from_millis(500)) {
+fn watch_loop(
+    app: AppHandle,
+    rx: Receiver<notify::Result<Event>>,
+    stop: Arc<AtomicBool>,
+    root: PathBuf,
+) {
+    // Debounce window: emit a full tree rebuild this long after the last change.
+    const DEBOUNCE_MS: u64 = 400;
+    let mut last_change: Option<Instant> = None;
+
+    loop {
+        if stop.load(Ordering::Relaxed) {
+            break;
+        }
+
+        match rx.recv_timeout(Duration::from_millis(50)) {
             Ok(Ok(event)) => {
+                // Emit incremental op immediately so dirty-folder tracking stays responsive.
                 if let Some(payload) = convert_event(&event) {
                     let _ = app.emit("test-editor:folder-change", payload);
+                    last_change = Some(Instant::now());
                 }
             }
             Ok(Err(err)) => {
                 eprintln!("watch error: {err}");
             }
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                // After the debounce window has elapsed without a new event, emit a
+                // full tree so the frontend always ends up with an accurate view.
+                if let Some(t) = last_change {
+                    if t.elapsed() >= Duration::from_millis(DEBOUNCE_MS) {
+                        last_change = None;
+                        if let Ok(tree) = build_tree(&root) {
+                            let _ = app.emit(
+                                "test-editor:folder-change",
+                                FolderChangePayload {
+                                    full_tree: Some(tree),
+                                    ops: None,
+                                },
+                            );
+                        }
+                    }
+                }
+            }
             Err(_) => break,
         }
     }

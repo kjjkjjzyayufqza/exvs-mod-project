@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Tree, type NodeApi, type NodeRendererProps } from "react-arborist";
-import { Search, FolderOpen, Loader2, ChevronRight, ChevronDown, Folder, File, ExternalLink } from "lucide-react";
+import { Search, FolderOpen, Loader2, ChevronRight, ChevronDown, Folder, File, ExternalLink, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -22,6 +22,7 @@ type FileTreePaneProps = {
   searchTerm: string;
   onSearchChange: (value: string) => void;
   onPickFolder: (folderPath: string) => void;
+  onRefresh?: () => void;
   folderStoreKey: string;
   isLoading?: boolean;
   currentDir?: string;
@@ -37,6 +38,7 @@ export function FileTreePane({
   searchTerm,
   onSearchChange,
   onPickFolder,
+  onRefresh,
   folderStoreKey,
   isLoading = false,
   currentDir,
@@ -63,15 +65,20 @@ export function FileTreePane({
 
   const selection = useMemo(() => selectedId ?? undefined, [selectedId]);
   const treeRef = useRef<any>(null);
+  const isUserClickRef = useRef(false);
 
   useEffect(() => {
-    if (selectedId && treeRef.current) {
-      // Small delay to ensure the node is rendered or tree is ready
-      const timer = setTimeout(() => {
-        treeRef.current.scrollTo(selectedId, "center");
-      }, 50);
-      return () => clearTimeout(timer);
+    if (!selectedId || !treeRef.current) return;
+    // Skip scrolling when the selection was triggered by a user click in the tree;
+    // only scroll to center when selection is changed programmatically (e.g., reveal-in-tree).
+    if (isUserClickRef.current) {
+      isUserClickRef.current = false;
+      return;
     }
+    const timer = setTimeout(() => {
+      treeRef.current.scrollTo(selectedId, "center");
+    }, 50);
+    return () => clearTimeout(timer);
   }, [selectedId]);
 
   const dirtyTopLevelSet = useMemo(() => new Set(dirtyTopLevelFolderNames), [dirtyTopLevelFolderNames]);
@@ -278,8 +285,17 @@ export function FileTreePane({
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search files..."
-            className="h-7 pl-7 text-xs"
+            className="h-7 pl-7 pr-7 text-xs"
           />
+          <button
+            type="button"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+            onClick={onRefresh}
+            disabled={isLoading || !currentDir}
+            title="Refresh folder"
+          >
+            <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
+          </button>
         </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-hidden p-2 pt-1">
@@ -303,7 +319,10 @@ export function FileTreePane({
               // Ensure directories remain internal nodes even when children are temporarily filtered out.
               childrenAccessor={(node) => (node.isDir ? node.children ?? [] : node.children ?? null)}
               selection={selection}
-              onSelect={(nodes: NodeApi<TestTreeNode>[]) => onSelect(nodes[0]?.data ?? null)}
+              onSelect={(nodes: NodeApi<TestTreeNode>[]) => {
+                isUserClickRef.current = true;
+                onSelect(nodes[0]?.data ?? null);
+              }}
             >
               {(props) => <NodeRow {...props} />}
             </Tree>

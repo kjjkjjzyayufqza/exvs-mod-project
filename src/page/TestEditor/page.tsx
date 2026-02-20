@@ -306,6 +306,20 @@ const TestEditorPage = () => {
     }
   }, []);
 
+  const refreshFolder = useCallback(async () => {
+    if (!currentDir) return;
+    setIsLoading(true);
+    try {
+      const fresh = await invoke<RawTreeNode[]>(WATCH_COMMAND, { path: currentDir });
+      setTreeData(normalizeTree(fresh ?? []));
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to refresh folder");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentDir]);
+
   useEffect(() => {
     const hydrate = async () => {
       if (!store) return;
@@ -424,6 +438,7 @@ const TestEditorPage = () => {
                 searchTerm={searchTerm}
                 onSearchChange={setSearchTerm}
                 onPickFolder={loadFolder}
+                onRefresh={refreshFolder}
                 folderStoreKey={TEST_EDITOR_FOLDER_STORE_KEY}
                 isLoading={isLoading}
                 currentDir={currentDir}
