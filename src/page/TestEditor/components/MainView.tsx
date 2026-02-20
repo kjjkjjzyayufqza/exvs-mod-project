@@ -191,38 +191,38 @@ const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFold
   }, [activeTab, handleCharacterIdTableUnsaved, handleCharacterListUnsaved, handleSeriesListUnsaved, handleUnsavedChanges]);
 
   return (
-    <div className="flex h-full w-full">
+    <div className="flex h-full w-full bg-background">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex h-full w-full flex-col rounded-none p-0 m-0">
-        <TabsList className="w-full justify-start rounded-none h-[2.5em] flex items-start">
+        <TabsList className="w-full justify-start rounded-none h-10 flex items-center bg-muted/50 px-2 border-b">
           {resolvedTabs.map((tab) => (
             <TabsTrigger key={tab.value} value={tab.value}
-              className="rounded-none relative ">
+              className="rounded-md px-4 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm">
               <span className="inline-flex items-center gap-2">
                 <span>{tab.name}</span>
                 {tab.value === "folder-structure" && folderStructureHasUnsaved && (
                   <span
-                    className="h-2 w-2 rounded-full bg-yellow-500"
+                    className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
                     aria-label="Unsaved changes"
                     title="Unsaved changes"
                   />
                 )}
                 {tab.value === "character-id-table" && characterIdTableHasUnsaved && (
                   <span
-                    className="h-2 w-2 rounded-full bg-yellow-500"
+                    className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
                     aria-label="Unsaved changes"
                     title="Unsaved changes"
                   />
                 )}
                 {tab.value === "character-list" && characterListHasUnsaved && (
                   <span
-                    className="h-2 w-2 rounded-full bg-yellow-500"
+                    className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
                     aria-label="Unsaved changes"
                     title="Unsaved changes"
                   />
                 )}
                 {tab.value === "series-list" && seriesListHasUnsaved && (
                   <span
-                    className="h-2 w-2 rounded-full bg-yellow-500"
+                    className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
                     aria-label="Unsaved changes"
                     title="Unsaved changes"
                   />
@@ -232,7 +232,7 @@ const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFold
           ))}
         </TabsList>
         {resolvedTabs.map((tab) => (
-          <TabsContent key={tab.value} value={tab.value} className="flex-1 h-full w-full p-0 m-0">
+          <TabsContent key={tab.value} value={tab.value} className="flex-1 h-full w-full p-4 m-0 overflow-auto">
             {tab.render ? tab.render({ jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFolder }) : tab.content}
           </TabsContent>
         ))}

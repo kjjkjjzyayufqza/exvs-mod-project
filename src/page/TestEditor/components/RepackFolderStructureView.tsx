@@ -448,10 +448,10 @@ export default function RepackFolderStructureView({
 
   return (
     <div className="h-full w-full">
-      <ResizablePanelGroup orientation="horizontal" className="h-full w-full rounded-lg border bg-background">
+      <ResizablePanelGroup orientation="horizontal" className="h-full w-full border-none bg-background">
         <ResizablePanel defaultSize={65} minSize={40}>
-          <Card className="h-full rounded-none border-0">
-            <CardHeader className="space-y-2">
+          <Card className="h-full rounded-none border-0 shadow-none">
+            <CardHeader className="space-y-2 p-0 pb-4">
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <CardTitle>Project Structure</CardTitle>
@@ -511,7 +511,7 @@ export default function RepackFolderStructureView({
                 </div>
               )}
             </CardHeader>
-            <CardContent className="h-[calc(100%-theme(spacing.24))]">
+            <CardContent className="h-[calc(100%-theme(spacing.20))] p-0">
               <div ref={containerRef} className="h-full rounded-lg border bg-card overflow-hidden">
                 <Tree
                   ref={treeRef}

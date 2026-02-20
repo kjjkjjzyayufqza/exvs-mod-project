@@ -465,11 +465,11 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
   if (loadState.status === "loading") {
     return (
       <div className="h-full w-full">
-        <Card className="h-full flex flex-col">
-          <CardHeader>
+        <Card className="h-full flex flex-col border-none shadow-none rounded-none bg-transparent">
+          <CardHeader className="p-0 pb-4">
             <CardTitle>Character List</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3 p-0">
             <div className="text-sm text-muted-foreground">Loading character_list.bin...</div>
           </CardContent>
         </Card>
@@ -480,11 +480,11 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
   if (loadState.status === "error") {
     return (
       <div className="h-full w-full">
-        <Card>
-          <CardHeader>
+        <Card className="border-none shadow-none rounded-none bg-transparent">
+          <CardHeader className="p-0 pb-4">
             <CardTitle>Character List</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3 p-0">
             <div className="text-sm text-muted-foreground">
               {loadState.filePath ? (
                 <>
@@ -516,8 +516,8 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
 
   return (
     <div className="h-full w-full">
-      <Card className="h-full flex flex-col">
-        <CardHeader className="pb-3">
+      <Card className="h-full flex flex-col border-none shadow-none rounded-none bg-transparent">
+        <CardHeader className="p-0 pb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <CardTitle>Character List</CardTitle>
@@ -588,7 +588,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
           </div>
         </CardHeader>
 
-        <CardContent className="flex-1 min-h-0">
+        <CardContent className="flex-1 min-h-0 p-0">
           <CharacterEditor
             key={editorResetKey}
             characterListData={loadState.list}
@@ -741,6 +741,3 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
     </div>
   );
 }
-
-
-

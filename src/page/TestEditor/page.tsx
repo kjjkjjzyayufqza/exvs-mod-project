@@ -19,6 +19,7 @@ import InfoPanel from "./components/InfoPanel";
 import { FolderChangePayload, TestTreeNode } from "./types";
 import { FileTreePane } from "./components/FileTreePane";
 import { useConfigStore } from "@/store/configStore";
+import { TestEditorToolbar } from "./components/TestEditorToolbar";
 import ListeningRepackDialog from "./components/ListeningRepackDialog";
 
 const WATCH_EVENT = "test-editor:folder-change";
@@ -407,30 +408,24 @@ const TestEditorPage = () => {
   }, []);
 
   return (
-    <>
-      <div className="h-full text-xs **:text-xs relative">
-        <div className="flex flex-row justify-between">
-          <div></div>
-          <div className="flex items-end">
-            <Button
-              size="sm"
-              disabled={!hasDirtyFolders}
-              onClick={() => setIsRepackDialogOpen(true)}
-              className="relative"
-            >
-              Repack
-              {hasDirtyFolders && (
-                <span className="ml-2 inline-flex h-2 w-2 rounded-full bg-yellow-400" aria-label="Dirty folders" />
-              )}
-            </Button>
-          </div>
-        </div>
+    <div className="flex h-screen flex-col bg-background text-xs overflow-hidden">
+      <TestEditorToolbar
+        currentDir={currentDir}
+        folderStoreKey={TEST_EDITOR_FOLDER_STORE_KEY}
+        isLoading={isLoading}
+        hasDirtyFolders={hasDirtyFolders}
+        onPickFolder={loadFolder}
+        onRefresh={refreshFolder}
+        onRepack={() => setIsRepackDialogOpen(true)}
+      />
+
+      <div className="flex-1 min-h-0 p-2">
         <ResizablePanelGroup
           orientation="horizontal"
-          className="h-full rounded-lg border bg-background"
+          className="h-full rounded-lg border bg-card shadow-sm"
         >
-          <ResizablePanel defaultSize={"15%"} minSize={"10%"}>
-            <div className="h-full p-2">
+          <ResizablePanel defaultSize={20} minSize={15}>
+            <div className="h-full">
               <FileTreePane
                 data={filteredData}
                 onSelect={handleFileSelect}
@@ -449,10 +444,10 @@ const TestEditorPage = () => {
             </div>
           </ResizablePanel>
 
-          <ResizableHandle withHandle />
+          <ResizableHandle withHandle className="w-1 bg-border hover:bg-primary/20 transition-colors" />
 
-          <ResizablePanel defaultSize={"45%"} minSize={"35%"}>
-            <div className="h-full p-2 bg-gray-200">
+          <ResizablePanel defaultSize={60} minSize={40}>
+            <div className="h-full bg-muted/30">
               <MainView
                 jsonFilePath={selectedJsonPath}
                 folderPath={currentDir}
@@ -462,10 +457,10 @@ const TestEditorPage = () => {
             </div>
           </ResizablePanel>
 
-          <ResizableHandle withHandle />
+          <ResizableHandle withHandle className="w-1 bg-border hover:bg-primary/20 transition-colors" />
 
-          <ResizablePanel defaultSize={"15%"} minSize={"10%"}>
-            <div className="h-full p-2">
+          <ResizablePanel defaultSize={20} minSize={15}>
+            <div className="h-full">
               <InfoPanel selected={selectedNode} />
             </div>
           </ResizablePanel>
@@ -495,7 +490,7 @@ const TestEditorPage = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </div>
   );
 };
 

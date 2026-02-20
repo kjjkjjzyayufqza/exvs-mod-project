@@ -259,53 +259,27 @@ export function FileTreePane({
   };
 
   return (
-    <Card className="flex h-full flex-col">
-      <CardHeader className="space-y-1 p-3 pb-1">
+    <Card className="flex h-full flex-col border-none shadow-none bg-transparent">
+      <CardHeader className="space-y-2 p-2 pb-2">
         <div className="relative">
-          {isLoading ? (
-            <Loader2 className="absolute left-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
-          ) : (
-            <FolderOpen className="absolute left-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          )}
-          <FilePathInput
-            storeKey={folderStoreKey}
-            picker={{ kind: "folder", multiple: false }}
-            onPickedValue={(picked) => {
-              if (Array.isArray(picked)) return;
-              onPickFolder(picked);
-            }}
-            disabled={isLoading}
-            placeholder="Choose folder..."
-            className="h-7 pl-7 text-xs"
-          />
-        </div>
-        <div className="relative">
-          <Search className="absolute left-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search files..."
-            className="h-7 pl-7 pr-7 text-xs"
+            className="h-8 pl-8 pr-8 text-xs bg-background/50 focus-visible:bg-background transition-colors"
           />
-          <button
-            type="button"
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
-            onClick={onRefresh}
-            disabled={isLoading || !currentDir}
-            title="Refresh folder"
-          >
-            <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
-          </button>
         </div>
       </CardHeader>
-      <CardContent className="flex-1 overflow-hidden p-2 pt-1">
+      <CardContent className="flex-1 overflow-hidden p-2 pt-0">
         <div
           ref={containerRef}
-          className="h-full min-h-[400px] rounded-lg border bg-card overflow-hidden p-2"
+          className="h-full rounded-md border bg-background/50 overflow-hidden"
         >
           {empty ? (
-            <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-              Choose a folder to load files
+            <div className="flex h-full flex-col items-center justify-center gap-2 text-xs text-muted-foreground p-4 text-center">
+              <FolderOpen className="h-8 w-8 opacity-20" />
+              <p>Select a folder in the toolbar to start</p>
             </div>
           ) : (
             <Tree
@@ -313,10 +287,9 @@ export function FileTreePane({
               data={data}
               width="100%"
               height={treeHeight}
-              indent={20}
-              rowHeight={24}
+              indent={16}
+              rowHeight={28}
               openByDefault={false}
-              // Ensure directories remain internal nodes even when children are temporarily filtered out.
               childrenAccessor={(node) => (node.isDir ? node.children ?? [] : node.children ?? null)}
               selection={selection}
               onSelect={(nodes: NodeApi<TestTreeNode>[]) => {
