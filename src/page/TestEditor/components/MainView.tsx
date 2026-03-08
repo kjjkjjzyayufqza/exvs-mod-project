@@ -5,6 +5,7 @@ import CharacterIdTableView from "./CharacterIdTableView";
 import CharacterListView from "./CharacterListView";
 import SeriesListView from "./SeriesListView";
 import CardIconListView from "./CardIconListView";
+import StageListView from "./StageListView";
 
 type StageTab = {
   name: string;
@@ -93,6 +94,17 @@ const tabs: StageTab[] = [
       />
     ),
   },
+  {
+    name: "Stage List",
+    value: "stage-list",
+    render: (props: MainViewProps) => (
+      <StageListView
+        folderPath={props.folderPath ?? ""}
+        isActive={false}
+        onUnsavedChanges={props.onUnsavedChanges}
+      />
+    ),
+  },
 ];
 
 const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFolder }: MainViewProps) => {
@@ -101,6 +113,7 @@ const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFold
   const [characterIdTableHasUnsaved, setCharacterIdTableHasUnsaved] = useState(false);
   const [characterListHasUnsaved, setCharacterListHasUnsaved] = useState(false);
   const [seriesListHasUnsaved, setSeriesListHasUnsaved] = useState(false);
+  const [stageListHasUnsaved, setStageListHasUnsaved] = useState(false);
 
   const handleUnsavedChanges = useCallback((hasChanges: boolean) => {
     setFolderStructureHasUnsaved(hasChanges);
@@ -117,6 +130,10 @@ const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFold
 
   const handleSeriesListUnsaved = useCallback((hasChanges: boolean) => {
     setSeriesListHasUnsaved(hasChanges);
+  }, []);
+
+  const handleStageListUnsaved = useCallback((hasChanges: boolean) => {
+    setStageListHasUnsaved(hasChanges);
   }, []);
 
   const resolvedTabs = useMemo<StageTab[]>(() => {
@@ -186,9 +203,23 @@ const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFold
         };
       }
 
+      if (tab.value === "stage-list") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <StageListView
+              folderPath={props.folderPath ?? ""}
+              isActive={activeTab === "stage-list"}
+              onUnsavedChanges={handleStageListUnsaved}
+              onRevealTreeFolder={props.onRevealTreeFolder}
+            />
+          ),
+        };
+      }
+
       return tab;
     });
-  }, [activeTab, handleCharacterIdTableUnsaved, handleCharacterListUnsaved, handleSeriesListUnsaved, handleUnsavedChanges]);
+  }, [activeTab, handleCharacterIdTableUnsaved, handleCharacterListUnsaved, handleSeriesListUnsaved, handleStageListUnsaved, handleUnsavedChanges]);
 
   return (
     <div className="flex h-full w-full bg-background">
@@ -221,6 +252,13 @@ const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFold
                   />
                 )}
                 {tab.value === "series-list" && seriesListHasUnsaved && (
+                  <span
+                    className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
+                    aria-label="Unsaved changes"
+                    title="Unsaved changes"
+                  />
+                )}
+                {tab.value === "stage-list" && stageListHasUnsaved && (
                   <span
                     className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
                     aria-label="Unsaved changes"

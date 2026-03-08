@@ -8,6 +8,8 @@ use std::{
     path::PathBuf,
 };
 
+use std::str::FromStr;
+
 use image_dds::image::RgbaImage;
 use image_dds::{dds_from_image, ImageFormat as DdsImageFormat, Mipmaps, Quality};
 use nutexb::NutexbFile;
@@ -461,4 +463,77 @@ pub fn card_icon_replace_from_png(
         preview_png_path: preview_png_path.to_string_lossy().to_string(),
         nutexb_name,
     })
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CardIconBatchReplaceSummary {
+    pub converted: u32,
+    pub failed: u32,
+}
+
+pub fn card_icon_batch_replace_with_dds_format(
+    items: Vec<(String, String)>, // (nutexb_path, convert_dir)
+    dds_format_str: &str,
+) -> Result<CardIconBatchReplaceSummary, String> {
+    let dds_format = DdsImageFormat::from_str(dds_format_str)
+        .map_err(|_| format!("Invalid DDS format: {dds_format_str}"))?;
+
+    let mut converted = 0u32;
+    let mut failed = 0u32;
+
+    for (nutexb_path, convert_dir) in items {
+        let nutexb_path = PathBuf::from(&nutexb_path);
+        let convert_dir = PathBuf::from(&convert_dir);
+        if !nutexb_path.exists() {
+            failed += 1;
+            continue;
+        }
+
+        let nutexb = match NutexbFile::read_from_file(&nutexb_path) {
+            Ok(n) => n,
+            Err(_) => {
+                failed += 1;
+                continue;
+            }
+        };
+        let nutexb_name = nutexb.footer.string.to_string();
+        let dds = nutexb.to_dds().map_err(|e| e.to_string())?;
+        let rgba: RgbaImage = image_dds::image_from_dds(&dds, 0).map_err(|e| e.to_string())?;
+
+        fn max_mipmap_count_for_size(width: u32, height: u32) -> u32 {
+            let max_dim = width.max(height).max(1);
+            32 - max_dim.leading_zeros()
+        }
+
+        let mipmaps = if nutexb.footer.mipmap_count <= 1 {
+            Mipmaps::Disabled
+        } else {
+            let max_mips = max_mipmap_count_for_size(rgba.width().max(1), rgba.height().max(1));
+            let requested = nutexb.footer.mipmap_count.min(max_mips);
+            Mipmaps::GeneratedExact(requested)
+        };
+
+        let out_dds = dds_from_image(&rgba, dds_format, Quality::Normal, mipmaps).map_err(|e| e.to_string())?;
+        let out_nutexb = NutexbFile::from_dds(&out_dds, nutexb_name.clone()).map_err(|e| e.to_string())?;
+
+        if out_nutexb.write_to_file(&nutexb_path).is_err() {
+            failed += 1;
+            continue;
+        }
+
+        let preview_name = sanitize_file_name(nutexb_name.as_str());
+        let preview_png_path = convert_dir.join(format!("{preview_name}.png"));
+        if let Some(parent) = preview_png_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let _ = export_nutexb_to_png(
+            nutexb_path.to_string_lossy().as_ref(),
+            preview_png_path.to_string_lossy().as_ref(),
+        );
+
+        converted += 1;
+    }
+
+    Ok(CardIconBatchReplaceSummary { converted, failed })
 }

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CardIconList } from "./card-icon-list/CardIconList";
 import { CardIconAddDialog } from "./card-icon-list/CardIconAddDialog";
+import { CardIconBatchReplaceDialog } from "./card-icon-list/CardIconBatchReplaceDialog";
 import { extractCardIconItems, removeCardIconFromStructureJson } from "./card-icon-list/cardIconStructure";
 
 interface CardIconListViewProps {
@@ -339,6 +340,13 @@ export default function CardIconListView({ folderPath, isActive, onUnsavedChange
                 {isRefreshingNutexb ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
                 Refresh Nutexb
               </Button>
+              <CardIconBatchReplaceDialog
+                folderPath={folderPath}
+                convertDirPath={loadState.convertDirPath}
+                items={loadState.items}
+                onApplied={load}
+                triggerLabel="Replace Format"
+              />
               <CardIconAddDialog
                 folderPath={folderPath}
                 convertDirPath={loadState.convertDirPath}

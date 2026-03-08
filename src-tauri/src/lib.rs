@@ -26,6 +26,7 @@ pub fn run() {
             commands::nutexb_batch_export_png,
             commands::series_image_replace_from_png,
             commands::card_icon_replace_from_png,
+            commands::card_icon_batch_replace_with_dds_format,
             commands::copy_asset_as_new
         ])
         .setup(|app| {

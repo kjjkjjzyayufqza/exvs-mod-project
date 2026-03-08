@@ -11,6 +11,7 @@ import { applyNutexbInternalNameToStructureObject } from "@/lib/fhm2d_allNutexbF
 export enum Fhm2d_type_format {
   fhm2d_character = "fhm2d_character",
   fhm2d_all_nutexb = "fhm2d_all_nutexb",
+  fhm2d_stage_list = "fhm2d_stage_list",
 }
 
 export enum Fhm2dType {
@@ -481,7 +482,8 @@ export async function ExtractFHMData(
   fhm2d: Fhm2dData | PS4FhmData,
   outDir: string,
   type: ExtractType,
-  format?: Fhm2d_type_format
+  format?: Fhm2d_type_format,
+  listOutputFileName?: string
 ): Promise<void> {
   if (fhm2d._TYPE_ == Fhm2dType.PS4GundamVersus) {
     throw new Error(ErrorMessage.notSupport);
@@ -591,6 +593,13 @@ export async function ExtractFHMData(
             finalStructure = await applyNutexbInternalNameToStructureObject(outputStructure, {
               fileDataMap,
             });
+            break;
+          }
+          case Fhm2d_type_format.fhm2d_stage_list: {
+            finalStructure = { ...outputStructure };
+            if (listOutputFileName && finalStructure.SubFileData?.[0]) {
+              finalStructure.SubFileData[0].fileUrl = `.\\${fileNameNoExt}\\${listOutputFileName}`;
+            }
             break;
           }
           default: {

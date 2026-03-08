@@ -36,6 +36,20 @@ const FHM2D_ITEMS: InitListItem[] = [
         formatLabel: "list",
     },
     {
+        id: "stage_list",
+        name: "Stage List",
+        hash: "0xCE74091E",
+        format: Fhm2d_type_format.fhm2d_stage_list,
+        formatLabel: "list",
+    },
+    {
+        id: "stage_image_list",
+        name: "Stage Image List",
+        hash: "0x3CC8B10B",
+        format: Fhm2d_type_format.fhm2d_all_nutexb,
+        formatLabel: "all_nutexb",
+    },
+    {
         id: "series_image_list",
         name: "Series Image List",
         hash: "0xA0253AA0",
@@ -49,6 +63,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         format: Fhm2d_type_format.fhm2d_all_nutexb,
         formatLabel: "all_nutexb",
     },
+
 ];
 
 function buildHashFileName(hash: string): string {
@@ -109,7 +124,9 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
 
             const fhm = await readFhm2dFromPath(inputPath);
             const outDir = `${outBase}\\${buildHashFileName(item.hash)}`;
-            await ExtractFHMData(fhm, outDir, ExtractType.SingleFolder, item.format);
+            const listOutputFileName =
+                item.format === Fhm2d_type_format.fhm2d_stage_list ? `${item.id}.bin` : undefined;
+            await ExtractFHMData(fhm, outDir, ExtractType.SingleFolder, item.format, listOutputFileName);
             toast.success(`Extract completed: ${outDir}`);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);

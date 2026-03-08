@@ -132,6 +132,18 @@ pub async fn card_icon_replace_from_png(
     .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+pub async fn card_icon_batch_replace_with_dds_format(
+    items: Vec<(String, String)>,
+    dds_format: String,
+) -> Result<crate::nutexb_lib::CardIconBatchReplaceSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::nutexb_lib::card_icon_batch_replace_with_dds_format(items, dds_format.as_str())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CopyAssetAsNewResult {
