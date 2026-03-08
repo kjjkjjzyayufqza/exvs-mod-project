@@ -408,8 +408,9 @@ const TestEditorPage = () => {
   }, []);
 
   return (
-    <div className="flex h-screen flex-col bg-background text-xs overflow-hidden">
-      <TestEditorToolbar
+    <div className="flex h-full min-h-0 flex-col bg-background text-xs overflow-hidden">
+      <div className="shrink-0">
+        <TestEditorToolbar
         currentDir={currentDir}
         folderStoreKey={TEST_EDITOR_FOLDER_STORE_KEY}
         isLoading={isLoading}
@@ -418,8 +419,9 @@ const TestEditorPage = () => {
         onRefresh={refreshFolder}
         onRepack={() => setIsRepackDialogOpen(true)}
       />
+      </div>
 
-      <div className="flex-1 min-h-0 p-2">
+      <div className="flex-1 min-h-0 p-2 overflow-hidden">
         <ResizablePanelGroup
           orientation="horizontal"
           className="h-full rounded-lg border bg-card shadow-sm"

@@ -12,7 +12,7 @@ export default function SidebarLayout() {
           <TopNavBar />
           <div className="flex flex-1 min-h-0">
             <AppSidebar />
-            <main className="flex-1 overflow-auto p-4">
+            <main className="flex-1 min-h-0 overflow-auto p-4">
               <Outlet />
             </main>
           </div>

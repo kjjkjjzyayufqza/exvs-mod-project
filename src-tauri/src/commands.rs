@@ -374,6 +374,14 @@ fn watch_loop(
     }
 }
 
+/// Paths containing "__convert" (file or folder name) are ignored from watch events.
+const WATCH_IGNORE_PATTERNS: &[&str] = &["__convert"];
+
+fn should_ignore_path(path: &Path) -> bool {
+    let s = path.to_string_lossy();
+    WATCH_IGNORE_PATTERNS.iter().any(|pat| s.contains(pat))
+}
+
 fn convert_event(event: &Event) -> Option<FolderChangePayload> {
     if event.paths.is_empty() {
         return None;
@@ -384,6 +392,9 @@ fn convert_event(event: &Event) -> Option<FolderChangePayload> {
     match &event.kind {
         EventKind::Create(_) => {
             for path in &event.paths {
+                if should_ignore_path(path) {
+                    continue;
+                }
                 if let Some(op) = make_op("add", path) {
                     ops.push(op);
                 }
@@ -391,28 +402,51 @@ fn convert_event(event: &Event) -> Option<FolderChangePayload> {
         }
         EventKind::Modify(notify::event::ModifyKind::Name(notify::event::RenameMode::Both)) => {
             if event.paths.len() == 2 {
-                // treat as remove old + add new
                 let from = &event.paths[0];
                 let to = &event.paths[1];
-                let from_parent = from.parent().map(to_id);
-                ops.push(FolderChangeOp {
-                    r#type: "remove".into(),
-                    node: TestTreeNode {
-                        id: to_id(from),
-                        name: file_name(from),
-                        path: to_id(from),
-                        is_dir: false,
-                        children: None,
-                    },
-                    parent_id: from_parent,
-                });
-                if let Some(op) = make_op("add", to) {
-                    ops.push(op);
+                if should_ignore_path(from) && should_ignore_path(to) {
+                    // both ignored, skip entirely
+                } else if !should_ignore_path(from) && !should_ignore_path(to) {
+                    let from_parent = from.parent().map(to_id);
+                    ops.push(FolderChangeOp {
+                        r#type: "remove".into(),
+                        node: TestTreeNode {
+                            id: to_id(from),
+                            name: file_name(from),
+                            path: to_id(from),
+                            is_dir: false,
+                            children: None,
+                        },
+                        parent_id: from_parent,
+                    });
+                    if let Some(op) = make_op("add", to) {
+                        ops.push(op);
+                    }
+                } else if !should_ignore_path(from) {
+                    let from_parent = from.parent().map(to_id);
+                    ops.push(FolderChangeOp {
+                        r#type: "remove".into(),
+                        node: TestTreeNode {
+                            id: to_id(from),
+                            name: file_name(from),
+                            path: to_id(from),
+                            is_dir: false,
+                            children: None,
+                        },
+                        parent_id: from_parent,
+                    });
+                } else {
+                    if let Some(op) = make_op("add", to) {
+                        ops.push(op);
+                    }
                 }
             }
         }
         EventKind::Modify(_) => {
             for path in &event.paths {
+                if should_ignore_path(path) {
+                    continue;
+                }
                 if let Some(op) = make_op("modify", path) {
                     ops.push(op);
                 }
@@ -424,6 +458,9 @@ fn convert_event(event: &Event) -> Option<FolderChangePayload> {
                 notify::event::RemoveKind::Folder | notify::event::RemoveKind::Other
             );
             for path in &event.paths {
+                if should_ignore_path(path) {
+                    continue;
+                }
                 let id = to_id(path);
                 let parent_id = path.parent().map(to_id);
                 ops.push(FolderChangeOp {
@@ -453,6 +490,9 @@ fn convert_event(event: &Event) -> Option<FolderChangePayload> {
 }
 
 fn make_op(kind: &str, path: &Path) -> Option<FolderChangeOp> {
+    if should_ignore_path(path) {
+        return None;
+    }
     let meta = fs::metadata(path).ok()?;
     let is_dir = meta.is_dir();
     let id = to_id(path);
@@ -476,6 +516,9 @@ fn build_tree(path: &Path) -> Result<Vec<TestTreeNode>, String> {
 
     for entry in entries.flatten() {
         let entry_path = entry.path();
+        if should_ignore_path(&entry_path) {
+            continue;
+        }
         let meta = match entry.metadata() {
             Ok(m) => m,
             Err(_) => continue,
