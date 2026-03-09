@@ -24,7 +24,7 @@ export type StageJsonRow = {
   unk15: number;
   uniqueIndex: number;
   vs_sn: number;
-  unk18: number;
+  iconIndex: number;
 };
 
 export interface StageJsonImportPreview {
@@ -61,7 +61,7 @@ function toStageJsonRow(entry: StageDataEntry): StageJsonRow {
     unk15: entry.unk15 ?? 0,
     uniqueIndex: entry.uniqueIndex ?? 0,
     vs_sn: entry.vs_sn ?? 0,
-    unk18: entry.unk18 ?? 0,
+    iconIndex: entry.iconIndex ?? 0,
   };
 }
 
@@ -135,7 +135,7 @@ function normalizeImportRow(raw: unknown): StageJsonRow | null {
     unk15: coerceInt(obj.unk15, 0),
     uniqueIndex: coerceInt(obj.uniqueIndex, 0),
     vs_sn: coerceInt(obj.vs_sn, 0),
-    unk18: coerceInt(obj.unk18, 0),
+    iconIndex: coerceInt(obj.iconIndex ?? obj.unk18, 0),
   };
 }
 
@@ -183,10 +183,10 @@ export async function pickStageJsonImportPreview(): Promise<StageJsonImportPrevi
   };
 }
 
-function buildNameData(value: string): { StringBufferData: Buffer; Utf8String: string } {
+function buildNameData(value: string): { Offset: number; StringBufferData: Buffer; Utf8String: string } {
   const utf8 = value ?? "";
   const encoded = Buffer.from(obfEncodeFromUtf8String(utf8));
-  return { StringBufferData: encoded, Utf8String: utf8 };
+  return { Offset: 0, StringBufferData: encoded, Utf8String: utf8 };
 }
 
 export function applyStageJsonImportToList(currentList: StageList, rows: StageJsonRow[]): StageList {
@@ -209,7 +209,7 @@ export function applyStageJsonImportToList(currentList: StageList, rows: StageJs
     unk15: row.unk15,
     uniqueIndex: row.uniqueIndex,
     vs_sn: row.vs_sn,
-    unk18: row.unk18,
+    iconIndex: row.iconIndex,
   }));
 
   return Object.assign(Object.create(Object.getPrototypeOf(currentList)), currentList, {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { exists, readFile, writeFile } from "@tauri-apps/plugin-fs";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { exists, readFile, readTextFile, writeFile } from "@tauri-apps/plugin-fs";
 import { dirname, join } from "@tauri-apps/api/path";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { Buffer } from "buffer";
@@ -19,14 +20,18 @@ import {
 import { StageList, buildStageListBuffer } from "@/models/stageList";
 import { useConfigStore } from "@/store/configStore";
 import { StageEditor } from "./stage-list/StageEditor";
+import type { StageListSortKey } from "./stage-list/StageList";
 import {
   exportStageJsonToFile,
   pickStageJsonImportPreview,
   applyStageJsonImportToList,
   type StageJsonImportPreview,
 } from "./stage-list/StageListJson";
+import { extractCardIconItems } from "./card-icon-list/cardIconStructure";
+import { buildCardIconPreviewPath } from "./card-icon-list/cardIconUtils";
 
 const STAGE_LIST_HASH = "0xCE74091E";
+const STAGE_ICON_HASH = "0x3CC8B10B";
 
 interface StageListViewProps {
   folderPath: string;
@@ -41,27 +46,11 @@ type LoadState =
   | { status: "error"; filePath: string; message: string }
   | { status: "ready"; filePath: string; list: StageList };
 
-type StageListSortKey =
-  | "none"
-  | "index"
-  | "id"
-  | "unk1"
-  | "unk2"
-  | "unk3"
-  | "unk4"
-  | "unk5"
-  | "unk6"
-  | "vs_s_d"
-  | "fileName"
-  | "unk9"
-  | "vs_s_l"
-  | "unk11"
-  | "unk13"
-  | "unk14"
-  | "unk15"
-  | "uniqueIndex"
-  | "vs_sn"
-  | "unk18";
+type StageIconState =
+  | { status: "idle"; dirPath: string }
+  | { status: "loading"; dirPath: string }
+  | { status: "error"; dirPath: string; message: string }
+  | { status: "ready"; dirPath: string; stageIconBaseNameOrder: Array<string | null> };
 
 export default function StageListView({ folderPath, isActive, onUnsavedChanges, onRevealTreeFolder }: StageListViewProps) {
   const getSetting = useConfigStore((s) => s.getSetting);
@@ -79,11 +68,44 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
   const [searchInputValue, setSearchInputValue] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [isComposing, setIsComposing] = useState(false);
+  const [stageIconState, setStageIconState] = useState<StageIconState>({ status: "idle", dirPath: "" });
   const lastLoadedKeyRef = useRef<string>("");
 
   const resolveFilePath = useCallback(async () => {
     return await join(folderPath, STAGE_LIST_HASH, "stage_list.bin");
   }, [folderPath]);
+
+  const resolveStageIconConvertDir = useCallback(async () => {
+    return await join(folderPath, STAGE_ICON_HASH, "__convert");
+  }, [folderPath]);
+
+  const resolveStageIconStructureJsonPath = useCallback(async () => {
+    return await join(folderPath, `${STAGE_ICON_HASH}_structure.json`);
+  }, [folderPath]);
+
+  const loadStageIconCount = useCallback(async () => {
+    if (!folderPath) {
+      setStageIconState({ status: "error", dirPath: "", message: "Folder path is empty" });
+      return;
+    }
+
+    const dirPath = await resolveStageIconConvertDir();
+    setStageIconState({ status: "loading", dirPath });
+    try {
+      const structurePath = await resolveStageIconStructureJsonPath();
+      const raw = await readTextFile(structurePath);
+      const json = JSON.parse(raw);
+      const items = extractCardIconItems(json);
+      const stageIconBaseNameOrder = items.map((it) => it.name);
+      setStageIconState({ status: "ready", dirPath, stageIconBaseNameOrder });
+    } catch (error) {
+      setStageIconState({
+        status: "error",
+        dirPath,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }, [folderPath, resolveStageIconConvertDir, resolveStageIconStructureJsonPath]);
 
   const resetEditorState = useCallback(() => {
     setHasChanges(false);
@@ -135,6 +157,12 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
     lastLoadedKeyRef.current = key;
     void load();
   }, [folderPath, isActive, load]);
+
+  useEffect(() => {
+    if (!isActive) return;
+    if (!folderPath) return;
+    void loadStageIconCount();
+  }, [folderPath, isActive, loadStageIconCount]);
 
   const handleEditorChange = useCallback(
     (next: StageList) => {
@@ -279,6 +307,16 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
       setIsImporting(false);
     }
   }, [importPreview, isImporting, loadState, onUnsavedChanges]);
+
+  const stageIconIndexPickerItems = useMemo(() => {
+    if (stageIconState.status !== "ready") return [];
+    const { dirPath, stageIconBaseNameOrder } = stageIconState;
+    return stageIconBaseNameOrder.map((name, i) => {
+      const previewPath = name ? buildCardIconPreviewPath(dirPath, name) : null;
+      const previewSrc = previewPath ? convertFileSrc(previewPath) : "/tauri.svg";
+      return { index: i, name, previewSrc };
+    });
+  }, [stageIconState]);
 
   if (!isActive) {
     return <div className="h-full w-full" />;
@@ -428,6 +466,11 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
             workspacePath={folderPath}
             onReveal={onRevealTreeFolder}
             onChange={handleEditorChange}
+            stageIconConvertDirPath={stageIconState.status === "ready" ? stageIconState.dirPath : undefined}
+            stageIconBaseNameOrder={stageIconState.status === "ready" ? stageIconState.stageIconBaseNameOrder : undefined}
+            stageIconIndexPickerItems={stageIconIndexPickerItems}
+            stageIconIndexPickerLoading={stageIconState.status === "loading" || stageIconState.status === "idle"}
+            stageIconIndexPickerError={stageIconState.status === "error" ? stageIconState.message : null}
           />
         </CardContent>
       </Card>
@@ -439,7 +482,7 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
             <DialogDescription asChild>
               <div className="space-y-2 pt-2">
                 <p>Auto-loads {STAGE_LIST_HASH}/stage_list.bin from the selected folder.</p>
-                <p>Each stage entry has 18 unknown fields (unk1–unk18).</p>
+                <p>Each stage entry has fields including iconIndex for the Stage Icon List.</p>
                 <p>Use FHM2D Init to extract stage_list.bin from the source fhm2d file.</p>
               </div>
             </DialogDescription>

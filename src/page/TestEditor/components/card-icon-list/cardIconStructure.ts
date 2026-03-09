@@ -203,7 +203,10 @@ export function reorderCardIconsInStructureJson(
   return { nextStructJson: cloned };
 }
 
-function resolveFileUrlPrefix(subFileData: Array<Record<string, any>>): string {
+function resolveFileUrlPrefix(
+  subFileData: Array<Record<string, any>>,
+  defaultPrefix: string
+): string {
   for (const item of subFileData) {
     const fileUrl = typeof item?.fileUrl === "string" ? item.fileUrl : "";
     const type = typeof item?.fileType === "string" ? item.fileType : "";
@@ -213,7 +216,7 @@ function resolveFileUrlPrefix(subFileData: Array<Record<string, any>>): string {
       return fileUrl.slice(0, sepIndex + 1);
     }
   }
-  return "0x49235031/";
+  return defaultPrefix;
 }
 
 function updateFolderCount(
@@ -231,7 +234,7 @@ function updateFolderCount(
 
 export function appendCardIconToStructureJson(
   structJson: unknown,
-  params: { name: string }
+  params: { name: string; defaultFileUrlPrefix?: string }
 ): { nextStructJson: StructureJson; newFileIndex: number } {
   const cloned: StructureJson = JSON.parse(JSON.stringify(structJson ?? {}));
   const subFileData: Array<Record<string, any>> = Array.isArray(cloned.SubFileData) ? cloned.SubFileData : [];
@@ -246,7 +249,8 @@ export function appendCardIconToStructureJson(
   }
   const newFileIndex = maxFileIndex + 1;
 
-  const prefix = resolveFileUrlPrefix(subFileData);
+  const defaultPrefix = params.defaultFileUrlPrefix ?? "0x49235031/";
+  const prefix = resolveFileUrlPrefix(subFileData, defaultPrefix);
   const normalized = prefix.endsWith("/") || prefix.endsWith("\\") ? prefix : `${prefix}/`;
   const fileUrl = `${normalized}${params.name}.nutexb`;
 

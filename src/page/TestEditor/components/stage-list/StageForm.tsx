@@ -1,10 +1,12 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Buffer } from "buffer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DualValueProperty } from "@/components/ui/dual-value-property";
 import { StageFileNameStatusIcons } from "./StageFileNameStatusIcons";
+import { StageIconIndexPickerPopover } from "./StageIconIndexPickerPopover";
 import type { StageDataEntry } from "@/models/stageList";
+import type { StageIconIndexPickerItem } from "./StageIconIndexPickerPopover";
 
 const NUMERIC_FIELDS = [
   { name: "id" as const, label: "id" },
@@ -24,7 +26,7 @@ const NUMERIC_FIELDS = [
   { name: "unk14" as const, label: "unk14" },
   { name: "unk15" as const, label: "unk15" },
   { name: "vs_sn" as const, label: "vs_sn (地图名称图片)" },
-  { name: "unk18" as const, label: "unk18" },
+  { name: "iconIndex" as const, label: "Icon Index" },
 ];
 
 interface StageFormProps {
@@ -35,6 +37,9 @@ interface StageFormProps {
   obModPath?: string;
   workspacePath?: string;
   onReveal?: (path: string) => void;
+  stageIconIndexPickerItems?: StageIconIndexPickerItem[];
+  stageIconIndexPickerLoading?: boolean;
+  stageIconIndexPickerError?: string | null;
 }
 
 export function StageForm({
@@ -45,7 +50,11 @@ export function StageForm({
   obModPath = "",
   workspacePath = "",
   onReveal,
+  stageIconIndexPickerItems = [],
+  stageIconIndexPickerLoading = false,
+  stageIconIndexPickerError = null,
 }: StageFormProps) {
+  const [stageIconIndexPickerOpen, setStageIconIndexPickerOpen] = useState(false);
   const handleFieldChange = useCallback(
     (fieldName: keyof StageDataEntry, value: number) => {
       const updated = { ...stage, [fieldName]: value };
@@ -101,6 +110,16 @@ export function StageForm({
                   workspacePath={workspacePath}
                   onReveal={onReveal}
                 />
+              ) : field.name === "iconIndex" ? (
+                <StageIconIndexPickerPopover
+                  onSelect={(idx) => handleFieldChange("iconIndex", idx)}
+                  items={stageIconIndexPickerItems}
+                  selectedValue={getNumericValue("iconIndex")}
+                  isLoading={stageIconIndexPickerLoading}
+                  error={stageIconIndexPickerError}
+                  open={stageIconIndexPickerOpen}
+                  onOpenChange={setStageIconIndexPickerOpen}
+                />
               ) : undefined
             }
             value={getNumericValue(field.name)}
@@ -118,6 +137,12 @@ export function StageForm({
             mode="live"
             showHex
             onCommit={(nextValue) => handleFieldChange(field.name, nextValue)}
+            onLiveIntInputFocus={
+              field.name === "iconIndex" ? () => setStageIconIndexPickerOpen(true) : undefined
+            }
+            onLiveIntInputClick={
+              field.name === "iconIndex" ? () => setStageIconIndexPickerOpen(true) : undefined
+            }
           />
         ))}
       </div>

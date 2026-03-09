@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import type { StageDataEntry, StageList } from "@/models/stageList";
 import { StageForm } from "./StageForm";
-import { StageList as StageListComponent } from "./StageList";
+import { StageList as StageListComponent, type StageListSortKey } from "./StageList";
 
 function createEmptyStage(id: number): StageDataEntry {
   return {
@@ -22,7 +22,7 @@ function createEmptyStage(id: number): StageDataEntry {
     unk1: 0, unk2: 0, unk3: 0, unk4: 0, unk5: 0, unk6: 0, vs_s_d: 0, fileName: 0, unk9: 0,
     vs_s_l: 0, unk11: 0,
     name: { Offset: 0, StringBufferData: Buffer.from([0]), Utf8String: "" },
-    unk13: 0, unk14: 0, unk15: 0, uniqueIndex: 0, vs_sn: 0, unk18: 0,
+    unk13: 0, unk14: 0, unk15: 0, uniqueIndex: 0, vs_sn: 0, iconIndex: 0,
   };
 }
 
@@ -30,8 +30,8 @@ interface StageEditorProps {
   stageListData?: StageList | null;
   selectedIndex: number;
   onSelectChange: (index: number) => void;
-  sortKey?: string;
-  onSortKeyChange?: (key: string) => void;
+  sortKey?: StageListSortKey;
+  onSortKeyChange?: (key: StageListSortKey) => void;
   searchInputValue?: string;
   searchTerm?: string;
   onSearchInputChange?: (value: string) => void;
@@ -43,6 +43,11 @@ interface StageEditorProps {
   workspacePath?: string;
   onReveal?: (path: string) => void;
   onChange: (data: StageList) => void;
+  stageIconConvertDirPath?: string;
+  stageIconBaseNameOrder?: Array<string | null>;
+  stageIconIndexPickerItems?: Array<{ index: number; name: string | null; previewSrc: string }>;
+  stageIconIndexPickerLoading?: boolean;
+  stageIconIndexPickerError?: string | null;
 }
 
 export function StageEditor({
@@ -62,6 +67,11 @@ export function StageEditor({
   workspacePath = "",
   onReveal,
   onChange,
+  stageIconConvertDirPath,
+  stageIconBaseNameOrder,
+  stageIconIndexPickerItems = [],
+  stageIconIndexPickerLoading = false,
+  stageIconIndexPickerError = null,
 }: StageEditorProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteCandidateIndex, setDeleteCandidateIndex] = useState<number | null>(null);
@@ -148,6 +158,19 @@ export function StageEditor({
     return maxId + 1;
   }, [stageListData]);
 
+  /**
+   * Next uniqueIndex = max(existing) + 1.
+   * Does not reuse gaps; always uses the next value after the current maximum.
+   */
+  const getNextUniqueIndex = useCallback(() => {
+    if (!stageListData || stageListData.StageData.length === 0) return 1;
+    const maxVal = Math.max(
+      0,
+      ...stageListData.StageData.map((s) => (typeof s.uniqueIndex === "number" ? s.uniqueIndex : 0))
+    );
+    return maxVal + 1;
+  }, [stageListData]);
+
   const handleAdd = useCallback(() => {
     if (!stageListData) return;
 
@@ -162,6 +185,39 @@ export function StageEditor({
 
     onSelectChange(stageListData.StageData.length);
   }, [stageListData, getNextId, onSelectChange, updateList]);
+
+  const handleCopyAsNew = useCallback(
+    (index: number) => {
+      if (!stageListData) return;
+      const sourceStage = stageListData.StageData[index];
+      if (!sourceStage) return;
+
+      const newId = getNextId();
+      const newUniqueIndex = getNextUniqueIndex();
+      const copiedStage: StageDataEntry = {
+        ...sourceStage,
+        id: newId,
+        uniqueIndex: newUniqueIndex,
+        name: sourceStage.name
+          ? {
+              ...sourceStage.name,
+              StringBufferData: Buffer.from(sourceStage.name.StringBufferData),
+            }
+          : { Offset: 0, StringBufferData: Buffer.from([0]), Utf8String: "" },
+      };
+
+      updateList((prevList) => {
+        const nextRows = [...prevList.StageData, copiedStage];
+        return Object.assign(Object.create(Object.getPrototypeOf(prevList)), prevList, {
+          StageData: nextRows,
+          StageCount: nextRows.length,
+        });
+      });
+
+      onSelectChange(stageListData.StageData.length);
+    },
+    [stageListData, getNextId, getNextUniqueIndex, onSelectChange, updateList]
+  );
 
   if (!stageListData) {
     return (
@@ -186,6 +242,7 @@ export function StageEditor({
           stageData={stageListData.StageData}
           selectedIndex={selectedIndex}
           onSelect={handleSelect}
+          onCopy={handleCopyAsNew}
           onDelete={openDeleteDialog}
           sortKey={sortKey}
           onSortKeyChange={onSortKeyChange}
@@ -195,6 +252,8 @@ export function StageEditor({
           onSearchTermChange={onSearchTermChange}
           isComposing={isComposing}
           onComposingChange={onComposingChange}
+          stageIconConvertDirPath={stageIconConvertDirPath}
+          stageIconBaseNameOrder={stageIconBaseNameOrder}
         />
       </div>
 
@@ -208,6 +267,9 @@ export function StageEditor({
             obModPath={obModPath}
             workspacePath={workspacePath}
             onReveal={onReveal}
+            stageIconIndexPickerItems={stageIconIndexPickerItems}
+            stageIconIndexPickerLoading={stageIconIndexPickerLoading}
+            stageIconIndexPickerError={stageIconIndexPickerError}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">

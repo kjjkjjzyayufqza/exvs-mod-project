@@ -72,7 +72,7 @@ export class StageDataEntry {
   unk15: number // 0x38
   uniqueIndex: number // 0x3c
   vs_sn: number // 0x40
-  unk18: number // 0x44
+  iconIndex: number // 0x44
 
   constructor (fullBuffer: Buffer, stageBuffer: Buffer, _stageOffset: number, id: number) {
     if (stageBuffer.length < STAGE_DATA_SIZE) {
@@ -96,7 +96,7 @@ export class StageDataEntry {
     this.unk15 = stageBuffer.readInt32LE(0x38)
     this.uniqueIndex = stageBuffer.readInt32LE(0x3c)
     this.vs_sn = stageBuffer.readInt32LE(0x40)
-    this.unk18 = stageBuffer.readInt32LE(0x44)
+    this.iconIndex = stageBuffer.readInt32LE(0x44)
   }
 }
 
@@ -214,7 +214,7 @@ export function buildStageListBuffer (stageList: StageList): Buffer {
     stageDataBuffer.writeInt32LE(stage.unk15, baseOffset + 0x38)
     stageDataBuffer.writeInt32LE(stage.uniqueIndex, baseOffset + 0x3c)
     stageDataBuffer.writeInt32LE(stage.vs_sn, baseOffset + 0x40)
-    stageDataBuffer.writeInt32LE(stage.unk18, baseOffset + 0x44)
+    stageDataBuffer.writeInt32LE(stage.iconIndex, baseOffset + 0x44)
   }
 
   const stringNameDataBuffer = Buffer.concat(stringChunks)

@@ -39,6 +39,7 @@ type BatchItem = {
 
 interface CardIconAddDialogProps {
   folderPath: string;
+  hash: string;
   convertDirPath: string;
   structurePath: string;
   nextIndex: number;
@@ -103,6 +104,7 @@ function validateName(name: string): string | null {
 
 export function CardIconAddDialog({
   folderPath,
+  hash,
   convertDirPath,
   structurePath,
   nextIndex,
@@ -224,9 +226,13 @@ export function CardIconAddDialog({
         return;
       }
 
-      const { nextStructJson } = appendCardIconToStructureJson(json, { name: trimmedName });
+      const defaultFileUrlPrefix = hash.endsWith("/") || hash.endsWith("\\") ? hash : `${hash}/`;
+      const { nextStructJson } = appendCardIconToStructureJson(json, {
+        name: trimmedName,
+        defaultFileUrlPrefix,
+      });
 
-      const nutexbPath = await join(folderPath, "0x49235031", `${trimmedName}.nutexb`);
+      const nutexbPath = await join(folderPath, hash, `${trimmedName}.nutexb`);
       if (!nutexbPath) {
         toast.error("Failed to resolve target nutexb path");
         return;
@@ -393,7 +399,7 @@ export function CardIconAddDialog({
 
         setBatchItems((prev) => prev.map((e) => (e.id === it.id ? { ...e, status: "processing", progress: 10, message: undefined } : e)));
 
-        const nutexbPath = await join(folderPath, "0x49235031", `${trimmed}.nutexb`);
+        const nutexbPath = await join(folderPath, hash, `${trimmed}.nutexb`);
         if (!nutexbPath) {
           setBatchItems((prev) =>
             prev.map((e) =>
@@ -414,7 +420,11 @@ export function CardIconAddDialog({
 
           setBatchItems((prev) => prev.map((e) => (e.id === it.id ? { ...e, progress: 90, result } : e)));
 
-          const appended = appendCardIconToStructureJson(nextStructJson, { name: trimmed });
+          const defaultFileUrlPrefix = hash.endsWith("/") || hash.endsWith("\\") ? hash : `${hash}/`;
+          const appended = appendCardIconToStructureJson(nextStructJson, {
+            name: trimmed,
+            defaultFileUrlPrefix,
+          });
           nextStructJson = appended.nextStructJson;
           existingLower.add(lower);
           successNamesLower.add(lower);
@@ -448,7 +458,7 @@ export function CardIconAddDialog({
     } finally {
       setIsBatchRunning(false);
     }
-  }, [batchItems, canStartBatch, convertDirPath, folderPath, onAdded, structurePath]);
+  }, [batchItems, canStartBatch, convertDirPath, folderPath, hash, onAdded, structurePath]);
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -484,7 +494,7 @@ export function CardIconAddDialog({
         <DialogHeader>
           <DialogTitle>Add Card Icon</DialogTitle>
           <DialogDescription>
-            Creates nutexb from PNG and appends items to <span className="font-mono">0x49235031_structure.json</span>.
+            Creates nutexb from PNG and appends items to <span className="font-mono">{hash}_structure.json</span>.
           </DialogDescription>
         </DialogHeader>
 

@@ -1,20 +1,37 @@
-import { Trash2 } from "lucide-react";
+import { Copy, Trash2 } from "lucide-react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import type { StageDataEntry } from "@/models/stageList";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import type { StageDataEntry } from "@/models/stageList";
+import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
+import { formatSeriesPngFileNameFromBaseName, resolveMappedSeriesBaseName } from "../series-list/seriesImage";
 
 interface StageCardProps {
   stage: StageDataEntry;
   index: number;
   isSelected: boolean;
   onClick: () => void;
+  onCopy: () => void;
   onDelete: () => void;
+  stageIconConvertDirPath?: string;
+  stageIconBaseNameOrder?: Array<string | null>;
 }
 
-export function StageCard({ stage, index, isSelected, onClick, onDelete }: StageCardProps) {
+export function StageCard({ stage, index, isSelected, onClick, onCopy, onDelete, stageIconConvertDirPath, stageIconBaseNameOrder }: StageCardProps) {
+  const stageName = stage.name?.Utf8String ?? "";
+  const baseName = resolveMappedSeriesBaseName(stageIconBaseNameOrder, stage.iconIndex ?? 0);
+  const fileName = baseName ? formatSeriesPngFileNameFromBaseName(baseName) : null;
+  const imageFilePath = (() => {
+    if (!stageIconConvertDirPath || !fileName) return null;
+    const sep = getPathSeparatorFromFileUrl(stageIconConvertDirPath);
+    if (stageIconConvertDirPath.endsWith(sep)) return `${stageIconConvertDirPath}${fileName}`;
+    return `${stageIconConvertDirPath}${sep}${fileName}`;
+  })();
+  const thumbnailSrc = imageFilePath ? convertFileSrc(imageFilePath) : "/tauri.svg";
+
   return (
-    <Card
+    <div
       role="button"
       tabIndex={0}
       onClick={onClick}
@@ -25,29 +42,71 @@ export function StageCard({ stage, index, isSelected, onClick, onDelete }: Stage
         }
       }}
       className={cn(
-        "cursor-pointer transition-colors p-3",
-        isSelected ? "ring-2 ring-inset ring-primary bg-accent" : "hover:bg-accent/50"
+        "border rounded-md px-2 py-2 cursor-pointer hover:bg-accent/50 transition-colors h-full flex items-center justify-between gap-2",
+        isSelected && "ring-2 ring-inset ring-primary bg-accent"
       )}
     >
-      <CardContent className="p-0 flex items-center justify-between gap-2">
-        <div className="min-w-0 flex-1 text-sm">
-          <div className="font-medium">ID: {stage.id ?? index}</div>
-          <div className="text-muted-foreground text-xs truncate">Name: {stage.name?.Utf8String ?? "-"}</div>
-          <div className="text-muted-foreground text-xs">Unk1: {stage.unk1 ?? 0}</div>
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="h-12 w-24 shrink-0 overflow-hidden rounded border bg-black">
+          <img
+            src={thumbnailSrc}
+            alt={stageName}
+            className="h-full w-full object-contain"
+            onError={(e) => {
+              e.currentTarget.src = "/tauri.svg";
+            }}
+          />
         </div>
+
+        <div className="min-w-0">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="text-sm font-medium line-clamp-2 wrap-break-word">
+                  {stageName || `Stage ${stage.id ?? index}`}
+                </div>
+              </TooltipTrigger>
+              {stageName && (
+                <TooltipContent>
+                  <p>{stageName}</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
+
+          <div className="text-xs text-muted-foreground space-y-0.5">
+            <div>ID: {stage.id ?? 0}</div>
+            <div>Index: {index}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1 shrink-0">
         <Button
-          size="icon"
           variant="ghost"
-          className="h-7 w-7 shrink-0"
+          size="sm"
+          className="text-blue-600 hover:text-blue-600 hover:bg-blue-50 p-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCopy();
+          }}
+          title="Copy as new"
+        >
+          <Copy className="w-4 h-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-destructive hover:text-destructive hover:bg-destructive/10 p-0"
           onClick={(e) => {
             e.stopPropagation();
             onDelete();
           }}
-          aria-label="Delete stage"
+          title="Delete"
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          <Trash2 className="w-4 h-4" />
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

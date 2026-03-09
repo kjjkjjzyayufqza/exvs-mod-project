@@ -7,7 +7,7 @@ import type { StageDataEntry } from "@/models/stageList";
 import { cn } from "@/lib/utils";
 import { StageCard } from "./StageCard";
 
-type SortKey =
+export type StageListSortKey =
   | "none"
   | "index"
   | "id"
@@ -27,7 +27,9 @@ type SortKey =
   | "unk15"
   | "uniqueIndex"
   | "vs_sn"
-  | "unk18";
+  | "iconIndex";
+
+type SortKey = StageListSortKey;
 
 const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
   { value: "none", label: "No sort" },
@@ -49,13 +51,14 @@ const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
   { value: "unk15", label: "unk15 (min → max)" },
   { value: "uniqueIndex", label: "uniqueIndex (min → max)" },
   { value: "vs_sn", label: "vs_sn (min → max)" },
-  { value: "unk18", label: "unk18 (min → max)" },
+  { value: "iconIndex", label: "Icon Index (min → max)" },
 ];
 
 interface StageListProps {
   stageData: StageDataEntry[];
   selectedIndex: number;
   onSelect: (index: number) => void;
+  onCopy: (index: number) => void;
   onDelete: (index: number) => void;
   sortKey?: SortKey;
   onSortKeyChange?: (key: SortKey) => void;
@@ -65,12 +68,15 @@ interface StageListProps {
   onSearchTermChange?: (value: string) => void;
   isComposing?: boolean;
   onComposingChange?: (value: boolean) => void;
+  stageIconConvertDirPath?: string;
+  stageIconBaseNameOrder?: Array<string | null>;
 }
 
 export function StageList({
   stageData,
   selectedIndex,
   onSelect,
+  onCopy,
   onDelete,
   sortKey: controlledSortKey,
   onSortKeyChange,
@@ -80,6 +86,8 @@ export function StageList({
   onSearchTermChange,
   isComposing: controlledIsComposing,
   onComposingChange,
+  stageIconConvertDirPath,
+  stageIconBaseNameOrder,
 }: StageListProps) {
   const [internalInputValue, setInternalInputValue] = useState("");
   const [internalSearchTerm, setInternalSearchTerm] = useState("");
@@ -141,7 +149,7 @@ export function StageList({
 
   const listParentRef = useRef<HTMLDivElement | null>(null);
   const getListScrollElement = useCallback(() => listParentRef.current, []);
-  const estimateRowSize = useCallback(() => 80, []);
+  const estimateRowSize = useCallback(() => 96, []);
 
   const filteredRows = useMemo(() => {
     const term = deferredSearchTerm.trim();
@@ -204,8 +212,8 @@ export function StageList({
           return row.uniqueIndex ?? 0;
         case "vs_sn":
           return row.vs_sn ?? 0;
-        case "unk18":
-          return row.unk18 ?? 0;
+        case "iconIndex":
+          return row.iconIndex ?? 0;
         default:
           return idx;
       }
@@ -318,7 +326,10 @@ export function StageList({
                   index={idx}
                   isSelected={idx === selectedIndex}
                   onClick={() => onSelect(idx)}
+                  onCopy={() => onCopy(idx)}
                   onDelete={() => onDelete(idx)}
+                  stageIconConvertDirPath={stageIconConvertDirPath}
+                  stageIconBaseNameOrder={stageIconBaseNameOrder}
                 />
               </div>
             );
