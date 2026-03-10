@@ -21,6 +21,9 @@ interface CardIconCardProps {
   totalCount: number;
   isUpdating?: boolean;
   onMove: (toIndex: number) => void;
+  /** When true, shows linked-hover outline (used in dual-column layout) */
+  isHovered?: boolean;
+  onHoverChange?: (hovered: boolean) => void;
 }
 
 export function CardIconCard({
@@ -35,6 +38,8 @@ export function CardIconCard({
   totalCount,
   isUpdating = false,
   onMove,
+  isHovered = false,
+  onHoverChange,
 }: CardIconCardProps) {
   const nameLabel = item.name ?? "(empty)";
   const previewPath =
@@ -88,9 +93,12 @@ export function CardIconCard({
     <div
       className={cn(
         "border rounded-md px-2 py-2 cursor-pointer hover:bg-accent/50 transition-colors h-full flex items-center gap-3",
-        isSelected && "ring-2 ring-inset ring-primary bg-accent"
+        isSelected && "ring-2 ring-inset ring-primary bg-accent",
+        isHovered && "border-2 border-primary"
       )}
       onClick={onClick}
+      onMouseEnter={() => onHoverChange?.(true)}
+      onMouseLeave={() => onHoverChange?.(false)}
     >
       <div className="h-12 w-24 shrink-0 overflow-hidden rounded border bg-black">
         <img

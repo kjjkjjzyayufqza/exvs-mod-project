@@ -133,6 +133,25 @@ pub async fn card_icon_replace_from_png(
 }
 
 #[tauri::command]
+pub async fn card_icon_replace_from_png_with_dds_format(
+    nutexb_path: String,
+    convert_dir: String,
+    png_path: String,
+    dds_format: String,
+) -> Result<crate::nutexb_lib::SeriesImageReplaceSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::nutexb_lib::card_icon_replace_from_png_with_dds_format(
+            nutexb_path.as_str(),
+            convert_dir.as_str(),
+            png_path.as_str(),
+            dds_format.as_str(),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 pub async fn card_icon_batch_replace_with_dds_format(
     items: Vec<(String, String)>,
     dds_format: String,

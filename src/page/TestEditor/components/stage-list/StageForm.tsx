@@ -26,7 +26,7 @@ const NUMERIC_FIELDS = [
   { name: "unk14" as const, label: "unk14" },
   { name: "unk15" as const, label: "unk15" },
   { name: "vs_sn" as const, label: "vs_sn (地图名称图片)" },
-  { name: "iconIndex" as const, label: "Icon Index" },
+  { name: "iconIndex" as const, label: "Icon Index(同时索引两张图)" },
 ];
 
 interface StageFormProps {

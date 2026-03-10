@@ -14,6 +14,8 @@ export default function StageIconListView({ folderPath, isActive, onUnsavedChang
       title="Stage Icon List"
       isActive={isActive}
       onUnsavedChanges={onUnsavedChanges}
+      layout="dual"
+      secondaryHash="0x0CEE3991"
     />
   );
 }

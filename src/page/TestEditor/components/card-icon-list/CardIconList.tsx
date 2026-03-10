@@ -17,6 +17,9 @@ interface CardIconListProps {
   onRemove: (item: CardIconItem) => void;
   onMove: (fromIndex: number, toIndex: number) => void;
   isUpdating?: boolean;
+  /** When set, cards at this itemIndex show linked-hover outline (dual-column sync) */
+  hoveredItemIndex?: number | null;
+  onHoverItemIndex?: (itemIndex: number | null) => void;
 }
 
 export function CardIconList({
@@ -29,6 +32,8 @@ export function CardIconList({
   onRemove,
   onMove,
   isUpdating = false,
+  hoveredItemIndex = null,
+  onHoverItemIndex,
 }: CardIconListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const deferredSearchTerm = useDeferredValue(searchTerm);
@@ -118,6 +123,8 @@ export function CardIconList({
                   totalCount={items.length}
                   isUpdating={isUpdating}
                   onMove={(toIndex) => onMove(item.itemIndex, toIndex)}
+                  isHovered={onHoverItemIndex ? item.itemIndex === hoveredItemIndex : false}
+                  onHoverChange={onHoverItemIndex ? (hovered) => onHoverItemIndex(hovered ? item.itemIndex : null) : undefined}
                 />
               </div>
             );

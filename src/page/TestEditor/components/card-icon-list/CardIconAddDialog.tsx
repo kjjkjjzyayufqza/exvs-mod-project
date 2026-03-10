@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DDS_FORMATS } from "@/lib/ddsFormats";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -44,6 +46,7 @@ interface CardIconAddDialogProps {
   structurePath: string;
   nextIndex: number;
   onAdded: () => Promise<void> | void;
+  disabled?: boolean;
 }
 
 function containsInvalidFileChars(name: string): boolean {
@@ -109,12 +112,14 @@ export function CardIconAddDialog({
   structurePath,
   nextIndex,
   onAdded,
+  disabled = false,
 }: CardIconAddDialogProps) {
   const [openState, setOpenState] = useState(false);
   const [mode, setMode] = useState<"single" | "batch">("single");
 
   const [pngPath, setPngPath] = useState("");
   const [nameInput, setNameInput] = useState("");
+  const [ddsFormat, setDdsFormat] = useState<string>("BC7RgbaUnormSrgb");
   const [isCreating, setIsCreating] = useState(false);
 
   const [batchItems, setBatchItems] = useState<BatchItem[]>([]);
@@ -238,10 +243,11 @@ export function CardIconAddDialog({
         return;
       }
 
-      const result = await invoke<ReplaceSummary>("card_icon_replace_from_png", {
+      const result = await invoke<ReplaceSummary>("card_icon_replace_from_png_with_dds_format", {
         nutexbPath,
         convertDir: convertDirPath,
         pngPath,
+        ddsFormat,
       });
 
       await writeTextFile(structurePath, JSON.stringify(nextStructJson, null, 2));
@@ -257,7 +263,7 @@ export function CardIconAddDialog({
     } finally {
       setIsCreating(false);
     }
-  }, [convertDirPath, folderPath, isNameValid, onAdded, pngPath, structurePath, trimmedName]);
+  }, [convertDirPath, ddsFormat, folderPath, isNameValid, onAdded, pngPath, structurePath, trimmedName]);
 
   const canApply = Boolean(pngPath) && isNameValid && !isCreating;
 
@@ -412,10 +418,11 @@ export function CardIconAddDialog({
         setBatchItems((prev) => prev.map((e) => (e.id === it.id ? { ...e, progress: 60 } : e)));
 
         try {
-          const result = await invoke<ReplaceSummary>("card_icon_replace_from_png", {
+          const result = await invoke<ReplaceSummary>("card_icon_replace_from_png_with_dds_format", {
             nutexbPath,
             convertDir: convertDirPath,
             pngPath: it.pngPath,
+            ddsFormat,
           });
 
           setBatchItems((prev) => prev.map((e) => (e.id === it.id ? { ...e, progress: 90, result } : e)));
@@ -458,7 +465,7 @@ export function CardIconAddDialog({
     } finally {
       setIsBatchRunning(false);
     }
-  }, [batchItems, canStartBatch, convertDirPath, folderPath, hash, onAdded, structurePath]);
+  }, [batchItems, canStartBatch, convertDirPath, ddsFormat, folderPath, hash, onAdded, structurePath]);
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -486,7 +493,7 @@ export function CardIconAddDialog({
   return (
     <Dialog open={openState} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
+        <Button size="sm" variant="outline" disabled={disabled}>
           Add
         </Button>
       </DialogTrigger>
@@ -557,6 +564,25 @@ export function CardIconAddDialog({
               </div>
 
               <div className="space-y-2">
+                <Label>DDS Format</Label>
+                <Select value={ddsFormat} onValueChange={setDdsFormat} disabled={isCreating || isBatchRunning}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select DDS format" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DDS_FORMATS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="text-xs text-muted-foreground min-h-8 leading-snug">
+                  Output texture format for the nutexb file.
+                </div>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="card-icon-add-png">Source PNG</Label>
                 <FilePathInput
                   id="card-icon-add-png"
@@ -589,6 +615,22 @@ export function CardIconAddDialog({
             </TabsContent>
 
             <TabsContent value="batch" className="space-y-4 mt-0">
+              <div className="space-y-2">
+                <Label>DDS Format</Label>
+                <Select value={ddsFormat} onValueChange={setDdsFormat} disabled={isBatchRunning}>
+                  <SelectTrigger className="w-full max-w-[280px]">
+                    <SelectValue placeholder="Select DDS format" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DDS_FORMATS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm text-muted-foreground">
                   Total: <span className="font-mono">{batchSummary.total}</span> · Success:{" "}

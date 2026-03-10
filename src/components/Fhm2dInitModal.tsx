@@ -50,6 +50,13 @@ const FHM2D_ITEMS: InitListItem[] = [
         formatLabel: "all_nutexb",
     },
     {
+        id: "stage_image_list_2",
+        name: "Stage Image List 2",
+        hash: "0x0CEE3991",
+        format: Fhm2d_type_format.fhm2d_all_nutexb,
+        formatLabel: "all_nutexb",
+    },
+    {
         id: "series_image_list",
         name: "Series Image List",
         hash: "0xA0253AA0",
