@@ -1,13 +1,14 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Wrench, FileText, Calculator, Palette, File, FileJson, ImageIcon, FileEdit } from "lucide-react"
+import { Wrench, FileText, Calculator, Palette, File, FileJson, ImageIcon, FileEdit, GitCompareArrows } from "lucide-react"
 import { FBXItemRename } from "./components/fbx-item-rename/FBXItemRename"
 import { TemplateJsonGenerator } from "./components/template-json-generator/TemplateJsonGenerator"
 import { ImgToNutexbTool } from "./components/img-to-nutexb/ImgToNutexbTool"
 import { NumatbEditor } from "./components/numatb-editor/NumatbEditor"
 import { ImageCompressTool } from "./components/image-compress/ImageCompressTool"
 import { ImageResizeTool } from "./components/image-resize/ImageResizeTool"
+import { GvsMapToVs2Tool } from "./components/gvs-map-to-vs2/GvsMapToVs2Tool"
 
 export default function MiscToolsPage() {
   return (
@@ -188,6 +189,22 @@ export default function MiscToolsPage() {
             </CardHeader>
             <CardContent>
               <ImageResizeTool />
+            </CardContent>
+          </Card>
+
+          {/* GVS Map to VS2 */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <GitCompareArrows className="h-5 w-5" />
+                GVS Map to VS2
+              </CardTitle>
+              <CardDescription>
+                Extract flat files and generate VS2-compatible outputMeta JSON
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <GvsMapToVs2Tool />
             </CardContent>
           </Card>
         </div>
