@@ -3,11 +3,13 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { exists, readFile, readTextFile, writeFile } from "@tauri-apps/plugin-fs";
 import { dirname, join } from "@tauri-apps/api/path";
 import { openPath } from "@tauri-apps/plugin-opener";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Buffer } from "buffer";
 import { toast } from "sonner";
-import { RefreshCw, Save, FolderOpen, Info, Upload, Download } from "lucide-react";
+import { RefreshCw, Save, FolderOpen, Info, Upload, Download, Image } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -17,10 +19,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { StageList, buildStageListBuffer } from "@/models/stageList";
+import { FilePathInput } from "@/components/ui/filePathInput";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { StageList, StageListGVS, buildStageListBuffer } from "@/models/stageList";
 import { useConfigStore } from "@/store/configStore";
 import { StageEditor } from "./stage-list/StageEditor";
 import type { StageListSortKey } from "./stage-list/StageList";
+import { StageGvsViewer, type StageListGvsSortKey } from "./stage-list/StageGvsViewer";
+import {
+  collectGvsImageAssetBinEntries,
+  extractGvsImageAssetsToPng,
+  type GvsIndexedBinEntry,
+  type GvsImageConvertFailure,
+  type GvsImageConvertProgress,
+  type GvsImageConvertSuccess,
+} from "./stage-list/gvsImageAssetExtract";
 import {
   exportStageJsonToFile,
   pickStageJsonImportPreview,
@@ -52,6 +66,12 @@ type StageIconState =
   | { status: "error"; dirPath: string; message: string }
   | { status: "ready"; dirPath: string; stageIconBaseNameOrder: Array<string | null> };
 
+interface GvsSession {
+  filePath: string;
+  searchDir: string;
+  list: StageListGVS;
+}
+
 export default function StageListView({ folderPath, isActive, onUnsavedChanges, onRevealTreeFolder }: StageListViewProps) {
   const getSetting = useConfigStore((s) => s.getSetting);
   const [obDplCachePath, setObDplCachePath] = useState("");
@@ -68,6 +88,30 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
   const [searchInputValue, setSearchInputValue] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [isComposing, setIsComposing] = useState(false);
+  const [gvsSession, setGvsSession] = useState<GvsSession | null>(null);
+  const [isGvsDialogOpen, setIsGvsDialogOpen] = useState(false);
+  const [isApplyingGvs, setIsApplyingGvs] = useState(false);
+  const [gvsBinPath, setGvsBinPath] = useState("");
+  const [gvsSearchDir, setGvsSearchDir] = useState("");
+  const [gvsSelectedIndex, setGvsSelectedIndex] = useState<number>(-1);
+  const [gvsSortKey, setGvsSortKey] = useState<StageListGvsSortKey>("index");
+  const [gvsSearchInputValue, setGvsSearchInputValue] = useState("");
+  const [gvsSearchTerm, setGvsSearchTerm] = useState("");
+  const [gvsIsComposing, setGvsIsComposing] = useState(false);
+  const [isGvsAssetDialogOpen, setIsGvsAssetDialogOpen] = useState(false);
+  const [isCollectingGvsAssetBins, setIsCollectingGvsAssetBins] = useState(false);
+  const [isExtractingGvsAssets, setIsExtractingGvsAssets] = useState(false);
+  const [isGvsBinStatusDialogOpen, setIsGvsBinStatusDialogOpen] = useState(false);
+  const [gvsAssetOutputDir, setGvsAssetOutputDir] = useState("");
+  const [gvsAssetBinEntries, setGvsAssetBinEntries] = useState<GvsIndexedBinEntry[]>([]);
+  const [gvsAssetBinPaths, setGvsAssetBinPaths] = useState<string[]>([]);
+  const [gvsAssetExtractProgress, setGvsAssetExtractProgress] = useState<GvsImageConvertProgress>({
+    current: 0,
+    total: 0,
+    currentFile: "",
+  });
+  const [gvsAssetExtractSuccesses, setGvsAssetExtractSuccesses] = useState<GvsImageConvertSuccess[]>([]);
+  const [gvsAssetExtractFailures, setGvsAssetExtractFailures] = useState<GvsImageConvertFailure[]>([]);
   const [stageIconState, setStageIconState] = useState<StageIconState>({ status: "idle", dirPath: "" });
   const lastLoadedKeyRef = useRef<string>("");
 
@@ -176,14 +220,6 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
     [onUnsavedChanges]
   );
 
-  const fileMeta = useMemo(() => {
-    if (loadState.status !== "ready") return null;
-    return {
-      count: loadState.list.StageCount,
-      commands: loadState.list.CommandsCount,
-    };
-  }, [loadState]);
-
   const handleSaveFile = useCallback(async () => {
     if (loadState.status !== "ready") return;
     const filePath = loadState.filePath;
@@ -233,10 +269,192 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
   }, []);
 
   const handleOpenStageListFolder = useCallback(async () => {
-    if (loadState.status !== "ready") return;
-    const folderPathToOpen = await dirname(loadState.filePath);
+    const activeFilePath =
+      gvsSession?.filePath ??
+      (loadState.status === "ready"
+        ? loadState.filePath
+        : loadState.status === "error"
+          ? loadState.filePath
+          : "");
+    if (!activeFilePath) return;
+    const folderPathToOpen = await dirname(activeFilePath);
     await handleOpenPath(folderPathToOpen);
-  }, [loadState, handleOpenPath]);
+  }, [gvsSession, loadState, handleOpenPath]);
+
+  const loadGvsVariant = useCallback(async (filePath: string, searchDir: string) => {
+    const fileExists = await exists(filePath);
+    if (!fileExists) {
+      throw new Error("GVS stage_list.bin does not exist");
+    }
+
+    const dirExists = await exists(searchDir);
+    if (!dirExists) {
+      throw new Error("Search directory does not exist");
+    }
+
+    const fileData = await readFile(filePath);
+    const list = new StageListGVS(Buffer.from(fileData));
+    setGvsSession({ filePath, searchDir, list });
+    setGvsSelectedIndex(list.StageData.length > 0 ? 0 : -1);
+    setGvsSortKey("index");
+    setGvsSearchInputValue("");
+    setGvsSearchTerm("");
+    setGvsIsComposing(false);
+  }, []);
+
+  const handleApplyGvsVariant = useCallback(async () => {
+    if (!gvsBinPath.trim()) {
+      toast.error("Please select a GVS stage_list.bin file");
+      return;
+    }
+    if (!gvsSearchDir.trim()) {
+      toast.error("Please select a search directory");
+      return;
+    }
+    if (isApplyingGvs) return;
+
+    setIsApplyingGvs(true);
+    try {
+      await loadGvsVariant(gvsBinPath.trim(), gvsSearchDir.trim());
+      setIsGvsDialogOpen(false);
+      toast.success("Loaded GVS variant view");
+    } catch (error) {
+      console.error(error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      toast.error(`Failed to load GVS variant: ${message}`);
+    } finally {
+      setIsApplyingGvs(false);
+    }
+  }, [gvsBinPath, gvsSearchDir, isApplyingGvs, loadGvsVariant]);
+
+  const handleReloadActive = useCallback(async () => {
+    if (gvsSession) {
+      try {
+        await loadGvsVariant(gvsSession.filePath, gvsSession.searchDir);
+        toast.success("Reloaded GVS variant");
+      } catch (error) {
+        console.error(error);
+        const message = error instanceof Error ? error.message : "Unknown error";
+        toast.error(`Failed to reload GVS variant: ${message}`);
+      }
+      return;
+    }
+
+    await load();
+  }, [gvsSession, load, loadGvsVariant]);
+
+  const handleCopyAllNames = useCallback(async () => {
+    const names = gvsSession
+      ? gvsSession.list.StageData.map((entry) => entry.name?.Utf8String ?? "")
+      : loadState.status === "ready"
+        ? loadState.list.StageData.map((entry) => entry.name?.Utf8String ?? "")
+        : [];
+
+    if (names.length === 0) {
+      toast.error("No names available to copy");
+      return;
+    }
+
+    await writeText(names.join("\n"));
+    toast.success(`Copied ${names.length} names to clipboard`);
+  }, [gvsSession, loadState]);
+
+  const handleOpenGvsAssetDialog = useCallback(async () => {
+    if (!gvsSession) {
+      throw new Error("GVS variant is not active");
+    }
+    if (isCollectingGvsAssetBins) return;
+
+    setIsGvsAssetDialogOpen(true);
+    setIsCollectingGvsAssetBins(true);
+    setGvsAssetExtractProgress({ current: 0, total: 0, currentFile: "" });
+    setGvsAssetExtractSuccesses([]);
+    setGvsAssetExtractFailures([]);
+    setGvsAssetBinEntries([]);
+    console.log("[GVS_ASSET_UI] open dialog and start collecting indexed bins", {
+      gvsBinPath: gvsSession.filePath,
+      searchDir: gvsSession.searchDir,
+      stageCount: gvsSession.list.StageData.length,
+    });
+    try {
+      const entries = await collectGvsImageAssetBinEntries(gvsSession.list, gvsSession.searchDir);
+      const existingEntries = entries.filter((entry) => entry.exists);
+      const paths = existingEntries.map((entry) => entry.path);
+      setGvsAssetBinEntries(existingEntries);
+      setGvsAssetBinPaths(paths);
+      console.log("[GVS_ASSET_UI] collect complete", {
+        totalResolved: entries.length,
+        keptExistingCount: existingEntries.length,
+        removedMissingCount: entries.length - existingEntries.length,
+        sample: paths.slice(0, 10),
+      });
+      toast.success(
+        `Collected ${paths.length} existing indexed bins (filtered ${entries.length - existingEntries.length} missing bins)`
+      );
+    } catch (error) {
+      console.error(error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      toast.error(`Failed to collect indexed bins: ${message}`);
+      setGvsAssetBinEntries([]);
+      setGvsAssetBinPaths([]);
+    } finally {
+      setIsCollectingGvsAssetBins(false);
+    }
+  }, [gvsSession, isCollectingGvsAssetBins]);
+
+  const handleExtractAllGvsImageAssets = useCallback(async () => {
+    if (!gvsSession) {
+      throw new Error("GVS variant is not active");
+    }
+    if (!gvsAssetOutputDir.trim()) {
+      toast.error("Please select an output directory");
+      return;
+    }
+    if (isExtractingGvsAssets) return;
+
+    const existingBinPaths = gvsAssetBinEntries.filter((entry) => entry.exists).map((entry) => entry.path);
+    if (existingBinPaths.length === 0) {
+      toast.error("No existing bin files available for extraction");
+      return;
+    }
+
+    setIsExtractingGvsAssets(true);
+    setGvsAssetExtractSuccesses([]);
+    setGvsAssetExtractFailures([]);
+    setGvsAssetExtractProgress({ current: 0, total: 0, currentFile: "" });
+    console.log("[GVS_ASSET_UI] extraction start", {
+      outputDir: gvsAssetOutputDir.trim(),
+      binPathCount: gvsAssetBinPaths.length,
+      existingBinCount: existingBinPaths.length,
+      missingBinCount: 0,
+      sample: existingBinPaths.slice(0, 10),
+    });
+    try {
+      const result = await extractGvsImageAssetsToPng(existingBinPaths, gvsAssetOutputDir.trim(), (progress) => {
+        console.log("[GVS_ASSET_UI] progress update", progress);
+        setGvsAssetExtractProgress(progress);
+      });
+      setGvsAssetExtractSuccesses(result.successes);
+      setGvsAssetExtractFailures(result.failures);
+      console.log("[GVS_ASSET_UI] extraction done", {
+        converted: result.converted,
+        failed: result.failed,
+      });
+
+      if (result.converted > 0) {
+        toast.success(`Extracted ${result.converted} PNG file(s)`);
+      }
+      if (result.failed > 0) {
+        toast.error(`Failed to extract ${result.failed} file(s)`);
+      }
+    } catch (error) {
+      console.error(error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      toast.error(`Failed to extract image assets: ${message}`);
+    } finally {
+      setIsExtractingGvsAssets(false);
+    }
+  }, [gvsSession, gvsAssetOutputDir, isExtractingGvsAssets, gvsAssetBinEntries, gvsAssetBinPaths]);
 
   const handleExportStageJson = useCallback(async () => {
     if (loadState.status !== "ready") return;
@@ -318,11 +536,29 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
     });
   }, [stageIconState]);
 
+  const isGvsActive = gvsSession !== null;
+
+  const fileMeta = useMemo(() => {
+    if (gvsSession) {
+      return {
+        primary: `Loaded GVS: ${gvsSession.list.StageCount} entries, entry size ${gvsSession.list.StageDataEachSize}`,
+        secondary: `Search Directory: ${gvsSession.searchDir}`,
+      };
+    }
+    if (loadState.status !== "ready") return null;
+    return {
+      primary: `Loaded: ${loadState.list.StageCount} stages, ${loadState.list.CommandsCount} commands`,
+      secondary: "",
+    };
+  }, [gvsSession, loadState]);
+
+  const activeFilePath = gvsSession?.filePath ?? (loadState.status === "ready" ? loadState.filePath : "");
+
   if (!isActive) {
     return <div className="h-full w-full" />;
   }
 
-  if (loadState.status === "loading") {
+  if (!isGvsActive && loadState.status === "loading") {
     return (
       <div className="h-full w-full">
         <Card className="h-full flex flex-col border-none shadow-none rounded-none bg-transparent">
@@ -337,7 +573,7 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
     );
   }
 
-  if (loadState.status === "error") {
+  if (!isGvsActive && loadState.status === "error") {
     return (
       <div className="h-full w-full">
         <Card className="border-none shadow-none rounded-none bg-transparent">
@@ -356,17 +592,28 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
               )}
             </div>
             <div className="text-sm text-destructive">{loadState.message}</div>
-            <Button size="sm" onClick={() => void load()} className="inline-flex items-center gap-2">
-              <RefreshCw className="w-4 h-4" />
-              Reload
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={() => void handleReloadActive()} className="inline-flex items-center gap-2">
+                <RefreshCw className="w-4 h-4" />
+                Reload
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsGvsDialogOpen(true)}
+                disabled={isApplyingGvs}
+                className="inline-flex items-center gap-2"
+              >
+                Gvs Load
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  if (loadState.status !== "ready") {
+  if (!isGvsActive && loadState.status !== "ready") {
     return (
       <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground">
         Select this tab to load stage_list.bin
@@ -380,9 +627,12 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
         <CardHeader className="p-0 pb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <CardTitle>Stage List</CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle>Stage List</CardTitle>
+                {isGvsActive ? <Badge variant="secondary">GVS Variant</Badge> : null}
+              </div>
               <div className="text-xs text-muted-foreground break-all mt-1 flex items-center gap-1">
-                Stage List: {loadState.filePath}
+                {isGvsActive ? "Stage List GVS" : "Stage List"}: {activeFilePath}
                 <button
                   type="button"
                   onClick={() => void handleOpenStageListFolder()}
@@ -394,84 +644,141 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
                 </button>
               </div>
               {fileMeta && (
-                <div className="text-xs text-muted-foreground mt-1">
-                  Loaded: {fileMeta.count} stages, {fileMeta.commands} commands
-                </div>
+                <>
+                  <div className="text-xs text-muted-foreground mt-1">{fileMeta.primary}</div>
+                  {fileMeta.secondary ? <div className="text-xs text-muted-foreground mt-1 break-all">{fileMeta.secondary}</div> : null}
+                </>
               )}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Button size="sm" variant="outline" onClick={() => void load()} className="inline-flex items-center gap-2">
-                <RefreshCw className="w-4 h-4" />
-                Reload
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => void handlePickImportStageJson()}
-                disabled={isImporting}
-                className="inline-flex items-center gap-2"
-                title="Import stages from JSON"
-              >
-                <Upload className="w-4 h-4" />
-                Import JSON
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => void handleExportStageJson()}
-                disabled={isExporting || loadState.list.StageData.length === 0}
-                className="inline-flex items-center gap-2"
-                title="Export all stages to JSON"
-              >
-                <Download className="w-4 h-4" />
-                Export JSON
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setIsInfoDialogOpen(true)}
-                className="inline-flex items-center gap-2"
-              >
-                <Info className="w-4 h-4" />
-                Info
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => void handleSaveFile()}
-                disabled={!hasChanges}
-                className="inline-flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" />
-                Save File
-              </Button>
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => void handleReloadActive()} className="inline-flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4" />
+                  Reload
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handlePickImportStageJson()}
+                  disabled={isImporting || isGvsActive || loadState.status !== "ready"}
+                  className="inline-flex items-center gap-2"
+                  title={isGvsActive ? "Not available in GVS variant view" : "Import stages from JSON"}
+                >
+                  <Upload className="w-4 h-4" />
+                  Import JSON
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleExportStageJson()}
+                  disabled={isExporting || isGvsActive || loadState.status !== "ready" || loadState.list.StageData.length === 0}
+                  className="inline-flex items-center gap-2"
+                  title={isGvsActive ? "Not available in GVS variant view" : "Export all stages to JSON"}
+                >
+                  <Download className="w-4 h-4" />
+                  Export JSON
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsInfoDialogOpen(true)}
+                  className="inline-flex items-center gap-2"
+                >
+                  <Info className="w-4 h-4" />
+                  Info
+                </Button>
+                {isGvsActive ? (
+                  <Button size="sm" variant="outline" onClick={() => setGvsSession(null)}>
+                    Back To Main
+                  </Button>
+                ) : null}
+                <Button
+                  size="sm"
+                  onClick={() => void handleSaveFile()}
+                  disabled={!hasChanges || isGvsActive}
+                  className="inline-flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  Save File
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-2 rounded-md border px-2 py-1.5">
+                <span className="text-[11px] font-medium text-muted-foreground">GVS</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleCopyAllNames()}
+                  disabled={!isGvsActive && loadState.status !== "ready"}
+                >
+                  Copy All Name
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsGvsDialogOpen(true)}
+                  disabled={isApplyingGvs}
+                  className="inline-flex items-center gap-2"
+                  title="Load Stage List GVS variant"
+                >
+                  Gvs Load
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleOpenGvsAssetDialog()}
+                  disabled={!isGvsActive || isCollectingGvsAssetBins}
+                  className="inline-flex items-center gap-2"
+                >
+                  <Image className="w-4 h-4" />
+                  Extract All Image Assets
+                </Button>
+              </div>
             </div>
           </div>
         </CardHeader>
 
         <CardContent className="flex-1 min-h-0 p-0">
-          <StageEditor
-            stageListData={loadState.list}
-            selectedIndex={selectedIndex}
-            onSelectChange={setSelectedIndex}
-            sortKey={sortKey}
-            onSortKeyChange={setSortKey}
-            searchInputValue={searchInputValue}
-            searchTerm={searchTerm}
-            onSearchInputChange={setSearchInputValue}
-            onSearchTermChange={setSearchTerm}
-            isComposing={isComposing}
-            onComposingChange={setIsComposing}
-            obDplCachePath={obDplCachePath}
-            obModPath={obModPath}
-            workspacePath={folderPath}
-            onReveal={onRevealTreeFolder}
-            onChange={handleEditorChange}
-            stageIconConvertDirPath={stageIconState.status === "ready" ? stageIconState.dirPath : undefined}
-            stageIconBaseNameOrder={stageIconState.status === "ready" ? stageIconState.stageIconBaseNameOrder : undefined}
-            stageIconIndexPickerItems={stageIconIndexPickerItems}
-            stageIconIndexPickerLoading={stageIconState.status === "loading" || stageIconState.status === "idle"}
-            stageIconIndexPickerError={stageIconState.status === "error" ? stageIconState.message : null}
-          />
+          {isGvsActive && gvsSession ? (
+            <StageGvsViewer
+              stageListData={gvsSession.list}
+              selectedIndex={gvsSelectedIndex}
+              onSelectChange={setGvsSelectedIndex}
+              sortKey={gvsSortKey}
+              onSortKeyChange={setGvsSortKey}
+              searchInputValue={gvsSearchInputValue}
+              searchTerm={gvsSearchTerm}
+              onSearchInputChange={setGvsSearchInputValue}
+              onSearchTermChange={setGvsSearchTerm}
+              isComposing={gvsIsComposing}
+              onComposingChange={setGvsIsComposing}
+              searchDir={gvsSession.searchDir}
+            />
+          ) : (
+            <StageEditor
+              stageListData={loadState.status === "ready" ? loadState.list : null}
+              selectedIndex={selectedIndex}
+              onSelectChange={setSelectedIndex}
+              sortKey={sortKey}
+              onSortKeyChange={setSortKey}
+              searchInputValue={searchInputValue}
+              searchTerm={searchTerm}
+              onSearchInputChange={setSearchInputValue}
+              onSearchTermChange={setSearchTerm}
+              isComposing={isComposing}
+              onComposingChange={setIsComposing}
+              obDplCachePath={obDplCachePath}
+              obModPath={obModPath}
+              workspacePath={folderPath}
+              onReveal={onRevealTreeFolder}
+              onChange={handleEditorChange}
+              stageIconConvertDirPath={stageIconState.status === "ready" ? stageIconState.dirPath : undefined}
+              stageIconBaseNameOrder={stageIconState.status === "ready" ? stageIconState.stageIconBaseNameOrder : undefined}
+              stageIconIndexPickerItems={stageIconIndexPickerItems}
+              stageIconIndexPickerLoading={stageIconState.status === "loading" || stageIconState.status === "idle"}
+              stageIconIndexPickerError={stageIconState.status === "error" ? stageIconState.message : null}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -484,9 +791,196 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
                 <p>Auto-loads {STAGE_LIST_HASH}/stage_list.bin from the selected folder.</p>
                 <p>Each stage entry has fields including iconIndex for the Stage Icon List.</p>
                 <p>Use FHM2D Init to extract stage_list.bin from the source fhm2d file.</p>
+                <p>Gvs Load loads a variant file with magic A9 B8 AB CE in a separate read-only viewer.</p>
               </div>
             </DialogDescription>
           </DialogHeader>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isGvsDialogOpen} onOpenChange={setIsGvsDialogOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Load Stage List GVS Variant</DialogTitle>
+            <DialogDescription>
+              Select the GVS `stage_list.bin` variant and a search directory, then apply it to the Stage List viewer.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label htmlFor="gvs-bin-path">GVS stage_list.bin</Label>
+              <FilePathInput
+                id="gvs-bin-path"
+                value={gvsBinPath}
+                onChange={(e) => setGvsBinPath(e.target.value)}
+                storeKey="stageListGvsBinPath"
+                picker={{
+                  kind: "file",
+                  title: "Select GVS stage_list.bin",
+                  filters: [{ name: "BIN Files", extensions: ["bin"] }],
+                  defaultPathKey: "stageListGvsBinPath",
+                }}
+                placeholder="Select a GVS stage_list.bin file"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="gvs-search-dir">Search Directory</Label>
+              <FilePathInput
+                id="gvs-search-dir"
+                value={gvsSearchDir}
+                onChange={(e) => setGvsSearchDir(e.target.value)}
+                storeKey="stageListGvsSearchDir"
+                picker={{
+                  kind: "folder",
+                  title: "Select GVS search directory",
+                  defaultPathKey: "stageListGvsSearchDir",
+                }}
+                placeholder="Select a search directory"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsGvsDialogOpen(false)} disabled={isApplyingGvs}>
+              Cancel
+            </Button>
+            <Button onClick={() => void handleApplyGvsVariant()} disabled={isApplyingGvs}>
+              Apply
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isGvsAssetDialogOpen} onOpenChange={setIsGvsAssetDialogOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Extract All Image Assets</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-1">
+                <div>This operation automatically extracts nutexb assets and converts them to PNG in the selected output directory.</div>
+                <div>PNG file names use the internal nutexb names, not the nutexb index names.</div>
+                <div>Temporary files are written under `_gvs_extract_temp` inside the output directory.</div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="gvs-asset-output-dir">Output Directory</Label>
+              <FilePathInput
+                id="gvs-asset-output-dir"
+                value={gvsAssetOutputDir}
+                onChange={(e) => setGvsAssetOutputDir(e.target.value)}
+                storeKey="stageListGvsAssetOutputDir"
+                picker={{
+                  kind: "folder",
+                  title: "Select output directory",
+                  defaultPathKey: "stageListGvsAssetOutputDir",
+                }}
+                placeholder="Select output directory"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Pending BIN Paths (Deduplicated)</div>
+              <div className="text-xs text-muted-foreground">
+                Total BIN files: {gvsAssetBinPaths.length}
+              </div>
+              <div className="max-h-40 overflow-auto rounded border p-2 text-xs font-mono whitespace-pre-wrap break-all">
+                {isCollectingGvsAssetBins
+                  ? "Collecting indexed bin paths..."
+                  : gvsAssetBinPaths.length > 0
+                    ? gvsAssetBinPaths.join("\n")
+                    : "No indexed bin paths collected"}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Conversion Progress</div>
+              <Progress
+                value={
+                  gvsAssetExtractProgress.total > 0
+                    ? Math.round((gvsAssetExtractProgress.current / gvsAssetExtractProgress.total) * 100)
+                    : 0
+                }
+              />
+              <div className="text-xs text-muted-foreground">
+                {gvsAssetExtractProgress.current} / {gvsAssetExtractProgress.total}
+                {gvsAssetExtractProgress.currentFile ? ` · ${gvsAssetExtractProgress.currentFile}` : ""}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Success ({gvsAssetExtractSuccesses.length})</div>
+                <div className="max-h-36 overflow-auto rounded border p-2 text-xs font-mono whitespace-pre-wrap break-all">
+                  {gvsAssetExtractSuccesses.length > 0
+                    ? gvsAssetExtractSuccesses.map((item) => item.outputPngPath).join("\n")
+                    : "No success records"}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Failed ({gvsAssetExtractFailures.length})</div>
+                <div className="max-h-36 overflow-auto rounded border p-2 text-xs font-mono whitespace-pre-wrap break-all">
+                  {gvsAssetExtractFailures.length > 0
+                    ? gvsAssetExtractFailures.map((item) => `${item.sourceBinPath} :: ${item.target} :: ${item.reason}`).join("\n")
+                    : "No failure records"}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsGvsAssetDialogOpen(false)} disabled={isExtractingGvsAssets}>
+              Close
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsGvsBinStatusDialogOpen(true)}
+              disabled={isCollectingGvsAssetBins || gvsAssetBinEntries.length === 0}
+            >
+              Bin Extraction Status
+            </Button>
+            <Button
+              onClick={() => void handleExtractAllGvsImageAssets()}
+              disabled={
+                isExtractingGvsAssets ||
+                isCollectingGvsAssetBins ||
+                gvsAssetBinEntries.filter((entry) => entry.exists).length === 0
+              }
+            >
+              Start Extract and Convert
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isGvsBinStatusDialogOpen} onOpenChange={setIsGvsBinStatusDialogOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Bin Extraction Status</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-1">
+                <div>Indexed BIN paths are resolved from GVS hash fields.</div>
+                <div>This view already excludes missing BIN paths.</div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="text-sm text-muted-foreground">
+              Total Existing BIN files: {gvsAssetBinEntries.length}
+            </div>
+            <div className="max-h-96 overflow-auto rounded border p-2 text-xs font-mono whitespace-pre-wrap break-all">
+              {gvsAssetBinEntries.length > 0
+                ? gvsAssetBinEntries
+                    .map((entry) => `[OK] ${entry.path}`)
+                    .join("\n")
+                : "No indexed BIN paths collected"}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

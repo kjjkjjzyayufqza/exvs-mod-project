@@ -94,9 +94,9 @@ export function GvsMapToVs2Tool() {
     return Math.min(100, Math.round((progress.current / progress.total) * 100))
   }, [progress.current, progress.total])
 
-  const getObModBinName = (sourceBinName: string): string => {
+  const getObModOutputName = (sourceBinName: string): string => {
     const raw = sourceBinName.replace(/\.bin$/i, "").replace(/^0x/i, "")
-    return `0x${raw.toUpperCase()}.bin`
+    return `0x${raw.toUpperCase()}.fhm2d`
   }
 
   const containsAsciiKeyword = (data: Uint8Array, keyword: string): boolean => {
@@ -859,12 +859,12 @@ export function GvsMapToVs2Tool() {
 
         const packedFhm2dName = target.fileName.replace(/\.bin$/i, ".fhm2d")
         const packedFhm2dPath = await join(targetObModPath, packedFhm2dName)
-        const renamedBinName = getObModBinName(target.fileName)
-        const renamedBinPath = await join(targetObModPath, renamedBinName)
+        const renamedOutputName = getObModOutputName(target.fileName)
+        const renamedOutputPath = await join(targetObModPath, renamedOutputName)
 
         const renameCommand = Command.create(
           "exec-cmd",
-          ["/c", "move", "/Y", packedFhm2dPath.replace(/\//g, "\\"), renamedBinPath.replace(/\//g, "\\")],
+          ["/c", "move", "/Y", packedFhm2dPath.replace(/\//g, "\\"), renamedOutputPath.replace(/\//g, "\\")],
           { encoding: "utf-8" }
         )
         const renameResult = await renameCommand.execute()
@@ -879,7 +879,7 @@ export function GvsMapToVs2Tool() {
               ? {
                   ...item,
                   packStatus: "packed",
-                  packedFilePath: renamedBinPath,
+                  packedFilePath: renamedOutputPath,
                 }
               : item
           )
@@ -1006,7 +1006,7 @@ export function GvsMapToVs2Tool() {
             <div>Debug: scan raw data by directional_lighting and extract only graphic_param file.</div>
             <div>Direct Step2: Select extracted folders directly and run numatb fix without Step1.</div>
             <div>Step2: Migrate extracted `.numatb` files from GVS format to EXVS2-compatible settings.</div>
-            <div>Step3: Pack the folder using compression.js and output to `obModPath` as `0xHASH.bin`.</div>
+            <div>Step3: Pack the folder using compression.js and output to `obModPath` as `0xHASH.fhm2d`.</div>
           </Card>
         )}
 
