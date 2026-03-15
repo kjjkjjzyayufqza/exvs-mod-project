@@ -302,3 +302,17 @@ export function extractOnlyGraphicParamFile(
   }
   return matches[0]
 }
+
+export function extractOnlyNumatbFiles(
+  fileBuffer: Uint8Array,
+  _fileNameNoExt: string
+): FlatExtractedFile[] {
+  const pack = createGvsMapToVs2Package(fileBuffer, _fileNameNoExt)
+  const matches = pack.flatFiles.filter(
+    (file) => file.fileName.toLowerCase().endsWith(".numatb")
+  )
+  if (matches.length === 0) {
+    throw new Error("No numatb file found in package")
+  }
+  return matches
+}

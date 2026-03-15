@@ -6,7 +6,7 @@ import { DualValueProperty } from "@/components/ui/dual-value-property";
 import { StageFileNameStatusIcons } from "./StageFileNameStatusIcons";
 import { StageIconIndexPickerPopover } from "./StageIconIndexPickerPopover";
 import type { StageDataEntry } from "@/models/stageList";
-import type { StageIconIndexPickerItem } from "./StageIconIndexPickerPopover";
+import type { StageIconIndexPickerGroup } from "./StageIconIndexPickerPopover";
 
 const NUMERIC_FIELDS = [
   { name: "id" as const, label: "id" },
@@ -37,7 +37,7 @@ interface StageFormProps {
   obModPath?: string;
   workspacePath?: string;
   onReveal?: (path: string) => void;
-  stageIconIndexPickerItems?: StageIconIndexPickerItem[];
+  stageIconIndexPickerGroups?: StageIconIndexPickerGroup[];
   stageIconIndexPickerLoading?: boolean;
   stageIconIndexPickerError?: string | null;
 }
@@ -50,7 +50,7 @@ export function StageForm({
   obModPath = "",
   workspacePath = "",
   onReveal,
-  stageIconIndexPickerItems = [],
+  stageIconIndexPickerGroups = [],
   stageIconIndexPickerLoading = false,
   stageIconIndexPickerError = null,
 }: StageFormProps) {
@@ -113,7 +113,7 @@ export function StageForm({
               ) : field.name === "iconIndex" ? (
                 <StageIconIndexPickerPopover
                   onSelect={(idx) => handleFieldChange("iconIndex", idx)}
-                  items={stageIconIndexPickerItems}
+                  groups={stageIconIndexPickerGroups}
                   selectedValue={getNumericValue("iconIndex")}
                   isLoading={stageIconIndexPickerLoading}
                   error={stageIconIndexPickerError}

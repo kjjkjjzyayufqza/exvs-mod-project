@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { join } from "@tauri-apps/api/path";
+import { exists } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,8 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DDS_FORMATS } from "@/lib/ddsFormats";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { buildCardIconPreviewPath } from "./cardIconUtils";
 import { splitPathSegments } from "@/lib/fhm2d_fileUrlUtils";
@@ -42,17 +45,21 @@ export function CardIconReplaceDialog({
 }: CardIconReplaceDialogProps) {
   const [openState, setOpenState] = useState(false);
   const [pngPath, setPngPath] = useState("");
+  const [ddsFormat, setDdsFormat] = useState<string>("BC7RgbaUnormSrgb");
+  const [isDetectingFormat, setIsDetectingFormat] = useState(false);
   const [isReplacing, setIsReplacing] = useState(false);
 
   const targetFileUrl = selectedItem?.fileUrl ?? "";
   const canEdit = Boolean(folderPath && convertDirPath && targetFileUrl);
+  const defaultPreviewPngPath = useMemo(() => {
+    if (!selectedItem?.name) return "";
+    return buildCardIconPreviewPath(convertDirPath, selectedItem.name) ?? "";
+  }, [convertDirPath, selectedItem?.name]);
 
   const previewSrc = useMemo(() => {
     if (pngPath) return convertFileSrc(pngPath);
-    if (!selectedItem?.name) return null;
-    const previewPath = buildCardIconPreviewPath(convertDirPath, selectedItem.name);
-    return previewPath ? convertFileSrc(previewPath) : null;
-  }, [convertDirPath, pngPath, selectedItem?.name]);
+    return defaultPreviewPngPath ? convertFileSrc(defaultPreviewPngPath) : null;
+  }, [defaultPreviewPngPath, pngPath]);
 
   const handlePngPicked = useCallback((picked: string | string[]) => {
     if (Array.isArray(picked)) {
@@ -61,6 +68,33 @@ export function CardIconReplaceDialog({
     }
     setPngPath(picked);
   }, []);
+
+  useEffect(() => {
+    const detectDdsFormat = async () => {
+      if (!openState || !folderPath || !targetFileUrl) return;
+      try {
+        setIsDetectingFormat(true);
+        const nutexbPath = await resolveFullPath(folderPath, targetFileUrl);
+        if (!nutexbPath) {
+          throw new Error("Failed to resolve nutexb path");
+        }
+        const detected = await invoke<string>("card_icon_detect_dds_format", { nutexbPath });
+        const matched = DDS_FORMATS.find((opt) => opt.value === detected);
+        if (!matched) {
+          throw new Error(`Unsupported DDS format from nutexb: ${detected}`);
+        }
+        setDdsFormat(matched.value);
+      } catch (error) {
+        console.error(error);
+        const message =
+          error instanceof Error ? error.message : "Failed to detect original DDS format";
+        toast.error(message);
+      } finally {
+        setIsDetectingFormat(false);
+      }
+    };
+    void detectDdsFormat();
+  }, [folderPath, openState, targetFileUrl]);
 
   const handleApply = useCallback(async () => {
     if (!selectedItem) {
@@ -79,8 +113,13 @@ export function CardIconReplaceDialog({
       toast.error("Target nutexb path is not available");
       return;
     }
-    if (!pngPath) {
-      toast.error("Please select a PNG file");
+    const sourcePngPath = pngPath || defaultPreviewPngPath;
+    if (!sourcePngPath) {
+      toast.error("No source PNG available");
+      return;
+    }
+    if (!(await exists(sourcePngPath))) {
+      toast.error("Source PNG does not exist");
       return;
     }
 
@@ -91,10 +130,11 @@ export function CardIconReplaceDialog({
         toast.error("Failed to resolve nutexb path");
         return;
       }
-      const result = await invoke<ReplaceSummary>("card_icon_replace_from_png", {
+      const result = await invoke<ReplaceSummary>("card_icon_replace_from_png_with_dds_format", {
         nutexbPath,
         convertDir: convertDirPath,
-        pngPath,
+        pngPath: sourcePngPath,
+        ddsFormat,
       });
       toast.success(`Updated card icon: ${result.nutexbName}`);
       setOpenState(false);
@@ -107,7 +147,16 @@ export function CardIconReplaceDialog({
     } finally {
       setIsReplacing(false);
     }
-  }, [convertDirPath, folderPath, onApplied, pngPath, selectedItem, targetFileUrl]);
+  }, [
+    convertDirPath,
+    ddsFormat,
+    folderPath,
+    onApplied,
+    pngPath,
+    selectedItem,
+    targetFileUrl,
+    defaultPreviewPngPath,
+  ]);
 
   return (
     <Dialog open={openState} onOpenChange={setOpenState}>
@@ -159,7 +208,32 @@ export function CardIconReplaceDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="card-icon-replace-png">Source PNG</Label>
+              <Label>DDS Format</Label>
+              <Select
+                value={ddsFormat}
+                onValueChange={setDdsFormat}
+                disabled={isReplacing || isDetectingFormat}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select DDS format" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DDS_FORMATS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="text-xs text-muted-foreground min-h-8 leading-snug">
+                {isDetectingFormat
+                  ? "Detecting original format from target nutexb..."
+                  : "Default is the original format from the target nutexb file."}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="card-icon-replace-png">Source PNG (optional)</Label>
               <FilePathInput
                 id="card-icon-replace-png"
                 value={pngPath}
@@ -174,7 +248,7 @@ export function CardIconReplaceDialog({
                 disabled={isReplacing}
               />
               <div className="text-xs text-muted-foreground min-h-8 leading-snug">
-                The PNG will be converted in Rust (no external executables).
+                If empty, it uses the current <span className="font-mono">__convert</span> preview PNG.
               </div>
             </div>
 
@@ -182,7 +256,10 @@ export function CardIconReplaceDialog({
               <Button variant="outline" onClick={() => setOpenState(false)} disabled={isReplacing}>
                 Cancel
               </Button>
-              <Button onClick={() => void handleApply()} disabled={!pngPath || isReplacing || !canEdit}>
+              <Button
+                onClick={() => void handleApply()}
+                disabled={isReplacing || isDetectingFormat || !canEdit || (!pngPath && !defaultPreviewPngPath)}
+              >
                 {isReplacing ? "Replacing..." : "Apply"}
               </Button>
             </div>

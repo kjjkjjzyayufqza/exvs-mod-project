@@ -18,6 +18,8 @@ pub fn run() {
             commands::my_custom_command,
             commands::read_file,
             commands::exec_shell_command,
+            commands::exec_shell_command_with_output,
+            commands::exec_process_with_output,
             commands::watch_folder,
             commands::nutexb_read_info,
             commands::nutexb_export_dds,
@@ -27,6 +29,7 @@ pub fn run() {
             commands::series_image_replace_from_png,
             commands::card_icon_replace_from_png,
             commands::card_icon_replace_from_png_with_dds_format,
+            commands::card_icon_detect_dds_format,
             commands::card_icon_batch_replace_with_dds_format,
             commands::copy_asset_as_new
         ])

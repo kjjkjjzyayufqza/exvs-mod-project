@@ -535,6 +535,16 @@ pub fn card_icon_replace_from_png_with_dds_format(
     })
 }
 
+pub fn card_icon_detect_dds_format(nutexb_path: &str) -> Result<String, String> {
+    let path = PathBuf::from(nutexb_path);
+    if !path.exists() {
+        return Err(format!("Target nutexb does not exist: {}", path.display()));
+    }
+    let existing = NutexbFile::read_from_file(&path).map_err(|e| e.to_string())?;
+    let dds_format = nutexb_format_to_dds_image_format(existing.footer.image_format);
+    Ok(format!("{dds_format:?}"))
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CardIconBatchReplaceSummary {

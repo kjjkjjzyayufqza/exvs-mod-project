@@ -1,4 +1,5 @@
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use encoding_rs::GBK;
 use serde::Serialize;
 use serde_json::Value;
 use std::{
@@ -53,6 +54,67 @@ pub fn exec_shell_command(command: &str) -> Result<String, String> {
                 Err(String::from_utf8_lossy(&output.stderr).to_string())
             }
         }
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShellCommandOutput {
+    pub success: bool,
+    pub exit_code: Option<i32>,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+fn decode_command_text(bytes: &[u8]) -> String {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(text) = std::str::from_utf8(bytes) {
+            return text.to_string();
+        }
+        let (decoded, _, _) = GBK.decode(bytes);
+        decoded.to_string()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        String::from_utf8_lossy(bytes).to_string()
+    }
+}
+
+#[tauri::command]
+pub fn exec_shell_command_with_output(command: &str) -> Result<ShellCommandOutput, String> {
+    let output = if cfg!(target_os = "windows") {
+        Command::new("cmd").args(["/C", command]).output()
+    } else {
+        Command::new("sh").arg("-c").arg(command).output()
+    };
+
+    match output {
+        Ok(output) => Ok(ShellCommandOutput {
+            success: output.status.success(),
+            exit_code: output.status.code(),
+            stdout: decode_command_text(&output.stdout),
+            stderr: decode_command_text(&output.stderr),
+        }),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn exec_process_with_output(
+    executable: &str,
+    args: Vec<String>,
+) -> Result<ShellCommandOutput, String> {
+    let output = Command::new(executable).args(args).output();
+
+    match output {
+        Ok(output) => Ok(ShellCommandOutput {
+            success: output.status.success(),
+            exit_code: output.status.code(),
+            stdout: decode_command_text(&output.stdout),
+            stderr: decode_command_text(&output.stderr),
+        }),
         Err(e) => Err(e.to_string()),
     }
 }
@@ -146,6 +208,15 @@ pub async fn card_icon_replace_from_png_with_dds_format(
             png_path.as_str(),
             dds_format.as_str(),
         )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn card_icon_detect_dds_format(nutexb_path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::nutexb_lib::card_icon_detect_dds_format(nutexb_path.as_str())
     })
     .await
     .map_err(|e| e.to_string())?

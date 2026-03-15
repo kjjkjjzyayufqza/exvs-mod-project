@@ -6,7 +6,7 @@ import { openPath } from "@tauri-apps/plugin-opener";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Buffer } from "buffer";
 import { toast } from "sonner";
-import { RefreshCw, Save, FolderOpen, Info, Upload, Download, Image } from "lucide-react";
+import { RefreshCw, Save, FolderOpen, Info, Upload, Download, Image, Bug } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,8 @@ import { FilePathInput } from "@/components/ui/filePathInput";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { StageList, StageListGVS, buildStageListBuffer } from "@/models/stageList";
+import type { StageDataEntry } from "@/models/stageList";
+import { obfEncodeFromUtf8String } from "@/utils/obfString";
 import { useConfigStore } from "@/store/configStore";
 import { StageEditor } from "./stage-list/StageEditor";
 import type { StageListSortKey } from "./stage-list/StageList";
@@ -41,11 +43,50 @@ import {
   applyStageJsonImportToList,
   type StageJsonImportPreview,
 } from "./stage-list/StageListJson";
+import type { StageIconIndexPickerGroup } from "./stage-list/StageIconIndexPickerPopover";
 import { extractCardIconItems } from "./card-icon-list/cardIconStructure";
 import { buildCardIconPreviewPath } from "./card-icon-list/cardIconUtils";
 
 const STAGE_LIST_HASH = "0xCE74091E";
 const STAGE_ICON_HASH = "0x3CC8B10B";
+const STAGE_ICON_SECONDARY_HASH = "0x0CEE3991";
+
+const DEBUG_SOURCE_ID = 2111950077;
+
+/** Debug batch: each entry is copied from source id 2111950077 with name and fileName (hex bytes as little-endian int32). */
+const DEBUG_BATCH_ENTRIES: Array<{ name: string; fileNameHex: string }> = [
+  { name: "GVSチュートリアル", fileNameHex: "97 3C F7 16" },
+  { name: "GVSコロニー市街地", fileNameHex: "57 E3 B0 80" },
+  { name: "GVSコロニーレーザー内部", fileNameHex: "28 8E 34 20" },
+  { name: "GVS森林（昼間）", fileNameHex: "17 68 51 35" },
+  { name: "GVS月面", fileNameHex: "57 BA 57 7A" },
+  { name: "GVS小惑星", fileNameHex: "82 9E 2B 1A" },
+  { name: "GVSビクエスト島", fileNameHex: "FD F3 AF BA" },
+  { name: "GVSソロモン宙域", fileNameHex: "97 0B AA 40" },
+  { name: "GVS廃棄コロニー(地球近辺)", fileNameHex: "3D 42 52 80" },
+  { name: "GVSジャブロー", fileNameHex: "68 32 88 C3" },
+  { name: "GVSニューホンコン", fileNameHex: "28 E0 8E 8C" },
+  { name: "GVSサンダーボルト宙域", fileNameHex: "82 A9 76 4C" },
+  { name: "GVS鉄華団基地", fileNameHex: "57 8D 0A 2C" },
+  { name: "GVSトリントン演習場", fileNameHex: "E8 51 73 B6" },
+  { name: "GVSニューホンコン（夕方）", fileNameHex: "D7 80 4B F5" },
+  { name: "GVS森林（深夜）", fileNameHex: "FD AA 48 40" },
+  { name: "GVSミンスリー", fileNameHex: "42 76 31 DA" },
+];
+
+function parseFileNameHex(hex: string): number {
+  const bytes = hex.trim().split(/\s+/).map((s) => parseInt(s, 16));
+  if (bytes.length !== 4 || bytes.some((b) => Number.isNaN(b))) {
+    throw new Error(`Invalid fileName hex: ${hex}`);
+  }
+  return Buffer.from(bytes).readInt32LE(0);
+}
+
+function buildNameData(value: string): { Offset: number; StringBufferData: Buffer; Utf8String: string } {
+  const utf8 = value ?? "";
+  const encoded = Buffer.from(obfEncodeFromUtf8String(utf8));
+  return { Offset: 0, StringBufferData: encoded, Utf8String: utf8 };
+}
 
 interface StageListViewProps {
   folderPath: string;
@@ -61,10 +102,10 @@ type LoadState =
   | { status: "ready"; filePath: string; list: StageList };
 
 type StageIconState =
-  | { status: "idle"; dirPath: string }
-  | { status: "loading"; dirPath: string }
-  | { status: "error"; dirPath: string; message: string }
-  | { status: "ready"; dirPath: string; stageIconBaseNameOrder: Array<string | null> };
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "ready"; groups: StageIconIndexPickerGroup[] };
 
 interface GvsSession {
   filePath: string;
@@ -112,40 +153,67 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
   });
   const [gvsAssetExtractSuccesses, setGvsAssetExtractSuccesses] = useState<GvsImageConvertSuccess[]>([]);
   const [gvsAssetExtractFailures, setGvsAssetExtractFailures] = useState<GvsImageConvertFailure[]>([]);
-  const [stageIconState, setStageIconState] = useState<StageIconState>({ status: "idle", dirPath: "" });
+  const [stageIconState, setStageIconState] = useState<StageIconState>({ status: "idle" });
   const lastLoadedKeyRef = useRef<string>("");
 
   const resolveFilePath = useCallback(async () => {
     return await join(folderPath, STAGE_LIST_HASH, "stage_list.bin");
   }, [folderPath]);
 
-  const resolveStageIconConvertDir = useCallback(async () => {
-    return await join(folderPath, STAGE_ICON_HASH, "__convert");
-  }, [folderPath]);
+  const resolveStageIconConvertDir = useCallback(
+    async (hash: string) => {
+      return await join(folderPath, hash, "__convert");
+    },
+    [folderPath]
+  );
 
-  const resolveStageIconStructureJsonPath = useCallback(async () => {
-    return await join(folderPath, `${STAGE_ICON_HASH}_structure.json`);
-  }, [folderPath]);
+  const resolveStageIconStructureJsonPath = useCallback(
+    async (hash: string) => {
+      return await join(folderPath, `${hash}_structure.json`);
+    },
+    [folderPath]
+  );
 
   const loadStageIconCount = useCallback(async () => {
     if (!folderPath) {
-      setStageIconState({ status: "error", dirPath: "", message: "Folder path is empty" });
+      setStageIconState({ status: "error", message: "Folder path is empty" });
       return;
     }
 
-    const dirPath = await resolveStageIconConvertDir();
-    setStageIconState({ status: "loading", dirPath });
+    setStageIconState({ status: "loading" });
     try {
-      const structurePath = await resolveStageIconStructureJsonPath();
-      const raw = await readTextFile(structurePath);
-      const json = JSON.parse(raw);
-      const items = extractCardIconItems(json);
-      const stageIconBaseNameOrder = items.map((it) => it.name);
-      setStageIconState({ status: "ready", dirPath, stageIconBaseNameOrder });
+      const groupDefs: Array<{ key: string; title: string; hash: string }> = [
+        { key: "first", title: "Group 1", hash: STAGE_ICON_HASH },
+        { key: "second", title: "Group 2", hash: STAGE_ICON_SECONDARY_HASH },
+      ];
+      const groups = await Promise.all(
+        groupDefs.map(async (def) => {
+          const [dirPath, structurePath] = await Promise.all([
+            resolveStageIconConvertDir(def.hash),
+            resolveStageIconStructureJsonPath(def.hash),
+          ]);
+          const raw = await readTextFile(structurePath);
+          const json = JSON.parse(raw);
+          const iconItems = extractCardIconItems(json);
+          const items = iconItems.map((it, index) => {
+            const previewPath = it.name ? buildCardIconPreviewPath(dirPath, it.name) : null;
+            const previewSrc = previewPath ? convertFileSrc(previewPath) : "/tauri.svg";
+            return { index, name: it.name, previewSrc };
+          });
+          return {
+            key: def.key,
+            title: def.title,
+            convertDirPath: dirPath,
+            structurePath,
+            loadedCount: items.length,
+            items,
+          };
+        })
+      );
+      setStageIconState({ status: "ready", groups });
     } catch (error) {
       setStageIconState({
         status: "error",
-        dirPath,
         message: error instanceof Error ? error.message : "Unknown error",
       });
     }
@@ -526,14 +594,61 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
     }
   }, [importPreview, isImporting, loadState, onUnsavedChanges]);
 
-  const stageIconIndexPickerItems = useMemo(() => {
-    if (stageIconState.status !== "ready") return [];
-    const { dirPath, stageIconBaseNameOrder } = stageIconState;
-    return stageIconBaseNameOrder.map((name, i) => {
-      const previewPath = name ? buildCardIconPreviewPath(dirPath, name) : null;
-      const previewSrc = previewPath ? convertFileSrc(previewPath) : "/tauri.svg";
-      return { index: i, name, previewSrc };
+  const handleDebugBatch = useCallback(() => {
+    if (loadState.status !== "ready") return;
+    if (gvsSession !== null) return;
+
+    const list = loadState.list;
+    const sourceStage = list.StageData.find((s) => s.id === DEBUG_SOURCE_ID);
+    if (!sourceStage) {
+      toast.error(`Source stage id ${DEBUG_SOURCE_ID} not found`);
+      return;
+    }
+
+    const maxId = Math.max(0, ...list.StageData.map((s) => s.id ?? 0));
+    const maxUniqueIndex = Math.max(
+      0,
+      ...list.StageData.map((s) => (typeof s.uniqueIndex === "number" ? s.uniqueIndex : 0))
+    );
+
+    const newStages: StageDataEntry[] = [];
+    let nextId = maxId + 1;
+    let nextUniqueIndex = maxUniqueIndex + 1;
+
+    for (const entry of DEBUG_BATCH_ENTRIES) {
+      const fileNameValue = parseFileNameHex(entry.fileNameHex);
+      const copiedStage: StageDataEntry = {
+        ...sourceStage,
+        id: nextId,
+        uniqueIndex: nextUniqueIndex,
+        name: buildNameData(entry.name),
+        fileName: fileNameValue,
+      };
+      newStages.push(copiedStage);
+      nextId += 1;
+      nextUniqueIndex += 1;
+    }
+
+    const nextRows = [...list.StageData, ...newStages];
+    const nextList = Object.assign(Object.create(Object.getPrototypeOf(list)), list, {
+      StageData: nextRows,
+      StageCount: nextRows.length,
     });
+
+    handleEditorChange(nextList);
+    toast.success(`Added ${newStages.length} debug stages from id ${DEBUG_SOURCE_ID}`);
+  }, [loadState, gvsSession, handleEditorChange]);
+
+  const stageIconBaseNameOrder = useMemo(() => {
+    if (stageIconState.status !== "ready") return undefined;
+    const primaryGroup = stageIconState.groups[0];
+    if (!primaryGroup) return undefined;
+    return primaryGroup.items.map((it) => it.name ?? null);
+  }, [stageIconState]);
+
+  const stageIconConvertDirPath = useMemo(() => {
+    if (stageIconState.status !== "ready") return undefined;
+    return stageIconState.groups[0]?.convertDirPath;
   }, [stageIconState]);
 
   const isGvsActive = gvsSession !== null;
@@ -687,6 +802,17 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
                   <Info className="w-4 h-4" />
                   Info
                 </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleDebugBatch()}
+                  disabled={gvsSession !== null || loadState.status !== "ready"}
+                  className="inline-flex items-center gap-2"
+                  title={`Copy as new from id ${DEBUG_SOURCE_ID} with predefined GVS entries`}
+                >
+                  <Bug className="w-4 h-4" />
+                  Debug
+                </Button>
                 {isGvsActive ? (
                   <Button size="sm" variant="outline" onClick={() => setGvsSession(null)}>
                     Back To Main
@@ -772,11 +898,13 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
               workspacePath={folderPath}
               onReveal={onRevealTreeFolder}
               onChange={handleEditorChange}
-              stageIconConvertDirPath={stageIconState.status === "ready" ? stageIconState.dirPath : undefined}
-              stageIconBaseNameOrder={stageIconState.status === "ready" ? stageIconState.stageIconBaseNameOrder : undefined}
-              stageIconIndexPickerItems={stageIconIndexPickerItems}
+              stageIconConvertDirPath={stageIconConvertDirPath}
+              stageIconBaseNameOrder={stageIconBaseNameOrder}
+              stageIconIndexPickerGroups={stageIconState.status === "ready" ? stageIconState.groups : []}
               stageIconIndexPickerLoading={stageIconState.status === "loading" || stageIconState.status === "idle"}
-              stageIconIndexPickerError={stageIconState.status === "error" ? stageIconState.message : null}
+              stageIconIndexPickerError={
+                stageIconState.status === "error" ? stageIconState.message : null
+              }
             />
           )}
         </CardContent>

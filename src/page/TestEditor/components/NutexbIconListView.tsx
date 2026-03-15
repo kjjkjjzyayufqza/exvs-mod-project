@@ -32,6 +32,11 @@ type LoadState =
   | { status: "error"; filePath: string; message: string }
   | { status: "ready"; filePath: string; items: ReturnType<typeof extractCardIconItems>; convertDirPath: string };
 
+interface LoadOptions {
+  silent?: boolean;
+  preserveSelection?: boolean;
+}
+
 function normalizeHash(hash: string): string {
   const trimmed = hash.trim();
   if (!trimmed) return "";
@@ -60,6 +65,14 @@ export function NutexbIconListView({
   const lastLoadedKeyRef = useRef<string>("");
   const lastSecondaryLoadedKeyRef = useRef<string>("");
 
+  const getItemStableKey = useCallback((item: { fileIndex: number | null; fileUrl?: string | null; name: string | null; itemIndex: number } | null): string | null => {
+    if (!item) return null;
+    if (item.fileIndex !== null) return `fileIndex:${item.fileIndex}`;
+    if (item.fileUrl) return `fileUrl:${item.fileUrl}`;
+    if (item.name) return `name:${item.name}`;
+    return `itemIndex:${item.itemIndex}`;
+  }, []);
+
   const resolveStructurePath = useCallback(async () => {
     return await join(folderPath, `${normalizedHash}_structure.json`);
   }, [folderPath, normalizedHash]);
@@ -72,14 +85,22 @@ export function NutexbIconListView({
     return await join(folderPath, normalizedHash, "__convert");
   }, [folderPath, normalizedHash]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options?: LoadOptions) => {
     if (!folderPath) {
       setLoadState({ status: "error", filePath: "", message: "Folder path is empty" });
       return;
     }
 
+    const preserveSelection = options?.preserveSelection === true;
+    const selectedKey =
+      preserveSelection && loadState.status === "ready"
+        ? getItemStableKey(loadState.items.find((it) => it.itemIndex === selectedIndex) ?? null)
+        : null;
+
     const filePath = await resolveStructurePath();
-    setLoadState({ status: "loading" });
+    if (!options?.silent) {
+      setLoadState({ status: "loading" });
+    }
     try {
       const raw = await readTextFile(filePath);
       const json = JSON.parse(raw);
@@ -99,12 +120,18 @@ export function NutexbIconListView({
       }));
       const convertDirPath = await resolveConvertDir();
       setLoadState({ status: "ready", filePath, items: enrichedItems, convertDirPath });
+      if (selectedKey) {
+        const matched = enrichedItems.find((item) => getItemStableKey(item) === selectedKey);
+        if (matched) {
+          setSelectedIndex(matched.itemIndex);
+        }
+      }
       onUnsavedChanges?.(false);
     } catch (error) {
       console.error(error);
       setLoadState({ status: "error", filePath, message: error instanceof Error ? error.message : "Unknown error" });
     }
-  }, [folderPath, onUnsavedChanges, resolveConvertDir, resolveStructurePath]);
+  }, [folderPath, getItemStableKey, loadState, onUnsavedChanges, resolveConvertDir, resolveStructurePath, selectedIndex]);
 
   const resolveSecondaryStructurePath = useCallback(async () => {
     return await join(folderPath, `${normalizedSecondaryHash}_structure.json`);
@@ -118,11 +145,21 @@ export function NutexbIconListView({
     return await join(folderPath, normalizedSecondaryHash, "__convert");
   }, [folderPath, normalizedSecondaryHash]);
 
-  const loadSecondary = useCallback(async () => {
+  const loadSecondary = useCallback(async (options?: LoadOptions) => {
     if (!folderPath || !normalizedSecondaryHash) return;
 
+    const preserveSelection = options?.preserveSelection === true;
+    const selectedKey =
+      preserveSelection && secondaryLoadState.status === "ready"
+        ? getItemStableKey(
+            secondaryLoadState.items.find((it) => it.itemIndex === secondarySelectedIndex) ?? null
+          )
+        : null;
+
     const filePath = await resolveSecondaryStructurePath();
-    setSecondaryLoadState({ status: "loading" });
+    if (!options?.silent) {
+      setSecondaryLoadState({ status: "loading" });
+    }
     try {
       const raw = await readTextFile(filePath);
       const json = JSON.parse(raw);
@@ -142,6 +179,12 @@ export function NutexbIconListView({
       }));
       const convertDirPath = await resolveSecondaryConvertDir();
       setSecondaryLoadState({ status: "ready", filePath, items: enrichedItems, convertDirPath });
+      if (selectedKey) {
+        const matched = enrichedItems.find((item) => getItemStableKey(item) === selectedKey);
+        if (matched) {
+          setSecondarySelectedIndex(matched.itemIndex);
+        }
+      }
     } catch (error) {
       console.error(error);
       setSecondaryLoadState({
@@ -150,7 +193,15 @@ export function NutexbIconListView({
         message: error instanceof Error ? error.message : "Unknown error",
       });
     }
-  }, [folderPath, normalizedSecondaryHash, resolveSecondaryConvertDir, resolveSecondaryStructurePath]);
+  }, [
+    folderPath,
+    getItemStableKey,
+    normalizedSecondaryHash,
+    resolveSecondaryConvertDir,
+    resolveSecondaryStructurePath,
+    secondaryLoadState,
+    secondarySelectedIndex,
+  ]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -652,7 +703,7 @@ export function NutexbIconListView({
                   convertDirPath={loadState.convertDirPath}
                   selectedIndex={selectedIndex}
                   onSelect={setSelectedIndex}
-                  onReplaced={load}
+                  onReplaced={() => load({ silent: true, preserveSelection: true })}
                   onRemove={handleRemoveItem}
                   onMove={handleMoveItem}
                   isUpdating={isUpdating}
@@ -668,7 +719,7 @@ export function NutexbIconListView({
                     convertDirPath={secondaryLoadState.convertDirPath}
                     selectedIndex={secondarySelectedIndex}
                     onSelect={setSecondarySelectedIndex}
-                    onReplaced={loadSecondary}
+                    onReplaced={() => loadSecondary({ silent: true, preserveSelection: true })}
                     onRemove={handleRemoveItemSecondary}
                     onMove={handleMoveItemSecondary}
                     isUpdating={isUpdating}

@@ -33,3 +33,4 @@ tauri-plugin-opener = "2"
 nutexb = { git = "https://github.com/kjjkjjzyayufqza/nutexb", features = ["ddsfile"] }
 image = "0.25.9"
 image_dds = { version = "0.7.2", features = ["ddsfile", "image"] }
+encoding_rs = "0.8"

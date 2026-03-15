@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import type { StageDataEntry, StageList } from "@/models/stageList";
 import { StageForm } from "./StageForm";
 import { StageList as StageListComponent, type StageListSortKey } from "./StageList";
+import type { StageIconIndexPickerGroup } from "./StageIconIndexPickerPopover";
 
 function createEmptyStage(id: number): StageDataEntry {
   return {
@@ -45,7 +46,7 @@ interface StageEditorProps {
   onChange: (data: StageList) => void;
   stageIconConvertDirPath?: string;
   stageIconBaseNameOrder?: Array<string | null>;
-  stageIconIndexPickerItems?: Array<{ index: number; name: string | null; previewSrc: string }>;
+  stageIconIndexPickerGroups?: StageIconIndexPickerGroup[];
   stageIconIndexPickerLoading?: boolean;
   stageIconIndexPickerError?: string | null;
 }
@@ -69,7 +70,7 @@ export function StageEditor({
   onChange,
   stageIconConvertDirPath,
   stageIconBaseNameOrder,
-  stageIconIndexPickerItems = [],
+  stageIconIndexPickerGroups = [],
   stageIconIndexPickerLoading = false,
   stageIconIndexPickerError = null,
 }: StageEditorProps) {
@@ -267,7 +268,7 @@ export function StageEditor({
             obModPath={obModPath}
             workspacePath={workspacePath}
             onReveal={onReveal}
-            stageIconIndexPickerItems={stageIconIndexPickerItems}
+            stageIconIndexPickerGroups={stageIconIndexPickerGroups}
             stageIconIndexPickerLoading={stageIconIndexPickerLoading}
             stageIconIndexPickerError={stageIconIndexPickerError}
           />

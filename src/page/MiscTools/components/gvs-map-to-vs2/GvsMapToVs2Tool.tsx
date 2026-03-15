@@ -26,7 +26,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { createGvsMapToVs2Package, extractOnlyGraphicParamFile, type GvsMapToVs2OutputMeta } from "./gvsMapToVs2Service"
+import {
+  createGvsMapToVs2Package,
+  extractOnlyGraphicParamFile,
+  extractOnlyNumatbFiles,
+  type GvsMapToVs2OutputMeta,
+} from "./gvsMapToVs2Service"
 
 type ConvertRecord = {
   sourceType: "bin" | "folder"
@@ -39,11 +44,25 @@ type ConvertRecord = {
   packedFilePath: string
   fileName: string
   fileCount: number
+  convertedToJsonNumatbFiles: string[]
+  editedJsonNumatbFiles: string[]
   fixedNumatbFiles: string[]
-  failedNumatbFiles: Array<{ name: string; reason: string }>
+  failedNumatbFiles: Array<{
+    name: string
+    stage: "numatb_to_json" | "patch_json" | "json_to_numatb"
+    reason: string
+    detail?: string
+  }>
   errorMessage?: string
   numatbErrorMessage?: string
   packErrorMessage?: string
+}
+
+type ShellExecOutput = {
+  success: boolean
+  exitCode: number | null
+  stdout: string
+  stderr: string
 }
 
 export function GvsMapToVs2Tool() {
@@ -52,11 +71,14 @@ export function GvsMapToVs2Tool() {
   const [outputDir, setOutputDir] = useState("")
   const [isConverting, setIsConverting] = useState(false)
   const [isDebugGraphicParamExtracting, setIsDebugGraphicParamExtracting] = useState(false)
+  const [isDebugNumatbExtracting, setIsDebugNumatbExtracting] = useState(false)
   const [isFixingNumatb, setIsFixingNumatb] = useState(false)
   const [isPacking, setIsPacking] = useState(false)
   const [showGuide, setShowGuide] = useState(false)
   const [isStep21DialogOpen, setIsStep21DialogOpen] = useState(false)
+  const [isStep2ReportDialogOpen, setIsStep2ReportDialogOpen] = useState(false)
   const [isScanningGraphicParam, setIsScanningGraphicParam] = useState(false)
+  const [isConvertingGraphicParamCsv, setIsConvertingGraphicParamCsv] = useState(false)
   const [graphicParamLogText, setGraphicParamLogText] = useState("")
   const [progress, setProgress] = useState({ current: 0, total: 0, currentFile: "" })
   const [records, setRecords] = useState<ConvertRecord[]>([])
@@ -66,10 +88,12 @@ export function GvsMapToVs2Tool() {
   const [isPending, startTransition] = useTransition()
   const { obModPath, getSetting } = useConfigStore()
 
-  const canRunStep1 = selectedBinPaths.length > 0 && outputDir.trim().length > 0 && !isConverting && !isDebugGraphicParamExtracting && !isFixingNumatb && !isPacking
-  const canRunDebugGraphicParam = selectedBinPaths.length > 0 && outputDir.trim().length > 0 && !isConverting && !isDebugGraphicParamExtracting && !isFixingNumatb && !isPacking
-  const canRunStep2 = records.some((item) => item.status === "success") && !isConverting && !isDebugGraphicParamExtracting && !isFixingNumatb && !isPacking
-  const canRunStep21 = records.some((item) => item.status === "success") && !isConverting && !isDebugGraphicParamExtracting && !isFixingNumatb && !isPacking
+  const isAnyDebugExtracting = isDebugGraphicParamExtracting || isDebugNumatbExtracting
+  const canRunStep1 = selectedBinPaths.length > 0 && outputDir.trim().length > 0 && !isConverting && !isAnyDebugExtracting && !isFixingNumatb && !isPacking
+  const canRunDebugGraphicParam = selectedBinPaths.length > 0 && outputDir.trim().length > 0 && !isConverting && !isAnyDebugExtracting && !isFixingNumatb && !isPacking
+  const canRunDebugNumatb = selectedBinPaths.length > 0 && outputDir.trim().length > 0 && !isConverting && !isAnyDebugExtracting && !isFixingNumatb && !isPacking
+  const canRunStep2 = records.some((item) => item.status === "success") && !isConverting && !isAnyDebugExtracting && !isFixingNumatb && !isPacking
+  const canRunStep21 = records.some((item) => item.status === "success") && !isConverting && !isAnyDebugExtracting && !isFixingNumatb && !isPacking
   const canRunStep3 =
     records.some(
       (item) =>
@@ -80,7 +104,7 @@ export function GvsMapToVs2Tool() {
           item.numatbStatus === "idle")
     ) &&
     !isConverting &&
-    !isDebugGraphicParamExtracting &&
+    !isAnyDebugExtracting &&
     !isFixingNumatb &&
     !isPacking
   const successCount = useMemo(
@@ -93,6 +117,33 @@ export function GvsMapToVs2Tool() {
     }
     return Math.min(100, Math.round((progress.current / progress.total) * 100))
   }, [progress.current, progress.total])
+  const step2FailureRecords = useMemo(
+    () =>
+      records.filter(
+        (item) => item.failedNumatbFiles.length > 0 || item.numatbStatus === "fix_failed"
+      ),
+    [records]
+  )
+  const step2ReportRecords = useMemo(
+    () =>
+      records.filter(
+        (item) =>
+          item.status === "success" &&
+          (item.numatbStatus === "fixed" ||
+            item.numatbStatus === "fix_failed" ||
+            item.numatbStatus === "no_numatb")
+      ),
+    [records]
+  )
+  const step2FailureFileCount = useMemo(
+    () =>
+      records.reduce((sum, item) => {
+        const fallbackCount =
+          item.numatbStatus === "fix_failed" && item.failedNumatbFiles.length === 0 ? 1 : 0
+        return sum + item.failedNumatbFiles.length + fallbackCount
+      }, 0),
+    [records]
+  )
 
   const getObModOutputName = (sourceBinName: string): string => {
     const raw = sourceBinName.replace(/\.bin$/i, "").replace(/^0x/i, "")
@@ -172,6 +223,52 @@ export function GvsMapToVs2Tool() {
     toast.success("Copied graphic_param file list")
   }
 
+  const handleConvertGraphicParamToCsv = async () => {
+    if (!graphicParamLogText.trim()) {
+      toast.error("No scan content to convert")
+      return
+    }
+
+    const candidatePaths = graphicParamLogText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith("[NOT_FOUND]"))
+
+    if (candidatePaths.length === 0) {
+      toast.error("No valid graphic_param file path found in scan result")
+      return
+    }
+
+    setIsConvertingGraphicParamCsv(true)
+    let successCount = 0
+    const failedItems: Array<{ path: string; reason: string }> = []
+
+    for (const sourcePath of candidatePaths) {
+      try {
+        const sourceData = await readFile(sourcePath)
+        const parentDir = await dirname(sourcePath)
+        const targetCsvPath = await join(parentDir, "graphic_param.csv")
+        await writeFile(targetCsvPath, sourceData)
+        successCount += 1
+      } catch (error) {
+        failedItems.push({
+          path: sourcePath,
+          reason: error instanceof Error ? error.message : "Unknown error",
+        })
+      }
+    }
+
+    setIsConvertingGraphicParamCsv(false)
+    if (successCount > 0) {
+      toast.success(`Converted ${successCount} graphic_param file(s) to graphic_param.csv`)
+    }
+    if (failedItems.length > 0) {
+      toast.error(
+        `Failed ${failedItems.length} file(s). First error: ${failedItems[0].path} - ${failedItems[0].reason}`
+      )
+    }
+  }
+
   const handleSelectBinFiles = async () => {
     try {
       const selected = await open({
@@ -204,6 +301,8 @@ export function GvsMapToVs2Tool() {
           packedFilePath: "",
           fileName,
           fileCount: 0,
+          convertedToJsonNumatbFiles: [],
+          editedJsonNumatbFiles: [],
           fixedNumatbFiles: [],
           failedNumatbFiles: [],
         })
@@ -251,6 +350,8 @@ export function GvsMapToVs2Tool() {
           packedFilePath: "",
           fileName: `${folderName}.bin`,
           fileCount: 0,
+          convertedToJsonNumatbFiles: [],
+          editedJsonNumatbFiles: [],
           fixedNumatbFiles: [],
           failedNumatbFiles: [],
           errorMessage: hasStructureJson ? undefined : "Missing structure json beside selected folder",
@@ -320,6 +421,8 @@ export function GvsMapToVs2Tool() {
           outputJsonPath: "",
           packedFilePath: "",
           fileCount: 0,
+          convertedToJsonNumatbFiles: [],
+          editedJsonNumatbFiles: [],
           fixedNumatbFiles: [],
           failedNumatbFiles: [],
           errorMessage: undefined,
@@ -344,6 +447,8 @@ export function GvsMapToVs2Tool() {
                 ...item,
                 status: "running",
                 errorMessage: undefined,
+                convertedToJsonNumatbFiles: [],
+                editedJsonNumatbFiles: [],
                 fixedNumatbFiles: [],
                 failedNumatbFiles: [],
               }
@@ -392,6 +497,8 @@ export function GvsMapToVs2Tool() {
                   outputJsonPath,
                   packedFilePath: "",
                   fileCount: conversionResult.outputMeta.SubFileData.length,
+                  convertedToJsonNumatbFiles: [],
+                  editedJsonNumatbFiles: [],
                   fixedNumatbFiles: [],
                   failedNumatbFiles: [],
                 }
@@ -412,6 +519,8 @@ export function GvsMapToVs2Tool() {
                   outputJsonPath: "",
                   packedFilePath: "",
                   fileCount: 0,
+                  convertedToJsonNumatbFiles: [],
+                  editedJsonNumatbFiles: [],
                   fixedNumatbFiles: [],
                   failedNumatbFiles: [],
                   errorMessage,
@@ -455,6 +564,8 @@ export function GvsMapToVs2Tool() {
         outputJsonPath: "",
         packedFilePath: "",
         fileCount: 0,
+        convertedToJsonNumatbFiles: [],
+        editedJsonNumatbFiles: [],
         fixedNumatbFiles: [],
         failedNumatbFiles: [],
         errorMessage: undefined,
@@ -529,6 +640,8 @@ export function GvsMapToVs2Tool() {
                   outputJsonPath: "",
                   packedFilePath: "",
                   fileCount: 0,
+                  convertedToJsonNumatbFiles: [],
+                  editedJsonNumatbFiles: [],
                   errorMessage,
                 }
               : item
@@ -552,10 +665,192 @@ export function GvsMapToVs2Tool() {
     }
   }
 
+  const handleDebugExtractNumatbOnly = async () => {
+    if (!canRunDebugNumatb) {
+      return
+    }
+
+    setIsDebugNumatbExtracting(true)
+    setProgress({ current: 0, total: selectedBinPaths.length, currentFile: "" })
+    setRecords((prev) =>
+      prev.map((item) => ({
+        ...item,
+        status: "pending",
+        numatbStatus: "idle",
+        packStatus: "idle",
+        outputFolderPath: "",
+        outputJsonPath: "",
+        packedFilePath: "",
+        fileCount: 0,
+        convertedToJsonNumatbFiles: [],
+        editedJsonNumatbFiles: [],
+        fixedNumatbFiles: [],
+        failedNumatbFiles: [],
+        errorMessage: undefined,
+        numatbErrorMessage: undefined,
+        packErrorMessage: undefined,
+      }))
+    )
+
+    let okCount = 0
+    let failCount = 0
+    for (let i = 0; i < selectedBinPaths.length; i++) {
+      const binPath = selectedBinPaths[i]
+      const currentRecord = records.find((item) => item.inputPath === binPath)
+      const currentFileName = currentRecord?.fileName ?? (await basename(binPath))
+
+      setProgress({
+        current: i,
+        total: selectedBinPaths.length,
+        currentFile: currentFileName,
+      })
+      setRecords((prev) =>
+        prev.map((item) =>
+          item.inputPath === binPath
+            ? {
+                ...item,
+                status: "running",
+                errorMessage: undefined,
+              }
+            : item
+        )
+      )
+
+      try {
+        const fileNameNoExt = currentFileName.replace(/\.bin$/i, "")
+        const sourceBuffer = await readFile(binPath)
+        const numatbFiles = extractOnlyNumatbFiles(sourceBuffer, fileNameNoExt)
+
+        const outputFolderPath = await join(outputDir, fileNameNoExt)
+        await mkdir(outputFolderPath, { recursive: true })
+        for (const file of numatbFiles) {
+          const outputFilePath = await join(outputFolderPath, file.fileName)
+          await writeFile(outputFilePath, file.data)
+        }
+
+        okCount += 1
+        setRecords((prev) =>
+          prev.map((item) =>
+            item.inputPath === binPath
+              ? {
+                  ...item,
+                  status: "success",
+                  outputFolderPath,
+                  outputJsonPath: "",
+                  packedFilePath: "",
+                  fileCount: numatbFiles.length,
+                }
+              : item
+          )
+        )
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error"
+        failCount += 1
+        setRecords((prev) =>
+          prev.map((item) =>
+            item.inputPath === binPath
+              ? {
+                  ...item,
+                  status: "failed",
+                  outputFolderPath: "",
+                  outputJsonPath: "",
+                  packedFilePath: "",
+                  fileCount: 0,
+                  convertedToJsonNumatbFiles: [],
+                  editedJsonNumatbFiles: [],
+                  errorMessage,
+                }
+              : item
+          )
+        )
+      }
+
+      setProgress({
+        current: i + 1,
+        total: selectedBinPaths.length,
+        currentFile: "",
+      })
+    }
+
+    setIsDebugNumatbExtracting(false)
+    if (okCount > 0) {
+      toast.success(`Debug extracted numatb for ${okCount} file(s)`)
+    }
+    if (failCount > 0) {
+      toast.error(`Debug numatb extract failed for ${failCount} file(s)`)
+    }
+  }
+
   const handleStep2FixNumatbFiles = () => {
     void runStep2FixNumatbFiles().catch((error) => {
       toast.error(error instanceof Error ? error.message : "Step2 failed")
     })
+  }
+
+  const formatShellOutput = (result: ShellExecOutput): string => {
+    const code = result.exitCode === null ? "null" : String(result.exitCode)
+    const stdout = result.stdout.trim()
+    const stderr = result.stderr.trim()
+    const parts: string[] = [`exitCode=${code}`, `success=${String(result.success)}`]
+    if (stdout.length > 0) {
+      parts.push(`stdout=${stdout}`)
+    }
+    if (stderr.length > 0) {
+      parts.push(`stderr=${stderr}`)
+    }
+    return parts.join(" | ")
+  }
+
+  const runProcessAndCapture = async (
+    executable: string,
+    args: string[]
+  ): Promise<ShellExecOutput> => {
+    const result = await invoke<ShellExecOutput>("exec_process_with_output", {
+      executable,
+      args,
+    })
+    return result
+  }
+
+  const waitForFileReady = async (
+    filePath: string,
+    options?: { retries?: number; intervalMs?: number }
+  ): Promise<boolean> => {
+    const retries = options?.retries ?? 5
+    const intervalMs = options?.intervalMs ?? 80
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      if (await exists(filePath)) {
+        return true
+      }
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, intervalMs))
+      }
+    }
+    return false
+  }
+
+  const extractErrorDetail = (error: unknown): string => {
+    if (error instanceof Error && error.message.trim().length > 0) {
+      return error.message
+    }
+    if (typeof error === "string" && error.trim().length > 0) {
+      return error
+    }
+    if (error && typeof error === "object") {
+      const raw = error as Record<string, unknown>
+      if (typeof raw.message === "string" && raw.message.trim().length > 0) {
+        return raw.message
+      }
+      if (typeof raw.error === "string" && raw.error.trim().length > 0) {
+        return raw.error
+      }
+      try {
+        return JSON.stringify(raw)
+      } catch {
+        return "Unknown non-Error object"
+      }
+    }
+    return "Unknown error value"
   }
 
   const runStep2FixNumatbFiles = async () => {
@@ -584,6 +879,8 @@ export function GvsMapToVs2Tool() {
               ...item,
               numatbStatus: "idle",
               numatbErrorMessage: undefined,
+              convertedToJsonNumatbFiles: [],
+              editedJsonNumatbFiles: [],
               fixedNumatbFiles: [],
               failedNumatbFiles: [],
             }
@@ -609,6 +906,8 @@ export function GvsMapToVs2Tool() {
                 ...item,
                 numatbStatus: "fixing",
                 numatbErrorMessage: undefined,
+                convertedToJsonNumatbFiles: [],
+                editedJsonNumatbFiles: [],
                 fixedNumatbFiles: [],
                 failedNumatbFiles: [],
               }
@@ -642,106 +941,146 @@ export function GvsMapToVs2Tool() {
           continue
         }
 
+        const convertedToJsonNumatbFiles: string[] = []
+        const editedJsonNumatbFiles: string[] = []
+        const fixedNumatbFiles: string[] = []
+        const failedNumatbFiles: ConvertRecord["failedNumatbFiles"] = []
+
         for (const entry of numatbEntries) {
           const entryName = entry.name ?? ""
           const numatbPath = await join(target.outputFolderPath, entryName)
           const baseName = entryName.replace(/\.numatb$/i, "")
           const jsonPath = await join(target.outputFolderPath, `${baseName}.json`)
-          const convertToJsonCommand = await invoke("exec_shell_command", {
-            command: `${toolPath} ${numatbPath} ${jsonPath}`,
-          })
-          if (typeof convertToJsonCommand !== "string") {
-            console.error(`Failed to convert ${entryName} to JSON:`, convertToJsonCommand)
-            setRecords((prev) =>
-              prev.map((item) =>
-                item.inputPath === target.inputPath
-                  ? {
-                      ...item,
-                      failedNumatbFiles: [
-                        ...item.failedNumatbFiles,
-                        { name: entryName, reason: "numatb->json failed" },
-                      ],
-                    }
-                  : item
+          let currentStage: ConvertRecord["failedNumatbFiles"][number]["stage"] = "numatb_to_json"
+
+          try {
+            const convertToJsonCommand = await runProcessAndCapture(toolPath, [
+              numatbPath,
+              jsonPath,
+            ])
+            if (!convertToJsonCommand.success) {
+              throw new Error(
+                `numatb_to_json failed: ${formatShellOutput(convertToJsonCommand)}`
               )
-            )
-            continue
-          }
-
-          const jsonBuffer = await readTextFile(jsonPath)
-          const jsonContent = JSON.parse(jsonBuffer)
-          jsonContent.minor_version = 6
-
-          for (const row of jsonContent.entries) {
-            if (row.shader_label === "") {
-              row.textures.forEach((texture: any) => {
-                if (texture.param_id === "DiffuseMap" && !texture.data.includes("_sky")) {
-                  texture.param_id = "BaseColorMap"
-                }
-              })
             }
+            const jsonCreated = await waitForFileReady(jsonPath)
+            if (!jsonCreated) {
+              throw new Error(
+                `numatb_to_json output missing: expected ${jsonPath} | ${formatShellOutput(convertToJsonCommand)}`
+              )
+            }
+            convertedToJsonNumatbFiles.push(entryName)
 
-            if (row.shader_label !== "") {
-              switch (row.shader_label) {
-                case "FeRendererMovableVertexColor":
-                  row.shader_label = "vstgStandard_VertexColor"
-                  break
-                case "FeRendererMovableBlend2MultiUV":
-                  row.shader_label = "vstgStandard_MultiUV_LightAndShadowMap"
-                  break
-                default:
-                  break
+            currentStage = "patch_json"
+            const jsonBuffer = await readTextFile(jsonPath)
+            const jsonContent = JSON.parse(jsonBuffer)
+            jsonContent.minor_version = 6
+
+            for (const row of jsonContent.entries) {
+              const textures = row.textures ?? []
+              const booleans = row.booleans ?? []
+
+              const patchTextureParamId = (texture: { param_id: string; data: string }) => {
+                const dataStr = typeof texture.data === "string" ? texture.data : ""
+                if (texture.param_id === "DiffuseMap" && !dataStr.includes("_sky")) {
+                  texture.param_id = "BaseColorMap"
+                } else if (texture.param_id === "DiffuseMapLayer1") {
+                  texture.param_id = "BaseColorMapLayer1"
+                }
               }
-              row.textures.forEach((texture: any) => {
-                if (texture.param_id === "DiffuseMap" && !texture.data.includes("_sky")) {
-                  texture.param_id = "BaseColorMap"
+
+              const hasBaseColorMapInTextures = () =>
+                textures.some(
+                  (t: { param_id: string }) =>
+                    t.param_id === "BaseColorMap" || t.param_id === "BaseColorMapLayer1"
+                )
+              const hasUseBaseColorMap = () =>
+                booleans.some((b: { param_id: string }) => b.param_id === "UseBaseColorMap")
+              const hasUseDiffuseMap = () =>
+                booleans.some((b: { param_id: string }) => b.param_id === "UseDiffuseMap")
+
+              if (row.shader_label === "") {
+                textures.forEach(patchTextureParamId)
+              }
+
+              if (row.shader_label !== "") {
+                switch (row.shader_label) {
+                  case "FeRendererMovableVertexColor":
+                    row.shader_label = "vstgStandard_VertexColor"
+                    break
+                  case "FeRendererMovableBlend2MultiUV":
+                    row.shader_label = "vstgStandard_MultiUV_LightAndShadowMap"
+                    break
+                  case "FeRendererMovableMultiUVVertexColorAO":
+                    row.shader_label = "vstgStandard_MultiUV_LightAndShadowMap"
+                    break
+                  default:
+                    break
                 }
-              })
-            }
-          }
+                textures.forEach(patchTextureParamId)
 
-          await writeTextFile(jsonPath, JSON.stringify(jsonContent, null, 2))
-
-          const convertToNumatbCommand = await invoke("exec_shell_command", {
-            command: `${toolPath} ${jsonPath} ${numatbPath}`,
-          })
-          if (typeof convertToNumatbCommand !== "string") {
-            console.error(`Failed to convert JSON back to numatb for ${entryName}:`, convertToNumatbCommand)
-            setRecords((prev) =>
-              prev.map((item) =>
-                item.inputPath === target.inputPath
-                  ? {
-                      ...item,
-                      failedNumatbFiles: [
-                        ...item.failedNumatbFiles,
-                        { name: entryName, reason: "json->numatb failed" },
-                      ],
-                    }
-                  : item
-              )
-            )
-            continue
-          }
-
-          setRecords((prev) =>
-            prev.map((item) =>
-              item.inputPath === target.inputPath
-                ? {
-                    ...item,
-                    fixedNumatbFiles: [...item.fixedNumatbFiles, entryName],
+                for (const bool of booleans) {
+                  if (bool.param_id === "UseDiffuseMap") {
+                    bool.param_id = "UseBaseColorMap"
                   }
-                : item
-            )
-          )
+                }
+                if (
+                  hasBaseColorMapInTextures() &&
+                  !hasUseBaseColorMap() &&
+                  !hasUseDiffuseMap()
+                ) {
+                  booleans.push({ param_id: "UseBaseColorMap", data: true })
+                }
+              }
+            }
+
+            await writeTextFile(jsonPath, JSON.stringify(jsonContent, null, 2))
+            editedJsonNumatbFiles.push(entryName)
+
+            currentStage = "json_to_numatb"
+            const convertToNumatbCommand = await runProcessAndCapture(toolPath, [
+              jsonPath,
+              numatbPath,
+            ])
+            if (!convertToNumatbCommand.success) {
+              throw new Error(
+                `json_to_numatb failed: ${formatShellOutput(convertToNumatbCommand)}`
+              )
+            }
+
+            fixedNumatbFiles.push(entryName)
+          } catch (fileError) {
+            const detail = extractErrorDetail(fileError)
+            const stage = currentStage
+            failedNumatbFiles.push({
+              name: entryName,
+              stage,
+              reason: `Failed in ${stage}`,
+              detail,
+            })
+          }
         }
 
-        fixedCount += 1
+        if (failedNumatbFiles.length > 0) {
+          failedCount += 1
+        } else {
+          fixedCount += 1
+        }
+
         setRecords((prev) =>
           prev.map((item) =>
             item.inputPath === target.inputPath
               ? {
                   ...item,
-                  numatbStatus: "fixed",
+                  numatbStatus: failedNumatbFiles.length > 0 ? "fix_failed" : "fixed",
+                  numatbErrorMessage:
+                    failedNumatbFiles.length > 0
+                      ? `Failed ${failedNumatbFiles.length}/${numatbEntries.length} numatb file(s)`
+                      : undefined,
+                  convertedToJsonNumatbFiles,
+                  editedJsonNumatbFiles,
+                  fixedNumatbFiles,
+                  failedNumatbFiles,
                 }
               : item
           )
@@ -756,6 +1095,16 @@ export function GvsMapToVs2Tool() {
                   ...item,
                   numatbStatus: "fix_failed",
                   numatbErrorMessage,
+                  convertedToJsonNumatbFiles: [],
+                  editedJsonNumatbFiles: [],
+                  failedNumatbFiles: [
+                    {
+                      name: "(folder level)",
+                      stage: "patch_json",
+                      reason: "Failed before per-file processing",
+                      detail: numatbErrorMessage,
+                    },
+                  ],
                 }
               : item
           )
@@ -778,6 +1127,7 @@ export function GvsMapToVs2Tool() {
     }
     if (failedCount > 0) {
       toast.error(`Step2 failed for ${failedCount} file(s)`)
+      setIsStep2ReportDialogOpen(true)
     }
   }
 
@@ -949,9 +1299,9 @@ export function GvsMapToVs2Tool() {
               value={outputDir}
               onChange={(e) => setOutputDir(e.target.value)}
               placeholder="Select output directory, e.g. D:\\exports"
-              disabled={isConverting || isDebugGraphicParamExtracting || isFixingNumatb || isPacking}
+              disabled={isConverting || isAnyDebugExtracting || isFixingNumatb || isPacking}
             />
-            <Button variant="outline" onClick={handleSelectOutputDir} disabled={isConverting || isDebugGraphicParamExtracting || isFixingNumatb || isPacking}>
+            <Button variant="outline" onClick={handleSelectOutputDir} disabled={isConverting || isAnyDebugExtracting || isFixingNumatb || isPacking}>
               <FolderOpen className="h-4 w-4" />
             </Button>
           </div>
@@ -962,48 +1312,74 @@ export function GvsMapToVs2Tool() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={handleSelectBinFiles} disabled={isConverting || isDebugGraphicParamExtracting || isFixingNumatb || isPacking}>
-            <FolderOpen className="h-4 w-4 mr-2" />
-            Select .bin Files
-          </Button>
-          <Button onClick={handleStep1ExtractAndGenerateJson} disabled={!canRunStep1}>
-            {isConverting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileJson2 className="h-4 w-4 mr-2" />}
-            Step1: Extract and Generate JSON
-          </Button>
-          <Button variant="outline" onClick={() => void handleDebugExtractGraphicParamOnly()} disabled={!canRunDebugGraphicParam}>
-            {isDebugGraphicParamExtracting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-            Debug: only extract graphic_param file
-          </Button>
-          <Button variant="outline" onClick={handleStep2FixNumatbFiles} disabled={!canRunStep2}>
-            Step2: Fix Numatb Files
-          </Button>
-          <Button variant="outline" onClick={handleOpenStep21Dialog} disabled={!canRunStep21}>
-            Step2.1: log all graphic_param file url
-          </Button>
-          <Button variant="outline" onClick={handleStep3PackToObModPath} disabled={!canRunStep3}>
-            Step3: Pack to obModPath
-          </Button>
-          <Button variant="outline" onClick={() => setShowGuide((prev) => !prev)}>
-            {showGuide ? "Hide Guide" : "User Guide"}
-          </Button>
-          <Button variant="outline" onClick={handleReset} disabled={isConverting || isDebugGraphicParamExtracting || isFixingNumatb || isPacking}>
-            <RefreshCcw className="h-4 w-4 mr-2" />
-            Reset
-          </Button>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={handleSelectStep2Folders} disabled={isConverting || isDebugGraphicParamExtracting || isFixingNumatb || isPacking}>
-            <FolderOpen className="h-4 w-4 mr-2" />
-            Skip to Step2: Select Step2 Folders
-          </Button>
+        <div className="flex flex-col gap-2">
+          {/* Row 1: Input selection */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={handleSelectBinFiles} disabled={isConverting || isAnyDebugExtracting || isFixingNumatb || isPacking}>
+              <FolderOpen className="h-4 w-4 mr-2" />
+              Select .bin Files
+            </Button>
+            <Button variant="outline" onClick={handleSelectStep2Folders} disabled={isConverting || isAnyDebugExtracting || isFixingNumatb || isPacking}>
+              <FolderOpen className="h-4 w-4 mr-2" />
+              Skip to Step2: Select Step2 Folders
+            </Button>
+          </div>
+          {/* Row 2: Step1 workflow */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={handleStep1ExtractAndGenerateJson} disabled={!canRunStep1}>
+              {isConverting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileJson2 className="h-4 w-4 mr-2" />}
+              Step1: Extract and Generate JSON
+            </Button>
+            <Button variant="outline" onClick={() => void handleDebugExtractGraphicParamOnly()} disabled={!canRunDebugGraphicParam}>
+              {isDebugGraphicParamExtracting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Debug: only extract graphic_param file
+            </Button>
+            <Button variant="outline" onClick={() => void handleDebugExtractNumatbOnly()} disabled={!canRunDebugNumatb}>
+              {isDebugNumatbExtracting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Debug: only extract numatb
+            </Button>
+          </div>
+          {/* Row 3: Step2 workflow */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={handleStep2FixNumatbFiles} disabled={!canRunStep2}>
+              {isFixingNumatb ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Step2: Fix Numatb Files
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsStep2ReportDialogOpen(true)}
+              disabled={step2ReportRecords.length === 0}
+            >
+              Step2 Details ({step2FailureFileCount})
+            </Button>
+            <Button variant="outline" onClick={handleOpenStep21Dialog} disabled={!canRunStep21}>
+              Step2.1: log all graphic_param file url
+            </Button>
+          </div>
+          {/* Row 4: Step3 workflow */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={handleStep3PackToObModPath} disabled={!canRunStep3}>
+              Step3: Pack to obModPath
+            </Button>
+          </div>
+          {/* Row 5: Utility */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => setShowGuide((prev) => !prev)}>
+              {showGuide ? "Hide Guide" : "User Guide"}
+            </Button>
+            <Button variant="outline" onClick={handleReset} disabled={isConverting || isAnyDebugExtracting || isFixingNumatb || isPacking}>
+              <RefreshCcw className="h-4 w-4 mr-2" />
+              Reset
+            </Button>
+          </div>
         </div>
 
         {showGuide && (
           <Card className="p-3 text-sm space-y-2">
             <div className="font-medium">Workflow Guide</div>
             <div>Step1: Extract flat files and generate hash JSON from selected GVS .bin files.</div>
-            <div>Debug: scan raw data by directional_lighting and extract only graphic_param file.</div>
+            <div>Debug graphic_param: scan raw data by directional_lighting and extract only graphic_param file.</div>
+            <div>Debug numatb: extract only .numatb files from package without full Step1.</div>
             <div>Direct Step2: Select extracted folders directly and run numatb fix without Step1.</div>
             <div>Step2: Migrate extracted `.numatb` files from GVS format to EXVS2-compatible settings.</div>
             <div>Step3: Pack the folder using compression.js and output to `obModPath` as `0xHASH.fhm2d`.</div>
@@ -1034,6 +1410,20 @@ export function GvsMapToVs2Tool() {
                   <Copy className="h-4 w-4 mr-2" />
                   Copy
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => void handleConvertGraphicParamToCsv()}
+                  disabled={isScanningGraphicParam || isConvertingGraphicParamCsv}
+                >
+                  {isConvertingGraphicParamCsv ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Converting...
+                    </>
+                  ) : (
+                    "Convert to CSV"
+                  )}
+                </Button>
               </div>
               <Textarea
                 value={graphicParamLogText}
@@ -1042,6 +1432,106 @@ export function GvsMapToVs2Tool() {
                 placeholder="Scan result will appear here. One file path per line."
               />
             </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isStep2ReportDialogOpen} onOpenChange={setIsStep2ReportDialogOpen}>
+          <DialogContent className="max-w-5xl">
+            <DialogHeader>
+              <DialogTitle>Step2 Detailed Error Report</DialogTitle>
+              <DialogDescription>
+                Per-file failure details for Step2 numatb fix.
+              </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="max-h-[70vh] border rounded-md">
+              <div className="p-3 space-y-3 text-sm">
+                {step2ReportRecords.map((record) => (
+                  <Card key={`step2-report-${record.inputPath}`} className="p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-medium truncate pr-2">{record.fileName}</div>
+                      <Badge variant="destructive">{record.numatbStatus}</Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground break-all">
+                      Folder: {record.outputFolderPath || record.inputPath}
+                    </div>
+                    {record.numatbErrorMessage && (
+                      <div className="text-xs text-red-600">
+                        Summary: {record.numatbErrorMessage}
+                      </div>
+                    )}
+                    <div className="text-xs space-y-2">
+                      <div>
+                        <div className="font-medium mb-1">
+                          Stage 1: numatb -&gt; json success ({record.convertedToJsonNumatbFiles.length})
+                        </div>
+                        {record.convertedToJsonNumatbFiles.length > 0 ? (
+                          <div className="break-all">
+                            {record.convertedToJsonNumatbFiles.join(", ")}
+                          </div>
+                        ) : (
+                          <div className="text-muted-foreground">None</div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-medium mb-1">
+                          Stage 2: json edit success ({record.editedJsonNumatbFiles.length})
+                        </div>
+                        {record.editedJsonNumatbFiles.length > 0 ? (
+                          <div className="break-all">
+                            {record.editedJsonNumatbFiles.join(", ")}
+                          </div>
+                        ) : (
+                          <div className="text-muted-foreground">None</div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-xs">
+                      <div className="font-medium mb-1">Failed Files</div>
+                      {record.failedNumatbFiles.length > 0 ? (
+                        <div className="space-y-2">
+                          {record.failedNumatbFiles.map((failedFile, index) => (
+                            <div
+                              key={`${record.inputPath}-${failedFile.name}-${index}`}
+                              className="rounded border p-2 space-y-1"
+                            >
+                              <div>
+                                <span className="font-medium">File:</span> {failedFile.name}
+                              </div>
+                              <div>
+                                <span className="font-medium">Stage:</span> {failedFile.stage}
+                              </div>
+                              <div>
+                                <span className="font-medium">Reason:</span> {failedFile.reason}
+                              </div>
+                              {failedFile.detail && (
+                                <div className="text-red-600 break-all">
+                                  <span className="font-medium">Detail:</span> {failedFile.detail}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-muted-foreground">
+                          No per-file item was captured, check summary message above.
+                        </div>
+                      )}
+                    </div>
+                    {record.fixedNumatbFiles.length > 0 && (
+                      <div className="text-xs">
+                        <span className="font-medium">Fixed files:</span>{" "}
+                        {record.fixedNumatbFiles.join(", ")}
+                      </div>
+                    )}
+                  </Card>
+                ))}
+                {step2ReportRecords.length === 0 && (
+                  <div className="text-muted-foreground">
+                    No Step2 details yet. Run Step2 first.
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
           </DialogContent>
         </Dialog>
 
@@ -1132,7 +1622,10 @@ export function GvsMapToVs2Tool() {
                         )}
                         {item.failedNumatbFiles.length > 0 && (
                           <div>
-                            Failed files: {item.failedNumatbFiles.map((file) => `${file.name}(${file.reason})`).join(", ")}
+                            Failed files:{" "}
+                            {item.failedNumatbFiles
+                              .map((file) => `${file.name}(${file.stage}: ${file.reason})`)
+                              .join(", ")}
                           </div>
                         )}
                         <div>
