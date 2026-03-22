@@ -1,7 +1,8 @@
-import { Folder, FileText, ChevronRight, ChevronDown, AlertTriangle } from "lucide-react"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import type { NodeApi } from "react-arborist"
-import type { TreeDataItem } from "@/lib/utils"
+import { FolderOpen, Folder, FileText, ChevronRight, AlertTriangle, GripVertical } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import type { NodeApi } from "react-arborist";
+import type { TreeDataItem } from "@/lib/utils";
 
 interface CustomTreeNodeProps {
   node: NodeApi<TreeDataItem>;
@@ -18,7 +19,7 @@ export function CustomTreeNode({
   enableExampleHighlight = false,
   mode = 'Model'
 }: CustomTreeNodeProps) {
-  const Icon = node.isLeaf ? FileText : Folder;
+  const isFolder = !node.isLeaf;
   const nodeData = node.data.data;
 
   // Check if this is a Texture Folder and needs warning
@@ -27,14 +28,11 @@ export function CustomTreeNode({
     node.data.name?.includes('Textures Folder') &&
     !hasBarispecularFile(node);
 
-  // Helper function to check if Texture Folder contains barispecular file
   function hasBarispecularFile(folderNode: NodeApi<TreeDataItem>): boolean {
     if (!folderNode.children) return false;
-
     return folderNode.children.some(child => {
       const childData = child.data.data;
       if (childData?.type === 'Item' && childData.fileType === '.nutexb') {
-        // Check if filename matches barispecular pattern
         return /barispecular/i.test(child.data.name);
       }
       return false;
@@ -42,86 +40,142 @@ export function CustomTreeNode({
   }
 
   const handleToggle = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent triggering selection when clicking toggle
+    e.stopPropagation();
     node.toggle();
   };
 
-  const handleNodeClick = () => {
-    node.select();
-  };
+  const depth = node.level;
+  const indentPadding = depth * 12;
 
   return (
     <div
       ref={dragHandle}
       style={{
         ...style,
-        outline: node.isSelected || node.isFocused ? '2px solid rgb(59 130 246)' : 'none',
-        outlineOffset: '-2px',
+        paddingLeft: `${indentPadding}px`,
       }}
-      className={`flex items-center gap-1 px-2 py-1 hover:bg-gray-100 cursor-pointer rounded ${node.isSelected ? 'bg-blue-100 text-blue-900' : ''}`}
-      onClick={handleNodeClick}
-    >
-      {/* Toggle arrow for folders */}
-      {!node.isLeaf && (
-        <button
-          onClick={handleToggle}
-          className="p-0.5 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
-          aria-label={node.isOpen ? "Collapse folder" : "Expand folder"}
-        >
-          {node.isOpen ? (
-            <ChevronDown className="h-3 w-3 text-gray-500" />
-          ) : (
-            <ChevronRight className="h-3 w-3 text-gray-500" />
-          )}
-        </button>
+      className={cn(
+        "group relative flex items-center gap-1.5 py-1.5 pr-3 cursor-pointer select-none",
+        "transition-all duration-150 ease-out",
+        // Selection states
+        node.isSelected
+          ? "bg-primary/10 text-primary"
+          : "hover:bg-muted/60 text-foreground/80",
+        // Focus state
+        node.isFocused && "ring-1 ring-inset ring-primary/40",
+        // Drag states
+        node.isDragging && "opacity-60 shadow-lg",
+        node.willReceiveDrop && "bg-primary/5 border-primary/30",
+        // Drop target indicator
+        node.willReceiveDrop && "before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-primary"
       )}
+      onClick={() => node.select()}
+      onDoubleClick={() => isFolder && node.toggle()}
+    >
+      {/* Drag handle indicator - shows on hover */}
+      <div className={cn(
+        "w-3 flex items-center justify-center opacity-0 transition-opacity",
+        "group-hover:opacity-40 cursor-grab active:cursor-grabbing"
+      )}>
+        <GripVertical className="h-3 w-3 text-muted-foreground" />
+      </div>
 
-      {/* Spacer for leaf nodes to align with folder content */}
-      {node.isLeaf && <div className="w-4 flex-shrink-0" />}
+      {/* Expand/collapse toggle */}
+      <button
+        onClick={handleToggle}
+        className={cn(
+          "flex items-center justify-center w-5 h-5 rounded-sm",
+          "transition-colors duration-150",
+          "hover:bg-muted-foreground/10",
+          !isFolder && "invisible"
+        )}
+        aria-label={node.isOpen ? "Collapse" : "Expand"}
+      >
+        <ChevronRight
+          className={cn(
+            "h-3.5 w-3.5 text-muted-foreground transition-transform duration-200",
+            node.isOpen && "rotate-90"
+          )}
+        />
+      </button>
 
-      <Icon
-        className={`h-4 w-4 ${node.isLeaf ? 'text-gray-600' : 'text-blue-600'} flex-shrink-0`}
-      />
-      <span className="text-sm select-none flex-1 min-w-0">
+      {/* Icon with dynamic styling */}
+      <div className={cn(
+        "flex items-center justify-center w-5 h-5 rounded",
+        isFolder
+          ? node.isOpen
+            ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
+            : "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+          : "bg-muted text-muted-foreground"
+      )}>
+        {isFolder ? (
+          node.isOpen ? (
+            <FolderOpen className="h-3.5 w-3.5" />
+          ) : (
+            <Folder className="h-3.5 w-3.5" />
+          )
+        ) : (
+          <FileText className="h-3.5 w-3.5" />
+        )}
+      </div>
+
+      {/* Name with edit mode support */}
+      <div className="flex-1 min-w-0">
         {node.isEditing ? (
           <input
             type="text"
             defaultValue={node.data.name}
             onBlur={(e) => node.submit(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                node.submit(e.currentTarget.value);
-              } else if (e.key === 'Escape') {
-                node.reset();
-              }
+              if (e.key === 'Enter') node.submit(e.currentTarget.value);
+              if (e.key === 'Escape') node.reset();
             }}
-            className="px-1 py-0 text-sm border rounded focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+            className={cn(
+              "w-full px-1.5 py-0.5 text-sm bg-background border rounded",
+              "focus:outline-none focus:ring-2 focus:ring-primary/50"
+            )}
             autoFocus
           />
         ) : (
-          <span className={`truncate ${enableExampleHighlight && nodeData?.isExample ? 'text-red-600 font-medium' : ''}`}>
+          <span
+            className={cn(
+              "block text-sm truncate",
+              node.isSelected && "font-medium",
+              enableExampleHighlight && nodeData?.isExample && "text-destructive font-medium"
+            )}
+            title={node.data.name}
+          >
             {node.data.name}
           </span>
         )}
-      </span>
+      </div>
+
+      {/* File type badge */}
       {nodeData?.type === 'Item' && nodeData.fileType && (
-        <span className="text-xs text-gray-500 ml-auto flex-shrink-0">
-          {nodeData.fileType}
+        <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          {nodeData.fileType.replace('.', '')}
         </span>
       )}
 
-      {/* Barispecular warning for Texture Folders in Model mode */}
+      {/* Warning indicator */}
       {showBarispecularWarning && (
-        <TooltipProvider>
+        <TooltipProvider delayDuration={200}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <AlertTriangle className="h-4 w-4 text-yellow-500 ml-2 flex-shrink-0 cursor-help" />
+              <div className="flex-shrink-0">
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+              </div>
             </TooltipTrigger>
-            <TooltipContent>
+            <TooltipContent side="left" className="text-xs">
               <p>Missing barispecular texture file</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+      )}
+
+      {/* Selected indicator bar */}
+      {node.isSelected && (
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary rounded-full" />
       )}
     </div>
   );

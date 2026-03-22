@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -204,6 +204,14 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
 
   const { isIndexExists, isFileIndexExists, copyNode } = useRepackStore();
 
+  useEffect(() => {
+    setIsEditing(false);
+    setEditName("");
+    setEditingProperty(null);
+    setEditValue("");
+    setValidationError("");
+  }, [selectedItem?.id]);
+
   const handleStartEdit = () => {
     if (selectedItem) {
       setEditName(selectedItem.name);
@@ -316,12 +324,12 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
 
   if (!selectedItem) {
     return (
-      <Card>
-        <CardHeader>
+      <Card className="flex h-full min-h-0 flex-col overflow-hidden rounded-none">
+        <CardHeader className="shrink-0">
           <CardTitle>Properties</CardTitle>
           <CardDescription>Select an item to view its properties</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto">
           <div className="text-center text-muted-foreground py-8">
             <Folder className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p>No item selected</p>
@@ -366,8 +374,8 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="flex h-full min-h-0 flex-col overflow-hidden rounded-none">
+      <CardHeader className="shrink-0">
         <CardTitle className="flex items-center gap-2">
           {selectedItem.data?.type === 'Folder' ? (
             <Folder className="h-5 w-5" />
@@ -376,9 +384,8 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
           )}
           Properties
         </CardTitle>
-        <CardDescription>View and edit item properties</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto">
         {/* Name Section */}
         <div className="space-y-2">
           <Label htmlFor="name">Name</Label>

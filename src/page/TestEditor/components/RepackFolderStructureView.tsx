@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { toast } from "sonner";
 import { Tree, type NodeApi } from "react-arborist";
-import { Plus, Save } from "lucide-react";
+import { Plus, Redo2, Save, Undo2 } from "lucide-react";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +18,23 @@ type CreateArgs = { parentId: string | null; index: number; type: string };
 type MoveArgs = { dragIds: string[]; parentId: string | null; index: number };
 type RenameArgs = { id: string; name: string };
 type DeleteArgs = { ids: string[] };
+
+const MAX_UNDO_STACK = 50;
+
+type UndoSnapshot = {
+  treeData: TreeDataItem[];
+  completeProjectData: ReturnType<typeof useRepackStore.getState>["completeProjectData"];
+  selectedId: string | null;
+};
+
+function cloneUndoSnapshot(state: ReturnType<typeof useRepackStore.getState>): UndoSnapshot {
+  const { treeData, completeProjectData, selectedItem } = state;
+  return {
+    treeData: structuredClone(treeData),
+    completeProjectData: completeProjectData ? structuredClone(completeProjectData) : null,
+    selectedId: selectedItem?.id ?? null,
+  };
+}
 
 function updateFolderCount(node: TreeDataItem): TreeDataItem {
   if (node.data?.type !== "Folder") return node;
@@ -131,6 +148,18 @@ function findNode(nodes: TreeDataItem[], id: string | null): TreeDataItem | null
   return null;
 }
 
+function applyUndoSnapshot(snap: UndoSnapshot) {
+  const selectedItem =
+    snap.selectedId !== null && snap.selectedId !== undefined
+      ? findNode(snap.treeData, snap.selectedId)
+      : null;
+  useRepackStore.setState({
+    treeData: snap.treeData,
+    completeProjectData: snap.completeProjectData,
+    selectedItem,
+  });
+}
+
 const DEFAULT_TREE_DATA: TreeDataItem[] = [
 
 ];
@@ -165,6 +194,46 @@ export default function RepackFolderStructureView({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [loadedFilePath, setLoadedFilePath] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  const pastRef = useRef<UndoSnapshot[]>([]);
+  const futureRef = useRef<UndoSnapshot[]>([]);
+  const [historyTick, setHistoryTick] = useState(0);
+
+  const clearUndoHistory = useCallback(() => {
+    pastRef.current = [];
+    futureRef.current = [];
+    setHistoryTick((t) => t + 1);
+  }, []);
+
+  const recordBeforeMutation = useCallback(() => {
+    pastRef.current = [...pastRef.current, cloneUndoSnapshot(useRepackStore.getState())].slice(
+      -MAX_UNDO_STACK
+    );
+    futureRef.current = [];
+    setHistoryTick((t) => t + 1);
+  }, []);
+
+  const undo = useCallback(() => {
+    if (pastRef.current.length === 0) return;
+    const prev = pastRef.current[pastRef.current.length - 1];
+    const cur = cloneUndoSnapshot(useRepackStore.getState());
+    pastRef.current = pastRef.current.slice(0, -1);
+    futureRef.current = [cur, ...futureRef.current].slice(0, MAX_UNDO_STACK);
+    applyUndoSnapshot(prev);
+    setHasUnsavedChanges(true);
+    setHistoryTick((t) => t + 1);
+  }, []);
+
+  const redo = useCallback(() => {
+    if (futureRef.current.length === 0) return;
+    const next = futureRef.current[0];
+    const cur = cloneUndoSnapshot(useRepackStore.getState());
+    futureRef.current = futureRef.current.slice(1);
+    pastRef.current = [...pastRef.current, cur].slice(-MAX_UNDO_STACK);
+    applyUndoSnapshot(next);
+    setHasUnsavedChanges(true);
+    setHistoryTick((t) => t + 1);
+  }, []);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -234,6 +303,7 @@ export default function RepackFolderStructureView({
             setSelectedItem(null);
             setLoadedFilePath(jsonFilePath);
             setHasUnsavedChanges(false);
+            clearUndoHistory();
             toast.success(`Loaded JSON file: ${jsonFilePath.split(/[\\/]/).pop()}`);
           } else {
             toast.error("No valid tree data found in the selected file");
@@ -248,7 +318,7 @@ export default function RepackFolderStructureView({
     };
 
     loadJsonFile();
-  }, [jsonFilePath, loadedFilePath, setCompleteProjectData, setTreeData, setSelectedItem]);
+  }, [clearUndoHistory, jsonFilePath, loadedFilePath, setCompleteProjectData, setTreeData, setSelectedItem]);
 
   // Notify parent about unsaved changes
   useEffect(() => {
@@ -296,20 +366,40 @@ export default function RepackFolderStructureView({
     }
   }, [loadedFilePath, completeProjectData, exportProjectData]);
 
-  // Handle Ctrl+S / Cmd+S keyboard shortcut for saving
+  // Keyboard: save, undo, redo (skip when typing in inputs)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("input, textarea, [contenteditable=true], [contenteditable='']")) {
+        return;
+      }
+      const mod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+      if (mod && key === "s") {
         e.preventDefault();
         if (hasUnsavedChanges && loadedFilePath) {
           handleSave();
         }
+        return;
+      }
+      if (mod && key === "z") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+        return;
+      }
+      if (mod && key === "y") {
+        e.preventDefault();
+        redo();
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hasUnsavedChanges, loadedFilePath, handleSave]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [hasUnsavedChanges, loadedFilePath, handleSave, redo, undo]);
 
   const selection = useMemo(() => selectedItem?.id ?? undefined, [selectedItem?.id]);
 
@@ -318,6 +408,7 @@ export default function RepackFolderStructureView({
   };
 
   const handleCreate = ({ parentId, index, type }: CreateArgs) => {
+    recordBeforeMutation();
     const nodeType = type === "folder" ? "Folder" : "Item";
     const newId = uuidv4();
     const newIndex = nodeType === "Item" ? getMaxAvailableIndex() : index;
@@ -369,6 +460,7 @@ export default function RepackFolderStructureView({
   };
 
   const handleMove = ({ dragIds, parentId, index }: MoveArgs) => {
+    recordBeforeMutation();
     const dragSet = new Set(dragIds);
     const { remaining, removed } = removeNodesById(treeData, dragSet);
     const nextTree = insertNodes(remaining, parentId, index, removed);
@@ -377,6 +469,7 @@ export default function RepackFolderStructureView({
   };
 
   const handleRename = ({ id, name }: RenameArgs) => {
+    recordBeforeMutation();
     const nextTree = updateNode(treeData, id, (node) => ({ ...node, name }));
     setTreeData(nextTree);
     if (selectedItem?.id === id) {
@@ -386,6 +479,7 @@ export default function RepackFolderStructureView({
   };
 
   const handleDelete = ({ ids }: DeleteArgs) => {
+    recordBeforeMutation();
     const idSet = new Set(ids);
     const { remaining, removed } = removeNodesById(treeData, idSet);
     setTreeData(remaining);
@@ -400,6 +494,7 @@ export default function RepackFolderStructureView({
   };
 
   const handlePropertyChange = (nodeId: string, property: string, value: string | number) => {
+    recordBeforeMutation();
     const nextTree = updateNode(treeData, nodeId, (node) => ({
       ...node,
       data: {
@@ -415,6 +510,7 @@ export default function RepackFolderStructureView({
   };
 
   const handleFileTypeChange = (nodeId: string, newFileType: string) => {
+    recordBeforeMutation();
     const nextTree = updateNode(treeData, nodeId, (node) => ({
       ...node,
       data: {
@@ -437,6 +533,7 @@ export default function RepackFolderStructureView({
 
   const handlePaste = () => {
     if (!selectedItem || selectedItem.data?.type !== "Folder" || !copiedItem) return;
+    recordBeforeMutation();
     pasteNode(selectedItem.id);
     const itemType = copiedItem.data?.type || "item";
     const itemTypeText = itemType === "Folder" ? "folder" : "file";
@@ -445,6 +542,9 @@ export default function RepackFolderStructureView({
   };
 
   const canAddChild = !!selectedItem && selectedItem.data?.type === "Folder";
+
+  const canUndo = useMemo(() => pastRef.current.length > 0, [historyTick]);
+  const canRedo = useMemo(() => futureRef.current.length > 0, [historyTick]);
 
   return (
     <div className="h-full w-full">
@@ -456,7 +556,7 @@ export default function RepackFolderStructureView({
                 <div>
                   <CardTitle>Project Structure</CardTitle>
                   <CardDescription>
-                    Drag and drop items to reorganize the structure
+                    Drag and drop items to reorganize the structure. Undo / redo: Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z (Cmd on macOS).
                     {loadedFilePath && (
                       <span className="ml-2 text-xs">
                         • {loadedFilePath.split(/[\\/]/).pop()}
@@ -465,7 +565,29 @@ export default function RepackFolderStructureView({
                     )}
                   </CardDescription>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex flex-wrap gap-1">
+                  <Button
+                    type="button"
+                    onClick={undo}
+                    disabled={!canUndo}
+                    variant="outline"
+                    size="sm"
+                    title="Undo (Ctrl+Z / Cmd+Z)"
+                  >
+                    <Undo2 className="h-4 w-4" />
+                    Undo
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={redo}
+                    disabled={!canRedo}
+                    variant="outline"
+                    size="sm"
+                    title="Redo (Ctrl+Y / Ctrl+Shift+Z / Cmd+Shift+Z)"
+                  >
+                    <Redo2 className="h-4 w-4" />
+                    Redo
+                  </Button>
                   <Button
                     onClick={handleSave}
                     disabled={!hasUnsavedChanges || !loadedFilePath || isSaving}
@@ -511,15 +633,15 @@ export default function RepackFolderStructureView({
                 </div>
               )}
             </CardHeader>
-            <CardContent className="h-[calc(100%-theme(spacing.20))] p-0">
-              <div ref={containerRef} className="h-full rounded-lg border bg-card overflow-hidden">
+            <CardContent className="h-[calc(100%-(--spacing(20)))] p-0">
+              <div ref={containerRef} className="h-full rounded-none border bg-card/50 overflow-hidden">
                 <Tree
                   ref={treeRef}
                   data={treeData}
                   width="100%"
                   height={treeHeight}
-                  indent={20}
-                  rowHeight={24}
+                  indent={0}
+                  rowHeight={36}
                   openByDefault={false}
                   onSelect={handleSelectChange}
                   onCreate={handleCreate}
@@ -539,7 +661,7 @@ export default function RepackFolderStructureView({
         <ResizableHandle withHandle />
 
         <ResizablePanel defaultSize={35} minSize={25}>
-          <div className="h-full p-3">
+          <div className="h-full min-h-0">
             <NodePropertiesPanel
               selectedItem={selectedItem || undefined}
               onRename={(nodeId, newName) => handleRename({ id: nodeId, name: newName })}

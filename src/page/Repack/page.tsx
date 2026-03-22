@@ -1115,7 +1115,7 @@ export default function RepackPage() {
         </Card>
 
         {/* Properties Panel */}
-        <div className="space-y-6">
+        <div className="h-full min-h-0 space-y-6">
           <NodePropertiesPanel
             selectedItem={selectedItem || undefined}
             onRename={renameNode}
