@@ -46,7 +46,7 @@ export function PropertyInput({ label, value, onChange, axis, disabled = false }
 
     return (
         <div className="flex flex-col gap-1">
-            <div className={`text-xs font-medium p-1 rounded-md text-center text-white bg-white/10`}>
+            <div className={`text-xs font-medium p-1 rounded-md text-center text-white bg-card/10`}>
                 {label}
             </div>
             <Input

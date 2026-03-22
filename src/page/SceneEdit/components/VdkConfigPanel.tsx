@@ -69,7 +69,7 @@ export function VdkConfigPanel({
                             <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                                className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-card/10"
                             >
                                 {isCollapsed ? <ChevronDown className="h-3 w-3 transition-transform duration-200" /> : <ChevronUp className="h-3 w-3 transition-transform duration-200" />}
                             </Button>
@@ -83,7 +83,7 @@ export function VdkConfigPanel({
                             <Button
                                 onClick={handleLoadConfig}
                                 disabled={isVdkLoading}
-                                className="w-full text-white hover:bg-white/10 cursor-pointer bg-white/20"
+                                className="w-full text-white hover:bg-card/10 cursor-pointer bg-card/20"
                             >
                                 {isVdkLoading ? (
                                     <div className="flex items-center gap-2">
@@ -101,7 +101,7 @@ export function VdkConfigPanel({
                             <Button
                                 onClick={handleSaveConfig}
                                 disabled={isVdkLoading || vdkObjectInfos.size === 0}
-                                className="w-full text-white hover:bg-white/10 cursor-pointer bg-white/20"
+                                className="w-full text-white hover:bg-card/10 cursor-pointer bg-card/20"
                             >
                                 {isVdkLoading ? (
                                     <div className="flex items-center gap-2">
@@ -119,7 +119,7 @@ export function VdkConfigPanel({
 
                         {/* Add New VDK Object */}
                         <div className="space-y-2">
-                            <Separator className="bg-white/10" />
+                            <Separator className="bg-card/10" />
                             <div className="text-xs text-white/80 font-medium">添加新VDK对象</div>
                             <div className="flex gap-2">
                                 <div className="flex-1">
@@ -130,14 +130,14 @@ export function VdkConfigPanel({
                                         value={newObjectNumber}
                                         onChange={(e) => setNewObjectNumber(e.target.value)}
                                         placeholder="输入编号"
-                                        className="h-7 text-xs bg-white/10 border-white/20 text-white placeholder:text-white/40"
+                                        className="h-7 text-xs bg-card/10 border-white/20 text-white placeholder:text-white/40"
                                     />
                                 </div>
                                 <Button
                                     onClick={handleAddVdkObject}
                                     disabled={!newObjectNumber.trim()}
                                     size="sm"
-                                    className="h-7 px-2 text-white hover:bg-white/10 cursor-pointer bg-white/20"
+                                    className="h-7 px-2 text-white hover:bg-card/10 cursor-pointer bg-card/20"
                                 >
                                     <Plus className="h-3 w-3" />
                                 </Button>
@@ -155,18 +155,18 @@ export function VdkConfigPanel({
                         <div className="space-y-2">
                             <div className="flex items-center justify-between text-xs text-white/80">
                                 <span>配置状态:</span>
-                                <Badge variant="secondary" className="bg-white/10 text-white border-white/20 text-xs">
+                                <Badge variant="secondary" className="bg-card/10 text-white border-white/20 text-xs">
                                     {vdkConfigs.length > 0 ? `${vdkConfigs.length} 个配置 (${vdkObjectInfos.size} 个对象)` : '未加载'}
                                 </Badge>
                             </div>
 
-                            <Separator className="bg-white/10" />
+                            <Separator className="bg-card/10" />
 
                             {/* All VDK Configurations */}
                             <div className="space-y-2">
                                 <div className="text-xs text-white/80 font-medium">所有VDK配置:</div>
                                 {vdkConfigs.map((config, index) => (
-                                    <div key={index} className="space-y-1 p-2 bg-white/5 rounded border border-white/10">
+                                    <div key={index} className="space-y-1 p-2 bg-card/5 rounded border border-white/10">
                                         <div className="flex items-center justify-between">
                                             <Badge variant="outline" className={`border-white/30 text-xs ${
                                                 config.VDK_TYPE === 'SKY' ? 'text-blue-300 border-blue-300' :
@@ -321,14 +321,14 @@ export function VdkConfigPanel({
                                 ))}
                             </div>
 
-                            <Separator className="bg-white/10" />
+                            <Separator className="bg-card/10" />
 
                             {/* Object Details */}
                             <div className="text-xs text-white/80 font-medium">对象详情 (按编号分组):</div>
 
                             {/* Object List */}
                             {Array.from(vdkObjectInfos.entries()).map(([objectNumber, objectInfo]) => (
-                                <div key={objectNumber} className="space-y-2 p-2 bg-white/5 rounded border border-white/10">
+                                <div key={objectNumber} className="space-y-2 p-2 bg-card/5 rounded border border-white/10">
                                     <div className="flex items-center justify-between">
                                         <span className="text-xs text-white/80">对象编号:</span>
                                         <Badge variant="outline" className="border-white/30 text-white text-xs">

@@ -235,16 +235,16 @@ export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
         {compressionProgress ? (
           <div className="w-full max-w-md space-y-2">
             <div className="text-center">
-              <span className="text-gray-600">
+              <span className="text-muted-foreground">
                 Compressing {compressionProgress.current} of {compressionProgress.total} images...
               </span>
             </div>
             {compressionProgress.currentFile && (
-              <div className="text-center text-sm text-gray-500 truncate">
+              <div className="text-center text-sm text-muted-foreground truncate">
                 Current: {compressionProgress.currentFile}
               </div>
             )}
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="w-full bg-secondary rounded-full h-2">
               <div
                 className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                 style={{ width: `${(compressionProgress.current / compressionProgress.total) * 100}%` }}
@@ -257,7 +257,7 @@ export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
             )}
           </div>
         ) : (
-          <span className="text-gray-600">Compressing images...</span>
+          <span className="text-muted-foreground">Compressing images...</span>
         )}
       </div>
     );
@@ -286,11 +286,11 @@ export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
               onClick={handleFileSelect}
             >
               <div className="flex flex-col items-center justify-center p-8 text-center">
-                <Upload className="h-12 w-12 text-gray-400 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                <Upload className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium text-foreground mb-2">
                   Select PNG files to compress
                 </h3>
-                <p className="text-sm text-gray-500 mb-4">
+                <p className="text-sm text-muted-foreground mb-4">
                   Batch compression supported
                 </p>
                 <Button variant="outline" type="button">
@@ -320,7 +320,7 @@ export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
                   return (
                     <div key={imagePath} className="flex items-center gap-3 p-2 border rounded-lg">
                       <div className="w-8 h-8 bg-muted rounded overflow-hidden flex-shrink-0 flex items-center justify-center">
-                        <FileImage className="w-4 h-4 text-gray-400" />
+                        <FileImage className="w-4 h-4 text-muted-foreground" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{fileInfo?.displayName || imagePath.split(/[/\\]/).pop()}</p>

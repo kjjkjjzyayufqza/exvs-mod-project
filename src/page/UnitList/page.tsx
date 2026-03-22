@@ -134,7 +134,7 @@ export default function UnitList() {
         <h2 className="text-2xl font-bold tracking-tight mb-4">Unit List</h2>
         <div className="max-w-xl">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-5 w-5" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-5 w-5" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -147,24 +147,24 @@ export default function UnitList() {
 
       <div className="grid grid-cols-2 gap-6 flex-1">
         {/* Left grid - Unit list */}
-        <div className="bg-white rounded-lg shadow-sm border p-4">
-          <h3 className="text-lg font-semibold mb-4 text-gray-700">Units</h3>
+        <div className="bg-card rounded-lg shadow-sm border p-4">
+          <h3 className="text-lg font-semibold mb-4 text-foreground">Units</h3>
           {isLoading ? (
-            <div className="flex items-center justify-center h-32 text-gray-500">
+            <div className="flex items-center justify-center h-32 text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin mr-2" />
               Loading units...
             </div>
           ) : (
             <div className="space-y-2 overflow-auto max-h-[60vh]">
               {filteredUnits.length === 0 ? (
-                <div className="flex items-center justify-center h-32 text-gray-500">
+                <div className="flex items-center justify-center h-32 text-muted-foreground">
                   No units found
                 </div>
               ) : (
                 filteredUnits.map((unit, index) => (
                   <div
                     key={index}
-                    className={`flex justify-between items-center p-3 hover:bg-gray-50 rounded-md transition-colors border cursor-pointer ${selectedUnit?.unitId === unit.unitId ? "bg-blue-50 border-blue-200" : ""
+                    className={`flex justify-between items-center p-3 hover:bg-muted/80 rounded-md transition-colors border cursor-pointer ${selectedUnit?.unitId === unit.unitId ? "bg-primary/10 border-primary/30" : ""
                       }`}
                     onClick={() => handleUnitSelect(unit)}
                   >
@@ -179,20 +179,20 @@ export default function UnitList() {
         </div>
 
         {/* Right grid - Unit details */}
-        <div className="bg-white rounded-lg shadow-sm border p-4">
-          <h3 className="text-lg font-semibold mb-4 text-gray-700">Unit Details</h3>
+        <div className="bg-card rounded-lg shadow-sm border p-4">
+          <h3 className="text-lg font-semibold mb-4 text-foreground">Unit Details</h3>
           {selectedUnit ? (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2 col-span-2">
                   <div className="font-medium">Unit ID</div>
-                  <div className="text-gray-700">{selectedUnit.unitId}</div>
+                  <div className="text-foreground">{selectedUnit.unitId}</div>
                 </div>
 
                 <div className="space-y-2">
                   <div className="font-medium">Model File</div>
                   <div className="flex items-center justify-between">
-                    <div className="text-gray-700 flex items-center">
+                    <div className="text-foreground flex items-center">
                       <span className="mr-2">{selectedUnit.modelFileName}</span>
                       <span className={`h-2 w-2 rounded-full ${selectedUnit.constModelExists ? "bg-green-500" : "bg-red-500"}`}></span>
                     </div>
@@ -209,7 +209,7 @@ export default function UnitList() {
                 <div className="space-y-2">
                   <div className="font-medium">Aleo File</div>
                   <div className="flex items-center justify-between">
-                    <div className="text-gray-700 flex items-center">
+                    <div className="text-foreground flex items-center">
                       <span className="mr-2">{selectedUnit.aleoFileName}</span>
                       <span className={`h-2 w-2 rounded-full ${selectedUnit.constAleoExists ? "bg-green-500" : "bg-red-500"}`}></span>
                     </div>
@@ -226,7 +226,7 @@ export default function UnitList() {
                 <div className="space-y-2">
                   <div className="font-medium">Nu3bank File</div>
                   <div className="flex items-center justify-between">
-                    <div className="text-gray-700 flex items-center">
+                    <div className="text-foreground flex items-center">
                       <span className="mr-2">{selectedUnit.nu3bankFileName}</span>
                       <span className={`h-2 w-2 rounded-full ${selectedUnit.constNu3bankExists ? "bg-green-500" : "bg-red-500"}`}></span>
                     </div>
@@ -243,7 +243,7 @@ export default function UnitList() {
                 <div className="space-y-2">
                   <div className="font-medium">Ammo File</div>
                   <div className="flex items-center justify-between">
-                    <div className="text-gray-700 flex items-center">
+                    <div className="text-foreground flex items-center">
                       <span className="mr-2">{selectedUnit.ammoFileName}</span>
                       <span className={`h-2 w-2 rounded-full ${selectedUnit.constAmmoExists ? "bg-green-500" : "bg-red-500"}`}></span>
                     </div>
@@ -260,7 +260,7 @@ export default function UnitList() {
                 <div className="space-y-2">
                   <div className="font-medium">MSC File</div>
                   <div className="flex items-center justify-between">
-                    <div className="text-gray-700 flex items-center">
+                    <div className="text-foreground flex items-center">
                       <span className="mr-2">{selectedUnit.mscFileName}</span>
                       <span className={`h-2 w-2 rounded-full ${selectedUnit.constMscExists ? "bg-green-500" : "bg-red-500"}`}></span>
                     </div>
@@ -277,7 +277,7 @@ export default function UnitList() {
                 <div className="space-y-2">
                   <div className="font-medium">Anime File</div>
                   <div className="flex items-center justify-between">
-                    <div className="text-gray-700 flex items-center">
+                    <div className="text-foreground flex items-center">
                       <span className="mr-2">{selectedUnit.animeFileName}</span>
                       <span className={`h-2 w-2 rounded-full ${selectedUnit.constAnimeExists ? "bg-green-500" : "bg-red-500"}`}></span>
                     </div>
@@ -294,7 +294,7 @@ export default function UnitList() {
 
             </div>
           ) : (
-            <div className="flex items-center justify-center h-32 text-gray-500">
+            <div className="flex items-center justify-center h-32 text-muted-foreground">
               Select a unit to view details
             </div>
           )}

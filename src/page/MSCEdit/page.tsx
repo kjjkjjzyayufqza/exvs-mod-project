@@ -80,18 +80,18 @@ export default function MSCEdit() {
       <div className="mb-8">
         <h2 className="text-2xl font-bold tracking-tight mb-4">MSC Editor</h2>
         <div className="max-w-xl">
-          <Label htmlFor="folder-input" className="text-sm font-medium mb-2 block text-gray-600">
+          <Label htmlFor="folder-input" className="text-sm font-medium mb-2 block text-muted-foreground">
             Select Folder
           </Label>
           <div className="relative">
-            <FolderOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-5 w-5" />
+            <FolderOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-5 w-5" />
             <Input
               id="folder-input"
               value={folderPath}
               onClick={handleFolderSelect}
               readOnly
               placeholder="Click to select folder"
-              className="pl-10 cursor-pointer hover:bg-gray-50 transition-colors"
+              className="pl-10 cursor-pointer hover:bg-muted/50 transition-colors"
             />
           </div>
         </div>
@@ -103,8 +103,8 @@ export default function MSCEdit() {
         </Button>
       </div>
       <div className="grid grid-cols-1 gap-6 flex-1">
-        <div className="col-span-1 bg-white rounded-lg shadow-sm border p-4">
-          <h3 className="text-lg font-semibold mb-4 text-gray-700">MSC Files</h3>
+        <div className="col-span-1 bg-card rounded-lg shadow-sm border p-4">
+          <h3 className="text-lg font-semibold mb-4 text-foreground">MSC Files</h3>
           <FileList
             files={files}
             isLoading={isLoading}

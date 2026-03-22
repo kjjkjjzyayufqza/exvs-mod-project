@@ -341,7 +341,7 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
               <Separator />
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Clipboard</Label>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="bg-primary/10 border border-primary/30 rounded-lg p-3">
                   <div className="flex items-center gap-2">
                     <Info className="h-4 w-4 text-blue-600" />
                     <span className="text-sm font-medium text-blue-900">
@@ -351,7 +351,7 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
                       {copiedItem.data?.type || 'Unknown'}
                     </span>
                     {copiedItem.data?.type === 'Item' && copiedItem.data?.fileType && (
-                      <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded-full">
+                      <span className="text-xs px-2 py-1 bg-muted text-foreground rounded-full">
                         {copiedItem.data.fileType}
                       </span>
                     )}
@@ -643,7 +643,7 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
         {copiedItem && (
           <div className="space-y-2">
             <Label className="text-sm font-medium">Clipboard</Label>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="bg-primary/10 border border-primary/30 rounded-lg p-3">
               <div className="flex items-center gap-2">
                 <Info className="h-4 w-4 text-blue-600" />
                 <span className="text-sm font-medium text-blue-900">
@@ -653,7 +653,7 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
                   {copiedItem.data?.type || 'Unknown'}
                 </span>
                 {copiedItem.data?.type === 'Item' && copiedItem.data?.fileType && (
-                  <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded-full">
+                  <span className="text-xs px-2 py-1 bg-muted text-foreground rounded-full">
                     {copiedItem.data.fileType}
                   </span>
                 )}

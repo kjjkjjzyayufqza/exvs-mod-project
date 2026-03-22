@@ -39,7 +39,7 @@ const AddAttributeComponent = memo(function AddAttributeComponent({ materialInde
 
   if (availableAttributes.length === 0) {
     return (
-      <div className="text-xs text-gray-400 p-2">
+      <div className="text-xs text-muted-foreground p-2">
         All common attributes are already added
       </div>
     );
@@ -216,14 +216,14 @@ const AttributeEditor = memo(function AttributeEditor({ attribute, materialIndex
 
       case 'Sampler':
         return (
-          <div className="text-xs text-gray-500 p-2 bg-gray-50 rounded">
+          <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded">
             Sampler (Complex - Read Only)
           </div>
         );
 
       default:
         return (
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-muted-foreground">
             Unknown type
           </div>
         );
@@ -355,7 +355,7 @@ const MaterialCard = memo(function MaterialCard({
               </Button>
             </div>
           )}
-          <span className="text-sm text-gray-500">{material.shader_label}</span>
+          <span className="text-sm text-muted-foreground">{material.shader_label}</span>
         </div>
         
         {/* Texture paths section */}
@@ -366,7 +366,7 @@ const MaterialCard = memo(function MaterialCard({
             .filter(({ attribute }: any) => isStringAttribute(attribute))
             .map(({ attribute, attributeIndex }: any) => (
               <div key={`${materialIndex}-${attributeIndex}-${attribute.param_id}`} className="space-y-1">
-                <Label className="text-xs text-gray-600">{attribute.param_id}</Label>
+                <Label className="text-xs text-muted-foreground">{attribute.param_id}</Label>
                 <AttributeEditor
                   attribute={attribute}
                   materialIndex={materialIndex}
@@ -393,10 +393,10 @@ const MaterialCard = memo(function MaterialCard({
                 return (
                   <div key={`${materialIndex}-${attributeIndex}-${attribute.param_id}`} className="space-y-1">
                     <div className="flex items-center justify-between">
-                      <Label className="text-xs text-gray-600 font-medium">
+                      <Label className="text-xs text-muted-foreground font-medium">
                         {attribute.param_id}
                       </Label>
-                      <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded text-[10px]">
+                      <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded text-[10px]">
                         {dataType}
                       </span>
                     </div>
@@ -636,7 +636,7 @@ export function FileDialog({ file }: FileDialogProps) {
                       className={`group flex items-center justify-between p-2 rounded cursor-pointer text-sm transition-colors ${
                         selectedMaterialIndex === materialIndex
                           ? 'bg-blue-100 border border-blue-300'
-                          : 'hover:bg-gray-100'
+                          : 'hover:bg-muted'
                       }`}
                       onClick={() => setSelectedMaterialIndex(materialIndex)}
                       title={`${material.material_label} (${material.attributes?.length || 0} attributes)`}
@@ -645,10 +645,10 @@ export function FileDialog({ file }: FileDialogProps) {
                         <div className="truncate font-medium">
                           {material.material_label || `Material ${materialIndex + 1}`}
                         </div>
-                        <div className="text-xs text-gray-500 truncate">
+                        <div className="text-xs text-muted-foreground truncate">
                           {material.shader_label}
                         </div>
-                        <div className="text-xs text-gray-400 mt-1">
+                        <div className="text-xs text-muted-foreground mt-1">
                           {material.attributes?.length || 0} attributes
                         </div>
                       </div>
@@ -728,7 +728,7 @@ export function FileDialog({ file }: FileDialogProps) {
       <DialogHeader>
         <DialogTitle>Edit {file.name}</DialogTitle>
       </DialogHeader>
-      <div className="flex items-center justify-center h-32 text-gray-500">
+      <div className="flex items-center justify-center h-32 text-muted-foreground">
         No data to display
       </div>
     </div>

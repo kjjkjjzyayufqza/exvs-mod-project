@@ -176,6 +176,11 @@
 
 /* Custom text selection colors for PropertySection inputs */
 input::selection {
-  background-color: #3b82f6; /* Blue background */
-  color: white; /* White text for contrast */
+  background-color: #3b82f6;
+  color: white;
+}
+
+.dark input::selection {
+  background-color: #2563eb;
+  color: white;
 }

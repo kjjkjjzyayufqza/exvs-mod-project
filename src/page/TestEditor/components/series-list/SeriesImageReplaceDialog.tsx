@@ -267,7 +267,7 @@ export function SeriesImageReplaceDialog({
                             variant="secondary"
                             size="icon"
                             onClick={() => zoomIn()}
-                            className="h-8 w-8 rounded-full bg-white/80 hover:bg-white/90"
+                            className="h-8 w-8 rounded-full bg-card/80 hover:bg-card/90"
                           >
                             +
                           </Button>
@@ -276,7 +276,7 @@ export function SeriesImageReplaceDialog({
                             variant="secondary"
                             size="icon"
                             onClick={() => zoomOut()}
-                            className="h-8 w-8 rounded-full bg-white/80 hover:bg-white/90"
+                            className="h-8 w-8 rounded-full bg-card/80 hover:bg-card/90"
                           >
                             -
                           </Button>
@@ -285,7 +285,7 @@ export function SeriesImageReplaceDialog({
                             variant="secondary"
                             size="icon"
                             onClick={() => resetTransform()}
-                            className="h-8 w-8 rounded-full bg-white/80 hover:bg-white/90"
+                            className="h-8 w-8 rounded-full bg-card/80 hover:bg-card/90"
                           >
                             ↺
                           </Button>

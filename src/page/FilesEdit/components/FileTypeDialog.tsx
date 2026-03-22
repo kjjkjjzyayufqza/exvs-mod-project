@@ -45,7 +45,7 @@ export function FileTypeDialog({ onFileTypeSelect, children, currentDirectory }:
     if (!selectedFileType) {
       return (
         <div className="flex items-center justify-center h-full">
-          <div className="text-center text-gray-500">
+          <div className="text-center text-muted-foreground">
             <FileImage className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p className="text-lg font-medium">Select a file type</p>
             <p className="text-sm">Choose from the list on the left to get started</p>
@@ -68,7 +68,7 @@ export function FileTypeDialog({ onFileTypeSelect, children, currentDirectory }:
       default:
         return (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center text-gray-500">
+            <div className="text-center text-muted-foreground">
               <Plus className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p className="text-lg font-medium">Coming Soon</p>
               <p className="text-sm">This file type is not yet supported</p>
@@ -91,8 +91,8 @@ export function FileTypeDialog({ onFileTypeSelect, children, currentDirectory }:
           {/* Left sidebar - File types */}
           <div className="col-span-4 border-r pr-4">
             <div className="mb-4">
-              <p className="text-sm font-medium text-gray-700">Choose file type</p>
-              <p className="text-xs text-gray-500 mt-1">Select the type of file you want to create</p>
+              <p className="text-sm font-medium text-foreground">Choose file type</p>
+              <p className="text-xs text-muted-foreground mt-1">Select the type of file you want to create</p>
             </div>
             <ScrollArea className="h-[500px]">
               <div className="space-y-2">
@@ -100,21 +100,21 @@ export function FileTypeDialog({ onFileTypeSelect, children, currentDirectory }:
                   <Card
                     key={fileType.id}
                     className={`cursor-pointer transition-all ${selectedFileType === fileType.id
-                        ? 'border-blue-500 bg-blue-50 shadow-sm'
+                        ? 'border-blue-500 bg-primary/10 shadow-sm'
                         : 'hover:shadow-sm hover:border-gray-300'
                       } ${fileType.supported ? '' : 'opacity-50 cursor-not-allowed'}`}
                     onClick={() => fileType.supported && handleFileTypeSelect(fileType.id)}
                   >
                     <CardContent className="p-4">
                       <div className="flex items-start gap-3">
-                        <div className={`p-2 rounded-lg ${selectedFileType === fileType.id ? 'bg-blue-100' : 'bg-gray-50'
+                        <div className={`p-2 rounded-lg ${selectedFileType === fileType.id ? 'bg-blue-100' : 'bg-muted/50'
                           }`}>
-                          <fileType.icon className={`h-4 w-4 ${selectedFileType === fileType.id ? 'text-blue-600' : 'text-gray-600'
+                          <fileType.icon className={`h-4 w-4 ${selectedFileType === fileType.id ? 'text-blue-600' : 'text-muted-foreground'
                             }`} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm">{fileType.name}</p>
-                          <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                             {fileType.description}
                           </p>
                         </div>

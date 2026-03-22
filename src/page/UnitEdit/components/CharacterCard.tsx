@@ -61,7 +61,7 @@ export const CharacterCard: FC<CharacterCardProps> = ({
               variant="ghost"
               size="sm"
               onClick={handleCopyClick}
-              className="text-blue-600 hover:text-blue-600 hover:bg-blue-50"
+              className="text-primary hover:text-primary hover:bg-primary/10"
               title="Copy as new"
             >
               <Copy className="w-4 h-4" />

@@ -33,7 +33,7 @@ export function PropertySection({
                         variant="ghost"
                         onClick={() => onCopyProperty(property)}
                         disabled={disabled}
-                        className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-card/10 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="复制值"
                     >
                         <Copy className="h-3 w-3" />
@@ -43,7 +43,7 @@ export function PropertySection({
                         variant="ghost"
                         onClick={() => onResetProperty(property)}
                         disabled={disabled}
-                        className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-card/10 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="重置"
                     >
                         <RotateCcw className="h-3 w-3" />

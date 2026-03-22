@@ -85,7 +85,7 @@ export function StageCard({ stage, index, isSelected, onClick, onCopy, onDelete,
         <Button
           variant="ghost"
           size="sm"
-          className="text-blue-600 hover:text-blue-600 hover:bg-blue-50 p-0"
+          className="text-primary hover:text-primary hover:bg-primary/10 p-0"
           onClick={(e) => {
             e.stopPropagation();
             onCopy();

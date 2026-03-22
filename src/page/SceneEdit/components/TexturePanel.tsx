@@ -90,7 +90,7 @@ function SubModelTextureItem({ modelId, subModel, onSelectTexture, onRemoveTextu
                     variant="ghost"
                     onClick={handleSelectTexture}
                     disabled={isLoading}
-                    className="h-7 w-7 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                    className="h-7 w-7 p-0 text-white/60 hover:text-white hover:bg-card/10"
                     title="选择贴图"
                 >
                     {isLoading ? (
@@ -192,7 +192,7 @@ export function TexturePanel({ models, selectedModelId }: TexturePanelProps) {
 
                             {/* Separator between models */}
                             {model !== modelsWithSubModels[modelsWithSubModels.length - 1] && (
-                                <Separator className="bg-white/10 mt-4" />
+                                <Separator className="bg-card/10 mt-4" />
                             )}
                         </div>
                     ))

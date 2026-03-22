@@ -910,7 +910,7 @@ export default function RepackPage() {
     <div className="h-full">
       <div>
         <h2 className="text-2xl font-bold tracking-tight mb-4">Repack Manager</h2>
-        <p className="text-gray-600 mb-4">
+        <p className="text-muted-foreground mb-4">
           Manage your project structure with drag & drop, rename, add and delete operations.<br />
           <span className="text-2xl">对于GVS的文件，记得用解包工具解包一次，再打包一次，再解包一次的json来导入，否则会出错</span>
         </p>
@@ -1082,7 +1082,7 @@ export default function RepackPage() {
               Drag and drop items to reorganize your project structure
             </CardDescription>
             {completeProjectData && (
-              <div className="flex gap-6 text-sm text-gray-600 mt-2">
+              <div className="flex gap-6 text-sm text-muted-foreground mt-2">
                 <span>Magic: <span className="font-bold">{completeProjectData.Magic}</span></span>
                 <span>Files: <span className="font-bold">{completeProjectData.Fhm2dTotalCount}</span></span>
                 <span>UnkCount: <span className="font-bold">{completeProjectData.UnkCount}</span></span>

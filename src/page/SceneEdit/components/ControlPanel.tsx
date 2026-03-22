@@ -129,7 +129,7 @@ export function ControlPanel({
                                         <Button
                                             size="sm"
                                             variant="ghost"
-                                            className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                                            className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-card/10"
                                         >
                                             {isControlsCollapsed ? <ChevronDown className="h-3 w-3 transition-transform duration-200" /> : <ChevronUp className="h-3 w-3 transition-transform duration-200" />}
                                         </Button>
@@ -141,33 +141,33 @@ export function ControlPanel({
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between">
                                             <span className="text-xs text-white/80">当前选中:</span>
-                                            <Badge variant="secondary" className="bg-white/10 text-white border-white/20 text-xs">
+                                            <Badge variant="secondary" className="bg-card/10 text-white border-white/20 text-xs">
                                                 {selectedModelState?.name || 'None'}
                                             </Badge>
                                         </div>
-                                        <Separator className="bg-white/10" />
+                                        <Separator className="bg-card/10" />
                                         <div className="grid grid-cols-2 gap-2 text-xs text-white/80">
                                             <div className="space-y-0.5">
                                                 <div className="flex items-center gap-1">
-                                                    <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">W</kbd>
+                                                    <kbd className="p-1 bg-card/10 rounded text-white font-mono text-xs">W</kbd>
                                                     <span className="text-xs">平移</span>
                                                 </div>
                                                 <div className="flex items-center gap-1">
-                                                    <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">E</kbd>
+                                                    <kbd className="p-1 bg-card/10 rounded text-white font-mono text-xs">E</kbd>
                                                     <span className="text-xs">旋转</span>
                                                 </div>
                                                 <div className="flex items-center gap-1">
-                                                    <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">R</kbd>
+                                                    <kbd className="p-1 bg-card/10 rounded text-white font-mono text-xs">R</kbd>
                                                     <span className="text-xs">缩放</span>
                                                 </div>
                                             </div>
                                             <div className="space-y-0.5">
                                                 <div className="flex items-center gap-1">
-                                                    <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">Ctrl+Z</kbd>
+                                                    <kbd className="p-1 bg-card/10 rounded text-white font-mono text-xs">Ctrl+Z</kbd>
                                                     <span className="text-xs">撤销</span>
                                                 </div>
                                                 <div className="flex items-center gap-1">
-                                                    <kbd className="p-1 bg-white/10 rounded text-white font-mono text-xs">Ctrl+Y</kbd>
+                                                    <kbd className="p-1 bg-card/10 rounded text-white font-mono text-xs">Ctrl+Y</kbd>
                                                     <span className="text-xs">重做</span>
                                                 </div>
                                             </div>
@@ -191,7 +191,7 @@ export function ControlPanel({
                                             <Button
                                                 size="sm"
                                                 variant="ghost"
-                                                className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                                                className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-card/10"
                                             >
                                                 {isPropertiesCollapsed ? <ChevronDown className="h-3 w-3 transition-transform duration-200" /> : <ChevronUp className="h-3 w-3 transition-transform duration-200" />}
                                             </Button>
@@ -209,7 +209,7 @@ export function ControlPanel({
                                             onCopyProperty={copyProperty}
                                             disabled={selectedModelState!.isLocked}
                                         />
-                                        <Separator className="bg-white/10" />
+                                        <Separator className="bg-card/10" />
                                         <PropertySection
                                             title="旋转"
                                             property="rotation"
@@ -219,7 +219,7 @@ export function ControlPanel({
                                             onCopyProperty={copyProperty}
                                             disabled={selectedModelState!.isLocked}
                                         />
-                                        <Separator className="bg-white/10" />
+                                        <Separator className="bg-card/10" />
                                         <PropertySection
                                             title="缩放"
                                             property="scale"
@@ -248,7 +248,7 @@ export function ControlPanel({
                                         <Button
                                             size="sm"
                                             variant="ghost"
-                                            className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                                            className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-card/10"
                                         >
                                             {isModelListCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
                                         </Button>
@@ -281,7 +281,7 @@ export function ControlPanel({
                                         <Button
                                             size="sm"
                                             variant="ghost"
-                                            className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                                            className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-card/10"
                                         >
                                             {isTextureCollapsed ? <ChevronDown className="h-3 w-3 transition-transform duration-200" /> : <ChevronUp className="h-3 w-3 transition-transform duration-200" />}
                                         </Button>

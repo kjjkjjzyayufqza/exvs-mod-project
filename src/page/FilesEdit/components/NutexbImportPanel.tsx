@@ -212,7 +212,7 @@ export function NutexbImportPanel({
     return (
       <div className="flex flex-col items-center justify-center p-8 space-y-4">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-        <span className="text-gray-600">Converting image to nutexb...</span>
+        <span className="text-muted-foreground">Converting image to nutexb...</span>
       </div>
     );
   }
@@ -232,7 +232,7 @@ export function NutexbImportPanel({
           <Card
             className={`border-2 border-dashed transition-colors cursor-pointer ${
               isDragOver 
-                ? 'border-blue-400 bg-blue-50' 
+                ? 'border-blue-400 bg-primary/10' 
                 : 'border-gray-300 hover:border-gray-400'
             }`}
             onDrop={handleDrop}
@@ -241,11 +241,11 @@ export function NutexbImportPanel({
             onClick={handleFileSelect}
           >
             <div className="flex flex-col items-center justify-center p-8 text-center">
-              <Upload className="h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
+              <Upload className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">
                 Select or drop image files
               </h3>
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-sm text-muted-foreground mb-4">
                 Supports PNG, JPG, BMP, GIF, WebP, TIFF formats (batch selection supported)
               </p>
               <Button variant="outline" type="button">

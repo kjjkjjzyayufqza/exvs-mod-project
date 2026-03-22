@@ -96,7 +96,7 @@ export function FileList({ files, isLoading, folderPath, onFileSelect, resetConv
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-32 text-gray-500">
+      <div className="flex items-center justify-center h-32 text-muted-foreground">
         Loading files...
       </div>
     );
@@ -104,7 +104,7 @@ export function FileList({ files, isLoading, folderPath, onFileSelect, resetConv
 
   if (files.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-32 text-gray-500">
+      <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
         <FolderOpen className="h-8 w-8 mb-2 opacity-50" />
         {folderPath ? 'No files found in this folder' : 'Select a folder to view files'}
       </div>
@@ -137,7 +137,7 @@ export function FileList({ files, isLoading, folderPath, onFileSelect, resetConv
         {localFiles.map((file: FileInfo, index: number) => (
           <div
             key={index}
-            className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-md transition-colors border"
+            className="flex justify-between items-center p-3 hover:bg-muted/50 rounded-md transition-colors border"
           >
             <div className="flex items-center space-x-3">
               {file.previewPath ? (
@@ -154,7 +154,7 @@ export function FileList({ files, isLoading, folderPath, onFileSelect, resetConv
                       const parent = e.currentTarget.parentElement;
                       if (parent) {
                         const errorIcon = document.createElement('span');
-                        errorIcon.className = "h-4 w-4 text-gray-500";
+                        errorIcon.className = "h-4 w-4 text-muted-foreground";
                         errorIcon.textContent = "!";
                         parent.appendChild(errorIcon);
                       }
@@ -162,9 +162,9 @@ export function FileList({ files, isLoading, folderPath, onFileSelect, resetConv
                   />
                 </div>
               ) : file.name.endsWith('.nutexb') ? (
-                <Image className="h-4 w-4 text-gray-500" />
+                <Image className="h-4 w-4 text-muted-foreground" />
               ) : (
-                <FileEdit className="h-4 w-4 text-gray-500" />
+                <FileEdit className="h-4 w-4 text-muted-foreground" />
               )}
               <span className="truncate">{file.name}</span>
             </div>
@@ -179,7 +179,7 @@ export function FileList({ files, isLoading, folderPath, onFileSelect, resetConv
                   <Button
                     variant="outline"
                     size="sm"
-                    className="hover:bg-gray-100"
+                    className="hover:bg-muted"
                     onClick={() => onFileSelect(file)}
                   >
                     Edit

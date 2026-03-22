@@ -822,7 +822,7 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            className="text-blue-600 hover:text-blue-600 hover:bg-blue-50"
+                                                            className="text-primary hover:text-primary hover:bg-primary/10"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 handleCopy(idx);

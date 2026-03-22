@@ -72,7 +72,7 @@ export function ImportPanel() {
                             <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                                className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-card/10"
                             >
                                 {isCollapsed ? <ChevronDown className="h-3 w-3 transition-transform duration-200" /> : <ChevronUp className="h-3 w-3 transition-transform duration-200" />}
                             </Button>
@@ -91,7 +91,7 @@ export function ImportPanel() {
                             <Button
                                 onClick={handleImportModels}
                                 disabled={isLoading}
-                                className="w-full text-white hover:bg-white/10  cursor-pointer bg-white/20"
+                                className="w-full text-white hover:bg-card/10  cursor-pointer bg-card/20"
                             >
                                 {isLoading ? (
                                     <div className="flex items-center gap-2">

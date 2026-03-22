@@ -327,16 +327,16 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
         {conversionProgress ? (
           <div className="w-full max-w-md space-y-2">
             <div className="text-center">
-              <span className="text-gray-600">
+              <span className="text-muted-foreground">
                 Converting {conversionProgress.current} of {conversionProgress.total} images...
               </span>
             </div>
             {conversionProgress.currentFile && (
-              <div className="text-center text-sm text-gray-500 truncate">
+              <div className="text-center text-sm text-muted-foreground truncate">
                 Current: {conversionProgress.currentFile}
               </div>
             )}
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="w-full bg-secondary rounded-full h-2">
               <div
                 className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                 style={{ width: `${(conversionProgress.current / conversionProgress.total) * 100}%` }}
@@ -349,7 +349,7 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
             )}
           </div>
         ) : (
-          <span className="text-gray-600">Converting image to nutexb...</span>
+          <span className="text-muted-foreground">Converting image to nutexb...</span>
         )}
       </div>
     );
@@ -406,7 +406,7 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
         <Card
           className={`border-2 border-dashed transition-colors cursor-pointer ${
             isDragOver
-              ? 'border-blue-400 bg-blue-50'
+              ? 'border-blue-400 bg-primary/10'
               : 'border-gray-300 hover:border-gray-400'
           }`}
           onDrop={handleDrop}
@@ -415,11 +415,11 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
           onClick={handleFileSelect}
         >
           <div className="flex flex-col items-center justify-center p-8 text-center">
-            <Upload className="h-12 w-12 text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
+            <Upload className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium text-foreground mb-2">
               Select or drop image files
             </h3>
-            <p className="text-sm text-gray-500 mb-4">
+            <p className="text-sm text-muted-foreground mb-4">
               Supports PNG, JPG, BMP, GIF, WebP, TIFF formats (batch selection supported)
             </p>
             <Button variant="outline" type="button">
@@ -462,7 +462,7 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
                         <div className="w-4 h-4 border border-gray-300 rounded-full border-t-transparent animate-spin"></div>
                       )
                     ) : (
-                      <FileImage className="w-6 h-6 text-gray-400" />
+                      <FileImage className="w-6 h-6 text-muted-foreground" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">

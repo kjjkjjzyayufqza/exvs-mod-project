@@ -52,7 +52,7 @@ export function SceneExportPanel() {
                             <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                                className="h-5 w-5 p-0 text-white/60 hover:text-white hover:bg-card/10"
                             >
                                 {isCollapsed ? <ChevronDown className="h-3 w-3 transition-transform duration-200" /> : <ChevronUp className="h-3 w-3 transition-transform duration-200" />}
                             </Button>
@@ -67,12 +67,12 @@ export function SceneExportPanel() {
                                 value={sceneName}
                                 onChange={(e) => setSceneName(e.target.value)}
                                 disabled={isLoading}
-                                className="text-xs bg-white/10 border-white/20 text-white placeholder:text-white/60"
+                                className="text-xs bg-card/10 border-white/20 text-white placeholder:text-white/60"
                             />
                             <Button
                                 onClick={handleExport}
                                 disabled={isLoading || modelCount === 0}
-                                className="w-full text-white hover:bg-white/10 cursor-pointer bg-white/20"
+                                className="w-full text-white hover:bg-card/10 cursor-pointer bg-card/20"
                             >
                                 <Download className="h-4 w-4 mr-2" />
                                 {isLoading ? '导出中...' : '导出场景'}
@@ -80,7 +80,7 @@ export function SceneExportPanel() {
                             <Button
                                 onClick={handleImport}
                                 disabled={isLoading}
-                                className="w-full text-white hover:bg-white/10 cursor-pointer bg-white/20"
+                                className="w-full text-white hover:bg-card/10 cursor-pointer bg-card/20"
                             >
                                 <Upload className="h-4 w-4 mr-2" />
                                 {isLoading ? '导入中...' : '导入场景'}

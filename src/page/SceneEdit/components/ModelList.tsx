@@ -27,7 +27,7 @@ export function ModelList({ models, selectedModelId, onModelSelect, onModelRemov
                         className={`flex items-center gap-1 p-1 rounded text-xs cursor-pointer ${
                             selectedModelId === model.id
                                 ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                                : 'text-white/80 hover:text-white hover:bg-white/10'
+                                : 'text-white/80 hover:text-white hover:bg-card/10'
                         } ${model.isLocked ? 'opacity-60' : ''}`}
                         onClick={() => onModelSelect(model.id)}
                     >
@@ -44,7 +44,7 @@ export function ModelList({ models, selectedModelId, onModelSelect, onModelRemov
                             <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-6 w-6 p-0 text-white/60 hover:text-white hover:bg-white/10"
+                                className="h-6 w-6 p-0 text-white/60 hover:text-white hover:bg-card/10"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onModelLockToggle(model.id);

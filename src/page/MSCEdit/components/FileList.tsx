@@ -257,19 +257,19 @@ export function FileList({ files, isLoading, folderPath }: FileListProps) {
     
     switch (extension) {
       case 'bin':
-        return <FileEdit className="h-4 w-4 text-gray-900" />;
+        return <FileEdit className="h-4 w-4 text-foreground" />;
       case 'c':
-        return <Code className="h-4 w-4 text-gray-700" />;
+        return <Code className="h-4 w-4 text-foreground" />;
       case 'txt':
-        return <FileEdit className="h-4 w-4 text-gray-500" />;
+        return <FileEdit className="h-4 w-4 text-muted-foreground" />;
       default:
-        return <FileEdit className="h-4 w-4 text-gray-400" />;
+        return <FileEdit className="h-4 w-4 text-muted-foreground" />;
     }
   };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-32 text-gray-500">
+      <div className="flex items-center justify-center h-32 text-muted-foreground">
         Loading files...
       </div>
     );
@@ -277,7 +277,7 @@ export function FileList({ files, isLoading, folderPath }: FileListProps) {
 
   if (files.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-32 text-gray-500">
+      <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
         <FolderOpen className="h-8 w-8 mb-2 opacity-50" />
         {folderPath ? 'No files found in this folder' : 'Select a folder to view files'}
       </div>
@@ -313,7 +313,7 @@ export function FileList({ files, isLoading, folderPath }: FileListProps) {
           return (
             <Card
               key={index}
-              className="p-3 hover:bg-gray-50 transition-colors"
+              className="p-3 hover:bg-muted/50 transition-colors"
             >
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-3">

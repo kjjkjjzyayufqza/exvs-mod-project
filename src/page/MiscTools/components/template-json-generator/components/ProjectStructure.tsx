@@ -503,7 +503,7 @@ export function ProjectStructure({
                                         Drag and drop items to reorganize your project structure
                                     </CardDescription>
                                     {completeProjectData && (
-                                        <div className="flex gap-6 text-sm text-gray-600 mt-2">
+                                        <div className="flex gap-6 text-sm text-muted-foreground mt-2">
                                             <span>Magic: <span className="font-bold">{completeProjectData.Magic}</span></span>
                                             <span>Files: <span className="font-bold">{completeProjectData.Fhm2dTotalCount}</span></span>
                                             <span>UnkCount: <span className="font-bold">{completeProjectData.UnkCount}</span></span>

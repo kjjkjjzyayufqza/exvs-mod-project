@@ -179,14 +179,14 @@ function AttributeEditor({ attribute, materialIndex, attributeIndex, onUpdate, o
 
             case 'Sampler':
                 return (
-                    <div className="text-xs text-gray-500 p-2 bg-gray-50 rounded">
+                    <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded">
                         Sampler (Complex - Read Only)
                     </div>
                 );
 
             default:
                 return (
-                    <div className="text-xs text-gray-400">
+                    <div className="text-xs text-muted-foreground">
                         Unknown type
                     </div>
                 );
@@ -414,7 +414,7 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                                 </Button>
                             </div>
                         )}
-                        <span className="text-sm text-gray-500">{material.shader_label}</span>
+                        <span className="text-sm text-muted-foreground">{material.shader_label}</span>
                     </div>
 
                     {/* Texture paths section */}
@@ -425,7 +425,7 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                             .filter(({ attribute }: any) => isStringAttribute(attribute))
                             .map(({ attribute, attributeIndex }: any) => (
                                 <div key={`${materialIndex}-${attributeIndex}-${attribute.param_id}`} className="space-y-1">
-                                    <Label className="text-xs text-gray-600">{attribute.param_id}</Label>
+                                    <Label className="text-xs text-muted-foreground">{attribute.param_id}</Label>
                                     <AttributeEditor
                                         attribute={attribute}
                                         materialIndex={materialIndex}
@@ -452,10 +452,10 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                                     return (
                                         <div key={`${materialIndex}-${attributeIndex}-${attribute.param_id}`} className="space-y-1">
                                             <div className="flex items-center justify-between">
-                                                <Label className="text-xs text-gray-600 font-medium">
+                                                <Label className="text-xs text-muted-foreground font-medium">
                                                     {attribute.param_id}
                                                 </Label>
-                                                <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded text-[10px]">
+                                                <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded text-[10px]">
                                                     {dataType}
                                                 </span>
                                             </div>
@@ -478,7 +478,7 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                     <div className="space-y-2">
                         <Label className="text-sm font-medium">Add Attribute</Label>
                         {availableAttributes.length === 0 ? (
-                            <div className="text-xs text-gray-400 p-2">
+                            <div className="text-xs text-muted-foreground p-2">
                                 All common attributes are already added
                             </div>
                         ) : (
@@ -642,7 +642,7 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                                                         key={`material-list-${materialIndex}`}
                                                         className={`group flex items-center justify-between p-2 rounded cursor-pointer text-sm transition-colors ${selectedMaterialIndex === materialIndex
                                                                 ? 'bg-blue-100 border border-blue-300'
-                                                                : 'hover:bg-gray-100'
+                                                                : 'hover:bg-muted'
                                                             }`}
                                                         onClick={() => setSelectedMaterialIndex(materialIndex)}
                                                         title={`${material.material_label} (${material.attributes?.length || 0} attributes)`}
@@ -651,10 +651,10 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                                                             <div className="truncate font-medium">
                                                                 {material.material_label || `Material ${materialIndex + 1}`}
                                                             </div>
-                                                            <div className="text-xs text-gray-500 truncate">
+                                                            <div className="text-xs text-muted-foreground truncate">
                                                                 {material.shader_label}
                                                             </div>
-                                                            <div className="text-xs text-gray-400 mt-1">
+                                                            <div className="text-xs text-muted-foreground mt-1">
                                                                 {material.attributes?.length || 0} attributes
                                                             </div>
                                                         </div>
@@ -715,7 +715,7 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                             </div>
                         </>
                     ) : (
-                        <div className="flex items-center justify-center h-32 text-gray-500">
+                        <div className="flex items-center justify-center h-32 text-muted-foreground">
                             No data to display
                         </div>
                     )}

@@ -99,27 +99,27 @@ export function NutexbDialog({ file }: NutexbDialogProps) {
           {/* Metadata section */}
           <Card className="p-4 grid grid-cols-5">
             <div className="space-y-1 col-span-5">
-              <Label className="text-xs text-gray-500">Name</Label>
+              <Label className="text-xs text-muted-foreground">Name</Label>
               <p className="font-medium">{footer.string}</p>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-gray-500">Dimensions</Label>
+              <Label className="text-xs text-muted-foreground">Dimensions</Label>
               <p className="font-medium">{footer.width}x{footer.height}x{footer.depth}</p>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-gray-500">Image Format</Label>
+              <Label className="text-xs text-muted-foreground">Image Format</Label>
               <p className="font-medium">{nutexbData.imageFormat}</p>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-gray-500">Mipmap Count</Label>
+              <Label className="text-xs text-muted-foreground">Mipmap Count</Label>
               <p className="font-medium">{footer.mipmap_count}</p>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-gray-500">Layer Count</Label>
+              <Label className="text-xs text-muted-foreground">Layer Count</Label>
               <p className="font-medium">{footer.layer_count}</p>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-gray-500">Data Size</Label>
+              <Label className="text-xs text-muted-foreground">Data Size</Label>
               <p className="font-medium">{footer.data_size} bytes</p>
             </div>
           </Card>
@@ -165,7 +165,7 @@ export function NutexbDialog({ file }: NutexbDialogProps) {
                             variant="secondary"
                             size="icon"
                             onClick={() => zoomIn()}
-                            className="h-8 w-8 rounded-full bg-white/80 hover:bg-white/90"
+                            className="h-8 w-8 rounded-full bg-card/80 hover:bg-card/90"
                           >
                             +
                           </Button>
@@ -173,7 +173,7 @@ export function NutexbDialog({ file }: NutexbDialogProps) {
                             variant="secondary"
                             size="icon"
                             onClick={() => zoomOut()}
-                            className="h-8 w-8 rounded-full bg-white/80 hover:bg-white/90"
+                            className="h-8 w-8 rounded-full bg-card/80 hover:bg-card/90"
                           >
                             -
                           </Button>
@@ -181,7 +181,7 @@ export function NutexbDialog({ file }: NutexbDialogProps) {
                             variant="secondary"
                             size="icon"
                             onClick={() => resetTransform()}
-                            className="h-8 w-8 rounded-full bg-white/80 hover:bg-white/90"
+                            className="h-8 w-8 rounded-full bg-card/80 hover:bg-card/90"
                           >
                             ↺
                           </Button>
@@ -190,7 +190,7 @@ export function NutexbDialog({ file }: NutexbDialogProps) {
                     )}
                   </TransformWrapper>
                 ) : (
-                  <div className="flex items-center justify-center h-full w-full bg-gray-50">
+                  <div className="flex items-center justify-center h-full w-full bg-muted/50">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
                     <span className="ml-3">Loading image...</span>
                   </div>
@@ -262,7 +262,7 @@ export function NutexbDialog({ file }: NutexbDialogProps) {
       <DialogHeader>
         <DialogTitle>Edit {file.name}</DialogTitle>
       </DialogHeader>
-      <div className="flex items-center justify-center h-32 text-gray-500">
+      <div className="flex items-center justify-center h-32 text-muted-foreground">
         No data to display
       </div>
     </div>

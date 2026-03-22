@@ -808,18 +808,18 @@ export default function FilesEdit() {
       <div className="mb-8">
         <h2 className="text-2xl font-bold tracking-tight mb-4">Files Editor</h2>
         <div className="max-w-xl">
-          <Label htmlFor="folder-input" className="text-sm font-medium mb-2 block text-gray-600">
+          <Label htmlFor="folder-input" className="text-sm font-medium mb-2 block text-muted-foreground">
             Select Folder
           </Label>
           <div className="relative">
-            <FolderOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-5 w-5" />
+            <FolderOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-5 w-5" />
             <Input
               id="folder-input"
               value={folderPath}
               onClick={handleFolderSelect}
               readOnly
               placeholder="Click to select folder"
-              className="pl-10 cursor-pointer hover:bg-gray-50 transition-colors"
+              className="pl-10 cursor-pointer hover:bg-muted/50 transition-colors"
             />
           </div>
         </div>
@@ -897,15 +897,15 @@ export default function FilesEdit() {
       </div>
 
       <div className="grid grid-cols-2 gap-6 flex-1">
-        <div className="col-span-2 bg-white rounded-lg shadow-sm border p-4">
+        <div className="col-span-2 bg-card rounded-lg shadow-sm border p-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <h3 className="text-lg font-semibold text-gray-700">Files</h3>
+              <h3 className="text-lg font-semibold text-foreground">Files</h3>
               {loadingProgress.total > 0 && (
-                <div className="flex items-center gap-2 text-sm text-gray-600">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>Loading nutexb files: {loadingProgress.current}/{loadingProgress.total}</span>
-                  <div className="w-32 bg-gray-200 rounded-full h-2">
+                  <div className="w-32 bg-secondary rounded-full h-2">
                     <div
                       className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                       style={{ width: `${(loadingProgress.current / loadingProgress.total) * 100}%` }}
