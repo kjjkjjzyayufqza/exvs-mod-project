@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Tree, type NodeApi, type NodeRendererProps } from "react-arborist";
-import { Search, FolderOpen, Loader2, ChevronRight, ChevronDown, Folder, File, ExternalLink, RefreshCw } from "lucide-react";
+import {
+  Search,
+  FolderOpen,
+  Folder,
+  FileText,
+  ChevronRight,
+  GripVertical,
+  ExternalLink,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { FilePathInput } from "@/components/ui/filePathInput";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -14,6 +22,12 @@ import { exists } from "@tauri-apps/plugin-fs";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
 import { TestTreeNode } from "../types";
+
+function fileExtensionSuffix(name: string): string | null {
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0 || dot === name.length - 1) return null;
+  return name.slice(dot + 1);
+}
 
 type FileTreePaneProps = {
   data: TestTreeNode[];
@@ -189,57 +203,136 @@ export function FileTreePane({
     [getParentDirPath, openAnyPath]
   );
 
-  const NodeRow = ({ node, style }: NodeRendererProps<TestTreeNode>) => {
+  const NodeRow = ({ node, style, dragHandle }: NodeRendererProps<TestTreeNode>) => {
     const isDir = node.data.isDir;
-    const Icon = isDir ? (node.isOpen ? ChevronDown : ChevronRight) : File;
 
-    // Check if this is the current JSON file being edited
-    const isCurrentJson = !isDir &&
-      node.data.name.toLowerCase().endsWith('.json') &&
+    const isCurrentJson =
+      !isDir &&
+      node.data.name.toLowerCase().endsWith(".json") &&
       currentJsonPath === node.data.path;
 
-    // Check if this node is in the path to the current JSON file
     const isInPath = isInJsonPath.has(node.data.path);
 
-    const handleClick = () => {
-      onSelect(node.data);
-      if (isDir) {
-        node.toggle();
-      }
+    const handleToggle = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      node.toggle();
     };
 
-    // Determine background color based on state
-    let bgClass = "hover:bg-muted";
-    if (node.isSelected) {
-      bgClass = "bg-primary/10 text-primary";
-    } else if (isInPath) {
-      // Yellow highlight for nodes in the path to current JSON file
-      bgClass = hasUnsavedChanges
-        ? "bg-yellow-200/80 dark:bg-yellow-900/40 hover:bg-yellow-200 dark:hover:bg-yellow-900/50"
-        : "bg-yellow-100/60 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/30";
-    }
+    const handleRowClick = () => {
+      isUserClickRef.current = true;
+      node.select();
+    };
+
+    const depth = node.level;
+    const indentPadding = depth * 12;
 
     const topLevelName = resolveTopLevelName(node.data.path);
     const isTopLevelDirty = Boolean(topLevelName && dirtyTopLevelSet.has(topLevelName));
+
+    const extLabel = !isDir ? fileExtensionSuffix(node.data.name) : null;
 
     return (
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <div
-            style={style}
-            className={`flex items-center gap-1 px-1.5 py-0.5 ${bgClass}`}
-            onClick={handleClick}
+            ref={dragHandle}
+            style={{
+              ...style,
+              paddingLeft: `${indentPadding}px`,
+            }}
+            className={cn(
+              "group relative flex cursor-pointer select-none items-center gap-1.5 py-1.5 pr-3",
+              "transition-all duration-150 ease-out",
+              node.isSelected
+                ? "bg-primary/10 text-primary"
+                : isInPath
+                  ? hasUnsavedChanges
+                    ? "bg-yellow-200/80 text-foreground hover:bg-yellow-200 dark:bg-yellow-900/40 dark:hover:bg-yellow-900/50"
+                    : "bg-yellow-100/60 text-foreground hover:bg-yellow-100 dark:bg-yellow-900/20 dark:hover:bg-yellow-900/30"
+                  : "text-foreground/80 hover:bg-muted/60",
+              node.isFocused && "ring-1 ring-inset ring-primary/40",
+              node.isDragging && "opacity-60 shadow-lg"
+            )}
+            onClick={handleRowClick}
+            onDoubleClick={() => isDir && node.toggle()}
             title={node.data.name}
           >
             {isTopLevelDirty && (
               <span
-                className="h-2 w-2 rounded-full bg-yellow-400"
+                className="h-2 w-2 shrink-0 rounded-full bg-yellow-400"
                 aria-label="Folder changed"
                 title="Folder changed"
               />
             )}
-            <Icon className="h-3 w-3 shrink-0 text-muted-foreground" />
-            <span className="truncate">{node.data.name}</span>
+            <div
+              className={cn(
+                "flex w-3 items-center justify-center opacity-0 transition-opacity",
+                "cursor-grab active:cursor-grabbing group-hover:opacity-40"
+              )}
+            >
+              <GripVertical className="h-3 w-3 text-muted-foreground" />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleToggle}
+              className={cn(
+                "flex h-5 w-5 shrink-0 items-center justify-center rounded-sm transition-colors duration-150",
+                "hover:bg-muted-foreground/10",
+                !isDir && "invisible pointer-events-none"
+              )}
+              aria-label={node.isOpen ? "Collapse" : "Expand"}
+            >
+              <ChevronRight
+                className={cn(
+                  "h-3.5 w-3.5 text-muted-foreground transition-transform duration-200",
+                  node.isOpen && "rotate-90"
+                )}
+              />
+            </button>
+
+            <div
+              className={cn(
+                "flex h-5 w-5 shrink-0 items-center justify-center rounded",
+                isDir
+                  ? node.isOpen
+                    ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
+                    : "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                  : "bg-muted text-muted-foreground"
+              )}
+            >
+              {isDir ? (
+                node.isOpen ? (
+                  <FolderOpen className="h-3.5 w-3.5" />
+                ) : (
+                  <Folder className="h-3.5 w-3.5" />
+                )
+              ) : (
+                <FileText className="h-3.5 w-3.5" />
+              )}
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <span
+                className={cn(
+                  "block truncate text-sm",
+                  node.isSelected && "font-medium",
+                  isCurrentJson && "font-semibold"
+                )}
+              >
+                {node.data.name}
+              </span>
+            </div>
+
+            {extLabel && (
+              <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                {extLabel}
+              </span>
+            )}
+
+            {node.isSelected && (
+              <div className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
+            )}
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-48">
@@ -259,22 +352,22 @@ export function FileTreePane({
   };
 
   return (
-    <Card className="flex h-full flex-col border-none shadow-none bg-transparent">
-      <CardHeader className="space-y-2 p-2 pb-2">
+    <Card className="flex h-full min-h-0 flex-col rounded-none border-0 bg-transparent shadow-none">
+      <CardHeader className="shrink-0 space-y-2 p-0 pb-2">
         <div className="relative">
           <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search files..."
-            className="h-8 pl-8 pr-8 text-xs bg-background/50 focus-visible:bg-background transition-colors"
+            className="h-8 bg-background/50 pl-8 pr-8 text-xs transition-colors focus-visible:bg-background"
           />
         </div>
       </CardHeader>
-      <CardContent className="flex-1 overflow-hidden p-2 pt-0">
+      <CardContent className="flex min-h-0 flex-1 flex-col p-0">
         <div
           ref={containerRef}
-          className="h-full rounded-md border bg-background/50 overflow-hidden"
+          className="min-h-0 flex-1 overflow-hidden rounded-none border bg-card/50"
         >
           {empty ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 text-xs text-muted-foreground p-4 text-center">
@@ -287,8 +380,8 @@ export function FileTreePane({
               data={data}
               width="100%"
               height={treeHeight}
-              indent={16}
-              rowHeight={28}
+              indent={0}
+              rowHeight={36}
               openByDefault={false}
               childrenAccessor={(node) => (node.isDir ? node.children ?? [] : node.children ?? null)}
               selection={selection}

@@ -226,9 +226,15 @@ pub async fn card_icon_detect_dds_format(nutexb_path: String) -> Result<String, 
 pub async fn card_icon_batch_replace_with_dds_format(
     items: Vec<(String, String)>,
     dds_format: String,
+    source: String,
 ) -> Result<crate::nutexb_lib::CardIconBatchReplaceSummary, String> {
+    let parsed_source: crate::nutexb_lib::CardIconBatchReplaceSource = source.parse()?;
     tauri::async_runtime::spawn_blocking(move || {
-        crate::nutexb_lib::card_icon_batch_replace_with_dds_format(items, dds_format.as_str())
+        crate::nutexb_lib::card_icon_batch_replace_with_dds_format(
+            items,
+            dds_format.as_str(),
+            parsed_source,
+        )
     })
     .await
     .map_err(|e| e.to_string())?

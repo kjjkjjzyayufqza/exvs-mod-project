@@ -30,6 +30,8 @@ import { DDS_FORMATS } from "@/lib/ddsFormats";
 import { splitPathSegments } from "@/lib/fhm2d_fileUrlUtils";
 import type { CardIconItem } from "./cardIconStructure";
 
+type ReplacePixelSource = "nutexb" | "convertPng";
+
 function resolveFullPath(folderPath: string, fileUrl: string): Promise<string> {
   const segments = splitPathSegments(fileUrl);
   if (segments.length === 0) return Promise.resolve("");
@@ -56,6 +58,7 @@ export function CardIconBatchReplaceDialog({
   const [openState, setOpenState] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [ddsFormat, setDdsFormat] = useState<string>("BC7RgbaUnormSrgb");
+  const [pixelSource, setPixelSource] = useState<ReplacePixelSource>("nutexb");
   const [isReplacing, setIsReplacing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [replaceProgress, setReplaceProgress] = useState<{
@@ -152,7 +155,7 @@ export function CardIconBatchReplaceDialog({
 
         const result = await invoke<{ converted: number; failed: number }>(
           "card_icon_batch_replace_with_dds_format",
-          { items: [pairs[i]], ddsFormat }
+          { items: [pairs[i]], ddsFormat, source: pixelSource }
         );
         converted += result.converted;
         failed += result.failed;
@@ -174,7 +177,7 @@ export function CardIconBatchReplaceDialog({
     } finally {
       setIsReplacing(false);
     }
-  }, [convertDirPath, ddsFormat, folderPath, itemsWithFileUrl, onApplied, selectedIds]);
+  }, [convertDirPath, ddsFormat, folderPath, itemsWithFileUrl, onApplied, pixelSource, selectedIds]);
 
   const selectedCount = selectedIds.size;
 
@@ -189,12 +192,38 @@ export function CardIconBatchReplaceDialog({
         <DialogHeader>
           <DialogTitle>Replace Format (DDS)</DialogTitle>
           <DialogDescription>
-            Select images and choose a DDS format. Selected nutexb files will be re-encoded with the new format and
-            __convert previews refreshed.
+            Pick where pixel data comes from, then a DDS format. Output always writes the on-disk nutexb and refreshes
+            the matching PNG under __convert.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <Label>Pixel source</Label>
+              <p className="text-xs text-muted-foreground leading-snug">
+                <span className="font-semibold text-foreground">Original nutexb</span>: decode the .nutexb file on disk.{" "}
+                <span className="font-semibold text-foreground">__convert PNG</span>: use{" "}
+                <code className="rounded bg-muted px-1 py-0.5 text-[11px]">__convert</code> preview (
+                <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{"{name}.png"}</code>) — run export first if
+                previews are missing.
+              </p>
+            </div>
+            <Select
+              value={pixelSource}
+              onValueChange={(v) => setPixelSource(v as ReplacePixelSource)}
+              disabled={isReplacing}
+            >
+              <SelectTrigger className="h-8 w-full sm:w-[220px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="nutexb">Original nutexb</SelectItem>
+                <SelectItem value="convertPng">__convert PNG</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="flex items-center justify-between gap-2">
             <Label>DDS Format</Label>
             <Select value={ddsFormat} onValueChange={setDdsFormat} disabled={isReplacing}>

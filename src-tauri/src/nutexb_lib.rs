@@ -552,9 +552,33 @@ pub struct CardIconBatchReplaceSummary {
     pub failed: u32,
 }
 
+/// Where batch DDS replace reads RGBA pixels from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CardIconBatchReplaceSource {
+    /// Decode the on-disk `.nutexb` file.
+    Nutexb,
+    /// Use `{convert_dir}/{sanitized_nutexb_footer_name}.png` from `__convert`.
+    ConvertPng,
+}
+
+impl FromStr for CardIconBatchReplaceSource {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim() {
+            "nutexb" => Ok(Self::Nutexb),
+            "convertPng" => Ok(Self::ConvertPng),
+            other => Err(format!(
+                "Invalid replace source \"{other}\" (use \"nutexb\" or \"convertPng\")"
+            )),
+        }
+    }
+}
+
 pub fn card_icon_batch_replace_with_dds_format(
     items: Vec<(String, String)>, // (nutexb_path, convert_dir)
     dds_format_str: &str,
+    source: CardIconBatchReplaceSource,
 ) -> Result<CardIconBatchReplaceSummary, String> {
     let dds_format = DdsImageFormat::from_str(dds_format_str)
         .map_err(|_| format!("Invalid DDS format: {dds_format_str}"))?;
@@ -562,57 +586,120 @@ pub fn card_icon_batch_replace_with_dds_format(
     let mut converted = 0u32;
     let mut failed = 0u32;
 
-    for (nutexb_path, convert_dir) in items {
-        let nutexb_path = PathBuf::from(&nutexb_path);
-        let convert_dir = PathBuf::from(&convert_dir);
-        if !nutexb_path.exists() {
-            failed += 1;
-            continue;
-        }
+    match source {
+        CardIconBatchReplaceSource::Nutexb => {
+            for (nutexb_path, convert_dir) in items {
+                let nutexb_path = PathBuf::from(&nutexb_path);
+                let convert_dir = PathBuf::from(&convert_dir);
+                if !nutexb_path.exists() {
+                    failed += 1;
+                    continue;
+                }
 
-        let nutexb = match NutexbFile::read_from_file(&nutexb_path) {
-            Ok(n) => n,
-            Err(_) => {
-                failed += 1;
-                continue;
+                let nutexb = match NutexbFile::read_from_file(&nutexb_path) {
+                    Ok(n) => n,
+                    Err(_) => {
+                        failed += 1;
+                        continue;
+                    }
+                };
+                let nutexb_name = nutexb.footer.string.to_string();
+                let dds = match nutexb.to_dds() {
+                    Ok(d) => d,
+                    Err(_) => {
+                        failed += 1;
+                        continue;
+                    }
+                };
+                let rgba: RgbaImage = match image_dds::image_from_dds(&dds, 0) {
+                    Ok(img) => img,
+                    Err(_) => {
+                        failed += 1;
+                        continue;
+                    }
+                };
+
+                fn max_mipmap_count_for_size(width: u32, height: u32) -> u32 {
+                    let max_dim = width.max(height).max(1);
+                    32 - max_dim.leading_zeros()
+                }
+
+                let mipmaps = if nutexb.footer.mipmap_count <= 1 {
+                    Mipmaps::Disabled
+                } else {
+                    let max_mips = max_mipmap_count_for_size(rgba.width().max(1), rgba.height().max(1));
+                    let requested = nutexb.footer.mipmap_count.min(max_mips);
+                    Mipmaps::GeneratedExact(requested)
+                };
+
+                let out_dds = match dds_from_image(&rgba, dds_format, Quality::Normal, mipmaps) {
+                    Ok(d) => d,
+                    Err(_) => {
+                        failed += 1;
+                        continue;
+                    }
+                };
+                let out_nutexb = match NutexbFile::from_dds(&out_dds, nutexb_name.clone()) {
+                    Ok(n) => n,
+                    Err(_) => {
+                        failed += 1;
+                        continue;
+                    }
+                };
+
+                if out_nutexb.write_to_file(&nutexb_path).is_err() {
+                    failed += 1;
+                    continue;
+                }
+
+                let preview_name = sanitize_file_name(nutexb_name.as_str());
+                let preview_png_path = convert_dir.join(format!("{preview_name}.png"));
+                if let Some(parent) = preview_png_path.parent() {
+                    let _ = fs::create_dir_all(parent);
+                }
+                let _ = export_nutexb_to_png(
+                    nutexb_path.to_string_lossy().as_ref(),
+                    preview_png_path.to_string_lossy().as_ref(),
+                );
+
+                converted += 1;
             }
-        };
-        let nutexb_name = nutexb.footer.string.to_string();
-        let dds = nutexb.to_dds().map_err(|e| e.to_string())?;
-        let rgba: RgbaImage = image_dds::image_from_dds(&dds, 0).map_err(|e| e.to_string())?;
-
-        fn max_mipmap_count_for_size(width: u32, height: u32) -> u32 {
-            let max_dim = width.max(height).max(1);
-            32 - max_dim.leading_zeros()
         }
+        CardIconBatchReplaceSource::ConvertPng => {
+            for (nutexb_path, convert_dir) in items {
+                let nutexb_path = PathBuf::from(&nutexb_path);
+                let convert_dir = PathBuf::from(&convert_dir);
+                if !nutexb_path.exists() {
+                    failed += 1;
+                    continue;
+                }
 
-        let mipmaps = if nutexb.footer.mipmap_count <= 1 {
-            Mipmaps::Disabled
-        } else {
-            let max_mips = max_mipmap_count_for_size(rgba.width().max(1), rgba.height().max(1));
-            let requested = nutexb.footer.mipmap_count.min(max_mips);
-            Mipmaps::GeneratedExact(requested)
-        };
+                let nutexb = match NutexbFile::read_from_file(&nutexb_path) {
+                    Ok(n) => n,
+                    Err(_) => {
+                        failed += 1;
+                        continue;
+                    }
+                };
+                let nutexb_name = nutexb.footer.string.to_string();
+                let preview_name = sanitize_file_name(nutexb_name.as_str());
+                let png_path = convert_dir.join(format!("{preview_name}.png"));
+                if !png_path.exists() {
+                    failed += 1;
+                    continue;
+                }
 
-        let out_dds = dds_from_image(&rgba, dds_format, Quality::Normal, mipmaps).map_err(|e| e.to_string())?;
-        let out_nutexb = NutexbFile::from_dds(&out_dds, nutexb_name.clone()).map_err(|e| e.to_string())?;
-
-        if out_nutexb.write_to_file(&nutexb_path).is_err() {
-            failed += 1;
-            continue;
+                match card_icon_replace_from_png_with_dds_format(
+                    nutexb_path.to_string_lossy().as_ref(),
+                    convert_dir.to_string_lossy().as_ref(),
+                    png_path.to_string_lossy().as_ref(),
+                    dds_format_str,
+                ) {
+                    Ok(_) => converted += 1,
+                    Err(_) => failed += 1,
+                }
+            }
         }
-
-        let preview_name = sanitize_file_name(nutexb_name.as_str());
-        let preview_png_path = convert_dir.join(format!("{preview_name}.png"));
-        if let Some(parent) = preview_png_path.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-        let _ = export_nutexb_to_png(
-            nutexb_path.to_string_lossy().as_ref(),
-            preview_png_path.to_string_lossy().as_ref(),
-        );
-
-        converted += 1;
     }
 
     Ok(CardIconBatchReplaceSummary { converted, failed })

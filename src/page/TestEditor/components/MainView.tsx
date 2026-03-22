@@ -307,7 +307,7 @@ const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFold
           ))}
         </TabsList>
         {resolvedTabs.map((tab) => (
-          <TabsContent key={tab.value} value={tab.value} className="flex-1 h-full w-full p-4 m-0 overflow-auto">
+          <TabsContent key={tab.value} value={tab.value} className="flex-1 h-full w-full px-4 pt-4 m-0 overflow-auto">
             {tab.render ? tab.render({ jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFolder }) : tab.content}
           </TabsContent>
         ))}
