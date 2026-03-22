@@ -8,8 +8,13 @@ import {
   ChevronRight,
   GripVertical,
   ExternalLink,
+  Package,
+  Loader2,
 } from "lucide-react";
+import { join } from "@tauri-apps/api/path";
+import { exists, remove } from "@tauri-apps/plugin-fs";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import {
@@ -18,15 +23,58 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { exists } from "@tauri-apps/plugin-fs";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
+import { repackFolderUsingStructure } from "@/utils/repackRunner";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { TestTreeNode } from "../types";
 
 function fileExtensionSuffix(name: string): string | null {
   const dot = name.lastIndexOf(".");
   if (dot <= 0 || dot === name.length - 1) return null;
   return name.slice(dot + 1);
+}
+
+const STRUCTURE_JSON_SUFFIX = "_structure.json";
+
+/** Workspace root direct child folder only (same packs as Repack Changes). */
+function isWorkspaceDirectChildFolder(node: TestTreeNode, rootDir: string | undefined): boolean {
+  if (!node.isDir || !rootDir) return false;
+  const normalize = (input: string) => input.replace(/\\/g, "/");
+  const normalizedRoot = normalize(rootDir).replace(/\/+$/, "");
+  const normalizedNode = normalize(node.path).replace(/\/+$/, "");
+  if (!normalizedNode.startsWith(normalizedRoot)) return false;
+  const relative = normalizedNode.slice(normalizedRoot.length).replace(/^\/+/, "");
+  return Boolean(relative && !relative.includes("/"));
+}
+
+/** Root-level *_structure.json only; matches Repack Changes folder naming. */
+function parseRootStructureJsonRepackTarget(
+  fileName: string,
+  filePath: string,
+  rootDir: string | undefined
+): { folderName: string; structurePath: string } | null {
+  if (!rootDir) return null;
+  const lower = fileName.toLowerCase();
+  if (!lower.endsWith(STRUCTURE_JSON_SUFFIX)) return null;
+  const normalize = (input: string) => input.replace(/\\/g, "/");
+  const normalizedRoot = normalize(rootDir).replace(/\/+$/, "");
+  const normalizedNode = normalize(filePath);
+  if (!normalizedNode.startsWith(normalizedRoot)) return null;
+  const relative = normalizedNode.slice(normalizedRoot.length).replace(/^\/+/, "");
+  if (!relative || relative.includes("/")) return null;
+  const folderName = fileName.slice(0, fileName.length - STRUCTURE_JSON_SUFFIX.length);
+  if (!folderName) return null;
+  return { folderName, structurePath: filePath };
 }
 
 type FileTreePaneProps = {
@@ -43,6 +91,12 @@ type FileTreePaneProps = {
   currentJsonPath?: string | null;
   hasUnsavedChanges?: boolean;
   dirtyTopLevelFolderNames?: string[];
+  /** Top-level directory names under the workspace root (unfiltered); used to detect structure JSON. */
+  workspaceTopLevelFolderNames: string[];
+  /** Bumps when top-level dirs or root-level *_structure.json entries change; triggers existence re-scan. */
+  fileTreeStructureScanKey: string;
+  modFolderPath?: string;
+  onFolderRepacked?: (folderName: string) => void;
 };
 
 export function FileTreePane({
@@ -59,10 +113,55 @@ export function FileTreePane({
   currentJsonPath,
   hasUnsavedChanges = false,
   dirtyTopLevelFolderNames = [],
+  workspaceTopLevelFolderNames,
+  fileTreeStructureScanKey,
+  modFolderPath,
+  onFolderRepacked,
 }: FileTreePaneProps) {
   const empty = data.length === 0;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [treeHeight, setTreeHeight] = useState(480);
+  const [repackDialogOpen, setRepackDialogOpen] = useState(false);
+  const [repackRunning, setRepackRunning] = useState(false);
+  const [repackRemoveVgsht2InMod, setRepackRemoveVgsht2InMod] = useState(true);
+  const [repackTarget, setRepackTarget] = useState<{
+    folderName: string;
+    structurePath: string;
+    inputFolderPath: string;
+  } | null>(null);
+  const [structureJsonExistsAtWorkspaceRoot, setStructureJsonExistsAtWorkspaceRoot] = useState<
+    Record<string, boolean>
+  >({});
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentDir || workspaceTopLevelFolderNames.length === 0) {
+      setStructureJsonExistsAtWorkspaceRoot({});
+      return;
+    }
+    setStructureJsonExistsAtWorkspaceRoot({});
+    const names = workspaceTopLevelFolderNames;
+    void (async () => {
+      try {
+        const entries = await Promise.all(
+          names.map(async (name) => {
+            const structurePath = await join(currentDir, `${name}${STRUCTURE_JSON_SUFFIX}`);
+            const ok = await exists(structurePath);
+            return [name, ok] as const;
+          })
+        );
+        if (cancelled) return;
+        setStructureJsonExistsAtWorkspaceRoot(Object.fromEntries(entries));
+      } catch (error) {
+        console.error("Failed to verify structure JSON paths", error);
+        toast.error("Failed to verify structure JSON paths");
+        if (!cancelled) setStructureJsonExistsAtWorkspaceRoot({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentDir, workspaceTopLevelFolderNames, fileTreeStructureScanKey]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -203,6 +302,112 @@ export function FileTreePane({
     [getParentDirPath, openAnyPath]
   );
 
+  const beginRepackFlow = useCallback(
+    (target: { folderName: string; structurePath: string; inputFolderPath: string }) => {
+      setRepackTarget(target);
+      setRepackRemoveVgsht2InMod(true);
+      setRepackDialogOpen(true);
+    },
+    []
+  );
+
+  const openRepackDialogForFileNode = useCallback(
+    async (node: TestTreeNode) => {
+      if (!currentDir) {
+        toast.error("No workspace root selected");
+        return;
+      }
+      const parsed = parseRootStructureJsonRepackTarget(node.name, node.path, currentDir);
+      if (!parsed) return;
+      const inputFolderPath = await join(currentDir, parsed.folderName);
+      beginRepackFlow({
+        folderName: parsed.folderName,
+        structurePath: parsed.structurePath,
+        inputFolderPath,
+      });
+    },
+    [beginRepackFlow, currentDir]
+  );
+
+  const openRepackDialogForFolderNode = useCallback(
+    async (node: TestTreeNode) => {
+      if (!currentDir) {
+        toast.error("No workspace root selected");
+        return;
+      }
+      if (!node.isDir || !isWorkspaceDirectChildFolder(node, currentDir)) return;
+      const structurePath = await join(currentDir, `${node.name}${STRUCTURE_JSON_SUFFIX}`);
+      const structureOk = await exists(structurePath);
+      if (!structureOk) {
+        const label = `${node.name}${STRUCTURE_JSON_SUFFIX}`;
+        toast.error(`Missing ${label} at workspace root`);
+        return;
+      }
+      beginRepackFlow({
+        folderName: node.name,
+        structurePath,
+        inputFolderPath: node.path,
+      });
+    },
+    [beginRepackFlow, currentDir]
+  );
+
+  const handleRepackDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (repackRunning) return;
+      setRepackDialogOpen(open);
+      if (!open) setRepackTarget(null);
+    },
+    [repackRunning]
+  );
+
+  const handleConfirmRepack = useCallback(async () => {
+    if (!repackTarget) return;
+    setRepackRunning(true);
+    try {
+      const folderExists = await exists(repackTarget.inputFolderPath);
+      if (!folderExists) {
+        throw new Error(`Input folder does not exist: ${repackTarget.folderName}`);
+      }
+      const structureOk = await exists(repackTarget.structurePath);
+      if (!structureOk) {
+        throw new Error("Structure JSON file is missing");
+      }
+      await repackFolderUsingStructure({
+        structurePath: repackTarget.structurePath,
+        inputFolderPath: repackTarget.inputFolderPath,
+      });
+      const entryName = repackTarget.folderName;
+      if (repackRemoveVgsht2InMod && modFolderPath) {
+        const modVgsht2Path = await join(modFolderPath, `${entryName}.vgsht2`);
+        const fileExists = await exists(modVgsht2Path);
+        if (fileExists) {
+          try {
+            await remove(modVgsht2Path);
+            toast.success(`Repacked ${entryName}, removed mod/${entryName}.vgsht2`);
+          } catch (removeErr) {
+            console.error(`Failed to remove ${modVgsht2Path}`, removeErr);
+            toast.error(
+              `Repacked ${entryName} but failed to remove .vgsht2: ${(removeErr as Error).message}`
+            );
+          }
+        } else {
+          toast.success(`Repacked ${entryName}`);
+        }
+      } else {
+        toast.success(`Repacked ${entryName}`);
+      }
+      onFolderRepacked?.(entryName);
+    } catch (error) {
+      console.error(`Repack failed for ${repackTarget.folderName}`, error);
+      toast.error(`Repack failed: ${(error as Error).message}`);
+    } finally {
+      setRepackRunning(false);
+      setRepackDialogOpen(false);
+      setRepackTarget(null);
+    }
+  }, [repackTarget, repackRemoveVgsht2InMod, modFolderPath, onFolderRepacked]);
+
   const NodeRow = ({ node, style, dragHandle }: NodeRendererProps<TestTreeNode>) => {
     const isDir = node.data.isDir;
 
@@ -230,6 +435,16 @@ export function FileTreePane({
     const isTopLevelDirty = Boolean(topLevelName && dirtyTopLevelSet.has(topLevelName));
 
     const extLabel = !isDir ? fileExtensionSuffix(node.data.name) : null;
+    const structureRepackTarget = !isDir
+      ? parseRootStructureJsonRepackTarget(node.data.name, node.data.path, currentDir)
+      : null;
+
+    const isDirectWorkspaceFolder = isDir && isWorkspaceDirectChildFolder(node.data, currentDir);
+    const folderStructureExists = isDirectWorkspaceFolder
+      ? structureJsonExistsAtWorkspaceRoot[node.data.name]
+      : undefined;
+    const folderRepackReady = folderStructureExists === true;
+    const folderRepackDisabled = isDirectWorkspaceFolder && !folderRepackReady;
 
     return (
       <ContextMenu>
@@ -335,11 +550,42 @@ export function FileTreePane({
             )}
           </div>
         </ContextMenuTrigger>
-        <ContextMenuContent className="w-48">
+        <ContextMenuContent className="min-w-[11rem] max-w-[20rem]">
           {!isDir && (
             <ContextMenuItem onClick={() => handleOpenNodePath(node.data)} className="flex items-center gap-2">
               <ExternalLink className="h-4 w-4" />
               <span>Open File</span>
+            </ContextMenuItem>
+          )}
+          {structureRepackTarget && (
+            <ContextMenuItem
+              onClick={() => void openRepackDialogForFileNode(node.data)}
+              className="flex items-center gap-2"
+            >
+              <Package className="h-4 w-4" />
+              <span>Repack</span>
+            </ContextMenuItem>
+          )}
+          {isDirectWorkspaceFolder && (
+            <ContextMenuItem
+              disabled={folderRepackDisabled}
+              onClick={() => void openRepackDialogForFolderNode(node.data)}
+              className={cn(
+                "flex flex-col items-stretch gap-0.5 py-2",
+                folderRepackDisabled && "cursor-not-allowed"
+              )}
+            >
+              <span className="flex items-center gap-2">
+                <Package className="h-4 w-4 shrink-0" />
+                <span>Repack</span>
+              </span>
+              {folderRepackDisabled ? (
+                <span className="pl-6 text-[10px] leading-snug text-muted-foreground">
+                  {folderStructureExists === false
+                    ? `No ${node.data.name}${STRUCTURE_JSON_SUFFIX} at workspace root`
+                    : "Checking structure file…"}
+                </span>
+              ) : null}
             </ContextMenuItem>
           )}
           <ContextMenuItem onClick={() => handleOpenNodeFolder(node.data)} className="flex items-center gap-2">
@@ -352,6 +598,7 @@ export function FileTreePane({
   };
 
   return (
+    <>
     <Card className="flex h-full min-h-0 flex-col rounded-none border-0 bg-transparent shadow-none">
       <CardHeader className="shrink-0 space-y-2 p-0 pb-2">
         <div className="relative">
@@ -396,5 +643,56 @@ export function FileTreePane({
         </div>
       </CardContent>
     </Card>
+
+    <AlertDialog open={repackDialogOpen} onOpenChange={handleRepackDialogOpenChange}>
+      <AlertDialogContent className="max-w-lg">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Repack this pack?</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <p>
+                Runs the same repack as <span className="font-medium text-foreground">Repack Changes</span> for folder{" "}
+                <code className="rounded bg-muted px-1 py-0.5 text-foreground">{repackTarget?.folderName ?? "—"}</code>{" "}
+                using its <code className="rounded bg-muted px-1 py-0.5 text-foreground">_structure.json</code>. Output
+                is produced next to the workspace (same <code className="rounded bg-muted px-1 py-0.5">com</code> path
+                rules as the toolbar flow).
+              </p>
+              {hasUnsavedChanges && repackTarget && currentJsonPath === repackTarget.structurePath ? (
+                <p className="text-amber-600 dark:text-amber-500">
+                  This structure file is open with unsaved changes. Save in the editor first if you need those edits in
+                  the repack.
+                </p>
+              ) : null}
+              <label className="flex cursor-pointer items-start gap-2 text-foreground">
+                <Checkbox
+                  checked={repackRemoveVgsht2InMod}
+                  disabled={repackRunning}
+                  onCheckedChange={(checked) => setRepackRemoveVgsht2InMod(Boolean(checked))}
+                  className="mt-0.5"
+                />
+                <span>
+                  Remove matching <code className="rounded bg-muted px-1 py-0.5">.vgsht2</code> in OB Mod folder when
+                  configured (same option as Repack Changes).
+                </span>
+              </label>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={repackRunning}>Cancel</AlertDialogCancel>
+          <Button type="button" disabled={repackRunning || !repackTarget} onClick={() => void handleConfirmRepack()}>
+            {repackRunning ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Repacking...
+              </>
+            ) : (
+              "Repack"
+            )}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

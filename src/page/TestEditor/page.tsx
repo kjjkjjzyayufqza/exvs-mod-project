@@ -342,6 +342,24 @@ const TestEditorPage = () => {
   }, [getSetting]);
 
   const filteredData = useMemo(() => filterTree(treeData, searchTerm), [treeData, searchTerm]);
+  const workspaceTopLevelFolderNames = useMemo(
+    () => treeData.filter((n) => n.isDir).map((n) => n.name),
+    [treeData]
+  );
+
+  const fileTreeStructureScanKey = useMemo(() => {
+    const dirs = treeData
+      .filter((n) => n.isDir)
+      .map((n) => n.name)
+      .sort()
+      .join("\0");
+    const rootStructureJson = treeData
+      .filter((n) => !n.isDir && n.name.toLowerCase().endsWith("_structure.json"))
+      .map((n) => n.name.toLowerCase())
+      .sort()
+      .join("\0");
+    return `${dirs}|${rootStructureJson}`;
+  }, [treeData]);
   const selectedNode = useMemo(() => findNode(treeData, selectedId), [treeData, selectedId]);
   const dirtyFolderList = useMemo(() => Array.from(dirtyFolders), [dirtyFolders]);
   const hasDirtyFolders = dirtyFolderList.length > 0;
@@ -452,6 +470,10 @@ const TestEditorPage = () => {
                 currentJsonPath={selectedJsonPath}
                 hasUnsavedChanges={hasUnsavedChanges}
                 dirtyTopLevelFolderNames={dirtyFolderList}
+                workspaceTopLevelFolderNames={workspaceTopLevelFolderNames}
+                fileTreeStructureScanKey={fileTreeStructureScanKey}
+                modFolderPath={obModPath || undefined}
+                onFolderRepacked={handleRepackSuccess}
               />
             </div>
           </ResizablePanel>
