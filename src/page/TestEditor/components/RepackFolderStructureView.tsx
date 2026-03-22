@@ -5,7 +5,7 @@ import { Tree, type NodeApi } from "react-arborist";
 import { Plus, Redo2, Save, Undo2 } from "lucide-react";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { CustomTreeNode } from "@/components/CustomTreeNode";
@@ -547,94 +547,104 @@ export default function RepackFolderStructureView({
   const canRedo = useMemo(() => futureRef.current.length > 0, [historyTick]);
 
   return (
-    <div className="h-full w-full">
-      <ResizablePanelGroup orientation="horizontal" className="h-full w-full border-none bg-background">
-        <ResizablePanel defaultSize={65} minSize={40}>
-          <Card className="h-full rounded-none border-0 shadow-none">
-            <CardHeader className="space-y-2 p-0 pb-4">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <CardTitle>Project Structure</CardTitle>
-                  <CardDescription>
-                    Drag and drop items to reorganize the structure. Undo / redo: Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z (Cmd on macOS).
-                    {loadedFilePath && (
-                      <span className="ml-2 text-xs">
-                        • {loadedFilePath.split(/[\\/]/).pop()}
-                        {hasUnsavedChanges && <span className="text-yellow-600 dark:text-yellow-500"> (unsaved)</span>}
-                      </span>
-                    )}
-                  </CardDescription>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  <Button
-                    type="button"
-                    onClick={undo}
-                    disabled={!canUndo}
-                    variant="outline"
-                    size="sm"
-                    title="Undo (Ctrl+Z / Cmd+Z)"
-                  >
-                    <Undo2 className="h-4 w-4" />
-                    Undo
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={redo}
-                    disabled={!canRedo}
-                    variant="outline"
-                    size="sm"
-                    title="Redo (Ctrl+Y / Ctrl+Shift+Z / Cmd+Shift+Z)"
-                  >
-                    <Redo2 className="h-4 w-4" />
-                    Redo
-                  </Button>
-                  <Button
-                    onClick={handleSave}
-                    disabled={!hasUnsavedChanges || !loadedFilePath || isSaving}
-                    variant={hasUnsavedChanges ? "default" : "outline"}
-                    size="sm"
-                    title="Save changes (Ctrl+S)"
-                  >
-                    <Save className="h-4 w-4" />
-                    {isSaving ? "Saving..." : "Save"}
-                  </Button>
-                  <Button
-                    onClick={() => selectedItem && addNewNode(selectedItem.id, "folder")}
-                    disabled={!canAddChild}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Folder
-                  </Button>
-                  <Button
-                    onClick={() => selectedItem && addNewNode(selectedItem.id, "file")}
-                    disabled={!canAddChild}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add File
-                  </Button>
-                </div>
-              </div>
-
-              {completeProjectData && (
-                <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                  <span>
-                    Magic: <span className="font-semibold text-foreground">{completeProjectData.Magic}</span>
-                  </span>
-                  <span>
-                    Files: <span className="font-semibold text-foreground">{completeProjectData.Fhm2dTotalCount}</span>
-                  </span>
-                  <span>
-                    UnkCount: <span className="font-semibold text-foreground">{completeProjectData.UnkCount}</span>
-                  </span>
-                </div>
+    <div className="flex h-full min-h-0 w-full flex-col bg-background">
+      <header className="shrink-0 space-y-2 pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <CardTitle className="text-base sm:text-lg">Project Structure</CardTitle>
+          <div className="flex flex-wrap items-center justify-end gap-1">
+            <Button
+              type="button"
+              onClick={undo}
+              disabled={!canUndo}
+              variant="outline"
+              size="sm"
+              title="Undo (Ctrl+Z / Cmd+Z)"
+            >
+              <Undo2 className="h-4 w-4" />
+              Undo
+            </Button>
+            <Button
+              type="button"
+              onClick={redo}
+              disabled={!canRedo}
+              variant="outline"
+              size="sm"
+              title="Redo (Ctrl+Y / Ctrl+Shift+Z / Cmd+Shift+Z)"
+            >
+              <Redo2 className="h-4 w-4" />
+              Redo
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={!hasUnsavedChanges || !loadedFilePath || isSaving}
+              variant={hasUnsavedChanges ? "default" : "outline"}
+              size="sm"
+              title="Save changes (Ctrl+S)"
+            >
+              <Save className="h-4 w-4" />
+              {isSaving ? "Saving..." : "Save"}
+            </Button>
+            <Button
+              onClick={() => selectedItem && addNewNode(selectedItem.id, "folder")}
+              disabled={!canAddChild}
+              variant="outline"
+              size="sm"
+            >
+              <Plus className="h-4 w-4" />
+              Add Folder
+            </Button>
+            <Button
+              onClick={() => selectedItem && addNewNode(selectedItem.id, "file")}
+              disabled={!canAddChild}
+              variant="outline"
+              size="sm"
+            >
+              <Plus className="h-4 w-4" />
+              Add File
+            </Button>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <CardDescription className="text-sm leading-snug">
+            Drag and drop to reorganize. Shortcuts: Undo Ctrl+Z (Cmd+Z), Redo Ctrl+Y or Ctrl+Shift+Z (Cmd+Shift+Z).
+          </CardDescription>
+          {loadedFilePath && (
+            <p className="text-xs text-muted-foreground">
+              {loadedFilePath.split(/[\\/]/).pop()}
+              {hasUnsavedChanges && (
+                <span className="text-yellow-600 dark:text-yellow-500"> (unsaved)</span>
               )}
-            </CardHeader>
-            <CardContent className="h-[calc(100%-(--spacing(20)))] p-0">
-              <div ref={containerRef} className="h-full rounded-none border bg-card/50 overflow-hidden">
+            </p>
+          )}
+          {completeProjectData && (
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+              <span>
+                Magic: <span className="font-semibold text-foreground">{completeProjectData.Magic}</span>
+              </span>
+              <span>
+                Files:{" "}
+                <span className="font-semibold text-foreground">{completeProjectData.Fhm2dTotalCount}</span>
+              </span>
+              <span>
+                UnkCount:{" "}
+                <span className="font-semibold text-foreground">{completeProjectData.UnkCount}</span>
+              </span>
+            </div>
+          )}
+        </div>
+      </header>
+
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className="min-h-0 flex-1 w-full border-none"
+      >
+        <ResizablePanel defaultSize={65} minSize={40}>
+          <Card className="flex h-full min-h-0 flex-col rounded-none border-0 shadow-none">
+            <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+              <div
+                ref={containerRef}
+                className="min-h-0 flex-1 overflow-hidden rounded-none border bg-card/50"
+              >
                 <Tree
                   ref={treeRef}
                   data={treeData}

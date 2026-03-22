@@ -1,4 +1,11 @@
 import { FolderOpen, Folder, FileText, ChevronRight, AlertTriangle, GripVertical } from "lucide-react";
+import { toast } from "sonner";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { NodeApi } from "react-arborist";
@@ -48,30 +55,32 @@ export function CustomTreeNode({
   const indentPadding = depth * 12;
 
   return (
-    <div
-      ref={dragHandle}
-      style={{
-        ...style,
-        paddingLeft: `${indentPadding}px`,
-      }}
-      className={cn(
-        "group relative flex items-center gap-1.5 py-1.5 pr-3 cursor-pointer select-none",
-        "transition-all duration-150 ease-out",
-        // Selection states
-        node.isSelected
-          ? "bg-primary/10 text-primary"
-          : "hover:bg-muted/60 text-foreground/80",
-        // Focus state
-        node.isFocused && "ring-1 ring-inset ring-primary/40",
-        // Drag states
-        node.isDragging && "opacity-60 shadow-lg",
-        node.willReceiveDrop && "bg-primary/5 border-primary/30",
-        // Drop target indicator
-        node.willReceiveDrop && "before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-primary"
-      )}
-      onClick={() => node.select()}
-      onDoubleClick={() => isFolder && node.toggle()}
-    >
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div
+          ref={dragHandle}
+          style={{
+            ...style,
+            paddingLeft: `${indentPadding}px`,
+          }}
+          className={cn(
+            "group relative flex items-center gap-1.5 py-1.5 pr-3 cursor-pointer select-none",
+            "transition-all duration-150 ease-out",
+            // Selection states
+            node.isSelected
+              ? "bg-primary/10 text-primary"
+              : "hover:bg-muted/60 text-foreground/80",
+            // Focus state
+            node.isFocused && "ring-1 ring-inset ring-primary/40",
+            // Drag states
+            node.isDragging && "opacity-60 shadow-lg",
+            node.willReceiveDrop && "bg-primary/5 border-primary/30",
+            // Drop target indicator
+            node.willReceiveDrop && "before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-primary"
+          )}
+          onClick={() => node.select()}
+          onDoubleClick={() => isFolder && node.toggle()}
+        >
       {/* Drag handle indicator - shows on hover */}
       <div className={cn(
         "w-3 flex items-center justify-center opacity-0 transition-opacity",
@@ -177,6 +186,17 @@ export function CustomTreeNode({
       {node.isSelected && (
         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary rounded-full" />
       )}
-    </div>
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-40">
+        <ContextMenuItem
+          onSelect={() => {
+            toast.message("Test");
+          }}
+        >
+          Test
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
