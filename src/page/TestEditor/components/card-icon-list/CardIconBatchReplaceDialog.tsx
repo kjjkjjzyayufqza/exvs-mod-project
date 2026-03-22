@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { join } from "@tauri-apps/api/path";
 import { toast } from "sonner";
@@ -67,6 +67,8 @@ export function CardIconBatchReplaceDialog({
     currentFileName: string;
   } | null>(null);
 
+  const lastAnchorFilteredIndexRef = useRef<number | null>(null);
+
   const deferredSearchTerm = useDeferredValue(searchTerm);
 
   const itemsWithFileUrl = useMemo(
@@ -106,6 +108,48 @@ export function CardIconBatchReplaceDialog({
       return next;
     });
   }, []);
+
+  const selectFilteredIndexRange = useCallback(
+    (start: number, end: number) => {
+      const lo = Math.min(start, end);
+      const hi = Math.max(start, end);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (let i = lo; i <= hi; i++) {
+          const it = filteredItems[i];
+          if (it) next.add(it.itemIndex);
+        }
+        return next;
+      });
+    },
+    [filteredItems]
+  );
+
+  const handleListRowMouseDownCapture = useCallback(
+    (e: React.MouseEvent, filteredIndex: number, itemIndex: number) => {
+      if (isReplacing || e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (e.shiftKey && lastAnchorFilteredIndexRef.current !== null) {
+        selectFilteredIndexRange(lastAnchorFilteredIndexRef.current, filteredIndex);
+        return;
+      }
+
+      toggleItem(itemIndex);
+      lastAnchorFilteredIndexRef.current = filteredIndex;
+    },
+    [isReplacing, selectFilteredIndexRange, toggleItem]
+  );
+
+  const handleCheckboxCheckedChange = useCallback(
+    (filteredIndex: number, itemIndex: number) => {
+      if (isReplacing) return;
+      toggleItem(itemIndex);
+      lastAnchorFilteredIndexRef.current = filteredIndex;
+    },
+    [isReplacing, toggleItem]
+  );
 
   const handleReplace = useCallback(async () => {
     if (selectedIds.size === 0) {
@@ -270,25 +314,31 @@ export function CardIconBatchReplaceDialog({
               </div>
             )}
 
+            <p className="text-xs text-muted-foreground leading-snug">
+              Click a row to toggle. Hold <kbd className="rounded border border-border bg-muted px-1 py-0.5 text-[10px] font-mono">Shift</kbd> and click another row to select all items in between in the current list.
+            </p>
+
             <ScrollArea className="h-[240px] rounded-md border border-border p-2">
               <div className="space-y-1">
-                {filteredItems.map((item) => (
+                {filteredItems.map((item, filteredIndex) => (
                   <div
                     key={item.itemIndex}
-                    className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/50"
+                    className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/50 cursor-pointer select-none"
+                    onMouseDownCapture={(e) =>
+                      handleListRowMouseDownCapture(e, filteredIndex, item.itemIndex)
+                    }
                   >
                     <Checkbox
                       id={`batch-replace-${item.itemIndex}`}
                       checked={selectedIds.has(item.itemIndex)}
-                      onCheckedChange={() => toggleItem(item.itemIndex)}
+                      onCheckedChange={() =>
+                        handleCheckboxCheckedChange(filteredIndex, item.itemIndex)
+                      }
                       disabled={isReplacing}
                     />
-                    <Label
-                      htmlFor={`batch-replace-${item.itemIndex}`}
-                      className="text-sm font-normal cursor-pointer truncate flex-1 min-w-0"
-                    >
+                    <span className="text-sm font-normal cursor-pointer truncate flex-1 min-w-0 text-foreground">
                       {item.name ?? `#${item.itemIndex}`}
-                    </Label>
+                    </span>
                   </div>
                 ))}
                 {filteredItems.length === 0 && (

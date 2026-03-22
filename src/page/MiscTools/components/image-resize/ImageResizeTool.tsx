@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Upload, X, FileImage, Loader2, Settings } from "lucide-react";
+import { Upload, X, FileImage, Loader2, Settings, FolderOpen } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { open } from "@tauri-apps/plugin-dialog";
-import { basename, join, resourceDir } from "@tauri-apps/api/path";
+import { basename, dirname, join, resourceDir } from "@tauri-apps/api/path";
 import { Command } from "@tauri-apps/plugin-shell";
 import { exists } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
@@ -30,6 +30,7 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
   const [width, setWidth] = useState(1024);
   const [height, setHeight] = useState(1024);
   const [overwriteOriginal, setOverwriteOriginal] = useState(true);
+  const [outputDirectory, setOutputDirectory] = useState<string | null>(null);
   const [isResizing, setIsResizing] = useState(false);
   const [resizeProgress, setResizeProgress] = useState<{ current: number; total: number; currentFile?: string; failedFiles: string[] } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -88,6 +89,41 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
     }
   };
 
+  const handleSelectOutputDirectory = async () => {
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+      });
+      if (selected && !Array.isArray(selected)) {
+        const dirExists = await exists(selected);
+        if (!dirExists) {
+          throw new Error(`Output directory does not exist: ${selected}`);
+        }
+        setOutputDirectory(selected);
+      }
+    } catch (error) {
+      console.error("Error selecting output directory:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to select output directory"
+      );
+    }
+  };
+
+  const resolveOutputPath = async (
+    imagePath: string,
+    fileInfo: { baseName: string; displayName: string; extension: string }
+  ): Promise<string> => {
+    if (overwriteOriginal && !outputDirectory) {
+      return imagePath;
+    }
+    const outDir = outputDirectory ?? (await dirname(imagePath));
+    const fileName = overwriteOriginal
+      ? fileInfo.displayName
+      : `${fileInfo.baseName}_cov${fileInfo.extension}`;
+    return join(outDir, fileName);
+  };
+
   // Handle batch resize
   const handleResize = async () => {
     if (selectedImagePaths.length === 0) {
@@ -129,17 +165,7 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
             currentFile: fileInfo.displayName
           } : null);
 
-          let outputPath: string;
-
-          if (overwriteOriginal) {
-            // Overwrite original file
-            outputPath = imagePath;
-          } else {
-            // Create new file with _cov suffix
-            const dir = imagePath.substring(0, imagePath.lastIndexOf('/') + 1 || imagePath.lastIndexOf('\\') + 1);
-            const newFileName = `${fileInfo.baseName}_cov${fileInfo.extension}`;
-            outputPath = dir + newFileName;
-          }
+          const outputPath = await resolveOutputPath(imagePath, fileInfo);
 
           // Build magick command for resizing
           const magickCommand = Command.create('exec-cmd', [
@@ -212,6 +238,7 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
   const handleReset = () => {
     setSelectedImagePaths([]);
     setFileNames({});
+    setOutputDirectory(null);
     setResizeProgress(null);
   };
 
@@ -327,8 +354,13 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{fileInfo?.displayName || imagePath.split(/[/\\]/).pop()}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Output: {overwriteOriginal ? fileInfo?.displayName : `${fileInfo?.baseName}_cov${fileInfo?.extension}`}
+                        <p className="text-xs text-muted-foreground truncate" title={
+                          outputDirectory
+                            ? `${outputDirectory} (${overwriteOriginal ? fileInfo?.displayName : `${fileInfo?.baseName}_cov${fileInfo?.extension}`})`
+                            : undefined
+                        }>
+                          Output file: {overwriteOriginal ? fileInfo?.displayName : `${fileInfo?.baseName}_cov${fileInfo?.extension}`}
+                          {outputDirectory ? " → selected folder" : " → next to source"}
                         </p>
                       </div>
                       <Button
@@ -393,6 +425,43 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
                   </p>
                 </div>
 
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <FolderOpen className="h-4 w-4" />
+                    Output directory
+                  </Label>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full sm:w-auto shrink-0"
+                      onClick={handleSelectOutputDirectory}
+                    >
+                      Choose folder
+                    </Button>
+                    {outputDirectory ? (
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <p className="truncate text-xs text-muted-foreground" title={outputDirectory}>
+                          {outputDirectory}
+                        </p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 shrink-0 px-2"
+                          onClick={() => setOutputDirectory(null)}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Default: save next to each source file
+                      </p>
+                    )}
+                  </div>
+                </div>
+
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="overwrite"
@@ -402,7 +471,11 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
                   <Label htmlFor="overwrite">Overwrite original files</Label>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {!overwriteOriginal && "If unchecked, resized files will be saved as <name>_cov.<ext>"}
+                  {overwriteOriginal
+                    ? outputDirectory
+                      ? "Writes using the original file name inside the output folder; source files are not modified."
+                      : "Replaces each selected file in place."
+                    : "Saves as name_cov.ext in the output folder or next to the source file."}
                 </p>
               </div>
 
