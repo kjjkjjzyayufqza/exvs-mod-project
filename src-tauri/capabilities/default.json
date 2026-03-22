@@ -13,6 +13,14 @@
     "fs:allow-resource-read-recursive",
     "fs:allow-write-text-file",
     {
+      "identifier": "fs:allow-remove",
+      "allow": [
+        {
+          "path": "*/**"
+        }
+      ]
+    },
+    {
       "identifier": "fs:scope",
       "allow": [
         {

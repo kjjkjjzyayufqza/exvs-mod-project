@@ -1,8 +1,8 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { join } from "@tauri-apps/api/path";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +14,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
@@ -55,15 +57,36 @@ export function CardIconBatchReplaceDialog({
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [ddsFormat, setDdsFormat] = useState<string>("BC7RgbaUnormSrgb");
   const [isReplacing, setIsReplacing] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [replaceProgress, setReplaceProgress] = useState<{
+    current: number;
+    total: number;
+    currentFileName: string;
+  } | null>(null);
+
+  const deferredSearchTerm = useDeferredValue(searchTerm);
 
   const itemsWithFileUrl = useMemo(
     () => items.filter((it) => it.fileUrl && (it.fileIndex !== null || it.name)),
     [items]
   );
 
+  const filteredItems = useMemo(() => {
+    const term = deferredSearchTerm.trim().toLowerCase();
+    if (!term) return itemsWithFileUrl;
+    return itemsWithFileUrl.filter((item) => {
+      const name = item.name ?? "";
+      return (
+        name.toLowerCase().includes(term) ||
+        item.itemIndex.toString().includes(term) ||
+        (item.fileIndex !== null && item.fileIndex.toString().includes(term))
+      );
+    });
+  }, [itemsWithFileUrl, deferredSearchTerm]);
+
   const selectAll = useCallback(() => {
-    setSelectedIds(new Set(itemsWithFileUrl.map((it) => it.itemIndex)));
-  }, [itemsWithFileUrl]);
+    setSelectedIds(new Set(filteredItems.map((it) => it.itemIndex)));
+  }, [filteredItems]);
 
   const deselectAll = useCallback(() => {
     setSelectedIds(new Set());
@@ -113,18 +136,38 @@ export function CardIconBatchReplaceDialog({
 
     try {
       setIsReplacing(true);
-      const result = await invoke<{ converted: number; failed: number }>(
-        "card_icon_batch_replace_with_dds_format",
-        { items: pairs, ddsFormat }
-      );
-      toast.success(`Replaced ${result.converted} image(s) with ${ddsFormat}`);
-      if (result.failed > 0) {
-        toast.error(`Failed to replace ${result.failed} image(s)`);
+      setReplaceProgress({ current: 0, total: pairs.length, currentFileName: "" });
+
+      let converted = 0;
+      let failed = 0;
+
+      for (let i = 0; i < pairs.length; i++) {
+        const [nutexbPath] = pairs[i];
+        const fileName = nutexbPath.split(/[/\\]/).pop() ?? nutexbPath;
+        setReplaceProgress({
+          current: i + 1,
+          total: pairs.length,
+          currentFileName: fileName,
+        });
+
+        const result = await invoke<{ converted: number; failed: number }>(
+          "card_icon_batch_replace_with_dds_format",
+          { items: [pairs[i]], ddsFormat }
+        );
+        converted += result.converted;
+        failed += result.failed;
+      }
+
+      setReplaceProgress(null);
+      toast.success(`Replaced ${converted} image(s) with ${ddsFormat}`);
+      if (failed > 0) {
+        toast.error(`Failed to replace ${failed} image(s)`);
       }
       setOpenState(false);
       setSelectedIds(new Set());
       await onApplied();
     } catch (error) {
+      setReplaceProgress(null);
       console.error(error);
       const message = error instanceof Error ? error.message : "Failed to replace format";
       toast.error(message);
@@ -180,9 +223,27 @@ export function CardIconBatchReplaceDialog({
                 </Button>
               </div>
             </div>
-            <ScrollArea className="h-[280px] rounded-md border border-border p-2">
+
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name or index..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 h-8"
+                disabled={isReplacing}
+              />
+            </div>
+
+            {searchTerm.trim() && (
+              <div className="text-xs text-muted-foreground">
+                Showing {filteredItems.length} of {itemsWithFileUrl.length} icons
+              </div>
+            )}
+
+            <ScrollArea className="h-[240px] rounded-md border border-border p-2">
               <div className="space-y-1">
-                {itemsWithFileUrl.map((item) => (
+                {filteredItems.map((item) => (
                   <div
                     key={item.itemIndex}
                     className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/50"
@@ -201,8 +262,32 @@ export function CardIconBatchReplaceDialog({
                     </Label>
                   </div>
                 ))}
+                {filteredItems.length === 0 && (
+                  <div className="text-center text-muted-foreground py-6 text-sm">
+                    {searchTerm.trim()
+                      ? `No icons found matching "${searchTerm.trim()}"`
+                      : "No images available"}
+                  </div>
+                )}
               </div>
             </ScrollArea>
+
+            {replaceProgress && (
+              <div className="space-y-2 pt-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    Processing {replaceProgress.current} / {replaceProgress.total}
+                  </span>
+                  <span className="truncate max-w-[280px]" title={replaceProgress.currentFileName}>
+                    {replaceProgress.currentFileName}
+                  </span>
+                </div>
+                <Progress
+                  value={(replaceProgress.current / replaceProgress.total) * 100}
+                  className="h-2"
+                />
+              </div>
+            )}
           </div>
         </div>
 

@@ -210,6 +210,7 @@ const TestEditorPage = () => {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [dirtyFolders, setDirtyFolders] = useState<Set<string>>(new Set());
   const [isRepackDialogOpen, setIsRepackDialogOpen] = useState(false);
+  const [obModPath, setObModPath] = useState("");
   const pendingPayloadsRef = useRef<FolderChangePayload[]>([]);
   const rafIdRef = useRef<number | null>(null);
 
@@ -332,6 +333,14 @@ const TestEditorPage = () => {
     hydrate();
   }, [store, getSetting, loadFolder]);
 
+  useEffect(() => {
+    const loadObModPath = async () => {
+      const path = (await getSetting<string>("obModPath")) ?? "";
+      setObModPath(path);
+    };
+    loadObModPath();
+  }, [getSetting]);
+
   const filteredData = useMemo(() => filterTree(treeData, searchTerm), [treeData, searchTerm]);
   const selectedNode = useMemo(() => findNode(treeData, selectedId), [treeData, selectedId]);
   const dirtyFolderList = useMemo(() => Array.from(dirtyFolders), [dirtyFolders]);
@@ -418,6 +427,7 @@ const TestEditorPage = () => {
         onPickFolder={loadFolder}
         onRefresh={refreshFolder}
         onRepack={() => setIsRepackDialogOpen(true)}
+        onClearDirty={() => setDirtyFolders(new Set())}
       />
       </div>
 
@@ -474,6 +484,7 @@ const TestEditorPage = () => {
         onOpenChange={setIsRepackDialogOpen}
         rootDir={currentDir}
         dirtyFolders={dirtyFolderList}
+        modFolderPath={obModPath || undefined}
         onFolderRepacked={handleRepackSuccess}
         onComplete={handleRepackComplete}
       />

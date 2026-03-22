@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, Package } from "lucide-react";
+import { Loader2, RefreshCw, Package, Eraser } from "lucide-react";
 import { FilePathInput } from "@/components/ui/filePathInput";
 
 interface TestEditorToolbarProps {
@@ -10,6 +10,7 @@ interface TestEditorToolbarProps {
   onPickFolder: (path: string) => void;
   onRefresh: () => void;
   onRepack: () => void;
+  onClearDirty: () => void;
 }
 
 export function TestEditorToolbar({
@@ -20,6 +21,7 @@ export function TestEditorToolbar({
   onPickFolder,
   onRefresh,
   onRepack,
+  onClearDirty,
 }: TestEditorToolbarProps) {
   return (
     <div className="flex items-center justify-between gap-4 bg-background px-4">
@@ -65,6 +67,16 @@ export function TestEditorToolbar({
           {hasDirtyFolders && (
             <span className="ml-2 flex h-2 w-2 rounded-full bg-yellow-400 animate-pulse" />
           )}
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          disabled={!hasDirtyFolders || isLoading}
+          onClick={onClearDirty}
+          className="h-9 w-9 shrink-0"
+          title="Clear dirty state (skip repacking)"
+        >
+          <Eraser className="h-4 w-4" />
         </Button>
       </div>
     </div>

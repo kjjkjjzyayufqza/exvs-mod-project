@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { join } from "@tauri-apps/api/path";
-import { exists } from "@tauri-apps/plugin-fs";
+import { exists, remove } from "@tauri-apps/plugin-fs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,6 +13,7 @@ type ListeningRepackDialogProps = {
   onOpenChange: (open: boolean) => void;
   rootDir: string;
   dirtyFolders: string[];
+  modFolderPath?: string;
   onFolderRepacked: (folderName: string) => void;
   onComplete?: () => void;
 };
@@ -31,12 +32,14 @@ export default function ListeningRepackDialog({
   onOpenChange,
   rootDir,
   dirtyFolders,
+  modFolderPath,
   onFolderRepacked,
   onComplete,
 }: ListeningRepackDialogProps) {
   const [entries, setEntries] = useState<FolderEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [removeVgsht2InMod, setRemoveVgsht2InMod] = useState(true);
 
   useEffect(() => {
     const load = async () => {
@@ -98,7 +101,26 @@ export default function ListeningRepackDialog({
             structurePath: entry.structurePath,
             inputFolderPath,
           });
-          toast.success(`Repacked ${entry.name}`);
+          if (removeVgsht2InMod && modFolderPath) {
+            const modVgsht2Path = await join(modFolderPath, `${entry.name}.vgsht2`);
+            const fileExists = await exists(modVgsht2Path);
+            if (fileExists) {
+              try {
+                await remove(modVgsht2Path);
+                console.log(`Removed ${modVgsht2Path}`);
+                toast.success(`Repacked ${entry.name}, removed mod/${entry.name}.vgsht2`);
+              } catch (removeErr) {
+                console.error(`Failed to remove ${modVgsht2Path}`, removeErr);
+                toast.error(
+                  `Repacked ${entry.name} but failed to remove .vgsht2: ${(removeErr as Error).message}`
+                );
+              }
+            } else {
+              toast.success(`Repacked ${entry.name}`);
+            }
+          } else {
+            toast.success(`Repacked ${entry.name}`);
+          }
           onFolderRepacked(entry.name);
         } catch (error) {
           console.error(`Repack failed for ${entry.name}`, error);
@@ -133,6 +155,16 @@ export default function ListeningRepackDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 min-h-0 flex-1 overflow-hidden">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <Checkbox
+              checked={removeVgsht2InMod}
+              disabled={isRunning}
+              onCheckedChange={(checked) => setRemoveVgsht2InMod(Boolean(checked))}
+            />
+            <span>
+              Remove matching <code>.vgsht2</code> in OB Mod folder (e.g. pack <code>0x49235031.fhm2d</code> → remove <code>0x49235031.vgsht2</code>). Requires OB Mod path in Config.
+            </span>
+          </label>
           {isLoading ? (
             <div className="text-sm text-muted-foreground">Preparing list...</div>
           ) : entries.length === 0 ? (

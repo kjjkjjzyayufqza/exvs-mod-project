@@ -693,7 +693,7 @@ export function NutexbIconListView({
           )}
         </CardHeader>
 
-        <CardContent className={cn("flex-1 min-h-0 overflow-hidden p-0", isDual && "pt-0")}>
+        <CardContent className={cn("flex-1 min-h-0 flex flex-col overflow-hidden p-0", isDual && "pt-0")}>
           {isDual ? (
             <div className="flex h-full gap-2 px-2 pb-2 min-h-0">
               <div className="flex-1 min-w-0 flex flex-col min-h-0">
