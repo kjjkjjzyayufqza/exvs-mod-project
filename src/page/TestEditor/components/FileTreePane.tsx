@@ -12,7 +12,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { join } from "@tauri-apps/api/path";
-import { exists, remove } from "@tauri-apps/plugin-fs";
+import { exists } from "@tauri-apps/plugin-fs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -26,6 +26,8 @@ import {
 import { openPath } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
 import { repackFolderUsingStructure } from "@/utils/repackRunner";
+import { normalizePackFolderName } from "../utils/packName";
+import { removeMatchingModVgsht2 } from "../utils/modVgsht2";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -74,7 +76,7 @@ function parseRootStructureJsonRepackTarget(
   if (!relative || relative.includes("/")) return null;
   const folderName = fileName.slice(0, fileName.length - STRUCTURE_JSON_SUFFIX.length);
   if (!folderName) return null;
-  return { folderName, structurePath: filePath };
+  return { folderName: normalizePackFolderName(folderName), structurePath: filePath };
 }
 
 type FileTreePaneProps = {
@@ -344,7 +346,7 @@ export function FileTreePane({
         return;
       }
       beginRepackFlow({
-        folderName: node.name,
+        folderName: normalizePackFolderName(node.name),
         structurePath,
         inputFolderPath: node.path,
       });
@@ -379,20 +381,18 @@ export function FileTreePane({
       });
       const entryName = repackTarget.folderName;
       if (repackRemoveVgsht2InMod && modFolderPath) {
-        const modVgsht2Path = await join(modFolderPath, `${entryName}.vgsht2`);
-        const fileExists = await exists(modVgsht2Path);
-        if (fileExists) {
-          try {
-            await remove(modVgsht2Path);
+        try {
+          const removed = await removeMatchingModVgsht2(modFolderPath, entryName);
+          if (removed) {
             toast.success(`Repacked ${entryName}, removed mod/${entryName}.vgsht2`);
-          } catch (removeErr) {
-            console.error(`Failed to remove ${modVgsht2Path}`, removeErr);
-            toast.error(
-              `Repacked ${entryName} but failed to remove .vgsht2: ${(removeErr as Error).message}`
-            );
+          } else {
+            toast.success(`Repacked ${entryName}`);
           }
-        } else {
-          toast.success(`Repacked ${entryName}`);
+        } catch (removeErr) {
+          console.error(`Failed to remove mod/${entryName}.vgsht2`, removeErr);
+          toast.error(
+            `Repacked ${entryName} but failed to remove .vgsht2: ${(removeErr as Error).message}`
+          );
         }
       } else {
         toast.success(`Repacked ${entryName}`);

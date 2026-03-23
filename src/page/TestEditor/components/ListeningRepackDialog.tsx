@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { join } from "@tauri-apps/api/path";
-import { exists, remove } from "@tauri-apps/plugin-fs";
+import { exists } from "@tauri-apps/plugin-fs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { repackFolderUsingStructure } from "@/utils/repackRunner";
+import { normalizePackFolderName } from "../utils/packName";
+import { removeMatchingModVgsht2 } from "../utils/modVgsht2";
 
 type ListeningRepackDialogProps = {
   open: boolean;
@@ -50,7 +52,13 @@ export default function ListeningRepackDialog({
       setIsLoading(true);
       try {
         const next: FolderEntry[] = [];
-        for (const name of dirtyFolders) {
+        const seen = new Set<string>();
+        for (const rawName of dirtyFolders) {
+          const name = normalizePackFolderName(rawName);
+          if (!name || seen.has(name)) {
+            continue;
+          }
+          seen.add(name);
           const structurePath = await join(rootDir, `${name}_structure.json`);
           const structureExists = await exists(structurePath);
           next.push({
@@ -102,21 +110,18 @@ export default function ListeningRepackDialog({
             inputFolderPath,
           });
           if (removeVgsht2InMod && modFolderPath) {
-            const modVgsht2Path = await join(modFolderPath, `${entry.name}.vgsht2`);
-            const fileExists = await exists(modVgsht2Path);
-            if (fileExists) {
-              try {
-                await remove(modVgsht2Path);
-                console.log(`Removed ${modVgsht2Path}`);
+            try {
+              const removed = await removeMatchingModVgsht2(modFolderPath, entry.name);
+              if (removed) {
                 toast.success(`Repacked ${entry.name}, removed mod/${entry.name}.vgsht2`);
-              } catch (removeErr) {
-                console.error(`Failed to remove ${modVgsht2Path}`, removeErr);
-                toast.error(
-                  `Repacked ${entry.name} but failed to remove .vgsht2: ${(removeErr as Error).message}`
-                );
+              } else {
+                toast.success(`Repacked ${entry.name}`);
               }
-            } else {
-              toast.success(`Repacked ${entry.name}`);
+            } catch (removeErr) {
+              console.error(`Failed to remove mod/${entry.name}.vgsht2`, removeErr);
+              toast.error(
+                `Repacked ${entry.name} but failed to remove .vgsht2: ${(removeErr as Error).message}`
+              );
             }
           } else {
             toast.success(`Repacked ${entry.name}`);
@@ -211,4 +216,3 @@ export default function ListeningRepackDialog({
     </Dialog>
   );
 }
-

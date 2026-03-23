@@ -21,6 +21,7 @@ import { FileTreePane } from "./components/FileTreePane";
 import { useConfigStore } from "@/store/configStore";
 import { TestEditorToolbar } from "./components/TestEditorToolbar";
 import ListeningRepackDialog from "./components/ListeningRepackDialog";
+import { normalizePackFolderName } from "./utils/packName";
 
 const WATCH_EVENT = "test-editor:folder-change";
 const WATCH_COMMAND = "watch_folder";
@@ -177,7 +178,7 @@ function getTopLevelFolderName(nodePath: string, rootPath: string, isDir?: boole
 
 function getDirtyFolderNameFromPath(nodePath: string, rootPath: string, isDir?: boolean): string | null {
   const topLevel = getTopLevelFolderName(nodePath, rootPath, isDir);
-  if (topLevel) return topLevel;
+  if (topLevel) return normalizePackFolderName(topLevel);
 
   // If a root-level *_structure.json changed, it should mark the corresponding folder as dirty.
   if (isDir === false && nodePath && rootPath) {
@@ -190,7 +191,8 @@ function getDirtyFolderNameFromPath(nodePath: string, rootPath: string, isDir?: 
     const suffix = "_structure.json";
     if (!lower.endsWith(suffix)) return null;
     const base = relative.slice(0, -suffix.length);
-    return base || null;
+    if (!base) return null;
+    return normalizePackFolderName(base);
   }
 
   return null;
@@ -422,10 +424,11 @@ const TestEditorPage = () => {
   }, []);
 
   const handleRepackSuccess = useCallback((folderName: string) => {
+    const normalizedFolderName = normalizePackFolderName(folderName);
     setDirtyFolders((prev) => {
-      if (!prev.has(folderName)) return prev;
+      if (!prev.has(normalizedFolderName)) return prev;
       const next = new Set(prev);
-      next.delete(folderName);
+      next.delete(normalizedFolderName);
       return next;
     });
   }, []);
