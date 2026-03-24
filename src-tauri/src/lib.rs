@@ -2,6 +2,7 @@ use tauri::Manager;
 
 mod commands;
 mod nutexb_lib;
+mod ssbh_preview;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -25,7 +26,10 @@ pub fn run() {
             commands::nutexb_export_dds,
             commands::nutexb_export_png_uncompressed,
             commands::nutexb_export_png,
+            commands::nutexb_png_base64,
             commands::nutexb_batch_export_png,
+            ssbh_preview::ssbh_load_model_preview,
+            ssbh_preview::ssbh_load_ssbh_file_as_json,
             commands::series_image_replace_from_png,
             commands::card_icon_replace_from_png,
             commands::card_icon_replace_from_png_with_dds_format,

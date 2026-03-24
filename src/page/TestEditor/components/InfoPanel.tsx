@@ -1,15 +1,14 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TestTreeNode } from "../types";
 import { ImagePreview, isImageFile } from "./ImagePreview";
 import { NutexbPreview } from "./NutexbPreview";
+import { SsbhModelPreviewInspector } from "./ssbh-model-preview/SsbhModelPreviewPanel";
 
 const TAB_ITEMS = [
   { name: "Info", value: "info" },
-  { name: "Explore", value: "explore" },
-  { name: "Favorites", value: "favorites" },
-  { name: "Surprise Me", value: "surprise" },
+  { name: "Model Preview", value: "modelPreview" },
 ] as const;
 
 type TabValue = (typeof TAB_ITEMS)[number]["value"];
@@ -28,9 +27,7 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
 
   const renderInfoContent = () => {
     if (!selected) {
-      return (
-        <p className="text-muted-foreground">Select a node to see details</p>
-      );
+      return <p className="text-muted-foreground">Select a node in the tree to see file details.</p>;
     }
 
     return (
@@ -47,7 +44,7 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
         </div>
         <div className="flex flex-col gap-1">
           <span className="text-muted-foreground">Path</span>
-          <span className="break-all text-xs" title={selected.path}>
+          <span className="wrap-break-word text-xs" title={selected.path}>
             {selected.path}
           </span>
         </div>
@@ -68,65 +65,43 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
   const renderContent = () => {
     switch (activeTab) {
       case "info":
-        return renderInfoContent();
-      case "explore":
-        return (
-          <>
-            Discover{" "}
-            <span className="text-foreground font-semibold">fresh ideas</span>,
-            trending topics, and hidden gems curated just for you. Start
-            exploring and let your curiosity lead the way!
-          </>
-        );
-      case "favorites":
-        return (
-          <>
-            All your{" "}
-            <span className="text-foreground font-semibold">favorites</span> are
-            saved here. Revisit articles, collections, and moments you love, any
-            time you want a little inspiration.
-          </>
-        );
-      case "surprise":
-        return (
-          <>
-            <span className="text-foreground font-semibold">Surprise!</span>{" "}
-            Here&apos;s something unexpected—a fun fact, a quirky tip, or a
-            daily challenge. Come back for a new surprise every day!
-          </>
-        );
+        return <div className="space-y-2">{renderInfoContent()}</div>;
+      case "modelPreview":
+        return <SsbhModelPreviewInspector />;
     }
   };
 
   return (
-    <div className="flex h-full">
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => setActiveTab(v as TabValue)}
-        className="flex h-full rounded-none"
-      >
-        <TabsList className="rounded-none flex h-full w-[2em] flex-col items-start justify-start overflow-visible">
+    <div className="flex h-full min-h-0 flex-col">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)} className="flex h-full flex-col rounded-none">
+        <TabsList className="flex h-10 w-full shrink-0 items-center justify-start gap-1 overflow-x-auto border-b bg-muted/30 px-2 py-1">
           {TAB_ITEMS.map((tab) => (
             <TabsTrigger
               key={tab.value}
               value={tab.value}
-              className="rounded-none w-full shrink-0 items-center justify-center px-2 py-3 whitespace-nowrap"
-              style={{ writingMode: "sideways-lr", textOrientation: "mixed" }}
+              className="h-8 shrink-0 rounded-md px-3 text-[11px] font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
             >
               {tab.name}
             </TabsTrigger>
           ))}
         </TabsList>
-      </Tabs>
 
-      <Card className="h-full flex-1 flex flex-col rounded-none overflow-hidden">
-        <CardHeader className="shrink-0">
-          <CardTitle>Info</CardTitle>
-        </CardHeader>
-        <CardContent className="flex-1 overflow-y-auto space-y-2 text-sm">
-          {renderContent()}
-        </CardContent>
-      </Card>
+        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-none border-0 shadow-none">
+          <CardHeader className="shrink-0 space-y-1 border-b bg-muted/10 py-3">
+            <CardTitle className="text-xs font-bold uppercase tracking-widest">
+              {activeTab === "info" ? "File info" : "Viewport inspector"}
+            </CardTitle>
+            <CardDescription className="text-[10px] italic">
+              {activeTab === "info"
+                ? "Selection, path, and texture previews"
+                : "Display, lighting, meshes, and scene stats for the 3D view"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-y-auto p-4 text-sm">
+            <div className="space-y-2">{renderContent()}</div>
+          </CardContent>
+        </Card>
+      </Tabs>
     </div>
   );
 };

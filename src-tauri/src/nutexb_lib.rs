@@ -1,5 +1,8 @@
+use base64::{engine::general_purpose::STANDARD, Engine};
+use image::ImageFormat;
 use serde::Serialize;
 use std::collections::HashSet;
+use std::io::Cursor;
 use std::{
     fs,
     fs::File,
@@ -63,6 +66,18 @@ pub fn export_nutexb_to_png(input_path: &str, output_path: &str) -> Result<(), S
     let image: RgbaImage = image_dds::image_from_dds(&dds, 0).map_err(|e| e.to_string())?;
     image.save(output_path).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+pub fn nutexb_to_png_base64(input_path: &str) -> Result<String, String> {
+    let nutexb = NutexbFile::read_from_file(input_path).map_err(|e| e.to_string())?;
+    let dds = nutexb.to_dds().map_err(|e| e.to_string())?;
+    let image: RgbaImage = image_dds::image_from_dds(&dds, 0).map_err(|e| e.to_string())?;
+    let mut buf = Vec::new();
+    let mut cursor = Cursor::new(&mut buf);
+    image
+        .write_to(&mut cursor, ImageFormat::Png)
+        .map_err(|e| e.to_string())?;
+    Ok(STANDARD.encode(cursor.into_inner()))
 }
 
 pub fn ensure_parent_dir(output_path: &str) -> Result<(), String> {

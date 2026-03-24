@@ -143,6 +143,11 @@ pub fn nutexb_export_png(input_path: &str, output_path: &str) -> Result<(), Stri
 }
 
 #[tauri::command]
+pub fn nutexb_png_base64(input_path: String) -> Result<String, String> {
+    crate::nutexb_lib::nutexb_to_png_base64(&input_path)
+}
+
+#[tauri::command]
 pub async fn nutexb_batch_export_png(
     root_dir: String,
     output_mode: String,

@@ -31,6 +31,8 @@ notify = "8.2.0"
 tauri-plugin-opener = "2"
 
 nutexb = { git = "https://github.com/kjjkjjzyayufqza/nutexb", features = ["ddsfile"] }
+ssbh_data = { git = "https://github.com/kjjkjjzyayufqza/ssbh_lib", branch = "wmmt2", package = "ssbh_data", features = ["serde"] }
+base64 = "0.22"
 image = "0.25.9"
 image_dds = { version = "0.7.2", features = ["ddsfile", "image"] }
 encoding_rs = "0.8"

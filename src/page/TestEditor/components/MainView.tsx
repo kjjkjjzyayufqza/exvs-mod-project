@@ -7,6 +7,7 @@ import SeriesListView from "./SeriesListView";
 import CardIconListView from "./CardIconListView";
 import StageIconListView from "./StageIconListView";
 import StageListView from "./StageListView";
+import { SsbhModelPreviewViewport } from "./ssbh-model-preview/SsbhModelPreviewPanel";
 
 type StageTab = {
   name: string;
@@ -26,18 +27,27 @@ const tabs: StageTab[] = [
   {
     name: "3D View",
     value: "3d",
-    content: (
-      <div>
-        3D viewport placeholder
-      </div>
-    ),
+    render: () => <SsbhModelPreviewViewport />,
   },
   {
     name: "Preview",
     value: "preview",
     content: (
-      <div>
-        Alternate view placeholder
+      <div className="text-sm text-muted-foreground space-y-2 max-w-lg">
+        <p>
+          SSBH model preview lives in the <span className="font-medium text-foreground">3D View</span> tab: Rust loads
+          <code className="mx-1 rounded bg-muted px-1">numdlb</code> /
+          <code className="mx-1 rounded bg-muted px-1">numshb</code> /
+          <code className="mx-1 rounded bg-muted px-1">nusktb</code> /
+          <code className="mx-1 rounded bg-muted px-1">numatb</code> via{" "}
+          <code className="rounded bg-muted px-1">ssbh_data</code>, returns JSON, then the viewport renders with React
+          Three Fiber.
+        </p>
+        <p>
+          Open a model folder (or a <code className="rounded bg-muted px-1">.numdlb</code> file), then use the right{" "}
+          <span className="font-medium text-foreground">Model Preview</span> tab (mesh list, lighting, grid) while you
+          orbit in <span className="font-medium text-foreground">3D View</span>.
+        </p>
       </div>
     ),
   },
@@ -119,7 +129,12 @@ const tabs: StageTab[] = [
   },
 ];
 
-const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFolder }: MainViewProps) => {
+const MainView = ({
+  jsonFilePath,
+  folderPath,
+  onUnsavedChanges,
+  onRevealTreeFolder,
+}: MainViewProps) => {
   const [activeTab, setActiveTab] = useState<string>(tabs[0]?.value ?? "3d");
   const [folderStructureHasUnsaved, setFolderStructureHasUnsaved] = useState(false);
   const [characterIdTableHasUnsaved, setCharacterIdTableHasUnsaved] = useState(false);
@@ -252,9 +267,9 @@ const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFold
   }, [activeTab, handleCharacterIdTableUnsaved, handleCharacterListUnsaved, handleSeriesListUnsaved, handleStageIconListUnsaved, handleStageListUnsaved, handleUnsavedChanges]);
 
   return (
-    <div className="flex h-full w-full bg-background">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex h-full w-full flex-col rounded-none p-0 m-0">
-        <TabsList className="w-full justify-start rounded-none h-10 flex items-center bg-muted/50 px-2 border-b">
+    <div className="flex h-full w-full min-h-0 bg-background">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex h-full w-full min-h-0 flex-col rounded-none p-0 m-0">
+        <TabsList className="w-full shrink-0 justify-start rounded-none h-10 flex items-center bg-muted/50 px-2 border-b">
           {resolvedTabs.map((tab) => (
             <TabsTrigger key={tab.value} value={tab.value}
               className="rounded-md px-4 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm">
@@ -307,7 +322,15 @@ const MainView = ({ jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFold
           ))}
         </TabsList>
         {resolvedTabs.map((tab) => (
-          <TabsContent key={tab.value} value={tab.value} className="flex-1 h-full w-full px-4 pt-4 m-0 overflow-auto">
+          <TabsContent
+            key={tab.value}
+            value={tab.value}
+            className={
+              tab.value === "3d"
+                ? "flex-1 min-h-0 h-full w-full m-0 flex flex-col overflow-hidden p-0 data-[state=inactive]:hidden"
+                : "flex-1 min-h-0 h-full w-full px-4 pt-4 m-0 overflow-auto data-[state=inactive]:hidden"
+            }
+          >
             {tab.render ? tab.render({ jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFolder }) : tab.content}
           </TabsContent>
         ))}

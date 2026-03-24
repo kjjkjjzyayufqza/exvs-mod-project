@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import MainView from "./components/MainView";
 import InfoPanel from "./components/InfoPanel";
+import { SsbhModelPreviewProvider } from "./components/ssbh-model-preview/SsbhModelPreviewPanel";
 import { FolderChangePayload, TestTreeNode } from "./types";
 import { FileTreePane } from "./components/FileTreePane";
 import { useConfigStore } from "@/store/configStore";
@@ -453,10 +454,11 @@ const TestEditorPage = () => {
       </div>
 
       <div className="flex-1 min-h-0 p-2 overflow-hidden">
-        <ResizablePanelGroup
-          orientation="horizontal"
-          className="h-full rounded-lg border bg-card shadow-sm"
-        >
+        <SsbhModelPreviewProvider workspaceRoot={currentDir}>
+          <ResizablePanelGroup
+            orientation="horizontal"
+            className="h-full min-h-0 rounded-lg border bg-card shadow-sm"
+          >
           <ResizablePanel defaultSize={20} minSize={15}>
             <div className="h-full">
               <FileTreePane
@@ -484,7 +486,7 @@ const TestEditorPage = () => {
           <ResizableHandle withHandle className="w-1 bg-border hover:bg-primary/20 transition-colors" />
 
           <ResizablePanel defaultSize={60} minSize={40}>
-            <div className="h-full bg-muted/30">
+            <div className="h-full min-h-0 bg-muted/30">
               <MainView
                 jsonFilePath={selectedJsonPath}
                 folderPath={currentDir}
@@ -497,11 +499,12 @@ const TestEditorPage = () => {
           <ResizableHandle withHandle className="w-1 bg-border hover:bg-primary/20 transition-colors" />
 
           <ResizablePanel defaultSize={20} minSize={15}>
-            <div className="h-full">
+            <div className="h-full min-h-0">
               <InfoPanel selected={selectedNode} />
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>
+        </SsbhModelPreviewProvider>
       </div>
 
       <ListeningRepackDialog
