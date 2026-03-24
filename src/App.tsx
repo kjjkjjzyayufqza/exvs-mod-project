@@ -1,8 +1,8 @@
 import "./App.css";
 import SidebarLayout from "./layout/Sidebar";
+import { KeepAliveOutlet } from "./layout/KeepAliveOutlet";
 import { Route, Routes } from "react-router";
 import { HashRouter } from "react-router-dom";
-import { RouterItems } from "./router/router";
 import { useConfigStore } from "./store/configStore";
 import { useEffect } from "react";
 
@@ -15,16 +15,9 @@ function App() {
   return (
     <HashRouter>
       <Routes>
-        {/* Layout Route - all routes with sidebar */}
         <Route element={<SidebarLayout />}>
-          {RouterItems.map((e, i) => {
-            return <Route key={i} path={e.url} element={e.element} />;
-          })}
+          <Route path="*" element={<KeepAliveOutlet />} />
         </Route>
-        
-        {/* Future: Routes without sidebar can be added here */}
-        {/* <Route path="/login" element={<LoginPage />} /> */}
-        {/* <Route path="*" element={<NotFoundPage />} /> */}
       </Routes>
     </HashRouter>
   );

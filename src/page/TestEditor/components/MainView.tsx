@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import RepackFolderStructureView from "./RepackFolderStructureView";
 import CharacterIdTableView from "./CharacterIdTableView";
 import CharacterListView from "./CharacterListView";
@@ -135,7 +136,9 @@ const MainView = ({
   onUnsavedChanges,
   onRevealTreeFolder,
 }: MainViewProps) => {
-  const [activeTab, setActiveTab] = useState<string>(tabs[0]?.value ?? "3d");
+  const initialTab = tabs[0]?.value ?? "3d";
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set([initialTab]));
   const [folderStructureHasUnsaved, setFolderStructureHasUnsaved] = useState(false);
   const [characterIdTableHasUnsaved, setCharacterIdTableHasUnsaved] = useState(false);
   const [characterListHasUnsaved, setCharacterListHasUnsaved] = useState(false);
@@ -266,13 +269,33 @@ const MainView = ({
     });
   }, [activeTab, handleCharacterIdTableUnsaved, handleCharacterListUnsaved, handleSeriesListUnsaved, handleStageIconListUnsaved, handleStageListUnsaved, handleUnsavedChanges]);
 
+  const handleTabChange = useCallback((value: string) => {
+    setActiveTab(value);
+    setVisitedTabs((prev) => {
+      if (prev.has(value)) return prev;
+      const next = new Set(prev);
+      next.add(value);
+      return next;
+    });
+  }, []);
+
+  const renderTabPanel = (tab: StageTab) => {
+    const props: MainViewProps = { jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFolder };
+    if (tab.render) return tab.render(props);
+    return tab.content ?? null;
+  };
+
   return (
     <div className="flex h-full w-full min-h-0 bg-background">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex h-full w-full min-h-0 flex-col rounded-none p-0 m-0">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="flex h-full w-full min-h-0 flex-col rounded-none p-0 m-0">
         <TabsList className="w-full shrink-0 justify-start rounded-none h-10 flex items-center bg-muted/50 px-2 border-b">
           {resolvedTabs.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value}
-              className="rounded-md px-4 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TabsTrigger
+              key={tab.value}
+              id={`mainview-tab-${tab.value}`}
+              value={tab.value}
+              className="rounded-md px-4 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm"
+            >
               <span className="inline-flex items-center gap-2">
                 <span>{tab.name}</span>
                 {tab.value === "folder-structure" && folderStructureHasUnsaved && (
@@ -321,19 +344,37 @@ const MainView = ({
             </TabsTrigger>
           ))}
         </TabsList>
-        {resolvedTabs.map((tab) => (
-          <TabsContent
-            key={tab.value}
-            value={tab.value}
-            className={
-              tab.value === "3d"
-                ? "flex-1 min-h-0 h-full w-full m-0 flex flex-col overflow-hidden p-0 data-[state=inactive]:hidden"
-                : "flex-1 min-h-0 h-full w-full px-4 pt-4 m-0 overflow-auto data-[state=inactive]:hidden"
-            }
-          >
-            {tab.render ? tab.render({ jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFolder }) : tab.content}
-          </TabsContent>
-        ))}
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          {resolvedTabs.map((tab) => {
+            if (!visitedTabs.has(tab.value)) return null;
+            const isActive = activeTab === tab.value;
+            return (
+              <div
+                key={tab.value}
+                role="tabpanel"
+                id={`mainview-panel-${tab.value}`}
+                aria-labelledby={`mainview-tab-${tab.value}`}
+                className={cn(
+                  "flex min-h-0 flex-col",
+                  isActive
+                    ? "relative z-10 flex-1"
+                    : "pointer-events-none invisible absolute inset-0 z-0 overflow-hidden",
+                  tab.value === "3d"
+                    ? isActive
+                      ? "m-0 flex h-full w-full flex-1 flex-col overflow-hidden p-0"
+                      : "p-0"
+                    : isActive
+                      ? "h-full w-full flex-1 overflow-auto px-4 pt-4"
+                      : "px-4 pt-4",
+                )}
+                aria-hidden={!isActive}
+                {...(!isActive ? { inert: true } : {})}
+              >
+                {renderTabPanel(tab)}
+              </div>
+            );
+          })}
+        </div>
       </Tabs>
     </div>
   );

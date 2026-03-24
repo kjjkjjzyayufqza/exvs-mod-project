@@ -27,4 +27,10 @@ export default defineConfig(async () => ({
   build: {
     target: "ES2022",
   },
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["./src/test/setup.ts"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+  },
 }));

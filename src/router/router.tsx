@@ -10,6 +10,8 @@ import RepackPage from "../page/Repack/page"
 import SceneEdit from "../page/SceneEdit/page"
 import MiscToolsPage from "../page/MiscTools/page"
 import TestEditorPage from "../page/TestEditor/page"
+import { SIDEBAR_ROUTE_URLS } from "./sidebarRouteUrls"
+
 // Menu items.
 export const RouterItems = [
     {
@@ -79,3 +81,16 @@ export const RouterItems = [
         element: <TestEditorPage />
     }
 ]
+
+if (RouterItems.length !== SIDEBAR_ROUTE_URLS.length) {
+  throw new Error(
+    `RouterItems length (${RouterItems.length}) must match SIDEBAR_ROUTE_URLS (${SIDEBAR_ROUTE_URLS.length}).`,
+  )
+}
+RouterItems.forEach((item, i) => {
+  if (item.url !== SIDEBAR_ROUTE_URLS[i]) {
+    throw new Error(
+      `Route URL mismatch at index ${i}: RouterItems has "${item.url}", SIDEBAR_ROUTE_URLS has "${SIDEBAR_ROUTE_URLS[i]}".`,
+    )
+  }
+})
