@@ -126,6 +126,8 @@ export function buildDrawListFromBundle(
       label,
       geometry,
       materialLabel: entry.material_label,
+      meshObjectName: entry.mesh_object_name,
+      meshObjectSubindex: entry.mesh_object_subindex,
     });
   }
   return out;

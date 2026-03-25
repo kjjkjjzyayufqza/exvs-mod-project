@@ -4,11 +4,13 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TestTreeNode } from "../types";
 import { ImagePreview, isImageFile } from "./ImagePreview";
 import { NutexbPreview } from "./NutexbPreview";
+import { SsbhDaeExchangePanel } from "./ssbh-model-preview/SsbhDaeExchangePanel";
 import { SsbhModelPreviewInspector } from "./ssbh-model-preview/SsbhModelPreviewPanel";
 
 const TAB_ITEMS = [
   { name: "Info", value: "info" },
   { name: "Model Preview", value: "modelPreview" },
+  { name: "COLLADA (.dae)", value: "daeExchange" },
 ] as const;
 
 type TabValue = (typeof TAB_ITEMS)[number]["value"];
@@ -68,6 +70,8 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
         return <div className="space-y-2">{renderInfoContent()}</div>;
       case "modelPreview":
         return <SsbhModelPreviewInspector />;
+      case "daeExchange":
+        return <SsbhDaeExchangePanel />;
     }
   };
 
@@ -89,12 +93,18 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-none border-0 shadow-none">
           <CardHeader className="shrink-0 space-y-1 border-b bg-muted/10 py-3">
             <CardTitle className="text-xs font-bold uppercase tracking-widest">
-              {activeTab === "info" ? "File info" : "Viewport inspector"}
+              {activeTab === "info"
+                ? "File info"
+                : activeTab === "modelPreview"
+                  ? "Viewport inspector"
+                  : "COLLADA exchange"}
             </CardTitle>
             <CardDescription className="text-[10px] italic">
               {activeTab === "info"
                 ? "Selection, path, and texture previews"
-                : "Display, lighting, meshes, and scene stats for the 3D view"}
+                : activeTab === "modelPreview"
+                  ? "Display, lighting, meshes, and scene stats for the 3D view"
+                  : "Export SSBH to .dae and convert .dae to SSBH (separate from scene preview)"}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto p-4 text-sm">

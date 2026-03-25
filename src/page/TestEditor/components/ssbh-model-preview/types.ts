@@ -89,4 +89,6 @@ export type BuiltMeshDraw = {
   label: string;
   geometry: BufferGeometry;
   materialLabel: string;
+  meshObjectName: string;
+  meshObjectSubindex: number;
 };

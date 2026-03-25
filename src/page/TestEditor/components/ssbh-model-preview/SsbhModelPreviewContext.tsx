@@ -68,6 +68,8 @@ export type SsbhModelPreviewContextValue = {
   pickFolder: () => Promise<void>;
   pickNumdlb: () => Promise<void>;
   tryWorkspaceRoot: () => Promise<void>;
+  /** Load preview from a folder path or a `.numdlb` file path (same as Open model). */
+  loadModelAt: (path: string) => Promise<void>;
   toggleVisible: (key: string, checked: boolean) => void;
   showAllMeshes: () => void;
   hideAllMeshes: () => void;
@@ -265,6 +267,17 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
     await loadAt(root);
   }, [loadAt, root]);
 
+  const loadModelAt = useCallback(
+    async (path: string) => {
+      const t = path.trim();
+      if (!t) {
+        throw new Error("Path is empty");
+      }
+      await loadAt(t);
+    },
+    [loadAt],
+  );
+
   const requestCameraFit = useCallback(() => {
     setFitRequestId((r) => r + 1);
   }, []);
@@ -331,6 +344,7 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       pickFolder,
       pickNumdlb,
       tryWorkspaceRoot,
+      loadModelAt,
       toggleVisible,
       showAllMeshes,
       hideAllMeshes,
@@ -359,6 +373,7 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       pickFolder,
       pickNumdlb,
       tryWorkspaceRoot,
+      loadModelAt,
       toggleVisible,
       showAllMeshes,
       hideAllMeshes,
