@@ -29,6 +29,7 @@ pub fn run() {
             commands::nutexb_export_png_uncompressed,
             commands::nutexb_export_png,
             commands::nutexb_png_base64,
+            commands::nutexb_png_bytes,
             commands::nutexb_batch_export_png,
             ssbh_preview::ssbh_load_model_preview,
             ssbh_preview::ssbh_load_ssbh_file_as_json,

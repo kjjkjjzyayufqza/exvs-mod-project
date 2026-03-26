@@ -271,6 +271,7 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       setTextureDecodeProgress(null);
       return;
     }
+    const blobUrlsThisRun = new Set<string>();
     let cancelled = false;
     const matl = bundle.matl as MatlDataJson | null;
     const lookup = buildMatlLookup(matl);
@@ -331,9 +332,13 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
           return cached;
         }
         try {
-          const b64 = await invoke<string>("nutexb_png_base64", { inputPath: diskPath });
+          const raw = await invoke<ArrayBuffer | Uint8Array>("nutexb_png_bytes", { inputPath: diskPath });
           if (cancelled) return null;
-          const url = `data:image/png;base64,${b64}`;
+          const u8 = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
+          const ab = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer;
+          const blob = new Blob([ab], { type: "image/png" });
+          const url = URL.createObjectURL(blob);
+          blobUrlsThisRun.add(url);
           pathToDataUrl.set(diskPath, url);
           return url;
         } catch (e) {
@@ -390,6 +395,9 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
 
     return () => {
       cancelled = true;
+      for (const u of blobUrlsThisRun) {
+        URL.revokeObjectURL(u);
+      }
     };
   }, [bundle, draws, textureSlotLoadEnabled]);
 

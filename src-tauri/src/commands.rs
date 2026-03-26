@@ -147,6 +147,13 @@ pub fn nutexb_png_base64(input_path: String) -> Result<String, String> {
     crate::nutexb_lib::nutexb_to_png_base64(&input_path)
 }
 
+/// Returns raw PNG bytes via IPC [`InvokeBody::Raw`] (no base64); prefer for large textures vs [`nutexb_png_base64`].
+#[tauri::command]
+pub fn nutexb_png_bytes(input_path: String) -> Result<Response, String> {
+    let bytes = crate::nutexb_lib::nutexb_to_png_bytes(&input_path)?;
+    Ok(Response::new(InvokeBody::Raw(bytes)))
+}
+
 #[tauri::command]
 pub async fn nutexb_batch_export_png(
     root_dir: String,

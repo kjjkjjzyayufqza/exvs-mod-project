@@ -68,16 +68,24 @@ pub fn export_nutexb_to_png(input_path: &str, output_path: &str) -> Result<(), S
     Ok(())
 }
 
-pub fn nutexb_to_png_base64(input_path: &str) -> Result<String, String> {
+/// Encodes the nutexb as PNG bytes (same pipeline as `nutexb_to_png_base64` without base64 encoding).
+pub fn nutexb_to_png_bytes(input_path: &str) -> Result<Vec<u8>, String> {
     let nutexb = NutexbFile::read_from_file(input_path).map_err(|e| e.to_string())?;
     let dds = nutexb.to_dds().map_err(|e| e.to_string())?;
     let image: RgbaImage = image_dds::image_from_dds(&dds, 0).map_err(|e| e.to_string())?;
     let mut buf = Vec::new();
-    let mut cursor = Cursor::new(&mut buf);
-    image
-        .write_to(&mut cursor, ImageFormat::Png)
-        .map_err(|e| e.to_string())?;
-    Ok(STANDARD.encode(cursor.into_inner()))
+    {
+        let mut cursor = Cursor::new(&mut buf);
+        image
+            .write_to(&mut cursor, ImageFormat::Png)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(buf)
+}
+
+pub fn nutexb_to_png_base64(input_path: &str) -> Result<String, String> {
+    let bytes = nutexb_to_png_bytes(input_path)?;
+    Ok(STANDARD.encode(bytes))
 }
 
 pub fn ensure_parent_dir(output_path: &str) -> Result<(), String> {
