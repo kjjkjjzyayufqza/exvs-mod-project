@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { SsbhModelCanvas } from "./SsbhModelCanvas";
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
+import type { SkelDataJson } from "./types";
 
 export function SsbhModelPreviewViewport() {
   const p = useSsbhModelPreview();
@@ -53,6 +54,11 @@ export function SsbhModelPreviewViewport() {
           ambientIntensity={p.ambientIntensity}
           directionalIntensity={p.directionalIntensity}
           fitRequestId={p.fitRequestId}
+          skel={p.bundle?.skel ? (p.bundle.skel as SkelDataJson) : null}
+          bonePoseEnabled={p.bonePoseEnabled}
+          selectedBoneIndex={p.selectedBoneIndex}
+          boneTransformMode={p.boneTransformMode}
+          bonePoseResetNonce={p.bonePoseResetNonce}
         />
         <p className="mt-1.5 text-[10px] text-muted-foreground">
           Left-drag: orbit · Scroll: zoom (does not scroll this page) · Right-drag: pan. Use{" "}

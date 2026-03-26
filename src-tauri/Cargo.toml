@@ -39,3 +39,4 @@ encoding_rs = "0.8"
 anyhow = "1.0"
 xmltree = "0.10.3"
 glam = { version = "0.30", features = ["mint"] }
+ufbx = "0.10"

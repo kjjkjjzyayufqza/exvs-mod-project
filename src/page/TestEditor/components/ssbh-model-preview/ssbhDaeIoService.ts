@@ -52,6 +52,10 @@ export async function ssbhAnalyzeDae(daePath: string): Promise<SsbhDaeAnalysisRe
   return invoke<SsbhDaeAnalysisReport>("ssbh_analyze_dae", { daePath });
 }
 
+export async function ssbhAnalyzeFbx(fbxPath: string): Promise<SsbhDaeAnalysisReport> {
+  return invoke<SsbhDaeAnalysisReport>("ssbh_analyze_fbx", { fbxPath });
+}
+
 export async function ssbhExportFolderToDae(params: {
   rootPath: string;
   outputDaePath: string;
@@ -68,8 +72,7 @@ export async function ssbhExportFolderToDae(params: {
   });
 }
 
-export async function ssbhConvertDaeToSsbh(params: {
-  daePath: string;
+export type SsbhConvertToSsbhParams = {
   outputDir: string;
   baseFilename: string;
   scaleFactor: number;
@@ -80,14 +83,38 @@ export async function ssbhConvertDaeToSsbh(params: {
   writeNumdlb: boolean;
   writeNumshb: boolean;
   writeNusktb: boolean;
-}): Promise<{
+};
+
+export type SsbhConvertToSsbhResult = {
   ok: boolean;
   files: SsbhDaeConvertFiles;
   stats: SsbhDaeConvertStats;
   logPath: string | null;
-}> {
+};
+
+export async function ssbhConvertDaeToSsbh(
+  params: { daePath: string } & SsbhConvertToSsbhParams,
+): Promise<SsbhConvertToSsbhResult> {
   return invoke("ssbh_convert_dae_to_ssbh", {
     daePath: params.daePath,
+    outputDir: params.outputDir,
+    baseFilename: params.baseFilename,
+    scaleFactor: params.scaleFactor,
+    flipUv: params.flipUv,
+    upAxis: params.upAxis,
+    includeGeometryNames: params.includeGeometryNames,
+    writeLog: params.writeLog,
+    writeNumdlb: params.writeNumdlb,
+    writeNumshb: params.writeNumshb,
+    writeNusktb: params.writeNusktb,
+  });
+}
+
+export async function ssbhConvertFbxToSsbh(
+  params: { fbxPath: string } & SsbhConvertToSsbhParams,
+): Promise<SsbhConvertToSsbhResult> {
+  return invoke("ssbh_convert_fbx_to_ssbh", {
+    fbxPath: params.fbxPath,
     outputDir: params.outputDir,
     baseFilename: params.baseFilename,
     scaleFactor: params.scaleFactor,

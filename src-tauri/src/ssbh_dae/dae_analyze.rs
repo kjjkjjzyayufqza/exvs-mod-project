@@ -3,9 +3,8 @@
 use serde::Serialize;
 use std::path::Path;
 
-use super::dae_parse::{
-    parse_dae_file, validate_dae_scene, DaeMesh, UpAxisConversion,
-};
+use super::dae_parse::{parse_dae_file, validate_dae_scene, DaeMesh, UpAxisConversion};
+use super::import_scene::ImportScene;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -88,11 +87,8 @@ fn analyze_mesh_row(mesh: &DaeMesh) -> DaeMeshAnalysisRow {
     }
 }
 
-/// Parse and summarize a DAE without writing SSBH files.
-pub fn analyze_dae_path(path: &Path) -> Result<DaeAnalysisReport, String> {
-    let dae_path = path.to_string_lossy().to_string();
-    let scene = parse_dae_file(path).map_err(|e| e.to_string())?;
-
+/// Build the same analysis report used for DAE preflight, for any `ImportScene` (DAE, FBX, etc.).
+pub fn analysis_report_for_import_scene(source_path: String, scene: &ImportScene) -> DaeAnalysisReport {
     let mut mesh_rows: Vec<DaeMeshAnalysisRow> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
 
@@ -141,14 +137,14 @@ pub fn analyze_dae_path(path: &Path) -> Result<DaeAnalysisReport, String> {
         .collect();
 
     let mut blocking_errors: Vec<String> = Vec::new();
-    if let Err(e) = validate_dae_scene(&scene) {
+    if let Err(e) = validate_dae_scene(scene) {
         blocking_errors.push(e.to_string());
     }
 
     let can_convert = blocking_errors.is_empty();
 
-    Ok(DaeAnalysisReport {
-        dae_path,
+    DaeAnalysisReport {
+        dae_path: source_path,
         up_axis: up_axis_label(scene.up_axis).to_string(),
         mesh_rows,
         bone_count: scene.bones.len(),
@@ -157,5 +153,14 @@ pub fn analyze_dae_path(path: &Path) -> Result<DaeAnalysisReport, String> {
         blocking_errors,
         warnings,
         can_convert,
-    })
+    }
+}
+
+/// Parse and summarize a DAE without writing SSBH files.
+pub fn analyze_dae_path(path: &Path) -> Result<DaeAnalysisReport, String> {
+    let scene = parse_dae_file(path).map_err(|e| e.to_string())?;
+    Ok(analysis_report_for_import_scene(
+        path.to_string_lossy().to_string(),
+        &scene,
+    ))
 }

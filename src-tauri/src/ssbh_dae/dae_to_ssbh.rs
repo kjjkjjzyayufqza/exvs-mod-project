@@ -11,6 +11,7 @@ use super::dae_parse::{
     validate_converted_files, validate_dae_scene, ConvertedFiles, DaeBone, DaeConvertConfig, DaeMesh,
     DaeScene,
 };
+use super::import_scene::ImportScene;
 
 #[derive(Debug, Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -36,9 +37,9 @@ fn compute_convert_stats(mesh: &MeshData, bone_count: usize) -> SsbhConvertStats
     }
 }
 
-/// Convert DAE scene to SSBH files using ssbh_data write paths.
-pub fn convert_dae_to_ssbh_files(
-    dae_scene: &DaeScene,
+/// Convert a neutral import scene (from DAE, FBX, etc.) to SSBH files.
+pub fn convert_import_scene_to_ssbh_files(
+    scene: &ImportScene,
     config: &DaeConvertConfig,
 ) -> Result<(ConvertedFiles, SsbhConvertStats)> {
     let mut converted_files = ConvertedFiles::default();
@@ -52,12 +53,12 @@ pub fn convert_dae_to_ssbh_files(
         ));
     }
 
-    ensure_unique_geometry_names_for_vs2(&dae_scene.meshes)?;
+    ensure_unique_geometry_names_for_vs2(&scene.meshes)?;
 
-    let skel_data = convert_skeleton_from_dae(&dae_scene.bones, &dae_scene.meshes, config)?;
-    let mesh_data = convert_meshes_to_ssbh(&dae_scene.meshes, config)?;
+    let skel_data = convert_skeleton_from_dae(&scene.bones, &scene.meshes, config)?;
+    let mesh_data = convert_meshes_to_ssbh(&scene.meshes, config)?;
     let stats = compute_convert_stats(&mesh_data, skel_data.bones.len());
-    let modl_data = convert_model_to_ssbh(&dae_scene.meshes, config)?;
+    let modl_data = convert_model_to_ssbh(&scene.meshes, config)?;
 
     if config.write_nusktb {
         let skel_path = config
@@ -92,23 +93,51 @@ pub fn convert_dae_to_ssbh_files(
     Ok((converted_files, stats))
 }
 
+/// Convert DAE-backed scene to SSBH (alias for `convert_import_scene_to_ssbh_files`).
+pub fn convert_dae_to_ssbh_files(
+    dae_scene: &DaeScene,
+    config: &DaeConvertConfig,
+) -> Result<(ConvertedFiles, SsbhConvertStats)> {
+    convert_import_scene_to_ssbh_files(dae_scene, config)
+}
+
 /// Convert a DAE file to `.numdlb`, `.numshb`, and `.nusktb` in `config.output_directory`.
 pub fn convert_dae_file(
     dae_file_path: &Path,
     config: &DaeConvertConfig,
 ) -> Result<(ConvertedFiles, SsbhConvertStats)> {
-    let mut dae_scene = parse_dae_file(dae_file_path)?;
+    let mut scene = parse_dae_file(dae_file_path)?;
     if !config.include_geometry_names.is_empty() {
         let allowed: HashSet<String> = config.include_geometry_names.iter().cloned().collect();
-        dae_scene.meshes.retain(|m| !m.vertices.is_empty() && allowed.contains(&m.name));
-        if dae_scene.meshes.is_empty() {
+        scene.meshes.retain(|m| !m.vertices.is_empty() && allowed.contains(&m.name));
+        if scene.meshes.is_empty() {
             return Err(anyhow!(
                 "include_geometry_names left no geometries (check exact COLLADA geometry names)"
             ));
         }
     }
-    validate_dae_scene(&dae_scene)?;
-    let (converted_files, stats) = convert_dae_to_ssbh_files(&dae_scene, config)?;
+    validate_dae_scene(&scene)?;
+    let (converted_files, stats) = convert_import_scene_to_ssbh_files(&scene, config)?;
+    validate_converted_files(&converted_files)?;
+    Ok((converted_files, stats))
+}
+
+/// Filter, validate, and convert an in-memory import scene (e.g. after FBX parse).
+pub fn convert_import_scene_file(
+    mut scene: ImportScene,
+    config: &DaeConvertConfig,
+) -> Result<(ConvertedFiles, SsbhConvertStats)> {
+    if !config.include_geometry_names.is_empty() {
+        let allowed: HashSet<String> = config.include_geometry_names.iter().cloned().collect();
+        scene.meshes.retain(|m| !m.vertices.is_empty() && allowed.contains(&m.name));
+        if scene.meshes.is_empty() {
+            return Err(anyhow!(
+                "include_geometry_names left no geometries (check exact mesh names)"
+            ));
+        }
+    }
+    validate_dae_scene(&scene)?;
+    let (converted_files, stats) = convert_import_scene_to_ssbh_files(&scene, config)?;
     validate_converted_files(&converted_files)?;
     Ok((converted_files, stats))
 }

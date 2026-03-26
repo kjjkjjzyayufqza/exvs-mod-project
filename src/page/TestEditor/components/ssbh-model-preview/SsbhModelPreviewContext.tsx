@@ -27,6 +27,8 @@ import type {
   SsbhModelPreviewBundle,
 } from "./types";
 
+export type BoneTransformMode = "translate" | "rotate" | "scale";
+
 function buildRefToPathMap(bundle: SsbhModelPreviewBundle): Map<string, string> {
   const m = new Map<string, string>();
   for (const row of bundle.textureResolve) {
@@ -74,6 +76,14 @@ export type SsbhModelPreviewContextValue = {
   showAllMeshes: () => void;
   hideAllMeshes: () => void;
   vertexTriangleStats: { verts: number; tris: number };
+  bonePoseEnabled: boolean;
+  setBonePoseEnabled: (v: boolean) => void;
+  selectedBoneIndex: number | null;
+  setSelectedBoneIndex: (v: number | null) => void;
+  boneTransformMode: BoneTransformMode;
+  setBoneTransformMode: (v: BoneTransformMode) => void;
+  bonePoseResetNonce: number;
+  resetBonePose: () => void;
 };
 
 const SsbhModelPreviewContext = createContext<SsbhModelPreviewContextValue | null>(null);
@@ -115,6 +125,10 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
   );
   const [fitRequestId, setFitRequestId] = useState(0);
   const [modelLoadNonce, setModelLoadNonce] = useState(0);
+  const [bonePoseEnabled, setBonePoseEnabled] = useState(false);
+  const [selectedBoneIndex, setSelectedBoneIndex] = useState<number | null>(null);
+  const [boneTransformMode, setBoneTransformMode] = useState<BoneTransformMode>("translate");
+  const [bonePoseResetNonce, setBonePoseResetNonce] = useState(0);
 
   const skeletonGeometry = useMemo(() => {
     if (!bundle?.skel) return null;
@@ -136,17 +150,27 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
     if (!bundle) {
       setDraws([]);
       setDrawError(null);
+      setBonePoseEnabled(false);
+      setSelectedBoneIndex(null);
       return;
     }
     let created: BuiltMeshDraw[] = [];
     try {
-      created = buildDrawListFromBundle(bundle.modl as ModlDataJson, bundle.mesh as MeshDataJson);
+      const skelJson = bundle.skel ? (bundle.skel as SkelDataJson) : null;
+      created = buildDrawListFromBundle(
+        bundle.modl as ModlDataJson,
+        bundle.mesh as MeshDataJson,
+        skelJson,
+      );
       setDrawError(null);
     } catch (e) {
       setDrawError(String(e));
       created = [];
     }
     setDraws(created);
+    setBonePoseEnabled(false);
+    setSelectedBoneIndex(null);
+    setBonePoseResetNonce((n) => n + 1);
     return () => {
       created.forEach((d) => d.geometry.dispose());
     };
@@ -282,6 +306,10 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
     setFitRequestId((r) => r + 1);
   }, []);
 
+  const resetBonePose = useCallback(() => {
+    setBonePoseResetNonce((n) => n + 1);
+  }, []);
+
   const toggleVisible = useCallback((key: string, checked: boolean) => {
     setVisibleKeys((prev) => {
       const next = new Set(prev);
@@ -349,6 +377,14 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       showAllMeshes,
       hideAllMeshes,
       vertexTriangleStats,
+      bonePoseEnabled,
+      setBonePoseEnabled,
+      selectedBoneIndex,
+      setSelectedBoneIndex,
+      boneTransformMode,
+      setBoneTransformMode,
+      bonePoseResetNonce,
+      resetBonePose,
     }),
     [
       root,
@@ -378,6 +414,11 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       showAllMeshes,
       hideAllMeshes,
       vertexTriangleStats,
+      bonePoseEnabled,
+      selectedBoneIndex,
+      boneTransformMode,
+      bonePoseResetNonce,
+      resetBonePose,
     ],
   );
 

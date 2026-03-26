@@ -1,7 +1,7 @@
 import { BufferAttribute, BufferGeometry, Matrix4, Quaternion, Vector3 } from "three";
 import type { BoneJson, SkelDataJson } from "./types";
 
-function mat4FromSsbhColumns(transform: number[][]): Matrix4 {
+export function mat4FromSsbhColumns(transform: number[][]): Matrix4 {
   const m = new Matrix4();
   const flat = [
     transform[0]?.[0] ?? 0,
@@ -25,7 +25,7 @@ function mat4FromSsbhColumns(transform: number[][]): Matrix4 {
   return m;
 }
 
-function boneWorldMatrices(bones: BoneJson[]): Matrix4[] {
+export function boneWorldMatrices(bones: BoneJson[]): Matrix4[] {
   const world: (Matrix4 | undefined)[] = new Array(bones.length);
   const stack = new Set<number>();
 

@@ -6,8 +6,8 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::ssbh_dae::{
-    analyze_dae_path, convert_dae_file, export_ssbh_bundle_to_dae, ConvertedFiles, DaeAnalysisReport,
-    DaeConvertConfig, DaeExportConfig, UpAxisConversion,
+    analyze_dae_path, analyze_fbx_path, convert_dae_file, convert_fbx_file, export_ssbh_bundle_to_dae,
+    ConvertedFiles, DaeAnalysisReport, DaeConvertConfig, DaeExportConfig, UpAxisConversion,
 };
 use crate::ssbh_preview::load_model_preview_bundle;
 
@@ -54,6 +54,13 @@ impl SsbhDaeConvertResult {
 pub fn ssbh_analyze_dae(dae_path: String) -> Result<DaeAnalysisReport, String> {
     let p = PathBuf::from(dae_path.trim());
     analyze_dae_path(&p)
+}
+
+/// Preflight a `.fbx` file (same report shape as `ssbh_analyze_dae`).
+#[tauri::command]
+pub fn ssbh_analyze_fbx(fbx_path: String) -> Result<DaeAnalysisReport, String> {
+    let p = PathBuf::from(fbx_path.trim());
+    analyze_fbx_path(&p)
 }
 
 /// Export loaded model folder to COLLADA. Optional `include_mesh_objects`: `{ name, subindex }[]` — empty = all objects.
@@ -170,6 +177,86 @@ pub fn ssbh_convert_dae_to_ssbh(
         let log_body = format!(
             "ts_ms={started}\ndae_path={}\noutput_dir={}\nbase_filename={}\nscale_factor={}\nflip_uv={}\nup_axis={}\ninclude_geometry_names={:?}\nwrite_numdlb={write_numdlb}\nwrite_numshb={write_numshb}\nwrite_nusktb={write_nusktb}\n\nstats={}\nfiles:\n  numdlb={:?}\n  numshb={:?}\n  nusktb={:?}\n",
             dae.display(),
+            out_dir.display(),
+            base,
+            scale_factor,
+            flip_uv,
+            up_axis,
+            config.include_geometry_names,
+            serde_json::to_string(&stats).map_err(|e| e.to_string())?,
+            converted.numdlb_path,
+            converted.numshb_path,
+            converted.nusktb_path,
+        );
+        std::fs::write(&lp, log_body).map_err(|e| format!("Failed to write log file: {e}"))?;
+        log_path = Some(lp.to_string_lossy().to_string());
+    }
+
+    let result = SsbhDaeConvertResult::from_converted(&converted);
+    Ok(json!({
+        "ok": true,
+        "files": result,
+        "stats": stats,
+        "logPath": log_path,
+    }))
+}
+
+/// Convert FBX → SSBH. Same parameters as `ssbh_convert_dae_to_ssbh`; `include_geometry_names` matches FBX mesh names.
+#[tauri::command]
+pub fn ssbh_convert_fbx_to_ssbh(
+    fbx_path: String,
+    output_dir: String,
+    base_filename: String,
+    scale_factor: f32,
+    flip_uv: bool,
+    up_axis: String,
+    include_geometry_names: Vec<String>,
+    write_log: bool,
+    write_numdlb: bool,
+    write_numshb: bool,
+    write_nusktb: bool,
+) -> Result<serde_json::Value, String> {
+    if !scale_factor.is_finite() || scale_factor <= 0.0 {
+        return Err("scale_factor must be a finite positive number".to_string());
+    }
+    let base = base_filename.trim();
+    if base.is_empty() {
+        return Err("base_filename must not be empty".to_string());
+    }
+    let fbx = PathBuf::from(fbx_path.trim());
+    if !fbx.is_file() {
+        return Err(format!("FBX file not found: {}", fbx.display()));
+    }
+    let out_dir = PathBuf::from(output_dir.trim());
+    std::fs::create_dir_all(&out_dir)
+        .map_err(|e| format!("Failed to create output directory: {e}"))?;
+
+    let config = DaeConvertConfig {
+        output_directory: out_dir.clone(),
+        base_filename: base.to_string(),
+        scale_factor,
+        up_axis_conversion: parse_up_axis(&up_axis)?,
+        flip_uv,
+        include_geometry_names,
+        write_numdlb,
+        write_numshb,
+        write_nusktb,
+    };
+
+    let started = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_millis();
+
+    let (converted, stats) =
+        convert_fbx_file(&fbx, &config).map_err(|e| format!("FBX conversion: {e:#}"))?;
+
+    let mut log_path: Option<String> = None;
+    if write_log {
+        let lp = out_dir.join(format!("{base}_fbx_to_ssbh.log"));
+        let log_body = format!(
+            "ts_ms={started}\nfbx_path={}\noutput_dir={}\nbase_filename={}\nscale_factor={}\nflip_uv={}\nup_axis={}\ninclude_geometry_names={:?}\nwrite_numdlb={write_numdlb}\nwrite_numshb={write_numshb}\nwrite_nusktb={write_nusktb}\n\nstats={}\nfiles:\n  numdlb={:?}\n  numshb={:?}\n  nusktb={:?}\n",
+            fbx.display(),
             out_dir.display(),
             base,
             scale_factor,

@@ -31,6 +31,16 @@ export type MeshAttributeJson = {
   data: VectorDataJson;
 };
 
+export type VertexWeightJson = {
+  vertex_index: number;
+  vertex_weight: number;
+};
+
+export type BoneInfluenceJson = {
+  bone_name: string;
+  vertex_weights: VertexWeightJson[];
+};
+
 export type MeshObjectJson = {
   name: string;
   subindex: number;
@@ -39,6 +49,7 @@ export type MeshObjectJson = {
   positions: MeshAttributeJson[];
   normals: MeshAttributeJson[];
   texture_coordinates: MeshAttributeJson[];
+  bone_influences?: BoneInfluenceJson[];
 };
 
 export type MeshDataJson = {
@@ -84,6 +95,14 @@ export type MatlDataJson = {
   entries: MatlEntryJson[];
 };
 
+/** Per-corner skinning data aligned with expanded triangle vertices (same order as BufferGeometry position). */
+export type MeshSkinRuntime = {
+  boneCount: number;
+  bindPositions: Float32Array;
+  boneIndices: Uint16Array;
+  boneWeights: Float32Array;
+};
+
 export type BuiltMeshDraw = {
   key: string;
   label: string;
@@ -91,4 +110,5 @@ export type BuiltMeshDraw = {
   materialLabel: string;
   meshObjectName: string;
   meshObjectSubindex: number;
+  skin: MeshSkinRuntime | null;
 };

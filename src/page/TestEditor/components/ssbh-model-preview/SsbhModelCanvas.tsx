@@ -8,11 +8,21 @@ import {
   useTexture,
 } from "@react-three/drei";
 import { Suspense, useLayoutEffect, useState, useEffect, useRef, type RefObject } from "react";
-import { Color, DoubleSide, Group, LineBasicMaterial, PerspectiveCamera, SRGBColorSpace } from "three";
+import {
+  Color,
+  DoubleSide,
+  Group,
+  LineBasicMaterial,
+  Mesh,
+  PerspectiveCamera,
+  SRGBColorSpace,
+} from "three";
 import type { BufferGeometry } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { BonePreviewRig, resetSkinnedMeshesToBindPose } from "./BonePreviewRig";
 import { fitCameraToObject } from "./cameraFit";
-import type { BuiltMeshDraw } from "./types";
+import type { BoneTransformMode } from "./SsbhModelPreviewContext";
+import type { BuiltMeshDraw, SkelDataJson } from "./types";
 
 /** Finite ground grid plane size in world units (not infinite). */
 const GRID_PLANE_WIDTH = 200;
@@ -38,6 +48,11 @@ type SsbhModelCanvasProps = {
   directionalIntensity: number;
   /** Increment to request a one-shot camera fit (user Reset view or new model). */
   fitRequestId: number;
+  skel: SkelDataJson | null;
+  bonePoseEnabled: boolean;
+  selectedBoneIndex: number | null;
+  boneTransformMode: BoneTransformMode;
+  bonePoseResetNonce: number;
 };
 
 function CameraFit({
@@ -66,12 +81,16 @@ type DrawMeshProps = {
   draw: BuiltMeshDraw;
   visible: boolean;
   wireframe: boolean;
+  /** When true, mesh does not participate in raycasting so TransformControls can receive pointer events. */
+  ignoreRaycast: boolean;
 };
 
-function DrawMeshUntextured({ draw, visible, wireframe }: DrawMeshProps) {
+const noopMeshRaycast: Mesh["raycast"] = () => {};
+
+function DrawMeshUntextured({ draw, visible, wireframe, ignoreRaycast }: DrawMeshProps) {
   if (!visible) return null;
   return (
-    <mesh geometry={draw.geometry}>
+    <mesh geometry={draw.geometry} raycast={ignoreRaycast ? noopMeshRaycast : undefined}>
       <meshStandardMaterial
         color={new Color("#b8bec7")}
         roughness={0.88}
@@ -85,7 +104,13 @@ function DrawMeshUntextured({ draw, visible, wireframe }: DrawMeshProps) {
 
 type DrawMeshTexturedProps = DrawMeshProps & { dataUrl: string };
 
-function DrawMeshTextured({ draw, dataUrl, visible, wireframe }: DrawMeshTexturedProps) {
+function DrawMeshTextured({
+  draw,
+  dataUrl,
+  visible,
+  wireframe,
+  ignoreRaycast,
+}: DrawMeshTexturedProps) {
   const map = useTexture(dataUrl);
   useLayoutEffect(() => {
     map.colorSpace = SRGBColorSpace;
@@ -95,7 +120,7 @@ function DrawMeshTextured({ draw, dataUrl, visible, wireframe }: DrawMeshTexture
   if (!visible) return null;
 
   return (
-    <mesh geometry={draw.geometry}>
+    <mesh geometry={draw.geometry} raycast={ignoreRaycast ? noopMeshRaycast : undefined}>
       <meshStandardMaterial
         map={map}
         roughness={0.62}
@@ -112,7 +137,12 @@ function DrawMeshes({
   textureDataUrlByDrawKey,
   visibleKeys,
   wireframe,
-}: Pick<SsbhModelCanvasProps, "draws" | "textureDataUrlByDrawKey" | "visibleKeys" | "wireframe">) {
+  bonePoseEnabled,
+}: Pick<
+  SsbhModelCanvasProps,
+  "draws" | "textureDataUrlByDrawKey" | "visibleKeys" | "wireframe" | "bonePoseEnabled"
+>) {
+  const ignoreRaycast = bonePoseEnabled;
   return (
     <>
       {draws.map((d) => {
@@ -125,9 +155,15 @@ function DrawMeshes({
                 dataUrl={url}
                 visible={visibleKeys.has(d.key)}
                 wireframe={wireframe}
+                ignoreRaycast={ignoreRaycast}
               />
             ) : (
-              <DrawMeshUntextured draw={d} visible={visibleKeys.has(d.key)} wireframe={wireframe} />
+              <DrawMeshUntextured
+                draw={d}
+                visible={visibleKeys.has(d.key)}
+                wireframe={wireframe}
+                ignoreRaycast={ignoreRaycast}
+              />
             )}
           </Suspense>
         );
@@ -173,9 +209,25 @@ function Scene({
   ambientIntensity,
   directionalIntensity,
   fitRequestId,
+  skel,
+  bonePoseEnabled,
+  selectedBoneIndex,
+  boneTransformMode,
+  bonePoseResetNonce,
 }: SsbhModelCanvasProps) {
   const modelRootRef = useRef<Group>(null);
   const controlsRef = useRef<OrbitControlsImpl>(null);
+  const prevBonePose = useRef(bonePoseEnabled);
+
+  useEffect(() => {
+    if (prevBonePose.current && !bonePoseEnabled) {
+      resetSkinnedMeshesToBindPose(draws);
+    }
+    prevBonePose.current = bonePoseEnabled;
+  }, [bonePoseEnabled, draws]);
+
+  const showStaticSkeleton = showSkeleton && !bonePoseEnabled && Boolean(skeletonGeometry);
+  const showRig = bonePoseEnabled && skel !== null && skel.bones.length > 0;
 
   return (
     <>
@@ -184,13 +236,25 @@ function Scene({
       <directionalLight position={[8, 14, 6]} intensity={directionalIntensity} />
 
       <group ref={modelRootRef}>
+        {showRig ? (
+          <BonePreviewRig
+            skel={skel!}
+            draws={draws}
+            selectedBoneIndex={selectedBoneIndex}
+            transformMode={boneTransformMode}
+            poseResetNonce={bonePoseResetNonce}
+            showSkeletonLines={showSkeleton}
+            orbitControlsRef={controlsRef}
+          />
+        ) : null}
         <DrawMeshes
           draws={draws}
           textureDataUrlByDrawKey={textureDataUrlByDrawKey}
           visibleKeys={visibleKeys}
           wireframe={wireframe}
+          bonePoseEnabled={bonePoseEnabled}
         />
-        {showSkeleton && skeletonGeometry ? <SkeletonLines geometry={skeletonGeometry} /> : null}
+        {showStaticSkeleton && skeletonGeometry ? <SkeletonLines geometry={skeletonGeometry} /> : null}
       </group>
 
       <OrbitControls
