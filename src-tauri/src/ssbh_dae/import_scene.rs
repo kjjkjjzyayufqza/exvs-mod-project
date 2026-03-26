@@ -27,6 +27,8 @@ pub struct ImportMesh {
     pub normals: Vec<[f32; 3]>,
     pub uvs: Vec<[f32; 2]>,
     pub indices: Vec<u32>,
+    /// Filled by DAE/FBX importers; reserved for future material binding in the SSBH pipeline.
+    #[allow(dead_code)]
     pub material_name: Option<String>,
     pub bone_influences: Vec<ImportBoneInfluence>,
 }
@@ -48,10 +50,14 @@ pub struct ImportBone {
     pub name: String,
     pub parent_index: Option<usize>,
     pub transform: [[f32; 4]; 4],
+    /// Present when the source file provides bind-pose data; reserved for skin export refinements.
+    #[allow(dead_code)]
     pub inverse_bind_matrix: Option<[[f32; 4]; 4]>,
 }
 
+/// Parsed from source files for future matl / texture export; not yet consumed by `convert_import_scene_to_ssbh_files`.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct ImportMaterial {
     pub name: String,
     pub diffuse_color: [f32; 4],

@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { SsbhModelCanvas } from "./SsbhModelCanvas";
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
+import { SsbhModelPreviewLoadingOverlay } from "./SsbhModelPreviewLoadingOverlay";
 import type { SkelDataJson } from "./types";
 
 export function SsbhModelPreviewViewport() {
@@ -28,7 +29,16 @@ export function SsbhModelPreviewViewport() {
         >
           Reset view
         </Button>
-        {p.loading ? <span className="text-muted-foreground">Loading…</span> : null}
+        {p.loading ? (
+          <span className="text-muted-foreground">Loading model…</span>
+        ) : p.textureDecoding && p.textureDecodeProgress ? (
+          <span
+            className="max-w-[min(100%,280px)] truncate text-muted-foreground tabular-nums"
+            title={p.textureDecodeProgress.currentLabel ?? undefined}
+          >
+            Decoding textures {p.textureDecodeProgress.done}/{p.textureDecodeProgress.total}
+          </span>
+        ) : null}
         {p.loadError ? <span className="text-destructive max-w-[240px] truncate">{p.loadError}</span> : null}
         {p.drawError ? <span className="text-destructive max-w-[240px] truncate">{p.drawError}</span> : null}
       </div>
@@ -40,35 +50,38 @@ export function SsbhModelPreviewViewport() {
       ) : null}
 
       <div className="min-h-0 flex-1 flex flex-col px-1 pb-1">
-        <SsbhModelCanvas
-          draws={p.draws}
-          drawMaterialDataUrlsByDrawKey={p.drawMaterialDataUrlsByDrawKey}
-          drawMaterialBindingsByDrawKey={p.drawMaterialBindingsByDrawKey}
-          materialDebugViewMode={p.materialDebugViewMode}
-          textureFlipY={p.textureFlipY}
-          uvFlipU={p.uvFlipU}
-          uvFlipV={p.uvFlipV}
-          visibleKeys={p.visibleKeys}
-          wireframe={p.wireframe}
-          showSkeleton={p.showSkeleton && Boolean(p.bundle?.skel)}
-          skeletonGeometry={p.skeletonGeometry}
-          showGrid={p.showGrid}
-          showAxesGizmo={p.showAxesGizmo}
-          showStats={p.showStats}
-          background={p.background}
-          ambientIntensity={p.ambientIntensity}
-          directionalIntensity={p.directionalIntensity}
-          directionalX={p.directionalX}
-          directionalY={p.directionalY}
-          directionalZ={p.directionalZ}
-          normalMapEnabled={p.normalMapEnabled}
-          fitRequestId={p.fitRequestId}
-          skel={p.bundle?.skel ? (p.bundle.skel as SkelDataJson) : null}
-          bonePoseEnabled={p.bonePoseEnabled}
-          selectedBoneIndex={p.selectedBoneIndex}
-          boneTransformMode={p.boneTransformMode}
-          bonePoseResetNonce={p.bonePoseResetNonce}
-        />
+        <div className="relative min-h-0 flex-1">
+          <SsbhModelCanvas
+            draws={p.draws}
+            drawMaterialDataUrlsByDrawKey={p.drawMaterialDataUrlsByDrawKey}
+            drawMaterialBindingsByDrawKey={p.drawMaterialBindingsByDrawKey}
+            materialDebugViewMode={p.materialDebugViewMode}
+            textureFlipY={p.textureFlipY}
+            uvFlipU={p.uvFlipU}
+            uvFlipV={p.uvFlipV}
+            visibleKeys={p.visibleKeys}
+            wireframe={p.wireframe}
+            showSkeleton={p.showSkeleton && Boolean(p.bundle?.skel)}
+            skeletonGeometry={p.skeletonGeometry}
+            showGrid={p.showGrid}
+            showAxesGizmo={p.showAxesGizmo}
+            showStats={p.showStats}
+            background={p.background}
+            ambientIntensity={p.ambientIntensity}
+            directionalIntensity={p.directionalIntensity}
+            directionalX={p.directionalX}
+            directionalY={p.directionalY}
+            directionalZ={p.directionalZ}
+            normalMapEnabled={p.normalMapEnabled}
+            fitRequestId={p.fitRequestId}
+            skel={p.bundle?.skel ? (p.bundle.skel as SkelDataJson) : null}
+            bonePoseEnabled={p.bonePoseEnabled}
+            selectedBoneIndex={p.selectedBoneIndex}
+            boneTransformMode={p.boneTransformMode}
+            bonePoseResetNonce={p.bonePoseResetNonce}
+          />
+          <SsbhModelPreviewLoadingOverlay readingBundle={p.loading} textureDecode={p.textureDecodeProgress} />
+        </div>
         <p className="mt-1.5 text-[10px] text-muted-foreground">
           Left-drag: orbit · Scroll: zoom (does not scroll this page) · Right-drag: pan. Use{" "}
           <span className="font-medium text-foreground">Reset view</span> to fit the model again. Viewport options and

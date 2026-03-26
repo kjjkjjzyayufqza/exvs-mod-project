@@ -325,6 +325,28 @@ export const TEXTURE_SLOT_TO_PATH_FIELD: Record<TexturePreviewSlotKey, keyof Res
   cubeMap: "cubePath",
 };
 
+/**
+ * Counts nutexb decode operations for preview (one per mesh draw × enabled slot with a resolved path).
+ * Matches the decode loop in `SsbhModelPreviewProvider` texture loading.
+ */
+export function countTextureDecodeSteps(
+  draws: BuiltMeshDraw[],
+  lookup: Map<string, MatlEntryJson>,
+  refMap: Map<string, string>,
+  textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>,
+): number {
+  let n = 0;
+  for (const d of draws) {
+    const paths = resolveMaterialTexturePaths(d.materialLabel, lookup, refMap);
+    for (const { key } of TEXTURE_PREVIEW_SLOT_META) {
+      if (!textureSlotLoadEnabled[key]) continue;
+      const field = TEXTURE_SLOT_TO_PATH_FIELD[key];
+      if (paths[field]) n += 1;
+    }
+  }
+  return n;
+}
+
 export type ShaderFamily = "vsngCharaBasic" | "vsngCharaSparkle" | "generic";
 
 export type ResolvedTextureSampling = {

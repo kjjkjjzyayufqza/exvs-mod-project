@@ -20,9 +20,12 @@ import type { BufferGeometry } from "three";
 import {
   buildDrawListFromBundle,
   buildMatlLookup,
+  countTextureDecodeSteps,
   createDefaultTextureSlotLoadEnabled,
   resolveMaterialBinding,
   resolveMaterialTexturePaths,
+  TEXTURE_PREVIEW_SLOT_META,
+  TEXTURE_SLOT_TO_PATH_FIELD,
   type DrawMaterialDataUrls,
   type ResolvedMaterialBinding,
   type TexturePreviewSlotKey,
@@ -46,6 +49,19 @@ export type MaterialDebugViewMode =
   | "emissive"
   | "reflection";
 
+/** Progress while decoding .nutexb → PNG for the WebGL preview (per slot step, deduped by disk path inside the loop). */
+export type SsbhModelPreviewTextureDecodeProgress = {
+  done: number;
+  total: number;
+  currentLabel: string | null;
+};
+
+function fileBasename(path: string): string {
+  const p = path.replace(/\\/g, "/");
+  const seg = p.split("/").filter((x) => x.length > 0).pop();
+  return seg ?? path;
+}
+
 function buildRefToPathMap(bundle: SsbhModelPreviewBundle): Map<string, string> {
   const m = new Map<string, string>();
   for (const row of bundle.textureResolve) {
@@ -62,7 +78,14 @@ export type SsbhModelPreviewContextValue = {
   draws: BuiltMeshDraw[];
   drawError: string | null;
   loading: boolean;
+  /** True while reading bundle from disk (Rust). */
   loadError: string | null;
+  /** True while .nutexb textures are being decoded for preview. */
+  textureDecoding: boolean;
+  /** Null when idle or finished; set while decoding with step counts and last file label. */
+  textureDecodeProgress: SsbhModelPreviewTextureDecodeProgress | null;
+  /** Shorthand: `loading || textureDecoding` — use to block actions that conflict with I/O. */
+  previewBusy: boolean;
   visibleKeys: ReadonlySet<string>;
   wireframe: boolean;
   setWireframe: (v: boolean) => void;
@@ -178,6 +201,7 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
   const [uvFlipU, setUvFlipU] = useState(false);
   const [uvFlipV, setUvFlipV] = useState(false);
   const [textureSlotLoadEnabled, setTextureSlotLoadEnabledState] = useState(createDefaultTextureSlotLoadEnabled);
+  const [textureDecodeProgress, setTextureDecodeProgress] = useState<SsbhModelPreviewTextureDecodeProgress | null>(null);
   const [fitRequestId, setFitRequestId] = useState(0);
   const [modelLoadNonce, setModelLoadNonce] = useState(0);
   const [bonePoseEnabled, setBonePoseEnabled] = useState(false);
@@ -244,6 +268,7 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
     if (!bundle || draws.length === 0) {
       setDrawMaterialDataUrlsByDrawKey(new Map());
       setDrawMaterialBindingsByDrawKey(new Map());
+      setTextureDecodeProgress(null);
       return;
     }
     let cancelled = false;
@@ -251,16 +276,60 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
     const lookup = buildMatlLookup(matl);
     const refMap = buildRefToPathMap(bundle);
 
+    const totalSteps = countTextureDecodeSteps(draws, lookup, refMap, textureSlotLoadEnabled);
+    if (totalSteps === 0) {
+      const nextBindings = new Map<string, ResolvedMaterialBinding>();
+      const next = new Map<string, DrawMaterialDataUrls>();
+      for (const d of draws) {
+        nextBindings.set(d.key, resolveMaterialBinding(d.materialLabel, lookup, refMap));
+        next.set(d.key, {
+          map: null,
+          normalMap: null,
+          roughnessMap: null,
+          metalnessMap: null,
+          emissiveMap: null,
+          aoMap: null,
+          cubeMap: null,
+        });
+      }
+      setDrawMaterialBindingsByDrawKey(nextBindings);
+      setDrawMaterialDataUrlsByDrawKey(next);
+      setTextureDecodeProgress(null);
+      return;
+    }
+
+    setTextureDecodeProgress({ done: 0, total: totalSteps, currentLabel: null });
+
     (async () => {
       const next = new Map<string, DrawMaterialDataUrls>();
       const nextBindings = new Map<string, ResolvedMaterialBinding>();
       const failedTextures: string[] = [];
       const pathToDataUrl = new Map<string, string>();
 
-      const decodePath = async (diskPath: string | null): Promise<string | null> => {
+      const bumpDone = () => {
+        if (cancelled) return;
+        setTextureDecodeProgress((prev) =>
+          prev ? { ...prev, done: prev.done + 1 } : null,
+        );
+      };
+
+      const decodePath = async (diskPath: string | null, slotShort: string): Promise<string | null> => {
         if (!diskPath) return null;
+        if (!cancelled) {
+          setTextureDecodeProgress((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  currentLabel: `${fileBasename(diskPath)} · ${slotShort}`,
+                }
+              : null,
+          );
+        }
         const cached = pathToDataUrl.get(diskPath);
-        if (cached) return cached;
+        if (cached) {
+          bumpDone();
+          return cached;
+        }
         try {
           const b64 = await invoke<string>("nutexb_png_base64", { inputPath: diskPath });
           if (cancelled) return null;
@@ -270,6 +339,8 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
         } catch (e) {
           failedTextures.push(`${diskPath}: ${String(e)}`);
           return null;
+        } finally {
+          bumpDone();
         }
       };
 
@@ -277,34 +348,35 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
         const binding = resolveMaterialBinding(d.materialLabel, lookup, refMap);
         nextBindings.set(d.key, binding);
         const paths = resolveMaterialTexturePaths(d.materialLabel, lookup, refMap);
-        if (cancelled) return;
-        const map = textureSlotLoadEnabled.map ? await decodePath(paths.mapPath) : null;
-        if (cancelled) return;
-        const normalMap = textureSlotLoadEnabled.normalMap ? await decodePath(paths.normalPath) : null;
-        if (cancelled) return;
-        const roughnessMap = textureSlotLoadEnabled.roughnessMap ? await decodePath(paths.roughnessPath) : null;
-        if (cancelled) return;
-        const metalnessMap = textureSlotLoadEnabled.metalnessMap ? await decodePath(paths.metalnessPath) : null;
-        if (cancelled) return;
-        const emissiveMap = textureSlotLoadEnabled.emissiveMap ? await decodePath(paths.emissivePath) : null;
-        if (cancelled) return;
-        const aoMap = textureSlotLoadEnabled.aoMap ? await decodePath(paths.aoPath) : null;
-        if (cancelled) return;
-        const cubeMap = textureSlotLoadEnabled.cubeMap ? await decodePath(paths.cubePath) : null;
-        if (cancelled) return;
-        next.set(d.key, {
-          map,
-          normalMap,
-          roughnessMap,
-          metalnessMap,
-          emissiveMap,
-          aoMap,
-          cubeMap,
-        });
+        const urls: DrawMaterialDataUrls = {
+          map: null,
+          normalMap: null,
+          roughnessMap: null,
+          metalnessMap: null,
+          emissiveMap: null,
+          aoMap: null,
+          cubeMap: null,
+        };
+        for (const { key, short } of TEXTURE_PREVIEW_SLOT_META) {
+          if (cancelled) return;
+          const field = TEXTURE_SLOT_TO_PATH_FIELD[key];
+          const pathVal = paths[field];
+          if (!textureSlotLoadEnabled[key]) {
+            urls[key] = null;
+            continue;
+          }
+          if (!pathVal) {
+            urls[key] = null;
+            continue;
+          }
+          urls[key] = await decodePath(pathVal, short);
+        }
+        next.set(d.key, urls);
       }
       if (!cancelled) {
         setDrawMaterialDataUrlsByDrawKey(next);
         setDrawMaterialBindingsByDrawKey(nextBindings);
+        setTextureDecodeProgress(null);
         if (failedTextures.length > 0) {
           const preview = failedTextures.slice(0, 4).join("\n");
           const more =
@@ -336,6 +408,7 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
   const loadAt = useCallback(async (path: string) => {
     setLoading(true);
     setLoadError(null);
+    setTextureDecodeProgress(null);
     try {
       const b = await invoke<SsbhModelPreviewBundle>("ssbh_load_model_preview", { rootPath: path });
       startTransition(() => setBundle(b));
@@ -456,6 +529,15 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
     return { verts, tris };
   }, [draws]);
 
+  const textureDecoding = useMemo(
+    () =>
+      textureDecodeProgress !== null &&
+      textureDecodeProgress.done < textureDecodeProgress.total,
+    [textureDecodeProgress],
+  );
+
+  const previewBusy = loading || textureDecoding;
+
   const value = useMemo<SsbhModelPreviewContextValue>(
     () => ({
       workspaceRoot: root,
@@ -464,6 +546,9 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       drawError,
       loading,
       loadError,
+      textureDecoding,
+      textureDecodeProgress,
+      previewBusy,
       visibleKeys,
       wireframe,
       setWireframe,
@@ -531,6 +616,9 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       drawError,
       loading,
       loadError,
+      textureDecoding,
+      textureDecodeProgress,
+      previewBusy,
       visibleKeys,
       wireframe,
       showSkeleton,

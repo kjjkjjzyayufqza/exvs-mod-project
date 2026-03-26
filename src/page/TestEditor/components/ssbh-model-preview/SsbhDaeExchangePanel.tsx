@@ -337,7 +337,7 @@ export function SsbhDaeExchangePanel() {
               className={btnPrimarySm}
               disabled={
                 !p.bundle?.rootFolder ||
-                p.loading ||
+                p.previewBusy ||
                 busy !== null ||
                 (exportSubset && p.draws.length === 0)
               }
@@ -673,7 +673,7 @@ export function SsbhDaeExchangePanel() {
             type="button"
             size="sm"
             className="h-8 w-full text-[10px] font-medium uppercase tracking-wide"
-            disabled={!importSourcePath || p.loading || busy !== null}
+            disabled={!importSourcePath || p.previewBusy || busy !== null}
             onClick={() => {
               void (async () => {
                 if (!importSourcePath) return;

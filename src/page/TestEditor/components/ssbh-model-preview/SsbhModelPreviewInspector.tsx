@@ -50,6 +50,25 @@ export function SsbhModelPreviewInspector() {
 
   return (
     <div className="-mx-4 flex flex-col border-t bg-background/50">
+      {p.previewBusy ? (
+        <div
+          className="border-b border-border/60 bg-muted/25 px-3 py-1.5 text-[10px] text-muted-foreground"
+          role="status"
+          aria-live="polite"
+        >
+          {p.loading ? (
+            <span>Loading model from disk…</span>
+          ) : (
+            <span
+              className="block truncate"
+              title={p.textureDecodeProgress?.currentLabel ?? undefined}
+            >
+              Decoding textures ({p.textureDecodeProgress?.done ?? 0}/{p.textureDecodeProgress?.total ?? 0}
+              {p.textureDecodeProgress?.currentLabel ? ` — ${p.textureDecodeProgress.currentLabel}` : ""})
+            </span>
+          )}
+        </div>
+      ) : null}
       <MayaSection title="Display Settings" icon={<Settings2 className="h-3.5 w-3.5" />}>
         <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
           <div className="flex items-center justify-between gap-2">

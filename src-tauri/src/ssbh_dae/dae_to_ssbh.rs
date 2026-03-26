@@ -117,7 +117,7 @@ pub fn convert_dae_file(
         }
     }
     validate_dae_scene(&scene)?;
-    let (converted_files, stats) = convert_import_scene_to_ssbh_files(&scene, config)?;
+    let (converted_files, stats) = convert_dae_to_ssbh_files(&scene, config)?;
     validate_converted_files(&converted_files)?;
     Ok((converted_files, stats))
 }
