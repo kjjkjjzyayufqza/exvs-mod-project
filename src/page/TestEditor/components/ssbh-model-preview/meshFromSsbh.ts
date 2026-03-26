@@ -1,5 +1,6 @@
 import { BufferAttribute, BufferGeometry } from "three";
 import type {
+  BuiltMeshDraw,
   MatlDataJson,
   MatlEntryJson,
   MeshDataJson,
@@ -8,8 +9,11 @@ import type {
   ModlDataJson,
   ModlEntryJson,
   SkelDataJson,
+  TextureParamJson,
+  TextureWrapModeJson,
   VectorDataJson,
-  BuiltMeshDraw,
+  UvTransformJson,
+  SamplerDataJson,
 } from "./types";
 
 function vectorDataToVec3(data: VectorDataJson | undefined): [number, number, number][] | null {
@@ -35,16 +39,645 @@ function normalizeParamId(paramId: unknown): string {
   return "";
 }
 
-function pickAlbedoTextureRef(entry: MatlEntryJson | undefined): string | null {
+/**
+ * Matches ssbh_wgpu `material_uniforms_bind_group`: Texture2/Texture7/Texture8 use cube dimensions.
+ * Preview skips cube paths for 2D MeshStandardMaterial slots.
+ */
+function isLikelyCubeMapTextureRef(ref: string): boolean {
+  const lower = ref.toLowerCase();
+  return lower.includes("cubemap") || lower.includes("_cube") || lower.includes("cube_map");
+}
+
+/** Basename (last path segment) lowercased for heuristics. */
+function textureRefStemLower(ref: string): string {
+  const s = ref.replace(/\\/g, "/").trim();
+  const seg = s.split("/").pop() ?? s;
+  return seg.toLowerCase();
+}
+
+/**
+ * Packed PBR / masks (roughness, metal, normal, AO) must not drive MeshStandard `map` (base color).
+ * Game paths often contain tokens like `roughnessandmask` while albedo uses `col`, `dif`, etc.
+ */
+function isLikelyNonAlbedoTextureRef(ref: string): boolean {
+  const b = textureRefStemLower(ref);
+  const tokens = [
+    "roughnessandmask",
+    "roughness",
+    "andmask",
+    "_mask",
+    "metalness",
+    "metallic",
+    "_orm",
+    "ormpack",
+    "normalmap",
+    "_normal",
+    "normal",
+    "_nor",
+    "_nrm",
+    "nor_",
+    "nrm_",
+    "bump",
+    "specular",
+    "_spec",
+    "spec_",
+    "occlusion",
+    "ambientocclusion",
+    "_ao",
+    "aomap",
+    "height",
+    "displace",
+    "prm",
+    "mrao",
+    "mra",
+  ];
+  return tokens.some((t) => b.includes(t));
+}
+
+/** Prefer when choosing among ambiguous slots (second pass). */
+function isLikelyAlbedoTextureRef(ref: string): boolean {
+  const b = textureRefStemLower(ref);
+  const tokens = [
+    "albedo",
+    "basecolor",
+    "base_color",
+    "diffuse",
+    "_dif",
+    "_col",
+    "color",
+    "tex_",
+    "_tex",
+    "decal",
+  ];
+  return tokens.some((t) => b.includes(t));
+}
+
+function textureRefForParam(entry: MatlEntryJson | undefined, paramId: string): string | null {
   if (!entry) return null;
-  const priority = ["Texture0", "Texture4", "Texture6", "Texture7"];
-  for (const id of priority) {
-    const tex = entry.textures.find((t) => normalizeParamId(t.param_id) === id);
-    const data = tex?.data?.trim();
-    if (data) return data;
+  const tex = [...(entry.textures ?? []), ...(entry.textures2 ?? [])]
+    .find((t) => normalizeParamId(t.param_id) === paramId);
+  const data = tex?.data?.trim();
+  return data || null;
+}
+
+function iterTextureRefs(entry: MatlEntryJson | undefined): { paramId: string; ref: string }[] {
+  const textures = [...(entry?.textures ?? []), ...(entry?.textures2 ?? [])];
+  if (!textures.length) return [];
+  return textures
+    .map((t) => ({
+      paramId: normalizeParamId(t.param_id),
+      ref: (t.data ?? "").trim(),
+    }))
+    .filter((x) => x.ref.length > 0);
+}
+
+/**
+ * EXVS-style PBR: filenames use tokens like `_pbr1_basecolor`, `_pbr1_normal`, `_pbr1_metallic`.
+ * Matl may use semantic ParamIds (DiffuseMap, NormalMap, …) instead of only Texture0–Texture7.
+ */
+function pickExvsPbrTextureRefs(entry: MatlEntryJson | undefined): {
+  base: string | null;
+  normal: string | null;
+  roughness: string | null;
+  roughnessMask: string | null;
+  metallic: string | null;
+  emissive: string | null;
+  ao: string | null;
+} {
+  const rows = iterTextureRefs(entry);
+  const stem = (r: string) => textureRefStemLower(r);
+  const find = (pred: (b: string) => boolean): string | null => {
+    for (const { ref } of rows) {
+      if (pred(stem(ref))) return ref;
+    }
+    return null;
+  };
+  const basePbr1 = (): string | null => {
+    for (const { ref } of rows) {
+      const b = stem(ref);
+      if (b.includes("pbr1_basecolor")) return ref;
+    }
+    return null;
+  };
+  const normalPbr1 = (): string | null => {
+    for (const { ref } of rows) {
+      const b = stem(ref);
+      if (b.includes("pbr1_normal")) return ref;
+    }
+    return null;
+  };
+  return {
+    base:
+      basePbr1() ??
+      find(
+        (b) =>
+          (b.includes("basecolor") || b.includes("base_color") || b.includes("_albedo")) &&
+          !b.includes("roughnessandmask"),
+      ),
+    normal:
+      normalPbr1() ??
+      find(
+        (b) =>
+          (b.includes("normal") || b.includes("_nor") || b.includes("_nrm")) &&
+          !b.includes("roughnessandmask"),
+      ),
+    roughness: find((b) => b.includes("roughness") && !b.includes("roughnessandmask")),
+    roughnessMask: find((b) => b.includes("roughnessandmask")),
+    metallic: find((b) => b.includes("metallic") || b.includes("metalness")),
+    emissive: find((b) => b.includes("emissive") || b.includes("emission")),
+    ao: find(
+      (b) =>
+        b.includes("ambientocclusion") ||
+        (b.includes("occlusion") && !b.includes("roughnessandmask")) ||
+        b.endsWith("_ao"),
+    ),
+  };
+}
+
+/**
+ * Base color: prefer Texture0, then Texture1/Texture3 before Texture4/Texture5 — many titles put
+ * ORM / roughness+mask in Texture4 while albedo stays in Texture0.
+ */
+function pickBaseColorTextureRef(entry: MatlEntryJson | undefined): string | null {
+  if (!entry) return null;
+  const order = ["Texture0", "Texture1", "Texture3", "Texture4", "Texture5"];
+  for (const id of order) {
+    const data = textureRefForParam(entry, id);
+    if (data && !isLikelyCubeMapTextureRef(data) && !isLikelyNonAlbedoTextureRef(data)) {
+      return data;
+    }
   }
-  const any = entry.textures.find((t) => t.data?.trim());
+  for (const id of order) {
+    const data = textureRefForParam(entry, id);
+    if (data && !isLikelyCubeMapTextureRef(data) && isLikelyAlbedoTextureRef(data)) {
+      return data;
+    }
+  }
+  for (const id of order) {
+    const data = textureRefForParam(entry, id);
+    if (data && !isLikelyCubeMapTextureRef(data)) {
+      return data;
+    }
+  }
+  const any = entry.textures.find((t) => {
+    const d = t.data?.trim();
+    if (!d) return false;
+    const id = normalizeParamId(t.param_id);
+    if (id === "Texture6" || id === "Texture2" || id === "Texture7" || id === "Texture8") return false;
+    return !isLikelyCubeMapTextureRef(d);
+  });
   return any?.data?.trim() ?? null;
+}
+
+/** Often tangent normals (ssbh_wgpu binds Texture6 as 2D). */
+function pickNormalTextureRef(entry: MatlEntryJson | undefined): string | null {
+  const data = textureRefForParam(entry, "Texture6");
+  if (!data || isLikelyCubeMapTextureRef(data)) return null;
+  return data;
+}
+
+/**
+ * Roughness / packed masks: Texture5 or Texture4 when filename indicates non-albedo, or Texture4 when
+ * base color clearly comes from Texture0 (common ORM in Texture4).
+ */
+function pickRoughnessTextureRef(
+  entry: MatlEntryJson | undefined,
+  baseColorRef: string | null,
+): string | null {
+  if (!entry) return null;
+  for (const id of ["Texture5", "Texture4"] as const) {
+    const r = textureRefForParam(entry, id);
+    if (!r || isLikelyCubeMapTextureRef(r) || r === baseColorRef) continue;
+    if (isLikelyNonAlbedoTextureRef(r)) {
+      return r;
+    }
+  }
+  const t0 = textureRefForParam(entry, "Texture0");
+  const t4 = textureRefForParam(entry, "Texture4");
+  if (
+    baseColorRef &&
+    t0 &&
+    baseColorRef === t0 &&
+    t4 &&
+    !isLikelyCubeMapTextureRef(t4) &&
+    t4 !== baseColorRef &&
+    !isLikelyAlbedoTextureRef(t4)
+  ) {
+    return t4;
+  }
+  return null;
+}
+
+export type ResolvedMaterialTexturePaths = {
+  mapPath: string | null;
+  normalPath: string | null;
+  roughnessPath: string | null;
+  metalnessPath: string | null;
+  emissivePath: string | null;
+  aoPath: string | null;
+  cubePath: string | null;
+};
+
+/** Decoded PNG data URLs for Three.js (map/emissive sRGB; others linear). */
+export type DrawMaterialDataUrls = {
+  map: string | null;
+  normalMap: string | null;
+  roughnessMap: string | null;
+  metalnessMap: string | null;
+  emissiveMap: string | null;
+  aoMap: string | null;
+  cubeMap: string | null;
+};
+
+export type TexturePreviewSlotKey = keyof DrawMaterialDataUrls;
+
+/** UI labels for preview texture slot toggles (English). */
+export const TEXTURE_PREVIEW_SLOT_META: { key: TexturePreviewSlotKey; label: string; short: string }[] = [
+  { key: "map", label: "Base color (albedo)", short: "Map" },
+  { key: "normalMap", label: "Normal map", short: "Normal" },
+  { key: "roughnessMap", label: "Roughness", short: "Roughness" },
+  { key: "metalnessMap", label: "Metalness", short: "Metalness" },
+  { key: "emissiveMap", label: "Emissive", short: "Emissive" },
+  { key: "aoMap", label: "Ambient occlusion", short: "AO" },
+  { key: "cubeMap", label: "Environment / cube", short: "Cube" },
+];
+
+export function createDefaultTextureSlotLoadEnabled(): Record<TexturePreviewSlotKey, boolean> {
+  return {
+    map: true,
+    normalMap: true,
+    roughnessMap: true,
+    metalnessMap: true,
+    emissiveMap: true,
+    aoMap: true,
+    cubeMap: true,
+  };
+}
+
+/** Maps preview slot keys to `ResolvedMaterialTexturePaths` field names. */
+export const TEXTURE_SLOT_TO_PATH_FIELD: Record<TexturePreviewSlotKey, keyof ResolvedMaterialTexturePaths> = {
+  map: "mapPath",
+  normalMap: "normalPath",
+  roughnessMap: "roughnessPath",
+  metalnessMap: "metalnessPath",
+  emissiveMap: "emissivePath",
+  aoMap: "aoPath",
+  cubeMap: "cubePath",
+};
+
+export type ShaderFamily = "vsngCharaBasic" | "vsngCharaSparkle" | "generic";
+
+export type ResolvedTextureSampling = {
+  wrapS: TextureWrapModeJson;
+  wrapT: TextureWrapModeJson;
+  uvTransform: UvTransformJson | null;
+};
+
+export type ResolvedMaterialBinding = {
+  materialLabel: string;
+  shaderLabel: string;
+  shaderFamily: ShaderFamily;
+  textureRefs: {
+    map: string | null;
+    normal: string | null;
+    roughness: string | null;
+    metalness: string | null;
+    emissive: string | null;
+    ao: string | null;
+    cube: string | null;
+  };
+  texturePaths: ResolvedMaterialTexturePaths;
+  renderHints: {
+    isTransparent: boolean;
+    isSparkle: boolean;
+  };
+  uniforms: {
+    fresnelType4V16Hex: string | null;
+    roughnessScalar: number | null;
+    metalnessScalar: number | null;
+  };
+  sampling: {
+    map: ResolvedTextureSampling;
+    normal: ResolvedTextureSampling;
+    roughness: ResolvedTextureSampling;
+    metalness: ResolvedTextureSampling;
+    emissive: ResolvedTextureSampling;
+    ao: ResolvedTextureSampling;
+  };
+};
+
+export function resolveTextureRefToPath(ref: string | null, refToPath: Map<string, string>): string | null {
+  if (!ref) return null;
+  const direct = refToPath.get(ref);
+  if (direct) return direct;
+  const normalized = ref.replace(/^[/\\]+/, "").replace(/\\/g, "/");
+  for (const [k, v] of refToPath) {
+    if (k === ref || k.endsWith(normalized) || normalized.endsWith(k.replace(/^[/\\]+/, ""))) {
+      return v;
+    }
+  }
+  return null;
+}
+
+/**
+ * Maps matl ParamId texture paths to on-disk nutexb paths (same rules as previous single-texture preview).
+ */
+export function resolveMaterialTexturePaths(
+  materialLabel: string,
+  matlLookup: Map<string, MatlEntryJson>,
+  refToPath: Map<string, string>,
+): ResolvedMaterialTexturePaths {
+  const entry = matlLookup.get(materialLabel);
+  const exvs = pickExvsPbrTextureRefs(entry);
+  const baseRef =
+    exvs.base ??
+    textureRefForParam(entry, "DiffuseMap") ??
+    pickBaseColorTextureRef(entry);
+  const normalRef =
+    exvs.normal ??
+    textureRefForParam(entry, "NormalMap") ??
+    pickNormalTextureRef(entry);
+  const roughRef =
+    exvs.roughness ??
+    exvs.roughnessMask ??
+    textureRefForParam(entry, "RoughnessMap") ??
+    pickRoughnessTextureRef(entry, baseRef);
+  const metalRef =
+    exvs.metallic ?? textureRefForParam(entry, "MetallicMap") ?? null;
+  const emissiveRef =
+    exvs.emissive ?? textureRefForParam(entry, "EmissiveMap") ?? null;
+  const aoRef =
+    exvs.ao ?? textureRefForParam(entry, "AmbientOcclusionMap") ?? null;
+  const cubeRef =
+    textureRefForParam(entry, "Texture7") ??
+    textureRefForParam(entry, "Texture8") ??
+    iterTextureRefs(entry).find((x) => isLikelyCubeMapTextureRef(x.ref))?.ref ??
+    null;
+  const mapPath = resolveTextureRefToPath(baseRef, refToPath);
+  let normalPath = resolveTextureRefToPath(normalRef, refToPath);
+  let roughnessPath = resolveTextureRefToPath(roughRef, refToPath);
+  let metalnessPath = resolveTextureRefToPath(metalRef, refToPath);
+  let emissivePath = resolveTextureRefToPath(emissiveRef, refToPath);
+  let aoPath = resolveTextureRefToPath(aoRef, refToPath);
+  let cubePath = resolveTextureRefToPath(cubeRef, refToPath);
+  const dedupe = (p: string | null) => (p && p === mapPath ? null : p);
+  normalPath = dedupe(normalPath);
+  roughnessPath = dedupe(roughnessPath);
+  metalnessPath = dedupe(metalnessPath);
+  emissivePath = dedupe(emissivePath);
+  aoPath = dedupe(aoPath);
+  cubePath = dedupe(cubePath);
+  return {
+    mapPath,
+    normalPath,
+    roughnessPath,
+    metalnessPath,
+    emissivePath,
+    aoPath,
+    cubePath,
+  };
+}
+
+function normalizeShaderFamily(shaderLabel: string): ShaderFamily {
+  if (shaderLabel.includes("vsngCharaSparkle")) return "vsngCharaSparkle";
+  if (shaderLabel.includes("vsngCharaBasic")) return "vsngCharaBasic";
+  return "generic";
+}
+
+function paramIdMatches(paramId: unknown, want: string): boolean {
+  return normalizeParamId(paramId) === want;
+}
+
+function paramNumberById(
+  rows: { param_id: unknown; data: number }[] | undefined,
+  id: string,
+): number | null {
+  if (!rows?.length) return null;
+  const row = rows.find((r) => paramIdMatches(r.param_id, id));
+  return typeof row?.data === "number" ? row.data : null;
+}
+
+function type4HexById(
+  rows: { param_id: unknown; data: number[] }[] | undefined,
+  id: string,
+): string | null {
+  if (!rows?.length) return null;
+  const row = rows.find((r) => paramIdMatches(r.param_id, id));
+  if (!Array.isArray(row?.data)) return null;
+  return row.data.map((n) => Number(n).toString(16).padStart(2, "0")).join("");
+}
+
+function paramBooleanById(
+  rows: { param_id: unknown; data: boolean }[] | undefined,
+  id: string,
+): boolean | null {
+  if (!rows?.length) return null;
+  const row = rows.find((r) => paramIdMatches(r.param_id, id));
+  return typeof row?.data === "boolean" ? row.data : null;
+}
+
+function samplerByParamId(
+  entry: MatlEntryJson | undefined,
+  id: string,
+): SamplerDataJson | null {
+  if (!entry?.samplers?.length) return null;
+  const row = entry.samplers.find((r) => paramIdMatches(r.param_id, id));
+  const data = row?.data;
+  if (!data || typeof data !== "object") return null;
+  return data;
+}
+
+function uvTransformByParamId(
+  entry: MatlEntryJson | undefined,
+  id: string,
+): UvTransformJson | null {
+  if (!entry?.uv_transforms?.length) return null;
+  const row = entry.uv_transforms.find((r) => paramIdMatches(r.param_id, id));
+  const data = row?.data;
+  if (!data || typeof data !== "object") return null;
+  const candidate = data as Partial<UvTransformJson>;
+  if (
+    typeof candidate.scale_u !== "number" ||
+    typeof candidate.scale_v !== "number" ||
+    typeof candidate.rotation !== "number" ||
+    typeof candidate.translate_u !== "number" ||
+    typeof candidate.translate_v !== "number"
+  ) {
+    return null;
+  }
+  return {
+    scale_u: candidate.scale_u,
+    scale_v: candidate.scale_v,
+    rotation: candidate.rotation,
+    translate_u: candidate.translate_u,
+    translate_v: candidate.translate_v,
+  };
+}
+
+function defaultTextureSampling(): ResolvedTextureSampling {
+  return {
+    wrapS: "ClampToEdge",
+    wrapT: "ClampToEdge",
+    uvTransform: null,
+  };
+}
+
+function resolveTextureSampling(
+  sampler: SamplerDataJson | null,
+  uvTransform: UvTransformJson | null,
+): ResolvedTextureSampling {
+  return {
+    wrapS: sampler?.wraps ?? "ClampToEdge",
+    wrapT: sampler?.wrapt ?? "ClampToEdge",
+    uvTransform,
+  };
+}
+
+function firstSampler(entry: MatlEntryJson | undefined): SamplerDataJson | null {
+  if (!entry?.samplers?.length) return null;
+  for (const row of entry.samplers) {
+    if (row.data && typeof row.data === "object") {
+      return row.data;
+    }
+  }
+  return null;
+}
+
+function resolveUvTransformWithFlag(
+  entry: MatlEntryJson | undefined,
+  useIds: string[],
+  transformIds: string[],
+): UvTransformJson | null {
+  let enabled: boolean | null = null;
+  for (const id of useIds) {
+    const value = paramBooleanById(entry?.booleans, id);
+    if (value !== null) {
+      enabled = value;
+      break;
+    }
+  }
+  let transform: UvTransformJson | null = null;
+  for (const id of transformIds) {
+    transform = uvTransformByParamId(entry, id);
+    if (transform) break;
+  }
+  if (enabled === false) {
+    return null;
+  }
+  return transform;
+}
+
+export function resolveMaterialBinding(
+  materialLabel: string,
+  matlLookup: Map<string, MatlEntryJson>,
+  refToPath: Map<string, string>,
+): ResolvedMaterialBinding {
+  const entry = matlLookup.get(materialLabel);
+  const texturePaths = resolveMaterialTexturePaths(materialLabel, matlLookup, refToPath);
+  const shaderLabel = entry?.shader_label ?? "";
+  const shaderFamily = normalizeShaderFamily(shaderLabel);
+  const roughnessScalar = paramNumberById(entry?.floats, "Roughness");
+  const metalnessScalar = paramNumberById(entry?.floats, "Metalness");
+  const fresnelType4V16Hex = type4HexById(entry?.type4_v16, "Fresnel");
+  const diffuseSampler =
+    samplerByParamId(entry, "DiffuseSampler") ??
+    samplerByParamId(entry, "Sampler0") ??
+    firstSampler(entry);
+  const normalSampler =
+    samplerByParamId(entry, "NormalSampler") ??
+    samplerByParamId(entry, "Sampler6") ??
+    diffuseSampler;
+  const specularSampler =
+    samplerByParamId(entry, "SpecularSampler") ??
+    samplerByParamId(entry, "Sampler4") ??
+    samplerByParamId(entry, "Sampler5") ??
+    diffuseSampler;
+  const diffuseUvTransform = resolveUvTransformWithFlag(
+    entry,
+    ["UseDiffuseUvTransform", "UseDiffuseUvTransform1", "UseDiffuseUvTransform2"],
+    ["DiffuseUvTransform", "DiffuseUvTransform1", "DiffuseUvTransform2", "UvTransform0", "UvTransform1"],
+  );
+  const normalUvTransform = resolveUvTransformWithFlag(
+    entry,
+    ["UseNormalUvTransform", "UseNormalUvTransform1", "UseNormalUvTransform2"],
+    ["NormalUvTransform", "NormalUvTransform1", "NormalUvTransform2", "UvTransform6"],
+  );
+  const specularUvTransform = resolveUvTransformWithFlag(
+    entry,
+    ["UseSpecularUvTransform", "UseSpecularUvTransform1", "UseSpecularUvTransform2"],
+    ["SpecularUvTransform", "SpecularUvTransform1", "SpecularUvTransform2", "UvTransform4", "UvTransform5"],
+  );
+  const diffuseSampling = resolveTextureSampling(diffuseSampler, diffuseUvTransform);
+  const normalSampling = resolveTextureSampling(normalSampler, normalUvTransform);
+  const specularSampling = resolveTextureSampling(specularSampler, specularUvTransform);
+  return {
+    materialLabel,
+    shaderLabel,
+    shaderFamily,
+    textureRefs: {
+      map: textureRefForParam(entry, "Texture0") ?? null,
+      normal: textureRefForParam(entry, "Texture6") ?? null,
+      roughness: textureRefForParam(entry, "Texture4") ?? textureRefForParam(entry, "Texture5") ?? null,
+      metalness: textureRefForParam(entry, "Texture5") ?? null,
+      emissive: textureRefForParam(entry, "Texture3") ?? null,
+      ao: textureRefForParam(entry, "Texture1") ?? null,
+      cube: textureRefForParam(entry, "Texture7") ?? textureRefForParam(entry, "Texture8") ?? null,
+    },
+    texturePaths,
+    renderHints: {
+      isTransparent: shaderLabel.includes("trans") || shaderLabel.includes("blend"),
+      isSparkle: shaderFamily === "vsngCharaSparkle",
+    },
+    uniforms: {
+      fresnelType4V16Hex,
+      roughnessScalar,
+      metalnessScalar,
+    },
+    sampling: {
+      map: diffuseSampling,
+      normal: normalSampling,
+      roughness: specularSampling,
+      metalness: specularSampling,
+      emissive: diffuseSampling,
+      ao: diffuseSampling,
+    },
+  };
+}
+
+function mergeMatlEntries(a: MatlEntryJson, b: MatlEntryJson): MatlEntryJson {
+  const paramKey = (t: { param_id: unknown }) => normalizeParamId(t.param_id);
+  const mergeByParamId = <T extends { param_id: unknown }>(lhs: T[] | undefined, rhs: T[] | undefined): T[] => {
+    const merged = new Map<string, T>();
+    for (const t of lhs ?? []) merged.set(paramKey(t), t);
+    for (const t of rhs ?? []) {
+      const k = paramKey(t);
+      if (!merged.has(k)) merged.set(k, t);
+    }
+    return [...merged.values()];
+  };
+  const mergedTextures = new Map<string, TextureParamJson>();
+  for (const t of a.textures ?? []) { mergedTextures.set(paramKey(t), t); }
+  for (const t of b.textures ?? []) {
+    const k = paramKey(t);
+    if (!mergedTextures.has(k)) mergedTextures.set(k, t);
+  }
+  return {
+    ...a,
+    shader_label: a.shader_label || b.shader_label,
+    blend_states: mergeByParamId(a.blend_states, b.blend_states),
+    floats: mergeByParamId(a.floats, b.floats),
+    float1s: mergeByParamId(a.float1s, b.float1s),
+    booleans: mergeByParamId(a.booleans, b.booleans),
+    vectors: mergeByParamId(a.vectors, b.vectors),
+    colors: mergeByParamId(a.colors, b.colors),
+    rasterizer_states: mergeByParamId(a.rasterizer_states, b.rasterizer_states),
+    samplers: mergeByParamId(a.samplers, b.samplers),
+    textures: [...mergedTextures.values()],
+    textures2: mergeByParamId(a.textures2, b.textures2),
+    type4_v16: mergeByParamId(a.type4_v16, b.type4_v16),
+    type4_v15: mergeByParamId(a.type4_v15, b.type4_v15),
+    uv_transforms: mergeByParamId(a.uv_transforms, b.uv_transforms),
+  };
 }
 
 function findMeshObject(
@@ -123,6 +756,8 @@ function buildGeometryForObject(
   const normals = nAttr ? vectorDataToVec3(nAttr.data) : null;
   const uvAttr = obj.texture_coordinates[0];
   const uvs = uvAttr ? vectorDataToVec2(uvAttr.data) : null;
+  const uv2Attr = obj.texture_coordinates[1];
+  const uvs2 = uv2Attr ? vectorDataToVec2(uv2Attr.data) : null;
 
   const nameToIndex = skel ? boneNameToIndex(skel) : null;
   const logicalSkin =
@@ -133,6 +768,7 @@ function buildGeometryForObject(
   const pos: number[] = [];
   const nrm: number[] = [];
   const uv: number[] = [];
+  const uv2: number[] = [];
   const bindPositions = new Float32Array(indices.length * 3);
   const boneIndices = logicalSkin ? new Uint16Array(indices.length * 4) : new Uint16Array(0);
   const boneWeights = logicalSkin ? new Float32Array(indices.length * 4) : new Float32Array(0);
@@ -162,6 +798,9 @@ function buildGeometryForObject(
     if (uvs?.[vi]) {
       uv.push(uvs[vi][0], uvs[vi][1]);
     }
+    if (uvs2?.[vi]) {
+      uv2.push(uvs2[vi][0], uvs2[vi][1]);
+    }
   }
 
   const geom = new BufferGeometry();
@@ -172,7 +811,14 @@ function buildGeometryForObject(
     geom.computeVertexNormals();
   }
   if (uv.length === indices.length * 2) {
-    geom.setAttribute("uv", new BufferAttribute(new Float32Array(uv), 2));
+    const uvArray = new Float32Array(uv);
+    geom.setAttribute("uv", new BufferAttribute(uvArray, 2));
+    // AO in MeshStandardMaterial reads uv2; duplicate uv when a second channel is absent.
+    if (uv2.length === indices.length * 2) {
+      geom.setAttribute("uv2", new BufferAttribute(new Float32Array(uv2), 2));
+    } else {
+      geom.setAttribute("uv2", new BufferAttribute(uvArray.slice(), 2));
+    }
   }
 
   let skin: MeshSkinRuntime | null = null;
@@ -222,26 +868,13 @@ export function buildMatlLookup(matl: MatlDataJson | null | undefined): Map<stri
   const map = new Map<string, MatlEntryJson>();
   if (!matl?.entries) return map;
   for (const e of matl.entries) {
-    map.set(e.material_label, e);
+    const prev = map.get(e.material_label);
+    if (!prev) {
+      map.set(e.material_label, e);
+    } else {
+      map.set(e.material_label, mergeMatlEntries(prev, e));
+    }
   }
   return map;
 }
 
-export function resolveTexturePathForMaterial(
-  materialLabel: string,
-  matlLookup: Map<string, MatlEntryJson>,
-  refToPath: Map<string, string>,
-): string | null {
-  const entry = matlLookup.get(materialLabel);
-  const ref = pickAlbedoTextureRef(entry);
-  if (!ref) return null;
-  const direct = refToPath.get(ref);
-  if (direct) return direct;
-  const normalized = ref.replace(/^[/\\]+/, "").replace(/\\/g, "/");
-  for (const [k, v] of refToPath) {
-    if (k === ref || k.endsWith(normalized) || normalized.endsWith(k.replace(/^[/\\]+/, ""))) {
-      return v;
-    }
-  }
-  return null;
-}

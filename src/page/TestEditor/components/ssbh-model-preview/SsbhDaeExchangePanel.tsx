@@ -10,6 +10,11 @@ import { Label } from "@/components/ui/label";
 import { MayaSection } from "./MayaInspectorSection";
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
 import {
+  DialogLastPathKey,
+  getDialogDefaultPath,
+  rememberDialogSelection,
+} from "@/utils/dialogLastPath";
+import {
   loadDaeExchangePresets,
   saveDaeExchangePresets,
   ssbhAnalyzeDae,
@@ -355,9 +360,10 @@ export function SsbhDaeExchangePanel() {
                   const out = await save({
                     title: "Export COLLADA",
                     filters: [{ name: "COLLADA", extensions: ["dae"] }],
-                    defaultPath: p.workspaceRoot ?? undefined,
+                    defaultPath: getDialogDefaultPath(DialogLastPathKey.ssbhDaeExportDae, p.workspaceRoot),
                   });
                   if (typeof out !== "string" || !out.trim()) return;
+                  rememberDialogSelection(DialogLastPathKey.ssbhDaeExportDae, out.trim(), "file");
                   const include =
                     exportSubset && p.draws.length > 0
                       ? p.draws.filter((d) => exportKeys.has(d.key)).map((d) => ({ name: d.meshObjectName, subindex: d.meshObjectSubindex }))
@@ -427,6 +433,10 @@ export function SsbhDaeExchangePanel() {
               disabled={busy !== null}
               onClick={() => {
                 void (async () => {
+                  const importSourceKey =
+                    importKind === "dae"
+                      ? DialogLastPathKey.ssbhDaeImportSourceDae
+                      : DialogLastPathKey.ssbhDaeImportSourceFbx;
                   const path = await open({
                     title: importKind === "dae" ? "COLLADA source" : "FBX source",
                     multiple: false,
@@ -434,9 +444,10 @@ export function SsbhDaeExchangePanel() {
                       importKind === "dae"
                         ? [{ name: "COLLADA", extensions: ["dae"] }]
                         : [{ name: "FBX", extensions: ["fbx"] }],
-                    defaultPath: p.workspaceRoot ?? undefined,
+                    defaultPath: getDialogDefaultPath(importSourceKey, p.workspaceRoot),
                   });
                   if (typeof path !== "string" || !path.trim()) return;
+                  rememberDialogSelection(importSourceKey, path.trim(), "file");
                   setImportSourcePath(path.trim());
                   setAnalysis(null);
                   setImportGeomPick(new Set());
@@ -692,9 +703,10 @@ export function SsbhDaeExchangePanel() {
                   title: "Output folder",
                   directory: true,
                   multiple: false,
-                  defaultPath: p.workspaceRoot ?? undefined,
+                  defaultPath: getDialogDefaultPath(DialogLastPathKey.ssbhDaeConvertOutputFolder, p.workspaceRoot),
                 });
                 if (typeof outDir !== "string" || !outDir.trim()) return;
+                rememberDialogSelection(DialogLastPathKey.ssbhDaeConvertOutputFolder, outDir.trim(), "directory");
                 setBusy("import");
                 try {
                   const common = {

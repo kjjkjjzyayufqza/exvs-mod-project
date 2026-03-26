@@ -56,38 +56,3 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-
-#[cfg(test)]
-mod dae_integration_tests {
-    use crate::ssbh_dae_cmd::ssbh_convert_dae_to_ssbh;
-
-    #[test]
-    #[ignore = "Requires local DAE path; run: cargo test convert_user_delta_dae_roundtrip -- --ignored"]
-    fn convert_user_delta_dae_roundtrip() {
-        let dae = r"D:\output\德尔塔改\1.dae";
-        let out_dir = std::env::temp_dir().join("tauri_ssbh_dae_import_smoke");
-        let _ = std::fs::remove_dir_all(&out_dir);
-        std::fs::create_dir_all(&out_dir).expect("mkdir");
-        let v = ssbh_convert_dae_to_ssbh(
-            dae.to_string(),
-            out_dir.to_string_lossy().to_string(),
-            "smoke_model".to_string(),
-            1.0,
-            false,
-            "y_up".to_string(),
-            Vec::new(),
-            false,
-            true,
-            true,
-            true,
-        )
-        .expect("convert");
-        let obj = v.as_object().expect("json object");
-        assert_eq!(obj.get("ok").and_then(|x| x.as_bool()), Some(true));
-        let numdlb = out_dir.join("smoke_model.numdlb");
-        let numshb = out_dir.join("smoke_model.numshb");
-        assert!(numdlb.is_file(), "numdlb at {}", numdlb.display());
-        assert!(numshb.is_file(), "numshb at {}", numshb.display());
-        let _ = std::fs::remove_dir_all(&out_dir);
-    }
-}

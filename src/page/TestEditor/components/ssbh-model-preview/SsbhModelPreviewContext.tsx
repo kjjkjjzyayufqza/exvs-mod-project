@@ -1,6 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
+  DialogLastPathKey,
+  getDialogDefaultPath,
+  rememberDialogSelection,
+} from "@/utils/dialogLastPath";
+import {
   createContext,
   useCallback,
   useContext,
@@ -15,7 +20,12 @@ import type { BufferGeometry } from "three";
 import {
   buildDrawListFromBundle,
   buildMatlLookup,
-  resolveTexturePathForMaterial,
+  createDefaultTextureSlotLoadEnabled,
+  resolveMaterialBinding,
+  resolveMaterialTexturePaths,
+  type DrawMaterialDataUrls,
+  type ResolvedMaterialBinding,
+  type TexturePreviewSlotKey,
 } from "./meshFromSsbh";
 import { buildSkeletonLineGeometry } from "./skeletonLines";
 import type {
@@ -28,6 +38,13 @@ import type {
 } from "./types";
 
 export type BoneTransformMode = "translate" | "rotate" | "scale";
+export type MaterialDebugViewMode =
+  | "full"
+  | "baseColor"
+  | "normals"
+  | "roughnessMetalness"
+  | "emissive"
+  | "reflection";
 
 function buildRefToPathMap(bundle: SsbhModelPreviewBundle): Map<string, string> {
   const m = new Map<string, string>();
@@ -63,7 +80,32 @@ export type SsbhModelPreviewContextValue = {
   setAmbientIntensity: (v: number) => void;
   directionalIntensity: number;
   setDirectionalIntensity: (v: number) => void;
-  textureDataUrlByDrawKey: ReadonlyMap<string, string | null>;
+  directionalX: number;
+  setDirectionalX: (v: number) => void;
+  directionalY: number;
+  setDirectionalY: (v: number) => void;
+  directionalZ: number;
+  setDirectionalZ: (v: number) => void;
+  normalMapEnabled: boolean;
+  setNormalMapEnabled: (v: boolean) => void;
+  selectedDebugDrawKey: string | null;
+  setSelectedDebugDrawKey: (v: string | null) => void;
+  drawMaterialDataUrlsByDrawKey: ReadonlyMap<string, DrawMaterialDataUrls>;
+  drawMaterialBindingsByDrawKey: ReadonlyMap<string, ResolvedMaterialBinding>;
+  materialDebugViewMode: MaterialDebugViewMode;
+  setMaterialDebugViewMode: (v: MaterialDebugViewMode) => void;
+  textureFlipY: boolean;
+  setTextureFlipY: (v: boolean) => void;
+  /** Mirror mesh UVs horizontally (U -> 1-U) for preview. */
+  uvFlipU: boolean;
+  setUvFlipU: (v: boolean) => void;
+  /** Mirror mesh UVs vertically (V -> 1-V) for preview. */
+  uvFlipV: boolean;
+  setUvFlipV: (v: boolean) => void;
+  /** When false for a slot, that texture is not decoded from disk (saves CPU/GPU memory). */
+  textureSlotLoadEnabled: Readonly<Record<TexturePreviewSlotKey, boolean>>;
+  setTextureSlotLoadEnabled: (key: TexturePreviewSlotKey, enabled: boolean) => void;
+  setAllTextureSlotsLoadEnabled: (enabled: boolean) => void;
   fitRequestId: number;
   requestCameraFit: () => void;
   skeletonGeometry: BufferGeometry | null;
@@ -120,9 +162,22 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
   const [background, setBackground] = useState("#1a1d23");
   const [ambientIntensity, setAmbientIntensity] = useState(0.4);
   const [directionalIntensity, setDirectionalIntensity] = useState(1.05);
-  const [textureDataUrlByDrawKey, setTextureDataUrlByDrawKey] = useState<Map<string, string | null>>(
-    () => new Map(),
-  );
+  const [directionalX, setDirectionalX] = useState(8);
+  const [directionalY, setDirectionalY] = useState(14);
+  const [directionalZ, setDirectionalZ] = useState(6);
+  const [normalMapEnabled, setNormalMapEnabled] = useState(true);
+  const [selectedDebugDrawKey, setSelectedDebugDrawKey] = useState<string | null>(null);
+  const [drawMaterialDataUrlsByDrawKey, setDrawMaterialDataUrlsByDrawKey] = useState<
+    Map<string, DrawMaterialDataUrls>
+  >(() => new Map());
+  const [drawMaterialBindingsByDrawKey, setDrawMaterialBindingsByDrawKey] = useState<
+    Map<string, ResolvedMaterialBinding>
+  >(() => new Map());
+  const [materialDebugViewMode, setMaterialDebugViewMode] = useState<MaterialDebugViewMode>("full");
+  const [textureFlipY, setTextureFlipY] = useState(false);
+  const [uvFlipU, setUvFlipU] = useState(false);
+  const [uvFlipV, setUvFlipV] = useState(false);
+  const [textureSlotLoadEnabled, setTextureSlotLoadEnabledState] = useState(createDefaultTextureSlotLoadEnabled);
   const [fitRequestId, setFitRequestId] = useState(0);
   const [modelLoadNonce, setModelLoadNonce] = useState(0);
   const [bonePoseEnabled, setBonePoseEnabled] = useState(false);
@@ -178,11 +233,17 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
 
   useEffect(() => {
     setVisibleKeys(new Set(draws.map((d) => d.key)));
+    setSelectedDebugDrawKey((prev) => {
+      if (!draws.length) return null;
+      if (prev && draws.some((d) => d.key === prev)) return prev;
+      return draws[0]?.key ?? null;
+    });
   }, [draws]);
 
   useEffect(() => {
     if (!bundle || draws.length === 0) {
-      setTextureDataUrlByDrawKey(new Map());
+      setDrawMaterialDataUrlsByDrawKey(new Map());
+      setDrawMaterialBindingsByDrawKey(new Map());
       return;
     }
     let cancelled = false;
@@ -191,26 +252,59 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
     const refMap = buildRefToPathMap(bundle);
 
     (async () => {
-      const next = new Map<string, string | null>();
+      const next = new Map<string, DrawMaterialDataUrls>();
+      const nextBindings = new Map<string, ResolvedMaterialBinding>();
       const failedTextures: string[] = [];
-      for (const d of draws) {
-        const nutexbPath = resolveTexturePathForMaterial(d.materialLabel, lookup, refMap);
-        if (!nutexbPath) {
-          next.set(d.key, null);
-          continue;
-        }
+      const pathToDataUrl = new Map<string, string>();
+
+      const decodePath = async (diskPath: string | null): Promise<string | null> => {
+        if (!diskPath) return null;
+        const cached = pathToDataUrl.get(diskPath);
+        if (cached) return cached;
         try {
-          const b64 = await invoke<string>("nutexb_png_base64", { inputPath: nutexbPath });
-          if (cancelled) return;
-          next.set(d.key, `data:image/png;base64,${b64}`);
+          const b64 = await invoke<string>("nutexb_png_base64", { inputPath: diskPath });
+          if (cancelled) return null;
+          const url = `data:image/png;base64,${b64}`;
+          pathToDataUrl.set(diskPath, url);
+          return url;
         } catch (e) {
-          if (cancelled) return;
-          next.set(d.key, null);
-          failedTextures.push(`${nutexbPath}: ${String(e)}`);
+          failedTextures.push(`${diskPath}: ${String(e)}`);
+          return null;
         }
+      };
+
+      for (const d of draws) {
+        const binding = resolveMaterialBinding(d.materialLabel, lookup, refMap);
+        nextBindings.set(d.key, binding);
+        const paths = resolveMaterialTexturePaths(d.materialLabel, lookup, refMap);
+        if (cancelled) return;
+        const map = textureSlotLoadEnabled.map ? await decodePath(paths.mapPath) : null;
+        if (cancelled) return;
+        const normalMap = textureSlotLoadEnabled.normalMap ? await decodePath(paths.normalPath) : null;
+        if (cancelled) return;
+        const roughnessMap = textureSlotLoadEnabled.roughnessMap ? await decodePath(paths.roughnessPath) : null;
+        if (cancelled) return;
+        const metalnessMap = textureSlotLoadEnabled.metalnessMap ? await decodePath(paths.metalnessPath) : null;
+        if (cancelled) return;
+        const emissiveMap = textureSlotLoadEnabled.emissiveMap ? await decodePath(paths.emissivePath) : null;
+        if (cancelled) return;
+        const aoMap = textureSlotLoadEnabled.aoMap ? await decodePath(paths.aoPath) : null;
+        if (cancelled) return;
+        const cubeMap = textureSlotLoadEnabled.cubeMap ? await decodePath(paths.cubePath) : null;
+        if (cancelled) return;
+        next.set(d.key, {
+          map,
+          normalMap,
+          roughnessMap,
+          metalnessMap,
+          emissiveMap,
+          aoMap,
+          cubeMap,
+        });
       }
       if (!cancelled) {
-        setTextureDataUrlByDrawKey(next);
+        setDrawMaterialDataUrlsByDrawKey(next);
+        setDrawMaterialBindingsByDrawKey(nextBindings);
         if (failedTextures.length > 0) {
           const preview = failedTextures.slice(0, 4).join("\n");
           const more =
@@ -225,7 +319,7 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
     return () => {
       cancelled = true;
     };
-  }, [bundle, draws]);
+  }, [bundle, draws, textureSlotLoadEnabled]);
 
   useEffect(() => {
     if (modelLoadNonce === 0 || draws.length === 0) return;
@@ -264,9 +358,10 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
     const selected = await open({
       directory: true,
       multiple: false,
-      defaultPath: root ?? undefined,
+      defaultPath: getDialogDefaultPath(DialogLastPathKey.ssbhPreviewOpenModelFolder, root),
     });
     if (typeof selected === "string") {
+      rememberDialogSelection(DialogLastPathKey.ssbhPreviewOpenModelFolder, selected, "directory");
       await loadAt(selected);
     }
   }, [loadAt, root]);
@@ -275,10 +370,11 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
     const selected = await open({
       directory: false,
       multiple: false,
-      defaultPath: root ?? undefined,
+      defaultPath: getDialogDefaultPath(DialogLastPathKey.ssbhPreviewOpenNumdlb, root),
       filters: [{ name: "NUMDLB", extensions: ["numdlb"] }],
     });
     if (typeof selected === "string") {
+      rememberDialogSelection(DialogLastPathKey.ssbhPreviewOpenNumdlb, selected, "file");
       await loadAt(selected);
     }
   }, [loadAt, root]);
@@ -327,6 +423,26 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
     setVisibleKeys(new Set());
   }, []);
 
+  const setTextureSlotLoadEnabled = useCallback((key: TexturePreviewSlotKey, enabled: boolean) => {
+    setTextureSlotLoadEnabledState((prev) => ({ ...prev, [key]: enabled }));
+  }, []);
+
+  const setAllTextureSlotsLoadEnabled = useCallback((enabled: boolean) => {
+    if (enabled) {
+      setTextureSlotLoadEnabledState(createDefaultTextureSlotLoadEnabled());
+    } else {
+      setTextureSlotLoadEnabledState({
+        map: false,
+        normalMap: false,
+        roughnessMap: false,
+        metalnessMap: false,
+        emissiveMap: false,
+        aoMap: false,
+        cubeMap: false,
+      });
+    }
+  }, []);
+
   const vertexTriangleStats = useMemo(() => {
     let verts = 0;
     let tris = 0;
@@ -365,7 +481,29 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       setAmbientIntensity,
       directionalIntensity,
       setDirectionalIntensity,
-      textureDataUrlByDrawKey,
+      directionalX,
+      setDirectionalX,
+      directionalY,
+      setDirectionalY,
+      directionalZ,
+      setDirectionalZ,
+      normalMapEnabled,
+      setNormalMapEnabled,
+      selectedDebugDrawKey,
+      setSelectedDebugDrawKey,
+      drawMaterialDataUrlsByDrawKey,
+      drawMaterialBindingsByDrawKey,
+      materialDebugViewMode,
+      setMaterialDebugViewMode,
+      textureFlipY,
+      setTextureFlipY,
+      uvFlipU,
+      setUvFlipU,
+      uvFlipV,
+      setUvFlipV,
+      textureSlotLoadEnabled,
+      setTextureSlotLoadEnabled,
+      setAllTextureSlotsLoadEnabled,
       fitRequestId,
       requestCameraFit,
       skeletonGeometry,
@@ -402,7 +540,20 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       background,
       ambientIntensity,
       directionalIntensity,
-      textureDataUrlByDrawKey,
+      directionalX,
+      directionalY,
+      directionalZ,
+      normalMapEnabled,
+      selectedDebugDrawKey,
+      drawMaterialDataUrlsByDrawKey,
+      drawMaterialBindingsByDrawKey,
+      materialDebugViewMode,
+      textureFlipY,
+      uvFlipU,
+      uvFlipV,
+      textureSlotLoadEnabled,
+      setTextureSlotLoadEnabled,
+      setAllTextureSlotsLoadEnabled,
       fitRequestId,
       requestCameraFit,
       skeletonGeometry,

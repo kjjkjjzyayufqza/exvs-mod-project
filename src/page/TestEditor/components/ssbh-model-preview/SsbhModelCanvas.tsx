@@ -9,19 +9,27 @@ import {
 } from "@react-three/drei";
 import { Suspense, useLayoutEffect, useState, useEffect, useRef, type RefObject } from "react";
 import {
+  ClampToEdgeWrapping,
   Color,
   DoubleSide,
+  EquirectangularReflectionMapping,
   Group,
   LineBasicMaterial,
+  MirroredRepeatWrapping,
   Mesh,
+  NoColorSpace,
   PerspectiveCamera,
+  RepeatWrapping,
   SRGBColorSpace,
+  Vector2,
 } from "three";
-import type { BufferGeometry } from "three";
+import type { BufferGeometry, Texture } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { BonePreviewRig, resetSkinnedMeshesToBindPose } from "./BonePreviewRig";
 import { fitCameraToObject } from "./cameraFit";
-import type { BoneTransformMode } from "./SsbhModelPreviewContext";
+import { applyPreviewUvFlip } from "./previewUvFlip";
+import type { BoneTransformMode, MaterialDebugViewMode } from "./SsbhModelPreviewContext";
+import type { DrawMaterialDataUrls, ResolvedMaterialBinding, ResolvedTextureSampling } from "./meshFromSsbh";
 import type { BuiltMeshDraw, SkelDataJson } from "./types";
 
 /** Finite ground grid plane size in world units (not infinite). */
@@ -35,7 +43,12 @@ const GRID_FADE_DISTANCE = 5e6;
 
 type SsbhModelCanvasProps = {
   draws: BuiltMeshDraw[];
-  textureDataUrlByDrawKey: ReadonlyMap<string, string | null>;
+  drawMaterialDataUrlsByDrawKey: ReadonlyMap<string, DrawMaterialDataUrls>;
+  drawMaterialBindingsByDrawKey: ReadonlyMap<string, ResolvedMaterialBinding>;
+  materialDebugViewMode: MaterialDebugViewMode;
+  textureFlipY: boolean;
+  uvFlipU: boolean;
+  uvFlipV: boolean;
   visibleKeys: ReadonlySet<string>;
   wireframe: boolean;
   showSkeleton: boolean;
@@ -46,6 +59,10 @@ type SsbhModelCanvasProps = {
   background: string;
   ambientIntensity: number;
   directionalIntensity: number;
+  directionalX: number;
+  directionalY: number;
+  directionalZ: number;
+  normalMapEnabled: boolean;
   /** Increment to request a one-shot camera fit (user Reset view or new model). */
   fitRequestId: number;
   skel: SkelDataJson | null;
@@ -77,12 +94,30 @@ function CameraFit({
   return null;
 }
 
+function PreviewUvFlipSync({
+  draws,
+  uvFlipU,
+  uvFlipV,
+}: {
+  draws: BuiltMeshDraw[];
+  uvFlipU: boolean;
+  uvFlipV: boolean;
+}) {
+  useLayoutEffect(() => {
+    for (const d of draws) {
+      applyPreviewUvFlip(d.geometry, uvFlipU, uvFlipV);
+    }
+  }, [draws, uvFlipU, uvFlipV]);
+  return null;
+}
+
 type DrawMeshProps = {
   draw: BuiltMeshDraw;
   visible: boolean;
   wireframe: boolean;
   /** When true, mesh does not participate in raycasting so TransformControls can receive pointer events. */
   ignoreRaycast: boolean;
+  normalMapEnabled?: boolean;
 };
 
 const noopMeshRaycast: Mesh["raycast"] = () => {};
@@ -102,29 +137,153 @@ function DrawMeshUntextured({ draw, visible, wireframe, ignoreRaycast }: DrawMes
   );
 }
 
-type DrawMeshTexturedProps = DrawMeshProps & { dataUrl: string };
+type PbrSlotKind =
+  | "map"
+  | "normalMap"
+  | "roughnessMap"
+  | "metalnessMap"
+  | "emissiveMap"
+  | "aoMap"
+  | "cubeMap";
 
-function DrawMeshTextured({
+function toThreeWrapping(mode: ResolvedTextureSampling["wrapS"]) {
+  switch (mode) {
+    case "Repeat":
+      return RepeatWrapping;
+    case "MirroredRepeat":
+      return MirroredRepeatWrapping;
+    case "ClampToBorder":
+    case "ClampToEdge":
+    default:
+      return ClampToEdgeWrapping;
+  }
+}
+
+function samplingForSlot(
+  binding: ResolvedMaterialBinding | null,
+  kind: PbrSlotKind,
+): ResolvedTextureSampling | null {
+  if (!binding || kind === "cubeMap") return null;
+  switch (kind) {
+    case "map":
+      return binding.sampling.map;
+    case "normalMap":
+      return binding.sampling.normal;
+    case "roughnessMap":
+      return binding.sampling.roughness;
+    case "metalnessMap":
+      return binding.sampling.metalness;
+    case "emissiveMap":
+      return binding.sampling.emissive;
+    case "aoMap":
+      return binding.sampling.ao;
+    default:
+      return null;
+  }
+}
+
+function DrawMeshUnifiedPbr({
   draw,
-  dataUrl,
+  slots,
+  binding,
   visible,
   wireframe,
   ignoreRaycast,
-}: DrawMeshTexturedProps) {
-  const map = useTexture(dataUrl);
+  textureFlipY,
+  normalMapEnabled,
+  materialDebugViewMode,
+}: DrawMeshProps & {
+  slots: { kind: PbrSlotKind; url: string }[];
+  binding: ResolvedMaterialBinding | null;
+  textureFlipY: boolean;
+  materialDebugViewMode: MaterialDebugViewMode;
+}) {
+  const urls = slots.map((s) => s.url);
+  const texs = useTexture(urls);
   useLayoutEffect(() => {
-    map.colorSpace = SRGBColorSpace;
-    map.needsUpdate = true;
-  }, [map]);
-
+    const list = Array.isArray(texs) ? texs : [texs];
+    slots.forEach((s, i) => {
+      const t = list[i];
+      if (!t) return;
+      t.colorSpace = s.kind === "map" || s.kind === "emissiveMap" ? SRGBColorSpace : NoColorSpace;
+      if (s.kind !== "cubeMap") {
+        t.flipY = textureFlipY;
+        const sampling = samplingForSlot(binding, s.kind);
+        t.wrapS = toThreeWrapping(sampling?.wrapS ?? "ClampToEdge");
+        t.wrapT = toThreeWrapping(sampling?.wrapT ?? "ClampToEdge");
+        t.center.set(0, 0);
+        t.repeat.set(sampling?.uvTransform?.scale_u ?? 1, sampling?.uvTransform?.scale_v ?? 1);
+        t.offset.set(sampling?.uvTransform?.translate_u ?? 0, sampling?.uvTransform?.translate_v ?? 0);
+        t.rotation = sampling?.uvTransform?.rotation ?? 0;
+      }
+      if (s.kind === "cubeMap") {
+        t.mapping = EquirectangularReflectionMapping;
+      }
+      t.needsUpdate = true;
+    });
+  }, [slots, texs, textureFlipY]);
+  const list = Array.isArray(texs) ? texs : [texs];
+  const byKind: Partial<Record<PbrSlotKind, Texture>> = {};
+  slots.forEach((s, i) => {
+    byKind[s.kind] = list[i] as Texture;
+  });
   if (!visible) return null;
-
+  const shaderFamily = binding?.shaderFamily ?? "generic";
+  const activeNormalMap = normalMapEnabled ? byKind.normalMap : undefined;
+  const hasRough = !!byKind.roughnessMap || typeof binding?.uniforms.roughnessScalar === "number";
+  const hasMetal = !!byKind.metalnessMap || typeof binding?.uniforms.metalnessScalar === "number";
+  const hasEmit = !!byKind.emissiveMap;
+  const hasAo = !!byKind.aoMap;
+  const hasMap = !!byKind.map;
+  const hasCube = !!byKind.cubeMap;
+  const roughnessValue =
+    typeof binding?.uniforms.roughnessScalar === "number"
+      ? binding.uniforms.roughnessScalar
+      : hasRough
+        ? 1
+        : shaderFamily === "vsngCharaSparkle"
+          ? 0.45
+          : 0.65;
+  const metalnessValue =
+    typeof binding?.uniforms.metalnessScalar === "number"
+      ? binding.uniforms.metalnessScalar
+      : hasMetal
+        ? 1
+        : shaderFamily === "vsngCharaSparkle"
+          ? 0.35
+          : 0.12;
+  const emissiveIntensity = shaderFamily === "vsngCharaSparkle" ? 1.8 : hasEmit ? 1 : 0;
+  const transparent = binding?.renderHints.isTransparent ?? hasMap;
+  const envIntensity = shaderFamily === "vsngCharaSparkle" ? 1.55 : hasCube ? 1.15 : 0;
+  const canUseMetalnessMap = hasCube;
+  const effectiveMetalnessMap = canUseMetalnessMap ? byKind.metalnessMap : undefined;
+  const effectiveMetalnessValue = canUseMetalnessMap ? metalnessValue : Math.min(metalnessValue, 0.2);
+  if (materialDebugViewMode === "baseColor") {
+    return (
+      <mesh geometry={draw.geometry} raycast={ignoreRaycast ? noopMeshRaycast : undefined}>
+        <meshBasicMaterial map={byKind.map} side={DoubleSide} wireframe={wireframe} />
+      </mesh>
+    );
+  }
   return (
     <mesh geometry={draw.geometry} raycast={ignoreRaycast ? noopMeshRaycast : undefined}>
       <meshStandardMaterial
-        map={map}
-        roughness={0.62}
-        metalness={0.18}
+        map={byKind.map}
+        normalMap={activeNormalMap}
+        normalScale={activeNormalMap ? new Vector2(1, 1) : undefined}
+        roughnessMap={byKind.roughnessMap}
+        metalnessMap={effectiveMetalnessMap}
+        emissiveMap={byKind.emissiveMap}
+        emissive={hasEmit ? new Color(0xffffff) : new Color(0)}
+        emissiveIntensity={emissiveIntensity}
+        aoMap={byKind.aoMap}
+        aoMapIntensity={hasAo ? 0.35 : 0}
+        envMap={byKind.cubeMap}
+        envMapIntensity={envIntensity}
+        alphaTest={hasMap ? 0.001 : 0}
+        transparent={transparent}
+        roughness={roughnessValue}
+        metalness={effectiveMetalnessValue}
         side={DoubleSide}
         wireframe={wireframe}
       />
@@ -134,28 +293,69 @@ function DrawMeshTextured({
 
 function DrawMeshes({
   draws,
-  textureDataUrlByDrawKey,
+  drawMaterialDataUrlsByDrawKey,
+  drawMaterialBindingsByDrawKey,
+  materialDebugViewMode,
+  textureFlipY,
+  normalMapEnabled,
   visibleKeys,
   wireframe,
   bonePoseEnabled,
 }: Pick<
   SsbhModelCanvasProps,
-  "draws" | "textureDataUrlByDrawKey" | "visibleKeys" | "wireframe" | "bonePoseEnabled"
+  | "draws"
+  | "drawMaterialDataUrlsByDrawKey"
+  | "drawMaterialBindingsByDrawKey"
+  | "materialDebugViewMode"
+  | "textureFlipY"
+  | "normalMapEnabled"
+  | "visibleKeys"
+  | "wireframe"
+  | "bonePoseEnabled"
 >) {
   const ignoreRaycast = bonePoseEnabled;
   return (
     <>
       {draws.map((d) => {
-        const url = textureDataUrlByDrawKey.get(d.key) ?? null;
+        const mats = drawMaterialDataUrlsByDrawKey.get(d.key);
+        const binding = drawMaterialBindingsByDrawKey.get(d.key) ?? null;
+        const mapUrl = mats?.map ?? null;
+        const slots: { kind: PbrSlotKind; url: string }[] = [];
+        const mode = materialDebugViewMode;
+        if (mapUrl && (mode === "full" || mode === "baseColor")) {
+          slots.push({ kind: "map", url: mapUrl });
+        }
+        if (normalMapEnabled && mats?.normalMap && (mode === "full" || mode === "normals")) {
+          slots.push({ kind: "normalMap", url: mats.normalMap });
+        }
+        if (mats?.roughnessMap && (mode === "full" || mode === "roughnessMetalness")) {
+          slots.push({ kind: "roughnessMap", url: mats.roughnessMap });
+        }
+        if (mats?.metalnessMap && (mode === "full" || mode === "roughnessMetalness")) {
+          slots.push({ kind: "metalnessMap", url: mats.metalnessMap });
+        }
+        if (mats?.emissiveMap && (mode === "full" || mode === "emissive")) {
+          slots.push({ kind: "emissiveMap", url: mats.emissiveMap });
+        }
+        if (mats?.aoMap && (mode === "full" || mode === "roughnessMetalness")) {
+          slots.push({ kind: "aoMap", url: mats.aoMap });
+        }
+        if (mats?.cubeMap && (mode === "full" || mode === "reflection")) {
+          slots.push({ kind: "cubeMap", url: mats.cubeMap });
+        }
         return (
           <Suspense key={d.key} fallback={null}>
-            {url ? (
-              <DrawMeshTextured
+            {slots.length > 0 ? (
+              <DrawMeshUnifiedPbr
                 draw={d}
-                dataUrl={url}
+                slots={slots}
+                binding={binding}
                 visible={visibleKeys.has(d.key)}
                 wireframe={wireframe}
                 ignoreRaycast={ignoreRaycast}
+                textureFlipY={textureFlipY}
+                normalMapEnabled={normalMapEnabled}
+                materialDebugViewMode={materialDebugViewMode}
               />
             ) : (
               <DrawMeshUntextured
@@ -197,7 +397,12 @@ function SkeletonLines({ geometry }: { geometry: BufferGeometry }) {
 
 function Scene({
   draws,
-  textureDataUrlByDrawKey,
+  drawMaterialDataUrlsByDrawKey,
+  drawMaterialBindingsByDrawKey,
+  materialDebugViewMode,
+  textureFlipY,
+  uvFlipU,
+  uvFlipV,
   visibleKeys,
   wireframe,
   showSkeleton,
@@ -208,6 +413,10 @@ function Scene({
   background,
   ambientIntensity,
   directionalIntensity,
+  directionalX,
+  directionalY,
+  directionalZ,
+  normalMapEnabled,
   fitRequestId,
   skel,
   bonePoseEnabled,
@@ -233,9 +442,12 @@ function Scene({
     <>
       <color attach="background" args={[background]} />
       <ambientLight intensity={ambientIntensity} />
-      <directionalLight position={[8, 14, 6]} intensity={directionalIntensity} />
+      <hemisphereLight args={["#dbeafe", "#111827", 0.26]} />
+      <directionalLight position={[directionalX, directionalY, directionalZ]} intensity={directionalIntensity} />
+      <directionalLight position={[-directionalX * 0.7, directionalY * 0.45, -directionalZ * 0.7]} intensity={directionalIntensity * 0.28} />
 
       <group ref={modelRootRef}>
+        <PreviewUvFlipSync draws={draws} uvFlipU={uvFlipU} uvFlipV={uvFlipV} />
         {showRig ? (
           <BonePreviewRig
             skel={skel!}
@@ -249,7 +461,11 @@ function Scene({
         ) : null}
         <DrawMeshes
           draws={draws}
-          textureDataUrlByDrawKey={textureDataUrlByDrawKey}
+          drawMaterialDataUrlsByDrawKey={drawMaterialDataUrlsByDrawKey}
+          drawMaterialBindingsByDrawKey={drawMaterialBindingsByDrawKey}
+          materialDebugViewMode={materialDebugViewMode}
+          textureFlipY={textureFlipY}
+          normalMapEnabled={normalMapEnabled}
           visibleKeys={visibleKeys}
           wireframe={wireframe}
           bonePoseEnabled={bonePoseEnabled}

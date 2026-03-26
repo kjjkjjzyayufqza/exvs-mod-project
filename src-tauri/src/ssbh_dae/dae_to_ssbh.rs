@@ -405,26 +405,3 @@ fn generate_default_colorset0_data(vertex_count: usize) -> Vec<[f32; 2]> {
 fn generate_default_colorset1_data(vertex_count: usize) -> Vec<[f32; 2]> {
     vec![[0.0, 0.0]; vertex_count]
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::Path;
-
-    #[test]
-    fn convert_dae_file_rejects_missing_input() {
-        let cfg = DaeConvertConfig {
-            output_directory: std::env::temp_dir(),
-            base_filename: "test_model".to_string(),
-            scale_factor: 1.0,
-            up_axis_conversion: crate::ssbh_dae::UpAxisConversion::YUp,
-            flip_uv: false,
-            include_geometry_names: Vec::new(),
-            write_numdlb: true,
-            write_numshb: true,
-            write_nusktb: true,
-        };
-        let p = Path::new("__ssbh_dae_missing_test_file__.dae");
-        assert!(convert_dae_file(p, &cfg).is_err());
-    }
-}

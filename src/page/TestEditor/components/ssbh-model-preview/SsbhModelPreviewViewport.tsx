@@ -42,7 +42,12 @@ export function SsbhModelPreviewViewport() {
       <div className="min-h-0 flex-1 flex flex-col px-1 pb-1">
         <SsbhModelCanvas
           draws={p.draws}
-          textureDataUrlByDrawKey={p.textureDataUrlByDrawKey}
+          drawMaterialDataUrlsByDrawKey={p.drawMaterialDataUrlsByDrawKey}
+          drawMaterialBindingsByDrawKey={p.drawMaterialBindingsByDrawKey}
+          materialDebugViewMode={p.materialDebugViewMode}
+          textureFlipY={p.textureFlipY}
+          uvFlipU={p.uvFlipU}
+          uvFlipV={p.uvFlipV}
           visibleKeys={p.visibleKeys}
           wireframe={p.wireframe}
           showSkeleton={p.showSkeleton && Boolean(p.bundle?.skel)}
@@ -53,6 +58,10 @@ export function SsbhModelPreviewViewport() {
           background={p.background}
           ambientIntensity={p.ambientIntensity}
           directionalIntensity={p.directionalIntensity}
+          directionalX={p.directionalX}
+          directionalY={p.directionalY}
+          directionalZ={p.directionalZ}
+          normalMapEnabled={p.normalMapEnabled}
           fitRequestId={p.fitRequestId}
           skel={p.bundle?.skel ? (p.bundle.skel as SkelDataJson) : null}
           bonePoseEnabled={p.bonePoseEnabled}

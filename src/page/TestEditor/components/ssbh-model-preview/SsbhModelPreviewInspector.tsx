@@ -12,6 +12,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { MayaSection } from "./MayaInspectorSection";
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
+import { TEXTURE_PREVIEW_SLOT_META, TEXTURE_SLOT_TO_PATH_FIELD } from "./meshFromSsbh";
 import type { SkelDataJson } from "./types";
 
 export function SsbhModelPreviewInspector() {
@@ -19,6 +20,33 @@ export function SsbhModelPreviewInspector() {
   const skel = p.bundle?.skel ? (p.bundle.skel as SkelDataJson) : null;
   const bones = skel?.bones ?? [];
   const hasSkinnedMesh = p.draws.some((d) => d.skin !== null);
+  const debugRows = p.draws
+    .map((d) => {
+      const binding = p.drawMaterialBindingsByDrawKey.get(d.key);
+      const dataUrls = p.drawMaterialDataUrlsByDrawKey.get(d.key);
+      const unresolvedRefs = binding
+        ? Object.entries(binding.textureRefs).filter(([, ref]) => !!ref).length -
+          Object.values(binding.texturePaths).filter((path) => !!path).length
+        : 0;
+      return {
+        key: d.key,
+        materialLabel: d.materialLabel,
+        shaderLabel: binding?.shaderLabel ?? "",
+        shaderFamily: binding?.shaderFamily ?? "generic",
+        unresolvedRefs: Math.max(0, unresolvedRefs),
+        hasCube: Boolean(dataUrls?.cubeMap),
+      };
+    })
+    .slice(0, 20);
+  const selectedDebugRow =
+    debugRows.find((r) => r.key === p.selectedDebugDrawKey) ??
+    (debugRows.length > 0 ? debugRows[0] : null);
+  const selectedBinding = selectedDebugRow
+    ? p.drawMaterialBindingsByDrawKey.get(selectedDebugRow.key)
+    : undefined;
+  const selectedDataUrls = selectedDebugRow
+    ? p.drawMaterialDataUrlsByDrawKey.get(selectedDebugRow.key)
+    : undefined;
 
   return (
     <div className="-mx-4 flex flex-col border-t bg-background/50">
@@ -44,6 +72,205 @@ export function SsbhModelPreviewInspector() {
             <Label className="text-[11px] text-muted-foreground">Stats</Label>
             <Switch checked={p.showStats} onCheckedChange={p.setShowStats} />
           </div>
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-[11px] text-muted-foreground">Texture Flip Y</Label>
+            <Switch checked={p.textureFlipY} onCheckedChange={p.setTextureFlipY} />
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-[11px] text-muted-foreground" title="Mirror mesh UV horizontally (U → 1−U)">
+              Flip UV U
+            </Label>
+            <Switch checked={p.uvFlipU} onCheckedChange={p.setUvFlipU} />
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-[11px] text-muted-foreground" title="Mirror mesh UV vertically (V → 1−V)">
+              Flip UV V
+            </Label>
+            <Switch checked={p.uvFlipV} onCheckedChange={p.setUvFlipV} />
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-[11px] text-muted-foreground">Normal Map</Label>
+            <Switch checked={p.normalMapEnabled} onCheckedChange={p.setNormalMapEnabled} />
+          </div>
+        </div>
+      </MayaSection>
+
+      <MayaSection title="Material Debug" icon={<Info className="h-3.5 w-3.5" />} defaultOpen={false}>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[11px] text-muted-foreground">Debug view mode</Label>
+            <Select value={p.materialDebugViewMode} onValueChange={(v) => p.setMaterialDebugViewMode(v as typeof p.materialDebugViewMode)}>
+              <SelectTrigger className="h-8 text-[11px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="full" className="text-[11px]">Full</SelectItem>
+                <SelectItem value="baseColor" className="text-[11px]">Base color only</SelectItem>
+                <SelectItem value="normals" className="text-[11px]">Normals only</SelectItem>
+                <SelectItem value="roughnessMetalness" className="text-[11px]">Roughness/metalness</SelectItem>
+                <SelectItem value="emissive" className="text-[11px]">Emissive only</SelectItem>
+                <SelectItem value="reflection" className="text-[11px]">Reflection only</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[11px] text-muted-foreground">Inspect draw</Label>
+            <Select
+              value={p.selectedDebugDrawKey ?? "__none__"}
+              onValueChange={(v) => p.setSelectedDebugDrawKey(v === "__none__" ? null : v)}
+              disabled={debugRows.length === 0}
+            >
+              <SelectTrigger className="h-8 text-[11px]">
+                <SelectValue placeholder="Select draw" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[220px]">
+                <SelectItem value="__none__" className="text-[11px]">
+                  None
+                </SelectItem>
+                {debugRows.map((r) => (
+                  <SelectItem key={r.key} value={r.key} className="text-[11px] font-mono">
+                    {r.materialLabel} ({r.key})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="max-h-[220px] space-y-1 overflow-y-auto pr-1 text-[10px]">
+            {debugRows.map((r) => (
+              <div key={r.key} className="rounded border border-border/60 p-2">
+                <div className="font-medium">{r.materialLabel}</div>
+                <div className="font-mono text-muted-foreground">{r.shaderLabel || "shader: <none>"}</div>
+                <div className="mt-1 flex items-center gap-2 text-[9px] uppercase text-muted-foreground">
+                  <span>{r.shaderFamily}</span>
+                  <span>{r.hasCube ? "cubemap:on" : "cubemap:off"}</span>
+                  <span>{r.unresolvedRefs > 0 ? `unresolved:${r.unresolvedRefs}` : "resolved"}</span>
+                </div>
+              </div>
+            ))}
+            {!debugRows.length ? (
+              <span className="text-[10px] italic text-muted-foreground">No materials available</span>
+            ) : null}
+          </div>
+          <div className="min-w-0 space-y-2 rounded border border-border/60 p-2">
+            <div className="font-medium text-[11px]">Preview texture decoding</div>
+            <p className="text-[9px] leading-snug text-muted-foreground">
+              Uncheck a slot to skip loading that texture for all meshes (faster preview, less GPU memory). Paths below
+              still show what the material references on disk.
+            </p>
+            <div className="flex flex-wrap gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-[9px]"
+                onClick={() => p.setAllTextureSlotsLoadEnabled(true)}
+              >
+                Load all
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-[9px]"
+                onClick={() => p.setAllTextureSlotsLoadEnabled(false)}
+              >
+                Load none
+              </Button>
+            </div>
+            <div className="grid max-h-[200px] grid-cols-1 gap-x-3 gap-y-1.5 overflow-y-auto overflow-x-hidden pr-0.5 sm:grid-cols-2">
+              {TEXTURE_PREVIEW_SLOT_META.map(({ key, label }) => (
+                <label
+                  key={key}
+                  className="flex cursor-pointer items-start gap-2 rounded-sm border border-transparent py-0.5 hover:bg-muted/25"
+                >
+                  <Checkbox
+                    checked={p.textureSlotLoadEnabled[key]}
+                    onCheckedChange={(c) => p.setTextureSlotLoadEnabled(key, c === true)}
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                  />
+                  <span className="min-w-0 flex-1 text-[10px] leading-tight">{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {selectedDebugRow && selectedBinding ? (
+            <div className="min-w-0 overflow-hidden rounded border border-border/60">
+              <div className="border-b border-border/50 bg-muted/20 px-2 py-1.5">
+                <div className="font-medium text-[11px]">Selected Material Details</div>
+                <div className="mt-1 wrap-break-word font-mono text-[10px] text-muted-foreground leading-snug">
+                  {selectedBinding.materialLabel}
+                </div>
+                <div className="wrap-break-word font-mono text-[10px] text-muted-foreground leading-snug">
+                  {selectedBinding.shaderLabel || "<no shader>"}
+                </div>
+              </div>
+              <div className="max-h-[min(42vh,360px)] overflow-y-auto overflow-x-hidden px-2 py-2">
+                <div className="space-y-2 text-[10px]">
+                  {TEXTURE_PREVIEW_SLOT_META.map(({ key, short }) => {
+                    const pathField = TEXTURE_SLOT_TO_PATH_FIELD[key];
+                    const diskPath = selectedBinding.texturePaths[pathField] ?? null;
+                    const loadOn = p.textureSlotLoadEnabled[key];
+                    const decoded = selectedDataUrls?.[key];
+                    const sampling =
+                      key === "map"
+                        ? selectedBinding.sampling.map
+                        : key === "normalMap"
+                          ? selectedBinding.sampling.normal
+                          : key === "roughnessMap"
+                            ? selectedBinding.sampling.roughness
+                            : key === "metalnessMap"
+                              ? selectedBinding.sampling.metalness
+                              : key === "emissiveMap"
+                                ? selectedBinding.sampling.emissive
+                                : key === "aoMap"
+                                  ? selectedBinding.sampling.ao
+                                  : null;
+                    let decodeLabel: string;
+                    if (!loadOn) {
+                      decodeLabel = "skipped";
+                    } else if (decoded) {
+                      decodeLabel = "decoded";
+                    } else if (diskPath) {
+                      decodeLabel = "failed or pending";
+                    } else {
+                      decodeLabel = "none";
+                    }
+                    return (
+                      <div key={key} className="min-w-0 border-b border-border/40 pb-2 last:border-b-0 last:pb-0">
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                          <span className="shrink-0 font-medium text-foreground">{short}</span>
+                          <span
+                            className={
+                              decodeLabel === "decoded"
+                                ? "text-emerald-600/90 dark:text-emerald-400/90"
+                                : decodeLabel === "skipped"
+                                  ? "text-muted-foreground"
+                                  : "text-amber-700/90 dark:text-amber-400/90"
+                            }
+                          >
+                            {decodeLabel}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 break-all font-mono text-[9px] leading-relaxed text-muted-foreground">
+                          {diskPath ?? "<no path>"}
+                        </div>
+                        {sampling ? (
+                          <div className="mt-1 font-mono text-[9px] leading-relaxed text-muted-foreground">
+                            {`wrapS=${sampling.wrapS} wrapT=${sampling.wrapT} `}
+                            {sampling.uvTransform
+                              ? `uv=scale(${sampling.uvTransform.scale_u.toFixed(3)}, ${sampling.uvTransform.scale_v.toFixed(3)}) rotate(${sampling.uvTransform.rotation.toFixed(3)}) translate(${sampling.uvTransform.translate_u.toFixed(3)}, ${sampling.uvTransform.translate_v.toFixed(3)})`
+                              : "uv=<identity>"}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       </MayaSection>
 
@@ -78,6 +305,53 @@ export function SsbhModelPreviewInspector() {
               onChange={(e) => p.setDirectionalIntensity(Number(e.target.value))}
               className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
             />
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] text-muted-foreground">Light X</Label>
+                <span className="text-[10px] font-mono">{p.directionalX.toFixed(1)}</span>
+              </div>
+              <input
+                type="range"
+                min={-20}
+                max={20}
+                step={0.5}
+                value={p.directionalX}
+                onChange={(e) => p.setDirectionalX(Number(e.target.value))}
+                className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] text-muted-foreground">Light Y</Label>
+                <span className="text-[10px] font-mono">{p.directionalY.toFixed(1)}</span>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={24}
+                step={0.5}
+                value={p.directionalY}
+                onChange={(e) => p.setDirectionalY(Number(e.target.value))}
+                className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] text-muted-foreground">Light Z</Label>
+                <span className="text-[10px] font-mono">{p.directionalZ.toFixed(1)}</span>
+              </div>
+              <input
+                type="range"
+                min={-20}
+                max={20}
+                step={0.5}
+                value={p.directionalZ}
+                onChange={(e) => p.setDirectionalZ(Number(e.target.value))}
+                className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+              />
+            </div>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label className="text-[11px] text-muted-foreground">Background Color</Label>
@@ -237,7 +511,7 @@ export function SsbhModelPreviewInspector() {
           </div>
           <div className="flex flex-col">
             <span className="text-[9px] uppercase text-muted-foreground">Textures</span>
-            <span className="text-[11px] font-mono">{p.textureDataUrlByDrawKey.size}</span>
+            <span className="text-[11px] font-mono">{p.drawMaterialDataUrlsByDrawKey.size}</span>
           </div>
           <div className="flex flex-col col-span-2">
             <span className="text-[9px] uppercase text-muted-foreground">Bones</span>

@@ -185,6 +185,119 @@ pub fn resolve_modl_entry_path(input: &str) -> Result<PathBuf, String> {
     ))
 }
 
+fn truncate_warn_detail(s: &str, max_chars: usize) -> String {
+    let t = s.trim();
+    let count = t.chars().count();
+    if count <= max_chars {
+        return t.to_string();
+    }
+    t.chars().take(max_chars).collect::<String>() + "…"
+}
+
+/// Loads every `.numatb` in the model folder not already referenced by the modl.
+/// Files that fail to parse (unsupported Matl revision / game-specific layout) are skipped with a warning.
+fn merge_additional_numatb_in_model_folder(
+    root_canon: &Path,
+    matl_paths: &mut Vec<String>,
+    matl_combined: &mut Option<MatlData>,
+    warnings: &mut Vec<String>,
+) -> Result<(), String> {
+    let mut seen: HashSet<PathBuf> = HashSet::new();
+    for s in matl_paths.iter() {
+        let p = Path::new(s);
+        if let Ok(c) = fs::canonicalize(p) {
+            seen.insert(c);
+        }
+    }
+    let rd =
+        fs::read_dir(root_canon).map_err(|e| format!("Failed to read model folder: {e}"))?;
+    for ent in rd.flatten() {
+        let p = ent.path();
+        let ext = p.extension().and_then(|x| x.to_str()).unwrap_or("");
+        if !ext.eq_ignore_ascii_case("numatb") {
+            continue;
+        }
+        let canon = fs::canonicalize(&p).map_err(|e| {
+            format!(
+                "Failed to canonicalize {}: {e}",
+                p.display()
+            )
+        })?;
+        if seen.contains(&canon) {
+            continue;
+        }
+        let data = match MatlData::from_file(&p) {
+            Ok(d) => d,
+            Err(e) => {
+                warnings.push(format!(
+                    "Skipped extra material file {} (cannot parse as Matl): {}",
+                    p.display(),
+                    truncate_warn_detail(&e.to_string(), 320)
+                ));
+                continue;
+            }
+        };
+        matl_paths.push(p.to_string_lossy().to_string());
+        seen.insert(canon);
+        match matl_combined.as_mut() {
+            None => *matl_combined = Some(data),
+            Some(existing) => existing.entries.extend(data.entries),
+        }
+    }
+    Ok(())
+}
+
+fn is_nust_numatb_path(path: &Path) -> bool {
+    let file = match path.file_name().and_then(|s| s.to_str()) {
+        Some(v) => v.to_ascii_lowercase(),
+        None => return false,
+    };
+    file.ends_with("__nust__.numatb")
+}
+
+fn select_preferred_matl_paths(matl_paths: &[String]) -> (Vec<String>, Vec<String>) {
+    let mut nust_paths: Vec<String> = Vec::new();
+    let mut non_nust_paths: Vec<String> = Vec::new();
+    for s in matl_paths {
+        if is_nust_numatb_path(Path::new(s)) {
+            nust_paths.push(s.clone());
+        } else {
+            non_nust_paths.push(s.clone());
+        }
+    }
+    if !nust_paths.is_empty() {
+        (nust_paths, non_nust_paths)
+    } else {
+        (matl_paths.to_vec(), Vec::new())
+    }
+}
+
+fn load_and_merge_matl_paths(
+    matl_paths: &[String],
+    warnings: &mut Vec<String>,
+) -> Option<MatlData> {
+    let mut merged: Option<MatlData> = None;
+    for s in matl_paths {
+        let p = Path::new(s);
+        let data = match MatlData::from_file(p) {
+            Ok(v) => v,
+            Err(e) => {
+                warnings.push(format!(
+                    "Skipped selected material file {} (cannot parse as Matl): {}",
+                    p.display(),
+                    truncate_warn_detail(&e.to_string(), 320)
+                ));
+                continue;
+            }
+        };
+        match merged.as_mut() {
+            None => merged = Some(data),
+            Some(existing) => existing.entries.extend(data.entries),
+        }
+    }
+    merged
+}
+
 fn collect_texture_refs(matl: &MatlData) -> Vec<String> {
     let mut set: HashSet<String> = HashSet::new();
     for entry in &matl.entries {
@@ -194,10 +307,110 @@ fn collect_texture_refs(matl: &MatlData) -> Vec<String> {
                 set.insert(s.to_string());
             }
         }
+        for tex in &entry.textures2 {
+            let s = tex.data.trim();
+            if !s.is_empty() {
+                set.insert(s.to_string());
+            }
+        }
     }
     let mut v: Vec<String> = set.into_iter().collect();
     v.sort();
     v
+}
+
+/// Strips leading `..` path components. Matl texture paths are often authored relative to a
+/// content root above the `.numdlb` folder; those `..` segments must not be applied only from
+/// the numdlb directory — the remainder (`share/textures/...`, `textures/...`) is joined under
+/// the model folder and each ancestor until a real file is found.
+fn texture_logical_suffix_after_parent_dots(normalized_rel: &str) -> String {
+    let parts: Vec<&str> = normalized_rel
+        .split(|c| c == '/' || c == '\\')
+        .filter(|p| !p.is_empty() && *p != ".")
+        .collect();
+    let mut i = 0usize;
+    while i < parts.len() && parts[i] == ".." {
+        i += 1;
+    }
+    parts[i..].join(std::path::MAIN_SEPARATOR_STR)
+}
+
+fn try_resolve_nutexb_lex_under_model_tree(
+    model_root_canon: &Path,
+    candidate: &Path,
+) -> Result<Option<PathBuf>, String> {
+    let mut attempts: Vec<PathBuf> = Vec::new();
+    attempts.push(candidate.to_path_buf());
+    let has_nutexb_ext = candidate
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|e| e.eq_ignore_ascii_case("nutexb"))
+        .unwrap_or(false);
+    if !has_nutexb_ext {
+        attempts.push(candidate.with_extension("nutexb"));
+    }
+    for p in attempts {
+        if p.is_file() {
+            return Ok(Some(verify_preview_path_under_model_tree(
+                model_root_canon,
+                &p,
+            )?));
+        }
+    }
+    Ok(None)
+}
+
+/// Tries `suffix` joined to `model_root_canon` and each ancestor directory (walk-up), resolving
+/// `.nutexb` files that live at the content root (e.g. `share/textures/...` next to `model/`).
+fn find_nutexb_by_suffix_walking_ancestors(
+    model_root_canon: &Path,
+    suffix: &str,
+) -> Result<Option<PathBuf>, String> {
+    if suffix.is_empty() {
+        return Ok(None);
+    }
+    let mut base = model_root_canon.to_path_buf();
+    for _ in 0..=MAX_PREVIEW_ANCESTOR_HOPS {
+        let candidate = base.join(suffix);
+        if let Some(p) = try_resolve_nutexb_lex_under_model_tree(model_root_canon, &candidate)? {
+            return Ok(Some(p));
+        }
+        if !base.pop() {
+            break;
+        }
+    }
+    Ok(None)
+}
+
+/// Matl strings like `../../textures/foo` or `../../../share/textures/bar` — strip `..`, drop
+/// `textures/` and `share/textures/` prefixes, keep only the final filename for lookup (user
+/// unpack trees place `.nutexb` under `{root}/textures/` or `{root}/share/textures/`).
+fn normalized_matl_texture_filename_only(normalized_rel: &str) -> Option<String> {
+    let s = normalized_rel.trim().replace('\\', "/");
+    if s.is_empty() {
+        return None;
+    }
+    let mut parts: Vec<&str> = s
+        .split('/')
+        .filter(|p| !p.is_empty() && *p != ".")
+        .collect();
+    while parts.first() == Some(&"..") {
+        parts.remove(0);
+    }
+    while parts.first().map(|p| p.eq_ignore_ascii_case("textures")).unwrap_or(false) {
+        parts.remove(0);
+    }
+    if parts.len() >= 2
+        && parts[0].eq_ignore_ascii_case("share")
+        && parts[1].eq_ignore_ascii_case("textures")
+    {
+        parts.drain(0..2);
+    }
+    let name = parts.last()?.trim();
+    if name.is_empty() {
+        return None;
+    }
+    Some(name.to_string())
 }
 
 fn texture_basename_as_nutexb(texture_ref: &str) -> Option<String> {
@@ -228,8 +441,73 @@ fn find_case_insensitive_file_in_dir(dir: &Path, want_file: &str) -> Option<Path
     None
 }
 
+fn nutexb_filename_from_basename_token(token: &str) -> String {
+    let t = token.trim();
+    if t.to_ascii_lowercase().ends_with(".nutexb") {
+        t.to_string()
+    } else {
+        format!("{t}.nutexb")
+    }
+}
+
+/// Looks for `want_file` (e.g. `foo.nutexb`) in `base_dir`, then under `textures/`, `share/textures/`,
+/// and case variants (unpack layouts vary: flat root vs `textures/` subtree).
+fn find_nutexb_in_texture_trees(
+    model_root_canon: &Path,
+    base_dir: &Path,
+    want_file: &str,
+) -> Result<Option<PathBuf>, String> {
+    if base_dir.is_dir() {
+        let direct = base_dir.join(want_file);
+        if direct.is_file() {
+            return Ok(Some(verify_preview_path_under_model_tree(
+                model_root_canon,
+                &direct,
+            )?));
+        }
+        if let Some(found) = find_case_insensitive_file_in_dir(base_dir, want_file) {
+            return Ok(Some(verify_preview_path_under_model_tree(
+                model_root_canon,
+                &found,
+            )?));
+        }
+    }
+    let subdir_chains: &[&[&str]] = &[
+        &["textures"],
+        &["Textures"],
+        &["TEXTURES"],
+        &["share", "textures"],
+        &["share", "Textures"],
+        &["Share", "textures"],
+        &["Share", "Textures"],
+    ];
+    for chain in subdir_chains {
+        let mut dir = base_dir.to_path_buf();
+        for seg in *chain {
+            dir.push(seg);
+        }
+        if !dir.is_dir() {
+            continue;
+        }
+        let direct = dir.join(want_file);
+        if direct.is_file() {
+            return Ok(Some(verify_preview_path_under_model_tree(
+                model_root_canon,
+                &direct,
+            )?));
+        }
+        if let Some(found) = find_case_insensitive_file_in_dir(&dir, want_file) {
+            return Ok(Some(verify_preview_path_under_model_tree(
+                model_root_canon,
+                &found,
+            )?));
+        }
+    }
+    Ok(None)
+}
+
 /// When the matl path does not match disk (extra folders, different `..` depth), locate the same
-/// filename under any `textures` directory on the path from the model folder up the unpack tree.
+/// filename in the content root, under `textures/`, or `share/textures/` while walking ancestors.
 fn find_nutexb_by_basename_near_textures(
     model_root_canon: &Path,
     texture_ref: &str,
@@ -240,24 +518,8 @@ fn find_nutexb_by_basename_near_textures(
     };
     let mut base_anc = model_root_canon.to_path_buf();
     for _ in 0..=MAX_PREVIEW_ANCESTOR_HOPS {
-        for sub in ["textures", "Textures", "TEXTURES"] {
-            let dir = base_anc.join(sub);
-            if !dir.is_dir() {
-                continue;
-            }
-            let direct = dir.join(&want_file);
-            if direct.is_file() {
-                return Ok(Some(verify_preview_path_under_model_tree(
-                    model_root_canon,
-                    &direct,
-                )?));
-            }
-            if let Some(found) = find_case_insensitive_file_in_dir(&dir, &want_file) {
-                return Ok(Some(verify_preview_path_under_model_tree(
-                    model_root_canon,
-                    &found,
-                )?));
-            }
+        if let Some(p) = find_nutexb_in_texture_trees(model_root_canon, &base_anc, &want_file)? {
+            return Ok(Some(p));
         }
         if !base_anc.pop() {
             break;
@@ -272,19 +534,50 @@ fn resolve_nutexb_path(root_canon: &Path, texture_ref: &str) -> Result<Option<Pa
         return Ok(None);
     }
     let normalized = normalize_bundle_relative_path(trimmed);
-    if !normalized.is_empty() {
-        let base = resolve_relative_from_model_folder(root_canon, &normalized)?;
+    if normalized.is_empty() {
+        return find_nutexb_by_basename_near_textures(root_canon, texture_ref);
+    }
+
+    // 0) Strip `../`, `textures/`, `share/textures/` — use filename only (e.g. matl
+    //    `../../textures/foo` → lookup `foo.nutexb` under `{unpack}/textures/` and `{unpack}/share/textures/`).
+    if let Some(fname_token) = normalized_matl_texture_filename_only(&normalized) {
+        let want = nutexb_filename_from_basename_token(&fname_token);
+        let mut base_anc = root_canon.to_path_buf();
+        for _ in 0..=MAX_PREVIEW_ANCESTOR_HOPS {
+            if let Some(p) = find_nutexb_in_texture_trees(root_canon, &base_anc, &want)? {
+                return Ok(Some(p));
+            }
+            if !base_anc.pop() {
+                break;
+            }
+        }
+    }
+
+    // 1) Content-root style: ignore leading `..` segments and locate `share/textures/...`,
+    //    `textures/...`, etc. under the model folder or any ancestor (unpack / workspace root).
+    let suffix = texture_logical_suffix_after_parent_dots(&normalized);
+    if !suffix.is_empty() {
+        if let Some(p) = find_nutexb_by_suffix_walking_ancestors(root_canon, &suffix)? {
+            return Ok(Some(p));
+        }
+    }
+
+    // 2) Path relative to the folder that contains the `.numdlb` (legacy).
+    if let Ok(base) = resolve_relative_from_model_folder(root_canon, &normalized) {
         if base.is_file() {
             return Ok(Some(verify_preview_path_under_model_tree(root_canon, &base)?));
         }
         if !normalized.to_ascii_lowercase().ends_with(".nutexb") {
             let with_ext = format!("{normalized}.nutexb");
-            let alt = resolve_relative_from_model_folder(root_canon, &with_ext)?;
-            if alt.is_file() {
-                return Ok(Some(verify_preview_path_under_model_tree(root_canon, &alt)?));
+            if let Ok(alt) = resolve_relative_from_model_folder(root_canon, &with_ext) {
+                if alt.is_file() {
+                    return Ok(Some(verify_preview_path_under_model_tree(root_canon, &alt)?));
+                }
             }
         }
     }
+
+    // 3) Same basename under any `textures/` folder up the tree.
     find_nutexb_by_basename_near_textures(root_canon, texture_ref)
 }
 
@@ -386,8 +679,17 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
             continue;
         }
         let p = verify_preview_path_under_model_tree(&root_canon, &p_lex)?;
-        let data: MatlData =
-            MatlData::from_file(&p).map_err(|e| format!("Failed to read Matl {}: {e}", p.display()))?;
+        let data = match MatlData::from_file(&p) {
+            Ok(d) => d,
+            Err(e) => {
+                warnings.push(format!(
+                    "Skipped material file {} (cannot parse as Matl): {}",
+                    p.display(),
+                    truncate_warn_detail(&e.to_string(), 320)
+                ));
+                continue;
+            }
+        };
         matl_paths.push(p.to_string_lossy().to_string());
         match matl_combined.as_mut() {
             None => matl_combined = Some(data),
@@ -396,6 +698,24 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
             }
         }
     }
+
+    merge_additional_numatb_in_model_folder(
+        &root_canon,
+        &mut matl_paths,
+        &mut matl_combined,
+        &mut warnings,
+    )?;
+
+    // Prefer game runtime material files: when `__nust__.numatb` exists, ignore non-`__nust__` files.
+    let (preferred_matl_paths, ignored_non_nust_paths) = select_preferred_matl_paths(&matl_paths);
+    if !ignored_non_nust_paths.is_empty() {
+        warnings.push(format!(
+            "Using only __nust__.numatb material files for preview; ignored {} non-__nust__ file(s).",
+            ignored_non_nust_paths.len()
+        ));
+    }
+    matl_paths = preferred_matl_paths;
+    matl_combined = load_and_merge_matl_paths(&matl_paths, &mut warnings);
 
     let (texture_refs, resolved_nutexb_paths, texture_resolve, matl_value) =
         if let Some(ref m) = matl_combined {
@@ -496,4 +816,147 @@ pub fn ssbh_load_ssbh_file_as_json(path: String) -> Result<Value, String> {
         "format": ext_lc,
         "data": v,
     }))
+}
+
+#[cfg(test)]
+mod numatb_folder_tests {
+    use super::{load_model_preview_bundle, MatlData};
+    use std::fs;
+    use std::path::Path;
+
+    fn numatb_test_root() -> std::path::PathBuf {
+        match std::env::var("SSBH_TEST_NUMATB_DIR") {
+            Ok(s) => {
+                let t = s.trim();
+                if t.is_empty() {
+                    Path::new(r"E:\XB\解包\com\file\0xa258a522").to_path_buf()
+                } else {
+                    std::path::PathBuf::from(t)
+                }
+            }
+            Err(_) => Path::new(r"E:\XB\解包\com\file\0xa258a522").to_path_buf(),
+        }
+    }
+
+    fn collect_numatb_paths(root: &Path) -> Vec<std::path::PathBuf> {
+        let mut out: Vec<std::path::PathBuf> = fs::read_dir(root)
+            .map(|rd| {
+                rd.filter_map(|e| e.ok())
+                    .map(|e| e.path())
+                    .filter(|p| {
+                        p.extension()
+                            .and_then(|x| x.to_str())
+                            .map(|e| e.eq_ignore_ascii_case("numatb"))
+                            .unwrap_or(false)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        out.sort();
+        out
+    }
+
+    fn sample_model_path() -> std::path::PathBuf {
+        numatb_test_root().join("015gndmuc_004deltpl_001_body_normal.numdlb")
+    }
+
+    /// Scans `SSBH_TEST_NUMATB_DIR` (default `E:\XB\解包\com\file\0xa258a522`) and asserts every
+    /// `.numatb` parses with `ssbh_data::MatlData::from_file`.
+    ///
+    /// Run locally: `cargo test numatb_unpack_folder_matl_all_parse -- --ignored --nocapture`
+    #[test]
+    #[ignore = "Requires local unpack path; set SSBH_TEST_NUMATB_DIR to override"]
+    fn numatb_unpack_folder_matl_all_parse() {
+        let root = numatb_test_root();
+        if !root.is_dir() {
+            eprintln!(
+                "skip: directory does not exist: {} (set SSBH_TEST_NUMATB_DIR)",
+                root.display()
+            );
+            return;
+        }
+        let files = collect_numatb_paths(&root);
+        assert!(
+            !files.is_empty(),
+            "no .numatb files under {}",
+            root.display()
+        );
+        let mut failures: Vec<String> = Vec::new();
+        for p in &files {
+            match MatlData::from_file(p) {
+                Ok(m) => {
+                    eprintln!(
+                        "OK  {}  ({} entries)",
+                        p.display(),
+                        m.entries.len()
+                    );
+                }
+                Err(e) => {
+                    let msg = format!("{}: {}", p.display(), e);
+                    eprintln!("FAIL {msg}");
+                    failures.push(msg);
+                }
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "MatlData::from_file failed for {} of {} file(s). See --nocapture output above.\n{}",
+            failures.len(),
+            files.len(),
+            failures.join("\n---\n")
+        );
+    }
+
+    /// Loads a real EXVS2 model preview bundle and verifies material + texture resolution reaches
+    /// on-disk `.nutexb` files.
+    ///
+    /// Run locally:
+    /// `cargo test exvs_model_preview_bundle_resolves_textures -- --ignored --nocapture`
+    #[test]
+    #[ignore = "Requires local unpack path; set SSBH_TEST_NUMATB_DIR to override"]
+    fn exvs_model_preview_bundle_resolves_textures() {
+        let model_path = sample_model_path();
+        if !model_path.is_file() {
+            eprintln!(
+                "skip: model does not exist: {} (set SSBH_TEST_NUMATB_DIR)",
+                model_path.display()
+            );
+            return;
+        }
+
+        let bundle = load_model_preview_bundle(&model_path.to_string_lossy())
+            .expect("expected EXVS model preview bundle to load");
+
+        assert!(
+            bundle.matl.is_some(),
+            "expected combined Matl JSON for {}",
+            model_path.display()
+        );
+        assert!(
+            bundle
+                .matl_paths
+                .iter()
+                .any(|p| p.ends_with("__nust__.numatb")),
+            "expected preview bundle to load at least one __nust__.numatb"
+        );
+        assert!(
+            bundle.texture_refs.iter().any(|r| r.contains("pbr1_basecolor")),
+            "expected EXVS base color texture reference in preview bundle"
+        );
+        assert!(
+            bundle
+                .resolved_nutexb_paths
+                .iter()
+                .any(|p| p.ends_with("015gndmuc_004deltpl_001_pbr1_basecolor.nutexb")),
+            "expected resolved EXVS base color .nutexb path in preview bundle"
+        );
+        assert!(
+            !bundle
+                .warnings
+                .iter()
+                .any(|w| w.contains("cannot parse as Matl")),
+            "did not expect material parse warnings: {:?}",
+            bundle.warnings
+        );
+    }
 }
