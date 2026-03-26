@@ -49,7 +49,7 @@ export function SsbhModelPreviewInspector() {
     : undefined;
 
   return (
-    <div className="-mx-4 flex flex-col border-t bg-background/50">
+    <div className="-mx-4 flex min-w-0 flex-col border-t bg-background/50">
       {p.previewBusy ? (
         <div
           className="border-b border-border/60 bg-muted/25 px-3 py-1.5 text-[10px] text-muted-foreground"
@@ -543,11 +543,15 @@ export function SsbhModelPreviewInspector() {
 
       {p.bundle?.warnings?.length ? (
         <MayaSection title="Warnings" icon={<Info className="h-3.5 w-3.5 text-amber-500" />}>
-          <ul className="list-disc space-y-1 pl-4 text-[10px] text-muted-foreground">
-            {p.bundle.warnings.map((w, i) => (
-              <li key={i}>{w}</li>
-            ))}
-          </ul>
+          <div className="min-w-0 max-w-full">
+            <ul className="list-disc space-y-1.5 pl-4 text-[10px] text-muted-foreground">
+              {p.bundle.warnings.map((w, i) => (
+                <li key={i} className="min-w-0 break-words whitespace-normal [overflow-wrap:anywhere]">
+                  {w}
+                </li>
+              ))}
+            </ul>
+          </div>
         </MayaSection>
       ) : null}
     </div>

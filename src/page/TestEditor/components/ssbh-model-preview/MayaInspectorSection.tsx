@@ -24,7 +24,7 @@ export function MayaSection({ title, icon, children, defaultOpen = true }: MayaS
           <span className="text-[10px] font-bold uppercase tracking-wider">{title}</span>
         </div>
       </button>
-      {isOpen && <div className="p-3">{children}</div>}
+      {isOpen && <div className="min-w-0 p-3">{children}</div>}
     </div>
   );
 }
