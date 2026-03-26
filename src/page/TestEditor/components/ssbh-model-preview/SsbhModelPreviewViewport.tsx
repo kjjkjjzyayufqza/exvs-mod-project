@@ -79,6 +79,7 @@ export function SsbhModelPreviewViewport() {
             selectedBoneIndex={p.selectedBoneIndex}
             boneTransformMode={p.boneTransformMode}
             bonePoseResetNonce={p.bonePoseResetNonce}
+            previewRenderStyle={p.previewRenderStyle}
           />
           <SsbhModelPreviewLoadingOverlay readingBundle={p.loading} textureDecode={p.textureDecodeProgress} />
         </div>

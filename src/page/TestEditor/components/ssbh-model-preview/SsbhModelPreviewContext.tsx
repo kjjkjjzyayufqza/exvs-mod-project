@@ -41,6 +41,10 @@ import type {
 } from "./types";
 
 export type BoneTransformMode = "translate" | "rotate" | "scale";
+
+/** Physical PBR preview vs stylized look inspired by cortiz2894/water-anime-shader (bloom + warm lights). */
+export type PreviewRenderStyle = "standard" | "anime";
+
 export type MaterialDebugViewMode =
   | "full"
   | "baseColor"
@@ -86,6 +90,8 @@ export type SsbhModelPreviewContextValue = {
   textureDecodeProgress: SsbhModelPreviewTextureDecodeProgress | null;
   /** Shorthand: `loading || textureDecoding` — use to block actions that conflict with I/O. */
   previewBusy: boolean;
+  previewRenderStyle: PreviewRenderStyle;
+  setPreviewRenderStyle: (v: PreviewRenderStyle) => void;
   visibleKeys: ReadonlySet<string>;
   wireframe: boolean;
   setWireframe: (v: boolean) => void;
@@ -208,6 +214,7 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
   const [selectedBoneIndex, setSelectedBoneIndex] = useState<number | null>(null);
   const [boneTransformMode, setBoneTransformMode] = useState<BoneTransformMode>("translate");
   const [bonePoseResetNonce, setBonePoseResetNonce] = useState(0);
+  const [previewRenderStyle, setPreviewRenderStyle] = useState<PreviewRenderStyle>("standard");
 
   const skeletonGeometry = useMemo(() => {
     if (!bundle?.skel) return null;
@@ -557,6 +564,8 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       textureDecoding,
       textureDecodeProgress,
       previewBusy,
+      previewRenderStyle,
+      setPreviewRenderStyle,
       visibleKeys,
       wireframe,
       setWireframe,
@@ -627,6 +636,7 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       textureDecoding,
       textureDecodeProgress,
       previewBusy,
+      previewRenderStyle,
       visibleKeys,
       wireframe,
       showSkeleton,

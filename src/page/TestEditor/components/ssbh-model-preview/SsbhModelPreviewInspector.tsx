@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { MayaSection } from "./MayaInspectorSection";
-import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
+import { useSsbhModelPreview, type PreviewRenderStyle } from "./SsbhModelPreviewContext";
 import { TEXTURE_PREVIEW_SLOT_META, TEXTURE_SLOT_TO_PATH_FIELD } from "./meshFromSsbh";
 import type { SkelDataJson } from "./types";
 
@@ -71,6 +71,27 @@ export function SsbhModelPreviewInspector() {
       ) : null}
       <MayaSection title="Display Settings" icon={<Settings2 className="h-3.5 w-3.5" />}>
         <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5 sm:col-span-2">
+            <Label className="text-[11px] text-muted-foreground" title="Bloom + warm key lights (water-anime-shader style)">
+              Preview render style
+            </Label>
+            <Select
+              value={p.previewRenderStyle}
+              onValueChange={(v) => p.setPreviewRenderStyle(v as PreviewRenderStyle)}
+            >
+              <SelectTrigger className="h-8 text-[11px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="standard" className="text-[11px]">
+                  Standard
+                </SelectItem>
+                <SelectItem value="anime" className="text-[11px]">
+                  Anime (bloom + warm lights)
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex items-center justify-between gap-2">
             <Label className="text-[11px] text-muted-foreground">Wireframe</Label>
             <Switch checked={p.wireframe} onCheckedChange={p.setWireframe} />

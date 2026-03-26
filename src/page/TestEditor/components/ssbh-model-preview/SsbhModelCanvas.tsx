@@ -1,4 +1,4 @@
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
   Grid,
   GizmoHelper,
@@ -7,7 +7,7 @@ import {
   Stats,
   useTexture,
 } from "@react-three/drei";
-import { Suspense, useLayoutEffect, useState, useEffect, useRef, type RefObject } from "react";
+import { Suspense, useLayoutEffect, useMemo, useState, useEffect, useRef, type RefObject } from "react";
 import {
   ClampToEdgeWrapping,
   Color,
@@ -22,13 +22,16 @@ import {
   RepeatWrapping,
   SRGBColorSpace,
   Vector2,
+  Vector3,
 } from "three";
 import type { BufferGeometry, Texture } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { animeExvsOnBeforeCompile, createAnimeExvsUniforms } from "./animeExvsMeshStandard";
+import { AnimePreviewPostFx } from "./AnimePreviewPostFx";
 import { BonePreviewRig, resetSkinnedMeshesToBindPose } from "./BonePreviewRig";
 import { fitCameraToObject } from "./cameraFit";
 import { applyPreviewUvFlip } from "./previewUvFlip";
-import type { BoneTransformMode, MaterialDebugViewMode } from "./SsbhModelPreviewContext";
+import type { BoneTransformMode, MaterialDebugViewMode, PreviewRenderStyle } from "./SsbhModelPreviewContext";
 import type { DrawMaterialDataUrls, ResolvedMaterialBinding, ResolvedTextureSampling } from "./meshFromSsbh";
 import type { BuiltMeshDraw, SkelDataJson } from "./types";
 
@@ -70,6 +73,8 @@ type SsbhModelCanvasProps = {
   selectedBoneIndex: number | null;
   boneTransformMode: BoneTransformMode;
   bonePoseResetNonce: number;
+  /** Stylized pipeline (bloom + warm lights) inspired by external/water-anime-shader. */
+  previewRenderStyle: PreviewRenderStyle;
 };
 
 function CameraFit({
@@ -192,11 +197,15 @@ function DrawMeshUnifiedPbr({
   textureFlipY,
   normalMapEnabled,
   materialDebugViewMode,
+  previewRenderStyle,
+  animeKeyLightDir,
 }: DrawMeshProps & {
   slots: { kind: PbrSlotKind; url: string }[];
   binding: ResolvedMaterialBinding | null;
   textureFlipY: boolean;
   materialDebugViewMode: MaterialDebugViewMode;
+  previewRenderStyle: PreviewRenderStyle;
+  animeKeyLightDir: Vector3;
 }) {
   const urls = slots.map((s) => s.url);
   const texs = useTexture(urls);
@@ -227,6 +236,13 @@ function DrawMeshUnifiedPbr({
   slots.forEach((s, i) => {
     byKind[s.kind] = list[i] as Texture;
   });
+  const exvsActive = previewRenderStyle === "anime" && materialDebugViewMode === "full";
+  const exvsUniforms = useMemo(() => createAnimeExvsUniforms(), [draw.key]);
+  const onBeforeCompileExvs = useMemo(() => animeExvsOnBeforeCompile(exvsUniforms), [exvsUniforms]);
+  useFrame(() => {
+    if (!exvsActive) return;
+    exvsUniforms.uAnimeKeyDir.value.copy(animeKeyLightDir);
+  });
   if (!visible) return null;
   const shaderFamily = binding?.shaderFamily ?? "generic";
   const activeNormalMap = normalMapEnabled ? byKind.normalMap : undefined;
@@ -252,9 +268,28 @@ function DrawMeshUnifiedPbr({
         : shaderFamily === "vsngCharaSparkle"
           ? 0.35
           : 0.12;
-  const emissiveIntensity = shaderFamily === "vsngCharaSparkle" ? 1.8 : hasEmit ? 1 : 0;
+  const roughnessForStyle =
+    exvsActive ? Math.min(1, roughnessValue * 0.72) : roughnessValue;
+  const emissiveIntensity = exvsActive
+    ? shaderFamily === "vsngCharaSparkle"
+      ? 2.15
+      : hasEmit
+        ? 1.18
+        : 0
+    : shaderFamily === "vsngCharaSparkle"
+      ? 1.8
+        : hasEmit
+        ? 1
+        : 0;
   const transparent = binding?.renderHints.isTransparent ?? hasMap;
-  const envIntensity = shaderFamily === "vsngCharaSparkle" ? 1.55 : hasCube ? 1.15 : 0;
+  const envIntensity =
+    exvsActive
+      ? (shaderFamily === "vsngCharaSparkle" ? 1.65 : hasCube ? 1.25 : 0)
+      : shaderFamily === "vsngCharaSparkle"
+        ? 1.55
+        : hasCube
+          ? 1.15
+          : 0;
   const canUseMetalnessMap = hasCube;
   const effectiveMetalnessMap = canUseMetalnessMap ? byKind.metalnessMap : undefined;
   const effectiveMetalnessValue = canUseMetalnessMap ? metalnessValue : Math.min(metalnessValue, 0.2);
@@ -268,6 +303,7 @@ function DrawMeshUnifiedPbr({
   return (
     <mesh geometry={draw.geometry} raycast={ignoreRaycast ? noopMeshRaycast : undefined}>
       <meshStandardMaterial
+        key={exvsActive ? "exvs" : "std"}
         map={byKind.map}
         normalMap={activeNormalMap}
         normalScale={activeNormalMap ? new Vector2(1, 1) : undefined}
@@ -282,10 +318,11 @@ function DrawMeshUnifiedPbr({
         envMapIntensity={envIntensity}
         alphaTest={hasMap ? 0.001 : 0}
         transparent={transparent}
-        roughness={roughnessValue}
+        roughness={roughnessForStyle}
         metalness={effectiveMetalnessValue}
         side={DoubleSide}
         wireframe={wireframe}
+        onBeforeCompile={exvsActive ? onBeforeCompileExvs : undefined}
       />
     </mesh>
   );
@@ -301,6 +338,8 @@ function DrawMeshes({
   visibleKeys,
   wireframe,
   bonePoseEnabled,
+  previewRenderStyle,
+  animeKeyLightDir,
 }: Pick<
   SsbhModelCanvasProps,
   | "draws"
@@ -312,7 +351,10 @@ function DrawMeshes({
   | "visibleKeys"
   | "wireframe"
   | "bonePoseEnabled"
->) {
+  | "previewRenderStyle"
+> & {
+  animeKeyLightDir: Vector3;
+}) {
   const ignoreRaycast = bonePoseEnabled;
   return (
     <>
@@ -356,6 +398,8 @@ function DrawMeshes({
                 textureFlipY={textureFlipY}
                 normalMapEnabled={normalMapEnabled}
                 materialDebugViewMode={materialDebugViewMode}
+                previewRenderStyle={previewRenderStyle}
+                animeKeyLightDir={animeKeyLightDir}
               />
             ) : (
               <DrawMeshUntextured
@@ -423,6 +467,7 @@ function Scene({
   selectedBoneIndex,
   boneTransformMode,
   bonePoseResetNonce,
+  previewRenderStyle,
 }: SsbhModelCanvasProps) {
   const modelRootRef = useRef<Group>(null);
   const controlsRef = useRef<OrbitControlsImpl>(null);
@@ -438,13 +483,39 @@ function Scene({
   const showStaticSkeleton = showSkeleton && !bonePoseEnabled && Boolean(skeletonGeometry);
   const showRig = bonePoseEnabled && skel !== null && skel.bones.length > 0;
 
+  const animeKeyLightDir = useMemo(() => {
+    const v = new Vector3(directionalX, directionalY, directionalZ);
+    if (v.lengthSq() < 1e-12) {
+      v.set(0.35, 0.85, 0.45);
+    } else {
+      v.normalize();
+    }
+    return v;
+  }, [directionalX, directionalY, directionalZ]);
+
   return (
     <>
       <color attach="background" args={[background]} />
       <ambientLight intensity={ambientIntensity} />
-      <hemisphereLight args={["#dbeafe", "#111827", 0.26]} />
-      <directionalLight position={[directionalX, directionalY, directionalZ]} intensity={directionalIntensity} />
-      <directionalLight position={[-directionalX * 0.7, directionalY * 0.45, -directionalZ * 0.7]} intensity={directionalIntensity * 0.28} />
+      <hemisphereLight
+        args={
+          previewRenderStyle === "anime"
+            ? ["#b8c8e8", "#101820", 0.32]
+            : ["#dbeafe", "#111827", 0.26]
+        }
+      />
+      <directionalLight
+        color={previewRenderStyle === "anime" ? "#fff4ea" : "#ffffff"}
+        position={[directionalX, directionalY, directionalZ]}
+        intensity={previewRenderStyle === "anime" ? directionalIntensity * 1.1 : directionalIntensity}
+      />
+      <directionalLight
+        color={previewRenderStyle === "anime" ? "#9eb6d4" : "#ffffff"}
+        position={[-directionalX * 0.7, directionalY * 0.45, -directionalZ * 0.7]}
+        intensity={
+          previewRenderStyle === "anime" ? directionalIntensity * 0.22 : directionalIntensity * 0.28
+        }
+      />
 
       <group ref={modelRootRef}>
         <PreviewUvFlipSync draws={draws} uvFlipU={uvFlipU} uvFlipV={uvFlipV} />
@@ -469,6 +540,8 @@ function Scene({
           visibleKeys={visibleKeys}
           wireframe={wireframe}
           bonePoseEnabled={bonePoseEnabled}
+          previewRenderStyle={previewRenderStyle}
+          animeKeyLightDir={animeKeyLightDir}
         />
         {showStaticSkeleton && skeletonGeometry ? <SkeletonLines geometry={skeletonGeometry} /> : null}
       </group>
@@ -531,6 +604,7 @@ export function SsbhModelCanvas(props: SsbhModelCanvasProps) {
         dpr={[1, 2]}
         camera={{ position: [2.4, 1.6, 2.8], fov: 50, near: 0.02, far: 5e6 }}
       >
+        {sceneProps.previewRenderStyle === "anime" ? <AnimePreviewPostFx /> : null}
         <Scene {...sceneProps} background={background} />
       </Canvas>
     </div>
