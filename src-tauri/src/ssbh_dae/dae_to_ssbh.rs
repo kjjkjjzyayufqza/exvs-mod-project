@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use std::collections::HashMap;
 use serde::Serialize;
 use ssbh_data::mesh_data::{AttributeData, MeshData, MeshObjectData, VectorData};
 use ssbh_data::modl_data::{ModlData, ModlEntryData};
@@ -282,15 +283,41 @@ fn convert_meshes_to_ssbh(meshes: &[DaeMesh], config: &DaeConvertConfig) -> Resu
 
 fn convert_model_to_ssbh(meshes: &[DaeMesh], config: &DaeConvertConfig) -> Result<ModlData> {
     let mut entries = Vec::new();
+    let configured_entries: HashMap<(&str, u64), &str> = config
+        .modl_entries
+        .iter()
+        .map(|entry| {
+            (
+                (entry.mesh_object_name.as_str(), entry.mesh_object_subindex),
+                entry.material_label.as_str(),
+            )
+        })
+        .collect();
 
     for mesh in meshes {
         if mesh.vertices.is_empty() {
             continue;
         }
+        let material_label = if configured_entries.is_empty() {
+            "DefaultMaterial".to_string()
+        } else {
+            let key = (mesh.name.as_str(), 0u64);
+            configured_entries
+                .get(&key)
+                .ok_or_else(|| anyhow!("Missing numdlb mapping for mesh '{}'", mesh.name))?
+                .trim()
+                .to_string()
+        };
+        if material_label.is_empty() {
+            return Err(anyhow!(
+                "Mesh '{}' has an empty material label in the numdlb mapping",
+                mesh.name
+            ));
+        }
         entries.push(ModlEntryData {
             mesh_object_name: mesh.name.clone(),
             mesh_object_subindex: 0,
-            material_label: "DefaultMaterial".to_string(),
+            material_label,
         });
     }
 

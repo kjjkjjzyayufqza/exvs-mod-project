@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TestTreeNode } from "../types";
@@ -6,14 +6,16 @@ import { ImagePreview, isImageFile } from "./ImagePreview";
 import { NutexbPreview } from "./NutexbPreview";
 import { SsbhDaeExchangePanel } from "./ssbh-model-preview/SsbhDaeExchangePanel";
 import { SsbhModelPreviewInspector } from "./ssbh-model-preview/SsbhModelPreviewPanel";
+import { NumdlbFileEditorPanel } from "./ssbh-model-preview/NumdlbFileEditorPanel";
 
-const TAB_ITEMS = [
+const BASE_TAB_ITEMS = [
   { name: "Info", value: "info" },
   { name: "Model Preview", value: "modelPreview" },
   { name: "COLLADA (.dae)", value: "daeExchange" },
 ] as const;
+const NUMDLB_TAB_ITEM = { name: "NUMDLB Mapping", value: "numdlbMapping" } as const;
 
-type TabValue = (typeof TAB_ITEMS)[number]["value"];
+type TabValue = (typeof BASE_TAB_ITEMS)[number]["value"] | typeof NUMDLB_TAB_ITEM.value;
 
 type InfoPanelProps = {
   selected?: TestTreeNode | null;
@@ -26,6 +28,14 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
     !selected?.isDir && selected?.name.toLowerCase().endsWith(".nutexb");
   const isImage =
     !selected?.isDir && selected?.name && isImageFile(selected.name);
+  const isNumdlb = !selected?.isDir && selected?.name?.toLowerCase().endsWith(".numdlb");
+  const tabItems = isNumdlb ? [...BASE_TAB_ITEMS, NUMDLB_TAB_ITEM] : BASE_TAB_ITEMS;
+
+  useEffect(() => {
+    if (!isNumdlb && activeTab === "numdlbMapping") {
+      setActiveTab("info");
+    }
+  }, [activeTab, isNumdlb]);
 
   const renderInfoContent = () => {
     if (!selected) {
@@ -72,6 +82,8 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
         return <SsbhModelPreviewInspector />;
       case "daeExchange":
         return <SsbhDaeExchangePanel />;
+      case "numdlbMapping":
+        return <NumdlbFileEditorPanel selected={selected} />;
     }
   };
 
@@ -79,7 +91,7 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
     <div className="flex h-full min-h-0 flex-col">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)} className="flex h-full flex-col rounded-none">
         <TabsList className="flex h-10 w-full shrink-0 items-center justify-start gap-1 overflow-x-auto border-b bg-muted/30 px-2 py-1">
-          {TAB_ITEMS.map((tab) => (
+          {tabItems.map((tab) => (
             <TabsTrigger
               key={tab.value}
               value={tab.value}
@@ -97,14 +109,18 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
                 ? "File info"
                 : activeTab === "modelPreview"
                   ? "Viewport inspector"
-                  : "COLLADA exchange"}
+                  : activeTab === "daeExchange"
+                    ? "COLLADA exchange"
+                    : "NUMDLB mapping"}
             </CardTitle>
             <CardDescription className="text-[10px] italic">
               {activeTab === "info"
                 ? "Selection, path, and texture previews"
                 : activeTab === "modelPreview"
                   ? "Display, lighting, meshes, and scene stats for the 3D view"
-                  : "Export SSBH to .dae and convert .dae to SSBH (separate from scene preview)"}
+                  : activeTab === "daeExchange"
+                    ? "Export SSBH to .dae and convert .dae to SSBH (separate from scene preview)"
+                    : "Edit mesh object to material label mapping for the selected .numdlb"}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto p-4 text-sm">

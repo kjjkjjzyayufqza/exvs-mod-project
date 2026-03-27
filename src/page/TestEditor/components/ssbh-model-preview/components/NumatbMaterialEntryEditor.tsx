@@ -1,0 +1,288 @@
+import { useMemo, useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  getNumatbAttributeKind,
+  type NumatbAttribute,
+  type NumatbAttributeData,
+  type NumatbAttributeDataKind,
+  type NumatbMaterialEntry,
+} from "../daeSsbhTypes";
+import { COMMON_NUMATB_PARAM_IDS, createDefaultAttributeData } from "../store/numatbTemplateStoreHelpers";
+
+type NumatbMaterialEntryEditorProps = {
+  entry: NumatbMaterialEntry | null;
+  onChangeMaterialLabel: (nextLabel: string) => void;
+  onChangeShaderLabel: (nextShaderLabel: string) => void;
+  onUpdateAttribute: (attributeIndex: number, data: NumatbAttributeData) => void;
+  onAddAttribute: (paramId: string, kind?: NumatbAttributeDataKind) => void;
+  onRemoveAttribute: (attributeIndex: number) => void;
+};
+
+function JsonAttributeEditor({
+  value,
+  onChange,
+}: {
+  value: unknown;
+  onChange: (nextValue: unknown) => void;
+}) {
+  const [raw, setRaw] = useState(() => JSON.stringify(value, null, 2));
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="space-y-1">
+      <Textarea
+        value={raw}
+        onChange={(event) => setRaw(event.target.value)}
+        onBlur={() => {
+          try {
+            const parsed = JSON.parse(raw) as unknown;
+            onChange(parsed);
+            setError(null);
+          } catch (parseError) {
+            setError(parseError instanceof Error ? parseError.message : String(parseError));
+          }
+        }}
+        className="min-h-[110px] font-mono text-[11px]"
+      />
+      {error ? <p className="text-[11px] text-destructive">{error}</p> : null}
+    </div>
+  );
+}
+
+function AttributeValueEditor({
+  attribute,
+  onChange,
+}: {
+  attribute: NumatbAttribute;
+  onChange: (nextData: NumatbAttributeData) => void;
+}) {
+  const kind = getNumatbAttributeKind(attribute.param.data);
+  const data = attribute.param.data;
+
+  switch (kind) {
+    case "Boolean":
+      return (
+        <div className="flex items-center gap-2">
+          <Checkbox checked={data.Boolean === 1} onCheckedChange={(checked) => onChange({ Boolean: checked ? 1 : 0 })} />
+          <span className="text-[11px] text-muted-foreground">{data.Boolean === 1 ? "True" : "False"}</span>
+        </div>
+      );
+    case "Float":
+      return (
+        <Input
+          type="number"
+          step="0.01"
+          value={data.Float ?? 0}
+          onChange={(event) => onChange({ Float: Number(event.target.value) })}
+          className="h-8 text-[11px]"
+        />
+      );
+    case "Float1":
+      return (
+        <Input
+          type="number"
+          step="0.01"
+          value={data.Float1 ?? 0}
+          onChange={(event) => onChange({ Float1: Number(event.target.value) })}
+          className="h-8 text-[11px]"
+        />
+      );
+    case "String":
+      return (
+        <Input value={data.String ?? ""} onChange={(event) => onChange({ String: event.target.value })} className="h-8 font-mono text-[11px]" />
+      );
+    case "String1":
+      return (
+        <Input value={data.String1 ?? ""} onChange={(event) => onChange({ String1: event.target.value })} className="h-8 font-mono text-[11px]" />
+      );
+    case "Vector4":
+      return (
+        <JsonAttributeEditor
+          value={data.Vector4 ?? createDefaultAttributeData("Vector4").Vector4}
+          onChange={(nextValue) => onChange({ Vector4: nextValue as NonNullable<NumatbAttributeData["Vector4"]> })}
+        />
+      );
+    case "Unk7":
+      return (
+        <JsonAttributeEditor
+          value={data.Unk7 ?? createDefaultAttributeData("Unk7").Unk7}
+          onChange={(nextValue) => onChange({ Unk7: nextValue as NonNullable<NumatbAttributeData["Unk7"]> })}
+        />
+      );
+    case "Sampler":
+      return (
+        <JsonAttributeEditor
+          value={data.Sampler ?? createDefaultAttributeData("Sampler").Sampler}
+          onChange={(nextValue) => onChange({ Sampler: nextValue as NonNullable<NumatbAttributeData["Sampler"]> })}
+        />
+      );
+    case "BlendState":
+      return (
+        <JsonAttributeEditor
+          value={data.BlendState ?? createDefaultAttributeData("BlendState").BlendState}
+          onChange={(nextValue) => onChange({ BlendState: nextValue as NonNullable<NumatbAttributeData["BlendState"]> })}
+        />
+      );
+    case "RasterizerState":
+      return (
+        <JsonAttributeEditor
+          value={data.RasterizerState ?? createDefaultAttributeData("RasterizerState").RasterizerState}
+          onChange={(nextValue) => onChange({ RasterizerState: nextValue as NonNullable<NumatbAttributeData["RasterizerState"]> })}
+        />
+      );
+    case "UvTransform":
+      return (
+        <JsonAttributeEditor
+          value={data.UvTransform ?? createDefaultAttributeData("UvTransform").UvTransform}
+          onChange={(nextValue) => onChange({ UvTransform: nextValue as NonNullable<NumatbAttributeData["UvTransform"]> })}
+        />
+      );
+    case "Type4":
+      return (
+        <JsonAttributeEditor
+          value={data.Type4 ?? createDefaultAttributeData("Type4").Type4}
+          onChange={(nextValue) => onChange({ Type4: nextValue as number[] })}
+        />
+      );
+  }
+}
+
+export function NumatbMaterialEntryEditor({
+  entry,
+  onChangeMaterialLabel,
+  onChangeShaderLabel,
+  onUpdateAttribute,
+  onAddAttribute,
+  onRemoveAttribute,
+}: NumatbMaterialEntryEditorProps) {
+  const [newParamId, setNewParamId] = useState("");
+  const [newParamKind, setNewParamKind] = useState<NumatbAttributeDataKind>("String");
+
+  const availableParamIds = useMemo(() => {
+    const existing = new Set(entry?.attributes.map((attribute) => attribute.param_id) ?? []);
+    return COMMON_NUMATB_PARAM_IDS.filter((paramId) => !existing.has(paramId));
+  }, [entry]);
+
+  if (!entry) {
+    return <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">Select a material entry to edit.</div>;
+  }
+
+  return (
+    <div className="flex h-full flex-col gap-3">
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-1">
+          <Label className="text-[11px] text-muted-foreground">Material label</Label>
+          <Input value={entry.material_label} onChange={(event) => onChangeMaterialLabel(event.target.value)} className="h-8 text-[11px]" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-[11px] text-muted-foreground">Shader label</Label>
+          <Input value={entry.shader_label} onChange={(event) => onChangeShaderLabel(event.target.value)} className="h-8 text-[11px]" />
+        </div>
+      </div>
+
+      <div className="rounded-md border p-3">
+        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_100px]">
+          <Input
+            value={newParamId}
+            onChange={(event) => setNewParamId(event.target.value)}
+            list="numatb-common-param-ids"
+            className="h-8 text-[11px]"
+            placeholder="Param ID"
+          />
+          <Select value={newParamKind} onValueChange={(value) => setNewParamKind(value as NumatbAttributeDataKind)}>
+            <SelectTrigger className="h-8 text-[11px]">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              {[
+                "Boolean",
+                "Float",
+                "Float1",
+                "String",
+                "String1",
+                "Vector4",
+                "Unk7",
+                "Sampler",
+                "BlendState",
+                "RasterizerState",
+                "UvTransform",
+                "Type4",
+              ].map((kind) => (
+                <SelectItem key={kind} value={kind} className="text-[11px]">
+                  {kind}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            size="sm"
+            className="h-8 text-[10px] uppercase tracking-wide"
+            disabled={!newParamId.trim()}
+            onClick={() => {
+              onAddAttribute(newParamId.trim(), newParamKind);
+              setNewParamId("");
+            }}
+          >
+            <Plus className="mr-1 h-3.5 w-3.5" />
+            Add
+          </Button>
+        </div>
+        <datalist id="numatb-common-param-ids">
+          {availableParamIds.map((paramId) => (
+            <option key={paramId} value={paramId} />
+          ))}
+        </datalist>
+      </div>
+
+      <div className="min-h-0 flex-1 rounded-md border">
+        <div className="grid grid-cols-[minmax(0,180px)_100px_minmax(0,1fr)_52px] gap-2 border-b bg-muted/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <span>Param</span>
+          <span>Type</span>
+          <span>Value</span>
+          <span />
+        </div>
+        <ScrollArea className="h-[360px]">
+          <div className="divide-y">
+            {entry.attributes.map((attribute, attributeIndex) => {
+              const kind = getNumatbAttributeKind(attribute.param.data);
+              return (
+                <div key={`${attribute.param_id}:${attributeIndex}`} className="grid grid-cols-[minmax(0,180px)_100px_minmax(0,1fr)_52px] gap-2 px-3 py-3">
+                  <div className="min-w-0">
+                    <div className="truncate font-mono text-[11px]" title={attribute.param_id}>
+                      {attribute.param_id}
+                    </div>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">{kind}</div>
+                  <AttributeValueEditor
+                    attribute={attribute}
+                    onChange={(nextData) => onUpdateAttribute(attributeIndex, nextData)}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 px-0 text-destructive"
+                    onClick={() => onRemoveAttribute(attributeIndex)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              );
+            })}
+            {entry.attributes.length === 0 ? (
+              <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">This material has no attributes yet.</div>
+            ) : null}
+          </div>
+        </ScrollArea>
+      </div>
+    </div>
+  );
+}

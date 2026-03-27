@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 use anyhow::{Result, anyhow};
+use serde::{Deserialize, Serialize};
 use ssbh_data::{
     mesh_data::{BoneInfluence, VertexWeight},
 };
@@ -29,6 +30,14 @@ pub fn validate_dae_scene(scene: &DaeScene) -> Result<()> {
 }
 
 /// Configuration for DAE conversion
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModlEntryConfig {
+    pub mesh_object_name: String,
+    pub mesh_object_subindex: u64,
+    pub material_label: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct DaeConvertConfig {
     pub output_directory: PathBuf,
@@ -41,6 +50,7 @@ pub struct DaeConvertConfig {
     pub write_numdlb: bool,
     pub write_numshb: bool,
     pub write_nusktb: bool,
+    pub modl_entries: Vec<ModlEntryConfig>,
 }
 
 impl Default for DaeConvertConfig {
@@ -55,6 +65,7 @@ impl Default for DaeConvertConfig {
             write_numdlb: true,
             write_numshb: true,
             write_nusktb: true,
+            modl_entries: Vec::new(),
         }
     }
 }

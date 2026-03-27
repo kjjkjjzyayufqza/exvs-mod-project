@@ -1,11 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
+import type {
+  DaeSsbhConvertExtendedResult,
+  NumatbFileJson,
+  NumdlbMappingRow,
+} from "./daeSsbhTypes";
 
 export type SsbhDaeUpAxis = "y_up" | "z_up" | "none";
 
 export type SsbhDaeConvertFiles = {
   numdlbPath?: string;
   numshbPath?: string;
+  numatbPath?: string;
   nusktbPath?: string;
+  mayaNumatbPath?: string;
+  nustNumatbPath?: string;
 };
 
 export type SsbhDaeConvertStats = {
@@ -83,18 +91,18 @@ export type SsbhConvertToSsbhParams = {
   writeNumdlb: boolean;
   writeNumshb: boolean;
   writeNusktb: boolean;
-};
-
-export type SsbhConvertToSsbhResult = {
-  ok: boolean;
-  files: SsbhDaeConvertFiles;
-  stats: SsbhDaeConvertStats;
-  logPath: string | null;
+  writeNumatb: boolean;
+  writeMayaProfile: boolean;
+  writeNustProfile: boolean;
+  baseNumatbSource: "maya" | "nust";
+  numdlbEntries: NumdlbMappingRow[];
+  mayaFile: NumatbFileJson | null;
+  nustFile: NumatbFileJson | null;
 };
 
 export async function ssbhConvertDaeToSsbh(
   params: { daePath: string } & SsbhConvertToSsbhParams,
-): Promise<SsbhConvertToSsbhResult> {
+): Promise<DaeSsbhConvertExtendedResult> {
   return invoke("ssbh_convert_dae_to_ssbh", {
     daePath: params.daePath,
     outputDir: params.outputDir,
@@ -107,12 +115,19 @@ export async function ssbhConvertDaeToSsbh(
     writeNumdlb: params.writeNumdlb,
     writeNumshb: params.writeNumshb,
     writeNusktb: params.writeNusktb,
+    writeNumatb: params.writeNumatb,
+    writeMayaProfile: params.writeMayaProfile,
+    writeNustProfile: params.writeNustProfile,
+    baseNumatbSource: params.baseNumatbSource,
+    numdlbEntries: params.numdlbEntries,
+    mayaFile: params.mayaFile,
+    nustFile: params.nustFile,
   });
 }
 
 export async function ssbhConvertFbxToSsbh(
   params: { fbxPath: string } & SsbhConvertToSsbhParams,
-): Promise<SsbhConvertToSsbhResult> {
+): Promise<DaeSsbhConvertExtendedResult> {
   return invoke("ssbh_convert_fbx_to_ssbh", {
     fbxPath: params.fbxPath,
     outputDir: params.outputDir,
@@ -125,7 +140,45 @@ export async function ssbhConvertFbxToSsbh(
     writeNumdlb: params.writeNumdlb,
     writeNumshb: params.writeNumshb,
     writeNusktb: params.writeNusktb,
+    writeNumatb: params.writeNumatb,
+    writeMayaProfile: params.writeMayaProfile,
+    writeNustProfile: params.writeNustProfile,
+    baseNumatbSource: params.baseNumatbSource,
+    numdlbEntries: params.numdlbEntries,
+    mayaFile: params.mayaFile,
+    nustFile: params.nustFile,
   });
+}
+
+export type NumdlbReadResult = {
+  modelName: string;
+  skeletonFileName: string;
+  materialFileNames: string[];
+  meshFileName: string;
+  animationFileName: string | null;
+  entries: NumdlbMappingRow[];
+};
+
+export type NumdlbWritePayload = {
+  filePath: string;
+  modelName: string;
+  skeletonFileName: string;
+  materialFileNames: string[];
+  meshFileName: string;
+  animationFileName: string | null;
+  entries: NumdlbMappingRow[];
+};
+
+export async function ssbhReadNumdlbMapping(filePath: string): Promise<NumdlbReadResult> {
+  return invoke("ssbh_read_numdlb_mapping", { filePath });
+}
+
+export async function ssbhWriteNumdlbMapping(payload: NumdlbWritePayload): Promise<void> {
+  await invoke("ssbh_write_numdlb_mapping", payload);
+}
+
+export async function ssbhTemplateReadNumatb(filePath: string): Promise<NumatbFileJson> {
+  return invoke("ssbh_template_read_numatb", { filePath });
 }
 
 const PRESET_STORAGE_KEY = "ssbh-dae-exchange-presets-v1";
