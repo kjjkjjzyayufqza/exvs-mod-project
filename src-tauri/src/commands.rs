@@ -120,6 +120,11 @@ pub fn exec_process_with_output(
 }
 
 #[tauri::command]
+pub fn nutexb_preview_file_identity(path: String) -> Result<crate::nutexb_lib::NutexbPreviewFileIdentity, String> {
+    crate::nutexb_lib::nutexb_preview_file_identity(&path)
+}
+
+#[tauri::command]
 pub fn nutexb_read_info(input_path: &str) -> Result<crate::nutexb_lib::NutexbInfo, String> {
     crate::nutexb_lib::read_nutexb_info(input_path)
 }

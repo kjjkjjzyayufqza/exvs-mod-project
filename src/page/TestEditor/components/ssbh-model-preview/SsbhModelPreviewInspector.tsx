@@ -1,4 +1,6 @@
-import { Info, Layout, List, Settings2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Database, Info, Layout, List, Settings2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -11,12 +13,24 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { MayaSection } from "./MayaInspectorSection";
+import {
+  clearNutexbPreviewCacheAsync,
+  getNutexbPreviewCacheStats,
+  type NutexbPreviewCacheStats,
+} from "./nutexbPreviewCache";
 import { useSsbhModelPreview, type PreviewRenderStyle } from "./SsbhModelPreviewContext";
 import { TEXTURE_PREVIEW_SLOT_META, TEXTURE_SLOT_TO_PATH_FIELD } from "./meshFromSsbh";
 import type { SkelDataJson } from "./types";
 
 export function SsbhModelPreviewInspector() {
   const p = useSsbhModelPreview();
+  const [textureCacheStats, setTextureCacheStats] = useState<NutexbPreviewCacheStats | null>(null);
+  const refreshTextureCacheStats = useCallback(async () => {
+    setTextureCacheStats(await getNutexbPreviewCacheStats());
+  }, []);
+  useEffect(() => {
+    void refreshTextureCacheStats();
+  }, [refreshTextureCacheStats]);
   const skel = p.bundle?.skel ? (p.bundle.skel as SkelDataJson) : null;
   const bones = skel?.bones ?? [];
   const hasSkinnedMesh = p.draws.some((d) => d.skin !== null);
@@ -131,6 +145,47 @@ export function SsbhModelPreviewInspector() {
           <div className="flex items-center justify-between gap-2">
             <Label className="text-[11px] text-muted-foreground">Normal Map</Label>
             <Switch checked={p.normalMapEnabled} onCheckedChange={p.setNormalMapEnabled} />
+          </div>
+        </div>
+      </MayaSection>
+
+      <MayaSection title="Texture cache" icon={<Database className="h-3.5 w-3.5" />} defaultOpen={false}>
+        <div className="flex flex-col gap-2">
+          <p className="text-[9px] leading-snug text-muted-foreground">
+            Keys use full-file CRC32 (IEEE) from Rust; any nutexb byte change produces a new key. Clearing revokes in-memory
+            blob URLs and removes persisted PNG entries (IndexedDB).
+          </p>
+          <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+            <span>
+              Memory: {textureCacheStats?.memoryEntries ?? "—"} · Persistent:{" "}
+              {textureCacheStats?.idbEntries === null || textureCacheStats?.idbEntries === undefined
+                ? "n/a"
+                : textureCacheStats.idbEntries}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-[9px]"
+              onClick={() => void refreshTextureCacheStats()}
+            >
+              Refresh stats
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              className="h-7 px-2 text-[9px]"
+              onClick={async () => {
+                await clearNutexbPreviewCacheAsync();
+                await refreshTextureCacheStats();
+                toast.success("Texture preview cache cleared");
+              }}
+            >
+              Clear all
+            </Button>
           </div>
         </div>
       </MayaSection>

@@ -24,6 +24,7 @@ pub fn run() {
             commands::exec_shell_command_with_output,
             commands::exec_process_with_output,
             commands::watch_folder,
+            commands::nutexb_preview_file_identity,
             commands::nutexb_read_info,
             commands::nutexb_export_dds,
             commands::nutexb_export_png_uncompressed,

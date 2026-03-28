@@ -20,6 +20,7 @@ import type { BufferGeometry } from "three";
 import {
   buildDrawListFromBundle,
   buildMatlLookup,
+  collectPathSlotCounts,
   countTextureDecodeSteps,
   createDefaultTextureSlotLoadEnabled,
   resolveMaterialBinding,
@@ -30,6 +31,7 @@ import {
   type ResolvedMaterialBinding,
   type TexturePreviewSlotKey,
 } from "./meshFromSsbh";
+import { getOrDecodeNutexbPngBlobUrl, resolveNutexbVersionId } from "./nutexbPreviewCache";
 import { buildSkeletonLineGeometry } from "./skeletonLines";
 import type {
   BuiltMeshDraw,
@@ -65,6 +67,9 @@ function fileBasename(path: string): string {
   const seg = p.split("/").filter((x) => x.length > 0).pop();
   return seg ?? path;
 }
+
+/** Parallel nutexb→PNG IPC for cache misses; LRU avoids re-decoding across model switches. */
+const NUTEXB_DECODE_CONCURRENCY = 12;
 
 function buildRefToPathMap(bundle: SsbhModelPreviewBundle): Map<string, string> {
   const m = new Map<string, string>();
@@ -278,7 +283,6 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       setTextureDecodeProgress(null);
       return;
     }
-    const blobUrlsThisRun = new Set<string>();
     let cancelled = false;
     const matl = bundle.matl as MatlDataJson | null;
     const lookup = buildMatlLookup(matl);
@@ -313,50 +317,73 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       const nextBindings = new Map<string, ResolvedMaterialBinding>();
       const failedTextures: string[] = [];
       const pathToDataUrl = new Map<string, string>();
+      const pathSlotCounts = collectPathSlotCounts(draws, lookup, refMap, textureSlotLoadEnabled);
+      const uniquePaths = [...pathSlotCounts.keys()];
+      const versionByPath = new Map<string, Awaited<ReturnType<typeof resolveNutexbVersionId>>>();
+      if (uniquePaths.length > 0) {
+        await Promise.all(
+          uniquePaths.map((p) =>
+            resolveNutexbVersionId(p)
+              .then((v) => {
+                versionByPath.set(p, v);
+              })
+              .catch((e) => {
+                failedTextures.push(`${p}: ${String(e)}`);
+              }),
+          ),
+        );
+      }
+      if (cancelled) {
+        return;
+      }
 
-      const bumpDone = () => {
-        if (cancelled) return;
+      const bumpDoneBy = (n: number) => {
+        if (cancelled || n <= 0) return;
         setTextureDecodeProgress((prev) =>
-          prev ? { ...prev, done: prev.done + 1 } : null,
+          prev ? { ...prev, done: prev.done + n } : null,
         );
       };
 
-      const decodePath = async (diskPath: string | null, slotShort: string): Promise<string | null> => {
-        if (!diskPath) return null;
+      const decodeOneDiskPath = async (diskPath: string): Promise<void> => {
+        const slotCount = pathSlotCounts.get(diskPath) ?? 0;
         if (!cancelled) {
           setTextureDecodeProgress((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  currentLabel: `${fileBasename(diskPath)} · ${slotShort}`,
-                }
-              : null,
+            prev ? { ...prev, currentLabel: `${fileBasename(diskPath)} · decode` } : null,
           );
         }
-        const cached = pathToDataUrl.get(diskPath);
-        if (cached) {
-          bumpDone();
-          return cached;
-        }
         try {
-          const raw = await invoke<ArrayBuffer | Uint8Array>("nutexb_png_bytes", { inputPath: diskPath });
-          if (cancelled) return null;
-          const u8 = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
-          const ab = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer;
-          const blob = new Blob([ab], { type: "image/png" });
-          const url = URL.createObjectURL(blob);
-          blobUrlsThisRun.add(url);
+          const meta = versionByPath.get(diskPath);
+          if (!meta) {
+            throw new Error("Missing CRC identity for texture path (see earlier errors)");
+          }
+          const { versionId, persistEligible } = meta;
+          const url = await getOrDecodeNutexbPngBlobUrl(versionId, persistEligible, () =>
+            invoke<ArrayBuffer | Uint8Array>("nutexb_png_bytes", { inputPath: diskPath }),
+          );
+          if (cancelled) return;
           pathToDataUrl.set(diskPath, url);
-          return url;
         } catch (e) {
           failedTextures.push(`${diskPath}: ${String(e)}`);
-          return null;
         } finally {
-          bumpDone();
+          bumpDoneBy(slotCount);
         }
       };
 
+      if (uniquePaths.length > 0) {
+        const queue = [...uniquePaths];
+        const workerCount = Math.min(NUTEXB_DECODE_CONCURRENCY, uniquePaths.length);
+        const worker = async () => {
+          while (!cancelled) {
+            const diskPath = queue.shift();
+            if (diskPath === undefined) return;
+            await decodeOneDiskPath(diskPath);
+          }
+        };
+        await Promise.all(Array.from({ length: workerCount }, () => worker()));
+      }
+
       for (const d of draws) {
+        if (cancelled) return;
         const binding = resolveMaterialBinding(d.materialLabel, lookup, refMap);
         nextBindings.set(d.key, binding);
         const paths = resolveMaterialTexturePaths(d.materialLabel, lookup, refMap);
@@ -369,8 +396,7 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
           aoMap: null,
           cubeMap: null,
         };
-        for (const { key, short } of TEXTURE_PREVIEW_SLOT_META) {
-          if (cancelled) return;
+        for (const { key } of TEXTURE_PREVIEW_SLOT_META) {
           const field = TEXTURE_SLOT_TO_PATH_FIELD[key];
           const pathVal = paths[field];
           if (!textureSlotLoadEnabled[key]) {
@@ -381,7 +407,7 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
             urls[key] = null;
             continue;
           }
-          urls[key] = await decodePath(pathVal, short);
+          urls[key] = pathToDataUrl.get(pathVal) ?? null;
         }
         next.set(d.key, urls);
       }
@@ -402,9 +428,6 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
 
     return () => {
       cancelled = true;
-      for (const u of blobUrlsThisRun) {
-        URL.revokeObjectURL(u);
-      }
     };
   }, [bundle, draws, textureSlotLoadEnabled]);
 

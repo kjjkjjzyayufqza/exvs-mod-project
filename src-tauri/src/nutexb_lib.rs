@@ -1,5 +1,6 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
-use image::ImageFormat;
+use image::codecs::png::{CompressionType, FilterType, PngEncoder};
+use image::{ExtendedColorType, ImageEncoder};
 use serde::Serialize;
 use std::collections::HashSet;
 use std::io::Cursor;
@@ -15,6 +16,7 @@ use std::str::FromStr;
 
 use image_dds::image::RgbaImage;
 use image_dds::{dds_from_image, ImageFormat as DdsImageFormat, Mipmaps, Quality};
+use crc32fast::Hasher as Crc32Hasher;
 use nutexb::NutexbFile;
 use nutexb::NutexbFormat;
 
@@ -30,6 +32,28 @@ pub struct NutexbInfo {
     pub layer_count: u32,
     pub data_size: u32,
     pub is_swizzled: bool,
+}
+
+/// Full-file CRC32 (IEEE) over raw .nutexb bytes; used as part of the preview cache version key.
+pub fn nutexb_file_crc32(bytes: &[u8]) -> u32 {
+    let mut h = Crc32Hasher::new();
+    h.update(bytes);
+    h.finalize()
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NutexbPreviewFileIdentity {
+    pub nutexb_size: u64,
+    pub crc32: u32,
+}
+
+/// Reads the file once and returns size + CRC32 over the raw nutexb bytes (no decode).
+pub fn nutexb_preview_file_identity(path: &str) -> Result<NutexbPreviewFileIdentity, String> {
+    let bytes = fs::read(path).map_err(|e| e.to_string())?;
+    let nutexb_size = bytes.len() as u64;
+    let crc32 = nutexb_file_crc32(&bytes);
+    Ok(NutexbPreviewFileIdentity { nutexb_size, crc32 })
 }
 
 pub fn read_nutexb_info(input_path: &str) -> Result<NutexbInfo, String> {
@@ -68,19 +92,37 @@ pub fn export_nutexb_to_png(input_path: &str, output_path: &str) -> Result<(), S
     Ok(())
 }
 
-/// Encodes the nutexb as PNG bytes (same pipeline as `nutexb_to_png_base64` without base64 encoding).
-pub fn nutexb_to_png_bytes(input_path: &str) -> Result<Vec<u8>, String> {
-    let nutexb = NutexbFile::read_from_file(input_path).map_err(|e| e.to_string())?;
+/// Encodes nutexb bytes to PNG (same pipeline as path-based decode; avoids a second disk read when bytes are already in memory).
+pub fn nutexb_to_png_bytes_from_bytes(nutexb_bytes: &[u8]) -> Result<Vec<u8>, String> {
+    let mut cursor = Cursor::new(nutexb_bytes.to_vec());
+    let nutexb = NutexbFile::read(&mut cursor).map_err(|e| e.to_string())?;
     let dds = nutexb.to_dds().map_err(|e| e.to_string())?;
     let image: RgbaImage = image_dds::image_from_dds(&dds, 0).map_err(|e| e.to_string())?;
     let mut buf = Vec::new();
     {
-        let mut cursor = Cursor::new(&mut buf);
-        image
-            .write_to(&mut cursor, ImageFormat::Png)
+        let mut out = Cursor::new(&mut buf);
+        let encoder = PngEncoder::new_with_quality(
+            &mut out,
+            CompressionType::Fast,
+            FilterType::NoFilter,
+        );
+        encoder
+            .write_image(
+                image.as_raw(),
+                image.width(),
+                image.height(),
+                ExtendedColorType::Rgba8,
+            )
             .map_err(|e| e.to_string())?;
     }
     Ok(buf)
+}
+
+/// Encodes the nutexb as PNG bytes (same pipeline as `nutexb_to_png_base64` without base64 encoding).
+/// Uses fast PNG compression to reduce preview IPC latency vs default `write_to` PNG settings.
+pub fn nutexb_to_png_bytes(input_path: &str) -> Result<Vec<u8>, String> {
+    let bytes = fs::read(input_path).map_err(|e| e.to_string())?;
+    nutexb_to_png_bytes_from_bytes(&bytes)
 }
 
 pub fn nutexb_to_png_base64(input_path: &str) -> Result<String, String> {

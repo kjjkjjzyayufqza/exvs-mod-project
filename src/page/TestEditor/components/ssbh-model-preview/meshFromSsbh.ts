@@ -347,6 +347,30 @@ export function countTextureDecodeSteps(
   return n;
 }
 
+/**
+ * How many preview slots reference each resolved disk path (for progress when decoding unique paths in parallel).
+ * Sum of values equals `countTextureDecodeSteps` for the same inputs.
+ */
+export function collectPathSlotCounts(
+  draws: BuiltMeshDraw[],
+  lookup: Map<string, MatlEntryJson>,
+  refMap: Map<string, string>,
+  textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>,
+): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const d of draws) {
+    const paths = resolveMaterialTexturePaths(d.materialLabel, lookup, refMap);
+    for (const { key } of TEXTURE_PREVIEW_SLOT_META) {
+      if (!textureSlotLoadEnabled[key]) continue;
+      const field = TEXTURE_SLOT_TO_PATH_FIELD[key];
+      const pathVal = paths[field];
+      if (!pathVal) continue;
+      m.set(pathVal, (m.get(pathVal) ?? 0) + 1);
+    }
+  }
+  return m;
+}
+
 export type ShaderFamily = "vsngCharaBasic" | "vsngCharaSparkle" | "generic";
 
 export type ResolvedTextureSampling = {
