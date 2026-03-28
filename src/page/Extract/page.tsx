@@ -178,8 +178,20 @@ export default function ExtractFilePage() {
     setIsExtracting(true);
     startTransition(() => setExtractProgress(0));
     try {
-      await ExtractFHMData(fhm2dData, data.outputFolderPath, extractType, Fhm2d_type_format.fhm2d_character);
-      toast.success(`Extract completed: ${data.outputFolderPath}`);
+      const extractResult = await ExtractFHMData(
+        fhm2dData,
+        data.outputFolderPath,
+        extractType,
+        Fhm2d_type_format.fhm2d_character
+      );
+      if (extractResult.namingError) {
+        toast.error("Extract finished but FHM naming step failed (files were written)", {
+          description: extractResult.namingError,
+          duration: 20_000,
+        });
+      } else {
+        toast.success(`Extract completed: ${data.outputFolderPath}`);
+      }
       startTransition(() => setExtractProgress(100));
       await sleep(600);
     } catch (error) {

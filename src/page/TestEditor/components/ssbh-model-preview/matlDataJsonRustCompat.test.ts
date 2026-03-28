@@ -29,10 +29,11 @@ describe("ensureMatlDataSerdeFields for Rust MatlData JSON", () => {
             { param_id: "UseNormalMap", data: 0 },
             { param_id: "UseRoughnessMap", data: 1 },
           ],
+          textures: [],
         },
       ],
     };
-    const out = ensureMatlDataSerdeFields(raw as MatlDataJson);
+    const out = ensureMatlDataSerdeFields(raw as unknown as MatlDataJson);
     const entry = out.entries[0];
     const blend = entry.blend_states?.[0]?.data as { alpha_sample_to_coverage: boolean };
     expect(blend.alpha_sample_to_coverage).toBe(false);

@@ -232,8 +232,16 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
 
         setIsExtractingAll(false);
         const successCount = results.filter(r => r.success).length;
+        const namingWarnings = results.filter((r) => r.success && r.namingWarning);
         if (successCount > 0) {
-            toast.success(`Successfully extracted ${successCount} assets`);
+            if (namingWarnings.length > 0) {
+                toast.error(`Extracted ${successCount} asset(s); ${namingWarnings.length} FHM naming step failed`, {
+                    description: namingWarnings.map((r) => r.namingWarning).join("\n---\n"),
+                    duration: 25_000,
+                });
+            } else {
+                toast.success(`Successfully extracted ${successCount} assets`);
+            }
         }
     }, [selectedRow, isExtractingAll, resolvedAssetRefs, extractOutputPath]);
 

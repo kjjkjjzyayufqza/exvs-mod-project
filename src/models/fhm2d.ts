@@ -4,7 +4,6 @@ import pako from "pako";
 import { invoke } from "@tauri-apps/api/core";
 import { writeFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { basename, dirname } from "@tauri-apps/api/path";
-import { toast } from "sonner";
 import { applyNumdlbBaseNameToStructureObject } from "@/lib/fhm2d_characterModelFormatFuc";
 import { applyNutexbInternalNameToStructureObject } from "@/lib/fhm2d_allNutexbFormatFuc";
 
@@ -520,13 +519,18 @@ function logExtractFhmStep(label: string, stepStart: number, extractStart: numbe
   return now;
 }
 
+/** Returned when Xboost extraction finishes; `namingError` is set if numdlb/nutexb naming failed but files were still written. */
+export type ExtractFhmDataResult = {
+  namingError?: string;
+};
+
 export async function ExtractFHMData(
   fhm2d: Fhm2dData | PS4FhmData,
   outDir: string,
   type: ExtractType,
   format?: Fhm2d_type_format,
   listOutputFileName?: string
-): Promise<void> {
+): Promise<ExtractFhmDataResult> {
   if (fhm2d._TYPE_ == Fhm2dType.PS4GundamVersus) {
     throw new Error(ErrorMessage.notSupport);
   } else if (fhm2d._TYPE_ == Fhm2dType.Xboost) {
@@ -659,7 +663,7 @@ export async function ExtractFHMData(
         }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
-        console.error("applyNumdlbBaseNameToStructureObject failed:", errorMessage);
+        console.error("FHM structure naming step failed:", errorMessage);
         finalStructure = {
           ...outputStructure,
           __namingError: errorMessage,
@@ -727,10 +731,16 @@ export async function ExtractFHMData(
       );
 
       console.log(`[ExtractFHM] total ExtractFHMData: ${(performance.now() - extractStart).toFixed(2)}ms`);
+
+      const namingError =
+        typeof finalStructure.__namingError === "string" ? finalStructure.__namingError : undefined;
+      return { namingError };
     } else if (type === ExtractType.FolderWithStructure) {
       throw new Error(ErrorMessage.notSupport);
     }
+    return {};
   }
+  return {};
 }
 
 function generateOutputStructure(fhm2d: PS4FhmData | Fhm2dData, typeList: string[], fileNameNoExt: string, errorInfoMap: Record<number, any>) {

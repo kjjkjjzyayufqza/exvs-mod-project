@@ -364,7 +364,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
             const listOutputFileName =
                 item.format === Fhm2d_type_format.fhm2d_stage_list ? `${item.id}.bin` : undefined;
 
-            await ExtractFHMData(fhm, outDir, ExtractType.SingleFolder, item.format, listOutputFileName);
+            const extractResult = await ExtractFHMData(fhm, outDir, ExtractType.SingleFolder, item.format, listOutputFileName);
 
             clearInterval(progressInterval);
             setExtractionProgress(100);
@@ -380,13 +380,24 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
             saveHistory(newHistory);
 
             setLastExtractedId(item.id);
-            toast.success(`Extract completed: ${item.name}`, {
-                description: `Output: ${outDir}`,
-                action: {
-                    label: "Open Folder",
-                    onClick: () => openFolder(outDir),
-                },
-            });
+            if (extractResult.namingError) {
+                toast.error(`Extract finished but FHM naming failed: ${item.name}`, {
+                    description: extractResult.namingError,
+                    duration: 20_000,
+                    action: {
+                        label: "Open Folder",
+                        onClick: () => openFolder(outDir),
+                    },
+                });
+            } else {
+                toast.success(`Extract completed: ${item.name}`, {
+                    description: `Output: ${outDir}`,
+                    action: {
+                        label: "Open Folder",
+                        onClick: () => openFolder(outDir),
+                    },
+                });
+            }
         } catch (error) {
             clearInterval(progressInterval);
             const message = error instanceof Error ? error.message : String(error);

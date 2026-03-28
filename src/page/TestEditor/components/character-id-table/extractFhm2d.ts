@@ -8,6 +8,8 @@ export interface ExtractResult {
   success: boolean;
   path?: string;
   error?: string;
+  /** Present when extraction finished but numdlb/nutexb naming failed (see `*_structure.json` __namingError). */
+  namingWarning?: string;
 }
 
 /**
@@ -61,7 +63,7 @@ export async function extractAsset(
     const targetDir = await join(extractOutputPath, asset.hashHex);
     logExtractPhase('resolve target directory');
 
-    await ExtractFHMData(
+    const extractResult = await ExtractFHMData(
       fhm2d,
       targetDir,
       ExtractType.SingleFolder,
@@ -70,7 +72,11 @@ export async function extractAsset(
     logExtractPhase('ExtractFHMData');
     console.log(`[ModelAsset Extract] total (Extract to Output Folder): ${(performance.now() - extractT0).toFixed(2)}ms`);
 
-    return { success: true, path: targetDir };
+    return {
+      success: true,
+      path: targetDir,
+      namingWarning: extractResult.namingError,
+    };
   } catch (err: any) {
     console.error('Extraction failed:', err);
     return { success: false, error: err.message || 'Unknown error during extraction' };

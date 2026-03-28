@@ -121,11 +121,29 @@ export default function UnitList() {
     const upperCaseHashName = fileName.split('0x')[1].toUpperCase();
     const outputPath = `${extractOutputPath}\\0x${upperCaseHashName}`;
     const fhm = new Fhm2dData(Buffer.from(fileBuffer))
-    void ExtractFHMData(fhm, outputPath, ExtractType.SingleFolder, Fhm2d_type_format.fhm2d_character).catch((err) => {
-      console.error("ExtractFHMData failed:", err);
-    });
+    void (async () => {
+      try {
+        const extractResult = await ExtractFHMData(
+          fhm,
+          outputPath,
+          ExtractType.SingleFolder,
+          Fhm2d_type_format.fhm2d_character
+        );
+        if (extractResult.namingError) {
+          toast.error("FHM naming step failed (raw files were still extracted)", {
+            description: extractResult.namingError,
+            duration: 20_000,
+          });
+        } else {
+          toast.success(`Extracted ${fileType}`);
+        }
+      } catch (err) {
+        console.error("ExtractFHMData failed:", err);
+        const message = err instanceof Error ? err.message : String(err);
+        toast.error(`Extract failed: ${message}`);
+      }
+    })();
     console.log(fhm);
-    toast.success(`Extracted ${fileType}`)
   };
 
   return (

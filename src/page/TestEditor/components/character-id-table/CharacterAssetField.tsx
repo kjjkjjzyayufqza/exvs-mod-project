@@ -105,12 +105,23 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     setIsExtracting(false);
 
     if (result.success) {
-      toast.success(`Extracted ${asset.fieldKey} to output folder`, {
-        action: {
-          label: "Open Folder",
-          onClick: () => openPath(result.path!),
-        },
-      });
+      if (result.namingWarning) {
+        toast.error(`Extracted ${asset.fieldKey} but FHM naming failed`, {
+          description: result.namingWarning,
+          duration: 20_000,
+          action: {
+            label: "Open Folder",
+            onClick: () => openPath(result.path!),
+          },
+        });
+      } else {
+        toast.success(`Extracted ${asset.fieldKey} to output folder`, {
+          action: {
+            label: "Open Folder",
+            onClick: () => openPath(result.path!),
+          },
+        });
+      }
       setWorkspaceExists(true);
     } else {
       toast.error(result.error || "Extraction failed");
