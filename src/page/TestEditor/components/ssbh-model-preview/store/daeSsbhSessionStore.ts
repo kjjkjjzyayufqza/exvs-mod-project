@@ -6,14 +6,16 @@ import {
   type DaeImportKind,
   type DaeSsbhConvertExtendedResult,
   type DaeSsbhSessionState,
+  type MatlDataJson,
   type NumatbAttributeData,
   type NumatbAttributeDataKind,
-  type NumatbFileJson,
   type NumatbProfileKind,
   type NumatbTemplateDefinition,
   type NumatbTemplateLibrary,
   type NumdlbMappingRow,
 } from "../daeSsbhTypes";
+import { flattenEntryToAttributes } from "./matlEntryFlat";
+import { normalizeMatlDataJson } from "./numatbProfileMigration";
 import type { SsbhDaeAnalysisReport, SsbhDaeUpAxis } from "../ssbhDaeIoService";
 import { getExvsDefaultMayaProfileTemplate, getExvsDefaultNustProfileTemplate } from "../exvsEmbeddedProfileTemplates";
 import {
@@ -72,7 +74,7 @@ type DaeSsbhSessionActions = {
   removeProfileAttribute: (profile: NumatbProfileKind, materialIndex: number, attributeIndex: number) => void;
   addProfileMaterialEntry: (profile: NumatbProfileKind, materialLabel: string) => void;
   removeProfileMaterialEntry: (profile: NumatbProfileKind, materialIndex: number) => void;
-  setProfileFile: (profile: NumatbProfileKind, file: NumatbFileJson) => void;
+  setProfileFile: (profile: NumatbProfileKind, file: MatlDataJson) => void;
   setLastResult: (result: DaeSsbhConvertExtendedResult | null) => void;
   loadTemplateLibrary: () => Promise<void>;
   saveCurrentAsTemplate: (payload: { name: string; description: string; sourceFileName?: string | null }) => Promise<void>;
@@ -89,7 +91,7 @@ type DaeSsbhTemplateState = {
 export type DaeSsbhSessionStoreState = DaeSsbhSessionState & DaeSsbhTemplateState & DaeSsbhSessionActions;
 
 const SESSION_STORAGE_KEY = "ssbh-dae-session-v2";
-const SESSION_VERSION = 4;
+const SESSION_VERSION = 5;
 
 function buildInitialState(): DaeSsbhSessionState {
   return {
@@ -256,12 +258,15 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
       updateProfileAttribute: (profile, materialIndex, attributeIndex, data) => {
         set((state) => {
           const sourceFile = profile === "maya" ? state.mayaFile : state.nustFile;
-          const sourceEntries = sourceFile.Matl.V16.entries;
-          const entry = sourceEntries[materialIndex];
-          if (!entry?.attributes[attributeIndex]) {
+          const entry = sourceFile.entries[materialIndex];
+          if (!entry) {
+            throw new Error("Material index is out of range");
+          }
+          const flatAttrs = flattenEntryToAttributes(entry);
+          if (!flatAttrs[attributeIndex]) {
             throw new Error("Attribute index is out of range");
           }
-          const paramId = entry.attributes[attributeIndex].param_id;
+          const paramId = flatAttrs[attributeIndex].param_id;
           const materialLabel = entry.material_label;
 
           let nextMaya =
@@ -315,8 +320,9 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
 
       setProfileFile: (profile, file) => {
         set((state) => {
-          const maya = profile === "maya" ? file : state.mayaFile;
-          const nust = profile === "nust" ? file : state.nustFile;
+          const normalized = normalizeMatlDataJson(file);
+          const maya = profile === "maya" ? normalized : state.mayaFile;
+          const nust = profile === "nust" ? normalized : state.nustFile;
           const ensured = ensureMissingMappingLabelsInProfiles(maya, nust, state.numdlbEntries);
           return {
             mayaFile: ensured.mayaFile,
@@ -412,8 +418,8 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
           ...next,
           sessionVersion: SESSION_VERSION,
           mirrorTexturePathsAcrossProfiles: next?.mirrorTexturePathsAcrossProfiles ?? true,
-          mayaFile: next?.mayaFile ?? createEmptyNumatbFile(),
-          nustFile: next?.nustFile ?? createEmptyNumatbFile(),
+          mayaFile: normalizeMatlDataJson(next?.mayaFile ?? createEmptyNumatbFile()),
+          nustFile: normalizeMatlDataJson(next?.nustFile ?? createEmptyNumatbFile()),
         };
       },
     },

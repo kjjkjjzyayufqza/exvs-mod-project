@@ -10,6 +10,8 @@ import type { MatlDataJson, MeshDataJson, ModlDataJson } from "./types";
 describe("buildMatlLookup", () => {
   it("merges split EXVS material entries by material label", () => {
     const matl: MatlDataJson = {
+      major_version: 1,
+      minor_version: 6,
       entries: [
         {
           material_label: "emi2Mtl",
@@ -46,6 +48,8 @@ describe("buildMatlLookup", () => {
 describe("resolveMaterialTexturePaths", () => {
   it("maps EXVS PBR texture names to MeshStandardMaterial slots", () => {
     const matl: MatlDataJson = {
+      major_version: 1,
+      minor_version: 6,
       entries: [
         {
           material_label: "emi2Mtl",
@@ -146,6 +150,8 @@ describe("resolveMaterialTexturePaths", () => {
 describe("resolveMaterialBinding", () => {
   it("resolves shader family and render hints for sparkle materials", () => {
     const matl: MatlDataJson = {
+      major_version: 1,
+      minor_version: 6,
       entries: [
         {
           material_label: "sparkleMtl",

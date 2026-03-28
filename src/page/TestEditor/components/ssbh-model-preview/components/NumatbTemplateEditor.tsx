@@ -69,7 +69,7 @@ export function NumatbTemplateEditor() {
   const [newMaterialLabel, setNewMaterialLabel] = useState("");
 
   const activeFile = activeProfile === "maya" ? mayaFile : nustFile;
-  const entries = activeFile.Matl.V16.entries;
+  const entries = activeFile.entries;
   const selectedMaterialIndex = Math.min(selectedMaterialByProfile[activeProfile] ?? 0, Math.max(entries.length - 1, 0));
   const selectedEntry = entries[selectedMaterialIndex] ?? null;
 

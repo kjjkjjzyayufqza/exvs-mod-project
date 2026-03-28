@@ -4,9 +4,8 @@ use ssbh_data::prelude::*;
 use ssbh_data::modl_data::ModlEntryData;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 use crate::ssbh_dae::{
     analyze_dae_path, analyze_fbx_path, convert_dae_file, convert_fbx_file, export_ssbh_bundle_to_dae,
@@ -93,18 +92,6 @@ pub struct NumdlbWritePayload {
     pub entries: Vec<NumdlbMappingEntryPayload>,
 }
 
-fn tool_path(app: &AppHandle, tool_name: &str) -> Result<PathBuf, String> {
-    let resource_dir = app
-        .path()
-        .resource_dir()
-        .map_err(|e| format!("Failed to resolve resource directory: {e}"))?;
-    let path = resource_dir.join("tools").join(tool_name);
-    if !path.is_file() {
-        return Err(format!("Required tool not found: {}", path.display()));
-    }
-    Ok(path)
-}
-
 fn ensure_parent_dir(path: &Path) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
@@ -113,80 +100,23 @@ fn ensure_parent_dir(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn run_ssbh_lib_json_convert(
-    app: &AppHandle,
-    input_path: &Path,
-    output_path: &Path,
-) -> Result<(), String> {
-    let tool = tool_path(app, "ssbh_lib_json.exe")?;
-    let output = Command::new(&tool)
-        .arg(input_path)
-        .arg(output_path)
-        .output()
-        .map_err(|e| format!("Failed to run {}: {e}", tool.display()))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        let detail = if !stderr.is_empty() { stderr } else { stdout };
-        return Err(format!(
-            "ssbh_lib_json conversion failed ({} -> {}): {}",
-            input_path.display(),
-            output_path.display(),
-            detail
-        ));
-    }
-    Ok(())
-}
-
-fn write_numatb_from_json_value(
-    app: &AppHandle,
-    json_value: &serde_json::Value,
-    output_path: &Path,
-) -> Result<(), String> {
+fn write_numatb_from_json_value(json_value: &serde_json::Value, output_path: &Path) -> Result<(), String> {
     ensure_parent_dir(output_path)?;
-    let temp_dir = output_path
-        .parent()
-        .unwrap_or_else(|| Path::new("."))
-        .join("__convert");
-    std::fs::create_dir_all(&temp_dir)
-        .map_err(|e| format!("Failed to create temp convert directory {}: {e}", temp_dir.display()))?;
-    let temp_json_path = temp_dir.join(format!(
-        "{}.json",
-        output_path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("temp_numatb")
-    ));
-    std::fs::write(
-        &temp_json_path,
-        serde_json::to_vec_pretty(json_value).map_err(|e| format!("Failed to serialize numatb JSON: {e}"))?,
-    )
-    .map_err(|e| format!("Failed to write temp numatb JSON {}: {e}", temp_json_path.display()))?;
-    run_ssbh_lib_json_convert(app, &temp_json_path, output_path)?;
-    Ok(())
+    let matl: MatlData = serde_json::from_value(json_value.clone()).map_err(|e| {
+        format!(
+            "Invalid numatb JSON (expected ssbh_data MatlData: major_version, minor_version, entries): {e}"
+        )
+    })?;
+    matl.write_to_file(output_path)
+        .map_err(|e| format!("Failed to write numatb {}: {e}", output_path.display()))
 }
 
-fn read_numatb_to_json_value(app: &AppHandle, file_path: &Path) -> Result<serde_json::Value, String> {
+fn read_numatb_to_json_value(file_path: &Path) -> Result<serde_json::Value, String> {
     if !file_path.is_file() {
         return Err(format!("numatb file not found: {}", file_path.display()));
     }
-    let temp_dir = file_path
-        .parent()
-        .unwrap_or_else(|| Path::new("."))
-        .join("__convert");
-    std::fs::create_dir_all(&temp_dir)
-        .map_err(|e| format!("Failed to create temp convert directory {}: {e}", temp_dir.display()))?;
-    let temp_json_path = temp_dir.join(format!(
-        "{}.json",
-        file_path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("temp_numatb")
-    ));
-    run_ssbh_lib_json_convert(app, file_path, &temp_json_path)?;
-    let bytes = std::fs::read(&temp_json_path)
-        .map_err(|e| format!("Failed to read temp numatb JSON {}: {e}", temp_json_path.display()))?;
-    serde_json::from_slice(&bytes).map_err(|e| format!("Failed to parse numatb JSON: {e}"))
+    let matl = MatlData::from_file(file_path).map_err(|e| format!("Failed to read numatb: {e}"))?;
+    serde_json::to_value(&matl).map_err(|e| format!("Failed to serialize numatb to JSON: {e}"))
 }
 
 fn variant_numatb_paths(base: &str, output_dir: &Path) -> (PathBuf, PathBuf) {
@@ -272,7 +202,7 @@ pub struct MeshObjectRef {
 /// Convert DAE → SSBH. `include_geometry_names`: exact COLLADA geometry names; empty = all. `write_log`: append `{base}_dae_to_ssbh.log` in output dir.
 #[tauri::command]
 pub fn ssbh_convert_dae_to_ssbh(
-    app: AppHandle,
+    _app: AppHandle,
     dae_path: String,
     output_dir: String,
     base_filename: String,
@@ -340,7 +270,7 @@ pub fn ssbh_convert_dae_to_ssbh(
         let nust_payload = nust_file
             .as_ref()
             .ok_or_else(|| "writeNumatb is true but no nustFile payload was provided".to_string())?;
-        write_numatb_from_json_value(&app, nust_payload, &nust_numatb_path)?;
+        write_numatb_from_json_value(nust_payload, &nust_numatb_path)?;
         converted.numatb_path = Some(nust_numatb_path.clone());
         nust_written_path = Some(nust_numatb_path.to_string_lossy().to_string());
 
@@ -348,7 +278,7 @@ pub fn ssbh_convert_dae_to_ssbh(
             let payload = maya_file
                 .as_ref()
                 .ok_or_else(|| "writeMayaProfile is true but no mayaFile payload was provided".to_string())?;
-            write_numatb_from_json_value(&app, payload, &maya_numatb_path)?;
+            write_numatb_from_json_value(payload, &maya_numatb_path)?;
             maya_written_path = Some(maya_numatb_path.to_string_lossy().to_string());
         }
     }
@@ -391,7 +321,7 @@ pub fn ssbh_convert_dae_to_ssbh(
 /// Convert FBX → SSBH. Same parameters as `ssbh_convert_dae_to_ssbh`; `include_geometry_names` matches FBX mesh names.
 #[tauri::command]
 pub fn ssbh_convert_fbx_to_ssbh(
-    app: AppHandle,
+    _app: AppHandle,
     fbx_path: String,
     output_dir: String,
     base_filename: String,
@@ -459,7 +389,7 @@ pub fn ssbh_convert_fbx_to_ssbh(
         let nust_payload = nust_file
             .as_ref()
             .ok_or_else(|| "writeNumatb is true but no nustFile payload was provided".to_string())?;
-        write_numatb_from_json_value(&app, nust_payload, &nust_numatb_path)?;
+        write_numatb_from_json_value(nust_payload, &nust_numatb_path)?;
         converted.numatb_path = Some(nust_numatb_path.clone());
         nust_written_path = Some(nust_numatb_path.to_string_lossy().to_string());
 
@@ -467,7 +397,7 @@ pub fn ssbh_convert_fbx_to_ssbh(
             let payload = maya_file
                 .as_ref()
                 .ok_or_else(|| "writeMayaProfile is true but no mayaFile payload was provided".to_string())?;
-            write_numatb_from_json_value(&app, payload, &maya_numatb_path)?;
+            write_numatb_from_json_value(payload, &maya_numatb_path)?;
             maya_written_path = Some(maya_numatb_path.to_string_lossy().to_string());
         }
     }
@@ -558,8 +488,8 @@ pub fn ssbh_write_numdlb_mapping(payload: NumdlbWritePayload) -> Result<(), Stri
 
 #[tauri::command]
 pub fn ssbh_template_read_numatb(
-    app: AppHandle,
+    _app: AppHandle,
     file_path: String,
 ) -> Result<serde_json::Value, String> {
-    read_numatb_to_json_value(&app, &PathBuf::from(file_path.trim()))
+    read_numatb_to_json_value(&PathBuf::from(file_path.trim()))
 }

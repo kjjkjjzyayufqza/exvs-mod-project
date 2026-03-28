@@ -1,6 +1,8 @@
-import type { NumatbFileJson } from "./daeSsbhTypes";
+import type { MatlDataJson } from "./types";
+import type { LegacyNumatbFileJson } from "./store/numatbProfileMigration";
+import { convertLegacyNumatbFileToMatlData } from "./store/numatbProfileMigration";
 
-export const EXVS_MAYA_TEMPLATE_FIXTURE: NumatbFileJson = {
+const MAYA_LEGACY: LegacyNumatbFileJson = {
   Matl: {
     V16: {
       entries: [
@@ -77,7 +79,7 @@ export const EXVS_MAYA_TEMPLATE_FIXTURE: NumatbFileJson = {
   },
 };
 
-export const EXVS_NUST_TEMPLATE_FIXTURE: NumatbFileJson = {
+const NUST_LEGACY: LegacyNumatbFileJson = {
   Matl: {
     V16: {
       entries: [
@@ -135,3 +137,6 @@ export const EXVS_NUST_TEMPLATE_FIXTURE: NumatbFileJson = {
     },
   },
 };
+
+export const EXVS_MAYA_TEMPLATE_FIXTURE: MatlDataJson = convertLegacyNumatbFileToMatlData(MAYA_LEGACY);
+export const EXVS_NUST_TEMPLATE_FIXTURE: MatlDataJson = convertLegacyNumatbFileToMatlData(NUST_LEGACY);

@@ -32,8 +32,9 @@ export function DaeSsbhSessionLayout() {
       collectMissingTexturePathsForExportSession(session.mayaFile, session.nustFile, {
         writeNumatb: session.writeNumatb,
         writeMayaProfile: session.writeMayaProfile,
+        materialLabels: session.numdlbEntries.map((row) => row.materialLabel),
       }),
-    [session.mayaFile, session.nustFile, session.writeNumatb, session.writeMayaProfile],
+    [session.mayaFile, session.nustFile, session.writeNumatb, session.writeMayaProfile, session.numdlbEntries],
   );
 
   const baseExportReady =
@@ -266,7 +267,8 @@ export function DaeSsbhSessionLayout() {
           <p className="text-[11px] text-muted-foreground">
             Output directory, base filename, geometry selection, and non-empty material labels are required.
           </p>
-        ) : missingTexturePaths.length > 0 ? (
+        ) : null}
+        {missingTexturePaths.length > 0 ? (
           <div className="space-y-2">
             <p className="text-[11px] text-destructive">
               {

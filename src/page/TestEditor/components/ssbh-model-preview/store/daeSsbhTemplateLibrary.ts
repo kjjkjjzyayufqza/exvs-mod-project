@@ -1,10 +1,10 @@
 import { Store } from "@tauri-apps/plugin-store";
 import {
-  cloneNumatbFile,
   createEmptyNumatbFile,
   type NumatbTemplateDefinition,
   type NumatbTemplateLibrary,
 } from "../daeSsbhTypes";
+import { normalizeMatlDataJson } from "./numatbProfileMigration";
 
 const TEMPLATE_LIBRARY_STORE_NAME = "ssbh-dae-template-library.json";
 const TEMPLATE_LIBRARY_KEY = "templateLibrary";
@@ -30,8 +30,8 @@ function normalizeTemplateLibrary(input: unknown): NumatbTemplateLibrary {
       description: template.description ?? "",
       sourceFileName: template.sourceFileName ?? null,
       updatedAt: template.updatedAt,
-      mayaFile: cloneNumatbFile(template.mayaFile ?? createEmptyNumatbFile()),
-      nustFile: cloneNumatbFile(template.nustFile ?? createEmptyNumatbFile()),
+      mayaFile: normalizeMatlDataJson(template.mayaFile ?? createEmptyNumatbFile()),
+      nustFile: normalizeMatlDataJson(template.nustFile ?? createEmptyNumatbFile()),
     })),
   };
 }

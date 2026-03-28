@@ -1,550 +1,388 @@
 {
-  "Matl": {
-    "V16": {
-      "entries": [
+  "major_version": 1,
+  "minor_version": 6,
+  "entries": [
+    {
+      "material_label": "emiMtl",
+      "shader_label": "",
+      "blend_states": [
         {
-          "material_label": "emiMtl",
-          "attributes": [
-            {
-              "param_id": "BlendState0",
-              "param": {
-                "data": {
-                  "BlendState": {
-                    "source_color": "One",
-                    "color_operation": "Add",
-                    "destination_color": "Zero",
-                    "source_alpha": "One",
-                    "alpha_operation": "Add",
-                    "destination_alpha": "Zero",
-                    "alpha_sample_to_coverage": 0,
-                    "unk8": 0,
-                    "unk9": 0,
-                    "unk10": 5
-                  }
-                }
-              }
-            },
-            {
-              "param_id": "RasterizerState0",
-              "param": {
-                "data": {
-                  "RasterizerState": {
-                    "fill_mode": "Solid",
-                    "cull_mode": "Back",
-                    "depth_bias": 0.0,
-                    "unk4": 0.0,
-                    "unk5": 0.0,
-                    "unk6": 16777217
-                  }
-                }
-              }
-            },
-            {
-              "param_id": "DiffuseMap",
-              "param": {
-                "data": {
-                  "String": "../../textures/015gndmuc_004deltpl_001_emi_basecolor"
-                }
-              }
-            },
-            {
-              "param_id": "Diffuse",
-              "param": {
-                "data": {
-                  "Unk7": {
-                    "r": 1.0,
-                    "g": 1.0,
-                    "b": 1.0,
-                    "a": 1.0
-                  }
-                }
-              }
-            },
-            {
-              "param_id": "DiffuseSampler",
-              "param": {
-                "data": {
-                  "Sampler": {
-                    "wraps": "Repeat",
-                    "wrapt": "Repeat",
-                    "wrapr": "ClampToEdge",
-                    "min_filter": "LinearMipmapLinear",
-                    "mag_filter": "Linear",
-                    "texture_filtering_type": "Default2",
-                    "border_color": {
-                      "r": 0.5,
-                      "g": 0.5,
-                      "b": 0.5,
-                      "a": 1.0
-                    },
-                    "unk11": 0,
-                    "unk12": 2139095022,
-                    "lod_bias": 0.0,
-                    "max_anisotropy": "One"
-                  }
-                }
-              }
-            },
-            {
-              "param_id": "DiffuseUvTransform",
-              "param": {
-                "data": {
-                  "UvTransform": {
-                    "scale_u": 1.0,
-                    "scale_v": 1.0,
-                    "rotation": 0.0,
-                    "translate_u": 0.0,
-                    "translate_v": 0.0
-                  }
-                }
-              }
-            },
-            {
-              "param_id": "UseDiffuseUvTransform",
-              "param": {
-                "data": {
-                  "Boolean": 1
-                }
-              }
-            },
-            {
-              "param_id": "SpecularMap",
-              "param": {
-                "data": {
-                  "String": "../../textures/015gndmuc_004deltpl_001_emi_metallic"
-                }
-              }
-            },
-            {
-              "param_id": "Specular",
-              "param": {
-                "data": {
-                  "Unk7": {
-                    "r": 1.0,
-                    "g": 1.0,
-                    "b": 1.0,
-                    "a": 1.0
-                  }
-                }
-              }
-            },
-            {
-              "param_id": "SpecularSampler",
-              "param": {
-                "data": {
-                  "Sampler": {
-                    "wraps": "Repeat",
-                    "wrapt": "Repeat",
-                    "wrapr": "ClampToEdge",
-                    "min_filter": "LinearMipmapLinear",
-                    "mag_filter": "Linear",
-                    "texture_filtering_type": "Default2",
-                    "border_color": {
-                      "r": 0.5,
-                      "g": 0.5,
-                      "b": 0.5,
-                      "a": 1.0
-                    },
-                    "unk11": 0,
-                    "unk12": 2139095022,
-                    "lod_bias": 0.0,
-                    "max_anisotropy": "One"
-                  }
-                }
-              }
-            },
-            {
-              "param_id": "SpecularUvTransform",
-              "param": {
-                "data": {
-                  "UvTransform": {
-                    "scale_u": 1.0,
-                    "scale_v": 1.0,
-                    "rotation": 0.0,
-                    "translate_u": 0.0,
-                    "translate_v": 0.0
-                  }
-                }
-              }
-            },
-            {
-              "param_id": "UseSpecularUvTransform",
-              "param": {
-                "data": {
-                  "Boolean": 1
-                }
-              }
-            },
-            {
-              "param_id": "NormalMap",
-              "param": {
-                "data": {
-                  "String": "../../textures/015gndmuc_004deltpl_001_emi_normal"
-                }
-              }
-            },
-            {
-              "param_id": "NormalSampler",
-              "param": {
-                "data": {
-                  "Sampler": {
-                    "wraps": "Repeat",
-                    "wrapt": "Repeat",
-                    "wrapr": "ClampToEdge",
-                    "min_filter": "LinearMipmapLinear",
-                    "mag_filter": "Linear",
-                    "texture_filtering_type": "Default2",
-                    "border_color": {
-                      "r": 0.5,
-                      "g": 0.5,
-                      "b": 0.5,
-                      "a": 1.0
-                    },
-                    "unk11": 0,
-                    "unk12": 2139095022,
-                    "lod_bias": 0.0,
-                    "max_anisotropy": "One"
-                  }
-                }
-              }
-            },
-            {
-              "param_id": "NormalUvTransform",
-              "param": {
-                "data": {
-                  "UvTransform": {
-                    "scale_u": 1.0,
-                    "scale_v": 1.0,
-                    "rotation": 0.0,
-                    "translate_u": 0.0,
-                    "translate_v": 0.0
-                  }
-                }
-              }
-            },
-            {
-              "param_id": "UseNormalUvTransform",
-              "param": {
-                "data": {
-                  "Boolean": 1
-                }
-              }
-            },
-            {
-              "param_id": "Texture1",
-              "param": {
-                "data": {
-                  "String": "../../textures/015gndmuc_004deltpl_001_emi_roughnessandmask"
-                }
-              }
-            },
-            {
-              "param_id": "RoughnessMap",
-              "param": {
-                "data": {
-                  "String": "../../textures/015gndmuc_004deltpl_001_emi_roughness"
-                }
-              }
-            },
-            {
-              "param_id": "AmbientOcclusionMap",
-              "param": {
-                "data": {
-                  "String": "../../textures/015gndmuc_004deltpl_001_emi_ambientocclusion"
-                }
-              }
-            },
-            {
-              "param_id": "EmissiveMap",
-              "param": {
-                "data": {
-                  "String": "../../textures/015gndmuc_004deltpl_001_emi_emissive"
-                }
-              }
-            },
-            {
-              "param_id": "CosinePower",
-              "param": {
-                "data": {
-                  "Float1": 20.0
-                }
-              }
-            }
-          ],
-          "shader_label": ""
+          "param_id": "BlendState0",
+          "data": {
+            "source_color": "One",
+            "color_operation": "Add",
+            "destination_color": "Zero",
+            "source_alpha": "One",
+            "alpha_operation": "Add",
+            "destination_alpha": "Zero",
+            "alpha_sample_to_coverage": false
+          }
+        }
+      ],
+      "floats": [],
+      "float1s": [
+        {
+          "param_id": "CosinePower",
+          "data": 20.0
+        }
+      ],
+      "booleans": [
+        {
+          "param_id": "UseDiffuseUvTransform",
+          "data": true
         },
         {
-          "material_label": "pbr1Mtl",
-          "attributes": [
-            {
-              "param_id": "BlendState0",
-              "param": {
-                "data": {
-                  "BlendState": {
-                    "source_color": "One",
-                    "color_operation": "Add",
-                    "destination_color": "Zero",
-                    "source_alpha": "One",
-                    "alpha_operation": "Add",
-                    "destination_alpha": "Zero",
-                    "alpha_sample_to_coverage": 0,
-                    "unk8": 0,
-                    "unk9": 0,
-                    "unk10": 5
-                  }
-                }
-              }
+          "param_id": "UseSpecularUvTransform",
+          "data": true
+        },
+        {
+          "param_id": "UseNormalUvTransform",
+          "data": true
+        }
+      ],
+      "vectors": [],
+      "colors": [
+        {
+          "param_id": "Diffuse",
+          "data": {
+            "r": 1.0,
+            "g": 1.0,
+            "b": 1.0,
+            "a": 1.0
+          }
+        },
+        {
+          "param_id": "Specular",
+          "data": {
+            "r": 1.0,
+            "g": 1.0,
+            "b": 1.0,
+            "a": 1.0
+          }
+        }
+      ],
+      "rasterizer_states": [
+        {
+          "param_id": "RasterizerState0",
+          "data": {
+            "fill_mode": "Solid",
+            "cull_mode": "Back",
+            "depth_bias": 0.0
+          }
+        }
+      ],
+      "samplers": [
+        {
+          "param_id": "DiffuseSampler",
+          "data": {
+            "wraps": "Repeat",
+            "wrapt": "Repeat",
+            "wrapr": "ClampToEdge",
+            "min_filter": "LinearMipmapLinear",
+            "mag_filter": "Linear",
+            "border_color": {
+              "r": 0.5,
+              "g": 0.5,
+              "b": 0.5,
+              "a": 1.0
             },
-            {
-              "param_id": "RasterizerState0",
-              "param": {
-                "data": {
-                  "RasterizerState": {
-                    "fill_mode": "Solid",
-                    "cull_mode": "Back",
-                    "depth_bias": 0.0,
-                    "unk4": 0.0,
-                    "unk5": 0.0,
-                    "unk6": 16777217
-                  }
-                }
-              }
+            "lod_bias": 0.0,
+            "max_anisotropy": "One"
+          }
+        },
+        {
+          "param_id": "SpecularSampler",
+          "data": {
+            "wraps": "Repeat",
+            "wrapt": "Repeat",
+            "wrapr": "ClampToEdge",
+            "min_filter": "LinearMipmapLinear",
+            "mag_filter": "Linear",
+            "border_color": {
+              "r": 0.5,
+              "g": 0.5,
+              "b": 0.5,
+              "a": 1.0
             },
-            {
-              "param_id": "DiffuseMap",
-              "param": {
-                "data": {
-                  "String": "../../textures/015gndmuc_004deltpl_001_pbr1_basecolor"
-                }
-              }
+            "lod_bias": 0.0,
+            "max_anisotropy": "One"
+          }
+        },
+        {
+          "param_id": "NormalSampler",
+          "data": {
+            "wraps": "Repeat",
+            "wrapt": "Repeat",
+            "wrapr": "ClampToEdge",
+            "min_filter": "LinearMipmapLinear",
+            "mag_filter": "Linear",
+            "border_color": {
+              "r": 0.5,
+              "g": 0.5,
+              "b": 0.5,
+              "a": 1.0
             },
-            {
-              "param_id": "Diffuse",
-              "param": {
-                "data": {
-                  "Unk7": {
-                    "r": 1.0,
-                    "g": 1.0,
-                    "b": 1.0,
-                    "a": 1.0
-                  }
-                }
-              }
+            "lod_bias": 0.0,
+            "max_anisotropy": "One"
+          }
+        }
+      ],
+      "textures": [
+        {
+          "param_id": "DiffuseMap",
+          "data": "../../textures/015gndmuc_004deltpl_001_emi_basecolor"
+        },
+        {
+          "param_id": "SpecularMap",
+          "data": "../../textures/015gndmuc_004deltpl_001_emi_metallic"
+        },
+        {
+          "param_id": "NormalMap",
+          "data": "../../textures/015gndmuc_004deltpl_001_emi_normal"
+        },
+        {
+          "param_id": "Texture1",
+          "data": "../../textures/015gndmuc_004deltpl_001_emi_roughnessandmask"
+        },
+        {
+          "param_id": "RoughnessMap",
+          "data": "../../textures/015gndmuc_004deltpl_001_emi_roughness"
+        },
+        {
+          "param_id": "AmbientOcclusionMap",
+          "data": "../../textures/015gndmuc_004deltpl_001_emi_ambientocclusion"
+        },
+        {
+          "param_id": "EmissiveMap",
+          "data": "../../textures/015gndmuc_004deltpl_001_emi_emissive"
+        }
+      ],
+      "textures2": [],
+      "type4_v16": [],
+      "type4_v15": [],
+      "uv_transforms": [
+        {
+          "param_id": "DiffuseUvTransform",
+          "data": {
+            "scale_u": 1.0,
+            "scale_v": 1.0,
+            "rotation": 0.0,
+            "translate_u": 0.0,
+            "translate_v": 0.0
+          }
+        },
+        {
+          "param_id": "SpecularUvTransform",
+          "data": {
+            "scale_u": 1.0,
+            "scale_v": 1.0,
+            "rotation": 0.0,
+            "translate_u": 0.0,
+            "translate_v": 0.0
+          }
+        },
+        {
+          "param_id": "NormalUvTransform",
+          "data": {
+            "scale_u": 1.0,
+            "scale_v": 1.0,
+            "rotation": 0.0,
+            "translate_u": 0.0,
+            "translate_v": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "material_label": "pbr1Mtl",
+      "shader_label": "",
+      "blend_states": [
+        {
+          "param_id": "BlendState0",
+          "data": {
+            "source_color": "One",
+            "color_operation": "Add",
+            "destination_color": "Zero",
+            "source_alpha": "One",
+            "alpha_operation": "Add",
+            "destination_alpha": "Zero",
+            "alpha_sample_to_coverage": false
+          }
+        }
+      ],
+      "floats": [],
+      "float1s": [
+        {
+          "param_id": "CosinePower",
+          "data": 20.0
+        }
+      ],
+      "booleans": [
+        {
+          "param_id": "UseDiffuseUvTransform",
+          "data": true
+        },
+        {
+          "param_id": "UseSpecularUvTransform",
+          "data": true
+        },
+        {
+          "param_id": "UseNormalUvTransform",
+          "data": true
+        }
+      ],
+      "vectors": [],
+      "colors": [
+        {
+          "param_id": "Diffuse",
+          "data": {
+            "r": 1.0,
+            "g": 1.0,
+            "b": 1.0,
+            "a": 1.0
+          }
+        },
+        {
+          "param_id": "Specular",
+          "data": {
+            "r": 1.0,
+            "g": 1.0,
+            "b": 1.0,
+            "a": 1.0
+          }
+        }
+      ],
+      "rasterizer_states": [
+        {
+          "param_id": "RasterizerState0",
+          "data": {
+            "fill_mode": "Solid",
+            "cull_mode": "Back",
+            "depth_bias": 0.0
+          }
+        }
+      ],
+      "samplers": [
+        {
+          "param_id": "DiffuseSampler",
+          "data": {
+            "wraps": "Repeat",
+            "wrapt": "Repeat",
+            "wrapr": "ClampToEdge",
+            "min_filter": "LinearMipmapLinear",
+            "mag_filter": "Linear",
+            "border_color": {
+              "r": 0.5,
+              "g": 0.5,
+              "b": 0.5,
+              "a": 1.0
             },
-            {
-              "param_id": "DiffuseSampler",
-              "param": {
-                "data": {
-                  "Sampler": {
-                    "wraps": "Repeat",
-                    "wrapt": "Repeat",
-                    "wrapr": "ClampToEdge",
-                    "min_filter": "LinearMipmapLinear",
-                    "mag_filter": "Linear",
-                    "texture_filtering_type": "Default2",
-                    "border_color": {
-                      "r": 0.5,
-                      "g": 0.5,
-                      "b": 0.5,
-                      "a": 1.0
-                    },
-                    "unk11": 0,
-                    "unk12": 2139095022,
-                    "lod_bias": 0.0,
-                    "max_anisotropy": "One"
-                  }
-                }
-              }
+            "lod_bias": 0.0,
+            "max_anisotropy": "One"
+          }
+        },
+        {
+          "param_id": "SpecularSampler",
+          "data": {
+            "wraps": "Repeat",
+            "wrapt": "Repeat",
+            "wrapr": "ClampToEdge",
+            "min_filter": "LinearMipmapLinear",
+            "mag_filter": "Linear",
+            "border_color": {
+              "r": 0.5,
+              "g": 0.5,
+              "b": 0.5,
+              "a": 1.0
             },
-            {
-              "param_id": "DiffuseUvTransform",
-              "param": {
-                "data": {
-                  "UvTransform": {
-                    "scale_u": 1.0,
-                    "scale_v": 1.0,
-                    "rotation": 0.0,
-                    "translate_u": 0.0,
-                    "translate_v": 0.0
-                  }
-                }
-              }
+            "lod_bias": 0.0,
+            "max_anisotropy": "One"
+          }
+        },
+        {
+          "param_id": "NormalSampler",
+          "data": {
+            "wraps": "Repeat",
+            "wrapt": "Repeat",
+            "wrapr": "ClampToEdge",
+            "min_filter": "LinearMipmapLinear",
+            "mag_filter": "Linear",
+            "border_color": {
+              "r": 0.5,
+              "g": 0.5,
+              "b": 0.5,
+              "a": 1.0
             },
-            {
-              "param_id": "UseDiffuseUvTransform",
-              "param": {
-                "data": {
-                  "Boolean": 1
-                }
-              }
-            },
-            {
-              "param_id": "SpecularMap",
-              "param": {
-                "data": {
-                  "String": "../../textures/015gndmuc_004deltpl_001_pbr1_metallic"
-                }
-              }
-            },
-            {
-              "param_id": "Specular",
-              "param": {
-                "data": {
-                  "Unk7": {
-                    "r": 1.0,
-                    "g": 1.0,
-                    "b": 1.0,
-                    "a": 1.0
-                  }
-                }
-              }
-            },
-            {
-              "param_id": "SpecularSampler",
-              "param": {
-                "data": {
-                  "Sampler": {
-                    "wraps": "Repeat",
-                    "wrapt": "Repeat",
-                    "wrapr": "ClampToEdge",
-                    "min_filter": "LinearMipmapLinear",
-                    "mag_filter": "Linear",
-                    "texture_filtering_type": "Default2",
-                    "border_color": {
-                      "r": 0.5,
-                      "g": 0.5,
-                      "b": 0.5,
-                      "a": 1.0
-                    },
-                    "unk11": 0,
-                    "unk12": 2139095022,
-                    "lod_bias": 0.0,
-                    "max_anisotropy": "One"
-                  }
-                }
-              }
-            },
-            {
-              "param_id": "SpecularUvTransform",
-              "param": {
-                "data": {
-                  "UvTransform": {
-                    "scale_u": 1.0,
-                    "scale_v": 1.0,
-                    "rotation": 0.0,
-                    "translate_u": 0.0,
-                    "translate_v": 0.0
-                  }
-                }
-              }
-            },
-            {
-              "param_id": "UseSpecularUvTransform",
-              "param": {
-                "data": {
-                  "Boolean": 1
-                }
-              }
-            },
-            {
-              "param_id": "NormalMap",
-              "param": {
-                "data": {
-                  "String": "../../textures/015gndmuc_004deltpl_001_pbr1_normal"
-                }
-              }
-            },
-            {
-              "param_id": "NormalSampler",
-              "param": {
-                "data": {
-                  "Sampler": {
-                    "wraps": "Repeat",
-                    "wrapt": "Repeat",
-                    "wrapr": "ClampToEdge",
-                    "min_filter": "LinearMipmapLinear",
-                    "mag_filter": "Linear",
-                    "texture_filtering_type": "Default2",
-                    "border_color": {
-                      "r": 0.5,
-                      "g": 0.5,
-                      "b": 0.5,
-                      "a": 1.0
-                    },
-                    "unk11": 0,
-                    "unk12": 2139095022,
-                    "lod_bias": 0.0,
-                    "max_anisotropy": "One"
-                  }
-                }
-              }
-            },
-            {
-              "param_id": "NormalUvTransform",
-              "param": {
-                "data": {
-                  "UvTransform": {
-                    "scale_u": 1.0,
-                    "scale_v": 1.0,
-                    "rotation": 0.0,
-                    "translate_u": 0.0,
-                    "translate_v": 0.0
-                  }
-                }
-              }
-            },
-            {
-              "param_id": "UseNormalUvTransform",
-              "param": {
-                "data": {
-                  "Boolean": 1
-                }
-              }
-            },
-            {
-              "param_id": "Texture1",
-              "param": {
-                "data": {
-                  "String": "../../textures/015gndmuc_004deltpl_001_pbr1_roughnessandmask"
-                }
-              }
-            },
-            {
-              "param_id": "RoughnessMap",
-              "param": {
-                "data": {
-                  "String": "../../textures/015gndmuc_004deltpl_001_pbr1_roughness"
-                }
-              }
-            },
-            {
-              "param_id": "AmbientOcclusionMap",
-              "param": {
-                "data": {
-                  "String": "../../textures/015gndmuc_004deltpl_001_pbr1_ambientocclusion"
-                }
-              }
-            },
-            {
-              "param_id": "EmissiveMap",
-              "param": {
-                "data": {
-                  "String": "../../textures/015gndmuc_004deltpl_001_pbr1_emissive"
-                }
-              }
-            },
-            {
-              "param_id": "CosinePower",
-              "param": {
-                "data": {
-                  "Float1": 20.0
-                }
-              }
-            }
-          ],
-          "shader_label": ""
+            "lod_bias": 0.0,
+            "max_anisotropy": "One"
+          }
+        }
+      ],
+      "textures": [
+        {
+          "param_id": "DiffuseMap",
+          "data": "../../textures/015gndmuc_004deltpl_001_pbr1_basecolor"
+        },
+        {
+          "param_id": "SpecularMap",
+          "data": "../../textures/015gndmuc_004deltpl_001_pbr1_metallic"
+        },
+        {
+          "param_id": "NormalMap",
+          "data": "../../textures/015gndmuc_004deltpl_001_pbr1_normal"
+        },
+        {
+          "param_id": "Texture1",
+          "data": "../../textures/015gndmuc_004deltpl_001_pbr1_roughnessandmask"
+        },
+        {
+          "param_id": "RoughnessMap",
+          "data": "../../textures/015gndmuc_004deltpl_001_pbr1_roughness"
+        },
+        {
+          "param_id": "AmbientOcclusionMap",
+          "data": "../../textures/015gndmuc_004deltpl_001_pbr1_ambientocclusion"
+        },
+        {
+          "param_id": "EmissiveMap",
+          "data": "../../textures/015gndmuc_004deltpl_001_pbr1_emissive"
+        }
+      ],
+      "textures2": [],
+      "type4_v16": [],
+      "type4_v15": [],
+      "uv_transforms": [
+        {
+          "param_id": "DiffuseUvTransform",
+          "data": {
+            "scale_u": 1.0,
+            "scale_v": 1.0,
+            "rotation": 0.0,
+            "translate_u": 0.0,
+            "translate_v": 0.0
+          }
+        },
+        {
+          "param_id": "SpecularUvTransform",
+          "data": {
+            "scale_u": 1.0,
+            "scale_v": 1.0,
+            "rotation": 0.0,
+            "translate_u": 0.0,
+            "translate_v": 0.0
+          }
+        },
+        {
+          "param_id": "NormalUvTransform",
+          "data": {
+            "scale_u": 1.0,
+            "scale_v": 1.0,
+            "rotation": 0.0,
+            "translate_u": 0.0,
+            "translate_v": 0.0
+          }
         }
       ]
     }
-  }
+  ]
 }

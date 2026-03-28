@@ -132,6 +132,8 @@ export type MatlEntryJson = {
 };
 
 export type MatlDataJson = {
+  major_version: number;
+  minor_version: number;
   entries: MatlEntryJson[];
 };
 

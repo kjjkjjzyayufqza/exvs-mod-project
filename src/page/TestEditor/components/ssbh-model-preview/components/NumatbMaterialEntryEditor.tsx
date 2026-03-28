@@ -12,12 +12,13 @@ import {
   type NumatbAttribute,
   type NumatbAttributeData,
   type NumatbAttributeDataKind,
-  type NumatbMaterialEntry,
 } from "../daeSsbhTypes";
+import type { MatlEntryJson } from "../types";
 import { COMMON_NUMATB_PARAM_IDS, createDefaultAttributeData } from "../store/numatbTemplateStoreHelpers";
+import { flattenEntryToAttributes } from "../store/matlEntryFlat";
 
 type NumatbMaterialEntryEditorProps = {
-  entry: NumatbMaterialEntry | null;
+  entry: MatlEntryJson | null;
   onChangeMaterialLabel: (nextLabel: string) => void;
   onChangeShaderLabel: (nextShaderLabel: string) => void;
   onUpdateAttribute: (attributeIndex: number, data: NumatbAttributeData) => void;
@@ -165,10 +166,15 @@ export function NumatbMaterialEntryEditor({
   const [newParamId, setNewParamId] = useState("");
   const [newParamKind, setNewParamKind] = useState<NumatbAttributeDataKind>("String");
 
+  const flatAttributes = useMemo(
+    () => (entry ? flattenEntryToAttributes(entry) : []),
+    [entry],
+  );
+
   const availableParamIds = useMemo(() => {
-    const existing = new Set(entry?.attributes.map((attribute) => attribute.param_id) ?? []);
+    const existing = new Set(flatAttributes.map((attribute) => attribute.param_id));
     return COMMON_NUMATB_PARAM_IDS.filter((paramId) => !existing.has(paramId));
-  }, [entry]);
+  }, [flatAttributes]);
 
   if (!entry) {
     return <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">Select a material entry to edit.</div>;
@@ -251,7 +257,7 @@ export function NumatbMaterialEntryEditor({
         </div>
         <ScrollArea className="h-[360px]">
           <div className="divide-y">
-            {entry.attributes.map((attribute, attributeIndex) => {
+            {flatAttributes.map((attribute, attributeIndex) => {
               const kind = getNumatbAttributeKind(attribute.param.data);
               return (
                 <div key={`${attribute.param_id}:${attributeIndex}`} className="grid grid-cols-[minmax(0,180px)_100px_minmax(0,1fr)_52px] gap-2 px-3 py-3">
@@ -277,7 +283,7 @@ export function NumatbMaterialEntryEditor({
                 </div>
               );
             })}
-            {entry.attributes.length === 0 ? (
+            {flatAttributes.length === 0 ? (
               <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">This material has no attributes yet.</div>
             ) : null}
           </div>

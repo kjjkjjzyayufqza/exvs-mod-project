@@ -1,4 +1,7 @@
 import type { SsbhDaeAnalysisReport, SsbhDaeConvertStats, SsbhDaeUpAxis } from "./ssbhDaeIoService";
+import type { MatlDataJson, MatlEntryJson } from "./types";
+
+export type { MatlDataJson, MatlEntryJson } from "./types";
 
 export type DaeImportKind = "dae" | "fbx";
 export type NumatbProfileKind = "maya" | "nust";
@@ -24,7 +27,8 @@ export type NumatbBlendStateValue = {
   source_alpha: string;
   alpha_operation: string;
   destination_alpha: string;
-  alpha_sample_to_coverage: number;
+  /** Rust MatlData uses bool; 0/1 may appear in legacy JSON until `ensureMatlEntrySerdeFields` runs. */
+  alpha_sample_to_coverage: boolean | number;
   unk8?: number;
   unk9?: number;
   unk10?: number;
@@ -97,18 +101,11 @@ export type NumatbAttribute = {
   };
 };
 
+/** Legacy flat list shape (ssbh_lib JSON). Migrated to MatlDataJson at load time. */
 export type NumatbMaterialEntry = {
   material_label: string;
   shader_label: string;
   attributes: NumatbAttribute[];
-};
-
-export type NumatbFileJson = {
-  Matl: {
-    V16: {
-      entries: NumatbMaterialEntry[];
-    };
-  };
 };
 
 export type NumdlbMappingRow = {
@@ -123,8 +120,8 @@ export type NumatbTemplateDefinition = {
   description: string;
   sourceFileName: string | null;
   updatedAt: string;
-  mayaFile: NumatbFileJson;
-  nustFile: NumatbFileJson;
+  mayaFile: MatlDataJson;
+  nustFile: MatlDataJson;
 };
 
 export type NumatbTemplateLibrary = {
@@ -169,27 +166,91 @@ export type DaeSsbhSessionState = {
   mirrorTexturePathsAcrossProfiles: boolean;
   numdlbEntries: NumdlbMappingRow[];
   selectedTemplateId: string | null;
-  mayaFile: NumatbFileJson;
-  nustFile: NumatbFileJson;
+  mayaFile: MatlDataJson;
+  nustFile: MatlDataJson;
   lastResult: DaeSsbhConvertExtendedResult | null;
 };
 
-export function createEmptyNumatbFile(): NumatbFileJson {
+export function createEmptyNumatbFile(): MatlDataJson {
   return {
-    Matl: {
-      V16: {
-        entries: [],
-      },
-    },
+    major_version: 1,
+    minor_version: 6,
+    entries: [],
   };
 }
 
-export function cloneNumatbFile(file: NumatbFileJson): NumatbFileJson {
-  return JSON.parse(JSON.stringify(file)) as NumatbFileJson;
+export function cloneNumatbFile(file: MatlDataJson): MatlDataJson {
+  return JSON.parse(JSON.stringify(file)) as MatlDataJson;
 }
 
-export function getNumatbEntries(file: NumatbFileJson): NumatbMaterialEntry[] {
-  return file.Matl.V16.entries;
+export function getNumatbEntries(file: MatlDataJson): MatlEntryJson[] {
+  return file.entries;
+}
+
+/** Rust `MatlData` JSON uses `bool`; session/UI may store 0/1 from legacy flat attributes. */
+function coerceMatlJsonBool(value: unknown): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value !== 0;
+  }
+  throw new Error(`MatlData JSON bool field must be boolean or a finite number (0/1), got ${typeof value}`);
+}
+
+/**
+ * Rust `MatlEntryData` serde requires several Vec fields to be present (no `default` on blend_states, floats, etc.).
+ * Merge partial UI/session JSON into a shape that round-trips to `MatlData::write_to_file`.
+ */
+export function ensureMatlEntrySerdeFields(entry: MatlEntryJson): MatlEntryJson {
+  const blend_states = (entry.blend_states ?? []).map((row) => {
+    const data = row.data;
+    if (!data || typeof data !== "object") {
+      return row;
+    }
+    const d = data as Record<string, unknown>;
+    if (!("alpha_sample_to_coverage" in d)) {
+      return row;
+    }
+    return {
+      ...row,
+      data: {
+        ...d,
+        alpha_sample_to_coverage: coerceMatlJsonBool(d.alpha_sample_to_coverage),
+      },
+    };
+  });
+
+  const booleans = (entry.booleans ?? []).map((row) => ({
+    ...row,
+    data: coerceMatlJsonBool((row as { data: unknown }).data),
+  }));
+
+  return {
+    material_label: entry.material_label,
+    shader_label: entry.shader_label,
+    blend_states,
+    floats: entry.floats ?? [],
+    float1s: entry.float1s ?? [],
+    booleans,
+    vectors: entry.vectors ?? [],
+    colors: entry.colors ?? [],
+    rasterizer_states: entry.rasterizer_states ?? [],
+    samplers: entry.samplers ?? [],
+    textures: entry.textures ?? [],
+    textures2: entry.textures2 ?? [],
+    type4_v16: entry.type4_v16 ?? [],
+    type4_v15: entry.type4_v15 ?? [],
+    uv_transforms: entry.uv_transforms ?? [],
+  };
+}
+
+export function ensureMatlDataSerdeFields(file: MatlDataJson): MatlDataJson {
+  return {
+    major_version: file.major_version ?? 1,
+    minor_version: file.minor_version ?? 6,
+    entries: file.entries.map(ensureMatlEntrySerdeFields),
+  };
 }
 
 export function getNumatbAttributeKind(data: NumatbAttributeData): NumatbAttributeDataKind {
@@ -208,12 +269,12 @@ export function getNumatbAttributeKind(data: NumatbAttributeData): NumatbAttribu
   throw new Error("Unsupported numatb attribute data shape");
 }
 
-export function createEmptyMaterialEntry(materialLabel: string, profile: NumatbProfileKind): NumatbMaterialEntry {
-  return {
+export function createEmptyMaterialEntry(materialLabel: string, profile: NumatbProfileKind): MatlEntryJson {
+  return ensureMatlEntrySerdeFields({
     material_label: materialLabel,
     shader_label: profile === "nust" ? "vsngCharaBasic" : "",
-    attributes: [],
-  };
+    textures: [],
+  });
 }
 
 export function uniqueMaterialLabels(rows: NumdlbMappingRow[]): string[] {
