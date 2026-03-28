@@ -46,14 +46,15 @@ pub fn run() {
             commands::card_icon_replace_from_png_with_dds_format,
             commands::card_icon_detect_dds_format,
             commands::card_icon_batch_replace_with_dds_format,
-            commands::copy_asset_as_new
+            commands::copy_asset_as_new,
+            commands::write_files_batch_base64
         ])
         .setup(|app| {
-            #[cfg(debug_assertions)] // only include this code on debug builds
+            #[cfg(debug_assertions)]
             {
-                let window = app.get_webview_window("main").unwrap();
-                window.open_devtools();
-                window.close_devtools();
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.open_devtools();
+                }
             }
             Ok(())
         })

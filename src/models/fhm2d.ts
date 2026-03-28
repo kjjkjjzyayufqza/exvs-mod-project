@@ -1,8 +1,8 @@
 import { Buffer } from "buffer";
 import { ErrorMessage } from "./error";
 import pako from "pako";
+import { invoke } from "@tauri-apps/api/core";
 import { writeFile, mkdir, exists } from "@tauri-apps/plugin-fs";
-import { path } from "@tauri-apps/api";
 import { basename, dirname } from "@tauri-apps/api/path";
 import { toast } from "sonner";
 import { applyNumdlbBaseNameToStructureObject } from "@/lib/fhm2d_characterModelFormatFuc";
@@ -478,6 +478,40 @@ export enum ExtractType {
   FolderWithStructure = "structure",
 }
 
+/** Fewer IPC round-trips than per-file `plugin-fs` writeFile; chunk size caps single-invoke JSON size. */
+const WRITE_FILES_BATCH_CHUNK_SIZE = 48;
+
+interface WriteBatchFileWriteTiming {
+  relativePath: string;
+  /** Rust `fs::write` only (ms). */
+  writeMs: number;
+}
+
+async function writeExtractedSubfilesBatch(
+  outDir: string,
+  entries: { relativePath: string; buffer: Buffer }[],
+): Promise<void> {
+  if (entries.length === 0) {
+    return;
+  }
+  for (let i = 0; i < entries.length; i += WRITE_FILES_BATCH_CHUNK_SIZE) {
+    const chunk = entries.slice(i, i + WRITE_FILES_BATCH_CHUNK_SIZE);
+    const files = chunk.map((e) => ({
+      relativePath: e.relativePath,
+      dataBase64: e.buffer.toString("base64"),
+    }));
+    const timings = await invoke<WriteBatchFileWriteTiming[]>("write_files_batch_base64", {
+      baseDir: outDir,
+      files,
+    });
+    for (const row of timings) {
+      console.log(
+        `[ExtractFHM] write file ${outDir}/${row.relativePath} ${row.writeMs.toFixed(2)}ms`
+      );
+    }
+  }
+}
+
 function logExtractFhmStep(label: string, stepStart: number, extractStart: number): number {
   const now = performance.now();
   console.log(
@@ -657,30 +691,30 @@ export async function ExtractFHMData(
 
       stepAt = logExtractFhmStep("sync structure base names", stepAt, extractStart);
 
-      // Step 4: Write files using the new naming from finalStructure
+      // Step 4: Write files via Rust batch (chunked invoke) — avoids N× plugin-fs IPC.
+      const writeEntries: { relativePath: string; buffer: Buffer }[] = [];
       for (const fileData of decompressedFiles) {
         const structureItem = finalStructure.SubFileData.find((item: any) => item.index === fileData.index);
         if (structureItem && structureItem.fileUrl) {
-          // Extract filename from fileUrl (e.g., ".\0x092B6B4A\body_normal.numdlb" -> "body_normal.numdlb")
           const fileUrl = structureItem.fileUrl.replace(/^\.[\\/]/, "");
           const pathParts = fileUrl.split(/[\\/]/);
           const fileName = pathParts[pathParts.length - 1];
-          const outputPath = `${outDir}/${fileName}`;
-          const writeStart = performance.now();
-          await writeFile(outputPath, fileData.buffer);
-          console.log(
-            `[ExtractFHM] write file ${outputPath} ${(performance.now() - writeStart).toFixed(2)}ms`
-          );
+          if (!fileName) {
+            throw new Error(`Invalid fileUrl for extraction: ${String(structureItem.fileUrl)}`);
+          }
+          writeEntries.push({ relativePath: fileName, buffer: fileData.buffer });
         } else {
-          // Fallback to old naming if structure item not found
-          const outputPath = `${outDir}/${fileData.index}${typeList[fileData.index]}`;
-          const writeStart = performance.now();
-          await writeFile(outputPath, fileData.buffer);
-          console.log(
-            `[ExtractFHM] write file (fallback) ${outputPath} ${(performance.now() - writeStart).toFixed(2)}ms`
-          );
+          writeEntries.push({
+            relativePath: `${fileData.index}${typeList[fileData.index]}`,
+            buffer: fileData.buffer,
+          });
         }
       }
+      const writeStart = performance.now();
+      await writeExtractedSubfilesBatch(outDir, writeEntries);
+      console.log(
+        `[ExtractFHM] write all subfiles (batched IPC, ${writeEntries.length} files): ${(performance.now() - writeStart).toFixed(2)}ms`
+      );
 
       stepAt = logExtractFhmStep("write all subfiles", stepAt, extractStart);
 

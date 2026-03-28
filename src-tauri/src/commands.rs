@@ -1,6 +1,6 @@
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use encoding_rs::GBK;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     fs,
@@ -247,6 +247,81 @@ pub async fn card_icon_batch_replace_with_dds_format(
             dds_format.as_str(),
             parsed_source,
         )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// One flat file name under `base_dir` (no subfolders, no `..`). Matches `ExtractFHM` single-folder output.
+fn validate_flat_relative_file_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("relative_path must not be empty".to_string());
+    }
+    if name.contains('/') || name.contains('\\') {
+        return Err(format!(
+            "relative_path must be a single file name (no path separators): {name}"
+        ));
+    }
+    if name.contains("..") {
+        return Err(format!(
+            "relative_path must not contain '..': {name}"
+        ));
+    }
+    Ok(())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WriteBatchFileBase64 {
+    pub relative_path: String,
+    pub data_base64: String,
+}
+
+/// Per-file `fs::write` wall time (milliseconds); base64 decode is not included.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WriteBatchFileWriteTiming {
+    pub relative_path: String,
+    pub write_ms: f64,
+}
+
+/// Writes many files in one IPC round-trip (optionally chunked from the webview). Decodes base64 on the Rust side.
+#[tauri::command]
+pub async fn write_files_batch_base64(
+    base_dir: String,
+    files: Vec<WriteBatchFileBase64>,
+) -> Result<Vec<WriteBatchFileWriteTiming>, String> {
+    if files.is_empty() {
+        return Ok(vec![]);
+    }
+    const MAX_FILES_PER_INVOKE: usize = 512;
+    if files.len() > MAX_FILES_PER_INVOKE {
+        return Err(format!(
+            "files.len() must be <= {MAX_FILES_PER_INVOKE}"
+        ));
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+        let base = PathBuf::from(&base_dir);
+        fs::create_dir_all(&base).map_err(|e| e.to_string())?;
+        let mut timings: Vec<WriteBatchFileWriteTiming> = Vec::with_capacity(files.len());
+        for f in files {
+            validate_flat_relative_file_name(&f.relative_path)?;
+            let bytes = BASE64
+                .decode(f.data_base64.trim())
+                .map_err(|e| e.to_string())?;
+            let path = base.join(&f.relative_path);
+            let write_start = Instant::now();
+            fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+            let write_ms = write_start.elapsed().as_secs_f64() * 1000.0;
+            let path_str = path.to_string_lossy().into_owned();
+            println!("[ExtractFHM] write file {} {:.2}ms", path_str, write_ms);
+            timings.push(WriteBatchFileWriteTiming {
+                relative_path: f.relative_path,
+                write_ms,
+            });
+        }
+        Ok(timings)
     })
     .await
     .map_err(|e| e.to_string())?
