@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use ssbh_data::prelude::*;
-use ssbh_data::modl_data::ModlEntryData;
+use ssbh_data::modl_data::{ModlData, ModlEntryData};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -9,8 +9,8 @@ use tauri::AppHandle;
 
 use crate::ssbh_dae::{
     analyze_dae_path, analyze_fbx_path, convert_dae_file, convert_fbx_file, export_ssbh_bundle_to_dae,
-    ConvertedFiles, DaeAnalysisReport, DaeConvertConfig, DaeExportConfig, ModlEntryConfig,
-    UpAxisConversion,
+    ConvertedFiles, DaeAnalysisReport, DaeConvertConfig, DaeExportConfig, DaeMaterialTextureExport,
+    ModlEntryConfig, UpAxisConversion,
 };
 use crate::ssbh_preview::load_model_preview_bundle;
 
@@ -150,6 +150,7 @@ pub fn ssbh_export_folder_to_dae(
     scale_factor: f32,
     up_axis: String,
     include_mesh_objects: Option<Vec<MeshObjectRef>>,
+    export_numatb_textures: bool,
 ) -> Result<serde_json::Value, String> {
     if !scale_factor.is_finite() || scale_factor <= 0.0 {
         return Err("scale_factor must be a finite positive number".to_string());
@@ -176,6 +177,7 @@ pub fn ssbh_export_folder_to_dae(
     let cfg = DaeExportConfig {
         up_axis: parse_up_axis(&up_axis)?,
         scale_factor,
+        ..Default::default()
     };
 
     let filter_set: Option<HashSet<(String, u64)>> = include_mesh_objects.map(|v| {
@@ -185,8 +187,37 @@ pub fn ssbh_export_folder_to_dae(
     });
 
     let skel_ref = skel.as_ref();
-    let stats = export_ssbh_bundle_to_dae(&mesh, skel_ref, &out, &cfg, filter_set.as_ref())
-        .map_err(|e| format!("DAE export failed: {e:#}"))?;
+
+    let stats = if export_numatb_textures {
+        let out_dir = out.parent().ok_or_else(|| {
+            "output_dae_path must include a parent directory for texture export".to_string()
+        })?;
+        let matl_json = bundle.matl.clone().ok_or_else(|| {
+            "matl data is missing from the model bundle; cannot export numatb textures".to_string()
+        })?;
+        let modl: ModlData =
+            serde_json::from_value(bundle.modl.clone()).map_err(|e| format!("Failed to parse modl: {e}"))?;
+        let matl: MatlData =
+            serde_json::from_value(matl_json).map_err(|e| format!("Failed to parse matl: {e}"))?;
+        let root_canon = PathBuf::from(bundle.root_folder.trim());
+        let material_export = DaeMaterialTextureExport {
+            root_canon: &root_canon,
+            output_dir: out_dir,
+            modl: &modl,
+            matl: &matl,
+        };
+        export_ssbh_bundle_to_dae(
+            &mesh,
+            skel_ref,
+            &out,
+            &cfg,
+            filter_set.as_ref(),
+            Some(&material_export),
+        )
+    } else {
+        export_ssbh_bundle_to_dae(&mesh, skel_ref, &out, &cfg, filter_set.as_ref(), None)
+    }
+    .map_err(|e| format!("DAE export failed: {e:#}"))?;
 
     Ok(json!({
         "daePath": out.to_string_lossy(),

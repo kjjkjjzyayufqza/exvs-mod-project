@@ -528,7 +528,7 @@ fn find_nutexb_by_basename_near_textures(
     Ok(None)
 }
 
-fn resolve_nutexb_path(root_canon: &Path, texture_ref: &str) -> Result<Option<PathBuf>, String> {
+pub fn resolve_nutexb_path(root_canon: &Path, texture_ref: &str) -> Result<Option<PathBuf>, String> {
     let trimmed = texture_ref.trim();
     if trimmed.is_empty() {
         return Ok(None);

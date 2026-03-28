@@ -23,6 +23,7 @@ export type SsbhDaeConvertStats = {
 export type SsbhDaeExportStats = {
   objectsExported: number;
   trianglesExported: number;
+  texturesExported: number;
 };
 
 export type SsbhDaeMeshAnalysisRow = {
@@ -68,6 +69,8 @@ export async function ssbhExportFolderToDae(params: {
   scaleFactor: number;
   upAxis: SsbhDaeUpAxis;
   includeMeshObjects?: MeshObjectRef[] | null;
+  /** When true, resolves diffuse nutexb from numatb to PNG next to the DAE and binds materials in the file. */
+  exportNumatbTextures: boolean;
 }): Promise<{ daePath: string; stats: SsbhDaeExportStats }> {
   return invoke<{ daePath: string; stats: SsbhDaeExportStats }>("ssbh_export_folder_to_dae", {
     rootPath: params.rootPath,
@@ -75,6 +78,7 @@ export async function ssbhExportFolderToDae(params: {
     scaleFactor: params.scaleFactor,
     upAxis: params.upAxis,
     includeMeshObjects: params.includeMeshObjects ?? null,
+    exportNumatbTextures: params.exportNumatbTextures,
   });
 }
 

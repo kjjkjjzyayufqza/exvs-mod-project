@@ -37,6 +37,7 @@ export function SsbhModelPreviewInspector() {
   const [textureCacheStats, setTextureCacheStats] = useState<NutexbPreviewCacheStats | null>(null);
   const [daeExportScaleText, setDaeExportScaleText] = useState("1");
   const [daeExportUpAxis, setDaeExportUpAxis] = useState<SsbhDaeUpAxis>("y_up");
+  const [daeExportNumatbTextures, setDaeExportNumatbTextures] = useState(false);
   const [daeExportBusy, setDaeExportBusy] = useState(false);
   const refreshTextureCacheStats = useCallback(async () => {
     setTextureCacheStats(await getNutexbPreviewCacheStats());
@@ -83,15 +84,18 @@ export function SsbhModelPreviewInspector() {
         scaleFactor: scale,
         upAxis: daeExportUpAxis,
         includeMeshObjects: null,
+        exportNumatbTextures: daeExportNumatbTextures,
       });
       rememberDialogSelection(DialogLastPathKey.ssbhDaeExportDae, daePath, "file");
+      const texLine =
+        stats.texturesExported > 0 ? ` · PNG textures: ${stats.texturesExported}` : "";
       toast.success("Exported COLLADA", {
-        description: `${daePath}\nObjects: ${stats.objectsExported} · Triangles: ${stats.trianglesExported}`,
+        description: `${daePath}\nObjects: ${stats.objectsExported} · Triangles: ${stats.trianglesExported}${texLine}`,
       });
     } finally {
       setDaeExportBusy(false);
     }
-  }, [p.bundle, p.workspaceRoot, daeExportScaleText, daeExportUpAxis]);
+  }, [p.bundle, p.workspaceRoot, daeExportScaleText, daeExportUpAxis, daeExportNumatbTextures]);
 
   const skel = p.bundle?.skel ? (p.bundle.skel as SkelDataJson) : null;
   const bones = skel?.bones ?? [];
@@ -215,7 +219,7 @@ export function SsbhModelPreviewInspector() {
         <div className="flex flex-col gap-3">
           <p className="text-[9px] leading-snug text-muted-foreground">
             Writes the same mesh (and skeleton when present) as the 3D preview from the loaded model folder to a .dae file.
-            Materials are not embedded; this is geometry-focused export.
+            Optional: export diffuse nutexb textures referenced in numatb as PNG next to the DAE and bind them in the COLLADA file.
           </p>
           {p.bundle?.modlPath ? (
             <p className="truncate font-mono text-[10px] text-muted-foreground" title={p.bundle.modlPath}>
@@ -258,6 +262,17 @@ export function SsbhModelPreviewInspector() {
               </Select>
             </div>
           </div>
+          <label className="flex cursor-pointer items-start gap-2 text-[11px] leading-snug">
+            <Checkbox
+              checked={daeExportNumatbTextures}
+              onCheckedChange={(c) => setDaeExportNumatbTextures(c === true)}
+              disabled={!p.bundle?.modlPath || p.previewBusy || daeExportBusy}
+              className="mt-0.5"
+            />
+            <span className="text-muted-foreground">
+              Export numatb diffuse textures (nutexb → PNG in the same folder as the .dae, update DAE references)
+            </span>
+          </label>
           <Button
             type="button"
             variant="secondary"

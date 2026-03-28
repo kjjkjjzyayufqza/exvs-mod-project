@@ -1,11 +1,17 @@
 use anyhow::{anyhow, Result};
 use serde::Serialize;
+use ssbh_data::matl_data::{MatlData, ParamId};
 use ssbh_data::mesh_data::{MeshData, VectorData};
+use ssbh_data::modl_data::ModlData;
 use ssbh_data::skel_data::SkelData;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::ffi::OsStr;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use xmltree::{Element, XMLNode};
+
+use crate::nutexb_lib;
+use crate::ssbh_preview::resolve_nutexb_path;
 
 use super::dae_parse::UpAxisConversion;
 
@@ -14,6 +20,10 @@ use super::dae_parse::UpAxisConversion;
 pub struct DaeExportConfig {
     pub up_axis: UpAxisConversion,
     pub scale_factor: f32,
+    /// Mirror UV horizontally: `u -> 1.0 - u`.
+    pub flip_uv_u: bool,
+    /// Mirror UV vertically: `v -> 1.0 - v` (often needed for Maya vs OpenGL-style UVs).
+    pub flip_uv_v: bool,
 }
 
 impl Default for DaeExportConfig {
@@ -21,6 +31,8 @@ impl Default for DaeExportConfig {
         Self {
             up_axis: UpAxisConversion::YUp,
             scale_factor: 1.0,
+            flip_uv_u: false,
+            flip_uv_v: true,
         }
     }
 }
@@ -40,6 +52,8 @@ struct JsonBoneInfluence {
 #[derive(Debug, Clone)]
 struct JsonMeshObject {
     name: String,
+    original_name: String,
+    original_subindex: u64,
     vertex_indices: Vec<u32>,
     positions: Vec<[f32; 3]>,
     normals: Option<Vec<[f32; 3]>>,
@@ -65,6 +79,498 @@ struct JsonScene {
 pub struct ExportDaeStats {
     pub objects_exported: usize,
     pub triangles_exported: usize,
+    pub textures_exported: usize,
+}
+
+/// When set, resolves numatb textures to PNG next to the `.dae` and wires `library_images` / materials.
+#[derive(Debug, Clone)]
+pub struct DaeMaterialTextureExport<'a> {
+    pub root_canon: &'a Path,
+    pub output_dir: &'a Path,
+    pub modl: &'a ModlData,
+    pub matl: &'a MatlData,
+}
+
+#[derive(Debug, Clone)]
+struct MaterialNodeDef {
+    material_id: String,
+    effect_id: String,
+    image_id: String,
+    png_rel: String,
+    /// Absolute `file:///...` URI for `<image><init_from>` (Maya often ignores relative paths).
+    image_init_from_uri: String,
+}
+
+fn matl_entry_for_label<'a>(matl: &'a MatlData, label: &str) -> Option<&'a ssbh_data::matl_data::MatlEntryData> {
+    matl.entries.iter().find(|e| e.material_label == label)
+}
+
+fn modl_material_label(modl: &ModlData, mesh_name: &str, subindex: u64) -> Result<String> {
+    modl
+        .entries
+        .iter()
+        .find(|e| e.mesh_object_name == mesh_name && e.mesh_object_subindex == subindex)
+        .map(|e| e.material_label.clone())
+        .ok_or_else(|| {
+            anyhow!(
+                "No numdlb entry for mesh object '{}' subindex {}",
+                mesh_name,
+                subindex
+            )
+        })
+}
+
+fn param_texture_ref(entry: &ssbh_data::matl_data::MatlEntryData, id: ParamId) -> Option<&str> {
+    entry
+        .textures
+        .iter()
+        .find(|t| t.param_id == id)
+        .map(|t| t.data.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| {
+            entry
+                .textures2
+                .iter()
+                .find(|t| t.param_id == id)
+                .map(|t| t.data.as_str())
+                .filter(|s| !s.trim().is_empty())
+        })
+}
+
+fn is_likely_cube_map(s: &str) -> bool {
+    let l = s.to_ascii_lowercase();
+    l.contains("cube") || l.contains("cubemap") || l.contains("ibl")
+}
+
+/// Lowercase filename stem for path tokens (aligned with meshFromSsbh `textureRefStemLower`).
+fn texture_ref_stem_lower(s: &str) -> String {
+    let p = s.replace('\\', "/");
+    let seg = p.split('/').filter(|x| !x.is_empty()).last().unwrap_or(s);
+    Path::new(seg)
+        .file_stem()
+        .and_then(|x| x.to_str())
+        .unwrap_or(seg)
+        .to_ascii_lowercase()
+}
+
+fn is_likely_non_albedo_texture_ref(s: &str) -> bool {
+    let b = texture_ref_stem_lower(s);
+    const TOKENS: &[&str] = &[
+        "roughnessandmask",
+        "roughness",
+        "andmask",
+        "_mask",
+        "metalness",
+        "metallic",
+        "_orm",
+        "ormpack",
+        "normalmap",
+        "_normal",
+        "normal",
+        "_nor",
+        "_nrm",
+        "nor_",
+        "nrm_",
+        "bump",
+        "specular",
+        "_spec",
+        "spec_",
+        "occlusion",
+        "ambientocclusion",
+        "_ao",
+        "aomap",
+        "height",
+        "displace",
+        "prm",
+        "mrao",
+        "mra",
+    ];
+    TOKENS.iter().any(|t| b.contains(t))
+}
+
+fn is_likely_albedo_texture_ref(s: &str) -> bool {
+    let b = texture_ref_stem_lower(s);
+    const TOKENS: &[&str] = &[
+        "albedo",
+        "basecolor",
+        "base_color",
+        "diffuse",
+        "_dif",
+        "_col",
+        "color",
+        "tex_",
+        "_tex",
+        "decal",
+    ];
+    TOKENS.iter().any(|t| b.contains(t))
+}
+
+/// EXVS-style PBR filenames (`pbr1_basecolor`, etc.); scans all texture slots like meshFromSsbh `pickExvsPbrTextureRefs`.
+fn pick_exvs_pbr_base_ref(entry: &ssbh_data::matl_data::MatlEntryData) -> Option<&str> {
+    for t in entry.textures.iter().chain(entry.textures2.iter()) {
+        let r = t.data.trim();
+        if r.is_empty() {
+            continue;
+        }
+        let b = texture_ref_stem_lower(r);
+        if b.contains("pbr1_basecolor") {
+            return Some(r);
+        }
+    }
+    for t in entry.textures.iter().chain(entry.textures2.iter()) {
+        let r = t.data.trim();
+        if r.is_empty() {
+            continue;
+        }
+        let b = texture_ref_stem_lower(r);
+        if b.contains("pbr2_basecolor") {
+            return Some(r);
+        }
+    }
+    for t in entry.textures.iter().chain(entry.textures2.iter()) {
+        let r = t.data.trim();
+        if r.is_empty() {
+            continue;
+        }
+        let b = texture_ref_stem_lower(r);
+        if (b.contains("basecolor") || b.contains("base_color") || b.contains("_albedo"))
+            && !b.contains("roughnessandmask")
+        {
+            return Some(r);
+        }
+    }
+    None
+}
+
+/// Same resolution order as meshFromSsbh `resolveMaterialTexturePaths` base: exvs base, DiffuseMap, then ordered slots with non-albedo heuristics.
+fn pick_base_color_texture_ref(entry: &ssbh_data::matl_data::MatlEntryData) -> Option<&str> {
+    if let Some(r) = pick_exvs_pbr_base_ref(entry) {
+        if !is_likely_cube_map(r) {
+            return Some(r);
+        }
+    }
+    if let Some(r) = param_texture_ref(entry, ParamId::DiffuseMap) {
+        if !is_likely_cube_map(r) {
+            return Some(r);
+        }
+    }
+    const ORDER: &[ParamId] = &[
+        ParamId::Texture0,
+        ParamId::Texture1,
+        ParamId::Texture3,
+        ParamId::Texture4,
+        ParamId::Texture5,
+    ];
+    for &id in ORDER {
+        if let Some(r) = param_texture_ref(entry, id) {
+            if !is_likely_cube_map(r) && !is_likely_non_albedo_texture_ref(r) {
+                return Some(r);
+            }
+        }
+    }
+    for &id in ORDER {
+        if let Some(r) = param_texture_ref(entry, id) {
+            if !is_likely_cube_map(r) && is_likely_albedo_texture_ref(r) {
+                return Some(r);
+            }
+        }
+    }
+    for &id in ORDER {
+        if let Some(r) = param_texture_ref(entry, id) {
+            if !is_likely_cube_map(r) {
+                return Some(r);
+            }
+        }
+    }
+    for t in entry.textures.iter().chain(entry.textures2.iter()) {
+        let d = t.data.trim();
+        if d.is_empty() || is_likely_cube_map(d) {
+            continue;
+        }
+        if matches!(
+            t.param_id,
+            ParamId::Texture6 | ParamId::Texture2 | ParamId::Texture7 | ParamId::Texture8
+        ) {
+            continue;
+        }
+        return Some(t.data.as_str());
+    }
+    None
+}
+
+fn next_unique_png_name(stem: &str, used: &mut HashSet<String>) -> String {
+    let base = sanitize_id(stem);
+    let mut name = format!("{base}.png");
+    let mut n = 0u32;
+    while used.contains(&name) {
+        n += 1;
+        name = format!("{base}_{n}.png");
+    }
+    used.insert(name.clone());
+    name
+}
+
+fn run_texture_export_plan(
+    ctx: &DaeMaterialTextureExport<'_>,
+    json_scene: &JsonScene,
+) -> Result<(Vec<Option<(String, String)>>, Vec<MaterialNodeDef>, usize)> {
+    let mut used_png_names: HashSet<String> = HashSet::new();
+    let mut nutexb_to_rel_png: HashMap<PathBuf, String> = HashMap::new();
+    let mut exported_nutexb: HashSet<PathBuf> = HashSet::new();
+    let mut textures_exported: usize = 0;
+
+    let mut per_mesh: Vec<Option<(String, String)>> = vec![None; json_scene.meshes.len()];
+    let mut mat_nodes: Vec<MaterialNodeDef> = Vec::new();
+    let mut mat_key_to_index: HashMap<String, usize> = HashMap::new();
+
+    for (mesh_index, mesh) in json_scene.meshes.iter().enumerate() {
+        let mat_label = modl_material_label(ctx.modl, &mesh.original_name, mesh.original_subindex)?;
+        let entry = matl_entry_for_label(ctx.matl, &mat_label)
+            .ok_or_else(|| anyhow!("No numatb entry for material label '{}'", mat_label))?;
+        let tex_ref = pick_base_color_texture_ref(entry)
+            .ok_or_else(|| anyhow!("No usable diffuse texture in numatb for material '{}'", mat_label))?;
+        let nutexb_abs = resolve_nutexb_path(ctx.root_canon, tex_ref)
+            .map_err(|e| anyhow!(e))?
+            .ok_or_else(|| anyhow!("Could not resolve nutexb on disk for material '{}': {}", mat_label, tex_ref))?;
+
+        let rel_png = nutexb_to_rel_png
+            .entry(nutexb_abs.clone())
+            .or_insert_with(|| {
+                let stem = nutexb_abs
+                    .file_stem()
+                    .and_then(OsStr::to_str)
+                    .unwrap_or("texture");
+                next_unique_png_name(stem, &mut used_png_names)
+            })
+            .clone();
+
+        let full_png = ctx.output_dir.join(&rel_png);
+        if !exported_nutexb.contains(&nutexb_abs) {
+            let src = nutexb_abs
+                .to_str()
+                .ok_or_else(|| anyhow!("Invalid nutexb path"))?;
+            let dst = full_png
+                .to_str()
+                .ok_or_else(|| anyhow!("Invalid PNG output path"))?;
+            nutexb_lib::export_nutexb_to_png(src, dst).map_err(|e| anyhow!(e))?;
+            exported_nutexb.insert(nutexb_abs.clone());
+            textures_exported += 1;
+        }
+
+        let mat_key = format!("{}|{}", mat_label, rel_png);
+        let mat_idx = if let Some(&idx) = mat_key_to_index.get(&mat_key) {
+            idx
+        } else {
+            let idx = mat_nodes.len();
+            let image_init_from_uri = collada_absolute_file_uri(&full_png)?;
+            mat_nodes.push(MaterialNodeDef {
+                material_id: format!("material_{}", idx),
+                effect_id: format!("effect_{}", idx),
+                image_id: format!("image_{}", idx),
+                png_rel: rel_png.clone(),
+                image_init_from_uri,
+            });
+            mat_key_to_index.insert(mat_key, idx);
+            idx
+        };
+
+        let symbol = format!("MAT_{mesh_index}");
+        per_mesh[mesh_index] = Some((symbol, mat_nodes[mat_idx].material_id.clone()));
+    }
+
+    Ok((per_mesh, mat_nodes, textures_exported))
+}
+
+/// Absolute `file:///...` URI for COLLADA `<image><init_from>`. Maya's importer often fails on
+/// relative paths when the scene is imported from a different working directory.
+fn collada_absolute_file_uri(path: &Path) -> Result<String> {
+    let abs = path
+        .canonicalize()
+        .map_err(|e| anyhow!("Could not canonicalize texture path {}: {}", path.display(), e))?;
+    let mut s = abs
+        .to_str()
+        .ok_or_else(|| anyhow!("Texture path is not valid UTF-8: {}", abs.display()))?
+        .to_string();
+    if let Some(stripped) = s.strip_prefix("\\\\?\\") {
+        s = stripped.to_string();
+    }
+    let s = s.replace('\\', "/");
+    Ok(format!("file:///{}", s))
+}
+
+fn collada_color_element(r: f32, g: f32, b: f32, a: f32) -> Element {
+    let mut c = Element::new("color");
+    c.children.push(XMLNode::Text(format!(
+        "{} {} {} {}",
+        format_float(r),
+        format_float(g),
+        format_float(b),
+        format_float(a)
+    )));
+    c
+}
+
+fn collada_profile_color_child(name: &str, r: f32, g: f32, b: f32, a: f32) -> Element {
+    let mut e = Element::new(name);
+    e.children.push(XMLNode::Element(collada_color_element(r, g, b, a)));
+    e
+}
+
+fn collada_profile_float_child(name: &str, v: f32) -> Element {
+    let mut e = Element::new(name);
+    let mut f = Element::new("float");
+    f.children.push(XMLNode::Text(format_float(v)));
+    e.children.push(XMLNode::Element(f));
+    e
+}
+
+fn build_library_images(nodes: &[MaterialNodeDef]) -> Element {
+    let mut lib = Element::new("library_images");
+    for n in nodes {
+        let mut img = Element::new("image");
+        img.attributes.insert("id".to_string(), n.image_id.clone());
+        img.attributes.insert("name".to_string(), n.png_rel.clone());
+        let mut init = Element::new("init_from");
+        init
+            .children
+            .push(XMLNode::Text(n.image_init_from_uri.clone()));
+        img.children.push(XMLNode::Element(init));
+        lib.children.push(XMLNode::Element(img));
+    }
+    lib
+}
+
+/// Maya-friendly `profile_COMMON`: Lambert diffuse + file texture (not Phong-only), full color slots,
+/// WRAP sampler, and `TEX0` bound to mesh `TEXCOORD` set 0 via `bind_vertex_input`.
+fn build_maya_lambert_effect(effect_id: &str, image_id: &str) -> Element {
+    let mut effect = Element::new("effect");
+    effect.attributes.insert("id".to_string(), effect_id.to_string());
+    let mut profile = Element::new("profile_COMMON");
+    let mut newparam_surf = Element::new("newparam");
+    newparam_surf
+        .attributes
+        .insert("sid".to_string(), "surface0".to_string());
+    let mut surface = Element::new("surface");
+    surface
+        .attributes
+        .insert("type".to_string(), "2D".to_string());
+    let mut init_from = Element::new("init_from");
+    // Maya sample files use the image id without a leading `#` in surface init_from.
+    init_from
+        .children
+        .push(XMLNode::Text(image_id.to_string()));
+    surface.children.push(XMLNode::Element(init_from));
+    newparam_surf.children.push(XMLNode::Element(surface));
+    profile.children.push(XMLNode::Element(newparam_surf));
+
+    let mut newparam_samp = Element::new("newparam");
+    newparam_samp
+        .attributes
+        .insert("sid".to_string(), "sampler0".to_string());
+    let mut sampler2d = Element::new("sampler2D");
+    let mut src = Element::new("source");
+    src.children.push(XMLNode::Text("surface0".to_string()));
+    sampler2d.children.push(XMLNode::Element(src));
+    let mut wrap_s = Element::new("wrap_s");
+    wrap_s.children.push(XMLNode::Text("WRAP".to_string()));
+    sampler2d.children.push(XMLNode::Element(wrap_s));
+    let mut wrap_t = Element::new("wrap_t");
+    wrap_t.children.push(XMLNode::Text("WRAP".to_string()));
+    sampler2d.children.push(XMLNode::Element(wrap_t));
+    let mut minf = Element::new("minfilter");
+    minf.children.push(XMLNode::Text("LINEAR".to_string()));
+    sampler2d.children.push(XMLNode::Element(minf));
+    let mut magf = Element::new("magfilter");
+    magf.children.push(XMLNode::Text("LINEAR".to_string()));
+    sampler2d.children.push(XMLNode::Element(magf));
+    newparam_samp.children.push(XMLNode::Element(sampler2d));
+    profile.children.push(XMLNode::Element(newparam_samp));
+
+    let mut technique = Element::new("technique");
+    technique.attributes.insert("sid".to_string(), "common".to_string());
+    let mut lambert = Element::new("lambert");
+    lambert.children.push(XMLNode::Element(collada_profile_color_child(
+        "emission", 0.0, 0.0, 0.0, 1.0,
+    )));
+    lambert.children.push(XMLNode::Element(collada_profile_color_child(
+        "ambient", 1.0, 1.0, 1.0, 1.0,
+    )));
+    let mut diffuse = Element::new("diffuse");
+    let mut tex = Element::new("texture");
+    tex.attributes.insert("texture".to_string(), "sampler0".to_string());
+    tex.attributes.insert("texcoord".to_string(), "TEX0".to_string());
+    diffuse.children.push(XMLNode::Element(tex));
+    lambert.children.push(XMLNode::Element(diffuse));
+    lambert.children.push(XMLNode::Element(collada_profile_color_child(
+        "reflective", 0.0, 0.0, 0.0, 1.0,
+    )));
+    lambert.children.push(XMLNode::Element(collada_profile_float_child("reflectivity", 0.0)));
+    let mut transparent = Element::new("transparent");
+    transparent
+        .attributes
+        .insert("opaque".to_string(), "A_ONE".to_string());
+    transparent.children.push(XMLNode::Element(collada_color_element(1.0, 1.0, 1.0, 1.0)));
+    lambert.children.push(XMLNode::Element(transparent));
+    lambert.children.push(XMLNode::Element(collada_profile_float_child("transparency", 0.0)));
+    technique.children.push(XMLNode::Element(lambert));
+    profile.children.push(XMLNode::Element(technique));
+    effect.children.push(XMLNode::Element(profile));
+    effect
+}
+
+fn build_library_effects(nodes: &[MaterialNodeDef]) -> Element {
+    let mut lib = Element::new("library_effects");
+    for n in nodes {
+        lib.children
+            .push(XMLNode::Element(build_maya_lambert_effect(&n.effect_id, &n.image_id)));
+    }
+    lib
+}
+
+fn build_library_materials(nodes: &[MaterialNodeDef]) -> Element {
+    let mut lib = Element::new("library_materials");
+    for n in nodes {
+        let mut m = Element::new("material");
+        m.attributes.insert("id".to_string(), n.material_id.clone());
+        m.attributes.insert("name".to_string(), n.material_id.clone());
+        let mut inst = Element::new("instance_effect");
+        inst
+            .attributes
+            .insert("url".to_string(), format!("#{}", n.effect_id));
+        m.children.push(XMLNode::Element(inst));
+        let mut extra = Element::new("extra");
+        let mut maya_tech = Element::new("technique");
+        maya_tech
+            .attributes
+            .insert("profile".to_string(), "MAYA".to_string());
+        let mut ds = Element::new("double_sided");
+        ds.children.push(XMLNode::Text("1".to_string()));
+        maya_tech.children.push(XMLNode::Element(ds));
+        extra.children.push(XMLNode::Element(maya_tech));
+        m.children.push(XMLNode::Element(extra));
+        lib.children.push(XMLNode::Element(m));
+    }
+    lib
+}
+
+fn build_bind_material(mat_symbol: &str, material_id: &str) -> Element {
+    let mut bm = Element::new("bind_material");
+    let mut tc = Element::new("technique_common");
+    let mut im = Element::new("instance_material");
+    im.attributes
+        .insert("symbol".to_string(), mat_symbol.to_string());
+    im.attributes
+        .insert("target".to_string(), format!("#{material_id}"));
+    let mut bvi = Element::new("bind_vertex_input");
+    bvi.attributes
+        .insert("semantic".to_string(), "TEX0".to_string());
+    bvi.attributes
+        .insert("input_semantic".to_string(), "TEXCOORD".to_string());
+    bvi.attributes.insert("input_set".to_string(), "0".to_string());
+    im.children.push(XMLNode::Element(bvi));
+    tc.children.push(XMLNode::Element(im));
+    bm.children.push(XMLNode::Element(tc));
+    bm
 }
 
 fn build_json_scene_from_ssbh(
@@ -100,7 +606,20 @@ fn build_json_scene_from_ssbh(
         let texcoords0 = obj
             .texture_coordinates
             .get(0)
-            .and_then(|a| vector_data_to_vec2(&a.data).ok());
+            .and_then(|a| vector_data_to_vec2(&a.data).ok())
+            .map(|mut tc| {
+                if config.flip_uv_u {
+                    for uv in &mut tc {
+                        uv[0] = 1.0 - uv[0];
+                    }
+                }
+                if config.flip_uv_v {
+                    for uv in &mut tc {
+                        uv[1] = 1.0 - uv[1];
+                    }
+                }
+                tc
+            });
 
         let mut influences: Vec<JsonBoneInfluence> = obj
             .bone_influences
@@ -136,6 +655,8 @@ fn build_json_scene_from_ssbh(
 
         meshes.push(JsonMeshObject {
             name: export_name,
+            original_name: obj.name.clone(),
+            original_subindex: obj.subindex,
             vertex_indices: obj.vertex_indices.clone(),
             positions,
             normals,
@@ -168,12 +689,14 @@ fn build_json_scene_from_ssbh(
 
 /// Export SSBH [MeshData] (and optional skeleton) to a COLLADA (.dae) file.
 /// When `include_objects` is `Some` and non-empty, only `(name, subindex)` pairs in the set are written.
+/// When `material_export` is set, exports diffuse nutexb textures as PNG next to the DAE and binds materials.
 pub fn export_ssbh_bundle_to_dae(
     mesh_data: &MeshData,
     skel: Option<&SkelData>,
     output_path: &Path,
     config: &DaeExportConfig,
     include_objects: Option<&HashSet<(String, u64)>>,
+    material_export: Option<&DaeMaterialTextureExport<'_>>,
 ) -> Result<ExportDaeStats> {
     let json_scene = build_json_scene_from_ssbh(mesh_data, skel, config, include_objects)?;
     let objects_exported = json_scene.meshes.len();
@@ -189,6 +712,14 @@ pub fn export_ssbh_bundle_to_dae(
             }
         })
         .sum();
+
+    let (per_mesh_mat, mat_nodes, textures_exported) = if let Some(ctx) = material_export {
+        let (per, nodes, ntex) = run_texture_export_plan(ctx, &json_scene)?;
+        (Some(per), nodes, ntex)
+    } else {
+        (None, Vec::new(), 0usize)
+    };
+
     // Build DOM
     let mut collada = Element::new("COLLADA");
     collada.attributes.insert("xmlns".to_string(), "http://www.collada.org/2005/11/COLLADASchema".to_string());
@@ -197,10 +728,26 @@ pub fn export_ssbh_bundle_to_dae(
     // <asset>
     collada.children.push(XMLNode::Element(build_asset(config)));
 
+    if !mat_nodes.is_empty() {
+        collada
+            .children
+            .push(XMLNode::Element(build_library_images(&mat_nodes)));
+        collada
+            .children
+            .push(XMLNode::Element(build_library_effects(&mat_nodes)));
+        collada
+            .children
+            .push(XMLNode::Element(build_library_materials(&mat_nodes)));
+    }
+
     // <library_geometries> built from JSON intermediate
     let mut library_geometries = Element::new("library_geometries");
     for (mesh_index, mesh_object) in json_scene.meshes.iter().enumerate() {
-        let geom = build_geometry_element_json(mesh_object, mesh_index)?;
+        let mat_sym = per_mesh_mat
+            .as_ref()
+            .and_then(|v| v.get(mesh_index))
+            .and_then(|o| o.as_ref().map(|(s, _)| s.as_str()));
+        let geom = build_geometry_element_json(mesh_object, mesh_index, mat_sym)?;
         library_geometries.children.push(XMLNode::Element(geom));
     }
     collada.children.push(XMLNode::Element(library_geometries));
@@ -284,6 +831,14 @@ pub fn export_ssbh_bundle_to_dae(
                 inst_ctrl.children.push(XMLNode::Element(skeleton_elem));
             }
 
+            if let Some(ref rows) = per_mesh_mat {
+                if let Some(Some((ref sym, ref mid))) = rows.get(mesh_index) {
+                    inst_ctrl
+                        .children
+                        .push(XMLNode::Element(build_bind_material(sym, mid)));
+                }
+            }
+
             mesh_node.children.push(XMLNode::Element(inst_ctrl));
 
             // Skinned meshes remain at scene root to avoid double transforms
@@ -294,6 +849,15 @@ pub fn export_ssbh_bundle_to_dae(
             inst_geom
                 .attributes
                 .insert("url".to_string(), format!("#{}", geometry_id));
+
+            if let Some(ref rows) = per_mesh_mat {
+                if let Some(Some((ref sym, ref mid))) = rows.get(mesh_index) {
+                    inst_geom
+                        .children
+                        .push(XMLNode::Element(build_bind_material(sym, mid)));
+                }
+            }
+
             mesh_node.children.push(XMLNode::Element(inst_geom));
 
             // For rigid meshes, place at scene root (match GLTF exporter behavior)
@@ -321,12 +885,14 @@ pub fn export_ssbh_bundle_to_dae(
     Ok(ExportDaeStats {
         objects_exported,
         triangles_exported,
+        textures_exported,
     })
 }
 
 fn build_geometry_element_json(
     mesh_object: &JsonMeshObject,
     mesh_index: usize,
+    material_symbol: Option<&str>,
 ) -> Result<Element> {
     let positions = &mesh_object.positions;
     let normals = mesh_object.normals.as_ref();
@@ -382,6 +948,11 @@ fn build_geometry_element_json(
     triangles
         .attributes
         .insert("count".to_string(), format!("{}", indices.len() / 3));
+    if let Some(ms) = material_symbol {
+        triangles
+            .attributes
+            .insert("material".to_string(), ms.to_string());
+    }
 
     let mut in_vtx = Element::new("input");
     in_vtx
