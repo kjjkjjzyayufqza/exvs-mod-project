@@ -313,10 +313,13 @@ function longestCommonPrefix(strings: string[]): string {
 }
 
 function normalizeCharacterBaseNameFromModelNames(modelNames: string[]): string {
-  const lcp = longestCommonPrefix(modelNames);
-  // Trim to a reasonable boundary to avoid ending with partial token.
+  const filtered = modelNames.map((s) => s.trim()).filter((s) => s.length > 0);
+  if (filtered.length === 0) return "";
+  const lcp = longestCommonPrefix(filtered);
   const trimmed = lcp.replace(/[_\\/-]+$/g, "");
-  return trimmed;
+  if (trimmed) return trimmed;
+  // Multiple models with unrelated names share no prefix; use the first model name.
+  return filtered[0]!.replace(/[_\\/-]+$/g, "");
 }
 
 /**
@@ -606,6 +609,13 @@ export async function applyNumdlbBaseNameToStructureObject(
 
   // Step 4: Rename shell file (the 2nd .bin under folder "0" by Windows name sort) -> shell_<character>.shl.
   // The character base name is derived from the common prefix of model names under "0\\0".
+  // When that layout is missing, fall back to numdlb-derived names from Step 1.
+  const numdlbModelNamesFallback = candidates
+    .map((c) => c.fileBaseName)
+    .filter((s): s is string => Boolean(s && s.trim()));
+  const effectiveModelNamesForShell =
+    modelNamesForPackage.length > 0 ? modelNamesForPackage : numdlbModelNamesFallback;
+
   const rootFolder0 = findFolderNodeByPath(parseRoot, ["0"]);
   if (rootFolder0) {
     const folder0Children: SubFileParseNode[] = ((rootFolder0 as any).children as SubFileParseNode[]) || [];
@@ -622,53 +632,52 @@ export async function applyNumdlbBaseNameToStructureObject(
       throw new Error(`Expected at least 4 .bin files directly under folder 0, got ${folder0BinItemIndices.length}`);
     }
 
-    const baseName = normalizeCharacterBaseNameFromModelNames(modelNamesForPackage);
-    if (!baseName) {
-      throw new Error("Failed to derive character base name for shell file renaming");
-    }
+    const baseName = normalizeCharacterBaseNameFromModelNames(effectiveModelNamesForShell);
 
-    // 1st .bin: characterid_<base>.bin
-    const characterIdItem = folder0BinItemIndices[0]!;
-    {
-      const sep = getPathSeparatorFromFileUrl(characterIdItem.fileUrl);
-      const segments = splitPathSegments(characterIdItem.fileUrl);
-      const prefixSegments = segments.slice(0, -1);
-      const desired = `characterid_${baseName}.bin`;
-      characterIdItem.fileBaseName = `characterid_${baseName}`;
-      characterIdItem.fileUrl = buildFileUrl(prefixSegments, desired, sep);
-    }
+    if (baseName) {
+      // 1st .bin: characterid_<base>.bin
+      const characterIdItem = folder0BinItemIndices[0]!;
+      {
+        const sep = getPathSeparatorFromFileUrl(characterIdItem.fileUrl);
+        const segments = splitPathSegments(characterIdItem.fileUrl);
+        const prefixSegments = segments.slice(0, -1);
+        const desired = `characterid_${baseName}.bin`;
+        characterIdItem.fileBaseName = `characterid_${baseName}`;
+        characterIdItem.fileUrl = buildFileUrl(prefixSegments, desired, sep);
+      }
 
-    // 2nd .bin: shell_<base>.shl
-    const shellItem = folder0BinItemIndices[1]!;
-    {
-      const sep = getPathSeparatorFromFileUrl(shellItem.fileUrl);
-      const segments = splitPathSegments(shellItem.fileUrl);
-      const prefixSegments = segments.slice(0, -1);
-      const desired = `shell_${baseName}.shl`;
-      shellItem.fileBaseName = `shell_${baseName}`;
-      shellItem.fileUrl = buildFileUrl(prefixSegments, desired, sep);
-    }
+      // 2nd .bin: shell_<base>.shl
+      const shellItem = folder0BinItemIndices[1]!;
+      {
+        const sep = getPathSeparatorFromFileUrl(shellItem.fileUrl);
+        const segments = splitPathSegments(shellItem.fileUrl);
+        const prefixSegments = segments.slice(0, -1);
+        const desired = `shell_${baseName}.shl`;
+        shellItem.fileBaseName = `shell_${baseName}`;
+        shellItem.fileUrl = buildFileUrl(prefixSegments, desired, sep);
+      }
 
-    // 3rd .bin: vernier_table_<base>.bin
-    const vernierTableItem = folder0BinItemIndices[2]!;
-    {
-      const sep = getPathSeparatorFromFileUrl(vernierTableItem.fileUrl);
-      const segments = splitPathSegments(vernierTableItem.fileUrl);
-      const prefixSegments = segments.slice(0, -1);
-      const desired = `vernier_table_${baseName}.bin`;
-      vernierTableItem.fileBaseName = `vernier_table_${baseName}`;
-      vernierTableItem.fileUrl = buildFileUrl(prefixSegments, desired, sep);
-    }
+      // 3rd .bin: vernier_table_<base>.bin
+      const vernierTableItem = folder0BinItemIndices[2]!;
+      {
+        const sep = getPathSeparatorFromFileUrl(vernierTableItem.fileUrl);
+        const segments = splitPathSegments(vernierTableItem.fileUrl);
+        const prefixSegments = segments.slice(0, -1);
+        const desired = `vernier_table_${baseName}.bin`;
+        vernierTableItem.fileBaseName = `vernier_table_${baseName}`;
+        vernierTableItem.fileUrl = buildFileUrl(prefixSegments, desired, sep);
+      }
 
-    // 4th .bin: effect_project_<base>.bin
-    const effectProjectItem = folder0BinItemIndices[3]!;
-    {
-      const sep = getPathSeparatorFromFileUrl(effectProjectItem.fileUrl);
-      const segments = splitPathSegments(effectProjectItem.fileUrl);
-      const prefixSegments = segments.slice(0, -1);
-      const desired = `effect_project_${baseName}.bin`;
-      effectProjectItem.fileBaseName = `effect_project_${baseName}`;
-      effectProjectItem.fileUrl = buildFileUrl(prefixSegments, desired, sep);
+      // 4th .bin: effect_project_<base>.bin
+      const effectProjectItem = folder0BinItemIndices[3]!;
+      {
+        const sep = getPathSeparatorFromFileUrl(effectProjectItem.fileUrl);
+        const segments = splitPathSegments(effectProjectItem.fileUrl);
+        const prefixSegments = segments.slice(0, -1);
+        const desired = `effect_project_${baseName}.bin`;
+        effectProjectItem.fileBaseName = `effect_project_${baseName}`;
+        effectProjectItem.fileUrl = buildFileUrl(prefixSegments, desired, sep);
+      }
     }
   }
 
