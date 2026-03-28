@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { createEmptyNumatbFile, type NumdlbMappingRow } from "./daeSsbhTypes";
 import { EXVS_MAYA_TEMPLATE_FIXTURE, EXVS_NUST_TEMPLATE_FIXTURE } from "./exvsNumatbFixtures";
-import { syncProfilesWithMappings, upsertProfileEntriesFromTemplate } from "./store/numatbTemplateStoreHelpers";
+import {
+  collectMissingTexturePathSlots,
+  collectMissingTexturePathsForExportSession,
+  mirrorTexturePathOntoOtherProfile,
+  syncProfilesWithMappings,
+  upsertProfileEntriesFromTemplate,
+} from "./store/numatbTemplateStoreHelpers";
 
 describe("numatb template helpers", () => {
   const rows: NumdlbMappingRow[] = [
@@ -65,5 +71,67 @@ describe("numatb template helpers", () => {
     const reduced = syncProfilesWithMappings(initial.mayaFile, initial.nustFile, reducedRows);
     expect(reduced.mayaFile.Matl.V16.entries.map((entry) => entry.material_label)).toEqual(["bodyMaterial"]);
     expect(reduced.nustFile.Matl.V16.entries.map((entry) => entry.material_label)).toEqual(["bodyMaterial"]);
+  });
+
+  it("collectMissingTexturePathSlots flags empty String on texture param ids", () => {
+    const file = createEmptyNumatbFile();
+    file.Matl.V16.entries.push({
+      material_label: "m1",
+      shader_label: "",
+      attributes: [{ param_id: "RoughnessMap", param: { data: { String: "" } } }],
+    });
+    expect(collectMissingTexturePathSlots(file)).toEqual(["m1 → RoughnessMap"]);
+  });
+
+  it("collectMissingTexturePathSlots accepts non-empty texture paths", () => {
+    const file = createEmptyNumatbFile();
+    file.Matl.V16.entries.push({
+      material_label: "m1",
+      shader_label: "",
+      attributes: [{ param_id: "Texture1", param: { data: { String: "path/to/tex" } } }],
+    });
+    expect(collectMissingTexturePathSlots(file)).toEqual([]);
+  });
+
+  it("collectMissingTexturePathsForExportSession only checks profiles that will be written", () => {
+    const maya = createEmptyNumatbFile();
+    maya.Matl.V16.entries.push({
+      material_label: "a",
+      shader_label: "",
+      attributes: [{ param_id: "BaseColorMap", param: { data: { String: "" } } }],
+    });
+    const nust = createEmptyNumatbFile();
+    nust.Matl.V16.entries.push({
+      material_label: "b",
+      shader_label: "",
+      attributes: [{ param_id: "BaseColorMap", param: { data: { String: "" } } }],
+    });
+    const onlyNustBase = collectMissingTexturePathsForExportSession(maya, nust, {
+      writeNumatb: true,
+      writeMayaProfile: false,
+    });
+    expect(onlyNustBase).toEqual(["Nust profile: b → BaseColorMap"]);
+  });
+
+  it("mirrorTexturePathOntoOtherProfile copies path to the same material label and param id", () => {
+    const nust = createEmptyNumatbFile();
+    nust.Matl.V16.entries.push({
+      material_label: "pbr1Mtl",
+      shader_label: "vsngCharaBasic",
+      attributes: [{ param_id: "BaseColorMap", param: { data: { String: "" } } }],
+    });
+    const out = mirrorTexturePathOntoOtherProfile(nust, "pbr1Mtl", "BaseColorMap", { String: "model/body_BC" });
+    expect(out.Matl.V16.entries[0].attributes[0].param.data.String).toBe("model/body_BC");
+  });
+
+  it("mirrorTexturePathOntoOtherProfile leaves target unchanged when param id is absent", () => {
+    const nust = createEmptyNumatbFile();
+    nust.Matl.V16.entries.push({
+      material_label: "pbr1Mtl",
+      shader_label: "vsngCharaBasic",
+      attributes: [],
+    });
+    const out = mirrorTexturePathOntoOtherProfile(nust, "pbr1Mtl", "BaseColorMap", { String: "model/body_BC" });
+    expect(out.Matl.V16.entries[0].attributes).toHaveLength(0);
   });
 });

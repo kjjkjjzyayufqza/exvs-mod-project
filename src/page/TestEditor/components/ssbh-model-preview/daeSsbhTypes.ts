@@ -165,8 +165,8 @@ export type DaeSsbhSessionState = {
   writeNusktb: boolean;
   writeNumatb: boolean;
   writeMayaProfile: boolean;
-  writeNustProfile: boolean;
-  baseNumatbSource: NumatbProfileKind;
+  /** When true, editing a texture path on Maya or Nust updates the same param on the other profile (matched by material label + param id). */
+  mirrorTexturePathsAcrossProfiles: boolean;
   numdlbEntries: NumdlbMappingRow[];
   selectedTemplateId: string | null;
   mayaFile: NumatbFileJson;

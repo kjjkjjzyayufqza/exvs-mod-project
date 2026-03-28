@@ -11,6 +11,7 @@ import { useDaeSsbhSessionStore } from "../store/daeSsbhSessionStore";
 import { DialogLastPathKey, getDialogDefaultPath, rememberDialogSelection } from "@/utils/dialogLastPath";
 import { useSsbhModelPreview } from "../SsbhModelPreviewContext";
 import { ssbhAnalyzeDae, ssbhAnalyzeFbx, ssbhConvertDaeToSsbh, ssbhConvertFbxToSsbh } from "../ssbhDaeIoService";
+import { collectMissingTexturePathsForExportSession } from "../store/numatbTemplateStoreHelpers";
 import { NumdlbMaterialMappingEditor } from "./NumdlbMaterialMappingEditor";
 import { NumatbTemplateEditor } from "./NumatbTemplateEditor";
 
@@ -26,7 +27,16 @@ export function DaeSsbhSessionLayout() {
 
   const selectedGeometrySet = useMemo(() => new Set(session.includeGeometryNames), [session.includeGeometryNames]);
 
-  const canExport =
+  const missingTexturePaths = useMemo(
+    () =>
+      collectMissingTexturePathsForExportSession(session.mayaFile, session.nustFile, {
+        writeNumatb: session.writeNumatb,
+        writeMayaProfile: session.writeMayaProfile,
+      }),
+    [session.mayaFile, session.nustFile, session.writeNumatb, session.writeMayaProfile],
+  );
+
+  const baseExportReady =
     !!session.sourcePath &&
     !!session.analysis &&
     session.analysis.canConvert &&
@@ -35,6 +45,8 @@ export function DaeSsbhSessionLayout() {
     session.includeGeometryNames.length > 0 &&
     session.numdlbEntries.every((row) => row.materialLabel.trim()) &&
     (!session.writeNumdlb || (session.writeNumshb && session.writeNusktb));
+
+  const canExport = baseExportReady && missingTexturePaths.length === 0;
 
   const reAnalyze = async () => {
     if (!session.sourcePath) return;
@@ -55,6 +67,11 @@ export function DaeSsbhSessionLayout() {
 
   const convert = async () => {
     if (!session.sourcePath || !session.outputDir) return;
+    if (missingTexturePaths.length > 0) {
+      throw new Error(
+        `Texture path validation failed. Fill every texture path slot (e.g. *Map, Texture1, *CubeMap) for profiles you export:\n${missingTexturePaths.join("\n")}`,
+      );
+    }
     setBusy("convert");
     try {
       const params = {
@@ -70,8 +87,6 @@ export function DaeSsbhSessionLayout() {
         writeNusktb: session.writeNusktb,
         writeNumatb: session.writeNumatb,
         writeMayaProfile: session.writeMayaProfile,
-        writeNustProfile: session.writeNustProfile,
-        baseNumatbSource: session.baseNumatbSource,
         numdlbEntries: session.numdlbEntries,
         mayaFile: session.writeNumatb ? session.mayaFile : null,
         nustFile: session.writeNumatb ? session.nustFile : null,
@@ -81,13 +96,13 @@ export function DaeSsbhSessionLayout() {
           ? await ssbhConvertDaeToSsbh({ daePath: session.sourcePath, ...params })
           : await ssbhConvertFbxToSsbh({ fbxPath: session.sourcePath, ...params });
       session.setLastResult(result);
+      const nustMatPath = result.files.nustNumatbPath ?? result.files.numatbPath;
       const lines = [
         result.files.numdlbPath ? `numdlb: ${result.files.numdlbPath}` : null,
         result.files.numshbPath ? `numshb: ${result.files.numshbPath}` : null,
         result.files.nusktbPath ? `nusktb: ${result.files.nusktbPath}` : null,
-        result.files.numatbPath ? `numatb: ${result.files.numatbPath}` : null,
-        result.files.mayaNumatbPath ? `maya: ${result.files.mayaNumatbPath}` : null,
-        result.files.nustNumatbPath ? `nust: ${result.files.nustNumatbPath}` : null,
+        nustMatPath ? `__nust__.numatb: ${nustMatPath}` : null,
+        result.files.mayaNumatbPath ? `__maya__.numatb: ${result.files.mayaNumatbPath}` : null,
       ].filter(Boolean);
       toast.success("Converted to SSBH", { description: lines.join("\n") });
       if (result.files.numdlbPath) {
@@ -212,15 +227,11 @@ export function DaeSsbhSessionLayout() {
             </label>
             <label className="flex items-center gap-2 text-[11px]">
               <Checkbox checked={session.writeNumatb} onCheckedChange={(checked) => session.setWriteNumatb(checked === true)} />
-              <span>base.numatb</span>
+              <span>__nust__.numatb (Nust profile; referenced by .numdlb)</span>
             </label>
             <label className="flex items-center gap-2 text-[11px]">
               <Checkbox checked={session.writeMayaProfile} onCheckedChange={(checked) => session.setWriteMayaProfile(checked === true)} />
-              <span>__maya__.numatb</span>
-            </label>
-            <label className="flex items-center gap-2 text-[11px]">
-              <Checkbox checked={session.writeNustProfile} onCheckedChange={(checked) => session.setWriteNustProfile(checked === true)} />
-              <span>__nust__.numatb</span>
+              <span>__maya__.numatb (optional extra)</span>
             </label>
             <label className="flex items-center gap-2 text-[11px]">
               <Checkbox checked={session.writeLog} onCheckedChange={(checked) => session.setWriteLog(checked === true)} />
@@ -228,17 +239,6 @@ export function DaeSsbhSessionLayout() {
             </label>
           </div>
 
-          <div className="space-y-1">
-            <Label className="text-[11px] text-muted-foreground">Base .numatb source</Label>
-            <select
-              className="h-8 w-full rounded-md border border-input bg-background px-2 text-[11px]"
-              value={session.baseNumatbSource}
-              onChange={(event) => session.setBaseNumatbSource(event.target.value as "maya" | "nust")}
-            >
-              <option value="maya">Use Maya profile</option>
-              <option value="nust">Use Nust profile</option>
-            </select>
-          </div>
         </div>
       </div>
 
@@ -262,10 +262,28 @@ export function DaeSsbhSessionLayout() {
           <Save className="mr-1 h-3.5 w-3.5" />
           {busy === "convert" ? "Converting..." : "Convert to SSBH"}
         </Button>
-        {!canExport ? (
+        {!baseExportReady ? (
           <p className="text-[11px] text-muted-foreground">
             Output directory, base filename, geometry selection, and non-empty material labels are required.
           </p>
+        ) : missingTexturePaths.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-[11px] text-destructive">
+              {
+                "Every texture path parameter must be filled for the Maya/Nust profiles you are exporting (parameters such as Texture1, RoughnessMap, AmbientOcclusionMap, BaseColorMap, DiffuseCubeMap, etc.)."
+              }
+            </p>
+            <ul className="max-h-36 list-inside list-disc overflow-y-auto rounded-md border border-destructive/30 bg-destructive/5 p-2 font-mono text-[10px] text-muted-foreground">
+              {missingTexturePaths.slice(0, 24).map((line, index) => (
+                <li key={`${index}:${line}`} className="break-all">
+                  {line}
+                </li>
+              ))}
+            </ul>
+            {missingTexturePaths.length > 24 ? (
+              <p className="text-[10px] text-muted-foreground">{"…and more (fix listed items first)."}</p>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </div>

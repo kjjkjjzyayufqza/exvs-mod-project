@@ -478,6 +478,14 @@ export enum ExtractType {
   FolderWithStructure = "structure",
 }
 
+function logExtractFhmStep(label: string, stepStart: number, extractStart: number): number {
+  const now = performance.now();
+  console.log(
+    `[ExtractFHM] ${label}: +${(now - stepStart).toFixed(2)}ms (elapsed ${(now - extractStart).toFixed(2)}ms)`
+  );
+  return now;
+}
+
 export async function ExtractFHMData(
   fhm2d: Fhm2dData | PS4FhmData,
   outDir: string,
@@ -488,6 +496,8 @@ export async function ExtractFHMData(
   if (fhm2d._TYPE_ == Fhm2dType.PS4GundamVersus) {
     throw new Error(ErrorMessage.notSupport);
   } else if (fhm2d._TYPE_ == Fhm2dType.Xboost) {
+    const extractStart = performance.now();
+    let stepAt = extractStart;
     // Write the extracted data.
     // We sort by FileIndex because the type list is defined in the header order,
     // while file records may not be stored in FileIndex order.
@@ -508,6 +518,8 @@ export async function ExtractFHMData(
       }
     });
 
+    stepAt = logExtractFhmStep("setup type lists and structure index", stepAt, extractStart);
+
     const errorInfo: any = {};
 
     // Prepare output structure once for the whole extraction.
@@ -519,6 +531,8 @@ export async function ExtractFHMData(
         await mkdir(outDir, { recursive: true });
       }
     }
+
+    stepAt = logExtractFhmStep("basename + ensure output directory", stepAt, extractStart);
 
     // Step 1: Decompress all files and store in memory
     const decompressedFiles: { index: number; buffer: Buffer }[] = [];
@@ -556,6 +570,8 @@ export async function ExtractFHMData(
       }
       decompressedFiles.push({ index: i, buffer: BufferData });
     }
+
+    stepAt = logExtractFhmStep("decompress all subfiles", stepAt, extractStart);
 
     if (type === ExtractType.SingleFolder) {
       // Step 2: Generate structure and apply naming logic
@@ -616,6 +632,8 @@ export async function ExtractFHMData(
         };
       }
 
+      stepAt = logExtractFhmStep("generate structure + apply naming", stepAt, extractStart);
+
       // Step 3: Sync fileBaseName from SubFileData to SubFileStructure Name field
       if (finalStructure.SubFileData && finalStructure.SubFileStructure) {
         // Create a map of fileIndex to fileBaseName
@@ -637,6 +655,8 @@ export async function ExtractFHMData(
         }
       }
 
+      stepAt = logExtractFhmStep("sync structure base names", stepAt, extractStart);
+
       // Step 4: Write files using the new naming from finalStructure
       for (const fileData of decompressedFiles) {
         const structureItem = finalStructure.SubFileData.find((item: any) => item.index === fileData.index);
@@ -646,19 +666,33 @@ export async function ExtractFHMData(
           const pathParts = fileUrl.split(/[\\/]/);
           const fileName = pathParts[pathParts.length - 1];
           const outputPath = `${outDir}/${fileName}`;
+          const writeStart = performance.now();
           await writeFile(outputPath, fileData.buffer);
-          console.log("write file", outputPath);
+          console.log(
+            `[ExtractFHM] write file ${outputPath} ${(performance.now() - writeStart).toFixed(2)}ms`
+          );
         } else {
           // Fallback to old naming if structure item not found
           const outputPath = `${outDir}/${fileData.index}${typeList[fileData.index]}`;
+          const writeStart = performance.now();
           await writeFile(outputPath, fileData.buffer);
-          console.log("write file (fallback)", outputPath);
+          console.log(
+            `[ExtractFHM] write file (fallback) ${outputPath} ${(performance.now() - writeStart).toFixed(2)}ms`
+          );
         }
       }
 
+      stepAt = logExtractFhmStep("write all subfiles", stepAt, extractStart);
+
       // Step 5: Write structure.json
-      await writeFile(outDir + "_structure.json", Buffer.from(JSON.stringify(finalStructure, null, 2)));
-      console.log("write file", outDir + "_structure.json");
+      const structurePath = outDir + "_structure.json";
+      const structureWriteStart = performance.now();
+      await writeFile(structurePath, Buffer.from(JSON.stringify(finalStructure, null, 2)));
+      console.log(
+        `[ExtractFHM] write file ${structurePath} ${(performance.now() - structureWriteStart).toFixed(2)}ms`
+      );
+
+      console.log(`[ExtractFHM] total ExtractFHMData: ${(performance.now() - extractStart).toFixed(2)}ms`);
     } else if (type === ExtractType.FolderWithStructure) {
       throw new Error(ErrorMessage.notSupport);
     }

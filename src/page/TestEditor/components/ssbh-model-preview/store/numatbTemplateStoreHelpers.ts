@@ -249,6 +249,179 @@ export function syncProfilesWithMappings(
   };
 }
 
+export function isTexturePathParamId(paramId: string): boolean {
+  if (paramId === "Texture1" || paramId.includes("CubeMap")) {
+    return true;
+  }
+  if (
+    paramId.endsWith("Map") ||
+    paramId.endsWith("CubeMap") ||
+    paramId.startsWith("Texture") ||
+    paramId === "DiffuseMap" ||
+    paramId === "SpecularMap"
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function texturePathStringFromData(data: NumatbAttributeData): string | undefined {
+  if (data.String !== undefined) {
+    return data.String;
+  }
+  if (data.String1 !== undefined) {
+    return data.String1;
+  }
+  return undefined;
+}
+
+function applyTexturePathStringToData(target: NumatbAttributeData, path: string): NumatbAttributeData {
+  const next = { ...target };
+  if (target.String !== undefined) {
+    next.String = path;
+    return next;
+  }
+  if (target.String1 !== undefined) {
+    next.String1 = path;
+    return next;
+  }
+  return target;
+}
+
+/**
+ * Copies the texture path from sourceData onto the matching param in targetFile (same material_label + param_id).
+ * No-op if the param is missing on the target or is not a texture path id.
+ */
+export function mirrorTexturePathOntoOtherProfile(
+  targetFile: NumatbFileJson,
+  materialLabel: string,
+  paramId: string,
+  sourceData: NumatbAttributeData,
+): NumatbFileJson {
+  if (!isTexturePathParamId(paramId) || paramId.startsWith("Use")) {
+    return targetFile;
+  }
+  const path = texturePathStringFromData(sourceData);
+  if (path === undefined) {
+    return targetFile;
+  }
+  const next = cloneNumatbFile(targetFile);
+  const entry = getNumatbEntries(next).find((item) => item.material_label === materialLabel);
+  if (!entry) {
+    return targetFile;
+  }
+  const attributeIndex = entry.attributes.findIndex((attribute) => attribute.param_id === paramId);
+  if (attributeIndex < 0) {
+    return targetFile;
+  }
+  const current = entry.attributes[attributeIndex].param.data;
+  entry.attributes[attributeIndex].param.data = applyTexturePathStringToData(current, path);
+  return next;
+}
+
+export function collectMissingTexturePathSlots(file: NumatbFileJson): string[] {
+  const missing: string[] = [];
+  for (const entry of getNumatbEntries(file)) {
+    for (const attribute of entry.attributes) {
+      if (!isTexturePathParamId(attribute.param_id)) {
+        continue;
+      }
+      const data = attribute.param.data;
+      if (data.String !== undefined && !(data.String ?? "").trim()) {
+        missing.push(`${entry.material_label} → ${attribute.param_id}`);
+      }
+      if (data.String1 !== undefined && !(data.String1 ?? "").trim()) {
+        missing.push(`${entry.material_label} → ${attribute.param_id} (String1)`);
+      }
+    }
+  }
+  return missing;
+}
+
+export function areNumatbTexturePathsComplete(file: NumatbFileJson): boolean {
+  return collectMissingTexturePathSlots(file).length === 0;
+}
+
+export function collectMissingTexturePathsForExportSession(
+  mayaFile: NumatbFileJson,
+  nustFile: NumatbFileJson,
+  options: {
+    writeNumatb: boolean;
+    writeMayaProfile: boolean;
+  },
+): string[] {
+  const missing: string[] = [];
+  if (options.writeMayaProfile) {
+    for (const line of collectMissingTexturePathSlots(mayaFile)) {
+      missing.push(`Maya profile: ${line}`);
+    }
+  }
+  if (options.writeNumatb) {
+    for (const line of collectMissingTexturePathSlots(nustFile)) {
+      missing.push(`Nust profile: ${line}`);
+    }
+  }
+  return missing;
+}
+
+export function stripTextureUrlStringsFromNumatbFile(file: NumatbFileJson): NumatbFileJson {
+  const next = cloneNumatbFile(file);
+  for (const entry of next.Matl.V16.entries) {
+    for (const attribute of entry.attributes) {
+      if (!isTexturePathParamId(attribute.param_id)) {
+        continue;
+      }
+      const data = attribute.param.data;
+      if (data.String !== undefined) {
+        data.String = "";
+      }
+      if (data.String1 !== undefined) {
+        data.String1 = "";
+      }
+    }
+  }
+  return next;
+}
+
+export function ensureShaderLabelsOnEntries(file: NumatbFileJson): NumatbFileJson {
+  const next = cloneNumatbFile(file);
+  for (const entry of next.Matl.V16.entries) {
+    if (entry.shader_label === undefined) {
+      entry.shader_label = "";
+    }
+  }
+  return next;
+}
+
+export function ensureMissingMappingLabelsInProfiles(
+  mayaFile: NumatbFileJson,
+  nustFile: NumatbFileJson,
+  rows: NumdlbMappingRow[],
+): { mayaFile: NumatbFileJson; nustFile: NumatbFileJson } {
+  const labels = Array.from(new Set(rows.map((row) => row.materialLabel.trim()).filter(Boolean)));
+  const addMissing = (file: NumatbFileJson): NumatbFileJson => {
+    const entries = getNumatbEntries(file);
+    const existing = new Set(entries.map((entry) => entry.material_label));
+    const base = entries.find((entry) => entry.material_label === "pbr1Mtl") ?? entries[0];
+    if (!base) {
+      return file;
+    }
+    const next = cloneNumatbFile(file);
+    const out = getNumatbEntries(next);
+    for (const label of labels) {
+      if (!existing.has(label)) {
+        out.push(cloneEntryWithLabel(base, label));
+        existing.add(label);
+      }
+    }
+    return next;
+  };
+  return {
+    mayaFile: addMissing(mayaFile),
+    nustFile: addMissing(nustFile),
+  };
+}
+
 export function upsertProfileEntriesFromTemplate(
   existingFile: NumatbFileJson,
   templateFile: NumatbFileJson,

@@ -1,0 +1,642 @@
+{
+  "Matl": {
+    "V16": {
+      "entries": [
+        {
+          "material_label": "pbr1Mtl",
+          "attributes": [
+            {
+              "param_id": "DiffuseCubeMap",
+              "param": {
+                "data": {
+                  "String": "../../../share/textures/barispecular00_cubemap"
+                }
+              }
+            },
+            {
+              "param_id": "UseMetallicMap",
+              "param": {
+                "data": {
+                  "Boolean": 1
+                }
+              }
+            },
+            {
+              "param_id": "UseAmbientOcclusionMap",
+              "param": {
+                "data": {
+                  "Boolean": 1
+                }
+              }
+            },
+            {
+              "param_id": "ReceiveShadow",
+              "param": {
+                "data": {
+                  "Boolean": 1
+                }
+              }
+            },
+            {
+              "param_id": "UseRoughnessMap",
+              "param": {
+                "data": {
+                  "Boolean": 1
+                }
+              }
+            },
+            {
+              "param_id": "UseNormalMap",
+              "param": {
+                "data": {
+                  "Boolean": 1
+                }
+              }
+            },
+            {
+              "param_id": "DiffuseSampler",
+              "param": {
+                "data": {
+                  "Sampler": {
+                    "wraps": "Repeat",
+                    "wrapt": "Repeat",
+                    "wrapr": "Repeat",
+                    "min_filter": "LinearMipmapLinear",
+                    "mag_filter": "Linear",
+                    "texture_filtering_type": "Default2",
+                    "border_color": {
+                      "r": 0.0,
+                      "g": 0.0,
+                      "b": 0.0,
+                      "a": 0.0
+                    },
+                    "unk11": 0,
+                    "unk12": 1098907648,
+                    "lod_bias": -1.0,
+                    "max_anisotropy": "One"
+                  }
+                }
+              }
+            },
+            {
+              "param_id": "CustomFloat0",
+              "param": {
+                "data": {
+                  "Float1": 0.1
+                }
+              }
+            },
+            {
+              "param_id": "CustomFloat1",
+              "param": {
+                "data": {
+                  "Float1": 1.0
+                }
+              }
+            },
+            {
+              "param_id": "CustomFloat2",
+              "param": {
+                "data": {
+                  "Float1": 1.0
+                }
+              }
+            },
+            {
+              "param_id": "CustomFloat3",
+              "param": {
+                "data": {
+                  "Float1": 1.0
+                }
+              }
+            },
+            {
+              "param_id": "CustomFloat4",
+              "param": {
+                "data": {
+                  "Float1": 1.0
+                }
+              }
+            },
+            {
+              "param_id": "CustomFloat5",
+              "param": {
+                "data": {
+                  "Float1": 0.0
+                }
+              }
+            },
+            {
+              "param_id": "CustomFloat7",
+              "param": {
+                "data": {
+                  "Float1": 1.0
+                }
+              }
+            },
+            {
+              "param_id": "CustomFloat8",
+              "param": {
+                "data": {
+                  "Float1": 1.0
+                }
+              }
+            },
+            {
+              "param_id": "CustomFloat9",
+              "param": {
+                "data": {
+                  "Float1": 1.0
+                }
+              }
+            },
+            {
+              "param_id": "CustomVector0",
+              "param": {
+                "data": {
+                  "Vector4": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0,
+                    "w": 0.0
+                  }
+                }
+              }
+            },
+            {
+              "param_id": "CustomVector2",
+              "param": {
+                "data": {
+                  "Vector4": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0,
+                    "w": 1.0
+                  }
+                }
+              }
+            },
+            {
+              "param_id": "CustomVector3",
+              "param": {
+                "data": {
+                  "Vector4": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0,
+                    "w": 1.0
+                  }
+                }
+              }
+            },
+            {
+              "param_id": "CustomInteger0",
+              "param": {
+                "data": {
+                  "Float": 0.0
+                }
+              }
+            },
+            {
+              "param_id": "CustomColor0",
+              "param": {
+                "data": {
+                  "Unk7": {
+                    "r": 0.0,
+                    "g": 0.0,
+                    "b": 0.0,
+                    "a": 0.0
+                  }
+                }
+              }
+            },
+            {
+              "param_id": "CustomColor1",
+              "param": {
+                "data": {
+                  "Unk7": {
+                    "r": 1.0,
+                    "g": 1.0,
+                    "b": 1.0,
+                    "a": 1.0
+                  }
+                }
+              }
+            },
+            {
+              "param_id": "CustomColor2",
+              "param": {
+                "data": {
+                  "Unk7": {
+                    "r": 0.0,
+                    "g": 0.0,
+                    "b": 0.0,
+                    "a": 0.0
+                  }
+                }
+              }
+            },
+            {
+              "param_id": "AmbientOcclusionMap",
+              "param": {
+                "data": {
+                  "String": "../../textures/015gndmuc_004deltpl_001_pbr1_ambientocclusion"
+                }
+              }
+            },
+            {
+              "param_id": "MetallicMap",
+              "param": {
+                "data": {
+                  "String": "../../textures/015gndmuc_004deltpl_001_pbr1_metallic"
+                }
+              }
+            },
+            {
+              "param_id": "RoughnessMap",
+              "param": {
+                "data": {
+                  "String": "../../textures/015gndmuc_004deltpl_001_pbr1_roughness"
+                }
+              }
+            },
+            {
+              "param_id": "Texture1",
+              "param": {
+                "data": {
+                  "String": "../../textures/015gndmuc_004deltpl_001_pbr1_roughnessandmask"
+                }
+              }
+            },
+            {
+              "param_id": "BaseColorMap",
+              "param": {
+                "data": {
+                  "String": "../../textures/015gndmuc_004deltpl_001_pbr1_basecolor"
+                }
+              }
+            },
+            {
+              "param_id": "NormalMap",
+              "param": {
+                "data": {
+                  "String": "../../textures/015gndmuc_004deltpl_001_pbr1_normal"
+                }
+              }
+            },
+            {
+              "param_id": "UseEmissiveMap",
+              "param": {
+                "data": {
+                  "Boolean": 1
+                }
+              }
+            },
+            {
+              "param_id": "NormalMapBc5",
+              "param": {
+                "data": {
+                  "Boolean": 0
+                }
+              }
+            },
+            {
+              "param_id": "EmissiveMap",
+              "param": {
+                "data": {
+                  "String": "../../textures/015gndmuc_004deltpl_001_pbr1_emissive"
+                }
+              }
+            },
+            {
+              "param_id": "EmissiveScale",
+              "param": {
+                "data": {
+                  "Float1": 4.0
+                }
+              }
+            }
+          ],
+          "shader_label": "vsngCharaBasic"
+        },
+        {
+          "material_label": "emiMtl",
+          "attributes": [
+            {
+              "param_id": "UseMetallicMap",
+              "param": {
+                "data": {
+                  "Boolean": 1
+                }
+              }
+            },
+            {
+              "param_id": "UseAmbientOcclusionMap",
+              "param": {
+                "data": {
+                  "Boolean": 1
+                }
+              }
+            },
+            {
+              "param_id": "ReceiveShadow",
+              "param": {
+                "data": {
+                  "Boolean": 0
+                }
+              }
+            },
+            {
+              "param_id": "UseRoughnessMap",
+              "param": {
+                "data": {
+                  "Boolean": 1
+                }
+              }
+            },
+            {
+              "param_id": "UseNormalMap",
+              "param": {
+                "data": {
+                  "Boolean": 1
+                }
+              }
+            },
+            {
+              "param_id": "DiffuseSampler",
+              "param": {
+                "data": {
+                  "Sampler": {
+                    "wraps": "Repeat",
+                    "wrapt": "Repeat",
+                    "wrapr": "Repeat",
+                    "min_filter": "LinearMipmapLinear",
+                    "mag_filter": "Linear",
+                    "texture_filtering_type": "Default2",
+                    "border_color": {
+                      "r": 0.0,
+                      "g": 0.0,
+                      "b": 0.0,
+                      "a": 0.0
+                    },
+                    "unk11": 0,
+                    "unk12": 1098907648,
+                    "lod_bias": -1.0,
+                    "max_anisotropy": "One"
+                  }
+                }
+              }
+            },
+            {
+              "param_id": "CustomFloat0",
+              "param": {
+                "data": {
+                  "Float1": 0.1
+                }
+              }
+            },
+            {
+              "param_id": "CustomFloat1",
+              "param": {
+                "data": {
+                  "Float1": 1.0
+                }
+              }
+            },
+            {
+              "param_id": "CustomFloat2",
+              "param": {
+                "data": {
+                  "Float1": 1.0
+                }
+              }
+            },
+            {
+              "param_id": "UseEmissiveMap",
+              "param": {
+                "data": {
+                  "Boolean": 1
+                }
+              }
+            },
+            {
+              "param_id": "EmissiveScale",
+              "param": {
+                "data": {
+                  "Float1": 10.0
+                }
+              }
+            },
+            {
+              "param_id": "CustomFloat3",
+              "param": {
+                "data": {
+                  "Float1": 1.0
+                }
+              }
+            },
+            {
+              "param_id": "CustomFloat4",
+              "param": {
+                "data": {
+                  "Float1": 1.0
+                }
+              }
+            },
+            {
+              "param_id": "CustomFloat5",
+              "param": {
+                "data": {
+                  "Float1": 0.0
+                }
+              }
+            },
+            {
+              "param_id": "CustomFloat7",
+              "param": {
+                "data": {
+                  "Float1": 1.0
+                }
+              }
+            },
+            {
+              "param_id": "CustomFloat8",
+              "param": {
+                "data": {
+                  "Float1": 0.3187
+                }
+              }
+            },
+            {
+              "param_id": "CustomFloat9",
+              "param": {
+                "data": {
+                  "Float1": 1.0
+                }
+              }
+            },
+            {
+              "param_id": "CustomVector0",
+              "param": {
+                "data": {
+                  "Vector4": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0,
+                    "w": 0.0
+                  }
+                }
+              }
+            },
+            {
+              "param_id": "CustomVector2",
+              "param": {
+                "data": {
+                  "Vector4": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0,
+                    "w": 1.0
+                  }
+                }
+              }
+            },
+            {
+              "param_id": "CustomVector3",
+              "param": {
+                "data": {
+                  "Vector4": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0,
+                    "w": 1.0
+                  }
+                }
+              }
+            },
+            {
+              "param_id": "CustomInteger0",
+              "param": {
+                "data": {
+                  "Float": 0.0
+                }
+              }
+            },
+            {
+              "param_id": "CustomColor0",
+              "param": {
+                "data": {
+                  "Unk7": {
+                    "r": 0.0,
+                    "g": 0.0,
+                    "b": 0.0,
+                    "a": 0.0
+                  }
+                }
+              }
+            },
+            {
+              "param_id": "CustomColor1",
+              "param": {
+                "data": {
+                  "Unk7": {
+                    "r": 1.0,
+                    "g": 1.0,
+                    "b": 1.0,
+                    "a": 1.0
+                  }
+                }
+              }
+            },
+            {
+              "param_id": "CustomColor2",
+              "param": {
+                "data": {
+                  "Unk7": {
+                    "r": 0.0,
+                    "g": 0.0,
+                    "b": 0.0,
+                    "a": 0.0
+                  }
+                }
+              }
+            },
+            {
+              "param_id": "AmbientOcclusionMap",
+              "param": {
+                "data": {
+                  "String": "../../textures/015gndmuc_004deltpl_001_emi_ambientocclusion"
+                }
+              }
+            },
+            {
+              "param_id": "EmissiveMap",
+              "param": {
+                "data": {
+                  "String": "../../textures/015gndmuc_004deltpl_001_emi_emissive"
+                }
+              }
+            },
+            {
+              "param_id": "MetallicMap",
+              "param": {
+                "data": {
+                  "String": "../../textures/015gndmuc_004deltpl_001_emi_metallic"
+                }
+              }
+            },
+            {
+              "param_id": "RoughnessMap",
+              "param": {
+                "data": {
+                  "String": "../../textures/015gndmuc_004deltpl_001_emi_roughness"
+                }
+              }
+            },
+            {
+              "param_id": "Texture1",
+              "param": {
+                "data": {
+                  "String": "../../textures/015gndmuc_004deltpl_001_emi_roughnessandmask"
+                }
+              }
+            },
+            {
+              "param_id": "BaseColorMap",
+              "param": {
+                "data": {
+                  "String": "../../textures/015gndmuc_004deltpl_001_emi_basecolor"
+                }
+              }
+            },
+            {
+              "param_id": "NormalMap",
+              "param": {
+                "data": {
+                  "String": "../../textures/015gndmuc_004deltpl_001_emi_normal"
+                }
+              }
+            },
+            {
+              "param_id": "NormalMapBc5",
+              "param": {
+                "data": {
+                  "Boolean": 0
+                }
+              }
+            },
+            {
+              "param_id": "DiffuseCubeMap",
+              "param": {
+                "data": {
+                  "String": "../../../share/textures/barispecular00_cubemap"
+                }
+              }
+            }
+          ],
+          "shader_label": "vsngCharaBasic"
+        }
+      ]
+    }
+  }
+}

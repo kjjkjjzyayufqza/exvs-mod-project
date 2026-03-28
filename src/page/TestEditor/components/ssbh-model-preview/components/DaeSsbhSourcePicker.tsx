@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { open } from "@tauri-apps/plugin-dialog";
-import { FileSearch, RefreshCw } from "lucide-react";
+import { FileSearch } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -25,20 +25,6 @@ export function DaeSsbhSourcePicker() {
 
   const importSourceKey =
     importKind === "dae" ? DialogLastPathKey.ssbhDaeImportSourceDae : DialogLastPathKey.ssbhDaeImportSourceFbx;
-
-  const analyze = async () => {
-    if (!sourcePath) return;
-    setBusy(true);
-    try {
-      const analysis = importKind === "dae" ? await ssbhAnalyzeDae(sourcePath) : await ssbhAnalyzeFbx(sourcePath);
-      loadAnalysis(analysis);
-      toast.success(`Analyzed ${importKind.toUpperCase()} source`);
-    } catch (error) {
-      toast.error(String(error));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <div className="space-y-4">
@@ -80,29 +66,33 @@ export function DaeSsbhSourcePicker() {
                   return;
                 }
                 rememberDialogSelection(importSourceKey, selected.trim(), "file");
-                setSourcePath(selected.trim());
+                const nextPath = selected.trim();
+                setSourcePath(nextPath);
+                setBusy(true);
+                void (async () => {
+                  try {
+                    const analysis =
+                      importKind === "dae" ? await ssbhAnalyzeDae(nextPath) : await ssbhAnalyzeFbx(nextPath);
+                    loadAnalysis(analysis);
+                    toast.success(`Analyzed ${importKind.toUpperCase()} source`);
+                  } catch (error) {
+                    toast.error(String(error));
+                  } finally {
+                    setBusy(false);
+                  }
+                })();
               })();
             }}
           >
             <FileSearch className="mr-1 h-3.5 w-3.5" />
             Pick {importKind === "dae" ? ".dae" : ".fbx"}
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            className="h-8 text-[10px] uppercase tracking-wide"
-            disabled={!sourcePath || busy}
-            onClick={() => void analyze()}
-          >
-            <RefreshCw className={`mr-1 h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} />
-            {busy ? "Analyzing" : "Analyze"}
-          </Button>
         </div>
 
         {sourcePath ? (
           <p className="break-all font-mono text-[10px] text-muted-foreground">{sourcePath}</p>
         ) : (
-          <p className="text-[11px] text-muted-foreground">Select a source file to start a persisted conversion session.</p>
+          <p className="text-[11px] text-muted-foreground">Pick a source file; analysis runs automatically after selection.</p>
         )}
       </div>
     </div>

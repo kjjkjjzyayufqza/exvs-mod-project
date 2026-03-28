@@ -4,6 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { FileInput, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -32,6 +33,8 @@ export function NumatbTemplateEditor() {
     removeProfileAttribute,
     addProfileMaterialEntry,
     removeProfileMaterialEntry,
+    mirrorTexturePathsAcrossProfiles,
+    setMirrorTexturePathsAcrossProfiles,
   } = useDaeSsbhSessionStore(
     useShallow((state) => ({
       mayaFile: state.mayaFile,
@@ -51,6 +54,8 @@ export function NumatbTemplateEditor() {
       removeProfileAttribute: state.removeProfileAttribute,
       addProfileMaterialEntry: state.addProfileMaterialEntry,
       removeProfileMaterialEntry: state.removeProfileMaterialEntry,
+      mirrorTexturePathsAcrossProfiles: state.mirrorTexturePathsAcrossProfiles,
+      setMirrorTexturePathsAcrossProfiles: state.setMirrorTexturePathsAcrossProfiles,
     })),
   );
 
@@ -181,16 +186,31 @@ export function NumatbTemplateEditor() {
         </Button>
       </div>
 
-      <Tabs value={activeProfile} onValueChange={(value) => setActiveProfile(value as NumatbProfileKind)}>
-        <TabsList className="h-8">
-          <TabsTrigger value="maya" className="text-[11px]">
-            Maya Profile
-          </TabsTrigger>
-          <TabsTrigger value="nust" className="text-[11px]">
-            Nust Profile
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <Tabs value={activeProfile} onValueChange={(value) => setActiveProfile(value as NumatbProfileKind)}>
+          <TabsList className="h-8">
+            <TabsTrigger value="maya" className="text-[11px]">
+              Maya Profile
+            </TabsTrigger>
+            <TabsTrigger value="nust" className="text-[11px]">
+              Nust Profile
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border/60 bg-muted/20 px-3 py-2 sm:max-w-md">
+          <Checkbox
+            checked={mirrorTexturePathsAcrossProfiles}
+            onCheckedChange={(checked) => setMirrorTexturePathsAcrossProfiles(checked === true)}
+            className="mt-0.5"
+          />
+          <span className="space-y-0.5">
+            <span className="block text-[11px] font-medium leading-tight">Mirror texture paths (Maya ↔ Nust)</span>
+            <span className="block text-[10px] leading-snug text-muted-foreground">
+              When enabled, editing a map path on one profile updates the same material label + param on the other (EXVS-relative paths usually match).
+            </span>
+          </span>
+        </label>
+      </div>
 
       <div className="grid min-h-[460px] gap-3 xl:grid-cols-[220px_minmax(0,1fr)]">
         <div className="space-y-3 rounded-md border p-3">

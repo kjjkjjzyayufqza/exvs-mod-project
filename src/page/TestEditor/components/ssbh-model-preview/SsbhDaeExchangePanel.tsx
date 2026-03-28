@@ -21,7 +21,7 @@ export function SsbhDaeExchangePanel() {
           <p className="text-[11px] text-muted-foreground">
             {analysis && sourcePath
               ? "Detailed session state is persisted with Zustand and survives refresh."
-              : "Pick a source file, analyze it, then configure numdlb and numatb before export."}
+              : "Pick a source file (analysis runs automatically), then configure numdlb and numatb before export."}
           </p>
         </div>
         {analysis ? (

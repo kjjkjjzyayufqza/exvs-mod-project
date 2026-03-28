@@ -15,6 +15,7 @@ import {
   type NumdlbMappingRow,
 } from "../daeSsbhTypes";
 import type { SsbhDaeAnalysisReport, SsbhDaeUpAxis } from "../ssbhDaeIoService";
+import { getExvsDefaultMayaProfileTemplate, getExvsDefaultNustProfileTemplate } from "../exvsEmbeddedProfileTemplates";
 import {
   deleteNumatbTemplate,
   loadNumatbTemplateLibrary,
@@ -24,14 +25,14 @@ import {
   addEntryAttribute,
   addMaterialEntry,
   cloneProfile,
+  ensureMissingMappingLabelsInProfiles,
+  isTexturePathParamId,
+  mirrorTexturePathOntoOtherProfile,
   removeEntryAttribute,
   removeMaterialEntry,
-  replaceMaterialLabelInProfiles,
-  syncProfilesWithMappings,
   updateEntryAttribute,
   updateMaterialLabel,
   updateShaderLabel,
-  upsertProfileEntriesFromTemplate,
 } from "./numatbTemplateStoreHelpers";
 
 type DaeSsbhSessionActions = {
@@ -51,8 +52,7 @@ type DaeSsbhSessionActions = {
   setWriteNusktb: (value: boolean) => void;
   setWriteNumatb: (value: boolean) => void;
   setWriteMayaProfile: (value: boolean) => void;
-  setWriteNustProfile: (value: boolean) => void;
-  setBaseNumatbSource: (value: NumatbProfileKind) => void;
+  setMirrorTexturePathsAcrossProfiles: (value: boolean) => void;
   setMaterialLabel: (rowIndex: number, nextLabel: string) => void;
   replaceAllMaterialLabels: (nextLabel: string) => void;
   updateProfileMaterialLabel: (profile: NumatbProfileKind, materialIndex: number, nextLabel: string) => void;
@@ -89,7 +89,7 @@ type DaeSsbhTemplateState = {
 export type DaeSsbhSessionStoreState = DaeSsbhSessionState & DaeSsbhTemplateState & DaeSsbhSessionActions;
 
 const SESSION_STORAGE_KEY = "ssbh-dae-session-v2";
-const SESSION_VERSION = 2;
+const SESSION_VERSION = 4;
 
 function buildInitialState(): DaeSsbhSessionState {
   return {
@@ -109,8 +109,7 @@ function buildInitialState(): DaeSsbhSessionState {
     writeNusktb: true,
     writeNumatb: true,
     writeMayaProfile: true,
-    writeNustProfile: true,
-    baseNumatbSource: "nust",
+    mirrorTexturePathsAcrossProfiles: true,
     numdlbEntries: [],
     selectedTemplateId: null,
     mayaFile: createEmptyNumatbFile(),
@@ -119,11 +118,13 @@ function buildInitialState(): DaeSsbhSessionState {
   };
 }
 
+const DEFAULT_MESH_MATERIAL_LABEL = "pbr1Mtl";
+
 function createRowsFromAnalysis(analysis: SsbhDaeAnalysisReport): NumdlbMappingRow[] {
   return analysis.geometryNames.map((name) => ({
     meshObjectName: name,
     meshObjectSubindex: 0,
-    materialLabel: name,
+    materialLabel: DEFAULT_MESH_MATERIAL_LABEL,
   }));
 }
 
@@ -177,19 +178,20 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
       setWriteNusktb: (writeNusktb) => set({ writeNusktb }),
       setWriteNumatb: (writeNumatb) => set({ writeNumatb }),
       setWriteMayaProfile: (writeMayaProfile) => set({ writeMayaProfile }),
-      setWriteNustProfile: (writeNustProfile) => set({ writeNustProfile }),
-      setBaseNumatbSource: (baseNumatbSource) => set({ baseNumatbSource }),
+      setMirrorTexturePathsAcrossProfiles: (mirrorTexturePathsAcrossProfiles) => set({ mirrorTexturePathsAcrossProfiles }),
 
       loadAnalysis: (analysis) => {
         const rows = createRowsFromAnalysis(analysis);
-        const syncedProfiles = syncProfilesWithMappings(createEmptyNumatbFile(), createEmptyNumatbFile(), rows);
+        const mayaFile = getExvsDefaultMayaProfileTemplate();
+        const nustFile = getExvsDefaultNustProfileTemplate();
+        const ensured = ensureMissingMappingLabelsInProfiles(mayaFile, nustFile, rows);
         set({
           analysis,
           includeGeometryNames: [...analysis.geometryNames],
           numdlbEntries: rows,
           outputBaseName: "model",
-          mayaFile: syncedProfiles.mayaFile,
-          nustFile: syncedProfiles.nustFile,
+          mayaFile: ensured.mayaFile,
+          nustFile: ensured.nustFile,
           lastResult: null,
         });
       },
@@ -211,16 +213,11 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
       setMaterialLabel: (rowIndex, nextLabel) => {
         set((state) => {
           const rows = state.numdlbEntries.map((row, index) => (index === rowIndex ? { ...row, materialLabel: nextLabel } : row));
-          const previousLabel = state.numdlbEntries[rowIndex]?.materialLabel ?? "";
-          const nextProfiles = syncProfilesWithMappings(state.mayaFile, state.nustFile, rows);
-          const renamedProfiles =
-            previousLabel.trim() && previousLabel !== nextLabel
-              ? replaceMaterialLabelInProfiles(nextProfiles.mayaFile, nextProfiles.nustFile, previousLabel, nextLabel)
-              : nextProfiles;
+          const ensured = ensureMissingMappingLabelsInProfiles(state.mayaFile, state.nustFile, rows);
           return {
             numdlbEntries: rows,
-            mayaFile: renamedProfiles.mayaFile,
-            nustFile: renamedProfiles.nustFile,
+            mayaFile: ensured.mayaFile,
+            nustFile: ensured.nustFile,
           };
         });
       },
@@ -231,11 +228,11 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
             ...row,
             materialLabel: nextLabel,
           }));
-          const profiles = syncProfilesWithMappings(state.mayaFile, state.nustFile, rows);
+          const ensured = ensureMissingMappingLabelsInProfiles(state.mayaFile, state.nustFile, rows);
           return {
             numdlbEntries: rows,
-            mayaFile: profiles.mayaFile,
-            nustFile: profiles.nustFile,
+            mayaFile: ensured.mayaFile,
+            nustFile: ensured.nustFile,
           };
         });
       },
@@ -258,9 +255,29 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
 
       updateProfileAttribute: (profile, materialIndex, attributeIndex, data) => {
         set((state) => {
-          const file = profile === "maya" ? state.mayaFile : state.nustFile;
-          const nextFile = updateEntryAttribute(file, materialIndex, attributeIndex, data);
-          return profile === "maya" ? { mayaFile: nextFile } : { nustFile: nextFile };
+          const sourceFile = profile === "maya" ? state.mayaFile : state.nustFile;
+          const sourceEntries = sourceFile.Matl.V16.entries;
+          const entry = sourceEntries[materialIndex];
+          if (!entry?.attributes[attributeIndex]) {
+            throw new Error("Attribute index is out of range");
+          }
+          const paramId = entry.attributes[attributeIndex].param_id;
+          const materialLabel = entry.material_label;
+
+          let nextMaya =
+            profile === "maya" ? updateEntryAttribute(state.mayaFile, materialIndex, attributeIndex, data) : state.mayaFile;
+          let nextNust =
+            profile === "nust" ? updateEntryAttribute(state.nustFile, materialIndex, attributeIndex, data) : state.nustFile;
+
+          if (state.mirrorTexturePathsAcrossProfiles && isTexturePathParamId(paramId) && !paramId.startsWith("Use")) {
+            if (profile === "maya") {
+              nextNust = mirrorTexturePathOntoOtherProfile(nextNust, materialLabel, paramId, data);
+            } else {
+              nextMaya = mirrorTexturePathOntoOtherProfile(nextMaya, materialLabel, paramId, data);
+            }
+          }
+
+          return { mayaFile: nextMaya, nustFile: nextNust };
         });
       },
 
@@ -298,13 +315,12 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
 
       setProfileFile: (profile, file) => {
         set((state) => {
-          const nextProfiles =
-            profile === "maya"
-              ? syncProfilesWithMappings(file, state.nustFile, state.numdlbEntries)
-              : syncProfilesWithMappings(state.mayaFile, file, state.numdlbEntries);
+          const maya = profile === "maya" ? file : state.mayaFile;
+          const nust = profile === "nust" ? file : state.nustFile;
+          const ensured = ensureMissingMappingLabelsInProfiles(maya, nust, state.numdlbEntries);
           return {
-            mayaFile: nextProfiles.mayaFile,
-            nustFile: nextProfiles.nustFile,
+            mayaFile: ensured.mayaFile,
+            nustFile: ensured.nustFile,
           };
         });
       },
@@ -351,12 +367,13 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
         if (!template) {
           throw new Error("Template not found");
         }
-        const mayaFile = upsertProfileEntriesFromTemplate(state.mayaFile, template.mayaFile, state.numdlbEntries, "maya");
-        const nustFile = upsertProfileEntriesFromTemplate(state.nustFile, template.nustFile, state.numdlbEntries, "nust");
+        const mayaFile = cloneProfile(template.mayaFile);
+        const nustFile = cloneProfile(template.nustFile);
+        const ensured = ensureMissingMappingLabelsInProfiles(mayaFile, nustFile, state.numdlbEntries);
         set({
           selectedTemplateId: templateId,
-          mayaFile,
-          nustFile,
+          mayaFile: ensured.mayaFile,
+          nustFile: ensured.nustFile,
         });
       },
     }),
@@ -381,8 +398,7 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
         writeNusktb: state.writeNusktb,
         writeNumatb: state.writeNumatb,
         writeMayaProfile: state.writeMayaProfile,
-        writeNustProfile: state.writeNustProfile,
-        baseNumatbSource: state.baseNumatbSource,
+        mirrorTexturePathsAcrossProfiles: state.mirrorTexturePathsAcrossProfiles,
         numdlbEntries: state.numdlbEntries,
         selectedTemplateId: state.selectedTemplateId,
         mayaFile: state.mayaFile,
@@ -390,11 +406,12 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
         lastResult: state.lastResult,
       }),
       migrate: (persistedState) => {
-        const next = persistedState as Partial<DaeSsbhSessionState> | undefined;
+        const next = persistedState as Partial<DaeSsbhSessionState> & Record<string, unknown> | undefined;
         return {
           ...buildInitialState(),
           ...next,
           sessionVersion: SESSION_VERSION,
+          mirrorTexturePathsAcrossProfiles: next?.mirrorTexturePathsAcrossProfiles ?? true,
           mayaFile: next?.mayaFile ?? createEmptyNumatbFile(),
           nustFile: next?.nustFile ?? createEmptyNumatbFile(),
         };

@@ -93,8 +93,6 @@ export type SsbhConvertToSsbhParams = {
   writeNusktb: boolean;
   writeNumatb: boolean;
   writeMayaProfile: boolean;
-  writeNustProfile: boolean;
-  baseNumatbSource: "maya" | "nust";
   numdlbEntries: NumdlbMappingRow[];
   mayaFile: NumatbFileJson | null;
   nustFile: NumatbFileJson | null;
@@ -117,8 +115,6 @@ export async function ssbhConvertDaeToSsbh(
     writeNusktb: params.writeNusktb,
     writeNumatb: params.writeNumatb,
     writeMayaProfile: params.writeMayaProfile,
-    writeNustProfile: params.writeNustProfile,
-    baseNumatbSource: params.baseNumatbSource,
     numdlbEntries: params.numdlbEntries,
     mayaFile: params.mayaFile,
     nustFile: params.nustFile,
@@ -142,8 +138,6 @@ export async function ssbhConvertFbxToSsbh(
     writeNusktb: params.writeNusktb,
     writeNumatb: params.writeNumatb,
     writeMayaProfile: params.writeMayaProfile,
-    writeNustProfile: params.writeNustProfile,
-    baseNumatbSource: params.baseNumatbSource,
     numdlbEntries: params.numdlbEntries,
     mayaFile: params.mayaFile,
     nustFile: params.nustFile,

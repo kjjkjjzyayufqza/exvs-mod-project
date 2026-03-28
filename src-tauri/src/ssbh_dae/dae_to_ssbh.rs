@@ -326,7 +326,7 @@ fn convert_model_to_ssbh(meshes: &[DaeMesh], config: &DaeConvertConfig) -> Resul
         minor_version: 0,
         model_name: config.base_filename.clone(),
         skeleton_file_name: format!("{}.nusktb", config.base_filename),
-        material_file_names: vec![format!("{}.numatb", config.base_filename)],
+        material_file_names: vec![format!("{}__nust__.numatb", config.base_filename)],
         animation_file_name: None,
         mesh_file_name: format!("{}.numshb", config.base_filename),
         entries,

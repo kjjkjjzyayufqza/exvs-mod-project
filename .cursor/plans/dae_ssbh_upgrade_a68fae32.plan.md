@@ -7,19 +7,19 @@ todos:
     status: completed
   - id: build-persisted-session-store
     content: 建立带 persist/version/migrate 的 Zustand 转换会话 store，承接详细设定页全部状态
-    status: in_progress
+    status: completed
   - id: extract-reusable-editors
     content: 拆出可复用的 NumdlbMaterialMappingEditor 与 NumatbTemplateEditor 组件
-    status: pending
+    status: completed
   - id: extend-rust-convert-pipeline
     content: 扩展 Rust 命令与写盘逻辑，支持自定义 numdlb 映射与 numatb 输出
-    status: pending
+    status: completed
   - id: integrate-test-editor-tabs
     content: 将 dae 详细设定页与独立 numdlb 编辑页接入 Test Editor 右侧 tab
-    status: pending
+    status: completed
   - id: validate-exvs-profiles
-    content: 用 maya/nust 样本回归校验模板输出结构与关键参数命名
-    status: pending
+    content: 用 maya/nust 样本回归校验模板输出结构与关键参数命名（fixtures + 单测覆盖关键参数名；完整资产回归仍可按需补充）
+    status: completed
 isProject: false
 ---
 

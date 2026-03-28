@@ -189,9 +189,8 @@ fn read_numatb_to_json_value(app: &AppHandle, file_path: &Path) -> Result<serde_
     serde_json::from_slice(&bytes).map_err(|e| format!("Failed to parse numatb JSON: {e}"))
 }
 
-fn output_numatb_paths(base: &str, output_dir: &Path) -> (PathBuf, PathBuf, PathBuf) {
+fn variant_numatb_paths(base: &str, output_dir: &Path) -> (PathBuf, PathBuf) {
     (
-        output_dir.join(format!("{base}.numatb")),
         output_dir.join(format!("{base}__maya__.numatb")),
         output_dir.join(format!("{base}__nust__.numatb")),
     )
@@ -287,8 +286,6 @@ pub fn ssbh_convert_dae_to_ssbh(
     write_nusktb: bool,
     write_numatb: bool,
     write_maya_profile: bool,
-    write_nust_profile: bool,
-    base_numatb_source: String,
     numdlb_entries: Vec<NumdlbMappingEntryPayload>,
     maya_file: Option<serde_json::Value>,
     nust_file: Option<serde_json::Value>,
@@ -336,25 +333,16 @@ pub fn ssbh_convert_dae_to_ssbh(
     let (mut converted, stats) =
         convert_dae_file(&dae, &config).map_err(|e| format!("DAE conversion: {e:#}"))?;
 
-    let (base_numatb_path, maya_numatb_path, nust_numatb_path) = output_numatb_paths(base, &out_dir);
+    let (maya_numatb_path, nust_numatb_path) = variant_numatb_paths(base, &out_dir);
     let mut maya_written_path: Option<String> = None;
     let mut nust_written_path: Option<String> = None;
     if write_numatb {
-        let base_payload = match base_numatb_source.trim() {
-            "maya" => maya_file
-                .as_ref()
-                .ok_or_else(|| "baseNumatbSource is 'maya' but no mayaFile payload was provided".to_string())?,
-            "nust" => nust_file
-                .as_ref()
-                .ok_or_else(|| "baseNumatbSource is 'nust' but no nustFile payload was provided".to_string())?,
-            other => {
-                return Err(format!(
-                    "Invalid baseNumatbSource '{other}': expected 'maya' or 'nust'"
-                ))
-            }
-        };
-        write_numatb_from_json_value(&app, base_payload, &base_numatb_path)?;
-        converted.numatb_path = Some(base_numatb_path.clone());
+        let nust_payload = nust_file
+            .as_ref()
+            .ok_or_else(|| "writeNumatb is true but no nustFile payload was provided".to_string())?;
+        write_numatb_from_json_value(&app, nust_payload, &nust_numatb_path)?;
+        converted.numatb_path = Some(nust_numatb_path.clone());
+        nust_written_path = Some(nust_numatb_path.to_string_lossy().to_string());
 
         if write_maya_profile {
             let payload = maya_file
@@ -363,21 +351,13 @@ pub fn ssbh_convert_dae_to_ssbh(
             write_numatb_from_json_value(&app, payload, &maya_numatb_path)?;
             maya_written_path = Some(maya_numatb_path.to_string_lossy().to_string());
         }
-
-        if write_nust_profile {
-            let payload = nust_file
-                .as_ref()
-                .ok_or_else(|| "writeNustProfile is true but no nustFile payload was provided".to_string())?;
-            write_numatb_from_json_value(&app, payload, &nust_numatb_path)?;
-            nust_written_path = Some(nust_numatb_path.to_string_lossy().to_string());
-        }
     }
 
     let mut log_path: Option<String> = None;
     if write_log {
         let lp = out_dir.join(format!("{base}_dae_to_ssbh.log"));
         let log_body = format!(
-            "ts_ms={started}\ndae_path={}\noutput_dir={}\nbase_filename={}\nscale_factor={}\nflip_uv={}\nup_axis={}\ninclude_geometry_names={:?}\nwrite_numdlb={write_numdlb}\nwrite_numshb={write_numshb}\nwrite_nusktb={write_nusktb}\nwrite_numatb={write_numatb}\nwrite_maya_profile={write_maya_profile}\nwrite_nust_profile={write_nust_profile}\nbase_numatb_source={base_numatb_source}\n\nstats={}\nfiles:\n  numdlb={:?}\n  numshb={:?}\n  numatb={:?}\n  maya_numatb={:?}\n  nust_numatb={:?}\n  nusktb={:?}\n",
+            "ts_ms={started}\ndae_path={}\noutput_dir={}\nbase_filename={}\nscale_factor={}\nflip_uv={}\nup_axis={}\ninclude_geometry_names={:?}\nwrite_numdlb={write_numdlb}\nwrite_numshb={write_numshb}\nwrite_nusktb={write_nusktb}\nwrite_numatb={write_numatb}\nwrite_maya_profile={write_maya_profile}\n\nstats={}\nfiles:\n  numdlb={:?}\n  numshb={:?}\n  numatb={:?}\n  maya_numatb={:?}\n  nust_numatb={:?}\n  nusktb={:?}\n",
             dae.display(),
             out_dir.display(),
             base,
@@ -425,8 +405,6 @@ pub fn ssbh_convert_fbx_to_ssbh(
     write_nusktb: bool,
     write_numatb: bool,
     write_maya_profile: bool,
-    write_nust_profile: bool,
-    base_numatb_source: String,
     numdlb_entries: Vec<NumdlbMappingEntryPayload>,
     maya_file: Option<serde_json::Value>,
     nust_file: Option<serde_json::Value>,
@@ -474,25 +452,16 @@ pub fn ssbh_convert_fbx_to_ssbh(
     let (mut converted, stats) =
         convert_fbx_file(&fbx, &config).map_err(|e| format!("FBX conversion: {e:#}"))?;
 
-    let (base_numatb_path, maya_numatb_path, nust_numatb_path) = output_numatb_paths(base, &out_dir);
+    let (maya_numatb_path, nust_numatb_path) = variant_numatb_paths(base, &out_dir);
     let mut maya_written_path: Option<String> = None;
     let mut nust_written_path: Option<String> = None;
     if write_numatb {
-        let base_payload = match base_numatb_source.trim() {
-            "maya" => maya_file
-                .as_ref()
-                .ok_or_else(|| "baseNumatbSource is 'maya' but no mayaFile payload was provided".to_string())?,
-            "nust" => nust_file
-                .as_ref()
-                .ok_or_else(|| "baseNumatbSource is 'nust' but no nustFile payload was provided".to_string())?,
-            other => {
-                return Err(format!(
-                    "Invalid baseNumatbSource '{other}': expected 'maya' or 'nust'"
-                ))
-            }
-        };
-        write_numatb_from_json_value(&app, base_payload, &base_numatb_path)?;
-        converted.numatb_path = Some(base_numatb_path.clone());
+        let nust_payload = nust_file
+            .as_ref()
+            .ok_or_else(|| "writeNumatb is true but no nustFile payload was provided".to_string())?;
+        write_numatb_from_json_value(&app, nust_payload, &nust_numatb_path)?;
+        converted.numatb_path = Some(nust_numatb_path.clone());
+        nust_written_path = Some(nust_numatb_path.to_string_lossy().to_string());
 
         if write_maya_profile {
             let payload = maya_file
@@ -501,21 +470,13 @@ pub fn ssbh_convert_fbx_to_ssbh(
             write_numatb_from_json_value(&app, payload, &maya_numatb_path)?;
             maya_written_path = Some(maya_numatb_path.to_string_lossy().to_string());
         }
-
-        if write_nust_profile {
-            let payload = nust_file
-                .as_ref()
-                .ok_or_else(|| "writeNustProfile is true but no nustFile payload was provided".to_string())?;
-            write_numatb_from_json_value(&app, payload, &nust_numatb_path)?;
-            nust_written_path = Some(nust_numatb_path.to_string_lossy().to_string());
-        }
     }
 
     let mut log_path: Option<String> = None;
     if write_log {
         let lp = out_dir.join(format!("{base}_fbx_to_ssbh.log"));
         let log_body = format!(
-            "ts_ms={started}\nfbx_path={}\noutput_dir={}\nbase_filename={}\nscale_factor={}\nflip_uv={}\nup_axis={}\ninclude_geometry_names={:?}\nwrite_numdlb={write_numdlb}\nwrite_numshb={write_numshb}\nwrite_nusktb={write_nusktb}\nwrite_numatb={write_numatb}\nwrite_maya_profile={write_maya_profile}\nwrite_nust_profile={write_nust_profile}\nbase_numatb_source={base_numatb_source}\n\nstats={}\nfiles:\n  numdlb={:?}\n  numshb={:?}\n  numatb={:?}\n  maya_numatb={:?}\n  nust_numatb={:?}\n  nusktb={:?}\n",
+            "ts_ms={started}\nfbx_path={}\noutput_dir={}\nbase_filename={}\nscale_factor={}\nflip_uv={}\nup_axis={}\ninclude_geometry_names={:?}\nwrite_numdlb={write_numdlb}\nwrite_numshb={write_numshb}\nwrite_nusktb={write_nusktb}\nwrite_numatb={write_numatb}\nwrite_maya_profile={write_maya_profile}\n\nstats={}\nfiles:\n  numdlb={:?}\n  numshb={:?}\n  numatb={:?}\n  maya_numatb={:?}\n  nust_numatb={:?}\n  nusktb={:?}\n",
             fbx.display(),
             out_dir.display(),
             base,
