@@ -62,6 +62,7 @@ export async function ssbhAnalyzeFbx(fbxPath: string): Promise<SsbhDaeAnalysisRe
 }
 
 export async function ssbhExportFolderToDae(params: {
+  /** Same resolver as preview: prefer `.numdlb` path; a folder is ambiguous when multiple `.numdlb` exist. */
   rootPath: string;
   outputDaePath: string;
   scaleFactor: number;

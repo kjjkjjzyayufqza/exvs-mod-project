@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Database, Info, Layout, List, Settings2 } from "lucide-react";
+import { save } from "@tauri-apps/plugin-dialog";
+import { Database, FileDown, Info, Layout, List, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,6 +13,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { DialogLastPathKey, getDialogDefaultPath, rememberDialogSelection } from "@/utils/dialogLastPath";
 import { MayaSection } from "./MayaInspectorSection";
 import {
   clearNutexbPreviewCacheAsync,
@@ -20,17 +23,76 @@ import {
 } from "./nutexbPreviewCache";
 import { useSsbhModelPreview, type PreviewRenderStyle } from "./SsbhModelPreviewContext";
 import { TEXTURE_PREVIEW_SLOT_META, TEXTURE_SLOT_TO_PATH_FIELD } from "./meshFromSsbh";
+import { ssbhExportFolderToDae, type SsbhDaeUpAxis } from "./ssbhDaeIoService";
 import type { SkelDataJson } from "./types";
+
+function meshFileStem(meshPath: string): string {
+  const seg = meshPath.replace(/\\/g, "/").split("/").filter((x) => x.length > 0).pop() ?? "model";
+  const i = seg.lastIndexOf(".");
+  return i > 0 ? seg.slice(0, i) : seg;
+}
 
 export function SsbhModelPreviewInspector() {
   const p = useSsbhModelPreview();
   const [textureCacheStats, setTextureCacheStats] = useState<NutexbPreviewCacheStats | null>(null);
+  const [daeExportScaleText, setDaeExportScaleText] = useState("1");
+  const [daeExportUpAxis, setDaeExportUpAxis] = useState<SsbhDaeUpAxis>("y_up");
+  const [daeExportBusy, setDaeExportBusy] = useState(false);
   const refreshTextureCacheStats = useCallback(async () => {
     setTextureCacheStats(await getNutexbPreviewCacheStats());
   }, []);
   useEffect(() => {
     void refreshTextureCacheStats();
   }, [refreshTextureCacheStats]);
+
+  const exportPreviewToDae = useCallback(async () => {
+    const bundle = p.bundle;
+    const modlPath = bundle?.modlPath?.trim();
+    const modelFolder = bundle?.rootFolder?.trim();
+    if (!bundle || !modlPath) {
+      throw new Error("No model loaded: open a folder or .numdlb in the viewport first.");
+    }
+    const scale = Number(daeExportScaleText);
+    if (!Number.isFinite(scale) || scale <= 0) {
+      throw new Error("Scale must be a finite positive number.");
+    }
+    const meshPath = bundle.meshPath;
+    const suggestedName = `${meshFileStem(meshPath)}.dae`;
+    const folder = getDialogDefaultPath(
+      DialogLastPathKey.ssbhDaeExportDae,
+      p.workspaceRoot ?? modelFolder,
+    );
+    const defaultPath = folder
+      ? `${folder.replace(/[/\\]+$/, "")}${folder.includes("\\") ? "\\" : "/"}${suggestedName}`
+      : suggestedName;
+
+    const outputDaePath = await save({
+      title: "Export preview mesh to COLLADA",
+      filters: [{ name: "COLLADA", extensions: ["dae"] }],
+      defaultPath,
+    });
+    if (typeof outputDaePath !== "string" || !outputDaePath.trim()) {
+      return;
+    }
+    const out = outputDaePath.trim();
+    setDaeExportBusy(true);
+    try {
+      const { daePath, stats } = await ssbhExportFolderToDae({
+        rootPath: modlPath,
+        outputDaePath: out,
+        scaleFactor: scale,
+        upAxis: daeExportUpAxis,
+        includeMeshObjects: null,
+      });
+      rememberDialogSelection(DialogLastPathKey.ssbhDaeExportDae, daePath, "file");
+      toast.success("Exported COLLADA", {
+        description: `${daePath}\nObjects: ${stats.objectsExported} · Triangles: ${stats.trianglesExported}`,
+      });
+    } finally {
+      setDaeExportBusy(false);
+    }
+  }, [p.bundle, p.workspaceRoot, daeExportScaleText, daeExportUpAxis]);
+
   const skel = p.bundle?.skel ? (p.bundle.skel as SkelDataJson) : null;
   const bones = skel?.bones ?? [];
   const hasSkinnedMesh = p.draws.some((d) => d.skin !== null);
@@ -146,6 +208,71 @@ export function SsbhModelPreviewInspector() {
             <Label className="text-[11px] text-muted-foreground">Normal Map</Label>
             <Switch checked={p.normalMapEnabled} onCheckedChange={p.setNormalMapEnabled} />
           </div>
+        </div>
+      </MayaSection>
+
+      <MayaSection title="Export COLLADA" icon={<FileDown className="h-3.5 w-3.5" />} defaultOpen={false}>
+        <div className="flex flex-col gap-3">
+          <p className="text-[9px] leading-snug text-muted-foreground">
+            Writes the same mesh (and skeleton when present) as the 3D preview from the loaded model folder to a .dae file.
+            Materials are not embedded; this is geometry-focused export.
+          </p>
+          {p.bundle?.modlPath ? (
+            <p className="truncate font-mono text-[10px] text-muted-foreground" title={p.bundle.modlPath}>
+              NUMDLB: {p.bundle.modlPath}
+            </p>
+          ) : (
+            <p className="text-[10px] text-muted-foreground">Load a model in the viewport to enable export.</p>
+          )}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-[11px] text-muted-foreground">Scale</Label>
+              <Input
+                className="h-8 text-[11px]"
+                value={daeExportScaleText}
+                onChange={(e) => setDaeExportScaleText(e.target.value)}
+                disabled={!p.bundle?.modlPath || p.previewBusy || daeExportBusy}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-[11px] text-muted-foreground">Up axis</Label>
+              <Select
+                value={daeExportUpAxis}
+                onValueChange={(v) => setDaeExportUpAxis(v as SsbhDaeUpAxis)}
+                disabled={!p.bundle?.modlPath || p.previewBusy || daeExportBusy}
+              >
+                <SelectTrigger className="h-8 text-[11px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="y_up" className="text-[11px]">
+                    Y-up
+                  </SelectItem>
+                  <SelectItem value="z_up" className="text-[11px]">
+                    Z-up
+                  </SelectItem>
+                  <SelectItem value="none" className="text-[11px]">
+                    None
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="h-8 w-fit text-[10px] uppercase tracking-wide"
+            disabled={!p.bundle?.modlPath || p.previewBusy || daeExportBusy}
+            onClick={() => {
+              void exportPreviewToDae().catch((err) => {
+                toast.error(String(err));
+              });
+            }}
+          >
+            <FileDown className="mr-1.5 h-3.5 w-3.5" />
+            {daeExportBusy ? "Exporting…" : "Export to .dae…"}
+          </Button>
         </div>
       </MayaSection>
 

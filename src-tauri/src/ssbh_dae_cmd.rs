@@ -140,7 +140,9 @@ pub fn ssbh_analyze_fbx(fbx_path: String) -> Result<DaeAnalysisReport, String> {
     analyze_fbx_path(&p)
 }
 
-/// Export loaded model folder to COLLADA. Optional `include_mesh_objects`: `{ name, subindex }[]` — empty = all objects.
+/// Export model to COLLADA. `root_path` is passed to `load_model_preview_bundle`: use the same `.numdlb`
+/// path as the preview when a folder contains multiple models; a directory alone may resolve a different `.numdlb`.
+/// Optional `include_mesh_objects`: `{ name, subindex }[]` — empty = all objects.
 #[tauri::command]
 pub fn ssbh_export_folder_to_dae(
     root_path: String,

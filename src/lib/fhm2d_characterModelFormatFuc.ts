@@ -220,6 +220,32 @@ function stripExtension(fileName: string): string {
   return fileName.slice(0, lastDot);
 }
 
+const NUST_NUMATB_SUFFIX = "__nust__";
+
+/**
+ * materialFileNames[1] must reference a __nust__ numatb basename (without .numatb), e.g. foo__nust__
+ */
+function assertNustMaterialTemplateForExtras(strippedBasename: string, numdlbFileIndex: number): void {
+  if (!strippedBasename.endsWith(NUST_NUMATB_SUFFIX)) {
+    throw new Error(
+      `numdlb fileIndex=${numdlbFileIndex}: materialFileNames[1] must be a __nust__ path (e.g. *${NUST_NUMATB_SUFFIX}.numatb), got "${strippedBasename}"`
+    );
+  }
+}
+
+/**
+ * Build extra numatb filename from the nust template basename (no extension), e.g.
+ * 053gbftry_002trybng_001_assist_bunshin00__nust__ -> 053gbftry_002trybng_001_assist_bunshin00_m001__nust__.numatb
+ */
+export function buildExtraNustNumatbDesiredFileName(nustTemplateStrippedBasename: string, variantIndex1Based: number): string {
+  if (!nustTemplateStrippedBasename.endsWith(NUST_NUMATB_SUFFIX)) {
+    throw new Error(`Invalid nust template basename: "${nustTemplateStrippedBasename}"`);
+  }
+  const prefix = nustTemplateStrippedBasename.slice(0, -NUST_NUMATB_SUFFIX.length);
+  const mPart = `_m${String(variantIndex1Based).padStart(3, "0")}`;
+  return `${prefix}${mPart}${NUST_NUMATB_SUFFIX}.numatb`;
+}
+
 function findFolderPathForFileIndex(
   root: SubFileParseNode,
   fileIndex: number
@@ -490,10 +516,22 @@ export async function applyNumdlbBaseNameToStructureObject(
         `Ambiguous group folder for numdlb fileIndex=${numdlbItem.fileIndex}: expected 1 numshb in group, got ${meshCandidates.length}`
       );
     }
-    if (materialCandidates.length !== modl.materialFileNames.length) {
+    const declaredMaterialCount = modl.materialFileNames.length;
+    if (materialCandidates.length < declaredMaterialCount) {
       throw new Error(
-        `Ambiguous group folder for numdlb fileIndex=${numdlbItem.fileIndex}: expected ${modl.materialFileNames.length} numatb in group, got ${materialCandidates.length}`
+        `Ambiguous group folder for numdlb fileIndex=${numdlbItem.fileIndex}: expected at least ${declaredMaterialCount} numatb in group, got ${materialCandidates.length}`
       );
+    }
+    const extraNumatbCount = materialCandidates.length - declaredMaterialCount;
+    if (extraNumatbCount > 0) {
+      if (declaredMaterialCount < 2) {
+        throw new Error(
+          `numdlb fileIndex=${numdlbItem.fileIndex}: ${extraNumatbCount} extra numatb file(s) require materialFileNames[1] as __nust__ template, but only ${declaredMaterialCount} material path(s) in numdlb`
+        );
+      }
+      const nustTemplateDesired = basenameFromMixedPath(modl.materialFileNames[1]!);
+      const nustTemplateStripped = stripExtension(nustTemplateDesired);
+      assertNustMaterialTemplateForExtras(nustTemplateStripped, numdlbItem.fileIndex);
     }
 
     // jnttbl (stored as .bin in fhm2d, renamed to .jnttbl for readability)
@@ -524,11 +562,26 @@ export async function applyNumdlbBaseNameToStructureObject(
       target.fileUrl = buildFileUrl(prefixSegments, desired, sep);
     }
 
-    // Materials (order by fileIndex)
-    for (let i = 0; i < modl.materialFileNames.length; i++) {
+    // Materials (order by fileIndex): first N entries follow numdlb materialFileNames[0..N-1].
+    // Extra numatb beyond N use materialFileNames[1] as __nust__ template -> prefix_m001__nust__.numatb, m002, ...
+    const nustTemplateStrippedForExtras =
+      extraNumatbCount > 0 ? stripExtension(basenameFromMixedPath(modl.materialFileNames[1]!)) : "";
+
+    for (let i = 0; i < declaredMaterialCount; i++) {
       const desired = basenameFromMixedPath(modl.materialFileNames[i]!);
       const desiredBase = stripExtension(desired);
       const target = materialCandidates[i]!;
+      const sep = getPathSeparatorFromFileUrl(target.fileUrl);
+      const targetSegments = splitPathSegments(target.fileUrl);
+      const prefixSegments = targetSegments.slice(0, -1);
+      target.fileBaseName = desiredBase;
+      target.fileUrl = buildFileUrl(prefixSegments, desired, sep);
+    }
+
+    for (let e = 0; e < extraNumatbCount; e++) {
+      const target = materialCandidates[declaredMaterialCount + e]!;
+      const desired = buildExtraNustNumatbDesiredFileName(nustTemplateStrippedForExtras, e + 1);
+      const desiredBase = stripExtension(desired);
       const sep = getPathSeparatorFromFileUrl(target.fileUrl);
       const targetSegments = splitPathSegments(target.fileUrl);
       const prefixSegments = targetSegments.slice(0, -1);
