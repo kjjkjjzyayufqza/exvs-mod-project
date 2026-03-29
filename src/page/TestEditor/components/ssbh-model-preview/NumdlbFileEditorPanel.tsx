@@ -107,16 +107,26 @@ export function NumdlbFileEditorPanel({ selected }: NumdlbFileEditorPanelProps) 
               : current,
           )
         }
-        onReplaceAll={(nextLabel) =>
+        onReplaceAll={(nextLabel, rowIndices) => {
+          const trimmed = nextLabel.trim();
+          if (!trimmed) {
+            throw new Error("replaceAllMaterialLabels: nextLabel must be non-empty");
+          }
+          if (rowIndices.length === 0) {
+            throw new Error("replaceAllMaterialLabels: rowIndices must not be empty");
+          }
+          const indexSet = new Set(rowIndices);
           setData((current) =>
             current
               ? {
                   ...current,
-                  entries: current.entries.map((row) => ({ ...row, materialLabel: nextLabel })),
+                  entries: current.entries.map((row, index) =>
+                    indexSet.has(index) ? { ...row, materialLabel: trimmed } : row,
+                  ),
                 }
               : current,
-          )
-        }
+          );
+        }}
       />
 
       <Button

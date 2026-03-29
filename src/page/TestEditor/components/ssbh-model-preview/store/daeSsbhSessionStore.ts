@@ -56,7 +56,7 @@ type DaeSsbhSessionActions = {
   setWriteMayaProfile: (value: boolean) => void;
   setMirrorTexturePathsAcrossProfiles: (value: boolean) => void;
   setMaterialLabel: (rowIndex: number, nextLabel: string) => void;
-  replaceAllMaterialLabels: (nextLabel: string) => void;
+  replaceAllMaterialLabels: (nextLabel: string, rowIndices: number[]) => void;
   updateProfileMaterialLabel: (profile: NumatbProfileKind, materialIndex: number, nextLabel: string) => void;
   updateProfileShaderLabel: (profile: NumatbProfileKind, materialIndex: number, nextShaderLabel: string) => void;
   updateProfileAttribute: (
@@ -224,12 +224,19 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
         });
       },
 
-      replaceAllMaterialLabels: (nextLabel) => {
+      replaceAllMaterialLabels: (nextLabel, rowIndices) => {
+        const trimmed = nextLabel.trim();
+        if (!trimmed) {
+          throw new Error("replaceAllMaterialLabels: nextLabel must be non-empty");
+        }
+        if (rowIndices.length === 0) {
+          throw new Error("replaceAllMaterialLabels: rowIndices must not be empty");
+        }
+        const indexSet = new Set(rowIndices);
         set((state) => {
-          const rows = state.numdlbEntries.map((row) => ({
-            ...row,
-            materialLabel: nextLabel,
-          }));
+          const rows = state.numdlbEntries.map((row, index) =>
+            indexSet.has(index) ? { ...row, materialLabel: trimmed } : row,
+          );
           const ensured = ensureMissingMappingLabelsInProfiles(state.mayaFile, state.nustFile, rows);
           return {
             numdlbEntries: rows,

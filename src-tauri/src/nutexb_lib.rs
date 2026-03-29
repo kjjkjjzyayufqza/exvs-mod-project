@@ -88,7 +88,24 @@ pub fn export_nutexb_to_png(input_path: &str, output_path: &str) -> Result<(), S
     // ultimate_tex approach: DDS as an intermediate handles swizzling and compressed formats (BC1/BC7/etc).
     let dds = nutexb.to_dds().map_err(|e| e.to_string())?;
     let image: RgbaImage = image_dds::image_from_dds(&dds, 0).map_err(|e| e.to_string())?;
-    image.save(output_path).map_err(|e| e.to_string())?;
+
+    ensure_parent_dir(output_path)?;
+    let out = File::create(output_path).map_err(|e| e.to_string())?;
+    let mut writer = BufWriter::new(out);
+    let encoder = PngEncoder::new_with_quality(
+        &mut writer,
+        CompressionType::Fast,
+        FilterType::NoFilter,
+    );
+    encoder
+        .write_image(
+            image.as_raw(),
+            image.width(),
+            image.height(),
+            ExtendedColorType::Rgba8,
+        )
+        .map_err(|e| e.to_string())?;
+    writer.flush().map_err(|e| e.to_string())?;
     Ok(())
 }
 

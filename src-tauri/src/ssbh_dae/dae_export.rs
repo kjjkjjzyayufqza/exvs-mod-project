@@ -6,6 +6,7 @@ use ssbh_data::modl_data::ModlData;
 use ssbh_data::skel_data::SkelData;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsStr;
+use std::fmt::Write as FmtWrite;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use xmltree::{Element, XMLNode};
@@ -997,17 +998,26 @@ fn build_geometry_element_json(
 
     // Build <p> with original indices per input stream (no flattening)
     let mut p = Element::new("p");
-    let mut values: Vec<String> = Vec::with_capacity(indices.len() * input_count);
+    let est = indices.len().saturating_mul(input_count).saturating_mul(8);
+    let mut p_text = String::with_capacity(est);
+    let mut first_num = true;
+    let push_idx = |n: u32, buf: &mut String, first: &mut bool| {
+        if !*first {
+            buf.push(' ');
+        }
+        *first = false;
+        write!(buf, "{}", n).unwrap();
+    };
     for &idx in indices {
-        values.push(idx.to_string());
+        push_idx(idx, &mut p_text, &mut first_num);
         if normals.is_some() {
-            values.push(idx.to_string());
+            push_idx(idx, &mut p_text, &mut first_num);
         }
         if texcoords.is_some() {
-            values.push(idx.to_string());
+            push_idx(idx, &mut p_text, &mut first_num);
         }
     }
-    p.children.push(XMLNode::Text(values.join(" ")));
+    p.children.push(XMLNode::Text(p_text));
     triangles.children.push(XMLNode::Element(p));
 
     mesh.children.push(XMLNode::Element(triangles));
@@ -1069,24 +1079,28 @@ fn build_controller_element_json(
         }
     }
 
-    // Build vcount and v streams, and collect weights array
+    // Build vcount and v streams, and collect weights array (O(1) lookup per weight via quantized key)
     let mut weights: Vec<f32> = Vec::new();
-    let mut weight_values: Vec<f32> = Vec::new();
+    let mut weight_key_to_index: HashMap<i32, usize> = HashMap::new();
     let mut vcount_values: Vec<usize> = Vec::with_capacity(vertex_count);
     let mut v_values: Vec<i32> = Vec::new();
+
+    let weight_index_for_value = |w: f32, weights: &mut Vec<f32>, map: &mut HashMap<i32, usize>| {
+        let k = weight_quant_key(w);
+        if let Some(&i) = map.get(&k) {
+            return i;
+        }
+        let i = weights.len();
+        weights.push(w);
+        map.insert(k, i);
+        i
+    };
 
     for influences in vertex_influences.iter_mut() {
         if influences.is_empty() {
             // Assign to root bone with weight 1.0
             let bone_index = 0usize;
-            let w_idx = match weight_values.iter().position(|&v| (v - 1.0).abs() < 1e-6) {
-                Some(i) => i,
-                None => {
-                    weight_values.push(1.0);
-                    weights.push(1.0);
-                    weights.len() - 1
-                }
-            };
+            let w_idx = weight_index_for_value(1.0, &mut weights, &mut weight_key_to_index);
             vcount_values.push(1);
             v_values.push(bone_index as i32);
             v_values.push(w_idx as i32);
@@ -1101,14 +1115,7 @@ fn build_controller_element_json(
         vcount_values.push(influences.len());
         for (joint, w) in influences.iter().copied() {
             let w_norm = w / norm;
-            let idx = match weight_values.iter().position(|&v| (v - w_norm).abs() < 1e-6) {
-                Some(i) => i,
-                None => {
-                    weight_values.push(w_norm);
-                    weights.push(w_norm);
-                    weights.len() - 1
-                }
-            };
+            let idx = weight_index_for_value(w_norm, &mut weights, &mut weight_key_to_index);
             v_values.push(joint as i32);
             v_values.push(idx as i32);
         }
@@ -1167,13 +1174,29 @@ fn build_controller_element_json(
     vweights.children.push(XMLNode::Element(in_weight));
 
     let mut vcount = Element::new("vcount");
-    vcount
-        .children
-        .push(XMLNode::Text(vcount_values.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(" ")));
+    let mut vcount_text = String::with_capacity(vcount_values.len() * 3);
+    let mut first_vc = true;
+    for vc in &vcount_values {
+        if !first_vc {
+            vcount_text.push(' ');
+        }
+        first_vc = false;
+        write!(&mut vcount_text, "{}", vc).unwrap();
+    }
+    vcount.children.push(XMLNode::Text(vcount_text));
     vweights.children.push(XMLNode::Element(vcount));
 
     let mut v = Element::new("v");
-    v.children.push(XMLNode::Text(v_values.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(" ")));
+    let mut v_text = String::with_capacity(v_values.len() * 6);
+    let mut first_v = true;
+    for n in &v_values {
+        if !first_v {
+            v_text.push(' ');
+        }
+        first_v = false;
+        write!(&mut v_text, "{}", n).unwrap();
+    }
+    v.children.push(XMLNode::Text(v_text));
     vweights.children.push(XMLNode::Element(v));
 
     skin.children.push(XMLNode::Element(vweights));
@@ -1303,22 +1326,70 @@ fn build_asset(config: &DaeExportConfig) -> Element {
 
 
 
+fn append_format_float(out: &mut String, v: f32) {
+    if v == 0.0 {
+        out.push('0');
+    } else {
+        write!(out, "{:.6}", v).unwrap();
+    }
+}
+
+/// Quantized key for skin weight deduplication (~1e-6 tolerance, same as prior linear scan).
+fn weight_quant_key(w: f32) -> i32 {
+    (w as f64 * 1_000_000.0).round() as i32
+}
+
 fn build_source_float_vec3(id: &str, data: &[[f32; 3]]) -> Element {
-    let flat: Vec<f32> = data.iter().flat_map(|v| [v[0], v[1], v[2]]).collect();
-    build_source_float_array(id, &flat, 3)
+    let float_count = data.len() * 3;
+    let mut float_text = String::with_capacity(float_count * 12);
+    let mut first = true;
+    for v in data {
+        for &c in v {
+            if !first {
+                float_text.push(' ');
+            }
+            first = false;
+            append_format_float(&mut float_text, c);
+        }
+    }
+    build_source_float_array_text(id, float_text, float_count, 3)
 }
 
 fn build_source_float_vec2(id: &str, data: &[[f32; 2]]) -> Element {
-    let flat: Vec<f32> = data.iter().flat_map(|v| [v[0], v[1]]).collect();
-    build_source_float_array(id, &flat, 2)
+    let float_count = data.len() * 2;
+    let mut float_text = String::with_capacity(float_count * 12);
+    let mut first = true;
+    for v in data {
+        for &c in v {
+            if !first {
+                float_text.push(' ');
+            }
+            first = false;
+            append_format_float(&mut float_text, c);
+        }
+    }
+    build_source_float_array_text(id, float_text, float_count, 2)
 }
 
-fn build_source_float_array(
+fn build_source_float_array(id: &str, flat_data: &[f32], stride: usize) -> Element {
+    let mut float_text = String::with_capacity(flat_data.len() * 12);
+    let mut first = true;
+    for &v in flat_data {
+        if !first {
+            float_text.push(' ');
+        }
+        first = false;
+        append_format_float(&mut float_text, v);
+    }
+    build_source_float_array_text(id, float_text, flat_data.len(), stride)
+}
+
+fn build_source_float_array_text(
     id: &str,
-    flat_data: &Vec<f32>,
+    float_text: String,
+    float_count: usize,
     stride: usize,
 ) -> Element {
-    // Note: We cannot encode param generic type directly; build below
     let mut source = Element::new("source");
     source.attributes.insert("id".to_string(), id.to_string());
 
@@ -1328,10 +1399,10 @@ fn build_source_float_array(
         .insert("id".to_string(), format!("{}-array", id));
     float_array
         .attributes
-        .insert("count".to_string(), flat_data.len().to_string());
+        .insert("count".to_string(), float_count.to_string());
     float_array
         .children
-        .push(XMLNode::Text(flat_data.iter().map(|v| format_float(*v)).collect::<Vec<_>>().join(" ")));
+        .push(XMLNode::Text(float_text));
     source.children.push(XMLNode::Element(float_array));
 
     let mut tech = Element::new("technique_common");
@@ -1341,7 +1412,7 @@ fn build_source_float_array(
         .insert("source".to_string(), format!("#{}-array", id));
     accessor
         .attributes
-        .insert("count".to_string(), (flat_data.len() / stride).to_string());
+        .insert("count".to_string(), (float_count / stride).to_string());
     accessor
         .attributes
         .insert("stride".to_string(), stride.to_string());
@@ -1433,11 +1504,18 @@ fn build_source_mat4_array(id: &str, matrices: &[[f32; 16]]) -> Element {
     float_array
         .attributes
         .insert("count".to_string(), (matrices.len() * 16).to_string());
-    let mut values: Vec<String> = Vec::with_capacity(matrices.len() * 16);
+    let mut float_text = String::with_capacity(matrices.len() * 16 * 12);
+    let mut first = true;
     for m in matrices {
-        values.extend(m.iter().map(|v| format_float(*v)));
+        for &v in m {
+            if !first {
+                float_text.push(' ');
+            }
+            first = false;
+            append_format_float(&mut float_text, v);
+        }
     }
-    float_array.children.push(XMLNode::Text(values.join(" ")));
+    float_array.children.push(XMLNode::Text(float_text));
     source.children.push(XMLNode::Element(float_array));
 
     let mut tech = Element::new("technique_common");
@@ -1480,12 +1558,22 @@ fn vector_data_to_vec2(data: &VectorData) -> Result<Vec<[f32; 2]>> {
 // Removed unused row/column-major conversion helpers after switching to column-major output.
 
 fn matrix_to_string(m: &[f32; 16]) -> String {
-    m.iter().map(|v| format_float(*v)).collect::<Vec<_>>().join(" ")
+    let mut s = String::with_capacity(16 * 12);
+    let mut first = true;
+    for &v in m {
+        if !first {
+            s.push(' ');
+        }
+        first = false;
+        append_format_float(&mut s, v);
+    }
+    s
 }
 
 fn format_float(v: f32) -> String {
-    // Use shorter representation without losing precision materially
-    if v == 0.0 { "0".to_string() } else { format!("{:.6}", v) }
+    let mut s = String::new();
+    append_format_float(&mut s, v);
+    s
 }
 
 fn sanitize_id(s: &str) -> String {

@@ -10,7 +10,7 @@ import type { NumdlbMappingRow } from "../daeSsbhTypes";
 type NumdlbMaterialMappingEditorProps = {
   rows: NumdlbMappingRow[];
   onChangeMaterialLabel: (rowIndex: number, nextLabel: string) => void;
-  onReplaceAll: (nextLabel: string) => void;
+  onReplaceAll: (nextLabel: string, rowIndices: number[]) => void;
 };
 
 export function NumdlbMaterialMappingEditor({
@@ -28,15 +28,22 @@ export function NumdlbMaterialMappingEditor({
     );
   }, [rows]);
 
-  const filteredRows = useMemo(() => {
+  const filteredEntries = useMemo(() => {
     const normalized = filter.trim().toLowerCase();
-    if (!normalized) return rows;
-    return rows.filter((row) => {
-      return (
+    const out: { row: NumdlbMappingRow; rowIndex: number }[] = [];
+    rows.forEach((row, rowIndex) => {
+      if (!normalized) {
+        out.push({ row, rowIndex });
+        return;
+      }
+      if (
         row.meshObjectName.toLowerCase().includes(normalized) ||
         row.materialLabel.toLowerCase().includes(normalized)
-      );
+      ) {
+        out.push({ row, rowIndex });
+      }
     });
+    return out;
   }, [filter, rows]);
 
   return (
@@ -55,7 +62,12 @@ export function NumdlbMaterialMappingEditor({
           </div>
         </div>
         <div className="space-y-1">
-          <Label className="text-[11px] text-muted-foreground">Replace all material labels</Label>
+          <div className="flex flex-wrap items-baseline justify-between gap-1">
+            <Label className="text-[11px] text-muted-foreground">Replace all material labels</Label>
+            <span className="text-[10px] tabular-nums text-muted-foreground">
+              Will rename: {filteredEntries.length}
+            </span>
+          </div>
           <div className="flex gap-2">
             <Input
               value={replaceAllValue}
@@ -68,8 +80,13 @@ export function NumdlbMaterialMappingEditor({
               type="button"
               size="sm"
               className="h-8 px-3 text-[10px] uppercase tracking-wide"
-              onClick={() => onReplaceAll(replaceAllValue)}
-              disabled={!replaceAllValue.trim() || rows.length === 0}
+              onClick={() =>
+                onReplaceAll(
+                  replaceAllValue.trim(),
+                  filteredEntries.map((entry) => entry.rowIndex),
+                )
+              }
+              disabled={!replaceAllValue.trim() || filteredEntries.length === 0}
             >
               <WandSparkles className="mr-1 h-3.5 w-3.5" />
               Apply
@@ -101,12 +118,7 @@ export function NumdlbMaterialMappingEditor({
         </div>
         <ScrollArea className="h-[280px]">
           <div className="divide-y">
-            {filteredRows.map((row) => {
-              const rowIndex = rows.findIndex(
-                (candidate) =>
-                  candidate.meshObjectName === row.meshObjectName &&
-                  candidate.meshObjectSubindex === row.meshObjectSubindex,
-              );
+            {filteredEntries.map(({ row, rowIndex }) => {
               return (
                 <div
                   key={`${row.meshObjectName}:${row.meshObjectSubindex}`}
@@ -127,7 +139,7 @@ export function NumdlbMaterialMappingEditor({
                 </div>
               );
             })}
-            {filteredRows.length === 0 ? (
+            {filteredEntries.length === 0 ? (
               <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">No mapping rows match the current filter.</div>
             ) : null}
           </div>
