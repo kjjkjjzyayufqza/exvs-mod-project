@@ -2,14 +2,27 @@ import { Button } from "@/components/ui/button";
 import { SsbhModelCanvas } from "./SsbhModelCanvas";
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
 import { SsbhModelPreviewLoadingOverlay } from "./SsbhModelPreviewLoadingOverlay";
+import { SsbhModelPreviewQuickActions } from "./SsbhModelPreviewQuickActions";
 import type { SkelDataJson } from "./types";
+
+function formatPreviewCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 10_000) return `${Math.round(n / 1_000)}k`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return `${n}`;
+}
 
 export function SsbhModelPreviewViewport() {
   const p = useSsbhModelPreview();
+  const stats = p.vertexTriangleStats;
+  const statsLine =
+    p.bundle && p.draws.length > 0
+      ? `${formatPreviewCount(stats.verts)} verts · ${formatPreviewCount(stats.tris)} tris · ${p.draws.length} draws`
+      : null;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2 shrink-0 px-1">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 shrink-0 px-1">
         <Button type="button" size="sm" variant="default" disabled={p.loading} onClick={() => void p.pickFolder()}>
           Open model folder
         </Button>
@@ -19,6 +32,7 @@ export function SsbhModelPreviewViewport() {
         <Button type="button" size="sm" variant="outline" disabled={p.loading} onClick={() => void p.tryWorkspaceRoot()}>
           Use workspace root
         </Button>
+        <SsbhModelPreviewQuickActions />
         <Button
           type="button"
           size="sm"
@@ -41,6 +55,14 @@ export function SsbhModelPreviewViewport() {
         ) : null}
         {p.loadError ? <span className="text-destructive max-w-[240px] truncate">{p.loadError}</span> : null}
         {p.drawError ? <span className="text-destructive max-w-[240px] truncate">{p.drawError}</span> : null}
+        {statsLine ? (
+          <span
+            className="text-[10px] text-muted-foreground tabular-nums ml-auto w-full sm:w-auto sm:ml-0"
+            title="Mesh statistics for the loaded preview"
+          >
+            {statsLine}
+          </span>
+        ) : null}
       </div>
 
       {p.bundle ? (
@@ -84,9 +106,12 @@ export function SsbhModelPreviewViewport() {
           <SsbhModelPreviewLoadingOverlay readingBundle={p.loading} textureDecode={p.textureDecodeProgress} />
         </div>
         <p className="mt-1.5 text-[10px] text-muted-foreground">
-          Left-drag: orbit · Scroll: zoom (does not scroll this page) · Right-drag: pan. Use{" "}
-          <span className="font-medium text-foreground">Reset view</span> to fit the model again. Viewport options and
-          mesh list are in the right <span className="font-medium text-foreground">Info</span> panel on the{" "}
+          Left-drag: orbit · Scroll: zoom (does not scroll this page) · Right-drag: pan.{" "}
+          <span className="font-medium text-foreground">Clear scene</span> unloads the model;{" "}
+          <span className="font-medium text-foreground">More</span> opens recent files, copy path, folder in file manager,
+          and shortcuts
+          (focus the quick bar with Tab, then F / R). Full options are in the right{" "}
+          <span className="font-medium text-foreground">Info</span> panel on the{" "}
           <span className="font-medium text-foreground">3D View</span> tab.
         </p>
       </div>

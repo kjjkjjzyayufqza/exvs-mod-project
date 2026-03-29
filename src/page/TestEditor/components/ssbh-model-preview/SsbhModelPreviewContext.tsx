@@ -32,6 +32,11 @@ import {
   type TexturePreviewSlotKey,
 } from "./meshFromSsbh";
 import { getOrDecodeNutexbPngBlobUrl, resolveNutexbVersionId } from "./nutexbPreviewCache";
+import {
+  buildNextRecentPaths,
+  readRecentModelPathsFromStorage,
+  writeRecentModelPathsToStorage,
+} from "./ssbhPreviewRecentPaths";
 import { buildSkeletonLineGeometry } from "./skeletonLines";
 import type {
   BuiltMeshDraw,
@@ -148,6 +153,15 @@ export type SsbhModelPreviewContextValue = {
   tryWorkspaceRoot: () => Promise<void>;
   /** Load preview from a folder path or a `.numdlb` file path (same as Open model). */
   loadModelAt: (path: string) => Promise<void>;
+  /** Unloads the model from GPU/memory. Throws if a load or texture decode is in progress. */
+  clearScene: () => void;
+  /** Reloads the same `.numdlb` path from disk. Throws when no model is loaded. */
+  reloadCurrentModel: () => Promise<void>;
+  /** Resets viewport toggles and lighting to installation defaults (does not unload the model). */
+  resetDisplaySettingsToDefaults: () => void;
+  recentModelPaths: readonly string[];
+  clearRecentModelPaths: () => void;
+  removeRecentModelPath: (path: string) => void;
   toggleVisible: (key: string, checked: boolean) => void;
   showAllMeshes: () => void;
   hideAllMeshes: () => void;
@@ -220,6 +234,9 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
   const [boneTransformMode, setBoneTransformMode] = useState<BoneTransformMode>("translate");
   const [bonePoseResetNonce, setBonePoseResetNonce] = useState(0);
   const [previewRenderStyle, setPreviewRenderStyle] = useState<PreviewRenderStyle>("standard");
+  const [recentModelPaths, setRecentModelPaths] = useState<string[]>(() =>
+    readRecentModelPathsFromStorage(),
+  );
 
   const skeletonGeometry = useMemo(() => {
     if (!bundle?.skel) return null;
@@ -450,6 +467,11 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
     try {
       const b = await invoke<SsbhModelPreviewBundle>("ssbh_load_model_preview", { rootPath: path });
       startTransition(() => setBundle(b));
+      setRecentModelPaths((prev) => {
+        const next = buildNextRecentPaths(prev, path);
+        writeRecentModelPathsToStorage(next);
+        return next;
+      });
       setModelLoadNonce((n) => n + 1);
       if (b.warnings.length) {
         for (const w of b.warnings) {
@@ -511,6 +533,68 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
 
   const requestCameraFit = useCallback(() => {
     setFitRequestId((r) => r + 1);
+  }, []);
+
+  const clearScene = useCallback(() => {
+    if (loading) {
+      throw new Error("Cannot clear the scene while loading or decoding textures.");
+    }
+    const decoding =
+      textureDecodeProgress !== null &&
+      textureDecodeProgress.done < textureDecodeProgress.total;
+    if (decoding) {
+      throw new Error("Cannot clear the scene while loading or decoding textures.");
+    }
+    setBundle(null);
+    setLoadError(null);
+    setDrawError(null);
+  }, [loading, textureDecodeProgress]);
+
+  const reloadCurrentModel = useCallback(async () => {
+    const path = bundle?.modlPath?.trim();
+    if (!path) {
+      throw new Error("No model loaded to reload.");
+    }
+    await loadAt(path);
+  }, [bundle?.modlPath, loadAt]);
+
+  const resetDisplaySettingsToDefaults = useCallback(() => {
+    setWireframe(false);
+    setShowSkeleton(true);
+    setShowGrid(true);
+    setShowAxesGizmo(true);
+    setShowStats(false);
+    setBackground("#1a1d23");
+    setAmbientIntensity(0.4);
+    setDirectionalIntensity(1.05);
+    setDirectionalX(8);
+    setDirectionalY(14);
+    setDirectionalZ(6);
+    setNormalMapEnabled(true);
+    setMaterialDebugViewMode("full");
+    setTextureFlipY(false);
+    setUvFlipU(false);
+    setUvFlipV(false);
+    setPreviewRenderStyle("standard");
+    setTextureSlotLoadEnabledState(createDefaultTextureSlotLoadEnabled());
+    setBonePoseEnabled(false);
+    setSelectedBoneIndex(null);
+    setBoneTransformMode("translate");
+    setBonePoseResetNonce((n) => n + 1);
+    setFitRequestId((r) => r + 1);
+  }, []);
+
+  const clearRecentModelPaths = useCallback(() => {
+    writeRecentModelPathsToStorage([]);
+    setRecentModelPaths([]);
+  }, []);
+
+  const removeRecentModelPath = useCallback((path: string) => {
+    setRecentModelPaths((prev) => {
+      const next = prev.filter((p) => p !== path);
+      writeRecentModelPathsToStorage(next);
+      return next;
+    });
   }, []);
 
   const resetBonePose = useCallback(() => {
@@ -636,6 +720,12 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       pickNumdlb,
       tryWorkspaceRoot,
       loadModelAt,
+      clearScene,
+      reloadCurrentModel,
+      resetDisplaySettingsToDefaults,
+      recentModelPaths,
+      clearRecentModelPaths,
+      removeRecentModelPath,
       toggleVisible,
       showAllMeshes,
       hideAllMeshes,
@@ -690,6 +780,12 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       pickNumdlb,
       tryWorkspaceRoot,
       loadModelAt,
+      clearScene,
+      reloadCurrentModel,
+      resetDisplaySettingsToDefaults,
+      recentModelPaths,
+      clearRecentModelPaths,
+      removeRecentModelPath,
       toggleVisible,
       showAllMeshes,
       hideAllMeshes,
