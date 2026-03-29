@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { SsbhModelCanvas } from "./SsbhModelCanvas";
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
 import { SsbhModelPreviewLoadingOverlay } from "./SsbhModelPreviewLoadingOverlay";
@@ -33,6 +34,15 @@ export function SsbhModelPreviewViewport() {
           Use workspace root
         </Button>
         <SsbhModelPreviewQuickActions />
+        <div
+          className="flex items-center gap-2 rounded-md border border-border/50 px-2 py-1 shrink-0"
+          title="After a successful DAE or FBX export to SSBH, load the generated .numdlb in this preview"
+        >
+          <span className="text-[11px] text-muted-foreground whitespace-nowrap select-none">
+            Auto-load after convert
+          </span>
+          <Switch checked={p.autoLoadAfterConvertToSsbh} onCheckedChange={p.setAutoLoadAfterConvertToSsbh} />
+        </div>
         <Button
           type="button"
           size="sm"

@@ -106,7 +106,7 @@ export function DaeSsbhSessionLayout() {
         result.files.mayaNumatbPath ? `__maya__.numatb: ${result.files.mayaNumatbPath}` : null,
       ].filter(Boolean);
       toast.success("Converted to SSBH", { description: lines.join("\n") });
-      if (result.files.numdlbPath) {
+      if (result.files.numdlbPath && preview.autoLoadAfterConvertToSsbh) {
         await preview.loadModelAt(result.files.numdlbPath);
       }
     } catch (error) {

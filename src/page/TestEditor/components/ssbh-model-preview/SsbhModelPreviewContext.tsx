@@ -34,7 +34,9 @@ import {
 import { getOrDecodeNutexbPngBlobUrl, resolveNutexbVersionId } from "./nutexbPreviewCache";
 import {
   buildNextRecentPaths,
+  readAutoLoadAfterConvertFromStorage,
   readRecentModelPathsFromStorage,
+  writeAutoLoadAfterConvertToStorage,
   writeRecentModelPathsToStorage,
 } from "./ssbhPreviewRecentPaths";
 import { buildSkeletonLineGeometry } from "./skeletonLines";
@@ -151,6 +153,9 @@ export type SsbhModelPreviewContextValue = {
   pickFolder: () => Promise<void>;
   pickNumdlb: () => Promise<void>;
   tryWorkspaceRoot: () => Promise<void>;
+  /** When true, a successful DAE/FBX → SSBH export loads the generated `.numdlb` here. Persisted in localStorage. */
+  autoLoadAfterConvertToSsbh: boolean;
+  setAutoLoadAfterConvertToSsbh: (v: boolean) => void;
   /** Load preview from a folder path or a `.numdlb` file path (same as Open model). */
   loadModelAt: (path: string) => Promise<void>;
   /** Unloads the model from GPU/memory. Throws if a load or texture decode is in progress. */
@@ -237,6 +242,14 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
   const [recentModelPaths, setRecentModelPaths] = useState<string[]>(() =>
     readRecentModelPathsFromStorage(),
   );
+  const [autoLoadAfterConvertToSsbh, setAutoLoadAfterConvertToSsbhState] = useState(() =>
+    readAutoLoadAfterConvertFromStorage(),
+  );
+
+  const setAutoLoadAfterConvertToSsbh = useCallback((v: boolean) => {
+    setAutoLoadAfterConvertToSsbhState(v);
+    writeAutoLoadAfterConvertToStorage(v);
+  }, []);
 
   const skeletonGeometry = useMemo(() => {
     if (!bundle?.skel) return null;
@@ -719,6 +732,8 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       pickFolder,
       pickNumdlb,
       tryWorkspaceRoot,
+      autoLoadAfterConvertToSsbh,
+      setAutoLoadAfterConvertToSsbh,
       loadModelAt,
       clearScene,
       reloadCurrentModel,
@@ -779,6 +794,8 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       pickFolder,
       pickNumdlb,
       tryWorkspaceRoot,
+      autoLoadAfterConvertToSsbh,
+      setAutoLoadAfterConvertToSsbh,
       loadModelAt,
       clearScene,
       reloadCurrentModel,

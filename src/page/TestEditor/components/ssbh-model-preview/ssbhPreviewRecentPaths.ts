@@ -1,5 +1,22 @@
 const STORAGE_KEY = "ssbhModelPreview.recentPaths";
+const AUTO_LOAD_AFTER_CONVERT_KEY = "ssbhModelPreview.autoLoadAfterConvertToSsbh";
 const MAX_RECENT = 15;
+
+export function readAutoLoadAfterConvertFromStorage(): boolean {
+  try {
+    const raw = localStorage.getItem(AUTO_LOAD_AFTER_CONVERT_KEY);
+    if (raw === null) return true;
+    if (raw === "true") return true;
+    if (raw === "false") return false;
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+export function writeAutoLoadAfterConvertToStorage(value: boolean): void {
+  localStorage.setItem(AUTO_LOAD_AFTER_CONVERT_KEY, value ? "true" : "false");
+}
 
 export function readRecentModelPathsFromStorage(): string[] {
   try {

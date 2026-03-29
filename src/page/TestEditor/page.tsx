@@ -23,6 +23,18 @@ import { useConfigStore } from "@/store/configStore";
 import { TestEditorToolbar } from "./components/TestEditorToolbar";
 import ListeningRepackDialog from "./components/ListeningRepackDialog";
 import { normalizePackFolderName } from "./utils/packName";
+import { NumdlbEditorModalHost } from "./components/ssbh-model-preview/NumdlbEditorModalHost";
+import type { NumdlbEditorWindowSession } from "./components/ssbh-model-preview/NumdlbEditorModalWindow";
+import {
+  cloneNumdlbReadResult,
+  assertNumdlbValidForSave,
+  isNumdlbDraftDirty,
+} from "./components/ssbh-model-preview/numdlbEditorUtils";
+import {
+  ssbhReadNumdlbMapping,
+  ssbhWriteNumdlbMapping,
+  type NumdlbReadResult,
+} from "./components/ssbh-model-preview/ssbhDaeIoService";
 
 const WATCH_EVENT = "test-editor:folder-change";
 const WATCH_COMMAND = "watch_folder";
@@ -216,6 +228,13 @@ const TestEditorPage = () => {
   const [obModPath, setObModPath] = useState("");
   const pendingPayloadsRef = useRef<FolderChangePayload[]>([]);
   const rafIdRef = useRef<number | null>(null);
+  const [numdlbSessions, setNumdlbSessions] = useState<NumdlbEditorWindowSession[]>([]);
+  const numdlbZIndexRef = useRef(1000);
+  const numdlbSessionsRef = useRef(numdlbSessions);
+  numdlbSessionsRef.current = numdlbSessions;
+  const [numdlbGuard, setNumdlbGuard] = useState<{ sessionId: string; action: "close" | "reload" } | null>(
+    null,
+  );
 
   const revealInTreeByPath = useCallback((targetPath: string) => {
     // 1. Clear search term
@@ -303,6 +322,8 @@ const TestEditorPage = () => {
       setTreeData(normalizeTree(initial ?? []));
       setSelectedId(null);
       setDirtyFolders(new Set());
+      setNumdlbSessions([]);
+      setNumdlbGuard(null);
     } catch (error) {
       console.error(error);
       toast.error("Failed to start folder watch");
@@ -367,31 +388,6 @@ const TestEditorPage = () => {
   const dirtyFolderList = useMemo(() => Array.from(dirtyFolders), [dirtyFolders]);
   const hasDirtyFolders = dirtyFolderList.length > 0;
 
-  const handleFileSelect = useCallback((node: TestTreeNode | null) => {
-    if (!node || node.isDir) {
-      setSelectedId(node?.id ?? null);
-      return;
-    }
-
-    // Check if it's a JSON file
-    if (!node.name.toLowerCase().endsWith('.json')) {
-      setSelectedId(node.id);
-      return;
-    }
-
-    // If there are unsaved changes, show dialog but don't change selection
-    if (hasUnsavedChanges && selectedJsonPath !== node.path) {
-      setPendingJsonPath(node.path);
-      setShowUnsavedDialog(true);
-      // Don't change selectedId - keep the current JSON file selected
-      return;
-    }
-
-    // Load the JSON file
-    setSelectedJsonPath(node.path);
-    setSelectedId(node.id);
-  }, [hasUnsavedChanges, selectedJsonPath]);
-
   const handleDiscardChanges = useCallback(() => {
     if (pendingJsonPath) {
       setSelectedJsonPath(pendingJsonPath);
@@ -437,6 +433,234 @@ const TestEditorPage = () => {
   const handleRepackComplete = useCallback(() => {
     setIsRepackDialogOpen(false);
   }, []);
+
+  const openNumdlbSession = useCallback((filePath: string) => {
+    const normalized = filePath.trim().toLowerCase();
+    setNumdlbSessions((prev) => {
+      const existing = prev.find((s) => s.filePath.trim().toLowerCase() === normalized);
+      if (existing) {
+        const nextZ = ++numdlbZIndexRef.current;
+        return prev.map((s) => (s.id === existing.id ? { ...s, zIndex: nextZ } : s));
+      }
+      const id = crypto.randomUUID();
+      const nextZ = ++numdlbZIndexRef.current;
+      const newSession: NumdlbEditorWindowSession = {
+        id,
+        filePath,
+        loading: true,
+        saving: false,
+        loadError: null,
+        baseData: null,
+        draftData: null,
+        zIndex: nextZ,
+      };
+      void ssbhReadNumdlbMapping(filePath)
+        .then((data) => {
+          const base = cloneNumdlbReadResult(data);
+          const draft = cloneNumdlbReadResult(data);
+          setNumdlbSessions((p) =>
+            p.map((s) =>
+              s.id === id
+                ? {
+                    ...s,
+                    loading: false,
+                    loadError: null,
+                    baseData: base,
+                    draftData: draft,
+                  }
+                : s,
+            ),
+          );
+        })
+        .catch((err) => {
+          setNumdlbSessions((p) =>
+            p.map((s) =>
+              s.id === id ? { ...s, loading: false, loadError: String(err) } : s,
+            ),
+          );
+        });
+      return [...prev, newSession];
+    });
+  }, []);
+
+  const activateNumdlbSession = useCallback((sessionId: string) => {
+    setNumdlbSessions((prev) => {
+      const nextZ = ++numdlbZIndexRef.current;
+      return prev.map((s) => (s.id === sessionId ? { ...s, zIndex: nextZ } : s));
+    });
+  }, []);
+
+  const updateNumdlbDraft = useCallback((sessionId: string, next: NumdlbReadResult) => {
+    setNumdlbSessions((prev) =>
+      prev.map((s) => (s.id === sessionId ? { ...s, draftData: next } : s)),
+    );
+  }, []);
+
+  const saveNumdlbSession = useCallback(async (sessionId: string) => {
+    const snapshot = numdlbSessionsRef.current.find((x) => x.id === sessionId);
+    if (!snapshot?.draftData) return;
+    try {
+      assertNumdlbValidForSave(snapshot.draftData);
+    } catch (e) {
+      toast.error(String(e));
+      return;
+    }
+    const draft = snapshot.draftData;
+    const path = snapshot.filePath;
+    setNumdlbSessions((prev) =>
+      prev.map((x) => (x.id === sessionId ? { ...x, saving: true } : x)),
+    );
+    try {
+      await ssbhWriteNumdlbMapping({
+        filePath: path,
+        modelName: draft.modelName,
+        skeletonFileName: draft.skeletonFileName,
+        materialFileNames: draft.materialFileNames,
+        meshFileName: draft.meshFileName,
+        animationFileName: draft.animationFileName,
+        entries: draft.entries,
+      });
+      const saved = cloneNumdlbReadResult(draft);
+      setNumdlbSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionId
+            ? { ...s, saving: false, baseData: saved, draftData: saved }
+            : s,
+        ),
+      );
+      toast.success("Saved NUMDLB");
+    } catch (e) {
+      toast.error(String(e));
+      setNumdlbSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, saving: false } : s)));
+    }
+  }, []);
+
+  const resetNumdlbSession = useCallback((sessionId: string) => {
+    setNumdlbSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== sessionId || !s.baseData) return s;
+        return { ...s, draftData: cloneNumdlbReadResult(s.baseData) };
+      }),
+    );
+  }, []);
+
+  const reloadNumdlbSession = useCallback(async (sessionId: string) => {
+    let fp = "";
+    setNumdlbSessions((prev) => {
+      const s = prev.find((x) => x.id === sessionId);
+      if (!s) return prev;
+      fp = s.filePath;
+      return prev.map((x) => (x.id === sessionId ? { ...x, loading: true, loadError: null } : x));
+    });
+    if (!fp) return;
+    try {
+      const data = await ssbhReadNumdlbMapping(fp);
+      const base = cloneNumdlbReadResult(data);
+      const draft = cloneNumdlbReadResult(data);
+      setNumdlbSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionId
+            ? { ...s, loading: false, loadError: null, baseData: base, draftData: draft }
+            : s,
+        ),
+      );
+      toast.success("Reloaded NUMDLB from disk");
+    } catch (e) {
+      const msg = String(e);
+      setNumdlbSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, loading: false, loadError: msg } : s)),
+      );
+      toast.error(msg);
+    }
+  }, []);
+
+  const requestCloseNumdlbSession = useCallback((sessionId: string) => {
+    const s = numdlbSessionsRef.current.find((x) => x.id === sessionId);
+    if (!s) return;
+    if (isNumdlbDraftDirty(s.baseData, s.draftData)) {
+      setNumdlbGuard({ sessionId, action: "close" });
+      return;
+    }
+    setNumdlbSessions((prev) => prev.filter((x) => x.id !== sessionId));
+  }, []);
+
+  const requestReloadNumdlbSession = useCallback(
+    (sessionId: string) => {
+      const s = numdlbSessionsRef.current.find((x) => x.id === sessionId);
+      if (!s) return;
+      if (isNumdlbDraftDirty(s.baseData, s.draftData)) {
+        setNumdlbGuard({ sessionId, action: "reload" });
+        return;
+      }
+      void reloadNumdlbSession(sessionId);
+    },
+    [reloadNumdlbSession],
+  );
+
+  const dismissNumdlbGuard = useCallback(() => {
+    setNumdlbGuard(null);
+  }, []);
+
+  const discardNumdlbGuard = useCallback(() => {
+    setNumdlbGuard((g) => {
+      if (!g) return null;
+      const { sessionId, action } = g;
+      if (action === "close") {
+        setNumdlbSessions((prev) => prev.filter((x) => x.id !== sessionId));
+      } else {
+        void reloadNumdlbSession(sessionId);
+      }
+      return null;
+    });
+  }, [reloadNumdlbSession]);
+
+  const saveAndFinishNumdlbGuard = useCallback(async () => {
+    if (!numdlbGuard) return;
+    const { sessionId, action } = numdlbGuard;
+    await saveNumdlbSession(sessionId);
+    const s = numdlbSessionsRef.current.find((x) => x.id === sessionId);
+    if (!s) return;
+    if (isNumdlbDraftDirty(s.baseData, s.draftData)) {
+      return;
+    }
+    setNumdlbGuard(null);
+    if (action === "close") {
+      setNumdlbSessions((prev) => prev.filter((x) => x.id !== sessionId));
+    } else {
+      void reloadNumdlbSession(sessionId);
+    }
+  }, [numdlbGuard, saveNumdlbSession, reloadNumdlbSession]);
+
+  const handleFileSelect = useCallback(
+    (node: TestTreeNode | null) => {
+      if (!node || node.isDir) {
+        setSelectedId(node?.id ?? null);
+        return;
+      }
+
+      const lower = node.name.toLowerCase();
+      if (lower.endsWith(".numdlb")) {
+        setSelectedId(node.id);
+        openNumdlbSession(node.path);
+        return;
+      }
+
+      if (!lower.endsWith(".json")) {
+        setSelectedId(node.id);
+        return;
+      }
+
+      if (hasUnsavedChanges && selectedJsonPath !== node.path) {
+        setPendingJsonPath(node.path);
+        setShowUnsavedDialog(true);
+        return;
+      }
+
+      setSelectedJsonPath(node.path);
+      setSelectedId(node.id);
+    },
+    [hasUnsavedChanges, selectedJsonPath, openNumdlbSession],
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background text-xs overflow-hidden">
@@ -528,6 +752,45 @@ const TestEditorPage = () => {
           <AlertDialogFooter>
             <AlertDialogCancel onClick={handleCancelSelection}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDiscardChanges}>Discard Changes</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <NumdlbEditorModalHost
+        sessions={numdlbSessions}
+        onActivateSession={activateNumdlbSession}
+        onCloseRequest={requestCloseNumdlbSession}
+        onReloadRequest={requestReloadNumdlbSession}
+        onDraftChange={updateNumdlbDraft}
+        onSave={saveNumdlbSession}
+        onReset={resetNumdlbSession}
+      />
+
+      <AlertDialog
+        open={numdlbGuard !== null}
+        onOpenChange={(open) => {
+          if (!open) setNumdlbGuard(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved NUMDLB changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              {numdlbGuard?.action === "close"
+                ? "Save before closing, discard edits, or cancel."
+                : "Save before reloading from disk, discard edits, or cancel."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+            <AlertDialogCancel type="button" onClick={dismissNumdlbGuard}>
+              Cancel
+            </AlertDialogCancel>
+            <Button type="button" variant="outline" onClick={discardNumdlbGuard}>
+              Discard
+            </Button>
+            <Button type="button" onClick={() => void saveAndFinishNumdlbGuard()}>
+              {numdlbGuard?.action === "close" ? "Save and close" : "Save and reload"}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

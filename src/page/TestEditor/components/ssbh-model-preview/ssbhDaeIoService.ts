@@ -174,7 +174,7 @@ export async function ssbhReadNumdlbMapping(filePath: string): Promise<NumdlbRea
 }
 
 export async function ssbhWriteNumdlbMapping(payload: NumdlbWritePayload): Promise<void> {
-  await invoke("ssbh_write_numdlb_mapping", payload);
+  await invoke("ssbh_write_numdlb_mapping", { payload });
 }
 
 export async function ssbhTemplateReadNumatb(filePath: string): Promise<MatlDataJson> {

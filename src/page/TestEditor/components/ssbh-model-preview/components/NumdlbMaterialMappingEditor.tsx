@@ -11,12 +11,15 @@ type NumdlbMaterialMappingEditorProps = {
   rows: NumdlbMappingRow[];
   onChangeMaterialLabel: (rowIndex: number, nextLabel: string) => void;
   onReplaceAll: (nextLabel: string, rowIndices: number[]) => void;
+  /** When true, table body is not in a nested ScrollArea (parent provides scroll). */
+  embedTableWithoutInnerScroll?: boolean;
 };
 
 export function NumdlbMaterialMappingEditor({
   rows,
   onChangeMaterialLabel,
   onReplaceAll,
+  embedTableWithoutInnerScroll = false,
 }: NumdlbMaterialMappingEditorProps) {
   const [filter, setFilter] = useState("");
   const [replaceAllValue, setReplaceAllValue] = useState("");
@@ -45,6 +48,35 @@ export function NumdlbMaterialMappingEditor({
     });
     return out;
   }, [filter, rows]);
+
+  const tableBody = (
+    <div className="divide-y">
+      {filteredEntries.map(({ row, rowIndex }) => (
+        <div
+          key={`${row.meshObjectName}:${row.meshObjectSubindex}`}
+          className="grid grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] gap-2 px-3 py-2"
+        >
+          <div className="min-w-0">
+            <div className="truncate font-mono text-[11px]" title={row.meshObjectName}>
+              {row.meshObjectName}
+            </div>
+          </div>
+          <div className="font-mono text-[11px] text-muted-foreground">{row.meshObjectSubindex}</div>
+          <Input
+            value={row.materialLabel}
+            onChange={(event) => onChangeMaterialLabel(rowIndex, event.target.value)}
+            className="h-8 text-[11px]"
+            list={datalistId}
+          />
+        </div>
+      ))}
+      {filteredEntries.length === 0 ? (
+        <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">
+          No mapping rows match the current filter.
+        </div>
+      ) : null}
+    </div>
+  );
 
   return (
     <div className="space-y-3">
@@ -116,34 +148,7 @@ export function NumdlbMaterialMappingEditor({
           <span>Subindex</span>
           <span>Material Label</span>
         </div>
-        <ScrollArea className="h-[280px]">
-          <div className="divide-y">
-            {filteredEntries.map(({ row, rowIndex }) => {
-              return (
-                <div
-                  key={`${row.meshObjectName}:${row.meshObjectSubindex}`}
-                  className="grid grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] gap-2 px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate font-mono text-[11px]" title={row.meshObjectName}>
-                      {row.meshObjectName}
-                    </div>
-                  </div>
-                  <div className="font-mono text-[11px] text-muted-foreground">{row.meshObjectSubindex}</div>
-                  <Input
-                    value={row.materialLabel}
-                    onChange={(event) => onChangeMaterialLabel(rowIndex, event.target.value)}
-                    className="h-8 text-[11px]"
-                    list={datalistId}
-                  />
-                </div>
-              );
-            })}
-            {filteredEntries.length === 0 ? (
-              <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">No mapping rows match the current filter.</div>
-            ) : null}
-          </div>
-        </ScrollArea>
+        {embedTableWithoutInnerScroll ? tableBody : <ScrollArea className="h-[280px]">{tableBody}</ScrollArea>}
       </div>
     </div>
   );
