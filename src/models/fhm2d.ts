@@ -6,11 +6,13 @@ import { writeFile, mkdir, exists } from "@tauri-apps/plugin-fs";
 import { basename, dirname } from "@tauri-apps/api/path";
 import { applyNumdlbBaseNameToStructureObject } from "@/lib/fhm2d_characterModelFormatFuc";
 import { applyNutexbInternalNameToStructureObject } from "@/lib/fhm2d_allNutexbFormatFuc";
+import { applyParamAssetNamesToStructureObject } from "@/lib/fhm2d_paramAssetFormatFuc";
 
 export enum Fhm2d_type_format {
   fhm2d_character = "fhm2d_character",
   fhm2d_all_nutexb = "fhm2d_all_nutexb",
   fhm2d_stage_list = "fhm2d_stage_list",
+  fhm2d_character_param = "fhm2d_character_param",
 }
 
 export enum Fhm2dType {
@@ -654,6 +656,10 @@ export async function ExtractFHMData(
             if (listOutputFileName && finalStructure.SubFileData?.[0]) {
               finalStructure.SubFileData[0].fileUrl = `.\\${fileNameNoExt}\\${listOutputFileName}`;
             }
+            break;
+          }
+          case Fhm2d_type_format.fhm2d_character_param: {
+            finalStructure = applyParamAssetNamesToStructureObject(outputStructure);
             break;
           }
           default: {

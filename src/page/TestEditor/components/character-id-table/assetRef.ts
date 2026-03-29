@@ -18,6 +18,7 @@ export interface AssetRefInfo {
   modFilePath: string; // Expected path in OB mod directory
   workspaceFolderPath: string; // Expected folder path in current workspace root
   isModel: boolean;
+  isParamAsset: boolean;
 }
 
 async function resolveFhm2dPath(baseDir: string, hashHex: string): Promise<string> {
@@ -37,8 +38,10 @@ export async function getAssetRefInfo(
   currentDir: string
 ): Promise<AssetRefInfo> {
   const hashHex = int32ToHashHex(value);
-  const isModel = fieldKey.toLowerCase() === 'model';
-  
+  const lower = fieldKey.toLowerCase();
+  const isModel = lower === "model";
+  const isParamAsset = lower === "param";
+
   // Construct paths
   // Source: {obDplCachePath}\0x{HEX}.fhm2d
   // Read paths should tolerate existing lowercase file names.
@@ -56,5 +59,6 @@ export async function getAssetRefInfo(
     modFilePath,
     workspaceFolderPath,
     isModel,
+    isParamAsset,
   };
 }

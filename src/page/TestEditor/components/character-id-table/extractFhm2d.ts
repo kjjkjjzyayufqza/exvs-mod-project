@@ -38,7 +38,7 @@ export async function extractAsset(
     const logExtractPhase = (label: string) => {
       const now = performance.now();
       console.log(
-        `[ModelAsset Extract] ${label}: +${(now - extractLast).toFixed(2)}ms (since start ${(now - extractT0).toFixed(2)}ms)`
+        `[FHM2D Extract] ${label}: +${(now - extractLast).toFixed(2)}ms (since start ${(now - extractT0).toFixed(2)}ms)`
       );
       extractLast = now;
     };
@@ -63,14 +63,20 @@ export async function extractAsset(
     const targetDir = await join(extractOutputPath, asset.hashHex);
     logExtractPhase('resolve target directory');
 
+    const extractFormat: Fhm2d_type_format | undefined = asset.isModel
+      ? Fhm2d_type_format.fhm2d_character
+      : asset.isParamAsset
+        ? Fhm2d_type_format.fhm2d_character_param
+        : undefined;
+
     const extractResult = await ExtractFHMData(
       fhm2d,
       targetDir,
       ExtractType.SingleFolder,
-      asset.isModel ? Fhm2d_type_format.fhm2d_character : undefined
+      extractFormat
     );
     logExtractPhase('ExtractFHMData');
-    console.log(`[ModelAsset Extract] total (Extract to Output Folder): ${(performance.now() - extractT0).toFixed(2)}ms`);
+    console.log(`[FHM2D Extract] total (Extract to Output Folder): ${(performance.now() - extractT0).toFixed(2)}ms`);
 
     return {
       success: true,
