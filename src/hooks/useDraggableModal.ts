@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect, useLayoutEffect, type RefObject, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useRef, useLayoutEffect, type RefObject, type PointerEvent as ReactPointerEvent } from "react";
 
 type Position = { x: number; y: number };
 
@@ -15,7 +15,7 @@ type UseDraggableModalReturn = {
   /** Spread onto the drag-handle element: `<div {...handleProps}>`. */
   handleProps: {
     onPointerDown: (e: ReactPointerEvent) => void;
-    style: { cursor: string; userSelect: string; touchAction: string };
+    style: { cursor: "move"; userSelect: "none"; touchAction: "none" };
   };
 };
 
@@ -24,6 +24,10 @@ type UseDraggableModalReturn = {
  * Uses pointer events so the delta is always in CSS-pixel space.
  * Modifies the DOM directly instead of using React state for dragging, 
  * which avoids re-renders and drastically improves performance.
+ *
+ * Uses left/top instead of transform so nested overflow scrolling inside the
+ * dialog works reliably (transform creates a containing layer that breaks wheel
+ * scrolling in some browsers).
  */
 export function useDraggableModal(options: UseDraggableModalOptions = {}): UseDraggableModalReturn {
   const { defaultPosition = { x: 0, y: 0 }, boundToViewport = true } = options;
@@ -31,25 +35,23 @@ export function useDraggableModal(options: UseDraggableModalOptions = {}): UseDr
   
   const positionRef = useRef<Position>(defaultPosition);
   const dragging = useRef(false);
-  const animationFrameRef = useRef<number | null>(null);
 
-  const applyTransform = useCallback((x: number, y: number) => {
+  const applyPosition = useCallback((x: number, y: number) => {
     if (nodeRef.current) {
-      nodeRef.current.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+      const el = nodeRef.current;
+      el.style.transform = "";
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
     }
   }, []);
 
-  // Sync initial position and re-apply on renders so other updates don't wipe it
   useLayoutEffect(() => {
-    // Only re-apply if we are not currently dragging
-    // to avoid fighting with the requestAnimationFrame loop.
-    // Also request a frame to ensure React hasn't already committed a reset style.
     if (!dragging.current) {
-      applyTransform(positionRef.current.x, positionRef.current.y);
+      applyPosition(positionRef.current.x, positionRef.current.y);
     }
-  });
+  }, [applyPosition]);
 
-      const onPointerDown = useCallback(
+  const onPointerDown = useCallback(
     (e: ReactPointerEvent) => {
       if (e.button !== 0) return;
       
@@ -75,15 +77,8 @@ export function useDraggableModal(options: UseDraggableModalOptions = {}): UseDr
         const vw = document.documentElement.clientWidth || window.innerWidth;
         const vh = document.documentElement.clientHeight || window.innerHeight;
 
-        // The logic for clamping is:
-        // positionRef.current has the currently applied transform (translate) value.
-        // We want to figure out the actual MIN and MAX translate values we can apply
-        // without the element's bounding rect leaving the screen.
-        
-        // Example: If rect.left is 100, and our current X transform is 20,
-        // then the element's base un-transformed left is 80.
-        // We can move left until left becomes 0, which means transform X becomes -80.
-        // So minX = currentX - rect.left
+        // Clamp translate so the modal stays in the viewport (position uses left/top).
+        // Example: minX = currentX - rect.left moves the left edge to 0.
         minX = initialPosition.x - rect.left;
         minY = initialPosition.y - rect.top;
         
@@ -117,13 +112,7 @@ export function useDraggableModal(options: UseDraggableModalOptions = {}): UseDr
         }
 
         positionRef.current = { x: nextX, y: nextY };
-
-        if (animationFrameRef.current !== null) {
-          cancelAnimationFrame(animationFrameRef.current);
-        }
-        
-        // Execute immediately during move for absolute minimum latency and 1:1 sync
-        applyTransform(nextX, nextY);
+        applyPosition(nextX, nextY);
       };
 
       const onPointerUp = (ev: globalThis.PointerEvent) => {
@@ -143,7 +132,7 @@ export function useDraggableModal(options: UseDraggableModalOptions = {}): UseDr
       window.addEventListener("pointerup", onPointerUp);
       window.addEventListener("pointercancel", onPointerUp);
     },
-    [boundToViewport, applyTransform],
+    [boundToViewport, applyPosition],
   );
 
   const handleProps = {

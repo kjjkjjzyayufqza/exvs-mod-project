@@ -90,15 +90,18 @@ export function NuhlpbEditorModalWindow({
           aria-modal="true"
           aria-labelledby={`nuhlpb-editor-title-${session.id}`}
           tabIndex={-1}
-          onMouseDown={onActivate}
           className="pointer-events-auto w-[720px] max-w-[95vw]"
           style={{ position: 'absolute' }}
           onClick={(e) => e.stopPropagation()}
         >
-          <Card className="flex max-h-[min(90vh,720px)] flex-col overflow-hidden border shadow-2xl">
+          <Card className="flex min-h-0 max-h-[min(90vh,720px)] flex-col overflow-hidden border shadow-2xl">
             {/* Header */}
             <div
               {...handleProps}
+              onPointerDown={(e) => {
+                onActivate();
+                handleProps.onPointerDown(e);
+              }}
               className="flex shrink-0 items-center justify-between border-b bg-linear-to-r from-muted/80 to-muted/40 px-5 py-4"
             >
               <div className="flex min-w-0 flex-1 items-center gap-3">

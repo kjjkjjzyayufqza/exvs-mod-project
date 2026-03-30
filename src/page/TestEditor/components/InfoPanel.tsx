@@ -6,6 +6,7 @@ import { ImagePreview, isImageFile } from "./ImagePreview";
 import { NutexbPreview } from "./NutexbPreview";
 import { SsbhDaeExchangePanel } from "./ssbh-model-preview/SsbhDaeExchangePanel";
 import { SsbhModelPreviewInspector } from "./ssbh-model-preview/SsbhModelPreviewPanel";
+import { JnttblFileEditorPanel } from "./ssbh-model-preview/JnttblFileEditorPanel";
 import { NumdlbFileEditorPanel } from "./ssbh-model-preview/NumdlbFileEditorPanel";
 
 const BASE_TAB_ITEMS = [
@@ -14,8 +15,12 @@ const BASE_TAB_ITEMS = [
   { name: "COLLADA (.dae)", value: "daeExchange" },
 ] as const;
 const NUMDLB_TAB_ITEM = { name: "NUMDLB Mapping", value: "numdlbMapping" } as const;
+const JNTT_TAB_ITEM = { name: "JNTT Table", value: "jnttblMapping" } as const;
 
-type TabValue = (typeof BASE_TAB_ITEMS)[number]["value"] | typeof NUMDLB_TAB_ITEM.value;
+type TabValue =
+  | (typeof BASE_TAB_ITEMS)[number]["value"]
+  | typeof NUMDLB_TAB_ITEM.value
+  | typeof JNTT_TAB_ITEM.value;
 
 type InfoPanelProps = {
   selected?: TestTreeNode | null;
@@ -29,13 +34,24 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
   const isImage =
     !selected?.isDir && selected?.name && isImageFile(selected.name);
   const isNumdlb = !selected?.isDir && selected?.name?.toLowerCase().endsWith(".numdlb");
-  const tabItems = isNumdlb ? [...BASE_TAB_ITEMS, NUMDLB_TAB_ITEM] : BASE_TAB_ITEMS;
+  const isJnttbl = !selected?.isDir && selected?.name?.toLowerCase().endsWith(".jnttbl");
+  const tabItems = [
+    ...BASE_TAB_ITEMS,
+    ...(isNumdlb ? [NUMDLB_TAB_ITEM] : []),
+    ...(isJnttbl ? [JNTT_TAB_ITEM] : []),
+  ];
 
   useEffect(() => {
     if (!isNumdlb && activeTab === "numdlbMapping") {
       setActiveTab("info");
     }
   }, [activeTab, isNumdlb]);
+
+  useEffect(() => {
+    if (!isJnttbl && activeTab === "jnttblMapping") {
+      setActiveTab("info");
+    }
+  }, [activeTab, isJnttbl]);
 
   const renderInfoContent = () => {
     if (!selected) {
@@ -84,6 +100,8 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
         return <SsbhDaeExchangePanel />;
       case "numdlbMapping":
         return <NumdlbFileEditorPanel selected={selected} />;
+      case "jnttblMapping":
+        return <JnttblFileEditorPanel selected={selected} />;
     }
   };
 
@@ -111,7 +129,9 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
                   ? "Viewport inspector"
                   : activeTab === "daeExchange"
                     ? "COLLADA exchange"
-                    : "NUMDLB mapping"}
+                    : activeTab === "numdlbMapping"
+                      ? "NUMDLB mapping"
+                      : "JNTT joint table"}
             </CardTitle>
             <CardDescription className="text-[10px] italic">
               {activeTab === "info"
@@ -120,7 +140,9 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
                   ? "Display, lighting, meshes, and scene stats for the 3D view"
                   : activeTab === "daeExchange"
                     ? "Export SSBH to .dae and convert .dae to SSBH (separate from scene preview)"
-                    : "Edit mesh object to material label mapping for the selected .numdlb"}
+                    : activeTab === "numdlbMapping"
+                      ? "Edit mesh object to material label mapping for the selected .numdlb"
+                      : "Edit hash to bone index pairs for the selected .jnttbl"}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto p-4 text-sm">

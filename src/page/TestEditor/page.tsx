@@ -37,6 +37,20 @@ import {
   cloneNuhlpbReadResult,
   isNuhlpbDraftDirty,
 } from "./components/ssbh-model-preview/nuhlpbEditorUtils";
+import { JnttblEditorModalHost } from "./components/ssbh-model-preview/JnttblEditorModalHost";
+import type { JnttblEditorWindowSession } from "./components/ssbh-model-preview/JnttblEditorModalWindow";
+import {
+  assertJnttblValidForSave,
+  cloneJnttblEditorDocument,
+  isJnttblDraftDirty,
+  readResultToEditorDocument,
+  resolveJnttblBoneCountForSave,
+} from "./components/ssbh-model-preview/jnttblEditorUtils";
+import {
+  jnttblReadFile,
+  jnttblWriteFile,
+  type JnttblEditorDocument,
+} from "./components/ssbh-model-preview/jnttblIoService";
 import {
   ssbhReadNumdlbMapping,
   ssbhWriteNumdlbMapping,
@@ -254,6 +268,14 @@ const TestEditorPage = () => {
     null,
   );
 
+  const [jnttblSessions, setJnttblSessions] = useState<JnttblEditorWindowSession[]>([]);
+  const jnttblZIndexRef = useRef(3000);
+  const jnttblSessionsRef = useRef(jnttblSessions);
+  jnttblSessionsRef.current = jnttblSessions;
+  const [jnttblGuard, setJnttblGuard] = useState<{ sessionId: string; action: "close" | "reload" } | null>(
+    null,
+  );
+
   const revealInTreeByPath = useCallback((targetPath: string) => {
     // 1. Clear search term
     setSearchTerm("");
@@ -344,6 +366,8 @@ const TestEditorPage = () => {
       setNumdlbGuard(null);
       setNuhlpbSessions([]);
       setNuhlpbGuard(null);
+      setJnttblSessions([]);
+      setJnttblGuard(null);
     } catch (error) {
       console.error(error);
       toast.error("Failed to start folder watch");
@@ -830,6 +854,203 @@ const TestEditorPage = () => {
     }
   }, [nuhlpbGuard, saveNuhlpbSession, reloadNuhlpbSession]);
 
+  const openJnttblSession = useCallback((filePath: string) => {
+    const normalized = filePath.trim().toLowerCase();
+    setJnttblSessions((prev) => {
+      const existing = prev.find((s) => s.filePath.trim().toLowerCase() === normalized);
+      if (existing) {
+        const nextZ = ++jnttblZIndexRef.current;
+        return prev.map((s) => (s.id === existing.id ? { ...s, zIndex: nextZ } : s));
+      }
+      const id = crypto.randomUUID();
+      const nextZ = ++jnttblZIndexRef.current;
+      const newSession: JnttblEditorWindowSession = {
+        id,
+        filePath,
+        loading: true,
+        saving: false,
+        loadError: null,
+        baseData: null,
+        draftData: null,
+        zIndex: nextZ,
+      };
+      void jnttblReadFile(filePath)
+        .then((data) => {
+          const doc = readResultToEditorDocument(data);
+          const base = cloneJnttblEditorDocument(doc);
+          const draft = cloneJnttblEditorDocument(doc);
+          setJnttblSessions((p) =>
+            p.map((s) =>
+              s.id === id
+                ? {
+                    ...s,
+                    loading: false,
+                    loadError: null,
+                    baseData: base,
+                    draftData: draft,
+                  }
+                : s,
+            ),
+          );
+        })
+        .catch((err) => {
+          setJnttblSessions((p) =>
+            p.map((s) => (s.id === id ? { ...s, loading: false, loadError: String(err) } : s)),
+          );
+        });
+      return [...prev, newSession];
+    });
+  }, []);
+
+  const activateJnttblSession = useCallback((sessionId: string) => {
+    setJnttblSessions((prev) => {
+      const nextZ = ++jnttblZIndexRef.current;
+      return prev.map((s) => (s.id === sessionId ? { ...s, zIndex: nextZ } : s));
+    });
+  }, []);
+
+  const updateJnttblDraft = useCallback((sessionId: string, next: JnttblEditorDocument) => {
+    setJnttblSessions((prev) =>
+      prev.map((s) => (s.id === sessionId ? { ...s, draftData: next } : s)),
+    );
+  }, []);
+
+  const saveJnttblSession = useCallback(async (sessionId: string) => {
+    const snapshot = jnttblSessionsRef.current.find((x) => x.id === sessionId);
+    if (!snapshot?.draftData) return;
+    try {
+      assertJnttblValidForSave(snapshot.draftData);
+    } catch (e) {
+      toast.error(String(e));
+      return;
+    }
+    const draft = snapshot.draftData;
+    const path = snapshot.filePath;
+    const override = draft.nusktbPathOverride;
+    setJnttblSessions((prev) =>
+      prev.map((x) => (x.id === sessionId ? { ...x, saving: true } : x)),
+    );
+    try {
+      await jnttblWriteFile({
+        filePath: path,
+        version: draft.version,
+        boneCount: resolveJnttblBoneCountForSave(draft),
+        flag: draft.flag,
+        entries: draft.entries,
+      });
+      const fresh = await jnttblReadFile(path);
+      const doc = readResultToEditorDocument(fresh);
+      const saved = cloneJnttblEditorDocument({
+        ...doc,
+        nusktbPathOverride: override,
+      });
+      setJnttblSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionId ? { ...s, saving: false, baseData: saved, draftData: saved } : s,
+        ),
+      );
+      toast.success("Saved JNTT");
+    } catch (e) {
+      toast.error(String(e));
+      setJnttblSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, saving: false } : s)));
+    }
+  }, []);
+
+  const resetJnttblSession = useCallback((sessionId: string) => {
+    setJnttblSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== sessionId || !s.baseData) return s;
+        return { ...s, draftData: cloneJnttblEditorDocument(s.baseData) };
+      }),
+    );
+  }, []);
+
+  const reloadJnttblSession = useCallback(async (sessionId: string) => {
+    let fp = "";
+    setJnttblSessions((prev) => {
+      const s = prev.find((x) => x.id === sessionId);
+      if (!s) return prev;
+      fp = s.filePath;
+      return prev.map((x) => (x.id === sessionId ? { ...x, loading: true, loadError: null } : x));
+    });
+    if (!fp) return;
+    try {
+      const data = await jnttblReadFile(fp);
+      const doc = readResultToEditorDocument(data);
+      const base = cloneJnttblEditorDocument(doc);
+      const draft = cloneJnttblEditorDocument(doc);
+      setJnttblSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionId
+            ? { ...s, loading: false, loadError: null, baseData: base, draftData: draft }
+            : s,
+        ),
+      );
+      toast.success("Reloaded JNTT from disk");
+    } catch (e) {
+      const msg = String(e);
+      setJnttblSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, loading: false, loadError: msg } : s)),
+      );
+      toast.error(msg);
+    }
+  }, []);
+
+  const requestCloseJnttblSession = useCallback((sessionId: string) => {
+    const s = jnttblSessionsRef.current.find((x) => x.id === sessionId);
+    if (!s) return;
+    if (isJnttblDraftDirty(s.baseData, s.draftData)) {
+      setJnttblGuard({ sessionId, action: "close" });
+      return;
+    }
+    setJnttblSessions((prev) => prev.filter((x) => x.id !== sessionId));
+  }, []);
+
+  const requestReloadJnttblSession = useCallback(
+    (sessionId: string) => {
+      const s = jnttblSessionsRef.current.find((x) => x.id === sessionId);
+      if (!s) return;
+      if (isJnttblDraftDirty(s.baseData, s.draftData)) {
+        setJnttblGuard({ sessionId, action: "reload" });
+        return;
+      }
+      void reloadJnttblSession(sessionId);
+    },
+    [reloadJnttblSession],
+  );
+
+  const dismissJnttblGuard = useCallback(() => {
+    setJnttblGuard(null);
+  }, []);
+
+  const discardJnttblGuard = useCallback(() => {
+    setJnttblGuard((g) => {
+      if (!g) return null;
+      const { sessionId, action } = g;
+      if (action === "close") {
+        setJnttblSessions((prev) => prev.filter((x) => x.id !== sessionId));
+      } else {
+        void reloadJnttblSession(sessionId);
+      }
+      return null;
+    });
+  }, [reloadJnttblSession]);
+
+  const saveAndFinishJnttblGuard = useCallback(async () => {
+    if (!jnttblGuard) return;
+    const { sessionId, action } = jnttblGuard;
+    await saveJnttblSession(sessionId);
+    const s = jnttblSessionsRef.current.find((x) => x.id === sessionId);
+    if (!s) return;
+    if (isJnttblDraftDirty(s.baseData, s.draftData)) return;
+    setJnttblGuard(null);
+    if (action === "close") {
+      setJnttblSessions((prev) => prev.filter((x) => x.id !== sessionId));
+    } else {
+      void reloadJnttblSession(sessionId);
+    }
+  }, [jnttblGuard, saveJnttblSession, reloadJnttblSession]);
+
   const handleFileSelect = useCallback(
     (node: TestTreeNode | null) => {
       if (!node || node.isDir) {
@@ -850,6 +1071,12 @@ const TestEditorPage = () => {
         return;
       }
 
+      if (lower.endsWith(".jnttbl")) {
+        setSelectedId(node.id);
+        openJnttblSession(node.path);
+        return;
+      }
+
       if (!lower.endsWith(".json")) {
         setSelectedId(node.id);
         return;
@@ -864,7 +1091,7 @@ const TestEditorPage = () => {
       setSelectedJsonPath(node.path);
       setSelectedId(node.id);
     },
-    [hasUnsavedChanges, selectedJsonPath, openNumdlbSession, openNuhlpbSession],
+    [hasUnsavedChanges, selectedJsonPath, openNumdlbSession, openNuhlpbSession, openJnttblSession],
   );
 
   return (
@@ -1036,6 +1263,45 @@ const TestEditorPage = () => {
             </Button>
             <Button type="button" onClick={() => void saveAndFinishNuhlpbGuard()}>
               {nuhlpbGuard?.action === "close" ? "Save and close" : "Save and reload"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <JnttblEditorModalHost
+        sessions={jnttblSessions}
+        onActivateSession={activateJnttblSession}
+        onCloseRequest={requestCloseJnttblSession}
+        onReloadRequest={requestReloadJnttblSession}
+        onDraftChange={updateJnttblDraft}
+        onSave={saveJnttblSession}
+        onReset={resetJnttblSession}
+      />
+
+      <AlertDialog
+        open={jnttblGuard !== null}
+        onOpenChange={(open) => {
+          if (!open) setJnttblGuard(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved JNTT changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              {jnttblGuard?.action === "close"
+                ? "Save before closing, discard edits, or cancel."
+                : "Save before reloading from disk, discard edits, or cancel."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+            <AlertDialogCancel type="button" onClick={dismissJnttblGuard}>
+              Cancel
+            </AlertDialogCancel>
+            <Button type="button" variant="outline" onClick={discardJnttblGuard}>
+              Discard
+            </Button>
+            <Button type="button" onClick={() => void saveAndFinishJnttblGuard()}>
+              {jnttblGuard?.action === "close" ? "Save and close" : "Save and reload"}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

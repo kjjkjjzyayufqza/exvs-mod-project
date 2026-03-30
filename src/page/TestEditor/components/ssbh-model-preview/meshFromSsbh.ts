@@ -1,5 +1,6 @@
 import { BufferAttribute, BufferGeometry } from "three";
 import type {
+  BoneJson,
   BuiltMeshDraw,
   MatlDataJson,
   MatlEntryJson,
@@ -735,22 +736,74 @@ function findMeshObject(
   );
 }
 
-function boneNameToIndex(skel: SkelDataJson): Map<string, number> {
-  const m = new Map<string, number>();
-  skel.bones.forEach((b, i) => m.set(b.name, i));
-  return m;
+function boneIndicesWithName(bones: BoneJson[], name: string): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < bones.length; i++) {
+    if (bones[i]!.name === name) out.push(i);
+  }
+  return out;
+}
+
+/** True if boneIdx is a strict descendant of ancestorIdx (parent chain walks upward). */
+function isDescendantOf(ancestorIdx: number, boneIdx: number, bones: BoneJson[]): boolean {
+  let cur = boneIdx;
+  for (let guard = 0; guard < bones.length + 2; guard++) {
+    const p = bones[cur]?.parent_index;
+    if (p === null || p === undefined) return false;
+    if (p === ancestorIdx) return true;
+    cur = p;
+  }
+  return false;
+}
+
+/**
+ * Resolves mesh bone influences when multiple skeleton bones share the same name.
+ * Uses mesh `parent_bone_name` as attachment: prefer influences in that bone's subtree,
+ * then ancestors on the path to the root.
+ */
+function resolveBoneIndexForMesh(
+  skel: SkelDataJson,
+  boneName: string,
+  meshParentBoneName: string,
+): number | undefined {
+  const bones = skel.bones;
+  const nameCandidates = boneIndicesWithName(bones, boneName);
+  if (nameCandidates.length === 0) return undefined;
+  if (nameCandidates.length === 1) return nameCandidates[0];
+
+  const meshParent = meshParentBoneName.trim();
+  if (!meshParent) {
+    return nameCandidates[0];
+  }
+
+  const attachCandidates = boneIndicesWithName(bones, meshParent);
+  const attachIdx = attachCandidates.length > 0 ? attachCandidates[0] : undefined;
+  if (attachIdx === undefined) {
+    return nameCandidates[0];
+  }
+
+  const underAttach = nameCandidates.filter((n) => isDescendantOf(attachIdx, n, bones));
+  if (underAttach.length === 1) return underAttach[0];
+  if (underAttach.length > 1) return underAttach[0];
+
+  const ancestorsOfAttach = nameCandidates.filter((n) => isDescendantOf(n, attachIdx, bones));
+  if (ancestorsOfAttach.length === 1) return ancestorsOfAttach[0];
+  if (ancestorsOfAttach.length > 1) return ancestorsOfAttach[0];
+
+  return nameCandidates[0];
 }
 
 function buildLogicalSkinTable(
   vertexCount: number,
   influences: NonNullable<MeshObjectJson["bone_influences"]>,
-  nameToIndex: Map<string, number>,
+  skel: SkelDataJson,
+  meshParentBoneName: string,
 ): { idx: Uint16Array; w: Float32Array } | null {
   const idx = new Uint16Array(vertexCount * 4);
   const w = new Float32Array(vertexCount * 4);
   const lists: { bi: number; wt: number }[][] = Array.from({ length: vertexCount }, () => []);
   for (const inf of influences) {
-    const bi = nameToIndex.get(inf.bone_name);
+    const bi = resolveBoneIndexForMesh(skel, inf.bone_name, meshParentBoneName);
     if (bi === undefined) continue;
     for (const vw of inf.vertex_weights) {
       const vi = vw.vertex_index;
@@ -805,10 +858,9 @@ function buildGeometryForObject(
   const uv2Attr = obj.texture_coordinates[1];
   const uvs2 = uv2Attr ? vectorDataToVec2(uv2Attr.data) : null;
 
-  const nameToIndex = skel ? boneNameToIndex(skel) : null;
   const logicalSkin =
-    skel && nameToIndex && obj.bone_influences?.length
-      ? buildLogicalSkinTable(logicalCount, obj.bone_influences, nameToIndex)
+    skel && obj.bone_influences?.length
+      ? buildLogicalSkinTable(logicalCount, obj.bone_influences, skel, obj.parent_bone_name)
       : null;
 
   const pos: number[] = [];

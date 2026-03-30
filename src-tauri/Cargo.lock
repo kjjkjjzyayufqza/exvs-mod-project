@@ -84,6 +84,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
+ "binrw 0.15.1",
  "crc32fast",
  "encoding_rs",
  "glam",
