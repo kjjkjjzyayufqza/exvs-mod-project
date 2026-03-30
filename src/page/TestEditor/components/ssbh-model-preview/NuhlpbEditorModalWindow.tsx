@@ -52,7 +52,7 @@ export function NuhlpbEditorModalWindow({
   onReset,
   onReloadRequest,
 }: NuhlpbEditorModalWindowProps) {
-  const { nodeRef, position, handleProps } = useDraggableModal({
+  const { nodeRef, handleProps } = useDraggableModal({
     defaultPosition: { x: 64 + cascadeIndex * 28, y: 64 + cascadeIndex * 28 },
   });
   const dirty = useMemo(
@@ -92,7 +92,7 @@ export function NuhlpbEditorModalWindow({
           tabIndex={-1}
           onMouseDown={onActivate}
           className="pointer-events-auto w-[720px] max-w-[95vw]"
-          style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
+          style={{ position: 'absolute' }}
           onClick={(e) => e.stopPropagation()}
         >
           <Card className="flex max-h-[min(90vh,720px)] flex-col overflow-hidden border shadow-2xl">

@@ -52,7 +52,7 @@ export function NumdlbEditorModalWindow({
   onReset,
   onReloadRequest,
 }: NumdlbEditorModalWindowProps) {
-  const { nodeRef, position, handleProps } = useDraggableModal({
+  const { nodeRef, handleProps } = useDraggableModal({
     defaultPosition: { x: 32 + cascadeIndex * 28, y: 32 + cascadeIndex * 28 },
   });
   const dirty = useMemo(
@@ -98,7 +98,7 @@ export function NumdlbEditorModalWindow({
           tabIndex={-1}
           onMouseDown={onActivate}
           className="pointer-events-auto w-[720px] max-w-[95vw]"
-          style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
+          style={{ position: 'absolute' }}
           onClick={(e) => e.stopPropagation()}
         >
           <Card className="flex max-h-[min(90vh,720px)] flex-col overflow-hidden border shadow-2xl">

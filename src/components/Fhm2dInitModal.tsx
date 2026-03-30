@@ -143,7 +143,7 @@ function getFormatBadgeColor(formatLabel: string): string {
 }
 
 export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps) {
-    const { nodeRef, position, handleProps } = useDraggableModal();
+    const { nodeRef, handleProps } = useDraggableModal();
     const searchInputRef = useRef<HTMLInputElement>(null);
 
     // Core states
@@ -485,7 +485,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                     <div
                         ref={nodeRef}
                         className="w-[720px] max-w-[95vw]"
-                        style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
+                        style={{ position: 'absolute' }}
                         onClick={(e) => e.stopPropagation()}
                     >
                         <Card className="border shadow-2xl overflow-hidden">
