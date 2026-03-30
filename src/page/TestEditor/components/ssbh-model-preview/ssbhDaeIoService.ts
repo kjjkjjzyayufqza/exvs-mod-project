@@ -177,6 +177,29 @@ export async function ssbhWriteNumdlbMapping(payload: NumdlbWritePayload): Promi
   await invoke("ssbh_write_numdlb_mapping", { payload });
 }
 
+export type NuhlpbReadResult = {
+  majorVersion: number;
+  minorVersion: number;
+  aimConstraints: Record<string, unknown>[];
+  orientConstraints: Record<string, unknown>[];
+};
+
+export type NuhlpbWritePayload = {
+  filePath: string;
+  majorVersion: number;
+  minorVersion: number;
+  aimConstraints: Record<string, unknown>[];
+  orientConstraints: Record<string, unknown>[];
+};
+
+export async function ssbhReadNuhlpb(filePath: string): Promise<NuhlpbReadResult> {
+  return invoke("ssbh_read_nuhlpb", { filePath });
+}
+
+export async function ssbhWriteNuhlpb(payload: NuhlpbWritePayload): Promise<void> {
+  await invoke("ssbh_write_nuhlpb", { payload });
+}
+
 export async function ssbhTemplateReadNumatb(filePath: string): Promise<MatlDataJson> {
   return invoke("ssbh_template_read_numatb", { filePath });
 }

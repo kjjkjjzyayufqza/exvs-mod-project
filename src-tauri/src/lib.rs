@@ -41,6 +41,8 @@ pub fn run() {
             ssbh_dae_cmd::ssbh_convert_fbx_to_ssbh,
             ssbh_dae_cmd::ssbh_read_numdlb_mapping,
             ssbh_dae_cmd::ssbh_write_numdlb_mapping,
+            ssbh_dae_cmd::ssbh_read_nuhlpb,
+            ssbh_dae_cmd::ssbh_write_nuhlpb,
             ssbh_dae_cmd::ssbh_template_read_numatb,
             commands::series_image_replace_from_png,
             commands::card_icon_replace_from_png,

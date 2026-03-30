@@ -1,5 +1,4 @@
 import { useRef, useState, useMemo, useEffect } from "react";
-import Draggable from "react-draggable";
 import {
     X,
     Loader2,
@@ -42,6 +41,7 @@ import { useConfigStore } from "@/store/configStore";
 import { IOReadFile } from "@/IO/fileSystem";
 import { ExtractFHMData, ExtractType, Fhm2dData, Fhm2d_type_format, PS4FhmData } from "@/models/fhm2d";
 import { cn } from "@/lib/utils";
+import { useDraggableModal } from "@/hooks/useDraggableModal";
 
 interface Fhm2dInitModalProps {
     isOpen: boolean;
@@ -143,7 +143,7 @@ function getFormatBadgeColor(formatLabel: string): string {
 }
 
 export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps) {
-    const nodeRef = useRef<HTMLDivElement>(null);
+    const { nodeRef, position, handleProps } = useDraggableModal();
     const searchInputRef = useRef<HTMLInputElement>(null);
 
     // Core states
@@ -481,16 +481,19 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
 
     return (
         <TooltipProvider delayDuration={100}>
-            <div className="fixed inset-0 z-50 flex items-center justify-center">
-                <Draggable nodeRef={nodeRef} handle=".drag-handle" bounds="parent">
+            <div className="fixed inset-0 z-50">
                     <div
                         ref={nodeRef}
                         className="w-[720px] max-w-[95vw]"
+                        style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
                         onClick={(e) => e.stopPropagation()}
                     >
                         <Card className="border shadow-2xl overflow-hidden">
                             {/* Header */}
-                            <div className="drag-handle flex items-center justify-between px-5 py-4 border-b bg-linear-to-r from-muted/80 to-muted/40 cursor-move select-none">
+                            <div
+                                {...handleProps}
+                                className="flex items-center justify-between px-5 py-4 border-b bg-linear-to-r from-muted/80 to-muted/40"
+                            >
                                 <div className="flex items-center gap-3">
                                     <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 shadow-sm">
                                         <FileCode2 className="h-5 w-5 text-primary" />
@@ -973,7 +976,6 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                             </CardContent>
                         </Card>
                     </div>
-                </Draggable>
             </div>
         </TooltipProvider>
     );

@@ -11,18 +11,18 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useDraggableModal } from "@/hooks/useDraggableModal";
-import type { NumdlbReadResult } from "./ssbhDaeIoService";
-import { NumdlbMappingEditorBody } from "./NumdlbMappingEditorBody";
-import { assertNumdlbValidForSave, isNumdlbDraftDirty } from "./numdlbEditorUtils";
+import type { NuhlpbReadResult } from "./ssbhDaeIoService";
+import { NuhlpbEditorBody } from "./NuhlpbEditorBody";
+import { isNuhlpbDraftDirty } from "./nuhlpbEditorUtils";
 
-export type NumdlbEditorWindowSession = {
+export type NuhlpbEditorWindowSession = {
   id: string;
   filePath: string;
   loading: boolean;
   saving: boolean;
   loadError: string | null;
-  baseData: NumdlbReadResult | null;
-  draftData: NumdlbReadResult | null;
+  baseData: NuhlpbReadResult | null;
+  draftData: NuhlpbReadResult | null;
   zIndex: number;
 };
 
@@ -31,18 +31,18 @@ function fileBasename(path: string): string {
   return seg ?? path;
 }
 
-type NumdlbEditorModalWindowProps = {
-  session: NumdlbEditorWindowSession;
+type NuhlpbEditorModalWindowProps = {
+  session: NuhlpbEditorWindowSession;
   cascadeIndex: number;
   onActivate: () => void;
   onCloseRequest: () => void;
-  onDraftChange: (next: NumdlbReadResult) => void;
+  onDraftChange: (next: NuhlpbReadResult) => void;
   onSave: () => void;
   onReset: () => void;
   onReloadRequest: () => void;
 };
 
-export function NumdlbEditorModalWindow({
+export function NuhlpbEditorModalWindow({
   session,
   cascadeIndex,
   onActivate,
@@ -51,12 +51,12 @@ export function NumdlbEditorModalWindow({
   onSave,
   onReset,
   onReloadRequest,
-}: NumdlbEditorModalWindowProps) {
+}: NuhlpbEditorModalWindowProps) {
   const { nodeRef, position, handleProps } = useDraggableModal({
-    defaultPosition: { x: 32 + cascadeIndex * 28, y: 32 + cascadeIndex * 28 },
+    defaultPosition: { x: 64 + cascadeIndex * 28, y: 64 + cascadeIndex * 28 },
   });
   const dirty = useMemo(
-    () => isNumdlbDraftDirty(session.baseData, session.draftData),
+    () => isNuhlpbDraftDirty(session.baseData, session.draftData),
     [session.baseData, session.draftData],
   );
 
@@ -67,12 +67,6 @@ export function NumdlbEditorModalWindow({
         if (nodeRef.current?.contains(active)) {
           e.preventDefault();
           if (!session.saving && session.draftData && !session.loading) {
-            try {
-              assertNumdlbValidForSave(session.draftData);
-            } catch (err) {
-              toast.error(String(err));
-              return;
-            }
             onSave();
           }
         }
@@ -94,7 +88,7 @@ export function NumdlbEditorModalWindow({
           ref={nodeRef}
           role="dialog"
           aria-modal="true"
-          aria-labelledby={`numdlb-editor-title-${session.id}`}
+          aria-labelledby={`nuhlpb-editor-title-${session.id}`}
           tabIndex={-1}
           onMouseDown={onActivate}
           className="pointer-events-auto w-[720px] max-w-[95vw]"
@@ -108,19 +102,19 @@ export function NumdlbEditorModalWindow({
               className="flex shrink-0 items-center justify-between border-b bg-linear-to-r from-muted/80 to-muted/40 px-5 py-4"
             >
               <div className="flex min-w-0 flex-1 items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 shadow-sm">
-                  <FileCode2 className="h-5 w-5 text-primary" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 shadow-sm">
+                  <FileCode2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                 </div>
                 <div className="min-w-0">
                   <h2
-                    id={`numdlb-editor-title-${session.id}`}
+                    id={`nuhlpb-editor-title-${session.id}`}
                     className="truncate text-base font-semibold"
                     title={session.filePath}
                   >
                     {dirty ? "• " : ""}
                     {title}
                   </h2>
-                  <p className="text-xs text-muted-foreground">Edit SSBH (.numdlb) file</p>
+                  <p className="text-xs text-muted-foreground">Edit SSBH (.nuhlpb) file</p>
                 </div>
               </div>
               <Button
@@ -140,7 +134,7 @@ export function NumdlbEditorModalWindow({
               {session.loading ? (
                 <div className="flex items-center gap-2 px-5 py-4 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading NUMDLB…
+                  Loading NUHLPB…
                 </div>
               ) : session.loadError ? (
                 <div className="px-5 py-4 text-sm text-destructive">{session.loadError}</div>
@@ -156,11 +150,10 @@ export function NumdlbEditorModalWindow({
                       </p>
                     </div>
                     <div className="px-5 py-4">
-                      <NumdlbMappingEditorBody
+                      <NuhlpbEditorBody
                         data={session.draftData}
                         onChange={onDraftChange}
                         disabled={session.saving}
-                        embedTableWithoutInnerScroll
                       />
                     </div>
                   </div>
@@ -193,17 +186,7 @@ export function NumdlbEditorModalWindow({
                       size="sm"
                       className="h-8 text-[10px] uppercase tracking-wide"
                       disabled={session.saving || !dirty}
-                      onClick={() => {
-                        const d = session.draftData;
-                        if (!d) return;
-                        try {
-                          assertNumdlbValidForSave(d);
-                        } catch (e) {
-                          toast.error(String(e));
-                          return;
-                        }
-                        onSave();
-                      }}
+                      onClick={onSave}
                     >
                       {session.saving ? (
                         <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />

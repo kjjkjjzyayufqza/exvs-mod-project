@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use ssbh_data::prelude::*;
+use ssbh_data::hlpb_data::{HlpbData, AimConstraintData, OrientConstraintData};
 use ssbh_data::modl_data::{ModlData, ModlEntryData};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -517,6 +518,80 @@ pub fn ssbh_write_numdlb_mapping(payload: NumdlbWritePayload) -> Result<(), Stri
     };
     modl.write_to_file(&path)
         .map_err(|e| format!("Failed to write numdlb {}: {e}", path.display()))
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NuhlpbReadResult {
+    pub major_version: u16,
+    pub minor_version: u16,
+    pub aim_constraints: Vec<serde_json::Value>,
+    pub orient_constraints: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NuhlpbWritePayload {
+    pub file_path: String,
+    pub major_version: u16,
+    pub minor_version: u16,
+    pub aim_constraints: Vec<serde_json::Value>,
+    pub orient_constraints: Vec<serde_json::Value>,
+}
+
+#[tauri::command]
+pub fn ssbh_read_nuhlpb(file_path: String) -> Result<NuhlpbReadResult, String> {
+    let path = PathBuf::from(file_path.trim());
+    let hlpb =
+        HlpbData::from_file(&path).map_err(|e| format!("Failed to read nuhlpb {}: {e}", path.display()))?;
+    let aim_constraints: Vec<serde_json::Value> = hlpb
+        .aim_constraints
+        .iter()
+        .map(|c| serde_json::to_value(c).unwrap())
+        .collect();
+    let orient_constraints: Vec<serde_json::Value> = hlpb
+        .orient_constraints
+        .iter()
+        .map(|c| serde_json::to_value(c).unwrap())
+        .collect();
+    Ok(NuhlpbReadResult {
+        major_version: hlpb.major_version,
+        minor_version: hlpb.minor_version,
+        aim_constraints,
+        orient_constraints,
+    })
+}
+
+#[tauri::command]
+pub fn ssbh_write_nuhlpb(payload: NuhlpbWritePayload) -> Result<(), String> {
+    let path = PathBuf::from(payload.file_path.trim());
+    ensure_parent_dir(&path)?;
+    let aim_constraints: Vec<AimConstraintData> = payload
+        .aim_constraints
+        .into_iter()
+        .enumerate()
+        .map(|(i, v)| {
+            serde_json::from_value(v)
+                .map_err(|e| format!("Invalid aim constraint at index {i}: {e}"))
+        })
+        .collect::<Result<_, _>>()?;
+    let orient_constraints: Vec<OrientConstraintData> = payload
+        .orient_constraints
+        .into_iter()
+        .enumerate()
+        .map(|(i, v)| {
+            serde_json::from_value(v)
+                .map_err(|e| format!("Invalid orient constraint at index {i}: {e}"))
+        })
+        .collect::<Result<_, _>>()?;
+    let hlpb = HlpbData {
+        major_version: payload.major_version,
+        minor_version: payload.minor_version,
+        aim_constraints,
+        orient_constraints,
+    };
+    hlpb.write_to_file(&path)
+        .map_err(|e| format!("Failed to write nuhlpb {}: {e}", path.display()))
 }
 
 #[tauri::command]

@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Package,
   Loader2,
+  Star,
 } from "lucide-react";
 import { join } from "@tauri-apps/api/path";
 import { exists } from "@tauri-apps/plugin-fs";
@@ -39,6 +40,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TestTreeNode } from "../types";
+import { normalizePathForStar } from "../utils/fileTreeStars";
 
 function fileExtensionSuffix(name: string): string | null {
   const dot = name.lastIndexOf(".");
@@ -99,6 +101,8 @@ type FileTreePaneProps = {
   fileTreeStructureScanKey: string;
   modFolderPath?: string;
   onFolderRepacked?: (folderName: string) => void;
+  starredPathSet: Set<string>;
+  onToggleStar: (path: string) => void;
 };
 
 export function FileTreePane({
@@ -119,6 +123,8 @@ export function FileTreePane({
   fileTreeStructureScanKey,
   modFolderPath,
   onFolderRepacked,
+  starredPathSet,
+  onToggleStar,
 }: FileTreePaneProps) {
   const empty = data.length === 0;
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -433,6 +439,7 @@ export function FileTreePane({
 
     const topLevelName = resolveTopLevelName(node.data.path);
     const isTopLevelDirty = Boolean(topLevelName && dirtyTopLevelSet.has(topLevelName));
+    const isStarred = starredPathSet.has(normalizePathForStar(node.data.path));
 
     const extLabel = !isDir ? fileExtensionSuffix(node.data.name) : null;
     const structureRepackTarget = !isDir
@@ -539,6 +546,13 @@ export function FileTreePane({
               </span>
             </div>
 
+            {isStarred && (
+              <Star
+                className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500"
+                aria-hidden
+              />
+            )}
+
             {extLabel && (
               <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                 {extLabel}
@@ -551,6 +565,13 @@ export function FileTreePane({
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent className="min-w-[11rem] max-w-[20rem]">
+          <ContextMenuItem
+            onClick={() => onToggleStar(node.data.path)}
+            className="flex items-center gap-2"
+          >
+            <Star className={cn("h-4 w-4", isStarred && "fill-amber-400 text-amber-500")} />
+            <span>{isStarred ? "Unstar" : "Star"}</span>
+          </ContextMenuItem>
           {!isDir && (
             <ContextMenuItem onClick={() => handleOpenNodePath(node.data)} className="flex items-center gap-2">
               <ExternalLink className="h-4 w-4" />

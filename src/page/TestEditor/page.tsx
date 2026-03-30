@@ -23,6 +23,7 @@ import { useConfigStore } from "@/store/configStore";
 import { TestEditorToolbar } from "./components/TestEditorToolbar";
 import ListeningRepackDialog from "./components/ListeningRepackDialog";
 import { normalizePackFolderName } from "./utils/packName";
+import { sortTreeByStarOrder, useFileTreeStarOrder } from "./utils/fileTreeStars";
 import { NumdlbEditorModalHost } from "./components/ssbh-model-preview/NumdlbEditorModalHost";
 import type { NumdlbEditorWindowSession } from "./components/ssbh-model-preview/NumdlbEditorModalWindow";
 import {
@@ -30,10 +31,19 @@ import {
   assertNumdlbValidForSave,
   isNumdlbDraftDirty,
 } from "./components/ssbh-model-preview/numdlbEditorUtils";
+import { NuhlpbEditorModalHost } from "./components/ssbh-model-preview/NuhlpbEditorModalHost";
+import type { NuhlpbEditorWindowSession } from "./components/ssbh-model-preview/NuhlpbEditorModalWindow";
+import {
+  cloneNuhlpbReadResult,
+  isNuhlpbDraftDirty,
+} from "./components/ssbh-model-preview/nuhlpbEditorUtils";
 import {
   ssbhReadNumdlbMapping,
   ssbhWriteNumdlbMapping,
+  ssbhReadNuhlpb,
+  ssbhWriteNuhlpb,
   type NumdlbReadResult,
+  type NuhlpbReadResult,
 } from "./components/ssbh-model-preview/ssbhDaeIoService";
 
 const WATCH_EVENT = "test-editor:folder-change";
@@ -236,6 +246,14 @@ const TestEditorPage = () => {
     null,
   );
 
+  const [nuhlpbSessions, setNuhlpbSessions] = useState<NuhlpbEditorWindowSession[]>([]);
+  const nuhlpbZIndexRef = useRef(2000);
+  const nuhlpbSessionsRef = useRef(nuhlpbSessions);
+  nuhlpbSessionsRef.current = nuhlpbSessions;
+  const [nuhlpbGuard, setNuhlpbGuard] = useState<{ sessionId: string; action: "close" | "reload" } | null>(
+    null,
+  );
+
   const revealInTreeByPath = useCallback((targetPath: string) => {
     // 1. Clear search term
     setSearchTerm("");
@@ -324,6 +342,8 @@ const TestEditorPage = () => {
       setDirtyFolders(new Set());
       setNumdlbSessions([]);
       setNumdlbGuard(null);
+      setNuhlpbSessions([]);
+      setNuhlpbGuard(null);
     } catch (error) {
       console.error(error);
       toast.error("Failed to start folder watch");
@@ -365,7 +385,13 @@ const TestEditorPage = () => {
     loadObModPath();
   }, [getSetting]);
 
-  const filteredData = useMemo(() => filterTree(treeData, searchTerm), [treeData, searchTerm]);
+  const { starOrder, toggleStar, starredPathSet } = useFileTreeStarOrder(
+    currentDir || undefined
+  );
+  const fileTreeData = useMemo(
+    () => sortTreeByStarOrder(filterTree(treeData, searchTerm), starOrder),
+    [treeData, searchTerm, starOrder]
+  );
   const workspaceTopLevelFolderNames = useMemo(
     () => treeData.filter((n) => n.isDir).map((n) => n.name),
     [treeData]
@@ -631,6 +657,179 @@ const TestEditorPage = () => {
     }
   }, [numdlbGuard, saveNumdlbSession, reloadNumdlbSession]);
 
+  const openNuhlpbSession = useCallback((filePath: string) => {
+    const normalized = filePath.trim().toLowerCase();
+    setNuhlpbSessions((prev) => {
+      const existing = prev.find((s) => s.filePath.trim().toLowerCase() === normalized);
+      if (existing) {
+        const nextZ = ++nuhlpbZIndexRef.current;
+        return prev.map((s) => (s.id === existing.id ? { ...s, zIndex: nextZ } : s));
+      }
+      const id = crypto.randomUUID();
+      const nextZ = ++nuhlpbZIndexRef.current;
+      const newSession: NuhlpbEditorWindowSession = {
+        id,
+        filePath,
+        loading: true,
+        saving: false,
+        loadError: null,
+        baseData: null,
+        draftData: null,
+        zIndex: nextZ,
+      };
+      void ssbhReadNuhlpb(filePath)
+        .then((data) => {
+          const base = cloneNuhlpbReadResult(data);
+          const draft = cloneNuhlpbReadResult(data);
+          setNuhlpbSessions((p) =>
+            p.map((s) =>
+              s.id === id ? { ...s, loading: false, loadError: null, baseData: base, draftData: draft } : s,
+            ),
+          );
+        })
+        .catch((err) => {
+          setNuhlpbSessions((p) =>
+            p.map((s) => (s.id === id ? { ...s, loading: false, loadError: String(err) } : s)),
+          );
+        });
+      return [...prev, newSession];
+    });
+  }, []);
+
+  const activateNuhlpbSession = useCallback((sessionId: string) => {
+    setNuhlpbSessions((prev) => {
+      const nextZ = ++nuhlpbZIndexRef.current;
+      return prev.map((s) => (s.id === sessionId ? { ...s, zIndex: nextZ } : s));
+    });
+  }, []);
+
+  const updateNuhlpbDraft = useCallback((sessionId: string, next: NuhlpbReadResult) => {
+    setNuhlpbSessions((prev) =>
+      prev.map((s) => (s.id === sessionId ? { ...s, draftData: next } : s)),
+    );
+  }, []);
+
+  const saveNuhlpbSession = useCallback(async (sessionId: string) => {
+    const snapshot = nuhlpbSessionsRef.current.find((x) => x.id === sessionId);
+    if (!snapshot?.draftData) return;
+    const draft = snapshot.draftData;
+    const path = snapshot.filePath;
+    setNuhlpbSessions((prev) =>
+      prev.map((x) => (x.id === sessionId ? { ...x, saving: true } : x)),
+    );
+    try {
+      await ssbhWriteNuhlpb({
+        filePath: path,
+        majorVersion: draft.majorVersion,
+        minorVersion: draft.minorVersion,
+        aimConstraints: draft.aimConstraints,
+        orientConstraints: draft.orientConstraints,
+      });
+      const saved = cloneNuhlpbReadResult(draft);
+      setNuhlpbSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionId ? { ...s, saving: false, baseData: saved, draftData: saved } : s,
+        ),
+      );
+      toast.success("Saved NUHLPB");
+    } catch (e) {
+      toast.error(String(e));
+      setNuhlpbSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, saving: false } : s)));
+    }
+  }, []);
+
+  const resetNuhlpbSession = useCallback((sessionId: string) => {
+    setNuhlpbSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== sessionId || !s.baseData) return s;
+        return { ...s, draftData: cloneNuhlpbReadResult(s.baseData) };
+      }),
+    );
+  }, []);
+
+  const reloadNuhlpbSession = useCallback(async (sessionId: string) => {
+    let fp = "";
+    setNuhlpbSessions((prev) => {
+      const s = prev.find((x) => x.id === sessionId);
+      if (!s) return prev;
+      fp = s.filePath;
+      return prev.map((x) => (x.id === sessionId ? { ...x, loading: true, loadError: null } : x));
+    });
+    if (!fp) return;
+    try {
+      const data = await ssbhReadNuhlpb(fp);
+      const base = cloneNuhlpbReadResult(data);
+      const draft = cloneNuhlpbReadResult(data);
+      setNuhlpbSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionId ? { ...s, loading: false, loadError: null, baseData: base, draftData: draft } : s,
+        ),
+      );
+      toast.success("Reloaded NUHLPB from disk");
+    } catch (e) {
+      const msg = String(e);
+      setNuhlpbSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, loading: false, loadError: msg } : s)),
+      );
+      toast.error(msg);
+    }
+  }, []);
+
+  const requestCloseNuhlpbSession = useCallback((sessionId: string) => {
+    const s = nuhlpbSessionsRef.current.find((x) => x.id === sessionId);
+    if (!s) return;
+    if (isNuhlpbDraftDirty(s.baseData, s.draftData)) {
+      setNuhlpbGuard({ sessionId, action: "close" });
+      return;
+    }
+    setNuhlpbSessions((prev) => prev.filter((x) => x.id !== sessionId));
+  }, []);
+
+  const requestReloadNuhlpbSession = useCallback(
+    (sessionId: string) => {
+      const s = nuhlpbSessionsRef.current.find((x) => x.id === sessionId);
+      if (!s) return;
+      if (isNuhlpbDraftDirty(s.baseData, s.draftData)) {
+        setNuhlpbGuard({ sessionId, action: "reload" });
+        return;
+      }
+      void reloadNuhlpbSession(sessionId);
+    },
+    [reloadNuhlpbSession],
+  );
+
+  const dismissNuhlpbGuard = useCallback(() => {
+    setNuhlpbGuard(null);
+  }, []);
+
+  const discardNuhlpbGuard = useCallback(() => {
+    setNuhlpbGuard((g) => {
+      if (!g) return null;
+      const { sessionId, action } = g;
+      if (action === "close") {
+        setNuhlpbSessions((prev) => prev.filter((x) => x.id !== sessionId));
+      } else {
+        void reloadNuhlpbSession(sessionId);
+      }
+      return null;
+    });
+  }, [reloadNuhlpbSession]);
+
+  const saveAndFinishNuhlpbGuard = useCallback(async () => {
+    if (!nuhlpbGuard) return;
+    const { sessionId, action } = nuhlpbGuard;
+    await saveNuhlpbSession(sessionId);
+    const s = nuhlpbSessionsRef.current.find((x) => x.id === sessionId);
+    if (!s) return;
+    if (isNuhlpbDraftDirty(s.baseData, s.draftData)) return;
+    setNuhlpbGuard(null);
+    if (action === "close") {
+      setNuhlpbSessions((prev) => prev.filter((x) => x.id !== sessionId));
+    } else {
+      void reloadNuhlpbSession(sessionId);
+    }
+  }, [nuhlpbGuard, saveNuhlpbSession, reloadNuhlpbSession]);
+
   const handleFileSelect = useCallback(
     (node: TestTreeNode | null) => {
       if (!node || node.isDir) {
@@ -642,6 +841,12 @@ const TestEditorPage = () => {
       if (lower.endsWith(".numdlb")) {
         setSelectedId(node.id);
         openNumdlbSession(node.path);
+        return;
+      }
+
+      if (lower.endsWith(".nuhlpb")) {
+        setSelectedId(node.id);
+        openNuhlpbSession(node.path);
         return;
       }
 
@@ -659,7 +864,7 @@ const TestEditorPage = () => {
       setSelectedJsonPath(node.path);
       setSelectedId(node.id);
     },
-    [hasUnsavedChanges, selectedJsonPath, openNumdlbSession],
+    [hasUnsavedChanges, selectedJsonPath, openNumdlbSession, openNuhlpbSession],
   );
 
   return (
@@ -686,7 +891,7 @@ const TestEditorPage = () => {
           <ResizablePanel defaultSize={20} minSize={15}>
             <div className="h-full">
               <FileTreePane
-                data={filteredData}
+                data={fileTreeData}
                 onSelect={handleFileSelect}
                 selectedId={selectedId}
                 searchTerm={searchTerm}
@@ -703,6 +908,8 @@ const TestEditorPage = () => {
                 fileTreeStructureScanKey={fileTreeStructureScanKey}
                 modFolderPath={obModPath || undefined}
                 onFolderRepacked={handleRepackSuccess}
+                starredPathSet={starredPathSet}
+                onToggleStar={toggleStar}
               />
             </div>
           </ResizablePanel>
@@ -790,6 +997,45 @@ const TestEditorPage = () => {
             </Button>
             <Button type="button" onClick={() => void saveAndFinishNumdlbGuard()}>
               {numdlbGuard?.action === "close" ? "Save and close" : "Save and reload"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <NuhlpbEditorModalHost
+        sessions={nuhlpbSessions}
+        onActivateSession={activateNuhlpbSession}
+        onCloseRequest={requestCloseNuhlpbSession}
+        onReloadRequest={requestReloadNuhlpbSession}
+        onDraftChange={updateNuhlpbDraft}
+        onSave={saveNuhlpbSession}
+        onReset={resetNuhlpbSession}
+      />
+
+      <AlertDialog
+        open={nuhlpbGuard !== null}
+        onOpenChange={(open) => {
+          if (!open) setNuhlpbGuard(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved NUHLPB changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              {nuhlpbGuard?.action === "close"
+                ? "Save before closing, discard edits, or cancel."
+                : "Save before reloading from disk, discard edits, or cancel."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+            <AlertDialogCancel type="button" onClick={dismissNuhlpbGuard}>
+              Cancel
+            </AlertDialogCancel>
+            <Button type="button" variant="outline" onClick={discardNuhlpbGuard}>
+              Discard
+            </Button>
+            <Button type="button" onClick={() => void saveAndFinishNuhlpbGuard()}>
+              {nuhlpbGuard?.action === "close" ? "Save and close" : "Save and reload"}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
