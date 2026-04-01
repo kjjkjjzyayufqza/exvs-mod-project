@@ -270,6 +270,7 @@ const TestEditorPage = () => {
 
   const [jnttblSessions, setJnttblSessions] = useState<JnttblEditorWindowSession[]>([]);
   const jnttblZIndexRef = useRef(3000);
+  const jnttblZLayerSettersRef = useRef(new Map<string, (z: number) => void>());
   const jnttblSessionsRef = useRef(jnttblSessions);
   jnttblSessionsRef.current = jnttblSessions;
   const [jnttblGuard, setJnttblGuard] = useState<{ sessionId: string; action: "close" | "reload" } | null>(
@@ -854,13 +855,24 @@ const TestEditorPage = () => {
     }
   }, [nuhlpbGuard, saveNuhlpbSession, reloadNuhlpbSession]);
 
+  const registerJnttblZLayer = useCallback((sessionId: string, setZ: (z: number) => void) => {
+    jnttblZLayerSettersRef.current.set(sessionId, setZ);
+    return () => {
+      jnttblZLayerSettersRef.current.delete(sessionId);
+    };
+  }, []);
+
   const openJnttblSession = useCallback((filePath: string) => {
     const normalized = filePath.trim().toLowerCase();
     setJnttblSessions((prev) => {
       const existing = prev.find((s) => s.filePath.trim().toLowerCase() === normalized);
       if (existing) {
         const nextZ = ++jnttblZIndexRef.current;
-        return prev.map((s) => (s.id === existing.id ? { ...s, zIndex: nextZ } : s));
+        queueMicrotask(() => {
+          const setter = jnttblZLayerSettersRef.current.get(existing.id);
+          if (setter) setter(nextZ);
+        });
+        return prev;
       }
       const id = crypto.randomUUID();
       const nextZ = ++jnttblZIndexRef.current;
@@ -903,10 +915,9 @@ const TestEditorPage = () => {
   }, []);
 
   const activateJnttblSession = useCallback((sessionId: string) => {
-    setJnttblSessions((prev) => {
-      const nextZ = ++jnttblZIndexRef.current;
-      return prev.map((s) => (s.id === sessionId ? { ...s, zIndex: nextZ } : s));
-    });
+    const nextZ = ++jnttblZIndexRef.current;
+    const setter = jnttblZLayerSettersRef.current.get(sessionId);
+    if (setter) setter(nextZ);
   }, []);
 
   const updateJnttblDraft = useCallback((sessionId: string, next: JnttblEditorDocument) => {
@@ -1270,6 +1281,7 @@ const TestEditorPage = () => {
 
       <JnttblEditorModalHost
         sessions={jnttblSessions}
+        onRegisterZLayer={registerJnttblZLayer}
         onActivateSession={activateJnttblSession}
         onCloseRequest={requestCloseJnttblSession}
         onReloadRequest={requestReloadJnttblSession}

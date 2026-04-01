@@ -1,10 +1,10 @@
-import { useMemo } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { JnttblEditorModalWindow, type JnttblEditorWindowSession } from "./JnttblEditorModalWindow";
 import type { JnttblEditorDocument } from "./jnttblIoService";
 
 type JnttblEditorModalHostProps = {
   sessions: JnttblEditorWindowSession[];
+  onRegisterZLayer: (sessionId: string, setZ: (z: number) => void) => () => void;
   onActivateSession: (sessionId: string) => void;
   onCloseRequest: (sessionId: string) => void;
   onReloadRequest: (sessionId: string) => void;
@@ -15,6 +15,7 @@ type JnttblEditorModalHostProps = {
 
 export function JnttblEditorModalHost({
   sessions,
+  onRegisterZLayer,
   onActivateSession,
   onCloseRequest,
   onReloadRequest,
@@ -22,21 +23,17 @@ export function JnttblEditorModalHost({
   onSave,
   onReset,
 }: JnttblEditorModalHostProps) {
-  const sorted = useMemo(
-    () => [...sessions].sort((a, b) => a.zIndex - b.zIndex),
-    [sessions],
-  );
-
   if (sessions.length === 0) return null;
 
   return (
     <TooltipProvider delayDuration={100}>
       <div className="pointer-events-none fixed inset-0 z-[61]">
-        {sorted.map((session, cascadeIndex) => (
+        {sessions.map((session, cascadeIndex) => (
           <JnttblEditorModalWindow
             key={session.id}
             session={session}
             cascadeIndex={cascadeIndex}
+            onRegisterZLayer={onRegisterZLayer}
             onActivate={() => onActivateSession(session.id)}
             onCloseRequest={() => onCloseRequest(session.id)}
             onReloadRequest={() => onReloadRequest(session.id)}

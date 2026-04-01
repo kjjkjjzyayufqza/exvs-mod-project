@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import {
   FileCode2,
   Loader2,
@@ -34,6 +34,7 @@ function fileBasename(path: string): string {
 type JnttblEditorModalWindowProps = {
   session: JnttblEditorWindowSession;
   cascadeIndex: number;
+  onRegisterZLayer: (sessionId: string, setZ: (z: number) => void) => () => void;
   onActivate: () => void;
   onCloseRequest: () => void;
   onDraftChange: (next: JnttblEditorDocument) => void;
@@ -45,6 +46,7 @@ type JnttblEditorModalWindowProps = {
 export function JnttblEditorModalWindow({
   session,
   cascadeIndex,
+  onRegisterZLayer,
   onActivate,
   onCloseRequest,
   onDraftChange,
@@ -52,6 +54,20 @@ export function JnttblEditorModalWindow({
   onReset,
   onReloadRequest,
 }: JnttblEditorModalWindowProps) {
+  const zLayerRef = useRef<HTMLDivElement>(null);
+  const setZLayer = useCallback((z: number) => {
+    const el = zLayerRef.current;
+    if (el) el.style.zIndex = String(z);
+  }, []);
+
+  useLayoutEffect(() => {
+    setZLayer(session.zIndex);
+  }, [session.zIndex, setZLayer]);
+
+  useLayoutEffect(() => {
+    return onRegisterZLayer(session.id, setZLayer);
+  }, [onRegisterZLayer, session.id, setZLayer]);
+
   const { nodeRef, handleProps } = useDraggableModal({
     defaultPosition: { x: 48 + cascadeIndex * 28, y: 48 + cascadeIndex * 28 },
   });
@@ -85,11 +101,7 @@ export function JnttblEditorModalWindow({
   const title = fileBasename(session.filePath);
 
   return (
-    <div
-      className="pointer-events-none absolute inset-0"
-      style={{ zIndex: session.zIndex }}
-      aria-hidden={false}
-    >
+    <div ref={zLayerRef} className="pointer-events-none absolute inset-0" aria-hidden={false}>
       <div
         ref={nodeRef}
         role="dialog"

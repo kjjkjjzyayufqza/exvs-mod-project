@@ -137,7 +137,11 @@ export function useDraggableModal(options: UseDraggableModalOptions = {}): UseDr
 
   const handleProps = {
     onPointerDown,
-    style: { cursor: "move", userSelect: "none" as const, touchAction: "none" as const },
+    style: {
+      cursor: "move" as const,
+      userSelect: "none" as const,
+      touchAction: "none" as const,
+    },
   };
 
   return { nodeRef, handleProps };
