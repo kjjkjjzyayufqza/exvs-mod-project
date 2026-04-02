@@ -1,7 +1,36 @@
+import type { NumdlbMappingRow } from "./daeSsbhTypes";
 import type { NumdlbReadResult } from "./ssbhDaeIoService";
 
+function cloneStructured<T>(data: T): T {
+  return structuredClone(data);
+}
+
 export function cloneNumdlbReadResult(data: NumdlbReadResult): NumdlbReadResult {
-  return JSON.parse(JSON.stringify(data)) as NumdlbReadResult;
+  return cloneStructured(data);
+}
+
+function materialNamesEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+function mappingRowsEqual(a: NumdlbMappingRow[], b: NumdlbMappingRow[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const ra = a[i];
+    const rb = b[i];
+    if (
+      ra.meshObjectName !== rb.meshObjectName ||
+      ra.meshObjectSubindex !== rb.meshObjectSubindex ||
+      ra.materialLabel !== rb.materialLabel
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function isNumdlbDraftDirty(
@@ -9,7 +38,13 @@ export function isNumdlbDraftDirty(
   draft: NumdlbReadResult | null,
 ): boolean {
   if (!base || !draft) return false;
-  return JSON.stringify(base) !== JSON.stringify(draft);
+  if (base.modelName !== draft.modelName) return true;
+  if (base.skeletonFileName !== draft.skeletonFileName) return true;
+  if (base.meshFileName !== draft.meshFileName) return true;
+  if (base.animationFileName !== draft.animationFileName) return true;
+  if (!materialNamesEqual(base.materialFileNames, draft.materialFileNames)) return true;
+  if (!mappingRowsEqual(base.entries, draft.entries)) return true;
+  return false;
 }
 
 /** Throws with a clear message if the draft cannot be saved. */

@@ -531,6 +531,7 @@ fn watch_loop(
     stop: Arc<AtomicBool>,
     root: PathBuf,
 ) {
+    // Debounced full-tree rebuild: see `docs/test-editor-watcher-backend.md` for cost on huge workspaces.
     // Debounce window: emit a full tree rebuild this long after the last change.
     const DEBOUNCE_MS: u64 = 400;
     let mut last_change: Option<Instant> = None;

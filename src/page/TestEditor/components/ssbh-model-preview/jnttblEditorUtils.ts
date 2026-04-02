@@ -67,6 +67,34 @@ export function isJnttblDraftDirty(
   return false;
 }
 
+export function computeNextJnttblDirtyState(args: {
+  wasDirty: boolean;
+  base: JnttblEditorDocument | null;
+  draft: JnttblEditorDocument | null;
+}): boolean {
+  if (args.wasDirty) return true;
+  return isJnttblDraftDirty(args.base, args.draft);
+}
+
+export function replaceJnttblEntryAt(
+  entries: JnttblEntryRow[],
+  index: number,
+  nextEntry: JnttblEntryRow,
+): JnttblEntryRow[] {
+  return [...entries.slice(0, index), nextEntry, ...entries.slice(index + 1)];
+}
+
+export function appendJnttblEntry(
+  entries: JnttblEntryRow[],
+  nextEntry: JnttblEntryRow,
+): JnttblEntryRow[] {
+  return [...entries, nextEntry];
+}
+
+export function removeJnttblEntryAt(entries: JnttblEntryRow[], index: number): JnttblEntryRow[] {
+  return [...entries.slice(0, index), ...entries.slice(index + 1)];
+}
+
 function isU32(n: number): boolean {
   return Number.isFinite(n) && n === Math.trunc(n) && n >= 0 && n <= 0xffffffff;
 }

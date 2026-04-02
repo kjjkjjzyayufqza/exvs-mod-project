@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { JnttblEditorDocument, JnttblEntryRow } from "./jnttblIoService";
+import { appendJnttblEntry, removeJnttblEntryAt, replaceJnttblEntryAt } from "./jnttblEditorUtils";
 import { ssbhReadNusktbBoneNames } from "./jnttblIoService";
 import { BoneIndexSearchSelect } from "./components/BoneIndexSearchSelect";
 import { debugFillMissingJnttblEntries } from "./jnttblDebugFill";
@@ -377,7 +378,7 @@ export function JnttblEditorBody({
             onClick={() =>
               onChange({
                 ...data,
-                entries: [...data.entries, { hashId: 0, boneIndex: 0 }],
+                entries: appendJnttblEntry(data.entries, { hashId: 0, boneIndex: 0 }),
               })
             }
           >
@@ -525,7 +526,10 @@ export function JnttblEditorBody({
                           onCommit={(hashId) => {
                             onChange({
                               ...data,
-                              entries: data.entries.map((x, i) => (i === rowIndex ? { ...x, hashId } : x)),
+                              entries: replaceJnttblEntryAt(data.entries, rowIndex, {
+                                ...row,
+                                hashId,
+                              }),
                             });
                           }}
                         />
@@ -540,9 +544,10 @@ export function JnttblEditorBody({
                           onChange={(boneIndex) =>
                             onChange({
                               ...data,
-                              entries: data.entries.map((x, i) =>
-                                i === rowIndex ? { ...x, boneIndex } : x,
-                              ),
+                              entries: replaceJnttblEntryAt(data.entries, rowIndex, {
+                                ...row,
+                                boneIndex,
+                              }),
                             })
                           }
                         />
@@ -558,7 +563,7 @@ export function JnttblEditorBody({
                           onClick={() =>
                             onChange({
                               ...data,
-                              entries: data.entries.filter((_, i) => i !== rowIndex),
+                              entries: removeJnttblEntryAt(data.entries, rowIndex),
                             })
                           }
                         >

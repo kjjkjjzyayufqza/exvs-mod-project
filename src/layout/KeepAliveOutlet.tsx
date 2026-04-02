@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { findMatchedRouteUrl, pathMatchesRoute } from "@/router/pathMatch";
 import { RouterItems } from "@/router/router";
+import { KeepAliveProvider } from "./KeepAliveContext";
 
 /**
  * Renders matched sidebar pages in a stacked layout: visited routes stay mounted
@@ -27,7 +28,8 @@ export function KeepAliveOutlet() {
   }, [matchedUrl]);
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <KeepAliveProvider activeMatchedUrl={matchedUrl}>
+      <div className="relative flex min-h-0 flex-1 flex-col">
       {RouterItems.map((item) => {
         if (!visited.has(item.url)) return null;
         const active = matchedUrl !== null && pathMatchesRoute(pathname, item.url);
@@ -51,6 +53,7 @@ export function KeepAliveOutlet() {
           Unknown route: <span className="text-foreground ml-1 font-mono">{pathname || "/"}</span>
         </div>
       ) : null}
-    </div>
+      </div>
+    </KeepAliveProvider>
   );
 }

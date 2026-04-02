@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   FileCode2,
   Loader2,
@@ -60,15 +60,23 @@ export function NumdlbEditorModalWindow({
     [session.baseData, session.draftData],
   );
 
+  const draftRef = useRef(session.draftData);
+  const savingRef = useRef(session.saving);
+  const loadingRef = useRef(session.loading);
+  draftRef.current = session.draftData;
+  savingRef.current = session.saving;
+  loadingRef.current = session.loading;
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         const active = document.activeElement;
         if (nodeRef.current?.contains(active)) {
           e.preventDefault();
-          if (!session.saving && session.draftData && !session.loading) {
+          const draft = draftRef.current;
+          if (!savingRef.current && draft && !loadingRef.current) {
             try {
-              assertNumdlbValidForSave(session.draftData);
+              assertNumdlbValidForSave(draft);
             } catch (err) {
               toast.error(String(err));
               return;
@@ -80,7 +88,7 @@ export function NumdlbEditorModalWindow({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onSave, session.draftData, session.loading, session.saving, nodeRef]);
+  }, [onSave, nodeRef]);
 
   const title = fileBasename(session.filePath);
 

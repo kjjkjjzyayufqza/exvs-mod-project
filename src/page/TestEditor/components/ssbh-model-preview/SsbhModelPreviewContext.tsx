@@ -179,6 +179,8 @@ export type SsbhModelPreviewContextValue = {
   setBoneTransformMode: (v: BoneTransformMode) => void;
   bonePoseResetNonce: number;
   resetBonePose: () => void;
+  /** When true, the 3D canvas stops its render loop (kept-alive background route). */
+  previewSuspended: boolean;
 };
 
 const SsbhModelPreviewContext = createContext<SsbhModelPreviewContextValue | null>(null);
@@ -193,10 +195,16 @@ export function useSsbhModelPreview(): SsbhModelPreviewContextValue {
 
 type ProviderProps = {
   workspaceRoot: string | null | undefined;
+  /** When true, pause the Three.js render loop while the Test Editor route stays mounted in the background. */
+  previewSuspended?: boolean;
   children: ReactNode;
 };
 
-export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderProps) {
+export function SsbhModelPreviewProvider({
+  workspaceRoot,
+  previewSuspended = false,
+  children,
+}: ProviderProps) {
   const root = workspaceRoot?.trim() ? workspaceRoot : null;
 
   const [bundle, setBundle] = useState<SsbhModelPreviewBundle | null>(null);
@@ -753,7 +761,8 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       setBoneTransformMode,
       bonePoseResetNonce,
       resetBonePose,
-    }),
+      previewSuspended,
+    } satisfies SsbhModelPreviewContextValue),
     [
       root,
       bundle,
@@ -812,6 +821,7 @@ export function SsbhModelPreviewProvider({ workspaceRoot, children }: ProviderPr
       boneTransformMode,
       bonePoseResetNonce,
       resetBonePose,
+      previewSuspended,
     ],
   );
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import {
   FileCode2,
   Loader2,
@@ -13,7 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useDraggableModal } from "@/hooks/useDraggableModal";
 import type { JnttblEditorDocument } from "./jnttblIoService";
 import { JnttblEditorBody } from "./JnttblEditorBody";
-import { assertJnttblValidForSave, isJnttblDraftDirty } from "./jnttblEditorUtils";
+import { assertJnttblValidForSave } from "./jnttblEditorUtils";
 
 export type JnttblEditorWindowSession = {
   id: string;
@@ -23,6 +23,7 @@ export type JnttblEditorWindowSession = {
   loadError: string | null;
   baseData: JnttblEditorDocument | null;
   draftData: JnttblEditorDocument | null;
+  isDirty: boolean;
   zIndex: number;
 };
 
@@ -71,10 +72,14 @@ export function JnttblEditorModalWindow({
   const { nodeRef, handleProps } = useDraggableModal({
     defaultPosition: { x: 48 + cascadeIndex * 28, y: 48 + cascadeIndex * 28 },
   });
-  const dirty = useMemo(
-    () => isJnttblDraftDirty(session.baseData, session.draftData),
-    [session.baseData, session.draftData],
-  );
+  const dirty = session.isDirty;
+
+  const draftRef = useRef(session.draftData);
+  const savingRef = useRef(session.saving);
+  const loadingRef = useRef(session.loading);
+  draftRef.current = session.draftData;
+  savingRef.current = session.saving;
+  loadingRef.current = session.loading;
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -82,9 +87,10 @@ export function JnttblEditorModalWindow({
         const active = document.activeElement;
         if (nodeRef.current?.contains(active)) {
           e.preventDefault();
-          if (!session.saving && session.draftData && !session.loading) {
+          const draft = draftRef.current;
+          if (!savingRef.current && draft && !loadingRef.current) {
             try {
-              assertJnttblValidForSave(session.draftData);
+              assertJnttblValidForSave(draft);
             } catch (err) {
               toast.error(String(err));
               return;
@@ -96,7 +102,7 @@ export function JnttblEditorModalWindow({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onSave, session.draftData, session.loading, session.saving, nodeRef]);
+  }, [onSave, nodeRef]);
 
   const title = fileBasename(session.filePath);
 

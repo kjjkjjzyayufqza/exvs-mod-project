@@ -75,6 +75,8 @@ type SsbhModelCanvasProps = {
   bonePoseResetNonce: number;
   /** Stylized pipeline (bloom + warm lights) inspired by external/water-anime-shader. */
   previewRenderStyle: PreviewRenderStyle;
+  /** When true, R3F stops the render loop (background kept-alive route). */
+  previewSuspended?: boolean;
 };
 
 function CameraFit({
@@ -468,7 +470,7 @@ function Scene({
   boneTransformMode,
   bonePoseResetNonce,
   previewRenderStyle,
-}: SsbhModelCanvasProps) {
+}: Omit<SsbhModelCanvasProps, "previewSuspended">) {
   const modelRootRef = useRef<Group>(null);
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const prevBonePose = useRef(bonePoseEnabled);
@@ -588,7 +590,7 @@ function Scene({
 }
 
 export function SsbhModelCanvas(props: SsbhModelCanvasProps) {
-  const { background, ...sceneProps } = props;
+  const { background, previewSuspended = false, ...sceneProps } = props;
 
   return (
     <div
@@ -600,6 +602,7 @@ export function SsbhModelCanvas(props: SsbhModelCanvasProps) {
     >
       <Canvas
         className="h-full w-full touch-none"
+        frameloop={previewSuspended ? "never" : "demand"}
         gl={{ antialias: true, alpha: false }}
         dpr={[1, 2]}
         camera={{ position: [2.4, 1.6, 2.8], fov: 50, near: 0.02, far: 5e6 }}
