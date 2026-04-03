@@ -19,6 +19,7 @@ export interface AssetRefInfo {
   workspaceFolderPath: string; // Expected folder path in current workspace root
   isModel: boolean;
   isParamAsset: boolean;
+  isMscAsset: boolean;
 }
 
 async function resolveFhm2dPath(baseDir: string, hashHex: string): Promise<string> {
@@ -41,6 +42,7 @@ export async function getAssetRefInfo(
   const lower = fieldKey.toLowerCase();
   const isModel = lower === "model";
   const isParamAsset = lower === "param";
+  const isMscAsset = lower === "msc";
 
   // Construct paths
   // Source: {obDplCachePath}\0x{HEX}.fhm2d
@@ -60,5 +62,6 @@ export async function getAssetRefInfo(
     workspaceFolderPath,
     isModel,
     isParamAsset,
+    isMscAsset,
   };
 }

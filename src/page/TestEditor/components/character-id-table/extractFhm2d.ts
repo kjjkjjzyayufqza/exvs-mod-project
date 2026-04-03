@@ -67,7 +67,9 @@ export async function extractAsset(
       ? Fhm2d_type_format.fhm2d_character
       : asset.isParamAsset
         ? Fhm2d_type_format.fhm2d_character_param
-        : undefined;
+        : asset.isMscAsset
+          ? Fhm2d_type_format.fhm2d_msc
+          : undefined;
 
     const extractResult = await ExtractFHMData(
       fhm2d,

@@ -7,12 +7,14 @@ import { basename, dirname } from "@tauri-apps/api/path";
 import { applyNumdlbBaseNameToStructureObject } from "@/lib/fhm2d_characterModelFormatFuc";
 import { applyNutexbInternalNameToStructureObject } from "@/lib/fhm2d_allNutexbFormatFuc";
 import { applyParamAssetNamesToStructureObject } from "@/lib/fhm2d_paramAssetFormatFuc";
+import { applyMscAssetNamesToStructureObject } from "@/lib/fhm2d_mscAssetFormatFuc";
 
 export enum Fhm2d_type_format {
   fhm2d_character = "fhm2d_character",
   fhm2d_all_nutexb = "fhm2d_all_nutexb",
   fhm2d_stage_list = "fhm2d_stage_list",
   fhm2d_character_param = "fhm2d_character_param",
+  fhm2d_msc = "fhm2d_msc",
 }
 
 export enum Fhm2dType {
@@ -613,6 +615,10 @@ export async function ExtractFHMData(
 
     stepAt = logExtractFhmStep("decompress all subfiles", stepAt, extractStart);
 
+    if (format === Fhm2d_type_format.fhm2d_msc && decompressedFiles.length !== 3) {
+      throw new Error(`MSC extract: expected exactly 3 subfiles, got ${decompressedFiles.length}`);
+    }
+
     if (type === ExtractType.SingleFolder) {
       // Step 2: Generate structure and apply naming logic
       const outputStructure = generateOutputStructure(fhm2d, typeList, fileNameNoExt, errorInfo);
@@ -660,6 +666,10 @@ export async function ExtractFHMData(
           }
           case Fhm2d_type_format.fhm2d_character_param: {
             finalStructure = applyParamAssetNamesToStructureObject(outputStructure);
+            break;
+          }
+          case Fhm2d_type_format.fhm2d_msc: {
+            finalStructure = applyMscAssetNamesToStructureObject(outputStructure);
             break;
           }
           default: {
