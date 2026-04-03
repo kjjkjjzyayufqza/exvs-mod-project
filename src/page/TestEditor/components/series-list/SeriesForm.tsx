@@ -1,8 +1,10 @@
-import { ChangeEvent, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+
+import { ImageIcon } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -56,6 +58,7 @@ export function SeriesForm({
   onChange,
 }: SeriesFormProps) {
   const [previewVersion, setPreviewVersion] = useState(0);
+  const [seriesImageDialogOpen, setSeriesImageDialogOpen] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(FormSchema),
@@ -135,8 +138,8 @@ export function SeriesForm({
         <Card className="h-full flex flex-col">
           <CardHeader className="pb-3">
             <div className="flex items-start gap-4">
-              <div className="shrink-0 space-y-2">
-                <div className="h-24 w-48 overflow-hidden rounded border bg-black">
+              <div className="shrink-0">
+                <div className="h-24 w-48 overflow-hidden rounded border bg-black relative group">
                   <img
                     src={thumbnailSrc}
                     alt={seriesName || "Series"}
@@ -145,24 +148,52 @@ export function SeriesForm({
                       e.currentTarget.src = "/tauri.svg";
                     }}
                   />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 transition-opacity group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="shadow-md font-semibold"
+                      onClick={() => setSeriesImageDialogOpen(true)}
+                    >
+                      View
+                    </Button>
+                  </div>
                 </div>
-                <SeriesImageReplaceDialog
-                  iconFileIndex={series.iconFileIndex}
-                  seriesImageConvertDirPath={seriesImageConvertDirPath}
-                  seriesImageSeriesBaseNameOrder={seriesImageSeriesBaseNameOrder}
-                  onRefreshSeriesImages={onRefreshSeriesImages}
-                  onApplied={(nextIconFileIndex) => {
-                    form.setValue("iconFileIndex", nextIconFileIndex);
-                    setPreviewVersion((v) => v + 1);
-                  }}
-                />
               </div>
               <div className="flex-1 min-w-0 space-y-2">
-                <CardTitle className="text-lg">Series Details</CardTitle>
-                <div className="text-xs text-muted-foreground">
-                  <div>ID: {series.SeriesId}</div>
-                  <div>Index: {index}</div>
-                  <div>Image: {imageFileName ?? "-"}</div>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-2">
+                    <CardTitle className="text-lg">Series Details</CardTitle>
+                    <div className="text-xs text-muted-foreground">
+                      <div>ID: {series.SeriesId}</div>
+                      <div>Index: {index}</div>
+                      <div>Image: {imageFileName ?? "-"}</div>
+                    </div>
+                  </div>
+                  <SeriesImageReplaceDialog
+                    open={seriesImageDialogOpen}
+                    onOpenChange={setSeriesImageDialogOpen}
+                    iconFileIndex={series.iconFileIndex}
+                    seriesImageConvertDirPath={seriesImageConvertDirPath}
+                    seriesImageSeriesBaseNameOrder={seriesImageSeriesBaseNameOrder}
+                    onRefreshSeriesImages={onRefreshSeriesImages}
+                    onApplied={(nextIconFileIndex) => {
+                      form.setValue("iconFileIndex", nextIconFileIndex);
+                      setPreviewVersion((v) => v + 1);
+                    }}
+                    trigger={
+                      <Button
+                        type="button"
+                        variant="default"
+                        size="sm"
+                        className="shrink-0 font-semibold shadow-sm gap-2"
+                      >
+                        <ImageIcon className="w-4 h-4 shrink-0" />
+                        Image
+                      </Button>
+                    }
+                  />
                 </div>
               </div>
             </div>
