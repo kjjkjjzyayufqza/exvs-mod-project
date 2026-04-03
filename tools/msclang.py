@@ -387,14 +387,21 @@ binaryOpCount = 0
 exvs_native_truth_mapping = None
 
 
-def compile_call_argument(arg_node, function_name, arg_index, loopParent=None, parentLoopCondition=None):
+def compile_call_argument(
+    arg_node,
+    function_name,
+    arg_index,
+    call_args=None,
+    loopParent=None,
+    parentLoopCondition=None,
+):
     global exvs_native_truth_mapping
     if exvs_native_truth_mapping is None:
         return compileNode(arg_node, loopParent, parentLoopCondition)
 
     if type(arg_node) == c_ast.Constant and arg_node.type in ["int", "bool"]:
         raw_value = toInt(arg_node.value) & 0xFFFFFFFF
-        for rule in exvs_native_truth_mapping.rules_for(function_name, arg_index):
+        for rule in exvs_native_truth_mapping.rules_for(function_name, arg_index, call_args):
             if not rule.matches_value(raw_value):
                 continue
 
@@ -822,7 +829,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
                 raise CompilerError("Syscall {} not found".format(syscallName))
         elif name == "printf":
             for arg_index, arg in enumerate(node.args.exprs):
-                nodeOut += compile_call_argument(arg, name, arg_index, loopParent, parentLoopCondition)
+                nodeOut += compile_call_argument(arg, name, arg_index, node.args.exprs, loopParent, parentLoopCondition)
                 addArg()
             nodeOut.append(Command(0x2c, [len(node.args.exprs)]))
         elif name == "set_main":
@@ -831,7 +838,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
             funcPtr = compileNode(node.args.exprs[0], loopParent, parentLoopCondition)
             funcArgs = node.args.exprs[1:]
             for arg_index, arg in enumerate(funcArgs):
-                nodeOut += compile_call_argument(arg, name, arg_index + 1, loopParent, parentLoopCondition)
+                nodeOut += compile_call_argument(arg, name, arg_index + 1, node.args.exprs, loopParent, parentLoopCondition)
                 addArg()
             nodeOut += funcPtr
             addArg()
@@ -842,7 +849,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
             funcPtr = compileNode(node.args.exprs[0], loopParent, parentLoopCondition)
             funcArgs = node.args.exprs[1:]
             for arg_index, arg in enumerate(funcArgs):
-                nodeOut += compile_call_argument(arg, name, arg_index + 1, loopParent, parentLoopCondition)
+                nodeOut += compile_call_argument(arg, name, arg_index + 1, node.args.exprs, loopParent, parentLoopCondition)
                 addArg()
             nodeOut += funcPtr
             addArg()
@@ -851,7 +858,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
             sysNum = syscalls[name]
             if hasattr(node.args, 'exprs'):
                 for arg_index, arg in enumerate(node.args.exprs):
-                    nodeOut += compile_call_argument(arg, name, arg_index, loopParent, parentLoopCondition)
+                    nodeOut += compile_call_argument(arg, name, arg_index, node.args.exprs, loopParent, parentLoopCondition)
                     addArg()
                 nodeOut.append(Command(0x2d, [len(node.args.exprs), sysNum]))
             else:
@@ -867,7 +874,14 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
             nodeOut.append(Command(0x2e, [endLabel]))
             if node.args != None:
                 for arg_index, arg in enumerate(node.args.exprs):
-                    nodeOut += compile_call_argument(arg, name if name is not None else "", arg_index, loopParent, parentLoopCondition)
+                    nodeOut += compile_call_argument(
+                        arg,
+                        name if name is not None else "",
+                        arg_index,
+                        node.args.exprs if node.args is not None else None,
+                        loopParent,
+                        parentLoopCondition,
+                    )
                     addArg()
             nodeOut += funcPtr
             addArg()

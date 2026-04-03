@@ -1,4 +1,5 @@
 import json
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -16,19 +17,23 @@ class ExvsCallRule:
     encode_add: int = 0
     min_value: int = 0
     max_value: Optional[int] = None
+    function_patterns: Optional[List[str]] = None
+    match_prefix: Optional[List[int]] = None
     anchor_function: Optional[str] = None
     anchor_baseline_offset: Optional[int] = None
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> "ExvsCallRule":
         return ExvsCallRule(
-            function=data["function"],
+            function=data.get("function", ""),
             arg_index=int(data["arg_index"]),
             kind=data["kind"],
             decode_add=int(data.get("decode_add", 0)),
             encode_add=int(data.get("encode_add", 0)),
             min_value=int(data.get("min_value", 0)),
             max_value=(None if data.get("max_value") is None else int(data["max_value"])),
+            function_patterns=data.get("function_patterns"),
+            match_prefix=[int(x) for x in data.get("match_prefix", [])] if data.get("match_prefix") is not None else None,
             anchor_function=data.get("anchor_function"),
             anchor_baseline_offset=(
                 None if data.get("anchor_baseline_offset") is None else int(data["anchor_baseline_offset"])
@@ -40,6 +45,36 @@ class ExvsCallRule:
             return False
         if self.max_value is not None and value > self.max_value:
             return False
+        return True
+
+    def _extract_int_from_arg(self, arg: Any) -> Optional[int]:
+        if isinstance(arg, int):
+            return arg
+        if hasattr(arg, "value") and isinstance(getattr(arg, "value"), int):
+            return getattr(arg, "value")
+        return None
+
+    def matches_call(self, function_name: str, call_args: Optional[List[Any]]) -> bool:
+        function_ok = self.function == function_name if self.function else False
+        if not function_ok and self.function_patterns:
+            for pattern in self.function_patterns:
+                if re.match(pattern, function_name):
+                    function_ok = True
+                    break
+        if not function_ok:
+            return False
+
+        if self.match_prefix is None:
+            return True
+        if call_args is None:
+            return False
+        if len(call_args) < len(self.match_prefix):
+            return False
+
+        for i, expected in enumerate(self.match_prefix):
+            value = self._extract_int_from_arg(call_args[i])
+            if value is None or value != expected:
+                return False
         return True
 
 
@@ -73,8 +108,17 @@ class ExvsNativeTruthMapping:
         for rule_raw in self.raw.get("opaque_function_refs", []):
             self._call_rules.append(ExvsCallRule.from_dict(rule_raw))
 
-    def rules_for(self, function_name: str, arg_index: int) -> List[ExvsCallRule]:
-        return [r for r in self._call_rules if r.function == function_name and r.arg_index == arg_index]
+    def rules_for(
+        self,
+        function_name: str,
+        arg_index: int,
+        call_args: Optional[List[Any]] = None,
+    ) -> List[ExvsCallRule]:
+        return [
+            r
+            for r in self._call_rules
+            if r.arg_index == arg_index and r.matches_call(function_name, call_args)
+        ]
 
     def decode_symbol_from_value(self, rule: ExvsCallRule, value: int) -> Optional[str]:
         if not rule.matches_value(value):

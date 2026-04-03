@@ -19,6 +19,7 @@ class DecompilerError(Exception):
 
 
 exvs_native_truth_mapping = None
+exvs_script_ranges = []
 
 class Cast:
     def __init__(self, type):
@@ -780,7 +781,7 @@ def _get_call_name(call_obj):
 
 
 def _walk_and_symbolize_exvs_native_truth(node):
-    global exvs_native_truth_mapping
+    global exvs_native_truth_mapping, exvs_script_ranges
     if exvs_native_truth_mapping is None or node is None:
         return
 
@@ -789,14 +790,35 @@ def _walk_and_symbolize_exvs_native_truth(node):
         if call_name is not None and isinstance(node.args, c_ast.DeclList):
             for arg_index, arg in enumerate(node.args):
                 if isinstance(arg, c_ast.Constant) and isinstance(arg.value, int):
-                    for rule in exvs_native_truth_mapping.rules_for(call_name, arg_index):
-                        if rule.kind != "function_ref":
-                            continue
-                        symbol = exvs_native_truth_mapping.decode_symbol_from_value(rule, arg.value)
-                        if symbol is not None:
-                            node.args[arg_index] = c_ast.ID(symbol)
-                            arg = node.args[arg_index]
-                            break
+                    for rule in exvs_native_truth_mapping.rules_for(call_name, arg_index, list(node.args)):
+                        if rule.kind == "function_ref":
+                            symbol = exvs_native_truth_mapping.decode_symbol_from_value(rule, arg.value)
+                            if symbol is not None:
+                                node.args[arg_index] = c_ast.ID(symbol)
+                                arg = node.args[arg_index]
+                                break
+
+                        if rule.kind == "script_delta":
+                            target = arg.value
+                            containing_symbol = None
+                            containing_start = None
+                            for script_name, start, end in exvs_script_ranges:
+                                if start <= target < end:
+                                    containing_symbol = script_name
+                                    containing_start = start
+                                    break
+                            if containing_symbol is not None and containing_start is not None:
+                                delta = target - containing_start
+                                if delta == 0:
+                                    node.args[arg_index] = c_ast.ID(containing_symbol)
+                                else:
+                                    node.args[arg_index] = c_ast.BinaryOp(
+                                        "+",
+                                        c_ast.ID(containing_symbol),
+                                        c_ast.Constant(delta),
+                                    )
+                                arg = node.args[arg_index]
+                                break
                 _walk_and_symbolize_exvs_native_truth(arg)
         return
 
@@ -862,7 +884,7 @@ def _walk_and_symbolize_exvs_native_truth(node):
         return
 
 def main(args):
-    global globalVars, globalVarDecls, funcTypes, funcNames, allLocalVarTypes, xmlInfo, exvs_native_truth_mapping
+    global globalVars, globalVarDecls, funcTypes, funcNames, allLocalVarTypes, xmlInfo, exvs_native_truth_mapping, exvs_script_ranges
 
     # Use path passed by argument if it exists,
     # else use the path found from getXmlInfoPath()
@@ -895,6 +917,9 @@ def main(args):
     if args.assumeCharStd:
         for f in xmlInfo.functions:
             funcNames[f.id] = f.name
+    exvs_script_ranges = []
+    for script in mscFile:
+        exvs_script_ranges.append((script.name, script.bounds[0], script.bounds[1]))
 
     allLocalVarTypes = []
     for i, script in enumerate(mscFile):

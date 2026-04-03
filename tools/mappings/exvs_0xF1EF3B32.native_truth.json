@@ -4,7 +4,8 @@
   "script_file_id": "0xF1EF3B32",
   "binary": {
     "image_base": "0x140000000",
-    "notes": "Fill exact binary hash via IDA MCP survey before production usage."
+    "sha256": "cae3636aa4870d356eb25837badeb83482a71e290961442decf13cf87e1baa76",
+    "notes": "Verified against ida://idb/metadata from IDA MCP session."
   },
   "anchors": {
     "main_script_baseline_offset": 15315
@@ -19,7 +20,18 @@
       "min_value": 4096,
       "max_value": 131072,
       "anchor_function": "main",
-      "anchor_baseline_offset": 15315
+      "anchor_baseline_offset": 15367
+    },
+    {
+      "rule_id": "sys1_10002_ch0_arg3_script_delta",
+      "function": "sys_1",
+      "arg_index": 3,
+      "kind": "script_delta",
+      "match_prefix": [65538, 0],
+      "min_value": 4096,
+      "max_value": 131072,
+      "anchor_function": "main",
+      "anchor_baseline_offset": 15367
     },
     {
       "rule_id": "func241_arg1_function_ref",
