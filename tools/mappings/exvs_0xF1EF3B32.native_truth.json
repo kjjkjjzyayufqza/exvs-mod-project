@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "game_version": "EXVS2",
+  "script_file_id": "0xF1EF3B32",
+  "binary": {
+    "image_base": "0x140000000",
+    "notes": "Fill exact binary hash via IDA MCP survey before production usage."
+  },
+  "anchors": {
+    "main_script_baseline_offset": 15315
+  },
+  "script_functions": [],
+  "opaque_function_refs": [
+    {
+      "rule_id": "func83_arg1_script_delta",
+      "function": "func_83",
+      "arg_index": 1,
+      "kind": "script_delta",
+      "min_value": 4096,
+      "max_value": 131072,
+      "anchor_function": "main",
+      "anchor_baseline_offset": 15315
+    },
+    {
+      "rule_id": "func241_arg1_function_ref",
+      "function": "func_241",
+      "arg_index": 1,
+      "kind": "function_ref",
+      "decode_add": 48,
+      "encode_add": -48,
+      "min_value": 1
+    }
+  ],
+  "callback_bindings_seed": [
+    {
+      "action_hash": "0xf48d2d49",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "setupMainShotScriptCallbacks",
+      "evidence": "2.c:29819"
+    },
+    {
+      "action_hash": "0x97d37a4f",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_929",
+      "evidence": "2.c:29825"
+    },
+    {
+      "action_hash": "0x974e3e5f",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_935",
+      "evidence": "2.c:29826"
+    }
+  ]
+}

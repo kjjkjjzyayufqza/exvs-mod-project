@@ -11,10 +11,14 @@ import math
 import logging
 import re
 import sys
+from exvs_native_truth import ExvsNativeTruthMapping
 
 class DecompilerError(Exception):
     def __init__(self,*args,**kwargs):
         Exception.__init__(self,*args,**kwargs)
+
+
+exvs_native_truth_mapping = None
 
 class Cast:
     def __init__(self, type):
@@ -766,8 +770,99 @@ def getFuncTypes(mscFile):
                 funcTypes[i] = funcTypes[funcNames.index(funcTypes[i])]
     return funcTypes
 
+
+def _get_call_name(call_obj):
+    if isinstance(call_obj.function, str):
+        return call_obj.function
+    if isinstance(call_obj.function, c_ast.ID):
+        return call_obj.function.name
+    return None
+
+
+def _walk_and_symbolize_exvs_native_truth(node):
+    global exvs_native_truth_mapping
+    if exvs_native_truth_mapping is None or node is None:
+        return
+
+    if isinstance(node, c_ast.FuncCall):
+        call_name = _get_call_name(node)
+        if call_name is not None and isinstance(node.args, c_ast.DeclList):
+            for arg_index, arg in enumerate(node.args):
+                if isinstance(arg, c_ast.Constant) and isinstance(arg.value, int):
+                    for rule in exvs_native_truth_mapping.rules_for(call_name, arg_index):
+                        if rule.kind != "function_ref":
+                            continue
+                        symbol = exvs_native_truth_mapping.decode_symbol_from_value(rule, arg.value)
+                        if symbol is not None:
+                            node.args[arg_index] = c_ast.ID(symbol)
+                            arg = node.args[arg_index]
+                            break
+                _walk_and_symbolize_exvs_native_truth(arg)
+        return
+
+    if isinstance(node, c_ast.FuncDef):
+        for stmt in node.statements:
+            _walk_and_symbolize_exvs_native_truth(stmt)
+        return
+
+    if isinstance(node, c_ast.Statements):
+        for stmt in node:
+            _walk_and_symbolize_exvs_native_truth(stmt)
+        return
+
+    if isinstance(node, c_ast.If):
+        _walk_and_symbolize_exvs_native_truth(node.condition)
+        _walk_and_symbolize_exvs_native_truth(node.trueStatements)
+        _walk_and_symbolize_exvs_native_truth(node.falseStatements)
+        return
+
+    if isinstance(node, c_ast.While):
+        _walk_and_symbolize_exvs_native_truth(node.condition)
+        _walk_and_symbolize_exvs_native_truth(node.statements)
+        return
+
+    if isinstance(node, c_ast.DoWhile):
+        _walk_and_symbolize_exvs_native_truth(node.condition)
+        _walk_and_symbolize_exvs_native_truth(node.statements)
+        return
+
+    if isinstance(node, c_ast.For):
+        _walk_and_symbolize_exvs_native_truth(node.initialize)
+        _walk_and_symbolize_exvs_native_truth(node.condition)
+        _walk_and_symbolize_exvs_native_truth(node.iterate)
+        _walk_and_symbolize_exvs_native_truth(node.statements)
+        return
+
+    if isinstance(node, c_ast.Assignment):
+        _walk_and_symbolize_exvs_native_truth(node.lvalue)
+        _walk_and_symbolize_exvs_native_truth(node.rvalue)
+        return
+
+    if isinstance(node, c_ast.Return):
+        _walk_and_symbolize_exvs_native_truth(node.statement)
+        return
+
+    if isinstance(node, c_ast.BinaryOp):
+        _walk_and_symbolize_exvs_native_truth(node.arg1)
+        _walk_and_symbolize_exvs_native_truth(node.arg2)
+        return
+
+    if isinstance(node, c_ast.UnaryOp):
+        _walk_and_symbolize_exvs_native_truth(node.id)
+        return
+
+    if isinstance(node, c_ast.Cast):
+        _walk_and_symbolize_exvs_native_truth(node.statement)
+        return
+
+    if isinstance(node, c_ast.TernaryOp):
+        _walk_and_symbolize_exvs_native_truth(node.condition)
+        _walk_and_symbolize_exvs_native_truth(node.trueStatement)
+        _walk_and_symbolize_exvs_native_truth(node.falseStatement)
+        return
+
 def main(args):
-    global globalVars, globalVarDecls, funcTypes, funcNames, allLocalVarTypes, xmlInfo
+    global globalVars, globalVarDecls, funcTypes, funcNames, allLocalVarTypes, xmlInfo, exvs_native_truth_mapping
 
     # Use path passed by argument if it exists,
     # else use the path found from getXmlInfoPath()
@@ -775,6 +870,9 @@ def main(args):
     # MscXmlInfo(None) (aka filename=None) will be an empty MscXmlInfo object
     xmlPath = args.xmlPath if args.xmlPath != None else getXmlInfoPath()
     xmlInfo = MscXmlInfo(xmlPath)
+    exvs_native_truth_mapping = None
+    if args.exvsMapping:
+        exvs_native_truth_mapping = ExvsNativeTruthMapping.from_path(args.exvsMapping)
 
     logging.info("Analyzing...")
     mscFile = mscsb_disasm(args.file)
@@ -804,6 +902,10 @@ def main(args):
     funcTypes = getFuncTypes(mscFile)
     for i, func in enumerate(funcs):
         func.type = funcTypes[i]
+
+    if exvs_native_truth_mapping is not None:
+        for func in funcs:
+            _walk_and_symbolize_exvs_native_truth(func)
 
     if args.split:
         stdlibFuncs = []
@@ -1269,6 +1371,7 @@ if __name__ == "__main__":
     parser.add_argument('-o', dest='filename', help='Filename to output to')
     parser.add_argument('-s', '--split', action='store_true', help='Split to put all functions before main() into stdlib.c')
     parser.add_argument('-x', '--xmlPath', dest='xmlPath', help="Path to load overload MSC xml info")
+    parser.add_argument('--exvsMapping', dest='exvsMapping', help="Path to EXVS native-truth mapping JSON")
     parser.add_argument('-c', '--assumeCharStd', dest='assumeCharStd', action='store_true', help="Assume the MSC binary is a character")
     parser.add_argument('-log', '--log', dest='log', help="Log file to output to", default="log.txt")
     start = timeit.default_timer()

@@ -22,6 +22,7 @@ import struct
 from subprocess import Popen, PIPE
 import os.path
 from xml_info import MscXmlInfo, VariableLabel, getXmlInfoPath
+from exvs_native_truth import ExvsNativeTruthMapping
 
 ENDIANESS = '<L'
 
@@ -182,6 +183,18 @@ class FileRefs:
         self.globalVariables = globalVariables
         self.globalVariableTypes = globalVariableTypes
         self.functionTypes = functionTypes
+
+
+class MappedFunctionRef:
+    def __init__(self, symbol, rule):
+        self.symbol = symbol
+        self.rule = rule
+
+
+class DeferredRelocationValue:
+    def __init__(self, raw_value, rule):
+        self.raw_value = raw_value
+        self.rule = rule
 
 def removeComments(text):
     text = re.sub(
@@ -371,6 +384,30 @@ nodeCount = 0
 position = 0
 outputAB34 = False
 binaryOpCount = 0
+exvs_native_truth_mapping = None
+
+
+def compile_call_argument(arg_node, function_name, arg_index, loopParent=None, parentLoopCondition=None):
+    global exvs_native_truth_mapping
+    if exvs_native_truth_mapping is None:
+        return compileNode(arg_node, loopParent, parentLoopCondition)
+
+    if type(arg_node) == c_ast.Constant and arg_node.type in ["int", "bool"]:
+        raw_value = toInt(arg_node.value) & 0xFFFFFFFF
+        for rule in exvs_native_truth_mapping.rules_for(function_name, arg_index):
+            if not rule.matches_value(raw_value):
+                continue
+
+            if rule.kind == "function_ref":
+                symbol = exvs_native_truth_mapping.decode_symbol_from_value(rule, raw_value)
+                if symbol is None:
+                    continue
+                return [Command(0xA, [MappedFunctionRef(symbol, rule)])]
+
+            if rule.kind == "script_delta":
+                return [Command(0xA, [DeferredRelocationValue(raw_value, rule)])]
+
+    return compileNode(arg_node, loopParent, parentLoopCondition)
 
 # Take a abstract syntax tree node and recursively compile it
 def compileNode(node, loopParent=None, parentLoopCondition=None):
@@ -784,8 +821,8 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
             else:
                 raise CompilerError("Syscall {} not found".format(syscallName))
         elif name == "printf":
-            for arg in node.args.exprs:
-                nodeOut += compileNode(arg, loopParent, parentLoopCondition)
+            for arg_index, arg in enumerate(node.args.exprs):
+                nodeOut += compile_call_argument(arg, name, arg_index, loopParent, parentLoopCondition)
                 addArg()
             nodeOut.append(Command(0x2c, [len(node.args.exprs)]))
         elif name == "set_main":
@@ -793,8 +830,8 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
                 raise CompilerError("Error at %s: set_main requires at least 1 argument (function pointer)"%str(node.coord))
             funcPtr = compileNode(node.args.exprs[0], loopParent, parentLoopCondition)
             funcArgs = node.args.exprs[1:]
-            for arg in funcArgs:
-                nodeOut += compileNode(arg, loopParent, parentLoopCondition)
+            for arg_index, arg in enumerate(funcArgs):
+                nodeOut += compile_call_argument(arg, name, arg_index + 1, loopParent, parentLoopCondition)
                 addArg()
             nodeOut += funcPtr
             addArg()
@@ -804,8 +841,8 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
                 raise CompilerError("Error at %s: callFunc3 requires at least 1 argument (function pointer)"%str(node.coord))
             funcPtr = compileNode(node.args.exprs[0], loopParent, parentLoopCondition)
             funcArgs = node.args.exprs[1:]
-            for arg in funcArgs:
-                nodeOut += compileNode(arg, loopParent, parentLoopCondition)
+            for arg_index, arg in enumerate(funcArgs):
+                nodeOut += compile_call_argument(arg, name, arg_index + 1, loopParent, parentLoopCondition)
                 addArg()
             nodeOut += funcPtr
             addArg()
@@ -813,8 +850,8 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
         elif name in syscalls:
             sysNum = syscalls[name]
             if hasattr(node.args, 'exprs'):
-                for arg in node.args.exprs:
-                    nodeOut += compileNode(arg, loopParent, parentLoopCondition)
+                for arg_index, arg in enumerate(node.args.exprs):
+                    nodeOut += compile_call_argument(arg, name, arg_index, loopParent, parentLoopCondition)
                     addArg()
                 nodeOut.append(Command(0x2d, [len(node.args.exprs), sysNum]))
             else:
@@ -829,8 +866,8 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
                 funcPtr = compileNode(node.name.expr, loopParent, parentLoopCondition)
             nodeOut.append(Command(0x2e, [endLabel]))
             if node.args != None:
-                for arg in node.args.exprs:
-                    nodeOut += compileNode(arg, loopParent, parentLoopCondition)
+                for arg_index, arg in enumerate(node.args.exprs):
+                    nodeOut += compile_call_argument(arg, name if name is not None else "", arg_index, loopParent, parentLoopCondition)
                     addArg()
             nodeOut += funcPtr
             addArg()
@@ -872,7 +909,7 @@ def compileScript(func):
 
 # Fill in function pointers, labels with locations rather than strings
 def resolveReferences(msc):
-    global refs
+    global refs, exvs_native_truth_mapping
     scriptPositions = []
     labelPostions = {}
     namedLabelPositions = []
@@ -898,6 +935,17 @@ def resolveReferences(msc):
                             cmd.parameters[i] = namedLabelPositions[j][arg]
                         else:
                             cmd.parameters[i] = scriptPositions[refs.functions.index(arg)]
+                    elif type(arg) == MappedFunctionRef:
+                        if arg.symbol not in refs.functions:
+                            raise CompilerError(f"Mapped symbol '{arg.symbol}' does not exist in current functions")
+                        symbol_offset = scriptPositions[refs.functions.index(arg.symbol)]
+                        cmd.parameters[i] = symbol_offset + arg.rule.encode_add
+                    elif type(arg) == DeferredRelocationValue:
+                        if exvs_native_truth_mapping is None:
+                            raise CompilerError("Deferred relocation encountered but EXVS native truth mapping is not loaded")
+                        cmd.parameters[i] = exvs_native_truth_mapping.relocate_constant_for_compile(
+                            arg.raw_value, refs.functions, scriptPositions, arg.rule
+                        )
                     elif type(arg) == Label:
                         cmd.parameters[i] = labelPostions[arg]
 
@@ -1034,7 +1082,7 @@ def preprocess(filepath):
 
 # Compile contents of the file to a string
 def main(arguments):
-    global args, xmlInfo
+    global args, xmlInfo, exvs_native_truth_mapping
     args = arguments
     # Use path passed by argument if it exists,
     # else use the path found from getXmlInfoPath()
@@ -1042,6 +1090,9 @@ def main(arguments):
     # MscXmlInfo(None) (aka filename=None) will be an empty MscXmlInfo object
     xmlPath = args.xmlPath if args.xmlPath != None else getXmlInfoPath()
     xmlInfo = MscXmlInfo(xmlPath)
+    exvs_native_truth_mapping = None
+    if getattr(args, "exvsMapping", None):
+        exvs_native_truth_mapping = ExvsNativeTruthMapping.from_path(args.exvsMapping)
     for s in xmlInfo.syscalls:
         syscalls[s.name] = s.id
     for file in args.files:
@@ -1089,5 +1140,6 @@ if __name__ == "__main__":
     parser.add_argument('-a', '--autocast', dest='autocast', action='store_true', help='Autocast between int and float types when relevant (Note: don\'t use with decompiled files)')
     parser.add_argument('-i', '--pushInt', dest='usePushShort', action='store_false', help='Disable using pushShort as a space saver')
     parser.add_argument('-x', '--xmlPath', dest='xmlPath', help="Path to load overload MSC xml info")
+    parser.add_argument('--exvsMapping', dest='exvsMapping', help="Path to EXVS native-truth mapping JSON")
     main(parser.parse_args())
     handle_EXVS2_2E_to_AE(args)

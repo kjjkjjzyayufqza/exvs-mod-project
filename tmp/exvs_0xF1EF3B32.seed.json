@@ -1,0 +1,468 @@
+{
+  "schema_version": 1,
+  "generator": "extract_exvs_native_truth_seed.py",
+  "sources": {
+    "script0": "E:\\XB\\\u89e3\u5305\\com\\file\\0xF1EF3B32\\0_bak.c",
+    "script2": "E:\\XB\\\u89e3\u5305\\com\\file\\0xF1EF3B32\\2.c"
+  },
+  "callback_bindings_seed": [
+    {
+      "action_hash": "0x6d00aeaa",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_390",
+      "evidence": "2.c:29791"
+    },
+    {
+      "action_hash": "0x9cf36e1b",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_392",
+      "evidence": "2.c:29792"
+    },
+    {
+      "action_hash": "0x868ec571",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_394",
+      "evidence": "2.c:29793"
+    },
+    {
+      "action_hash": "0xa8ab2ac9",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_401",
+      "evidence": "2.c:29794"
+    },
+    {
+      "action_hash": "0x4de2206b",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_403",
+      "evidence": "2.c:29795"
+    },
+    {
+      "action_hash": "0x41443ba0",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_406",
+      "evidence": "2.c:29796"
+    },
+    {
+      "action_hash": "0x901c3623",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_408",
+      "evidence": "2.c:29797"
+    },
+    {
+      "action_hash": "0x679f48c2",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_410",
+      "evidence": "2.c:29798"
+    },
+    {
+      "action_hash": "0xf5f21169",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_412",
+      "evidence": "2.c:29799"
+    },
+    {
+      "action_hash": "0x14b0aea3",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_414",
+      "evidence": "2.c:29800"
+    },
+    {
+      "action_hash": "0xff098547",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_423",
+      "evidence": "2.c:29801"
+    },
+    {
+      "action_hash": "0x506ac760",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_425",
+      "evidence": "2.c:29802"
+    },
+    {
+      "action_hash": "0x86d45295",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_437",
+      "evidence": "2.c:29803"
+    },
+    {
+      "action_hash": "0x910f3fa7",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_439",
+      "evidence": "2.c:29804"
+    },
+    {
+      "action_hash": "0xb28c1647",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_441",
+      "evidence": "2.c:29805"
+    },
+    {
+      "action_hash": "0xdabb0543",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_427",
+      "evidence": "2.c:29809"
+    },
+    {
+      "action_hash": "0x68790b03",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_430",
+      "evidence": "2.c:29810"
+    },
+    {
+      "action_hash": "0xeee34191",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_433",
+      "evidence": "2.c:29811"
+    },
+    {
+      "action_hash": "0x1ad4e055",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_650",
+      "evidence": "2.c:29812"
+    },
+    {
+      "action_hash": "0xef809e66",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_840",
+      "evidence": "2.c:29813"
+    },
+    {
+      "action_hash": "0x676aca0b",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_472",
+      "evidence": "2.c:29814"
+    },
+    {
+      "action_hash": "0x27786a84",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_486",
+      "evidence": "2.c:29815"
+    },
+    {
+      "action_hash": "0xf32aa1ba",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_480",
+      "evidence": "2.c:29816"
+    },
+    {
+      "action_hash": "0x900ab393",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_482",
+      "evidence": "2.c:29817"
+    },
+    {
+      "action_hash": "0x613494c8",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_58",
+      "evidence": "2.c:29818"
+    },
+    {
+      "action_hash": "0xf48d2d49",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "setupMainShotScriptCallbacks",
+      "evidence": "2.c:29819"
+    },
+    {
+      "action_hash": "0x2e970260",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_902",
+      "evidence": "2.c:29820"
+    },
+    {
+      "action_hash": "0x7116ae73",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_907",
+      "evidence": "2.c:29821"
+    },
+    {
+      "action_hash": "0x129d65c5",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_912",
+      "evidence": "2.c:29822"
+    },
+    {
+      "action_hash": "0xd1961638",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_918",
+      "evidence": "2.c:29823"
+    },
+    {
+      "action_hash": "0x5133308a",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_923",
+      "evidence": "2.c:29824"
+    },
+    {
+      "action_hash": "0x97d37a4f",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_929",
+      "evidence": "2.c:29825"
+    },
+    {
+      "action_hash": "0x974e3e5f",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_935",
+      "evidence": "2.c:29826"
+    },
+    {
+      "action_hash": "0x1007fe95",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_941",
+      "evidence": "2.c:29827"
+    },
+    {
+      "action_hash": "0x150577e5",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_946",
+      "evidence": "2.c:29828"
+    },
+    {
+      "action_hash": "0x178d1109",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_949",
+      "evidence": "2.c:29829"
+    },
+    {
+      "action_hash": "0xa2236f44",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_964",
+      "evidence": "2.c:29830"
+    },
+    {
+      "action_hash": "0xe962048",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_968",
+      "evidence": "2.c:29831"
+    },
+    {
+      "action_hash": "0x2a1c5a4e",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_973",
+      "evidence": "2.c:29832"
+    },
+    {
+      "action_hash": "0x4a6857e2",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_976",
+      "evidence": "2.c:29833"
+    },
+    {
+      "action_hash": "0x366bb8ce",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_981",
+      "evidence": "2.c:29834"
+    },
+    {
+      "action_hash": "0x3ac14535",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_985",
+      "evidence": "2.c:29835"
+    },
+    {
+      "action_hash": "0xcce1225f",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_993",
+      "evidence": "2.c:29836"
+    },
+    {
+      "action_hash": "0x241fe4d0",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_998",
+      "evidence": "2.c:29837"
+    },
+    {
+      "action_hash": "0xb9e33e81",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_1017",
+      "evidence": "2.c:29838"
+    },
+    {
+      "action_hash": "0xd6a22df2",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_1004",
+      "evidence": "2.c:29839"
+    },
+    {
+      "action_hash": "0x131e4bc1",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_1021",
+      "evidence": "2.c:29840"
+    },
+    {
+      "action_hash": "0xcfba946",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_1025",
+      "evidence": "2.c:29841"
+    },
+    {
+      "action_hash": "0xdba6c1cc",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_1012",
+      "evidence": "2.c:29842"
+    },
+    {
+      "action_hash": "0x85f6f160",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_899",
+      "evidence": "2.c:29843"
+    },
+    {
+      "action_hash": "0x3f5c5086",
+      "registration_function": "bindActionHashHandler",
+      "callback_symbol_hint": "func_959",
+      "evidence": "2.c:29844"
+    }
+  ],
+  "func83_seed": [
+    {
+      "action_slot": 0,
+      "target_value": 0,
+      "evidence_line": 580
+    },
+    {
+      "action_slot": 1,
+      "target_value": 5106,
+      "evidence_line": 581
+    },
+    {
+      "action_slot": 2,
+      "target_value": 6153,
+      "evidence_line": 582
+    },
+    {
+      "action_slot": 3,
+      "target_value": 6266,
+      "evidence_line": 583
+    },
+    {
+      "action_slot": 4,
+      "target_value": 6344,
+      "evidence_line": 584
+    },
+    {
+      "action_slot": 5,
+      "target_value": 6457,
+      "evidence_line": 585
+    },
+    {
+      "action_slot": 6,
+      "target_value": 6604,
+      "evidence_line": 586
+    },
+    {
+      "action_slot": 7,
+      "target_value": 6686,
+      "evidence_line": 587
+    },
+    {
+      "action_slot": 8,
+      "target_value": 6902,
+      "evidence_line": 588
+    },
+    {
+      "action_slot": 9,
+      "target_value": 7100,
+      "evidence_line": 589
+    },
+    {
+      "action_slot": 10,
+      "target_value": 7178,
+      "evidence_line": 590
+    },
+    {
+      "action_slot": 11,
+      "target_value": 7542,
+      "evidence_line": 591
+    },
+    {
+      "action_slot": 12,
+      "target_value": 7629,
+      "evidence_line": 592
+    },
+    {
+      "action_slot": 13,
+      "target_value": 7802,
+      "evidence_line": 593
+    },
+    {
+      "action_slot": 14,
+      "target_value": 8023,
+      "evidence_line": 594
+    },
+    {
+      "action_slot": 15,
+      "target_value": 8069,
+      "evidence_line": 595
+    },
+    {
+      "action_slot": 16,
+      "target_value": 8467,
+      "evidence_line": 596
+    },
+    {
+      "action_slot": 23,
+      "target_value": 9291,
+      "evidence_line": 597
+    },
+    {
+      "action_slot": 24,
+      "target_value": 9369,
+      "evidence_line": 598
+    },
+    {
+      "action_slot": 25,
+      "target_value": 9413,
+      "evidence_line": 599
+    },
+    {
+      "action_slot": 26,
+      "target_value": 9459,
+      "evidence_line": 600
+    },
+    {
+      "action_slot": 29,
+      "target_value": 8775,
+      "evidence_line": 601
+    },
+    {
+      "action_slot": 30,
+      "target_value": 8821,
+      "evidence_line": 602
+    },
+    {
+      "action_slot": 31,
+      "target_value": 8908,
+      "evidence_line": 603
+    },
+    {
+      "action_slot": 32,
+      "target_value": 9127,
+      "evidence_line": 604
+    },
+    {
+      "action_slot": 33,
+      "target_value": 9540,
+      "evidence_line": 605
+    },
+    {
+      "action_slot": 35,
+      "target_value": 9922,
+      "evidence_line": 606
+    },
+    {
+      "action_slot": 36,
+      "target_value": 0,
+      "evidence_line": 607
+    },
+    {
+      "action_slot": 37,
+      "target_value": 0,
+      "evidence_line": 608
+    },
+    {
+      "action_slot": 40,
+      "target_value": 0,
+      "evidence_line": 609
+    }
+  ]
+}

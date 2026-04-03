@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { join } from "@tauri-apps/api/path";
+import { dirname, join, resourceDir } from "@tauri-apps/api/path";
 import { FileEdit, FolderOpen, Code, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,9 +14,13 @@ import {
 import { Command } from "@tauri-apps/plugin-shell";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { readDir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
-import { resourceDir } from "@tauri-apps/api/path";
-import { folderContainsMscScriptFiles } from "../../utils/mscWorkspaceUtils";
+import { exists, readDir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import {
+  folderContainsMscScriptFiles,
+  getMscConvertLogPath,
+  getMscConvertOutputPath,
+  getMscRepackOutputPath,
+} from "../../utils/mscWorkspaceUtils";
 
 interface FileInfo {
   name: string;
@@ -40,7 +44,6 @@ interface FileAction {
 
 const FILE_TYPES = [
   { value: "all", label: "All Files" },
-  { value: "bin", label: ".bin" },
   { value: "c", label: ".c" },
   { value: "txt", label: ".txt" },
   { value: "bscex", label: ".bscex" },
@@ -59,13 +62,18 @@ const BUTTON_STYLES = {
 function matchesFileType(fileName: string, type: string): boolean {
   const lower = fileName.toLowerCase();
   if (type === "all") return true;
-  if (type === "bin") return lower.endsWith(".bin");
   if (type === "c") return lower.endsWith(".c");
   if (type === "txt") return lower.endsWith(".txt");
   if (type === "bscex") return lower.endsWith(".bscex");
   if (type === "cscex") return lower.endsWith(".cscex");
   if (type === "dscex") return lower.endsWith(".dscex");
   return false;
+}
+
+/** MSC pack root scripts that support Replace + Repack in this workspace. */
+function isMscCoreScriptCFile(fileName: string): boolean {
+  const lower = fileName.toLowerCase();
+  return lower === "0.c" || lower === "1.c" || lower === "2.c";
 }
 
 export default function MscWorkspaceView({
@@ -79,8 +87,31 @@ export default function MscWorkspaceView({
   const [localFiles, setLocalFiles] = useState<FileInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [processingFile, setProcessingFile] = useState<string | null>(null);
-  const [isGlobalRepacking, setIsGlobalRepacking] = useState(false);
+  const [isFolderRepacking, setIsFolderRepacking] = useState(false);
   const [isPickingFolder, setIsPickingFolder] = useState(false);
+
+  const resolveTauriExeDir = useCallback(async () => {
+    const resourcePath = await resourceDir();
+    const normalized = resourcePath.replace(/\\/g, "/").replace(/\/+$/, "");
+    if (normalized.toLowerCase().endsWith("/resources")) {
+      return await dirname(resourcePath);
+    }
+    return resourcePath;
+  }, []);
+
+  const resolveExvsMappingPath = useCallback(async () => {
+    const exeDir = await resolveTauriExeDir();
+    const mappingPath = await join(
+      exeDir,
+      "tools",
+      "mappings",
+      "exvs_0xF1EF3B32.native_truth.json",
+    );
+    if (!(await exists(mappingPath))) {
+      throw new Error(`MSC workspace: EXVS mapping file not found: ${mappingPath}`);
+    }
+    return mappingPath;
+  }, [resolveTauriExeDir]);
 
   const fetchFiles = useCallback(async () => {
     if (!mscFolderPath) return;
@@ -139,10 +170,10 @@ export default function MscWorkspaceView({
     }
   };
 
-  const handleGlobalRepack = async () => {
+  const handleRepackFolder = async () => {
     if (!mscFolderPath) return;
     try {
-      setIsGlobalRepacking(true);
+      setIsFolderRepacking(true);
       const toolPath = "E:\\XB\\解包\\com\\compression.js";
       const normalizedFolderPath = mscFolderPath.replace(/\\/g, "/");
       const folderName = normalizedFolderPath.split("/").filter(Boolean).pop() ?? "";
@@ -157,26 +188,27 @@ export default function MscWorkspaceView({
       ).execute();
 
       if (command.code !== 0) {
-        console.error("Global Repack failed:", command.stderr);
-        toast.error(`Global Repack failed: ${command.stderr}`);
+        console.error("Repack Folder failed:", command.stderr);
+        toast.error(`Repack Folder failed: ${command.stderr}`);
       } else {
-        toast.success("Global Repack completed successfully");
+        toast.success("Repack Folder completed successfully");
       }
     } catch (error) {
-      console.error("Error during global repack:", error);
-      toast.error("Error during global repack");
+      console.error("Error during repack folder:", error);
+      toast.error("Error during Repack Folder");
     } finally {
-      setIsGlobalRepacking(false);
+      setIsFolderRepacking(false);
     }
   };
 
-  const handleConvertBinToC = async (file: FileInfo) => {
+  const handleConvertScriptToC = async (file: FileInfo) => {
     try {
       setProcessingFile(file.name);
       const inputPath = file.path;
-      const outputPath = inputPath.replace(/\.bin$/i, ".c");
-      const logPath = inputPath.replace(/\.bin$/i, ".txt");
+      const outputPath = getMscConvertOutputPath(inputPath);
+      const logPath = getMscConvertLogPath(inputPath);
       const resourcePath = await resourceDir();
+      const exvsMappingPath = await resolveExvsMappingPath();
 
       const command = await Command.create("exec-python", [
         resourcePath + "/tools/mscdec.py",
@@ -185,6 +217,8 @@ export default function MscWorkspaceView({
         outputPath,
         "-log",
         logPath,
+        "--exvsMapping",
+        exvsMappingPath,
       ]).execute();
 
       if (command.code !== 0) {
@@ -193,8 +227,8 @@ export default function MscWorkspaceView({
         toast.success(`Successfully converted ${file.name} to .c`);
         void fetchFiles();
       }
-    } catch {
-      toast.error(`Error converting ${file.name}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : `Error converting ${file.name}`);
     } finally {
       setProcessingFile(null);
     }
@@ -214,27 +248,36 @@ export default function MscWorkspaceView({
     }
   };
 
-  const handleRepackCToBin = async (file: FileInfo) => {
+  const handleRepackCToScript = async (file: FileInfo) => {
     try {
       setProcessingFile(file.name);
       const inputPath = file.path;
-      const outputPath = inputPath.replace(/\.c$/i, ".bin");
+      const outputPath = getMscRepackOutputPath(inputPath);
       const resourcePath = await resourceDir();
+      const exvsMappingPath = await resolveExvsMappingPath();
 
       const command = await Command.create(
         "exec-python",
-        [resourcePath + "/tools/msclang.py", inputPath, "-o", outputPath, "-i"],
+        [
+          resourcePath + "/tools/msclang.py",
+          inputPath,
+          "-o",
+          outputPath,
+          "-i",
+          "--exvsMapping",
+          exvsMappingPath,
+        ],
         { encoding: "utf-8" },
       ).execute();
 
       if (command.code !== 0) {
         toast.error(`Failed to repack ${file.name}: ${command.stderr}`);
       } else {
-        toast.success(`Successfully repacked ${file.name} to .bin`);
-        void fetchFiles();
+        const outputName = outputPath.replace(/^.*[\\/]/, "");
+        toast.success(`Successfully repacked ${file.name} to ${outputName}`);
       }
-    } catch {
-      toast.error(`Error repacking ${file.name}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : `Error repacking ${file.name}`);
     } finally {
       setProcessingFile(null);
     }
@@ -258,23 +301,29 @@ export default function MscWorkspaceView({
     const extension = file.name.split(".").pop()?.toLowerCase();
 
     switch (extension) {
-      case "bin":
+      case "bscex":
+      case "cscex":
+      case "dscex":
         return [
           {
             label: processingFile === file.name ? "Converting..." : "Convert",
-            onClick: () => handleConvertBinToC(file),
+            onClick: () => handleConvertScriptToC(file),
             className: BUTTON_STYLES.convert,
             disabled: processingFile === file.name,
           },
         ];
-      case "c":
+      case "c": {
+        const openCursor: FileAction = {
+          label: "Open Cursor",
+          onClick: () => handleOpenInCursor(file),
+          className: BUTTON_STYLES.edit,
+          disabled: processingFile === file.name,
+        };
+        if (!isMscCoreScriptCFile(file.name)) {
+          return [openCursor];
+        }
         return [
-          {
-            label: "Open Cursor",
-            onClick: () => handleOpenInCursor(file),
-            className: BUTTON_STYLES.edit,
-            disabled: processingFile === file.name,
-          },
+          openCursor,
           {
             label: "Replace",
             onClick: () => handleReplaceFuncToMain(file),
@@ -283,23 +332,13 @@ export default function MscWorkspaceView({
           },
           {
             label: processingFile === file.name ? "Repacking..." : "Repack",
-            onClick: () => handleRepackCToBin(file),
+            onClick: () => handleRepackCToScript(file),
             className: BUTTON_STYLES.repack,
             disabled: processingFile === file.name,
           },
         ];
+      }
       case "txt":
-        return [
-          {
-            label: "Open Cursor",
-            onClick: () => handleOpenInCursor(file),
-            className: BUTTON_STYLES.view,
-            disabled: processingFile === file.name,
-          },
-        ];
-      case "bscex":
-      case "cscex":
-      case "dscex":
         return [
           {
             label: "Open Cursor",
@@ -316,8 +355,6 @@ export default function MscWorkspaceView({
   const getFileIcon = (fileName: string) => {
     const extension = fileName.split(".").pop()?.toLowerCase();
     switch (extension) {
-      case "bin":
-        return <FileEdit className="h-4 w-4 text-foreground" />;
       case "c":
         return <Code className="h-4 w-4 text-foreground" />;
       case "txt":
@@ -397,12 +434,12 @@ export default function MscWorkspaceView({
             </Button>
             <Button
               type="button"
-              onClick={handleGlobalRepack}
-              disabled={isGlobalRepacking}
+              onClick={handleRepackFolder}
+              disabled={isFolderRepacking}
               size="sm"
             >
-              {isGlobalRepacking && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Global Repack
+              {isFolderRepacking && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Repack Folder
             </Button>
           </div>
         </div>
