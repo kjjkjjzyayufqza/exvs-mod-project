@@ -15,6 +15,7 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import type { TestTreeNode } from "../types";
@@ -106,6 +107,8 @@ export function FileTreeNodeRow({ node, style, dragHandle, ctx }: Props) {
     : undefined;
   const folderRepackReady = folderStructureExists === true;
   const folderRepackDisabled = isDirectWorkspaceFolder && !folderRepackReady;
+
+  const hasRepackItems = Boolean(structureRepackTarget) || isDirectWorkspaceFolder;
 
   return (
     <ContextMenu>
@@ -226,6 +229,11 @@ export function FileTreeNodeRow({ node, style, dragHandle, ctx }: Props) {
             <span>Open File</span>
           </ContextMenuItem>
         )}
+        <ContextMenuItem onClick={() => void handleOpenNodeFolder(node.data)} className="flex items-center gap-2">
+          <ExternalLink className="h-4 w-4" />
+          <span>Open Folder</span>
+        </ContextMenuItem>
+        {hasRepackItems ? <ContextMenuSeparator /> : null}
         {structureRepackTarget && (
           <ContextMenuItem
             onClick={() => void openRepackDialogForFileNode(node.data)}
@@ -254,10 +262,6 @@ export function FileTreeNodeRow({ node, style, dragHandle, ctx }: Props) {
             ) : null}
           </ContextMenuItem>
         )}
-        <ContextMenuItem onClick={() => void handleOpenNodeFolder(node.data)} className="flex items-center gap-2">
-          <ExternalLink className="h-4 w-4" />
-          <span>Open Folder</span>
-        </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );

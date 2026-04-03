@@ -1,4 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { dirname } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ import { TestEditorWorkspacePanels } from "./components/TestEditorWorkspacePanel
 import { useConfigStore } from "@/store/configStore";
 import { TestEditorToolbar } from "./components/TestEditorToolbar";
 import ListeningRepackDialog from "./components/ListeningRepackDialog";
+import { folderContainsMscScriptFiles } from "./utils/mscWorkspaceUtils";
 import { normalizePackFolderName } from "./utils/packName";
 import { sortTreeByStarOrder, useFileTreeStarOrder } from "./utils/fileTreeStars";
 import { NumdlbEditorModalHost } from "./components/ssbh-model-preview/NumdlbEditorModalHost";
@@ -247,7 +249,33 @@ const TestEditorPage = () => {
     return `${dirs}|${rootStructureJson}`;
   }, [treeData]);
   const selectedNode = useMemo(() => findNode(treeData, selectedId), [treeData, selectedId]);
+  const [mscWorkspaceFolderPath, setMscWorkspaceFolderPath] = useState<string | null>(null);
   const dirtyFolderList = useMemo(() => Array.from(dirtyFolders), [dirtyFolders]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const sync = async () => {
+      if (!selectedNode) {
+        if (!cancelled) setMscWorkspaceFolderPath(null);
+        return;
+      }
+      try {
+        const dirPath = selectedNode.isDir
+          ? selectedNode.path
+          : await dirname(selectedNode.path);
+        const ok = await folderContainsMscScriptFiles(dirPath);
+        if (!cancelled) {
+          setMscWorkspaceFolderPath(ok ? dirPath : null);
+        }
+      } catch {
+        if (!cancelled) setMscWorkspaceFolderPath(null);
+      }
+    };
+    void sync();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedNode]);
   const hasDirtyFolders = dirtyFolderList.length > 0;
 
   const handleDiscardChanges = useCallback(() => {
@@ -977,6 +1005,8 @@ const TestEditorPage = () => {
               <MainView
                 jsonFilePath={selectedJsonPath}
                 folderPath={currentDir}
+                mscWorkspaceFolderPath={mscWorkspaceFolderPath}
+                onMscWorkspaceFolderChange={setMscWorkspaceFolderPath}
                 onUnsavedChanges={setHasUnsavedChanges}
                 onRevealTreeFolder={revealInTreeByPath}
               />

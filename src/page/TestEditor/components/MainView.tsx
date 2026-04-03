@@ -1,4 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import RepackFolderStructureView from "./RepackFolderStructureView";
@@ -8,6 +10,7 @@ import SeriesListView from "./SeriesListView";
 import CardIconListView from "./CardIconListView";
 import StageIconListView from "./StageIconListView";
 import StageListView from "./StageListView";
+import MscWorkspaceView from "./msc-editor/MscWorkspaceView";
 import { SsbhModelPreviewViewport } from "./ssbh-model-preview/SsbhModelPreviewPanel";
 
 type StageTab = {
@@ -20,9 +23,14 @@ type StageTab = {
 interface MainViewProps {
   jsonFilePath?: string | null;
   folderPath?: string | null;
+  /** Folder path for MSC Workspace when the tree selection is a folder (or file parent) that contains .bscex/.cscex/.dscex files. */
+  mscWorkspaceFolderPath?: string | null;
+  onMscWorkspaceFolderChange?: (path: string | null) => void;
   onUnsavedChanges?: (hasChanges: boolean) => void;
   onRevealTreeFolder?: (path: string) => void;
 }
+
+const TAB_STRIP_SCROLL_EPSILON_px = 2;
 
 const tabs: StageTab[] = [
   {
@@ -128,11 +136,26 @@ const tabs: StageTab[] = [
       />
     ),
   },
+  {
+    name: "MSC Workspace",
+    value: "msc-workspace",
+    render: (props: MainViewProps) => (
+      <MscWorkspaceView
+        workspaceRoot={props.folderPath ?? ""}
+        mscFolderPath={props.mscWorkspaceFolderPath ?? null}
+        onMscFolderChange={props.onMscWorkspaceFolderChange}
+        isActive={false}
+        onUnsavedChanges={props.onUnsavedChanges}
+      />
+    ),
+  },
 ];
 
 const MainView = ({
   jsonFilePath,
   folderPath,
+  mscWorkspaceFolderPath,
+  onMscWorkspaceFolderChange,
   onUnsavedChanges,
   onRevealTreeFolder,
 }: MainViewProps) => {
@@ -145,6 +168,48 @@ const MainView = ({
   const [seriesListHasUnsaved, setSeriesListHasUnsaved] = useState(false);
   const [stageListHasUnsaved, setStageListHasUnsaved] = useState(false);
   const [stageIconListHasUnsaved, setStageIconListHasUnsaved] = useState(false);
+  const [mscWorkspaceHasUnsaved, setMscWorkspaceHasUnsaved] = useState(false);
+
+  const tabStripRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const syncTabStripScrollEdges = useCallback(() => {
+    const el = tabStripRef.current;
+    if (!el) {
+      return;
+    }
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollLeft(scrollLeft > TAB_STRIP_SCROLL_EPSILON_px);
+    setCanScrollRight(
+      scrollLeft + clientWidth < scrollWidth - TAB_STRIP_SCROLL_EPSILON_px,
+    );
+  }, []);
+
+  const scrollTabStrip = (direction: -1 | 1) => {
+    const el = tabStripRef.current;
+    if (!el) {
+      throw new Error("MainView: tab strip scroll container is not mounted");
+    }
+    const delta = Math.max(80, Math.round(el.clientWidth * 0.45));
+    el.scrollBy({ left: direction * delta, behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    const el = tabStripRef.current;
+    if (!el) {
+      return;
+    }
+    syncTabStripScrollEdges();
+    const onScroll = () => syncTabStripScrollEdges();
+    const ro = new ResizeObserver(() => syncTabStripScrollEdges());
+    ro.observe(el);
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      ro.disconnect();
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, [syncTabStripScrollEdges]);
 
   const handleUnsavedChanges = useCallback((hasChanges: boolean) => {
     setFolderStructureHasUnsaved(hasChanges);
@@ -169,6 +234,10 @@ const MainView = ({
 
   const handleStageIconListUnsaved = useCallback((hasChanges: boolean) => {
     setStageIconListHasUnsaved(hasChanges);
+  }, []);
+
+  const handleMscWorkspaceUnsaved = useCallback((hasChanges: boolean) => {
+    setMscWorkspaceHasUnsaved(hasChanges);
   }, []);
 
   const resolvedTabs = useMemo<StageTab[]>(() => {
@@ -265,9 +334,40 @@ const MainView = ({
         };
       }
 
+      if (tab.value === "msc-workspace") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <MscWorkspaceView
+              workspaceRoot={props.folderPath ?? ""}
+              mscFolderPath={props.mscWorkspaceFolderPath ?? null}
+              onMscFolderChange={props.onMscWorkspaceFolderChange}
+              isActive={activeTab === "msc-workspace"}
+              onUnsavedChanges={handleMscWorkspaceUnsaved}
+            />
+          ),
+        };
+      }
+
       return tab;
     });
-  }, [activeTab, handleCharacterIdTableUnsaved, handleCharacterListUnsaved, handleSeriesListUnsaved, handleStageIconListUnsaved, handleStageListUnsaved, handleUnsavedChanges]);
+  }, [
+    activeTab,
+    handleCharacterIdTableUnsaved,
+    handleCharacterListUnsaved,
+    handleSeriesListUnsaved,
+    handleStageIconListUnsaved,
+    handleStageListUnsaved,
+    handleMscWorkspaceUnsaved,
+    handleUnsavedChanges,
+    mscWorkspaceFolderPath,
+    onMscWorkspaceFolderChange,
+  ]);
+
+  useLayoutEffect(() => {
+    const id = requestAnimationFrame(() => syncTabStripScrollEdges());
+    return () => cancelAnimationFrame(id);
+  }, [activeTab, syncTabStripScrollEdges]);
 
   const handleTabChange = useCallback((value: string) => {
     setActiveTab(value);
@@ -280,7 +380,14 @@ const MainView = ({
   }, []);
 
   const renderTabPanel = (tab: StageTab) => {
-    const props: MainViewProps = { jsonFilePath, folderPath, onUnsavedChanges, onRevealTreeFolder };
+    const props: MainViewProps = {
+      jsonFilePath,
+      folderPath,
+      mscWorkspaceFolderPath,
+      onMscWorkspaceFolderChange,
+      onUnsavedChanges,
+      onRevealTreeFolder,
+    };
     if (tab.render) return tab.render(props);
     return tab.content ?? null;
   };
@@ -288,62 +395,98 @@ const MainView = ({
   return (
     <div className="flex h-full w-full min-h-0 bg-background">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex h-full w-full min-h-0 flex-col rounded-none p-0 m-0">
-        <TabsList className="w-full shrink-0 justify-start rounded-none h-10 flex items-center bg-muted/50 px-2 border-b">
-          {resolvedTabs.map((tab) => (
-            <TabsTrigger
-              key={tab.value}
-              id={`mainview-tab-${tab.value}`}
-              value={tab.value}
-              className="rounded-md px-4 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm"
-            >
-              <span className="inline-flex items-center gap-2">
-                <span>{tab.name}</span>
-                {tab.value === "folder-structure" && folderStructureHasUnsaved && (
-                  <span
-                    className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
-                    aria-label="Unsaved changes"
-                    title="Unsaved changes"
-                  />
-                )}
-                {tab.value === "character-id-table" && characterIdTableHasUnsaved && (
-                  <span
-                    className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
-                    aria-label="Unsaved changes"
-                    title="Unsaved changes"
-                  />
-                )}
-                {tab.value === "character-list" && characterListHasUnsaved && (
-                  <span
-                    className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
-                    aria-label="Unsaved changes"
-                    title="Unsaved changes"
-                  />
-                )}
-                {tab.value === "series-list" && seriesListHasUnsaved && (
-                  <span
-                    className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
-                    aria-label="Unsaved changes"
-                    title="Unsaved changes"
-                  />
-                )}
-                {tab.value === "stage-icon-list" && stageIconListHasUnsaved && (
-                  <span
-                    className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
-                    aria-label="Unsaved changes"
-                    title="Unsaved changes"
-                  />
-                )}
-                {tab.value === "stage-list" && stageListHasUnsaved && (
-                  <span
-                    className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
-                    aria-label="Unsaved changes"
-                    title="Unsaved changes"
-                  />
-                )}
-              </span>
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <div className="flex min-h-10 w-full shrink-0 items-stretch gap-1 border-b bg-muted/50 px-1 py-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-auto min-h-8 w-8 shrink-0 self-center"
+            onClick={() => scrollTabStrip(-1)}
+            disabled={!canScrollLeft}
+            aria-label="Scroll tabs left"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <div
+            ref={tabStripRef}
+            className="min-h-8 min-w-0 flex-1 overflow-x-auto scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          >
+            <TabsList className="inline-flex h-8 min-w-min flex-nowrap items-center justify-start gap-1 border-0 bg-transparent p-0 shadow-none">
+              {resolvedTabs.map((tab) => (
+                <TabsTrigger
+                  key={tab.value}
+                  id={`mainview-tab-${tab.value}`}
+                  value={tab.value}
+                  className="h-8 shrink-0 rounded-md px-3 text-xs font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <span>{tab.name}</span>
+                    {tab.value === "folder-structure" && folderStructureHasUnsaved && (
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
+                        aria-label="Unsaved changes"
+                        title="Unsaved changes"
+                      />
+                    )}
+                    {tab.value === "character-id-table" && characterIdTableHasUnsaved && (
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
+                        aria-label="Unsaved changes"
+                        title="Unsaved changes"
+                      />
+                    )}
+                    {tab.value === "character-list" && characterListHasUnsaved && (
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
+                        aria-label="Unsaved changes"
+                        title="Unsaved changes"
+                      />
+                    )}
+                    {tab.value === "series-list" && seriesListHasUnsaved && (
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
+                        aria-label="Unsaved changes"
+                        title="Unsaved changes"
+                      />
+                    )}
+                    {tab.value === "stage-icon-list" && stageIconListHasUnsaved && (
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
+                        aria-label="Unsaved changes"
+                        title="Unsaved changes"
+                      />
+                    )}
+                    {tab.value === "stage-list" && stageListHasUnsaved && (
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
+                        aria-label="Unsaved changes"
+                        title="Unsaved changes"
+                      />
+                    )}
+                    {tab.value === "msc-workspace" && mscWorkspaceHasUnsaved && (
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
+                        aria-label="Unsaved changes"
+                        title="Unsaved changes"
+                      />
+                    )}
+                  </span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-auto min-h-8 w-8 shrink-0 self-center"
+            onClick={() => scrollTabStrip(1)}
+            disabled={!canScrollRight}
+            aria-label="Scroll tabs right"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
         <div className="relative flex min-h-0 flex-1 flex-col">
           {resolvedTabs.map((tab) => {
             if (!visitedTabs.has(tab.value)) return null;
