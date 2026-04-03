@@ -8,6 +8,7 @@
 
 - `docs/exvs-msc-analysis.md`
 - `docs/exvs-msc-syscall-4f-notes.md`
+- `docs/exvs-msc-input-action-weapon-pipeline.md`
 
 本文件的重点不是解释 MSC 本身，而是回答下面几个更具体的问题：
 

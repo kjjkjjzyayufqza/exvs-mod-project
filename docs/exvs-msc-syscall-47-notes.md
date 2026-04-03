@@ -9,6 +9,7 @@
 - `docs/exvs-msc-analysis.md`
 - `docs/exvs-msc-syscall-4f-notes.md`
 - `docs/exvs-msc-syscall-4f-native-handler.md`
+- `docs/exvs-msc-input-action-weapon-pipeline.md`
 
 当前目标不是一次性把 `sys_47` 全部解释完，而是先确认：
 

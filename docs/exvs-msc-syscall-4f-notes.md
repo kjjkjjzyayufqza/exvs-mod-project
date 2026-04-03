@@ -20,6 +20,7 @@
 进一步的 native handler 分析见：
 
 - `docs/exvs-msc-syscall-4f-native-handler.md`
+- `docs/exvs-msc-input-action-weapon-pipeline.md`
 
 ## 关键纠正
 
@@ -304,3 +305,4 @@
 ## 参考
 
 - 主文档：`docs/exvs-msc-analysis.md`
+- 动作链总览：`docs/exvs-msc-input-action-weapon-pipeline.md`
