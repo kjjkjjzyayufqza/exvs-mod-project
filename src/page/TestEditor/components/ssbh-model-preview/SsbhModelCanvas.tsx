@@ -1053,11 +1053,11 @@ function Scene({
     }
     phaseCamera = performance.now() - cameraStart;
     const now = performance.now();
-    onMotionFrameSync(nextFrame);
     if (shouldStopPlayback) {
+      onMotionFrameSync(nextFrame);
       onMotionPlaybackStop();
     }
-    phaseUiSync = 0.05;
+    phaseUiSync = shouldStopPlayback ? 0.05 : 0;
     const frameTotal = performance.now() - frameStart;
     if (frameTotal > 20 && now - lastSlowFrameLogMsRef.current > 300) {
       lastSlowFrameLogMsRef.current = now;

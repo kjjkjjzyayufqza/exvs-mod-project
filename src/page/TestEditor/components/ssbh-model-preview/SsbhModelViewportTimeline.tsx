@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pause, Play, RotateCcw, SkipBack, SkipForward, Square } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Pause, Play, RotateCcw, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -159,7 +159,10 @@ export function SsbhModelViewportTimeline({
   const skel = p.bundle?.skel ? (p.bundle.skel as SkelDataJson) : null;
   const boneNames = skel?.bones.map((b) => b.name) ?? [];
   const [selectedBoneIndex, setSelectedBoneIndex] = useState<number>(0);
+  const [, setPlaybackUiTick] = useState(0);
   const playheadRef = useRef(p.motionFrame);
+  const rafRef = useRef<number | null>(null);
+  const lastTickRef = useRef<number | null>(null);
   const activeMin = rangeEnabled ? Math.min(rangeIn, rangeOut) : 0;
   const activeMax = rangeEnabled ? Math.max(rangeIn, rangeOut) : maxFrame;
   const timelineTrackRef = useRef<HTMLDivElement | null>(null);
@@ -183,11 +186,67 @@ export function SsbhModelViewportTimeline({
     if (scrubFrame !== null) {
       return;
     }
+    if (p.motionPlaying) {
+      return;
+    }
     playheadRef.current = clampFrame(p.motionFrame, 0, maxFrame);
     setFrameInputText(String(Math.round(playheadRef.current)));
-  }, [p.motionFrame, maxFrame, scrubFrame]);
+  }, [p.motionFrame, maxFrame, scrubFrame, p.motionPlaying]);
 
-  const displayFrame = scrubFrame ?? p.motionFrame;
+  useEffect(() => {
+    if (!p.motionPlaying || !hasMotion || scrubFrame !== null) {
+      lastTickRef.current = null;
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      return;
+    }
+    const tick = (now: number) => {
+      const last = lastTickRef.current ?? now;
+      lastTickRef.current = now;
+      const dt = (now - last) / 1000;
+      const speed = p.motionSpeed;
+      const min = rangeEnabled ? Math.min(rangeIn, rangeOut) : 0;
+      const max = rangeEnabled ? Math.max(rangeIn, rangeOut) : maxFrame;
+      let next = playheadRef.current + dt * 60 * speed;
+      if (p.motionLoop) {
+        const span = Math.max(1e-6, max - min);
+        next = ((next - min) % span + span) % span + min;
+      } else if (next >= max) {
+        next = max;
+      }
+      playheadRef.current = clampFrame(next, min, max);
+      setPlaybackUiTick((t) => t + 1);
+      if (!p.motionLoop && next >= max) {
+        p.setMotionFrame(playheadRef.current);
+        p.setMotionPlaying(false);
+        return;
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, [
+    hasMotion,
+    maxFrame,
+    p.motionPlaying,
+    p.motionSpeed,
+    p.motionLoop,
+    p.setMotionFrame,
+    p.setMotionPlaying,
+    rangeEnabled,
+    rangeIn,
+    rangeOut,
+    scrubFrame,
+  ]);
+
+  const displayFrame = scrubFrame ?? (p.motionPlaying ? playheadRef.current : p.motionFrame);
   const framePercent = maxFrame > 0 ? (displayFrame / maxFrame) * 100 : 0;
   const rangeStartPercent = maxFrame > 0 ? (Math.min(rangeIn, rangeOut) / maxFrame) * 100 : 0;
   const rangeEndPercent = maxFrame > 0 ? (Math.max(rangeIn, rangeOut) / maxFrame) * 100 : 0;
@@ -338,7 +397,7 @@ export function SsbhModelViewportTimeline({
           }}
           title="Jump to start"
         >
-          <SkipBack className="h-3.5 w-3.5" />
+          <ChevronsLeft className="h-3.5 w-3.5" />
         </Button>
         <Button
           type="button"
@@ -353,6 +412,8 @@ export function SsbhModelViewportTimeline({
               setScrubFrame(null);
               p.setMotionFrame(target);
               playheadRef.current = target;
+            } else {
+              p.setMotionFrame(clampFrame(playheadRef.current, 0, maxFrame));
             }
             p.setMotionPlaying(!p.motionPlaying);
           }}
@@ -391,7 +452,7 @@ export function SsbhModelViewportTimeline({
           }}
           title="Previous frame"
         >
-          <SkipBack className="h-3.5 w-3.5 -scale-x-100" />
+          <ChevronLeft className="h-3.5 w-3.5" />
         </Button>
         <Button
           type="button"
@@ -409,7 +470,7 @@ export function SsbhModelViewportTimeline({
           }}
           title="Next frame"
         >
-          <SkipForward className="h-3.5 w-3.5" />
+          <ChevronRight className="h-3.5 w-3.5" />
         </Button>
         <Button
           type="button"
@@ -426,7 +487,7 @@ export function SsbhModelViewportTimeline({
           }}
           title="Jump to end"
         >
-          <SkipForward className="h-3.5 w-3.5 scale-x-110" />
+          <ChevronsRight className="h-3.5 w-3.5" />
         </Button>
         <div className="ml-auto flex items-center gap-3 pr-1">
           <div className="flex items-center gap-2">
