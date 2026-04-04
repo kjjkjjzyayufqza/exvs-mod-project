@@ -1,10 +1,13 @@
-import { useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { SsbhModelCanvas } from "./SsbhModelCanvas";
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
+import type { SkelDataJson } from "./types";
 import { SsbhModelPreviewLoadingOverlay } from "./SsbhModelPreviewLoadingOverlay";
 import { SsbhModelPreviewQuickActions } from "./SsbhModelPreviewQuickActions";
+import { SsbhModelViewportTimeline } from "./SsbhModelViewportTimeline";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 function formatPreviewCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 10_000) return `${Math.round(n / 1_000)}k`;
@@ -14,6 +17,15 @@ function formatPreviewCount(n: number): string {
 
 export function SsbhModelPreviewViewport() {
   const p = useSsbhModelPreview();
+  const motionScrubFrameRef = useRef<number | null>(null);
+  const [motionScrubbing, setMotionScrubbing] = useState(false);
+  const skelBoneCount = p.bundle?.skel ? (p.bundle.skel as SkelDataJson).bones.length : 0;
+  const motionBoneLocalsActive =
+    p.motionSample &&
+    p.motionSample.boneLocals.length === skelBoneCount &&
+    skelBoneCount > 0
+      ? p.motionSample.boneLocals
+      : null;
   const onViewportBoneSelect = useCallback(
     (index: number) => {
       p.setSelectedBoneIndex(index);
@@ -23,6 +35,23 @@ export function SsbhModelPreviewViewport() {
   const onViewportBoneSelectionClear = useCallback(() => {
     p.setSelectedBoneIndex(null);
   }, [p.setSelectedBoneIndex]);
+  const onMotionScrubStart = useCallback(() => {
+    if (!motionScrubbing) {
+      setMotionScrubbing(true);
+    }
+  }, [motionScrubbing]);
+  const onMotionScrubPreview = useCallback((frame: number) => {
+    motionScrubFrameRef.current = frame;
+  }, []);
+  const onMotionScrubEnd = useCallback(
+    (frame: number) => {
+      motionScrubFrameRef.current = null;
+      setMotionScrubbing(false);
+      p.setMotionFrame(frame);
+      p.setMotionPlaying(false);
+    },
+    [p],
+  );
   const stats = p.vertexTriangleStats;
   const statsLine =
     p.bundle && p.draws.length > 0
@@ -37,6 +66,15 @@ export function SsbhModelPreviewViewport() {
         </Button>
         <Button type="button" size="sm" variant="secondary" disabled={p.loading} onClick={() => void p.pickNumdlb()}>
           Open .numdlb
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          disabled={p.previewBusy}
+          onClick={() => void p.pickMotionNuanmbFile()}
+        >
+          Open .nuanmb
         </Button>
         <SsbhModelPreviewQuickActions />
         <div
@@ -91,63 +129,84 @@ export function SsbhModelPreviewViewport() {
         </p>
       ) : null}
 
-      <div className="min-h-0 flex-1 flex flex-col px-1 pb-1">
-        <div className="relative min-h-0 flex-1">
-          <SsbhModelCanvas
-            draws={p.draws}
-            drawMaterialDataUrlsByDrawKey={p.drawMaterialDataUrlsByDrawKey}
-            drawMaterialBindingsByDrawKey={p.drawMaterialBindingsByDrawKey}
-            materialDebugViewMode={p.materialDebugViewMode}
-            textureFlipY={p.textureFlipY}
-            uvFlipU={p.uvFlipU}
-            uvFlipV={p.uvFlipV}
-            visibleKeys={p.visibleKeys}
-            wireframe={p.wireframe}
-            showSkeleton={p.showSkeleton && Boolean(p.bundle?.skel)}
-            skeletonGeometry={p.skeletonGeometry}
-            showGrid={p.showGrid}
-            showAxesGizmo={p.showAxesGizmo}
-            showStats={p.showStats}
-            background={p.background}
-            ambientIntensity={p.ambientIntensity}
-            directionalIntensity={p.directionalIntensity}
-            directionalX={p.directionalX}
-            directionalY={p.directionalY}
-            directionalZ={p.directionalZ}
-            normalMapEnabled={p.normalMapEnabled}
-            fitRequestId={p.fitRequestId}
-            previewInstances={p.previewInstances}
-            activePreviewInstanceId={p.activePreviewInstanceId}
-            previewViewMode={p.previewViewMode}
-            hiddenPreviewInstanceIds={p.hiddenPreviewInstanceIds}
-            selectedBoneIndex={p.selectedBoneIndex}
-            boneTransformMode={p.boneTransformMode}
-            bonePoseResetNonce={p.bonePoseResetNonce}
-            previewRenderStyle={p.previewRenderStyle}
-            previewSuspended={p.previewSuspended}
-            onViewportBoneSelect={onViewportBoneSelect}
-            onViewportBoneSelectionClear={onViewportBoneSelectionClear}
-            onBoneTransformHotkey={p.setBoneTransformMode}
-            bonePoseGetterRef={p.bonePoseGetterRef}
-            bonePoseApplyNonce={p.bonePoseApplyNonce}
-            bonePoseToApply={p.bonePoseToApply}
-            onBonePoseApplyConsumed={p.consumeBonePoseApply}
-            onBonePoseCommit={p.commitBonePoseUndo}
-            onUndoBonePose={p.undoBonePose}
-            onRedoBonePose={p.redoBonePose}
-          />
-          <SsbhModelPreviewLoadingOverlay readingBundle={p.loading} textureDecode={p.textureDecodeProgress} />
-        </div>
-        <p className="mt-1.5 text-[10px] text-muted-foreground">
-          Left-drag: orbit · Scroll: zoom (does not scroll this page) · Right-drag: pan.{" "}
-          <span className="font-medium text-foreground">Clear scene</span> unloads the model;{" "}
-          <span className="font-medium text-foreground">More</span> opens recent files, copy path, folder in file manager,
-          and shortcuts
-          (focus the quick bar with Tab, then F / R). Full options are in the right{" "}
-          <span className="font-medium text-foreground">Info</span> panel on the{" "}
-          <span className="font-medium text-foreground">3D View</span> tab.
-        </p>
-      </div>
+      <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
+        <ResizablePanel defaultSize={90} minSize={45}>
+          <div className="relative h-full min-h-0 px-1 pb-1">
+            <SsbhModelCanvas
+              draws={p.draws}
+              drawMaterialDataUrlsByDrawKey={p.drawMaterialDataUrlsByDrawKey}
+              drawMaterialBindingsByDrawKey={p.drawMaterialBindingsByDrawKey}
+              materialDebugViewMode={p.materialDebugViewMode}
+              textureFlipY={p.textureFlipY}
+              uvFlipU={p.uvFlipU}
+              uvFlipV={p.uvFlipV}
+              visibleKeys={p.visibleKeys}
+              wireframe={p.wireframe}
+              showSkeleton={p.showSkeleton && Boolean(p.bundle?.skel)}
+              skeletonGeometry={p.skeletonGeometry}
+              showGrid={p.showGrid}
+              showAxesGizmo={p.showAxesGizmo}
+              showStats={p.showStats}
+              background={p.background}
+              ambientIntensity={p.ambientIntensity}
+              directionalIntensity={p.directionalIntensity}
+              directionalX={p.directionalX}
+              directionalY={p.directionalY}
+              directionalZ={p.directionalZ}
+              normalMapEnabled={p.normalMapEnabled}
+              fitRequestId={p.fitRequestId}
+              previewInstances={p.previewInstances}
+              activePreviewInstanceId={p.activePreviewInstanceId}
+              previewViewMode={p.previewViewMode}
+              hiddenPreviewInstanceIds={p.hiddenPreviewInstanceIds}
+              selectedBoneIndex={p.selectedBoneIndex}
+              boneTransformMode={p.boneTransformMode}
+              bonePoseResetNonce={p.bonePoseResetNonce}
+              previewRenderStyle={p.previewRenderStyle}
+              previewSuspended={p.previewSuspended}
+              onViewportBoneSelect={onViewportBoneSelect}
+              onViewportBoneSelectionClear={onViewportBoneSelectionClear}
+              onBoneTransformHotkey={p.setBoneTransformMode}
+              bonePoseGetterRef={p.bonePoseGetterRef}
+              bonePoseApplyNonce={p.bonePoseApplyNonce}
+              bonePoseToApply={p.bonePoseToApply}
+              onBonePoseApplyConsumed={p.consumeBonePoseApply}
+              onBonePoseCommit={p.commitBonePoseUndo}
+              onUndoBonePose={p.undoBonePose}
+              onRedoBonePose={p.redoBonePose}
+              motionBoneLocalsActive={motionBoneLocalsActive}
+              motionClip={p.motionClip}
+              motionFrame={p.motionFrame}
+              motionLoop={p.motionLoop}
+              motionSpeed={p.motionSpeed}
+              onMotionFrameSync={p.setMotionFrame}
+              onMotionPlaybackStop={() => p.setMotionPlaying(false)}
+              motionPlaying={p.motionPlaying}
+              motionScrubbing={motionScrubbing}
+              motionScrubFrameRef={motionScrubFrameRef}
+              motionVisibilityRows={p.motionSample?.visibility ?? null}
+              motionCameraSample={p.motionSample?.camera ?? null}
+              motionApplyCamera={p.motionApplyCamera}
+              motionLightingSample={p.motionSample?.lighting ?? null}
+              motionApplyLighting={p.motionApplyLighting}
+              motionForceVisibleDuringPlayback={p.motionForceVisibleDuringPlayback}
+            />
+            <SsbhModelPreviewLoadingOverlay readingBundle={p.loading} textureDecode={p.textureDecodeProgress} />
+          </div>
+        </ResizablePanel>
+
+        <ResizableHandle withHandle className="bg-border hover:bg-primary/20 transition-colors" />
+
+        <ResizablePanel defaultSize={10} minSize={6}>
+          <div className="h-full min-h-0 overflow-y-auto px-1 pb-1">
+            <SsbhModelViewportTimeline
+              onScrubStart={onMotionScrubStart}
+              onScrubPreview={onMotionScrubPreview}
+              onScrubEnd={onMotionScrubEnd}
+            />
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 }

@@ -32,6 +32,7 @@ tauri-plugin-opener = "2"
 
 nutexb = { git = "https://github.com/kjjkjjzyayufqza/nutexb", features = ["ddsfile"] }
 ssbh_data = { git = "https://github.com/kjjkjjzyayufqza/ssbh_lib", branch = "wmmt2", package = "ssbh_data", features = ["serde"] }
+ssbh_lib = { git = "https://github.com/kjjkjjzyayufqza/ssbh_lib", branch = "wmmt2", package = "ssbh_lib" }
 base64 = "0.22"
 crc32fast = "1.4"
 image = "0.25.9"
@@ -41,5 +42,7 @@ anyhow = "1.0"
 binrw = "0.15"
 xmltree = "0.10.3"
 glam = { version = "0.30", features = ["mint"] }
+topological-sort = "0.2.2"
+indexmap = "2.2.5"
 ufbx = "0.10"
 flate2 = "1"

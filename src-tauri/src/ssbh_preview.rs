@@ -146,11 +146,11 @@ const NUMDLB_RECURSE_MAX_DEPTH: usize = 16;
 /// Max number of `.numdlb` files returned (sorted, truncated with deterministic order).
 const NUMDLB_RECURSE_MAX_FILES: usize = 128;
 
-fn preview_log(msg: &str) {
+pub(crate) fn preview_log(msg: &str) {
     eprintln!("[ssbh_preview] {msg}");
 }
 
-fn dir_name_should_skip(name: &str) -> bool {
+pub(crate) fn dir_name_should_skip(name: &str) -> bool {
     let n = name.to_ascii_lowercase();
     matches!(
         n.as_str(),
@@ -158,17 +158,19 @@ fn dir_name_should_skip(name: &str) -> bool {
     )
 }
 
-/// Recursively collects `.numdlb` file paths under `root`, sorted lexicographically by path string.
-/// Skips junk directories, enforces depth and count caps; uses canonical paths in `visited` to avoid symlink cycles.
-fn collect_numdlb_paths_recursive(
+/// Recursively collects files with extension `want_ext` under `root`, sorted lexicographically.
+pub(crate) fn collect_paths_recursive(
     root: &Path,
+    want_ext: &str,
     max_depth: usize,
     max_files: usize,
+    skip_dir: fn(&str) -> bool,
 ) -> Result<Vec<PathBuf>, String> {
     let t0 = Instant::now();
     preview_log(&format!(
-        "scan start: root={} depth_cap={} file_cap={}",
+        "scan start: root={} ext={} depth_cap={} file_cap={}",
         root.display(),
+        want_ext,
         max_depth,
         max_files
     ));
@@ -180,14 +182,17 @@ fn collect_numdlb_paths_recursive(
 
     let mut out: Vec<PathBuf> = Vec::new();
     let mut visited_dirs: HashSet<PathBuf> = HashSet::new();
+    let want = want_ext.to_ascii_lowercase();
 
     fn walk(
         dir: &Path,
         depth: usize,
         max_depth: usize,
         max_files: usize,
+        want_ext_lc: &str,
         out: &mut Vec<PathBuf>,
         visited_dirs: &mut HashSet<PathBuf>,
+        skip_dir: fn(&str) -> bool,
     ) -> Result<(), String> {
         if out.len() >= max_files {
             return Ok(());
@@ -222,7 +227,7 @@ fn collect_numdlb_paths_recursive(
             if meta.is_file() {
                 if p.extension()
                     .and_then(|s| s.to_str())
-                    .map(|ext| ext.eq_ignore_ascii_case("numdlb"))
+                    .map(|ext| ext.eq_ignore_ascii_case(want_ext_lc))
                     .unwrap_or(false)
                 {
                     out.push(p);
@@ -231,10 +236,19 @@ fn collect_numdlb_paths_recursive(
             }
             if meta.is_dir() {
                 let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
-                if dir_name_should_skip(name) {
+                if skip_dir(name) {
                     continue;
                 }
-                walk(&p, depth + 1, max_depth, max_files, out, visited_dirs)?;
+                walk(
+                    &p,
+                    depth + 1,
+                    max_depth,
+                    max_files,
+                    want_ext_lc,
+                    out,
+                    visited_dirs,
+                    skip_dir,
+                )?;
             }
         }
         Ok(())
@@ -245,8 +259,10 @@ fn collect_numdlb_paths_recursive(
         0,
         max_depth,
         max_files,
+        &want,
         &mut out,
         &mut visited_dirs,
+        skip_dir,
     )?;
 
     let mut unique: Vec<PathBuf> = Vec::new();
@@ -270,6 +286,16 @@ fn collect_numdlb_paths_recursive(
         t0.elapsed().as_millis()
     ));
     Ok(unique)
+}
+
+/// Recursively collects `.numdlb` file paths under `root`, sorted lexicographically by path string.
+/// Skips junk directories, enforces depth and count caps; uses canonical paths in `visited` to avoid symlink cycles.
+fn collect_numdlb_paths_recursive(
+    root: &Path,
+    max_depth: usize,
+    max_files: usize,
+) -> Result<Vec<PathBuf>, String> {
+    collect_paths_recursive(root, "numdlb", max_depth, max_files, dir_name_should_skip)
 }
 
 fn find_numdlb_in_dir(dir: &Path) -> Result<PathBuf, String> {

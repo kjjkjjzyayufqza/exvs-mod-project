@@ -51,6 +51,8 @@ import type {
   SsbhModelPreviewBundle,
   SsbhModelPreviewInstance,
 } from "./types";
+import type { MotionClip, MotionSample, NuanmbManifest } from "./motionPreviewTypes";
+import { sampleMotionClipFrame } from "./motionPlaybackMath";
 
 export type BoneTransformMode = "translate" | "rotate" | "scale";
 export type PreviewInstanceViewMode = "all" | "single";
@@ -211,6 +213,33 @@ export type SsbhModelPreviewContextValue = {
   canRedoBonePose: boolean;
   /** When true, the 3D canvas stops its render loop (kept-alive background route). */
   previewSuspended: boolean;
+  /** NUANMB motion (active model only). */
+  motionNuanmbPaths: readonly string[];
+  motionSelectedNuanmbPath: string | null;
+  setMotionSelectedNuanmbPath: (path: string | null) => void;
+  motionManifest: NuanmbManifest | null;
+  motionPlaying: boolean;
+  setMotionPlaying: (v: boolean) => void;
+  motionLoop: boolean;
+  setMotionLoop: (v: boolean) => void;
+  motionSpeed: number;
+  setMotionSpeed: (v: number) => void;
+  motionFrame: number;
+  setMotionFrame: (v: number) => void;
+  motionClip: MotionClip | null;
+  motionSample: MotionSample | null;
+  motionSampling: boolean;
+  motionSampleError: string | null;
+  motionApplyCamera: boolean;
+  setMotionApplyCamera: (v: boolean) => void;
+  motionApplyLighting: boolean;
+  setMotionApplyLighting: (v: boolean) => void;
+  motionForceVisibleDuringPlayback: boolean;
+  setMotionForceVisibleDuringPlayback: (v: boolean) => void;
+  pickMotionNuanmbFile: () => Promise<void>;
+  pickMotionFolder: () => Promise<void>;
+  reloadMotionClip: () => void;
+  clearMotion: () => void;
 };
 
 const SsbhModelPreviewContext = createContext<SsbhModelPreviewContextValue | null>(null);
@@ -274,6 +303,13 @@ export function SsbhModelPreviewProvider({
   const [uvFlipV, setUvFlipV] = useState(false);
   const [textureSlotLoadEnabled, setTextureSlotLoadEnabledState] = useState(createDefaultTextureSlotLoadEnabled);
   const [textureDecodeProgress, setTextureDecodeProgress] = useState<SsbhModelPreviewTextureDecodeProgress | null>(null);
+  const textureDecoding = useMemo(
+    () =>
+      textureDecodeProgress !== null &&
+      textureDecodeProgress.done < textureDecodeProgress.total,
+    [textureDecodeProgress],
+  );
+  const previewBusy = loading || textureDecoding;
   const [fitRequestId, setFitRequestId] = useState(0);
   const [modelLoadNonce, setModelLoadNonce] = useState(0);
   const [selectedBoneIndex, setSelectedBoneIndex] = useState<number | null>(null);
@@ -294,10 +330,105 @@ export function SsbhModelPreviewProvider({
     readAutoLoadAfterConvertFromStorage(),
   );
 
+  const [motionNuanmbPaths, setMotionNuanmbPaths] = useState<string[]>([]);
+  const [motionSelectedNuanmbPath, setMotionSelectedNuanmbPath] = useState<string | null>(null);
+  const [motionManifest, setMotionManifest] = useState<NuanmbManifest | null>(null);
+  const [motionPlaying, setMotionPlaying] = useState(false);
+  const [motionLoop, setMotionLoop] = useState(true);
+  const [motionSpeed, setMotionSpeed] = useState(1);
+  const [motionFrame, setMotionFrame] = useState(0);
+  const [motionClip, setMotionClip] = useState<MotionClip | null>(null);
+  const [motionSampling, setMotionSampling] = useState(false);
+  const [motionSampleError, setMotionSampleError] = useState<string | null>(null);
+  const [motionApplyCamera, setMotionApplyCamera] = useState(false);
+  const [motionApplyLighting, setMotionApplyLighting] = useState(false);
+  const [motionForceVisibleDuringPlayback, setMotionForceVisibleDuringPlayback] = useState(true);
+  const [motionReloadNonce, setMotionReloadNonce] = useState(0);
+  const loadedMotionClipKeyRef = useRef<string | null>(null);
+  const motionSample = useMemo<MotionSample | null>(() => {
+    if (!motionClip) {
+      return null;
+    }
+    const frameSample = sampleMotionClipFrame(motionClip, motionFrame, motionLoop);
+    return {
+      frame: motionFrame,
+      finalFrameIndex: motionClip.finalFrameIndex,
+      boneLocals: frameSample.boneLocals,
+      visibility: frameSample.visibility,
+      materialTracks: frameSample.materialTracks,
+      camera: frameSample.camera,
+      lighting: frameSample.lighting,
+      elapsedMs: 0,
+    };
+  }, [motionClip, motionFrame, motionLoop]);
+
   const setAutoLoadAfterConvertToSsbh = useCallback((v: boolean) => {
     setAutoLoadAfterConvertToSsbhState(v);
     writeAutoLoadAfterConvertToStorage(v);
   }, []);
+
+  const clearMotion = useCallback(() => {
+    setMotionNuanmbPaths([]);
+    setMotionSelectedNuanmbPath(null);
+    setMotionManifest(null);
+    setMotionPlaying(false);
+    setMotionFrame(0);
+    setMotionClip(null);
+    setMotionSampleError(null);
+    loadedMotionClipKeyRef.current = null;
+    setMotionReloadNonce((n) => n + 1);
+    setBonePoseResetNonce((n) => n + 1);
+  }, []);
+
+  const reloadMotionClip = useCallback(() => {
+    loadedMotionClipKeyRef.current = null;
+    setMotionClip(null);
+    setMotionFrame(0);
+    setMotionPlaying(false);
+    setMotionSampleError(null);
+    setMotionReloadNonce((n) => n + 1);
+  }, []);
+
+  const pickMotionNuanmbFile = useCallback(async () => {
+    const selected = await open({
+      directory: false,
+      multiple: false,
+      defaultPath: getDialogDefaultPath(DialogLastPathKey.ssbhPreviewOpenNuanmb, root),
+      filters: [{ name: "NUANMB", extensions: ["nuanmb"] }],
+    });
+    if (typeof selected !== "string") return;
+    rememberDialogSelection(DialogLastPathKey.ssbhPreviewOpenNuanmb, selected, "file");
+    setMotionNuanmbPaths([selected]);
+    setMotionSelectedNuanmbPath(selected);
+    setMotionFrame(0);
+    setMotionPlaying(false);
+    setMotionClip(null);
+    setMotionSampleError(null);
+    loadedMotionClipKeyRef.current = null;
+  }, [root]);
+
+  const pickMotionFolder = useCallback(async () => {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      defaultPath: getDialogDefaultPath(DialogLastPathKey.ssbhPreviewOpenMotionFolder, root),
+    });
+    if (typeof selected !== "string") return;
+    rememberDialogSelection(DialogLastPathKey.ssbhPreviewOpenMotionFolder, selected, "directory");
+    const listed = await invoke<string[]>("ssbh_list_nuanmb_under_tree", { rootPath: selected });
+    if (listed.length === 0) {
+      const msg = "No .nuanmb files under the selected folder.";
+      toast.error(msg);
+      throw new Error(msg);
+    }
+    setMotionNuanmbPaths(listed);
+    setMotionSelectedNuanmbPath(listed[0] ?? null);
+    setMotionFrame(0);
+    setMotionPlaying(false);
+    setMotionClip(null);
+    setMotionSampleError(null);
+    loadedMotionClipKeyRef.current = null;
+  }, [root]);
 
   const bundle = useMemo((): SsbhModelPreviewBundle | null => {
     if (previewInstances.length === 0) return null;
@@ -387,6 +518,84 @@ export function SsbhModelPreviewProvider({
     }
     setActivePreviewInstanceId(previewInstances[0]!.id);
   }, [previewInstances, activePreviewInstanceId]);
+
+  useEffect(() => {
+    setMotionFrame(0);
+    setMotionClip(null);
+    setMotionSampleError(null);
+    loadedMotionClipKeyRef.current = null;
+  }, [activePreviewInstanceId]);
+
+  useEffect(() => {
+    setMotionClip(null);
+    setMotionSampleError(null);
+    loadedMotionClipKeyRef.current = null;
+    if (!motionSelectedNuanmbPath) {
+      setMotionManifest(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const m = await invoke<NuanmbManifest>("ssbh_nuanmb_manifest", { path: motionSelectedNuanmbPath });
+        if (!cancelled) setMotionManifest(m);
+      } catch (e) {
+        if (!cancelled) {
+          setMotionManifest(null);
+          setMotionSampleError(String(e));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [motionSelectedNuanmbPath]);
+
+  useEffect(() => {
+    const matlPath = bundle?.matlPaths[0] ?? null;
+    if (!bundle?.skelPath || !motionSelectedNuanmbPath) {
+      loadedMotionClipKeyRef.current = null;
+      setMotionClip(null);
+      return;
+    }
+    if (previewBusy) {
+      return;
+    }
+    const key = `${bundle.skelPath}\n${motionSelectedNuanmbPath}\n${matlPath ?? ""}\n${motionReloadNonce}`;
+    if (loadedMotionClipKeyRef.current === key && motionClip !== null) {
+      return;
+    }
+
+    const ac = new AbortController();
+    (async () => {
+      setMotionSampling(true);
+      setMotionSampleError(null);
+      try {
+        const clip = await invoke<MotionClip>("ssbh_load_motion_clip", {
+          request: {
+            skelPath: bundle.skelPath,
+            nuanmbPath: motionSelectedNuanmbPath,
+            matlPath,
+          },
+        });
+        if (!ac.signal.aborted) {
+          loadedMotionClipKeyRef.current = key;
+          setMotionClip(clip);
+        }
+      } catch (e) {
+        if (!ac.signal.aborted) {
+          setMotionClip(null);
+          loadedMotionClipKeyRef.current = null;
+          setMotionSampleError(String(e));
+        }
+      } finally {
+        if (!ac.signal.aborted) setMotionSampling(false);
+      }
+    })();
+    return () => {
+      ac.abort();
+    };
+  }, [bundle?.skelPath, bundle?.matlPaths?.[0], motionSelectedNuanmbPath, motionClip, previewBusy, motionReloadNonce]);
 
   useEffect(() => {
     setVisibleKeys((prev) => {
@@ -730,7 +939,8 @@ export function SsbhModelPreviewProvider({
     setHiddenPreviewInstanceIds(new Set());
     setLoadError(null);
     setDrawError(null);
-  }, [loading, textureDecodeProgress]);
+    clearMotion();
+  }, [loading, textureDecodeProgress, clearMotion]);
 
   const reloadCurrentModel = useCallback(async () => {
     if (previewInstances.length === 0) {
@@ -773,10 +983,10 @@ export function SsbhModelPreviewProvider({
     setTextureSlotLoadEnabledState(createDefaultTextureSlotLoadEnabled());
     setSelectedBoneIndex(null);
     setBoneTransformMode("translate");
-    setBonePoseResetNonce((n) => n + 1);
     setBonePoseHistory({ undoStack: [], redoStack: [], applyNonce: 0, applyData: null });
     setFitRequestId((r) => r + 1);
-  }, []);
+    clearMotion();
+  }, [clearMotion]);
 
   const clearRecentModelPaths = useCallback(() => {
     writeRecentModelPathsToStorage([]);
@@ -922,15 +1132,6 @@ export function SsbhModelPreviewProvider({
     return { verts, tris };
   }, [draws]);
 
-  const textureDecoding = useMemo(
-    () =>
-      textureDecodeProgress !== null &&
-      textureDecodeProgress.done < textureDecodeProgress.total,
-    [textureDecodeProgress],
-  );
-
-  const previewBusy = loading || textureDecoding;
-
   const canUndoBonePose = bonePoseHistory.undoStack.length > 0;
   const canRedoBonePose = bonePoseHistory.redoStack.length > 0;
 
@@ -1031,6 +1232,32 @@ export function SsbhModelPreviewProvider({
       canUndoBonePose,
       canRedoBonePose,
       previewSuspended,
+      motionNuanmbPaths,
+      motionSelectedNuanmbPath,
+      setMotionSelectedNuanmbPath,
+      motionManifest,
+      motionPlaying,
+      setMotionPlaying,
+      motionLoop,
+      setMotionLoop,
+      motionSpeed,
+      setMotionSpeed,
+      motionFrame,
+      setMotionFrame,
+      motionClip,
+      motionSample,
+      motionSampling,
+      motionSampleError,
+      motionApplyCamera,
+      setMotionApplyCamera,
+      motionApplyLighting,
+      setMotionApplyLighting,
+      motionForceVisibleDuringPlayback,
+      setMotionForceVisibleDuringPlayback,
+      pickMotionNuanmbFile,
+      pickMotionFolder,
+      reloadMotionClip,
+      clearMotion,
     } satisfies SsbhModelPreviewContextValue),
     [
       root,
@@ -1110,6 +1337,32 @@ export function SsbhModelPreviewProvider({
       canUndoBonePose,
       canRedoBonePose,
       previewSuspended,
+      motionNuanmbPaths,
+      motionSelectedNuanmbPath,
+      setMotionSelectedNuanmbPath,
+      motionManifest,
+      motionPlaying,
+      setMotionPlaying,
+      motionLoop,
+      setMotionLoop,
+      motionSpeed,
+      setMotionSpeed,
+      motionFrame,
+      setMotionFrame,
+      motionClip,
+      motionSample,
+      motionSampling,
+      motionSampleError,
+      motionApplyCamera,
+      setMotionApplyCamera,
+      motionApplyLighting,
+      setMotionApplyLighting,
+      motionForceVisibleDuringPlayback,
+      setMotionForceVisibleDuringPlayback,
+      pickMotionNuanmbFile,
+      pickMotionFolder,
+      reloadMotionClip,
+      clearMotion,
     ],
   );
 

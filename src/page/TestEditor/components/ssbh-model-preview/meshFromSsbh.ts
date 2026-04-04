@@ -819,6 +819,21 @@ function isDescendantOf(ancestorIdx: number, boneIdx: number, bones: BoneJson[])
   return false;
 }
 
+function ancestorDistance(ancestorIdx: number, boneIdx: number, bones: BoneJson[]): number | null {
+  let cur = boneIdx;
+  for (let dist = 1; dist <= bones.length + 2; dist++) {
+    const p = bones[cur]?.parent_index;
+    if (p === null || p === undefined || p < 0 || p >= bones.length) {
+      return null;
+    }
+    if (p === ancestorIdx) {
+      return dist;
+    }
+    cur = p;
+  }
+  return null;
+}
+
 /**
  * Resolves mesh bone influences when multiple skeleton bones share the same name.
  * Uses mesh `parent_bone_name` as attachment: prefer influences in that bone's subtree,
@@ -840,18 +855,39 @@ function resolveBoneIndexForMesh(
   }
 
   const attachCandidates = boneIndicesWithName(bones, meshParent);
-  const attachIdx = attachCandidates.length > 0 ? attachCandidates[0] : undefined;
-  if (attachIdx === undefined) {
+  if (attachCandidates.length === 0) {
     return nameCandidates[0];
   }
 
-  const underAttach = nameCandidates.filter((n) => isDescendantOf(attachIdx, n, bones));
-  if (underAttach.length === 1) return underAttach[0];
-  if (underAttach.length > 1) return underAttach[0];
+  // Prefer the nearest candidate that lies under any attach parent candidate.
+  const underAttach: { index: number; dist: number }[] = [];
+  for (const candidate of nameCandidates) {
+    for (const attachIdx of attachCandidates) {
+      const dist = ancestorDistance(attachIdx, candidate, bones);
+      if (dist !== null) {
+        underAttach.push({ index: candidate, dist });
+      }
+    }
+  }
+  if (underAttach.length > 0) {
+    underAttach.sort((a, b) => a.dist - b.dist || a.index - b.index);
+    return underAttach[0]!.index;
+  }
 
-  const ancestorsOfAttach = nameCandidates.filter((n) => isDescendantOf(n, attachIdx, bones));
-  if (ancestorsOfAttach.length === 1) return ancestorsOfAttach[0];
-  if (ancestorsOfAttach.length > 1) return ancestorsOfAttach[0];
+  // Otherwise prefer nearest candidate that is an ancestor of any attach parent candidate.
+  const ancestorsOfAttach: { index: number; dist: number }[] = [];
+  for (const candidate of nameCandidates) {
+    for (const attachIdx of attachCandidates) {
+      const dist = ancestorDistance(candidate, attachIdx, bones);
+      if (dist !== null) {
+        ancestorsOfAttach.push({ index: candidate, dist });
+      }
+    }
+  }
+  if (ancestorsOfAttach.length > 0) {
+    ancestorsOfAttach.sort((a, b) => a.dist - b.dist || a.index - b.index);
+    return ancestorsOfAttach[0]!.index;
+  }
 
   return nameCandidates[0];
 }
@@ -984,11 +1020,14 @@ function buildGeometryForObject(
 
   let skin: MeshSkinRuntime | null = null;
   if (logicalSkin && skel) {
+    geom.setAttribute("skinIndex", new BufferAttribute(boneIndices, 4));
+    geom.setAttribute("skinWeight", new BufferAttribute(boneWeights, 4));
     skin = {
       boneCount: skel.bones.length,
       bindPositions,
       boneIndices,
       boneWeights,
+      gpuAttributesReady: true,
     };
   }
 

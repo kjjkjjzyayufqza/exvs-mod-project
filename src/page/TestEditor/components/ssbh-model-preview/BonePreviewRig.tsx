@@ -1,9 +1,11 @@
 import { TransformControls, useCursor } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { BufferAttribute, Group, Matrix4, Object3D, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { bonePosesEqual, encodeBonePose } from "./bonePoseHistory";
+import { shouldRecomputeNormalsDuringSkinning } from "./bonePreviewRigPerf";
+import { applyLocalPoseToObjects } from "./boneRuntime";
 import {
   useArmatureRestAndInvBind,
   useBonePoseApplyLayout,
@@ -12,13 +14,18 @@ import {
   useJointPickRadiusFromBounds,
   useSkeletonLineGeometry,
 } from "./bonePreviewRigHooks";
+import type { MotionBoneLocal } from "./motionPreviewTypes";
 import type { BuiltMeshDraw, BoneJson, SkelDataJson } from "./types";
+
+function isValidParentIndex(parentIndex: number | null | undefined, boneCount: number): parentIndex is number {
+  return parentIndex !== null && parentIndex !== undefined && parentIndex >= 0 && parentIndex < boneCount;
+}
 
 function buildChildrenByParent(bones: BoneJson[]): number[][] {
   const ch: number[][] = bones.map(() => []);
   for (let i = 0; i < bones.length; i++) {
     const p = bones[i]!.parent_index;
-    if (p !== null && p !== undefined && p >= 0 && p < bones.length) {
+    if (isValidParentIndex(p, bones.length)) {
       ch[p]!.push(i);
     }
   }
@@ -29,7 +36,7 @@ function rootBoneIndices(bones: BoneJson[]): number[] {
   const out: number[] = [];
   for (let i = 0; i < bones.length; i++) {
     const p = bones[i]!.parent_index;
-    if (p === null || p === undefined) {
+    if (!isValidParentIndex(p, bones.length)) {
       out.push(i);
     }
   }
@@ -174,6 +181,7 @@ function applyCpuSkinning(draw: BuiltMeshDraw, palette: Matrix4[], updateNormals
 type BonePreviewRigProps = {
   skel: SkelDataJson;
   draws: BuiltMeshDraw[];
+  skinningDraws: BuiltMeshDraw[];
   /** When false, skinning still runs but gizmo, picking, and pose ref sync are disabled (multi-instance preview). */
   isInteractionTarget?: boolean;
   selectedBoneIndex: number | null;
@@ -187,11 +195,20 @@ type BonePreviewRigProps = {
   bonePoseToApply: Float32Array | null;
   onBonePoseApplyConsumed: () => void;
   onBonePoseCommit: (beforeTransformSnapshot: Float32Array) => void;
+  /** When set (same length as bones), overrides local bone transforms for motion playback. */
+  motionBoneLocals: MotionBoneLocal[] | null;
+  /** When true, a motion pose is currently applied even if playback is paused. */
+  motionPoseActive: boolean;
+  /** When true, playback skinning runs on GPU via SkinnedMesh path. */
+  gpuSkinningActive: boolean;
+  /** When true, motion drives the skeleton; TransformControls are disabled. */
+  motionDriving: boolean;
 };
 
 export function BonePreviewRig({
   skel,
   draws,
+  skinningDraws,
   isInteractionTarget = true,
   selectedBoneIndex,
   transformMode,
@@ -204,6 +221,10 @@ export function BonePreviewRig({
   bonePoseToApply,
   onBonePoseApplyConsumed,
   onBonePoseCommit,
+  motionBoneLocals,
+  motionPoseActive,
+  gpuSkinningActive,
+  motionDriving,
 }: BonePreviewRigProps) {
   const bones = skel.bones;
   const childrenByParent = useMemo(() => buildChildrenByParent(bones), [bones]);
@@ -235,7 +256,7 @@ export function BonePreviewRig({
     setArmatureLayoutTick,
   );
 
-  useBonePoseGetterRef(bonePoseGetterRef, boneRefs, bones.length, isInteractionTarget);
+  useBonePoseGetterRef(bonePoseGetterRef, boneRefs, bones.length, isInteractionTarget && !motionPoseActive);
 
   useBonePoseApplyLayout(
     armatureRef,
@@ -244,9 +265,25 @@ export function BonePreviewRig({
     bonePoseApplyNonce,
     bonePoseToApply,
     onBonePoseApplyConsumed,
-    isInteractionTarget,
+    isInteractionTarget && !motionPoseActive,
   );
-  if (bonePoseToApply !== null && isInteractionTarget) {
+  useLayoutEffect(() => {
+    if (!motionBoneLocals || motionBoneLocals.length !== bones.length) return;
+    applyLocalPoseToObjects(boneRefs.current, motionBoneLocals);
+    armatureRef.current?.updateMatrixWorld(true);
+    needsSkinningUpdateRef.current = true;
+  }, [motionBoneLocals, bones.length]);
+
+  useLayoutEffect(() => {
+    // Ensure one refresh when entering/leaving motion-driving mode.
+    needsSkinningUpdateRef.current = true;
+  }, [motionDriving, motionPoseActive]);
+
+  useLayoutEffect(() => {
+    needsSkinningUpdateRef.current = true;
+  }, [skinningDraws]);
+
+  if (bonePoseToApply !== null && isInteractionTarget && !motionPoseActive) {
     needsSkinningUpdateRef.current = true;
   }
   if (lastPoseResetNonceRef.current !== poseResetNonce) {
@@ -279,10 +316,13 @@ export function BonePreviewRig({
         pal[b]!.multiplyMatrices(g.matrixWorld, ib[b]!);
       }
     }
-    const updateNormals = !tcDragRef.current;
-    for (const d of draws) {
-      if (d.skin) {
-        applyCpuSkinning(d, pal, updateNormals);
+    const motionPoseActive = motionDriving || Boolean(motionBoneLocals?.length);
+    const updateNormals = shouldRecomputeNormalsDuringSkinning(tcDragRef.current, motionPoseActive);
+    if (!gpuSkinningActive) {
+      for (const d of skinningDraws) {
+        if (d.skin) {
+          applyCpuSkinning(d, pal, updateNormals);
+        }
       }
     }
 
@@ -312,17 +352,18 @@ export function BonePreviewRig({
     }
   });
 
-  const effectiveSelected = isInteractionTarget ? selectedBoneIndex : null;
+  const effectiveSelected = isInteractionTarget && !motionPoseActive ? selectedBoneIndex : null;
 
   const tcObject: Object3D | null =
     isInteractionTarget &&
+    !motionPoseActive &&
     selectedBoneIndex !== null &&
     selectedBoneIndex >= 0 &&
     selectedBoneIndex < bones.length
       ? boneRefs.current[selectedBoneIndex]
       : null;
 
-  const onBoneSelect = isInteractionTarget ? onSelectBone : () => {};
+  const onBoneSelect = isInteractionTarget && !motionPoseActive ? onSelectBone : () => {};
 
   return (
     <group ref={armatureRef}>

@@ -8,6 +8,8 @@ const STORAGE_PREFIX = "tauri.dialog.lastPath.";
 export const DialogLastPathKey = {
   ssbhPreviewOpenModelFolder: "ssbhPreview.openModelFolder",
   ssbhPreviewOpenNumdlb: "ssbhPreview.openNumdlb",
+  ssbhPreviewOpenNuanmb: "ssbhPreview.openNuanmb",
+  ssbhPreviewOpenMotionFolder: "ssbhPreview.openMotionFolder",
   ssbhDaeExportDae: "ssbhDae.exportDae",
   ssbhDaeImportSourceDae: "ssbhDae.importSource.dae",
   ssbhDaeImportSourceFbx: "ssbhDae.importSource.fbx",

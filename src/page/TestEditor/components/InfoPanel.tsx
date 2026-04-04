@@ -8,12 +8,14 @@ import { ImagePreview, isImageFile } from "./ImagePreview";
 import { NutexbPreview } from "./NutexbPreview";
 import { SsbhDaeExchangePanel } from "./ssbh-model-preview/SsbhDaeExchangePanel";
 import { SsbhModelPreviewInspector } from "./ssbh-model-preview/SsbhModelPreviewPanel";
+import { SsbhModelPreviewMotionPanel } from "./ssbh-model-preview/SsbhModelPreviewMotionPanel";
 import { JnttblFileEditorPanel } from "./ssbh-model-preview/JnttblFileEditorPanel";
 import { NumdlbFileEditorPanel } from "./ssbh-model-preview/NumdlbFileEditorPanel";
 
 const BASE_TAB_ITEMS = [
   { name: "Info", value: "info" },
   { name: "Model Preview", value: "modelPreview" },
+  { name: "Motion", value: "motion" },
   { name: "COLLADA (.dae)", value: "daeExchange" },
 ] as const;
 const NUMDLB_TAB_ITEM = { name: "NUMDLB Mapping", value: "numdlbMapping" } as const;
@@ -145,6 +147,8 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
         return <div className="space-y-2">{renderInfoContent()}</div>;
       case "modelPreview":
         return <SsbhModelPreviewInspector />;
+      case "motion":
+        return <SsbhModelPreviewMotionPanel />;
       case "daeExchange":
         return <SsbhDaeExchangePanel />;
       case "numdlbMapping":
@@ -205,7 +209,9 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
                 ? "File info"
                 : activeTab === "modelPreview"
                   ? "Viewport inspector"
-                  : activeTab === "daeExchange"
+                  : activeTab === "motion"
+                    ? "Motion (NUANMB)"
+                    : activeTab === "daeExchange"
                     ? "COLLADA exchange"
                     : activeTab === "numdlbMapping"
                       ? "NUMDLB mapping"
@@ -216,7 +222,9 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
                 ? "Selection, path, and texture previews"
                 : activeTab === "modelPreview"
                   ? "Display, lighting, meshes, and scene stats for the 3D view"
-                  : activeTab === "daeExchange"
+                  : activeTab === "motion"
+                    ? "Load motion files and inspect clip metadata for the 3D view"
+                    : activeTab === "daeExchange"
                     ? "Export SSBH to .dae and convert .dae to SSBH (separate from scene preview)"
                     : activeTab === "numdlbMapping"
                       ? "Edit mesh object to material label mapping for the selected .numdlb"

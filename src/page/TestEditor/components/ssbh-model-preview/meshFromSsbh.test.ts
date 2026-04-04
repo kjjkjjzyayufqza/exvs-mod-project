@@ -260,4 +260,148 @@ describe("buildDrawListFromBundle", () => {
     expect(uv2).toBeDefined();
     expect(uv2?.array).toEqual(uv?.array);
   });
+
+  it("writes skinIndex and skinWeight attributes for skinned draws", () => {
+    const modl: ModlDataJson = {
+      entries: [
+        {
+          mesh_object_name: "body",
+          mesh_object_subindex: 0,
+          material_label: "mat_body",
+        },
+      ],
+    };
+    const mesh: MeshDataJson = {
+      major_version: 1,
+      minor_version: 10,
+      is_vs2: true,
+      objects: [
+        {
+          name: "body",
+          subindex: 0,
+          parent_bone_name: "Root",
+          vertex_indices: [0, 1, 2],
+          positions: [
+            {
+              name: "Position0",
+              data: { Vector3: [[0, 0, 0], [1, 0, 0], [0, 1, 0]] },
+            },
+          ],
+          normals: [],
+          texture_coordinates: [],
+          bone_influences: [
+            {
+              bone_name: "Root",
+              vertex_weights: [
+                { vertex_index: 0, vertex_weight: 1 },
+                { vertex_index: 1, vertex_weight: 1 },
+                { vertex_index: 2, vertex_weight: 1 },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const skel = {
+      bones: [
+        {
+          name: "Root",
+          transform: [
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1],
+          ],
+          parent_index: null,
+          billboard_type: null,
+        },
+      ],
+    };
+
+    const draws = buildDrawListFromBundle(modl, mesh, skel);
+    const draw = draws[0];
+    expect(draw?.skin?.gpuAttributesReady).toBe(true);
+    const skinIndex = draw?.geometry.getAttribute("skinIndex");
+    const skinWeight = draw?.geometry.getAttribute("skinWeight");
+    expect(skinIndex).toBeDefined();
+    expect(skinWeight).toBeDefined();
+    expect(skinIndex?.itemSize).toBe(4);
+    expect(skinWeight?.itemSize).toBe(4);
+    expect(skinIndex?.count).toBe(3);
+    expect(skinWeight?.count).toBe(3);
+  });
+
+  it("resolves duplicate bone names using mesh parent branch", () => {
+    const modl: ModlDataJson = {
+      entries: [{ mesh_object_name: "body", mesh_object_subindex: 0, material_label: "mat_body" }],
+    };
+    const mesh: MeshDataJson = {
+      major_version: 1,
+      minor_version: 10,
+      is_vs2: true,
+      objects: [
+        {
+          name: "body",
+          subindex: 0,
+          parent_bone_name: "Arm_R",
+          vertex_indices: [0, 1, 2],
+          positions: [{ name: "Position0", data: { Vector3: [[0, 0, 0], [1, 0, 0], [0, 1, 0]] } }],
+          normals: [],
+          texture_coordinates: [],
+          bone_influences: [
+            {
+              bone_name: "Joint",
+              vertex_weights: [
+                { vertex_index: 0, vertex_weight: 1 },
+                { vertex_index: 1, vertex_weight: 1 },
+                { vertex_index: 2, vertex_weight: 1 },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const skel = {
+      bones: [
+        {
+          name: "Root",
+          transform: [[1, 0, 0, 0],[0, 1, 0, 0],[0, 0, 1, 0],[0, 0, 0, 1]],
+          parent_index: null,
+          billboard_type: null,
+        },
+        {
+          name: "Arm_L",
+          transform: [[1, 0, 0, 0],[0, 1, 0, 0],[0, 0, 1, 0],[0, 0, 0, 1]],
+          parent_index: 0,
+          billboard_type: null,
+        },
+        {
+          name: "Joint",
+          transform: [[1, 0, 0, 0],[0, 1, 0, 0],[0, 0, 1, 0],[0, 0, 0, 1]],
+          parent_index: 1,
+          billboard_type: null,
+        },
+        {
+          name: "Arm_R",
+          transform: [[1, 0, 0, 0],[0, 1, 0, 0],[0, 0, 1, 0],[0, 0, 0, 1]],
+          parent_index: 0,
+          billboard_type: null,
+        },
+        {
+          name: "Joint",
+          transform: [[1, 0, 0, 0],[0, 1, 0, 0],[0, 0, 1, 0],[0, 0, 0, 1]],
+          parent_index: 3,
+          billboard_type: null,
+        },
+      ],
+    };
+
+    const draws = buildDrawListFromBundle(modl, mesh, skel);
+    const draw = draws[0];
+    expect(draw?.skin).not.toBeNull();
+    const idx = draw?.skin?.boneIndices;
+    expect(idx?.[0]).toBe(4);
+    expect(idx?.[4]).toBe(4);
+    expect(idx?.[8]).toBe(4);
+  });
 });

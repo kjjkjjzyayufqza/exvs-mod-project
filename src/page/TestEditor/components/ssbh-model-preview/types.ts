@@ -151,6 +151,8 @@ export type MeshSkinRuntime = {
   bindPositions: Float32Array;
   boneIndices: Uint16Array;
   boneWeights: Float32Array;
+  /** True when geometry already has skinIndex/skinWeight attributes for GPU skinning. */
+  gpuAttributesReady: boolean;
 };
 
 export type BuiltMeshDraw = {

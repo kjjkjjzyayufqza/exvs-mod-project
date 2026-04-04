@@ -8,6 +8,9 @@ mod nutexb_lib;
 mod ssbh_dae;
 mod ssbh_dae_cmd;
 mod ssbh_preview;
+mod ssbh_motion;
+
+pub use ssbh_motion::smoke_decode_and_sample_nuanmb;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -20,6 +23,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .manage(commands::WatcherState::default())
+        .manage(ssbh_motion::MotionSampleCacheState::default())
         .invoke_handler(tauri::generate_handler![
             commands::my_custom_command,
             commands::read_file,
@@ -38,6 +42,10 @@ pub fn run() {
             ssbh_preview::ssbh_load_model_preview,
             ssbh_preview::ssbh_list_numdlb_under_tree,
             ssbh_preview::ssbh_load_ssbh_file_as_json,
+            ssbh_motion::ssbh_list_nuanmb_under_tree,
+            ssbh_motion::ssbh_nuanmb_manifest,
+            ssbh_motion::ssbh_load_motion_clip,
+            ssbh_motion::ssbh_sample_motion_frame,
             ssbh_dae_cmd::ssbh_analyze_dae,
             ssbh_dae_cmd::ssbh_analyze_fbx,
             ssbh_dae_cmd::ssbh_export_folder_to_dae,
