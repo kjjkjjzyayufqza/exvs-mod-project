@@ -5,8 +5,7 @@ import { Search, Loader2 } from "lucide-react";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { resourceDir } from "@tauri-apps/api/path";
 import { useConfigStore } from "../../store/configStore";
-import { ExtractFHMData, ExtractType, Fhm2dData, Fhm2d_type_format } from "../../models/fhm2d";
-import { Buffer } from "buffer";
+import { ExtractFHMData, ExtractType, Fhm2d_type_format } from "../../models/fhm2d";
 import { toast } from "sonner";
 
 // Define the UnitData interface based on the sample provided
@@ -120,11 +119,10 @@ export default function UnitList() {
     
     const upperCaseHashName = fileName.split('0x')[1].toUpperCase();
     const outputPath = `${extractOutputPath}\\0x${upperCaseHashName}`;
-    const fhm = new Fhm2dData(Buffer.from(fileBuffer))
     void (async () => {
       try {
         const extractResult = await ExtractFHMData(
-          fhm,
+          filePath,
           outputPath,
           ExtractType.SingleFolder,
           Fhm2d_type_format.fhm2d_character
@@ -143,7 +141,6 @@ export default function UnitList() {
         toast.error(`Extract failed: ${message}`);
       }
     })();
-    console.log(fhm);
   };
 
   return (

@@ -1,6 +1,7 @@
 use tauri::Manager;
 
 mod commands;
+mod format;
 mod jnttbl_cmd;
 mod jnttbl_format;
 mod nutexb_lib;
@@ -55,7 +56,8 @@ pub fn run() {
             commands::card_icon_detect_dds_format,
             commands::card_icon_batch_replace_with_dds_format,
             commands::copy_asset_as_new,
-            commands::write_files_batch_base64
+            commands::write_files_batch_base64,
+            commands::extract_fhm2d_to_folder
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

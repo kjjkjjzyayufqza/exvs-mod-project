@@ -179,7 +179,7 @@ export default function ExtractFilePage() {
     startTransition(() => setExtractProgress(0));
     try {
       const extractResult = await ExtractFHMData(
-        fhm2dData,
+        data.inputFilePath,
         data.outputFolderPath,
         extractType,
         Fhm2d_type_format.fhm2d_character

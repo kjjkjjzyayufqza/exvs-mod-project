@@ -2,17 +2,6 @@ import { Buffer } from "buffer";
 import { ErrorMessage } from "./error";
 import pako from "pako";
 import { invoke } from "@tauri-apps/api/core";
-import { writeFile, mkdir, exists } from "@tauri-apps/plugin-fs";
-import { basename, dirname } from "@tauri-apps/api/path";
-import { applyNumdlbBaseNameToStructureObject } from "@/lib/fhm2d_characterModelFormatFuc";
-import { applyNutexbInternalNameToStructureObject } from "@/lib/fhm2d_allNutexbFormatFuc";
-import { applyParamAssetNamesToStructureObject } from "@/lib/fhm2d_paramAssetFormatFuc";
-import { applyMscAssetNamesToStructureObject } from "@/lib/fhm2d_mscAssetFormatFuc";
-import {
-  applyMotionAssetNamesToStructureObject,
-  ensureEmptyFoldersFromSubFileParseStructure,
-  motionFileUrlToNestedRelativePath,
-} from "@/lib/fhm2d_motionAssetFormatFuc";
 
 export enum Fhm2d_type_format {
   fhm2d_character = "fhm2d_character",
@@ -58,6 +47,10 @@ export function getFileType(type: number) {
 }
 
 export class PS4FhmData {
+  /**
+   * @deprecated Runtime extraction has migrated to Rust and currently does not support PS4/GVS.
+   * Kept for legacy analysis paths only.
+   */
   _TYPE_: Fhm2dType = Fhm2dType.PS4GundamVersus;
   bufferData: Buffer;
   Magic: string;
@@ -141,6 +134,10 @@ export class PS4FhmData {
   }
 }
 
+/**
+ * @deprecated Runtime extraction has migrated to Rust (`extract_fhm2d_to_folder` in `src-tauri/src/format/fhm2d.rs`).
+ * Keep this class for legacy preview/debug scenarios only.
+ */
 export class Fhm2dData {
   _TYPE_: Fhm2dType = Fhm2dType.Xboost;
   bufferData: Buffer;
@@ -349,6 +346,10 @@ interface SubFileStructure {
   originalFileIndex?: number;
 }
 
+/**
+ * @deprecated Migrated to Rust parser flow in `src-tauri/src/format/fhm2d.rs`.
+ * Kept for compatibility with legacy in-memory JS parsing.
+ */
 function createSubFileStructure(file: Buffer, _TYPE_: Fhm2dType): SubFileStructure[] {
   let Items: any = [];
   function loopingData(Data: Buffer, Offset = 0) {
@@ -426,6 +427,10 @@ function createSubFileStructure(file: Buffer, _TYPE_: Fhm2dType): SubFileStructu
   return fileEndDataJson;
 }
 
+/**
+ * @deprecated Migrated to Rust parse-tree construction in `src-tauri/src/format/fhm2d.rs`.
+ * Kept for compatibility and historical reference.
+ */
 function createFolderStructureXB(data: SubFileStructure[]) {
   const root: any = { name: "Root", children: [] };
   let currentFolder: any = root;
@@ -487,323 +492,28 @@ export enum ExtractType {
   FolderWithStructure = "structure",
 }
 
-/** Fewer IPC round-trips than per-file `plugin-fs` writeFile; chunk size caps single-invoke JSON size. */
-const WRITE_FILES_BATCH_CHUNK_SIZE = 48;
-
-interface WriteBatchFileWriteTiming {
-  relativePath: string;
-  /** Rust `fs::write` only (ms). */
-  writeMs: number;
-}
-
-async function writeExtractedSubfilesBatch(
-  outDir: string,
-  entries: { relativePath: string; buffer: Buffer }[],
-): Promise<void> {
-  if (entries.length === 0) {
-    return;
-  }
-  for (let i = 0; i < entries.length; i += WRITE_FILES_BATCH_CHUNK_SIZE) {
-    const chunk = entries.slice(i, i + WRITE_FILES_BATCH_CHUNK_SIZE);
-    const files = chunk.map((e) => ({
-      relativePath: e.relativePath,
-      dataBase64: e.buffer.toString("base64"),
-    }));
-    const timings = await invoke<WriteBatchFileWriteTiming[]>("write_files_batch_base64", {
-      baseDir: outDir,
-      files,
-    });
-    for (const row of timings) {
-      console.log(
-        `[ExtractFHM] write file ${outDir}/${row.relativePath} ${row.writeMs.toFixed(2)}ms`
-      );
-    }
-  }
-}
-
-function logExtractFhmStep(label: string, stepStart: number, extractStart: number): number {
-  const now = performance.now();
-  console.log(
-    `[ExtractFHM] ${label}: +${(now - stepStart).toFixed(2)}ms (elapsed ${(now - extractStart).toFixed(2)}ms)`
-  );
-  return now;
-}
-
 /** Returned when Xboost extraction finishes; `namingError` is set if numdlb/nutexb naming failed but files were still written. */
 export type ExtractFhmDataResult = {
   namingError?: string;
 };
 
 export async function ExtractFHMData(
-  fhm2d: Fhm2dData | PS4FhmData,
+  sourcePath: string,
   outDir: string,
   type: ExtractType,
   format?: Fhm2d_type_format,
   listOutputFileName?: string
 ): Promise<ExtractFhmDataResult> {
-  if (fhm2d._TYPE_ == Fhm2dType.PS4GundamVersus) {
-    throw new Error(ErrorMessage.notSupport);
-  } else if (fhm2d._TYPE_ == Fhm2dType.Xboost) {
-    const extractStart = performance.now();
-    let stepAt = extractStart;
-    // Write the extracted data.
-    // We sort by FileIndex because the type list is defined in the header order,
-    // while file records may not be stored in FileIndex order.
-    // create list to store type
-    let typeList = [];
-    for (let i of fhm2d.FileTypeData) {
-      for (let k = 0; k < i.FileCount; k++) {
-        typeList.push(getFileType(i.FileType));
-      }
-    }
-    const subFileData = fhm2d.getSortSubFileData();
-
-    // Update file structure index
-    fhm2d.SubFileStructure.forEach((e) => {
-      if (e.type === "Item") {
-        // Keep the original fileIndex so callers can map structure items back to file data.
-        e.originalFileIndex = e.fileIndex;
-      }
-    });
-
-    stepAt = logExtractFhmStep("setup type lists and structure index", stepAt, extractStart);
-
-    const errorInfo: any = {};
-
-    // Prepare output structure once for the whole extraction.
-    // This avoids rewriting the JSON structure file for every subfile.
-    const fileNameNoExt = await basename(outDir);
-    if (type === ExtractType.SingleFolder) {
-      const dirExists = await exists(outDir);
-      if (!dirExists) {
-        await mkdir(outDir, { recursive: true });
-      }
-    }
-
-    stepAt = logExtractFhmStep("basename + ensure output directory", stepAt, extractStart);
-
-    // Step 1: Decompress all files and store in memory
-    const decompressedFiles: { index: number; buffer: Buffer }[] = [];
-    for (let i = 0; i < subFileData.length; i++) {
-      const sub = subFileData[i]!;
-      let BufferData: Buffer;
-      const decompressData: Uint8Array[] = [];
-      if (sub._isNeedDeComp == false) {
-        BufferData = sub.CompBufferData[0].CompBufferData;
-      } else {
-        try {
-          sub.CompBufferData.forEach((chunk) => {
-            if (!chunk.IsCompressed) {
-              decompressData.push(new Uint8Array(chunk.CompBufferData));
-              return;
-            }
-            const temp = pako.inflateRaw(new Uint8Array(chunk.CompBufferData));
-            decompressData.push(temp);
-          });
-          BufferData = Buffer.concat(decompressData);
-        } catch (error) {
-          console.error("Error in ", i, typeList[i], "Offset", sub.StartOffset + "|" + sub.StartOffset.toString(16));
-          BufferData = Buffer.alloc(0);
-          sub.CompBufferData.forEach((chunk) => {
-            BufferData = Buffer.concat([BufferData, chunk.CompBufferData]);
-          });
-          errorInfo[i] = {
-            isError: true,
-            originChunkCount: sub.ChunkCount,
-            errorCompBufferData: sub.CompBufferData.map((e) => e.Size),
-            errorOriginSize: sub.FileSize,
-            OriginChunkBinaryBuffer: sub.OriginChunkBinaryBuffer,
-          };
-        }
-      }
-      decompressedFiles.push({ index: i, buffer: BufferData });
-    }
-
-    stepAt = logExtractFhmStep("decompress all subfiles", stepAt, extractStart);
-
-    if (format === Fhm2d_type_format.fhm2d_msc && decompressedFiles.length !== 3) {
-      throw new Error(`MSC extract: expected exactly 3 subfiles, got ${decompressedFiles.length}`);
-    }
-
-    if (type === ExtractType.SingleFolder) {
-      // Step 2: Generate structure and apply naming logic
-      const outputStructure = generateOutputStructure(fhm2d, typeList, fileNameNoExt, errorInfo);
-      let finalStructure: any = outputStructure;
-
-      try {
-        switch (format) {
-          case Fhm2d_type_format.fhm2d_character: {
-            const rootDir = await dirname(outDir);
-
-            // Create file data map from decompressed files (keyed by FileIndex)
-            const fileDataMap = new Map<number, Uint8Array>();
-            for (const fileData of decompressedFiles) {
-              const fileIndex = subFileData[fileData.index]?.FileIndex ?? fileData.index;
-              fileDataMap.set(fileIndex, new Uint8Array(fileData.buffer));
-            }
-
-            finalStructure = await applyNumdlbBaseNameToStructureObject(outputStructure, {
-              rootDir,
-              concurrency: 1,
-              rewriteFileUrl: true,
-              fileDataMap,
-            });
-            break;
-          }
-          case Fhm2d_type_format.fhm2d_all_nutexb: {
-            // Create file data map from decompressed files (keyed by FileIndex)
-            const fileDataMap = new Map<number, Uint8Array>();
-            for (const fileData of decompressedFiles) {
-              const fileIndex = subFileData[fileData.index]?.FileIndex ?? fileData.index;
-              fileDataMap.set(fileIndex, new Uint8Array(fileData.buffer));
-            }
-
-            finalStructure = await applyNutexbInternalNameToStructureObject(outputStructure, {
-              fileDataMap,
-            });
-            break;
-          }
-          case Fhm2d_type_format.fhm2d_stage_list: {
-            finalStructure = { ...outputStructure };
-            if (listOutputFileName && finalStructure.SubFileData?.[0]) {
-              finalStructure.SubFileData[0].fileUrl = `.\\${fileNameNoExt}\\${listOutputFileName}`;
-            }
-            break;
-          }
-          case Fhm2d_type_format.fhm2d_character_param: {
-            finalStructure = applyParamAssetNamesToStructureObject(outputStructure);
-            break;
-          }
-          case Fhm2d_type_format.fhm2d_msc: {
-            finalStructure = applyMscAssetNamesToStructureObject(outputStructure);
-            break;
-          }
-          case Fhm2d_type_format.fhm2d_motion: {
-            finalStructure = applyMotionAssetNamesToStructureObject(outputStructure, {
-              sortedSubFileBuffers: decompressedFiles.map((d) => d.buffer),
-              fileNameNoExt,
-            });
-            break;
-          }
-          default: {
-            finalStructure = outputStructure;
-            break;
-          }
-        }
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        console.error("FHM structure naming step failed:", errorMessage);
-        finalStructure = {
-          ...outputStructure,
-          __namingError: errorMessage,
-        };
-      }
-
-      stepAt = logExtractFhmStep("generate structure + apply naming", stepAt, extractStart);
-
-      // Step 3: Sync fileBaseName from SubFileData to SubFileStructure Name field
-      if (finalStructure.SubFileData && finalStructure.SubFileStructure) {
-        // Create a map of fileIndex to fileBaseName
-        const fileIndexToBaseName = new Map<number, string>();
-        for (const subFileItem of finalStructure.SubFileData) {
-          if (subFileItem.fileBaseName) {
-            fileIndexToBaseName.set(subFileItem.fileIndex, subFileItem.fileBaseName);
-          }
-        }
-
-        // Update SubFileStructure Name field
-        for (const structureItem of finalStructure.SubFileStructure) {
-          if (structureItem.type === 'Item' && structureItem.fileIndex !== undefined) {
-            const baseName = fileIndexToBaseName.get(structureItem.fileIndex);
-            if (baseName) {
-              structureItem.Name = baseName;
-            }
-          }
-        }
-      }
-
-      stepAt = logExtractFhmStep("sync structure base names", stepAt, extractStart);
-
-      // Step 4: Write files via Rust batch (chunked invoke) — avoids N× plugin-fs IPC.
-      const writeEntries: { relativePath: string; buffer: Buffer }[] = [];
-      for (const fileData of decompressedFiles) {
-        const structureItem = finalStructure.SubFileData.find((item: any) => item.index === fileData.index);
-        if (structureItem && structureItem.fileUrl) {
-          let relativePath: string;
-          if (format === Fhm2d_type_format.fhm2d_motion) {
-            relativePath = motionFileUrlToNestedRelativePath(
-              String(structureItem.fileUrl),
-              fileNameNoExt,
-            );
-          } else {
-            const fileUrl = structureItem.fileUrl.replace(/^\.[\\/]/, "");
-            const pathParts = fileUrl.split(/[\\/]/);
-            const fileName = pathParts[pathParts.length - 1];
-            if (!fileName) {
-              throw new Error(`Invalid fileUrl for extraction: ${String(structureItem.fileUrl)}`);
-            }
-            relativePath = fileName;
-          }
-          writeEntries.push({ relativePath, buffer: fileData.buffer });
-        } else {
-          writeEntries.push({
-            relativePath: `${fileData.index}${typeList[fileData.index]}`,
-            buffer: fileData.buffer,
-          });
-        }
-      }
-      const writeStart = performance.now();
-      await writeExtractedSubfilesBatch(outDir, writeEntries);
-      console.log(
-        `[ExtractFHM] write all subfiles (batched IPC, ${writeEntries.length} files): ${(performance.now() - writeStart).toFixed(2)}ms`
-      );
-
-      stepAt = logExtractFhmStep("write all subfiles", stepAt, extractStart);
-
-      if (format === Fhm2d_type_format.fhm2d_motion && finalStructure.SubFileParseStructure) {
-        const emptyDirStart = performance.now();
-        await ensureEmptyFoldersFromSubFileParseStructure(outDir, finalStructure.SubFileParseStructure);
-        console.log(
-          `[ExtractFHM] motion empty folders: ${(performance.now() - emptyDirStart).toFixed(2)}ms`
-        );
-      }
-
-      // Step 5: Write structure.json
-      const structurePath = outDir + "_structure.json";
-      const structureWriteStart = performance.now();
-      await writeFile(structurePath, Buffer.from(JSON.stringify(finalStructure, null, 2)));
-      console.log(
-        `[ExtractFHM] write file ${structurePath} ${(performance.now() - structureWriteStart).toFixed(2)}ms`
-      );
-
-      console.log(`[ExtractFHM] total ExtractFHMData: ${(performance.now() - extractStart).toFixed(2)}ms`);
-
-      const namingError =
-        typeof finalStructure.__namingError === "string" ? finalStructure.__namingError : undefined;
-      return { namingError };
-    } else if (type === ExtractType.FolderWithStructure) {
-      throw new Error(ErrorMessage.notSupport);
-    }
-    return {};
+  if (!sourcePath || !sourcePath.trim()) {
+    throw new Error("sourcePath is required for Rust-side extraction");
   }
-  return {};
+  if (type !== ExtractType.SingleFolder) {
+    throw new Error(ErrorMessage.notSupport);
+  }
+  return await invoke<ExtractFhmDataResult>("extract_fhm2d_to_folder", {
+    sourcePath,
+    outDir,
+    format,
+    listOutputFileName,
+  });
 }
-
-function generateOutputStructure(fhm2d: PS4FhmData | Fhm2dData, typeList: string[], fileNameNoExt: string, errorInfoMap: Record<number, any>) {
-  return {
-    Magic: fhm2d.MetaHeader,
-    Fhm2dTotalCount: fhm2d.FileCount,
-    UnkCount: fhm2d.UnkCount,
-    SubFileData: fhm2d.SubFileData.map((e, i) => ({
-      index: i,
-      fileType: typeList[i],
-      fileIndex: e.FileIndex,
-      fileUrl: `.\\${fileNameNoExt}\\${i}${typeList[i]}`,
-      ...(errorInfoMap[i] || {}),
-    })),
-    SubFileStructure: fhm2d.SubFileStructure,
-    SubFileParseStructure: createFolderStructureXB(fhm2d.SubFileStructure),
-  };
-}
-
-// Helper functions removed: bitmap length is derived from page count, not from counting 1-bits.

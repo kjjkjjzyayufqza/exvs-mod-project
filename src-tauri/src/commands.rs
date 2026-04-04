@@ -340,6 +340,26 @@ pub async fn write_files_batch_base64(
     .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+pub async fn extract_fhm2d_to_folder(
+    source_path: String,
+    out_dir: String,
+    format: Option<String>,
+    list_output_file_name: Option<String>,
+) -> Result<crate::format::fhm2d::ExtractFhm2dResult, String> {
+    let parsed_format = crate::format::fhm2d::Fhm2dFormat::from_opt_str(format.as_deref())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::format::fhm2d::extract_fhm2d_to_folder_impl(
+            source_path.as_str(),
+            out_dir.as_str(),
+            parsed_format,
+            list_output_file_name,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CopyAssetAsNewResult {

@@ -42,3 +42,4 @@ binrw = "0.15"
 xmltree = "0.10.3"
 glam = { version = "0.30", features = ["mint"] }
 ufbx = "0.10"
+flate2 = "1"

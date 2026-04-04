@@ -1,7 +1,7 @@
 import { readFile, exists } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
 import { Buffer } from 'buffer';
-import { ExtractFHMData, Fhm2d_type_format, Fhm2dData, PS4FhmData, ExtractType } from '@/models/fhm2d';
+import { ExtractFHMData, Fhm2d_type_format, ExtractType } from '@/models/fhm2d';
 import { AssetRefInfo } from './assetRef';
 
 export interface ExtractResult {
@@ -49,16 +49,10 @@ export async function extractAsset(
 
     // Determine if it's Xboost or PS4 based on magic
     const magic = buffer.slice(0, 4).toString('hex').toUpperCase();
-    let fhm2d: Fhm2dData | PS4FhmData;
-
-    if (magic === 'B9B7B2CD') {
-      fhm2d = new Fhm2dData(buffer);
-    } else if (magic === '9992CD90') {
-      fhm2d = new PS4FhmData(buffer);
-    } else {
+    if (magic !== 'B9B7B2CD' && magic !== '9992CD90') {
       return { success: false, error: `Unsupported file magic: ${magic}` };
     }
-    logExtractPhase('parse FHM2D (constructor)');
+    logExtractPhase('validate FHM2D magic');
 
     const targetDir = await join(extractOutputPath, asset.hashHex);
     logExtractPhase('resolve target directory');
@@ -74,7 +68,7 @@ export async function extractAsset(
             : undefined;
 
     const extractResult = await ExtractFHMData(
-      fhm2d,
+      asset.sourceFilePath,
       targetDir,
       ExtractType.SingleFolder,
       extractFormat

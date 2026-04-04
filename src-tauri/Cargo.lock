@@ -87,6 +87,7 @@ dependencies = [
  "binrw 0.15.1",
  "crc32fast",
  "encoding_rs",
+ "flate2",
  "glam",
  "image",
  "image_dds",

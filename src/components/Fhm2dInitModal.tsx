@@ -21,7 +21,6 @@ import {
     ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Buffer } from "buffer";
 import { exists, stat } from "@tauri-apps/plugin-fs";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -39,7 +38,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Progress } from "@/components/ui/progress";
 import { useConfigStore } from "@/store/configStore";
 import { IOReadFile } from "@/IO/fileSystem";
-import { ExtractFHMData, ExtractType, Fhm2dData, Fhm2d_type_format, PS4FhmData } from "@/models/fhm2d";
+import { ExtractFHMData, ExtractType, Fhm2d_type_format } from "@/models/fhm2d";
 import { cn } from "@/lib/utils";
 import { useDraggableModal } from "@/hooks/useDraggableModal";
 
@@ -97,11 +96,16 @@ function getFhm2dFullPath(sourceFolder: string, hash: string): string {
     return `${base}\\${fileName}`;
 }
 
-async function readFhm2dFromPath(filePath: string): Promise<Fhm2dData | PS4FhmData> {
-    const buf = Buffer.from(await IOReadFile(filePath));
-    const magic = buf.slice(0, 0x4).toString("hex").toUpperCase();
-    if (magic === "B9B7B2CD") return new Fhm2dData(buf);
-    if (magic === "9992CD90") return new PS4FhmData(buf);
+async function assertFhm2dMagic(filePath: string): Promise<void> {
+    const buf = new Uint8Array(await IOReadFile(filePath));
+    if (buf.byteLength < 4) {
+        throw new Error("Invalid fhm2d file: too small");
+    }
+    const magic = Array.from(buf.subarray(0, 4))
+        .map((n) => n.toString(16).padStart(2, "0"))
+        .join("")
+        .toUpperCase();
+    if (magic === "B9B7B2CD" || magic === "9992CD90") return;
     throw new Error("File magic not match with FHM2D or PS4FHM");
 }
 
@@ -359,12 +363,12 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
         }, 200);
 
         try {
-            const fhm = await readFhm2dFromPath(inputPath);
+            await assertFhm2dMagic(inputPath);
             const outDir = `${outBase}\\${buildHashFileName(item.hash)}`;
             const listOutputFileName =
                 item.format === Fhm2d_type_format.fhm2d_stage_list ? `${item.id}.bin` : undefined;
 
-            const extractResult = await ExtractFHMData(fhm, outDir, ExtractType.SingleFolder, item.format, listOutputFileName);
+            const extractResult = await ExtractFHMData(inputPath, outDir, ExtractType.SingleFolder, item.format, listOutputFileName);
 
             clearInterval(progressInterval);
             setExtractionProgress(100);
