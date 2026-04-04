@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { SsbhModelCanvas } from "./SsbhModelCanvas";
@@ -15,6 +16,15 @@ function formatPreviewCount(n: number): string {
 
 export function SsbhModelPreviewViewport() {
   const p = useSsbhModelPreview();
+  const onViewportBoneSelect = useCallback(
+    (index: number) => {
+      p.setSelectedBoneIndex(index);
+    },
+    [p.setSelectedBoneIndex],
+  );
+  const onViewportBoneSelectionClear = useCallback(() => {
+    p.setSelectedBoneIndex(null);
+  }, [p.setSelectedBoneIndex]);
   const stats = p.vertexTriangleStats;
   const statsLine =
     p.bundle && p.draws.length > 0
@@ -29,9 +39,6 @@ export function SsbhModelPreviewViewport() {
         </Button>
         <Button type="button" size="sm" variant="secondary" disabled={p.loading} onClick={() => void p.pickNumdlb()}>
           Open .numdlb
-        </Button>
-        <Button type="button" size="sm" variant="outline" disabled={p.loading} onClick={() => void p.tryWorkspaceRoot()}>
-          Use workspace root
         </Button>
         <SsbhModelPreviewQuickActions />
         <div
@@ -107,12 +114,21 @@ export function SsbhModelPreviewViewport() {
             normalMapEnabled={p.normalMapEnabled}
             fitRequestId={p.fitRequestId}
             skel={p.bundle?.skel ? (p.bundle.skel as SkelDataJson) : null}
-            bonePoseEnabled={p.bonePoseEnabled}
             selectedBoneIndex={p.selectedBoneIndex}
             boneTransformMode={p.boneTransformMode}
             bonePoseResetNonce={p.bonePoseResetNonce}
             previewRenderStyle={p.previewRenderStyle}
             previewSuspended={p.previewSuspended}
+            onViewportBoneSelect={onViewportBoneSelect}
+            onViewportBoneSelectionClear={onViewportBoneSelectionClear}
+            onBoneTransformHotkey={p.setBoneTransformMode}
+            bonePoseGetterRef={p.bonePoseGetterRef}
+            bonePoseApplyNonce={p.bonePoseApplyNonce}
+            bonePoseToApply={p.bonePoseToApply}
+            onBonePoseApplyConsumed={p.consumeBonePoseApply}
+            onBonePoseCommit={p.commitBonePoseUndo}
+            onUndoBonePose={p.undoBonePose}
+            onRedoBonePose={p.redoBonePose}
           />
           <SsbhModelPreviewLoadingOverlay readingBundle={p.loading} textureDecode={p.textureDecodeProgress} />
         </div>

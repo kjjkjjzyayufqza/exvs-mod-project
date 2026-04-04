@@ -11,8 +11,10 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
+  type MutableRefObject,
   type ReactNode,
 } from "react";
 import { toast } from "sonner";
@@ -152,7 +154,6 @@ export type SsbhModelPreviewContextValue = {
   skeletonGeometry: BufferGeometry | null;
   pickFolder: () => Promise<void>;
   pickNumdlb: () => Promise<void>;
-  tryWorkspaceRoot: () => Promise<void>;
   /** When true, a successful DAE/FBX → SSBH export loads the generated `.numdlb` here. Persisted in localStorage. */
   autoLoadAfterConvertToSsbh: boolean;
   setAutoLoadAfterConvertToSsbh: (v: boolean) => void;
@@ -171,14 +172,22 @@ export type SsbhModelPreviewContextValue = {
   showAllMeshes: () => void;
   hideAllMeshes: () => void;
   vertexTriangleStats: { verts: number; tris: number };
-  bonePoseEnabled: boolean;
-  setBonePoseEnabled: (v: boolean) => void;
   selectedBoneIndex: number | null;
   setSelectedBoneIndex: (v: number | null) => void;
   boneTransformMode: BoneTransformMode;
   setBoneTransformMode: (v: BoneTransformMode) => void;
   bonePoseResetNonce: number;
   resetBonePose: () => void;
+  /** Set by BonePreviewRig; used for undo/redo to read the current pose. */
+  bonePoseGetterRef: MutableRefObject<(() => Float32Array) | null>;
+  bonePoseApplyNonce: number;
+  bonePoseToApply: Float32Array | null;
+  consumeBonePoseApply: () => void;
+  commitBonePoseUndo: (beforeTransformSnapshot: Float32Array) => void;
+  undoBonePose: () => void;
+  redoBonePose: () => void;
+  canUndoBonePose: boolean;
+  canRedoBonePose: boolean;
   /** When true, the 3D canvas stops its render loop (kept-alive background route). */
   previewSuspended: boolean;
 };
@@ -242,10 +251,16 @@ export function SsbhModelPreviewProvider({
   const [textureDecodeProgress, setTextureDecodeProgress] = useState<SsbhModelPreviewTextureDecodeProgress | null>(null);
   const [fitRequestId, setFitRequestId] = useState(0);
   const [modelLoadNonce, setModelLoadNonce] = useState(0);
-  const [bonePoseEnabled, setBonePoseEnabled] = useState(false);
   const [selectedBoneIndex, setSelectedBoneIndex] = useState<number | null>(null);
   const [boneTransformMode, setBoneTransformMode] = useState<BoneTransformMode>("translate");
   const [bonePoseResetNonce, setBonePoseResetNonce] = useState(0);
+  const bonePoseGetterRef = useRef<(() => Float32Array) | null>(null);
+  const [bonePoseHistory, setBonePoseHistory] = useState<{
+    undoStack: Float32Array[];
+    redoStack: Float32Array[];
+    applyNonce: number;
+    applyData: Float32Array | null;
+  }>({ undoStack: [], redoStack: [], applyNonce: 0, applyData: null });
   const [previewRenderStyle, setPreviewRenderStyle] = useState<PreviewRenderStyle>("standard");
   const [recentModelPaths, setRecentModelPaths] = useState<string[]>(() =>
     readRecentModelPathsFromStorage(),
@@ -279,8 +294,8 @@ export function SsbhModelPreviewProvider({
     if (!bundle) {
       setDraws([]);
       setDrawError(null);
-      setBonePoseEnabled(false);
       setSelectedBoneIndex(null);
+      setBonePoseHistory({ undoStack: [], redoStack: [], applyNonce: 0, applyData: null });
       return;
     }
     let created: BuiltMeshDraw[] = [];
@@ -297,9 +312,9 @@ export function SsbhModelPreviewProvider({
       created = [];
     }
     setDraws(created);
-    setBonePoseEnabled(false);
     setSelectedBoneIndex(null);
     setBonePoseResetNonce((n) => n + 1);
+    setBonePoseHistory({ undoStack: [], redoStack: [], applyNonce: 0, applyData: null });
     return () => {
       created.forEach((d) => d.geometry.dispose());
     };
@@ -533,14 +548,6 @@ export function SsbhModelPreviewProvider({
     }
   }, [loadAt, root]);
 
-  const tryWorkspaceRoot = useCallback(async () => {
-    if (!root) {
-      toast.error("No workspace folder is open.");
-      return;
-    }
-    await loadAt(root);
-  }, [loadAt, root]);
-
   const loadModelAt = useCallback(
     async (path: string) => {
       const t = path.trim();
@@ -598,10 +605,10 @@ export function SsbhModelPreviewProvider({
     setUvFlipV(false);
     setPreviewRenderStyle("standard");
     setTextureSlotLoadEnabledState(createDefaultTextureSlotLoadEnabled());
-    setBonePoseEnabled(false);
     setSelectedBoneIndex(null);
     setBoneTransformMode("translate");
     setBonePoseResetNonce((n) => n + 1);
+    setBonePoseHistory({ undoStack: [], redoStack: [], applyNonce: 0, applyData: null });
     setFitRequestId((r) => r + 1);
   }, []);
 
@@ -618,8 +625,54 @@ export function SsbhModelPreviewProvider({
     });
   }, []);
 
+  const commitBonePoseUndo = useCallback((beforeTransformSnapshot: Float32Array) => {
+    const snap = new Float32Array(beforeTransformSnapshot);
+    setBonePoseHistory((h) => ({
+      ...h,
+      undoStack: [...h.undoStack, snap],
+      redoStack: [],
+    }));
+  }, []);
+
+  const undoBonePose = useCallback(() => {
+    setBonePoseHistory((h) => {
+      if (h.undoStack.length === 0) return h;
+      const get = bonePoseGetterRef.current;
+      if (!get) return h;
+      const prev = h.undoStack[h.undoStack.length - 1]!;
+      const current = get();
+      return {
+        undoStack: h.undoStack.slice(0, -1),
+        redoStack: [...h.redoStack, new Float32Array(current)],
+        applyNonce: h.applyNonce + 1,
+        applyData: new Float32Array(prev),
+      };
+    });
+  }, []);
+
+  const redoBonePose = useCallback(() => {
+    setBonePoseHistory((h) => {
+      if (h.redoStack.length === 0) return h;
+      const get = bonePoseGetterRef.current;
+      if (!get) return h;
+      const next = h.redoStack[h.redoStack.length - 1]!;
+      const current = get();
+      return {
+        undoStack: [...h.undoStack, new Float32Array(current)],
+        redoStack: h.redoStack.slice(0, -1),
+        applyNonce: h.applyNonce + 1,
+        applyData: new Float32Array(next),
+      };
+    });
+  }, []);
+
+  const consumeBonePoseApply = useCallback(() => {
+    setBonePoseHistory((h) => ({ ...h, applyData: null }));
+  }, []);
+
   const resetBonePose = useCallback(() => {
     setBonePoseResetNonce((n) => n + 1);
+    setBonePoseHistory({ undoStack: [], redoStack: [], applyNonce: 0, applyData: null });
   }, []);
 
   const toggleVisible = useCallback((key: string, checked: boolean) => {
@@ -681,6 +734,9 @@ export function SsbhModelPreviewProvider({
 
   const previewBusy = loading || textureDecoding;
 
+  const canUndoBonePose = bonePoseHistory.undoStack.length > 0;
+  const canRedoBonePose = bonePoseHistory.redoStack.length > 0;
+
   const value = useMemo<SsbhModelPreviewContextValue>(
     () => ({
       workspaceRoot: root,
@@ -739,7 +795,6 @@ export function SsbhModelPreviewProvider({
       skeletonGeometry,
       pickFolder,
       pickNumdlb,
-      tryWorkspaceRoot,
       autoLoadAfterConvertToSsbh,
       setAutoLoadAfterConvertToSsbh,
       loadModelAt,
@@ -753,14 +808,21 @@ export function SsbhModelPreviewProvider({
       showAllMeshes,
       hideAllMeshes,
       vertexTriangleStats,
-      bonePoseEnabled,
-      setBonePoseEnabled,
       selectedBoneIndex,
       setSelectedBoneIndex,
       boneTransformMode,
       setBoneTransformMode,
       bonePoseResetNonce,
       resetBonePose,
+      bonePoseGetterRef,
+      bonePoseApplyNonce: bonePoseHistory.applyNonce,
+      bonePoseToApply: bonePoseHistory.applyData,
+      consumeBonePoseApply,
+      commitBonePoseUndo,
+      undoBonePose,
+      redoBonePose,
+      canUndoBonePose,
+      canRedoBonePose,
       previewSuspended,
     } satisfies SsbhModelPreviewContextValue),
     [
@@ -802,7 +864,6 @@ export function SsbhModelPreviewProvider({
       skeletonGeometry,
       pickFolder,
       pickNumdlb,
-      tryWorkspaceRoot,
       autoLoadAfterConvertToSsbh,
       setAutoLoadAfterConvertToSsbh,
       loadModelAt,
@@ -816,11 +877,21 @@ export function SsbhModelPreviewProvider({
       showAllMeshes,
       hideAllMeshes,
       vertexTriangleStats,
-      bonePoseEnabled,
       selectedBoneIndex,
       boneTransformMode,
       bonePoseResetNonce,
       resetBonePose,
+      bonePoseGetterRef,
+      bonePoseHistory.applyNonce,
+      bonePoseHistory.applyData,
+      bonePoseHistory.undoStack.length,
+      bonePoseHistory.redoStack.length,
+      consumeBonePoseApply,
+      commitBonePoseUndo,
+      undoBonePose,
+      redoBonePose,
+      canUndoBonePose,
+      canRedoBonePose,
       previewSuspended,
     ],
   );

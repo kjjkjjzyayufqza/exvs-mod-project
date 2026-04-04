@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import { Database, FileDown, Info, Layout, List, Settings2 } from "lucide-react";
+import { Bone, Database, FileDown, Info, Layout, List, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,6 +13,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { DialogLastPathKey, getDialogDefaultPath, rememberDialogSelection } from "@/utils/dialogLastPath";
 import { MayaSection } from "./MayaInspectorSection";
@@ -24,7 +26,17 @@ import {
 import { useSsbhModelPreview, type PreviewRenderStyle } from "./SsbhModelPreviewContext";
 import { TEXTURE_PREVIEW_SLOT_META, TEXTURE_SLOT_TO_PATH_FIELD } from "./meshFromSsbh";
 import { ssbhExportFolderToDae, type SsbhDaeUpAxis } from "./ssbhDaeIoService";
-import type { SkelDataJson } from "./types";
+import type { BoneJson, SkelDataJson } from "./types";
+
+function boneHierarchyDepth(bones: BoneJson[], i: number): number {
+  let d = 0;
+  let p = bones[i]?.parent_index;
+  while (p !== null && p !== undefined && p >= 0) {
+    d++;
+    p = bones[p]?.parent_index;
+  }
+  return d;
+}
 
 function meshFileStem(meshPath: string): string {
   const seg = meshPath.replace(/\\/g, "/").split("/").filter((x) => x.length > 0).pop() ?? "model";
@@ -605,84 +617,6 @@ export function SsbhModelPreviewInspector() {
         </div>
       </MayaSection>
 
-      <MayaSection title="Bone pose (preview)" icon={<Settings2 className="h-3.5 w-3.5" />} defaultOpen={false}>
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-2">
-            <Label className="text-[11px] text-muted-foreground">Enable bone control</Label>
-            <Switch
-              checked={p.bonePoseEnabled}
-              onCheckedChange={p.setBonePoseEnabled}
-              disabled={!skel || bones.length === 0}
-            />
-          </div>
-          <p className="text-[10px] leading-snug text-muted-foreground">
-            Drag gizmo on the selected bone (translate / rotate / scale). Orbit is disabled while dragging the gizmo.
-            CPU skinning updates rigged meshes; turn off to restore bind pose.
-          </p>
-          {!hasSkinnedMesh && p.bonePoseEnabled ? (
-            <p className="text-[10px] text-amber-600/90 dark:text-amber-400/90">
-              This model has no per-vertex bone weights in the mesh JSON — skeleton lines will move but geometry will
-              not deform.
-            </p>
-          ) : null}
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-[10px] text-muted-foreground">Selected bone</Label>
-            <Select
-              disabled={!p.bonePoseEnabled || bones.length === 0}
-              value={p.selectedBoneIndex === null ? "__none__" : String(p.selectedBoneIndex)}
-              onValueChange={(v) => p.setSelectedBoneIndex(v === "__none__" ? null : Number(v))}
-            >
-              <SelectTrigger className="h-8 text-[11px]">
-                <SelectValue placeholder="None" />
-              </SelectTrigger>
-              <SelectContent className="max-h-[220px]">
-                <SelectItem value="__none__" className="text-[11px]">
-                  None
-                </SelectItem>
-                {bones.map((b, i) => (
-                  <SelectItem key={`${b.name}_${i}`} value={String(i)} className="text-[11px] font-mono">
-                    [{i}] {b.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-[10px] text-muted-foreground">Gizmo mode</Label>
-            <Select
-              disabled={!p.bonePoseEnabled}
-              value={p.boneTransformMode}
-              onValueChange={(v) => p.setBoneTransformMode(v as "translate" | "rotate" | "scale")}
-            >
-              <SelectTrigger className="h-8 text-[11px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="translate" className="text-[11px]">
-                  Move
-                </SelectItem>
-                <SelectItem value="rotate" className="text-[11px]">
-                  Rotate
-                </SelectItem>
-                <SelectItem value="scale" className="text-[11px]">
-                  Scale
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-7 text-[10px]"
-            disabled={!p.bonePoseEnabled}
-            onClick={p.resetBonePose}
-          >
-            Reset bone pose
-          </Button>
-        </div>
-      </MayaSection>
-
       <MayaSection title="Mesh Explorer" icon={<List className="h-3.5 w-3.5" />}>
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between border-b pb-2">
@@ -728,6 +662,102 @@ export function SsbhModelPreviewInspector() {
             {!p.draws.length && (
               <span className="py-4 text-center text-[10px] italic text-muted-foreground">No meshes loaded</span>
             )}
+          </div>
+        </div>
+      </MayaSection>
+
+      <MayaSection title="Bone Explorer" icon={<Bone className="h-3.5 w-3.5" />}>
+        <div className="flex flex-col gap-3">
+          <p className="text-[9px] leading-snug text-muted-foreground">
+            Hierarchy matches the skeleton. Select a bone here or click joint spheres in the viewport, then drag the
+            gizmo. With the 3D view focused: Maya-style{" "}
+            <span className="font-mono text-foreground">W / E / R</span> (or{" "}
+            <span className="font-mono text-foreground">1 / 2 / 3</span>) for Move / Rotate / Scale;{" "}
+            <span className="font-mono text-foreground">Ctrl+Z</span> undo /{" "}
+            <span className="font-mono text-foreground">Ctrl+Shift+Z</span> or{" "}
+            <span className="font-mono text-foreground">Ctrl+Y</span> redo bone transforms;{" "}
+            <span className="font-mono text-foreground">Esc</span> clears the active bone. Orbit pauses while dragging
+            the gizmo.
+          </p>
+          {!hasSkinnedMesh && p.selectedBoneIndex !== null && bones.length > 0 ? (
+            <p className="text-[10px] text-amber-600/90 dark:text-amber-400/90">
+              This model has no per-vertex bone weights in the mesh JSON — skeleton lines will move but geometry will not
+              deform.
+            </p>
+          ) : null}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[10px] text-muted-foreground">Gizmo mode</Label>
+            <ToggleGroup
+              type="single"
+              value={p.boneTransformMode}
+              onValueChange={(v) => {
+                if (v) p.setBoneTransformMode(v as typeof p.boneTransformMode);
+              }}
+              disabled={bones.length === 0 || p.selectedBoneIndex === null}
+              variant="outline"
+              className="flex w-full flex-wrap justify-start gap-1"
+            >
+              <ToggleGroupItem value="translate" className="h-8 flex-1 min-w-18 px-2 text-[10px]" aria-label="Move">
+                Move
+              </ToggleGroupItem>
+              <ToggleGroupItem value="rotate" className="h-8 flex-1 min-w-18 px-2 text-[10px]" aria-label="Rotate">
+                Rotate
+              </ToggleGroupItem>
+              <ToggleGroupItem value="scale" className="h-8 flex-1 min-w-18 px-2 text-[10px]" aria-label="Scale">
+                Scale
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 text-[10px]"
+            disabled={bones.length === 0}
+            onClick={p.resetBonePose}
+          >
+            Reset bone pose
+          </Button>
+          <div className="flex items-center justify-between border-b pb-2">
+            <span className="text-[10px] text-muted-foreground">{bones.length} bones</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-6 px-2 text-[9px] uppercase tracking-tighter"
+              disabled={bones.length === 0}
+              onClick={() => p.setSelectedBoneIndex(null)}
+            >
+              Clear selection
+            </Button>
+          </div>
+          <div className="max-h-[300px] space-y-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-muted">
+            {bones.map((b, i) => {
+              const depth = boneHierarchyDepth(bones, i);
+              const active = p.selectedBoneIndex === i;
+              return (
+                <button
+                  key={`${b.name}_${i}`}
+                  type="button"
+                  className={cn(
+                    "flex w-full min-w-0 flex-col rounded-sm border px-2 py-1.5 text-left transition-colors",
+                    active
+                      ? "border-primary/55 bg-primary/12"
+                      : "border-border/40 hover:bg-muted/35",
+                  )}
+                  style={{ paddingLeft: `${10 + depth * 12}px` }}
+                  onClick={() => {
+                    p.setSelectedBoneIndex(i);
+                  }}
+                >
+                  <span className="truncate text-[11px] font-medium leading-tight">{b.name}</span>
+                  <span className="font-mono text-[9px] text-muted-foreground">[{i}]</span>
+                </button>
+              );
+            })}
+            {!bones.length ? (
+              <span className="py-4 text-center text-[10px] italic text-muted-foreground">No skeleton loaded</span>
+            ) : null}
           </div>
         </div>
       </MayaSection>

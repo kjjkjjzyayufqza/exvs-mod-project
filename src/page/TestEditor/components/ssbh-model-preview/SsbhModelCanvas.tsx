@@ -7,7 +7,18 @@ import {
   Stats,
   useTexture,
 } from "@react-three/drei";
-import { Suspense, useLayoutEffect, useMemo, useState, useEffect, useRef, type RefObject } from "react";
+import {
+  Suspense,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MutableRefObject,
+  type RefObject,
+} from "react";
 import {
   ClampToEdgeWrapping,
   Color,
@@ -28,7 +39,7 @@ import type { BufferGeometry, Texture } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { animeExvsOnBeforeCompile, createAnimeExvsUniforms } from "./animeExvsMeshStandard";
 import { AnimePreviewPostFx } from "./AnimePreviewPostFx";
-import { BonePreviewRig, resetSkinnedMeshesToBindPose } from "./BonePreviewRig";
+import { BonePreviewRig } from "./BonePreviewRig";
 import { fitCameraToObject } from "./cameraFit";
 import { applyPreviewUvFlip } from "./previewUvFlip";
 import type { BoneTransformMode, MaterialDebugViewMode, PreviewRenderStyle } from "./SsbhModelPreviewContext";
@@ -69,7 +80,6 @@ type SsbhModelCanvasProps = {
   /** Increment to request a one-shot camera fit (user Reset view or new model). */
   fitRequestId: number;
   skel: SkelDataJson | null;
-  bonePoseEnabled: boolean;
   selectedBoneIndex: number | null;
   boneTransformMode: BoneTransformMode;
   bonePoseResetNonce: number;
@@ -77,6 +87,16 @@ type SsbhModelCanvasProps = {
   previewRenderStyle: PreviewRenderStyle;
   /** When true, R3F stops the render loop (background kept-alive route). */
   previewSuspended?: boolean;
+  onViewportBoneSelect: (index: number) => void;
+  onViewportBoneSelectionClear: () => void;
+  onBoneTransformHotkey: (mode: BoneTransformMode) => void;
+  bonePoseGetterRef: MutableRefObject<(() => Float32Array) | null>;
+  bonePoseApplyNonce: number;
+  bonePoseToApply: Float32Array | null;
+  onBonePoseApplyConsumed: () => void;
+  onBonePoseCommit: (beforeTransformSnapshot: Float32Array) => void;
+  onUndoBonePose: () => void;
+  onRedoBonePose: () => void;
 };
 
 function CameraFit({
@@ -339,7 +359,7 @@ function DrawMeshes({
   normalMapEnabled,
   visibleKeys,
   wireframe,
-  bonePoseEnabled,
+  ignoreMeshRaycastForBonePicking,
   previewRenderStyle,
   animeKeyLightDir,
 }: Pick<
@@ -352,12 +372,12 @@ function DrawMeshes({
   | "normalMapEnabled"
   | "visibleKeys"
   | "wireframe"
-  | "bonePoseEnabled"
   | "previewRenderStyle"
 > & {
+  ignoreMeshRaycastForBonePicking: boolean;
   animeKeyLightDir: Vector3;
 }) {
-  const ignoreRaycast = bonePoseEnabled;
+  const ignoreRaycast = ignoreMeshRaycastForBonePicking;
   return (
     <>
       {draws.map((d) => {
@@ -465,25 +485,30 @@ function Scene({
   normalMapEnabled,
   fitRequestId,
   skel,
-  bonePoseEnabled,
   selectedBoneIndex,
   boneTransformMode,
   bonePoseResetNonce,
   previewRenderStyle,
-}: Omit<SsbhModelCanvasProps, "previewSuspended">) {
+  onViewportBoneSelect,
+  bonePoseGetterRef,
+  bonePoseApplyNonce,
+  bonePoseToApply,
+  onBonePoseApplyConsumed,
+  onBonePoseCommit,
+}: Omit<
+  SsbhModelCanvasProps,
+  | "previewSuspended"
+  | "onViewportBoneSelectionClear"
+  | "onBoneTransformHotkey"
+  | "onUndoBonePose"
+  | "onRedoBonePose"
+>) {
   const modelRootRef = useRef<Group>(null);
   const controlsRef = useRef<OrbitControlsImpl>(null);
-  const prevBonePose = useRef(bonePoseEnabled);
 
-  useEffect(() => {
-    if (prevBonePose.current && !bonePoseEnabled) {
-      resetSkinnedMeshesToBindPose(draws);
-    }
-    prevBonePose.current = bonePoseEnabled;
-  }, [bonePoseEnabled, draws]);
-
-  const showStaticSkeleton = showSkeleton && !bonePoseEnabled && Boolean(skeletonGeometry);
-  const showRig = bonePoseEnabled && skel !== null && skel.bones.length > 0;
+  const skelHasBones = skel !== null && skel.bones.length > 0;
+  const showStaticSkeleton = showSkeleton && !skelHasBones && Boolean(skeletonGeometry);
+  const showRig = skelHasBones;
 
   const animeKeyLightDir = useMemo(() => {
     const v = new Vector3(directionalX, directionalY, directionalZ);
@@ -530,6 +555,12 @@ function Scene({
             poseResetNonce={bonePoseResetNonce}
             showSkeletonLines={showSkeleton}
             orbitControlsRef={controlsRef}
+            onSelectBone={onViewportBoneSelect}
+            bonePoseGetterRef={bonePoseGetterRef}
+            bonePoseApplyNonce={bonePoseApplyNonce}
+            bonePoseToApply={bonePoseToApply}
+            onBonePoseApplyConsumed={onBonePoseApplyConsumed}
+            onBonePoseCommit={onBonePoseCommit}
           />
         ) : null}
         <DrawMeshes
@@ -541,7 +572,7 @@ function Scene({
           normalMapEnabled={normalMapEnabled}
           visibleKeys={visibleKeys}
           wireframe={wireframe}
-          bonePoseEnabled={bonePoseEnabled}
+          ignoreMeshRaycastForBonePicking={skelHasBones}
           previewRenderStyle={previewRenderStyle}
           animeKeyLightDir={animeKeyLightDir}
         />
@@ -591,14 +622,94 @@ function Scene({
 
 export function SsbhModelCanvas(props: SsbhModelCanvasProps) {
   const { background, previewSuspended = false, ...sceneProps } = props;
+  const {
+    onViewportBoneSelectionClear,
+    onBoneTransformHotkey,
+    onUndoBonePose,
+    onRedoBonePose,
+    ...restSceneProps
+  } = sceneProps;
+  const skel = restSceneProps.skel;
+  const skelHasBones = skel !== null && skel.bones.length > 0;
+  const selectedBoneIndex = restSceneProps.selectedBoneIndex;
+
+  const handleCanvasKeyDown = useCallback(
+    (e: ReactKeyboardEvent<HTMLDivElement>) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod) {
+        const low = e.key.toLowerCase();
+        if (low === "z" && !e.shiftKey) {
+          if (skelHasBones) {
+            e.preventDefault();
+            onUndoBonePose();
+          }
+          return;
+        }
+        if ((low === "z" && e.shiftKey) || low === "y") {
+          if (skelHasBones) {
+            e.preventDefault();
+            onRedoBonePose();
+          }
+          return;
+        }
+      }
+      if (e.repeat) return;
+      if (!skelHasBones) return;
+      if (e.key === "Escape") {
+        if (selectedBoneIndex === null) return;
+        e.preventDefault();
+        onViewportBoneSelectionClear();
+        return;
+      }
+      const lowKey = e.key.toLowerCase();
+      if (lowKey === "w") {
+        e.preventDefault();
+        onBoneTransformHotkey("translate");
+        return;
+      }
+      if (lowKey === "e") {
+        e.preventDefault();
+        onBoneTransformHotkey("rotate");
+        return;
+      }
+      if (lowKey === "r") {
+        e.preventDefault();
+        onBoneTransformHotkey("scale");
+        return;
+      }
+      const k = e.key;
+      if (k === "1") {
+        e.preventDefault();
+        onBoneTransformHotkey("translate");
+      } else if (k === "2") {
+        e.preventDefault();
+        onBoneTransformHotkey("rotate");
+      } else if (k === "3") {
+        e.preventDefault();
+        onBoneTransformHotkey("scale");
+      }
+    },
+    [
+      skelHasBones,
+      selectedBoneIndex,
+      onBoneTransformHotkey,
+      onViewportBoneSelectionClear,
+      onUndoBonePose,
+      onRedoBonePose,
+    ],
+  );
 
   return (
     <div
-      className="relative h-full min-h-[420px] w-full rounded-md border bg-black/40 outline-none overscroll-contain"
-      tabIndex={-1}
+      className="relative h-full min-h-[420px] w-full rounded-md border bg-black/40 outline-none overscroll-contain focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      tabIndex={0}
       onWheel={(e) => {
         e.stopPropagation();
       }}
+      onPointerDown={(ev) => {
+        ev.currentTarget.focus();
+      }}
+      onKeyDown={handleCanvasKeyDown}
     >
       <Canvas
         className="h-full w-full touch-none"
@@ -606,9 +717,14 @@ export function SsbhModelCanvas(props: SsbhModelCanvasProps) {
         gl={{ antialias: true, alpha: false }}
         dpr={[1, 2]}
         camera={{ position: [2.4, 1.6, 2.8], fov: 50, near: 0.02, far: 5e6 }}
+        onPointerMissed={() => {
+          if (selectedBoneIndex !== null) {
+            onViewportBoneSelectionClear();
+          }
+        }}
       >
-        {sceneProps.previewRenderStyle === "anime" ? <AnimePreviewPostFx /> : null}
-        <Scene {...sceneProps} background={background} />
+        {restSceneProps.previewRenderStyle === "anime" ? <AnimePreviewPostFx /> : null}
+        <Scene {...restSceneProps} background={background} />
       </Canvas>
     </div>
   );

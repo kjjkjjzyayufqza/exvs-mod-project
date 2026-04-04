@@ -1,19 +1,18 @@
-import { TransformControls } from "@react-three/drei";
+import { TransformControls, useCursor } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import {
-  BufferAttribute,
-  BufferGeometry,
-  Group,
-  LineBasicMaterial,
-  Matrix4,
-  Object3D,
-  Quaternion,
-  Vector3,
-} from "three";
+import { useMemo, useRef, useState } from "react";
+import { BufferAttribute, Group, Matrix4, Object3D, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { bonePosesEqual, encodeBonePose } from "./bonePoseHistory";
+import {
+  useArmatureRestAndInvBind,
+  useBonePoseApplyLayout,
+  useBonePoseGetterRef,
+  useDisposableLineMaterial,
+  useJointPickRadiusFromBounds,
+  useSkeletonLineGeometry,
+} from "./bonePreviewRigHooks";
 import type { BuiltMeshDraw, BoneJson, SkelDataJson } from "./types";
-import { mat4FromSsbhColumns } from "./skeletonLines";
 
 function buildChildrenByParent(bones: BoneJson[]): number[][] {
   const ch: number[][] = bones.map(() => []);
@@ -37,18 +36,65 @@ function rootBoneIndices(bones: BoneJson[]): number[] {
   return out;
 }
 
+function BoneJointHit({
+  boneIndex,
+  selected,
+  radius,
+  onSelect,
+}: {
+  boneIndex: number;
+  selected: boolean;
+  radius: number;
+  onSelect: (index: number) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  useCursor(hovered);
+  return (
+    <mesh
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        onSelect(boneIndex);
+      }}
+      onPointerOver={(e) => {
+        e.stopPropagation();
+        setHovered(true);
+      }}
+      onPointerOut={(e) => {
+        e.stopPropagation();
+        setHovered(false);
+      }}
+    >
+      <sphereGeometry args={[radius, 18, 18]} />
+      <meshBasicMaterial
+        color={selected ? "#22c55e" : hovered ? "#94a3b8" : "#64748b"}
+        transparent
+        opacity={selected ? 0.58 : hovered ? 0.4 : 0.26}
+        depthWrite={false}
+        toneMapped={false}
+      />
+    </mesh>
+  );
+}
+
 function BoneTree({
   boneIndex,
   bones,
   childrenByParent,
   refs,
+  selectedBoneIndex,
+  jointPickRadius,
+  onSelectBone,
 }: {
   boneIndex: number;
   bones: BoneJson[];
   childrenByParent: number[][];
   refs: React.MutableRefObject<(Group | null)[]>;
+  selectedBoneIndex: number | null;
+  jointPickRadius: number;
+  onSelectBone: (index: number) => void;
 }) {
   const kids = childrenByParent[boneIndex] ?? [];
+  const selected = selectedBoneIndex === boneIndex;
   return (
     <group
       ref={(el) => {
@@ -56,6 +102,12 @@ function BoneTree({
       }}
       name={bones[boneIndex]!.name}
     >
+      <BoneJointHit
+        boneIndex={boneIndex}
+        selected={selected}
+        radius={jointPickRadius}
+        onSelect={onSelectBone}
+      />
       {kids.map((ci) => (
         <BoneTree
           key={ci}
@@ -63,29 +115,13 @@ function BoneTree({
           bones={bones}
           childrenByParent={childrenByParent}
           refs={refs}
+          selectedBoneIndex={selectedBoneIndex}
+          jointPickRadius={jointPickRadius}
+          onSelectBone={onSelectBone}
         />
       ))}
     </group>
   );
-}
-
-const _restLocalM = new Matrix4();
-const _restPos = new Vector3();
-const _restQuat = new Quaternion();
-const _restScl = new Vector3();
-
-function applyRestLocalMatrices(refs: (Group | null)[], bones: BoneJson[]) {
-  for (let i = 0; i < bones.length; i++) {
-    const g = refs[i];
-    if (!g) continue;
-    _restLocalM.copy(mat4FromSsbhColumns(bones[i]!.transform as number[][]));
-    _restLocalM.decompose(_restPos, _restQuat, _restScl);
-    g.position.copy(_restPos);
-    g.quaternion.copy(_restQuat);
-    g.scale.copy(_restScl);
-    g.matrixAutoUpdate = true;
-    g.updateMatrix();
-  }
 }
 
 const _pal = new Matrix4();
@@ -143,6 +179,12 @@ type BonePreviewRigProps = {
   poseResetNonce: number;
   showSkeletonLines: boolean;
   orbitControlsRef: React.RefObject<OrbitControlsImpl | null>;
+  onSelectBone: (index: number) => void;
+  bonePoseGetterRef: React.MutableRefObject<(() => Float32Array) | null>;
+  bonePoseApplyNonce: number;
+  bonePoseToApply: Float32Array | null;
+  onBonePoseApplyConsumed: () => void;
+  onBonePoseCommit: (beforeTransformSnapshot: Float32Array) => void;
 };
 
 export function BonePreviewRig({
@@ -153,6 +195,12 @@ export function BonePreviewRig({
   poseResetNonce,
   showSkeletonLines,
   orbitControlsRef,
+  onSelectBone,
+  bonePoseGetterRef,
+  bonePoseApplyNonce,
+  bonePoseToApply,
+  onBonePoseApplyConsumed,
+  onBonePoseCommit,
 }: BonePreviewRigProps) {
   const bones = skel.bones;
   const childrenByParent = useMemo(() => buildChildrenByParent(bones), [bones]);
@@ -165,48 +213,46 @@ export function BonePreviewRig({
   const invBindRef = useRef<Matrix4[]>([]);
   const paletteRef = useRef<Matrix4[]>([]);
   const tcDragRef = useRef(false);
+  const tcDragStartPoseRef = useRef<Float32Array | null>(null);
 
   const [armatureLayoutTick, setArmatureLayoutTick] = useState(0);
 
-  const lineGeomRef = useRef<BufferGeometry | null>(null);
-
-  const lineMat = useMemo(
-    () =>
-      new LineBasicMaterial({
-        color: "#fbbf24",
-        depthTest: true,
-        transparent: true,
-        opacity: 0.95,
-      }),
-    [],
-  );
-
-  useEffect(() => {
-    return () => lineMat.dispose();
-  }, [lineMat]);
-
+  const lineMat = useDisposableLineMaterial();
   const posScratch = useRef(new Vector3());
 
-  useLayoutEffect(() => {
-    applyRestLocalMatrices(boneRefs.current, bones);
-    armatureRef.current?.updateMatrixWorld(true);
-    const n = bones.length;
-    while (invBindRef.current.length < n) {
-      invBindRef.current.push(new Matrix4());
-      paletteRef.current.push(new Matrix4());
+  useArmatureRestAndInvBind(
+    armatureRef,
+    boneRefs,
+    invBindRef,
+    paletteRef,
+    bones,
+    poseResetNonce,
+    setArmatureLayoutTick,
+  );
+
+  useBonePoseGetterRef(bonePoseGetterRef, boneRefs, bones.length);
+
+  useBonePoseApplyLayout(
+    armatureRef,
+    boneRefs,
+    bones.length,
+    bonePoseApplyNonce,
+    bonePoseToApply,
+    onBonePoseApplyConsumed,
+  );
+
+  const jointPickRadius = useJointPickRadiusFromBounds(armatureRef, bones, draws, poseResetNonce);
+
+  const lineSegmentCount = useMemo(() => {
+    let c = 0;
+    for (let i = 0; i < bones.length; i++) {
+      const p = bones[i]!.parent_index;
+      if (p !== null && p !== undefined) c++;
     }
-    invBindRef.current.length = n;
-    paletteRef.current.length = n;
-    for (let i = 0; i < n; i++) {
-      const g = boneRefs.current[i];
-      if (g) {
-        invBindRef.current[i]!.copy(g.matrixWorld).invert();
-      } else {
-        invBindRef.current[i]!.identity();
-      }
-    }
-    setArmatureLayoutTick((t) => t + 1);
-  }, [bones, poseResetNonce]);
+    return c;
+  }, [bones]);
+
+  const { lineGeom, lineGeomRef } = useSkeletonLineGeometry(lineSegmentCount);
 
   useFrame(() => {
     armatureRef.current?.updateMatrixWorld(true);
@@ -248,22 +294,6 @@ export function BonePreviewRig({
     }
   });
 
-  const lineSegmentCount = useMemo(() => {
-    let c = 0;
-    for (let i = 0; i < bones.length; i++) {
-      const p = bones[i]!.parent_index;
-      if (p !== null && p !== undefined) c++;
-    }
-    return c;
-  }, [bones]);
-
-  const lineGeom = useMemo(() => {
-    const g = new BufferGeometry();
-    g.setAttribute("position", new BufferAttribute(new Float32Array(lineSegmentCount * 2 * 3), 3));
-    lineGeomRef.current = g;
-    return g;
-  }, [lineSegmentCount]);
-
   const tcObject: Object3D | null =
     selectedBoneIndex !== null && selectedBoneIndex >= 0 && selectedBoneIndex < bones.length
       ? boneRefs.current[selectedBoneIndex]
@@ -278,6 +308,9 @@ export function BonePreviewRig({
           bones={bones}
           childrenByParent={childrenByParent}
           refs={boneRefs}
+          selectedBoneIndex={selectedBoneIndex}
+          jointPickRadius={jointPickRadius}
+          onSelectBone={onSelectBone}
         />
       ))}
       {showSkeletonLines && lineSegmentCount > 0 ? (
@@ -292,6 +325,7 @@ export function BonePreviewRig({
           mode={transformMode}
           onMouseDown={() => {
             tcDragRef.current = true;
+            tcDragStartPoseRef.current = new Float32Array(encodeBonePose(boneRefs.current, bones.length));
             const oc = orbitControlsRef.current;
             if (oc) oc.enabled = false;
           }}
@@ -299,6 +333,14 @@ export function BonePreviewRig({
             tcDragRef.current = false;
             const oc = orbitControlsRef.current;
             if (oc) oc.enabled = true;
+            const start = tcDragStartPoseRef.current;
+            tcDragStartPoseRef.current = null;
+            if (start) {
+              const end = encodeBonePose(boneRefs.current, bones.length);
+              if (!bonePosesEqual(start, end)) {
+                onBonePoseCommit(start);
+              }
+            }
             for (const d of draws) {
               if (d.skin) {
                 d.geometry.computeVertexNormals();
@@ -309,14 +351,4 @@ export function BonePreviewRig({
       ) : null}
     </group>
   );
-}
-
-export function resetSkinnedMeshesToBindPose(draws: BuiltMeshDraw[]) {
-  for (const d of draws) {
-    if (!d.skin) continue;
-    const posAttr = d.geometry.getAttribute("position") as BufferAttribute;
-    (posAttr.array as Float32Array).set(d.skin.bindPositions);
-    posAttr.needsUpdate = true;
-    d.geometry.computeVertexNormals();
-  }
 }
