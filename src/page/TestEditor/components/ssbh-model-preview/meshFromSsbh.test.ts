@@ -243,6 +243,16 @@ describe("buildDrawListFromBundle", () => {
 
     const draws = buildDrawListFromBundle(modl, mesh, null);
     expect(draws).toHaveLength(1);
+    expect(draws[0]?.key).toBe("body_0");
+
+    const prefixed = buildDrawListFromBundle(modl, mesh, null, {
+      drawKeyPrefix: "pi_a1",
+      instanceLabel: "model.numdlb",
+    });
+    expect(prefixed).toHaveLength(1);
+    expect(prefixed[0]?.key).toBe("pi_a1::body_0");
+    expect(prefixed[0]?.previewInstanceId).toBe("pi_a1");
+    expect(prefixed[0]?.label).toContain("model.numdlb");
     const geom = draws[0]?.geometry;
     const uv = geom?.getAttribute("uv");
     const uv2 = geom?.getAttribute("uv2");

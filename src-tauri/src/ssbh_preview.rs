@@ -4,6 +4,7 @@ use ssbh_data::prelude::*;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -138,6 +139,137 @@ fn verify_preview_path_under_model_tree(
         ));
     }
     Ok(canon)
+}
+
+/// Max directory depth from the root when recursively listing `.numdlb` files.
+const NUMDLB_RECURSE_MAX_DEPTH: usize = 16;
+/// Max number of `.numdlb` files returned (sorted, truncated with deterministic order).
+const NUMDLB_RECURSE_MAX_FILES: usize = 128;
+
+fn preview_log(msg: &str) {
+    eprintln!("[ssbh_preview] {msg}");
+}
+
+fn dir_name_should_skip(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    matches!(
+        n.as_str(),
+        ".git" | ".svn" | ".hg" | "node_modules" | "target" | ".cargo"
+    )
+}
+
+/// Recursively collects `.numdlb` file paths under `root`, sorted lexicographically by path string.
+/// Skips junk directories, enforces depth and count caps; uses canonical paths in `visited` to avoid symlink cycles.
+fn collect_numdlb_paths_recursive(
+    root: &Path,
+    max_depth: usize,
+    max_files: usize,
+) -> Result<Vec<PathBuf>, String> {
+    let t0 = Instant::now();
+    preview_log(&format!(
+        "scan start: root={} depth_cap={} file_cap={}",
+        root.display(),
+        max_depth,
+        max_files
+    ));
+    let root_canon = fs::canonicalize(root)
+        .map_err(|e| format!("Failed to canonicalize {}: {e}", root.display()))?;
+    if !root_canon.is_dir() {
+        return Err(format!("Not a directory: {}", root_canon.display()));
+    }
+
+    let mut out: Vec<PathBuf> = Vec::new();
+    let mut visited_dirs: HashSet<PathBuf> = HashSet::new();
+
+    fn walk(
+        dir: &Path,
+        depth: usize,
+        max_depth: usize,
+        max_files: usize,
+        out: &mut Vec<PathBuf>,
+        visited_dirs: &mut HashSet<PathBuf>,
+    ) -> Result<(), String> {
+        if out.len() >= max_files {
+            return Ok(());
+        }
+        if depth > max_depth {
+            return Ok(());
+        }
+        let canon = match fs::canonicalize(dir) {
+            Ok(c) => c,
+            Err(_) => return Ok(()),
+        };
+        if !visited_dirs.insert(canon.clone()) {
+            return Ok(());
+        }
+
+        let rd = match fs::read_dir(&canon) {
+            Ok(r) => r,
+            Err(_) => return Ok(()),
+        };
+        let mut entries: Vec<_> = rd.filter_map(|e| e.ok()).collect();
+        entries.sort_by_key(|e| e.file_name());
+
+        for ent in entries {
+            if out.len() >= max_files {
+                break;
+            }
+            let p = ent.path();
+            let meta = match ent.metadata() {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+            if meta.is_file() {
+                if p.extension()
+                    .and_then(|s| s.to_str())
+                    .map(|ext| ext.eq_ignore_ascii_case("numdlb"))
+                    .unwrap_or(false)
+                {
+                    out.push(p);
+                }
+                continue;
+            }
+            if meta.is_dir() {
+                let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                if dir_name_should_skip(name) {
+                    continue;
+                }
+                walk(&p, depth + 1, max_depth, max_files, out, visited_dirs)?;
+            }
+        }
+        Ok(())
+    }
+
+    walk(
+        &root_canon,
+        0,
+        max_depth,
+        max_files,
+        &mut out,
+        &mut visited_dirs,
+    )?;
+
+    let mut unique: Vec<PathBuf> = Vec::new();
+    let mut seen_canon: HashSet<PathBuf> = HashSet::new();
+    for p in out {
+        if let Ok(c) = fs::canonicalize(&p) {
+            if seen_canon.insert(c.clone()) {
+                unique.push(c);
+            }
+        }
+    }
+    unique.sort_by(|a, b| {
+        a.to_string_lossy()
+            .to_ascii_lowercase()
+            .cmp(&b.to_string_lossy().to_ascii_lowercase())
+    });
+    preview_log(&format!(
+        "scan done: root={} found={} elapsed_ms={}",
+        root_canon.display(),
+        unique.len(),
+        t0.elapsed().as_millis()
+    ));
+    Ok(unique)
 }
 
 fn find_numdlb_in_dir(dir: &Path) -> Result<PathBuf, String> {
@@ -582,6 +714,8 @@ pub fn resolve_nutexb_path(root_canon: &Path, texture_ref: &str) -> Result<Optio
 }
 
 pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBundle, String> {
+    let t0 = Instant::now();
+    preview_log(&format!("load start: input={}", root_input));
     let modl_path = resolve_modl_entry_path(root_input)?;
     let folder = modl_path
         .parent()
@@ -589,6 +723,11 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
         .to_path_buf();
 
     let root_canon = canonical_model_folder(&folder)?;
+    preview_log(&format!(
+        "resolved entry: modl={} root={}",
+        modl_path.display(),
+        root_canon.display()
+    ));
 
     let modl: ModlData =
         ModlData::from_file(&modl_path).map_err(|e| format!("Failed to read Modl: {e}"))?;
@@ -602,6 +741,7 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
         ));
     }
     let mesh_path = verify_preview_path_under_model_tree(&root_canon, &mesh_lex)?;
+    preview_log(&format!("mesh resolved: {}", mesh_path.display()));
 
     let mesh: MeshData =
         MeshData::from_file(&mesh_path).map_err(|e| format!("Failed to read Mesh: {e}"))?;
@@ -754,7 +894,7 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
     let modl_json = serde_json::to_value(&modl).map_err(|e| format!("Failed to serialize Modl: {e}"))?;
     let mesh_json = serde_json::to_value(&mesh).map_err(|e| format!("Failed to serialize Mesh: {e}"))?;
 
-    Ok(SsbhModelPreviewBundle {
+    let bundle = SsbhModelPreviewBundle {
         root_folder: root_canon.to_string_lossy().to_string(),
         modl_path: modl_path.to_string_lossy().to_string(),
         mesh_path: mesh_path.to_string_lossy().to_string(),
@@ -768,12 +908,44 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
         resolved_nutexb_paths,
         texture_resolve,
         warnings,
-    })
+    };
+    preview_log(&format!(
+        "load done: modl={} matl_files={} textures_ref={} textures_resolved={} warnings={} elapsed_ms={}",
+        bundle.modl_path,
+        bundle.matl_paths.len(),
+        bundle.texture_refs.len(),
+        bundle.resolved_nutexb_paths.len(),
+        bundle.warnings.len(),
+        t0.elapsed().as_millis()
+    ));
+    Ok(bundle)
 }
 
 #[tauri::command]
 pub fn ssbh_load_model_preview(root_path: String) -> Result<SsbhModelPreviewBundle, String> {
     load_model_preview_bundle(&root_path)
+}
+
+/// Lists all `.numdlb` files under `root_path` (recursive), sorted lexicographically, capped by depth and count.
+#[tauri::command]
+pub fn ssbh_list_numdlb_under_tree(root_path: String) -> Result<Vec<String>, String> {
+    let t0 = Instant::now();
+    preview_log(&format!("list command: root={}", root_path));
+    let paths = collect_numdlb_paths_recursive(
+        Path::new(&root_path.trim()),
+        NUMDLB_RECURSE_MAX_DEPTH,
+        NUMDLB_RECURSE_MAX_FILES,
+    )?;
+    preview_log(&format!(
+        "list command done: root={} count={} elapsed_ms={}",
+        root_path,
+        paths.len(),
+        t0.elapsed().as_millis()
+    ));
+    Ok(paths
+        .into_iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect())
 }
 
 #[tauri::command]

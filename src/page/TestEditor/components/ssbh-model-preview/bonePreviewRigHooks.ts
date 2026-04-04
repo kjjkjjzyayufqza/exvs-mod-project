@@ -69,13 +69,18 @@ export function useBonePoseGetterRef(
   bonePoseGetterRef: MutableRefObject<(() => Float32Array) | null>,
   boneRefs: MutableRefObject<(Group | null)[]>,
   boneCount: number,
+  enabled = true,
 ): void {
-  bonePoseGetterRef.current = () => encodeBonePose(boneRefs.current, boneCount);
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (!enabled) return;
+    const fn = () => encodeBonePose(boneRefs.current, boneCount);
+    bonePoseGetterRef.current = fn;
     return () => {
-      bonePoseGetterRef.current = null;
+      if (bonePoseGetterRef.current === fn) {
+        bonePoseGetterRef.current = null;
+      }
     };
-  }, [bonePoseGetterRef]);
+  }, [bonePoseGetterRef, enabled, boneCount]);
 }
 
 export function useBonePoseApplyLayout(
@@ -85,13 +90,15 @@ export function useBonePoseApplyLayout(
   bonePoseApplyNonce: number,
   bonePoseToApply: Float32Array | null,
   onBonePoseApplyConsumed: () => void,
+  enabled = true,
 ): void {
   useLayoutEffect(() => {
+    if (!enabled) return;
     if (bonePoseToApply === null) return;
     decodeBonePoseInto(bonePoseToApply, boneRefs.current, bonesLength);
     armatureRef.current?.updateMatrixWorld(true);
     onBonePoseApplyConsumed();
-  }, [bonePoseApplyNonce, bonePoseToApply, bonesLength, onBonePoseApplyConsumed]);
+  }, [enabled, bonePoseApplyNonce, bonePoseToApply, bonesLength, onBonePoseApplyConsumed]);
 }
 
 export function useJointPickRadiusFromBounds(

@@ -174,6 +174,8 @@ function applyCpuSkinning(draw: BuiltMeshDraw, palette: Matrix4[], updateNormals
 type BonePreviewRigProps = {
   skel: SkelDataJson;
   draws: BuiltMeshDraw[];
+  /** When false, skinning still runs but gizmo, picking, and pose ref sync are disabled (multi-instance preview). */
+  isInteractionTarget?: boolean;
   selectedBoneIndex: number | null;
   transformMode: "translate" | "rotate" | "scale";
   poseResetNonce: number;
@@ -190,6 +192,7 @@ type BonePreviewRigProps = {
 export function BonePreviewRig({
   skel,
   draws,
+  isInteractionTarget = true,
   selectedBoneIndex,
   transformMode,
   poseResetNonce,
@@ -213,6 +216,8 @@ export function BonePreviewRig({
   const invBindRef = useRef<Matrix4[]>([]);
   const paletteRef = useRef<Matrix4[]>([]);
   const tcDragRef = useRef(false);
+  const needsSkinningUpdateRef = useRef(true);
+  const lastPoseResetNonceRef = useRef(poseResetNonce);
   const tcDragStartPoseRef = useRef<Float32Array | null>(null);
 
   const [armatureLayoutTick, setArmatureLayoutTick] = useState(0);
@@ -230,7 +235,7 @@ export function BonePreviewRig({
     setArmatureLayoutTick,
   );
 
-  useBonePoseGetterRef(bonePoseGetterRef, boneRefs, bones.length);
+  useBonePoseGetterRef(bonePoseGetterRef, boneRefs, bones.length, isInteractionTarget);
 
   useBonePoseApplyLayout(
     armatureRef,
@@ -239,7 +244,15 @@ export function BonePreviewRig({
     bonePoseApplyNonce,
     bonePoseToApply,
     onBonePoseApplyConsumed,
+    isInteractionTarget,
   );
+  if (bonePoseToApply !== null && isInteractionTarget) {
+    needsSkinningUpdateRef.current = true;
+  }
+  if (lastPoseResetNonceRef.current !== poseResetNonce) {
+    lastPoseResetNonceRef.current = poseResetNonce;
+    needsSkinningUpdateRef.current = true;
+  }
 
   const jointPickRadius = useJointPickRadiusFromBounds(armatureRef, bones, draws, poseResetNonce);
 
@@ -255,6 +268,8 @@ export function BonePreviewRig({
   const { lineGeom, lineGeomRef } = useSkeletonLineGeometry(lineSegmentCount);
 
   useFrame(() => {
+    const shouldUpdateNow = tcDragRef.current || needsSkinningUpdateRef.current;
+    if (!shouldUpdateNow) return;
     armatureRef.current?.updateMatrixWorld(true);
     const pal = paletteRef.current;
     const ib = invBindRef.current;
@@ -292,12 +307,22 @@ export function BonePreviewRig({
       }
       positions.needsUpdate = true;
     }
+    if (!tcDragRef.current) {
+      needsSkinningUpdateRef.current = false;
+    }
   });
 
+  const effectiveSelected = isInteractionTarget ? selectedBoneIndex : null;
+
   const tcObject: Object3D | null =
-    selectedBoneIndex !== null && selectedBoneIndex >= 0 && selectedBoneIndex < bones.length
+    isInteractionTarget &&
+    selectedBoneIndex !== null &&
+    selectedBoneIndex >= 0 &&
+    selectedBoneIndex < bones.length
       ? boneRefs.current[selectedBoneIndex]
       : null;
+
+  const onBoneSelect = isInteractionTarget ? onSelectBone : () => {};
 
   return (
     <group ref={armatureRef}>
@@ -308,9 +333,9 @@ export function BonePreviewRig({
           bones={bones}
           childrenByParent={childrenByParent}
           refs={boneRefs}
-          selectedBoneIndex={selectedBoneIndex}
+          selectedBoneIndex={effectiveSelected}
           jointPickRadius={jointPickRadius}
-          onSelectBone={onSelectBone}
+          onSelectBone={onBoneSelect}
         />
       ))}
       {showSkeletonLines && lineSegmentCount > 0 ? (
@@ -325,12 +350,14 @@ export function BonePreviewRig({
           mode={transformMode}
           onMouseDown={() => {
             tcDragRef.current = true;
+            needsSkinningUpdateRef.current = true;
             tcDragStartPoseRef.current = new Float32Array(encodeBonePose(boneRefs.current, bones.length));
             const oc = orbitControlsRef.current;
             if (oc) oc.enabled = false;
           }}
           onMouseUp={() => {
             tcDragRef.current = false;
+            needsSkinningUpdateRef.current = true;
             const oc = orbitControlsRef.current;
             if (oc) oc.enabled = true;
             const start = tcDragStartPoseRef.current;

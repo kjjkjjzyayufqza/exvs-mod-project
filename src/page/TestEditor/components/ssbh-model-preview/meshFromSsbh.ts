@@ -10,6 +10,8 @@ import type {
   ModlDataJson,
   ModlEntryJson,
   SkelDataJson,
+  SsbhModelPreviewBundle,
+  SsbhModelPreviewInstance,
   TextureParamJson,
   TextureWrapModeJson,
   VectorDataJson,
@@ -360,6 +362,67 @@ export function collectPathSlotCounts(
 ): Map<string, number> {
   const m = new Map<string, number>();
   for (const d of draws) {
+    const paths = resolveMaterialTexturePaths(d.materialLabel, lookup, refMap);
+    for (const { key } of TEXTURE_PREVIEW_SLOT_META) {
+      if (!textureSlotLoadEnabled[key]) continue;
+      const field = TEXTURE_SLOT_TO_PATH_FIELD[key];
+      const pathVal = paths[field];
+      if (!pathVal) continue;
+      m.set(pathVal, (m.get(pathVal) ?? 0) + 1);
+    }
+  }
+  return m;
+}
+
+export function buildTextureRefToPathMap(bundle: SsbhModelPreviewBundle): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const row of bundle.textureResolve) {
+    if (row.nutexbPath) {
+      m.set(row.reference, row.nutexbPath);
+    }
+  }
+  return m;
+}
+
+export function bundleForPreviewDraw(
+  draw: BuiltMeshDraw,
+  instances: readonly SsbhModelPreviewInstance[],
+): SsbhModelPreviewBundle | null {
+  if (instances.length === 0) return null;
+  const id = draw.previewInstanceId;
+  if (id) {
+    return instances.find((i) => i.id === id)?.bundle ?? null;
+  }
+  return instances[0]!.bundle;
+}
+
+export function countTextureDecodeStepsForInstances(
+  draws: BuiltMeshDraw[],
+  instances: readonly SsbhModelPreviewInstance[],
+  textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>,
+): number {
+  let n = 0;
+  for (const d of draws) {
+    const b = bundleForPreviewDraw(d, instances);
+    if (!b) continue;
+    const lookup = buildMatlLookup(b.matl as MatlDataJson | null);
+    const refMap = buildTextureRefToPathMap(b);
+    n += countTextureDecodeSteps([d], lookup, refMap, textureSlotLoadEnabled);
+  }
+  return n;
+}
+
+export function collectPathSlotCountsForInstances(
+  draws: BuiltMeshDraw[],
+  instances: readonly SsbhModelPreviewInstance[],
+  textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>,
+): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const d of draws) {
+    const b = bundleForPreviewDraw(d, instances);
+    if (!b) continue;
+    const lookup = buildMatlLookup(b.matl as MatlDataJson | null);
+    const refMap = buildTextureRefToPathMap(b);
     const paths = resolveMaterialTexturePaths(d.materialLabel, lookup, refMap);
     for (const { key } of TEXTURE_PREVIEW_SLOT_META) {
       if (!textureSlotLoadEnabled[key]) continue;
@@ -932,11 +995,24 @@ function buildGeometryForObject(
   return { geometry: geom, skin };
 }
 
+export type BuildDrawListFromBundleOptions = {
+  /** Prepended to draw keys as `${prefix}::${mesh}_${sub}` to avoid collisions across instances. */
+  drawKeyPrefix?: string;
+  /** Short label prefix for mesh list (e.g. numdlb file name). */
+  instanceLabel?: string;
+};
+
 export function buildDrawListFromBundle(
   modl: ModlDataJson,
   mesh: MeshDataJson,
   skel?: SkelDataJson | null,
+  options?: BuildDrawListFromBundleOptions,
 ): BuiltMeshDraw[] {
+  const prefix = options?.drawKeyPrefix?.trim()
+    ? `${options.drawKeyPrefix.trim()}::`
+    : "";
+  const labelPrefix = options?.instanceLabel?.trim() ? `${options.instanceLabel.trim()} — ` : "";
+  const instanceId = options?.drawKeyPrefix?.trim() || undefined;
   const objects = mesh.objects;
   const out: BuiltMeshDraw[] = [];
   for (const entry of modl.entries) {
@@ -946,8 +1022,8 @@ export function buildDrawListFromBundle(
         `Modl entry references missing mesh object "${entry.mesh_object_name}" subindex ${entry.mesh_object_subindex}`,
       );
     }
-    const key = `${entry.mesh_object_name}_${entry.mesh_object_subindex}`;
-    const label = `${entry.mesh_object_name} [${entry.mesh_object_subindex}]`;
+    const key = `${prefix}${entry.mesh_object_name}_${entry.mesh_object_subindex}`;
+    const label = `${labelPrefix}${entry.mesh_object_name} [${entry.mesh_object_subindex}]`;
     const { geometry, skin } = buildGeometryForObject(obj, skel ?? null);
     out.push({
       key,
@@ -957,6 +1033,7 @@ export function buildDrawListFromBundle(
       meshObjectName: entry.mesh_object_name,
       meshObjectSubindex: entry.mesh_object_subindex,
       skin,
+      previewInstanceId: instanceId,
     });
   }
   return out;

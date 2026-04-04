@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import { Bone, Database, FileDown, Info, Layout, List, Settings2 } from "lucide-react";
+import { Bone, ChevronDown, ChevronRight, Database, Eye, EyeOff, FileDown, Info, Layout, List, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -46,6 +46,8 @@ function meshFileStem(meshPath: string): string {
 
 export function SsbhModelPreviewInspector() {
   const p = useSsbhModelPreview();
+  const [boneListMode, setBoneListMode] = useState<"active" | "all">("active");
+  const [collapsedBoneGroups, setCollapsedBoneGroups] = useState<Set<string>>(new Set());
   const [textureCacheStats, setTextureCacheStats] = useState<NutexbPreviewCacheStats | null>(null);
   const [daeExportScaleText, setDaeExportScaleText] = useState("1");
   const [daeExportUpAxis, setDaeExportUpAxis] = useState<SsbhDaeUpAxis>("y_up");
@@ -109,10 +111,54 @@ export function SsbhModelPreviewInspector() {
     }
   }, [p.bundle, p.workspaceRoot, daeExportScaleText, daeExportUpAxis, daeExportNumatbTextures]);
 
-  const skel = p.bundle?.skel ? (p.bundle.skel as SkelDataJson) : null;
+  const scopedDraws = useMemo(
+    () => {
+      const visibleInstances = p.previewInstances.filter((i) => !p.hiddenPreviewInstanceIds.has(i.id));
+      const controlledInstanceIds =
+        p.previewControlScope === "all"
+          ? new Set(visibleInstances.map((i) => i.id))
+          : new Set(
+              visibleInstances
+                .filter((i) => i.id === (p.activePreviewInstanceId ?? p.previewInstances[0]?.id ?? ""))
+                .map((i) => i.id),
+            );
+      if (controlledInstanceIds.size === 0) return [];
+      return p.draws.filter((d) => {
+        const id = d.previewInstanceId ?? p.previewInstances[0]?.id ?? null;
+        return id !== null && controlledInstanceIds.has(id);
+      });
+    },
+    [
+      p.draws,
+      p.previewInstances,
+      p.hiddenPreviewInstanceIds,
+      p.previewControlScope,
+      p.activePreviewInstanceId,
+    ],
+  );
+
+  const visibleInstances = useMemo(() => {
+    const byVisibility = p.previewInstances.filter((i) => !p.hiddenPreviewInstanceIds.has(i.id));
+    if (p.previewViewMode === "single") {
+      if (byVisibility.length === 0) return [];
+      const active =
+        (p.activePreviewInstanceId
+          ? byVisibility.find((i) => i.id === p.activePreviewInstanceId)
+          : null) ?? byVisibility[0]!;
+      return [active];
+    }
+    return byVisibility;
+  }, [p.previewInstances, p.hiddenPreviewInstanceIds, p.previewViewMode, p.activePreviewInstanceId]);
+
+  const activeInstance =
+    visibleInstances.find((i) => i.id === (p.activePreviewInstanceId ?? "")) ??
+    visibleInstances[0] ??
+    null;
+  const skel = activeInstance?.bundle?.skel ? (activeInstance.bundle.skel as SkelDataJson) : null;
   const bones = skel?.bones ?? [];
-  const hasSkinnedMesh = p.draws.some((d) => d.skin !== null);
-  const debugRows = p.draws
+  const boneListInstances = boneListMode === "all" ? visibleInstances : activeInstance ? [activeInstance] : [];
+  const hasSkinnedMesh = scopedDraws.some((d) => d.skin !== null);
+  const debugRows = scopedDraws
     .map((d) => {
       const binding = p.drawMaterialBindingsByDrawKey.get(d.key);
       const dataUrls = p.drawMaterialDataUrlsByDrawKey.get(d.key);
@@ -160,6 +206,88 @@ export function SsbhModelPreviewInspector() {
             </span>
           )}
         </div>
+      ) : null}
+      {p.previewInstances.length > 0 ? (
+        <MayaSection title="Collection" icon={<Layout className="h-3.5 w-3.5" />}>
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-[10px] text-muted-foreground">View range</Label>
+                <ToggleGroup
+                  type="single"
+                  value={p.previewViewMode}
+                  onValueChange={(v) => {
+                    if (v) p.setPreviewViewMode(v as typeof p.previewViewMode);
+                  }}
+                  variant="outline"
+                  className="flex w-full justify-start gap-1"
+                >
+                  <ToggleGroupItem value="all" className="h-7 px-2 text-[10px]">All models</ToggleGroupItem>
+                  <ToggleGroupItem value="single" className="h-7 px-2 text-[10px]">Active only</ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-[10px] text-muted-foreground">Control range</Label>
+                <ToggleGroup
+                  type="single"
+                  value={p.previewControlScope}
+                  onValueChange={(v) => {
+                    if (v) p.setPreviewControlScope(v as typeof p.previewControlScope);
+                  }}
+                  variant="outline"
+                  className="flex w-full justify-start gap-1"
+                >
+                  <ToggleGroupItem value="all" className="h-7 px-2 text-[10px]">All models</ToggleGroupItem>
+                  <ToggleGroupItem value="single" className="h-7 px-2 text-[10px]">Active only</ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+            </div>
+            <div className="flex items-center justify-between border-b pb-2">
+              <span className="text-[10px] text-muted-foreground">{p.previewInstances.length} models in collection</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-6 px-2 text-[9px] uppercase tracking-tighter"
+                onClick={p.showAllPreviewInstances}
+              >
+                Show all
+              </Button>
+            </div>
+            <div className="max-h-[220px] space-y-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-muted">
+              {p.previewInstances.map((inst) => {
+                const visible = !p.hiddenPreviewInstanceIds.has(inst.id);
+                const active = inst.id === (p.activePreviewInstanceId ?? p.previewInstances[0]?.id ?? "");
+                return (
+                  <div
+                    key={inst.id}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-sm border px-2 py-1.5",
+                      active ? "border-primary/55 bg-primary/10" : "border-border/40",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                      title={visible ? "Hide model" : "Show model"}
+                      onClick={() => p.setPreviewInstanceVisible(inst.id, !visible)}
+                    >
+                      {visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                    </button>
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 text-left"
+                      onClick={() => p.setActivePreviewInstanceId(inst.id)}
+                    >
+                      <div className="truncate text-[11px] font-medium leading-tight">{inst.displayLabel}</div>
+                      <div className="truncate font-mono text-[9px] text-muted-foreground">{inst.modlPath}</div>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </MayaSection>
       ) : null}
       <MayaSection title="Display Settings" icon={<Settings2 className="h-3.5 w-3.5" />}>
         <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
@@ -620,7 +748,7 @@ export function SsbhModelPreviewInspector() {
       <MayaSection title="Mesh Explorer" icon={<List className="h-3.5 w-3.5" />}>
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between border-b pb-2">
-            <span className="text-[10px] text-muted-foreground">{p.draws.length} total meshes</span>
+            <span className="text-[10px] text-muted-foreground">{scopedDraws.length} total meshes</span>
             <div className="flex gap-1">
               <Button
                 type="button"
@@ -643,7 +771,7 @@ export function SsbhModelPreviewInspector() {
             </div>
           </div>
           <div className="max-h-[300px] space-y-2 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-muted">
-            {p.draws.map((d) => (
+            {scopedDraws.map((d) => (
               <label
                 key={d.key}
                 className="flex cursor-pointer items-start gap-2 rounded-sm p-1 transition-colors hover:bg-muted/30"
@@ -659,7 +787,7 @@ export function SsbhModelPreviewInspector() {
                 </div>
               </label>
             ))}
-            {!p.draws.length && (
+            {!scopedDraws.length && (
               <span className="py-4 text-center text-[10px] italic text-muted-foreground">No meshes loaded</span>
             )}
           </div>
@@ -684,6 +812,27 @@ export function SsbhModelPreviewInspector() {
               This model has no per-vertex bone weights in the mesh JSON — skeleton lines will move but geometry will not
               deform.
             </p>
+          ) : null}
+          {p.previewInstances.length > 1 ? (
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-[10px] text-muted-foreground">Bone list scope</Label>
+              <ToggleGroup
+                type="single"
+                value={boneListMode}
+                onValueChange={(v) => {
+                  if (v === "active" || v === "all") setBoneListMode(v);
+                }}
+                variant="outline"
+                className="flex w-full justify-start gap-1"
+              >
+                <ToggleGroupItem value="active" className="h-7 px-2 text-[10px]">
+                  Active model
+                </ToggleGroupItem>
+                <ToggleGroupItem value="all" className="h-7 px-2 text-[10px]">
+                  All visible models
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
           ) : null}
           <div className="flex flex-col gap-1.5">
             <Label className="text-[10px] text-muted-foreground">Gizmo mode</Label>
@@ -719,43 +868,97 @@ export function SsbhModelPreviewInspector() {
             Reset bone pose
           </Button>
           <div className="flex items-center justify-between border-b pb-2">
-            <span className="text-[10px] text-muted-foreground">{bones.length} bones</span>
+            <span className="text-[10px] text-muted-foreground">
+              {boneListMode === "all"
+                ? `${boneListInstances.reduce((n, inst) => n + (((inst.bundle.skel as SkelDataJson | null)?.bones?.length) ?? 0), 0)} bones`
+                : `${bones.length} bones`}
+            </span>
             <Button
               type="button"
               variant="outline"
               size="sm"
               className="h-6 px-2 text-[9px] uppercase tracking-tighter"
-              disabled={bones.length === 0}
+              disabled={boneListInstances.length === 0}
               onClick={() => p.setSelectedBoneIndex(null)}
             >
               Clear selection
             </Button>
           </div>
           <div className="max-h-[300px] space-y-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-muted">
-            {bones.map((b, i) => {
-              const depth = boneHierarchyDepth(bones, i);
-              const active = p.selectedBoneIndex === i;
+            {boneListInstances.map((inst) => {
+              const instSkel = inst.bundle.skel ? (inst.bundle.skel as SkelDataJson) : null;
+              const instBones = instSkel?.bones ?? [];
+              const instActive = inst.id === (p.activePreviewInstanceId ?? "");
               return (
-                <button
-                  key={`${b.name}_${i}`}
-                  type="button"
-                  className={cn(
-                    "flex w-full min-w-0 flex-col rounded-sm border px-2 py-1.5 text-left transition-colors",
-                    active
-                      ? "border-primary/55 bg-primary/12"
-                      : "border-border/40 hover:bg-muted/35",
-                  )}
-                  style={{ paddingLeft: `${10 + depth * 12}px` }}
-                  onClick={() => {
-                    p.setSelectedBoneIndex(i);
-                  }}
-                >
-                  <span className="truncate text-[11px] font-medium leading-tight">{b.name}</span>
-                  <span className="font-mono text-[9px] text-muted-foreground">[{i}]</span>
-                </button>
+                <div key={inst.id} className="space-y-1">
+                  {boneListMode === "all" ? (
+                    <div
+                      className={cn(
+                        "flex items-center gap-1 rounded-sm border px-2 py-1",
+                        instActive
+                          ? "border-primary/55 bg-primary/12 text-foreground"
+                          : "border-border/40 text-muted-foreground",
+                      )}
+                    >
+                      <button
+                        type="button"
+                        className="shrink-0 hover:text-foreground"
+                        title={
+                          collapsedBoneGroups.has(inst.id) ? "Expand bone group" : "Collapse bone group"
+                        }
+                        onClick={() =>
+                          setCollapsedBoneGroups((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(inst.id)) next.delete(inst.id);
+                            else next.add(inst.id);
+                            return next;
+                          })
+                        }
+                      >
+                        {collapsedBoneGroups.has(inst.id) ? (
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        ) : (
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 truncate text-left text-[10px] font-medium hover:text-foreground"
+                        onClick={() => p.setActivePreviewInstanceId(inst.id)}
+                        title={inst.modlPath}
+                      >
+                        {inst.displayLabel}
+                      </button>
+                    </div>
+                  ) : null}
+                  {(boneListMode === "all" && collapsedBoneGroups.has(inst.id) ? [] : instBones).map((b, i) => {
+                    const depth = boneHierarchyDepth(instBones, i);
+                    const active = instActive && p.selectedBoneIndex === i;
+                    return (
+                      <button
+                        key={`${inst.id}_${b.name}_${i}`}
+                        type="button"
+                        className={cn(
+                          "flex w-full min-w-0 flex-col rounded-sm border px-2 py-1.5 text-left transition-colors",
+                          active
+                            ? "border-primary/55 bg-primary/12"
+                            : "border-border/40 hover:bg-muted/35",
+                        )}
+                        style={{ paddingLeft: `${10 + depth * 12}px` }}
+                        onClick={() => {
+                          p.setActivePreviewInstanceId(inst.id);
+                          p.setSelectedBoneIndex(i);
+                        }}
+                      >
+                        <span className="truncate text-[11px] font-medium leading-tight">{b.name}</span>
+                        <span className="font-mono text-[9px] text-muted-foreground">[{i}]</span>
+                      </button>
+                    );
+                  })}
+                </div>
               );
             })}
-            {!bones.length ? (
+            {boneListInstances.length === 0 ? (
               <span className="py-4 text-center text-[10px] italic text-muted-foreground">No skeleton loaded</span>
             ) : null}
           </div>
@@ -794,7 +997,7 @@ export function SsbhModelPreviewInspector() {
           <div className="min-w-0 max-w-full">
             <ul className="list-disc space-y-1.5 pl-4 text-[10px] text-muted-foreground">
               {p.bundle.warnings.map((w, i) => (
-                <li key={i} className="min-w-0 break-words whitespace-normal [overflow-wrap:anywhere]">
+                <li key={i} className="min-w-0 whitespace-normal wrap-anywhere">
                   {w}
                 </li>
               ))}

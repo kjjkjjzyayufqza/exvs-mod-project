@@ -42,9 +42,18 @@ import { AnimePreviewPostFx } from "./AnimePreviewPostFx";
 import { BonePreviewRig } from "./BonePreviewRig";
 import { fitCameraToObject } from "./cameraFit";
 import { applyPreviewUvFlip } from "./previewUvFlip";
-import type { BoneTransformMode, MaterialDebugViewMode, PreviewRenderStyle } from "./SsbhModelPreviewContext";
+import type {
+  BoneTransformMode,
+  MaterialDebugViewMode,
+  PreviewInstanceViewMode,
+  PreviewRenderStyle,
+} from "./SsbhModelPreviewContext";
 import type { DrawMaterialDataUrls, ResolvedMaterialBinding, ResolvedTextureSampling } from "./meshFromSsbh";
-import type { BuiltMeshDraw, SkelDataJson } from "./types";
+import type { BuiltMeshDraw, SkelDataJson, SsbhModelPreviewInstance } from "./types";
+
+function instanceLayoutPosition(_index: number, _count: number): [number, number, number] {
+  return [0, 0, 0];
+}
 
 /** Finite ground grid plane size in world units (not infinite). */
 const GRID_PLANE_WIDTH = 200;
@@ -79,7 +88,10 @@ type SsbhModelCanvasProps = {
   normalMapEnabled: boolean;
   /** Increment to request a one-shot camera fit (user Reset view or new model). */
   fitRequestId: number;
-  skel: SkelDataJson | null;
+  previewInstances: readonly SsbhModelPreviewInstance[];
+  activePreviewInstanceId: string | null;
+  previewViewMode: PreviewInstanceViewMode;
+  hiddenPreviewInstanceIds: ReadonlySet<string>;
   selectedBoneIndex: number | null;
   boneTransformMode: BoneTransformMode;
   bonePoseResetNonce: number;
@@ -484,7 +496,10 @@ function Scene({
   directionalZ,
   normalMapEnabled,
   fitRequestId,
-  skel,
+  previewInstances,
+  activePreviewInstanceId,
+  previewViewMode,
+  hiddenPreviewInstanceIds,
   selectedBoneIndex,
   boneTransformMode,
   bonePoseResetNonce,
@@ -506,9 +521,34 @@ function Scene({
   const modelRootRef = useRef<Group>(null);
   const controlsRef = useRef<OrbitControlsImpl>(null);
 
-  const skelHasBones = skel !== null && skel.bones.length > 0;
-  const showStaticSkeleton = showSkeleton && !skelHasBones && Boolean(skeletonGeometry);
-  const showRig = skelHasBones;
+  const singleInstance = previewInstances.length <= 1;
+  const visibleInstances = useMemo(() => {
+    const byVisibility = previewInstances.filter((inst) => !hiddenPreviewInstanceIds.has(inst.id));
+    if (previewViewMode === "single") {
+      if (byVisibility.length === 0) return [];
+      const active =
+        (activePreviewInstanceId
+          ? byVisibility.find((inst) => inst.id === activePreviewInstanceId)
+          : null) ?? byVisibility[0]!;
+      return [active];
+    }
+    return byVisibility;
+  }, [previewInstances, hiddenPreviewInstanceIds, previewViewMode, activePreviewInstanceId]);
+
+  const drawsByInstance = useMemo(() => {
+    const map = new Map<string, BuiltMeshDraw[]>();
+    for (const inst of previewInstances) {
+      map.set(inst.id, []);
+    }
+    for (const d of draws) {
+      if (d.previewInstanceId && map.has(d.previewInstanceId)) {
+        map.get(d.previewInstanceId)!.push(d);
+      } else if (singleInstance && previewInstances[0]) {
+        map.get(previewInstances[0]!.id)!.push(d);
+      }
+    }
+    return map;
+  }, [draws, previewInstances, singleInstance]);
 
   const animeKeyLightDir = useMemo(() => {
     const v = new Vector3(directionalX, directionalY, directionalZ);
@@ -545,38 +585,55 @@ function Scene({
       />
 
       <group ref={modelRootRef}>
-        <PreviewUvFlipSync draws={draws} uvFlipU={uvFlipU} uvFlipV={uvFlipV} />
-        {showRig ? (
-          <BonePreviewRig
-            skel={skel!}
-            draws={draws}
-            selectedBoneIndex={selectedBoneIndex}
-            transformMode={boneTransformMode}
-            poseResetNonce={bonePoseResetNonce}
-            showSkeletonLines={showSkeleton}
-            orbitControlsRef={controlsRef}
-            onSelectBone={onViewportBoneSelect}
-            bonePoseGetterRef={bonePoseGetterRef}
-            bonePoseApplyNonce={bonePoseApplyNonce}
-            bonePoseToApply={bonePoseToApply}
-            onBonePoseApplyConsumed={onBonePoseApplyConsumed}
-            onBonePoseCommit={onBonePoseCommit}
-          />
-        ) : null}
-        <DrawMeshes
-          draws={draws}
-          drawMaterialDataUrlsByDrawKey={drawMaterialDataUrlsByDrawKey}
-          drawMaterialBindingsByDrawKey={drawMaterialBindingsByDrawKey}
-          materialDebugViewMode={materialDebugViewMode}
-          textureFlipY={textureFlipY}
-          normalMapEnabled={normalMapEnabled}
-          visibleKeys={visibleKeys}
-          wireframe={wireframe}
-          ignoreMeshRaycastForBonePicking={skelHasBones}
-          previewRenderStyle={previewRenderStyle}
-          animeKeyLightDir={animeKeyLightDir}
-        />
-        {showStaticSkeleton && skeletonGeometry ? <SkeletonLines geometry={skeletonGeometry} /> : null}
+        {visibleInstances.map((inst, i) => {
+          const instDraws = drawsByInstance.get(inst.id) ?? [];
+          const pos = instanceLayoutPosition(i, previewInstances.length);
+          const isActive =
+            activePreviewInstanceId === inst.id ||
+            (previewInstances.length === 1 && activePreviewInstanceId === null);
+          const isInteractionTarget = isActive;
+          const instSkel = inst.bundle.skel ? (inst.bundle.skel as SkelDataJson) : null;
+          const skelHasBones = instSkel !== null && instSkel.bones.length > 0;
+          const showStaticSkeleton =
+            showSkeleton && !skelHasBones && Boolean(skeletonGeometry) && isInteractionTarget;
+          return (
+            <group key={inst.id} position={pos}>
+              <PreviewUvFlipSync draws={instDraws} uvFlipU={uvFlipU} uvFlipV={uvFlipV} />
+              {skelHasBones ? (
+                <BonePreviewRig
+                  skel={instSkel!}
+                  draws={instDraws}
+                  isInteractionTarget={isInteractionTarget}
+                  selectedBoneIndex={selectedBoneIndex}
+                  transformMode={boneTransformMode}
+                  poseResetNonce={bonePoseResetNonce}
+                  showSkeletonLines={showSkeleton}
+                  orbitControlsRef={controlsRef}
+                  onSelectBone={onViewportBoneSelect}
+                  bonePoseGetterRef={bonePoseGetterRef}
+                  bonePoseApplyNonce={bonePoseApplyNonce}
+                  bonePoseToApply={bonePoseToApply}
+                  onBonePoseApplyConsumed={onBonePoseApplyConsumed}
+                  onBonePoseCommit={onBonePoseCommit}
+                />
+              ) : null}
+              <DrawMeshes
+                draws={instDraws}
+                drawMaterialDataUrlsByDrawKey={drawMaterialDataUrlsByDrawKey}
+                drawMaterialBindingsByDrawKey={drawMaterialBindingsByDrawKey}
+                materialDebugViewMode={materialDebugViewMode}
+                textureFlipY={textureFlipY}
+                normalMapEnabled={normalMapEnabled}
+                visibleKeys={visibleKeys}
+                wireframe={wireframe}
+                ignoreMeshRaycastForBonePicking={skelHasBones && isActive}
+                previewRenderStyle={previewRenderStyle}
+                animeKeyLightDir={animeKeyLightDir}
+              />
+              {showStaticSkeleton && skeletonGeometry ? <SkeletonLines geometry={skeletonGeometry} /> : null}
+            </group>
+          );
+        })}
       </group>
 
       <OrbitControls
@@ -629,7 +686,10 @@ export function SsbhModelCanvas(props: SsbhModelCanvasProps) {
     onRedoBonePose,
     ...restSceneProps
   } = sceneProps;
-  const skel = restSceneProps.skel;
+  const { previewInstances, activePreviewInstanceId } = restSceneProps;
+  const activeInstance =
+    previewInstances.find((i) => i.id === activePreviewInstanceId) ?? previewInstances[0] ?? null;
+  const skel = activeInstance?.bundle?.skel ? (activeInstance.bundle.skel as SkelDataJson) : null;
   const skelHasBones = skel !== null && skel.bones.length > 0;
   const selectedBoneIndex = restSceneProps.selectedBoneIndex;
 

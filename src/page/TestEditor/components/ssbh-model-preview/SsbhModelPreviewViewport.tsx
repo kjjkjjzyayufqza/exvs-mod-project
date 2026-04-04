@@ -5,8 +5,6 @@ import { SsbhModelCanvas } from "./SsbhModelCanvas";
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
 import { SsbhModelPreviewLoadingOverlay } from "./SsbhModelPreviewLoadingOverlay";
 import { SsbhModelPreviewQuickActions } from "./SsbhModelPreviewQuickActions";
-import type { SkelDataJson } from "./types";
-
 function formatPreviewCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 10_000) return `${Math.round(n / 1_000)}k`;
@@ -83,8 +81,13 @@ export function SsbhModelPreviewViewport() {
       </div>
 
       {p.bundle ? (
-        <p className="text-[11px] text-muted-foreground truncate shrink-0 px-1" title={p.bundle.modlPath}>
-          {p.bundle.modlPath}
+        <p
+          className="text-[11px] text-muted-foreground truncate shrink-0 px-1"
+          title={p.previewInstances.length > 1 ? `${p.previewInstances.length} models` : p.bundle.modlPath}
+        >
+          {p.previewInstances.length > 1
+            ? `${p.previewInstances.length} models · ${p.bundle.modlPath}`
+            : p.bundle.modlPath}
         </p>
       ) : null}
 
@@ -113,7 +116,10 @@ export function SsbhModelPreviewViewport() {
             directionalZ={p.directionalZ}
             normalMapEnabled={p.normalMapEnabled}
             fitRequestId={p.fitRequestId}
-            skel={p.bundle?.skel ? (p.bundle.skel as SkelDataJson) : null}
+            previewInstances={p.previewInstances}
+            activePreviewInstanceId={p.activePreviewInstanceId}
+            previewViewMode={p.previewViewMode}
+            hiddenPreviewInstanceIds={p.hiddenPreviewInstanceIds}
             selectedBoneIndex={p.selectedBoneIndex}
             boneTransformMode={p.boneTransformMode}
             bonePoseResetNonce={p.bonePoseResetNonce}

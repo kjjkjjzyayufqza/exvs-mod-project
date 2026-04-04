@@ -22,8 +22,8 @@ import type { BufferGeometry } from "three";
 import {
   buildDrawListFromBundle,
   buildMatlLookup,
-  collectPathSlotCounts,
-  countTextureDecodeSteps,
+  buildTextureRefToPathMap,
+  bundleForPreviewDraw,
   createDefaultTextureSlotLoadEnabled,
   resolveMaterialBinding,
   resolveMaterialTexturePaths,
@@ -49,9 +49,12 @@ import type {
   ModlDataJson,
   SkelDataJson,
   SsbhModelPreviewBundle,
+  SsbhModelPreviewInstance,
 } from "./types";
 
 export type BoneTransformMode = "translate" | "rotate" | "scale";
+export type PreviewInstanceViewMode = "all" | "single";
+export type PreviewControlScope = "all" | "single";
 
 /** Physical PBR preview vs stylized look inspired by cortiz2894/water-anime-shader (bloom + warm lights). */
 export type PreviewRenderStyle = "standard" | "anime";
@@ -77,22 +80,40 @@ function fileBasename(path: string): string {
   return seg ?? path;
 }
 
+type PreviewInstanceMaterialContext = {
+  lookup: Map<string, MatlDataJson["entries"][number]>;
+  refMap: Map<string, string>;
+};
+
 /** Parallel nutexb→PNG IPC for cache misses; LRU avoids re-decoding across model switches. */
 const NUTEXB_DECODE_CONCURRENCY = 12;
 
-function buildRefToPathMap(bundle: SsbhModelPreviewBundle): Map<string, string> {
-  const m = new Map<string, string>();
-  for (const row of bundle.textureResolve) {
-    if (row.nutexbPath) {
-      m.set(row.reference, row.nutexbPath);
-    }
+const INSTANCE_LOAD_CONCURRENCY = 4;
+
+function previewInstanceIdFromModlPath(modlPath: string): string {
+  const s = modlPath.trim().replace(/\\/g, "/");
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
   }
-  return m;
+  return `pi${(h >>> 0).toString(16)}`;
 }
 
 export type SsbhModelPreviewContextValue = {
   workspaceRoot: string | null;
   bundle: SsbhModelPreviewBundle | null;
+  /** All loaded `.numdlb` instances (folder open may load many). */
+  previewInstances: readonly SsbhModelPreviewInstance[];
+  activePreviewInstanceId: string | null;
+  setActivePreviewInstanceId: (id: string | null) => void;
+  previewViewMode: PreviewInstanceViewMode;
+  setPreviewViewMode: (mode: PreviewInstanceViewMode) => void;
+  previewControlScope: PreviewControlScope;
+  setPreviewControlScope: (scope: PreviewControlScope) => void;
+  hiddenPreviewInstanceIds: ReadonlySet<string>;
+  setPreviewInstanceVisible: (id: string, visible: boolean) => void;
+  showAllPreviewInstances: () => void;
   draws: BuiltMeshDraw[];
   drawError: string | null;
   loading: boolean;
@@ -216,7 +237,11 @@ export function SsbhModelPreviewProvider({
 }: ProviderProps) {
   const root = workspaceRoot?.trim() ? workspaceRoot : null;
 
-  const [bundle, setBundle] = useState<SsbhModelPreviewBundle | null>(null);
+  const [previewInstances, setPreviewInstances] = useState<SsbhModelPreviewInstance[]>([]);
+  const [activePreviewInstanceId, setActivePreviewInstanceId] = useState<string | null>(null);
+  const [previewViewMode, setPreviewViewMode] = useState<PreviewInstanceViewMode>("all");
+  const [previewControlScope, setPreviewControlScope] = useState<PreviewControlScope>("single");
+  const [hiddenPreviewInstanceIds, setHiddenPreviewInstanceIds] = useState<Set<string>>(new Set());
   const [draws, setDraws] = useState<BuiltMeshDraw[]>([]);
   const [drawError, setDrawError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -274,6 +299,65 @@ export function SsbhModelPreviewProvider({
     writeAutoLoadAfterConvertToStorage(v);
   }, []);
 
+  const bundle = useMemo((): SsbhModelPreviewBundle | null => {
+    if (previewInstances.length === 0) return null;
+    if (activePreviewInstanceId) {
+      const hit = previewInstances.find((i) => i.id === activePreviewInstanceId);
+      return hit?.bundle ?? previewInstances[0]!.bundle;
+    }
+    return previewInstances[0]!.bundle;
+  }, [previewInstances, activePreviewInstanceId]);
+
+  const loadInstancesFromPaths = useCallback(async (paths: string[]) => {
+    const instances: SsbhModelPreviewInstance[] = [];
+    const allDraws: BuiltMeshDraw[] = [];
+    const collectedWarnings: string[] = [];
+    for (let offset = 0; offset < paths.length; offset += INSTANCE_LOAD_CONCURRENCY) {
+      const chunk = paths.slice(offset, offset + INSTANCE_LOAD_CONCURRENCY);
+      const bundles = await Promise.all(
+        chunk.map((p) => invoke<SsbhModelPreviewBundle>("ssbh_load_model_preview", { rootPath: p })),
+      );
+      for (let j = 0; j < chunk.length; j++) {
+        const b = bundles[j]!;
+        const id = previewInstanceIdFromModlPath(b.modlPath);
+        const label = fileBasename(b.modlPath).replace(/\.numdlb$/i, "") || "model";
+        const skelJson = b.skel ? (b.skel as SkelDataJson) : null;
+        let created: BuiltMeshDraw[];
+        try {
+          created = buildDrawListFromBundle(
+            b.modl as ModlDataJson,
+            b.mesh as MeshDataJson,
+            skelJson,
+            { drawKeyPrefix: id, instanceLabel: label },
+          );
+        } catch (e) {
+          throw new Error(`Failed to build mesh draws for ${b.modlPath}: ${String(e)}`);
+        }
+        instances.push({ id, modlPath: b.modlPath, displayLabel: label, bundle: b });
+        allDraws.push(...created);
+        if (b.warnings.length) collectedWarnings.push(...b.warnings);
+      }
+    }
+    if (collectedWarnings.length > 0) {
+      const preview = collectedWarnings.slice(0, 4).join("\n");
+      const more =
+        collectedWarnings.length > 4 ? `\n… and ${collectedWarnings.length - 4} more` : "";
+      toast.message("Model preview notices", {
+        description: `${preview}${more}`,
+      });
+    }
+    startTransition(() => {
+      setDraws((prev) => {
+        prev.forEach((d) => d.geometry.dispose());
+        return allDraws;
+      });
+      setPreviewInstances(instances);
+      setActivePreviewInstanceId(instances[0]?.id ?? null);
+      setHiddenPreviewInstanceIds(new Set());
+      setDrawError(null);
+    });
+  }, [startTransition]);
+
   const skeletonGeometry = useMemo(() => {
     if (!bundle?.skel) return null;
     try {
@@ -291,62 +375,108 @@ export function SsbhModelPreviewProvider({
   }, [skeletonGeometry]);
 
   useEffect(() => {
-    if (!bundle) {
-      setDraws([]);
-      setDrawError(null);
-      setSelectedBoneIndex(null);
-      setBonePoseHistory({ undoStack: [], redoStack: [], applyNonce: 0, applyData: null });
-      return;
-    }
-    let created: BuiltMeshDraw[] = [];
-    try {
-      const skelJson = bundle.skel ? (bundle.skel as SkelDataJson) : null;
-      created = buildDrawListFromBundle(
-        bundle.modl as ModlDataJson,
-        bundle.mesh as MeshDataJson,
-        skelJson,
-      );
-      setDrawError(null);
-    } catch (e) {
-      setDrawError(String(e));
-      created = [];
-    }
-    setDraws(created);
     setSelectedBoneIndex(null);
     setBonePoseResetNonce((n) => n + 1);
     setBonePoseHistory({ undoStack: [], redoStack: [], applyNonce: 0, applyData: null });
-    return () => {
-      created.forEach((d) => d.geometry.dispose());
-    };
-  }, [bundle]);
+  }, [activePreviewInstanceId]);
 
   useEffect(() => {
-    setVisibleKeys(new Set(draws.map((d) => d.key)));
-    setSelectedDebugDrawKey((prev) => {
-      if (!draws.length) return null;
-      if (prev && draws.some((d) => d.key === prev)) return prev;
-      return draws[0]?.key ?? null;
+    if (previewInstances.length === 0) return;
+    if (activePreviewInstanceId && previewInstances.some((i) => i.id === activePreviewInstanceId)) {
+      return;
+    }
+    setActivePreviewInstanceId(previewInstances[0]!.id);
+  }, [previewInstances, activePreviewInstanceId]);
+
+  useEffect(() => {
+    setVisibleKeys((prev) => {
+      if (prev.size === 0) {
+        return new Set(draws.map((d) => d.key));
+      }
+      const next = new Set<string>();
+      const drawKeySet = new Set(draws.map((d) => d.key));
+      for (const key of prev) {
+        if (drawKeySet.has(key)) next.add(key);
+      }
+      return next.size > 0 ? next : new Set(draws.map((d) => d.key));
     });
-  }, [draws]);
+    setSelectedDebugDrawKey((prev) => {
+      const activeId = previewControlScope === "single" ? activePreviewInstanceId : null;
+      const scoped = draws.filter(
+        (d) =>
+          !activeId ||
+          d.previewInstanceId === activeId ||
+          (!d.previewInstanceId && previewInstances.length <= 1),
+      );
+      if (!scoped.length) return null;
+      if (prev && scoped.some((d) => d.key === prev)) return prev;
+      return scoped[0]?.key ?? null;
+    });
+  }, [draws, activePreviewInstanceId, previewControlScope, previewInstances.length]);
 
   useEffect(() => {
-    if (!bundle || draws.length === 0) {
+    if (previewInstances.length === 0 || draws.length === 0) {
       setDrawMaterialDataUrlsByDrawKey(new Map());
       setDrawMaterialBindingsByDrawKey(new Map());
       setTextureDecodeProgress(null);
       return;
     }
     let cancelled = false;
-    const matl = bundle.matl as MatlDataJson | null;
-    const lookup = buildMatlLookup(matl);
-    const refMap = buildRefToPathMap(bundle);
 
-    const totalSteps = countTextureDecodeSteps(draws, lookup, refMap, textureSlotLoadEnabled);
+    const instanceById = new Map(previewInstances.map((inst) => [inst.id, inst] as const));
+    const materialCtxByInstanceId = new Map<string, PreviewInstanceMaterialContext>();
+    for (const inst of previewInstances) {
+      materialCtxByInstanceId.set(inst.id, {
+        lookup: buildMatlLookup(inst.bundle.matl as MatlDataJson | null),
+        refMap: buildTextureRefToPathMap(inst.bundle),
+      });
+    }
+    const fallbackCtx: PreviewInstanceMaterialContext | null =
+      previewInstances.length > 0
+        ? {
+            lookup: buildMatlLookup(previewInstances[0]!.bundle.matl as MatlDataJson | null),
+            refMap: buildTextureRefToPathMap(previewInstances[0]!.bundle),
+          }
+        : null;
+    const drawPathsByKey = new Map<string, ReturnType<typeof resolveMaterialTexturePaths>>();
+    const pathSlotCounts = new Map<string, number>();
+    let totalSteps = 0;
+    for (const d of draws) {
+      const inst =
+        (d.previewInstanceId ? instanceById.get(d.previewInstanceId) : null) ??
+        (previewInstances[0] ?? null);
+      const ctx =
+        (inst ? materialCtxByInstanceId.get(inst.id) : null) ??
+        fallbackCtx;
+      if (!ctx) {
+        continue;
+      }
+      const paths = resolveMaterialTexturePaths(d.materialLabel, ctx.lookup, ctx.refMap);
+      drawPathsByKey.set(d.key, paths);
+      for (const { key } of TEXTURE_PREVIEW_SLOT_META) {
+        if (!textureSlotLoadEnabled[key]) continue;
+        const field = TEXTURE_SLOT_TO_PATH_FIELD[key];
+        const pathVal = paths[field];
+        if (!pathVal) continue;
+        totalSteps += 1;
+        pathSlotCounts.set(pathVal, (pathSlotCounts.get(pathVal) ?? 0) + 1);
+      }
+    }
     if (totalSteps === 0) {
       const nextBindings = new Map<string, ResolvedMaterialBinding>();
       const next = new Map<string, DrawMaterialDataUrls>();
       for (const d of draws) {
-        nextBindings.set(d.key, resolveMaterialBinding(d.materialLabel, lookup, refMap));
+        const instBundle = bundleForPreviewDraw(d, previewInstances);
+        if (!instBundle) {
+          throw new Error("Missing preview bundle for draw (instance mapping)");
+        }
+        const ctx = materialCtxByInstanceId.get(
+          d.previewInstanceId ?? previewInstances[0]!.id,
+        ) ?? {
+          lookup: buildMatlLookup(instBundle.matl as MatlDataJson | null),
+          refMap: buildTextureRefToPathMap(instBundle),
+        };
+        nextBindings.set(d.key, resolveMaterialBinding(d.materialLabel, ctx.lookup, ctx.refMap));
         next.set(d.key, {
           map: null,
           normalMap: null,
@@ -370,7 +500,6 @@ export function SsbhModelPreviewProvider({
       const nextBindings = new Map<string, ResolvedMaterialBinding>();
       const failedTextures: string[] = [];
       const pathToDataUrl = new Map<string, string>();
-      const pathSlotCounts = collectPathSlotCounts(draws, lookup, refMap, textureSlotLoadEnabled);
       const uniquePaths = [...pathSlotCounts.keys()];
       const versionByPath = new Map<string, Awaited<ReturnType<typeof resolveNutexbVersionId>>>();
       if (uniquePaths.length > 0) {
@@ -437,9 +566,16 @@ export function SsbhModelPreviewProvider({
 
       for (const d of draws) {
         if (cancelled) return;
-        const binding = resolveMaterialBinding(d.materialLabel, lookup, refMap);
+        const instId = d.previewInstanceId ?? previewInstances[0]?.id ?? null;
+        const ctx = instId ? materialCtxByInstanceId.get(instId) : null;
+        if (!ctx) {
+          throw new Error("Missing preview material context for draw");
+        }
+        const binding = resolveMaterialBinding(d.materialLabel, ctx.lookup, ctx.refMap);
         nextBindings.set(d.key, binding);
-        const paths = resolveMaterialTexturePaths(d.materialLabel, lookup, refMap);
+        const paths =
+          drawPathsByKey.get(d.key) ??
+          resolveMaterialTexturePaths(d.materialLabel, ctx.lookup, ctx.refMap);
         const urls: DrawMaterialDataUrls = {
           map: null,
           normalMap: null,
@@ -482,7 +618,7 @@ export function SsbhModelPreviewProvider({
     return () => {
       cancelled = true;
     };
-  }, [bundle, draws, textureSlotLoadEnabled]);
+  }, [previewInstances, draws, textureSlotLoadEnabled]);
 
   useEffect(() => {
     if (modelLoadNonce === 0 || draws.length === 0) return;
@@ -496,32 +632,44 @@ export function SsbhModelPreviewProvider({
     };
   }, [modelLoadNonce, draws.length]);
 
-  const loadAt = useCallback(async (path: string) => {
-    setLoading(true);
-    setLoadError(null);
-    setTextureDecodeProgress(null);
-    try {
-      const b = await invoke<SsbhModelPreviewBundle>("ssbh_load_model_preview", { rootPath: path });
-      startTransition(() => setBundle(b));
-      setRecentModelPaths((prev) => {
-        const next = buildNextRecentPaths(prev, path);
-        writeRecentModelPathsToStorage(next);
-        return next;
-      });
-      setModelLoadNonce((n) => n + 1);
-      if (b.warnings.length) {
-        for (const w of b.warnings) {
-          toast.message("Model preview notice", { description: w });
-        }
+  const loadAt = useCallback(
+    async (path: string) => {
+      const t = path.trim();
+      if (!t) {
+        const msg = "Path is empty";
+        setLoadError(msg);
+        toast.error(msg);
+        return;
       }
-    } catch (e) {
-      const msg = String(e);
-      setLoadError(msg);
-      toast.error(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, [startTransition]);
+      setLoading(true);
+      setLoadError(null);
+      setTextureDecodeProgress(null);
+      try {
+        if (/\.numdlb$/i.test(t)) {
+          await loadInstancesFromPaths([t]);
+        } else {
+          const listed = await invoke<string[]>("ssbh_list_numdlb_under_tree", { rootPath: t });
+          if (listed.length === 0) {
+            throw new Error("No .numdlb files found under the selected folder.");
+          }
+          await loadInstancesFromPaths(listed);
+        }
+        setRecentModelPaths((prev) => {
+          const next = buildNextRecentPaths(prev, t);
+          writeRecentModelPathsToStorage(next);
+          return next;
+        });
+        setModelLoadNonce((n) => n + 1);
+      } catch (e) {
+        const msg = String(e);
+        setLoadError(msg);
+        toast.error(msg);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [loadInstancesFromPaths],
+  );
 
   const pickFolder = useCallback(async () => {
     const selected = await open({
@@ -573,18 +721,36 @@ export function SsbhModelPreviewProvider({
     if (decoding) {
       throw new Error("Cannot clear the scene while loading or decoding textures.");
     }
-    setBundle(null);
+    setDraws((prev) => {
+      prev.forEach((d) => d.geometry.dispose());
+      return [];
+    });
+    setPreviewInstances([]);
+    setActivePreviewInstanceId(null);
+    setHiddenPreviewInstanceIds(new Set());
     setLoadError(null);
     setDrawError(null);
   }, [loading, textureDecodeProgress]);
 
   const reloadCurrentModel = useCallback(async () => {
-    const path = bundle?.modlPath?.trim();
-    if (!path) {
+    if (previewInstances.length === 0) {
       throw new Error("No model loaded to reload.");
     }
-    await loadAt(path);
-  }, [bundle?.modlPath, loadAt]);
+    const paths = previewInstances.map((i) => i.modlPath);
+    setLoading(true);
+    setLoadError(null);
+    setTextureDecodeProgress(null);
+    try {
+      await loadInstancesFromPaths(paths);
+      setModelLoadNonce((n) => n + 1);
+    } catch (e) {
+      const msg = String(e);
+      setLoadError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [previewInstances, loadInstancesFromPaths]);
 
   const resetDisplaySettingsToDefaults = useCallback(() => {
     setWireframe(false);
@@ -684,12 +850,43 @@ export function SsbhModelPreviewProvider({
     });
   }, []);
 
+  const controllableDraws = useMemo(() => {
+    if (previewControlScope === "all") return draws;
+    if (!activePreviewInstanceId) return draws;
+    return draws.filter(
+      (d) =>
+        d.previewInstanceId === activePreviewInstanceId ||
+        (!d.previewInstanceId && previewInstances.length <= 1),
+    );
+  }, [draws, previewControlScope, activePreviewInstanceId, previewInstances.length]);
+
   const showAllMeshes = useCallback(() => {
-    setVisibleKeys(new Set(draws.map((d) => d.key)));
-  }, [draws]);
+    setVisibleKeys((prev) => {
+      const next = new Set(prev);
+      for (const d of controllableDraws) next.add(d.key);
+      return next;
+    });
+  }, [controllableDraws]);
 
   const hideAllMeshes = useCallback(() => {
-    setVisibleKeys(new Set());
+    setVisibleKeys((prev) => {
+      const next = new Set(prev);
+      for (const d of controllableDraws) next.delete(d.key);
+      return next;
+    });
+  }, [controllableDraws]);
+
+  const setPreviewInstanceVisible = useCallback((id: string, visible: boolean) => {
+    setHiddenPreviewInstanceIds((prev) => {
+      const next = new Set(prev);
+      if (visible) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const showAllPreviewInstances = useCallback(() => {
+    setHiddenPreviewInstanceIds(new Set());
   }, []);
 
   const setTextureSlotLoadEnabled = useCallback((key: TexturePreviewSlotKey, enabled: boolean) => {
@@ -741,6 +938,16 @@ export function SsbhModelPreviewProvider({
     () => ({
       workspaceRoot: root,
       bundle,
+      previewInstances,
+      activePreviewInstanceId,
+      setActivePreviewInstanceId,
+      previewViewMode,
+      setPreviewViewMode,
+      previewControlScope,
+      setPreviewControlScope,
+      hiddenPreviewInstanceIds,
+      setPreviewInstanceVisible,
+      showAllPreviewInstances,
       draws,
       drawError,
       loading,
@@ -828,6 +1035,16 @@ export function SsbhModelPreviewProvider({
     [
       root,
       bundle,
+      previewInstances,
+      activePreviewInstanceId,
+      setActivePreviewInstanceId,
+      previewViewMode,
+      setPreviewViewMode,
+      previewControlScope,
+      setPreviewControlScope,
+      hiddenPreviewInstanceIds,
+      setPreviewInstanceVisible,
+      showAllPreviewInstances,
       draws,
       drawError,
       loading,

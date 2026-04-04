@@ -36,6 +36,7 @@ pub fn run() {
             commands::nutexb_png_bytes,
             commands::nutexb_batch_export_png,
             ssbh_preview::ssbh_load_model_preview,
+            ssbh_preview::ssbh_list_numdlb_under_tree,
             ssbh_preview::ssbh_load_ssbh_file_as_json,
             ssbh_dae_cmd::ssbh_analyze_dae,
             ssbh_dae_cmd::ssbh_analyze_fbx,

@@ -21,6 +21,14 @@ export type SsbhModelPreviewBundle = {
   warnings: string[];
 };
 
+/** One loaded `.numdlb` preview instance (multi-folder load may create many). */
+export type SsbhModelPreviewInstance = {
+  id: string;
+  modlPath: string;
+  displayLabel: string;
+  bundle: SsbhModelPreviewBundle;
+};
+
 export type VectorDataJson =
   | { Vector2: [number, number][] }
   | { Vector3: [number, number, number][] }
@@ -153,4 +161,6 @@ export type BuiltMeshDraw = {
   meshObjectName: string;
   meshObjectSubindex: number;
   skin: MeshSkinRuntime | null;
+  /** Set when multiple models are loaded; used for layout and bone rig scoping. */
+  previewInstanceId?: string;
 };
