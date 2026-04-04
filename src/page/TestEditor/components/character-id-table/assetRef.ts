@@ -20,6 +20,7 @@ export interface AssetRefInfo {
   isModel: boolean;
   isParamAsset: boolean;
   isMscAsset: boolean;
+  isMotionAsset: boolean;
 }
 
 async function resolveFhm2dPath(baseDir: string, hashHex: string): Promise<string> {
@@ -43,6 +44,7 @@ export async function getAssetRefInfo(
   const isModel = lower === "model";
   const isParamAsset = lower === "param";
   const isMscAsset = lower === "msc";
+  const isMotionAsset = lower === "motion";
 
   // Construct paths
   // Source: {obDplCachePath}\0x{HEX}.fhm2d
@@ -63,5 +65,6 @@ export async function getAssetRefInfo(
     isModel,
     isParamAsset,
     isMscAsset,
+    isMotionAsset,
   };
 }

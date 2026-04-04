@@ -8,6 +8,11 @@ import { applyNumdlbBaseNameToStructureObject } from "@/lib/fhm2d_characterModel
 import { applyNutexbInternalNameToStructureObject } from "@/lib/fhm2d_allNutexbFormatFuc";
 import { applyParamAssetNamesToStructureObject } from "@/lib/fhm2d_paramAssetFormatFuc";
 import { applyMscAssetNamesToStructureObject } from "@/lib/fhm2d_mscAssetFormatFuc";
+import {
+  applyMotionAssetNamesToStructureObject,
+  ensureEmptyFoldersFromSubFileParseStructure,
+  motionFileUrlToNestedRelativePath,
+} from "@/lib/fhm2d_motionAssetFormatFuc";
 
 export enum Fhm2d_type_format {
   fhm2d_character = "fhm2d_character",
@@ -15,6 +20,7 @@ export enum Fhm2d_type_format {
   fhm2d_stage_list = "fhm2d_stage_list",
   fhm2d_character_param = "fhm2d_character_param",
   fhm2d_msc = "fhm2d_msc",
+  fhm2d_motion = "fhm2d_motion",
 }
 
 export enum Fhm2dType {
@@ -672,6 +678,13 @@ export async function ExtractFHMData(
             finalStructure = applyMscAssetNamesToStructureObject(outputStructure);
             break;
           }
+          case Fhm2d_type_format.fhm2d_motion: {
+            finalStructure = applyMotionAssetNamesToStructureObject(outputStructure, {
+              sortedSubFileBuffers: decompressedFiles.map((d) => d.buffer),
+              fileNameNoExt,
+            });
+            break;
+          }
           default: {
             finalStructure = outputStructure;
             break;
@@ -716,13 +729,22 @@ export async function ExtractFHMData(
       for (const fileData of decompressedFiles) {
         const structureItem = finalStructure.SubFileData.find((item: any) => item.index === fileData.index);
         if (structureItem && structureItem.fileUrl) {
-          const fileUrl = structureItem.fileUrl.replace(/^\.[\\/]/, "");
-          const pathParts = fileUrl.split(/[\\/]/);
-          const fileName = pathParts[pathParts.length - 1];
-          if (!fileName) {
-            throw new Error(`Invalid fileUrl for extraction: ${String(structureItem.fileUrl)}`);
+          let relativePath: string;
+          if (format === Fhm2d_type_format.fhm2d_motion) {
+            relativePath = motionFileUrlToNestedRelativePath(
+              String(structureItem.fileUrl),
+              fileNameNoExt,
+            );
+          } else {
+            const fileUrl = structureItem.fileUrl.replace(/^\.[\\/]/, "");
+            const pathParts = fileUrl.split(/[\\/]/);
+            const fileName = pathParts[pathParts.length - 1];
+            if (!fileName) {
+              throw new Error(`Invalid fileUrl for extraction: ${String(structureItem.fileUrl)}`);
+            }
+            relativePath = fileName;
           }
-          writeEntries.push({ relativePath: fileName, buffer: fileData.buffer });
+          writeEntries.push({ relativePath, buffer: fileData.buffer });
         } else {
           writeEntries.push({
             relativePath: `${fileData.index}${typeList[fileData.index]}`,
@@ -737,6 +759,14 @@ export async function ExtractFHMData(
       );
 
       stepAt = logExtractFhmStep("write all subfiles", stepAt, extractStart);
+
+      if (format === Fhm2d_type_format.fhm2d_motion && finalStructure.SubFileParseStructure) {
+        const emptyDirStart = performance.now();
+        await ensureEmptyFoldersFromSubFileParseStructure(outDir, finalStructure.SubFileParseStructure);
+        console.log(
+          `[ExtractFHM] motion empty folders: ${(performance.now() - emptyDirStart).toFixed(2)}ms`
+        );
+      }
 
       // Step 5: Write structure.json
       const structurePath = outDir + "_structure.json";

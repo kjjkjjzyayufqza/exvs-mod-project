@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     fs,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     process::Command,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -257,20 +257,25 @@ pub async fn card_icon_batch_replace_with_dds_format(
     .map_err(|e| e.to_string())?
 }
 
-/// One flat file name under `base_dir` (no subfolders, no `..`). Matches `ExtractFHM` single-folder output.
-fn validate_flat_relative_file_name(name: &str) -> Result<(), String> {
-    if name.is_empty() {
+/// Relative path under `base_dir`: allows nested segments (e.g. `0/sub/file.bin`), rejects `..` and absolute paths.
+fn validate_relative_path_under_base(rel: &str) -> Result<(), String> {
+    if rel.is_empty() {
         return Err("relative_path must not be empty".to_string());
     }
-    if name.contains('/') || name.contains('\\') {
-        return Err(format!(
-            "relative_path must be a single file name (no path separators): {name}"
-        ));
+    let path = Path::new(rel);
+    if path.is_absolute() {
+        return Err(format!("relative_path must be relative: {rel}"));
     }
-    if name.contains("..") {
-        return Err(format!(
-            "relative_path must not contain '..': {name}"
-        ));
+    for c in path.components() {
+        match c {
+            Component::Normal(_) | Component::CurDir => {}
+            Component::ParentDir => {
+                return Err(format!("relative_path must not contain '..': {rel}"));
+            }
+            Component::Prefix(_) | Component::RootDir => {
+                return Err(format!("relative_path must not be absolute: {rel}"));
+            }
+        }
     }
     Ok(())
 }
@@ -311,11 +316,14 @@ pub async fn write_files_batch_base64(
         fs::create_dir_all(&base).map_err(|e| e.to_string())?;
         let mut timings: Vec<WriteBatchFileWriteTiming> = Vec::with_capacity(files.len());
         for f in files {
-            validate_flat_relative_file_name(&f.relative_path)?;
+            validate_relative_path_under_base(&f.relative_path)?;
             let bytes = BASE64
                 .decode(f.data_base64.trim())
                 .map_err(|e| e.to_string())?;
             let path = base.join(&f.relative_path);
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
             let write_start = Instant::now();
             fs::write(&path, &bytes).map_err(|e| e.to_string())?;
             let write_ms = write_start.elapsed().as_secs_f64() * 1000.0;
