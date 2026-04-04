@@ -2,13 +2,7 @@ import { FileVideo, ListTree } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { MotionClipPathSearchSelect } from "./components/MotionClipPathSearchSelect";
 import { MayaSection } from "./MayaInspectorSection";
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
 
@@ -73,27 +67,16 @@ export function SsbhModelPreviewMotionPanel() {
           {p.motionNuanmbPaths.length > 1 ? (
             <div className="flex flex-col gap-1">
               <Label className="text-[10px] text-muted-foreground">Clip</Label>
-              <Select
-                value={p.motionSelectedNuanmbPath ?? ""}
-                onValueChange={(v) => {
-                  if (v) {
-                    p.setMotionSelectedNuanmbPath(v);
-                    p.setMotionFrame(0);
-                    p.setMotionPlaying(false);
-                  }
+              <MotionClipPathSearchSelect
+                paths={p.motionNuanmbPaths}
+                value={p.motionSelectedNuanmbPath}
+                disabled={p.previewBusy}
+                onChange={(path) => {
+                  p.setMotionSelectedNuanmbPath(path);
+                  p.setMotionFrame(0);
+                  p.setMotionPlaying(false);
                 }}
-              >
-                <SelectTrigger className="h-8 text-[10px]">
-                  <SelectValue placeholder="Select .nuanmb" />
-                </SelectTrigger>
-                <SelectContent>
-                  {p.motionNuanmbPaths.map((path) => (
-                    <SelectItem key={path} value={path} className="text-[10px] font-mono">
-                      {path.replace(/\\/g, "/").split("/").pop() ?? path}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
             </div>
           ) : null}
           {p.motionSampleError ? (
