@@ -15,8 +15,8 @@ export function SsbhModelPreviewMotionPanel() {
       <MayaSection title="Motion source" icon={<FileVideo className="h-3.5 w-3.5 opacity-80" />} defaultOpen>
         <div className="flex flex-col gap-2">
           <p className="text-[10px] text-muted-foreground leading-snug">
-            NUANMB applies to the <span className="text-foreground font-medium">active</span> model only. Requires a
-            skeleton on disk (same as the viewport).
+            Configure NUANMB for the <span className="text-foreground font-medium">active</span> model. Each model
+            keeps its own clip and playback state, so multiple models can play different clips at the same time.
           </p>
           <div className="flex flex-wrap gap-1.5">
             <Button

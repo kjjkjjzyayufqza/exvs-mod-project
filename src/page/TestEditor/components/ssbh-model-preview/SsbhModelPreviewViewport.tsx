@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { SsbhModelCanvas } from "./SsbhModelCanvas";
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
-import type { SkelDataJson } from "./types";
 import { SsbhModelPreviewLoadingOverlay } from "./SsbhModelPreviewLoadingOverlay";
 import { SsbhModelPreviewQuickActions } from "./SsbhModelPreviewQuickActions";
 import { SsbhModelViewportTimeline } from "./SsbhModelViewportTimeline";
@@ -19,13 +18,6 @@ export function SsbhModelPreviewViewport() {
   const p = useSsbhModelPreview();
   const motionScrubFrameRef = useRef<number | null>(null);
   const [motionScrubbing, setMotionScrubbing] = useState(false);
-  const skelBoneCount = p.bundle?.skel ? (p.bundle.skel as SkelDataJson).bones.length : 0;
-  const motionBoneLocalsActive =
-    p.motionSample &&
-    p.motionSample.boneLocals.length === skelBoneCount &&
-    skelBoneCount > 0
-      ? p.motionSample.boneLocals
-      : null;
   const onViewportBoneSelect = useCallback(
     (index: number) => {
       p.setSelectedBoneIndex(index);
@@ -66,6 +58,16 @@ export function SsbhModelPreviewViewport() {
         </Button>
         <Button type="button" size="sm" variant="secondary" disabled={p.loading} onClick={() => void p.pickNumdlb()}>
           Open .numdlb
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          disabled={p.previewBusy}
+          onClick={() => void p.pickAddNumdlb()}
+          title="Append a .numdlb instance without replacing current models"
+        >
+          Add .numdlb
         </Button>
         <Button
           type="button"
@@ -174,22 +176,16 @@ export function SsbhModelPreviewViewport() {
               onBonePoseCommit={p.commitBonePoseUndo}
               onUndoBonePose={p.undoBonePose}
               onRedoBonePose={p.redoBonePose}
-              motionBoneLocalsActive={motionBoneLocalsActive}
-              motionClip={p.motionClip}
-              motionFrame={p.motionFrame}
-              motionLoop={p.motionLoop}
-              motionSpeed={p.motionSpeed}
-              onMotionFrameSync={p.setMotionFrame}
-              onMotionPlaybackStop={() => p.setMotionPlaying(false)}
-              motionPlaying={p.motionPlaying}
+              motionStatesByInstanceId={p.motionStatesByInstanceId}
+              onMotionFrameSync={p.setMotionFrameForInstance}
+              onMotionPlaybackStop={(instanceId) => p.setMotionPlayingForInstance(instanceId, false)}
+              motionControlInstanceId={p.activePreviewInstanceId ?? p.previewInstances[0]?.id ?? null}
               motionScrubbing={motionScrubbing}
               motionScrubFrameRef={motionScrubFrameRef}
-              motionVisibilityRows={p.motionSample?.visibility ?? null}
-              motionCameraSample={p.motionSample?.camera ?? null}
               motionApplyCamera={p.motionApplyCamera}
-              motionLightingSample={p.motionSample?.lighting ?? null}
               motionApplyLighting={p.motionApplyLighting}
               motionForceVisibleDuringPlayback={p.motionForceVisibleDuringPlayback}
+              modelAttachments={p.modelAttachments}
             />
             <SsbhModelPreviewLoadingOverlay readingBundle={p.loading} textureDecode={p.textureDecodeProgress} />
           </div>

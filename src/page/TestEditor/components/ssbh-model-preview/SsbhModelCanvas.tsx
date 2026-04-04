@@ -37,6 +37,7 @@ import {
   EquirectangularReflectionMapping,
   Group,
   LineBasicMaterial,
+  Matrix4,
   MirroredRepeatWrapping,
   Mesh,
   NoColorSpace,
@@ -65,6 +66,8 @@ import { applyPreviewUvFlip } from "./previewUvFlip";
 import type {
   BoneTransformMode,
   MaterialDebugViewMode,
+  PreviewInstanceMotionState,
+  PreviewModelAttachment,
   PreviewInstanceViewMode,
   PreviewRenderStyle,
 } from "./SsbhModelPreviewContext";
@@ -172,23 +175,16 @@ type SsbhModelCanvasProps = {
   onBonePoseCommit: (beforeTransformSnapshot: Float32Array) => void;
   onUndoBonePose: () => void;
   onRedoBonePose: () => void;
-  /** NUANMB motion for the active model instance (active-only policy). */
-  motionBoneLocalsActive: MotionBoneLocal[] | null;
-  motionClip: MotionClip | null;
-  motionFrame: number;
-  motionLoop: boolean;
-  motionSpeed: number;
-  onMotionFrameSync: (frame: number) => void;
-  onMotionPlaybackStop: () => void;
-  motionPlaying: boolean;
+  motionStatesByInstanceId: ReadonlyMap<string, PreviewInstanceMotionState>;
+  onMotionFrameSync: (instanceId: string, frame: number) => void;
+  onMotionPlaybackStop: (instanceId: string) => void;
+  motionControlInstanceId: string | null;
   motionScrubbing: boolean;
   motionScrubFrameRef: MutableRefObject<number | null>;
-  motionVisibilityRows: MotionVisibilityRow[] | null;
-  motionCameraSample: MotionCameraSample | null;
   motionApplyCamera: boolean;
-  motionLightingSample: MotionLightingSample | null;
   motionApplyLighting: boolean;
   motionForceVisibleDuringPlayback: boolean;
+  modelAttachments: readonly PreviewModelAttachment[];
 };
 
 function MotionCameraController({
@@ -271,6 +267,9 @@ const _interpQa = new Quaternion();
 const _interpQb = new Quaternion();
 const _cameraQFrom = new Quaternion();
 const _cameraQTo = new Quaternion();
+const _attachParentM = new Matrix4();
+const _attachChildInvM = new Matrix4();
+const _attachFinalM = new Matrix4();
 
 function lerpNumber(a: number, b: number, t: number): number {
   return a + (b - a) * t;
@@ -562,12 +561,12 @@ function DrawMeshes({
   | "visibleKeys"
   | "wireframe"
   | "previewRenderStyle"
-  | "motionVisibilityRows"
   | "motionForceVisibleDuringPlayback"
 > & {
   ignoreMeshRaycastForBonePicking: boolean;
   animeKeyLightDir: Vector3;
   skeleton: Skeleton | null;
+  motionVisibilityRows: MotionVisibilityRow[] | null;
 }) {
   const ignoreRaycast = ignoreMeshRaycastForBonePicking;
   useRenderDebug("DrawMeshes", {
@@ -711,22 +710,16 @@ function Scene({
   bonePoseToApply,
   onBonePoseApplyConsumed,
   onBonePoseCommit,
-  motionBoneLocalsActive,
-  motionClip,
-  motionFrame,
-  motionLoop,
-  motionSpeed,
+  motionStatesByInstanceId,
   onMotionFrameSync,
   onMotionPlaybackStop,
-  motionPlaying,
+  motionControlInstanceId,
   motionScrubbing,
   motionScrubFrameRef,
-  motionVisibilityRows,
-  motionCameraSample,
   motionApplyCamera,
-  motionLightingSample,
   motionApplyLighting,
   motionForceVisibleDuringPlayback,
+  modelAttachments,
 }: Omit<
   SsbhModelCanvasProps,
   | "previewSuspended"
@@ -738,20 +731,27 @@ function Scene({
   const modelRootRef = useRef<Group>(null);
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const camera = useThree((s) => s.camera);
-  const playbackFrameRef = useRef(0);
+  const playbackFrameRef = useRef<Map<string, number>>(new Map());
   const lastSlowFrameLogMsRef = useRef(0);
   const lastAppliedScrubFrameRef = useRef<number | null>(null);
+  const activeMotionState =
+    (motionControlInstanceId ? motionStatesByInstanceId.get(motionControlInstanceId) : null) ?? null;
+  const activeMotionSample = activeMotionState?.sample ?? null;
+  const anyMotionPlaying = useMemo(
+    () => Array.from(motionStatesByInstanceId.values()).some((s) => s.playing),
+    [motionStatesByInstanceId],
+  );
 
   useRenderDebug("Scene", {
     draws: draws.length,
     previewInstances: previewInstances.length,
     activePreviewInstanceId: activePreviewInstanceId ?? "null",
     hiddenPreviewInstances: hiddenPreviewInstanceIds.size,
-    motionPlaying,
+    motionPlaying: anyMotionPlaying,
     motionScrubbing,
-    motionFrame,
-    motionClipFrames: motionClip?.frames.length ?? 0,
-    motionVisibilityRows: motionVisibilityRows?.length ?? 0,
+    motionFrame: activeMotionState?.frame ?? 0,
+    motionClipFrames: activeMotionState?.clip?.frames.length ?? 0,
+    motionVisibilityRows: activeMotionSample?.visibility?.length ?? 0,
     selectedBoneIndex: selectedBoneIndex ?? -1,
     previewRenderStyle,
     showGrid,
@@ -760,8 +760,11 @@ function Scene({
   });
 
   useEffect(() => {
-    playbackFrameRef.current = motionFrame;
-  }, [motionFrame, motionClip?.finalFrameIndex]);
+    if (!motionControlInstanceId || !activeMotionState) {
+      return;
+    }
+    playbackFrameRef.current.set(motionControlInstanceId, activeMotionState.frame);
+  }, [motionControlInstanceId, activeMotionState]);
 
   const singleInstance = previewInstances.length <= 1;
   const visibleInstances = useMemo(() => {
@@ -791,6 +794,22 @@ function Scene({
     }
     return map;
   }, [draws, previewInstances, singleInstance]);
+  const instanceGroupRefs = useRef<Map<string, Group>>(new Map());
+  const boneIndexByNameByInstance = useMemo(() => {
+    const map = new Map<string, Map<string, number>>();
+    for (const inst of previewInstances) {
+      const skel = inst.bundle.skel ? (inst.bundle.skel as SkelDataJson) : null;
+      if (!skel) {
+        continue;
+      }
+      const indexByName = new Map<string, number>();
+      for (let i = 0; i < skel.bones.length; i++) {
+        indexByName.set(skel.bones[i]!.name, i);
+      }
+      map.set(inst.id, indexByName);
+    }
+    return map;
+  }, [previewInstances]);
 
   const gpuRuntimeByInstance = useMemo(() => {
     const map = new Map<string, GpuSkeletonRuntime>();
@@ -805,36 +824,37 @@ function Scene({
   }, [previewInstances]);
 
   useLayoutEffect(() => {
-    if (motionPlaying || motionScrubbing) {
-      return;
-    }
     for (const inst of previewInstances) {
       const runtime = gpuRuntimeByInstance.get(inst.id);
       if (!runtime) {
         continue;
       }
-      const isActive =
-        activePreviewInstanceId === inst.id ||
-        (previewInstances.length === 1 && activePreviewInstanceId === null);
-      const activeLocals =
-        isActive && motionBoneLocalsActive && motionBoneLocalsActive.length === runtime.bones.length
-          ? motionBoneLocalsActive
+      const motionState = motionStatesByInstanceId.get(inst.id) ?? null;
+      const isScrubTarget = motionScrubbing && motionControlInstanceId === inst.id;
+      const isPlaying = Boolean(motionState?.playing && motionState.clip);
+      if (isScrubTarget || isPlaying) {
+        continue;
+      }
+      const sampledLocals =
+        motionState?.sample && motionState.sample.boneLocals.length === runtime.bones.length
+          ? motionState.sample.boneLocals
           : null;
-      if (activeLocals) {
-        applyLocalPoseToObjects(runtime.bones, activeLocals);
+      if (sampledLocals) {
+        applyLocalPoseToObjects(runtime.bones, sampledLocals);
       } else {
         applyLocalPoseToObjects(runtime.bones, runtime.restLocals);
       }
       updateGpuSkeletonWorld(runtime);
       runtime.skeleton.update();
     }
-  }, [gpuRuntimeByInstance, previewInstances, activePreviewInstanceId, motionBoneLocalsActive, motionPlaying, motionScrubbing]);
+  }, [gpuRuntimeByInstance, motionControlInstanceId, motionScrubbing, motionStatesByInstanceId, previewInstances]);
 
   useFrame((_, delta) => {
-    if (!motionClip) {
-      return;
-    }
-    if (!motionPlaying && motionScrubbing) {
+    const activeRuntime =
+      motionControlInstanceId !== null ? (gpuRuntimeByInstance.get(motionControlInstanceId) ?? null) : null;
+    const activeClip = activeMotionState?.clip ?? null;
+    const activeLoop = activeMotionState?.loop ?? true;
+    if (motionScrubbing && motionControlInstanceId && activeRuntime && activeClip) {
       const scrubFrame = motionScrubFrameRef.current;
       if (scrubFrame === null) {
         return;
@@ -843,16 +863,16 @@ function Scene({
         return;
       }
       lastAppliedScrubFrameRef.current = scrubFrame;
-      const frameCount = motionClip.frames.length;
+      const frameCount = activeClip.frames.length;
       if (frameCount <= 0) {
         throw new Error("Motion clip has no sampled frames");
       }
       const maxIndex = frameCount - 1;
       let f = scrubFrame;
-      if (motionLoop) {
+      if (activeLoop) {
         f =
-          motionClip.finalFrameIndex > 0
-            ? ((f % motionClip.finalFrameIndex) + motionClip.finalFrameIndex) % motionClip.finalFrameIndex
+          activeClip.finalFrameIndex > 0
+            ? ((f % activeClip.finalFrameIndex) + activeClip.finalFrameIndex) % activeClip.finalFrameIndex
             : 0;
       } else if (f < 0) {
         f = 0;
@@ -860,35 +880,25 @@ function Scene({
         f = maxIndex;
       }
       const currentIndex = Math.floor(f);
-      const nextIndex = motionLoop ? (currentIndex + 1) % frameCount : Math.min(currentIndex + 1, maxIndex);
+      const nextIndex = activeLoop ? (currentIndex + 1) % frameCount : Math.min(currentIndex + 1, maxIndex);
       const factor = f - currentIndex;
-      const currentFrame = motionClip.frames[currentIndex];
-      const nextMotionFrame = motionClip.frames[nextIndex];
+      const currentFrame = activeClip.frames[currentIndex];
+      const nextMotionFrame = activeClip.frames[nextIndex];
       if (!currentFrame || !nextMotionFrame) {
         throw new Error("Motion clip frame index out of range during scrub");
       }
-      const activeInst =
-        previewInstances.find((inst) => inst.id === activePreviewInstanceId) ??
-        previewInstances[0] ??
-        null;
-      if (!activeInst) {
-        return;
+      if (factor <= 1e-8 || currentIndex === nextIndex) {
+        applyLocalPoseToObjects(activeRuntime.bones, currentFrame.boneLocals);
+      } else {
+        applyInterpolatedLocalsToBones(
+          activeRuntime.bones,
+          currentFrame.boneLocals,
+          nextMotionFrame.boneLocals,
+          factor,
+        );
       }
-      const runtime = gpuRuntimeByInstance.get(activeInst.id);
-      if (runtime) {
-        if (factor <= 1e-8 || currentIndex === nextIndex) {
-          applyLocalPoseToObjects(runtime.bones, currentFrame.boneLocals);
-        } else {
-          applyInterpolatedLocalsToBones(
-            runtime.bones,
-            currentFrame.boneLocals,
-            nextMotionFrame.boneLocals,
-            factor,
-          );
-        }
-        updateGpuSkeletonWorld(runtime);
-        runtime.skeleton.update();
-      }
+      updateGpuSkeletonWorld(activeRuntime);
+      activeRuntime.skeleton.update();
       if (motionApplyCamera && currentFrame.camera && camera instanceof PerspectiveCamera) {
         if (factor <= 1e-8 || currentIndex === nextIndex || !nextMotionFrame.camera) {
           camera.position.set(
@@ -935,7 +945,7 @@ function Scene({
       }
       return;
     }
-    if (!motionPlaying) {
+    if (!anyMotionPlaying) {
       return;
     }
     lastAppliedScrubFrameRef.current = null;
@@ -945,53 +955,57 @@ function Scene({
     let phaseBones = 0;
     let phaseCamera = 0;
     let phaseUiSync = 0;
-    const current = playbackFrameRef.current;
-    const advanceStart = performance.now();
-    const { nextFrame, shouldStopPlayback } = advanceMotionFrame(
-      current,
-      delta,
-      motionSpeed,
-      motionClip.finalFrameIndex,
-      motionLoop,
-    );
-    phaseAdvance = performance.now() - advanceStart;
-    playbackFrameRef.current = nextFrame;
     const sampleStart = performance.now();
-    const frameCount = motionClip.frames.length;
-    if (frameCount <= 0) {
-      throw new Error("Motion clip has no sampled frames");
-    }
-    const maxIndex = frameCount - 1;
-    let f = nextFrame;
-    if (motionLoop) {
-      f =
-        motionClip.finalFrameIndex > 0
-          ? ((f % motionClip.finalFrameIndex) + motionClip.finalFrameIndex) % motionClip.finalFrameIndex
-          : 0;
-    } else if (f < 0) {
-      f = 0;
-    } else if (f > maxIndex) {
-      f = maxIndex;
-    }
-    const currentIndex = Math.floor(f);
-    const nextIndex = motionLoop ? (currentIndex + 1) % frameCount : Math.min(currentIndex + 1, maxIndex);
-    const factor = f - currentIndex;
-    const currentFrame = motionClip.frames[currentIndex];
-    const nextMotionFrame = motionClip.frames[nextIndex];
-    if (!currentFrame || !nextMotionFrame) {
-      throw new Error("Motion clip frame index out of range during playback");
-    }
-    phaseSample = performance.now() - sampleStart;
-    const activeInst =
-      previewInstances.find((inst) => inst.id === activePreviewInstanceId) ??
-      previewInstances[0] ??
-      null;
-    if (!activeInst) {
-      return;
-    }
-    const runtime = gpuRuntimeByInstance.get(activeInst.id);
-    const bonesStart = performance.now();
-    if (runtime) {
+    let cameraCurrentFrame: MotionClip["frames"][number] | null = null;
+    let cameraNextFrame: MotionClip["frames"][number] | null = null;
+    let cameraFactor = 0;
+    let cameraHasData = false;
+    for (const [instanceId, motionState] of motionStatesByInstanceId.entries()) {
+      if (!motionState.playing || !motionState.clip) {
+        continue;
+      }
+      const runtime = gpuRuntimeByInstance.get(instanceId);
+      if (!runtime) {
+        continue;
+      }
+      const clip = motionState.clip;
+      const current = playbackFrameRef.current.get(instanceId) ?? motionState.frame;
+      const advanceStart = performance.now();
+      const { nextFrame, shouldStopPlayback } = advanceMotionFrame(
+        current,
+        delta,
+        motionState.speed,
+        clip.finalFrameIndex,
+        motionState.loop,
+      );
+      phaseAdvance += performance.now() - advanceStart;
+      playbackFrameRef.current.set(instanceId, nextFrame);
+
+      const frameCount = clip.frames.length;
+      if (frameCount <= 0) {
+        throw new Error("Motion clip has no sampled frames");
+      }
+      const maxIndex = frameCount - 1;
+      let f = nextFrame;
+      if (motionState.loop) {
+        f =
+          clip.finalFrameIndex > 0
+            ? ((f % clip.finalFrameIndex) + clip.finalFrameIndex) % clip.finalFrameIndex
+            : 0;
+      } else if (f < 0) {
+        f = 0;
+      } else if (f > maxIndex) {
+        f = maxIndex;
+      }
+      const currentIndex = Math.floor(f);
+      const nextIndex = motionState.loop ? (currentIndex + 1) % frameCount : Math.min(currentIndex + 1, maxIndex);
+      const factor = f - currentIndex;
+      const currentFrame = clip.frames[currentIndex];
+      const nextMotionFrame = clip.frames[nextIndex];
+      if (!currentFrame || !nextMotionFrame) {
+        throw new Error("Motion clip frame index out of range during playback");
+      }
+      const bonesStart = performance.now();
       if (factor <= 1e-8 || currentIndex === nextIndex) {
         applyLocalPoseToObjects(runtime.bones, currentFrame.boneLocals);
       } else {
@@ -1004,38 +1018,55 @@ function Scene({
       }
       updateGpuSkeletonWorld(runtime);
       runtime.skeleton.update();
+      phaseBones += performance.now() - bonesStart;
+
+      if (instanceId === motionControlInstanceId) {
+        cameraCurrentFrame = currentFrame;
+        cameraNextFrame = nextMotionFrame;
+        cameraFactor = factor;
+        cameraHasData = true;
+      }
+      if (shouldStopPlayback) {
+        onMotionFrameSync(instanceId, nextFrame);
+        onMotionPlaybackStop(instanceId);
+      }
     }
-    phaseBones = performance.now() - bonesStart;
+    phaseSample = performance.now() - sampleStart;
     const cameraStart = performance.now();
-    if (motionApplyCamera && currentFrame.camera && camera instanceof PerspectiveCamera) {
-      if (factor <= 1e-8 || currentIndex === nextIndex || !nextMotionFrame.camera) {
+    if (
+      motionApplyCamera &&
+      cameraHasData &&
+      cameraCurrentFrame?.camera &&
+      camera instanceof PerspectiveCamera
+    ) {
+      if (cameraFactor <= 1e-8 || !cameraNextFrame?.camera) {
         camera.position.set(
-          currentFrame.camera.translation[0],
-          currentFrame.camera.translation[1],
-          currentFrame.camera.translation[2],
+          cameraCurrentFrame.camera.translation[0],
+          cameraCurrentFrame.camera.translation[1],
+          cameraCurrentFrame.camera.translation[2],
         );
         camera.quaternion.set(
-          currentFrame.camera.rotation[0],
-          currentFrame.camera.rotation[1],
-          currentFrame.camera.rotation[2],
-          currentFrame.camera.rotation[3],
+          cameraCurrentFrame.camera.rotation[0],
+          cameraCurrentFrame.camera.rotation[1],
+          cameraCurrentFrame.camera.rotation[2],
+          cameraCurrentFrame.camera.rotation[3],
         );
-        camera.fov = (currentFrame.camera.fovYRadians * 180) / Math.PI;
-        camera.near = currentFrame.camera.nearClip;
-        camera.far = currentFrame.camera.farClip;
+        camera.fov = (cameraCurrentFrame.camera.fovYRadians * 180) / Math.PI;
+        camera.near = cameraCurrentFrame.camera.nearClip;
+        camera.far = cameraCurrentFrame.camera.farClip;
       } else {
-        const nextCamera = nextMotionFrame.camera;
+        const nextCamera = cameraNextFrame.camera;
         camera.position.set(
-          lerpNumber(currentFrame.camera.translation[0], nextCamera.translation[0], factor),
-          lerpNumber(currentFrame.camera.translation[1], nextCamera.translation[1], factor),
-          lerpNumber(currentFrame.camera.translation[2], nextCamera.translation[2], factor),
+          lerpNumber(cameraCurrentFrame.camera.translation[0], nextCamera.translation[0], cameraFactor),
+          lerpNumber(cameraCurrentFrame.camera.translation[1], nextCamera.translation[1], cameraFactor),
+          lerpNumber(cameraCurrentFrame.camera.translation[2], nextCamera.translation[2], cameraFactor),
         );
         camera.quaternion.slerpQuaternions(
           _cameraQFrom.set(
-            currentFrame.camera.rotation[0],
-            currentFrame.camera.rotation[1],
-            currentFrame.camera.rotation[2],
-            currentFrame.camera.rotation[3],
+            cameraCurrentFrame.camera.rotation[0],
+            cameraCurrentFrame.camera.rotation[1],
+            cameraCurrentFrame.camera.rotation[2],
+            cameraCurrentFrame.camera.rotation[3],
           ),
           _cameraQTo.set(
             nextCamera.rotation[0],
@@ -1043,21 +1074,18 @@ function Scene({
             nextCamera.rotation[2],
             nextCamera.rotation[3],
           ),
-          factor,
+          cameraFactor,
         );
-        camera.fov = (lerpNumber(currentFrame.camera.fovYRadians, nextCamera.fovYRadians, factor) * 180) / Math.PI;
-        camera.near = lerpNumber(currentFrame.camera.nearClip, nextCamera.nearClip, factor);
-        camera.far = lerpNumber(currentFrame.camera.farClip, nextCamera.farClip, factor);
+        camera.fov =
+          (lerpNumber(cameraCurrentFrame.camera.fovYRadians, nextCamera.fovYRadians, cameraFactor) * 180) / Math.PI;
+        camera.near = lerpNumber(cameraCurrentFrame.camera.nearClip, nextCamera.nearClip, cameraFactor);
+        camera.far = lerpNumber(cameraCurrentFrame.camera.farClip, nextCamera.farClip, cameraFactor);
       }
       camera.updateProjectionMatrix();
     }
     phaseCamera = performance.now() - cameraStart;
     const now = performance.now();
-    if (shouldStopPlayback) {
-      onMotionFrameSync(nextFrame);
-      onMotionPlaybackStop();
-    }
-    phaseUiSync = shouldStopPlayback ? 0.05 : 0;
+    phaseUiSync = 0;
     const frameTotal = performance.now() - frameStart;
     if (frameTotal > 20 && now - lastSlowFrameLogMsRef.current > 300) {
       lastSlowFrameLogMsRef.current = now;
@@ -1070,9 +1098,56 @@ function Scene({
         uiSyncMs: Number(phaseUiSync.toFixed(2)),
         draws: draws.length,
         instances: previewInstances.length,
-        activeInstanceId: activeInst.id,
-        motionFrame: Number(nextFrame.toFixed(3)),
+        activeInstanceId: motionControlInstanceId ?? "none",
       });
+    }
+  });
+
+  useFrame(() => {
+    const attachedChildIds = new Set<string>();
+    for (const attachment of modelAttachments) {
+      const parentRuntime = gpuRuntimeByInstance.get(attachment.parentInstanceId);
+      const childRuntime = gpuRuntimeByInstance.get(attachment.childInstanceId);
+      const childGroup = instanceGroupRefs.current.get(attachment.childInstanceId);
+      const parentIndexByName = boneIndexByNameByInstance.get(attachment.parentInstanceId);
+      const childIndexByName = boneIndexByNameByInstance.get(attachment.childInstanceId);
+      if (!parentRuntime || !childRuntime || !childGroup || !parentIndexByName || !childIndexByName) {
+        continue;
+      }
+      const parentBoneIndex = parentIndexByName.get(attachment.parentBoneName);
+      const childBoneIndex = childIndexByName.get(attachment.childBoneName);
+      if (parentBoneIndex === undefined || childBoneIndex === undefined) {
+        continue;
+      }
+      const parentBone = parentRuntime.bones[parentBoneIndex];
+      const childBone = childRuntime.bones[childBoneIndex];
+      if (!parentBone || !childBone) {
+        continue;
+      }
+      _attachParentM.copy(parentBone.matrixWorld);
+      _attachChildInvM.copy(childBone.matrixWorld).invert();
+      _attachFinalM.multiplyMatrices(_attachParentM, _attachChildInvM);
+      childGroup.matrixAutoUpdate = false;
+      childGroup.matrix.copy(_attachFinalM);
+      childGroup.matrix.decompose(childGroup.position, childGroup.quaternion, childGroup.scale);
+      childGroup.updateMatrix();
+      childGroup.updateMatrixWorld(true);
+      attachedChildIds.add(attachment.childInstanceId);
+    }
+
+    for (let i = 0; i < visibleInstances.length; i++) {
+      const inst = visibleInstances[i];
+      const group = instanceGroupRefs.current.get(inst.id);
+      if (!group || attachedChildIds.has(inst.id)) {
+        continue;
+      }
+      if (!group.matrixAutoUpdate) {
+        group.matrixAutoUpdate = true;
+        const pos = instanceLayoutPosition(i, previewInstances.length);
+        group.position.set(pos[0], pos[1], pos[2]);
+        group.updateMatrix();
+        group.updateMatrixWorld(true);
+      }
     }
   });
 
@@ -1087,14 +1162,14 @@ function Scene({
   }, [directionalX, directionalY, directionalZ]);
 
   const primaryDirectionalPosition = useMemo(() => {
-    if (motionApplyLighting && motionLightingSample?.lightChr) {
-      const d = motionLightingSample.lightChr.direction;
+    if (motionApplyLighting && activeMotionSample?.lighting?.lightChr) {
+      const d = activeMotionSample.lighting.lightChr.direction;
       return new Vector3(d[0]!, d[1]!, d[2]!).normalize().multiplyScalar(120);
     }
     return new Vector3(directionalX, directionalY, directionalZ);
-  }, [motionApplyLighting, motionLightingSample, directionalX, directionalY, directionalZ]);
+  }, [motionApplyLighting, activeMotionSample, directionalX, directionalY, directionalZ]);
 
-  const motionDriving = motionPlaying && Boolean(motionBoneLocalsActive?.length);
+  const motionDriving = anyMotionPlaying;
 
   return (
     <>
@@ -1129,20 +1204,36 @@ function Scene({
             (previewInstances.length === 1 && activePreviewInstanceId === null);
           const isInteractionTarget = isActive;
           const instSkel = inst.bundle.skel ? (inst.bundle.skel as SkelDataJson) : null;
+          const instMotionState = motionStatesByInstanceId.get(inst.id) ?? null;
+          const instMotionSample = instMotionState?.sample ?? null;
+          const instMotionLocals =
+            instMotionSample && instSkel?.bones?.length === instMotionSample.boneLocals.length
+              ? instMotionSample.boneLocals
+              : null;
           const skelHasBones = instSkel !== null && instSkel.bones.length > 0;
           const showStaticSkeleton =
             showSkeleton && !skelHasBones && Boolean(skeletonGeometry) && isInteractionTarget;
-          const motionPoseActive = isActive && (motionPlaying || motionScrubbing || Boolean(motionBoneLocalsActive?.length));
+          const motionPoseActive = isActive && (Boolean(instMotionState?.playing) || motionScrubbing || Boolean(instMotionLocals?.length));
           const gpuRuntime = gpuRuntimeByInstance.get(inst.id) ?? null;
           const gpuSkinningActive = isActive && motionPoseActive && gpuRuntime !== null;
           const gpuSkeleton = gpuSkinningActive ? gpuRuntime!.skeleton : null;
           const skinningDraws = filterDrawsForMotionSkinning(
             instDraws,
             visibleKeys,
-            isActive ? motionVisibilityRows : null,
+            isActive ? (instMotionSample?.visibility ?? null) : null,
           );
           return (
-            <group key={inst.id} position={pos}>
+            <group
+              key={inst.id}
+              position={pos}
+              ref={(el) => {
+                if (el) {
+                  instanceGroupRefs.current.set(inst.id, el);
+                } else {
+                  instanceGroupRefs.current.delete(inst.id);
+                }
+              }}
+            >
               <PreviewUvFlipSync draws={instDraws} uvFlipU={uvFlipU} uvFlipV={uvFlipV} />
               {skelHasBones && !gpuSkinningActive ? (
                 <BonePreviewRig
@@ -1162,8 +1253,8 @@ function Scene({
                   onBonePoseApplyConsumed={onBonePoseApplyConsumed}
                   onBonePoseCommit={onBonePoseCommit}
                   motionBoneLocals={
-                    isActive && motionBoneLocalsActive && motionBoneLocalsActive.length === instSkel!.bones.length
-                      ? motionBoneLocalsActive
+                    isActive && instMotionLocals && instMotionLocals.length === instSkel!.bones.length
+                      ? instMotionLocals
                       : null
                   }
                   motionPoseActive={motionPoseActive}
@@ -1180,10 +1271,10 @@ function Scene({
                 normalMapEnabled={normalMapEnabled}
                 visibleKeys={visibleKeys}
                 wireframe={wireframe}
-                ignoreMeshRaycastForBonePicking={motionPlaying || motionScrubbing || (skelHasBones && isActive)}
+                ignoreMeshRaycastForBonePicking={anyMotionPlaying || motionScrubbing || (skelHasBones && isActive)}
                 previewRenderStyle={previewRenderStyle}
                 animeKeyLightDir={animeKeyLightDir}
-                motionVisibilityRows={motionPlaying || motionScrubbing ? null : isActive ? motionVisibilityRows : null}
+                motionVisibilityRows={anyMotionPlaying || motionScrubbing ? null : isActive ? (instMotionSample?.visibility ?? null) : null}
                 skeleton={gpuSkeleton}
                 motionForceVisibleDuringPlayback={motionForceVisibleDuringPlayback}
               />
@@ -1209,8 +1300,8 @@ function Scene({
       />
 
       <MotionCameraController
-        enabled={!motionPlaying && motionApplyCamera && Boolean(motionCameraSample)}
-        sample={motionCameraSample}
+        enabled={!anyMotionPlaying && motionApplyCamera && Boolean(activeMotionSample?.camera)}
+        sample={activeMotionSample?.camera ?? null}
         controlsRef={controlsRef}
       />
 
@@ -1241,7 +1332,7 @@ function Scene({
 }
 
 export function SsbhModelCanvas(props: SsbhModelCanvasProps) {
-  const { background, previewSuspended = false, motionPlaying, motionScrubbing, ...sceneProps } = props;
+  const { background, previewSuspended = false, motionScrubbing, ...sceneProps } = props;
   const {
     onViewportBoneSelectionClear,
     onBoneTransformHotkey,
@@ -1255,9 +1346,13 @@ export function SsbhModelCanvas(props: SsbhModelCanvasProps) {
   const skel = activeInstance?.bundle?.skel ? (activeInstance.bundle.skel as SkelDataJson) : null;
   const skelHasBones = skel !== null && skel.bones.length > 0;
   const selectedBoneIndex = restSceneProps.selectedBoneIndex;
+  const anyMotionPlaying = useMemo(
+    () => Array.from(restSceneProps.motionStatesByInstanceId.values()).some((s) => s.playing),
+    [restSceneProps.motionStatesByInstanceId],
+  );
 
   useRenderDebug("SsbhModelCanvas", {
-    motionPlaying,
+    motionPlaying: anyMotionPlaying,
     motionScrubbing,
     previewSuspended,
     draws: restSceneProps.draws.length,
@@ -1350,7 +1445,7 @@ export function SsbhModelCanvas(props: SsbhModelCanvasProps) {
     >
       <Canvas
         className="h-full w-full touch-none"
-        frameloop={previewSuspended ? "never" : motionPlaying || motionScrubbing ? "always" : "demand"}
+        frameloop={previewSuspended ? "never" : anyMotionPlaying || motionScrubbing ? "always" : "demand"}
         gl={{ antialias: true, alpha: false }}
         dpr={[1, 2]}
         camera={{ position: [2.4, 1.6, 2.8], fov: 50, near: 0.02, far: 5e6 }}
@@ -1361,7 +1456,7 @@ export function SsbhModelCanvas(props: SsbhModelCanvasProps) {
         }}
       >
         {restSceneProps.previewRenderStyle === "anime" ? <AnimePreviewPostFx /> : null}
-        <Scene {...restSceneProps} background={background} motionPlaying={motionPlaying} motionScrubbing={motionScrubbing} />
+        <Scene {...restSceneProps} background={background} motionScrubbing={motionScrubbing} />
       </Canvas>
     </div>
   );

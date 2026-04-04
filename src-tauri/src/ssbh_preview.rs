@@ -31,6 +31,20 @@ pub struct SsbhModelPreviewBundle {
     pub warnings: Vec<String>,
 }
 
+const WINDOWS_EXTENDED_PATH_PREFIX: &str = r"\\?\";
+
+pub(crate) fn normalize_preview_path_for_frontend(raw: &str) -> String {
+    let trimmed = raw.trim();
+    let without_extended = trimmed
+        .strip_prefix(WINDOWS_EXTENDED_PATH_PREFIX)
+        .unwrap_or(trimmed);
+    without_extended.replace('\\', "/")
+}
+
+pub(crate) fn preview_path_to_frontend(path: &Path) -> String {
+    normalize_preview_path_for_frontend(&path.to_string_lossy())
+}
+
 /// Game bundles inject a hard-coded `nusubf` segment in several references. Unpacked trees usually
 /// omit that folder. Remove every path component equal to `nusubf` (case-insensitive); keep `.` and `..`.
 fn normalize_bundle_relative_path(raw: &str) -> String {
@@ -395,7 +409,7 @@ fn merge_additional_numatb_in_model_folder(
                 continue;
             }
         };
-        matl_paths.push(p.to_string_lossy().to_string());
+        matl_paths.push(preview_path_to_frontend(&p));
         seen.insert(canon);
         match matl_combined.as_mut() {
             None => *matl_combined = Some(data),
@@ -791,7 +805,7 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
                         serde_json::to_value(&s)
                             .map_err(|e| format!("Failed to serialize Skel to JSON: {e}"))?,
                     ),
-                    Some(skel_path.to_string_lossy().to_string()),
+                    Some(preview_path_to_frontend(&skel_path)),
                     expected,
                 )
             } else {
@@ -856,7 +870,7 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
                 continue;
             }
         };
-        matl_paths.push(p.to_string_lossy().to_string());
+        matl_paths.push(preview_path_to_frontend(&p));
         match matl_combined.as_mut() {
             None => matl_combined = Some(data),
             Some(existing) => {
@@ -890,7 +904,7 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
             let mut resolve_rows: Vec<TextureRefResolve> = Vec::new();
             for r in &refs {
                 let nutexb_path = resolve_nutexb_path(&root_canon, r)?
-                    .map(|x| x.to_string_lossy().to_string());
+                    .map(|x| preview_path_to_frontend(&x));
                 if let Some(ref s) = nutexb_path {
                     if !resolved.contains(s) {
                         resolved.push(s.clone());
@@ -921,9 +935,9 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
     let mesh_json = serde_json::to_value(&mesh).map_err(|e| format!("Failed to serialize Mesh: {e}"))?;
 
     let bundle = SsbhModelPreviewBundle {
-        root_folder: root_canon.to_string_lossy().to_string(),
-        modl_path: modl_path.to_string_lossy().to_string(),
-        mesh_path: mesh_path.to_string_lossy().to_string(),
+        root_folder: preview_path_to_frontend(&root_canon),
+        modl_path: preview_path_to_frontend(&modl_path),
+        mesh_path: preview_path_to_frontend(&mesh_path),
         skel_path: skel_path_opt,
         matl_paths,
         modl: modl_json,
@@ -970,7 +984,7 @@ pub fn ssbh_list_numdlb_under_tree(root_path: String) -> Result<Vec<String>, Str
     ));
     Ok(paths
         .into_iter()
-        .map(|p| p.to_string_lossy().to_string())
+        .map(|p| preview_path_to_frontend(&p))
         .collect())
 }
 

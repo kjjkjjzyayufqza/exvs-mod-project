@@ -3,6 +3,8 @@ import { openPath } from "@tauri-apps/plugin-opener";
 import {
   ClipboardCopy,
   Eraser,
+  FileDown,
+  FileUp,
   FolderInput,
   HelpCircle,
   History,
@@ -21,6 +23,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
+import { ModelAttachmentModal } from "./ModelAttachmentModal";
 
 function shortPath(path: string, maxLen: number): string {
   const t = path.replace(/\\/g, "/");
@@ -122,6 +125,27 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
       >
         {busy ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
         Reload
+      </Button>
+      <ModelAttachmentModal />
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={busy}
+        onClick={() => void p.exportSceneConfig().catch((e) => toast.error(String(e)))}
+      >
+        <FileDown className="h-3.5 w-3.5 mr-1" />
+        Export scene
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={busy}
+        onClick={() => void p.importSceneConfig().catch((e) => toast.error(String(e)))}
+      >
+        <FileUp className="h-3.5 w-3.5 mr-1" />
+        Import scene
       </Button>
 
       <Popover>

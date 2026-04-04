@@ -21,7 +21,10 @@ use std::time::{Instant, UNIX_EPOCH};
 use topological_sort::TopologicalSort;
 use tauri::State;
 
-use crate::ssbh_preview::{collect_paths_recursive, dir_name_should_skip, preview_log};
+use crate::ssbh_preview::{
+    collect_paths_recursive, dir_name_should_skip, normalize_preview_path_for_frontend,
+    preview_log, preview_path_to_frontend,
+};
 
 const MAX_BONE_COUNT: usize = 512;
 const MAX_CLIP_SAMPLED_FRAMES: usize = 1200;
@@ -190,7 +193,7 @@ fn find_default_hlpb_path_for_skel(skel_path: &str) -> Result<Option<String>, St
         .find(|p| p.file_name().and_then(|s| s.to_str()) == Some("model.nuhlpb"))
         .or_else(|| files.first())
     {
-        return Ok(Some(path.to_string_lossy().to_string()));
+        return Ok(Some(preview_path_to_frontend(path)));
     }
     Ok(None)
 }
@@ -1126,7 +1129,7 @@ fn build_manifest(path: &Path, anim: &AnimData) -> NuanmbManifest {
         });
     }
     NuanmbManifest {
-        file_path: path.to_string_lossy().to_string(),
+        file_path: preview_path_to_frontend(path),
         major_version: anim.major_version,
         minor_version: anim.minor_version,
         final_frame_index: anim.final_frame_index,
@@ -1153,7 +1156,7 @@ pub fn ssbh_list_nuanmb_under_tree(root_path: String) -> Result<Vec<String>, Str
     ));
     Ok(paths
         .into_iter()
-        .map(|p| p.to_string_lossy().to_string())
+        .map(|p| normalize_preview_path_for_frontend(&p.to_string_lossy()))
         .collect())
 }
 

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import {
   DialogLastPathKey,
   getDialogDefaultPath,
@@ -53,6 +54,13 @@ import type {
 } from "./types";
 import type { MotionClip, MotionSample, NuanmbManifest } from "./motionPreviewTypes";
 import { sampleMotionClipFrame } from "./motionPlaybackMath";
+import {
+  buildSceneConfigInstanceEntries,
+  ensureSceneConfigSchema,
+  normalizeScenePath,
+  TEST_EDITOR_SCENE_CONFIG_VERSION,
+  type TestEditorSceneConfig,
+} from "./testEditorSceneConfig";
 
 export type BoneTransformMode = "translate" | "rotate" | "scale";
 export type PreviewInstanceViewMode = "all" | "single";
@@ -76,6 +84,28 @@ export type SsbhModelPreviewTextureDecodeProgress = {
   currentLabel: string | null;
 };
 
+export type PreviewInstanceMotionState = {
+  nuanmbPaths: readonly string[];
+  selectedNuanmbPath: string | null;
+  manifest: NuanmbManifest | null;
+  playing: boolean;
+  loop: boolean;
+  speed: number;
+  frame: number;
+  clip: MotionClip | null;
+  sample: MotionSample | null;
+  sampling: boolean;
+  sampleError: string | null;
+};
+
+export type PreviewModelAttachment = {
+  id: string;
+  parentInstanceId: string;
+  parentBoneName: string;
+  childInstanceId: string;
+  childBoneName: string;
+};
+
 function fileBasename(path: string): string {
   const p = path.replace(/\\/g, "/");
   const seg = p.split("/").filter((x) => x.length > 0).pop();
@@ -92,14 +122,17 @@ const NUTEXB_DECODE_CONCURRENCY = 12;
 
 const INSTANCE_LOAD_CONCURRENCY = 4;
 
-function previewInstanceIdFromModlPath(modlPath: string): string {
+function previewInstanceIdFromModlPath(modlPath: string, slotIndex: number): string {
   const s = modlPath.trim().replace(/\\/g, "/");
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
-  return `pi${(h >>> 0).toString(16)}`;
+  if (!Number.isInteger(slotIndex) || slotIndex < 0) {
+    throw new Error("Instance slot index must be a non-negative integer.");
+  }
+  return `pi${(h >>> 0).toString(16)}_${slotIndex}`;
 }
 
 export type SsbhModelPreviewContextValue = {
@@ -177,11 +210,14 @@ export type SsbhModelPreviewContextValue = {
   skeletonGeometry: BufferGeometry | null;
   pickFolder: () => Promise<void>;
   pickNumdlb: () => Promise<void>;
+  pickAddNumdlb: () => Promise<void>;
   /** When true, a successful DAE/FBX → SSBH export loads the generated `.numdlb` here. Persisted in localStorage. */
   autoLoadAfterConvertToSsbh: boolean;
   setAutoLoadAfterConvertToSsbh: (v: boolean) => void;
   /** Load preview from a folder path or a `.numdlb` file path (same as Open model). */
   loadModelAt: (path: string) => Promise<void>;
+  /** Append a `.numdlb` preview instance without replacing current scene models. */
+  addModelAt: (path: string) => Promise<void>;
   /** Unloads the model from GPU/memory. Throws if a load or texture decode is in progress. */
   clearScene: () => void;
   /** Reloads the same `.numdlb` path from disk. Throws when no model is loaded. */
@@ -213,7 +249,11 @@ export type SsbhModelPreviewContextValue = {
   canRedoBonePose: boolean;
   /** When true, the 3D canvas stops its render loop (kept-alive background route). */
   previewSuspended: boolean;
-  /** NUANMB motion (active model only). */
+  /** Motion state for each preview instance. */
+  motionStatesByInstanceId: ReadonlyMap<string, PreviewInstanceMotionState>;
+  setMotionFrameForInstance: (instanceId: string, frame: number) => void;
+  setMotionPlayingForInstance: (instanceId: string, playing: boolean) => void;
+  /** NUANMB controls for the active model instance. */
   motionNuanmbPaths: readonly string[];
   motionSelectedNuanmbPath: string | null;
   setMotionSelectedNuanmbPath: (path: string | null) => void;
@@ -240,6 +280,10 @@ export type SsbhModelPreviewContextValue = {
   pickMotionFolder: () => Promise<void>;
   reloadMotionClip: () => void;
   clearMotion: () => void;
+  modelAttachments: readonly PreviewModelAttachment[];
+  setModelAttachments: (next: PreviewModelAttachment[]) => void;
+  exportSceneConfig: () => Promise<void>;
+  importSceneConfig: () => Promise<void>;
 };
 
 const SsbhModelPreviewContext = createContext<SsbhModelPreviewContextValue | null>(null);
@@ -258,6 +302,40 @@ type ProviderProps = {
   previewSuspended?: boolean;
   children: ReactNode;
 };
+
+type InternalPreviewInstanceMotionState = {
+  nuanmbPaths: string[];
+  selectedNuanmbPath: string | null;
+  manifest: NuanmbManifest | null;
+  playing: boolean;
+  loop: boolean;
+  speed: number;
+  frame: number;
+  clip: MotionClip | null;
+  sample: MotionSample | null;
+  sampling: boolean;
+  sampleError: string | null;
+  reloadNonce: number;
+  loadedClipKey: string | null;
+};
+
+function createDefaultMotionState(): InternalPreviewInstanceMotionState {
+  return {
+    nuanmbPaths: [],
+    selectedNuanmbPath: null,
+    manifest: null,
+    playing: false,
+    loop: true,
+    speed: 1,
+    frame: 0,
+    clip: null,
+    sample: null,
+    sampling: false,
+    sampleError: null,
+    reloadNonce: 0,
+    loadedClipKey: null,
+  };
+}
 
 export function SsbhModelPreviewProvider({
   workspaceRoot,
@@ -330,37 +408,11 @@ export function SsbhModelPreviewProvider({
     readAutoLoadAfterConvertFromStorage(),
   );
 
-  const [motionNuanmbPaths, setMotionNuanmbPaths] = useState<string[]>([]);
-  const [motionSelectedNuanmbPath, setMotionSelectedNuanmbPath] = useState<string | null>(null);
-  const [motionManifest, setMotionManifest] = useState<NuanmbManifest | null>(null);
-  const [motionPlaying, setMotionPlaying] = useState(false);
-  const [motionLoop, setMotionLoop] = useState(true);
-  const [motionSpeed, setMotionSpeed] = useState(1);
-  const [motionFrame, setMotionFrame] = useState(0);
-  const [motionClip, setMotionClip] = useState<MotionClip | null>(null);
-  const [motionSampling, setMotionSampling] = useState(false);
-  const [motionSampleError, setMotionSampleError] = useState<string | null>(null);
+  const [motionByInstanceId, setMotionByInstanceId] = useState<Record<string, InternalPreviewInstanceMotionState>>({});
   const [motionApplyCamera, setMotionApplyCamera] = useState(false);
   const [motionApplyLighting, setMotionApplyLighting] = useState(false);
   const [motionForceVisibleDuringPlayback, setMotionForceVisibleDuringPlayback] = useState(true);
-  const [motionReloadNonce, setMotionReloadNonce] = useState(0);
-  const loadedMotionClipKeyRef = useRef<string | null>(null);
-  const motionSample = useMemo<MotionSample | null>(() => {
-    if (!motionClip) {
-      return null;
-    }
-    const frameSample = sampleMotionClipFrame(motionClip, motionFrame, motionLoop);
-    return {
-      frame: motionFrame,
-      finalFrameIndex: motionClip.finalFrameIndex,
-      boneLocals: frameSample.boneLocals,
-      visibility: frameSample.visibility,
-      materialTracks: frameSample.materialTracks,
-      camera: frameSample.camera,
-      lighting: frameSample.lighting,
-      elapsedMs: 0,
-    };
-  }, [motionClip, motionFrame, motionLoop]);
+  const [modelAttachments, setModelAttachments] = useState<PreviewModelAttachment[]>([]);
 
   const setAutoLoadAfterConvertToSsbh = useCallback((v: boolean) => {
     setAutoLoadAfterConvertToSsbhState(v);
@@ -368,28 +420,115 @@ export function SsbhModelPreviewProvider({
   }, []);
 
   const clearMotion = useCallback(() => {
-    setMotionNuanmbPaths([]);
-    setMotionSelectedNuanmbPath(null);
-    setMotionManifest(null);
-    setMotionPlaying(false);
-    setMotionFrame(0);
-    setMotionClip(null);
-    setMotionSampleError(null);
-    loadedMotionClipKeyRef.current = null;
-    setMotionReloadNonce((n) => n + 1);
+    setMotionByInstanceId((prev) => {
+      const next: Record<string, InternalPreviewInstanceMotionState> = {};
+      for (const key of Object.keys(prev)) {
+        next[key] = createDefaultMotionState();
+      }
+      return next;
+    });
     setBonePoseResetNonce((n) => n + 1);
   }, []);
 
-  const reloadMotionClip = useCallback(() => {
-    loadedMotionClipKeyRef.current = null;
-    setMotionClip(null);
-    setMotionFrame(0);
-    setMotionPlaying(false);
-    setMotionSampleError(null);
-    setMotionReloadNonce((n) => n + 1);
+  const bundle = useMemo((): SsbhModelPreviewBundle | null => {
+    if (previewInstances.length === 0) return null;
+    if (activePreviewInstanceId) {
+      const hit = previewInstances.find((i) => i.id === activePreviewInstanceId);
+      return hit?.bundle ?? previewInstances[0]!.bundle;
+    }
+    return previewInstances[0]!.bundle;
+  }, [previewInstances, activePreviewInstanceId]);
+
+  const resolvedActivePreviewInstanceId = useMemo(
+    () => activePreviewInstanceId ?? previewInstances[0]?.id ?? null,
+    [activePreviewInstanceId, previewInstances],
+  );
+
+  useEffect(() => {
+    setMotionByInstanceId((prev) => {
+      const next: Record<string, InternalPreviewInstanceMotionState> = {};
+      for (const inst of previewInstances) {
+        next[inst.id] = prev[inst.id] ?? createDefaultMotionState();
+      }
+      return next;
+    });
+    const existingIds = new Set(previewInstances.map((inst) => inst.id));
+    setModelAttachments((prev) =>
+      prev.filter(
+        (attachment) =>
+          existingIds.has(attachment.parentInstanceId) &&
+          existingIds.has(attachment.childInstanceId),
+      ),
+    );
+  }, [previewInstances]);
+
+  const reloadMotionClipForInstance = useCallback((instanceId: string) => {
+    setMotionByInstanceId((prev) => {
+      const current = prev[instanceId] ?? createDefaultMotionState();
+      return {
+        ...prev,
+        [instanceId]: {
+          ...current,
+          clip: null,
+          sample: null,
+          frame: 0,
+          playing: false,
+          sampleError: null,
+          loadedClipKey: null,
+          reloadNonce: current.reloadNonce + 1,
+        },
+      };
+    });
+  }, []);
+
+  const setMotionFrameForInstance = useCallback((instanceId: string, frame: number) => {
+    if (!Number.isFinite(frame)) {
+      throw new Error("Motion frame must be finite.");
+    }
+    setMotionByInstanceId((prev) => {
+      const current = prev[instanceId] ?? createDefaultMotionState();
+      if (Math.abs(current.frame - frame) < 1e-6) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [instanceId]: {
+          ...current,
+          frame,
+          sample: current.clip
+            ? {
+                frame,
+                finalFrameIndex: current.clip.finalFrameIndex,
+                ...sampleMotionClipFrame(current.clip, frame, current.loop),
+                elapsedMs: 0,
+              }
+            : null,
+        },
+      };
+    });
+  }, []);
+
+  const setMotionPlayingForInstance = useCallback((instanceId: string, playing: boolean) => {
+    setMotionByInstanceId((prev) => {
+      const current = prev[instanceId] ?? createDefaultMotionState();
+      if (current.playing === playing) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [instanceId]: {
+          ...current,
+          playing,
+        },
+      };
+    });
   }, []);
 
   const pickMotionNuanmbFile = useCallback(async () => {
+    const activeId = resolvedActivePreviewInstanceId;
+    if (!activeId) {
+      throw new Error("No active preview instance.");
+    }
     const selected = await open({
       directory: false,
       multiple: false,
@@ -398,16 +537,27 @@ export function SsbhModelPreviewProvider({
     });
     if (typeof selected !== "string") return;
     rememberDialogSelection(DialogLastPathKey.ssbhPreviewOpenNuanmb, selected, "file");
-    setMotionNuanmbPaths([selected]);
-    setMotionSelectedNuanmbPath(selected);
-    setMotionFrame(0);
-    setMotionPlaying(false);
-    setMotionClip(null);
-    setMotionSampleError(null);
-    loadedMotionClipKeyRef.current = null;
-  }, [root]);
+    setMotionByInstanceId((prev) => ({
+      ...prev,
+      [activeId]: {
+        ...(prev[activeId] ?? createDefaultMotionState()),
+        nuanmbPaths: [selected],
+        selectedNuanmbPath: selected,
+        frame: 0,
+        playing: false,
+        clip: null,
+        sample: null,
+        sampleError: null,
+        loadedClipKey: null,
+      },
+    }));
+  }, [resolvedActivePreviewInstanceId, root]);
 
   const pickMotionFolder = useCallback(async () => {
+    const activeId = resolvedActivePreviewInstanceId;
+    if (!activeId) {
+      throw new Error("No active preview instance.");
+    }
     const selected = await open({
       directory: true,
       multiple: false,
@@ -421,25 +571,23 @@ export function SsbhModelPreviewProvider({
       toast.error(msg);
       throw new Error(msg);
     }
-    setMotionNuanmbPaths(listed);
-    setMotionSelectedNuanmbPath(listed[0] ?? null);
-    setMotionFrame(0);
-    setMotionPlaying(false);
-    setMotionClip(null);
-    setMotionSampleError(null);
-    loadedMotionClipKeyRef.current = null;
-  }, [root]);
+    setMotionByInstanceId((prev) => ({
+      ...prev,
+      [activeId]: {
+        ...(prev[activeId] ?? createDefaultMotionState()),
+        nuanmbPaths: listed,
+        selectedNuanmbPath: listed[0] ?? null,
+        frame: 0,
+        playing: false,
+        clip: null,
+        sample: null,
+        sampleError: null,
+        loadedClipKey: null,
+      },
+    }));
+  }, [resolvedActivePreviewInstanceId, root]);
 
-  const bundle = useMemo((): SsbhModelPreviewBundle | null => {
-    if (previewInstances.length === 0) return null;
-    if (activePreviewInstanceId) {
-      const hit = previewInstances.find((i) => i.id === activePreviewInstanceId);
-      return hit?.bundle ?? previewInstances[0]!.bundle;
-    }
-    return previewInstances[0]!.bundle;
-  }, [previewInstances, activePreviewInstanceId]);
-
-  const loadInstancesFromPaths = useCallback(async (paths: string[]) => {
+  const buildInstancesFromPaths = useCallback(async (paths: string[], startSlotIndex: number) => {
     const instances: SsbhModelPreviewInstance[] = [];
     const allDraws: BuiltMeshDraw[] = [];
     const collectedWarnings: string[] = [];
@@ -450,7 +598,7 @@ export function SsbhModelPreviewProvider({
       );
       for (let j = 0; j < chunk.length; j++) {
         const b = bundles[j]!;
-        const id = previewInstanceIdFromModlPath(b.modlPath);
+        const id = previewInstanceIdFromModlPath(b.modlPath, startSlotIndex + offset + j);
         const label = fileBasename(b.modlPath).replace(/\.numdlb$/i, "") || "model";
         const skelJson = b.skel ? (b.skel as SkelDataJson) : null;
         let created: BuiltMeshDraw[];
@@ -477,17 +625,23 @@ export function SsbhModelPreviewProvider({
         description: `${preview}${more}`,
       });
     }
+    return { instances, draws: allDraws };
+  }, []);
+
+  const loadInstancesFromPaths = useCallback(async (paths: string[]) => {
+    const loaded = await buildInstancesFromPaths(paths, 0);
     startTransition(() => {
       setDraws((prev) => {
         prev.forEach((d) => d.geometry.dispose());
-        return allDraws;
+        return loaded.draws;
       });
-      setPreviewInstances(instances);
-      setActivePreviewInstanceId(instances[0]?.id ?? null);
+      setPreviewInstances(loaded.instances);
+      setActivePreviewInstanceId(loaded.instances[0]?.id ?? null);
       setHiddenPreviewInstanceIds(new Set());
       setDrawError(null);
     });
-  }, [startTransition]);
+    return loaded.instances;
+  }, [buildInstancesFromPaths, startTransition]);
 
   const skeletonGeometry = useMemo(() => {
     if (!bundle?.skel) return null;
@@ -520,82 +674,293 @@ export function SsbhModelPreviewProvider({
   }, [previewInstances, activePreviewInstanceId]);
 
   useEffect(() => {
-    setMotionFrame(0);
-    setMotionClip(null);
-    setMotionSampleError(null);
-    loadedMotionClipKeyRef.current = null;
-  }, [activePreviewInstanceId]);
-
-  useEffect(() => {
-    setMotionClip(null);
-    setMotionSampleError(null);
-    loadedMotionClipKeyRef.current = null;
-    if (!motionSelectedNuanmbPath) {
-      setMotionManifest(null);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const m = await invoke<NuanmbManifest>("ssbh_nuanmb_manifest", { path: motionSelectedNuanmbPath });
-        if (!cancelled) setMotionManifest(m);
-      } catch (e) {
-        if (!cancelled) {
-          setMotionManifest(null);
-          setMotionSampleError(String(e));
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [motionSelectedNuanmbPath]);
-
-  useEffect(() => {
-    const matlPath = bundle?.matlPaths[0] ?? null;
-    if (!bundle?.skelPath || !motionSelectedNuanmbPath) {
-      loadedMotionClipKeyRef.current = null;
-      setMotionClip(null);
-      return;
-    }
     if (previewBusy) {
       return;
     }
-    const key = `${bundle.skelPath}\n${motionSelectedNuanmbPath}\n${matlPath ?? ""}\n${motionReloadNonce}`;
-    if (loadedMotionClipKeyRef.current === key && motionClip !== null) {
-      return;
-    }
-
-    const ac = new AbortController();
-    (async () => {
-      setMotionSampling(true);
-      setMotionSampleError(null);
-      try {
-        const clip = await invoke<MotionClip>("ssbh_load_motion_clip", {
-          request: {
-            skelPath: bundle.skelPath,
-            nuanmbPath: motionSelectedNuanmbPath,
-            matlPath,
-          },
-        });
-        if (!ac.signal.aborted) {
-          loadedMotionClipKeyRef.current = key;
-          setMotionClip(clip);
+    let cancelled = false;
+    for (const inst of previewInstances) {
+      const current = motionByInstanceId[inst.id] ?? createDefaultMotionState();
+      const selectedPath = current.selectedNuanmbPath;
+      if (!selectedPath) {
+        if (
+          current.manifest !== null ||
+          current.clip !== null ||
+          current.sample !== null ||
+          current.sampleError !== null ||
+          current.loadedClipKey !== null ||
+          current.sampling
+        ) {
+          setMotionByInstanceId((prev) => ({
+            ...prev,
+            [inst.id]: {
+              ...createDefaultMotionState(),
+              loop: prev[inst.id]?.loop ?? true,
+              speed: prev[inst.id]?.speed ?? 1,
+            },
+          }));
         }
-      } catch (e) {
-        if (!ac.signal.aborted) {
-          setMotionClip(null);
-          loadedMotionClipKeyRef.current = null;
-          setMotionSampleError(String(e));
-        }
-      } finally {
-        if (!ac.signal.aborted) setMotionSampling(false);
+        continue;
       }
-    })();
+
+      if (!current.manifest || current.manifest.filePath !== selectedPath) {
+        void (async () => {
+          try {
+            const manifest = await invoke<NuanmbManifest>("ssbh_nuanmb_manifest", { path: selectedPath });
+            if (cancelled) return;
+            setMotionByInstanceId((prev) => {
+              const p = prev[inst.id];
+              if (!p || p.selectedNuanmbPath !== selectedPath) return prev;
+              return {
+                ...prev,
+                [inst.id]: { ...p, manifest },
+              };
+            });
+          } catch (e) {
+            if (cancelled) return;
+            setMotionByInstanceId((prev) => {
+              const p = prev[inst.id];
+              if (!p || p.selectedNuanmbPath !== selectedPath) return prev;
+              return {
+                ...prev,
+                [inst.id]: {
+                  ...p,
+                  manifest: null,
+                  sampleError: String(e),
+                },
+              };
+            });
+          }
+        })();
+      }
+
+      const matlPath = inst.bundle.matlPaths[0] ?? null;
+      const skelPath = inst.bundle.skelPath;
+      if (!skelPath) {
+        setMotionByInstanceId((prev) => {
+          const p = prev[inst.id];
+          if (!p || p.selectedNuanmbPath !== selectedPath) return prev;
+          return {
+            ...prev,
+            [inst.id]: {
+              ...p,
+              clip: null,
+              sample: null,
+              loadedClipKey: null,
+              sampleError: "Active instance has no skeleton path for motion sampling.",
+            },
+          };
+        });
+        continue;
+      }
+
+      const loadKey = `${skelPath}\n${selectedPath}\n${matlPath ?? ""}\n${current.reloadNonce}`;
+      if (current.loadedClipKey === loadKey && current.clip !== null) {
+        continue;
+      }
+      if (current.sampling) {
+        continue;
+      }
+      setMotionByInstanceId((prev) => {
+        const p = prev[inst.id];
+        if (!p || p.selectedNuanmbPath !== selectedPath) return prev;
+        return {
+          ...prev,
+          [inst.id]: {
+            ...p,
+            sampling: true,
+            sampleError: null,
+          },
+        };
+      });
+      void (async () => {
+        try {
+          const clip = await invoke<MotionClip>("ssbh_load_motion_clip", {
+            request: {
+              skelPath,
+              nuanmbPath: selectedPath,
+              matlPath,
+            },
+          });
+          if (cancelled) return;
+          setMotionByInstanceId((prev) => {
+            const p = prev[inst.id];
+            if (!p || p.selectedNuanmbPath !== selectedPath) return prev;
+            return {
+              ...prev,
+              [inst.id]: {
+                ...p,
+                clip,
+                sample:
+                  clip.frames.length > 0
+                    ? {
+                        frame: p.frame,
+                        finalFrameIndex: clip.finalFrameIndex,
+                        ...sampleMotionClipFrame(clip, p.frame, p.loop),
+                        elapsedMs: 0,
+                      }
+                    : null,
+                loadedClipKey: loadKey,
+                sampling: false,
+              },
+            };
+          });
+        } catch (e) {
+          if (cancelled) return;
+          setMotionByInstanceId((prev) => {
+            const p = prev[inst.id];
+            if (!p || p.selectedNuanmbPath !== selectedPath) return prev;
+            return {
+              ...prev,
+              [inst.id]: {
+                ...p,
+                clip: null,
+                sample: null,
+                loadedClipKey: null,
+                sampling: false,
+                sampleError: String(e),
+              },
+            };
+          });
+        }
+      })();
+    }
     return () => {
-      ac.abort();
+      cancelled = true;
     };
-  }, [bundle?.skelPath, bundle?.matlPaths?.[0], motionSelectedNuanmbPath, motionClip, previewBusy, motionReloadNonce]);
+  }, [previewInstances, motionByInstanceId, previewBusy]);
+
+  const activeMotionState = useMemo(() => {
+    if (!resolvedActivePreviewInstanceId) {
+      return createDefaultMotionState();
+    }
+    return motionByInstanceId[resolvedActivePreviewInstanceId] ?? createDefaultMotionState();
+  }, [motionByInstanceId, resolvedActivePreviewInstanceId]);
+
+  const motionNuanmbPaths = activeMotionState.nuanmbPaths;
+  const motionSelectedNuanmbPath = activeMotionState.selectedNuanmbPath;
+  const motionManifest = activeMotionState.manifest;
+  const motionPlaying = activeMotionState.playing;
+  const motionLoop = activeMotionState.loop;
+  const motionSpeed = activeMotionState.speed;
+  const motionFrame = activeMotionState.frame;
+  const motionClip = activeMotionState.clip;
+  const motionSample = useMemo<MotionSample | null>(() => {
+    if (!motionClip) {
+      return null;
+    }
+    const frameSample = sampleMotionClipFrame(motionClip, motionFrame, motionLoop);
+    return {
+      frame: motionFrame,
+      finalFrameIndex: motionClip.finalFrameIndex,
+      boneLocals: frameSample.boneLocals,
+      visibility: frameSample.visibility,
+      materialTracks: frameSample.materialTracks,
+      camera: frameSample.camera,
+      lighting: frameSample.lighting,
+      elapsedMs: 0,
+    };
+  }, [motionClip, motionFrame, motionLoop]);
+  const motionSampling = activeMotionState.sampling;
+  const motionSampleError = activeMotionState.sampleError;
+
+  const setMotionSelectedNuanmbPath = useCallback((path: string | null) => {
+    const instanceId = resolvedActivePreviewInstanceId;
+    if (!instanceId) return;
+    setMotionByInstanceId((prev) => {
+      const current = prev[instanceId] ?? createDefaultMotionState();
+      return {
+        ...prev,
+        [instanceId]: {
+          ...current,
+          selectedNuanmbPath: path,
+          frame: 0,
+          playing: false,
+          clip: null,
+          sample: null,
+          manifest: null,
+          sampleError: null,
+          loadedClipKey: null,
+        },
+      };
+    });
+  }, [resolvedActivePreviewInstanceId]);
+
+  const setMotionPlaying = useCallback((v: boolean) => {
+    const instanceId = resolvedActivePreviewInstanceId;
+    if (!instanceId) return;
+    setMotionPlayingForInstance(instanceId, v);
+  }, [resolvedActivePreviewInstanceId, setMotionPlayingForInstance]);
+
+  const setMotionLoop = useCallback((v: boolean) => {
+    const instanceId = resolvedActivePreviewInstanceId;
+    if (!instanceId) return;
+    setMotionByInstanceId((prev) => {
+      const current = prev[instanceId] ?? createDefaultMotionState();
+      return {
+        ...prev,
+        [instanceId]: {
+          ...current,
+          loop: v,
+        },
+      };
+    });
+  }, [resolvedActivePreviewInstanceId]);
+
+  const setMotionSpeed = useCallback((v: number) => {
+    const instanceId = resolvedActivePreviewInstanceId;
+    if (!instanceId) return;
+    setMotionByInstanceId((prev) => {
+      const current = prev[instanceId] ?? createDefaultMotionState();
+      return {
+        ...prev,
+        [instanceId]: {
+          ...current,
+          speed: v,
+        },
+      };
+    });
+  }, [resolvedActivePreviewInstanceId]);
+
+  const setMotionFrame = useCallback((v: number) => {
+    const instanceId = resolvedActivePreviewInstanceId;
+    if (!instanceId) return;
+    setMotionFrameForInstance(instanceId, v);
+  }, [resolvedActivePreviewInstanceId, setMotionFrameForInstance]);
+
+  const reloadMotionClip = useCallback(() => {
+    const instanceId = resolvedActivePreviewInstanceId;
+    if (!instanceId) return;
+    reloadMotionClipForInstance(instanceId);
+  }, [resolvedActivePreviewInstanceId, reloadMotionClipForInstance]);
+
+  const motionStatesByInstanceId = useMemo<ReadonlyMap<string, PreviewInstanceMotionState>>(() => {
+    const map = new Map<string, PreviewInstanceMotionState>();
+    for (const inst of previewInstances) {
+      const current = motionByInstanceId[inst.id] ?? createDefaultMotionState();
+      map.set(inst.id, {
+        nuanmbPaths: current.nuanmbPaths,
+        selectedNuanmbPath: current.selectedNuanmbPath,
+        manifest: current.manifest,
+        playing: current.playing,
+        loop: current.loop,
+        speed: current.speed,
+        frame: current.frame,
+        clip: current.clip,
+        sample:
+          current.clip && current.clip.frames.length > 0
+            ? {
+                frame: current.frame,
+                finalFrameIndex: current.clip.finalFrameIndex,
+                ...sampleMotionClipFrame(current.clip, current.frame, current.loop),
+                elapsedMs: 0,
+              }
+            : null,
+        sampling: current.sampling,
+        sampleError: current.sampleError,
+      });
+    }
+    return map;
+  }, [motionByInstanceId, previewInstances]);
 
   useEffect(() => {
     setVisibleKeys((prev) => {
@@ -905,6 +1270,65 @@ export function SsbhModelPreviewProvider({
     }
   }, [loadAt, root]);
 
+  const addModelAt = useCallback(
+    async (path: string) => {
+      const t = path.trim();
+      if (!t) {
+        throw new Error("Path is empty");
+      }
+      setLoading(true);
+      setLoadError(null);
+      try {
+        const loaded = await buildInstancesFromPaths([t], previewInstances.length);
+        if (loaded.instances.length !== 1) {
+          throw new Error("Append model operation returned unexpected instance count.");
+        }
+        const appendedInstance = loaded.instances[0]!;
+        setDraws((prev) => [...prev, ...loaded.draws]);
+        setPreviewInstances((prev) => [...prev, appendedInstance]);
+        setHiddenPreviewInstanceIds((prev) => {
+          const next = new Set(prev);
+          next.delete(appendedInstance.id);
+          return next;
+        });
+        setActivePreviewInstanceId(appendedInstance.id);
+        setVisibleKeys((prev) => {
+          const next = new Set(prev);
+          for (const d of loaded.draws) {
+            next.add(d.key);
+          }
+          return next;
+        });
+        setRecentModelPaths((prev) => {
+          const next = buildNextRecentPaths(prev, t);
+          writeRecentModelPathsToStorage(next);
+          return next;
+        });
+        setModelLoadNonce((n) => n + 1);
+      } catch (e) {
+        const msg = String(e);
+        setLoadError(msg);
+        toast.error(msg);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [buildInstancesFromPaths, previewInstances.length],
+  );
+
+  const pickAddNumdlb = useCallback(async () => {
+    const selected = await open({
+      directory: false,
+      multiple: false,
+      defaultPath: getDialogDefaultPath(DialogLastPathKey.ssbhPreviewOpenNumdlb, root),
+      filters: [{ name: "NUMDLB", extensions: ["numdlb"] }],
+    });
+    if (typeof selected === "string") {
+      rememberDialogSelection(DialogLastPathKey.ssbhPreviewOpenNumdlb, selected, "file");
+      await addModelAt(selected);
+    }
+  }, [addModelAt, root]);
+
   const loadModelAt = useCallback(
     async (path: string) => {
       const t = path.trim();
@@ -1000,6 +1424,233 @@ export function SsbhModelPreviewProvider({
       return next;
     });
   }, []);
+
+  const exportSceneConfig = useCallback(async () => {
+    const defaultDir = getDialogDefaultPath(DialogLastPathKey.ssbhPreviewOpenModelFolder, root);
+    const defaultPath = defaultDir ? `${defaultDir.replace(/[/\\]+$/, "")}\\scene-config.json` : "scene-config.json";
+    const outputPath = await save({
+      title: "Export Test Editor scene config",
+      defaultPath,
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (typeof outputPath !== "string" || !outputPath.trim()) {
+      return;
+    }
+    const config: TestEditorSceneConfig = {
+      schemaVersion: TEST_EDITOR_SCENE_CONFIG_VERSION,
+      workspaceRoot: normalizeScenePath(root),
+      instances: buildSceneConfigInstanceEntries(previewInstances, hiddenPreviewInstanceIds),
+      activePreviewInstanceId: resolvedActivePreviewInstanceId,
+      previewViewMode,
+      previewControlScope,
+      visibleKeys: Array.from(visibleKeys),
+      renderSettings: {
+        wireframe,
+        showSkeleton,
+        showGrid,
+        showAxesGizmo,
+        showStats,
+        background,
+        ambientIntensity,
+        directionalIntensity,
+        directionalX,
+        directionalY,
+        directionalZ,
+        normalMapEnabled,
+        materialDebugViewMode,
+        textureFlipY,
+        uvFlipU,
+        uvFlipV,
+        textureSlotLoadEnabled: { ...textureSlotLoadEnabled },
+        previewRenderStyle,
+      },
+      motion: {
+        applyCamera: motionApplyCamera,
+        applyLighting: motionApplyLighting,
+        forceVisibleDuringPlayback: motionForceVisibleDuringPlayback,
+        byInstanceId: Object.fromEntries(
+          previewInstances.map((inst) => {
+            const state = motionByInstanceId[inst.id] ?? createDefaultMotionState();
+            return [
+              inst.id,
+              {
+                nuanmbPaths: state.nuanmbPaths
+                  .map((p) => normalizeScenePath(p))
+                  .filter((p): p is string => Boolean(p)),
+                selectedNuanmbPath: normalizeScenePath(state.selectedNuanmbPath),
+                playing: state.playing,
+                loop: state.loop,
+                speed: state.speed,
+                frame: state.frame,
+              },
+            ] as const;
+          }),
+        ),
+      },
+      attachments: [...modelAttachments],
+      autoLoadAfterConvertToSsbh,
+    };
+    await writeTextFile(outputPath, JSON.stringify(config, null, 2));
+    rememberDialogSelection(DialogLastPathKey.ssbhPreviewOpenModelFolder, outputPath, "file");
+    toast.success("Scene exported", { description: outputPath });
+  }, [
+    root,
+    previewInstances,
+    hiddenPreviewInstanceIds,
+    resolvedActivePreviewInstanceId,
+    previewViewMode,
+    previewControlScope,
+    visibleKeys,
+    wireframe,
+    showSkeleton,
+    showGrid,
+    showAxesGizmo,
+    showStats,
+    background,
+    ambientIntensity,
+    directionalIntensity,
+    directionalX,
+    directionalY,
+    directionalZ,
+    normalMapEnabled,
+    materialDebugViewMode,
+    textureFlipY,
+    uvFlipU,
+    uvFlipV,
+    textureSlotLoadEnabled,
+    previewRenderStyle,
+    motionApplyCamera,
+    motionApplyLighting,
+    motionForceVisibleDuringPlayback,
+    motionByInstanceId,
+    modelAttachments,
+    autoLoadAfterConvertToSsbh,
+  ]);
+
+  const importSceneConfig = useCallback(async () => {
+    const selected = await open({
+      directory: false,
+      multiple: false,
+      defaultPath: getDialogDefaultPath(DialogLastPathKey.ssbhPreviewOpenModelFolder, root),
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (typeof selected !== "string" || !selected.trim()) {
+      return;
+    }
+    const selectedPath = selected.trim();
+    rememberDialogSelection(DialogLastPathKey.ssbhPreviewOpenModelFolder, selectedPath, "file");
+    const rawText = await readTextFile(selectedPath);
+    const parsed: unknown = JSON.parse(rawText);
+    ensureSceneConfigSchema(parsed);
+    const config = parsed as TestEditorSceneConfig;
+    const modelPaths = config.instances
+      .map((inst) => normalizeScenePath(inst.modlPath))
+      .filter((p): p is string => Boolean(p));
+    if (modelPaths.length !== config.instances.length) {
+      throw new Error("Scene config includes an empty model path.");
+    }
+    const loadedInstances = await loadInstancesFromPaths(modelPaths);
+    const idMap = new Map<string, string>();
+    for (let i = 0; i < config.instances.length; i++) {
+      const source = config.instances[i];
+      const loaded = loadedInstances[i];
+      if (!source || !loaded) {
+        throw new Error("Instance count mismatch while loading scene config.");
+      }
+      idMap.set(source.instanceId, loaded.id);
+    }
+    const mappedHidden = new Set<string>();
+    for (const entry of config.instances) {
+      const nextId = idMap.get(entry.instanceId);
+      if (!nextId) {
+        throw new Error(`Missing mapped instance id for ${entry.instanceId}`);
+      }
+      if (entry.hidden) {
+        mappedHidden.add(nextId);
+      }
+    }
+    setPreviewViewMode(config.previewViewMode);
+    setPreviewControlScope(config.previewControlScope);
+    setHiddenPreviewInstanceIds(mappedHidden);
+    setActivePreviewInstanceId(
+      config.activePreviewInstanceId ? (idMap.get(config.activePreviewInstanceId) ?? loadedInstances[0]?.id ?? null) : null,
+    );
+    setVisibleKeys(new Set(config.visibleKeys));
+    setWireframe(config.renderSettings.wireframe);
+    setShowSkeleton(config.renderSettings.showSkeleton);
+    setShowGrid(config.renderSettings.showGrid);
+    setShowAxesGizmo(config.renderSettings.showAxesGizmo);
+    setShowStats(config.renderSettings.showStats);
+    setBackground(config.renderSettings.background);
+    setAmbientIntensity(config.renderSettings.ambientIntensity);
+    setDirectionalIntensity(config.renderSettings.directionalIntensity);
+    setDirectionalX(config.renderSettings.directionalX);
+    setDirectionalY(config.renderSettings.directionalY);
+    setDirectionalZ(config.renderSettings.directionalZ);
+    setNormalMapEnabled(config.renderSettings.normalMapEnabled);
+    setMaterialDebugViewMode(config.renderSettings.materialDebugViewMode);
+    setTextureFlipY(config.renderSettings.textureFlipY);
+    setUvFlipU(config.renderSettings.uvFlipU);
+    setUvFlipV(config.renderSettings.uvFlipV);
+    setTextureSlotLoadEnabledState(
+      config.renderSettings.textureSlotLoadEnabled as Record<TexturePreviewSlotKey, boolean>,
+    );
+    setPreviewRenderStyle(config.renderSettings.previewRenderStyle);
+    setMotionApplyCamera(config.motion.applyCamera);
+    setMotionApplyLighting(config.motion.applyLighting);
+    setMotionForceVisibleDuringPlayback(config.motion.forceVisibleDuringPlayback);
+    setAutoLoadAfterConvertToSsbh(config.autoLoadAfterConvertToSsbh);
+    setMotionByInstanceId(() => {
+      const next: Record<string, InternalPreviewInstanceMotionState> = {};
+      for (const entry of config.instances) {
+        const mappedId = idMap.get(entry.instanceId);
+        if (!mappedId) {
+          throw new Error(`Missing mapped instance id for ${entry.instanceId}`);
+        }
+        const imported = config.motion.byInstanceId[entry.instanceId];
+        const base = createDefaultMotionState();
+        next[mappedId] = imported
+          ? {
+              ...base,
+              nuanmbPaths: imported.nuanmbPaths
+                .map((p) => normalizeScenePath(p))
+                .filter((p): p is string => Boolean(p)),
+              selectedNuanmbPath: normalizeScenePath(imported.selectedNuanmbPath),
+              playing: imported.playing,
+              loop: imported.loop,
+              speed: imported.speed,
+              frame: imported.frame,
+            }
+          : base;
+      }
+      return next;
+    });
+    const loadedById = new Map(loadedInstances.map((inst) => [inst.id, inst] as const));
+    const mappedAttachments = config.attachments.map((attachment) => {
+      const parentInstanceId = idMap.get(attachment.parentInstanceId);
+      const childInstanceId = idMap.get(attachment.childInstanceId);
+      if (!parentInstanceId || !childInstanceId) {
+        throw new Error("Attachment instance mapping failed while importing scene.");
+      }
+      const parentSkel = loadedById.get(parentInstanceId)?.bundle.skel as SkelDataJson | null | undefined;
+      const childSkel = loadedById.get(childInstanceId)?.bundle.skel as SkelDataJson | null | undefined;
+      const parentHasBone = Boolean(parentSkel?.bones.some((bone) => bone.name === attachment.parentBoneName));
+      const childHasBone = Boolean(childSkel?.bones.some((bone) => bone.name === attachment.childBoneName));
+      if (!parentHasBone || !childHasBone) {
+        throw new Error(
+          `Attachment bone resolution failed: ${attachment.parentBoneName} -> ${attachment.childBoneName}`,
+        );
+      }
+      return {
+        ...attachment,
+        parentInstanceId,
+        childInstanceId,
+      };
+    });
+    setModelAttachments(mappedAttachments);
+    setFitRequestId((v) => v + 1);
+    toast.success("Scene imported", { description: selectedPath });
+  }, [loadInstancesFromPaths, root, setAutoLoadAfterConvertToSsbh]);
 
   const commitBonePoseUndo = useCallback((beforeTransformSnapshot: Float32Array) => {
     const snap = new Float32Array(beforeTransformSnapshot);
@@ -1203,9 +1854,11 @@ export function SsbhModelPreviewProvider({
       skeletonGeometry,
       pickFolder,
       pickNumdlb,
+      pickAddNumdlb,
       autoLoadAfterConvertToSsbh,
       setAutoLoadAfterConvertToSsbh,
       loadModelAt,
+      addModelAt,
       clearScene,
       reloadCurrentModel,
       resetDisplaySettingsToDefaults,
@@ -1232,6 +1885,9 @@ export function SsbhModelPreviewProvider({
       canUndoBonePose,
       canRedoBonePose,
       previewSuspended,
+      motionStatesByInstanceId,
+      setMotionFrameForInstance,
+      setMotionPlayingForInstance,
       motionNuanmbPaths,
       motionSelectedNuanmbPath,
       setMotionSelectedNuanmbPath,
@@ -1258,6 +1914,10 @@ export function SsbhModelPreviewProvider({
       pickMotionFolder,
       reloadMotionClip,
       clearMotion,
+      modelAttachments,
+      setModelAttachments,
+      exportSceneConfig,
+      importSceneConfig,
     } satisfies SsbhModelPreviewContextValue),
     [
       root,
@@ -1308,9 +1968,11 @@ export function SsbhModelPreviewProvider({
       skeletonGeometry,
       pickFolder,
       pickNumdlb,
+      pickAddNumdlb,
       autoLoadAfterConvertToSsbh,
       setAutoLoadAfterConvertToSsbh,
       loadModelAt,
+      addModelAt,
       clearScene,
       reloadCurrentModel,
       resetDisplaySettingsToDefaults,
@@ -1337,6 +1999,9 @@ export function SsbhModelPreviewProvider({
       canUndoBonePose,
       canRedoBonePose,
       previewSuspended,
+      motionStatesByInstanceId,
+      setMotionFrameForInstance,
+      setMotionPlayingForInstance,
       motionNuanmbPaths,
       motionSelectedNuanmbPath,
       setMotionSelectedNuanmbPath,
@@ -1363,6 +2028,10 @@ export function SsbhModelPreviewProvider({
       pickMotionFolder,
       reloadMotionClip,
       clearMotion,
+      modelAttachments,
+      setModelAttachments,
+      exportSceneConfig,
+      importSceneConfig,
     ],
   );
 
