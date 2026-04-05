@@ -1,4 +1,5 @@
-//! Character FHM2D naming enrichment (source of truth; supersedes deprecated TS `applyNumdlbBaseNameToStructureObject`).
+//! Character / effect FHM2D naming (`fhm2d_character` full package vs `fhm2d_effect` model subset + nutexb).
+//! Source of truth; supersedes deprecated TS `applyNumdlbBaseNameToStructureObject`.
 
 use std::collections::HashMap;
 
@@ -9,10 +10,18 @@ use super::{
 
 const NUST_NUMATB_SUFFIX: &str = "__nust__";
 
+/// Full character package vs effect/lightweight model naming (steps 3–5 only apply to `Character`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum NumdlbCharacterNamingMode {
+    Character,
+    Effect,
+}
+
 pub(super) fn apply_numdlb_base_name_to_structure(
     sub: &mut [OutputSubFileData],
     parse_root: &ParseNode,
     files: &[DecodedSubFile],
+    mode: NumdlbCharacterNamingMode,
 ) -> Result<(), String> {
     let by_file_index = build_file_index_map(sub)?;
     let mut file_index_to_sub: HashMap<i32, usize> = HashMap::new();
@@ -120,28 +129,40 @@ pub(super) fn apply_numdlb_base_name_to_structure(
             ));
         }
 
-        let declared_material_count = modl.material_file_names.len();
-        if material_candidates.len() < declared_material_count {
-            return Err(format!(
-                "Ambiguous group folder for numdlb fileIndex={}: expected at least {} numatb in group, got {}",
-                numdlb_item.file_index,
-                declared_material_count,
-                material_candidates.len()
-            ));
-        }
-        let extra_numatb_count = material_candidates.len() - declared_material_count;
-        if extra_numatb_count > 0 {
-            if declared_material_count < 2 {
+        let material_names: Vec<String> = modl
+            .material_file_names
+            .iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        let declared_material_count = material_names.len();
+
+        if mode == NumdlbCharacterNamingMode::Character {
+            if material_candidates.len() < declared_material_count {
                 return Err(format!(
-                    "numdlb fileIndex={}: {} extra numatb file(s) require materialFileNames[1] as __nust__ template, but only {} material path(s) in numdlb",
+                    "Ambiguous group folder for numdlb fileIndex={}: expected at least {} numatb in group, got {}",
                     numdlb_item.file_index,
-                    extra_numatb_count,
-                    declared_material_count
+                    declared_material_count,
+                    material_candidates.len()
                 ));
             }
-            let nust_template_desired = basename_from_mixed_path(modl.material_file_names[1].as_str());
-            let nust_template_stripped = strip_extension(nust_template_desired.as_str());
-            assert_nust_material_template_for_extras(nust_template_stripped.as_str(), numdlb_item.file_index)?;
+        }
+        let extra_numatb_count = material_candidates.len().saturating_sub(declared_material_count);
+        if extra_numatb_count > 0 {
+            if declared_material_count < 2 {
+                if mode == NumdlbCharacterNamingMode::Character {
+                    return Err(format!(
+                        "numdlb fileIndex={}: {} extra numatb file(s) require materialFileNames[1] as __nust__ template, but only {} material path(s) in numdlb",
+                        numdlb_item.file_index,
+                        extra_numatb_count,
+                        declared_material_count
+                    ));
+                }
+            } else {
+                let nust_template_desired = basename_from_mixed_path(material_names[1].as_str());
+                let nust_template_stripped = strip_extension(nust_template_desired.as_str());
+                assert_nust_material_template_for_extras(nust_template_stripped.as_str(), numdlb_item.file_index)?;
+            }
         }
 
         if jnttbl_candidates.len() == 1 {
@@ -169,14 +190,15 @@ pub(super) fn apply_numdlb_base_name_to_structure(
             item.file_url = build_file_url(prefix.as_slice(), desired.as_str());
         }
 
-        let nust_template_stripped_for_extras = if extra_numatb_count > 0 {
-            strip_extension(basename_from_mixed_path(modl.material_file_names[1].as_str()).as_str())
+        let nust_template_stripped_for_extras = if extra_numatb_count > 0 && declared_material_count >= 2 {
+            strip_extension(basename_from_mixed_path(material_names[1].as_str()).as_str())
         } else {
             String::new()
         };
 
-        for i in 0..declared_material_count {
-            let desired = basename_from_mixed_path(modl.material_file_names[i].as_str());
+        let main_material_rename = declared_material_count.min(material_candidates.len());
+        for i in 0..main_material_rename {
+            let desired = basename_from_mixed_path(material_names[i].as_str());
             let desired_base = strip_extension(desired.as_str());
             let target = material_candidates[i];
             let item = &mut sub[target];
@@ -185,14 +207,17 @@ pub(super) fn apply_numdlb_base_name_to_structure(
             item.file_url = build_file_url(prefix.as_slice(), desired.as_str());
         }
 
-        for e in 0..extra_numatb_count {
-            let target = material_candidates[declared_material_count + e];
-            let desired = build_extra_nust_numatb_desired_file_name(nust_template_stripped_for_extras.as_str(), e + 1)?;
-            let desired_base = strip_extension(desired.as_str());
-            let item = &mut sub[target];
-            let prefix = parent_segments(item.file_url.as_str())?;
-            item.file_base_name = Some(desired_base);
-            item.file_url = build_file_url(prefix.as_slice(), desired.as_str());
+        if extra_numatb_count > 0 && declared_material_count >= 2 {
+            for e in 0..extra_numatb_count {
+                let target = material_candidates[declared_material_count + e];
+                let desired =
+                    build_extra_nust_numatb_desired_file_name(nust_template_stripped_for_extras.as_str(), e + 1)?;
+                let desired_base = strip_extension(desired.as_str());
+                let item = &mut sub[target];
+                let prefix = parent_segments(item.file_url.as_str())?;
+                item.file_base_name = Some(desired_base);
+                item.file_url = build_file_url(prefix.as_slice(), desired.as_str());
+            }
         }
 
         if !modl.mesh_file_name.is_empty() {
@@ -204,6 +229,10 @@ pub(super) fn apply_numdlb_base_name_to_structure(
             item.file_base_name = Some(desired_base);
             item.file_url = build_file_url(prefix.as_slice(), desired.as_str());
         }
+    }
+
+    if mode == NumdlbCharacterNamingMode::Effect {
+        return Ok(());
     }
 
     // Step 3: nuhlpb under 0\3 mapped by model folders under 0\0
@@ -403,6 +432,27 @@ struct NumdlbModlInfoV17 {
     mesh_file_name: String,
 }
 
+/// Modl `model_name` may be stored as a path like `\name.numdlx`; strip separators and wrong extensions.
+fn normalize_numdlb_model_name(raw: &str) -> String {
+    let mut s = raw.trim().to_string();
+    while s.starts_with('\\') || s.starts_with('/') {
+        s = s[1..].trim_start().to_string();
+    }
+    s = basename_from_mixed_path(s.as_str());
+    loop {
+        let lower = s.to_ascii_lowercase();
+        if !lower.ends_with(".numdlx") && !lower.ends_with(".numdlb") {
+            break;
+        }
+        let next = strip_extension(s.as_str());
+        if next.len() == s.len() {
+            break;
+        }
+        s = next;
+    }
+    s.trim().to_string()
+}
+
 fn parse_numdlb_modl_info_v17(bytes: &[u8]) -> Result<NumdlbModlInfoV17, String> {
     if bytes.get(0..4) != Some(b"HBSS") || bytes.get(0x10..0x14) != Some(b"LDOM") {
         return Err("Invalid numdlb header for Modl parse".to_string());
@@ -413,9 +463,13 @@ fn parse_numdlb_modl_info_v17(bytes: &[u8]) -> Result<NumdlbModlInfoV17, String>
         return Err(format!("Unsupported numdlb Modl version: {major}.{minor}"));
     }
     const BASE: usize = 0x18;
-    let model_name = read_ssbh_string_at(bytes, BASE + 0x00)?;
-    if model_name.trim().is_empty() {
+    let model_raw = read_ssbh_string_at(bytes, BASE + 0x00)?;
+    if model_raw.trim().is_empty() {
         return Err("numdlb model_name is empty".to_string());
+    }
+    let model_name = normalize_numdlb_model_name(model_raw.as_str());
+    if model_name.is_empty() {
+        return Err("numdlb model_name is empty after normalize".to_string());
     }
     let skeleton_file_name = read_ssbh_string_at(bytes, BASE + 0x08)?;
     let mat_header = read_ssbh_array_header(bytes, BASE + 0x10)?;
@@ -433,7 +487,7 @@ fn parse_numdlb_modl_info_v17(bytes: &[u8]) -> Result<NumdlbModlInfoV17, String>
     };
     let mesh_file_name = read_ssbh_string_at(bytes, BASE + 0x28)?;
     Ok(NumdlbModlInfoV17 {
-        model_name: model_name.trim().to_string(),
+        model_name,
         skeleton_file_name,
         material_file_names,
         animation_file_name,
@@ -704,8 +758,13 @@ mod tests {
         }];
         let parse_root = make_empty_parse_root();
 
-        apply_numdlb_base_name_to_structure(&mut sub, &parse_root, files.as_slice())
-            .expect("missing parse folder should be skipped like TS");
+        apply_numdlb_base_name_to_structure(
+            &mut sub,
+            &parse_root,
+            files.as_slice(),
+            NumdlbCharacterNamingMode::Character,
+        )
+        .expect("missing parse folder should be skipped like TS");
 
         assert_eq!(sub[0].file_base_name.as_deref(), Some("body_model"));
         assert_eq!(sub[0].file_url, ".\\pkg\\body_model.numdlb");
@@ -718,5 +777,14 @@ mod tests {
         let prefix = longest_common_prefix(values.as_slice());
 
         assert_eq!(prefix, "机体_");
+    }
+
+    #[test]
+    fn normalize_numdlb_model_name_strips_leading_slash_and_numdlx_extension() {
+        let raw = r"\eff_021destny_001strkfr_001_wing_001.numdlx";
+        assert_eq!(
+            normalize_numdlb_model_name(raw),
+            "eff_021destny_001strkfr_001_wing_001"
+        );
     }
 }

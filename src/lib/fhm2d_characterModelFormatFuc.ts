@@ -403,7 +403,7 @@ async function mapWithConcurrency<T, R>(
  * - Optionally rewrites `fileUrl` to use `fileBaseName + fileType`
  *
  * @deprecated Character FHM2D naming is implemented in the Tauri Rust extractor
- * (`src-tauri/src/format/fhm2d_numdlb_character.rs`, wired from `fhm2d.rs` when format is `fhm2d_character`).
+ * (`src-tauri/src/format/fhm2d_numdlb_character.rs`, wired from `fhm2d.rs` when format is `fhm2d_character` or `fhm2d_effect`).
  * Prefer extraction via that path; this TS implementation is retained for reference or legacy callers only.
  */
 export async function applyNumdlbBaseNameToStructureObject(

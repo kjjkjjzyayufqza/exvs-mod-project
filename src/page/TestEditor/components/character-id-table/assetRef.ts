@@ -18,6 +18,8 @@ export interface AssetRefInfo {
   modFilePath: string; // Expected path in OB mod directory
   workspaceFolderPath: string; // Expected folder path in current workspace root
   isModel: boolean;
+  /** Field key `Effect` — same extract layout as model (`hashHex` folder), lighter FHM naming. */
+  isEffectAsset: boolean;
   isParamAsset: boolean;
   isMscAsset: boolean;
   isMotionAsset: boolean;
@@ -43,6 +45,7 @@ export async function getAssetRefInfo(
   const hashHex = int32ToHashHex(value);
   const lower = fieldKey.toLowerCase();
   const isModel = lower === "model";
+  const isEffectAsset = lower === "effect";
   const isParamAsset = lower === "param";
   const isMscAsset = lower === "msc";
   const isMotionAsset = lower === "motion";
@@ -65,6 +68,7 @@ export async function getAssetRefInfo(
     modFilePath,
     workspaceFolderPath,
     isModel,
+    isEffectAsset,
     isParamAsset,
     isMscAsset,
     isMotionAsset,

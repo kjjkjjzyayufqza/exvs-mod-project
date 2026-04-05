@@ -63,7 +63,9 @@ export async function extractAsset(
     const targetDir = await join(extractOutputPath, asset.hashHex);
     logExtractPhase('resolve target directory');
 
-    const extractFormat: Fhm2d_type_format | undefined = asset.isModel
+    const extractFormat: Fhm2d_type_format | undefined = asset.isEffectAsset
+      ? Fhm2d_type_format.fhm2d_effect
+      : asset.isModel
       ? Fhm2d_type_format.fhm2d_character
       : asset.isParamAsset
         ? Fhm2d_type_format.fhm2d_character_param

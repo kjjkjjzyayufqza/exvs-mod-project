@@ -43,7 +43,8 @@ interface CharacterAssetFieldProps {
   onFieldUpdate?: (fieldKey: string, newValue: number) => void;
 }
 
-function crc32Hex(input: string): string {
+/** IEEE CRC32 over UTF-8 bytes; returns unsigned 32-bit value. */
+function crc32IeeeUint32(input: string): number {
   const bytes = new TextEncoder().encode(input);
   let crc = 0xffffffff;
   for (let i = 0; i < bytes.length; i++) {
@@ -56,8 +57,7 @@ function crc32Hex(input: string): string {
       }
     }
   }
-  const out = (~crc) >>> 0;
-  return `0x${out.toString(16).toUpperCase().padStart(8, "0")}`;
+  return (~crc) >>> 0;
 }
 
 export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
@@ -76,7 +76,12 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   const [isCopyingAsNew, setIsCopyingAsNew] = useState(false);
   const [writeMetaBin, setWriteMetaBin] = useState(false);
   const trimmedSeed = copySeed.trim();
-  const nextHashPreview = useMemo(() => crc32Hex(trimmedSeed), [trimmedSeed]);
+  const copySeedCrcPreview = useMemo(() => {
+    const u = crc32IeeeUint32(trimmedSeed);
+    const hex = `0x${u.toString(16).toUpperCase().padStart(8, "0")}`;
+    const int32 = u | 0;
+    return { hex, int32 };
+  }, [trimmedSeed]);
 
   useEffect(() => {
     const checkExists = async () => {
@@ -367,7 +372,9 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">CRC32 Preview</span>
-                <span className="font-mono">{nextHashPreview}</span>
+                <span className="font-mono tabular-nums shrink-0 text-right">
+                  {copySeedCrcPreview.hex} / {copySeedCrcPreview.int32}
+                </span>
               </div>
             </div>
           </div>

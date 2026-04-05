@@ -5,6 +5,8 @@ import { invoke } from "@tauri-apps/api/core";
 
 export enum Fhm2d_type_format {
   fhm2d_character = "fhm2d_character",
+  /** Effect FHM: numdlb group (jnttbl / materials / mesh / skeleton) + nutexb; no full character-package renames. */
+  fhm2d_effect = "fhm2d_effect",
   fhm2d_all_nutexb = "fhm2d_all_nutexb",
   fhm2d_stage_list = "fhm2d_stage_list",
   fhm2d_character_param = "fhm2d_character_param",

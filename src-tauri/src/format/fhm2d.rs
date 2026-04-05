@@ -24,6 +24,8 @@ pub struct ExtractFhm2dResult {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Fhm2dFormat {
     Character,
+    /// Model subset + nutexb (no character-package steps: nuhlpb 0\\3, folder 0 bins, 0\\1 magic).
+    Effect,
     AllNutexb,
     StageList,
     CharacterParam,
@@ -37,6 +39,7 @@ impl Fhm2dFormat {
         match value {
             None => Ok(None),
             Some("fhm2d_character") => Ok(Some(Self::Character)),
+            Some("fhm2d_effect") => Ok(Some(Self::Effect)),
             Some("fhm2d_all_nutexb") => Ok(Some(Self::AllNutexb)),
             Some("fhm2d_stage_list") => Ok(Some(Self::StageList)),
             Some("fhm2d_character_param") => Ok(Some(Self::CharacterParam)),
@@ -221,6 +224,7 @@ impl<'a> Fhm2dExtractor<'a> {
             parsed.sub_file_structure,
             parsed.sub_file_parse_structure,
             out_name.as_str(),
+            self.format,
         )?;
 
         let mut named_output = output.clone();
@@ -347,6 +351,7 @@ fn build_output_structure(
     sub_file_structure: Vec<SubFileStructureEntry>,
     sub_file_parse_structure: ParseNode,
     out_name: &str,
+    format: Option<Fhm2dFormat>,
 ) -> Result<OutputStructure, String> {
     if type_list.len() != files.len() {
         return Err(format!(
@@ -355,14 +360,28 @@ fn build_output_structure(
             files.len()
         ));
     }
+    let folder_map = if format == Some(Fhm2dFormat::Effect) {
+        Some(build_folder_map(&sub_file_parse_structure)?)
+    } else {
+        None
+    };
     let mut sub_file_data = Vec::with_capacity(files.len());
     for (idx, f) in files.iter().enumerate() {
         let file_type = type_list[idx].clone();
+        let file_url = if let Some(ref map) = folder_map {
+            let folder_segments = map.get(&f.file_index).cloned().unwrap_or_default();
+            let mut prefix = vec![out_name.to_string()];
+            prefix.extend(folder_segments);
+            let file_name = format!("{}{}", idx, file_type);
+            build_file_url(prefix.as_slice(), file_name.as_str())
+        } else {
+            format!(".\\{}\\{}{}", out_name, idx, file_type)
+        };
         sub_file_data.push(OutputSubFileData {
             index: idx,
             file_type: file_type.clone(),
             file_index: f.file_index,
-            file_url: format!(".\\{}\\{}{}", out_name, idx, file_type),
+            file_url,
             file_base_name: None,
         });
     }
@@ -707,6 +726,16 @@ fn apply_naming(
                 &mut output.sub_file_data,
                 &output.sub_file_parse_structure,
                 files,
+                numdlb_character_enrich::NumdlbCharacterNamingMode::Character,
+            )?;
+            apply_nutexb_names(&mut output.sub_file_data, files)
+        }
+        Some(Fhm2dFormat::Effect) => {
+            numdlb_character_enrich::apply_numdlb_base_name_to_structure(
+                &mut output.sub_file_data,
+                &output.sub_file_parse_structure,
+                files,
+                numdlb_character_enrich::NumdlbCharacterNamingMode::Effect,
             )?;
             apply_nutexb_names(&mut output.sub_file_data, files)
         }
@@ -1022,7 +1051,7 @@ fn write_files(
     let base = PathBuf::from(out_dir);
     fs::create_dir_all(&base).map_err(|e| format!("Create output dir failed: {e}"))?;
     for (idx, item) in sub_file_data.iter().enumerate() {
-        let rel = if format == Some(Fhm2dFormat::Motion) {
+        let rel = if matches!(format, Some(Fhm2dFormat::Motion) | Some(Fhm2dFormat::Effect)) {
             motion_relative_path(item.file_url.as_str(), out_name)?
         } else {
             let parts = split_path_segments(item.file_url.as_str());
@@ -1074,14 +1103,16 @@ fn ensure_motion_empty_folders(out_dir: &str, root: &ParseNode) -> Result<(), St
     walk(out_dir, root, &mut prefix)
 }
 
+/// Relative path under the output folder name (`out_name` first segment), preserving subfolders in `fileUrl`.
+/// Used for `fhm2d_motion` and `fhm2d_effect` writes.
 fn motion_relative_path(file_url: &str, out_name: &str) -> Result<String, String> {
     let segments = split_path_segments(file_url);
     if segments.len() < 2 {
-        return Err(format!("Invalid motion fileUrl: {file_url}"));
+        return Err(format!("Invalid fileUrl (need output root + path): {file_url}"));
     }
     if segments[0] != out_name {
         return Err(format!(
-            "Motion fileUrl root mismatch: expected {}, got {}",
+            "fileUrl root mismatch: expected {}, got {}",
             out_name, segments[0]
         ));
     }
