@@ -19,8 +19,11 @@ interface SubFileStructureItem {
   Name?: string
   unk1?: string
   unk2?: string
+  unk2_1?: number
   unk3?: number
   unk4?: number
+  unk5?: number
+  unk6?: number
   folderCount?: number
   fileIndex?: number
   originalFileIndex?: number
@@ -687,8 +690,11 @@ function generateSubFileStructureWithoutMapping (treeData: TreeDataItem[]): SubF
           Name: item.name,
           unk1: item.data.unk1,
           unk2: item.data.unk2,
+          unk2_1: item.data.unk2_1,
           unk3: item.data.unk3,
           unk4: item.data.unk4,
+          unk5: item.data.unk5,
+          unk6: item.data.unk6,
           folderCount: actualFolderCount
         })
 
@@ -720,7 +726,9 @@ function generateSubFileStructureWithoutMapping (treeData: TreeDataItem[]): SubF
           Name: item.name,
           unk1: item.data.unk1,
           unk2: item.data.unk2,
+          unk2_1: item.data.unk2_1,
           unk3: item.data.unk3,
+          unk4: item.data.unk4,
           fileIndex: item.data.fileIndex,
           originalFileIndex: item.data.originalFileIndex
         })

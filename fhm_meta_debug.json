@@ -376,149 +376,212 @@
       "unk1": "00000000",
       "folderCount": 1,
       "unk2": "00000000",
-      "unk3": 0
+      "unk2_1": 0,
+      "unk3": 0,
+      "unk4": 0,
+      "unk5": 0,
+      "unk6": 0,
+      "rawRecordHex": "0a0000000001000000000000000000000000000000000000000000000000000000"
     },
     {
       "type": "Folder",
       "unk1": "00000000",
       "folderCount": 37,
       "unk2": "00000000",
-      "unk3": 0
+      "unk2_1": 0,
+      "unk3": 0,
+      "unk4": 0,
+      "unk5": 0,
+      "unk6": 0,
+      "rawRecordHex": "0a0000000025000000000000000000000000000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 0,
       "unk2": "01000000",
+      "unk2_1": 0,
       "unk3": -1990752772,
-      "originalFileIndex": 0
+      "unk4": 0,
+      "originalFileIndex": 0,
+      "rawRecordHex": "0000000000000000000100000000000000fc85578900000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 5,
       "unk2": "01000000",
+      "unk2_1": 0,
       "unk3": 916357315,
-      "originalFileIndex": 5
+      "unk4": 0,
+      "originalFileIndex": 5,
+      "rawRecordHex": "0000000000050000000100000000000000c3809e3600000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 8,
       "unk2": "01000000",
+      "unk2_1": 0,
       "unk3": 860954220,
-      "originalFileIndex": 8
+      "unk4": 0,
+      "originalFileIndex": 8,
+      "rawRecordHex": "00000000000800000001000000000000006c1e513300000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 4,
       "unk2": "01000000",
+      "unk2_1": 0,
       "unk3": -1998200609,
-      "originalFileIndex": 4
+      "unk4": 0,
+      "originalFileIndex": 4,
+      "rawRecordHex": "0000000000040000000100000000000000dfe0e58800000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 10,
       "unk2": "01000000",
+      "unk2_1": 0,
       "unk3": -1479687493,
-      "originalFileIndex": 10
+      "unk4": 0,
+      "originalFileIndex": 10,
+      "rawRecordHex": "00000000000a0000000100000000000000bbc2cda700000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 9,
       "unk2": "01000000",
+      "unk2_1": 0,
       "unk3": -1055337616,
-      "originalFileIndex": 9
+      "unk4": 0,
+      "originalFileIndex": 9,
+      "rawRecordHex": "000000000009000000010000000000000070d318c100000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 6,
       "unk2": "01000000",
+      "unk2_1": 0,
       "unk3": 1090827199,
-      "originalFileIndex": 6
+      "unk4": 0,
+      "originalFileIndex": 6,
+      "rawRecordHex": "0000000000060000000100000000000000bfb3044100000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 2,
       "unk2": "01000000",
+      "unk2_1": 0,
       "unk3": -670178811,
-      "originalFileIndex": 2
+      "unk4": 0,
+      "originalFileIndex": 2,
+      "rawRecordHex": "000000000002000000010000000000000005e20dd800000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 1,
       "unk2": "01000000",
+      "unk2_1": 0,
       "unk3": 1543176513,
-      "originalFileIndex": 1
+      "unk4": 0,
+      "originalFileIndex": 1,
+      "rawRecordHex": "00000000000100000001000000000000004101fb5b00000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 3,
       "unk2": "01000000",
+      "unk2_1": 0,
       "unk3": -1024306949,
-      "originalFileIndex": 3
+      "unk4": 0,
+      "originalFileIndex": 3,
+      "rawRecordHex": "0000000000030000000100000000000000fb50f2c200000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 7,
       "unk2": "01000000",
+      "unk2_1": 0,
       "unk3": -1575390903,
-      "originalFileIndex": 7
+      "unk4": 0,
+      "originalFileIndex": 7,
+      "rawRecordHex": "0000000000070000000100000000000000497119a200000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 11,
       "unk2": "01000000",
+      "unk2_1": 0,
       "unk3": -52642650,
-      "originalFileIndex": 11
+      "unk4": 0,
+      "originalFileIndex": 11,
+      "rawRecordHex": "00000000000b0000000100000000000000a6bcdcfc00000000"
     },
     {
       "type": "Folder",
       "unk1": "00000000",
       "folderCount": 4,
       "unk2": "00000000",
-      "unk3": 2
+      "unk2_1": 0,
+      "unk3": 2,
+      "unk4": 0,
+      "unk5": 669863011,
+      "unk6": 0,
+      "rawRecordHex": "0a000000000400000000000000000000000200000000000000634ced2700000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 14,
       "unk2": "10000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 14
+      "unk4": 0,
+      "originalFileIndex": 14,
+      "rawRecordHex": "00000000000e00000010000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 23,
       "unk2": "30000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 23
+      "unk4": 0,
+      "originalFileIndex": 23,
+      "rawRecordHex": "00000000001700000030000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 30,
       "unk2": "40000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 30
+      "unk4": 0,
+      "originalFileIndex": 30,
+      "rawRecordHex": "00000000001e00000040000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 39,
       "unk2": "50000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 39
+      "unk4": 0,
+      "originalFileIndex": 39,
+      "rawRecordHex": "00000000002700000050000000000000000000000000000000"
     },
     {
       "type": "EndMark",
@@ -529,39 +592,56 @@
       "unk1": "00000000",
       "folderCount": 4,
       "unk2": "00000000",
-      "unk3": 2
+      "unk2_1": 0,
+      "unk3": 2,
+      "unk4": 0,
+      "unk5": -1291283057,
+      "unk6": 0,
+      "rawRecordHex": "0a0000000004000000000000000000000002000000000000008f9508b300000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 13,
       "unk2": "10000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 13
+      "unk4": 0,
+      "originalFileIndex": 13,
+      "rawRecordHex": "00000000000d00000010000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 22,
       "unk2": "30000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 22
+      "unk4": 0,
+      "originalFileIndex": 22,
+      "rawRecordHex": "00000000001600000030000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 29,
       "unk2": "40000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 29
+      "unk4": 0,
+      "originalFileIndex": 29,
+      "rawRecordHex": "00000000001d00000040000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 38,
       "unk2": "50000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 38
+      "unk4": 0,
+      "originalFileIndex": 38,
+      "rawRecordHex": "00000000002600000050000000000000000000000000000000"
     },
     {
       "type": "EndMark",
@@ -572,39 +652,56 @@
       "unk1": "00000000",
       "folderCount": 4,
       "unk2": "00000000",
-      "unk3": 2
+      "unk2_1": 0,
+      "unk3": 2,
+      "unk4": 0,
+      "unk5": 704758837,
+      "unk6": 0,
+      "rawRecordHex": "0a00000000040000000000000000000000020000000000000035c4012a00000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 12,
       "unk2": "10000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 12
+      "unk4": 0,
+      "originalFileIndex": 12,
+      "rawRecordHex": "00000000000c00000010000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 21,
       "unk2": "30000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 21
+      "unk4": 0,
+      "originalFileIndex": 21,
+      "rawRecordHex": "00000000001500000030000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 28,
       "unk2": "40000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 28
+      "unk4": 0,
+      "originalFileIndex": 28,
+      "rawRecordHex": "00000000001c00000040000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 37,
       "unk2": "50000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 37
+      "unk4": 0,
+      "originalFileIndex": 37,
+      "rawRecordHex": "00000000002500000050000000000000000000000000000000"
     },
     {
       "type": "EndMark",
@@ -615,39 +712,56 @@
       "unk1": "00000000",
       "folderCount": 4,
       "unk2": "00000000",
-      "unk3": 2
+      "unk2_1": 0,
+      "unk3": 2,
+      "unk4": 0,
+      "unk5": -1441553202,
+      "unk6": 0,
+      "rawRecordHex": "0a000000000400000000000000000000000200000000000000cea413aa00000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 16,
       "unk2": "10000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 16
+      "unk4": 0,
+      "originalFileIndex": 16,
+      "rawRecordHex": "00000000001000000010000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 24,
       "unk2": "30000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 24
+      "unk4": 0,
+      "originalFileIndex": 24,
+      "rawRecordHex": "00000000001800000030000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 32,
       "unk2": "40000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 32
+      "unk4": 0,
+      "originalFileIndex": 32,
+      "rawRecordHex": "00000000002000000040000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 41,
       "unk2": "50000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 41
+      "unk4": 0,
+      "originalFileIndex": 41,
+      "rawRecordHex": "00000000002900000050000000000000000000000000000000"
     },
     {
       "type": "EndMark",
@@ -658,39 +772,56 @@
       "unk1": "00000000",
       "folderCount": 4,
       "unk2": "00000000",
-      "unk3": 2
+      "unk2_1": 0,
+      "unk3": 2,
+      "unk4": 0,
+      "unk5": -1840164293,
+      "unk6": 0,
+      "rawRecordHex": "0a0000000004000000000000000000000002000000000000003b52519200000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 15,
       "unk2": "10000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 15
+      "unk4": 0,
+      "originalFileIndex": 15,
+      "rawRecordHex": "00000000000f00000010000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 20,
       "unk2": "30000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 20
+      "unk4": 0,
+      "originalFileIndex": 20,
+      "rawRecordHex": "00000000001400000030000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 31,
       "unk2": "40000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 31
+      "unk4": 0,
+      "originalFileIndex": 31,
+      "rawRecordHex": "00000000001f00000040000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 40,
       "unk2": "50000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 40
+      "unk4": 0,
+      "originalFileIndex": 40,
+      "rawRecordHex": "00000000002800000050000000000000000000000000000000"
     },
     {
       "type": "EndMark",
@@ -701,39 +832,56 @@
       "unk1": "00000000",
       "folderCount": 4,
       "unk2": "00000000",
-      "unk3": 2
+      "unk2_1": 0,
+      "unk3": 2,
+      "unk4": 0,
+      "unk5": 1543176513,
+      "unk6": 0,
+      "rawRecordHex": "0a0000000004000000000000000000000002000000000000004101fb5b00000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 18,
       "unk2": "10000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 18
+      "unk4": 0,
+      "originalFileIndex": 18,
+      "rawRecordHex": "00000000001200000010000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 26,
       "unk2": "30000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 26
+      "unk4": 0,
+      "originalFileIndex": 26,
+      "rawRecordHex": "00000000001a00000030000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 34,
       "unk2": "40000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 34
+      "unk4": 0,
+      "originalFileIndex": 34,
+      "rawRecordHex": "00000000002200000040000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 43,
       "unk2": "50000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 43
+      "unk4": 0,
+      "originalFileIndex": 43,
+      "rawRecordHex": "00000000002b00000050000000000000000000000000000000"
     },
     {
       "type": "EndMark",
@@ -744,39 +892,56 @@
       "unk1": "00000000",
       "folderCount": 4,
       "unk2": "00000000",
-      "unk3": 2
+      "unk2_1": 0,
+      "unk3": 2,
+      "unk4": 0,
+      "unk5": -1024306949,
+      "unk6": 0,
+      "rawRecordHex": "0a000000000400000000000000000000000200000000000000fb50f2c200000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 17,
       "unk2": "10000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 17
+      "unk4": 0,
+      "originalFileIndex": 17,
+      "rawRecordHex": "00000000001100000010000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 25,
       "unk2": "30000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 25
+      "unk4": 0,
+      "originalFileIndex": 25,
+      "rawRecordHex": "00000000001900000030000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 33,
       "unk2": "40000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 33
+      "unk4": 0,
+      "originalFileIndex": 33,
+      "rawRecordHex": "00000000002100000040000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 42,
       "unk2": "50000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 42
+      "unk4": 0,
+      "originalFileIndex": 42,
+      "rawRecordHex": "00000000002a00000050000000000000000000000000000000"
     },
     {
       "type": "EndMark",
@@ -787,39 +952,56 @@
       "unk1": "00000000",
       "folderCount": 4,
       "unk2": "00000000",
-      "unk3": 2
+      "unk2_1": 0,
+      "unk3": 2,
+      "unk4": 0,
+      "unk5": -52642650,
+      "unk6": 0,
+      "rawRecordHex": "0a000000000400000000000000000000000200000000000000a6bcdcfc00000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 19,
       "unk2": "10000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 19
+      "unk4": 0,
+      "originalFileIndex": 19,
+      "rawRecordHex": "00000000001300000010000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 27,
       "unk2": "30000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 27
+      "unk4": 0,
+      "originalFileIndex": 27,
+      "rawRecordHex": "00000000001b00000030000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 35,
       "unk2": "40000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 35
+      "unk4": 0,
+      "originalFileIndex": 35,
+      "rawRecordHex": "00000000002300000040000000000000000000000000000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 46,
       "unk2": "50000000",
+      "unk2_1": 0,
       "unk3": 0,
-      "originalFileIndex": 46
+      "unk4": 0,
+      "originalFileIndex": 46,
+      "rawRecordHex": "00000000002e00000050000000000000000000000000000000"
     },
     {
       "type": "EndMark",
@@ -830,136 +1012,187 @@
       "unk1": "00000000",
       "fileIndex": 36,
       "unk2": "00000000",
+      "unk2_1": 0,
       "unk3": -20817516,
-      "originalFileIndex": 36
+      "unk4": 0,
+      "originalFileIndex": 36,
+      "rawRecordHex": "00000000002400000000000000000000009459c2fe00000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 47,
       "unk2": "00000000",
+      "unk2_1": 0,
       "unk3": 294640785,
-      "originalFileIndex": 47
+      "unk4": 0,
+      "originalFileIndex": 47,
+      "rawRecordHex": "00000000002f000000000000000000000091dc8f1100000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 45,
       "unk2": "00000000",
+      "unk2_1": 0,
       "unk3": 860954220,
-      "originalFileIndex": 45
+      "unk4": 0,
+      "originalFileIndex": 45,
+      "rawRecordHex": "00000000002d00000000000000000000006c1e513300000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 48,
       "unk2": "00000000",
+      "unk2_1": 0,
       "unk3": 1641145955,
-      "originalFileIndex": 48
+      "unk4": 0,
+      "originalFileIndex": 48,
+      "rawRecordHex": "000000000030000000000000000000000063e6d16100000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 51,
       "unk2": "00000000",
+      "unk2_1": 0,
       "unk3": 2026559266,
-      "originalFileIndex": 51
+      "unk4": 0,
+      "originalFileIndex": 51,
+      "rawRecordHex": "000000000033000000000000000000000022d7ca7800000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 53,
       "unk2": "00000000",
+      "unk2_1": 0,
       "unk3": -1291283057,
-      "originalFileIndex": 53
+      "unk4": 0,
+      "originalFileIndex": 53,
+      "rawRecordHex": "00000000003500000000000000000000008f9508b300000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 55,
       "unk2": "00000000",
+      "unk2_1": 0,
       "unk3": 704758837,
-      "originalFileIndex": 55
+      "unk4": 0,
+      "originalFileIndex": 55,
+      "rawRecordHex": "000000000037000000000000000000000035c4012a00000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 59,
       "unk2": "00000000",
+      "unk2_1": 0,
       "unk3": 1090827199,
-      "originalFileIndex": 59
+      "unk4": 0,
+      "originalFileIndex": 59,
+      "rawRecordHex": "00000000003b0000000000000000000000bfb3044100000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 52,
       "unk2": "00000000",
+      "unk2_1": 0,
       "unk3": 1543176513,
-      "originalFileIndex": 52
+      "unk4": 0,
+      "originalFileIndex": 52,
+      "rawRecordHex": "00000000003400000000000000000000004101fb5b00000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 60,
       "unk2": "00000000",
+      "unk2_1": 0,
       "unk3": -2090323402,
-      "originalFileIndex": 60
+      "unk4": 0,
+      "originalFileIndex": 60,
+      "rawRecordHex": "00000000003c00000000000000000000003632688300000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 58,
       "unk2": "00000000",
+      "unk2_1": 0,
       "unk3": -1518552789,
-      "originalFileIndex": 58
+      "unk4": 0,
+      "originalFileIndex": 58,
+      "rawRecordHex": "00000000003a00000000000000000000002bb97ca500000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 50,
       "unk2": "00000000",
+      "unk2_1": 0,
       "unk3": -1352580325,
-      "originalFileIndex": 50
+      "unk4": 0,
+      "originalFileIndex": 50,
+      "rawRecordHex": "00000000003200000000000000000000001b4361af00000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 49,
       "unk2": "00000000",
+      "unk2_1": 0,
       "unk3": 912790177,
-      "originalFileIndex": 49
+      "unk4": 0,
+      "originalFileIndex": 49,
+      "rawRecordHex": "0000000000310000000000000000000000a112683600000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 57,
       "unk2": "00000000",
+      "unk2_1": 0,
       "unk3": -1233489318,
-      "originalFileIndex": 57
+      "unk4": 0,
+      "originalFileIndex": 57,
+      "rawRecordHex": "00000000003900000000000000000000005a727ab600000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 54,
       "unk2": "00000000",
+      "unk2_1": 0,
       "unk3": 796074976,
-      "originalFileIndex": 54
+      "unk4": 0,
+      "originalFileIndex": 54,
+      "rawRecordHex": "0000000000360000000000000000000000e023732f00000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 44,
       "unk2": "00000000",
+      "unk2_1": 0,
       "unk3": -52642650,
-      "originalFileIndex": 44
+      "unk4": 0,
+      "originalFileIndex": 44,
+      "rawRecordHex": "00000000002c0000000000000000000000a6bcdcfc00000000"
     },
     {
       "type": "Item",
       "unk1": "00000000",
       "fileIndex": 56,
       "unk2": "00000000",
+      "unk2_1": 0,
       "unk3": 1708518684,
-      "originalFileIndex": 56
+      "unk4": 0,
+      "originalFileIndex": 56,
+      "rawRecordHex": "00000000003800000000000000000000001cedd56500000000"
     },
     {
       "type": "EndMark",

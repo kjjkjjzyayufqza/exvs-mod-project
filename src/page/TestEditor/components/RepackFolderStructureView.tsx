@@ -429,8 +429,12 @@ export default function RepackFolderStructureView({
         folderCount: nodeType === "Folder" ? 0 : undefined,
         unk1: "00000000",
         unk2: "00000000",
+        unk2_1: 0,
         unk3: 0,
-        unk4: nodeType === "Folder" ? 0 : undefined,
+        unk4: 0,
+        ...(nodeType === "Folder"
+          ? { unk5: 0, unk6: 0 }
+          : {}),
       },
     };
 

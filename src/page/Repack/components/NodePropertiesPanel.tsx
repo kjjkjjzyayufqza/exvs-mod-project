@@ -274,18 +274,16 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
 
       let value: string | number;
 
-      // Special handling for unk3 property
-      if (editingProperty === 'unk3') {
+      const int32UnkProps = new Set(["unk3", "unk2_1", "unk4", "unk5", "unk6"]);
+      if (int32UnkProps.has(editingProperty)) {
         try {
-          // Try to parse as hex first (if it contains spaces or is 8 chars)
-          if (editValue.includes(' ') || (editValue.replace(/\s+/g, '').length === 8 && /^[0-9A-F\s]+$/i.test(editValue))) {
+          if (editValue.includes(" ") || (editValue.replace(/\s+/g, "").length === 8 && /^[0-9A-F\s]+$/i.test(editValue))) {
             value = hexDisplayToInt32(editValue);
           } else {
-            // Parse as integer
-            value = parseInt(editValue) || 0;
+            value = parseInt(editValue, 10) || 0;
           }
-        } catch (error) {
-          setValidationError('Invalid hex or integer format');
+        } catch {
+          setValidationError("Invalid hex or integer format");
           return;
         }
       } else if (editingProperty.includes('Index') || editingProperty.includes('unk')) {
@@ -594,6 +592,23 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
             />
           )}
 
+          {(selectedItem.data?.type === "Folder" || selectedItem.data?.type === "Item") && (
+            <DualValueProperty
+              label="Unk2_1"
+              value={selectedItem.data.unk2_1 ?? 0}
+              property="unk2_1"
+              editable={true}
+              editingProperty={editingProperty}
+              editValue={editValue}
+              validationError={validationError}
+              onStartEdit={handleStartPropertyEdit}
+              onSaveEdit={handleSavePropertyEdit}
+              onCancelEdit={handleCancelPropertyEdit}
+              onValueChange={setEditValue}
+              showHex={true}
+            />
+          )}
+
           {selectedItem.data?.unk3 !== undefined && (
             <DualValueProperty
               label="Unk3"
@@ -611,12 +626,12 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
             />
           )}
 
-          {selectedItem.data?.unk4 !== undefined && (
+          {(selectedItem.data?.type === "Folder" || selectedItem.data?.type === "Item") && (
             <DualValueProperty
               label="Unk4"
-              value={selectedItem.data.unk4}
+              value={selectedItem.data.unk4 ?? 0}
               property="unk4"
-              editable={selectedItem.data?.type === 'Folder'}
+              editable={true}
               editingProperty={editingProperty}
               editValue={editValue}
               validationError={validationError}
@@ -626,6 +641,39 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
               onValueChange={setEditValue}
               showHex={true}
             />
+          )}
+
+          {selectedItem.data?.type === "Folder" && (
+            <>
+              <DualValueProperty
+                label="Unk5"
+                value={selectedItem.data.unk5 ?? 0}
+                property="unk5"
+                editable={true}
+                editingProperty={editingProperty}
+                editValue={editValue}
+                validationError={validationError}
+                onStartEdit={handleStartPropertyEdit}
+                onSaveEdit={handleSavePropertyEdit}
+                onCancelEdit={handleCancelPropertyEdit}
+                onValueChange={setEditValue}
+                showHex={true}
+              />
+              <DualValueProperty
+                label="Unk6"
+                value={selectedItem.data.unk6 ?? 0}
+                property="unk6"
+                editable={true}
+                editingProperty={editingProperty}
+                editValue={editValue}
+                validationError={validationError}
+                onStartEdit={handleStartPropertyEdit}
+                onSaveEdit={handleSavePropertyEdit}
+                onCancelEdit={handleCancelPropertyEdit}
+                onValueChange={setEditValue}
+                showHex={true}
+              />
+            </>
           )}
 
           {selectedItem.data?.link && (

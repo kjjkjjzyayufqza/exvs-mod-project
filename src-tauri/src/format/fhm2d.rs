@@ -63,26 +63,34 @@ struct OutputSubFileData {
 }
 
 #[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SubFileStructureEntry {
-    #[serde(rename = "type")]
-    item_type: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    unk1: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    folder_count: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    file_index: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    end_mark_count: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    unk2: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    unk3: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    original_file_index: Option<i32>,
-    #[serde(rename = "Name", skip_serializing_if = "Option::is_none")]
-    display_name: Option<String>,
+#[serde(tag = "type", rename_all_fields = "camelCase")]
+enum SubFileStructureEntry {
+    Folder {
+        unk1: String,
+        folder_count: i32,
+        unk2: String,
+        #[serde(rename = "unk2_1")]
+        unk2_1: i32,
+        unk3: i32,
+        unk4: i32,
+        unk5: i32,
+        unk6: i32,
+    },
+    Item {
+        unk1: String,
+        file_index: i32,
+        unk2: String,
+        #[serde(rename = "unk2_1")]
+        unk2_1: i32,
+        unk3: i32,
+        unk4: i32,
+        original_file_index: i32,
+        #[serde(rename = "Name", skip_serializing_if = "Option::is_none")]
+        display_name: Option<String>,
+    },
+    EndMark {
+        end_mark_count: i32,
+    },
 }
 
 #[derive(Clone, Serialize)]
@@ -534,16 +542,15 @@ fn parse_sub_file_structure(data: &[u8]) -> Result<Vec<SubFileStructureEntry>, S
                 if cursor + 0x21 > data.len() {
                     return Err("Folder entry out of range".to_string());
                 }
-                out.push(SubFileStructureEntry {
-                    item_type: "Folder".to_string(),
-                    unk1: Some(hex_string(&data[cursor + 1..cursor + 5])),
-                    folder_count: Some(read_i32_le(data, cursor + 0x5)?),
-                    file_index: None,
-                    end_mark_count: None,
-                    unk2: Some(hex_string(&data[cursor + 0x9..cursor + 0xd])),
-                    unk3: Some(read_i32_le(data, cursor + 0x11)?),
-                    original_file_index: None,
-                    display_name: None,
+                out.push(SubFileStructureEntry::Folder {
+                    unk1: hex_string(&data[cursor + 1..cursor + 5]),
+                    folder_count: read_i32_le(data, cursor + 0x5)?,
+                    unk2: hex_string(&data[cursor + 0x9..cursor + 0xd]),
+                    unk2_1: read_i32_le(data, cursor + 0xd)?,
+                    unk3: read_i32_le(data, cursor + 0x11)?,
+                    unk4: read_i32_le(data, cursor + 0x15)?,
+                    unk5: read_i32_le(data, cursor + 0x19)?,
+                    unk6: read_i32_le(data, cursor + 0x1d)?,
                 });
                 cursor += 0x21;
             }
@@ -552,15 +559,14 @@ fn parse_sub_file_structure(data: &[u8]) -> Result<Vec<SubFileStructureEntry>, S
                     return Err("Item entry out of range".to_string());
                 }
                 let file_index = read_i32_le(data, cursor + 0x5)?;
-                out.push(SubFileStructureEntry {
-                    item_type: "Item".to_string(),
-                    unk1: Some(hex_string(&data[cursor + 1..cursor + 5])),
-                    folder_count: None,
-                    file_index: Some(file_index),
-                    end_mark_count: None,
-                    unk2: Some(hex_string(&data[cursor + 0x9..cursor + 0xd])),
-                    unk3: Some(read_i32_le(data, cursor + 0x11)?),
-                    original_file_index: Some(file_index),
+                out.push(SubFileStructureEntry::Item {
+                    unk1: hex_string(&data[cursor + 1..cursor + 5]),
+                    file_index,
+                    unk2: hex_string(&data[cursor + 0x9..cursor + 0xd]),
+                    unk2_1: read_i32_le(data, cursor + 0xd)?,
+                    unk3: read_i32_le(data, cursor + 0x11)?,
+                    unk4: read_i32_le(data, cursor + 0x15)?,
+                    original_file_index: file_index,
                     display_name: None,
                 });
                 cursor += 0x19;
@@ -571,17 +577,7 @@ fn parse_sub_file_structure(data: &[u8]) -> Result<Vec<SubFileStructureEntry>, S
                     count += 1;
                     cursor += 1;
                 }
-                out.push(SubFileStructureEntry {
-                    item_type: "EndMark".to_string(),
-                    unk1: None,
-                    folder_count: None,
-                    file_index: None,
-                    end_mark_count: Some(count),
-                    unk2: None,
-                    unk3: None,
-                    original_file_index: None,
-                    display_name: None,
-                });
+                out.push(SubFileStructureEntry::EndMark { end_mark_count: count });
             }
             other => return Err(format!("Unsupported SubFileStructure type: 0x{other:02X}")),
         }
@@ -611,29 +607,35 @@ fn build_parse_tree(entries: &[SubFileStructureEntry]) -> ParseNode {
     let mut folder_counter: Vec<i32> = vec![0];
     let mut tokens = Vec::new();
     for entry in entries {
-        match entry.item_type.as_str() {
-            "Folder" => {
+        match entry {
+            SubFileStructureEntry::Folder { unk1, unk2, unk3, .. } => {
                 let idx = folder_counter.len() - 1;
                 let name = folder_counter[idx].to_string();
                 folder_counter[idx] += 1;
                 folder_counter.push(0);
                 tokens.push(ParseToken::Folder {
                     name,
-                    link: entry.unk3.unwrap_or_default() == 1,
-                    unk1: entry.unk1.clone(),
-                    unk2: entry.unk2.clone(),
-                    unk3: entry.unk3,
+                    link: *unk3 == 1,
+                    unk1: Some(unk1.clone()),
+                    unk2: Some(unk2.clone()),
+                    unk3: Some(*unk3),
                 });
             }
-            "Item" => tokens.push(ParseToken::Item {
-                name: entry.file_index.unwrap_or_default().to_string(),
-                link: entry.unk3.unwrap_or_default() == 1,
-                unk1: entry.unk1.clone(),
-                unk2: entry.unk2.clone(),
-                unk3: entry.unk3,
+            SubFileStructureEntry::Item {
+                file_index,
+                unk1,
+                unk2,
+                unk3,
+                ..
+            } => tokens.push(ParseToken::Item {
+                name: file_index.to_string(),
+                link: *unk3 == 1,
+                unk1: Some(unk1.clone()),
+                unk2: Some(unk2.clone()),
+                unk3: Some(*unk3),
             }),
-            "EndMark" => {
-                let count = entry.end_mark_count.unwrap_or_default().max(0) as usize;
+            SubFileStructureEntry::EndMark { end_mark_count } => {
+                let count = (*end_mark_count).max(0) as usize;
                 for _ in 0..count {
                     if folder_counter.len() > 1 {
                         folder_counter.pop();
@@ -641,7 +643,6 @@ fn build_parse_tree(entries: &[SubFileStructureEntry]) -> ParseNode {
                     tokens.push(ParseToken::End);
                 }
             }
-            _ => {}
         }
     }
     let mut idx = 0usize;
@@ -753,11 +754,14 @@ fn sync_structure_display_name(output: &mut OutputStructure) {
         }
     }
     for entry in &mut output.sub_file_structure {
-        if entry.item_type == "Item" {
-            if let Some(idx) = entry.file_index {
-                if let Some(base) = by_file_index.get(&idx) {
-                    entry.display_name = Some(base.clone());
-                }
+        if let SubFileStructureEntry::Item {
+            file_index,
+            display_name,
+            ..
+        } = entry
+        {
+            if let Some(base) = by_file_index.get(file_index) {
+                *display_name = Some(base.clone());
             }
         }
     }

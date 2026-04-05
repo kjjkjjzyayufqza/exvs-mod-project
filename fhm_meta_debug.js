@@ -2,6 +2,11 @@
  * Decode FHM2D inflated meta (meta.bin from export access) or a full OB fhm2d file
  * into JSON matching the project's *_structure.json shape (see src-tauri/src/format/fhm2d.rs).
  *
+ * SubFileStructure: full unknown fields (i32 LE at each offset; unk1/unk2 stay hex strings like Rust JSON):
+ * - Item (0x00), 0x19 bytes: +0x00 type, unk1 +0x01, fileIndex +0x05, unk2 +0x09, unk2_1 +0x0d, unk3 +0x11, unk4 +0x15.
+ * - Folder (0x0a), 0x21 bytes: +0x00 type, unk1 +0x01, folderCount +0x05, unk2 +0x09, unk2_1 +0x0d, unk3 +0x11,
+ *   unk4 +0x15, unk5 +0x19, unk6 +0x1d. All i32 fields use readInt32LE (same as Rust read_i32_le).
+ *
  * Usage:
  *   node fhm_meta_debug.js --input <path/to/meta.bin>
  *   node fhm_meta_debug.js <path/to/meta.bin>
@@ -13,6 +18,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
 
 const MAGIC_OB = Buffer.from([0xb9, 0xb7, 0xb2, 0xcd]);
@@ -29,6 +35,50 @@ function readI32Le(buf, off) {
 
 function hexString(bytes) {
   return Buffer.from(bytes).toString("hex");
+}
+
+function writeHex4ToBuffer(hex8, buf, offset) {
+  const b = Buffer.from(hex8, "hex");
+  if (b.length !== 4) {
+    throw new Error(`writeHex4ToBuffer: expected 8 hex chars, got length ${hex8.length}`);
+  }
+  b.copy(buf, offset);
+}
+
+function assertFolderRecordRoundTrip(record, rawSlice) {
+  const buf = Buffer.alloc(0x21);
+  buf[0] = 0x0a;
+  writeHex4ToBuffer(record.unk1, buf, 1);
+  buf.writeInt32LE(record.folderCount, 5);
+  writeHex4ToBuffer(record.unk2, buf, 9);
+  buf.writeInt32LE(record.unk2_1, 0x0d);
+  buf.writeInt32LE(record.unk3, 0x11);
+  buf.writeInt32LE(record.unk4, 0x15);
+  buf.writeInt32LE(record.unk5, 0x19);
+  buf.writeInt32LE(record.unk6, 0x1d);
+  const raw = Buffer.from(rawSlice);
+  if (!buf.equals(raw)) {
+    throw new Error(
+      `Folder SubFileStructure round-trip mismatch:\n  rebuilt ${buf.toString("hex")}\n  actual  ${raw.toString("hex")}`,
+    );
+  }
+}
+
+function assertItemRecordRoundTrip(record, rawSlice) {
+  const buf = Buffer.alloc(0x19);
+  buf[0] = 0x00;
+  writeHex4ToBuffer(record.unk1, buf, 1);
+  buf.writeInt32LE(record.fileIndex, 5);
+  writeHex4ToBuffer(record.unk2, buf, 9);
+  buf.writeInt32LE(record.unk2_1, 0x0d);
+  buf.writeInt32LE(record.unk3, 0x11);
+  buf.writeInt32LE(record.unk4, 0x15);
+  const raw = Buffer.from(rawSlice);
+  if (!buf.equals(raw)) {
+    throw new Error(
+      `Item SubFileStructure round-trip mismatch:\n  rebuilt ${buf.toString("hex")}\n  actual  ${raw.toString("hex")}`,
+    );
+  }
 }
 
 function getFileType(fileType) {
@@ -120,34 +170,48 @@ function parseSubFileStructure(data) {
       if (cursor + 0x21 > data.length) {
         throw new Error("Folder entry out of range");
       }
-      out.push({
+      const rawSlice = data.subarray(cursor, cursor + 0x21);
+      const folder = {
         type: "Folder",
         unk1: hexString(data.subarray(cursor + 1, cursor + 5)),
         folderCount: readI32Le(data, cursor + 5),
+        unk2: hexString(data.subarray(cursor + 9, cursor + 0xd)),
+        unk2_1: readI32Le(data, cursor + 0x0d),
+        unk3: readI32Le(data, cursor + 0x11),
+        unk4: readI32Le(data, cursor + 0x15),
+        unk5: readI32Le(data, cursor + 0x19),
+        unk6: readI32Le(data, cursor + 0x1d),
         fileIndex: undefined,
         endMarkCount: undefined,
-        unk2: hexString(data.subarray(cursor + 9, cursor + 0xd)),
-        unk3: readI32Le(data, cursor + 0x11),
         originalFileIndex: undefined,
         Name: undefined,
-      });
+        rawRecordHex: hexString(rawSlice),
+      };
+      assertFolderRecordRoundTrip(folder, rawSlice);
+      out.push(folder);
       cursor += 0x21;
     } else if (ty === 0x00) {
       if (cursor + 0x19 > data.length) {
         throw new Error("Item entry out of range");
       }
       const fileIndex = readI32Le(data, cursor + 5);
-      out.push({
+      const rawSlice = data.subarray(cursor, cursor + 0x19);
+      const item = {
         type: "Item",
         unk1: hexString(data.subarray(cursor + 1, cursor + 5)),
-        folderCount: undefined,
         fileIndex,
-        endMarkCount: undefined,
         unk2: hexString(data.subarray(cursor + 9, cursor + 0xd)),
+        unk2_1: readI32Le(data, cursor + 0x0d),
         unk3: readI32Le(data, cursor + 0x11),
+        unk4: readI32Le(data, cursor + 0x15),
+        folderCount: undefined,
+        endMarkCount: undefined,
         originalFileIndex: fileIndex,
         Name: undefined,
-      });
+        rawRecordHex: hexString(rawSlice),
+      };
+      assertItemRecordRoundTrip(item, rawSlice);
+      out.push(item);
       cursor += 0x19;
     } else if (ty === 0x0b) {
       let count = 0;
@@ -365,6 +429,15 @@ function parseInflatedMeta(meta) {
   };
 }
 
+function isMainModule() {
+  if (typeof process === "undefined" || !process.argv[1]) {
+    return false;
+  }
+  const entry = path.resolve(process.argv[1]);
+  const thisFile = fileURLToPath(import.meta.url);
+  return path.normalize(entry) === path.normalize(thisFile);
+}
+
 function parseArgs(argv) {
   let inputPath = null;
   let outputPath = null;
@@ -425,9 +498,22 @@ function main() {
   console.log(`Wrote ${outFile} (${source}, ${meta.length} byte meta)`);
 }
 
-try {
-  main();
-} catch (e) {
-  console.error(e instanceof Error ? e.message : e);
-  process.exitCode = 1;
+export {
+  buildOutputStructure,
+  buildParseTree,
+  computeSubEntryMetaUsedLen,
+  loadMetaBuffer,
+  parseArgs,
+  parseInflatedMeta,
+  parseSubFileStructure,
+  readSubEntryHeader,
+};
+
+if (isMainModule()) {
+  try {
+    main();
+  } catch (e) {
+    console.error(e instanceof Error ? e.message : e);
+    process.exitCode = 1;
+  }
 }

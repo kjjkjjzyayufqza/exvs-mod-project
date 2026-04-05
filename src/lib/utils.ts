@@ -16,8 +16,11 @@ export interface TreeDataItem {
     folderCount?: number;
     unk1?: string;
     unk2?: string;
+    unk2_1?: number;
     unk3?: number;
     unk4?: number;
+    unk5?: number;
+    unk6?: number;
     link?: boolean;
     isError?: boolean;
     originChunkCount?: number;
@@ -61,8 +64,11 @@ export const convertSubFileStructureToTreeData = (structureData: any[], subFileD
           folderCount: item.folderCount,
           unk1: item.unk1,
           unk2: item.unk2,
+          unk2_1: item.unk2_1,
           unk3: item.unk3,
-          unk4: item.unk4
+          unk4: item.unk4,
+          unk5: item.unk5,
+          unk6: item.unk6,
         }
       };
 
@@ -112,7 +118,9 @@ export const convertSubFileStructureToTreeData = (structureData: any[], subFileD
           originalFileIndex: item.originalFileIndex,
           unk1: item.unk1,
           unk2: item.unk2,
+          unk2_1: item.unk2_1,
           unk3: item.unk3,
+          unk4: item.unk4,
           link: item.unk2 && item.unk2 !== "00000000",
           isError: fileInfo.isError,
           originChunkCount: fileInfo.originChunkCount,
