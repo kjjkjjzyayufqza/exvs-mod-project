@@ -223,14 +223,20 @@ impl<'a> Fhm2dExtractor<'a> {
             out_name.as_str(),
         )?;
 
-        let naming_error = apply_naming(
-            &mut output,
+        let mut named_output = output.clone();
+        let naming_error = match apply_naming(
+            &mut named_output,
             files.as_slice(),
             self.format,
             self.list_output_file_name.as_deref(),
             out_name.as_str(),
-        )
-        .err();
+        ) {
+            Ok(()) => {
+                output = named_output;
+                None
+            }
+            Err(err) => Some(err),
+        };
         output.naming_error = naming_error.clone();
         sync_structure_display_name(&mut output);
 
@@ -697,7 +703,11 @@ fn apply_naming(
         }
         Some(Fhm2dFormat::AllNutexb) => apply_nutexb_names(&mut output.sub_file_data, files),
         Some(Fhm2dFormat::Character) => {
-            apply_character_numdlb_names(&mut output.sub_file_data, files)?;
+            numdlb_character_enrich::apply_numdlb_base_name_to_structure(
+                &mut output.sub_file_data,
+                &output.sub_file_parse_structure,
+                files,
+            )?;
             apply_nutexb_names(&mut output.sub_file_data, files)
         }
         Some(Fhm2dFormat::Sound) => apply_sound_names(&mut output.sub_file_data, files),
@@ -798,23 +808,6 @@ fn apply_motion_names(
         prefix.extend(folder_segments.iter().cloned());
         item.file_base_name = Some(strip_extension(name.as_str()));
         item.file_url = build_file_url(prefix.as_slice(), name.as_str());
-    }
-    Ok(())
-}
-
-fn apply_character_numdlb_names(sub: &mut [OutputSubFileData], files: &[DecodedSubFile]) -> Result<(), String> {
-    let by_file_index = build_file_index_map(sub)?;
-    for item in sub {
-        if !item.file_type.eq_ignore_ascii_case(".numdlb") {
-            continue;
-        }
-        let source_idx = *by_file_index
-            .get(&item.file_index)
-            .ok_or_else(|| format!("Character naming missing fileIndex {}", item.file_index))?;
-        let model_name = parse_numdlb_model_name(files[source_idx].data.as_slice())?;
-        let prefix = parent_segments(item.file_url.as_str())?;
-        item.file_base_name = Some(model_name.clone());
-        item.file_url = build_file_url(prefix.as_slice(), format!("{}{}", model_name, item.file_type).as_str());
     }
     Ok(())
 }
@@ -924,24 +917,6 @@ fn build_file_index_map(sub: &[OutputSubFileData]) -> Result<HashMap<i32, usize>
         }
     }
     Ok(map)
-}
-
-fn parse_numdlb_model_name(bytes: &[u8]) -> Result<String, String> {
-    if bytes.get(0..4) != Some(b"HBSS") || bytes.get(0x10..0x14) != Some(b"LDOM") {
-        return Err("Invalid numdlb header".to_string());
-    }
-    let rel = read_u64_le(bytes, 0x18)?;
-    if rel == 0 {
-        return Err("numdlb model_name RelPtr64 is null".to_string());
-    }
-    let abs = 0x18usize
-        .checked_add(rel as usize)
-        .ok_or_else(|| "numdlb model_name offset overflow".to_string())?;
-    let model_name = read_c_string_utf8(bytes, abs, 4096)?;
-    if model_name.trim().is_empty() {
-        return Err("numdlb model_name is empty".to_string());
-    }
-    Ok(model_name.trim().to_string())
 }
 
 fn parse_nutexb_name(bytes: &[u8]) -> Result<String, String> {
@@ -1258,3 +1233,6 @@ fn hex_string(bytes: &[u8]) -> String {
 fn is_windows_invalid_char(ch: char) -> bool {
     matches!(ch, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*')
 }
+
+#[path = "fhm2d_numdlb_character.rs"]
+mod numdlb_character_enrich;
