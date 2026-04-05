@@ -45,14 +45,52 @@ pub(crate) fn preview_path_to_frontend(path: &Path) -> String {
     normalize_preview_path_for_frontend(&path.to_string_lossy())
 }
 
-/// Game bundles inject a hard-coded `nusubf` segment in several references. Unpacked trees usually
-/// omit that folder. Remove every path component equal to `nusubf` (case-insensitive); keep `.` and `..`.
-fn normalize_bundle_relative_path(raw: &str) -> String {
-    let s = raw.trim().replace('\\', "/");
-    s.split('/')
-        .filter(|p| !p.is_empty() && !p.eq_ignore_ascii_case("nusubf"))
+/// Normalizes modl-relative path strings: trim, unify separators, drop empty segments.
+/// Does not rewrite `nusubf` or other folder names; resolution follows the paths recorded in the modl.
+fn normalize_modl_relative_path_str(raw: &str) -> String {
+    raw.trim()
+        .replace('\\', "/")
+        .split('/')
+        .filter(|p| !p.is_empty())
         .collect::<Vec<_>>()
         .join("/")
+}
+
+/// Tries the path as recorded in the modl first; if that file is missing, tries the same basename
+/// directly under the model folder (directory containing the `.numdlb`).
+fn resolve_modl_sidecar_path(
+    model_root_canon: &Path,
+    raw: &str,
+) -> Result<(Option<PathBuf>, String), String> {
+    let rel = normalize_modl_relative_path_str(raw);
+    if rel.is_empty() {
+        return Err("Path is empty".to_string());
+    }
+    let primary_opt = resolve_relative_from_model_folder(model_root_canon, &rel).ok();
+    if let Some(ref primary) = primary_opt {
+        if primary.is_file() {
+            let v = verify_preview_path_under_model_tree(model_root_canon, primary)?;
+            return Ok((Some(v), preview_path_to_frontend(primary)));
+        }
+    }
+    if let Some(fname) = Path::new(&rel).file_name().and_then(|s| s.to_str()) {
+        if !fname.is_empty() {
+            let alt = model_root_canon.join(fname);
+            if alt.is_file() {
+                let v = verify_preview_path_under_model_tree(model_root_canon, &alt)?;
+                let expected = primary_opt
+                    .as_ref()
+                    .map(|p| preview_path_to_frontend(p.as_path()))
+                    .unwrap_or_else(|| rel.clone());
+                return Ok((Some(v), expected));
+            }
+        }
+    }
+    let expected = primary_opt
+        .as_ref()
+        .map(|p| preview_path_to_frontend(p.as_path()))
+        .unwrap_or_else(|| rel.clone());
+    Ok((None, expected))
 }
 
 /// Canonical model root (directory containing the `.numdlb`).
@@ -705,7 +743,7 @@ pub fn resolve_nutexb_path(root_canon: &Path, texture_ref: &str) -> Result<Optio
     if trimmed.is_empty() {
         return Ok(None);
     }
-    let normalized = normalize_bundle_relative_path(trimmed);
+    let normalized = normalize_modl_relative_path_str(trimmed);
     if normalized.is_empty() {
         return find_nutexb_by_basename_near_textures(root_canon, texture_ref);
     }
@@ -755,7 +793,10 @@ pub fn resolve_nutexb_path(root_canon: &Path, texture_ref: &str) -> Result<Optio
 
 pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBundle, String> {
     let t0 = Instant::now();
-    preview_log(&format!("load start: input={}", root_input));
+    preview_log(&format!(
+        "load start: input={}",
+        normalize_preview_path_for_frontend(root_input)
+    ));
     let modl_path = resolve_modl_entry_path(root_input)?;
     let folder = modl_path
         .parent()
@@ -765,23 +806,24 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
     let root_canon = canonical_model_folder(&folder)?;
     preview_log(&format!(
         "resolved entry: modl={} root={}",
-        modl_path.display(),
-        root_canon.display()
+        preview_path_to_frontend(&modl_path),
+        preview_path_to_frontend(&root_canon)
     ));
 
     let modl: ModlData =
         ModlData::from_file(&modl_path).map_err(|e| format!("Failed to read Modl: {e}"))?;
 
-    let mesh_rel = normalize_bundle_relative_path(&modl.mesh_file_name);
-    let mesh_lex = resolve_relative_from_model_folder(&root_canon, &mesh_rel)?;
-    if !mesh_lex.is_file() {
-        return Err(format!(
-            "Mesh file not found: {}",
-            mesh_lex.display()
-        ));
-    }
-    let mesh_path = verify_preview_path_under_model_tree(&root_canon, &mesh_lex)?;
-    preview_log(&format!("mesh resolved: {}", mesh_path.display()));
+    let (mesh_opt, mesh_expected) = resolve_modl_sidecar_path(&root_canon, &modl.mesh_file_name)?;
+    let mesh_path = mesh_opt.ok_or_else(|| {
+        format!(
+            "Mesh file not found (tried recorded path and model root basename): {}",
+            mesh_expected
+        )
+    })?;
+    preview_log(&format!(
+        "mesh resolved: {}",
+        preview_path_to_frontend(&mesh_path)
+    ));
 
     let mesh: MeshData =
         MeshData::from_file(&mesh_path).map_err(|e| format!("Failed to read Mesh: {e}"))?;
@@ -793,23 +835,26 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
         if skel_ref.is_empty() {
             (None, None, String::new())
         } else {
-            let skel_rel = normalize_bundle_relative_path(skel_ref);
-            let skel_lex = resolve_relative_from_model_folder(&root_canon, &skel_rel)?;
-            let expected = skel_lex.display().to_string();
-            if skel_lex.is_file() {
-                let skel_path = verify_preview_path_under_model_tree(&root_canon, &skel_lex)?;
-                let s: SkelData =
-                    SkelData::from_file(&skel_path).map_err(|e| format!("Failed to read Skel: {e}"))?;
-                (
-                    Some(
-                        serde_json::to_value(&s)
-                            .map_err(|e| format!("Failed to serialize Skel to JSON: {e}"))?,
-                    ),
-                    Some(preview_path_to_frontend(&skel_path)),
-                    expected,
-                )
-            } else {
-                (None, None, expected)
+            match resolve_modl_sidecar_path(&root_canon, skel_ref) {
+                Ok((Some(skel_path), _expected)) => {
+                    let s: SkelData = SkelData::from_file(&skel_path)
+                        .map_err(|e| format!("Failed to read Skel: {e}"))?;
+                    (
+                        Some(
+                            serde_json::to_value(&s)
+                                .map_err(|e| format!("Failed to serialize Skel to JSON: {e}"))?,
+                        ),
+                        Some(preview_path_to_frontend(&skel_path)),
+                        preview_path_to_frontend(&skel_path),
+                    )
+                }
+                Ok((None, expected)) => (None, None, expected),
+                Err(e) => {
+                    warnings.push(format!(
+                        "Skeleton reference invalid ({skel_ref}): {e}"
+                    ));
+                    (None, None, String::new())
+                }
             }
         }
     };
@@ -829,7 +874,7 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
         if name_trim.is_empty() {
             continue;
         }
-        let mat_rel = normalize_bundle_relative_path(name_trim);
+        let mat_rel = normalize_modl_relative_path_str(name_trim);
         if mat_rel.is_empty() {
             warnings.push(format!(
                 "Material reference has no usable path after normalizing: {name_trim}"
@@ -838,9 +883,15 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
         }
         let mut p_lex = match resolve_relative_from_model_folder(&root_canon, &mat_rel) {
             Ok(p) => p,
-            Err(e) => {
-                warnings.push(format!("Material reference invalid ({name_trim}): {e}"));
-                continue;
+            Err(_) => {
+                if let Some(fname) = Path::new(&mat_rel).file_name() {
+                    root_canon.join(fname)
+                } else {
+                    warnings.push(format!(
+                        "Material reference invalid ({name_trim}): could not resolve path"
+                    ));
+                    continue;
+                }
             }
         };
         if !p_lex.is_file() {

@@ -43,6 +43,7 @@ import {
   writeRecentModelPathsToStorage,
 } from "./ssbhPreviewRecentPaths";
 import { buildSkeletonLineGeometry } from "./skeletonLines";
+import { normalizeScenePathStrict } from "./testEditorSceneConfig";
 import type {
   BuiltMeshDraw,
   MatlDataJson,
@@ -594,7 +595,11 @@ export function SsbhModelPreviewProvider({
     for (let offset = 0; offset < paths.length; offset += INSTANCE_LOAD_CONCURRENCY) {
       const chunk = paths.slice(offset, offset + INSTANCE_LOAD_CONCURRENCY);
       const bundles = await Promise.all(
-        chunk.map((p) => invoke<SsbhModelPreviewBundle>("ssbh_load_model_preview", { rootPath: p })),
+        chunk.map((p) =>
+          invoke<SsbhModelPreviewBundle>("ssbh_load_model_preview", {
+            rootPath: normalizeScenePathStrict(p.trim()),
+          }),
+        ),
       );
       for (let j = 0; j < chunk.length; j++) {
         const b = bundles[j]!;
@@ -1219,17 +1224,18 @@ export function SsbhModelPreviewProvider({
       setLoadError(null);
       setTextureDecodeProgress(null);
       try {
-        if (/\.numdlb$/i.test(t)) {
-          await loadInstancesFromPaths([t]);
+        const normalized = normalizeScenePathStrict(t);
+        if (/\.numdlb$/i.test(normalized)) {
+          await loadInstancesFromPaths([normalized]);
         } else {
-          const listed = await invoke<string[]>("ssbh_list_numdlb_under_tree", { rootPath: t });
+          const listed = await invoke<string[]>("ssbh_list_numdlb_under_tree", { rootPath: normalized });
           if (listed.length === 0) {
             throw new Error("No .numdlb files found under the selected folder.");
           }
           await loadInstancesFromPaths(listed);
         }
         setRecentModelPaths((prev) => {
-          const next = buildNextRecentPaths(prev, t);
+          const next = buildNextRecentPaths(prev, normalized);
           writeRecentModelPathsToStorage(next);
           return next;
         });

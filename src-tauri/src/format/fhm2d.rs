@@ -13,6 +13,7 @@ const MAGIC_OB: [u8; 4] = [0xB9, 0xB7, 0xB2, 0xCD];
 const MAGIC_GVS: [u8; 4] = [0x99, 0x92, 0xCD, 0x90];
 const PAGE_SIZE: usize = 0x10000;
 const MOTION_INTERNAL_NAME_OFFSET: usize = 0x50;
+const NUS3BANK_INTERNAL_NAME_OFFSET: usize = 0x7d; // Maybe 0x7c is size of the string?
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,6 +29,7 @@ pub enum Fhm2dFormat {
     CharacterParam,
     Msc,
     Motion,
+    Sound,
 }
 
 impl Fhm2dFormat {
@@ -40,6 +42,7 @@ impl Fhm2dFormat {
             Some("fhm2d_character_param") => Ok(Some(Self::CharacterParam)),
             Some("fhm2d_msc") => Ok(Some(Self::Msc)),
             Some("fhm2d_motion") => Ok(Some(Self::Motion)),
+            Some("fhm2d_sound") => Ok(Some(Self::Sound)),
             Some(other) => Err(format!("Unsupported fhm2d format: {other}")),
         }
     }
@@ -164,6 +167,7 @@ pub struct Fhm2dExtractor<'a> {
     out_dir: &'a str,
     format: Option<Fhm2dFormat>,
     list_output_file_name: Option<String>,
+    write_meta_bin: bool,
 }
 
 impl<'a> Fhm2dExtractor<'a> {
@@ -172,18 +176,20 @@ impl<'a> Fhm2dExtractor<'a> {
         out_dir: &'a str,
         format: Option<Fhm2dFormat>,
         list_output_file_name: Option<String>,
+        write_meta_bin: bool,
     ) -> Self {
         Self {
             source_path,
             out_dir,
             format,
             list_output_file_name,
+            write_meta_bin,
         }
     }
 
     pub fn extract(self) -> Result<ExtractFhm2dResult, String> {
         let file_bytes = fs::read(self.source_path).map_err(|e| format!("Failed to read fhm2d file: {e}"))?;
-        let parsed = parse_ob_fhm2d(file_bytes.as_slice())?;
+        let (parsed, meta_inflated) = parse_ob_fhm2d(file_bytes.as_slice())?;
 
         let out_name = Path::new(self.out_dir)
             .file_name()
@@ -192,6 +198,17 @@ impl<'a> Fhm2dExtractor<'a> {
             .to_string();
         fs::create_dir_all(self.out_dir)
             .map_err(|e| format!("Failed to create output directory: {e}"))?;
+
+        if self.write_meta_bin {
+            let meta_path = Path::new(self.out_dir).join("meta.bin");
+            fs::write(&meta_path, meta_inflated.as_slice())
+                .map_err(|e| format!("Write meta.bin failed: {e}"))?;
+            println!(
+                "[fhm2d] wrote meta.bin: {} ({} bytes)",
+                meta_path.display(),
+                meta_inflated.len()
+            );
+        }
 
         let mut files = parsed.files;
         files.sort_by_key(|f| f.file_index);
@@ -243,11 +260,12 @@ pub fn extract_fhm2d_to_folder_impl(
     out_dir: &str,
     format: Option<Fhm2dFormat>,
     list_output_file_name: Option<String>,
+    write_meta_bin: bool,
 ) -> Result<ExtractFhm2dResult, String> {
-    Fhm2dExtractor::new(source_path, out_dir, format, list_output_file_name).extract()
+    Fhm2dExtractor::new(source_path, out_dir, format, list_output_file_name, write_meta_bin).extract()
 }
 
-fn parse_ob_fhm2d(bytes: &[u8]) -> Result<ParsedOb, String> {
+fn parse_ob_fhm2d(bytes: &[u8]) -> Result<(ParsedOb, Vec<u8>), String> {
     let magic = bytes
         .get(0..4)
         .ok_or_else(|| "Invalid fhm2d file: missing magic".to_string())?;
@@ -302,14 +320,17 @@ fn parse_ob_fhm2d(bytes: &[u8]) -> Result<ParsedOb, String> {
     let sub_file_structure = parse_sub_file_structure(structure_bytes)?;
     let sub_file_parse_structure = build_parse_tree(sub_file_structure.as_slice());
 
-    Ok(ParsedOb {
-        meta_header,
-        unk_count,
-        type_list,
-        files,
-        sub_file_structure,
-        sub_file_parse_structure,
-    })
+    Ok((
+        ParsedOb {
+            meta_header,
+            unk_count,
+            type_list,
+            files,
+            sub_file_structure,
+            sub_file_parse_structure,
+        },
+        meta,
+    ))
 }
 
 fn build_output_structure(
@@ -679,6 +700,7 @@ fn apply_naming(
             apply_character_numdlb_names(&mut output.sub_file_data, files)?;
             apply_nutexb_names(&mut output.sub_file_data, files)
         }
+        Some(Fhm2dFormat::Sound) => apply_sound_names(&mut output.sub_file_data, files),
         None => Ok(()),
     }?;
     ensure_unique_file_urls(output.sub_file_data.as_slice())
@@ -795,6 +817,66 @@ fn apply_character_numdlb_names(sub: &mut [OutputSubFileData], files: &[DecodedS
         item.file_url = build_file_url(prefix.as_slice(), format!("{}{}", model_name, item.file_type).as_str());
     }
     Ok(())
+}
+
+fn apply_sound_names(sub: &mut [OutputSubFileData], files: &[DecodedSubFile]) -> Result<(), String> {
+    let by_file_index = build_file_index_map(sub)?;
+    let mut used: HashSet<String> = sub.iter().map(|s| normalize_path_key(s.file_url.as_str())).collect();
+    for item in sub {
+        if !item.file_type.eq_ignore_ascii_case(".nus3bank") {
+            continue;
+        }
+        let source_idx = *by_file_index
+            .get(&item.file_index)
+            .ok_or_else(|| format!("Sound naming missing fileIndex {}", item.file_index))?;
+        let base = parse_nus3bank_display_name(files[source_idx].data.as_slice())?;
+        let prefix = parent_segments(item.file_url.as_str())?;
+        used.remove(&normalize_path_key(item.file_url.as_str()));
+        let mut suffix = 0usize;
+        loop {
+            let candidate = if suffix == 0 {
+                base.clone()
+            } else {
+                format!("{}_{}", base, suffix)
+            };
+            let url = build_file_url(prefix.as_slice(), format!("{candidate}.nus3bank").as_str());
+            let key = normalize_path_key(url.as_str());
+            if !used.contains(&key) {
+                used.insert(key);
+                item.file_base_name = Some(candidate);
+                item.file_url = url;
+                break;
+            }
+            suffix += 1;
+            if suffix > 9999 {
+                return Err(format!("Sound naming overflow for fileIndex {}", item.file_index));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn parse_nus3bank_display_name(bytes: &[u8]) -> Result<String, String> {
+    if bytes.len() < NUS3BANK_INTERNAL_NAME_OFFSET + 1 {
+        return Err("nus3bank buffer too small for name at 0x7C".to_string());
+    }
+    let raw = read_c_string_utf8(bytes, NUS3BANK_INTERNAL_NAME_OFFSET, 4096)?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("nus3bank internal name at 0x7C is empty".to_string());
+    }
+    let cleaned = sanitize_file_name(trimmed.replace(['/', '\\'], "_").trim());
+    if cleaned.is_empty() {
+        return Err("nus3bank internal name is empty after sanitize".to_string());
+    }
+    let mut base = strip_extension(cleaned.as_str());
+    if base.to_ascii_lowercase().ends_with(".nus3bank") {
+        base = strip_extension(base.as_str());
+    }
+    if base.is_empty() || has_windows_invalid_chars(base.as_str()) {
+        return Err(format!("nus3bank base name invalid: {cleaned}"));
+    }
+    Ok(base)
 }
 
 fn apply_nutexb_names(sub: &mut [OutputSubFileData], files: &[DecodedSubFile]) -> Result<(), String> {

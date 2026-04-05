@@ -85,7 +85,7 @@ export function normalizeScenePath(path: string | null | undefined): string | nu
   return withoutExtended.replace(/\\/g, "/");
 }
 
-function normalizeScenePathStrict(path: string): string {
+export function normalizeScenePathStrict(path: string): string {
   const normalized = normalizeScenePath(path);
   if (!normalized) {
     throw new Error("Scene path cannot be empty.");

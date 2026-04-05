@@ -15,9 +15,15 @@ export interface ExtractResult {
 /**
  * Core logic for extracting a single FHM2D asset.
  */
+export type ExtractAssetOptions = {
+  /** When true, writes decompressed OB meta section to `meta.bin` in the output folder. */
+  writeMetaBin?: boolean;
+};
+
 export async function extractAsset(
   asset: AssetRefInfo,
-  extractOutputPath: string
+  extractOutputPath: string,
+  options?: ExtractAssetOptions
 ): Promise<ExtractResult> {
   try {
     if (!asset.sourceFilePath) {
@@ -65,13 +71,17 @@ export async function extractAsset(
           ? Fhm2d_type_format.fhm2d_msc
           : asset.isMotionAsset
             ? Fhm2d_type_format.fhm2d_motion
-            : undefined;
+            : asset.isSoundAsset
+              ? Fhm2d_type_format.fhm2d_sound
+              : undefined;
 
     const extractResult = await ExtractFHMData(
       asset.sourceFilePath,
       targetDir,
       ExtractType.SingleFolder,
-      extractFormat
+      extractFormat,
+      undefined,
+      options?.writeMetaBin === true
     );
     logExtractPhase('ExtractFHMData');
     console.log(`[FHM2D Extract] total (Extract to Output Folder): ${(performance.now() - extractT0).toFixed(2)}ms`);

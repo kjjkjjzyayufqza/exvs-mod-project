@@ -10,6 +10,7 @@ export enum Fhm2d_type_format {
   fhm2d_character_param = "fhm2d_character_param",
   fhm2d_msc = "fhm2d_msc",
   fhm2d_motion = "fhm2d_motion",
+  fhm2d_sound = "fhm2d_sound",
 }
 
 export enum Fhm2dType {
@@ -502,7 +503,8 @@ export async function ExtractFHMData(
   outDir: string,
   type: ExtractType,
   format?: Fhm2d_type_format,
-  listOutputFileName?: string
+  listOutputFileName?: string,
+  writeMetaBin?: boolean
 ): Promise<ExtractFhmDataResult> {
   if (!sourcePath || !sourcePath.trim()) {
     throw new Error("sourcePath is required for Rust-side extraction");
@@ -515,5 +517,6 @@ export async function ExtractFHMData(
     outDir,
     format,
     listOutputFileName,
+    writeMetaBin: writeMetaBin === true,
   });
 }

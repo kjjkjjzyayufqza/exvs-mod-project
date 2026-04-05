@@ -15,5 +15,22 @@
         "Param": 136612493,
         "Msc": -1111592982,
         "Motion": -230704377
+    },
+    {
+        "id": 900000001,
+        "name": "最終決戰特裝型強襲自由高達",
+        "gameName": "900bldrpe_001strkfr_001",
+        "modelName": "900bldrpe_001strkfr_001_model",
+        "aleoName": "900bldrpe_001strkfr_001_eff",
+        "nu3bankName": "900bldrpe_001strkfr_001_sound",
+        "ammoName": "900bldrpe_001strkfr_001_param",
+        "mscName": "900bldrpe_001strkfr_001_msc",
+        "animeName": "900bldrpe_001strkfr_001_motion",
+        "Model": 0,
+        "Effect": 0,
+        "Sound": 0,
+        "Param": 0,
+        "Msc": 0,
+        "Motion": 0
     }
 ]

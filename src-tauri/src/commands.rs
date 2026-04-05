@@ -346,14 +346,17 @@ pub async fn extract_fhm2d_to_folder(
     out_dir: String,
     format: Option<String>,
     list_output_file_name: Option<String>,
+    write_meta_bin: Option<bool>,
 ) -> Result<crate::format::fhm2d::ExtractFhm2dResult, String> {
     let parsed_format = crate::format::fhm2d::Fhm2dFormat::from_opt_str(format.as_deref())?;
+    let write_meta = write_meta_bin.unwrap_or(false);
     tauri::async_runtime::spawn_blocking(move || {
         crate::format::fhm2d::extract_fhm2d_to_folder_impl(
             source_path.as_str(),
             out_dir.as_str(),
             parsed_format,
             list_output_file_name,
+            write_meta,
         )
     })
     .await

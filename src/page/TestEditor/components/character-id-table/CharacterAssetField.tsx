@@ -14,6 +14,7 @@ import {
   Copy
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -73,6 +74,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [copySeed, setCopySeed] = useState("");
   const [isCopyingAsNew, setIsCopyingAsNew] = useState(false);
+  const [writeMetaBin, setWriteMetaBin] = useState(false);
   const trimmedSeed = copySeed.trim();
   const nextHashPreview = useMemo(() => crc32Hex(trimmedSeed), [trimmedSeed]);
 
@@ -101,7 +103,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
 
   const handleExtract = async () => {
     setIsExtracting(true);
-    const result = await extractAsset(asset, extractOutputPath);
+    const result = await extractAsset(asset, extractOutputPath, { writeMetaBin });
     setIsExtracting(false);
 
     if (result.success) {
@@ -285,15 +287,31 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
             </div>
 
             <div className="flex flex-col gap-2 pt-2 border-t">
-              <Button 
-                size="sm" 
-                className="w-full justify-start gap-2" 
-                onClick={handleExtract}
-                disabled={isExtracting || !sourceExists}
-              >
-                <Download className="h-3.5 w-3.5" />
-                {isExtracting ? "Extracting..." : "Extract to Output Folder"}
-              </Button>
+              <div className="flex items-center gap-2 w-full min-w-0">
+                <Button
+                  size="sm"
+                  className="flex-1 min-w-0 justify-start gap-2"
+                  onClick={handleExtract}
+                  disabled={isExtracting || !sourceExists}
+                >
+                  <Download className="h-3.5 w-3.5 shrink-0" />
+                  {isExtracting ? "Extracting..." : "Extract to Output Folder"}
+                </Button>
+                <label
+                  htmlFor={`write-meta-bin-${asset.fieldKey}`}
+                  className="flex flex-col items-center justify-center gap-0.5 shrink-0 w-[52px] cursor-pointer select-none rounded border border-border bg-muted/30 px-1 py-1 hover:bg-muted/50"
+                  title="Write decompressed FHM2D meta (inflate raw) to meta.bin in the output folder"
+                >
+                  <Checkbox
+                    id={`write-meta-bin-${asset.fieldKey}`}
+                    checked={writeMetaBin}
+                    onCheckedChange={(v) => setWriteMetaBin(v === true)}
+                    disabled={isExtracting || !sourceExists}
+                    className="h-3.5 w-3.5"
+                  />
+                  <span className="text-[9px] leading-none text-center text-muted-foreground">meta.bin</span>
+                </label>
+              </div>
               
               <Button 
                 variant="outline" 
