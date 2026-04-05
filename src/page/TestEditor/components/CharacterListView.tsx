@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { CharacterIdTable } from "@/models/characterIdTable";
 import { CharacterListOB, buildCharacterListBuffer } from "@/models/characterListOB";
 import { SeriesList } from "@/models/seriesList";
 import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
@@ -48,6 +49,7 @@ interface CharacterListViewProps {
   folderPath: string;
   isActive: boolean;
   onUnsavedChanges?: (hasChanges: boolean) => void;
+  onJumpToCharacterIdTable?: (characterId: number) => void;
 }
 
 type LoadState =
@@ -74,7 +76,7 @@ type CardIconMapState =
       pickerItems: Array<{ index: number; name: string | null; previewSrc: string }>;
     };
 
-export default function CharacterListView({ folderPath, isActive, onUnsavedChanges }: CharacterListViewProps) {
+export default function CharacterListView({ folderPath, isActive, onUnsavedChanges, onJumpToCharacterIdTable }: CharacterListViewProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [seriesPickerState, setSeriesPickerState] = useState<SeriesPickerState>({
     status: "idle",
@@ -98,10 +100,16 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
   >([]);
   const [editorResetKey, setEditorResetKey] = useState(0);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [characterIdTableIdSet, setCharacterIdTableIdSet] = useState<Set<number> | null>(null);
+  const [characterIdTableIdsError, setCharacterIdTableIdsError] = useState<string | null>(null);
   const lastLoadedKeyRef = useRef<string>("");
 
   const resolveFilePath = useCallback(async () => {
     return await join(folderPath, "0xDFD38C70", "character_list.bin");
+  }, [folderPath]);
+
+  const resolveCharacterIdTablePath = useCallback(async () => {
+    return await join(folderPath, "0x036B9E67", "character_id_table.bin");
   }, [folderPath]);
 
   const resolveSeriesListFilePath = useCallback(async () => {
@@ -128,6 +136,27 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
     setHasChanges(false);
     onUnsavedChanges?.(false);
   }, [onUnsavedChanges]);
+
+  const loadCharacterIdTableIds = useCallback(async () => {
+    if (!folderPath) {
+      setCharacterIdTableIdSet(null);
+      setCharacterIdTableIdsError("Folder path is empty");
+      return;
+    }
+    setCharacterIdTableIdSet(null);
+    setCharacterIdTableIdsError(null);
+    try {
+      const filePath = await resolveCharacterIdTablePath();
+      const fileData = await readFile(filePath);
+      const table = new CharacterIdTable(Buffer.from(fileData));
+      setCharacterIdTableIdSet(new Set(table.CharacterData.map((r) => r.CharacterId)));
+      setCharacterIdTableIdsError(null);
+    } catch (error) {
+      console.error(error);
+      setCharacterIdTableIdSet(null);
+      setCharacterIdTableIdsError(error instanceof Error ? error.message : "Unknown error");
+    }
+  }, [folderPath, resolveCharacterIdTablePath]);
 
   const load = useCallback(async () => {
     if (!folderPath) {
@@ -243,7 +272,8 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
     void load();
     void loadSeriesPicker();
     void loadCardIconMap();
-  }, [folderPath, isActive, load, loadCardIconMap, loadSeriesPicker]);
+    void loadCharacterIdTableIds();
+  }, [folderPath, isActive, load, loadCardIconMap, loadCharacterIdTableIds, loadSeriesPicker]);
 
   useEffect(() => {
     if (loadState.status !== "ready") return;
@@ -456,7 +486,56 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
     void load();
     void loadSeriesPicker();
     void loadCardIconMap();
-  }, [load, loadCardIconMap, loadSeriesPicker]);
+    void loadCharacterIdTableIds();
+  }, [load, loadCardIconMap, loadCharacterIdTableIds, loadSeriesPicker]);
+
+  const jumpToCharacterIdTable = useMemo(() => {
+    if (!onJumpToCharacterIdTable) {
+      return undefined;
+    }
+    if (characterIdTableIdSet === null && !characterIdTableIdsError) {
+      return {
+        disabled: true,
+        tooltip: "Loading character_id_table.bin…",
+        onClick: () => {},
+      };
+    }
+    if (characterIdTableIdsError || characterIdTableIdSet === null) {
+      return {
+        disabled: true,
+        tooltip: `Missing: character_id_table.bin unavailable (${characterIdTableIdsError ?? "unknown"})`,
+        onClick: () => {},
+      };
+    }
+    if (loadState.status !== "ready") {
+      return {
+        disabled: true,
+        tooltip: "Character list is not ready",
+        onClick: () => {},
+      };
+    }
+    const selected = loadState.list.CharacterData[selectedIndex];
+    if (!selected) {
+      return {
+        disabled: true,
+        tooltip: "Select a character to edit",
+        onClick: () => {},
+      };
+    }
+    const id = selected.CharacterId;
+    if (!characterIdTableIdSet.has(id)) {
+      return {
+        disabled: true,
+        tooltip: `Missing: no row for Character ID ${id} in character_id_table.bin`,
+        onClick: () => {},
+      };
+    }
+    return {
+      disabled: false,
+      tooltip: `Open Character ID Table and select Character ID ${id}`,
+      onClick: () => onJumpToCharacterIdTable(id),
+    };
+  }, [characterIdTableIdSet, characterIdTableIdsError, loadState, onJumpToCharacterIdTable, selectedIndex]);
 
   if (!isActive) {
     return <div className="h-full w-full" />;
@@ -605,6 +684,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
             cardIconIndexPickerItems={cardIconMapState.status === "ready" ? cardIconMapState.pickerItems : []}
             cardIconIndexPickerLoading={cardIconMapState.status === "loading" || cardIconMapState.status === "idle"}
             cardIconIndexPickerError={cardIconMapState.status === "error" ? cardIconMapState.message : null}
+            jumpToCharacterIdTable={jumpToCharacterIdTable}
             onChange={handleEditorChange}
             onSelectChange={handleEditorSelectChange}
           />

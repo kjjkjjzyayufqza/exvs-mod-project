@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Buffer } from "buffer";
+import { TableProperties } from "lucide-react";
 import { obfEncodeFromUtf8String } from "@/utils/obfString";
 import { checkStringCoverage, getDefaultRanges } from "@/utils/exvsStringAllowedRanges";
 
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DualValueProperty } from "@/components/ui/dual-value-property";
 import type { CharacterDataOB } from "@/models/characterListOB";
 import { StringFieldGroup } from "./StringFieldGroup";
@@ -20,6 +23,11 @@ interface CharacterFormProps {
   cardIconIndexPickerItems: CardIconIndexPickerItem[];
   cardIconIndexPickerLoading?: boolean;
   cardIconIndexPickerError?: string | null;
+  jumpToCharacterIdTable?: {
+    disabled: boolean;
+    tooltip: string;
+    onClick: () => void;
+  };
   onChange: (character: CharacterDataOB) => void;
 }
 
@@ -32,6 +40,7 @@ export function CharacterForm({
   cardIconIndexPickerItems,
   cardIconIndexPickerLoading,
   cardIconIndexPickerError,
+  jumpToCharacterIdTable,
   onChange,
 }: CharacterFormProps) {
   const [formData, setFormData] = useState<Record<string, number>>({});
@@ -378,8 +387,32 @@ export function CharacterForm({
         <div className="space-y-6 pr-2">
           {fieldGroups.map((group) => (
             <div key={group.title} className="space-y-3">
-              <div className="font-bold text-foreground">
-                {group.title}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="font-bold text-foreground">{group.title}</div>
+                {group.title === "Basic Information" && jumpToCharacterIdTable && (
+                  <TooltipProvider delayDuration={100}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={jumpToCharacterIdTable.disabled}
+                            onClick={jumpToCharacterIdTable.onClick}
+                            className="inline-flex shrink-0 items-center gap-1.5"
+                          >
+                            <TableProperties className="h-3.5 w-3.5" />
+                            Jump to Character ID Table
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-xs">
+                        {jumpToCharacterIdTable.tooltip}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {group.fields.map((field) => (

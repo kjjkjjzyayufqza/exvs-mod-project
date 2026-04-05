@@ -150,35 +150,22 @@ export function SeriesEditor({
     [seriesListData]
   );
 
-  const maxPlusOne = useCallback(
-    (rows: SeriesData[], getter: (row: SeriesData) => number): number => {
-      let max = 0;
-      for (const row of rows) {
-        const v = getter(row);
-        if (Number.isFinite(v) && v > max) max = v;
-      }
-      return (max | 0) + 1;
-    },
-    []
-  );
-
   const handleCopy = useCallback(
     (index: number) => {
       if (!seriesListData) return;
       const seriesToCopy = seriesListData.SeriesData[index];
       if (!seriesToCopy) return;
 
-      const rows = seriesListData.SeriesData;
       const newSeriesId = getNextSeriesId({ startFrom: seriesToCopy.SeriesId + 1 });
 
       const clonedSeries: SeriesData = {
         SeriesId: newSeriesId,
         iconFileIndex: seriesToCopy.iconFileIndex,
-        unk2: maxPlusOne(rows, (s) => s.unk2),
-        unk3: maxPlusOne(rows, (s) => s.unk3),
-        unk4: maxPlusOne(rows, (s) => s.unk4),
-        unk5: maxPlusOne(rows, (s) => s.unk5),
-        characterListPosition: maxPlusOne(rows, (s) => s.characterListPosition),
+        unk2: seriesToCopy.unk2,
+        unk3: seriesToCopy.unk3,
+        unk4: seriesToCopy.unk4,
+        unk5: seriesToCopy.unk5,
+        characterListPosition: seriesToCopy.characterListPosition,
         unkStr1: {
           Offset: 0,
           StringBufferData: seriesToCopy.unkStr1?.StringBufferData
@@ -200,25 +187,25 @@ export function SeriesEditor({
 
       setSelectedIndex(seriesListData.SeriesData.length);
     },
-    [seriesListData, getNextSeriesId, maxPlusOne, updateList]
+    [seriesListData, getNextSeriesId, updateList]
   );
 
   const handleAdd = useCallback(() => {
     if (!seriesListData) return;
 
-    const rows = seriesListData.SeriesData;
-    const selectedSeriesId = selectedIndex >= 0 ? (rows[selectedIndex]?.SeriesId ?? 0) : 0;
+    const selectedSeriesId =
+      selectedIndex >= 0 ? (seriesListData.SeriesData[selectedIndex]?.SeriesId ?? 0) : 0;
     const preferNegative = selectedSeriesId < 0;
     const newSeriesId = getNextSeriesId({ preferNegative });
 
     const newSeries: SeriesData = {
       SeriesId: newSeriesId,
       iconFileIndex: 0,
-      unk2: maxPlusOne(rows, (s) => s.unk2),
-      unk3: maxPlusOne(rows, (s) => s.unk3),
-      unk4: maxPlusOne(rows, (s) => s.unk4),
-      unk5: maxPlusOne(rows, (s) => s.unk5),
-      characterListPosition: maxPlusOne(rows, (s) => s.characterListPosition),
+      unk2: 0,
+      unk3: 0,
+      unk4: 0,
+      unk5: 0,
+      characterListPosition: 0,
       unkStr1: {
         Offset: 0,
         StringBufferData: Buffer.from([0]),
@@ -235,7 +222,7 @@ export function SeriesEditor({
     });
 
     setSelectedIndex(seriesListData.SeriesData.length);
-  }, [seriesListData, selectedIndex, getNextSeriesId, maxPlusOne, updateList]);
+  }, [seriesListData, selectedIndex, getNextSeriesId, updateList]);
 
   if (!seriesListData) {
     return (

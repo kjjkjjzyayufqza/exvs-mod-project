@@ -162,6 +162,7 @@ const MainView = ({
   const initialTab = tabs[0]?.value ?? "3d";
   const [activeTab, setActiveTab] = useState<string>(initialTab);
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set([initialTab]));
+  const [pendingCharacterIdTableSelection, setPendingCharacterIdTableSelection] = useState<number | null>(null);
   const [folderStructureHasUnsaved, setFolderStructureHasUnsaved] = useState(false);
   const [characterIdTableHasUnsaved, setCharacterIdTableHasUnsaved] = useState(false);
   const [characterListHasUnsaved, setCharacterListHasUnsaved] = useState(false);
@@ -240,6 +241,21 @@ const MainView = ({
     setMscWorkspaceHasUnsaved(hasChanges);
   }, []);
 
+  const handleJumpToCharacterIdTable = useCallback((characterId: number) => {
+    setPendingCharacterIdTableSelection(characterId);
+    setActiveTab("character-id-table");
+    setVisitedTabs((prev) => {
+      if (prev.has("character-id-table")) return prev;
+      const next = new Set(prev);
+      next.add("character-id-table");
+      return next;
+    });
+  }, []);
+
+  const handleConsumePendingCharacterIdTableSelection = useCallback(() => {
+    setPendingCharacterIdTableSelection(null);
+  }, []);
+
   const resolvedTabs = useMemo<StageTab[]>(() => {
     return tabs.map((tab) => {
       if (tab.value === "folder-structure") {
@@ -263,6 +279,8 @@ const MainView = ({
               isActive={activeTab === "character-id-table"}
               onUnsavedChanges={handleCharacterIdTableUnsaved}
               onRevealTreeFolder={props.onRevealTreeFolder}
+              pendingSelectCharacterId={pendingCharacterIdTableSelection}
+              onConsumePendingSelect={handleConsumePendingCharacterIdTableSelection}
             />
           ),
         };
@@ -276,6 +294,7 @@ const MainView = ({
               folderPath={props.folderPath ?? ""}
               isActive={activeTab === "character-list"}
               onUnsavedChanges={handleCharacterListUnsaved}
+              onJumpToCharacterIdTable={handleJumpToCharacterIdTable}
             />
           ),
         };
@@ -355,6 +374,8 @@ const MainView = ({
     activeTab,
     handleCharacterIdTableUnsaved,
     handleCharacterListUnsaved,
+    handleConsumePendingCharacterIdTableSelection,
+    handleJumpToCharacterIdTable,
     handleSeriesListUnsaved,
     handleStageIconListUnsaved,
     handleStageListUnsaved,
@@ -362,6 +383,7 @@ const MainView = ({
     handleUnsavedChanges,
     mscWorkspaceFolderPath,
     onMscWorkspaceFolderChange,
+    pendingCharacterIdTableSelection,
   ]);
 
   useLayoutEffect(() => {

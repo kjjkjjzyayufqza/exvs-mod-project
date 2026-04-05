@@ -32,6 +32,11 @@ interface CharacterEditorProps {
   cardIconIndexPickerItems: CardIconIndexPickerItem[];
   cardIconIndexPickerLoading?: boolean;
   cardIconIndexPickerError?: string | null;
+  jumpToCharacterIdTable?: {
+    disabled: boolean;
+    tooltip: string;
+    onClick: () => void;
+  };
   onChange: (data: CharacterListOB) => void;
   onSelectChange?: (index: number) => void;
 }
@@ -47,6 +52,7 @@ export function CharacterEditor({
   cardIconIndexPickerItems,
   cardIconIndexPickerLoading,
   cardIconIndexPickerError,
+  jumpToCharacterIdTable,
   onChange,
   onSelectChange,
 }: CharacterEditorProps) {
@@ -234,6 +240,7 @@ export function CharacterEditor({
             cardIconIndexPickerItems={cardIconIndexPickerItems}
             cardIconIndexPickerLoading={cardIconIndexPickerLoading}
             cardIconIndexPickerError={cardIconIndexPickerError}
+            jumpToCharacterIdTable={jumpToCharacterIdTable}
             onChange={handleUpdateCharacter}
           />
         ) : (

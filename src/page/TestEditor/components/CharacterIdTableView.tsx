@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { exists, readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { dirname, join } from "@tauri-apps/api/path";
@@ -41,6 +41,8 @@ interface CharacterIdTableViewProps {
     isActive: boolean;
     onUnsavedChanges?: (hasChanges: boolean) => void;
     onRevealTreeFolder?: (path: string) => void;
+    pendingSelectCharacterId?: number | null;
+    onConsumePendingSelect?: () => void;
 }
 
 type LoadState =
@@ -83,7 +85,17 @@ const parseClipboardPayload = (text: string): ClipboardPayload | null => {
     }
 };
 
-export default function CharacterIdTableView({ folderPath, isActive, onUnsavedChanges, onRevealTreeFolder }: CharacterIdTableViewProps) {
+export default function CharacterIdTableView({
+    folderPath,
+    isActive,
+    onUnsavedChanges,
+    onRevealTreeFolder,
+    pendingSelectCharacterId,
+    onConsumePendingSelect,
+}: CharacterIdTableViewProps) {
+    const pendingFromParentRef = useRef<number | null>(null);
+    pendingFromParentRef.current = pendingSelectCharacterId ?? null;
+
     const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
     const [selectedIndex, setSelectedIndex] = useState<number>(-1);
     const [searchTerm, setSearchTerm] = useState("");
@@ -118,6 +130,7 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
     const [clipboardPayload, setClipboardPayload] = useState<ClipboardPayload | null>(null);
 
     const lastLoadedKeyRef = useRef<string>("");
+    const pendingScrollCharacterIdRef = useRef<number | null>(null);
     const listParentRef = useRef<HTMLDivElement | null>(null);
     const getListScrollElement = useCallback(() => listParentRef.current, []);
     const estimateRowSize = useCallback(() => 52, []);
@@ -154,7 +167,13 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
                 setHasChanges(false);
                 onUnsavedChanges?.(false);
             } else {
-                resetEditorState();
+                const pendingId = pendingFromParentRef.current;
+                if (pendingId != null) {
+                    setHasChanges(false);
+                    onUnsavedChanges?.(false);
+                } else {
+                    resetEditorState();
+                }
             }
         } catch (error) {
             console.error("error", error);
@@ -256,6 +275,35 @@ export default function CharacterIdTableView({ folderPath, isActive, onUnsavedCh
         estimateSize: estimateRowSize,
         overscan: 10,
     });
+
+    useLayoutEffect(() => {
+        if (!isActive) return;
+        if (loadState.status !== "ready") return;
+        if (pendingSelectCharacterId == null) return;
+        const idx = loadState.table.CharacterData.findIndex((r) => r.CharacterId === pendingSelectCharacterId);
+        if (idx < 0) {
+            onConsumePendingSelect?.();
+            return;
+        }
+        pendingScrollCharacterIdRef.current = pendingSelectCharacterId;
+        setSearchTerm("");
+        setSelectedIndex(idx);
+        onConsumePendingSelect?.();
+    }, [isActive, loadState, pendingSelectCharacterId, onConsumePendingSelect]);
+
+    useLayoutEffect(() => {
+        const charId = pendingScrollCharacterIdRef.current;
+        if (charId == null) return;
+        const idx = tableData.findIndex((r) => r.CharacterId === charId);
+        if (idx < 0) {
+            pendingScrollCharacterIdRef.current = null;
+            return;
+        }
+        const virtIndex = filteredRows.findIndex((f) => f.idx === idx);
+        if (virtIndex < 0) return;
+        rowVirtualizer.scrollToIndex(virtIndex, { align: "center" });
+        pendingScrollCharacterIdRef.current = null;
+    }, [deferredSearchTerm, filteredRows, rowVirtualizer, selectedIndex, tableData]);
 
     const updateTable = useCallback(
         (updater: (prev: CharacterIdTable) => CharacterIdTable) => {
