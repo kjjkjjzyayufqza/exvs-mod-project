@@ -473,6 +473,10 @@ pub struct TestTreeNode {
     pub path: String,
     pub is_dir: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub mtime_ms: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<TestTreeNode>>,
 }
 
@@ -647,6 +651,8 @@ fn convert_event(event: &Event) -> Option<FolderChangePayload> {
                             name: file_name(from),
                             path: to_id(from),
                             is_dir: false,
+                            mtime_ms: None,
+                            size: None,
                             children: None,
                         },
                         parent_id: from_parent,
@@ -663,6 +669,8 @@ fn convert_event(event: &Event) -> Option<FolderChangePayload> {
                             name: file_name(from),
                             path: to_id(from),
                             is_dir: false,
+                            mtime_ms: None,
+                            size: None,
                             children: None,
                         },
                         parent_id: from_parent,
@@ -702,6 +710,8 @@ fn convert_event(event: &Event) -> Option<FolderChangePayload> {
                         name: file_name(path),
                         path: id.clone(),
                         is_dir: is_dir_hint,
+                        mtime_ms: None,
+                        size: None,
                         children: None,
                     },
                     parent_id,
@@ -727,6 +737,8 @@ fn make_op(kind: &str, path: &Path) -> Option<FolderChangeOp> {
     }
     let meta = fs::metadata(path).ok()?;
     let is_dir = meta.is_dir();
+    let mtime_ms = metadata_mtime_ms(&meta);
+    let size = if is_dir { None } else { Some(meta.len()) };
     let id = to_id(path);
     let parent_id = path.parent().map(to_id);
     Some(FolderChangeOp {
@@ -736,9 +748,19 @@ fn make_op(kind: &str, path: &Path) -> Option<FolderChangeOp> {
             name: file_name(path),
             path: id.clone(),
             is_dir,
+            mtime_ms,
+            size,
             children: None,
         },
         parent_id,
+    })
+}
+
+fn metadata_mtime_ms(meta: &fs::Metadata) -> Option<i64> {
+    meta.modified().ok().and_then(|t| {
+        t.duration_since(std::time::UNIX_EPOCH)
+            .ok()
+            .and_then(|d| i64::try_from(d.as_millis()).ok())
     })
 }
 
@@ -756,11 +778,15 @@ fn build_tree(path: &Path) -> Result<Vec<TestTreeNode>, String> {
             Err(_) => continue,
         };
         let is_dir = meta.is_dir();
+        let mtime_ms = metadata_mtime_ms(&meta);
+        let size = if is_dir { None } else { Some(meta.len()) };
         let mut node = TestTreeNode {
             id: to_id(&entry_path),
             name: file_name(&entry_path),
             path: to_id(&entry_path),
             is_dir,
+            mtime_ms,
+            size,
             children: None,
         };
         if is_dir {

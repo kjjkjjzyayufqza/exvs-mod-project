@@ -29,6 +29,8 @@ pub enum Fhm2dFormat {
     AllNutexb,
     StageList,
     CharacterParam,
+    /// Out-of-game character balance data (cost, HP, etc.): `0xFF832E7F.fhm2d`.
+    CharacterCost,
     Msc,
     Motion,
     Sound,
@@ -43,6 +45,7 @@ impl Fhm2dFormat {
             Some("fhm2d_all_nutexb") => Ok(Some(Self::AllNutexb)),
             Some("fhm2d_stage_list") => Ok(Some(Self::StageList)),
             Some("fhm2d_character_param") => Ok(Some(Self::CharacterParam)),
+            Some("fhm2d_character_cost") => Ok(Some(Self::CharacterCost)),
             Some("fhm2d_msc") => Ok(Some(Self::Msc)),
             Some("fhm2d_motion") => Ok(Some(Self::Motion)),
             Some("fhm2d_sound") => Ok(Some(Self::Sound)),
@@ -717,6 +720,7 @@ fn apply_naming(
     match format {
         Some(Fhm2dFormat::StageList) => apply_stage_list_name(output, list_output_file_name, out_name),
         Some(Fhm2dFormat::CharacterParam) => apply_param_names(&mut output.sub_file_data),
+        Some(Fhm2dFormat::CharacterCost) => apply_character_cost_names(&mut output.sub_file_data),
         Some(Fhm2dFormat::Msc) => apply_msc_names(&mut output.sub_file_data),
         Some(Fhm2dFormat::Motion) => {
             apply_motion_names(&mut output.sub_file_data, files, &output.sub_file_parse_structure, out_name)
@@ -799,6 +803,27 @@ fn apply_param_names(sub: &mut [OutputSubFileData]) -> Result<(), String> {
             .get(item.index)
             .map(|v| (*v).to_string())
             .unwrap_or_else(|| format!("unknown_{}.bin", item.index));
+        let prefix = parent_segments(item.file_url.as_str())?;
+        item.file_base_name = Some(strip_extension(name.as_str()));
+        item.file_url = build_file_url(prefix.as_slice(), name.as_str());
+    }
+    Ok(())
+}
+
+/// Names subfiles by sorted slot index (same order as `SubFileData[].index` after `file_index` sort).
+/// First three slots: playable / boss / grunt out-of-game param tables; additional slots use `{index}{extension}`.
+fn apply_character_cost_names(sub: &mut [OutputSubFileData]) -> Result<(), String> {
+    const COST_NAMES: [&str; 3] = [
+        "foroutgamecharacterparam_playable.bin",
+        "foroutgamecharacterparam_boss.bin",
+        "foroutgamecharacterparam_zako.bin",
+    ];
+    for item in sub {
+        let name = if item.index < COST_NAMES.len() {
+            COST_NAMES[item.index].to_string()
+        } else {
+            format!("{}{}", item.index, item.file_type)
+        };
         let prefix = parent_segments(item.file_url.as_str())?;
         item.file_base_name = Some(strip_extension(name.as_str()));
         item.file_url = build_file_url(prefix.as_slice(), name.as_str());

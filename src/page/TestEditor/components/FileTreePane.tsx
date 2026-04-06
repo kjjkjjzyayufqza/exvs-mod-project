@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Tree, type NodeApi } from "react-arborist";
-import { Search, FolderOpen, Loader2 } from "lucide-react";
+import { ArrowUpDown, Search, FolderOpen, Loader2 } from "lucide-react";
 import { join } from "@tauri-apps/api/path";
 import { exists } from "@tauri-apps/plugin-fs";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,16 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuLabel,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TestTreeNode } from "../types";
+import type { FileTreeViewOptions } from "../utils/fileTreeViewSort";
+import { FileTreeViewOptionsForm } from "./FileTreeViewOptionsForm";
 import { pathAncestorSetFromRoot } from "../utils/fileTreePathHighlight";
 import { FileTreeNodeRow, type FileTreeNodeRowContext } from "./FileTreeNodeRow";
 import { isWorkspaceDirectChildFolder, parseRootStructureJsonRepackTarget, STRUCTURE_JSON_SUFFIX } from "./fileTreeNodeRowUtils";
@@ -48,6 +57,8 @@ type FileTreePaneProps = {
   onFolderRepacked?: (folderName: string) => void;
   starredPathSet: Set<string>;
   onToggleStar: (path: string) => void;
+  viewOptions: FileTreeViewOptions;
+  onViewOptionsChange: (patch: Partial<FileTreeViewOptions>) => void;
 };
 
 function FileTreePaneImpl({
@@ -70,6 +81,8 @@ function FileTreePaneImpl({
   onFolderRepacked,
   starredPathSet,
   onToggleStar,
+  viewOptions,
+  onViewOptionsChange,
 }: FileTreePaneProps) {
   const empty = data.length === 0;
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -373,50 +386,86 @@ function FileTreePaneImpl({
 
   return (
     <>
-    <Card className="flex h-full min-h-0 flex-col rounded-none border-0 bg-transparent shadow-none">
-      <CardHeader className="shrink-0 space-y-2 p-0 pb-2">
-        <div className="relative">
-          <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchTerm}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search files..."
-            className="h-8 bg-background/50 pl-8 pr-8 text-xs transition-colors focus-visible:bg-background"
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div className="flex h-full min-h-0 flex-col outline-none">
+          <Card className="flex h-full min-h-0 flex-col rounded-none border-0 bg-transparent shadow-none">
+            <CardHeader className="shrink-0 space-y-2 p-0 pb-2">
+              <div className="flex gap-1.5 items-start">
+                <div className="relative flex-1 min-w-0">
+                  <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={searchTerm}
+                    onChange={(e) => onSearchChange(e.target.value)}
+                    placeholder="Search files..."
+                    className="h-8 bg-background/50 pl-8 pr-8 text-xs transition-colors focus-visible:bg-background"
+                  />
+                </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 shrink-0"
+                      title="Sort and group (list layout)"
+                    >
+                      <ArrowUpDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-80 p-3">
+                    <div className="text-xs font-medium text-foreground mb-2">List layout</div>
+                    <FileTreeViewOptionsForm value={viewOptions} onChange={onViewOptionsChange} />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </CardHeader>
+            <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+              <div
+                ref={containerRef}
+                className="min-h-0 flex-1 overflow-hidden rounded-none border bg-card/50"
+              >
+                {empty ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-2 text-xs text-muted-foreground p-4 text-center">
+                    <FolderOpen className="h-8 w-8 opacity-20" />
+                    <p>Select a folder in the toolbar to start</p>
+                  </div>
+                ) : (
+                  <Tree
+                    ref={treeRef}
+                    data={data}
+                    width="100%"
+                    height={treeHeight}
+                    indent={0}
+                    rowHeight={36}
+                    openByDefault={false}
+                    childrenAccessor={(node) => (node.isDir ? node.children ?? [] : node.children ?? null)}
+                    selection={selection}
+                    onSelect={(nodes: NodeApi<TestTreeNode>[]) => {
+                      isUserClickRef.current = true;
+                      onSelect(nodes[0]?.data ?? null);
+                    }}
+                  >
+                    {(props) => <FileTreeNodeRow {...props} ctx={fileTreeNodeRowCtx} />}
+                  </Tree>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-auto min-w-[260px] p-0">
+        <div className="p-2 space-y-1">
+          <ContextMenuLabel className="px-2 text-xs text-muted-foreground">List layout</ContextMenuLabel>
+          <FileTreeViewOptionsForm
+            value={viewOptions}
+            onChange={onViewOptionsChange}
+            isolatePointerEvents
+            className="px-2 pb-2"
           />
         </div>
-      </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col p-0">
-        <div
-          ref={containerRef}
-          className="min-h-0 flex-1 overflow-hidden rounded-none border bg-card/50"
-        >
-          {empty ? (
-            <div className="flex h-full flex-col items-center justify-center gap-2 text-xs text-muted-foreground p-4 text-center">
-              <FolderOpen className="h-8 w-8 opacity-20" />
-              <p>Select a folder in the toolbar to start</p>
-            </div>
-          ) : (
-            <Tree
-              ref={treeRef}
-              data={data}
-              width="100%"
-              height={treeHeight}
-              indent={0}
-              rowHeight={36}
-              openByDefault={false}
-              childrenAccessor={(node) => (node.isDir ? node.children ?? [] : node.children ?? null)}
-              selection={selection}
-              onSelect={(nodes: NodeApi<TestTreeNode>[]) => {
-                isUserClickRef.current = true;
-                onSelect(nodes[0]?.data ?? null);
-              }}
-            >
-              {(props) => <FileTreeNodeRow {...props} ctx={fileTreeNodeRowCtx} />}
-            </Tree>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+      </ContextMenuContent>
+    </ContextMenu>
 
     <AlertDialog open={repackDialogOpen} onOpenChange={handleRepackDialogOpenChange}>
       <AlertDialogContent className="max-w-lg">

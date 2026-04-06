@@ -53,6 +53,8 @@ type InitListItem = {
     hash: string;
     format?: Fhm2d_type_format;
     formatLabel: string;
+    /** English note shown in expanded row (optional). */
+    description?: string;
 };
 
 type FileStatus = {
@@ -79,6 +81,15 @@ const FHM2D_ITEMS: InitListItem[] = [
     { id: "stage_image_list_2", name: "Stage Image List 2", hash: "0x0CEE3991", format: Fhm2d_type_format.fhm2d_all_nutexb, formatLabel: "all_nutexb" },
     { id: "series_image_list", name: "Series Image List", hash: "0xA0253AA0", format: Fhm2d_type_format.fhm2d_all_nutexb, formatLabel: "all_nutexb" },
     { id: "card_icon_list", name: "Card Icon List", hash: "0x49235031", format: Fhm2d_type_format.fhm2d_all_nutexb, formatLabel: "all_nutexb" },
+    {
+        id: "character_cost",
+        name: "Character Cost",
+        hash: "0xFF832E7F",
+        format: Fhm2d_type_format.fhm2d_character_cost,
+        formatLabel: "character_cost",
+        description:
+            "unit cost, HP"
+    },
 ];
 
 const HISTORY_KEY = "fhm2d_extraction_history_v1";
@@ -141,6 +152,8 @@ function getFormatBadgeColor(formatLabel: string): string {
             return "bg-blue-500/10 text-blue-600 border-blue-500/20 hover:bg-blue-500/20";
         case "all_nutexb":
             return "bg-purple-500/10 text-purple-600 border-purple-500/20 hover:bg-purple-500/20";
+        case "character_cost":
+            return "bg-amber-500/10 text-amber-800 border-amber-500/25 hover:bg-amber-500/20";
         default:
             return "bg-muted text-muted-foreground";
     }
@@ -192,7 +205,8 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                 (item) =>
                     item.name.toLowerCase().includes(query) ||
                     item.hash.toLowerCase().includes(query) ||
-                    item.id.toLowerCase().includes(query)
+                    item.id.toLowerCase().includes(query) ||
+                    (item.description?.toLowerCase().includes(query) ?? false)
             );
         }
 
@@ -486,500 +500,507 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
     return (
         <TooltipProvider delayDuration={100}>
             <div className="fixed inset-0 z-50">
-                    <div
-                        ref={nodeRef}
-                        className="w-[720px] max-w-[95vw]"
-                        style={{ position: 'absolute' }}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <Card className="border shadow-2xl overflow-hidden">
-                            {/* Header */}
-                            <div
-                                {...handleProps}
-                                className="flex items-center justify-between px-5 py-4 border-b bg-linear-to-r from-muted/80 to-muted/40"
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 shadow-sm">
-                                        <FileCode2 className="h-5 w-5 text-primary" />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-base font-semibold">FHM2D Init</h2>
-                                        <p className="text-xs text-muted-foreground">Extract game data files</p>
-                                    </div>
+                <div
+                    ref={nodeRef}
+                    className="w-[720px] max-w-[95vw]"
+                    style={{ position: 'absolute' }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <Card className="border shadow-2xl overflow-hidden">
+                        {/* Header */}
+                        <div
+                            {...handleProps}
+                            className="flex items-center justify-between px-5 py-4 border-b bg-linear-to-r from-muted/80 to-muted/40"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 shadow-sm">
+                                    <FileCode2 className="h-5 w-5 text-primary" />
                                 </div>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 rounded-full hover:bg-destructive/10 hover:text-destructive transition-colors"
-                                    onClick={onClose}
-                                    disabled={isExtracting}
-                                >
-                                    <X className="h-4 w-4" />
-                                </Button>
+                                <div>
+                                    <h2 className="text-base font-semibold">FHM2D Init</h2>
+                                    <p className="text-xs text-muted-foreground">Extract game data files</p>
+                                </div>
                             </div>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 rounded-full hover:bg-destructive/10 hover:text-destructive transition-colors"
+                                onClick={onClose}
+                                disabled={isExtracting}
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
 
-                            <CardContent className="p-0">
-                                {/* Folder Configuration Section */}
-                                <div className="px-5 py-4 space-y-4 bg-muted/20">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label
-                                                htmlFor="fhm2d-init-source"
-                                                className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"
-                                            >
-                                                <FolderOpen className="h-3.5 w-3.5" />
-                                                Source Folder
-                                            </Label>
-                                            <FilePathInput
-                                                id="fhm2d-init-source"
-                                                placeholder="Select source folder..."
-                                                value={obDplCachePath ?? ""}
-                                                readOnly
-                                                storeKey="obDplCachePath"
-                                                picker={{ kind: "folder", multiple: false }}
-                                                className="h-9 cursor-pointer bg-background"
-                                            />
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label
-                                                htmlFor="fhm2d-init-export"
-                                                className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"
-                                            >
-                                                <FolderOutput className="h-3.5 w-3.5" />
-                                                Export Folder
-                                            </Label>
-                                            <FilePathInput
-                                                id="fhm2d-init-export"
-                                                placeholder="Select export folder..."
-                                                value={extractOutputPath}
-                                                readOnly
-                                                storeKey="extractOutputPath"
-                                                picker={{ kind: "folder", multiple: false }}
-                                                className="h-9 cursor-pointer bg-background"
-                                            />
-                                        </div>
+                        <CardContent className="p-0">
+                            {/* Folder Configuration Section */}
+                            <div className="px-5 py-4 space-y-4 bg-muted/20">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label
+                                            htmlFor="fhm2d-init-source"
+                                            className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"
+                                        >
+                                            <FolderOpen className="h-3.5 w-3.5" />
+                                            Source Folder
+                                        </Label>
+                                        <FilePathInput
+                                            id="fhm2d-init-source"
+                                            placeholder="Select source folder..."
+                                            value={obDplCachePath ?? ""}
+                                            readOnly
+                                            storeKey="obDplCachePath"
+                                            picker={{ kind: "folder", multiple: false }}
+                                            className="h-9 cursor-pointer bg-background"
+                                        />
                                     </div>
 
-                                    {/* Quick Stats */}
-                                    <div className="flex items-center gap-4 text-xs">
-                                        <Badge variant="secondary" className="font-normal">
-                                            {stats.available} / {stats.total} files available
-                                        </Badge>
-                                        {isBatchMode && (
-                                            <Badge variant="outline" className="font-normal">
-                                                {stats.selected} selected
-                                            </Badge>
-                                        )}
-                                        {obDplCachePath && !isRefreshing ? (
-                                            <span className="text-muted-foreground">
-                                                <CheckCircle2 className="inline h-3 w-3 mr-1 text-green-500" />
-                                                Ready
-                                            </span>
-                                        ) : (
-                                            <span className="text-muted-foreground">
-                                                <AlertCircle className="inline h-3 w-3 mr-1 text-amber-500" />
-                                                {isRefreshing ? "Scanning..." : "Configure folders"}
-                                            </span>
-                                        )}
+                                    <div className="space-y-2">
+                                        <Label
+                                            htmlFor="fhm2d-init-export"
+                                            className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"
+                                        >
+                                            <FolderOutput className="h-3.5 w-3.5" />
+                                            Export Folder
+                                        </Label>
+                                        <FilePathInput
+                                            id="fhm2d-init-export"
+                                            placeholder="Select export folder..."
+                                            value={extractOutputPath}
+                                            readOnly
+                                            storeKey="extractOutputPath"
+                                            picker={{ kind: "folder", multiple: false }}
+                                            className="h-9 cursor-pointer bg-background"
+                                        />
                                     </div>
                                 </div>
 
-                                {/* Search & Filter Toolbar */}
-                                <div className="px-5 py-3 border-b bg-background">
-                                    <div className="flex items-center gap-2">
-                                        <div className="relative flex-1">
-                                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                            <Input
-                                                ref={searchInputRef}
-                                                placeholder="Search files..."
-                                                value={searchQuery}
-                                                onChange={(e) => setSearchQuery(e.target.value)}
-                                                className="pl-9 h-9"
-                                            />
-                                        </div>
-
-                                        <Popover>
-                                            <PopoverTrigger asChild>
-                                                <Button variant="outline" size="sm" className="h-9 px-3 gap-1">
-                                                    <Filter className="h-3.5 w-3.5" />
-                                                    <span className="text-xs">Filter</span>
-                                                    {filterOption !== "all" && (
-                                                        <span className="ml-1 w-1.5 h-1.5 rounded-full bg-primary" />
-                                                    )}
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-40 p-1" align="end">
-                                                <div className="space-y-1">
-                                                    {[
-                                                        { value: "all", label: "All Files" },
-                                                        { value: "available", label: "Available Only" },
-                                                        { value: "list", label: "List Type" },
-                                                        { value: "nutexb", label: "NUTEXB Type" },
-                                                    ].map((opt) => (
-                                                        <Button
-                                                            key={opt.value}
-                                                            variant={filterOption === opt.value ? "secondary" : "ghost"}
-                                                            size="sm"
-                                                            className="w-full justify-start h-8 text-xs"
-                                                            onClick={() => setFilterOption(opt.value as FilterOption)}
-                                                        >
-                                                            {opt.label}
-                                                        </Button>
-                                                    ))}
-                                                </div>
-                                            </PopoverContent>
-                                        </Popover>
-
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-9 px-3 gap-1"
-                                            onClick={() => {
-                                                setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
-                                            }}
-                                        >
-                                            <ArrowUpDown className="h-3.5 w-3.5" />
-                                            <select
-                                                className="bg-transparent text-xs outline-hidden cursor-pointer"
-                                                value={sortOption}
-                                                onChange={(e) => setSortOption(e.target.value as SortOption)}
-                                            >
-                                                <option value="name">Name</option>
-                                                <option value="type">Type</option>
-                                                <option value="status">Status</option>
-                                                <option value="lastUsed">Last Used</option>
-                                            </select>
-                                        </Button>
-
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <Button
-                                                    variant="outline"
-                                                    size="icon"
-                                                    className="h-9 w-9"
-                                                    onClick={refreshFileStatus}
-                                                    disabled={isRefreshing}
-                                                >
-                                                    <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
-                                                </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>Refresh</TooltipContent>
-                                        </Tooltip>
-
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <Button
-                                                    variant={isBatchMode ? "secondary" : "outline"}
-                                                    size="sm"
-                                                    className="h-9 px-3"
-                                                    onClick={() => {
-                                                        setIsBatchMode(!isBatchMode);
-                                                        if (isBatchMode) setSelectedIds(new Set());
-                                                    }}
-                                                >
-                                                    <Settings2 className="h-4 w-4 mr-1.5" />
-                                                    Batch
-                                                </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>Batch Mode</TooltipContent>
-                                        </Tooltip>
-                                    </div>
-
-                                    {/* Batch Action Bar */}
+                                {/* Quick Stats */}
+                                <div className="flex items-center gap-4 text-xs">
+                                    <Badge variant="secondary" className="font-normal">
+                                        {stats.available} / {stats.total} files available
+                                    </Badge>
                                     {isBatchMode && (
-                                        <div className="flex items-center justify-between mt-3 pt-3 border-t">
-                                            <div className="flex items-center gap-2">
-                                                <Checkbox
-                                                    checked={selectedIds.size === filteredItems.length && filteredItems.length > 0}
-                                                    onCheckedChange={toggleSelectAll}
-                                                    id="select-all"
-                                                />
-                                                <Label htmlFor="select-all" className="text-xs cursor-pointer">
-                                                    Select All ({filteredItems.length})
-                                                </Label>
-                                            </div>
-                                            <Button
-                                                size="sm"
-                                                onClick={handleBatchExtract}
-                                                disabled={selectedIds.size === 0 || isExtracting}
-                                                className="gap-1.5"
-                                            >
-                                                {batchProgress.total > 0 ? (
-                                                    <>
-                                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                        {batchProgress.current} / {batchProgress.total}
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Play className="h-3.5 w-3.5" />
-                                                        Extract {selectedIds.size} items
-                                                    </>
-                                                )}
-                                            </Button>
-                                        </div>
+                                        <Badge variant="outline" className="font-normal">
+                                            {stats.selected} selected
+                                        </Badge>
+                                    )}
+                                    {obDplCachePath && !isRefreshing ? (
+                                        <span className="text-muted-foreground">
+                                            <CheckCircle2 className="inline h-3 w-3 mr-1 text-green-500" />
+                                            Ready
+                                        </span>
+                                    ) : (
+                                        <span className="text-muted-foreground">
+                                            <AlertCircle className="inline h-3 w-3 mr-1 text-amber-500" />
+                                            {isRefreshing ? "Scanning..." : "Configure folders"}
+                                        </span>
                                     )}
                                 </div>
+                            </div>
 
-                                {/* FHM2D List Section */}
-                                <div className="px-5 py-4">
-                                    <ScrollArea className="h-[320px] rounded-lg border bg-muted/5">
-                                        <div className="p-3 space-y-2">
-                                            {filteredItems.length === 0 ? (
-                                                <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
-                                                    <Search className="h-8 w-8 mb-2 opacity-50" />
-                                                    <p className="text-sm">No matching files found</p>
-                                                </div>
+                            {/* Search & Filter Toolbar */}
+                            <div className="px-5 py-3 border-b bg-background">
+                                <div className="flex items-center gap-2">
+                                    <div className="relative flex-1">
+                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                            ref={searchInputRef}
+                                            placeholder="Search files..."
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            className="pl-9 h-9"
+                                        />
+                                    </div>
+
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button variant="outline" size="sm" className="h-9 px-3 gap-1">
+                                                <Filter className="h-3.5 w-3.5" />
+                                                <span className="text-xs">Filter</span>
+                                                {filterOption !== "all" && (
+                                                    <span className="ml-1 w-1.5 h-1.5 rounded-full bg-primary" />
+                                                )}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-40 p-1" align="end">
+                                            <div className="space-y-1">
+                                                {[
+                                                    { value: "all", label: "All Files" },
+                                                    { value: "available", label: "Available Only" },
+                                                    { value: "list", label: "List Type" },
+                                                    { value: "nutexb", label: "NUTEXB Type" },
+                                                ].map((opt) => (
+                                                    <Button
+                                                        key={opt.value}
+                                                        variant={filterOption === opt.value ? "secondary" : "ghost"}
+                                                        size="sm"
+                                                        className="w-full justify-start h-8 text-xs"
+                                                        onClick={() => setFilterOption(opt.value as FilterOption)}
+                                                    >
+                                                        {opt.label}
+                                                    </Button>
+                                                ))}
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
+
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-9 px-3 gap-1"
+                                        onClick={() => {
+                                            setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
+                                        }}
+                                    >
+                                        <ArrowUpDown className="h-3.5 w-3.5" />
+                                        <select
+                                            className="bg-transparent text-xs outline-hidden cursor-pointer"
+                                            value={sortOption}
+                                            onChange={(e) => setSortOption(e.target.value as SortOption)}
+                                        >
+                                            <option value="name">Name</option>
+                                            <option value="type">Type</option>
+                                            <option value="status">Status</option>
+                                            <option value="lastUsed">Last Used</option>
+                                        </select>
+                                    </Button>
+
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                size="icon"
+                                                className="h-9 w-9"
+                                                onClick={refreshFileStatus}
+                                                disabled={isRefreshing}
+                                            >
+                                                <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Refresh</TooltipContent>
+                                    </Tooltip>
+
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                variant={isBatchMode ? "secondary" : "outline"}
+                                                size="sm"
+                                                className="h-9 px-3"
+                                                onClick={() => {
+                                                    setIsBatchMode(!isBatchMode);
+                                                    if (isBatchMode) setSelectedIds(new Set());
+                                                }}
+                                            >
+                                                <Settings2 className="h-4 w-4 mr-1.5" />
+                                                Batch
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Batch Mode</TooltipContent>
+                                    </Tooltip>
+                                </div>
+
+                                {/* Batch Action Bar */}
+                                {isBatchMode && (
+                                    <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                                        <div className="flex items-center gap-2">
+                                            <Checkbox
+                                                checked={selectedIds.size === filteredItems.length && filteredItems.length > 0}
+                                                onCheckedChange={toggleSelectAll}
+                                                id="select-all"
+                                            />
+                                            <Label htmlFor="select-all" className="text-xs cursor-pointer">
+                                                Select All ({filteredItems.length})
+                                            </Label>
+                                        </div>
+                                        <Button
+                                            size="sm"
+                                            onClick={handleBatchExtract}
+                                            disabled={selectedIds.size === 0 || isExtracting}
+                                            className="gap-1.5"
+                                        >
+                                            {batchProgress.total > 0 ? (
+                                                <>
+                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                    {batchProgress.current} / {batchProgress.total}
+                                                </>
                                             ) : (
-                                                filteredItems.map((item) => {
-                                                    const status = fileStatusMap.get(item.id);
-                                                    const isItemExtracting = extractingId === item.id;
-                                                    const isLastExtracted = lastExtractedId === item.id;
-                                                    const isSelected = selectedIds.has(item.id);
-                                                    const isExpanded = expandedId === item.id;
-                                                    const lastUsed = getLastExtractionTime(item.id);
+                                                <>
+                                                    <Play className="h-3.5 w-3.5" />
+                                                    Extract {selectedIds.size} items
+                                                </>
+                                            )}
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
 
-                                                    return (
-                                                        <Collapsible
-                                                            key={item.id}
-                                                            open={isExpanded}
-                                                            onOpenChange={(open) => setExpandedId(open ? item.id : null)}
+                            {/* FHM2D List Section */}
+                            <div className="px-5 py-4">
+                                <ScrollArea className="h-[320px] rounded-lg border bg-muted/5">
+                                    <div className="p-3 space-y-2">
+                                        {filteredItems.length === 0 ? (
+                                            <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
+                                                <Search className="h-8 w-8 mb-2 opacity-50" />
+                                                <p className="text-sm">No matching files found</p>
+                                            </div>
+                                        ) : (
+                                            filteredItems.map((item) => {
+                                                const status = fileStatusMap.get(item.id);
+                                                const isItemExtracting = extractingId === item.id;
+                                                const isLastExtracted = lastExtractedId === item.id;
+                                                const isSelected = selectedIds.has(item.id);
+                                                const isExpanded = expandedId === item.id;
+                                                const lastUsed = getLastExtractionTime(item.id);
+
+                                                return (
+                                                    <Collapsible
+                                                        key={item.id}
+                                                        open={isExpanded}
+                                                        onOpenChange={(open) => setExpandedId(open ? item.id : null)}
+                                                    >
+                                                        <div
+                                                            className={cn(
+                                                                "group relative rounded-lg border transition-all duration-200",
+                                                                isItemExtracting &&
+                                                                "border-primary/50 bg-primary/5 ring-1 ring-primary/20",
+                                                                isLastExtracted &&
+                                                                !isItemExtracting &&
+                                                                "border-green-500/30 bg-green-500/5",
+                                                                isSelected &&
+                                                                !isItemExtracting &&
+                                                                !isLastExtracted &&
+                                                                "border-blue-500/30 bg-blue-500/5",
+                                                                !isItemExtracting &&
+                                                                !isLastExtracted &&
+                                                                !isSelected &&
+                                                                "bg-card hover:border-muted-foreground/30 hover:shadow-sm",
+                                                                !status?.exists && "opacity-60"
+                                                            )}
                                                         >
-                                                            <div
-                                                                className={cn(
-                                                                    "group relative rounded-lg border transition-all duration-200",
-                                                                    isItemExtracting &&
-                                                                        "border-primary/50 bg-primary/5 ring-1 ring-primary/20",
-                                                                    isLastExtracted &&
-                                                                        !isItemExtracting &&
-                                                                        "border-green-500/30 bg-green-500/5",
-                                                                    isSelected &&
-                                                                        !isItemExtracting &&
-                                                                        !isLastExtracted &&
-                                                                        "border-blue-500/30 bg-blue-500/5",
-                                                                    !isItemExtracting &&
-                                                                        !isLastExtracted &&
-                                                                        !isSelected &&
-                                                                        "bg-card hover:border-muted-foreground/30 hover:shadow-sm",
-                                                                    !status?.exists && "opacity-60"
-                                                                )}
-                                                            >
-                                                                <div className="p-3">
-                                                                    <div className="flex items-start gap-3">
-                                                                        {/* Checkbox for batch mode */}
-                                                                        {isBatchMode && (
-                                                                            <div className="pt-1">
-                                                                                <Checkbox
-                                                                                    checked={isSelected}
-                                                                                    onCheckedChange={() => toggleSelection(item.id)}
-                                                                                    disabled={!status?.exists || isExtracting}
-                                                                                />
-                                                                            </div>
-                                                                        )}
-
-                                                                        {/* Icon */}
-                                                                        <div
-                                                                            className={cn(
-                                                                                "flex items-center justify-center w-10 h-10 rounded-lg shrink-0 transition-colors",
-                                                                                item.formatLabel === "list"
-                                                                                    ? "bg-blue-500/10 text-blue-600"
-                                                                                    : "bg-purple-500/10 text-purple-600",
-                                                                                isItemExtracting && "bg-primary/20 text-primary",
-                                                                                !status?.exists && "grayscale"
-                                                                            )}
-                                                                        >
-                                                                            <FileCode2 className="h-5 w-5" />
+                                                            <div className="p-3">
+                                                                <div className="flex items-start gap-3">
+                                                                    {/* Checkbox for batch mode */}
+                                                                    {isBatchMode && (
+                                                                        <div className="pt-1">
+                                                                            <Checkbox
+                                                                                checked={isSelected}
+                                                                                onCheckedChange={() => toggleSelection(item.id)}
+                                                                                disabled={!status?.exists || isExtracting}
+                                                                            />
                                                                         </div>
+                                                                    )}
 
-                                                                        {/* Content */}
-                                                                        <div className="flex-1 min-w-0">
-                                                                            <div className="flex items-center gap-2 mb-0.5">
-                                                                                <span className="font-medium text-sm truncate">
-                                                                                    {item.name}
-                                                                                </span>
+                                                                    {/* Icon */}
+                                                                    <div
+                                                                        className={cn(
+                                                                            "flex items-center justify-center w-10 h-10 rounded-lg shrink-0 transition-colors",
+                                                                            item.formatLabel === "list"
+                                                                                ? "bg-blue-500/10 text-blue-600"
+                                                                                : item.formatLabel === "character_cost"
+                                                                                    ? "bg-amber-500/10 text-amber-700"
+                                                                                    : "bg-purple-500/10 text-purple-600",
+                                                                            isItemExtracting && "bg-primary/20 text-primary",
+                                                                            !status?.exists && "grayscale"
+                                                                        )}
+                                                                    >
+                                                                        <FileCode2 className="h-5 w-5" />
+                                                                    </div>
+
+                                                                    {/* Content */}
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="flex items-center gap-2 mb-0.5">
+                                                                            <span className="font-medium text-sm truncate">
+                                                                                {item.name}
+                                                                            </span>
+                                                                            <Badge
+                                                                                variant="outline"
+                                                                                className={cn(
+                                                                                    "h-5 px-1.5 text-[10px] font-medium border",
+                                                                                    getFormatBadgeColor(item.formatLabel)
+                                                                                )}
+                                                                            >
+                                                                                {item.formatLabel}
+                                                                            </Badge>
+                                                                            {isLastExtracted && (
+                                                                                <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                                                                            )}
+                                                                            {status?.exists === false && (
                                                                                 <Badge
                                                                                     variant="outline"
-                                                                                    className={cn(
-                                                                                        "h-5 px-1.5 text-[10px] font-medium border",
-                                                                                        getFormatBadgeColor(item.formatLabel)
-                                                                                    )}
+                                                                                    className="h-5 px-1.5 text-[10px] border-red-200 bg-red-50 text-red-600"
                                                                                 >
-                                                                                    {item.formatLabel}
+                                                                                    Missing
                                                                                 </Badge>
-                                                                                {isLastExtracted && (
-                                                                                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                                                                                )}
-                                                                                {status?.exists === false && (
-                                                                                    <Badge
-                                                                                        variant="outline"
-                                                                                        className="h-5 px-1.5 text-[10px] border-red-200 bg-red-50 text-red-600"
-                                                                                    >
-                                                                                        Missing
-                                                                                    </Badge>
-                                                                                )}
-                                                                            </div>
-
-                                                                            <div className="flex items-center gap-3 text-xs">
-                                                                                <Tooltip>
-                                                                                    <TooltipTrigger asChild>
-                                                                                        <span className="font-mono text-muted-foreground cursor-help">
-                                                                                            {item.hash}
-                                                                                        </span>
-                                                                                    </TooltipTrigger>
-                                                                                    <TooltipContent side="bottom" className="max-w-md">
-                                                                                        <p className="text-xs font-mono break-all">
-                                                                                            {status?.path || "-"}
-                                                                                        </p>
-                                                                                    </TooltipContent>
-                                                                                </Tooltip>
-
-                                                                                {lastUsed && (
-                                                                                    <span className="text-muted-foreground flex items-center gap-1">
-                                                                                        <Clock className="h-3 w-3" />
-                                                                                        {lastUsed}
-                                                                                    </span>
-                                                                                )}
-
-                                                                                {status?.size && (
-                                                                                    <span className="text-muted-foreground">
-                                                                                        {formatFileSize(status.size)}
-                                                                                    </span>
-                                                                                )}
-                                                                            </div>
-
-                                                                            {/* Progress bar for extracting item */}
-                                                                            {isItemExtracting && (
-                                                                                <div className="mt-2">
-                                                                                    <Progress value={extractionProgress} className="h-1" />
-                                                                                </div>
                                                                             )}
                                                                         </div>
 
-                                                                        {/* Actions */}
-                                                                        <div className="shrink-0 flex items-center gap-1">
+                                                                        <div className="flex items-center gap-3 text-xs">
                                                                             <Tooltip>
                                                                                 <TooltipTrigger asChild>
-                                                                                    <Button
-                                                                                        variant="ghost"
-                                                                                        size="icon"
-                                                                                        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            copyPath(status?.path || item.hash, item.id);
-                                                                                        }}
-                                                                                        disabled={!status?.path}
-                                                                                    >
-                                                                                        {copiedId === item.id ? (
-                                                                                            <Check className="h-3.5 w-3.5 text-green-500" />
-                                                                                        ) : (
-                                                                                            <Copy className="h-3.5 w-3.5" />
-                                                                                        )}
-                                                                                    </Button>
+                                                                                    <span className="font-mono text-muted-foreground cursor-help">
+                                                                                        {item.hash}
+                                                                                    </span>
                                                                                 </TooltipTrigger>
-                                                                                <TooltipContent>Copy Path</TooltipContent>
+                                                                                <TooltipContent side="bottom" className="max-w-md">
+                                                                                    <p className="text-xs font-mono break-all">
+                                                                                        {status?.path || "-"}
+                                                                                    </p>
+                                                                                </TooltipContent>
                                                                             </Tooltip>
 
-                                                                            <CollapsibleTrigger asChild>
+                                                                            {lastUsed && (
+                                                                                <span className="text-muted-foreground flex items-center gap-1">
+                                                                                    <Clock className="h-3 w-3" />
+                                                                                    {lastUsed}
+                                                                                </span>
+                                                                            )}
+
+                                                                            {status?.size && (
+                                                                                <span className="text-muted-foreground">
+                                                                                    {formatFileSize(status.size)}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {/* Progress bar for extracting item */}
+                                                                        {isItemExtracting && (
+                                                                            <div className="mt-2">
+                                                                                <Progress value={extractionProgress} className="h-1" />
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Actions */}
+                                                                    <div className="shrink-0 flex items-center gap-1">
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
                                                                                 <Button
                                                                                     variant="ghost"
                                                                                     size="icon"
-                                                                                    className="h-7 w-7"
-                                                                                    onClick={(e) => e.stopPropagation()}
+                                                                                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        copyPath(status?.path || item.hash, item.id);
+                                                                                    }}
+                                                                                    disabled={!status?.path}
                                                                                 >
-                                                                                    {isExpanded ? (
-                                                                                        <ChevronUp className="h-4 w-4" />
+                                                                                    {copiedId === item.id ? (
+                                                                                        <Check className="h-3.5 w-3.5 text-green-500" />
                                                                                     ) : (
-                                                                                        <ChevronDown className="h-4 w-4" />
+                                                                                        <Copy className="h-3.5 w-3.5" />
                                                                                     )}
                                                                                 </Button>
-                                                                            </CollapsibleTrigger>
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent>Copy Path</TooltipContent>
+                                                                        </Tooltip>
 
-                                                                            {!isBatchMode && (
-                                                                                <Button
-                                                                                    size="sm"
-                                                                                    onClick={() => handleExtract(item)}
-                                                                                    disabled={isExtracting || !status?.exists}
-                                                                                    className={cn(
-                                                                                        "h-8 px-3 transition-all",
-                                                                                        isItemExtracting && "w-28"
-                                                                                    )}
-                                                                                >
-                                                                                    {isItemExtracting ? (
-                                                                                        <>
-                                                                                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                                                                                            <span className="text-xs">
-                                                                                                {extractionProgress}%
-                                                                                            </span>
-                                                                                        </>
-                                                                                    ) : isLastExtracted ? (
-                                                                                        <>
-                                                                                            <ArrowRight className="h-3.5 w-3.5 mr-1.5" />
-                                                                                            <span className="text-xs">Again</span>
-                                                                                        </>
-                                                                                    ) : (
-                                                                                        <span className="text-xs">Extract</span>
-                                                                                    )}
-                                                                                </Button>
-                                                                            )}
-                                                                        </div>
+                                                                        <CollapsibleTrigger asChild>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="h-7 w-7"
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                            >
+                                                                                {isExpanded ? (
+                                                                                    <ChevronUp className="h-4 w-4" />
+                                                                                ) : (
+                                                                                    <ChevronDown className="h-4 w-4" />
+                                                                                )}
+                                                                            </Button>
+                                                                        </CollapsibleTrigger>
+
+                                                                        {!isBatchMode && (
+                                                                            <Button
+                                                                                size="sm"
+                                                                                onClick={() => handleExtract(item)}
+                                                                                disabled={isExtracting || !status?.exists}
+                                                                                className={cn(
+                                                                                    "h-8 px-3 transition-all",
+                                                                                    isItemExtracting && "w-28"
+                                                                                )}
+                                                                            >
+                                                                                {isItemExtracting ? (
+                                                                                    <>
+                                                                                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                                                                                        <span className="text-xs">
+                                                                                            {extractionProgress}%
+                                                                                        </span>
+                                                                                    </>
+                                                                                ) : isLastExtracted ? (
+                                                                                    <>
+                                                                                        <ArrowRight className="h-3.5 w-3.5 mr-1.5" />
+                                                                                        <span className="text-xs">Again</span>
+                                                                                    </>
+                                                                                ) : (
+                                                                                    <span className="text-xs">Extract</span>
+                                                                                )}
+                                                                            </Button>
+                                                                        )}
                                                                     </div>
                                                                 </div>
+                                                            </div>
 
-                                                                {/* Expanded Details */}
-                                                                <CollapsibleContent>
-                                                                    <div className="px-3 pb-3 pt-0">
-                                                                        <div className="rounded-md bg-muted/50 p-3 space-y-2 text-xs">
-                                                                            <div className="grid grid-cols-2 gap-2">
-                                                                                <div>
-                                                                                    <span className="text-muted-foreground">ID:</span>
-                                                                                    <span className="ml-2 font-mono">{item.id}</span>
-                                                                                </div>
-                                                                                <div>
-                                                                                    <span className="text-muted-foreground">Format:</span>
-                                                                                    <span className="ml-2">{item.format || "auto-detect"}</span>
-                                                                                </div>
+                                                            {/* Expanded Details */}
+                                                            <CollapsibleContent>
+                                                                <div className="px-3 pb-3 pt-0">
+                                                                    <div className="rounded-md bg-muted/50 p-3 space-y-2 text-xs">
+                                                                        <div className="grid grid-cols-2 gap-2">
+                                                                            <div>
+                                                                                <span className="text-muted-foreground">ID:</span>
+                                                                                <span className="ml-2 font-mono">{item.id}</span>
                                                                             </div>
                                                                             <div>
-                                                                                <span className="text-muted-foreground">Path:</span>
-                                                                                <span className="ml-2 font-mono break-all">
-                                                                                    {status?.path || "-"}
+                                                                                <span className="text-muted-foreground">Format:</span>
+                                                                                <span className="ml-2">{item.format || "auto-detect"}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                        {item.description && (
+                                                                            <div className="text-muted-foreground leading-relaxed">
+                                                                                {item.description}
+                                                                            </div>
+                                                                        )}
+                                                                        <div>
+                                                                            <span className="text-muted-foreground">Path:</span>
+                                                                            <span className="ml-2 font-mono break-all">
+                                                                                {status?.path || "-"}
+                                                                            </span>
+                                                                        </div>
+                                                                        {status?.lastModified && (
+                                                                            <div>
+                                                                                <span className="text-muted-foreground">Modified:</span>
+                                                                                <span className="ml-2">
+                                                                                    {new Date(status.lastModified).toLocaleString()}
                                                                                 </span>
                                                                             </div>
-                                                                            {status?.lastModified && (
-                                                                                <div>
-                                                                                    <span className="text-muted-foreground">Modified:</span>
-                                                                                    <span className="ml-2">
-                                                                                        {new Date(status.lastModified).toLocaleString()}
-                                                                                    </span>
-                                                                                </div>
-                                                                            )}
-                                                                            {status?.size && (
-                                                                                <div>
-                                                                                    <span className="text-muted-foreground">Size:</span>
-                                                                                    <span className="ml-2">{formatFileSize(status.size)}</span>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
+                                                                        )}
+                                                                        {status?.size && (
+                                                                            <div>
+                                                                                <span className="text-muted-foreground">Size:</span>
+                                                                                <span className="ml-2">{formatFileSize(status.size)}</span>
+                                                                            </div>
+                                                                        )}
                                                                     </div>
-                                                                </CollapsibleContent>
-                                                            </div>
-                                                        </Collapsible>
-                                                    );
-                                                })
-                                            )}
-                                        </div>
-                                    </ScrollArea>
-                                </div>
+                                                                </div>
+                                                            </CollapsibleContent>
+                                                        </div>
+                                                    </Collapsible>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </ScrollArea>
+                            </div>
 
-                                {/* Footer */}
-                                <div className="px-5 py-4 border-t bg-muted/20 flex items-center justify-end">
-                                    <Button variant="outline" size="sm" onClick={onClose} disabled={isExtracting}>
-                                        Close
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
+                            {/* Footer */}
+                            <div className="px-5 py-4 border-t bg-muted/20 flex items-center justify-end">
+                                <Button variant="outline" size="sm" onClick={onClose} disabled={isExtracting}>
+                                    Close
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
         </TooltipProvider>
     );

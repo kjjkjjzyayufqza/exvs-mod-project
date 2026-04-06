@@ -3,6 +3,10 @@ export type TestTreeNode = {
   name: string;
   path: string;
   isDir: boolean;
+  /** Milliseconds since Unix epoch from host metadata (files and folders). */
+  mtimeMs?: number;
+  /** File size in bytes (files only; omitted for folders). */
+  size?: number;
   isLeaf?: boolean;
   children?: TestTreeNode[];
 };

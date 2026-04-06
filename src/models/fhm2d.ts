@@ -10,6 +10,8 @@ export enum Fhm2d_type_format {
   fhm2d_all_nutexb = "fhm2d_all_nutexb",
   fhm2d_stage_list = "fhm2d_stage_list",
   fhm2d_character_param = "fhm2d_character_param",
+  /** Out-of-game character balance tables (cost, HP, etc.) for 0xFF832E7F.fhm2d. */
+  fhm2d_character_cost = "fhm2d_character_cost",
   fhm2d_msc = "fhm2d_msc",
   fhm2d_motion = "fhm2d_motion",
   fhm2d_sound = "fhm2d_sound",

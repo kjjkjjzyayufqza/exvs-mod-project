@@ -7,17 +7,27 @@ type RawTreeNode = Partial<TestTreeNode> & {
   path: string;
   isDir?: boolean;
   is_dir?: boolean;
+  mtimeMs?: number;
+  mtime_ms?: number;
+  size?: number;
   children?: RawTreeNode[];
 };
 
 export function normalizeNode(node: RawTreeNode): TestTreeNode {
   const isDir = node.isDir ?? node.is_dir ?? false;
   const children = node.children?.map(normalizeNode);
+  const mtimeRaw = node.mtimeMs ?? node.mtime_ms;
+  const mtimeMs = typeof mtimeRaw === "number" && Number.isFinite(mtimeRaw) ? mtimeRaw : undefined;
+  const sizeRaw = node.size;
+  const size =
+    typeof sizeRaw === "number" && Number.isFinite(sizeRaw) && sizeRaw >= 0 ? sizeRaw : undefined;
   return {
     id: node.id,
     name: node.name,
     path: node.path,
     isDir,
+    mtimeMs,
+    size,
     children: isDir ? children ?? [] : undefined,
   };
 }

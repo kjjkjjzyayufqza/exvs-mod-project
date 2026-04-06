@@ -34,7 +34,9 @@ import { TestEditorToolbar } from "./components/TestEditorToolbar";
 import ListeningRepackDialog from "./components/ListeningRepackDialog";
 import { folderContainsMscScriptFiles } from "./utils/mscWorkspaceUtils";
 import { normalizePackFolderName } from "./utils/packName";
+import { applyFileTreeViewSort } from "./utils/fileTreeViewSort";
 import { sortTreeByStarOrder, useFileTreeStarOrder } from "./utils/fileTreeStars";
+import { useFileTreeViewOptions } from "./hooks/useFileTreeViewOptions";
 import { NumdlbEditorModalHost } from "./components/ssbh-model-preview/NumdlbEditorModalHost";
 import type { NumdlbEditorWindowSession } from "./components/ssbh-model-preview/NumdlbEditorModalWindow";
 import {
@@ -225,10 +227,15 @@ const TestEditorPage = () => {
   const { starOrder, toggleStar, starredPathSet } = useFileTreeStarOrder(
     currentDir || undefined
   );
+  const { viewOptions, setViewOptions } = useFileTreeViewOptions(currentDir || undefined);
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const fileTreeData = useMemo(
-    () => sortTreeByStarOrder(filterTree(treeData, deferredSearchTerm), starOrder),
-    [treeData, deferredSearchTerm, starOrder],
+    () =>
+      sortTreeByStarOrder(
+        applyFileTreeViewSort(filterTree(treeData, deferredSearchTerm), viewOptions),
+        starOrder
+      ),
+    [treeData, deferredSearchTerm, starOrder, viewOptions],
   );
   const workspaceTopLevelFolderNames = useMemo(
     () => treeData.filter((n) => n.isDir).map((n) => n.name),
@@ -999,6 +1006,8 @@ const TestEditorPage = () => {
                 onFolderRepacked={handleRepackSuccess}
                 starredPathSet={starredPathSet}
                 onToggleStar={toggleStar}
+                viewOptions={viewOptions}
+                onViewOptionsChange={setViewOptions}
               />
             }
             center={
