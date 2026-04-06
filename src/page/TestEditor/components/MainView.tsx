@@ -5,6 +5,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import RepackFolderStructureView from "./RepackFolderStructureView";
 import CharacterIdTableView from "./CharacterIdTableView";
+import CharacterCostView from "./CharacterCostView";
 import CharacterListView from "./CharacterListView";
 import SeriesListView from "./SeriesListView";
 import CardIconListView from "./CardIconListView";
@@ -75,6 +76,17 @@ const tabs: StageTab[] = [
     value: "character-id-table",
     render: (props: MainViewProps) => (
       <CharacterIdTableView
+        folderPath={props.folderPath ?? ""}
+        isActive={false}
+        onUnsavedChanges={props.onUnsavedChanges}
+      />
+    ),
+  },
+  {
+    name: "Character Cost",
+    value: "character-cost",
+    render: (props: MainViewProps) => (
+      <CharacterCostView
         folderPath={props.folderPath ?? ""}
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}
@@ -165,6 +177,7 @@ const MainView = ({
   const [pendingCharacterIdTableSelection, setPendingCharacterIdTableSelection] = useState<number | null>(null);
   const [folderStructureHasUnsaved, setFolderStructureHasUnsaved] = useState(false);
   const [characterIdTableHasUnsaved, setCharacterIdTableHasUnsaved] = useState(false);
+  const [characterCostHasUnsaved, setCharacterCostHasUnsaved] = useState(false);
   const [characterListHasUnsaved, setCharacterListHasUnsaved] = useState(false);
   const [seriesListHasUnsaved, setSeriesListHasUnsaved] = useState(false);
   const [stageListHasUnsaved, setStageListHasUnsaved] = useState(false);
@@ -219,6 +232,10 @@ const MainView = ({
 
   const handleCharacterIdTableUnsaved = useCallback((hasChanges: boolean) => {
     setCharacterIdTableHasUnsaved(hasChanges);
+  }, []);
+
+  const handleCharacterCostUnsaved = useCallback((hasChanges: boolean) => {
+    setCharacterCostHasUnsaved(hasChanges);
   }, []);
 
   const handleCharacterListUnsaved = useCallback((hasChanges: boolean) => {
@@ -281,6 +298,19 @@ const MainView = ({
               onRevealTreeFolder={props.onRevealTreeFolder}
               pendingSelectCharacterId={pendingCharacterIdTableSelection}
               onConsumePendingSelect={handleConsumePendingCharacterIdTableSelection}
+            />
+          ),
+        };
+      }
+
+      if (tab.value === "character-cost") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <CharacterCostView
+              folderPath={props.folderPath ?? ""}
+              isActive={activeTab === "character-cost"}
+              onUnsavedChanges={handleCharacterCostUnsaved}
             />
           ),
         };
@@ -373,6 +403,7 @@ const MainView = ({
   }, [
     activeTab,
     handleCharacterIdTableUnsaved,
+    handleCharacterCostUnsaved,
     handleCharacterListUnsaved,
     handleConsumePendingCharacterIdTableSelection,
     handleJumpToCharacterIdTable,
@@ -451,6 +482,13 @@ const MainView = ({
                       />
                     )}
                     {tab.value === "character-id-table" && characterIdTableHasUnsaved && (
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
+                        aria-label="Unsaved changes"
+                        title="Unsaved changes"
+                      />
+                    )}
+                    {tab.value === "character-cost" && characterCostHasUnsaved && (
                       <span
                         className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
                         aria-label="Unsaved changes"
