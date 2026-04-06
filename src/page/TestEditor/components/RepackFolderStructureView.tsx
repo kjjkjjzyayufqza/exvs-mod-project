@@ -7,6 +7,10 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  QuickAddFilesModal,
+  type QuickAddFileRow,
+} from "@/page/TestEditor/components/repack-folder-structure/QuickAddFilesModal";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { CustomTreeNode } from "@/components/CustomTreeNode";
 import { NodePropertiesPanel } from "@/page/Repack/components/NodePropertiesPanel";
@@ -194,6 +198,7 @@ export default function RepackFolderStructureView({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [loadedFilePath, setLoadedFilePath] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   const pastRef = useRef<UndoSnapshot[]>([]);
   const futureRef = useRef<UndoSnapshot[]>([]);
@@ -535,6 +540,81 @@ export default function RepackFolderStructureView({
     tree.create({ parentId, type: nodeType });
   };
 
+  const handleQuickAddFilesConfirm = useCallback(
+    (rows: QuickAddFileRow[]) => {
+      if (!selectedItem || selectedItem.data?.type !== "Folder" || !completeProjectData || rows.length === 0) {
+        return;
+      }
+      const parentId = selectedItem.id;
+      const parentNode = findNode(treeData, parentId);
+      if (!parentNode) return;
+
+      recordBeforeMutation();
+
+      const baseDirMatch = completeProjectData.SubFileData?.[0]?.fileUrl?.match(/\\([^\\]+)\\/)?.[1];
+      const baseDir = baseDirMatch ?? "unknown";
+
+      let subData = [...completeProjectData.SubFileData];
+      const newNodes: TreeDataItem[] = [];
+
+      for (const row of rows) {
+        const newIndex = subData.length === 0 ? 0 : Math.max(...subData.map((item) => item.index)) + 1;
+        const newFileIndex = subData.length === 0 ? 0 : Math.max(...subData.map((item) => item.fileIndex)) + 1;
+        const newId = uuidv4();
+        const fileName = row.name;
+
+        const newNode: TreeDataItem = {
+          id: newId,
+          name: fileName,
+          data: {
+            type: "Item",
+            index: newIndex,
+            fileType: row.fileType,
+            fileIndex: newFileIndex,
+            fileUrl: `./${fileName}`,
+            originalFileIndex: newIndex,
+            unk1: "00000000",
+            unk2: "00000000",
+            unk2_1: 0,
+            unk3: 0,
+            unk4: 0,
+          },
+        };
+        newNodes.push(newNode);
+
+        const nextSubFileDataItem = {
+          index: newIndex,
+          fileType: row.fileType,
+          fileIndex: newFileIndex,
+          fileUrl: `.\\${baseDir}\\${newFileIndex}.bin`,
+        };
+        subData = [...subData, nextSubFileDataItem];
+      }
+
+      const insertIndex = parentNode.children?.length ?? 0;
+      const nextTree = insertNodes(treeData, parentId, insertIndex, newNodes);
+      setTreeData(nextTree);
+      setCompleteProjectData({
+        ...completeProjectData,
+        Fhm2dTotalCount: completeProjectData.Fhm2dTotalCount + newNodes.length,
+        SubFileData: subData,
+      });
+      setSelectedItem(newNodes[newNodes.length - 1] ?? null);
+      setHasUnsavedChanges(true);
+      toast.success(`Added ${newNodes.length} file(s)`);
+    },
+    [
+      completeProjectData,
+      recordBeforeMutation,
+      selectedItem,
+      setCompleteProjectData,
+      setHasUnsavedChanges,
+      setSelectedItem,
+      setTreeData,
+      treeData,
+    ],
+  );
+
   const handlePaste = () => {
     if (!selectedItem || selectedItem.data?.type !== "Folder" || !copiedItem) return;
     recordBeforeMutation();
@@ -605,6 +685,16 @@ export default function RepackFolderStructureView({
             >
               <Plus className="h-4 w-4" />
               Add File
+            </Button>
+            <Button
+              type="button"
+              onClick={() => setQuickAddOpen(true)}
+              disabled={!canAddChild}
+              variant="outline"
+              size="sm"
+            >
+              <Plus className="h-4 w-4" />
+              Quick Add file
             </Button>
           </div>
         </div>
@@ -688,6 +778,8 @@ export default function RepackFolderStructureView({
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+
+      <QuickAddFilesModal open={quickAddOpen} onOpenChange={setQuickAddOpen} onConfirm={handleQuickAddFilesConfirm} />
     </div>
   );
 }
