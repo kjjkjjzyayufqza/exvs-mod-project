@@ -204,6 +204,10 @@ export async function ssbhTemplateReadNumatb(filePath: string): Promise<MatlData
   return invoke("ssbh_template_read_numatb", { filePath });
 }
 
+export async function ssbhTemplateWriteNumatb(filePath: string, matl: MatlDataJson): Promise<void> {
+  await invoke("ssbh_template_write_numatb", { filePath, matlJson: matl });
+}
+
 const PRESET_STORAGE_KEY = "ssbh-dae-exchange-presets-v1";
 
 export type SsbhDaeExchangePreset = {

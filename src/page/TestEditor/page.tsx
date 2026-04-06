@@ -69,9 +69,21 @@ import {
   ssbhWriteNumdlbMapping,
   ssbhReadNuhlpb,
   ssbhWriteNuhlpb,
+  ssbhTemplateReadNumatb,
+  ssbhTemplateWriteNumatb,
   type NumdlbReadResult,
   type NuhlpbReadResult,
 } from "./components/ssbh-model-preview/ssbhDaeIoService";
+import { ensureMatlDataSerdeFields, type NumatbProfileKind } from "./components/ssbh-model-preview/daeSsbhTypes";
+import { NumatbEditorModalHost } from "./components/ssbh-model-preview/NumatbEditorModalHost";
+import type { NumatbEditorWindowSession } from "./components/ssbh-model-preview/NumatbEditorModalWindow";
+import {
+  buildNumatbModalBundleFromLoadedFile,
+  cloneNumatbBundle,
+  detectNumatbProfileFromPath,
+  isNumatbBundleDirty,
+  type NumatbModalBundle,
+} from "./components/ssbh-model-preview/numatbEditorUtils";
 
 const WATCH_COMMAND = "watch_folder";
 const TEST_EDITOR_FOLDER_STORE_KEY = "testEditorFolder";
@@ -114,6 +126,14 @@ const TestEditorPage = () => {
   const jnttblSessionsRef = useRef(jnttblSessions);
   jnttblSessionsRef.current = jnttblSessions;
   const [jnttblGuard, setJnttblGuard] = useState<{ sessionId: string; action: "close" | "reload" } | null>(
+    null,
+  );
+
+  const [numatbSessions, setNumatbSessions] = useState<NumatbEditorWindowSession[]>([]);
+  const numatbZIndexRef = useRef(4000);
+  const numatbSessionsRef = useRef(numatbSessions);
+  numatbSessionsRef.current = numatbSessions;
+  const [numatbGuard, setNumatbGuard] = useState<{ sessionId: string; action: "close" | "reload" } | null>(
     null,
   );
 
@@ -183,6 +203,8 @@ const TestEditorPage = () => {
       setNuhlpbGuard(null);
       setJnttblSessions([]);
       setJnttblGuard(null);
+      setNumatbSessions([]);
+      setNumatbGuard(null);
     } catch (error) {
       console.error(error);
       toast.error("Failed to start folder watch");
@@ -924,6 +946,193 @@ const TestEditorPage = () => {
     }
   }, [jnttblGuard, saveJnttblSession, reloadJnttblSession]);
 
+  const openNumatbSession = useCallback((filePath: string) => {
+    const normalized = filePath.trim().toLowerCase();
+    setNumatbSessions((prev) => {
+      const existing = prev.find((s) => s.filePath.trim().toLowerCase() === normalized);
+      if (existing) {
+        const nextZ = ++numatbZIndexRef.current;
+        return prev.map((s) => (s.id === existing.id ? { ...s, zIndex: nextZ } : s));
+      }
+      const id = crypto.randomUUID();
+      const nextZ = ++numatbZIndexRef.current;
+      const primaryProfile = detectNumatbProfileFromPath(filePath);
+      const newSession: NumatbEditorWindowSession = {
+        id,
+        filePath,
+        primaryProfile,
+        loading: true,
+        saving: false,
+        loadError: null,
+        baseData: null,
+        draftData: null,
+        zIndex: nextZ,
+      };
+      void ssbhTemplateReadNumatb(filePath)
+        .then((data) => {
+          const bundle = buildNumatbModalBundleFromLoadedFile(data, primaryProfile);
+          const base = cloneNumatbBundle(bundle);
+          const draft = cloneNumatbBundle(bundle);
+          setNumatbSessions((p) =>
+            p.map((s) =>
+              s.id === id
+                ? {
+                    ...s,
+                    loading: false,
+                    loadError: null,
+                    baseData: base,
+                    draftData: draft,
+                  }
+                : s,
+            ),
+          );
+        })
+        .catch((err) => {
+          setNumatbSessions((p) =>
+            p.map((s) => (s.id === id ? { ...s, loading: false, loadError: String(err) } : s)),
+          );
+        });
+      return [...prev, newSession];
+    });
+  }, []);
+
+  const activateNumatbSession = useCallback((sessionId: string) => {
+    setNumatbSessions((prev) => {
+      const nextZ = ++numatbZIndexRef.current;
+      return prev.map((s) => (s.id === sessionId ? { ...s, zIndex: nextZ } : s));
+    });
+  }, []);
+
+  const updateNumatbDraft = useCallback((sessionId: string, next: NumatbModalBundle) => {
+    setNumatbSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, draftData: next } : s)));
+  }, []);
+
+  const saveNumatbSession = useCallback(async (sessionId: string) => {
+    const snapshot = numatbSessionsRef.current.find((x) => x.id === sessionId);
+    if (!snapshot?.draftData) return;
+    const draft = snapshot.draftData;
+    const path = snapshot.filePath;
+    const matl =
+      snapshot.primaryProfile === "maya"
+        ? ensureMatlDataSerdeFields(draft.mayaFile)
+        : ensureMatlDataSerdeFields(draft.nustFile);
+    setNumatbSessions((prev) => prev.map((x) => (x.id === sessionId ? { ...x, saving: true } : x)));
+    try {
+      await ssbhTemplateWriteNumatb(path, matl);
+      const savedBundle = cloneNumatbBundle(draft);
+      setNumatbSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionId
+            ? { ...s, saving: false, baseData: savedBundle, draftData: savedBundle }
+            : s,
+        ),
+      );
+      toast.success("Saved NUMATB");
+    } catch (e) {
+      toast.error(String(e));
+      setNumatbSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, saving: false } : s)));
+    }
+  }, []);
+
+  const resetNumatbSession = useCallback((sessionId: string) => {
+    setNumatbSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== sessionId || !s.baseData) return s;
+        return { ...s, draftData: cloneNumatbBundle(s.baseData) };
+      }),
+    );
+  }, []);
+
+  const reloadNumatbSession = useCallback(async (sessionId: string) => {
+    let fp = "";
+    let profile: NumatbProfileKind = "nust";
+    setNumatbSessions((prev) => {
+      const s = prev.find((x) => x.id === sessionId);
+      if (!s) return prev;
+      fp = s.filePath;
+      profile = s.primaryProfile;
+      return prev.map((x) => (x.id === sessionId ? { ...x, loading: true, loadError: null } : x));
+    });
+    if (!fp) return;
+    try {
+      const data = await ssbhTemplateReadNumatb(fp);
+      const bundle = buildNumatbModalBundleFromLoadedFile(data, profile);
+      const base = cloneNumatbBundle(bundle);
+      const draft = cloneNumatbBundle(bundle);
+      setNumatbSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionId
+            ? { ...s, loading: false, loadError: null, baseData: base, draftData: draft }
+            : s,
+        ),
+      );
+      toast.success("Reloaded NUMATB from disk");
+    } catch (e) {
+      const msg = String(e);
+      setNumatbSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, loading: false, loadError: msg } : s)),
+      );
+      toast.error(msg);
+    }
+  }, []);
+
+  const requestCloseNumatbSession = useCallback((sessionId: string) => {
+    const s = numatbSessionsRef.current.find((x) => x.id === sessionId);
+    if (!s) return;
+    if (isNumatbBundleDirty(s.baseData, s.draftData)) {
+      setNumatbGuard({ sessionId, action: "close" });
+      return;
+    }
+    setNumatbSessions((prev) => prev.filter((x) => x.id !== sessionId));
+  }, []);
+
+  const requestReloadNumatbSession = useCallback(
+    (sessionId: string) => {
+      const s = numatbSessionsRef.current.find((x) => x.id === sessionId);
+      if (!s) return;
+      if (isNumatbBundleDirty(s.baseData, s.draftData)) {
+        setNumatbGuard({ sessionId, action: "reload" });
+        return;
+      }
+      void reloadNumatbSession(sessionId);
+    },
+    [reloadNumatbSession],
+  );
+
+  const dismissNumatbGuard = useCallback(() => {
+    setNumatbGuard(null);
+  }, []);
+
+  const discardNumatbGuard = useCallback(() => {
+    setNumatbGuard((g) => {
+      if (!g) return null;
+      const { sessionId, action } = g;
+      if (action === "close") {
+        setNumatbSessions((prev) => prev.filter((x) => x.id !== sessionId));
+      } else {
+        void reloadNumatbSession(sessionId);
+      }
+      return null;
+    });
+  }, [reloadNumatbSession]);
+
+  const saveAndFinishNumatbGuard = useCallback(async () => {
+    if (!numatbGuard) return;
+    const { sessionId, action } = numatbGuard;
+    await saveNumatbSession(sessionId);
+    const s = numatbSessionsRef.current.find((x) => x.id === sessionId);
+    if (!s) return;
+    if (isNumatbBundleDirty(s.baseData, s.draftData)) {
+      return;
+    }
+    setNumatbGuard(null);
+    if (action === "close") {
+      setNumatbSessions((prev) => prev.filter((x) => x.id !== sessionId));
+    } else {
+      void reloadNumatbSession(sessionId);
+    }
+  }, [numatbGuard, saveNumatbSession, reloadNumatbSession]);
+
   const handleFileSelect = useCallback(
     (node: TestTreeNode | null) => {
       if (!node || node.isDir) {
@@ -950,6 +1159,12 @@ const TestEditorPage = () => {
         return;
       }
 
+      if (lower.endsWith(".numatb")) {
+        setSelectedId(node.id);
+        openNumatbSession(node.path);
+        return;
+      }
+
       if (!lower.endsWith(".json")) {
         setSelectedId(node.id);
         return;
@@ -964,7 +1179,7 @@ const TestEditorPage = () => {
       setSelectedJsonPath(node.path);
       setSelectedId(node.id);
     },
-    [hasUnsavedChanges, selectedJsonPath, openNumdlbSession, openNuhlpbSession, openJnttblSession],
+    [hasUnsavedChanges, selectedJsonPath, openNumdlbSession, openNuhlpbSession, openJnttblSession, openNumatbSession],
   );
 
   return (
@@ -1123,6 +1338,45 @@ const TestEditorPage = () => {
             </Button>
             <Button type="button" onClick={() => void saveAndFinishNuhlpbGuard()}>
               {nuhlpbGuard?.action === "close" ? "Save and close" : "Save and reload"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <NumatbEditorModalHost
+        sessions={numatbSessions}
+        onActivateSession={activateNumatbSession}
+        onCloseRequest={requestCloseNumatbSession}
+        onReloadRequest={requestReloadNumatbSession}
+        onDraftChange={updateNumatbDraft}
+        onSave={saveNumatbSession}
+        onReset={resetNumatbSession}
+      />
+
+      <AlertDialog
+        open={numatbGuard !== null}
+        onOpenChange={(open) => {
+          if (!open) setNumatbGuard(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved NUMATB changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              {numatbGuard?.action === "close"
+                ? "Save before closing, discard edits, or cancel."
+                : "Save before reloading from disk, discard edits, or cancel."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+            <AlertDialogCancel type="button" onClick={dismissNumatbGuard}>
+              Cancel
+            </AlertDialogCancel>
+            <Button type="button" variant="outline" onClick={discardNumatbGuard}>
+              Discard
+            </Button>
+            <Button type="button" onClick={() => void saveAndFinishNumatbGuard()}>
+              {numatbGuard?.action === "close" ? "Save and close" : "Save and reload"}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

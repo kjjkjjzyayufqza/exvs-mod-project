@@ -601,3 +601,12 @@ pub fn ssbh_template_read_numatb(
 ) -> Result<serde_json::Value, String> {
     read_numatb_to_json_value(&PathBuf::from(file_path.trim()))
 }
+
+#[tauri::command]
+pub fn ssbh_template_write_numatb(
+    _app: AppHandle,
+    file_path: String,
+    matl_json: serde_json::Value,
+) -> Result<(), String> {
+    write_numatb_from_json_value(&matl_json, &PathBuf::from(file_path.trim()))
+}
