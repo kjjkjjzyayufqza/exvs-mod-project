@@ -465,6 +465,118 @@ pub async fn copy_asset_as_new(
     .map_err(|e| e.to_string())?
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoveAssetTargets {
+    pub workspace_root: Option<String>,
+    pub extract_output_root: Option<String>,
+    pub mod_directory: Option<String>,
+}
+
+fn remove_asset_hash_folder_pair(root: &Path, normalized_hash: &str) -> Result<bool, String> {
+    let asset_folder = root.join(normalized_hash);
+    let struct_json = root.join(format!("{normalized_hash}_structure.json"));
+    let mut did_any = false;
+    if asset_folder.is_dir() {
+        fs::remove_dir_all(&asset_folder).map_err(|e| {
+            format!(
+                "Failed to remove folder {}: {}",
+                asset_folder.display(),
+                e
+            )
+        })?;
+        did_any = true;
+    }
+    if struct_json.is_file() {
+        fs::remove_file(&struct_json).map_err(|e| {
+            format!("Failed to remove {}: {}", struct_json.display(), e)
+        })?;
+        did_any = true;
+    }
+    Ok(did_any)
+}
+
+fn remove_mod_fhm2d_file(mod_dir: &Path, normalized_hash: &str) -> Result<bool, String> {
+    let upper = format!("{}.fhm2d", normalized_hash);
+    let lower = upper.to_ascii_lowercase();
+    let mut paths = vec![mod_dir.join(&upper)];
+    if lower != upper {
+        paths.push(mod_dir.join(&lower));
+    }
+    let mut removed = false;
+    for p in paths {
+        if p.is_file() {
+            fs::remove_file(&p).map_err(|e| format!("Failed to remove {}: {}", p.display(), e))?;
+            removed = true;
+        }
+    }
+    Ok(removed)
+}
+
+#[tauri::command]
+pub async fn remove_asset_workspace(hash_hex: String, targets: RemoveAssetTargets) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let normalized = normalize_hash_hex(&hash_hex)?;
+
+        let mut root_paths: Vec<PathBuf> = Vec::new();
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for opt in [&targets.workspace_root, &targets.extract_output_root] {
+            if let Some(s) = opt {
+                let t = s.trim();
+                if t.is_empty() {
+                    continue;
+                }
+                let p = PathBuf::from(t);
+                let key = p.to_string_lossy().to_ascii_lowercase();
+                if seen.insert(key) {
+                    root_paths.push(p);
+                }
+            }
+        }
+
+        let mod_trimmed = targets
+            .mod_directory
+            .as_ref()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+
+        if root_paths.is_empty() && mod_trimmed.is_none() {
+            return Err("Select at least one removal target".to_string());
+        }
+
+        for root in &root_paths {
+            if !root.is_dir() {
+                return Err(format!("Directory does not exist: {}", root.display()));
+            }
+            if !remove_asset_hash_folder_pair(root, &normalized)? {
+                return Err(format!(
+                    "Nothing to remove under {} for {}",
+                    root.display(),
+                    normalized
+                ));
+            }
+        }
+
+        if let Some(mod_s) = mod_trimmed {
+            let mod_dir = PathBuf::from(mod_s);
+            if !mod_dir.is_dir() {
+                return Err(format!("Mod directory does not exist: {}", mod_dir.display()));
+            }
+            if !remove_mod_fhm2d_file(&mod_dir, &normalized)? {
+                return Err(format!(
+                    "Packaged .fhm2d not found under {} for {}",
+                    mod_dir.display(),
+                    normalized
+                ));
+            }
+        }
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestTreeNode {

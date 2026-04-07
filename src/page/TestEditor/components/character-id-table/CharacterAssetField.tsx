@@ -4,14 +4,14 @@ import { exists } from "@tauri-apps/plugin-fs";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { 
-  ExternalLink, 
-  Download, 
-  MoreHorizontal, 
-  CheckCircle2, 
-  XCircle, 
-  AlertCircle,
-  Copy
+import {
+  ExternalLink,
+  Download,
+  MoreHorizontal,
+  CheckCircle2,
+  XCircle,
+  Copy,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,6 +26,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -34,11 +44,20 @@ import { AssetRefInfo } from "./assetRef";
 import { extractAsset } from "./extractFhm2d";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { copyAssetAsNew } from "./copyAssetAsNew";
+import { removeAssetWorkspace } from "./removeAssetWorkspace";
+
+function normalizePathKey(s: string): string {
+  return s.trim().replace(/\\/g, "/").toLowerCase();
+}
 
 interface CharacterAssetFieldProps {
   asset: AssetRefInfo;
+  /** Test Editor workspace root (e.g. com\file): hash folder + *_structure.json */
   projectRootDir: string;
+  /** Extract output folder from settings: same layout as workspace root */
   extractOutputPath: string;
+  /** OB mod folder (e.g. data\x64\mod): packaged .fhm2d */
+  obModPath: string;
   onReveal?: (path: string) => void;
   onFieldUpdate?: (fieldKey: string, newValue: number) => void;
 }
@@ -64,6 +83,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   asset,
   projectRootDir,
   extractOutputPath,
+  obModPath,
   onReveal,
   onFieldUpdate,
 }) => {
@@ -74,6 +94,11 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [copySeed, setCopySeed] = useState("");
   const [isCopyingAsNew, setIsCopyingAsNew] = useState(false);
+  const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const [removeWorkspace, setRemoveWorkspace] = useState(true);
+  const [removeExtractOutput, setRemoveExtractOutput] = useState(true);
+  const [removeModFhm2d, setRemoveModFhm2d] = useState(true);
   const [writeMetaBin, setWriteMetaBin] = useState(false);
   const trimmedSeed = copySeed.trim();
   const copySeedCrcPreview = useMemo(() => {
@@ -82,6 +107,21 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     const int32 = u | 0;
     return { hex, int32 };
   }, [trimmedSeed]);
+
+  const canRemoveWorkspace = Boolean(projectRootDir?.trim());
+  const canRemoveExtract = Boolean(extractOutputPath?.trim());
+  const canRemoveMod = Boolean(obModPath?.trim());
+  const extractOutputSameAsWorkspace =
+    canRemoveWorkspace &&
+    canRemoveExtract &&
+    normalizePathKey(extractOutputPath) === normalizePathKey(projectRootDir);
+
+  useEffect(() => {
+    if (!removeDialogOpen) return;
+    setRemoveWorkspace(canRemoveWorkspace);
+    setRemoveExtractOutput(canRemoveExtract && !extractOutputSameAsWorkspace);
+    setRemoveModFhm2d(canRemoveMod);
+  }, [removeDialogOpen, canRemoveWorkspace, canRemoveExtract, canRemoveMod, extractOutputSameAsWorkspace]);
 
   useEffect(() => {
     const checkExists = async () => {
@@ -198,6 +238,51 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
       toast.error(message || "Failed to copy as new");
     } finally {
       setIsCopyingAsNew(false);
+    }
+  };
+
+  const handleConfirmRemove = async () => {
+    const takeWorkspace = removeWorkspace && canRemoveWorkspace;
+    const takeExtract = removeExtractOutput && canRemoveExtract;
+    const takeMod = removeModFhm2d && canRemoveMod;
+
+    if (!takeWorkspace && !takeExtract && !takeMod) {
+      toast.error("Select at least one target with a configured path");
+      return;
+    }
+
+    setIsRemoving(true);
+    try {
+      await removeAssetWorkspace({
+        hashHex: asset.hashHex,
+        targets: {
+          workspaceRoot: takeWorkspace ? projectRootDir : undefined,
+          extractOutputRoot: takeExtract ? extractOutputPath : undefined,
+          modDirectory: takeMod ? obModPath : undefined,
+        },
+      });
+
+      const clearedWorkspaceRow =
+        takeWorkspace || (takeExtract && extractOutputSameAsWorkspace);
+
+      if (clearedWorkspaceRow) {
+        onFieldUpdate?.(asset.fieldKey, 0);
+        setWorkspaceExists(false);
+      } else if (takeExtract) {
+        setWorkspaceExists(await exists(asset.workspaceFolderPath));
+      }
+
+      if (takeMod) {
+        setModExists(false);
+      }
+
+      setRemoveDialogOpen(false);
+      toast.success(`Removed asset data for ${asset.hashHex}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(message || "Failed to remove asset data");
+    } finally {
+      setIsRemoving(false);
     }
   };
 
@@ -339,10 +424,105 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
                 <Copy className="h-3.5 w-3.5" />
                 Copy as New
               </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full justify-start gap-2 text-destructive hover:text-destructive border-destructive/40 hover:bg-destructive/10"
+                onClick={() => setRemoveDialogOpen(true)}
+                disabled={
+                  isRemoving ||
+                  (!canRemoveWorkspace && !canRemoveExtract && !canRemoveMod)
+                }
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Remove
+              </Button>
             </div>
           </div>
         </PopoverContent>
       </Popover>
+
+      <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove asset data</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-left text-sm text-muted-foreground">
+                <p>
+                  <span className="font-mono text-foreground">{asset.hashHex}</span> — choose what to delete.
+                  Clearing the Test Editor workspace field or the same path as extract output sets this table
+                  column to 0 (None).
+                </p>
+                <div className="space-y-2 rounded-md border border-border p-2">
+                  <label className="flex cursor-pointer items-start gap-2">
+                    <Checkbox
+                      checked={removeWorkspace && canRemoveWorkspace}
+                      onCheckedChange={(v) => setRemoveWorkspace(v === true)}
+                      disabled={!canRemoveWorkspace || isRemoving}
+                      className="mt-0.5"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="font-medium text-foreground">Test Editor workspace</span>
+                      <span className="block break-all font-mono text-xs">{projectRootDir || "(not set)"}</span>
+                      <span className="block text-[11px]">Remove {asset.hashHex} folder and {asset.hashHex}_structure.json</span>
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-2">
+                    <Checkbox
+                      checked={removeExtractOutput && canRemoveExtract}
+                      onCheckedChange={(v) => setRemoveExtractOutput(v === true)}
+                      disabled={!canRemoveExtract || isRemoving || extractOutputSameAsWorkspace}
+                      className="mt-0.5"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="font-medium text-foreground">Extract output folder</span>
+                      {extractOutputSameAsWorkspace && (
+                        <span className="ml-1 text-[11px] text-amber-600 dark:text-amber-500">(same as workspace)</span>
+                      )}
+                      <span className="block break-all font-mono text-xs">{extractOutputPath || "(not set)"}</span>
+                      <span className="block text-[11px]">Same folder + structure JSON as extract target</span>
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-2">
+                    <Checkbox
+                      checked={removeModFhm2d && canRemoveMod}
+                      onCheckedChange={(v) => setRemoveModFhm2d(v === true)}
+                      disabled={!canRemoveMod || isRemoving}
+                      className="mt-0.5"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="font-medium text-foreground">Mod (packaged .fhm2d)</span>
+                      <span className="block break-all font-mono text-xs">{obModPath || "(not set)"}</span>
+                      <span className="block text-[11px]">Remove {asset.hashHex}.fhm2d from mod path</span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRemoving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                void handleConfirmRemove();
+              }}
+              disabled={
+                isRemoving ||
+                !(
+                  (removeWorkspace && canRemoveWorkspace) ||
+                  (removeExtractOutput && canRemoveExtract) ||
+                  (removeModFhm2d && canRemoveMod)
+                )
+              }
+            >
+              {isRemoving ? "Removing..." : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={copyDialogOpen} onOpenChange={setCopyDialogOpen}>
         <DialogContent>

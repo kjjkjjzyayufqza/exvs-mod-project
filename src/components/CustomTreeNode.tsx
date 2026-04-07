@@ -54,6 +54,23 @@ export function CustomTreeNode({
   const depth = node.level;
   const indentPadding = depth * 12;
 
+  const handleSelect = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (e.shiftKey) {
+      node.selectContiguous();
+      return;
+    }
+    if (e.ctrlKey || e.metaKey) {
+      if (node.isSelected) {
+        node.deselect();
+      } else {
+        node.selectMulti();
+      }
+      return;
+    }
+    node.select();
+  };
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -78,7 +95,7 @@ export function CustomTreeNode({
             // Drop target indicator
             node.willReceiveDrop && "before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-primary"
           )}
-          onClick={() => node.select()}
+          onClick={handleSelect}
           onDoubleClick={() => isFolder && node.toggle()}
         >
       {/* Drag handle indicator - shows on hover */}
@@ -171,7 +188,7 @@ export function CustomTreeNode({
         <TooltipProvider delayDuration={200}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 <AlertTriangle className="h-4 w-4 text-amber-500" />
               </div>
             </TooltipTrigger>

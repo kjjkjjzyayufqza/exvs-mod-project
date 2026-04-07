@@ -7,10 +7,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  QuickAddFilesModal,
-  type QuickAddFileRow,
-} from "@/page/TestEditor/components/repack-folder-structure/QuickAddFilesModal";
+import { QuickAddFilesModal, type QuickAddFileRow } from "@/page/TestEditor/components/repack-folder-structure/QuickAddFilesModal";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { CustomTreeNode } from "@/components/CustomTreeNode";
 import { NodePropertiesPanel } from "@/page/Repack/components/NodePropertiesPanel";
@@ -199,6 +196,7 @@ export default function RepackFolderStructureView({
   const [loadedFilePath, setLoadedFilePath] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [selectedItems, setSelectedItems] = useState<TreeDataItem[]>([]);
 
   const pastRef = useRef<UndoSnapshot[]>([]);
   const futureRef = useRef<UndoSnapshot[]>([]);
@@ -225,6 +223,7 @@ export default function RepackFolderStructureView({
     pastRef.current = pastRef.current.slice(0, -1);
     futureRef.current = [cur, ...futureRef.current].slice(0, MAX_UNDO_STACK);
     applyUndoSnapshot(prev);
+    setSelectedItems([]);
     setHasUnsavedChanges(true);
     setHistoryTick((t) => t + 1);
   }, []);
@@ -236,6 +235,7 @@ export default function RepackFolderStructureView({
     futureRef.current = futureRef.current.slice(1);
     pastRef.current = [...pastRef.current, cur].slice(-MAX_UNDO_STACK);
     applyUndoSnapshot(next);
+    setSelectedItems([]);
     setHasUnsavedChanges(true);
     setHistoryTick((t) => t + 1);
   }, []);
@@ -306,6 +306,7 @@ export default function RepackFolderStructureView({
           if (convertedData.length > 0) {
             setTreeData(convertedData);
             setSelectedItem(null);
+            setSelectedItems([]);
             setLoadedFilePath(jsonFilePath);
             setHasUnsavedChanges(false);
             clearUndoHistory();
@@ -406,11 +407,22 @@ export default function RepackFolderStructureView({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [hasUnsavedChanges, loadedFilePath, handleSave, redo, undo]);
 
-  const selection = useMemo(() => selectedItem?.id ?? undefined, [selectedItem?.id]);
-
   const handleSelectChange = (nodes: NodeApi<TreeDataItem>[]) => {
-    setSelectedItem(nodes[0]?.data ?? null);
+    const nextSelected = nodes.map((node) => node.data);
+    setSelectedItems(nextSelected);
+    setSelectedItem(nextSelected.length === 1 ? nextSelected[0] : null);
   };
+
+  const selectedFolderItems = useMemo(
+    () => selectedItems.filter((item) => item.data?.type === "Folder"),
+    [selectedItems],
+  );
+
+  const resolveTargetFolders = useCallback((): TreeDataItem[] => {
+    if (selectedFolderItems.length > 0) return selectedFolderItems;
+    if (selectedItem && selectedItem.data?.type === "Folder") return [selectedItem];
+    return [];
+  }, [selectedFolderItems, selectedItem]);
 
   const handleCreate = ({ parentId, index, type }: CreateArgs) => {
     recordBeforeMutation();
@@ -497,6 +509,7 @@ export default function RepackFolderStructureView({
     if (selectedItem?.id && removedIds.has(selectedItem.id)) {
       setSelectedItem(null);
     }
+    setSelectedItems((prev) => prev.filter((item) => !removedIds.has(item.id)));
 
     recalculateIndices();
     setHasUnsavedChanges(true);
@@ -534,79 +547,230 @@ export default function RepackFolderStructureView({
     setHasUnsavedChanges(true);
   };
 
-  const addNewNode = (parentId: string, nodeType: "folder" | "file") => {
-    const tree = treeRef.current;
-    if (!tree) return;
-    tree.create({ parentId, type: nodeType });
-  };
+  const handleAddFolders = useCallback(() => {
+    const targets = resolveTargetFolders();
+    if (targets.length === 0) return;
+    recordBeforeMutation();
+
+    let nextTree = treeData;
+    const createdNodes: TreeDataItem[] = [];
+
+    for (const target of targets) {
+      const parentNode = findNode(nextTree, target.id);
+      if (!parentNode || parentNode.data?.type !== "Folder") continue;
+      const insertIndex = parentNode.children?.length ?? 0;
+      const newNode: TreeDataItem = {
+        id: uuidv4(),
+        name: "New Folder",
+        children: [],
+        data: {
+          type: "Folder",
+          index: insertIndex,
+          folderCount: 0,
+          unk1: "00000000",
+          unk2: "00000000",
+          unk2_1: 0,
+          unk3: 0,
+          unk4: 0,
+          unk5: 0,
+          unk6: 0,
+        },
+      };
+      nextTree = insertNodes(nextTree, target.id, insertIndex, [newNode]);
+      createdNodes.push(newNode);
+    }
+
+    if (createdNodes.length === 0) return;
+    const lastCreated = createdNodes[createdNodes.length - 1];
+    setTreeData(nextTree);
+    setSelectedItems([lastCreated]);
+    setSelectedItem(lastCreated);
+    setHasUnsavedChanges(true);
+    toast.success(`Added ${createdNodes.length} folder(s)`);
+  }, [recordBeforeMutation, resolveTargetFolders, setSelectedItem, setTreeData, treeData]);
+
+  const handleAddFiles = useCallback(() => {
+    const targets = resolveTargetFolders();
+    if (targets.length === 0 || !completeProjectData) return;
+    recordBeforeMutation();
+
+    const baseDirMatch = completeProjectData.SubFileData?.[0]?.fileUrl?.match(/\\([^\\]+)\\/)?.[1];
+    const baseDir = baseDirMatch ?? "unknown";
+
+    let nextTree = treeData;
+    let subData = [...completeProjectData.SubFileData];
+    const createdNodes: TreeDataItem[] = [];
+
+    for (const target of targets) {
+      const parentNode = findNode(nextTree, target.id);
+      if (!parentNode || parentNode.data?.type !== "Folder") continue;
+
+      const newIndex = subData.length === 0 ? 0 : Math.max(...subData.map((item) => item.index)) + 1;
+      const newFileIndex = subData.length === 0 ? 0 : Math.max(...subData.map((item) => item.fileIndex)) + 1;
+      const newNode: TreeDataItem = {
+        id: uuidv4(),
+        name: "New File.bin",
+        data: {
+          type: "Item",
+          index: newIndex,
+          fileType: ".bin",
+          fileIndex: newFileIndex,
+          fileUrl: "./New File.bin",
+          originalFileIndex: newIndex,
+          unk1: "00000000",
+          unk2: "00000000",
+          unk2_1: 0,
+          unk3: 0,
+          unk4: 0,
+        },
+      };
+      const insertIndex = parentNode.children?.length ?? 0;
+      nextTree = insertNodes(nextTree, target.id, insertIndex, [newNode]);
+      createdNodes.push(newNode);
+      subData = [
+        ...subData,
+        {
+          index: newIndex,
+          fileType: ".bin",
+          fileIndex: newFileIndex,
+          fileUrl: `.\\${baseDir}\\${newFileIndex}.bin`,
+        },
+      ];
+    }
+
+    if (createdNodes.length === 0) return;
+    const lastCreated = createdNodes[createdNodes.length - 1];
+    setTreeData(nextTree);
+    setCompleteProjectData({
+      ...completeProjectData,
+      Fhm2dTotalCount: completeProjectData.Fhm2dTotalCount + createdNodes.length,
+      SubFileData: subData,
+    });
+    setSelectedItems([lastCreated]);
+    setSelectedItem(lastCreated);
+    setHasUnsavedChanges(true);
+    toast.success(`Added ${createdNodes.length} file(s)`);
+  }, [completeProjectData, recordBeforeMutation, resolveTargetFolders, setCompleteProjectData, setSelectedItem, setTreeData, treeData]);
 
   const handleQuickAddFilesConfirm = useCallback(
-    (rows: QuickAddFileRow[]) => {
-      if (!selectedItem || selectedItem.data?.type !== "Folder" || !completeProjectData || rows.length === 0) {
+    (payload: { rows: QuickAddFileRow[]; shareFileIndexAcrossFolders: boolean }) => {
+      const { rows, shareFileIndexAcrossFolders } = payload;
+      const targets = resolveTargetFolders();
+      if (targets.length === 0 || !completeProjectData || rows.length === 0) {
         return;
       }
-      const parentId = selectedItem.id;
-      const parentNode = findNode(treeData, parentId);
-      if (!parentNode) return;
 
       recordBeforeMutation();
 
       const baseDirMatch = completeProjectData.SubFileData?.[0]?.fileUrl?.match(/\\([^\\]+)\\/)?.[1];
       const baseDir = baseDirMatch ?? "unknown";
 
+      let nextTree = treeData;
       let subData = [...completeProjectData.SubFileData];
       const newNodes: TreeDataItem[] = [];
 
-      for (const row of rows) {
-        const newIndex = subData.length === 0 ? 0 : Math.max(...subData.map((item) => item.index)) + 1;
-        const newFileIndex = subData.length === 0 ? 0 : Math.max(...subData.map((item) => item.fileIndex)) + 1;
-        const newId = uuidv4();
-        const fileName = row.name;
+      if (shareFileIndexAcrossFolders) {
+        for (const row of rows) {
+          const sharedIndex = subData.length === 0 ? 0 : Math.max(...subData.map((item) => item.index)) + 1;
+          const sharedFileIndex = subData.length === 0 ? 0 : Math.max(...subData.map((item) => item.fileIndex)) + 1;
 
-        const newNode: TreeDataItem = {
-          id: newId,
-          name: fileName,
-          data: {
-            type: "Item",
-            index: newIndex,
-            fileType: row.fileType,
-            fileIndex: newFileIndex,
-            fileUrl: `./${fileName}`,
-            originalFileIndex: newIndex,
-            unk1: "00000000",
-            unk2: "00000000",
-            unk2_1: 0,
-            unk3: 0,
-            unk4: 0,
-          },
-        };
-        newNodes.push(newNode);
+          for (const target of targets) {
+            const parentNode = findNode(nextTree, target.id);
+            if (!parentNode || parentNode.data?.type !== "Folder") continue;
 
-        const nextSubFileDataItem = {
-          index: newIndex,
-          fileType: row.fileType,
-          fileIndex: newFileIndex,
-          fileUrl: `.\\${baseDir}\\${newFileIndex}.bin`,
-        };
-        subData = [...subData, nextSubFileDataItem];
+            const fileNode: TreeDataItem = {
+              id: uuidv4(),
+              name: row.name,
+              data: {
+                type: "Item",
+                index: sharedIndex,
+                fileType: row.fileType,
+                fileIndex: sharedFileIndex,
+                fileUrl: `./${row.name}`,
+                originalFileIndex: sharedIndex,
+                unk1: "00000000",
+                unk2: "00000000",
+                unk2_1: 0,
+                unk3: 0,
+                unk4: 0,
+              },
+            };
+            const insertIndex = parentNode.children?.length ?? 0;
+            nextTree = insertNodes(nextTree, target.id, insertIndex, [fileNode]);
+            newNodes.push(fileNode);
+          }
+
+          subData = [
+            ...subData,
+            {
+              index: sharedIndex,
+              fileType: row.fileType,
+              fileIndex: sharedFileIndex,
+              fileUrl: `.\\${baseDir}\\${sharedFileIndex}.bin`,
+            },
+          ];
+        }
+      } else {
+        for (const target of targets) {
+          const parentNode = findNode(nextTree, target.id);
+          if (!parentNode || parentNode.data?.type !== "Folder") continue;
+          for (const row of rows) {
+            const newIndex = subData.length === 0 ? 0 : Math.max(...subData.map((item) => item.index)) + 1;
+            const newFileIndex = subData.length === 0 ? 0 : Math.max(...subData.map((item) => item.fileIndex)) + 1;
+            const newNode: TreeDataItem = {
+              id: uuidv4(),
+              name: row.name,
+              data: {
+                type: "Item",
+                index: newIndex,
+                fileType: row.fileType,
+                fileIndex: newFileIndex,
+                fileUrl: `./${row.name}`,
+                originalFileIndex: newIndex,
+                unk1: "00000000",
+                unk2: "00000000",
+                unk2_1: 0,
+                unk3: 0,
+                unk4: 0,
+              },
+            };
+            const insertIndex = parentNode.children?.length ?? 0;
+            nextTree = insertNodes(nextTree, target.id, insertIndex, [newNode]);
+            newNodes.push(newNode);
+            subData = [
+              ...subData,
+              {
+                index: newIndex,
+                fileType: row.fileType,
+                fileIndex: newFileIndex,
+                fileUrl: `.\\${baseDir}\\${newFileIndex}.bin`,
+              },
+            ];
+          }
+        }
       }
 
-      const insertIndex = parentNode.children?.length ?? 0;
-      const nextTree = insertNodes(treeData, parentId, insertIndex, newNodes);
+      if (newNodes.length === 0) return;
       setTreeData(nextTree);
       setCompleteProjectData({
         ...completeProjectData,
         Fhm2dTotalCount: completeProjectData.Fhm2dTotalCount + newNodes.length,
         SubFileData: subData,
       });
-      setSelectedItem(newNodes[newNodes.length - 1] ?? null);
+      const lastCreated = newNodes[newNodes.length - 1];
+      setSelectedItems([lastCreated]);
+      setSelectedItem(lastCreated);
       setHasUnsavedChanges(true);
-      toast.success(`Added ${newNodes.length} file(s)`);
+      toast.success(
+        shareFileIndexAcrossFolders
+          ? `Added ${newNodes.length} file node(s) with shared fileIndex per selected source file`
+          : `Added ${newNodes.length} file(s)`,
+      );
     },
     [
       completeProjectData,
       recordBeforeMutation,
-      selectedItem,
+      resolveTargetFolders,
       setCompleteProjectData,
       setHasUnsavedChanges,
       setSelectedItem,
@@ -625,7 +789,9 @@ export default function RepackFolderStructureView({
     setHasUnsavedChanges(true);
   };
 
-  const canAddChild = !!selectedItem && selectedItem.data?.type === "Folder";
+  const canAddChild = resolveTargetFolders().length > 0;
+  const hasSingleSelection = selectedItems.length === 1;
+  const addTargetsCount = resolveTargetFolders().length;
 
   const canUndo = useMemo(() => pastRef.current.length > 0, [historyTick]);
   const canRedo = useMemo(() => futureRef.current.length > 0, [historyTick]);
@@ -669,19 +835,29 @@ export default function RepackFolderStructureView({
               {isSaving ? "Saving..." : "Save"}
             </Button>
             <Button
-              onClick={() => selectedItem && addNewNode(selectedItem.id, "folder")}
+              onClick={handleAddFolders}
               disabled={!canAddChild}
               variant="outline"
               size="sm"
+              title={
+                addTargetsCount > 1
+                  ? `Add a new folder to ${addTargetsCount} selected folders`
+                  : "Add a new folder to selected folder"
+              }
             >
               <Plus className="h-4 w-4" />
               Add Folder
             </Button>
             <Button
-              onClick={() => selectedItem && addNewNode(selectedItem.id, "file")}
+              onClick={handleAddFiles}
               disabled={!canAddChild}
               variant="outline"
               size="sm"
+              title={
+                addTargetsCount > 1
+                  ? `Add a new file to ${addTargetsCount} selected folders`
+                  : "Add a new file to selected folder"
+              }
             >
               <Plus className="h-4 w-4" />
               Add File
@@ -692,6 +868,11 @@ export default function RepackFolderStructureView({
               disabled={!canAddChild}
               variant="outline"
               size="sm"
+              title={
+                addTargetsCount > 1
+                  ? `Quick add files to ${addTargetsCount} selected folders`
+                  : "Quick add files to selected folder"
+              }
             >
               <Plus className="h-4 w-4" />
               Quick Add file
@@ -702,6 +883,11 @@ export default function RepackFolderStructureView({
           <CardDescription className="text-sm leading-snug">
             Drag and drop to reorganize. Shortcuts: Undo Ctrl+Z (Cmd+Z), Redo Ctrl+Y or Ctrl+Shift+Z (Cmd+Shift+Z).
           </CardDescription>
+          {selectedItems.length > 1 ? (
+            <p className="text-xs text-muted-foreground">
+              Selected {selectedItems.length} nodes. Add actions apply to selected folders only; property editor is disabled for multi-selection.
+            </p>
+          ) : null}
           {loadedFilePath && (
             <p className="text-xs text-muted-foreground">
               {loadedFilePath.split(/[\\/]/).pop()}
@@ -752,7 +938,6 @@ export default function RepackFolderStructureView({
                   onMove={handleMove}
                   onRename={handleRename}
                   onDelete={handleDelete}
-                  selection={selection}
                   searchMatch={(node, term) => node.data.name.toLowerCase().includes(term.toLowerCase())}
                 >
                   {CustomTreeNode}
@@ -767,7 +952,7 @@ export default function RepackFolderStructureView({
         <ResizablePanel defaultSize={35} minSize={25}>
           <div className="h-full min-h-0">
             <NodePropertiesPanel
-              selectedItem={selectedItem || undefined}
+              selectedItem={hasSingleSelection ? selectedItem || undefined : undefined}
               onRename={(nodeId, newName) => handleRename({ id: nodeId, name: newName })}
               onDelete={(nodeId) => handleDelete({ ids: [nodeId] })}
               onFileTypeChange={handleFileTypeChange}

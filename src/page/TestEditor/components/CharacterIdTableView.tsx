@@ -989,6 +989,7 @@ export default function CharacterIdTableView({
                                                             asset={resolvedAssetRefs["Model"]} 
                                                             projectRootDir={folderPath}
                                                             extractOutputPath={extractOutputPath}
+                                                            obModPath={obModPath}
                                                             onReveal={onRevealTreeFolder}
                                                             onFieldUpdate={handleAssetFieldUpdate}
                                                         />
@@ -1015,6 +1016,7 @@ export default function CharacterIdTableView({
                                                             asset={resolvedAssetRefs["Effect"]} 
                                                             projectRootDir={folderPath}
                                                             extractOutputPath={extractOutputPath}
+                                                            obModPath={obModPath}
                                                             onReveal={onRevealTreeFolder}
                                                             onFieldUpdate={handleAssetFieldUpdate}
                                                         />
@@ -1041,6 +1043,7 @@ export default function CharacterIdTableView({
                                                             asset={resolvedAssetRefs["Sound"]} 
                                                             projectRootDir={folderPath}
                                                             extractOutputPath={extractOutputPath}
+                                                            obModPath={obModPath}
                                                             onReveal={onRevealTreeFolder}
                                                             onFieldUpdate={handleAssetFieldUpdate}
                                                         />
@@ -1067,6 +1070,7 @@ export default function CharacterIdTableView({
                                                             asset={resolvedAssetRefs["Param"]} 
                                                             projectRootDir={folderPath}
                                                             extractOutputPath={extractOutputPath}
+                                                            obModPath={obModPath}
                                                             onReveal={onRevealTreeFolder}
                                                             onFieldUpdate={handleAssetFieldUpdate}
                                                         />
@@ -1093,6 +1097,7 @@ export default function CharacterIdTableView({
                                                             asset={resolvedAssetRefs["Msc"]} 
                                                             projectRootDir={folderPath}
                                                             extractOutputPath={extractOutputPath}
+                                                            obModPath={obModPath}
                                                             onReveal={onRevealTreeFolder}
                                                             onFieldUpdate={handleAssetFieldUpdate}
                                                         />
@@ -1119,6 +1124,7 @@ export default function CharacterIdTableView({
                                                             asset={resolvedAssetRefs["Motion"]} 
                                                             projectRootDir={folderPath}
                                                             extractOutputPath={extractOutputPath}
+                                                            obModPath={obModPath}
                                                             onReveal={onRevealTreeFolder}
                                                             onFieldUpdate={handleAssetFieldUpdate}
                                                         />

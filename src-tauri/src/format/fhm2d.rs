@@ -742,7 +742,12 @@ fn apply_naming(
                 files,
                 numdlb_character_enrich::NumdlbCharacterNamingMode::Effect,
             )?;
-            apply_nutexb_names(&mut output.sub_file_data, files)
+            apply_nutexb_names(&mut output.sub_file_data, files)?;
+            apply_effect_shallow_parent_bins_to_efxbn(
+                &mut output.sub_file_data,
+                out_name,
+                &output.sub_file_parse_structure,
+            )
         }
         Some(Fhm2dFormat::Sound) => apply_sound_names(&mut output.sub_file_data, files),
         None => Ok(()),
@@ -963,6 +968,63 @@ fn apply_nutexb_names(sub: &mut [OutputSubFileData], files: &[DecodedSubFile]) -
                 return Err(format!("Nutexb naming overflow for fileIndex {}", item.file_index));
             }
         }
+    }
+    Ok(())
+}
+
+/// Loose `.bin` files next to numbered effect group folders are renamed to `.efxbn`.
+/// Parent paths from `build_folder_map` include both `["0"]` (from items whose folder path is `0\0\`)
+/// and `["0","0"]` (from items under `0\0\0\`); using **max** depth keeps `["0","0"]` so loose bins match.
+fn apply_effect_shallow_parent_bins_to_efxbn(
+    sub: &mut [OutputSubFileData],
+    out_name: &str,
+    parse_root: &ParseNode,
+) -> Result<(), String> {
+    let folder_map = build_folder_map(parse_root)?;
+    let mut parent_dirs: HashSet<Vec<String>> = HashSet::new();
+    for path in folder_map.values() {
+        if path.len() >= 1 {
+            parent_dirs.insert(path[..path.len() - 1].to_vec());
+        }
+    }
+    // Items with path `["0","0"]` contribute parent `["0"]`; group items with `["0","0","0"]` contribute
+    // `["0","0"]`. Using min depth keeps only `["0"]`, while loose bins sit at rel `["0","0"]` and never
+    // match. Use max depth so the deepest shared directory (sibling to numbered group folders) wins.
+    let non_empty_parents: Vec<Vec<String>> = parent_dirs.into_iter().filter(|p| !p.is_empty()).collect();
+    if non_empty_parents.is_empty() {
+        return Ok(());
+    }
+    let max_depth = non_empty_parents.iter().map(|p| p.len()).max().unwrap_or(0);
+    let shallow_parents: HashSet<Vec<String>> = non_empty_parents
+        .into_iter()
+        .filter(|p| p.len() == max_depth)
+        .collect();
+
+    for item in sub.iter_mut() {
+        if !item.file_type.eq_ignore_ascii_case(".bin") {
+            continue;
+        }
+        let parents = parent_segments(item.file_url.as_str())?;
+        if !parents
+            .first()
+            .map_or(false, |s| s.eq_ignore_ascii_case(out_name))
+        {
+            continue;
+        }
+        let rel: Vec<String> = parents[1..].to_vec();
+        if !shallow_parents.contains(&rel) {
+            continue;
+        }
+        let segments = split_path_segments(item.file_url.as_str());
+        let old_name = segments
+            .last()
+            .ok_or_else(|| format!("Invalid fileUrl: {}", item.file_url))?;
+        let base = strip_extension(old_name.as_str());
+        let new_name = format!("{base}.efxbn");
+        let prefix = parent_segments(item.file_url.as_str())?;
+        item.file_type = ".efxbn".to_string();
+        item.file_base_name = Some(base);
+        item.file_url = build_file_url(prefix.as_slice(), new_name.as_str());
     }
     Ok(())
 }

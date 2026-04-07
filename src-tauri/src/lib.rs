@@ -66,6 +66,7 @@ pub fn run() {
             commands::card_icon_detect_dds_format,
             commands::card_icon_batch_replace_with_dds_format,
             commands::copy_asset_as_new,
+            commands::remove_asset_workspace,
             commands::write_files_batch_base64,
             commands::extract_fhm2d_to_folder
         ])

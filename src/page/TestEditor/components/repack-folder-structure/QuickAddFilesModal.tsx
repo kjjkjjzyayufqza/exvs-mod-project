@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -37,7 +38,10 @@ export type QuickAddFileRow = {
 type QuickAddFilesModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (rows: QuickAddFileRow[]) => void;
+  onConfirm: (payload: {
+    rows: QuickAddFileRow[];
+    shareFileIndexAcrossFolders: boolean;
+  }) => void;
 };
 
 function fileBasename(filePath: string): string {
@@ -57,12 +61,14 @@ export function QuickAddFilesModal({ open: dialogOpen, onOpenChange, onConfirm }
   const bulkSelectId = useId();
   const [rows, setRows] = useState<QuickAddFileRow[]>([]);
   const [bulkFileType, setBulkFileType] = useState<string>(".bin");
+  const [shareFileIndexAcrossFolders, setShareFileIndexAcrossFolders] = useState(false);
 
   const canConfirm = rows.length > 0;
 
   const resetWhenClosed = useCallback(() => {
     setRows([]);
     setBulkFileType(".bin");
+    setShareFileIndexAcrossFolders(false);
   }, []);
 
   const handleOpenChange = useCallback(
@@ -113,10 +119,10 @@ export function QuickAddFilesModal({ open: dialogOpen, onOpenChange, onConfirm }
 
   const handleConfirm = useCallback(() => {
     if (rows.length === 0) return;
-    onConfirm(rows);
+    onConfirm({ rows, shareFileIndexAcrossFolders });
     resetWhenClosed();
     onOpenChange(false);
-  }, [onConfirm, onOpenChange, resetWhenClosed, rows]);
+  }, [onConfirm, onOpenChange, resetWhenClosed, rows, shareFileIndexAcrossFolders]);
 
   return (
     <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
@@ -199,6 +205,18 @@ export function QuickAddFilesModal({ open: dialogOpen, onOpenChange, onConfirm }
               </ScrollArea>
             )}
           </div>
+          <label className="flex items-start gap-2 rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+            <Checkbox
+              checked={shareFileIndexAcrossFolders}
+              onCheckedChange={(checked) => setShareFileIndexAcrossFolders(checked === true)}
+            />
+            <span className="space-y-0.5">
+              <span className="block text-xs font-medium leading-tight">Share one SubFileData across selected folders</span>
+              <span className="block text-[11px] leading-snug text-muted-foreground">
+                Each selected file uses one shared fileIndex, and every selected folder references that same file.
+              </span>
+            </span>
+          </label>
         </div>
         <DialogFooter className="shrink-0 border-t px-6 py-4">
           <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
