@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useRef } from "react";
-import { Layers, Loader2, RefreshCw, RotateCcw, Save, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FileJson, Layers, Loader2, RefreshCw, RotateCcw, Save, X } from "lucide-react";
+import { open } from "@tauri-apps/plugin-dialog";
+import { join } from "@tauri-apps/api/path";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useDraggableModal } from "@/hooks/useDraggableModal";
 import type { NumatbProfileKind } from "./daeSsbhTypes";
 import { NumatbTemplateEditorModalBody } from "./NumatbTemplateEditorModalBody";
 import { isNumatbBundleDirty, type NumatbModalBundle } from "./numatbEditorUtils";
+import { ssbhLoadSsbhFileAsJson } from "./ssbhDaeIoService";
 
 export type NumatbEditorWindowSession = {
   id: string;
@@ -78,6 +83,35 @@ export function NumatbEditorModalWindow({
   }, [onSave, nodeRef]);
 
   const title = fileBasename(session.filePath);
+  const [jsonExportBusy, setJsonExportBusy] = useState(false);
+
+  const exportNumatbJsonToDirectory = async () => {
+    const src = session.filePath.trim();
+    if (!src || session.loading) {
+      return;
+    }
+    setJsonExportBusy(true);
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: "Choose folder to export NUMATB JSON",
+      });
+      if (typeof selected !== "string" || !selected.trim()) {
+        return;
+      }
+      const envelope = await ssbhLoadSsbhFileAsJson(src);
+      const outName = `${fileBasename(src)}.json`;
+      const outPath = await join(selected, outName);
+      await writeTextFile(outPath, JSON.stringify(envelope, null, 2));
+      toast.success("NUMATB exported as JSON", { description: outPath });
+    } catch (e) {
+      const msg = String(e);
+      toast.error("Failed to export NUMATB as JSON", { description: msg });
+    } finally {
+      setJsonExportBusy(false);
+    }
+  };
 
   return (
     <div className="pointer-events-none absolute inset-0" style={{ zIndex: session.zIndex }} aria-hidden={false}>
@@ -151,6 +185,22 @@ export function NumatbEditorModalWindow({
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t bg-muted/20 px-5 py-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-[10px]"
+                    disabled={session.saving || session.loading || jsonExportBusy}
+                    onClick={() => void exportNumatbJsonToDirectory()}
+                    title="Read the .numatb from disk and write JSON (filePath, format, data) to the chosen folder"
+                  >
+                    {jsonExportBusy ? (
+                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <FileJson className="mr-1 h-3.5 w-3.5" />
+                    )}
+                    Export JSON…
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"

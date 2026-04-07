@@ -208,6 +208,17 @@ export async function ssbhTemplateWriteNumatb(filePath: string, matl: MatlDataJs
   await invoke("ssbh_template_write_numatb", { filePath, matlJson: matl });
 }
 
+/** Same payload shape as the `ssbh_load_ssbh_file_as_json` Tauri command (Matl / mesh / modl / skel). */
+export type SsbhSsbhFileAsJsonEnvelope = {
+  filePath: string;
+  format: string;
+  data: unknown;
+};
+
+export async function ssbhLoadSsbhFileAsJson(filePath: string): Promise<SsbhSsbhFileAsJsonEnvelope> {
+  return invoke<SsbhSsbhFileAsJsonEnvelope>("ssbh_load_ssbh_file_as_json", { path: filePath });
+}
+
 const PRESET_STORAGE_KEY = "ssbh-dae-exchange-presets-v1";
 
 export type SsbhDaeExchangePreset = {

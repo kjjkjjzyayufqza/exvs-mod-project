@@ -2,12 +2,26 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { toast } from "sonner";
 import { Tree, type NodeApi } from "react-arborist";
-import { Plus, Redo2, Save, Undo2 } from "lucide-react";
+import { Plus, Redo2, Save, Trash2, Undo2 } from "lucide-react";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { QuickAddFilesModal, type QuickAddFileRow } from "@/page/TestEditor/components/repack-folder-structure/QuickAddFilesModal";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  QuickAddFilesModal,
+  type QuickAddFileRow,
+  buildQuickAddSubFileUrl,
+} from "@/page/TestEditor/components/repack-folder-structure/QuickAddFilesModal";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { CustomTreeNode } from "@/components/CustomTreeNode";
 import { NodePropertiesPanel } from "@/page/Repack/components/NodePropertiesPanel";
@@ -196,6 +210,7 @@ export default function RepackFolderStructureView({
   const [loadedFilePath, setLoadedFilePath] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [deleteSelectedDialogOpen, setDeleteSelectedDialogOpen] = useState(false);
   const [selectedItems, setSelectedItems] = useState<TreeDataItem[]>([]);
 
   const pastRef = useRef<UndoSnapshot[]>([]);
@@ -653,8 +668,12 @@ export default function RepackFolderStructureView({
   }, [completeProjectData, recordBeforeMutation, resolveTargetFolders, setCompleteProjectData, setSelectedItem, setTreeData, treeData]);
 
   const handleQuickAddFilesConfirm = useCallback(
-    (payload: { rows: QuickAddFileRow[]; shareFileIndexAcrossFolders: boolean }) => {
-      const { rows, shareFileIndexAcrossFolders } = payload;
+    (payload: {
+      rows: QuickAddFileRow[];
+      shareFileIndexAcrossFolders: boolean;
+      fileUrlPrefix: string;
+    }) => {
+      const { rows, shareFileIndexAcrossFolders, fileUrlPrefix } = payload;
       const targets = resolveTargetFolders();
       if (targets.length === 0 || !completeProjectData || rows.length === 0) {
         return;
@@ -673,6 +692,7 @@ export default function RepackFolderStructureView({
         for (const row of rows) {
           const sharedIndex = subData.length === 0 ? 0 : Math.max(...subData.map((item) => item.index)) + 1;
           const sharedFileIndex = subData.length === 0 ? 0 : Math.max(...subData.map((item) => item.fileIndex)) + 1;
+          const subFileUrl = buildQuickAddSubFileUrl(baseDir, sharedFileIndex, row.fileType, fileUrlPrefix, row.name);
 
           for (const target of targets) {
             const parentNode = findNode(nextTree, target.id);
@@ -686,7 +706,7 @@ export default function RepackFolderStructureView({
                 index: sharedIndex,
                 fileType: row.fileType,
                 fileIndex: sharedFileIndex,
-                fileUrl: `./${row.name}`,
+                fileUrl: subFileUrl,
                 originalFileIndex: sharedIndex,
                 unk1: "00000000",
                 unk2: "00000000",
@@ -706,7 +726,7 @@ export default function RepackFolderStructureView({
               index: sharedIndex,
               fileType: row.fileType,
               fileIndex: sharedFileIndex,
-              fileUrl: `.\\${baseDir}\\${sharedFileIndex}.bin`,
+              fileUrl: subFileUrl,
             },
           ];
         }
@@ -717,6 +737,7 @@ export default function RepackFolderStructureView({
           for (const row of rows) {
             const newIndex = subData.length === 0 ? 0 : Math.max(...subData.map((item) => item.index)) + 1;
             const newFileIndex = subData.length === 0 ? 0 : Math.max(...subData.map((item) => item.fileIndex)) + 1;
+            const subFileUrl = buildQuickAddSubFileUrl(baseDir, newFileIndex, row.fileType, fileUrlPrefix, row.name);
             const newNode: TreeDataItem = {
               id: uuidv4(),
               name: row.name,
@@ -725,7 +746,7 @@ export default function RepackFolderStructureView({
                 index: newIndex,
                 fileType: row.fileType,
                 fileIndex: newFileIndex,
-                fileUrl: `./${row.name}`,
+                fileUrl: subFileUrl,
                 originalFileIndex: newIndex,
                 unk1: "00000000",
                 unk2: "00000000",
@@ -743,7 +764,7 @@ export default function RepackFolderStructureView({
                 index: newIndex,
                 fileType: row.fileType,
                 fileIndex: newFileIndex,
-                fileUrl: `.\\${baseDir}\\${newFileIndex}.bin`,
+                fileUrl: subFileUrl,
               },
             ];
           }
@@ -778,6 +799,14 @@ export default function RepackFolderStructureView({
       treeData,
     ],
   );
+
+  const handleConfirmDeleteSelected = () => {
+    const ids = selectedItems.map((i) => i.id);
+    if (ids.length === 0) return;
+    setDeleteSelectedDialogOpen(false);
+    handleDelete({ ids });
+    toast.success(`Deleted ${ids.length} node(s)`);
+  };
 
   const handlePaste = () => {
     if (!selectedItem || selectedItem.data?.type !== "Folder" || !copiedItem) return;
@@ -877,11 +906,29 @@ export default function RepackFolderStructureView({
               <Plus className="h-4 w-4" />
               Quick Add file
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              disabled={selectedItems.length === 0}
+              title={
+                selectedItems.length > 0
+                  ? `Delete ${selectedItems.length} selected node(s) (confirm)`
+                  : "Select one or more nodes in the tree"
+              }
+              onClick={() => setDeleteSelectedDialogOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete selected
+            </Button>
           </div>
         </div>
         <div className="space-y-1.5">
           <CardDescription className="text-sm leading-snug">
-            Drag and drop to reorganize. Shortcuts: Undo Ctrl+Z (Cmd+Z), Redo Ctrl+Y or Ctrl+Shift+Z (Cmd+Shift+Z).
+            Drag and drop to reorganize.             Tree selection: click; Ctrl/Cmd+click toggle; Shift+click range; Ctrl/Cmd+Shift+click
+            toggle add. Delete selected removes highlighted nodes (or Backspace). Shortcuts: Undo Ctrl+Z
+            (Cmd+Z), Redo Ctrl+Y or Ctrl+Shift+Z (Cmd+Shift+Z).
           </CardDescription>
           {selectedItems.length > 1 ? (
             <p className="text-xs text-muted-foreground">
@@ -965,6 +1012,30 @@ export default function RepackFolderStructureView({
       </ResizablePanelGroup>
 
       <QuickAddFilesModal open={quickAddOpen} onOpenChange={setQuickAddOpen} onConfirm={handleQuickAddFilesConfirm} />
+
+      <AlertDialog open={deleteSelectedDialogOpen} onOpenChange={setDeleteSelectedDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete selected nodes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove {selectedItems.length} selected node(s) from the structure tree. SubFileData
+              will be re-synced from the tree. This cannot be undone except via Undo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                handleConfirmDeleteSelected();
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

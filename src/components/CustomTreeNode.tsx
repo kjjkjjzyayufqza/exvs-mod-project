@@ -56,6 +56,14 @@ export function CustomTreeNode({
 
   const handleSelect = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
+      if (node.isSelected) {
+        node.deselect();
+      } else {
+        node.selectMulti();
+      }
+      return;
+    }
     if (e.shiftKey) {
       node.selectContiguous();
       return;

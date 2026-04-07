@@ -157,12 +157,35 @@ fn resolve_relative_from_model_folder(model_folder_canon: &Path, raw: &str) -> R
     Ok(cur)
 }
 
+/// Normalizes a path for prefix checks on Windows so `\\?\`-verbatim and non-verbatim paths
+/// compare consistently. `Path::starts_with` returns false when one side is verbatim and the other
+/// is not, which could incorrectly reject valid nutexb files next to the `.numdlb`.
+#[cfg(windows)]
+fn win_normalize_path_for_tree_compare(p: &Path) -> PathBuf {
+    let s = p.to_string_lossy();
+    let without = s.strip_prefix(r"\\?\");
+    match without {
+        Some(rest) if rest.starts_with("UNC\\") => {
+            PathBuf::from(format!(r"\\{}", &rest[4..]))
+        }
+        Some(rest) => PathBuf::from(rest.to_string()),
+        None => p.to_path_buf(),
+    }
+}
+
+#[cfg(not(windows))]
+fn win_normalize_path_for_tree_compare(p: &Path) -> PathBuf {
+    p.to_path_buf()
+}
+
 /// True if `resolved_canon` lies under `model_folder_canon` or under one of its ancestors, but not
 /// solely via a volume root prefix (e.g. `E:\`), which would allow the entire drive.
 fn resolved_stays_under_unpack_tree(model_folder_canon: &Path, resolved_canon: &Path) -> bool {
-    let mut base = model_folder_canon.to_path_buf();
+    let model = win_normalize_path_for_tree_compare(model_folder_canon);
+    let resolved = win_normalize_path_for_tree_compare(resolved_canon);
+    let mut base = model;
     for _ in 0..=MAX_PREVIEW_ANCESTOR_HOPS {
-        if resolved_canon.starts_with(&base) && normal_path_component_count(&base) >= 1 {
+        if resolved.starts_with(&base) && normal_path_component_count(&base) >= 1 {
             return true;
         }
         if !base.pop() {
@@ -1079,6 +1102,28 @@ pub fn ssbh_load_ssbh_file_as_json(path: String) -> Result<Value, String> {
         "format": ext_lc,
         "data": v,
     }))
+}
+
+#[cfg(test)]
+mod preview_path_tree_tests {
+    use super::resolved_stays_under_unpack_tree;
+    use std::path::Path;
+
+    #[test]
+    #[cfg(windows)]
+    fn resolved_stays_mixed_verbatim_prefixes() {
+        let model = Path::new(r"E:\unpack\delatkai_body");
+        let resolved = Path::new(r"\\?\E:\unpack\delatkai_body\NormalMap.nutexb");
+        assert!(resolved_stays_under_unpack_tree(model, resolved));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn resolved_stays_both_verbatim() {
+        let model = Path::new(r"\\?\E:\unpack\delatkai_body");
+        let resolved = Path::new(r"\\?\E:\unpack\delatkai_body\NormalMap.nutexb");
+        assert!(resolved_stays_under_unpack_tree(model, resolved));
+    }
 }
 
 #[cfg(test)]
