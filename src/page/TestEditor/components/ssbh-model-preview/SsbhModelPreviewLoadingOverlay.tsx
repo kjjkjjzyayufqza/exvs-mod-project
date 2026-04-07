@@ -38,7 +38,7 @@ export function SsbhModelPreviewLoadingOverlay({
             <div className="flex items-center gap-3">
               <Loader2 className="h-5 w-5 shrink-0 animate-spin text-primary" />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-foreground">Decoding textures</p>
+                <p className="text-sm font-medium text-foreground">Decoding unique textures</p>
                 <p className="truncate text-[11px] text-muted-foreground" title={textureDecode.currentLabel ?? undefined}>
                   {textureDecode.currentLabel ?? "Preparing…"}
                 </p>

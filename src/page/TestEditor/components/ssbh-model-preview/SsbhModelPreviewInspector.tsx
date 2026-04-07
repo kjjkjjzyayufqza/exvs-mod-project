@@ -24,9 +24,9 @@ import {
   type NutexbPreviewCacheStats,
 } from "./nutexbPreviewCache";
 import { useSsbhModelPreview, type PreviewRenderStyle } from "./SsbhModelPreviewContext";
-import { TEXTURE_PREVIEW_SLOT_META, TEXTURE_SLOT_TO_PATH_FIELD } from "./meshFromSsbh";
+import { TEXTURE_PREVIEW_SLOT_META, TEXTURE_SLOT_TO_PATH_FIELD, buildMatlLookup } from "./meshFromSsbh";
 import { ssbhExportFolderToDae, type SsbhDaeUpAxis } from "./ssbhDaeIoService";
-import type { BoneJson, SkelDataJson } from "./types";
+import type { BoneJson, MatlDataJson, SkelDataJson } from "./types";
 
 function boneHierarchyDepth(bones: BoneJson[], i: number): number {
   let d = 0;
@@ -185,6 +185,23 @@ export function SsbhModelPreviewInspector() {
   const selectedDataUrls = selectedDebugRow
     ? p.drawMaterialDataUrlsByDrawKey.get(selectedDebugRow.key)
     : undefined;
+  const activeBundle = activeInstance?.bundle ?? p.bundle ?? null;
+  const activeMatlLookup = useMemo(
+    () => buildMatlLookup((activeBundle?.matl as MatlDataJson | null | undefined) ?? null),
+    [activeBundle],
+  );
+  const activeTextureResolveRows = activeBundle?.textureResolve ?? [];
+  const unresolvedTextureResolveRows = useMemo(
+    () => activeTextureResolveRows.filter((row) => !row.nutexbPath),
+    [activeTextureResolveRows],
+  );
+  const missingMaterialLabelRows = useMemo(() => {
+    if (!activeBundle) return [];
+    const rows = scopedDraws
+      .filter((d) => !activeMatlLookup.has(d.materialLabel))
+      .map((d) => `${d.materialLabel} <- ${d.meshObjectName}[${d.meshObjectSubindex}]`);
+    return Array.from(new Set(rows)).sort((a, b) => a.localeCompare(b));
+  }, [activeBundle, scopedDraws, activeMatlLookup]);
 
   return (
     <div className="-mx-4 flex min-w-0 flex-col border-t bg-background/50">
@@ -201,7 +218,7 @@ export function SsbhModelPreviewInspector() {
               className="block truncate"
               title={p.textureDecodeProgress?.currentLabel ?? undefined}
             >
-              Decoding textures ({p.textureDecodeProgress?.done ?? 0}/{p.textureDecodeProgress?.total ?? 0}
+              Decoding unique textures ({p.textureDecodeProgress?.done ?? 0}/{p.textureDecodeProgress?.total ?? 0}
               {p.textureDecodeProgress?.currentLabel ? ` — ${p.textureDecodeProgress.currentLabel}` : ""})
             </span>
           )}
@@ -991,6 +1008,86 @@ export function SsbhModelPreviewInspector() {
           </div>
         </div>
       </MayaSection>
+
+      {activeBundle ? (
+        <MayaSection title="Preview Bundle Debug" icon={<Info className="h-3.5 w-3.5" />} defaultOpen={false}>
+          <div className="flex flex-col gap-3 text-[10px]">
+            <div className="space-y-1">
+              <div className="text-[9px] uppercase text-muted-foreground">Active bundle</div>
+              <div className="font-mono wrap-anywhere">{activeBundle.modlPath}</div>
+              <div className="font-mono wrap-anywhere text-muted-foreground">{activeBundle.meshPath}</div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-x-2 gap-y-2">
+              <div className="flex flex-col">
+                <span className="text-[9px] uppercase text-muted-foreground">Matl files loaded</span>
+                <span className="font-mono">{activeBundle.matlPaths.length}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[9px] uppercase text-muted-foreground">Matl entries merged</span>
+                <span className="font-mono">{activeMatlLookup.size}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[9px] uppercase text-muted-foreground">Texture refs</span>
+                <span className="font-mono">{activeBundle.textureRefs.length}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[9px] uppercase text-muted-foreground">Resolved nutexb</span>
+                <span className="font-mono">{activeBundle.resolvedNutexbPaths.length}</span>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <div className="text-[9px] uppercase text-muted-foreground">Matl path list</div>
+              <div className="max-h-[96px] space-y-1 overflow-y-auto pr-1">
+                {activeBundle.matlPaths.length > 0 ? (
+                  activeBundle.matlPaths.map((path) => (
+                    <div key={path} className="font-mono wrap-anywhere text-muted-foreground">
+                      {path}
+                    </div>
+                  ))
+                ) : (
+                  <div className="italic text-muted-foreground">No matl files loaded</div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <div className="text-[9px] uppercase text-muted-foreground">
+                Draw labels missing in matl ({missingMaterialLabelRows.length})
+              </div>
+              <div className="max-h-[96px] space-y-1 overflow-y-auto pr-1">
+                {missingMaterialLabelRows.length > 0 ? (
+                  missingMaterialLabelRows.map((row) => (
+                    <div key={row} className="font-mono wrap-anywhere text-amber-700/90 dark:text-amber-400/90">
+                      {row}
+                    </div>
+                  ))
+                ) : (
+                  <div className="italic text-muted-foreground">All draw material labels exist in merged matl entries.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <div className="text-[9px] uppercase text-muted-foreground">
+                Unresolved texture refs ({unresolvedTextureResolveRows.length}/{activeTextureResolveRows.length})
+              </div>
+              <div className="max-h-[132px] space-y-1 overflow-y-auto pr-1">
+                {unresolvedTextureResolveRows.length > 0 ? (
+                  unresolvedTextureResolveRows.slice(0, 120).map((row) => (
+                    <div key={row.reference} className="font-mono wrap-anywhere text-amber-700/90 dark:text-amber-400/90">
+                      {row.reference}
+                    </div>
+                  ))
+                ) : (
+                  <div className="italic text-muted-foreground">All collected texture refs resolved to on-disk .nutexb files.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </MayaSection>
+      ) : null}
 
       {p.bundle?.warnings?.length ? (
         <MayaSection title="Warnings" icon={<Info className="h-3.5 w-3.5 text-amber-500" />}>

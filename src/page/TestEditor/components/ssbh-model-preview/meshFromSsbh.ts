@@ -501,6 +501,7 @@ export function resolveMaterialTexturePaths(
   const exvs = pickExvsPbrTextureRefs(entry);
   const baseRef =
     exvs.base ??
+    textureRefForParam(entry, "BaseColorMap") ??
     textureRefForParam(entry, "DiffuseMap") ??
     pickBaseColorTextureRef(entry);
   const normalRef =
@@ -725,7 +726,11 @@ export function resolveMaterialBinding(
     shaderLabel,
     shaderFamily,
     textureRefs: {
-      map: textureRefForParam(entry, "Texture0") ?? null,
+      map:
+        textureRefForParam(entry, "Texture0") ??
+        textureRefForParam(entry, "BaseColorMap") ??
+        textureRefForParam(entry, "DiffuseMap") ??
+        null,
       normal: textureRefForParam(entry, "Texture6") ?? null,
       roughness: textureRefForParam(entry, "Texture4") ?? textureRefForParam(entry, "Texture5") ?? null,
       metalness: textureRefForParam(entry, "Texture5") ?? null,

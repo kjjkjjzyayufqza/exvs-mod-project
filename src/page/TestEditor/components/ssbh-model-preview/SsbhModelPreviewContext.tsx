@@ -78,7 +78,7 @@ export type MaterialDebugViewMode =
   | "emissive"
   | "reflection";
 
-/** Progress while decoding .nutexb → PNG for the WebGL preview (per slot step, deduped by disk path inside the loop). */
+/** Progress while decoding .nutexb → PNG for the WebGL preview (one step per unique disk path). */
 export type SsbhModelPreviewTextureDecodeProgress = {
   done: number;
   total: number;
@@ -1019,7 +1019,6 @@ export function SsbhModelPreviewProvider({
         : null;
     const drawPathsByKey = new Map<string, ReturnType<typeof resolveMaterialTexturePaths>>();
     const pathSlotCounts = new Map<string, number>();
-    let totalSteps = 0;
     for (const d of draws) {
       const inst =
         (d.previewInstanceId ? instanceById.get(d.previewInstanceId) : null) ??
@@ -1037,11 +1036,11 @@ export function SsbhModelPreviewProvider({
         const field = TEXTURE_SLOT_TO_PATH_FIELD[key];
         const pathVal = paths[field];
         if (!pathVal) continue;
-        totalSteps += 1;
         pathSlotCounts.set(pathVal, (pathSlotCounts.get(pathVal) ?? 0) + 1);
       }
     }
-    if (totalSteps === 0) {
+    const totalUniquePaths = pathSlotCounts.size;
+    if (totalUniquePaths === 0) {
       const nextBindings = new Map<string, ResolvedMaterialBinding>();
       const next = new Map<string, DrawMaterialDataUrls>();
       for (const d of draws) {
@@ -1072,7 +1071,7 @@ export function SsbhModelPreviewProvider({
       return;
     }
 
-    setTextureDecodeProgress({ done: 0, total: totalSteps, currentLabel: null });
+    setTextureDecodeProgress({ done: 0, total: totalUniquePaths, currentLabel: null });
 
     (async () => {
       const next = new Map<string, DrawMaterialDataUrls>();
@@ -1106,7 +1105,6 @@ export function SsbhModelPreviewProvider({
       };
 
       const decodeOneDiskPath = async (diskPath: string): Promise<void> => {
-        const slotCount = pathSlotCounts.get(diskPath) ?? 0;
         if (!cancelled) {
           setTextureDecodeProgress((prev) =>
             prev ? { ...prev, currentLabel: `${fileBasename(diskPath)} · decode` } : null,
@@ -1126,7 +1124,7 @@ export function SsbhModelPreviewProvider({
         } catch (e) {
           failedTextures.push(`${diskPath}: ${String(e)}`);
         } finally {
-          bumpDoneBy(slotCount);
+          bumpDoneBy(1);
         }
       };
 

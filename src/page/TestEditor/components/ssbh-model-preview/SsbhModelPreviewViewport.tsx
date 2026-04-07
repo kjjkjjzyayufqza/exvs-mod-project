@@ -105,7 +105,7 @@ export function SsbhModelPreviewViewport() {
             className="max-w-[min(100%,280px)] truncate text-muted-foreground tabular-nums"
             title={p.textureDecodeProgress.currentLabel ?? undefined}
           >
-            Decoding textures {p.textureDecodeProgress.done}/{p.textureDecodeProgress.total}
+            Decoding unique textures {p.textureDecodeProgress.done}/{p.textureDecodeProgress.total}
           </span>
         ) : null}
         {p.loadError ? <span className="text-destructive max-w-[240px] truncate">{p.loadError}</span> : null}
