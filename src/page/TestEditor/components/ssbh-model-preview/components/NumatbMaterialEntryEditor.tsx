@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -25,8 +24,6 @@ type NumatbMaterialEntryEditorProps = {
   onAddAttribute: (paramId: string, kind?: NumatbAttributeDataKind) => void;
   onRemoveAttribute: (attributeIndex: number) => void;
 };
-
-const NUMATB_ATTRIBUTE_ROW_HEIGHT_px = 176;
 
 function CommitInput({
   value,
@@ -97,7 +94,7 @@ function JsonAttributeEditor({
             setError(parseError instanceof Error ? parseError.message : String(parseError));
           }
         }}
-        className="h-28 resize-none overflow-auto font-mono text-[11px]"
+        className="min-h-28 resize-y overflow-auto font-mono text-[11px]"
       />
       {error ? <p className="text-[11px] text-destructive">{error}</p> : null}
     </div>
@@ -225,13 +222,6 @@ export function NumatbMaterialEntryEditor({
     () => (entry ? flattenEntryToAttributes(entry) : []),
     [entry],
   );
-  const attributeScrollRef = useRef<HTMLDivElement>(null);
-  const attributeVirtualizer = useVirtualizer({
-    count: flatAttributes.length,
-    getScrollElement: () => attributeScrollRef.current,
-    estimateSize: () => NUMATB_ATTRIBUTE_ROW_HEIGHT_px,
-    overscan: 8,
-  });
 
   const availableParamIds = useMemo(() => {
     const existing = new Set(flatAttributes.map((attribute) => attribute.param_id));
@@ -239,11 +229,11 @@ export function NumatbMaterialEntryEditor({
   }, [flatAttributes]);
 
   if (!entry) {
-    return <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">Select a material entry to edit.</div>;
+    return <div className="flex items-center justify-center py-8 text-[11px] text-muted-foreground">Select a material entry to edit.</div>;
   }
 
   return (
-    <div className="flex h-full flex-col gap-3">
+    <div className="flex flex-col gap-3">
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-1">
           <Label className="text-[11px] text-muted-foreground">Material label</Label>
@@ -310,67 +300,52 @@ export function NumatbMaterialEntryEditor({
         </datalist>
       </div>
 
-      <div className="min-h-0 flex-1 rounded-md border">
-        <div className="grid grid-cols-[minmax(0,180px)_100px_minmax(0,1fr)_52px] gap-2 border-b bg-muted/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          <span>Param</span>
-          <span>Type</span>
-          <span>Value</span>
-          <span />
+      <div className="rounded-md border">
+        <div className="grid grid-cols-[minmax(0,180px)_minmax(0,7rem)_minmax(0,1fr)_auto] items-start gap-2 border-b bg-muted/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <span className="min-w-0">Param</span>
+          <span className="min-w-0">Type</span>
+          <span className="min-w-0">Value</span>
+          <span className="w-8 shrink-0" aria-hidden />
         </div>
-        <div className="h-[360px] overflow-auto" ref={attributeScrollRef}>
-          <div style={{ height: `${attributeVirtualizer.getTotalSize()}px`, position: "relative" }}>
-            {attributeVirtualizer.getVirtualItems().map((virtualRow) => {
-              const attributeIndex = virtualRow.index;
-              const attribute = flatAttributes[attributeIndex];
-              if (!attribute) {
-                return null;
-              }
+        {flatAttributes.length === 0 ? (
+          <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">This material has no attributes yet.</div>
+        ) : (
+          <div className="divide-y">
+            {flatAttributes.map((attribute, attributeIndex) => {
               const kind = getNumatbAttributeKind(attribute.param.data);
               return (
                 <div
                   key={`${attribute.param_id}:${attributeIndex}`}
-                  ref={attributeVirtualizer.measureElement}
-                  className="grid grid-cols-[minmax(0,180px)_100px_minmax(0,1fr)_52px] gap-2 border-b px-3 py-3"
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
+                  className="grid grid-cols-[minmax(0,180px)_minmax(0,7rem)_minmax(0,1fr)_auto] items-start gap-2 px-3 py-3"
                 >
                   <div className="min-w-0">
-                    <div className="truncate font-mono text-[11px]" title={attribute.param_id}>
+                    <div className="wrap-break-word font-mono text-[11px]" title={attribute.param_id}>
                       {attribute.param_id}
                     </div>
                   </div>
-                  <div className="text-[11px] text-muted-foreground">{kind}</div>
-                  <div className="min-w-0 overflow-hidden">
+                  <div className="min-w-0 wrap-break-word text-[11px] text-muted-foreground">{kind}</div>
+                  <div className="min-w-0">
                     <AttributeValueEditor
                       attribute={attribute}
                       onChange={(nextData) => onUpdateAttribute(attributeIndex, nextData)}
                     />
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 px-0 text-destructive"
-                    onClick={() => onRemoveAttribute(attributeIndex)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex w-8 shrink-0 justify-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 px-0 text-destructive"
+                      onClick={() => onRemoveAttribute(attributeIndex)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               );
             })}
-            {flatAttributes.length === 0 ? (
-              <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">
-                This material has no attributes yet.
-              </div>
-            ) : null}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
