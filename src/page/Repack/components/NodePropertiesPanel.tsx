@@ -33,6 +33,8 @@ interface NodePropertiesPanelProps {
   onFileTypeChange: (nodeId: string, fileType: string) => void;
   onPropertyChange: (nodeId: string, property: string, value: string | number) => void;
   copiedItem: TreeDataItem | null;
+  copiedItems?: TreeDataItem[];
+  onCopy?: () => void;
   onPaste: () => void;
 }
 
@@ -194,7 +196,17 @@ const EditableProperty = ({
   );
 };
 
-export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTypeChange, onPropertyChange, copiedItem, onPaste }: NodePropertiesPanelProps) {
+export function NodePropertiesPanel({
+  selectedItem,
+  onRename,
+  onDelete,
+  onFileTypeChange,
+  onPropertyChange,
+  copiedItem,
+  copiedItems,
+  onCopy,
+  onPaste,
+}: NodePropertiesPanelProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -202,7 +214,11 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
   const [editValue, setEditValue] = useState<string>("");
   const [validationError, setValidationError] = useState<string>("");
 
-  const { isIndexExists, isFileIndexExists, copyNode } = useRepackStore();
+  const { isIndexExists, copyNode } = useRepackStore();
+  const clipboardItems = copiedItems && copiedItems.length > 0 ? copiedItems : copiedItem ? [copiedItem] : [];
+  const firstCopiedItem = clipboardItems[0] ?? null;
+  const copiedFolderCount = clipboardItems.filter((item) => item.data?.type === "Folder").length;
+  const copiedFileCount = clipboardItems.filter((item) => item.data?.type === "Item").length;
 
   useEffect(() => {
     setIsEditing(false);
@@ -243,6 +259,10 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
   };
 
   const handleCopy = () => {
+    if (onCopy) {
+      onCopy();
+      return;
+    }
     if (selectedItem) {
       copyNode(selectedItem.id);
 
@@ -334,7 +354,7 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
           </div>
           
           {/* Clipboard Status - Show even when no item is selected */}
-          {copiedItem && (
+          {clipboardItems.length > 0 && firstCopiedItem && (
             <>
               <Separator />
               <div className="space-y-2">
@@ -343,24 +363,34 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
                   <div className="flex items-center gap-2">
                     <Info className="h-4 w-4 text-blue-600" />
                     <span className="text-sm font-medium text-blue-900">
-                      {copiedItem.name}
+                      {clipboardItems.length === 1 ? firstCopiedItem.name : `${clipboardItems.length} nodes copied`}
                     </span>
                     <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
-                      {copiedItem.data?.type || 'Unknown'}
+                      {clipboardItems.length === 1 ? firstCopiedItem.data?.type || 'Unknown' : 'Batch'}
                     </span>
-                    {copiedItem.data?.type === 'Item' && copiedItem.data?.fileType && (
+                    {clipboardItems.length === 1 && firstCopiedItem.data?.type === 'Item' && firstCopiedItem.data?.fileType && (
                       <span className="text-xs px-2 py-1 bg-muted text-foreground rounded-full">
-                        {copiedItem.data.fileType}
+                        {firstCopiedItem.data.fileType}
                       </span>
                     )}
-                    {copiedItem.data?.type === 'Folder' && copiedItem.children && (
+                    {clipboardItems.length === 1 && firstCopiedItem.data?.type === 'Folder' && firstCopiedItem.children && (
                       <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
-                        {copiedItem.children.length} items
+                        {firstCopiedItem.children.length} items
+                      </span>
+                    )}
+                    {clipboardItems.length > 1 && copiedFolderCount > 0 && (
+                      <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
+                        {copiedFolderCount} folder(s)
+                      </span>
+                    )}
+                    {clipboardItems.length > 1 && copiedFileCount > 0 && (
+                      <span className="text-xs px-2 py-1 bg-muted text-foreground rounded-full">
+                        {copiedFileCount} file(s)
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-blue-600 mt-1">
-                    Select a folder to paste this item
+                    {clipboardItems.length === 1 ? "Select a folder to paste this item" : "Select a folder to paste these nodes"}
                   </p>
                 </div>
               </div>
@@ -688,31 +718,41 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
         <Separator />
 
         {/* Clipboard Status */}
-        {copiedItem && (
+        {clipboardItems.length > 0 && firstCopiedItem && (
           <div className="space-y-2">
             <Label className="text-sm font-medium">Clipboard</Label>
             <div className="bg-primary/10 border border-primary/30 rounded-lg p-3">
               <div className="flex items-center gap-2">
                 <Info className="h-4 w-4 text-blue-600" />
                 <span className="text-sm font-medium text-blue-900">
-                  {copiedItem.name}
+                  {clipboardItems.length === 1 ? firstCopiedItem.name : `${clipboardItems.length} nodes copied`}
                 </span>
                 <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
-                  {copiedItem.data?.type || 'Unknown'}
+                  {clipboardItems.length === 1 ? firstCopiedItem.data?.type || 'Unknown' : 'Batch'}
                 </span>
-                {copiedItem.data?.type === 'Item' && copiedItem.data?.fileType && (
+                {clipboardItems.length === 1 && firstCopiedItem.data?.type === 'Item' && firstCopiedItem.data?.fileType && (
                   <span className="text-xs px-2 py-1 bg-muted text-foreground rounded-full">
-                    {copiedItem.data.fileType}
+                    {firstCopiedItem.data.fileType}
                   </span>
                 )}
-                {copiedItem.data?.type === 'Folder' && copiedItem.children && (
+                {clipboardItems.length === 1 && firstCopiedItem.data?.type === 'Folder' && firstCopiedItem.children && (
                   <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
-                    {copiedItem.children.length} items
+                    {firstCopiedItem.children.length} items
+                  </span>
+                )}
+                {clipboardItems.length > 1 && copiedFolderCount > 0 && (
+                  <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
+                    {copiedFolderCount} folder(s)
+                  </span>
+                )}
+                {clipboardItems.length > 1 && copiedFileCount > 0 && (
+                  <span className="text-xs px-2 py-1 bg-muted text-foreground rounded-full">
+                    {copiedFileCount} file(s)
                   </span>
                 )}
               </div>
               <p className="text-xs text-blue-600 mt-1">
-                Select a folder to paste this item
+                {clipboardItems.length === 1 ? "Select a folder to paste this item" : "Select a folder to paste these nodes"}
               </p>
             </div>
           </div>
@@ -769,7 +809,7 @@ export function NodePropertiesPanel({ selectedItem, onRename, onDelete, onFileTy
               </AlertDialogContent>
             </AlertDialog>
           </div>
-          {copiedItem && (
+          {clipboardItems.length > 0 && (
             <Button
               onClick={onPaste}
               disabled={!selectedItem || selectedItem.data?.type !== 'Folder'}

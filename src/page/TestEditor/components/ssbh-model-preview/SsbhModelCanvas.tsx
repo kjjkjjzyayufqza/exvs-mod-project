@@ -476,7 +476,7 @@ function DrawMeshUnifiedPbr({
           ? 0.35
           : 0.12;
   const roughnessForStyle =
-    exvsActive ? Math.min(1, roughnessValue * 0.72) : roughnessValue;
+    exvsActive ? Math.min(1, roughnessValue * 0.84) : roughnessValue;
   const emissiveIntensity = exvsActive
     ? shaderFamily === "vsngCharaSparkle"
       ? 2.15
@@ -491,7 +491,7 @@ function DrawMeshUnifiedPbr({
   const transparent = binding?.renderHints.isTransparent ?? hasMap;
   const envIntensity =
     exvsActive
-      ? (shaderFamily === "vsngCharaSparkle" ? 1.65 : hasCube ? 1.25 : 0)
+      ? (shaderFamily === "vsngCharaSparkle" ? 1.38 : hasCube ? 1.05 : 0)
       : shaderFamily === "vsngCharaSparkle"
         ? 1.55
         : hasCube

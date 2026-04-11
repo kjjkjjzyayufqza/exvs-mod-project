@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { toast } from "sonner";
 import { Tree, type NodeApi } from "react-arborist";
-import { Plus, Redo2, Save, Trash2, Undo2 } from "lucide-react";
+import { Copy, Plus, Redo2, Save, Trash2, Undo2 } from "lucide-react";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
@@ -194,6 +194,8 @@ export default function RepackFolderStructureView({
     selectedItem,
     setSelectedItem,
     copiedItem,
+    copiedItems,
+    copyNodes,
     pasteNode,
     getMaxAvailableIndex,
     getMaxAvailableFileIndex,
@@ -387,41 +389,6 @@ export default function RepackFolderStructureView({
     }
   }, [loadedFilePath, completeProjectData, exportProjectData]);
 
-  // Keyboard: save, undo, redo (skip when typing in inputs)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target?.closest("input, textarea, [contenteditable=true], [contenteditable='']")) {
-        return;
-      }
-      const mod = e.ctrlKey || e.metaKey;
-      const key = e.key.toLowerCase();
-      if (mod && key === "s") {
-        e.preventDefault();
-        if (hasUnsavedChanges && loadedFilePath) {
-          handleSave();
-        }
-        return;
-      }
-      if (mod && key === "z") {
-        e.preventDefault();
-        if (e.shiftKey) {
-          redo();
-        } else {
-          undo();
-        }
-        return;
-      }
-      if (mod && key === "y") {
-        e.preventDefault();
-        redo();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [hasUnsavedChanges, loadedFilePath, handleSave, redo, undo]);
-
   const handleSelectChange = (nodes: NodeApi<TreeDataItem>[]) => {
     const nextSelected = nodes.map((node) => node.data);
     setSelectedItems(nextSelected);
@@ -431,6 +398,10 @@ export default function RepackFolderStructureView({
   const selectedFolderItems = useMemo(
     () => selectedItems.filter((item) => item.data?.type === "Folder"),
     [selectedItems],
+  );
+  const selectionForCopy = useMemo(
+    () => (selectedItems.length > 0 ? selectedItems : selectedItem ? [selectedItem] : []),
+    [selectedItem, selectedItems],
   );
 
   const resolveTargetFolders = useCallback((): TreeDataItem[] => {
@@ -808,19 +779,77 @@ export default function RepackFolderStructureView({
     toast.success(`Deleted ${ids.length} node(s)`);
   };
 
+  const handleCopySelected = useCallback(() => {
+    if (selectionForCopy.length === 0) return;
+    copyNodes(selectionForCopy.map((item) => item.id));
+    toast.success(
+      selectionForCopy.length === 1
+        ? `Copied ${selectionForCopy[0]?.data?.type === "Folder" ? "folder" : "file"} "${selectionForCopy[0]?.name}"`
+        : `Copied ${selectionForCopy.length} selected node(s)`,
+    );
+  }, [copyNodes, selectionForCopy]);
+
   const handlePaste = () => {
-    if (!selectedItem || selectedItem.data?.type !== "Folder" || !copiedItem) return;
+    if (!selectedItem || selectedItem.data?.type !== "Folder" || copiedItems.length === 0) return;
     recordBeforeMutation();
     pasteNode(selectedItem.id);
-    const itemType = copiedItem.data?.type || "item";
-    const itemTypeText = itemType === "Folder" ? "folder" : "file";
-    toast.success(`Successfully pasted ${itemTypeText} "${copiedItem.name}" into "${selectedItem.name}"`);
+    toast.success(
+      copiedItems.length === 1 && copiedItem
+        ? `Successfully pasted ${copiedItem.data?.type === "Folder" ? "folder" : "file"} "${copiedItem.name}" into "${selectedItem.name}"`
+        : `Successfully pasted ${copiedItems.length} node(s) into "${selectedItem.name}"`,
+    );
     setHasUnsavedChanges(true);
   };
+
+  // Keyboard: save, undo, redo, copy, paste (skip when typing in inputs)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("input, textarea, [contenteditable=true], [contenteditable='']")) {
+        return;
+      }
+      const mod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+      if (mod && key === "s") {
+        e.preventDefault();
+        if (hasUnsavedChanges && loadedFilePath) {
+          handleSave();
+        }
+        return;
+      }
+      if (mod && key === "z") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+        return;
+      }
+      if (mod && key === "y") {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      if (mod && key === "c" && selectionForCopy.length > 0) {
+        e.preventDefault();
+        handleCopySelected();
+        return;
+      }
+      if (mod && key === "v" && selectedItem && selectedItem.data?.type === "Folder" && copiedItems.length > 0) {
+        e.preventDefault();
+        handlePaste();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [copiedItems.length, handleCopySelected, handlePaste, hasUnsavedChanges, loadedFilePath, handleSave, redo, selectionForCopy.length, selectedItem, undo]);
 
   const canAddChild = resolveTargetFolders().length > 0;
   const hasSingleSelection = selectedItems.length === 1;
   const addTargetsCount = resolveTargetFolders().length;
+  const hasSelectionToCopy = selectionForCopy.length > 0;
 
   const canUndo = useMemo(() => pastRef.current.length > 0, [historyTick]);
   const canRedo = useMemo(() => futureRef.current.length > 0, [historyTick]);
@@ -908,6 +937,21 @@ export default function RepackFolderStructureView({
             </Button>
             <Button
               type="button"
+              onClick={handleCopySelected}
+              disabled={!hasSelectionToCopy}
+              variant="outline"
+              size="sm"
+              title={
+                hasSelectionToCopy
+                  ? `Copy ${selectionForCopy.length} selected node(s) to the internal clipboard`
+                  : "Select one or more nodes in the tree"
+              }
+            >
+              <Copy className="h-4 w-4" />
+              Copy selected
+            </Button>
+            <Button
+              type="button"
               variant="outline"
               size="sm"
               className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
@@ -927,12 +971,14 @@ export default function RepackFolderStructureView({
         <div className="space-y-1.5">
           <CardDescription className="text-sm leading-snug">
             Drag and drop to reorganize.             Tree selection: click; Ctrl/Cmd+click toggle; Shift+click range; Ctrl/Cmd+Shift+click
-            toggle add. Delete selected removes highlighted nodes (or Backspace). Shortcuts: Undo Ctrl+Z
-            (Cmd+Z), Redo Ctrl+Y or Ctrl+Shift+Z (Cmd+Shift+Z).
+            toggle add. Copy selected supports multi-selection. Delete selected removes highlighted nodes (or Backspace).
+            Shortcuts: Copy Ctrl+C (Cmd+C), Paste Ctrl+V (Cmd+V), Undo Ctrl+Z (Cmd+Z), Redo Ctrl+Y or Ctrl+Shift+Z
+            (Cmd+Shift+Z).
           </CardDescription>
           {selectedItems.length > 1 ? (
             <p className="text-xs text-muted-foreground">
-              Selected {selectedItems.length} nodes. Add actions apply to selected folders only; property editor is disabled for multi-selection.
+              Selected {selectedItems.length} nodes. Add actions apply to selected folders only; use Copy selected or Ctrl/Cmd+C
+              for batch copy. Property editor is disabled for multi-selection.
             </p>
           ) : null}
           {loadedFilePath && (
@@ -1005,6 +1051,8 @@ export default function RepackFolderStructureView({
               onFileTypeChange={handleFileTypeChange}
               onPropertyChange={handlePropertyChange}
               copiedItem={copiedItem}
+              copiedItems={copiedItems}
+              onCopy={handleCopySelected}
               onPaste={handlePaste}
             />
           </div>

@@ -65,6 +65,6 @@ uniform float uAnimeSpecularBoost;
     shader.uniforms.uAnimeCelBands = { value: 3.0 };
     shader.uniforms.uAnimeRimStrength = { value: 0.5 };
     shader.uniforms.uAnimeRimPower = { value: 3.15 };
-    shader.uniforms.uAnimeSpecularBoost = { value: 1.52 };
+    shader.uniforms.uAnimeSpecularBoost = { value: 1.18 };
   };
 }

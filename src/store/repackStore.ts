@@ -1,8 +1,14 @@
 import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
 import { TreeDataItem, convertSubFileStructureToTreeData } from '@/lib/utils'
+import {
+  copyNodesToClipboard,
+  pasteClipboardItems,
+  type RepackClipboardProjectData,
+  type RepackSubFileDataItem,
+} from '@/page/TestEditor/components/repack-folder-structure/repackClipboard'
 
-interface SubFileDataItem {
+interface SubFileDataItem extends RepackSubFileDataItem {
   index: number
   fileType: string
   fileIndex: number
@@ -30,7 +36,7 @@ interface SubFileStructureItem {
   endMarkCount?: number
 }
 
-interface CompleteProjectData {
+interface CompleteProjectData extends RepackClipboardProjectData<SubFileDataItem> {
   Magic: number
   Fhm2dTotalCount: number
   UnkCount: number
@@ -44,6 +50,7 @@ interface RepackStoreState {
   treeData: TreeDataItem[]
   selectedItem: TreeDataItem | null
   copiedItem: TreeDataItem | null
+  copiedItems: TreeDataItem[]
 
   // Actions
   setCompleteProjectData: (data: CompleteProjectData) => void
@@ -54,6 +61,7 @@ interface RepackStoreState {
 
   // Copy/Paste functions
   copyNode: (nodeId: string) => void
+  copyNodes: (nodeIds: string[]) => void
   pasteNode: (parentId: string) => void
 
   // Helper functions
@@ -70,6 +78,7 @@ export const useRepackStore = create<RepackStoreState>((set, get) => ({
   treeData: [],
   selectedItem: null,
   copiedItem: null,
+  copiedItems: [],
 
   setCompleteProjectData: data => set({ completeProjectData: data }),
 
@@ -173,126 +182,34 @@ export const useRepackStore = create<RepackStoreState>((set, get) => ({
 
   // Copy a node by ID
   copyNode: (nodeId: string) => {
+    get().copyNodes([nodeId])
+  },
+
+  copyNodes: (nodeIds: string[]) => {
     const { treeData } = get()
-
-    // Find the node to copy
-    const findNode = (items: TreeDataItem[]): TreeDataItem | null => {
-      for (const item of items) {
-        if (item.id === nodeId) {
-          return item
-        }
-        if (item.children) {
-          const found = findNode(item.children)
-          if (found) return found
-        }
-      }
-      return null
-    }
-
-    const nodeToCopy = findNode(treeData)
-    if (nodeToCopy) {
-      // Create a deep copy of the node
-      const copyWithNewIds = (node: TreeDataItem): TreeDataItem => {
-        const newId = uuidv4()
-        return {
-          ...node,
-          id: newId,
-          children: node.children ? node.children.map(copyWithNewIds) : undefined
-        }
-      }
-
-      const copiedNode = copyWithNewIds(nodeToCopy)
-      console.log('[DEBUG] copiedNode', copiedNode)
-      set({ copiedItem: copiedNode })
-    }
+    const copiedItems = copyNodesToClipboard(treeData, nodeIds)
+    set({
+      copiedItems,
+      copiedItem: copiedItems[0] ?? null
+    })
   },
 
   // Paste the copied node to a parent folder
   pasteNode: (parentId: string) => {
-    const { treeData, copiedItem, completeProjectData } = get()
-    if (!copiedItem) return
+    const { treeData, copiedItems, completeProjectData } = get()
+    if (copiedItems.length === 0) return
 
-    // Generate new indices for pasted items
-    const generateNewIndices = (node: TreeDataItem): TreeDataItem => {
-      const newId = uuidv4()
-      let newData = node.data
-      let newName = node.name // Default: keep original name
+    const result = pasteClipboardItems({
+      treeData,
+      parentId,
+      clipboardItems: copiedItems,
+      completeProjectData
+    })
 
-      if (node.data?.type === 'Item') {
-        const newFileIndex = get().getMaxAvailableFileIndex()
-
-        newData = {
-          ...node.data // Keep all original data including unk1, unk2, unk3, unk4
-        }
-
-        // Add to completeProjectData.SubFileData if it exists
-        if (completeProjectData && node.data.fileType) {
-          const newSubFileDataItem = {
-            index: node.data.index!,
-            fileType: node.data.fileType,
-            fileIndex: newFileIndex,
-            fileUrl: newData.fileUrl || `.\\unknown\\${newFileIndex}.bin`,
-            isError: node.data.isError,
-            originChunkCount: node.data.originChunkCount,
-            errorCompBufferData: node.data.errorCompBufferData,
-            errorOriginSize: node.data.errorOriginSize,
-            originBinChunkBuffer: node.data.originBinChunkBuffer
-          }
-
-          const updatedCompleteProjectData = {
-            ...completeProjectData,
-            Fhm2dTotalCount: completeProjectData.Fhm2dTotalCount + 1,
-            SubFileData: [...completeProjectData.SubFileData, newSubFileDataItem]
-          }
-
-          set({ completeProjectData: updatedCompleteProjectData })
-        }
-      } else if (node.data?.type === 'Folder') {
-        newName = `${node.name}`
-      }
-
-      return {
-        ...node,
-        id: newId,
-        name: newName,
-        data: newData,
-        children: node.children ? node.children.map(generateNewIndices) : undefined
-      }
-    }
-
-    const nodeToPaste = generateNewIndices(copiedItem)
-
-    // Add the pasted node to the target parent
-    const addNodeToParent = (items: TreeDataItem[]): TreeDataItem[] => {
-      return items.map(item => {
-        if (item.id === parentId && item.data?.type === 'Folder') {
-          const children = item.children || []
-          const newChildren = [...children, nodeToPaste]
-
-          // Update folderCount for the parent folder
-          const updatedData = {
-            ...item.data,
-            folderCount: newChildren.length
-          }
-
-          return {
-            ...item,
-            children: newChildren,
-            data: updatedData
-          }
-        }
-        if (item.children) {
-          return {
-            ...item,
-            children: addNodeToParent(item.children)
-          }
-        }
-        return item
-      })
-    }
-
-    const newTreeData = addNodeToParent(treeData)
-    set({ treeData: newTreeData })
+    set({
+      treeData: result.treeData,
+      completeProjectData: result.completeProjectData
+    })
   },
 
   // Merge existing template data into current project

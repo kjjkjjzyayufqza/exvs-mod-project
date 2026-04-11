@@ -431,7 +431,7 @@ export function SsbhModelPreviewProvider({
     applyNonce: number;
     applyData: Float32Array | null;
   }>({ undoStack: [], redoStack: [], applyNonce: 0, applyData: null });
-  const [previewRenderStyle, setPreviewRenderStyle] = useState<PreviewRenderStyle>("standard");
+  const [previewRenderStyle, setPreviewRenderStyle] = useState<PreviewRenderStyle>("anime");
   const [recentModelPaths, setRecentModelPaths] = useState<string[]>(() =>
     readRecentModelPathsFromStorage(),
   );
