@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileJson, Layers, Loader2, RefreshCw, RotateCcw, Save, X } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { join } from "@tauri-apps/api/path";
@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useDraggableModal } from "@/hooks/useDraggableModal";
 import type { NumatbProfileKind } from "./daeSsbhTypes";
 import { NumatbTemplateEditorModalBody } from "./NumatbTemplateEditorModalBody";
-import { isNumatbBundleDirty, type NumatbModalBundle } from "./numatbEditorUtils";
+import type { NumatbModalBundle } from "./numatbEditorUtils";
 import { ssbhLoadSsbhFileAsJson } from "./ssbhDaeIoService";
 
 export type NumatbEditorWindowSession = {
@@ -21,6 +21,7 @@ export type NumatbEditorWindowSession = {
   loadError: string | null;
   baseData: NumatbModalBundle | null;
   draftData: NumatbModalBundle | null;
+  isDirty: boolean;
   zIndex: number;
 };
 
@@ -53,10 +54,7 @@ export function NumatbEditorModalWindow({
   const { nodeRef, handleProps } = useDraggableModal({
     defaultPosition: { x: 40 + cascadeIndex * 28, y: 40 + cascadeIndex * 28 },
   });
-  const dirty = useMemo(
-    () => isNumatbBundleDirty(session.baseData, session.draftData),
-    [session.baseData, session.draftData],
-  );
+  const dirty = session.isDirty;
 
   const draftRef = useRef(session.draftData);
   const savingRef = useRef(session.saving);

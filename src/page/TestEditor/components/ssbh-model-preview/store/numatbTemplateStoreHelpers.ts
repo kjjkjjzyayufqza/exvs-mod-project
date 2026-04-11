@@ -18,6 +18,7 @@ import {
   removeAttributeAtFlatIndex,
   replaceAttributeAtFlatIndex,
 } from "./matlEntryFlat";
+import { produce } from "immer";
 
 export const COMMON_NUMATB_PARAM_IDS = [
   "BlendState0",
@@ -189,12 +190,11 @@ export function mirrorTexturePathOntoOtherProfile(
   if (path === undefined) {
     return targetFile;
   }
-  const next = cloneNumatbFile(targetFile);
-  const entryIndex = next.entries.findIndex((item) => item.material_label === materialLabel);
+  const entryIndex = targetFile.entries.findIndex((item) => item.material_label === materialLabel);
   if (entryIndex < 0) {
     return targetFile;
   }
-  const entry = next.entries[entryIndex];
+  const entry = targetFile.entries[entryIndex];
   const attributes = flattenEntryToAttributes(entry);
   const attributeIndex = attributes.findIndex((attribute) => attribute.param_id === paramId);
   if (attributeIndex < 0) {
@@ -202,8 +202,13 @@ export function mirrorTexturePathOntoOtherProfile(
   }
   const current = attributes[attributeIndex].param.data;
   const merged = applyTexturePathStringToData(current, path);
-  next.entries[entryIndex] = replaceAttributeAtFlatIndex(entry, attributeIndex, merged);
-  return next;
+  return produce(targetFile, (draft) => {
+    const targetEntry = draft.entries[entryIndex];
+    if (!targetEntry) {
+      throw new Error("Material index is out of range");
+    }
+    draft.entries[entryIndex] = replaceAttributeAtFlatIndex(targetEntry, attributeIndex, merged);
+  });
 }
 
 function collectMissingTexturePathSlotsImpl(
@@ -369,13 +374,17 @@ export function updateEntryAttribute(
   attributeIndex: number,
   data: NumatbAttributeData,
 ): MatlDataJson {
-  const next = cloneNumatbFile(file);
-  const entry = next.entries[materialIndex];
+  const entry = file.entries[materialIndex];
   if (!entry) {
     throw new Error("Material index is out of range");
   }
-  next.entries[materialIndex] = replaceAttributeAtFlatIndex(entry, attributeIndex, data);
-  return next;
+  return produce(file, (draft) => {
+    const targetEntry = draft.entries[materialIndex];
+    if (!targetEntry) {
+      throw new Error("Material index is out of range");
+    }
+    draft.entries[materialIndex] = replaceAttributeAtFlatIndex(targetEntry, attributeIndex, data);
+  });
 }
 
 export function addEntryAttribute(
@@ -384,13 +393,17 @@ export function addEntryAttribute(
   paramId: string,
   kind?: NumatbAttributeDataKind,
 ): MatlDataJson {
-  const next = cloneNumatbFile(file);
-  const entry = next.entries[materialIndex];
+  const entry = file.entries[materialIndex];
   if (!entry) {
     throw new Error("Material index is out of range");
   }
-  next.entries[materialIndex] = addAttributeToMatlEntry(entry, paramId, kind);
-  return next;
+  return produce(file, (draft) => {
+    const targetEntry = draft.entries[materialIndex];
+    if (!targetEntry) {
+      throw new Error("Material index is out of range");
+    }
+    draft.entries[materialIndex] = addAttributeToMatlEntry(targetEntry, paramId, kind);
+  });
 }
 
 export function removeEntryAttribute(
@@ -398,13 +411,17 @@ export function removeEntryAttribute(
   materialIndex: number,
   attributeIndex: number,
 ): MatlDataJson {
-  const next = cloneNumatbFile(file);
-  const entry = next.entries[materialIndex];
+  const entry = file.entries[materialIndex];
   if (!entry) {
     throw new Error("Material index is out of range");
   }
-  next.entries[materialIndex] = removeAttributeAtFlatIndex(entry, attributeIndex);
-  return next;
+  return produce(file, (draft) => {
+    const targetEntry = draft.entries[materialIndex];
+    if (!targetEntry) {
+      throw new Error("Material index is out of range");
+    }
+    draft.entries[materialIndex] = removeAttributeAtFlatIndex(targetEntry, attributeIndex);
+  });
 }
 
 export function updateMaterialLabel(
@@ -412,13 +429,16 @@ export function updateMaterialLabel(
   materialIndex: number,
   materialLabel: string,
 ): MatlDataJson {
-  const next = cloneNumatbFile(file);
-  const entry = next.entries[materialIndex];
-  if (!entry) {
+  if (!file.entries[materialIndex]) {
     throw new Error("Material index is out of range");
   }
-  entry.material_label = materialLabel;
-  return next;
+  return produce(file, (draft) => {
+    const entry = draft.entries[materialIndex];
+    if (!entry) {
+      throw new Error("Material index is out of range");
+    }
+    entry.material_label = materialLabel;
+  });
 }
 
 export function updateShaderLabel(
@@ -426,13 +446,16 @@ export function updateShaderLabel(
   materialIndex: number,
   shaderLabel: string,
 ): MatlDataJson {
-  const next = cloneNumatbFile(file);
-  const entry = next.entries[materialIndex];
-  if (!entry) {
+  if (!file.entries[materialIndex]) {
     throw new Error("Material index is out of range");
   }
-  entry.shader_label = shaderLabel;
-  return next;
+  return produce(file, (draft) => {
+    const entry = draft.entries[materialIndex];
+    if (!entry) {
+      throw new Error("Material index is out of range");
+    }
+    entry.shader_label = shaderLabel;
+  });
 }
 
 export function addMaterialEntry(
@@ -440,15 +463,15 @@ export function addMaterialEntry(
   materialLabel: string,
   profile: NumatbProfileKind,
 ): MatlDataJson {
-  const next = cloneNumatbFile(file);
-  next.entries.push(createEmptyMaterialEntry(materialLabel, profile));
-  return next;
+  return produce(file, (draft) => {
+    draft.entries.push(createEmptyMaterialEntry(materialLabel, profile));
+  });
 }
 
 export function removeMaterialEntry(file: MatlDataJson, materialIndex: number): MatlDataJson {
-  const next = cloneNumatbFile(file);
-  next.entries.splice(materialIndex, 1);
-  return next;
+  return produce(file, (draft) => {
+    draft.entries.splice(materialIndex, 1);
+  });
 }
 
 export function cloneProfile(file: MatlDataJson): MatlDataJson {

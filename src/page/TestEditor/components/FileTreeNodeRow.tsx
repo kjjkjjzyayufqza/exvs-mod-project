@@ -1,4 +1,4 @@
-import type { MouseEvent } from "react";
+import { memo, type MouseEvent } from "react";
 import type { NodeRendererProps } from "react-arborist";
 import {
   ChevronRight,
@@ -53,7 +53,7 @@ type Props = NodeRendererProps<TestTreeNode> & {
   ctx: FileTreeNodeRowContext;
 };
 
-export function FileTreeNodeRow({ node, style, dragHandle, ctx }: Props) {
+function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
   const isDir = node.data.isDir;
   const {
     currentJsonPath,
@@ -266,3 +266,14 @@ export function FileTreeNodeRow({ node, style, dragHandle, ctx }: Props) {
     </ContextMenu>
   );
 }
+
+export const FileTreeNodeRow = memo(FileTreeNodeRowImpl, (prev, next) => {
+  return (
+    prev.node.id === next.node.id &&
+    prev.node.isOpen === next.node.isOpen &&
+    prev.node.isSelected === next.node.isSelected &&
+    prev.style?.top === next.style?.top &&
+    prev.style?.height === next.style?.height &&
+    prev.ctx === next.ctx
+  );
+});

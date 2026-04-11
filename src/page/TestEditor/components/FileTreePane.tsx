@@ -51,6 +51,8 @@ type FileTreePaneProps = {
   dirtyTopLevelFolderNames?: string[];
   /** Top-level directory names under the workspace root (unfiltered); used to detect structure JSON. */
   workspaceTopLevelFolderNames: string[];
+  /** Root-level *_structure.json file names from the full unfiltered tree. */
+  workspaceRootStructureJsonNames: string[];
   /** Bumps when top-level dirs or root-level *_structure.json entries change; triggers existence re-scan. */
   fileTreeStructureScanKey: string;
   modFolderPath?: string;
@@ -76,6 +78,7 @@ function FileTreePaneImpl({
   hasUnsavedChanges = false,
   dirtyTopLevelFolderNames = [],
   workspaceTopLevelFolderNames,
+  workspaceRootStructureJsonNames,
   fileTreeStructureScanKey,
   modFolderPath,
   onFolderRepacked,
@@ -95,39 +98,14 @@ function FileTreePaneImpl({
     structurePath: string;
     inputFolderPath: string;
   } | null>(null);
-  const [structureJsonExistsAtWorkspaceRoot, setStructureJsonExistsAtWorkspaceRoot] = useState<
-    Record<string, boolean>
-  >({});
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!currentDir || workspaceTopLevelFolderNames.length === 0) {
-      setStructureJsonExistsAtWorkspaceRoot({});
-      return;
-    }
-    setStructureJsonExistsAtWorkspaceRoot({});
-    const names = workspaceTopLevelFolderNames;
-    void (async () => {
-      try {
-        const entries = await Promise.all(
-          names.map(async (name) => {
-            const structurePath = await join(currentDir, `${name}${STRUCTURE_JSON_SUFFIX}`);
-            const ok = await exists(structurePath);
-            return [name, ok] as const;
-          })
-        );
-        if (cancelled) return;
-        setStructureJsonExistsAtWorkspaceRoot(Object.fromEntries(entries));
-      } catch (error) {
-        console.error("Failed to verify structure JSON paths", error);
-        toast.error("Failed to verify structure JSON paths");
-        if (!cancelled) setStructureJsonExistsAtWorkspaceRoot({});
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [currentDir, workspaceTopLevelFolderNames, fileTreeStructureScanKey]);
+  const structureJsonExistsAtWorkspaceRoot = useMemo(() => {
+    const structureFiles = new Set(workspaceRootStructureJsonNames.map((name) => name.toLowerCase()));
+    const out: Record<string, boolean> = {};
+    workspaceTopLevelFolderNames.forEach((folderName) => {
+      out[folderName] = structureFiles.has(`${folderName.toLowerCase()}${STRUCTURE_JSON_SUFFIX.toLowerCase()}`);
+    });
+    return out;
+  }, [workspaceTopLevelFolderNames, workspaceRootStructureJsonNames, fileTreeStructureScanKey]);
 
   useEffect(() => {
     const el = containerRef.current;

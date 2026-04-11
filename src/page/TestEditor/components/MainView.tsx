@@ -257,6 +257,29 @@ const MainView = ({
   const handleMscWorkspaceUnsaved = useCallback((hasChanges: boolean) => {
     setMscWorkspaceHasUnsaved(hasChanges);
   }, []);
+  const unsavedTabMap = useMemo<Record<string, boolean>>(
+    () => ({
+      "folder-structure": folderStructureHasUnsaved,
+      "character-id-table": characterIdTableHasUnsaved,
+      "character-cost": characterCostHasUnsaved,
+      "character-list": characterListHasUnsaved,
+      "series-list": seriesListHasUnsaved,
+      "card-icon-list": stageIconListHasUnsaved,
+      "stage-icon-list": stageIconListHasUnsaved,
+      "stage-list": stageListHasUnsaved,
+      "msc-workspace": mscWorkspaceHasUnsaved,
+    }),
+    [
+      folderStructureHasUnsaved,
+      characterIdTableHasUnsaved,
+      characterCostHasUnsaved,
+      characterListHasUnsaved,
+      seriesListHasUnsaved,
+      stageIconListHasUnsaved,
+      stageListHasUnsaved,
+      mscWorkspaceHasUnsaved,
+    ],
+  );
 
   const handleJumpToCharacterIdTable = useCallback((characterId: number) => {
     setPendingCharacterIdTableSelection(characterId);
@@ -551,6 +574,10 @@ const MainView = ({
           {resolvedTabs.map((tab) => {
             if (!visitedTabs.has(tab.value)) return null;
             const isActive = activeTab === tab.value;
+            const shouldKeepMounted = isActive || tab.value === "3d" || Boolean(unsavedTabMap[tab.value]);
+            if (!shouldKeepMounted) {
+              return null;
+            }
             return (
               <div
                 key={tab.value}

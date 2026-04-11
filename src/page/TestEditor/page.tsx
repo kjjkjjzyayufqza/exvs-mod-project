@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { dirname } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
@@ -13,9 +13,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import MainView from "./components/MainView";
-import InfoPanel from "./components/InfoPanel";
-import { SsbhModelPreviewProvider } from "./components/ssbh-model-preview/SsbhModelPreviewPanel";
 import { FolderChangePayload, TestTreeNode } from "./types";
 import {
   applyPayloadQueue,
@@ -27,8 +24,7 @@ import {
 } from "./utils/testEditorTreeOps";
 import { useTestEditorPageActive } from "./hooks/useTestEditorPageActive";
 import { useTestEditorFolderWatch } from "./hooks/useTestEditorFolderWatch";
-import { FileTreePane } from "./components/FileTreePane";
-import { TestEditorWorkspacePanels } from "./components/TestEditorWorkspacePanels";
+import { TestEditorWorkspaceArea } from "./components/TestEditorWorkspaceArea";
 import { useConfigStore } from "@/store/configStore";
 import { TestEditorToolbar } from "./components/TestEditorToolbar";
 import ListeningRepackDialog from "./components/ListeningRepackDialog";
@@ -81,7 +77,6 @@ import {
   buildNumatbModalBundleFromLoadedFile,
   cloneNumatbBundle,
   detectNumatbProfileFromPath,
-  isNumatbBundleDirty,
   type NumatbModalBundle,
 } from "./components/ssbh-model-preview/numatbEditorUtils";
 
@@ -130,6 +125,8 @@ const TestEditorPage = () => {
   );
 
   const [numatbSessions, setNumatbSessions] = useState<NumatbEditorWindowSession[]>([]);
+  const [, startTreeTransition] = useTransition();
+  const [, startNumatbTransition] = useTransition();
   const numatbZIndexRef = useRef(4000);
   const numatbSessionsRef = useRef(numatbSessions);
   numatbSessionsRef.current = numatbSessions;
@@ -166,7 +163,9 @@ const TestEditorPage = () => {
 
   const flushQueuedPayloads = useCallback((queued: FolderChangePayload[]) => {
     if (!queued.length) return;
-    setTreeData((prev) => applyPayloadQueue(prev, queued));
+    startTreeTransition(() => {
+      setTreeData((prev) => applyPayloadQueue(prev, queued));
+    });
 
     const nextDirty = new Set<string>();
     queued.forEach((payload) => {
@@ -185,7 +184,7 @@ const TestEditorPage = () => {
         return merged;
       });
     }
-  }, [currentDir]);
+  }, [currentDir, startTreeTransition]);
 
   useTestEditorFolderWatch({ isPageActive, onFlush: flushQueuedPayloads });
 
@@ -262,6 +261,13 @@ const TestEditorPage = () => {
   const workspaceTopLevelFolderNames = useMemo(
     () => treeData.filter((n) => n.isDir).map((n) => n.name),
     [treeData]
+  );
+  const workspaceRootStructureJsonNames = useMemo(
+    () =>
+      treeData
+        .filter((n) => !n.isDir && n.name.toLowerCase().endsWith("_structure.json"))
+        .map((n) => n.name),
+    [treeData],
   );
 
   const fileTreeStructureScanKey = useMemo(() => {
@@ -966,6 +972,7 @@ const TestEditorPage = () => {
         loadError: null,
         baseData: null,
         draftData: null,
+        isDirty: false,
         zIndex: nextZ,
       };
       void ssbhTemplateReadNumatb(filePath)
@@ -982,6 +989,7 @@ const TestEditorPage = () => {
                     loadError: null,
                     baseData: base,
                     draftData: draft,
+                    isDirty: false,
                   }
                 : s,
             ),
@@ -1004,8 +1012,12 @@ const TestEditorPage = () => {
   }, []);
 
   const updateNumatbDraft = useCallback((sessionId: string, next: NumatbModalBundle) => {
-    setNumatbSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, draftData: next } : s)));
-  }, []);
+    startNumatbTransition(() => {
+      setNumatbSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, draftData: next, isDirty: true } : s)),
+      );
+    });
+  }, [startNumatbTransition]);
 
   const saveNumatbSession = useCallback(async (sessionId: string) => {
     const snapshot = numatbSessionsRef.current.find((x) => x.id === sessionId);
@@ -1023,7 +1035,13 @@ const TestEditorPage = () => {
       setNumatbSessions((prev) =>
         prev.map((s) =>
           s.id === sessionId
-            ? { ...s, saving: false, baseData: savedBundle, draftData: savedBundle }
+            ? {
+                ...s,
+                saving: false,
+                baseData: savedBundle,
+                draftData: savedBundle,
+                isDirty: false,
+              }
             : s,
         ),
       );
@@ -1038,7 +1056,7 @@ const TestEditorPage = () => {
     setNumatbSessions((prev) =>
       prev.map((s) => {
         if (s.id !== sessionId || !s.baseData) return s;
-        return { ...s, draftData: cloneNumatbBundle(s.baseData) };
+        return { ...s, draftData: cloneNumatbBundle(s.baseData), isDirty: false };
       }),
     );
   }, []);
@@ -1062,7 +1080,14 @@ const TestEditorPage = () => {
       setNumatbSessions((prev) =>
         prev.map((s) =>
           s.id === sessionId
-            ? { ...s, loading: false, loadError: null, baseData: base, draftData: draft }
+            ? {
+                ...s,
+                loading: false,
+                loadError: null,
+                baseData: base,
+                draftData: draft,
+                isDirty: false,
+              }
             : s,
         ),
       );
@@ -1079,7 +1104,7 @@ const TestEditorPage = () => {
   const requestCloseNumatbSession = useCallback((sessionId: string) => {
     const s = numatbSessionsRef.current.find((x) => x.id === sessionId);
     if (!s) return;
-    if (isNumatbBundleDirty(s.baseData, s.draftData)) {
+    if (s.isDirty) {
       setNumatbGuard({ sessionId, action: "close" });
       return;
     }
@@ -1090,7 +1115,7 @@ const TestEditorPage = () => {
     (sessionId: string) => {
       const s = numatbSessionsRef.current.find((x) => x.id === sessionId);
       if (!s) return;
-      if (isNumatbBundleDirty(s.baseData, s.draftData)) {
+      if (s.isDirty) {
         setNumatbGuard({ sessionId, action: "reload" });
         return;
       }
@@ -1122,7 +1147,7 @@ const TestEditorPage = () => {
     await saveNumatbSession(sessionId);
     const s = numatbSessionsRef.current.find((x) => x.id === sessionId);
     if (!s) return;
-    if (isNumatbBundleDirty(s.baseData, s.draftData)) {
+    if (s.isDirty) {
       return;
     }
     setNumatbGuard(null);
@@ -1198,46 +1223,36 @@ const TestEditorPage = () => {
       </div>
 
       <div className="flex-1 min-h-0 p-2 overflow-hidden">
-        <SsbhModelPreviewProvider workspaceRoot={currentDir} previewSuspended={!isPageActive}>
-          <TestEditorWorkspacePanels
-            left={
-              <FileTreePane
-                data={fileTreeData}
-                onSelect={handleFileSelect}
-                selectedId={selectedId}
-                searchTerm={searchTerm}
-                onSearchChange={setSearchTerm}
-                onPickFolder={loadFolder}
-                onRefresh={refreshFolder}
-                folderStoreKey={TEST_EDITOR_FOLDER_STORE_KEY}
-                isLoading={isLoading}
-                currentDir={currentDir}
-                currentJsonPath={selectedJsonPath}
-                hasUnsavedChanges={hasUnsavedChanges}
-                dirtyTopLevelFolderNames={dirtyFolderList}
-                workspaceTopLevelFolderNames={workspaceTopLevelFolderNames}
-                fileTreeStructureScanKey={fileTreeStructureScanKey}
-                modFolderPath={obModPath || undefined}
-                onFolderRepacked={handleRepackSuccess}
-                starredPathSet={starredPathSet}
-                onToggleStar={toggleStar}
-                viewOptions={viewOptions}
-                onViewOptionsChange={setViewOptions}
-              />
-            }
-            center={
-              <MainView
-                jsonFilePath={selectedJsonPath}
-                folderPath={currentDir}
-                mscWorkspaceFolderPath={mscWorkspaceFolderPath}
-                onMscWorkspaceFolderChange={setMscWorkspaceFolderPath}
-                onUnsavedChanges={setHasUnsavedChanges}
-                onRevealTreeFolder={revealInTreeByPath}
-              />
-            }
-            right={<InfoPanel selected={selectedNode} />}
-          />
-        </SsbhModelPreviewProvider>
+        <TestEditorWorkspaceArea
+          folderStoreKey={TEST_EDITOR_FOLDER_STORE_KEY}
+          currentDir={currentDir}
+          isPageActive={isPageActive}
+          fileTreeData={fileTreeData}
+          onFileSelect={handleFileSelect}
+          selectedId={selectedId}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          onPickFolder={loadFolder}
+          onRefresh={refreshFolder}
+          isLoading={isLoading}
+          selectedJsonPath={selectedJsonPath}
+          hasUnsavedChanges={hasUnsavedChanges}
+          dirtyFolderList={dirtyFolderList}
+          workspaceTopLevelFolderNames={workspaceTopLevelFolderNames}
+          workspaceRootStructureJsonNames={workspaceRootStructureJsonNames}
+          fileTreeStructureScanKey={fileTreeStructureScanKey}
+          obModPath={obModPath}
+          onFolderRepacked={handleRepackSuccess}
+          starredPathSet={starredPathSet}
+          onToggleStar={toggleStar}
+          viewOptions={viewOptions}
+          onViewOptionsChange={setViewOptions}
+          mscWorkspaceFolderPath={mscWorkspaceFolderPath}
+          onMscWorkspaceFolderChange={setMscWorkspaceFolderPath}
+          onUnsavedChanges={setHasUnsavedChanges}
+          onRevealTreeFolder={revealInTreeByPath}
+          selectedNode={selectedNode}
+        />
       </div>
 
       <ListeningRepackDialog

@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -26,6 +26,45 @@ type NumatbMaterialEntryEditorProps = {
   onRemoveAttribute: (attributeIndex: number) => void;
 };
 
+const NUMATB_ATTRIBUTE_ROW_HEIGHT_px = 176;
+
+function CommitInput({
+  value,
+  onCommit,
+  type = "text",
+  step,
+  className,
+}: {
+  value: string | number;
+  onCommit: (next: string) => void;
+  type?: "text" | "number";
+  step?: string;
+  className?: string;
+}) {
+  const [draft, setDraft] = useState(String(value ?? ""));
+
+  useEffect(() => {
+    setDraft(String(value ?? ""));
+  }, [value]);
+
+  return (
+    <Input
+      type={type}
+      step={step}
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        const current = String(value ?? "");
+        if (draft === current) {
+          return;
+        }
+        onCommit(draft);
+      }}
+      className={className}
+    />
+  );
+}
+
 function JsonAttributeEditor({
   value,
   onChange,
@@ -35,22 +74,30 @@ function JsonAttributeEditor({
 }) {
   const [raw, setRaw] = useState(() => JSON.stringify(value, null, 2));
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    setRaw(JSON.stringify(value, null, 2));
+    setError(null);
+  }, [value]);
 
   return (
-    <div className="space-y-1">
+    <div className="min-w-0 space-y-1 overflow-hidden">
       <Textarea
         value={raw}
         onChange={(event) => setRaw(event.target.value)}
         onBlur={() => {
           try {
             const parsed = JSON.parse(raw) as unknown;
-            onChange(parsed);
+            const nextCanonical = JSON.stringify(parsed);
+            const currentCanonical = JSON.stringify(value);
+            if (nextCanonical !== currentCanonical) {
+              onChange(parsed);
+            }
             setError(null);
           } catch (parseError) {
             setError(parseError instanceof Error ? parseError.message : String(parseError));
           }
         }}
-        className="min-h-[110px] font-mono text-[11px]"
+        className="h-28 resize-none overflow-auto font-mono text-[11px]"
       />
       {error ? <p className="text-[11px] text-destructive">{error}</p> : null}
     </div>
@@ -77,31 +124,39 @@ function AttributeValueEditor({
       );
     case "Float":
       return (
-        <Input
+        <CommitInput
           type="number"
           step="0.01"
           value={data.Float ?? 0}
-          onChange={(event) => onChange({ Float: Number(event.target.value) })}
+          onCommit={(nextValue) => onChange({ Float: Number(nextValue) })}
           className="h-8 text-[11px]"
         />
       );
     case "Float1":
       return (
-        <Input
+        <CommitInput
           type="number"
           step="0.01"
           value={data.Float1 ?? 0}
-          onChange={(event) => onChange({ Float1: Number(event.target.value) })}
+          onCommit={(nextValue) => onChange({ Float1: Number(nextValue) })}
           className="h-8 text-[11px]"
         />
       );
     case "String":
       return (
-        <Input value={data.String ?? ""} onChange={(event) => onChange({ String: event.target.value })} className="h-8 font-mono text-[11px]" />
+        <CommitInput
+          value={data.String ?? ""}
+          onCommit={(nextValue) => onChange({ String: nextValue })}
+          className="h-8 font-mono text-[11px]"
+        />
       );
     case "String1":
       return (
-        <Input value={data.String1 ?? ""} onChange={(event) => onChange({ String1: event.target.value })} className="h-8 font-mono text-[11px]" />
+        <CommitInput
+          value={data.String1 ?? ""}
+          onCommit={(nextValue) => onChange({ String1: nextValue })}
+          className="h-8 font-mono text-[11px]"
+        />
       );
     case "Vector4":
       return (
@@ -170,6 +225,13 @@ export function NumatbMaterialEntryEditor({
     () => (entry ? flattenEntryToAttributes(entry) : []),
     [entry],
   );
+  const attributeScrollRef = useRef<HTMLDivElement>(null);
+  const attributeVirtualizer = useVirtualizer({
+    count: flatAttributes.length,
+    getScrollElement: () => attributeScrollRef.current,
+    estimateSize: () => NUMATB_ATTRIBUTE_ROW_HEIGHT_px,
+    overscan: 8,
+  });
 
   const availableParamIds = useMemo(() => {
     const existing = new Set(flatAttributes.map((attribute) => attribute.param_id));
@@ -255,22 +317,41 @@ export function NumatbMaterialEntryEditor({
           <span>Value</span>
           <span />
         </div>
-        <ScrollArea className="h-[360px]">
-          <div className="divide-y">
-            {flatAttributes.map((attribute, attributeIndex) => {
+        <div className="h-[360px] overflow-auto" ref={attributeScrollRef}>
+          <div style={{ height: `${attributeVirtualizer.getTotalSize()}px`, position: "relative" }}>
+            {attributeVirtualizer.getVirtualItems().map((virtualRow) => {
+              const attributeIndex = virtualRow.index;
+              const attribute = flatAttributes[attributeIndex];
+              if (!attribute) {
+                return null;
+              }
               const kind = getNumatbAttributeKind(attribute.param.data);
               return (
-                <div key={`${attribute.param_id}:${attributeIndex}`} className="grid grid-cols-[minmax(0,180px)_100px_minmax(0,1fr)_52px] gap-2 px-3 py-3">
+                <div
+                  key={`${attribute.param_id}:${attributeIndex}`}
+                  ref={attributeVirtualizer.measureElement}
+                  className="grid grid-cols-[minmax(0,180px)_100px_minmax(0,1fr)_52px] gap-2 border-b px-3 py-3"
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
                   <div className="min-w-0">
                     <div className="truncate font-mono text-[11px]" title={attribute.param_id}>
                       {attribute.param_id}
                     </div>
                   </div>
                   <div className="text-[11px] text-muted-foreground">{kind}</div>
-                  <AttributeValueEditor
-                    attribute={attribute}
-                    onChange={(nextData) => onUpdateAttribute(attributeIndex, nextData)}
-                  />
+                  <div className="min-w-0 overflow-hidden">
+                    <AttributeValueEditor
+                      attribute={attribute}
+                      onChange={(nextData) => onUpdateAttribute(attributeIndex, nextData)}
+                    />
+                  </div>
                   <Button
                     type="button"
                     variant="ghost"
@@ -284,10 +365,12 @@ export function NumatbMaterialEntryEditor({
               );
             })}
             {flatAttributes.length === 0 ? (
-              <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">This material has no attributes yet.</div>
+              <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">
+                This material has no attributes yet.
+              </div>
             ) : null}
           </div>
-        </ScrollArea>
+        </div>
       </div>
     </div>
   );

@@ -382,6 +382,36 @@ export function SsbhModelPreviewProvider({
   const [uvFlipV, setUvFlipV] = useState(false);
   const [textureSlotLoadEnabled, setTextureSlotLoadEnabledState] = useState(createDefaultTextureSlotLoadEnabled);
   const [textureDecodeProgress, setTextureDecodeProgress] = useState<SsbhModelPreviewTextureDecodeProgress | null>(null);
+  const textureDecodeProgressDraftRef = useRef<SsbhModelPreviewTextureDecodeProgress | null>(null);
+  const textureDecodeProgressFrameRef = useRef<number | null>(null);
+  const flushTextureDecodeProgress = useCallback(() => {
+    textureDecodeProgressFrameRef.current = null;
+    setTextureDecodeProgress(textureDecodeProgressDraftRef.current);
+  }, []);
+  const setTextureDecodeProgressBatched = useCallback(
+    (
+      next:
+        | SsbhModelPreviewTextureDecodeProgress
+        | null
+        | ((prev: SsbhModelPreviewTextureDecodeProgress | null) => SsbhModelPreviewTextureDecodeProgress | null),
+    ) => {
+      const prev = textureDecodeProgressDraftRef.current;
+      textureDecodeProgressDraftRef.current = typeof next === "function" ? next(prev) : next;
+      if (textureDecodeProgressFrameRef.current !== null) {
+        return;
+      }
+      textureDecodeProgressFrameRef.current = requestAnimationFrame(flushTextureDecodeProgress);
+    },
+    [flushTextureDecodeProgress],
+  );
+  useEffect(() => {
+    return () => {
+      if (textureDecodeProgressFrameRef.current !== null) {
+        cancelAnimationFrame(textureDecodeProgressFrameRef.current);
+        textureDecodeProgressFrameRef.current = null;
+      }
+    };
+  }, []);
   const textureDecoding = useMemo(
     () =>
       textureDecodeProgress !== null &&
@@ -997,7 +1027,7 @@ export function SsbhModelPreviewProvider({
     if (previewInstances.length === 0 || draws.length === 0) {
       setDrawMaterialDataUrlsByDrawKey(new Map());
       setDrawMaterialBindingsByDrawKey(new Map());
-      setTextureDecodeProgress(null);
+      setTextureDecodeProgressBatched(null);
       return;
     }
     let cancelled = false;
@@ -1067,11 +1097,11 @@ export function SsbhModelPreviewProvider({
       }
       setDrawMaterialBindingsByDrawKey(nextBindings);
       setDrawMaterialDataUrlsByDrawKey(next);
-      setTextureDecodeProgress(null);
+      setTextureDecodeProgressBatched(null);
       return;
     }
 
-    setTextureDecodeProgress({ done: 0, total: totalUniquePaths, currentLabel: null });
+    setTextureDecodeProgressBatched({ done: 0, total: totalUniquePaths, currentLabel: null });
 
     (async () => {
       const next = new Map<string, DrawMaterialDataUrls>();
@@ -1099,14 +1129,14 @@ export function SsbhModelPreviewProvider({
 
       const bumpDoneBy = (n: number) => {
         if (cancelled || n <= 0) return;
-        setTextureDecodeProgress((prev) =>
+        setTextureDecodeProgressBatched((prev) =>
           prev ? { ...prev, done: prev.done + n } : null,
         );
       };
 
       const decodeOneDiskPath = async (diskPath: string): Promise<void> => {
         if (!cancelled) {
-          setTextureDecodeProgress((prev) =>
+          setTextureDecodeProgressBatched((prev) =>
             prev ? { ...prev, currentLabel: `${fileBasename(diskPath)} · decode` } : null,
           );
         }
@@ -1180,7 +1210,7 @@ export function SsbhModelPreviewProvider({
       if (!cancelled) {
         setDrawMaterialDataUrlsByDrawKey(next);
         setDrawMaterialBindingsByDrawKey(nextBindings);
-        setTextureDecodeProgress(null);
+        setTextureDecodeProgressBatched(null);
         if (failedTextures.length > 0) {
           const preview = failedTextures.slice(0, 4).join("\n");
           const more =
@@ -1220,7 +1250,7 @@ export function SsbhModelPreviewProvider({
       }
       setLoading(true);
       setLoadError(null);
-      setTextureDecodeProgress(null);
+      setTextureDecodeProgressBatched(null);
       try {
         const normalized = normalizeScenePathStrict(t);
         if (/\.numdlb$/i.test(normalized)) {
@@ -1377,7 +1407,7 @@ export function SsbhModelPreviewProvider({
     const paths = previewInstances.map((i) => i.modlPath);
     setLoading(true);
     setLoadError(null);
-    setTextureDecodeProgress(null);
+    setTextureDecodeProgressBatched(null);
     try {
       await loadInstancesFromPaths(paths);
       setModelLoadNonce((n) => n + 1);

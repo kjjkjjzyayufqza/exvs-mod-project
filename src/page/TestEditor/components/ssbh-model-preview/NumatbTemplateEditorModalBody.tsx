@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FileInput, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -6,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { NumatbProfileKind, NumatbTemplateDefinition, NumatbTemplateLibrary } from "./daeSsbhTypes";
 import { NumatbMaterialEntryEditor } from "./components/NumatbMaterialEntryEditor";
@@ -44,6 +44,7 @@ export function NumatbTemplateEditorModalBody({
   disabled,
   defaultActiveProfile,
 }: NumatbTemplateEditorModalBodyProps) {
+  const materialListScrollRef = useRef<HTMLDivElement>(null);
   const [activeProfile, setActiveProfile] = useState<NumatbProfileKind>(() => defaultActiveProfile ?? "maya");
   const [selectedMaterialByProfile, setSelectedMaterialByProfile] = useState<Record<NumatbProfileKind, number>>({
     maya: 0,
@@ -100,6 +101,12 @@ export function NumatbTemplateEditorModalBody({
   const entries = activeFile.entries;
   const selectedMaterialIndex = Math.min(selectedMaterialByProfile[activeProfile] ?? 0, Math.max(entries.length - 1, 0));
   const selectedEntry = entries[selectedMaterialIndex] ?? null;
+  const materialRowVirtualizer = useVirtualizer({
+    count: entries.length,
+    getScrollElement: () => materialListScrollRef.current,
+    estimateSize: () => 52,
+    overscan: 8,
+  });
 
   const selectedTemplate = useMemo(
     () => templateLibrary.templates.find((template) => template.id === selectedTemplateId) ?? null,
@@ -317,32 +324,48 @@ export function NumatbTemplateEditorModalBody({
           </div>
 
           <div className="rounded-md border">
-            <ScrollArea className="h-[280px]">
-              <div className="divide-y">
-                {entries.map((entry, index) => (
-                  <button
-                    key={`${activeProfile}:${entry.material_label}:${index}`}
-                    type="button"
-                    className={`flex w-full flex-col items-start gap-1 px-3 py-2 text-left transition-colors ${
-                      selectedMaterialIndex === index ? "bg-muted" : "hover:bg-muted/40"
-                    }`}
-                    disabled={disabled}
-                    onClick={() =>
-                      setSelectedMaterialByProfile((current) => ({
-                        ...current,
-                        [activeProfile]: index,
-                      }))
-                    }
-                  >
-                    <span className="font-mono text-[11px]">{entry.material_label || `Material ${index + 1}`}</span>
-                    <span className="text-[10px] text-muted-foreground">{entry.shader_label || "(empty shader)"}</span>
-                  </button>
-                ))}
+            <div className="h-[280px] overflow-auto" ref={materialListScrollRef}>
+              <div style={{ height: `${materialRowVirtualizer.getTotalSize()}px`, position: "relative" }}>
+                {materialRowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const index = virtualRow.index;
+                  const entry = entries[index];
+                  if (!entry) {
+                    return null;
+                  }
+                  return (
+                    <button
+                      key={`${activeProfile}:${entry.material_label}:${index}`}
+                      type="button"
+                      className={`flex w-full flex-col items-start gap-1 border-b px-3 py-2 text-left transition-colors ${
+                        selectedMaterialIndex === index ? "bg-muted" : "hover:bg-muted/40"
+                      }`}
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: "100%",
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                      disabled={disabled}
+                      onClick={() =>
+                        setSelectedMaterialByProfile((current) => ({
+                          ...current,
+                          [activeProfile]: index,
+                        }))
+                      }
+                    >
+                      <span className="font-mono text-[11px]">{entry.material_label || `Material ${index + 1}`}</span>
+                      <span className="text-[10px] text-muted-foreground">{entry.shader_label || "(empty shader)"}</span>
+                    </button>
+                  );
+                })}
                 {entries.length === 0 ? (
-                  <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">No material entries in this profile.</div>
+                  <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">
+                    No material entries in this profile.
+                  </div>
                 ) : null}
               </div>
-            </ScrollArea>
+            </div>
           </div>
 
           <Button
