@@ -42,22 +42,6 @@ function cloneTreeItem(node: TreeDataItem): TreeDataItem {
   return structuredClone(node) as TreeDataItem;
 }
 
-function collectMaxFileIndex(nodes: TreeDataItem[]): number {
-  let maxFileIndex = -1;
-  const walk = (items: TreeDataItem[]) => {
-    for (const item of items) {
-      if (item.data?.type === "Item" && typeof item.data.fileIndex === "number") {
-        maxFileIndex = Math.max(maxFileIndex, item.data.fileIndex);
-      }
-      if (item.children && item.children.length > 0) {
-        walk(item.children);
-      }
-    }
-  };
-  walk(nodes);
-  return maxFileIndex;
-}
-
 function appendChildrenToFolder(nodes: TreeDataItem[], parentId: string, itemsToAppend: TreeDataItem[]): TreeDataItem[] {
   let changed = false;
 
@@ -142,30 +126,34 @@ export function pasteClipboardItems<
   }
 
   const nextSubFileData = completeProjectData ? [...completeProjectData.SubFileData] : null;
-  let nextFileIndex =
-    nextSubFileData && nextSubFileData.length > 0
-      ? Math.max(...nextSubFileData.map((item) => item.fileIndex)) + 1
-      : collectMaxFileIndex(treeData) + 1;
   let addedFileCount = 0;
 
   const cloneForPaste = (node: TreeDataItem): TreeDataItem => {
     const nextChildren = node.children?.map(cloneForPaste);
 
     if (node.data?.type === "Item") {
-      const assignedFileIndex = nextFileIndex++;
+      const d = node.data;
+      if (typeof d.fileIndex !== "number") {
+        throw new Error(`Pasted item "${node.name}" is missing fileIndex`);
+      }
+      const preservedFileIndex = d.fileIndex;
+      const preservedIndex = typeof d.index === "number" ? d.index : preservedFileIndex;
+      const preservedOriginalFileIndex =
+        typeof d.originalFileIndex === "number" ? d.originalFileIndex : preservedFileIndex;
+
       const nextSubFileDataItem = {
-        ...(node.data._originalSubFileData && typeof node.data._originalSubFileData === "object"
-          ? (structuredClone(node.data._originalSubFileData) as Partial<TSubFileData>)
+        ...(d._originalSubFileData && typeof d._originalSubFileData === "object"
+          ? (structuredClone(d._originalSubFileData) as Partial<TSubFileData>)
           : {}),
-        index: assignedFileIndex,
-        fileType: node.data.fileType ?? ".bin",
-        fileIndex: assignedFileIndex,
-        fileUrl: node.data.fileUrl ?? `.\\unknown\\${assignedFileIndex}.bin`,
-        isError: node.data.isError,
-        originChunkCount: node.data.originChunkCount,
-        errorCompBufferData: node.data.errorCompBufferData,
-        errorOriginSize: node.data.errorOriginSize,
-        originBinChunkBuffer: node.data.originBinChunkBuffer,
+        index: preservedIndex,
+        fileType: d.fileType ?? ".bin",
+        fileIndex: preservedFileIndex,
+        fileUrl: d.fileUrl ?? `.\\unknown\\${preservedFileIndex}.bin`,
+        isError: d.isError,
+        originChunkCount: d.originChunkCount,
+        errorCompBufferData: d.errorCompBufferData,
+        errorOriginSize: d.errorOriginSize,
+        originBinChunkBuffer: d.originBinChunkBuffer,
       } as TSubFileData;
 
       if (nextSubFileData) {
@@ -177,10 +165,10 @@ export function pasteClipboardItems<
         ...node,
         id: uuidv4(),
         data: {
-          ...node.data,
-          index: assignedFileIndex,
-          fileIndex: assignedFileIndex,
-          originalFileIndex: assignedFileIndex,
+          ...d,
+          index: preservedIndex,
+          fileIndex: preservedFileIndex,
+          originalFileIndex: preservedOriginalFileIndex,
           _originalSubFileData: nextSubFileDataItem,
         },
         children: nextChildren,

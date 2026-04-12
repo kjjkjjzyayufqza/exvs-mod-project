@@ -92,7 +92,7 @@ describe("repackClipboard", () => {
     expect(copiedItems[0]?.children?.[0]?.name).toBe("Child A");
   });
 
-  it("pastes the full clipboard set into a folder and rewrites item indices consistently", () => {
+  it("pastes the full clipboard set into a folder and preserves source file indices on items", () => {
     const targetFolder = createFolder("target-folder", "Target Folder", [createItem("existing-item", "Existing Item", 0)]);
     const copiedFolder = createFolder("copied-folder", "Copied Folder", [createItem("nested-item", "Nested Item", 10)]);
     const looseItem = createItem("loose-item", "Loose Item", 11, ".numdlb", ".\\data\\11.numdlb");
@@ -131,24 +131,25 @@ describe("repackClipboard", () => {
     expect(pastedLooseItem?.id).not.toBe("loose-item");
     expect(pastedNestedItem?.id).not.toBe("nested-item");
 
-    expect(pastedNestedItem?.data?.fileIndex).toBe(1);
-    expect(pastedNestedItem?.data?.index).toBe(1);
-    expect(pastedNestedItem?.data?.originalFileIndex).toBe(1);
-    expect(pastedLooseItem?.data?.fileIndex).toBe(2);
-    expect(pastedLooseItem?.data?.index).toBe(2);
-    expect(pastedLooseItem?.data?.originalFileIndex).toBe(2);
+    expect(pastedNestedItem?.data?.fileIndex).toBe(10);
+    expect(pastedNestedItem?.data?.index).toBe(10);
+    expect(pastedNestedItem?.data?.originalFileIndex).toBe(10);
+    expect(pastedLooseItem?.data?.fileIndex).toBe(11);
+    expect(pastedLooseItem?.data?.index).toBe(11);
+    expect(pastedLooseItem?.data?.originalFileIndex).toBe(11);
 
     expect(result.completeProjectData?.Fhm2dTotalCount).toBe(3);
-    expect(result.completeProjectData?.SubFileData.map((item) => item.fileIndex)).toEqual([0, 1, 2]);
+    // SubFileData append order follows paste traversal (folder subtree before loose sibling in this tree)
+    expect(result.completeProjectData?.SubFileData.map((item) => item.fileIndex)).toEqual([0, 10, 11]);
     expect(result.completeProjectData?.SubFileData[1]).toMatchObject({
-      index: 1,
-      fileIndex: 1,
+      index: 10,
+      fileIndex: 10,
       fileType: ".bin",
       fileUrl: ".\\data\\10.bin",
     });
     expect(result.completeProjectData?.SubFileData[2]).toMatchObject({
-      index: 2,
-      fileIndex: 2,
+      index: 11,
+      fileIndex: 11,
       fileType: ".numdlb",
       fileUrl: ".\\data\\11.numdlb",
     });

@@ -801,7 +801,7 @@ export default function RepackFolderStructureView({
     setHasUnsavedChanges(true);
   };
 
-  // Keyboard: save, undo, redo, copy, paste (skip when typing in inputs)
+  // Keyboard: save, undo, redo (global; skip when typing in inputs)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -831,6 +831,24 @@ export default function RepackFolderStructureView({
         redo();
         return;
       }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [hasUnsavedChanges, loadedFilePath, handleSave, redo, undo]);
+
+  // Copy/paste tree nodes only when focus is inside the tree panel (keydown bubbles from focused row)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("input, textarea, [contenteditable=true], [contenteditable='']")) {
+        return;
+      }
+      const mod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
       if (mod && key === "c" && selectionForCopy.length > 0) {
         e.preventDefault();
         handleCopySelected();
@@ -842,9 +860,9 @@ export default function RepackFolderStructureView({
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [copiedItems.length, handleCopySelected, handlePaste, hasUnsavedChanges, loadedFilePath, handleSave, redo, selectionForCopy.length, selectedItem, undo]);
+    el.addEventListener("keydown", handleKeyDown);
+    return () => el.removeEventListener("keydown", handleKeyDown);
+  }, [copiedItems.length, handleCopySelected, handlePaste, selectionForCopy.length, selectedItem, treeHeight]);
 
   const canAddChild = resolveTargetFolders().length > 0;
   const hasSingleSelection = selectedItems.length === 1;
@@ -972,8 +990,8 @@ export default function RepackFolderStructureView({
           <CardDescription className="text-sm leading-snug">
             Drag and drop to reorganize.             Tree selection: click; Ctrl/Cmd+click toggle; Shift+click range; Ctrl/Cmd+Shift+click
             toggle add. Copy selected supports multi-selection. Delete selected removes highlighted nodes (or Backspace).
-            Shortcuts: Copy Ctrl+C (Cmd+C), Paste Ctrl+V (Cmd+V), Undo Ctrl+Z (Cmd+Z), Redo Ctrl+Y or Ctrl+Shift+Z
-            (Cmd+Shift+Z).
+            Shortcuts: Save Ctrl+S (Cmd+S), Undo Ctrl+Z (Cmd+Z), Redo Ctrl+Y or Ctrl+Shift+Z (Cmd+Shift+Z). Copy/Paste tree
+            nodes: Ctrl+C / Ctrl+V (Cmd) when focus is in the tree panel (use &quot;Copy selected&quot; otherwise).
           </CardDescription>
           {selectedItems.length > 1 ? (
             <p className="text-xs text-muted-foreground">
