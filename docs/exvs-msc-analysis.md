@@ -216,6 +216,7 @@ MSC 是 EXVS 的脚本字节码层（VM 层），不是原始源码；`2.c` 是�
 
 ## See Also
 
+- `docs/exvs-msc-input-action-weapon-pipeline.md` (see **Action Mask Notes (No Hash Version)** for A/B/C combo mapping)
 - `docs/exvs-msc-input-action-weapon-pipeline.md`
 - `docs/exvs-msc-syscall-4e-notes.md`
 - `docs/exvs-msc-syscall-53-notes.md`

@@ -649,3 +649,75 @@ global6 -> pendingActionHash
 global8 -> previousActionHash
 global678 -> actionInitCallback
 global681 -> actionPhaseTickCallback
+
+---
+
+## Action Mask Notes (No Hash Version)
+
+This section records the current action-mask understanding for the `0xBDBE6FEA` script pair using `0.c` + `2.c`.
+
+Important scope rules:
+
+- Do not use this section as a global rule for all units/scripts.
+- This section intentionally omits action hash values.
+- This section uses control naming from `config.ini`:
+  - A = Shoot (`射撃`)
+  - B = Melee (`格闘`)
+  - C = Boost/Jump (`ジャンプ`)
+  - D = Target switch (special utility input)
+
+### Input-Level Button Mapping
+
+Current working mapping at input-mask level (`global2`):
+
+- `0x100` => A (`射撃`)
+- `0x40` => B (`格闘`)
+- `0x80` => C (`ジャンプ`)
+- `0x400` => D (`switch target`, special and excluded from most combat-combo semantics)
+
+### Action Mask Semantics
+
+Current working mapping at action-mask level (`global83` / `global48`):
+
+- `0x1` => A (`射撃`)
+- `0x2` => B (`格闘`)
+- `0x80` => A+B (`サブ`, Shoot+Melee)
+- `0x100` => A+C (`特射`, Shoot+Jump)
+- `0x200` => B+C (`特格`, Melee+Jump)
+- `0x400` => A+B+C (`覚醒技`)
+- `0x800` => Charging-shot subsystem trigger (hold Shoot or Melee long enough; not a plain one-frame tap combo)
+
+### Directional Variants
+
+Some masks can branch into neutral vs directional variants:
+
+- A+B family has neutral and directional branches.
+- B+C family has neutral and directional branches.
+
+For reverse-engineering workflow, treat these as one logical action family first, then split into:
+
+- neutral version
+- directional version
+
+after runtime confirmation.
+
+### D-Key Handling Rule
+
+D (`switch target`) should be treated as a special utility input:
+
+- It should not be grouped into normal combat combo naming.
+- It can influence guards/branches, but it is not part of the core A/B/C combat triad.
+
+### Practical Naming Standard
+
+Use the following naming in notes, tooling, and tests:
+
+- A = Shoot (`射撃`)
+- B = Melee (`格闘`)
+- C = Boost/Jump (`ジャンプ`)
+- A+B = Sub (`サブ`)
+- A+C = Special Shoot (`特射`)
+- B+C = Special Melee (`特格`)
+- A+B+C = Awakening Skill (`覚醒技`)
+
+This keeps script-side action-mask research aligned with gameplay-side terminology.

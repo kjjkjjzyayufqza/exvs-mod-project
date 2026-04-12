@@ -3,6 +3,15 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { dirname, join, resourceDir } from "@tauri-apps/api/path";
 import { FileEdit, FolderOpen, Code, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -40,6 +49,13 @@ interface FileAction {
   onClick: () => Promise<void>;
   className?: string;
   disabled?: boolean;
+}
+
+interface ConvertDialogTarget {
+  file: FileInfo;
+  outputPath: string;
+  logPath: string;
+  filesToOverwrite: string[];
 }
 
 const FILE_TYPES = [
@@ -89,6 +105,8 @@ export default function MscWorkspaceView({
   const [processingFile, setProcessingFile] = useState<string | null>(null);
   const [isFolderRepacking, setIsFolderRepacking] = useState(false);
   const [isPickingFolder, setIsPickingFolder] = useState(false);
+  const [convertDialogOpen, setConvertDialogOpen] = useState(false);
+  const [convertDialogTarget, setConvertDialogTarget] = useState<ConvertDialogTarget | null>(null);
 
   const resolveTauriExeDir = useCallback(async () => {
     const resourcePath = await resourceDir();
@@ -201,12 +219,32 @@ export default function MscWorkspaceView({
     }
   };
 
-  const handleConvertScriptToC = async (file: FileInfo) => {
+  const handleOpenConvertDialog = async (file: FileInfo) => {
     try {
-      setProcessingFile(file.name);
       const inputPath = file.path;
       const outputPath = getMscConvertOutputPath(inputPath);
       const logPath = getMscConvertLogPath(inputPath);
+      const outputExists = await exists(outputPath);
+      const logExists = await exists(logPath);
+      const filesToOverwrite = [outputExists ? outputPath : null, logExists ? logPath : null].filter(
+        (path): path is string => path !== null,
+      );
+      setConvertDialogTarget({
+        file,
+        outputPath,
+        logPath,
+        filesToOverwrite,
+      });
+      setConvertDialogOpen(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : `Failed to prepare convert for ${file.name}`);
+    }
+  };
+
+  const handleConvertScriptToC = async (file: FileInfo, outputPath: string, logPath: string) => {
+    try {
+      setProcessingFile(file.name);
+      const inputPath = file.path;
       const resourcePath = await resourceDir();
       const exvsMappingPath = await resolveExvsMappingPath();
 
@@ -232,6 +270,30 @@ export default function MscWorkspaceView({
     } finally {
       setProcessingFile(null);
     }
+  };
+
+  const handleConvertDialogOpenChange = (open: boolean) => {
+    if (processingFile && convertDialogTarget && processingFile === convertDialogTarget.file.name) {
+      return;
+    }
+    setConvertDialogOpen(open);
+    if (!open) {
+      setConvertDialogTarget(null);
+    }
+  };
+
+  const handleConfirmConvert = async () => {
+    if (!convertDialogTarget) {
+      toast.error("MSC workspace: missing convert dialog target");
+      return;
+    }
+    await handleConvertScriptToC(
+      convertDialogTarget.file,
+      convertDialogTarget.outputPath,
+      convertDialogTarget.logPath,
+    );
+    setConvertDialogOpen(false);
+    setConvertDialogTarget(null);
   };
 
   const handleReplaceFuncToMain = async (file: FileInfo) => {
@@ -307,7 +369,7 @@ export default function MscWorkspaceView({
         return [
           {
             label: processingFile === file.name ? "Converting..." : "Convert",
-            onClick: () => handleConvertScriptToC(file),
+            onClick: () => handleOpenConvertDialog(file),
             className: BUTTON_STYLES.convert,
             disabled: processingFile === file.name,
           },
@@ -408,7 +470,8 @@ export default function MscWorkspaceView({
   }
 
   return (
-    <div className="flex h-full flex-col space-y-4 pb-4">
+    <>
+      <div className="flex h-full flex-col space-y-4 pb-4">
       <div className="flex flex-col gap-3 shrink-0 border-b pb-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0 flex-1 space-y-1">
@@ -508,6 +571,67 @@ export default function MscWorkspaceView({
           })
         )}
       </div>
-    </div>
+      </div>
+      <AlertDialog open={convertDialogOpen} onOpenChange={handleConvertDialogOpenChange}>
+        <AlertDialogContent className="max-w-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Convert</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm text-muted-foreground">
+                <p>
+                  Convert <code className="rounded bg-muted px-1 py-0.5 text-foreground">{convertDialogTarget?.file.name ?? "—"}</code> to C source now?
+                </p>
+                <div className="space-y-1">
+                  <p className="font-medium text-foreground">Output targets</p>
+                  <p>
+                    <code className="rounded bg-muted px-1 py-0.5">{convertDialogTarget?.outputPath ?? "—"}</code>
+                  </p>
+                  <p>
+                    <code className="rounded bg-muted px-1 py-0.5">{convertDialogTarget?.logPath ?? "—"}</code>
+                  </p>
+                </div>
+                {convertDialogTarget && convertDialogTarget.filesToOverwrite.length > 0 ? (
+                  <div className="space-y-1">
+                    <p className="font-medium text-amber-600 dark:text-amber-500">
+                      Existing files that will be overwritten
+                    </p>
+                    {convertDialogTarget.filesToOverwrite.map((path) => (
+                      <p key={path}>
+                        <code className="rounded bg-muted px-1 py-0.5">{path}</code>
+                      </p>
+                    ))}
+                  </div>
+                ) : (
+                  <p>No existing .c/.txt output files will be overwritten.</p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={
+                !!(processingFile && convertDialogTarget && processingFile === convertDialogTarget.file.name)
+              }
+            >
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              type="button"
+              onClick={() => void handleConfirmConvert()}
+              disabled={
+                !convertDialogTarget ||
+                !!(processingFile && convertDialogTarget && processingFile === convertDialogTarget.file.name)
+              }
+            >
+              {processingFile && convertDialogTarget && processingFile === convertDialogTarget.file.name
+                ? "Converting..."
+                : convertDialogTarget && convertDialogTarget.filesToOverwrite.length > 0
+                  ? "Overwrite and Convert"
+                  : "Convert"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
