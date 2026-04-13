@@ -30,6 +30,7 @@ import {
   getMscConvertOutputPath,
   getMscRepackOutputPath,
 } from "../../utils/mscWorkspaceUtils";
+import { renameScript2CallbacksByActionMask } from "../../utils/mscActionRename";
 
 interface FileInfo {
   name: string;
@@ -299,12 +300,30 @@ export default function MscWorkspaceView({
   const handleReplaceFuncToMain = async (file: FileInfo) => {
     try {
       setProcessingFile(file.name);
+      const lowerName = file.name.toLowerCase();
+      if (lowerName === "2.c") {
+        const scriptFolder = await dirname(file.path);
+        const script0Path = await join(scriptFolder, "0.c");
+        if (!(await exists(script0Path))) {
+          throw new Error(`MSC workspace: missing 0.c for action rename: ${script0Path}`);
+        }
+        const script0Content = await readTextFile(script0Path);
+        const script2Content = await readTextFile(file.path);
+        const result = renameScript2CallbacksByActionMask(script0Content, script2Content);
+        const normalizedScript2 = result.updatedScript2.replace(/func_0/g, "main");
+        await writeTextFile(file.path, normalizedScript2);
+        toast.success(
+          `Renamed ${result.renamedCallbackCount} callbacks, updated ${result.bindingCommentCount} action bindings, and replaced func_0 to main in 2.c`,
+        );
+        return;
+      }
+
       const fileContent = await readTextFile(file.path);
       const replacedContent = fileContent.replace(/func_0/g, "main");
       await writeTextFile(file.path, replacedContent);
       toast.success(`Successfully replaced func_0 to main in ${file.name}`);
-    } catch {
-      toast.error(`Error replacing in ${file.name}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : `Error replacing in ${file.name}`);
     } finally {
       setProcessingFile(null);
     }
@@ -387,7 +406,14 @@ export default function MscWorkspaceView({
         return [
           openCursor,
           {
-            label: "Replace",
+            label:
+              processingFile === file.name
+                ? file.name.toLowerCase() === "2.c"
+                  ? "Renaming..."
+                  : "Replacing..."
+                : file.name.toLowerCase() === "2.c"
+                  ? "Rename Actions"
+                  : "Replace",
             onClick: () => handleReplaceFuncToMain(file),
             className: BUTTON_STYLES.replace,
             disabled: processingFile === file.name,
