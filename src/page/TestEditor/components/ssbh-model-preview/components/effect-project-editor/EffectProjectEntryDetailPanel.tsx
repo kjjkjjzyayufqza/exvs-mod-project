@@ -12,6 +12,10 @@ import {
 } from "../../effectProjectEditorUtils";
 import { formatEffectProjectIdLeBeLine, formatHexU32 } from "./effectProjectDisplayUtils";
 import { Field, FloatField } from "./EffectProjectFieldPrimitives";
+import {
+  createIdleAuxiliarySnapshot,
+  type EffectProjectAuxiliarySnapshot,
+} from "../../effectProjectAuxiliaryCache";
 
 function RowGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -26,9 +30,36 @@ function FieldGrid({ className, children }: { className?: string; children: Reac
   return <div className={cn("grid grid-cols-2 gap-x-2 gap-y-1.5 sm:grid-cols-4", className)}>{children}</div>;
 }
 
+function fileBasename(path: string): string {
+  const pieces = path.replace(/\\/g, "/").split("/").filter((part) => part.length > 0);
+  const name = pieces[pieces.length - 1];
+  if (!name) {
+    throw new Error(`Invalid path without basename: ${path}`);
+  }
+  return name;
+}
+
+function parentDir(path: string): string {
+  const normalized = path.replace(/\\/g, "/").trim();
+  const idx = normalized.lastIndexOf("/");
+  if (idx <= 0) {
+    throw new Error(`Invalid path without parent: ${path}`);
+  }
+  return normalized.slice(0, idx).toLowerCase();
+}
+
+function stripFileExtension(fileName: string): string {
+  const idx = fileName.lastIndexOf(".");
+  if (idx <= 0) {
+    throw new Error(`Invalid file name without extension: ${fileName}`);
+  }
+  return fileName.slice(0, idx);
+}
+
 export type EffectProjectEntryDetailPanelProps = {
   rowIndex: number;
   entry: EffectProjectEntrySnapshot;
+  auxiliary: EffectProjectAuxiliarySnapshot;
   disabled: boolean;
   /** Global display mode for int32 hex fields (toolbar). */
   displayEndian: "le" | "be";
@@ -40,12 +71,50 @@ export type EffectProjectEntryDetailPanelProps = {
 export function EffectProjectEntryDetailPanel({
   rowIndex,
   entry,
+  auxiliary,
   disabled,
   displayEndian,
   onPatch,
   onDuplicate,
   onRemove,
 }: EffectProjectEntryDetailPanelProps) {
+  const auxiliarySafe = auxiliary ?? createIdleAuxiliarySnapshot();
+  const jnttblData = auxiliarySafe.jnttblData ?? [];
+  const nusktbData = auxiliarySafe.nusktbData ?? [];
+  const hashLeU32 = entry.boneIndexLe >>> 0;
+  const resolveHashMatches = (hashU32: number) =>
+    jnttblData.flatMap((table) => {
+      const tableParent = parentDir(table.path);
+      const jnttblBaseName = fileBasename(table.path).toLowerCase();
+      const jnttblStem = stripFileExtension(jnttblBaseName);
+      const sameDirNusktb = nusktbData.filter((candidate) => {
+        if (parentDir(candidate.path) !== tableParent) return false;
+        const nusktbName = fileBasename(candidate.path).toLowerCase();
+        if (!nusktbName.endsWith(".nusktb")) {
+          throw new Error(`Invalid nusktb extension: ${candidate.path}`);
+        }
+        const nusktbStem = stripFileExtension(nusktbName);
+        return nusktbStem === jnttblStem || nusktbStem.startsWith(jnttblStem);
+      });
+      return table.entries
+        .filter((candidate) => (candidate.hashId >>> 0) === hashU32)
+        .map((candidate) => {
+          const resolvedBoneIndex = candidate.boneIndex >>> 0;
+          const boneNames = sameDirNusktb.flatMap((nusktb) => {
+            const boneName = nusktb.boneNames[resolvedBoneIndex];
+            if (!boneName) return [];
+            return [{ nusktbPath: nusktb.path, boneName }];
+          });
+          return {
+            jnttblPath: table.path,
+            hashId: candidate.hashId >>> 0,
+            resolvedBoneIndex,
+            boneNames,
+          };
+        });
+    });
+  const selectedMatches = resolveHashMatches(hashLeU32);
+
   return (
     <div className="space-y-3">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 pb-2">
@@ -279,6 +348,37 @@ export function EffectProjectEntryDetailPanel({
                   ? `BE ref ${formatHexU32(entry.boneIndexBe)}`
                   : `LE @0x70 ${formatHexU32(entry.boneIndexLe)}`}
               </p>
+              <div className="mt-1 space-y-1 rounded border border-border/60 bg-muted/20 p-2">
+                <p className="font-mono text-[9px] text-muted-foreground">
+                  hash (LE calc) {formatHexU32(hashLeU32)}
+                </p>
+                <p className="font-mono text-[9px] text-muted-foreground">
+                  Mapping: same folder, `{`jnttblStem`}.nusktb` or `{`jnttblStem`}{`*`}.nusktb`.
+                </p>
+                {selectedMatches.length > 0 ? (
+                  <div className="max-h-28 space-y-0.5 overflow-y-auto overscroll-contain font-mono text-[9px]">
+                    {selectedMatches.map((match, index) => {
+                      const boneNamesText =
+                        match.boneNames.length > 0
+                          ? match.boneNames.map((x) => x.boneName).join(", ")
+                          : "(no nusktb name)";
+                      return (
+                        <p
+                          key={`${match.jnttblPath}:${match.hashId}:${match.resolvedBoneIndex}:${index}`}
+                          className="truncate"
+                          title={`${match.jnttblPath} | hash ${formatHexU32(match.hashId)} | bone ${formatHexU32(match.resolvedBoneIndex)} | ${boneNamesText}`}
+                        >
+                          {fileBasename(match.jnttblPath)} - idx {formatHexU32(match.resolvedBoneIndex)} - {boneNamesText}
+                        </p>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="font-mono text-[9px] text-muted-foreground">
+                    no hash match
+                  </p>
+                )}
+              </div>
             </div>
             <Field label="0x74 unk23" v={entry.unk23} disabled={disabled} onChange={(v) => onPatch({ unk23: v })} />
             <Field label="0x78 unk24" v={entry.unk24} disabled={disabled} onChange={(v) => onPatch({ unk24: v })} />

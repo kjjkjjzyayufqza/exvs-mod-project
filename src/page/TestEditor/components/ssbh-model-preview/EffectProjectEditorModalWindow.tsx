@@ -14,6 +14,7 @@ import { useDraggableModal } from "@/hooks/useDraggableModal";
 import type { EffectProjectEditorDocument } from "./effectProjectEditorUtils";
 import { EffectProjectEditorBody } from "./EffectProjectEditorBody";
 import { assertEffectProjectValidForSave } from "./effectProjectEditorUtils";
+import type { EffectProjectAuxiliarySnapshot } from "./effectProjectAuxiliaryCache";
 
 export type EffectProjectEditorWindowSession = {
   id: string;
@@ -27,6 +28,7 @@ export type EffectProjectEditorWindowSession = {
   draftSyncGeneration: number;
   isDirty: boolean;
   zIndex: number;
+  auxiliary: EffectProjectAuxiliarySnapshot;
 };
 
 function fileBasename(path: string): string {
@@ -182,6 +184,7 @@ export function EffectProjectEditorModalWindow({
                       flushToParentRef.current = fn;
                     }}
                     disabled={session.saving}
+                    auxiliary={session.auxiliary}
                   />
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t bg-muted/20 px-5 py-4">

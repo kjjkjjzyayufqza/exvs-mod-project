@@ -92,6 +92,10 @@ import {
   sortEffectProjectRowsByEffectProjectIdAscending,
   type EffectProjectEditorDocument,
 } from "./components/ssbh-model-preview/effectProjectEditorUtils";
+import {
+  EffectProjectAuxiliaryCacheService,
+  createIdleAuxiliarySnapshot,
+} from "./components/ssbh-model-preview/effectProjectAuxiliaryCache";
 
 const WATCH_COMMAND = "watch_folder";
 const TEST_EDITOR_FOLDER_STORE_KEY = "testEditorFolder";
@@ -157,6 +161,7 @@ const TestEditorPage = () => {
     sessionId: string;
     action: "close" | "reload";
   } | null>(null);
+  const effectProjectAuxiliaryCacheRef = useRef(new EffectProjectAuxiliaryCacheService());
 
   const revealInTreeByPath = useCallback((targetPath: string) => {
     // 1. Clear search term
@@ -228,6 +233,7 @@ const TestEditorPage = () => {
       setJnttblGuard(null);
       setNumatbSessions([]);
       setNumatbGuard(null);
+      effectProjectAuxiliaryCacheRef.current.clearAllSessions();
       setEffectProjectSessions([]);
       setEffectProjectGuard(null);
     } catch (error) {
@@ -985,6 +991,23 @@ const TestEditorPage = () => {
     };
   }, []);
 
+  const closeEffectProjectSessionImmediately = useCallback((sessionId: string) => {
+    effectProjectAuxiliaryCacheRef.current.cancelSession(sessionId);
+    setEffectProjectSessions((prev) => prev.filter((x) => x.id !== sessionId));
+  }, []);
+
+  const startAuxiliaryScanForEffectProject = useCallback((sessionId: string, filePath: string) => {
+    effectProjectAuxiliaryCacheRef.current.startScan({
+      sessionId,
+      effectProjectPath: filePath,
+      onUpdate: (auxiliary) => {
+        setEffectProjectSessions((prev) =>
+          prev.map((session) => (session.id === sessionId ? { ...session, auxiliary } : session)),
+        );
+      },
+    });
+  }, []);
+
   const openEffectProjectSession = useCallback((filePath: string) => {
     const normalized = filePath.trim().toLowerCase();
     setEffectProjectSessions((prev) => {
@@ -1010,6 +1033,7 @@ const TestEditorPage = () => {
         draftSyncGeneration: 0,
         isDirty: false,
         zIndex: nextZ,
+        auxiliary: createIdleAuxiliarySnapshot(),
       };
       void effectProjectReadFile(filePath)
         .then((data) => {
@@ -1026,10 +1050,14 @@ const TestEditorPage = () => {
                     draftData: draft,
                     draftSyncGeneration: 1,
                     isDirty: false,
+                    auxiliary: createIdleAuxiliarySnapshot(),
                   }
                 : s,
             ),
           );
+          queueMicrotask(() => {
+            startAuxiliaryScanForEffectProject(id, filePath);
+          });
         })
         .catch((err) => {
           setEffectProjectSessions((p) =>
@@ -1038,7 +1066,7 @@ const TestEditorPage = () => {
         });
       return [...prev, newSession];
     });
-  }, []);
+  }, [startAuxiliaryScanForEffectProject]);
 
   const activateEffectProjectSession = useCallback((sessionId: string) => {
     const nextZ = ++effectProjectZIndexRef.current;
@@ -1119,11 +1147,16 @@ const TestEditorPage = () => {
 
   const reloadEffectProjectSession = useCallback(async (sessionId: string) => {
     let fp = "";
+    effectProjectAuxiliaryCacheRef.current.cancelSession(sessionId);
     setEffectProjectSessions((prev) => {
       const s = prev.find((x) => x.id === sessionId);
       if (!s) return prev;
       fp = s.filePath;
-      return prev.map((x) => (x.id === sessionId ? { ...x, loading: true, loadError: null } : x));
+      return prev.map((x) =>
+        x.id === sessionId
+          ? { ...x, loading: true, loadError: null, auxiliary: createIdleAuxiliarySnapshot() }
+          : x,
+      );
     });
     if (!fp) return;
     try {
@@ -1141,10 +1174,14 @@ const TestEditorPage = () => {
                 draftData: draft,
                 isDirty: false,
                 draftSyncGeneration: (s.draftSyncGeneration ?? 0) + 1,
+                auxiliary: createIdleAuxiliarySnapshot(),
               }
             : s,
         ),
       );
+      queueMicrotask(() => {
+        startAuxiliaryScanForEffectProject(sessionId, fp);
+      });
       toast.success("Reloaded effect project from disk");
     } catch (e) {
       const msg = String(e);
@@ -1153,7 +1190,7 @@ const TestEditorPage = () => {
       );
       toast.error(msg);
     }
-  }, []);
+  }, [startAuxiliaryScanForEffectProject]);
 
   const requestCloseEffectProjectSession = useCallback((sessionId: string) => {
     const s = effectProjectSessionsRef.current.find((x) => x.id === sessionId);
@@ -1162,8 +1199,8 @@ const TestEditorPage = () => {
       setEffectProjectGuard({ sessionId, action: "close" });
       return;
     }
-    setEffectProjectSessions((prev) => prev.filter((x) => x.id !== sessionId));
-  }, []);
+    closeEffectProjectSessionImmediately(sessionId);
+  }, [closeEffectProjectSessionImmediately]);
 
   const requestReloadEffectProjectSession = useCallback(
     (sessionId: string) => {
@@ -1187,13 +1224,13 @@ const TestEditorPage = () => {
       if (!g) return null;
       const { sessionId, action } = g;
       if (action === "close") {
-        setEffectProjectSessions((prev) => prev.filter((x) => x.id !== sessionId));
+        closeEffectProjectSessionImmediately(sessionId);
       } else {
         void reloadEffectProjectSession(sessionId);
       }
       return null;
     });
-  }, [reloadEffectProjectSession]);
+  }, [closeEffectProjectSessionImmediately, reloadEffectProjectSession]);
 
   const saveAndFinishEffectProjectGuard = useCallback(async () => {
     if (!effectProjectGuard) return;
@@ -1204,11 +1241,16 @@ const TestEditorPage = () => {
     if (s.isDirty) return;
     setEffectProjectGuard(null);
     if (action === "close") {
-      setEffectProjectSessions((prev) => prev.filter((x) => x.id !== sessionId));
+      closeEffectProjectSessionImmediately(sessionId);
     } else {
       void reloadEffectProjectSession(sessionId);
     }
-  }, [effectProjectGuard, saveEffectProjectSession, reloadEffectProjectSession]);
+  }, [
+    closeEffectProjectSessionImmediately,
+    effectProjectGuard,
+    saveEffectProjectSession,
+    reloadEffectProjectSession,
+  ]);
 
   const openNumatbSession = useCallback((filePath: string) => {
     const normalized = filePath.trim().toLowerCase();

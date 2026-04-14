@@ -19,6 +19,8 @@ import { EffectProjectEntryDetailPanel } from "./components/effect-project-edito
 import { EffectProjectRowListPanel } from "./components/effect-project-editor/EffectProjectRowListPanel";
 import { EffectProjectToolbar } from "./components/effect-project-editor/EffectProjectToolbar";
 import { formatHexU32 } from "./components/effect-project-editor/effectProjectDisplayUtils";
+import type { EffectProjectAuxiliarySnapshot } from "./effectProjectAuxiliaryCache";
+import { Badge } from "@/components/ui/badge";
 
 type Props = {
   data: EffectProjectEditorDocument;
@@ -28,6 +30,7 @@ type Props = {
   /** Register a function that flushes the latest draft to the parent immediately (call before Save). */
   onFlushToParentReady?: (flush: () => EffectProjectEditorDocument) => void;
   disabled: boolean;
+  auxiliary: EffectProjectAuxiliarySnapshot;
 };
 
 /** List row height estimate (id + LE/BE hex line; virtualizer measures actual height). */
@@ -89,6 +92,7 @@ export function EffectProjectEditorBody({
   onChange,
   onFlushToParentReady,
   disabled,
+  auxiliary,
 }: Props) {
   const [draft, setDraft] = useState<EffectProjectEditorDocument>(() => cloneEffectProjectDocument(data));
   const [searchQuery, setSearchQuery] = useState("");
@@ -293,6 +297,42 @@ export function EffectProjectEditorBody({
   return (
     <div className="space-y-2 text-[10px]">
       <EffectProjectDocumentHeader draft={draft} />
+      <div className="flex flex-wrap items-center gap-1">
+        <Badge variant={auxiliary.status === "scanning" ? "outline" : "secondary"} className="h-6 px-1.5 text-[9px]">
+          aux {auxiliary.status}
+        </Badge>
+        <Badge variant="secondary" className="h-6 px-1.5 font-mono text-[9px]">
+          jnttbl {auxiliary.jnttblReady}/{auxiliary.jnttblDiscovered}
+        </Badge>
+        <Badge variant="secondary" className="h-6 px-1.5 font-mono text-[9px]">
+          nusktb {auxiliary.nusktbReady}/{auxiliary.nusktbDiscovered}
+        </Badge>
+        <Badge
+          variant={auxiliary.failureCount > 0 ? "destructive" : "secondary"}
+          className="h-6 px-1.5 font-mono text-[9px]"
+        >
+          errors {auxiliary.failureCount}
+        </Badge>
+        {auxiliary.rootDir ? (
+          <span className="min-w-0 flex-1 truncate text-[9px] text-muted-foreground" title={auxiliary.rootDir}>
+            root {auxiliary.rootDir}
+          </span>
+        ) : null}
+      </div>
+      {auxiliary.errors.length > 0 ? (
+        <details className="rounded border border-border/60 bg-muted/10 px-2 py-1">
+          <summary className="cursor-pointer text-[10px] text-muted-foreground">
+            Auxiliary scan errors ({auxiliary.errors.length})
+          </summary>
+          <div className="mt-1 space-y-0.5 font-mono text-[9px] text-destructive/90">
+            {auxiliary.errors.map((error, index) => (
+              <p key={`${error.kind}:${error.path}:${index}`} className="truncate" title={`${error.path}: ${error.message}`}>
+                [{error.kind}] {error.path} - {error.message}
+              </p>
+            ))}
+          </div>
+        </details>
+      ) : null}
 
       <div className="rounded border border-border/60 bg-muted/15 px-2 py-2">
         <EffectProjectToolbar
@@ -335,6 +375,7 @@ export function EffectProjectEditorBody({
                     key={`detail-${selectedRowIndex}`}
                     rowIndex={selectedRowIndex}
                     entry={selectedEntry}
+                    auxiliary={auxiliary}
                     disabled={disabled}
                     displayEndian={displayEndian}
                     onPatch={patchSelected}
