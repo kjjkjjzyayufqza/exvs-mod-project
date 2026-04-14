@@ -61,6 +61,7 @@ type FileTreePaneProps = {
   onToggleStar: (path: string) => void;
   viewOptions: FileTreeViewOptions;
   onViewOptionsChange: (patch: Partial<FileTreeViewOptions>) => void;
+  onOpenAsEffectProject?: (filePath: string) => void;
 };
 
 function FileTreePaneImpl({
@@ -86,6 +87,7 @@ function FileTreePaneImpl({
   onToggleStar,
   viewOptions,
   onViewOptionsChange,
+  onOpenAsEffectProject,
 }: FileTreePaneProps) {
   const empty = data.length === 0;
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -343,6 +345,7 @@ function FileTreePaneImpl({
       openRepackDialogForFolderNode,
       handleOpenNodePath,
       handleOpenNodeFolder,
+      onOpenAsEffectProject,
     }),
     [
       currentJsonPath,
@@ -359,6 +362,7 @@ function FileTreePaneImpl({
       openRepackDialogForFolderNode,
       handleOpenNodePath,
       handleOpenNodeFolder,
+      onOpenAsEffectProject,
     ],
   );
 

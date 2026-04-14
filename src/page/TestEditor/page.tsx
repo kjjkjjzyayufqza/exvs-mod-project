@@ -79,6 +79,19 @@ import {
   detectNumatbProfileFromPath,
   type NumatbModalBundle,
 } from "./components/ssbh-model-preview/numatbEditorUtils";
+import { EffectProjectEditorModalHost } from "./components/ssbh-model-preview/EffectProjectEditorModalHost";
+import type { EffectProjectEditorWindowSession } from "./components/ssbh-model-preview/EffectProjectEditorModalWindow";
+import {
+  effectProjectReadFile,
+  effectProjectWriteFile,
+} from "./components/ssbh-model-preview/effectProjectIoService";
+import {
+  assertEffectProjectValidForSave,
+  cloneEffectProjectDocument,
+  computeNextEffectProjectDirtyState,
+  sortEffectProjectRowsByEffectProjectIdAscending,
+  type EffectProjectEditorDocument,
+} from "./components/ssbh-model-preview/effectProjectEditorUtils";
 
 const WATCH_COMMAND = "watch_folder";
 const TEST_EDITOR_FOLDER_STORE_KEY = "testEditorFolder";
@@ -127,12 +140,23 @@ const TestEditorPage = () => {
   const [numatbSessions, setNumatbSessions] = useState<NumatbEditorWindowSession[]>([]);
   const [, startTreeTransition] = useTransition();
   const [, startNumatbTransition] = useTransition();
+  const [, startEffectProjectTransition] = useTransition();
   const numatbZIndexRef = useRef(4000);
   const numatbSessionsRef = useRef(numatbSessions);
   numatbSessionsRef.current = numatbSessions;
   const [numatbGuard, setNumatbGuard] = useState<{ sessionId: string; action: "close" | "reload" } | null>(
     null,
   );
+
+  const [effectProjectSessions, setEffectProjectSessions] = useState<EffectProjectEditorWindowSession[]>([]);
+  const effectProjectZIndexRef = useRef(5000);
+  const effectProjectZLayerSettersRef = useRef(new Map<string, (z: number) => void>());
+  const effectProjectSessionsRef = useRef(effectProjectSessions);
+  effectProjectSessionsRef.current = effectProjectSessions;
+  const [effectProjectGuard, setEffectProjectGuard] = useState<{
+    sessionId: string;
+    action: "close" | "reload";
+  } | null>(null);
 
   const revealInTreeByPath = useCallback((targetPath: string) => {
     // 1. Clear search term
@@ -204,6 +228,8 @@ const TestEditorPage = () => {
       setJnttblGuard(null);
       setNumatbSessions([]);
       setNumatbGuard(null);
+      setEffectProjectSessions([]);
+      setEffectProjectGuard(null);
     } catch (error) {
       console.error(error);
       toast.error("Failed to start folder watch");
@@ -952,6 +978,238 @@ const TestEditorPage = () => {
     }
   }, [jnttblGuard, saveJnttblSession, reloadJnttblSession]);
 
+  const registerEffectProjectZLayer = useCallback((sessionId: string, setZ: (z: number) => void) => {
+    effectProjectZLayerSettersRef.current.set(sessionId, setZ);
+    return () => {
+      effectProjectZLayerSettersRef.current.delete(sessionId);
+    };
+  }, []);
+
+  const openEffectProjectSession = useCallback((filePath: string) => {
+    const normalized = filePath.trim().toLowerCase();
+    setEffectProjectSessions((prev) => {
+      const existing = prev.find((s) => s.filePath.trim().toLowerCase() === normalized);
+      if (existing) {
+        const nextZ = ++effectProjectZIndexRef.current;
+        queueMicrotask(() => {
+          const setter = effectProjectZLayerSettersRef.current.get(existing.id);
+          if (setter) setter(nextZ);
+        });
+        return prev;
+      }
+      const id = crypto.randomUUID();
+      const nextZ = ++effectProjectZIndexRef.current;
+      const newSession: EffectProjectEditorWindowSession = {
+        id,
+        filePath,
+        loading: true,
+        saving: false,
+        loadError: null,
+        baseData: null,
+        draftData: null,
+        draftSyncGeneration: 0,
+        isDirty: false,
+        zIndex: nextZ,
+      };
+      void effectProjectReadFile(filePath)
+        .then((data) => {
+          const base = cloneEffectProjectDocument(data);
+          const draft = cloneEffectProjectDocument(data);
+          setEffectProjectSessions((p) =>
+            p.map((s) =>
+              s.id === id
+                ? {
+                    ...s,
+                    loading: false,
+                    loadError: null,
+                    baseData: base,
+                    draftData: draft,
+                    draftSyncGeneration: 1,
+                    isDirty: false,
+                  }
+                : s,
+            ),
+          );
+        })
+        .catch((err) => {
+          setEffectProjectSessions((p) =>
+            p.map((s) => (s.id === id ? { ...s, loading: false, loadError: String(err) } : s)),
+          );
+        });
+      return [...prev, newSession];
+    });
+  }, []);
+
+  const activateEffectProjectSession = useCallback((sessionId: string) => {
+    const nextZ = ++effectProjectZIndexRef.current;
+    const setter = effectProjectZLayerSettersRef.current.get(sessionId);
+    if (setter) setter(nextZ);
+  }, []);
+
+  const updateEffectProjectDraft = useCallback((sessionId: string, next: EffectProjectEditorDocument) => {
+    startEffectProjectTransition(() => {
+      setEffectProjectSessions((prev) =>
+        prev.map((s) => {
+          if (s.id !== sessionId) return s;
+          return {
+            ...s,
+            draftData: next,
+            isDirty: computeNextEffectProjectDirtyState({
+              base: s.baseData,
+              draft: next,
+            }),
+          };
+        }),
+      );
+    });
+  }, [startEffectProjectTransition]);
+
+  const saveEffectProjectSession = useCallback(async (sessionId: string, forcedDraft?: EffectProjectEditorDocument) => {
+    const snapshot = effectProjectSessionsRef.current.find((x) => x.id === sessionId);
+    if (!snapshot) return;
+    const draft = forcedDraft ?? snapshot.draftData;
+    if (!draft) return;
+    const sortedForSave = sortEffectProjectRowsByEffectProjectIdAscending(cloneEffectProjectDocument(draft));
+    try {
+      assertEffectProjectValidForSave(sortedForSave);
+    } catch (e) {
+      toast.error(String(e));
+      return;
+    }
+    const path = snapshot.filePath;
+    setEffectProjectSessions((prev) => prev.map((x) => (x.id === sessionId ? { ...x, saving: true } : x)));
+    try {
+      await effectProjectWriteFile({ filePath: path, document: sortedForSave });
+      const fresh = await effectProjectReadFile(path);
+      const saved = cloneEffectProjectDocument(fresh);
+      setEffectProjectSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionId
+            ? {
+                ...s,
+                saving: false,
+                baseData: saved,
+                draftData: saved,
+                isDirty: false,
+                draftSyncGeneration: (s.draftSyncGeneration ?? 0) + 1,
+              }
+            : s,
+        ),
+      );
+      toast.success("Saved effect project");
+    } catch (e) {
+      toast.error(String(e));
+      setEffectProjectSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, saving: false } : s)));
+    }
+  }, []);
+
+  const resetEffectProjectSession = useCallback((sessionId: string) => {
+    setEffectProjectSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== sessionId || !s.baseData) return s;
+        return {
+          ...s,
+          draftData: cloneEffectProjectDocument(s.baseData),
+          isDirty: false,
+          draftSyncGeneration: (s.draftSyncGeneration ?? 0) + 1,
+        };
+      }),
+    );
+  }, []);
+
+  const reloadEffectProjectSession = useCallback(async (sessionId: string) => {
+    let fp = "";
+    setEffectProjectSessions((prev) => {
+      const s = prev.find((x) => x.id === sessionId);
+      if (!s) return prev;
+      fp = s.filePath;
+      return prev.map((x) => (x.id === sessionId ? { ...x, loading: true, loadError: null } : x));
+    });
+    if (!fp) return;
+    try {
+      const data = await effectProjectReadFile(fp);
+      const base = cloneEffectProjectDocument(data);
+      const draft = cloneEffectProjectDocument(data);
+      setEffectProjectSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionId
+            ? {
+                ...s,
+                loading: false,
+                loadError: null,
+                baseData: base,
+                draftData: draft,
+                isDirty: false,
+                draftSyncGeneration: (s.draftSyncGeneration ?? 0) + 1,
+              }
+            : s,
+        ),
+      );
+      toast.success("Reloaded effect project from disk");
+    } catch (e) {
+      const msg = String(e);
+      setEffectProjectSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, loading: false, loadError: msg } : s)),
+      );
+      toast.error(msg);
+    }
+  }, []);
+
+  const requestCloseEffectProjectSession = useCallback((sessionId: string) => {
+    const s = effectProjectSessionsRef.current.find((x) => x.id === sessionId);
+    if (!s) return;
+    if (s.isDirty) {
+      setEffectProjectGuard({ sessionId, action: "close" });
+      return;
+    }
+    setEffectProjectSessions((prev) => prev.filter((x) => x.id !== sessionId));
+  }, []);
+
+  const requestReloadEffectProjectSession = useCallback(
+    (sessionId: string) => {
+      const s = effectProjectSessionsRef.current.find((x) => x.id === sessionId);
+      if (!s) return;
+      if (s.isDirty) {
+        setEffectProjectGuard({ sessionId, action: "reload" });
+        return;
+      }
+      void reloadEffectProjectSession(sessionId);
+    },
+    [reloadEffectProjectSession],
+  );
+
+  const dismissEffectProjectGuard = useCallback(() => {
+    setEffectProjectGuard(null);
+  }, []);
+
+  const discardEffectProjectGuard = useCallback(() => {
+    setEffectProjectGuard((g) => {
+      if (!g) return null;
+      const { sessionId, action } = g;
+      if (action === "close") {
+        setEffectProjectSessions((prev) => prev.filter((x) => x.id !== sessionId));
+      } else {
+        void reloadEffectProjectSession(sessionId);
+      }
+      return null;
+    });
+  }, [reloadEffectProjectSession]);
+
+  const saveAndFinishEffectProjectGuard = useCallback(async () => {
+    if (!effectProjectGuard) return;
+    const { sessionId, action } = effectProjectGuard;
+    await saveEffectProjectSession(sessionId);
+    const s = effectProjectSessionsRef.current.find((x) => x.id === sessionId);
+    if (!s) return;
+    if (s.isDirty) return;
+    setEffectProjectGuard(null);
+    if (action === "close") {
+      setEffectProjectSessions((prev) => prev.filter((x) => x.id !== sessionId));
+    } else {
+      void reloadEffectProjectSession(sessionId);
+    }
+  }, [effectProjectGuard, saveEffectProjectSession, reloadEffectProjectSession]);
+
   const openNumatbSession = useCallback((filePath: string) => {
     const normalized = filePath.trim().toLowerCase();
     setNumatbSessions((prev) => {
@@ -1252,6 +1510,7 @@ const TestEditorPage = () => {
           onUnsavedChanges={setHasUnsavedChanges}
           onRevealTreeFolder={revealInTreeByPath}
           selectedNode={selectedNode}
+          onOpenAsEffectProject={openEffectProjectSession}
         />
       </div>
 
@@ -1432,6 +1691,46 @@ const TestEditorPage = () => {
             </Button>
             <Button type="button" onClick={() => void saveAndFinishJnttblGuard()}>
               {jnttblGuard?.action === "close" ? "Save and close" : "Save and reload"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <EffectProjectEditorModalHost
+        sessions={effectProjectSessions}
+        onRegisterZLayer={registerEffectProjectZLayer}
+        onActivateSession={activateEffectProjectSession}
+        onCloseRequest={requestCloseEffectProjectSession}
+        onReloadRequest={requestReloadEffectProjectSession}
+        onDraftChange={updateEffectProjectDraft}
+        onSave={saveEffectProjectSession}
+        onReset={resetEffectProjectSession}
+      />
+
+      <AlertDialog
+        open={effectProjectGuard !== null}
+        onOpenChange={(open) => {
+          if (!open) setEffectProjectGuard(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved effect project changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              {effectProjectGuard?.action === "close"
+                ? "Save before closing, discard edits, or cancel."
+                : "Save before reloading from disk, discard edits, or cancel."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+            <AlertDialogCancel type="button" onClick={dismissEffectProjectGuard}>
+              Cancel
+            </AlertDialogCancel>
+            <Button type="button" variant="outline" onClick={discardEffectProjectGuard}>
+              Discard
+            </Button>
+            <Button type="button" onClick={() => void saveAndFinishEffectProjectGuard()}>
+              {effectProjectGuard?.action === "close" ? "Save and close" : "Save and reload"}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

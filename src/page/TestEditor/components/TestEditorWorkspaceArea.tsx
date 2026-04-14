@@ -36,6 +36,7 @@ type Props = {
   onUnsavedChanges: (hasChanges: boolean) => void;
   onRevealTreeFolder: (path: string) => void;
   selectedNode: TestTreeNode | null;
+  onOpenAsEffectProject?: (filePath: string) => void;
 };
 
 export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
@@ -67,6 +68,7 @@ export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
   onUnsavedChanges,
   onRevealTreeFolder,
   selectedNode,
+  onOpenAsEffectProject,
 }: Props) {
   return (
     <SsbhModelPreviewProvider workspaceRoot={currentDir} previewSuspended={!isPageActive}>
@@ -95,6 +97,7 @@ export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
             onToggleStar={onToggleStar}
             viewOptions={viewOptions}
             onViewOptionsChange={onViewOptionsChange}
+            onOpenAsEffectProject={onOpenAsEffectProject}
           />
         }
         center={

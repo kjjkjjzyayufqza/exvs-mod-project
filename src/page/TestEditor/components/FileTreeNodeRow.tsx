@@ -8,6 +8,7 @@ import {
   FolderOpen,
   GripVertical,
   Package,
+  Sparkles,
   Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -41,6 +42,7 @@ export type FileTreeNodeRowContext = {
   openRepackDialogForFolderNode: (node: TestTreeNode) => void | Promise<void>;
   handleOpenNodePath: (node: TestTreeNode) => void | Promise<void>;
   handleOpenNodeFolder: (node: TestTreeNode) => void | Promise<void>;
+  onOpenAsEffectProject?: (filePath: string) => void;
 };
 
 function fileExtensionSuffix(name: string): string | null {
@@ -70,6 +72,7 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
     openRepackDialogForFolderNode,
     handleOpenNodePath,
     handleOpenNodeFolder,
+    onOpenAsEffectProject,
   } = ctx;
 
   const isCurrentJson =
@@ -109,6 +112,8 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
   const folderRepackDisabled = isDirectWorkspaceFolder && !folderRepackReady;
 
   const hasRepackItems = Boolean(structureRepackTarget) || isDirectWorkspaceFolder;
+  const isBinFile = !isDir && node.data.name.toLowerCase().endsWith(".bin");
+  const canOpenEffectProject = isBinFile && typeof onOpenAsEffectProject === "function";
 
   return (
     <ContextMenu>
@@ -233,6 +238,17 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
           <ExternalLink className="h-4 w-4" />
           <span>Open Folder</span>
         </ContextMenuItem>
+        {canOpenEffectProject ? (
+          <ContextMenuItem
+            onClick={() => {
+              onOpenAsEffectProject?.(node.data.path);
+            }}
+            className="flex items-center gap-2"
+          >
+            <Sparkles className="h-4 w-4" />
+            <span>Open as effect_project</span>
+          </ContextMenuItem>
+        ) : null}
         {hasRepackItems ? <ContextMenuSeparator /> : null}
         {structureRepackTarget && (
           <ContextMenuItem
