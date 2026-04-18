@@ -21,6 +21,22 @@ pub struct ExtractFhm2dResult {
     pub naming_error: Option<String>,
 }
 
+#[derive(Clone)]
+pub struct InMemoryFhm2dFile {
+    pub file_index: i32,
+    pub file_type: String,
+    pub file_url: String,
+    pub data: Vec<u8>,
+}
+
+#[derive(Clone)]
+pub struct InMemoryFhm2dExtraction {
+    pub source_name: String,
+    pub format: Option<Fhm2dFormat>,
+    pub naming_error: Option<String>,
+    pub files: Vec<InMemoryFhm2dFile>,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Fhm2dFormat {
     Character,
@@ -284,6 +300,70 @@ pub fn extract_fhm2d_to_folder_impl(
     write_meta_bin: bool,
 ) -> Result<ExtractFhm2dResult, String> {
     Fhm2dExtractor::new(source_path, out_dir, format, list_output_file_name, write_meta_bin).extract()
+}
+
+pub fn extract_fhm2d_to_memory_impl(
+    file_bytes: &[u8],
+    source_name: &str,
+    format: Option<Fhm2dFormat>,
+) -> Result<InMemoryFhm2dExtraction, String> {
+    let (parsed, _meta_inflated) = parse_ob_fhm2d(file_bytes)?;
+
+    let mut files = parsed.files;
+    files.sort_by_key(|f| f.file_index);
+
+    let mut output = build_output_structure(
+        parsed.meta_header,
+        parsed.unk_count,
+        files.as_slice(),
+        parsed.type_list.as_slice(),
+        parsed.sub_file_structure,
+        parsed.sub_file_parse_structure,
+        source_name,
+        format,
+    )?;
+
+    let mut named_output = output.clone();
+    let naming_error = match apply_naming(
+        &mut named_output,
+        files.as_slice(),
+        format,
+        None,
+        source_name,
+    ) {
+        Ok(()) => {
+            output = named_output;
+            None
+        }
+        Err(err) => Some(err),
+    };
+    output.naming_error = naming_error.clone();
+    sync_structure_display_name(&mut output);
+
+    if output.sub_file_data.len() != files.len() {
+        return Err("In-memory extraction metadata length mismatch".to_string());
+    }
+
+    let mut memory_files = Vec::with_capacity(files.len());
+    for (idx, decoded) in files.into_iter().enumerate() {
+        let meta = output
+            .sub_file_data
+            .get(idx)
+            .ok_or_else(|| format!("Missing output metadata for in-memory file at index {idx}"))?;
+        memory_files.push(InMemoryFhm2dFile {
+            file_index: decoded.file_index,
+            file_type: meta.file_type.clone(),
+            file_url: meta.file_url.clone(),
+            data: decoded.data,
+        });
+    }
+
+    Ok(InMemoryFhm2dExtraction {
+        source_name: source_name.to_string(),
+        format,
+        naming_error,
+        files: memory_files,
+    })
 }
 
 fn parse_ob_fhm2d(bytes: &[u8]) -> Result<(ParsedOb, Vec<u8>), String> {

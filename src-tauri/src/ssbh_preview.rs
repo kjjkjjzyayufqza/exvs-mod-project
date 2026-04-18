@@ -6,14 +6,14 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TextureRefResolve {
     pub reference: String,
     pub nutexb_path: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SsbhModelPreviewBundle {
     pub root_folder: String,
@@ -29,6 +29,9 @@ pub struct SsbhModelPreviewBundle {
     pub resolved_nutexb_paths: Vec<String>,
     pub texture_resolve: Vec<TextureRefResolve>,
     pub warnings: Vec<String>,
+    pub source_kind: String,
+    pub source_session_id: Option<String>,
+    pub virtual_modl_path: Option<String>,
 }
 
 const WINDOWS_EXTENDED_PATH_PREFIX: &str = r"\\?\";
@@ -1022,6 +1025,9 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
         resolved_nutexb_paths,
         texture_resolve,
         warnings,
+        source_kind: "disk".to_string(),
+        source_session_id: None,
+        virtual_modl_path: None,
     };
     preview_log(&format!(
         "load done: modl={} matl_files={} textures_ref={} textures_resolved={} warnings={} elapsed_ms={}",

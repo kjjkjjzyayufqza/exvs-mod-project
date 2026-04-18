@@ -6,6 +6,7 @@ import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
 import { SsbhModelPreviewLoadingOverlay } from "./SsbhModelPreviewLoadingOverlay";
 import { SsbhModelPreviewQuickActions } from "./SsbhModelPreviewQuickActions";
 import { SsbhModelViewportTimeline } from "./SsbhModelViewportTimeline";
+import { Fhm2dMemoryPreviewModal } from "./Fhm2dMemoryPreviewModal";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 function formatPreviewCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
@@ -68,6 +69,16 @@ export function SsbhModelPreviewViewport() {
           title="Append a .numdlb instance without replacing current models"
         >
           Add .numdlb
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          disabled={p.previewBusy}
+          onClick={() => p.setMemoryPreviewModalOpen(true)}
+          title="Load an .fhm2d package into a pure in-memory workspace and apply selected .numdlb entries to the viewport"
+        >
+          Memory Preview
         </Button>
         <Button
           type="button"
@@ -203,6 +214,7 @@ export function SsbhModelPreviewViewport() {
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+      <Fhm2dMemoryPreviewModal />
     </div>
   );
 }

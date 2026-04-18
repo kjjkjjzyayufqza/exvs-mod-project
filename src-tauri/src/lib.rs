@@ -1,6 +1,7 @@
 use tauri::Manager;
 
 mod commands;
+mod fhm2d_memory_preview;
 mod format;
 mod jnttbl_cmd;
 mod jnttbl_format;
@@ -23,6 +24,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .manage(commands::WatcherState::default())
+        .manage(fhm2d_memory_preview::Fhm2dMemorySessionState::default())
         .manage(ssbh_motion::MotionSampleCacheState::default())
         .invoke_handler(tauri::generate_handler![
             commands::my_custom_command,
@@ -68,7 +70,15 @@ pub fn run() {
             commands::copy_asset_as_new,
             commands::remove_asset_workspace,
             commands::write_files_batch_base64,
-            commands::extract_fhm2d_to_folder
+            commands::extract_fhm2d_to_folder,
+            fhm2d_memory_preview::create_fhm2d_memory_session,
+            fhm2d_memory_preview::create_fhm2d_memory_session_from_path,
+            fhm2d_memory_preview::rename_fhm2d_memory_entry,
+            fhm2d_memory_preview::list_fhm2d_memory_preview_candidates,
+            fhm2d_memory_preview::build_ssbh_preview_bundle_from_memory,
+            fhm2d_memory_preview::fhm2d_memory_nutexb_preview_identity,
+            fhm2d_memory_preview::fhm2d_memory_nutexb_png_bytes,
+            fhm2d_memory_preview::dispose_fhm2d_memory_session
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

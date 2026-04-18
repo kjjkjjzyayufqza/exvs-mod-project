@@ -36,6 +36,9 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   const onCopyPath = useCallback(async () => {
+    if ((p.bundle?.sourceKind ?? "disk") !== "disk") {
+      throw new Error("Copy path is only available for disk-backed preview models.");
+    }
     const path = p.bundle?.modlPath?.trim();
     if (!path) {
       throw new Error("No model path to copy.");
@@ -45,6 +48,9 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
   }, [p.bundle?.modlPath]);
 
   const onOpenModelFolder = useCallback(async () => {
+    if ((p.bundle?.sourceKind ?? "disk") !== "disk") {
+      throw new Error("Open folder is only available for disk-backed preview models.");
+    }
     const folder = p.bundle?.rootFolder?.trim();
     if (!folder) {
       throw new Error("No model folder to open.");
@@ -94,6 +100,8 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
 
   const busy = p.previewBusy;
   const hasModel = Boolean(p.bundle?.modlPath);
+  const hasOnlyDiskModels = p.previewInstances.every((inst) => inst.bundle.sourceKind === "disk");
+  const activeBundleIsDisk = (p.bundle?.sourceKind ?? "disk") === "disk";
 
   return (
     <div
@@ -119,7 +127,7 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
         type="button"
         size="sm"
         variant="outline"
-        disabled={busy || !hasModel}
+        disabled={busy || !hasModel || !hasOnlyDiskModels}
         title="Reload the same .numdlb from disk"
         onClick={() => void onReload()}
       >
@@ -131,7 +139,7 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
         type="button"
         size="sm"
         variant="outline"
-        disabled={busy}
+        disabled={busy || !hasOnlyDiskModels}
         onClick={() => void p.exportSceneConfig().catch((e) => toast.error(String(e)))}
       >
         <FileDown className="h-3.5 w-3.5 mr-1" />
@@ -231,7 +239,7 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
                     variant="ghost"
                     size="sm"
                     className="justify-start h-8 text-[11px]"
-                    disabled={!hasModel}
+                    disabled={!hasModel || !activeBundleIsDisk}
                     onClick={() => void onCopyPath().catch((e) => toast.error(String(e)))}
                   >
                     <ClipboardCopy className="h-3.5 w-3.5 mr-2 shrink-0" />
@@ -242,7 +250,7 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
                     variant="ghost"
                     size="sm"
                     className="justify-start h-8 text-[11px]"
-                    disabled={!hasModel}
+                    disabled={!hasModel || !activeBundleIsDisk}
                     onClick={() => void onOpenModelFolder().catch((e) => toast.error(String(e)))}
                   >
                     <FolderInput className="h-3.5 w-3.5 mr-2 shrink-0" />

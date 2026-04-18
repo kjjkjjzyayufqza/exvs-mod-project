@@ -53,6 +53,8 @@ export function SsbhModelPreviewInspector() {
   const [daeExportUpAxis, setDaeExportUpAxis] = useState<SsbhDaeUpAxis>("y_up");
   const [daeExportNumatbTextures, setDaeExportNumatbTextures] = useState(false);
   const [daeExportBusy, setDaeExportBusy] = useState(false);
+  const canExportPreviewToDae =
+    Boolean(p.bundle?.modlPath) && (p.bundle?.sourceKind ?? "disk") === "disk";
   const refreshTextureCacheStats = useCallback(async () => {
     setTextureCacheStats(await getNutexbPreviewCacheStats());
   }, []);
@@ -66,6 +68,9 @@ export function SsbhModelPreviewInspector() {
     const modelFolder = bundle?.rootFolder?.trim();
     if (!bundle || !modlPath) {
       throw new Error("No model loaded: open a folder or .numdlb in the viewport first.");
+    }
+    if ((bundle.sourceKind ?? "disk") !== "disk") {
+      throw new Error("DAE export is not available for in-memory preview bundles.");
     }
     const scale = Number(daeExportScaleText);
     if (!Number.isFinite(scale) || scale <= 0) {
@@ -392,7 +397,7 @@ export function SsbhModelPreviewInspector() {
                 className="h-8 text-[11px]"
                 value={daeExportScaleText}
                 onChange={(e) => setDaeExportScaleText(e.target.value)}
-                disabled={!p.bundle?.modlPath || p.previewBusy || daeExportBusy}
+                disabled={!canExportPreviewToDae || p.previewBusy || daeExportBusy}
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -400,7 +405,7 @@ export function SsbhModelPreviewInspector() {
               <Select
                 value={daeExportUpAxis}
                 onValueChange={(v) => setDaeExportUpAxis(v as SsbhDaeUpAxis)}
-                disabled={!p.bundle?.modlPath || p.previewBusy || daeExportBusy}
+                disabled={!canExportPreviewToDae || p.previewBusy || daeExportBusy}
               >
                 <SelectTrigger className="h-8 text-[11px]">
                   <SelectValue />
@@ -423,7 +428,7 @@ export function SsbhModelPreviewInspector() {
             <Checkbox
               checked={daeExportNumatbTextures}
               onCheckedChange={(c) => setDaeExportNumatbTextures(c === true)}
-              disabled={!p.bundle?.modlPath || p.previewBusy || daeExportBusy}
+              disabled={!canExportPreviewToDae || p.previewBusy || daeExportBusy}
               className="mt-0.5"
             />
             <span className="text-muted-foreground">
@@ -435,7 +440,7 @@ export function SsbhModelPreviewInspector() {
             variant="secondary"
             size="sm"
             className="h-8 w-fit text-[10px] uppercase tracking-wide"
-            disabled={!p.bundle?.modlPath || p.previewBusy || daeExportBusy}
+            disabled={!canExportPreviewToDae || p.previewBusy || daeExportBusy}
             onClick={() => {
               void exportPreviewToDae().catch((err) => {
                 toast.error(String(err));

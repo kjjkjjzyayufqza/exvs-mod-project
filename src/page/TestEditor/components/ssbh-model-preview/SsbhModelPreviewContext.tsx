@@ -15,8 +15,10 @@ import {
   useRef,
   useState,
   useTransition,
+  type Dispatch,
   type MutableRefObject,
   type ReactNode,
+  type SetStateAction,
 } from "react";
 import { toast } from "sonner";
 import type { BufferGeometry } from "three";
@@ -34,7 +36,11 @@ import {
   type ResolvedMaterialBinding,
   type TexturePreviewSlotKey,
 } from "./meshFromSsbh";
-import { getOrDecodeNutexbPngBlobUrl, resolveNutexbVersionId } from "./nutexbPreviewCache";
+import {
+  getOrDecodeNutexbPngBlobUrl,
+  makeNutexbVersionId,
+  resolveNutexbVersionId,
+} from "./nutexbPreviewCache";
 import {
   buildNextRecentPaths,
   readAutoLoadAfterConvertFromStorage,
@@ -51,8 +57,10 @@ import type {
   ModlDataJson,
   SkelDataJson,
   SsbhModelPreviewBundle,
+  SsbhModelPreviewBundleSourceKind,
   SsbhModelPreviewInstance,
 } from "./types";
+import type { Fhm2dMemorySessionSummary } from "./fhm2dMemoryPreviewTypes";
 import type { MotionClip, MotionSample, NuanmbManifest } from "./motionPreviewTypes";
 import { sampleMotionClipFrame } from "./motionPlaybackMath";
 import {
@@ -118,6 +126,11 @@ type PreviewInstanceMaterialContext = {
   refMap: Map<string, string>;
 };
 
+type PreviewTextureSource = {
+  sourceKind: SsbhModelPreviewBundleSourceKind;
+  sourceSessionId: string | null | undefined;
+};
+
 /** Parallel nutexb→PNG IPC for cache misses; LRU avoids re-decoding across model switches. */
 const NUTEXB_DECODE_CONCURRENCY = 12;
 
@@ -134,6 +147,14 @@ function previewInstanceIdFromModlPath(modlPath: string, slotIndex: number): str
     throw new Error("Instance slot index must be a non-negative integer.");
   }
   return `pi${(h >>> 0).toString(16)}_${slotIndex}`;
+}
+
+function collectMemorySessionIdsFromBundles(bundles: readonly SsbhModelPreviewBundle[]): string[] {
+  return [...new Set(
+    bundles
+      .map((bundle) => (bundle.sourceKind === "memory" ? bundle.sourceSessionId ?? null : null))
+      .filter((value): value is string => Boolean(value)),
+  )];
 }
 
 export type SsbhModelPreviewContextValue = {
@@ -212,6 +233,13 @@ export type SsbhModelPreviewContextValue = {
   pickFolder: () => Promise<void>;
   pickNumdlb: () => Promise<void>;
   pickAddNumdlb: () => Promise<void>;
+  memoryPreviewModalOpen: boolean;
+  setMemoryPreviewModalOpen: (open: boolean) => void;
+  /** In-memory FHM2D workspace session (survives closing the Memory Preview dialog). */
+  memoryWorkspaceSession: Fhm2dMemorySessionSummary | null;
+  setMemoryWorkspaceSession: Dispatch<SetStateAction<Fhm2dMemorySessionSummary | null>>;
+  memoryWorkspaceSourcePath: string | null;
+  setMemoryWorkspaceSourcePath: Dispatch<SetStateAction<string | null>>;
   /** When true, a successful DAE/FBX → SSBH export loads the generated `.numdlb` here. Persisted in localStorage. */
   autoLoadAfterConvertToSsbh: boolean;
   setAutoLoadAfterConvertToSsbh: (v: boolean) => void;
@@ -219,6 +247,10 @@ export type SsbhModelPreviewContextValue = {
   loadModelAt: (path: string) => Promise<void>;
   /** Append a `.numdlb` preview instance without replacing current scene models. */
   addModelAt: (path: string) => Promise<void>;
+  /** Replace the current preview scene with bundles that were resolved from an in-memory FHM2D session. */
+  loadMemoryPreviewBundles: (bundles: SsbhModelPreviewBundle[]) => void;
+  /** Append bundles resolved from an in-memory FHM2D session to the current scene. */
+  appendMemoryPreviewBundles: (bundles: SsbhModelPreviewBundle[]) => void;
   /** Unloads the model from GPU/memory. Throws if a load or texture decode is in progress. */
   clearScene: () => void;
   /** Reloads the same `.numdlb` path from disk. Throws when no model is loaded. */
@@ -431,10 +463,15 @@ export function SsbhModelPreviewProvider({
     applyNonce: number;
     applyData: Float32Array | null;
   }>({ undoStack: [], redoStack: [], applyNonce: 0, applyData: null });
-  const [previewRenderStyle, setPreviewRenderStyle] = useState<PreviewRenderStyle>("anime");
+  const [previewRenderStyle, setPreviewRenderStyle] = useState<PreviewRenderStyle>("standard");
   const [recentModelPaths, setRecentModelPaths] = useState<string[]>(() =>
     readRecentModelPathsFromStorage(),
   );
+  const [memoryPreviewModalOpen, setMemoryPreviewModalOpen] = useState(false);
+  const [memoryWorkspaceSession, setMemoryWorkspaceSession] = useState<Fhm2dMemorySessionSummary | null>(null);
+  const [memoryWorkspaceSourcePath, setMemoryWorkspaceSourcePath] = useState<string | null>(null);
+  const memoryWorkspaceSessionRef = useRef<Fhm2dMemorySessionSummary | null>(null);
+  memoryWorkspaceSessionRef.current = memoryWorkspaceSession;
   const [autoLoadAfterConvertToSsbh, setAutoLoadAfterConvertToSsbhState] = useState(() =>
     readAutoLoadAfterConvertFromStorage(),
   );
@@ -448,6 +485,30 @@ export function SsbhModelPreviewProvider({
   const setAutoLoadAfterConvertToSsbh = useCallback((v: boolean) => {
     setAutoLoadAfterConvertToSsbhState(v);
     writeAutoLoadAfterConvertToStorage(v);
+  }, []);
+
+  const disposeMemorySessions = useCallback(async (sessionIds: readonly string[]) => {
+    const unique = [...new Set(sessionIds.filter((id) => id.trim().length > 0))];
+    if (unique.length === 0) {
+      return;
+    }
+    await Promise.all(
+      unique.map((sessionId) =>
+        invoke("dispose_fhm2d_memory_session", { sessionId }).catch(() => undefined),
+      ),
+    );
+  }, []);
+
+  const clearMemoryWorkspaceIfDisposed = useCallback((disposedSessionIds: readonly string[]) => {
+    const uniq = new Set(disposedSessionIds.filter((id) => id.trim().length > 0));
+    if (uniq.size === 0) {
+      return;
+    }
+    const ws = memoryWorkspaceSessionRef.current;
+    if (ws && uniq.has(ws.sessionId)) {
+      setMemoryWorkspaceSession(null);
+      setMemoryWorkspaceSourcePath(null);
+    }
   }, []);
 
   const clearMotion = useCallback(() => {
@@ -618,22 +679,13 @@ export function SsbhModelPreviewProvider({
     }));
   }, [resolvedActivePreviewInstanceId, root]);
 
-  const buildInstancesFromPaths = useCallback(async (paths: string[], startSlotIndex: number) => {
+  const buildInstancesFromBundles = useCallback(async (bundles: SsbhModelPreviewBundle[], startSlotIndex: number) => {
     const instances: SsbhModelPreviewInstance[] = [];
     const allDraws: BuiltMeshDraw[] = [];
     const collectedWarnings: string[] = [];
-    for (let offset = 0; offset < paths.length; offset += INSTANCE_LOAD_CONCURRENCY) {
-      const chunk = paths.slice(offset, offset + INSTANCE_LOAD_CONCURRENCY);
-      const bundles = await Promise.all(
-        chunk.map((p) =>
-          invoke<SsbhModelPreviewBundle>("ssbh_load_model_preview", {
-            rootPath: normalizeScenePathStrict(p.trim()),
-          }),
-        ),
-      );
-      for (let j = 0; j < chunk.length; j++) {
-        const b = bundles[j]!;
-        const id = previewInstanceIdFromModlPath(b.modlPath, startSlotIndex + offset + j);
+    for (let index = 0; index < bundles.length; index++) {
+      const b = bundles[index]!;
+      const id = previewInstanceIdFromModlPath(b.modlPath, startSlotIndex + index);
         const label = fileBasename(b.modlPath).replace(/\.numdlb$/i, "") || "model";
         const skelJson = b.skel ? (b.skel as SkelDataJson) : null;
         let created: BuiltMeshDraw[];
@@ -650,7 +702,6 @@ export function SsbhModelPreviewProvider({
         instances.push({ id, modlPath: b.modlPath, displayLabel: label, bundle: b });
         allDraws.push(...created);
         if (b.warnings.length) collectedWarnings.push(...b.warnings);
-      }
     }
     if (collectedWarnings.length > 0) {
       const preview = collectedWarnings.slice(0, 4).join("\n");
@@ -663,8 +714,30 @@ export function SsbhModelPreviewProvider({
     return { instances, draws: allDraws };
   }, []);
 
+  const buildInstancesFromPaths = useCallback(async (paths: string[], startSlotIndex: number) => {
+    const bundles: SsbhModelPreviewBundle[] = [];
+    for (let offset = 0; offset < paths.length; offset += INSTANCE_LOAD_CONCURRENCY) {
+      const chunk = paths.slice(offset, offset + INSTANCE_LOAD_CONCURRENCY);
+      const loaded = await Promise.all(
+        chunk.map((p) =>
+          invoke<SsbhModelPreviewBundle>("ssbh_load_model_preview", {
+            rootPath: normalizeScenePathStrict(p.trim()),
+          }),
+        ),
+      );
+      bundles.push(...loaded);
+    }
+    return buildInstancesFromBundles(bundles, startSlotIndex);
+  }, [buildInstancesFromBundles]);
+
   const loadInstancesFromPaths = useCallback(async (paths: string[]) => {
+    const oldMemorySessionIds = collectMemorySessionIdsFromBundles(
+      previewInstances.map((instance) => instance.bundle),
+    );
     const loaded = await buildInstancesFromPaths(paths, 0);
+    const nextMemorySessionIds = collectMemorySessionIdsFromBundles(
+      loaded.instances.map((instance) => instance.bundle),
+    );
     startTransition(() => {
       setDraws((prev) => {
         prev.forEach((d) => d.geometry.dispose());
@@ -675,8 +748,104 @@ export function SsbhModelPreviewProvider({
       setHiddenPreviewInstanceIds(new Set());
       setDrawError(null);
     });
+    const disposeIds = oldMemorySessionIds.filter(
+      (sessionId) => !nextMemorySessionIds.includes(sessionId),
+    );
+    clearMemoryWorkspaceIfDisposed(disposeIds);
+    void disposeMemorySessions(disposeIds);
     return loaded.instances;
-  }, [buildInstancesFromPaths, startTransition]);
+  }, [
+    buildInstancesFromPaths,
+    clearMemoryWorkspaceIfDisposed,
+    disposeMemorySessions,
+    previewInstances,
+    startTransition,
+  ]);
+
+  const loadMemoryPreviewBundles = useCallback(
+    (bundles: SsbhModelPreviewBundle[]) => {
+      const oldMemorySessionIds = collectMemorySessionIdsFromBundles(
+        previewInstances.map((instance) => instance.bundle),
+      );
+      const nextMemorySessionIds = collectMemorySessionIdsFromBundles(bundles);
+      setLoading(true);
+      void buildInstancesFromBundles(bundles, 0)
+        .then((loaded) => {
+          startTransition(() => {
+            setDraws((prev) => {
+              prev.forEach((d) => d.geometry.dispose());
+              return loaded.draws;
+            });
+            setPreviewInstances(loaded.instances);
+            setActivePreviewInstanceId(loaded.instances[0]?.id ?? null);
+            setHiddenPreviewInstanceIds(new Set());
+            setDrawError(null);
+            setLoadError(null);
+          });
+          setModelLoadNonce((n) => n + 1);
+          const disposeIds = oldMemorySessionIds.filter(
+            (sessionId) => !nextMemorySessionIds.includes(sessionId),
+          );
+          clearMemoryWorkspaceIfDisposed(disposeIds);
+          void disposeMemorySessions(disposeIds);
+        })
+        .catch((e) => {
+          const msg = String(e);
+          setLoadError(msg);
+          toast.error(msg);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    },
+    [
+      buildInstancesFromBundles,
+      clearMemoryWorkspaceIfDisposed,
+      disposeMemorySessions,
+      previewInstances,
+      startTransition,
+    ],
+  );
+
+  const appendMemoryPreviewBundles = useCallback(
+    (bundles: SsbhModelPreviewBundle[]) => {
+      setLoading(true);
+      void buildInstancesFromBundles(bundles, previewInstances.length)
+        .then((loaded) => {
+          startTransition(() => {
+            setDraws((prev) => [...prev, ...loaded.draws]);
+            setPreviewInstances((prev) => [...prev, ...loaded.instances]);
+            setHiddenPreviewInstanceIds((prev) => {
+              const next = new Set(prev);
+              for (const inst of loaded.instances) {
+                next.delete(inst.id);
+              }
+              return next;
+            });
+            setVisibleKeys((prev) => {
+              const next = new Set(prev);
+              for (const draw of loaded.draws) {
+                next.add(draw.key);
+              }
+              return next;
+            });
+            setActivePreviewInstanceId(loaded.instances[loaded.instances.length - 1]?.id ?? null);
+            setDrawError(null);
+            setLoadError(null);
+          });
+          setModelLoadNonce((n) => n + 1);
+        })
+        .catch((e) => {
+          const msg = String(e);
+          setLoadError(msg);
+          toast.error(msg);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    },
+    [buildInstancesFromBundles, previewInstances.length, startTransition],
+  );
 
   const skeletonGeometry = useMemo(() => {
     if (!bundle?.skel) return null;
@@ -1049,6 +1218,7 @@ export function SsbhModelPreviewProvider({
         : null;
     const drawPathsByKey = new Map<string, ReturnType<typeof resolveMaterialTexturePaths>>();
     const pathSlotCounts = new Map<string, number>();
+    const pathSourceByPath = new Map<string, PreviewTextureSource>();
     for (const d of draws) {
       const inst =
         (d.previewInstanceId ? instanceById.get(d.previewInstanceId) : null) ??
@@ -1067,6 +1237,12 @@ export function SsbhModelPreviewProvider({
         const pathVal = paths[field];
         if (!pathVal) continue;
         pathSlotCounts.set(pathVal, (pathSlotCounts.get(pathVal) ?? 0) + 1);
+        if (!pathSourceByPath.has(pathVal)) {
+          pathSourceByPath.set(pathVal, {
+            sourceKind: inst?.bundle.sourceKind ?? "disk",
+            sourceSessionId: inst?.bundle.sourceSessionId,
+          });
+        }
       }
     }
     const totalUniquePaths = pathSlotCounts.size;
@@ -1109,18 +1285,35 @@ export function SsbhModelPreviewProvider({
       const failedTextures: string[] = [];
       const pathToDataUrl = new Map<string, string>();
       const uniquePaths = [...pathSlotCounts.keys()];
-      const versionByPath = new Map<string, Awaited<ReturnType<typeof resolveNutexbVersionId>>>();
+      const versionByPath = new Map<string, { versionId: string; persistEligible: boolean }>();
       if (uniquePaths.length > 0) {
         await Promise.all(
-          uniquePaths.map((p) =>
-            resolveNutexbVersionId(p)
-              .then((v) => {
-                versionByPath.set(p, v);
-              })
-              .catch((e) => {
-                failedTextures.push(`${p}: ${String(e)}`);
-              }),
-          ),
+          uniquePaths.map(async (p) => {
+            const source = pathSourceByPath.get(p);
+            try {
+              if (source?.sourceKind === "memory") {
+                if (!source.sourceSessionId) {
+                  throw new Error("Memory texture source is missing a session id.");
+                }
+                const identity = await invoke<{ nutexbSize: number; crc32: number }>(
+                  "fhm2d_memory_nutexb_preview_identity",
+                  {
+                    sessionId: source.sourceSessionId,
+                    virtualPath: p,
+                  },
+                );
+                versionByPath.set(p, {
+                  versionId: makeNutexbVersionId(p, identity.nutexbSize, identity.crc32),
+                  persistEligible: false,
+                });
+                return;
+              }
+              const resolved = await resolveNutexbVersionId(p);
+              versionByPath.set(p, resolved);
+            } catch (e) {
+              failedTextures.push(`${p}: ${String(e)}`);
+            }
+          }),
         );
       }
       if (cancelled) {
@@ -1134,25 +1327,35 @@ export function SsbhModelPreviewProvider({
         );
       };
 
-      const decodeOneDiskPath = async (diskPath: string): Promise<void> => {
+      const decodeOnePath = async (path: string): Promise<void> => {
         if (!cancelled) {
           setTextureDecodeProgressBatched((prev) =>
-            prev ? { ...prev, currentLabel: `${fileBasename(diskPath)} · decode` } : null,
+            prev ? { ...prev, currentLabel: `${fileBasename(path)} · decode` } : null,
           );
         }
         try {
-          const meta = versionByPath.get(diskPath);
+          const meta = versionByPath.get(path);
           if (!meta) {
             throw new Error("Missing CRC identity for texture path (see earlier errors)");
           }
+          const source = pathSourceByPath.get(path);
           const { versionId, persistEligible } = meta;
-          const url = await getOrDecodeNutexbPngBlobUrl(versionId, persistEligible, () =>
-            invoke<ArrayBuffer | Uint8Array>("nutexb_png_bytes", { inputPath: diskPath }),
-          );
+          const url = await getOrDecodeNutexbPngBlobUrl(versionId, persistEligible, async () => {
+            if (source?.sourceKind === "memory") {
+              if (!source.sourceSessionId) {
+                throw new Error("Memory texture source is missing a session id.");
+              }
+              return invoke<ArrayBuffer | Uint8Array>("fhm2d_memory_nutexb_png_bytes", {
+                sessionId: source.sourceSessionId,
+                virtualPath: path,
+              });
+            }
+            return invoke<ArrayBuffer | Uint8Array>("nutexb_png_bytes", { inputPath: path });
+          });
           if (cancelled) return;
-          pathToDataUrl.set(diskPath, url);
+          pathToDataUrl.set(path, url);
         } catch (e) {
-          failedTextures.push(`${diskPath}: ${String(e)}`);
+          failedTextures.push(`${path}: ${String(e)}`);
         } finally {
           bumpDoneBy(1);
         }
@@ -1163,9 +1366,9 @@ export function SsbhModelPreviewProvider({
         const workerCount = Math.min(NUTEXB_DECODE_CONCURRENCY, uniquePaths.length);
         const worker = async () => {
           while (!cancelled) {
-            const diskPath = queue.shift();
-            if (diskPath === undefined) return;
-            await decodeOneDiskPath(diskPath);
+            const path = queue.shift();
+            if (path === undefined) return;
+            await decodeOnePath(path);
           }
         };
         await Promise.all(Array.from({ length: workerCount }, () => worker()));
@@ -1388,6 +1591,9 @@ export function SsbhModelPreviewProvider({
     if (decoding) {
       throw new Error("Cannot clear the scene while loading or decoding textures.");
     }
+    const memorySessionIds = collectMemorySessionIdsFromBundles(
+      previewInstances.map((instance) => instance.bundle),
+    );
     setDraws((prev) => {
       prev.forEach((d) => d.geometry.dispose());
       return [];
@@ -1398,11 +1604,23 @@ export function SsbhModelPreviewProvider({
     setLoadError(null);
     setDrawError(null);
     clearMotion();
-  }, [loading, textureDecodeProgress, clearMotion]);
+    clearMemoryWorkspaceIfDisposed(memorySessionIds);
+    void disposeMemorySessions(memorySessionIds);
+  }, [
+    loading,
+    textureDecodeProgress,
+    clearMotion,
+    clearMemoryWorkspaceIfDisposed,
+    disposeMemorySessions,
+    previewInstances,
+  ]);
 
   const reloadCurrentModel = useCallback(async () => {
     if (previewInstances.length === 0) {
       throw new Error("No model loaded to reload.");
+    }
+    if (previewInstances.some((inst) => inst.bundle.sourceKind !== "disk")) {
+      throw new Error("Reload is available only for disk-backed preview models.");
     }
     const paths = previewInstances.map((i) => i.modlPath);
     setLoading(true);
@@ -1460,6 +1678,9 @@ export function SsbhModelPreviewProvider({
   }, []);
 
   const exportSceneConfig = useCallback(async () => {
+    if (previewInstances.some((inst) => inst.bundle.sourceKind !== "disk")) {
+      throw new Error("Scene export does not support in-memory preview models.");
+    }
     const defaultDir = getDialogDefaultPath(DialogLastPathKey.ssbhPreviewOpenModelFolder, root);
     const defaultPath = defaultDir ? `${defaultDir.replace(/[/\\]+$/, "")}\\scene-config.json` : "scene-config.json";
     const outputPath = await save({
@@ -1889,10 +2110,18 @@ export function SsbhModelPreviewProvider({
       pickFolder,
       pickNumdlb,
       pickAddNumdlb,
+      memoryPreviewModalOpen,
+      setMemoryPreviewModalOpen,
+      memoryWorkspaceSession,
+      setMemoryWorkspaceSession,
+      memoryWorkspaceSourcePath,
+      setMemoryWorkspaceSourcePath,
       autoLoadAfterConvertToSsbh,
       setAutoLoadAfterConvertToSsbh,
       loadModelAt,
       addModelAt,
+      loadMemoryPreviewBundles,
+      appendMemoryPreviewBundles,
       clearScene,
       reloadCurrentModel,
       resetDisplaySettingsToDefaults,
@@ -2003,10 +2232,18 @@ export function SsbhModelPreviewProvider({
       pickFolder,
       pickNumdlb,
       pickAddNumdlb,
+      memoryPreviewModalOpen,
+      setMemoryPreviewModalOpen,
+      memoryWorkspaceSession,
+      setMemoryWorkspaceSession,
+      memoryWorkspaceSourcePath,
+      setMemoryWorkspaceSourcePath,
       autoLoadAfterConvertToSsbh,
       setAutoLoadAfterConvertToSsbh,
       loadModelAt,
       addModelAt,
+      loadMemoryPreviewBundles,
+      appendMemoryPreviewBundles,
       clearScene,
       reloadCurrentModel,
       resetDisplaySettingsToDefaults,

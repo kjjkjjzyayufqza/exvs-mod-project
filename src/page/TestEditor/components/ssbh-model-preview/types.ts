@@ -5,6 +5,8 @@ export type TextureRefResolve = {
   nutexbPath: string | null;
 };
 
+export type SsbhModelPreviewBundleSourceKind = "disk" | "memory";
+
 export type SsbhModelPreviewBundle = {
   rootFolder: string;
   modlPath: string;
@@ -19,6 +21,9 @@ export type SsbhModelPreviewBundle = {
   resolvedNutexbPaths: string[];
   textureResolve: TextureRefResolve[];
   warnings: string[];
+  sourceKind: SsbhModelPreviewBundleSourceKind;
+  sourceSessionId?: string | null;
+  virtualModlPath?: string | null;
 };
 
 /** One loaded `.numdlb` preview instance (multi-folder load may create many). */
