@@ -210,7 +210,7 @@ export function SsbhModelPreviewInspector() {
 
   return (
     <div className="-mx-4 flex min-w-0 flex-col border-t bg-background/50">
-      {p.previewBusy ? (
+      {p.loading || p.textureDecoding ? (
         <div
           className="border-b border-border/60 bg-muted/25 px-3 py-1.5 text-[10px] text-muted-foreground"
           role="status"

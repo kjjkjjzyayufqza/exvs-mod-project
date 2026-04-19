@@ -134,6 +134,18 @@ type PreviewTextureSource = {
 /** Parallel nutexb→PNG IPC for cache misses; LRU avoids re-decoding across model switches. */
 const NUTEXB_DECODE_CONCURRENCY = 12;
 
+function createEmptyDrawMaterialDataUrls(): DrawMaterialDataUrls {
+  return {
+    map: null,
+    normalMap: null,
+    roughnessMap: null,
+    metalnessMap: null,
+    emissiveMap: null,
+    aoMap: null,
+    cubeMap: null,
+  };
+}
+
 const INSTANCE_LOAD_CONCURRENCY = 4;
 
 function previewInstanceIdFromModlPath(modlPath: string, slotIndex: number): string {
@@ -180,7 +192,7 @@ export type SsbhModelPreviewContextValue = {
   textureDecoding: boolean;
   /** Null when idle or finished; set while decoding with step counts and last file label. */
   textureDecodeProgress: SsbhModelPreviewTextureDecodeProgress | null;
-  /** Shorthand: `loading || textureDecoding` — use to block actions that conflict with I/O. */
+  /** True while the initial bundle is read from disk (Rust). Texture decode does not set this. */
   previewBusy: boolean;
   previewRenderStyle: PreviewRenderStyle;
   setPreviewRenderStyle: (v: PreviewRenderStyle) => void;
@@ -450,7 +462,7 @@ export function SsbhModelPreviewProvider({
       textureDecodeProgress.done < textureDecodeProgress.total,
     [textureDecodeProgress],
   );
-  const previewBusy = loading || textureDecoding;
+  const previewBusy = loading;
   const [fitRequestId, setFitRequestId] = useState(0);
   const [modelLoadNonce, setModelLoadNonce] = useState(0);
   const [selectedBoneIndex, setSelectedBoneIndex] = useState<number | null>(null);
@@ -1261,15 +1273,7 @@ export function SsbhModelPreviewProvider({
           refMap: buildTextureRefToPathMap(instBundle),
         };
         nextBindings.set(d.key, resolveMaterialBinding(d.materialLabel, ctx.lookup, ctx.refMap));
-        next.set(d.key, {
-          map: null,
-          normalMap: null,
-          roughnessMap: null,
-          metalnessMap: null,
-          emissiveMap: null,
-          aoMap: null,
-          cubeMap: null,
-        });
+        next.set(d.key, createEmptyDrawMaterialDataUrls());
       }
       setDrawMaterialBindingsByDrawKey(nextBindings);
       setDrawMaterialDataUrlsByDrawKey(next);
@@ -1277,11 +1281,24 @@ export function SsbhModelPreviewProvider({
       return;
     }
 
+    const syncBindings = new Map<string, ResolvedMaterialBinding>();
+    const initialUrls = new Map<string, DrawMaterialDataUrls>();
+    for (const d of draws) {
+      const instId = d.previewInstanceId ?? previewInstances[0]?.id ?? null;
+      const ctx = instId ? materialCtxByInstanceId.get(instId) : null;
+      if (!ctx) {
+        throw new Error("Missing preview material context for draw");
+      }
+      syncBindings.set(d.key, resolveMaterialBinding(d.materialLabel, ctx.lookup, ctx.refMap));
+      initialUrls.set(d.key, createEmptyDrawMaterialDataUrls());
+    }
+    setDrawMaterialBindingsByDrawKey(syncBindings);
+    setDrawMaterialDataUrlsByDrawKey(initialUrls);
     setTextureDecodeProgressBatched({ done: 0, total: totalUniquePaths, currentLabel: null });
 
+    let materialFlushRafId: number | null = null;
+
     (async () => {
-      const next = new Map<string, DrawMaterialDataUrls>();
-      const nextBindings = new Map<string, ResolvedMaterialBinding>();
       const failedTextures: string[] = [];
       const pathToDataUrl = new Map<string, string>();
       const uniquePaths = [...pathSlotCounts.keys()];
@@ -1320,6 +1337,50 @@ export function SsbhModelPreviewProvider({
         return;
       }
 
+      const flushMaterialUrlsToReact = () => {
+        if (cancelled) return;
+        setDrawMaterialDataUrlsByDrawKey((prev) => {
+          const nextMap = new Map(prev);
+          for (const d of draws) {
+            const paths = drawPathsByKey.get(d.key);
+            if (!paths) continue;
+            const prevUrls = nextMap.get(d.key) ?? createEmptyDrawMaterialDataUrls();
+            const merged: DrawMaterialDataUrls = { ...prevUrls };
+            let changed = false;
+            for (const { key } of TEXTURE_PREVIEW_SLOT_META) {
+              if (!textureSlotLoadEnabled[key]) continue;
+              const field = TEXTURE_SLOT_TO_PATH_FIELD[key];
+              const pathVal = paths[field];
+              if (!pathVal) continue;
+              const url = pathToDataUrl.get(pathVal) ?? null;
+              if (merged[key] !== url) {
+                merged[key] = url;
+                changed = true;
+              }
+            }
+            if (changed) {
+              nextMap.set(d.key, merged);
+            }
+          }
+          return nextMap;
+        });
+      };
+
+      const scheduleMaterialUrlFlush = () => {
+        if (cancelled || materialFlushRafId !== null) return;
+        materialFlushRafId = requestAnimationFrame(() => {
+          materialFlushRafId = null;
+          flushMaterialUrlsToReact();
+        });
+      };
+
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+      if (cancelled) {
+        return;
+      }
+
       const bumpDoneBy = (n: number) => {
         if (cancelled || n <= 0) return;
         setTextureDecodeProgressBatched((prev) =>
@@ -1354,6 +1415,7 @@ export function SsbhModelPreviewProvider({
           });
           if (cancelled) return;
           pathToDataUrl.set(path, url);
+          scheduleMaterialUrlFlush();
         } catch (e) {
           failedTextures.push(`${path}: ${String(e)}`);
         } finally {
@@ -1374,59 +1436,31 @@ export function SsbhModelPreviewProvider({
         await Promise.all(Array.from({ length: workerCount }, () => worker()));
       }
 
-      for (const d of draws) {
-        if (cancelled) return;
-        const instId = d.previewInstanceId ?? previewInstances[0]?.id ?? null;
-        const ctx = instId ? materialCtxByInstanceId.get(instId) : null;
-        if (!ctx) {
-          throw new Error("Missing preview material context for draw");
-        }
-        const binding = resolveMaterialBinding(d.materialLabel, ctx.lookup, ctx.refMap);
-        nextBindings.set(d.key, binding);
-        const paths =
-          drawPathsByKey.get(d.key) ??
-          resolveMaterialTexturePaths(d.materialLabel, ctx.lookup, ctx.refMap);
-        const urls: DrawMaterialDataUrls = {
-          map: null,
-          normalMap: null,
-          roughnessMap: null,
-          metalnessMap: null,
-          emissiveMap: null,
-          aoMap: null,
-          cubeMap: null,
-        };
-        for (const { key } of TEXTURE_PREVIEW_SLOT_META) {
-          const field = TEXTURE_SLOT_TO_PATH_FIELD[key];
-          const pathVal = paths[field];
-          if (!textureSlotLoadEnabled[key]) {
-            urls[key] = null;
-            continue;
-          }
-          if (!pathVal) {
-            urls[key] = null;
-            continue;
-          }
-          urls[key] = pathToDataUrl.get(pathVal) ?? null;
-        }
-        next.set(d.key, urls);
+      if (cancelled) {
+        return;
       }
-      if (!cancelled) {
-        setDrawMaterialDataUrlsByDrawKey(next);
-        setDrawMaterialBindingsByDrawKey(nextBindings);
-        setTextureDecodeProgressBatched(null);
-        if (failedTextures.length > 0) {
-          const preview = failedTextures.slice(0, 4).join("\n");
-          const more =
-            failedTextures.length > 4 ? `\n… and ${failedTextures.length - 4} more` : "";
-          toast.error("Some textures failed to decode", {
-            description: `${preview}${more}`,
-          });
-        }
+      if (materialFlushRafId !== null) {
+        cancelAnimationFrame(materialFlushRafId);
+        materialFlushRafId = null;
+      }
+      flushMaterialUrlsToReact();
+      setTextureDecodeProgressBatched(null);
+      if (failedTextures.length > 0) {
+        const preview = failedTextures.slice(0, 4).join("\n");
+        const more =
+          failedTextures.length > 4 ? `\n… and ${failedTextures.length - 4} more` : "";
+        toast.error("Some textures failed to decode", {
+          description: `${preview}${more}`,
+        });
       }
     })();
 
     return () => {
       cancelled = true;
+      if (materialFlushRafId !== null) {
+        cancelAnimationFrame(materialFlushRafId);
+        materialFlushRafId = null;
+      }
     };
   }, [previewInstances, draws, textureSlotLoadEnabled]);
 

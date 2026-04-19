@@ -64,7 +64,7 @@ export function SsbhModelPreviewViewport() {
           type="button"
           size="sm"
           variant="secondary"
-          disabled={p.previewBusy}
+          disabled={p.loading}
           onClick={() => void p.pickAddNumdlb()}
           title="Append a .numdlb instance without replacing current models"
         >
@@ -74,7 +74,7 @@ export function SsbhModelPreviewViewport() {
           type="button"
           size="sm"
           variant="secondary"
-          disabled={p.previewBusy}
+          disabled={p.loading}
           onClick={() => p.setMemoryPreviewModalOpen(true)}
           title="Load an .fhm2d package into a pure in-memory workspace and apply selected .numdlb entries to the viewport"
         >
@@ -84,7 +84,7 @@ export function SsbhModelPreviewViewport() {
           type="button"
           size="sm"
           variant="secondary"
-          disabled={p.previewBusy}
+          disabled={p.loading}
           onClick={() => void p.pickMotionNuanmbFile()}
         >
           Open .nuanmb
