@@ -66,10 +66,13 @@ import { SsbhSkinnedMesh } from "./SsbhSkinnedMesh";
 import { fitCameraToObject } from "./cameraFit";
 import { applyPreviewUvFlip } from "./previewUvFlip";
 import {
+  getSsbhAdaptiveDpr,
+  getSsbhAdaptivePerformanceOptions,
   getSsbhPerfMonitorOptions,
   getSsbhCanvasPerformanceProfile,
   isSsbhPreviewDebugEnabled,
   measureDrawComplexity,
+  shouldDisableSsbhAnimePostFx,
 } from "./ssbhCanvasPerformance";
 import type {
   BoneTransformMode,
@@ -233,6 +236,7 @@ function CameraFit({
   fitRequestId: number;
 }) {
   const camera = useThree((s) => s.camera);
+  const invalidate = useThree((s) => s.invalidate);
 
   useLayoutEffect(() => {
     if (!(camera instanceof PerspectiveCamera)) return;
@@ -240,9 +244,69 @@ function CameraFit({
     const controls = controlsRef.current;
     if (!root || !controls) return;
     fitCameraToObject(root, camera, controls);
-  }, [fitRequestId, camera, modelRootRef, controlsRef]);
+    invalidate();
+  }, [fitRequestId, camera, modelRootRef, controlsRef, invalidate]);
 
   return null;
+}
+
+function resolveBaseDpr(dprRange: [number, number]): number {
+  const deviceDpr =
+    typeof window !== "undefined" && Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0
+      ? window.devicePixelRatio
+      : 1;
+  return Math.min(dprRange[1], Math.max(dprRange[0], deviceDpr));
+}
+
+function AdaptiveCanvasPerformanceController({
+  baseDprRange,
+  motionActive,
+  perfMonitorOptions,
+  previewRenderStyle,
+  showStats,
+}: {
+  baseDprRange: [number, number];
+  motionActive: boolean;
+  perfMonitorOptions: ReturnType<typeof getSsbhPerfMonitorOptions>;
+  previewRenderStyle: PreviewRenderStyle;
+  showStats: boolean;
+}) {
+  const current = useThree((s) => s.performance.current);
+  const max = useThree((s) => s.performance.max);
+  const regress = useThree((s) => s.performance.regress);
+  const invalidate = useThree((s) => s.invalidate);
+  const setDpr = useThree((s) => s.setDpr);
+  const resolvedBaseDpr = useMemo(() => resolveBaseDpr(baseDprRange), [baseDprRange]);
+  const isRegressed = current < max - 1e-3;
+  const perfMinimal = perfMonitorOptions.minimal || isRegressed;
+  const perfShowGraph = perfMonitorOptions.showGraph && !isRegressed;
+  const disableAnimePostFx = shouldDisableSsbhAnimePostFx(previewRenderStyle, current);
+
+  useEffect(() => {
+    setDpr(getSsbhAdaptiveDpr(resolvedBaseDpr, current));
+  }, [current, resolvedBaseDpr, setDpr]);
+
+  useEffect(() => {
+    if (!motionActive) {
+      return;
+    }
+    regress();
+    invalidate();
+  }, [motionActive, regress, invalidate]);
+
+  return (
+    <>
+      {showStats ? (
+        <Perf
+          position={perfMonitorOptions.position}
+          minimal={perfMinimal}
+          showGraph={perfShowGraph}
+        />
+      ) : null}
+      {showStats && perfMonitorOptions.showLegacyStats ? <Stats /> : null}
+      {previewRenderStyle === "anime" && !disableAnimePostFx ? <AnimePreviewPostFx /> : null}
+    </>
+  );
 }
 
 function PreviewUvFlipSync({
@@ -813,6 +877,8 @@ const Scene = memo(function Scene({
   const modelRootRef = useRef<Group>(null);
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const camera = useThree((s) => s.camera);
+  const regress = useThree((s) => s.performance.regress);
+  const invalidate = useThree((s) => s.invalidate);
   const playbackFrameRef = useRef<Map<string, number>>(new Map());
   const lastSlowFrameLogMsRef = useRef(0);
   const lastAppliedScrubFrameRef = useRef<number | null>(null);
@@ -847,6 +913,11 @@ const Scene = memo(function Scene({
     }
     playbackFrameRef.current.set(motionControlInstanceId, activeMotionState.frame);
   }, [motionControlInstanceId, activeMotionState]);
+
+  const handlePerformanceInteraction = useCallback(() => {
+    regress();
+    invalidate();
+  }, [regress, invalidate]);
 
   const singleInstance = previewInstances.length <= 1;
   const visibleInstances = useMemo(() => {
@@ -1379,6 +1450,8 @@ const Scene = memo(function Scene({
         panSpeed={0.65}
         minPolarAngle={0.05}
         maxPolarAngle={Math.PI - 0.05}
+        onStart={handlePerformanceInteraction}
+        onChange={handlePerformanceInteraction}
       />
 
       <MotionCameraController
@@ -1438,6 +1511,17 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
   const canvasPerformanceProfile = useMemo(
     () =>
       getSsbhCanvasPerformanceProfile({
+        drawCount: drawComplexity.drawCount,
+        triangleCount: drawComplexity.triangleCount,
+        motionPlaying: anyMotionPlaying,
+        motionScrubbing,
+        previewRenderStyle: restSceneProps.previewRenderStyle,
+      }),
+    [drawComplexity, anyMotionPlaying, motionScrubbing, restSceneProps.previewRenderStyle],
+  );
+  const adaptivePerformanceOptions = useMemo(
+    () =>
+      getSsbhAdaptivePerformanceOptions({
         drawCount: drawComplexity.drawCount,
         triangleCount: drawComplexity.triangleCount,
         motionPlaying: anyMotionPlaying,
@@ -1561,6 +1645,7 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
           alpha: false,
           powerPreference: "high-performance",
         }}
+        performance={adaptivePerformanceOptions}
         dpr={canvasPerformanceProfile.dpr}
         camera={{ position: [2.4, 1.6, 2.8], fov: 50, near: 0.02, far: 5e6 }}
         onPointerMissed={() => {
@@ -1569,15 +1654,13 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
           }
         }}
       >
-        {restSceneProps.showStats ? (
-          <Perf
-            position={perfMonitorOptions.position}
-            minimal={perfMonitorOptions.minimal}
-            showGraph={perfMonitorOptions.showGraph}
-          />
-        ) : null}
-        {restSceneProps.showStats && perfMonitorOptions.showLegacyStats ? <Stats /> : null}
-        {restSceneProps.previewRenderStyle === "anime" ? <AnimePreviewPostFx /> : null}
+        <AdaptiveCanvasPerformanceController
+          baseDprRange={canvasPerformanceProfile.dpr}
+          motionActive={anyMotionPlaying || motionScrubbing}
+          perfMonitorOptions={perfMonitorOptions}
+          previewRenderStyle={restSceneProps.previewRenderStyle}
+          showStats={restSceneProps.showStats}
+        />
         <Scene {...restSceneProps} background={background} motionScrubbing={motionScrubbing} />
       </Canvas>
     </div>

@@ -2,10 +2,13 @@ import { BufferAttribute, BufferGeometry } from "three";
 import { describe, expect, it } from "vitest";
 import { measureSyncDurationBudget, assertDurationWithinBudget } from "@/test/performance";
 import {
+  getSsbhAdaptiveDpr,
+  getSsbhAdaptivePerformanceOptions,
   getSsbhPerfMonitorOptions,
   getSsbhCanvasPerformanceProfile,
   isSsbhPreviewDebugEnabled,
   measureDrawComplexity,
+  shouldDisableSsbhAnimePostFx,
 } from "./ssbhCanvasPerformance";
 import type { BuiltMeshDraw } from "./types";
 
@@ -56,6 +59,49 @@ describe("ssbhCanvasPerformance", () => {
 
     expect(profile.dpr).toEqual([1, 2]);
     expect(profile.antialias).toBe(true);
+  });
+
+  it("uses more aggressive adaptive performance options for heavy anime scenes", () => {
+    const options = getSsbhAdaptivePerformanceOptions({
+      drawCount: 36,
+      triangleCount: 820_000,
+      motionPlaying: true,
+      motionScrubbing: false,
+      previewRenderStyle: "anime",
+    });
+
+    expect(options).toEqual({
+      min: 0.5,
+      max: 1,
+      debounce: 650,
+    });
+  });
+
+  it("recovers quality faster for light static scenes", () => {
+    const options = getSsbhAdaptivePerformanceOptions({
+      drawCount: 6,
+      triangleCount: 45_000,
+      motionPlaying: false,
+      motionScrubbing: false,
+      previewRenderStyle: "standard",
+    });
+
+    expect(options).toEqual({
+      min: 0.8,
+      max: 1,
+      debounce: 300,
+    });
+  });
+
+  it("computes adaptive dpr from the current performance budget", () => {
+    expect(getSsbhAdaptiveDpr(2, 0.8)).toBe(1.6);
+    expect(getSsbhAdaptiveDpr(1.25, 0.5)).toBe(1);
+  });
+
+  it("disables anime post fx only while the canvas is regressed", () => {
+    expect(shouldDisableSsbhAnimePostFx("anime", 0.5)).toBe(true);
+    expect(shouldDisableSsbhAnimePostFx("anime", 1)).toBe(false);
+    expect(shouldDisableSsbhAnimePostFx("standard", 0.5)).toBe(false);
   });
 
   it("keeps the perf monitor compact for heavy animated scenes", () => {

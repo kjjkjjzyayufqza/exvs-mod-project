@@ -503,7 +503,7 @@ export function Fhm2dMemoryPreviewModal() {
       }}
     >
       <DialogContent className="h-[min(88vh,860px)] max-w-[min(100vw-32px,1460px)] gap-0 overflow-hidden p-0">
-        <DialogHeader className="shrink-0 border-b bg-muted/35 px-6 py-4">
+        <DialogHeader className="shrink-0 border-b bg-muted/35 py-4 pl-6 pr-14 sm:pr-16">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
               <DialogTitle className="flex items-center gap-2 text-base">

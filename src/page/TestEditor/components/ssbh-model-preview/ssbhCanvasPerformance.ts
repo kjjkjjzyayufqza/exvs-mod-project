@@ -16,6 +16,12 @@ export type SsbhCanvasPerformanceProfile = {
   antialias: boolean;
 };
 
+export type SsbhAdaptivePerformanceOptions = {
+  min: number;
+  max: number;
+  debounce: number;
+};
+
 export type SsbhPerfMonitorOptions = {
   position: "top-right";
   minimal: boolean;
@@ -73,6 +79,32 @@ function getSceneComplexityFlags(params: SsbhCanvasPerformanceParams) {
   };
 }
 
+export function getSsbhAdaptivePerformanceOptions(
+  params: SsbhCanvasPerformanceParams,
+): SsbhAdaptivePerformanceOptions {
+  const { heavyScene, veryHeavyScene, animePipeline } = getSceneComplexityFlags(params);
+
+  if (veryHeavyScene || animePipeline) {
+    return {
+      min: 0.5,
+      max: 1,
+      debounce: 650,
+    };
+  }
+  if (heavyScene) {
+    return {
+      min: 0.65,
+      max: 1,
+      debounce: 500,
+    };
+  }
+  return {
+    min: 0.8,
+    max: 1,
+    debounce: 300,
+  };
+}
+
 export function getSsbhCanvasPerformanceProfile(
   params: SsbhCanvasPerformanceParams,
 ): SsbhCanvasPerformanceProfile {
@@ -99,6 +131,26 @@ export function getSsbhCanvasPerformanceProfile(
     dpr: [1, maxDpr],
     antialias,
   };
+}
+
+export function getSsbhAdaptiveDpr(baseMaxDpr: number, performanceCurrent: number): number {
+  if (!Number.isFinite(baseMaxDpr) || baseMaxDpr <= 0) {
+    throw new Error(`Adaptive DPR requires a positive finite base max DPR, got ${baseMaxDpr}.`);
+  }
+  if (!Number.isFinite(performanceCurrent) || performanceCurrent <= 0) {
+    throw new Error(`Adaptive DPR requires a positive finite performance current, got ${performanceCurrent}.`);
+  }
+  return Math.min(baseMaxDpr, Math.max(1, Number((baseMaxDpr * performanceCurrent).toFixed(2))));
+}
+
+export function shouldDisableSsbhAnimePostFx(
+  previewRenderStyle: PreviewRenderStyle,
+  performanceCurrent: number,
+): boolean {
+  if (!Number.isFinite(performanceCurrent) || performanceCurrent <= 0) {
+    throw new Error(`Anime post FX gating requires a positive finite performance current, got ${performanceCurrent}.`);
+  }
+  return previewRenderStyle === "anime" && performanceCurrent < 0.999;
 }
 
 export function getSsbhPerfMonitorOptions(
