@@ -151,13 +151,13 @@ impl PreviewCollectionStore {
         self.items = source_items
             .into_iter()
             .enumerate()
-            .map(|(index, item)| PreviewCollectionEntry {
+            .map(|(_, item)| PreviewCollectionEntry {
                 id: item.id,
                 display_label: item.display_label,
                 modl_path: item.modl_path,
                 visible: true,
                 selected: false,
-                active: index == 0,
+                active: false,
             })
             .collect();
         Ok(self.snapshot())
@@ -183,8 +183,6 @@ impl PreviewCollectionStore {
             for item in &mut self.items {
                 item.active = item.id == active_id;
             }
-        } else if self.items.len() == 1 {
-            self.items[0].active = true;
         }
         Ok(self.snapshot())
     }
@@ -232,6 +230,13 @@ impl PreviewCollectionStore {
         Ok(self.snapshot())
     }
 
+    pub fn clear_active(&mut self) -> Result<PreviewCollectionSnapshot, String> {
+        for item in &mut self.items {
+            item.active = false;
+        }
+        Ok(self.snapshot())
+    }
+
     pub fn set_view_range(&mut self, value: String) -> Result<PreviewCollectionSnapshot, String> {
         self.view_range = PreviewCollectionRange::parse(value.as_str(), "viewRange")?;
         Ok(self.snapshot())
@@ -244,11 +249,6 @@ impl PreviewCollectionStore {
 
     pub fn remove_missing_ids(&mut self, valid_ids: Vec<String>) -> Result<PreviewCollectionSnapshot, String> {
         self.items.retain(|item| valid_ids.iter().any(|id| id == &item.id));
-        if !self.items.iter().any(|item| item.active) {
-            if let Some(first) = self.items.first_mut() {
-                first.active = true;
-            }
-        }
         Ok(self.snapshot())
     }
 }
@@ -348,6 +348,17 @@ pub fn preview_collection_set_active(
 }
 
 #[tauri::command]
+pub fn preview_collection_clear_active(
+    state: State<'_, PreviewCollectionState>,
+) -> Result<PreviewCollectionSnapshot, String> {
+    state
+        .store
+        .lock()
+        .map_err(|_| "Failed to lock preview collection state.".to_string())?
+        .clear_active()
+}
+
+#[tauri::command]
 pub fn preview_collection_set_view_range(
     state: State<'_, PreviewCollectionState>,
     value: String,
@@ -405,6 +416,16 @@ mod tests {
                 modl_path: String::from("memory://gamma/model.numdlb"),
             },
         ]
+    }
+
+    #[test]
+    fn collection_clear_active_clears_active_item_id() {
+        let mut store = PreviewCollectionStore::default();
+        let _ = store.replace_items(sample_items()).expect("replace should succeed");
+        let _ = store.set_active(String::from("inst-b")).expect("set active should succeed");
+        let snapshot = store.clear_active().expect("clear active should succeed");
+        assert_eq!(snapshot.active_item_id, None);
+        assert!(!snapshot.items.iter().any(|item| item.active));
     }
 
     #[test]

@@ -106,6 +106,10 @@ export async function setPreviewCollectionActive(id: string): Promise<PreviewCol
   return invoke<PreviewCollectionSnapshot>("preview_collection_set_active", { id });
 }
 
+export async function clearPreviewCollectionActive(): Promise<PreviewCollectionSnapshot> {
+  return invoke<PreviewCollectionSnapshot>("preview_collection_clear_active");
+}
+
 export async function setPreviewCollectionViewRange(value: "all" | "single"): Promise<PreviewCollectionSnapshot> {
   return invoke<PreviewCollectionSnapshot>("preview_collection_set_view_range", { value });
 }

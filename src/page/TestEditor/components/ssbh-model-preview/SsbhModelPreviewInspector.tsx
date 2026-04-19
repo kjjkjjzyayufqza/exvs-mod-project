@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import { Bone, ChevronDown, ChevronRight, Crosshair, Database, Eye, EyeOff, FileDown, Info, Layout, List, Search, Settings2 } from "lucide-react";
+import { Bone, ChevronDown, ChevronRight, Database, Eye, EyeOff, FileDown, Info, Layout, List, Search, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,6 +26,7 @@ import {
 import { useSsbhModelPreview, type PreviewRenderStyle } from "./SsbhModelPreviewContext";
 import { TEXTURE_PREVIEW_SLOT_META, TEXTURE_SLOT_TO_PATH_FIELD, buildMatlLookup } from "./meshFromSsbh";
 import { ssbhExportFolderToDae, type SsbhDaeUpAxis } from "./ssbhDaeIoService";
+import { hasAnyPreviewSkeleton } from "./ssbhPreviewSkeletonVisibility";
 import type { BoneJson, MatlDataJson, SkelDataJson } from "./types";
 
 function boneHierarchyDepth(bones: BoneJson[], i: number): number {
@@ -46,6 +47,7 @@ function meshFileStem(meshPath: string): string {
 
 export function SsbhModelPreviewInspector() {
   const p = useSsbhModelPreview();
+  const skeletonToggleEnabled = hasAnyPreviewSkeleton(p.previewInstances);
   const [boneListMode, setBoneListMode] = useState<"active" | "all">("active");
   const [collapsedBoneGroups, setCollapsedBoneGroups] = useState<Set<string>>(new Set());
   const [textureCacheStats, setTextureCacheStats] = useState<NutexbPreviewCacheStats | null>(null);
@@ -122,11 +124,13 @@ export function SsbhModelPreviewInspector() {
       const controlledInstanceIds =
         p.previewControlScope === "all"
           ? new Set(visibleInstances.map((i) => i.id))
-          : new Set(
-              visibleInstances
-                .filter((i) => i.id === (p.activePreviewInstanceId ?? p.previewInstances[0]?.id ?? ""))
-                .map((i) => i.id),
-            );
+          : p.activePreviewInstanceId
+            ? new Set(
+                visibleInstances
+                  .filter((i) => i.id === p.activePreviewInstanceId)
+                  .map((i) => i.id),
+              )
+            : new Set<string>();
       if (controlledInstanceIds.size === 0) return [];
       return p.draws.filter((d) => {
         const id = d.previewInstanceId ?? p.previewInstances[0]?.id ?? null;
@@ -146,19 +150,16 @@ export function SsbhModelPreviewInspector() {
     const byVisibility = p.previewInstances.filter((i) => !p.hiddenPreviewInstanceIds.has(i.id));
     if (p.previewViewMode === "single") {
       if (byVisibility.length === 0) return [];
-      const active =
-        (p.activePreviewInstanceId
-          ? byVisibility.find((i) => i.id === p.activePreviewInstanceId)
-          : null) ?? byVisibility[0]!;
-      return [active];
+      if (!p.activePreviewInstanceId) return [];
+      const active = byVisibility.find((i) => i.id === p.activePreviewInstanceId);
+      return active ? [active] : [];
     }
     return byVisibility;
   }, [p.previewInstances, p.hiddenPreviewInstanceIds, p.previewViewMode, p.activePreviewInstanceId]);
 
-  const activeInstance =
-    visibleInstances.find((i) => i.id === (p.activePreviewInstanceId ?? "")) ??
-    visibleInstances[0] ??
-    null;
+  const activeInstance = p.activePreviewInstanceId
+    ? (visibleInstances.find((i) => i.id === p.activePreviewInstanceId) ?? null)
+    : null;
   const skel = activeInstance?.bundle?.skel ? (activeInstance.bundle.skel as SkelDataJson) : null;
   const bones = skel?.bones ?? [];
   const boneListInstances = boneListMode === "all" ? visibleInstances : activeInstance ? [activeInstance] : [];
@@ -293,15 +294,13 @@ export function SsbhModelPreviewInspector() {
             <div className="max-h-[220px] space-y-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-muted">
               {p.previewCollectionItems.map((inst) => {
                 const visible = !p.hiddenPreviewInstanceIds.has(inst.id);
-                const active = inst.id === (p.activePreviewInstanceId ?? p.previewInstances[0]?.id ?? "");
-                const selected = p.selectedPreviewInstanceIds.has(inst.id);
+                const active = inst.id === p.activePreviewInstanceId;
                 return (
                   <div
                     key={inst.id}
                     className={cn(
                       "flex items-center gap-1.5 rounded-sm border px-2 py-1.5",
                       active ? "border-primary/55 bg-primary/10" : "border-border/40",
-                      selected && "border-amber-400/70 bg-amber-400/10",
                     )}
                   >
                     <button
@@ -315,21 +314,15 @@ export function SsbhModelPreviewInspector() {
                     <button
                       type="button"
                       className="min-w-0 flex-1 text-left"
-                      onClick={() => p.togglePreviewInstanceSelected(inst.id)}
+                      onClick={() =>
+                        p.setActivePreviewInstanceId(
+                          inst.id === p.activePreviewInstanceId ? null : inst.id,
+                        )
+                      }
                     >
                       <div className="truncate text-[11px] font-medium leading-tight">{inst.displayLabel}</div>
                       <div className="truncate font-mono text-[9px] text-muted-foreground">{inst.modlPath}</div>
                     </button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={active ? "default" : "outline"}
-                      className="h-6 px-1.5 text-[9px]"
-                      onClick={() => p.setActivePreviewInstanceId(inst.id)}
-                      title={active ? "Active interaction target" : "Set as active interaction target"}
-                    >
-                      <Crosshair className="h-3 w-3" />
-                    </Button>
                   </div>
                 );
               })}
@@ -366,7 +359,7 @@ export function SsbhModelPreviewInspector() {
           </div>
           <div className="flex items-center justify-between gap-2">
             <Label className="text-[11px] text-muted-foreground">Skeleton</Label>
-            <Switch checked={p.showSkeleton} onCheckedChange={p.setShowSkeleton} disabled={!p.bundle?.skel} />
+            <Switch checked={p.showSkeleton} onCheckedChange={p.setShowSkeleton} disabled={!skeletonToggleEnabled} />
           </div>
           <div className="flex items-center justify-between gap-2">
             <Label className="text-[11px] text-muted-foreground">Grid</Label>
@@ -936,7 +929,7 @@ export function SsbhModelPreviewInspector() {
             {boneListInstances.map((inst) => {
               const instSkel = inst.bundle.skel ? (inst.bundle.skel as SkelDataJson) : null;
               const instBones = instSkel?.bones ?? [];
-              const instActive = inst.id === (p.activePreviewInstanceId ?? "");
+              const instActive = inst.id === p.activePreviewInstanceId;
               return (
                 <div key={inst.id} className="space-y-1">
                   {boneListMode === "all" ? (
@@ -972,7 +965,11 @@ export function SsbhModelPreviewInspector() {
                       <button
                         type="button"
                         className="min-w-0 flex-1 truncate text-left text-[10px] font-medium hover:text-foreground"
-                        onClick={() => p.setActivePreviewInstanceId(inst.id)}
+                        onClick={() =>
+                          p.setActivePreviewInstanceId(
+                            inst.id === p.activePreviewInstanceId ? null : inst.id,
+                          )
+                        }
                         title={inst.modlPath}
                       >
                         {inst.displayLabel}

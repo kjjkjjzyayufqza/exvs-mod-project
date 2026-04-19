@@ -133,6 +133,11 @@ export function Fhm2dMemoryPreviewModal() {
   const groupsViewportRef = useRef<HTMLDivElement | null>(null);
   const candidatesViewportRef = useRef<HTMLDivElement | null>(null);
   const memoryModalWasOpenRef = useRef(false);
+  /** Tracks when to apply default "select all" after session / candidate list changes (not on rename-driven updates). */
+  const memorySelectionBaselineRef = useRef<{ sessionId: string | null; candidateCount: number }>({
+    sessionId: null,
+    candidateCount: 0,
+  });
   const deferredCharacterIdSearchText = useDeferredValue(characterIdSearchText);
   const deferredTreeSearchText = useDeferredValue(treeSearchText);
 
@@ -171,6 +176,35 @@ export function Fhm2dMemoryPreviewModal() {
       setActiveEntryId(null);
     }
   }, [p.memoryPreviewModalOpen, session]);
+
+  useEffect(() => {
+    const sid = session?.sessionId ?? null;
+    const candidates = session?.previewCandidates ?? [];
+    const count = candidates.length;
+
+    if (!sid) {
+      memorySelectionBaselineRef.current = { sessionId: null, candidateCount: 0 };
+      return;
+    }
+
+    const baseline = memorySelectionBaselineRef.current;
+    if (count === 0) {
+      if (baseline.sessionId !== sid) {
+        memorySelectionBaselineRef.current = { sessionId: sid, candidateCount: 0 };
+      }
+      return;
+    }
+
+    const sessionBecame = baseline.sessionId !== sid;
+    const firstBatchLoaded =
+      baseline.sessionId === sid && baseline.candidateCount === 0 && count > 0;
+
+    if (sessionBecame || firstBatchLoaded) {
+      setSelectedCandidateIds(new Set(candidates.map((c) => c.id)));
+    }
+
+    memorySelectionBaselineRef.current = { sessionId: sid, candidateCount: count };
+  }, [session?.sessionId, session?.previewCandidates]);
 
   useEffect(() => {
     const wasOpen = memoryModalWasOpenRef.current;
@@ -217,7 +251,6 @@ export function Fhm2dMemoryPreviewModal() {
             p.setMemoryWorkspaceSession(created);
             p.setMemoryWorkspaceSourcePath(path);
             setActiveEntryId(findFirstEntryId(created));
-            setSelectedCandidateIds(new Set());
             setCollapsedFolderIds(new Set());
             toast.success("Memory workspace was restored from disk.");
           } catch (e2) {
@@ -329,7 +362,6 @@ export function Fhm2dMemoryPreviewModal() {
         p.setMemoryWorkspaceSourcePath(path);
         p.setMemoryWorkspaceSession(created);
         setActiveEntryId(findFirstEntryId(created));
-        setSelectedCandidateIds(new Set());
         setCollapsedFolderIds(new Set());
         setRenameName("");
         setRenameVirtualPath("");
@@ -577,6 +609,7 @@ export function Fhm2dMemoryPreviewModal() {
           p.appendMemoryPreviewBundles(bundles);
           toast.success("Memory preview appended to 3D view");
         }
+        closeModal();
       } catch (e) {
         toast.error(String(e));
       } finally {
@@ -584,7 +617,7 @@ export function Fhm2dMemoryPreviewModal() {
         setBusy(false);
       }
     },
-    [buildSelectedBundles, p],
+    [buildSelectedBundles, closeModal, p],
   );
 
   return (

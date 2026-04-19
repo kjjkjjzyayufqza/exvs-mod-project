@@ -101,6 +101,12 @@ const GRID_PLANE_HEIGHT = 200;
  * Must be large vs orbit distance or the grid vanishes when zooming out.
  */
 const GRID_FADE_DISTANCE = 5e6;
+/**
+ * Blender default theme `space_view3d`: grid_major RGB #545454; grid is #545454 at alpha 0x80.
+ * Drei's Grid uses vec3 colors only — cell lines use #464646 to match grid over #383838 background.
+ */
+const BLENDER_GRID_CELL_COLOR = "#464646";
+const BLENDER_GRID_SECTION_COLOR = "#545454";
 const SSBH_PREVIEW_DEBUG = isSsbhPreviewDebugEnabled(
   globalThis as { __SSBH_PREVIEW_DEBUG__?: boolean } | undefined,
   import.meta.env.DEV,
@@ -175,7 +181,6 @@ type SsbhModelCanvasProps = {
   activePreviewInstanceId: string | null;
   previewViewMode: PreviewInstanceViewMode;
   hiddenPreviewInstanceIds: ReadonlySet<string>;
-  selectedPreviewInstanceIds: ReadonlySet<string>;
   selectedBoneIndex: number | null;
   boneTransformMode: BoneTransformMode;
   bonePoseResetNonce: number;
@@ -768,7 +773,7 @@ const DrawMeshes = memo(function DrawMeshes({
   ignoreMeshRaycastForBonePicking,
   previewRenderStyle,
   animeKeyLightDir,
-  selectedPreviewInstanceIds,
+  selectionOutline,
   motionVisibilityRows,
   motionForceVisibleDuringPlayback,
   skeleton,
@@ -783,13 +788,13 @@ const DrawMeshes = memo(function DrawMeshes({
   | "visibleKeys"
   | "wireframe"
   | "previewRenderStyle"
-  | "selectedPreviewInstanceIds"
   | "motionForceVisibleDuringPlayback"
 > & {
   ignoreMeshRaycastForBonePicking: boolean;
   animeKeyLightDir: Vector3;
   skeleton: Skeleton | null;
   motionVisibilityRows: MotionVisibilityRow[] | null;
+  selectionOutline: boolean;
 }) {
   const ignoreRaycast = ignoreMeshRaycastForBonePicking;
   useRenderDebug("DrawMeshes", {
@@ -816,10 +821,7 @@ const DrawMeshes = memo(function DrawMeshes({
           forceVisibleDuringMotion: motionForceVisibleDuringPlayback,
           motionPlaybackActive: Boolean(skeleton),
         });
-        const selected =
-          d.previewInstanceId !== undefined && d.previewInstanceId !== null
-            ? selectedPreviewInstanceIds.has(d.previewInstanceId)
-            : false;
+        const selected = selectionOutline;
         return (
           <DrawMeshEntry
             key={d.key}
@@ -893,7 +895,6 @@ const Scene = memo(function Scene({
   activePreviewInstanceId,
   previewViewMode,
   hiddenPreviewInstanceIds,
-  selectedPreviewInstanceIds,
   selectedBoneIndex,
   boneTransformMode,
   bonePoseResetNonce,
@@ -943,7 +944,6 @@ const Scene = memo(function Scene({
     previewInstances: previewInstances.length,
     activePreviewInstanceId: activePreviewInstanceId ?? "null",
     hiddenPreviewInstances: hiddenPreviewInstanceIds.size,
-    selectedPreviewInstances: selectedPreviewInstanceIds.size,
     motionPlaying: anyMotionPlaying,
     motionScrubbing,
     motionFrame: activeMotionState?.frame ?? 0,
@@ -1401,9 +1401,7 @@ const Scene = memo(function Scene({
         {visibleInstances.map((inst, i) => {
           const instDraws = drawsByInstance.get(inst.id) ?? [];
           const pos = instanceLayoutPosition(i, previewInstances.length);
-          const isActive =
-            activePreviewInstanceId === inst.id ||
-            (previewInstances.length === 1 && activePreviewInstanceId === null);
+          const isActive = activePreviewInstanceId === inst.id;
           const isInteractionTarget = isActive;
           const instSkel = inst.bundle.skel ? (inst.bundle.skel as SkelDataJson) : null;
           const instMotionState = motionStatesByInstanceId.get(inst.id) ?? null;
@@ -1476,7 +1474,7 @@ const Scene = memo(function Scene({
                 ignoreMeshRaycastForBonePicking={anyMotionPlaying || motionScrubbing || (skelHasBones && isActive)}
                 previewRenderStyle={previewRenderStyle}
                 animeKeyLightDir={animeKeyLightDir}
-                selectedPreviewInstanceIds={selectedPreviewInstanceIds}
+                selectionOutline={isActive}
                 motionVisibilityRows={anyMotionPlaying || motionScrubbing ? null : isActive ? (instMotionSample?.visibility ?? null) : null}
                 skeleton={gpuSkeleton}
                 motionForceVisibleDuringPlayback={motionForceVisibleDuringPlayback}
@@ -1520,8 +1518,8 @@ const Scene = memo(function Scene({
           sectionSize={5}
           fadeDistance={GRID_FADE_DISTANCE}
           fadeStrength={1}
-          sectionColor="#4a5568"
-          cellColor="#2d3748"
+          sectionColor={BLENDER_GRID_SECTION_COLOR}
+          cellColor={BLENDER_GRID_CELL_COLOR}
           sectionThickness={1}
           cellThickness={0.6}
         />
@@ -1545,8 +1543,9 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
     ...restSceneProps
   } = sceneProps;
   const { previewInstances, activePreviewInstanceId } = restSceneProps;
-  const activeInstance =
-    previewInstances.find((i) => i.id === activePreviewInstanceId) ?? previewInstances[0] ?? null;
+  const activeInstance = activePreviewInstanceId
+    ? (previewInstances.find((i) => i.id === activePreviewInstanceId) ?? null)
+    : null;
   const skel = activeInstance?.bundle?.skel ? (activeInstance.bundle.skel as SkelDataJson) : null;
   const skelHasBones = skel !== null && skel.bones.length > 0;
   const selectedBoneIndex = restSceneProps.selectedBoneIndex;

@@ -57,10 +57,10 @@ import {
   replacePreviewCollectionItems as replacePreviewCollectionItemsService,
   setPreviewCollectionControlRange as setPreviewCollectionControlRangeService,
   setPreviewCollectionQuery as setPreviewCollectionQueryService,
+  clearPreviewCollectionActive as clearPreviewCollectionActiveService,
   setPreviewCollectionActive as setPreviewCollectionActiveService,
   setPreviewCollectionViewRange as setPreviewCollectionViewRangeService,
   toggleAllPreviewCollectionVisibility as toggleAllPreviewCollectionVisibilityService,
-  togglePreviewCollectionItemSelected as togglePreviewCollectionItemSelectedService,
   togglePreviewCollectionItemVisibility as togglePreviewCollectionItemVisibilityService,
 } from "./fhm2dMemoryPreviewService";
 import type {
@@ -95,6 +95,9 @@ export type PreviewControlScope = "all" | "single";
 
 /** Physical PBR preview vs stylized look inspired by cortiz2894/water-anime-shader (bloom + warm lights). */
 export type PreviewRenderStyle = "standard" | "anime";
+
+/** Blender Dark theme 3D Viewport grid background high (0.22, 0.22, 0.22). */
+const DEFAULT_PREVIEW_3D_BACKGROUND = "#383838";
 
 export type MaterialDebugViewMode =
   | "full"
@@ -186,6 +189,9 @@ function collectMemorySessionIdsFromBundles(bundles: readonly SsbhModelPreviewBu
       .filter((value): value is string => Boolean(value)),
   )];
 }
+
+/** Multi-select is disabled in the UI; exported for context API compatibility. */
+const EMPTY_PREVIEW_INSTANCE_SELECTION: ReadonlySet<string> = new Set();
 
 function createEmptyPreviewCollectionSnapshot(): PreviewCollectionSnapshot {
   return {
@@ -446,7 +452,6 @@ export function SsbhModelPreviewProvider({
   const [previewViewMode, setPreviewViewMode] = useState<PreviewInstanceViewMode>("all");
   const [previewControlScope, setPreviewControlScope] = useState<PreviewControlScope>("single");
   const [hiddenPreviewInstanceIds, setHiddenPreviewInstanceIds] = useState<Set<string>>(new Set());
-  const [selectedPreviewInstanceIds, setSelectedPreviewInstanceIds] = useState<Set<string>>(new Set());
   const [draws, setDraws] = useState<BuiltMeshDraw[]>([]);
   const [drawError, setDrawError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -459,7 +464,7 @@ export function SsbhModelPreviewProvider({
   const [showGrid, setShowGrid] = useState(true);
   const [showAxesGizmo, setShowAxesGizmo] = useState(true);
   const [showStats, setShowStats] = useState(false);
-  const [background, setBackground] = useState("#1a1d23");
+  const [background, setBackground] = useState(DEFAULT_PREVIEW_3D_BACKGROUND);
   const [ambientIntensity, setAmbientIntensity] = useState(0.4);
   const [directionalIntensity, setDirectionalIntensity] = useState(1.05);
   const [directionalX, setDirectionalX] = useState(8);
@@ -558,7 +563,7 @@ export function SsbhModelPreviewProvider({
     setPreviewControlScope(snapshot.controlRange);
     setActivePreviewInstanceId(snapshot.activeItemId);
     setHiddenPreviewInstanceIds(new Set(snapshot.hiddenItemIds));
-    setSelectedPreviewInstanceIds(new Set(snapshot.selectedItemIds));
+    // Multi-select disabled: ignore snapshot.selectedItemIds (was setSelectedPreviewInstanceIds).
   }, []);
 
   const syncPreviewCollectionReplace = useCallback(
@@ -614,7 +619,12 @@ export function SsbhModelPreviewProvider({
 
   const setActivePreviewInstanceIdRemote = useCallback(
     (id: string | null) => {
-      if (!id) {
+      if (id === null) {
+        void clearPreviewCollectionActiveService()
+          .then(applyPreviewCollectionSnapshot)
+          .catch((error) => {
+            toast.error(String(error));
+          });
         return;
       }
       void setPreviewCollectionActiveService(id)
@@ -657,16 +667,9 @@ export function SsbhModelPreviewProvider({
       });
   }, [applyPreviewCollectionSnapshot, previewCollectionSnapshot.allVisible]);
 
-  const togglePreviewInstanceSelected = useCallback(
-    (id: string) => {
-      void togglePreviewCollectionItemSelectedService(id)
-        .then(applyPreviewCollectionSnapshot)
-        .catch((error) => {
-          toast.error(String(error));
-        });
-    },
-    [applyPreviewCollectionSnapshot],
-  );
+  const togglePreviewInstanceSelected = useCallback((_id: string) => {
+    /* Multi-select disabled; no backend toggle. */
+  }, []);
 
   const disposeMemorySessions = useCallback(async (sessionIds: readonly string[]) => {
     const unique = [...new Set(sessionIds.filter((id) => id.trim().length > 0))];
@@ -705,16 +708,15 @@ export function SsbhModelPreviewProvider({
 
   const bundle = useMemo((): SsbhModelPreviewBundle | null => {
     if (previewInstances.length === 0) return null;
-    if (activePreviewInstanceId) {
-      const hit = previewInstances.find((i) => i.id === activePreviewInstanceId);
-      return hit?.bundle ?? previewInstances[0]!.bundle;
+    if (!activePreviewInstanceId) {
+      return null;
     }
-    return previewInstances[0]!.bundle;
+    return previewInstances.find((i) => i.id === activePreviewInstanceId)?.bundle ?? null;
   }, [previewInstances, activePreviewInstanceId]);
 
   const resolvedActivePreviewInstanceId = useMemo(
-    () => activePreviewInstanceId ?? previewInstances[0]?.id ?? null,
-    [activePreviewInstanceId, previewInstances],
+    () => activePreviewInstanceId,
+    [activePreviewInstanceId],
   );
 
   useEffect(() => {
@@ -1839,7 +1841,7 @@ export function SsbhModelPreviewProvider({
     setShowGrid(true);
     setShowAxesGizmo(true);
     setShowStats(false);
-    setBackground("#1a1d23");
+    setBackground(DEFAULT_PREVIEW_3D_BACKGROUND);
     setAmbientIntensity(0.4);
     setDirectionalIntensity(1.05);
     setDirectionalX(8);
@@ -2026,6 +2028,8 @@ export function SsbhModelPreviewProvider({
       : null;
     if (mappedActiveId) {
       await setPreviewCollectionActiveService(mappedActiveId).then(applyPreviewCollectionSnapshot);
+    } else {
+      await clearPreviewCollectionActiveService().then(applyPreviewCollectionSnapshot);
     }
     for (const hiddenId of mappedHidden) {
       await togglePreviewCollectionItemVisibilityService(hiddenId).then(applyPreviewCollectionSnapshot);
@@ -2168,7 +2172,7 @@ export function SsbhModelPreviewProvider({
 
   const controllableDraws = useMemo(() => {
     if (previewControlScope === "all") return draws;
-    if (!activePreviewInstanceId) return draws;
+    if (!activePreviewInstanceId) return [];
     return draws.filter(
       (d) =>
         d.previewInstanceId === activePreviewInstanceId ||
@@ -2237,7 +2241,7 @@ export function SsbhModelPreviewProvider({
       previewCollectionQuery: previewCollectionSnapshot.query,
       setPreviewCollectionQuery,
       previewCollectionAllVisible: previewCollectionSnapshot.allVisible,
-      selectedPreviewInstanceIds,
+      selectedPreviewInstanceIds: EMPTY_PREVIEW_INSTANCE_SELECTION,
       togglePreviewInstanceSelected,
       activePreviewInstanceId,
       setActivePreviewInstanceId: setActivePreviewInstanceIdRemote,
@@ -2381,7 +2385,6 @@ export function SsbhModelPreviewProvider({
       previewInstances,
       previewCollectionSnapshot,
       setPreviewCollectionQuery,
-      selectedPreviewInstanceIds,
       togglePreviewInstanceSelected,
       activePreviewInstanceId,
       setActivePreviewInstanceIdRemote,

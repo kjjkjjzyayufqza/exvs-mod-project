@@ -5,6 +5,7 @@ import { BufferAttribute, Group, Matrix4, Object3D, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { bonePosesEqual, encodeBonePose } from "./bonePoseHistory";
 import { shouldRecomputeNormalsDuringSkinning } from "./bonePreviewRigPerf";
+import { refreshDynamicLineGeometryBounds } from "./bonePreviewRigLineGeometry";
 import { applyLocalPoseToObjects } from "./boneRuntime";
 import {
   useArmatureRestAndInvBind,
@@ -346,6 +347,7 @@ export function BonePreviewRig({
         arr[o++] = posScratch.current.z;
       }
       positions.needsUpdate = true;
+      refreshDynamicLineGeometryBounds(lineGeomRef.current);
     }
     if (!tcDragRef.current) {
       needsSkinningUpdateRef.current = false;
@@ -380,7 +382,7 @@ export function BonePreviewRig({
         />
       ))}
       {showSkeletonLines && lineSegmentCount > 0 ? (
-        <lineSegments geometry={lineGeom}>
+        <lineSegments geometry={lineGeom} frustumCulled={false}>
           <primitive attach="material" object={lineMat} />
         </lineSegments>
       ) : null}

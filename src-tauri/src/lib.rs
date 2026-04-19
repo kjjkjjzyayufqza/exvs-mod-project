@@ -91,6 +91,7 @@ pub fn run() {
             preview_collection_state::preview_collection_toggle_all_visibility,
             preview_collection_state::preview_collection_toggle_item_selected,
             preview_collection_state::preview_collection_set_active,
+            preview_collection_state::preview_collection_clear_active,
             preview_collection_state::preview_collection_set_view_range,
             preview_collection_state::preview_collection_set_control_range,
             preview_collection_state::preview_collection_remove_missing_ids

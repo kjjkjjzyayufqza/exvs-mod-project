@@ -7,13 +7,8 @@ import { SsbhModelPreviewLoadingOverlay } from "./SsbhModelPreviewLoadingOverlay
 import { SsbhModelPreviewQuickActions } from "./SsbhModelPreviewQuickActions";
 import { SsbhModelViewportTimeline } from "./SsbhModelViewportTimeline";
 import { Fhm2dMemoryPreviewModal } from "./Fhm2dMemoryPreviewModal";
+import { shouldRenderPreviewSkeletonLines } from "./ssbhPreviewSkeletonVisibility";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
-function formatPreviewCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 10_000) return `${Math.round(n / 1_000)}k`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return `${n}`;
-}
 
 export function SsbhModelPreviewViewport() {
   const p = useSsbhModelPreview();
@@ -45,12 +40,6 @@ export function SsbhModelPreviewViewport() {
     },
     [p],
   );
-  const stats = p.vertexTriangleStats;
-  const statsLine =
-    p.bundle && p.draws.length > 0
-      ? `${formatPreviewCount(stats.verts)} verts · ${formatPreviewCount(stats.tris)} tris · ${p.draws.length} draws`
-      : null;
-
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 shrink-0 px-1">
@@ -121,26 +110,7 @@ export function SsbhModelPreviewViewport() {
         ) : null}
         {p.loadError ? <span className="text-destructive max-w-[240px] truncate">{p.loadError}</span> : null}
         {p.drawError ? <span className="text-destructive max-w-[240px] truncate">{p.drawError}</span> : null}
-        {statsLine ? (
-          <span
-            className="text-[10px] text-muted-foreground tabular-nums ml-auto w-full sm:w-auto sm:ml-0"
-            title="Mesh statistics for the loaded preview"
-          >
-            {statsLine}
-          </span>
-        ) : null}
       </div>
-
-      {p.bundle ? (
-        <p
-          className="text-[11px] text-muted-foreground truncate shrink-0 px-1"
-          title={p.previewInstances.length > 1 ? `${p.previewInstances.length} models` : p.bundle.modlPath}
-        >
-          {p.previewInstances.length > 1
-            ? `${p.previewInstances.length} models · ${p.bundle.modlPath}`
-            : p.bundle.modlPath}
-        </p>
-      ) : null}
 
       <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
         <ResizablePanel defaultSize={90} minSize={45}>
@@ -155,7 +125,7 @@ export function SsbhModelPreviewViewport() {
               uvFlipV={p.uvFlipV}
               visibleKeys={p.visibleKeys}
               wireframe={p.wireframe}
-              showSkeleton={p.showSkeleton && Boolean(p.bundle?.skel)}
+              showSkeleton={shouldRenderPreviewSkeletonLines(p.showSkeleton, p.previewInstances)}
               skeletonGeometry={p.skeletonGeometry}
               showGrid={p.showGrid}
               showAxesGizmo={p.showAxesGizmo}
@@ -172,7 +142,6 @@ export function SsbhModelPreviewViewport() {
               activePreviewInstanceId={p.activePreviewInstanceId}
               previewViewMode={p.previewViewMode}
               hiddenPreviewInstanceIds={p.hiddenPreviewInstanceIds}
-              selectedPreviewInstanceIds={p.selectedPreviewInstanceIds}
               selectedBoneIndex={p.selectedBoneIndex}
               boneTransformMode={p.boneTransformMode}
               bonePoseResetNonce={p.bonePoseResetNonce}
@@ -191,7 +160,7 @@ export function SsbhModelPreviewViewport() {
               motionStatesByInstanceId={p.motionStatesByInstanceId}
               onMotionFrameSync={p.setMotionFrameForInstance}
               onMotionPlaybackStop={(instanceId) => p.setMotionPlayingForInstance(instanceId, false)}
-              motionControlInstanceId={p.activePreviewInstanceId ?? p.previewInstances[0]?.id ?? null}
+              motionControlInstanceId={p.activePreviewInstanceId ?? null}
               motionScrubbing={motionScrubbing}
               motionScrubFrameRef={motionScrubFrameRef}
               motionApplyCamera={p.motionApplyCamera}
