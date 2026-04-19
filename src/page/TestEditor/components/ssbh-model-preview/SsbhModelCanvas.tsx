@@ -66,6 +66,10 @@ import { SsbhSkinnedMesh } from "./SsbhSkinnedMesh";
 import { fitCameraToObject } from "./cameraFit";
 import { applyPreviewUvFlip } from "./previewUvFlip";
 import {
+  createPreviewSelectionUniforms,
+  previewSelectionOnBeforeCompile,
+} from "./previewSelectionMaterial";
+import {
   getSsbhAdaptiveDpr,
   getSsbhAdaptivePerformanceOptions,
   getSsbhPerfMonitorOptions,
@@ -171,6 +175,7 @@ type SsbhModelCanvasProps = {
   activePreviewInstanceId: string | null;
   previewViewMode: PreviewInstanceViewMode;
   hiddenPreviewInstanceIds: ReadonlySet<string>;
+  selectedPreviewInstanceIds: ReadonlySet<string>;
   selectedBoneIndex: number | null;
   boneTransformMode: BoneTransformMode;
   bonePoseResetNonce: number;
@@ -334,6 +339,7 @@ type DrawMeshProps = {
   ignoreRaycast: boolean;
   skeleton: Skeleton | null;
   normalMapEnabled?: boolean;
+  selected: boolean;
 };
 
 const noopMeshRaycast: Mesh["raycast"] = () => {};
@@ -407,7 +413,16 @@ function DrawMeshContainer({
   );
 }
 
-function DrawMeshUntextured({ draw, visible, wireframe, ignoreRaycast, skeleton }: DrawMeshProps) {
+function DrawMeshUntextured({ draw, visible, wireframe, ignoreRaycast, skeleton, selected }: DrawMeshProps) {
+  const selectionUniforms = useMemo(() => createPreviewSelectionUniforms(), [draw.key]);
+  const onBeforeCompileSelection = useMemo(
+    () => previewSelectionOnBeforeCompile(selectionUniforms),
+    [selectionUniforms],
+  );
+  useFrame((state) => {
+    selectionUniforms.uSelectionEnabled.value = selected ? 1 : 0;
+    selectionUniforms.uSelectionTime.value = state.clock.elapsedTime;
+  });
   if (!visible) return null;
   return (
     <DrawMeshContainer draw={draw} ignoreRaycast={ignoreRaycast} skeleton={skeleton}>
@@ -417,6 +432,7 @@ function DrawMeshUntextured({ draw, visible, wireframe, ignoreRaycast, skeleton 
         metalness={0.06}
         side={DoubleSide}
         wireframe={wireframe}
+        onBeforeCompile={onBeforeCompileSelection}
       />
     </DrawMeshContainer>
   );
@@ -480,6 +496,7 @@ function DrawMeshUnifiedPbr({
   materialDebugViewMode,
   previewRenderStyle,
   animeKeyLightDir,
+  selected,
 }: DrawMeshProps & {
   slots: { kind: PbrSlotKind; url: string }[];
   binding: ResolvedMaterialBinding | null;
@@ -520,9 +537,27 @@ function DrawMeshUnifiedPbr({
   const exvsActive = previewRenderStyle === "anime" && materialDebugViewMode === "full";
   const exvsUniforms = useMemo(() => createAnimeExvsUniforms(), [draw.key]);
   const onBeforeCompileExvs = useMemo(() => animeExvsOnBeforeCompile(exvsUniforms), [exvsUniforms]);
+  const selectionUniforms = useMemo(() => createPreviewSelectionUniforms(), [draw.key]);
+  const onBeforeCompileSelection = useMemo(
+    () => previewSelectionOnBeforeCompile(selectionUniforms),
+    [selectionUniforms],
+  );
+  const onBeforeCompileCombined = useMemo(
+    () => (shader: { fragmentShader: string; uniforms: Record<string, { value: unknown }> }) => {
+      if (exvsActive) {
+        onBeforeCompileExvs(shader);
+      }
+      onBeforeCompileSelection(shader);
+    },
+    [exvsActive, onBeforeCompileExvs, onBeforeCompileSelection],
+  );
   useFrame(() => {
     if (!exvsActive) return;
     exvsUniforms.uAnimeKeyDir.value.copy(animeKeyLightDir);
+  });
+  useFrame((state) => {
+    selectionUniforms.uSelectionEnabled.value = selected ? 1 : 0;
+    selectionUniforms.uSelectionTime.value = state.clock.elapsedTime;
   });
   if (!visible) return null;
   const shaderFamily = binding?.shaderFamily ?? "generic";
@@ -603,7 +638,7 @@ function DrawMeshUnifiedPbr({
         metalness={effectiveMetalnessValue}
         side={DoubleSide}
         wireframe={wireframe}
-        onBeforeCompile={exvsActive ? onBeforeCompileExvs : undefined}
+        onBeforeCompile={onBeforeCompileCombined}
       />
     </DrawMeshContainer>
   );
@@ -654,6 +689,7 @@ const DrawMeshEntry = memo(function DrawMeshEntry({
   previewRenderStyle,
   animeKeyLightDir,
   skeleton,
+  selected,
 }: {
   draw: BuiltMeshDraw;
   mats: DrawMaterialDataUrls | undefined;
@@ -667,6 +703,7 @@ const DrawMeshEntry = memo(function DrawMeshEntry({
   previewRenderStyle: PreviewRenderStyle;
   animeKeyLightDir: Vector3;
   skeleton: Skeleton | null;
+  selected: boolean;
 }) {
   const slots = useMemo(
     () => buildDrawMeshSlots(mats, materialDebugViewMode, normalMapEnabled),
@@ -689,6 +726,7 @@ const DrawMeshEntry = memo(function DrawMeshEntry({
           previewRenderStyle={previewRenderStyle}
           animeKeyLightDir={animeKeyLightDir}
           skeleton={skeleton}
+          selected={selected}
         />
       ) : (
         <DrawMeshUntextured
@@ -697,6 +735,7 @@ const DrawMeshEntry = memo(function DrawMeshEntry({
           wireframe={wireframe}
           ignoreRaycast={ignoreRaycast}
           skeleton={skeleton}
+          selected={selected}
         />
       )}
     </Suspense>
@@ -713,7 +752,8 @@ const DrawMeshEntry = memo(function DrawMeshEntry({
   prev.materialDebugViewMode === next.materialDebugViewMode &&
   prev.previewRenderStyle === next.previewRenderStyle &&
   prev.animeKeyLightDir === next.animeKeyLightDir &&
-  prev.skeleton === next.skeleton,
+  prev.skeleton === next.skeleton &&
+  prev.selected === next.selected,
 );
 
 const DrawMeshes = memo(function DrawMeshes({
@@ -728,6 +768,7 @@ const DrawMeshes = memo(function DrawMeshes({
   ignoreMeshRaycastForBonePicking,
   previewRenderStyle,
   animeKeyLightDir,
+  selectedPreviewInstanceIds,
   motionVisibilityRows,
   motionForceVisibleDuringPlayback,
   skeleton,
@@ -742,6 +783,7 @@ const DrawMeshes = memo(function DrawMeshes({
   | "visibleKeys"
   | "wireframe"
   | "previewRenderStyle"
+  | "selectedPreviewInstanceIds"
   | "motionForceVisibleDuringPlayback"
 > & {
   ignoreMeshRaycastForBonePicking: boolean;
@@ -774,6 +816,10 @@ const DrawMeshes = memo(function DrawMeshes({
           forceVisibleDuringMotion: motionForceVisibleDuringPlayback,
           motionPlaybackActive: Boolean(skeleton),
         });
+        const selected =
+          d.previewInstanceId !== undefined && d.previewInstanceId !== null
+            ? selectedPreviewInstanceIds.has(d.previewInstanceId)
+            : false;
         return (
           <DrawMeshEntry
             key={d.key}
@@ -789,6 +835,7 @@ const DrawMeshes = memo(function DrawMeshes({
             previewRenderStyle={previewRenderStyle}
             animeKeyLightDir={animeKeyLightDir}
             skeleton={skeleton}
+            selected={selected}
           />
         );
       })}
@@ -846,6 +893,7 @@ const Scene = memo(function Scene({
   activePreviewInstanceId,
   previewViewMode,
   hiddenPreviewInstanceIds,
+  selectedPreviewInstanceIds,
   selectedBoneIndex,
   boneTransformMode,
   bonePoseResetNonce,
@@ -895,6 +943,7 @@ const Scene = memo(function Scene({
     previewInstances: previewInstances.length,
     activePreviewInstanceId: activePreviewInstanceId ?? "null",
     hiddenPreviewInstances: hiddenPreviewInstanceIds.size,
+    selectedPreviewInstances: selectedPreviewInstanceIds.size,
     motionPlaying: anyMotionPlaying,
     motionScrubbing,
     motionFrame: activeMotionState?.frame ?? 0,
@@ -1427,6 +1476,7 @@ const Scene = memo(function Scene({
                 ignoreMeshRaycastForBonePicking={anyMotionPlaying || motionScrubbing || (skelHasBones && isActive)}
                 previewRenderStyle={previewRenderStyle}
                 animeKeyLightDir={animeKeyLightDir}
+                selectedPreviewInstanceIds={selectedPreviewInstanceIds}
                 motionVisibilityRows={anyMotionPlaying || motionScrubbing ? null : isActive ? (instMotionSample?.visibility ?? null) : null}
                 skeleton={gpuSkeleton}
                 motionForceVisibleDuringPlayback={motionForceVisibleDuringPlayback}

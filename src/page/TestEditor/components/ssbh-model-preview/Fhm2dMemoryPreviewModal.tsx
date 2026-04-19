@@ -38,11 +38,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { useConfigStore } from "@/store/configStore";
 import {
   DialogLastPathKey,
   getDialogDefaultPath,
   rememberDialogSelection,
 } from "@/utils/dialogLastPath";
+import {
+  loadCharacterIdMemoryPreviewOptions,
+} from "./fhm2dMemoryPreviewCharacterTable";
 import {
   buildSsbhPreviewBundleFromMemory,
   createFhm2dMemorySession,
@@ -52,6 +56,7 @@ import {
   renameFhm2dMemoryEntry,
 } from "./fhm2dMemoryPreviewService";
 import type {
+  CharacterIdMemoryPreviewOption,
   Fhm2dMemorySessionSummary,
   Fhm2dPreviewCandidate,
 } from "./fhm2dMemoryPreviewTypes";
@@ -72,6 +77,16 @@ type MemoryWorkspaceProgress = {
   total: number;
   currentLabel: string | null;
 };
+
+type CharacterIdPickerState =
+  | { status: "idle" | "loading" }
+  | { status: "error"; message: string }
+  | {
+      status: "ready";
+      filePath: string;
+      availableCount: number;
+      options: CharacterIdMemoryPreviewOption[];
+    };
 
 function formatBytes(size: number | null): string {
   if (!size || size <= 0) {
@@ -94,9 +109,15 @@ function findFirstEntryId(session: Fhm2dMemorySessionSummary | null): string | n
 
 export function Fhm2dMemoryPreviewModal() {
   const p = useSsbhModelPreview();
+  const obDplCachePath = useConfigStore((state) => state.obDplCachePath ?? "");
   const session = p.memoryWorkspaceSession;
   const sourcePath = p.memoryWorkspaceSourcePath;
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
+  const [selectedCharacterId, setSelectedCharacterId] = useState<number | null>(null);
+  const [characterIdPickerState, setCharacterIdPickerState] = useState<CharacterIdPickerState>({
+    status: "idle",
+  });
+  const [characterIdSearchText, setCharacterIdSearchText] = useState("");
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(new Set());
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<string>>(new Set());
   const [treeSearchText, setTreeSearchText] = useState("");
@@ -107,10 +128,12 @@ export function Fhm2dMemoryPreviewModal() {
   const [busy, setBusy] = useState(false);
   const [workspaceProgress, setWorkspaceProgress] = useState<MemoryWorkspaceProgress | null>(null);
   const [isPending, startTransition] = useTransition();
+  const characterIdViewportRef = useRef<HTMLDivElement | null>(null);
   const treeViewportRef = useRef<HTMLDivElement | null>(null);
   const groupsViewportRef = useRef<HTMLDivElement | null>(null);
   const candidatesViewportRef = useRef<HTMLDivElement | null>(null);
   const memoryModalWasOpenRef = useRef(false);
+  const deferredCharacterIdSearchText = useDeferredValue(characterIdSearchText);
   const deferredTreeSearchText = useDeferredValue(treeSearchText);
 
   const virtualEntriesById = useMemo(
@@ -232,6 +255,65 @@ export function Fhm2dMemoryPreviewModal() {
     }
   }, [session, activeEntryId, virtualEntriesById]);
 
+  useEffect(() => {
+    if (!p.memoryPreviewModalOpen) {
+      return;
+    }
+    const workspaceRoot = p.workspaceRoot?.trim() ?? "";
+    if (!workspaceRoot) {
+      setCharacterIdPickerState({
+        status: "error",
+        message: "Open a workspace folder before using the Character ID picker.",
+      });
+      return;
+    }
+    let cancelled = false;
+    setCharacterIdPickerState({ status: "loading" });
+    void (async () => {
+      try {
+        const loaded = await loadCharacterIdMemoryPreviewOptions({
+          workspaceRoot,
+          obDplCachePath,
+          query: deferredCharacterIdSearchText,
+        });
+        if (!cancelled) {
+          setCharacterIdPickerState({
+            status: "ready",
+            filePath: loaded.filePath,
+            availableCount: loaded.availableCount,
+            options: loaded.rows,
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setCharacterIdPickerState({
+            status: "error",
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [p.memoryPreviewModalOpen, p.workspaceRoot, obDplCachePath, deferredCharacterIdSearchText]);
+
+  useEffect(() => {
+    if (characterIdPickerState.status !== "ready") {
+      return;
+    }
+    const normalizedSourcePath = sourcePath?.trim();
+    if (!normalizedSourcePath) {
+      setSelectedCharacterId(null);
+      return;
+    }
+    const match =
+      characterIdPickerState.options.find(
+        (option) => option.sourcePath.trim().toLowerCase() === normalizedSourcePath.toLowerCase(),
+      ) ?? null;
+    setSelectedCharacterId(match?.characterId ?? null);
+  }, [characterIdPickerState, sourcePath]);
+
   const openSourcePath = useCallback(
     async (path: string) => {
       setBusy(true);
@@ -292,6 +374,20 @@ export function Fhm2dMemoryPreviewModal() {
   const closeModal = useCallback(() => {
     p.setMemoryPreviewModalOpen(false);
   }, [p]);
+
+  const filteredCharacterIdOptions = useMemo(() => {
+    if (characterIdPickerState.status !== "ready") {
+      return [];
+    }
+    return characterIdPickerState.options;
+  }, [characterIdPickerState]);
+
+  const characterIdVirtualizer = useVirtualizer({
+    count: filteredCharacterIdOptions.length,
+    getScrollElement: () => characterIdViewportRef.current,
+    estimateSize: () => 68,
+    overscan: 10,
+  });
 
   const visibleTreeRows = useMemo(
     () =>
@@ -587,6 +683,114 @@ export function Fhm2dMemoryPreviewModal() {
 
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(300px,1.1fr)_minmax(360px,1fr)_minmax(360px,1.1fr)]">
           <section className="flex min-h-0 flex-col border-r">
+            <div className="shrink-0 border-b px-4 py-3">
+              <div className="mb-2 flex items-center gap-2">
+                <FileArchive className="h-4 w-4 text-primary" />
+                <h3 className="text-sm font-semibold">Character ID</h3>
+              </div>
+              <div className="space-y-2">
+                <div className="rounded-lg border bg-muted/15 px-3 py-2 text-[10px] text-muted-foreground">
+                  {characterIdPickerState.status === "loading" ? (
+                    <div>Loading character_id_table.bin from the current workspace…</div>
+                  ) : null}
+                  {characterIdPickerState.status === "error" ? (
+                    <div className="text-destructive">{characterIdPickerState.message}</div>
+                  ) : null}
+                  {characterIdPickerState.status === "ready" ? (
+                    <div className="space-y-1">
+                      <div className="break-all">Source: {characterIdPickerState.filePath}</div>
+                      <div>
+                        Loadable rows: {characterIdPickerState.availableCount}/{characterIdPickerState.options.length}
+                      </div>
+                      <div className="break-all">
+                        Source root: {obDplCachePath.trim() ? obDplCachePath : "obDplCachePath is not configured"}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    value={characterIdSearchText}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      startTransition(() => setCharacterIdSearchText(next));
+                    }}
+                    placeholder="Search Character ID or Model hash"
+                    className="h-8 pl-7 text-[11px]"
+                    disabled={characterIdPickerState.status !== "ready"}
+                  />
+                </div>
+              </div>
+              <div className="mt-3">
+                {characterIdPickerState.status === "ready" && filteredCharacterIdOptions.length === 0 ? (
+                  <div className="rounded-lg border border-dashed px-3 py-4 text-[11px] text-muted-foreground">
+                    No Character ID rows match the current search.
+                  </div>
+                ) : null}
+                {characterIdPickerState.status === "ready" && filteredCharacterIdOptions.length > 0 ? (
+                  <div
+                    ref={characterIdViewportRef}
+                    className="max-h-[240px] overflow-y-auto rounded-lg border bg-muted/10"
+                  >
+                    <div
+                      style={{
+                        height: `${characterIdVirtualizer.getTotalSize()}px`,
+                        position: "relative",
+                        width: "100%",
+                      }}
+                    >
+                      {characterIdVirtualizer.getVirtualItems().map((virtualRow) => {
+                        const option = filteredCharacterIdOptions[virtualRow.index];
+                        if (!option) {
+                          return null;
+                        }
+                        const isSelected = option.characterId === selectedCharacterId;
+                        const disabled = busy || option.disabledReason !== null;
+                        return (
+                          <button
+                            key={`character-id-${option.characterId}-${option.modelHashHex}`}
+                            type="button"
+                            aria-label={`Character ID ${option.characterId}`}
+                            disabled={disabled}
+                            className={cn(
+                              "absolute left-0 right-0 flex flex-col items-start gap-1 border-l-[3px] px-3 py-2 text-left text-[11px] transition-colors",
+                              isSelected
+                                ? "border-l-primary bg-primary/10"
+                                : "border-l-transparent hover:bg-muted/60",
+                              disabled && "cursor-not-allowed opacity-70 hover:bg-transparent",
+                            )}
+                            style={{ transform: `translateY(${virtualRow.start}px)` }}
+                            onClick={() => void openSourcePath(option.sourcePath)}
+                            title={option.disabledReason ?? option.sourcePath}
+                          >
+                            <div className="flex w-full items-center justify-between gap-2">
+                              <span className="font-medium">{`Character ID ${option.characterId}`}</span>
+                              {option.disabledReason ? (
+                                <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-700 dark:text-amber-300">
+                                  Disabled
+                                </span>
+                              ) : (
+                                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-700 dark:text-emerald-300">
+                                  Ready
+                                </span>
+                              )}
+                            </div>
+                            <div className="font-mono text-[10px] text-muted-foreground">
+                              {option.modelHashHex}.fhm2d
+                            </div>
+                            {option.disabledReason ? (
+                              <div className="text-[10px] text-muted-foreground">{option.disabledReason}</div>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
             <div className="shrink-0 border-b px-4 py-3">
               <div className="mb-2 flex items-center gap-2">
                 <FolderTree className="h-4 w-4 text-primary" />

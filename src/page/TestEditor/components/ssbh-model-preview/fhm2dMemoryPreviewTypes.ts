@@ -48,6 +48,50 @@ export type Fhm2dPreviewCandidate = {
   complete: boolean;
 };
 
+export type CharacterIdMemoryPreviewOption = {
+  characterId: number;
+  modelValue: number;
+  modelHashHex: string;
+  sourcePath: string;
+  sourceExists: boolean;
+  disabledReason: string | null;
+};
+
+export type CharacterIdMemoryPreviewResponse = {
+  filePath: string;
+  availableCount: number;
+  query: string;
+  rows: CharacterIdMemoryPreviewOption[];
+};
+
+export type PreviewCollectionSourceItem = {
+  id: string;
+  displayLabel: string;
+  modlPath: string;
+};
+
+export type PreviewCollectionItem = {
+  id: string;
+  displayLabel: string;
+  modlPath: string;
+  visible: boolean;
+  selected: boolean;
+  active: boolean;
+};
+
+export type PreviewCollectionSnapshot = {
+  query: string;
+  viewRange: "all" | "single";
+  controlRange: "all" | "single";
+  allVisible: boolean;
+  activeItemId: string | null;
+  selectedItemIds: string[];
+  hiddenItemIds: string[];
+  totalCount: number;
+  filteredCount: number;
+  items: PreviewCollectionItem[];
+};
+
 export type Fhm2dMemorySessionSummary = {
   sessionId: string;
   sourceName: string;

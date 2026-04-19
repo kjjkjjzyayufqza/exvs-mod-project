@@ -50,6 +50,19 @@ import {
 } from "./ssbhPreviewRecentPaths";
 import { buildSkeletonLineGeometry } from "./skeletonLines";
 import { normalizeScenePathStrict } from "./testEditorSceneConfig";
+import {
+  appendPreviewCollectionItems as appendPreviewCollectionItemsService,
+  getPreviewCollectionSnapshot as getPreviewCollectionSnapshotService,
+  removeMissingPreviewCollectionIds as removeMissingPreviewCollectionIdsService,
+  replacePreviewCollectionItems as replacePreviewCollectionItemsService,
+  setPreviewCollectionControlRange as setPreviewCollectionControlRangeService,
+  setPreviewCollectionQuery as setPreviewCollectionQueryService,
+  setPreviewCollectionActive as setPreviewCollectionActiveService,
+  setPreviewCollectionViewRange as setPreviewCollectionViewRangeService,
+  toggleAllPreviewCollectionVisibility as toggleAllPreviewCollectionVisibilityService,
+  togglePreviewCollectionItemSelected as togglePreviewCollectionItemSelectedService,
+  togglePreviewCollectionItemVisibility as togglePreviewCollectionItemVisibilityService,
+} from "./fhm2dMemoryPreviewService";
 import type {
   BuiltMeshDraw,
   MatlDataJson,
@@ -60,7 +73,12 @@ import type {
   SsbhModelPreviewBundleSourceKind,
   SsbhModelPreviewInstance,
 } from "./types";
-import type { Fhm2dMemorySessionSummary } from "./fhm2dMemoryPreviewTypes";
+import type {
+  Fhm2dMemorySessionSummary,
+  PreviewCollectionItem,
+  PreviewCollectionSnapshot,
+  PreviewCollectionSourceItem,
+} from "./fhm2dMemoryPreviewTypes";
 import type { MotionClip, MotionSample, NuanmbManifest } from "./motionPreviewTypes";
 import { sampleMotionClipFrame } from "./motionPlaybackMath";
 import {
@@ -169,11 +187,42 @@ function collectMemorySessionIdsFromBundles(bundles: readonly SsbhModelPreviewBu
   )];
 }
 
+function createEmptyPreviewCollectionSnapshot(): PreviewCollectionSnapshot {
+  return {
+    query: "",
+    viewRange: "all",
+    controlRange: "single",
+    allVisible: true,
+    activeItemId: null,
+    selectedItemIds: [],
+    hiddenItemIds: [],
+    totalCount: 0,
+    filteredCount: 0,
+    items: [],
+  };
+}
+
+function buildPreviewCollectionSourceItems(
+  instances: readonly SsbhModelPreviewInstance[],
+): PreviewCollectionSourceItem[] {
+  return instances.map((instance) => ({
+    id: instance.id,
+    displayLabel: instance.displayLabel,
+    modlPath: instance.modlPath,
+  }));
+}
+
 export type SsbhModelPreviewContextValue = {
   workspaceRoot: string | null;
   bundle: SsbhModelPreviewBundle | null;
   /** All loaded `.numdlb` instances (folder open may load many). */
   previewInstances: readonly SsbhModelPreviewInstance[];
+  previewCollectionItems: readonly PreviewCollectionItem[];
+  previewCollectionQuery: string;
+  setPreviewCollectionQuery: (query: string) => void;
+  previewCollectionAllVisible: boolean;
+  selectedPreviewInstanceIds: ReadonlySet<string>;
+  togglePreviewInstanceSelected: (id: string) => void;
   activePreviewInstanceId: string | null;
   setActivePreviewInstanceId: (id: string | null) => void;
   previewViewMode: PreviewInstanceViewMode;
@@ -390,10 +439,14 @@ export function SsbhModelPreviewProvider({
   const root = workspaceRoot?.trim() ? workspaceRoot : null;
 
   const [previewInstances, setPreviewInstances] = useState<SsbhModelPreviewInstance[]>([]);
+  const [previewCollectionSnapshot, setPreviewCollectionSnapshot] = useState<PreviewCollectionSnapshot>(
+    createEmptyPreviewCollectionSnapshot(),
+  );
   const [activePreviewInstanceId, setActivePreviewInstanceId] = useState<string | null>(null);
   const [previewViewMode, setPreviewViewMode] = useState<PreviewInstanceViewMode>("all");
   const [previewControlScope, setPreviewControlScope] = useState<PreviewControlScope>("single");
   const [hiddenPreviewInstanceIds, setHiddenPreviewInstanceIds] = useState<Set<string>>(new Set());
+  const [selectedPreviewInstanceIds, setSelectedPreviewInstanceIds] = useState<Set<string>>(new Set());
   const [draws, setDraws] = useState<BuiltMeshDraw[]>([]);
   const [drawError, setDrawError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -498,6 +551,122 @@ export function SsbhModelPreviewProvider({
     setAutoLoadAfterConvertToSsbhState(v);
     writeAutoLoadAfterConvertToStorage(v);
   }, []);
+
+  const applyPreviewCollectionSnapshot = useCallback((snapshot: PreviewCollectionSnapshot) => {
+    setPreviewCollectionSnapshot(snapshot);
+    setPreviewViewMode(snapshot.viewRange);
+    setPreviewControlScope(snapshot.controlRange);
+    setActivePreviewInstanceId(snapshot.activeItemId);
+    setHiddenPreviewInstanceIds(new Set(snapshot.hiddenItemIds));
+    setSelectedPreviewInstanceIds(new Set(snapshot.selectedItemIds));
+  }, []);
+
+  const syncPreviewCollectionReplace = useCallback(
+    async (instances: readonly SsbhModelPreviewInstance[]) => {
+      const snapshot = await replacePreviewCollectionItemsService(buildPreviewCollectionSourceItems(instances));
+      applyPreviewCollectionSnapshot(snapshot);
+      return snapshot;
+    },
+    [applyPreviewCollectionSnapshot],
+  );
+
+  const syncPreviewCollectionAppend = useCallback(
+    async (instances: readonly SsbhModelPreviewInstance[]) => {
+      const snapshot = await appendPreviewCollectionItemsService(buildPreviewCollectionSourceItems(instances));
+      applyPreviewCollectionSnapshot(snapshot);
+      return snapshot;
+    },
+    [applyPreviewCollectionSnapshot],
+  );
+
+  const setPreviewCollectionQuery = useCallback(
+    (query: string) => {
+      void setPreviewCollectionQueryService(query)
+        .then(applyPreviewCollectionSnapshot)
+        .catch((error) => {
+          toast.error(String(error));
+        });
+    },
+    [applyPreviewCollectionSnapshot],
+  );
+
+  const setPreviewViewModeRemote = useCallback(
+    (mode: PreviewInstanceViewMode) => {
+      void setPreviewCollectionViewRangeService(mode)
+        .then(applyPreviewCollectionSnapshot)
+        .catch((error) => {
+          toast.error(String(error));
+        });
+    },
+    [applyPreviewCollectionSnapshot],
+  );
+
+  const setPreviewControlScopeRemote = useCallback(
+    (scope: PreviewControlScope) => {
+      void setPreviewCollectionControlRangeService(scope)
+        .then(applyPreviewCollectionSnapshot)
+        .catch((error) => {
+          toast.error(String(error));
+        });
+    },
+    [applyPreviewCollectionSnapshot],
+  );
+
+  const setActivePreviewInstanceIdRemote = useCallback(
+    (id: string | null) => {
+      if (!id) {
+        return;
+      }
+      void setPreviewCollectionActiveService(id)
+        .then(applyPreviewCollectionSnapshot)
+        .catch((error) => {
+          toast.error(String(error));
+        });
+    },
+    [applyPreviewCollectionSnapshot],
+  );
+
+  const setPreviewInstanceVisible = useCallback(
+    (id: string, visible: boolean) => {
+      const currentlyVisible = !hiddenPreviewInstanceIds.has(id);
+      if (currentlyVisible === visible) {
+        return;
+      }
+      void togglePreviewCollectionItemVisibilityService(id)
+        .then(applyPreviewCollectionSnapshot)
+        .catch((error) => {
+          toast.error(String(error));
+        });
+    },
+    [applyPreviewCollectionSnapshot, hiddenPreviewInstanceIds],
+  );
+
+  const showAllPreviewInstances = useCallback(() => {
+    if (previewCollectionSnapshot.allVisible) {
+      void toggleAllPreviewCollectionVisibilityService()
+        .then(applyPreviewCollectionSnapshot)
+        .catch((error) => {
+          toast.error(String(error));
+        });
+      return;
+    }
+    void toggleAllPreviewCollectionVisibilityService()
+      .then(applyPreviewCollectionSnapshot)
+      .catch((error) => {
+        toast.error(String(error));
+      });
+  }, [applyPreviewCollectionSnapshot, previewCollectionSnapshot.allVisible]);
+
+  const togglePreviewInstanceSelected = useCallback(
+    (id: string) => {
+      void togglePreviewCollectionItemSelectedService(id)
+        .then(applyPreviewCollectionSnapshot)
+        .catch((error) => {
+          toast.error(String(error));
+        });
+    },
+    [applyPreviewCollectionSnapshot],
+  );
 
   const disposeMemorySessions = useCallback(async (sessionIds: readonly string[]) => {
     const unique = [...new Set(sessionIds.filter((id) => id.trim().length > 0))];
@@ -747,6 +916,7 @@ export function SsbhModelPreviewProvider({
       previewInstances.map((instance) => instance.bundle),
     );
     const loaded = await buildInstancesFromPaths(paths, 0);
+    await syncPreviewCollectionReplace(loaded.instances);
     const nextMemorySessionIds = collectMemorySessionIdsFromBundles(
       loaded.instances.map((instance) => instance.bundle),
     );
@@ -756,8 +926,6 @@ export function SsbhModelPreviewProvider({
         return loaded.draws;
       });
       setPreviewInstances(loaded.instances);
-      setActivePreviewInstanceId(loaded.instances[0]?.id ?? null);
-      setHiddenPreviewInstanceIds(new Set());
       setDrawError(null);
     });
     const disposeIds = oldMemorySessionIds.filter(
@@ -772,6 +940,7 @@ export function SsbhModelPreviewProvider({
     disposeMemorySessions,
     previewInstances,
     startTransition,
+    syncPreviewCollectionReplace,
   ]);
 
   const loadMemoryPreviewBundles = useCallback(
@@ -782,15 +951,14 @@ export function SsbhModelPreviewProvider({
       const nextMemorySessionIds = collectMemorySessionIdsFromBundles(bundles);
       setLoading(true);
       void buildInstancesFromBundles(bundles, 0)
-        .then((loaded) => {
+        .then(async (loaded) => {
+          await syncPreviewCollectionReplace(loaded.instances);
           startTransition(() => {
             setDraws((prev) => {
               prev.forEach((d) => d.geometry.dispose());
               return loaded.draws;
             });
             setPreviewInstances(loaded.instances);
-            setActivePreviewInstanceId(loaded.instances[0]?.id ?? null);
-            setHiddenPreviewInstanceIds(new Set());
             setDrawError(null);
             setLoadError(null);
           });
@@ -816,6 +984,7 @@ export function SsbhModelPreviewProvider({
       disposeMemorySessions,
       previewInstances,
       startTransition,
+      syncPreviewCollectionReplace,
     ],
   );
 
@@ -823,17 +992,11 @@ export function SsbhModelPreviewProvider({
     (bundles: SsbhModelPreviewBundle[]) => {
       setLoading(true);
       void buildInstancesFromBundles(bundles, previewInstances.length)
-        .then((loaded) => {
+        .then(async (loaded) => {
+          await syncPreviewCollectionAppend(loaded.instances);
           startTransition(() => {
             setDraws((prev) => [...prev, ...loaded.draws]);
             setPreviewInstances((prev) => [...prev, ...loaded.instances]);
-            setHiddenPreviewInstanceIds((prev) => {
-              const next = new Set(prev);
-              for (const inst of loaded.instances) {
-                next.delete(inst.id);
-              }
-              return next;
-            });
             setVisibleKeys((prev) => {
               const next = new Set(prev);
               for (const draw of loaded.draws) {
@@ -841,7 +1004,6 @@ export function SsbhModelPreviewProvider({
               }
               return next;
             });
-            setActivePreviewInstanceId(loaded.instances[loaded.instances.length - 1]?.id ?? null);
             setDrawError(null);
             setLoadError(null);
           });
@@ -856,7 +1018,7 @@ export function SsbhModelPreviewProvider({
           setLoading(false);
         });
     },
-    [buildInstancesFromBundles, previewInstances.length, startTransition],
+    [buildInstancesFromBundles, previewInstances.length, startTransition, syncPreviewCollectionAppend],
   );
 
   const skeletonGeometry = useMemo(() => {
@@ -882,12 +1044,14 @@ export function SsbhModelPreviewProvider({
   }, [activePreviewInstanceId]);
 
   useEffect(() => {
-    if (previewInstances.length === 0) return;
-    if (activePreviewInstanceId && previewInstances.some((i) => i.id === activePreviewInstanceId)) {
+    const validIds = previewInstances.map((instance) => instance.id);
+    if (validIds.length === 0) {
       return;
     }
-    setActivePreviewInstanceId(previewInstances[0]!.id);
-  }, [previewInstances, activePreviewInstanceId]);
+    void removeMissingPreviewCollectionIdsService(validIds)
+      .then(applyPreviewCollectionSnapshot)
+      .catch(() => undefined);
+  }, [previewInstances, applyPreviewCollectionSnapshot]);
 
   useEffect(() => {
     if (previewBusy) {
@@ -1555,14 +1719,9 @@ export function SsbhModelPreviewProvider({
           throw new Error("Append model operation returned unexpected instance count.");
         }
         const appendedInstance = loaded.instances[0]!;
+        await syncPreviewCollectionAppend(loaded.instances);
         setDraws((prev) => [...prev, ...loaded.draws]);
         setPreviewInstances((prev) => [...prev, appendedInstance]);
-        setHiddenPreviewInstanceIds((prev) => {
-          const next = new Set(prev);
-          next.delete(appendedInstance.id);
-          return next;
-        });
-        setActivePreviewInstanceId(appendedInstance.id);
         setVisibleKeys((prev) => {
           const next = new Set(prev);
           for (const d of loaded.draws) {
@@ -1584,7 +1743,7 @@ export function SsbhModelPreviewProvider({
         setLoading(false);
       }
     },
-    [buildInstancesFromPaths, previewInstances.length],
+    [buildInstancesFromPaths, previewInstances.length, syncPreviewCollectionAppend],
   );
 
   const pickAddNumdlb = useCallback(async () => {
@@ -1633,6 +1792,7 @@ export function SsbhModelPreviewProvider({
       return [];
     });
     setPreviewInstances([]);
+    applyPreviewCollectionSnapshot(createEmptyPreviewCollectionSnapshot());
     setActivePreviewInstanceId(null);
     setHiddenPreviewInstanceIds(new Set());
     setLoadError(null);
@@ -1647,6 +1807,7 @@ export function SsbhModelPreviewProvider({
     clearMemoryWorkspaceIfDisposed,
     disposeMemorySessions,
     previewInstances,
+    applyPreviewCollectionSnapshot,
   ]);
 
   const reloadCurrentModel = useCallback(async () => {
@@ -1858,12 +2019,17 @@ export function SsbhModelPreviewProvider({
         mappedHidden.add(nextId);
       }
     }
-    setPreviewViewMode(config.previewViewMode);
-    setPreviewControlScope(config.previewControlScope);
-    setHiddenPreviewInstanceIds(mappedHidden);
-    setActivePreviewInstanceId(
-      config.activePreviewInstanceId ? (idMap.get(config.activePreviewInstanceId) ?? loadedInstances[0]?.id ?? null) : null,
-    );
+    await setPreviewCollectionViewRangeService(config.previewViewMode).then(applyPreviewCollectionSnapshot);
+    await setPreviewCollectionControlRangeService(config.previewControlScope).then(applyPreviewCollectionSnapshot);
+    const mappedActiveId = config.activePreviewInstanceId
+      ? (idMap.get(config.activePreviewInstanceId) ?? loadedInstances[0]?.id ?? null)
+      : null;
+    if (mappedActiveId) {
+      await setPreviewCollectionActiveService(mappedActiveId).then(applyPreviewCollectionSnapshot);
+    }
+    for (const hiddenId of mappedHidden) {
+      await togglePreviewCollectionItemVisibilityService(hiddenId).then(applyPreviewCollectionSnapshot);
+    }
     setVisibleKeys(new Set(config.visibleKeys));
     setWireframe(config.renderSettings.wireframe);
     setShowSkeleton(config.renderSettings.showSkeleton);
@@ -2026,19 +2192,6 @@ export function SsbhModelPreviewProvider({
     });
   }, [controllableDraws]);
 
-  const setPreviewInstanceVisible = useCallback((id: string, visible: boolean) => {
-    setHiddenPreviewInstanceIds((prev) => {
-      const next = new Set(prev);
-      if (visible) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const showAllPreviewInstances = useCallback(() => {
-    setHiddenPreviewInstanceIds(new Set());
-  }, []);
-
   const setTextureSlotLoadEnabled = useCallback((key: TexturePreviewSlotKey, enabled: boolean) => {
     setTextureSlotLoadEnabledState((prev) => ({ ...prev, [key]: enabled }));
   }, []);
@@ -2080,12 +2233,18 @@ export function SsbhModelPreviewProvider({
       workspaceRoot: root,
       bundle,
       previewInstances,
+      previewCollectionItems: previewCollectionSnapshot.items,
+      previewCollectionQuery: previewCollectionSnapshot.query,
+      setPreviewCollectionQuery,
+      previewCollectionAllVisible: previewCollectionSnapshot.allVisible,
+      selectedPreviewInstanceIds,
+      togglePreviewInstanceSelected,
       activePreviewInstanceId,
-      setActivePreviewInstanceId,
+      setActivePreviewInstanceId: setActivePreviewInstanceIdRemote,
       previewViewMode,
-      setPreviewViewMode,
+      setPreviewViewMode: setPreviewViewModeRemote,
       previewControlScope,
-      setPreviewControlScope,
+      setPreviewControlScope: setPreviewControlScopeRemote,
       hiddenPreviewInstanceIds,
       setPreviewInstanceVisible,
       showAllPreviewInstances,
@@ -2220,12 +2379,16 @@ export function SsbhModelPreviewProvider({
       root,
       bundle,
       previewInstances,
+      previewCollectionSnapshot,
+      setPreviewCollectionQuery,
+      selectedPreviewInstanceIds,
+      togglePreviewInstanceSelected,
       activePreviewInstanceId,
-      setActivePreviewInstanceId,
+      setActivePreviewInstanceIdRemote,
       previewViewMode,
-      setPreviewViewMode,
+      setPreviewViewModeRemote,
       previewControlScope,
-      setPreviewControlScope,
+      setPreviewControlScopeRemote,
       hiddenPreviewInstanceIds,
       setPreviewInstanceVisible,
       showAllPreviewInstances,

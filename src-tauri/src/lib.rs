@@ -1,11 +1,13 @@
 use tauri::Manager;
 
 mod commands;
+mod character_id_preview;
 mod fhm2d_memory_preview;
 mod format;
 mod jnttbl_cmd;
 mod jnttbl_format;
 mod nutexb_lib;
+mod preview_collection_state;
 mod ssbh_dae;
 mod ssbh_dae_cmd;
 mod ssbh_preview;
@@ -24,6 +26,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .manage(commands::WatcherState::default())
+        .manage(preview_collection_state::PreviewCollectionState::default())
         .manage(fhm2d_memory_preview::Fhm2dMemorySessionState::default())
         .manage(ssbh_motion::MotionSampleCacheState::default())
         .invoke_handler(tauri::generate_handler![
@@ -71,6 +74,7 @@ pub fn run() {
             commands::remove_asset_workspace,
             commands::write_files_batch_base64,
             commands::extract_fhm2d_to_folder,
+            character_id_preview::character_id_memory_preview_rows,
             fhm2d_memory_preview::create_fhm2d_memory_session,
             fhm2d_memory_preview::create_fhm2d_memory_session_from_path,
             fhm2d_memory_preview::rename_fhm2d_memory_entry,
@@ -78,7 +82,18 @@ pub fn run() {
             fhm2d_memory_preview::build_ssbh_preview_bundle_from_memory,
             fhm2d_memory_preview::fhm2d_memory_nutexb_preview_identity,
             fhm2d_memory_preview::fhm2d_memory_nutexb_png_bytes,
-            fhm2d_memory_preview::dispose_fhm2d_memory_session
+            fhm2d_memory_preview::dispose_fhm2d_memory_session,
+            preview_collection_state::preview_collection_replace_from_bundles,
+            preview_collection_state::preview_collection_append_from_bundles,
+            preview_collection_state::preview_collection_snapshot,
+            preview_collection_state::preview_collection_set_query,
+            preview_collection_state::preview_collection_toggle_item_visibility,
+            preview_collection_state::preview_collection_toggle_all_visibility,
+            preview_collection_state::preview_collection_toggle_item_selected,
+            preview_collection_state::preview_collection_set_active,
+            preview_collection_state::preview_collection_set_view_range,
+            preview_collection_state::preview_collection_set_control_range,
+            preview_collection_state::preview_collection_remove_missing_ids
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

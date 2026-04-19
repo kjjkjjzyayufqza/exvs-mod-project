@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import { Bone, ChevronDown, ChevronRight, Database, Eye, EyeOff, FileDown, Info, Layout, List, Settings2 } from "lucide-react";
+import { Bone, ChevronDown, ChevronRight, Crosshair, Database, Eye, EyeOff, FileDown, Info, Layout, List, Search, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -264,8 +264,22 @@ export function SsbhModelPreviewInspector() {
                 </ToggleGroup>
               </div>
             </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-[10px] text-muted-foreground">Collection search</Label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  className="h-8 pl-7 text-[11px]"
+                  value={p.previewCollectionQuery}
+                  onChange={(event) => p.setPreviewCollectionQuery(event.target.value)}
+                  placeholder="Search label or path"
+                />
+              </div>
+            </div>
             <div className="flex items-center justify-between border-b pb-2">
-              <span className="text-[10px] text-muted-foreground">{p.previewInstances.length} models in collection</span>
+              <span className="text-[10px] text-muted-foreground">
+                {p.previewCollectionItems.length}/{p.previewInstances.length} models shown
+              </span>
               <Button
                 type="button"
                 size="sm"
@@ -273,19 +287,21 @@ export function SsbhModelPreviewInspector() {
                 className="h-6 px-2 text-[9px] uppercase tracking-tighter"
                 onClick={p.showAllPreviewInstances}
               >
-                Show all
+                {p.previewCollectionAllVisible ? "Hide all" : "Show all"}
               </Button>
             </div>
             <div className="max-h-[220px] space-y-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-muted">
-              {p.previewInstances.map((inst) => {
+              {p.previewCollectionItems.map((inst) => {
                 const visible = !p.hiddenPreviewInstanceIds.has(inst.id);
                 const active = inst.id === (p.activePreviewInstanceId ?? p.previewInstances[0]?.id ?? "");
+                const selected = p.selectedPreviewInstanceIds.has(inst.id);
                 return (
                   <div
                     key={inst.id}
                     className={cn(
                       "flex items-center gap-1.5 rounded-sm border px-2 py-1.5",
                       active ? "border-primary/55 bg-primary/10" : "border-border/40",
+                      selected && "border-amber-400/70 bg-amber-400/10",
                     )}
                   >
                     <button
@@ -299,11 +315,21 @@ export function SsbhModelPreviewInspector() {
                     <button
                       type="button"
                       className="min-w-0 flex-1 text-left"
-                      onClick={() => p.setActivePreviewInstanceId(inst.id)}
+                      onClick={() => p.togglePreviewInstanceSelected(inst.id)}
                     >
                       <div className="truncate text-[11px] font-medium leading-tight">{inst.displayLabel}</div>
                       <div className="truncate font-mono text-[9px] text-muted-foreground">{inst.modlPath}</div>
                     </button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={active ? "default" : "outline"}
+                      className="h-6 px-1.5 text-[9px]"
+                      onClick={() => p.setActivePreviewInstanceId(inst.id)}
+                      title={active ? "Active interaction target" : "Set as active interaction target"}
+                    >
+                      <Crosshair className="h-3 w-3" />
+                    </Button>
                   </div>
                 );
               })}
