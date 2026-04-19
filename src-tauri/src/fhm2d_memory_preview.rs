@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::Cursor;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::ipc::{InvokeBody, Response};
 use tauri::State;
 
@@ -34,6 +34,7 @@ struct Fhm2dMemorySession {
     selected_candidate_ids: Vec<String>,
     rename_revision: u64,
     derived_preview_bundles_cache: HashMap<String, SsbhModelPreviewBundle>,
+    nutexb_identity_cache: HashMap<String, NutexbPreviewFileIdentity>,
 }
 
 #[derive(Clone)]
@@ -42,7 +43,7 @@ struct MemoryFileRecord {
     file_index: i32,
     file_type: String,
     relative_path: String,
-    data: Vec<u8>,
+    data: Arc<[u8]>,
 }
 
 #[derive(Clone, Serialize)]
@@ -113,6 +114,17 @@ pub struct MemoryRenameImpact {
     pub preview_candidates: Vec<Fhm2dPreviewCandidate>,
     pub virtual_tree: Vec<Fhm2dVirtualTreeNode>,
     pub rename_revision: u64,
+}
+
+#[derive(Clone)]
+struct PreviewBundleBuildInput {
+    session_id: String,
+    candidate: Fhm2dPreviewCandidate,
+    modl_file: MemoryFileRecord,
+    mesh_file: MemoryFileRecord,
+    skel_file: Option<MemoryFileRecord>,
+    matl_files: Vec<MemoryFileRecord>,
+    nutexb_relative_paths: Vec<String>,
 }
 
 fn normalize_virtual_rel_path(raw: &str) -> Result<String, String> {
@@ -279,7 +291,7 @@ fn collect_texture_refs(matl: &MatlData) -> Vec<String> {
 fn merge_matl_files(files: &[&MemoryFileRecord]) -> Result<Option<MatlData>, String> {
     let mut combined: Option<MatlData> = None;
     for file in files {
-        let parsed = load_matl_data(&file.data)?;
+        let parsed = load_matl_data(file.data.as_ref())?;
         match combined.as_mut() {
             None => combined = Some(parsed),
             Some(existing) => existing.entries.extend(parsed.entries),
@@ -394,6 +406,50 @@ fn resolve_texture_reference_to_path(
     Ok(matches.pop().map(|file| file.relative_path.clone()))
 }
 
+fn resolve_texture_reference_to_path_from_relative_paths(
+    nutexb_relative_paths: &[String],
+    raw_reference: &str,
+) -> Result<Option<String>, String> {
+    let trimmed = raw_reference.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    let normalized = trimmed.replace('\\', "/");
+    let normalized_lower = normalized.to_ascii_lowercase();
+    let basename = normalized
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .next_back()
+        .unwrap_or(trimmed)
+        .to_string();
+    let basename_stem = file_stem_from_name(&basename).to_ascii_lowercase();
+    let basename_with_ext = if basename.to_ascii_lowercase().ends_with(".nutexb") {
+        basename.to_ascii_lowercase()
+    } else {
+        format!("{basename_stem}.nutexb")
+    };
+
+    let mut matches: Vec<&String> = nutexb_relative_paths
+        .iter()
+        .filter(|path| {
+            let path_lower = path.to_ascii_lowercase();
+            let name_lower = basename_with_extension(path.as_str());
+            let stem_lower = basename_without_extension(path.as_str());
+            path_lower.ends_with(normalized_lower.as_str())
+                || name_lower == basename_with_ext
+                || stem_lower == basename_stem
+        })
+        .collect();
+    matches.sort();
+    matches.dedup();
+    if matches.len() > 1 {
+        return Err(format!(
+            "Ambiguous texture reference \"{trimmed}\" across the memory session"
+        ));
+    }
+    Ok(matches.pop().cloned())
+}
+
 fn build_preview_candidates_for_files(
     session_id: &str,
     files_by_id: &HashMap<String, MemoryFileRecord>,
@@ -417,7 +473,7 @@ fn build_preview_candidates_for_files(
         let mut nutexb_virtual_paths = Vec::new();
         let mut complete = true;
 
-        match load_modl_data(&file.data) {
+        match load_modl_data(file.data.as_ref()) {
             Ok(modl) => {
                 match resolve_sidecar_by_reference(
                     files_by_id,
@@ -574,6 +630,16 @@ fn session_summary(session: &Fhm2dMemorySession) -> Fhm2dMemorySessionSummary {
         selected_candidate_ids: session.selected_candidate_ids.clone(),
         rename_revision: session.rename_revision,
     }
+}
+
+fn create_session_and_summary(
+    session_id: String,
+    source_name: String,
+    extraction: InMemoryFhm2dExtraction,
+) -> Result<(Fhm2dMemorySession, Fhm2dMemorySessionSummary), String> {
+    let session = Fhm2dMemorySession::from_extraction(session_id, source_name, extraction)?;
+    let summary = session_summary(&session);
+    Ok((session, summary))
 }
 
 fn build_virtual_tree(
@@ -736,7 +802,7 @@ impl Fhm2dMemorySession {
                     file_index: file.file_index,
                     file_type: file.file_type,
                     relative_path,
-                    data: file.data,
+                    data: Arc::from(file.data),
                 },
             );
         }
@@ -763,6 +829,7 @@ impl Fhm2dMemorySession {
             selected_candidate_ids: Vec::new(),
             rename_revision: 0,
             derived_preview_bundles_cache: HashMap::new(),
+            nutexb_identity_cache: HashMap::new(),
         })
     }
 
@@ -773,42 +840,68 @@ impl Fhm2dMemorySession {
     }
 }
 
-fn build_preview_bundle_from_candidate(
+fn snapshot_preview_bundle_build_input(
     session: &Fhm2dMemorySession,
     candidate: &Fhm2dPreviewCandidate,
-) -> Result<SsbhModelPreviewBundle, String> {
-    let Some(modl_file) = session.files_by_id.get(candidate.modl_entry_id.as_str()) else {
+) -> Result<PreviewBundleBuildInput, String> {
+    let Some(modl_file) = session.files_by_id.get(candidate.modl_entry_id.as_str()).cloned() else {
         return Err("Selected memory .numdlb entry no longer exists.".to_string());
     };
-    let modl = load_modl_data(&modl_file.data)?;
     let mesh_file = candidate
         .mesh_virtual_path
         .as_ref()
         .and_then(|path| parse_public_or_relative_path(&session.session_id, path).ok())
         .and_then(|path| session.file_by_relative_path(path.as_str()))
+        .cloned()
         .ok_or_else(|| "Selected memory candidate is missing a .numshb sidecar.".to_string())?;
-    let mesh = load_mesh_data(&mesh_file.data)?;
-
-    let skel_value = match candidate
+    let skel_file = candidate
         .skel_virtual_path
         .as_ref()
         .and_then(|path| parse_public_or_relative_path(&session.session_id, path).ok())
         .and_then(|path| session.file_by_relative_path(path.as_str()))
-    {
+        .cloned();
+
+    let mut matl_files = Vec::new();
+    for path in &candidate.matl_virtual_paths {
+        let relative = parse_public_or_relative_path(&session.session_id, path)?;
+        if let Some(file) = session.file_by_relative_path(relative.as_str()) {
+            matl_files.push(file.clone());
+        }
+    }
+
+    let nutexb_relative_paths = session
+        .files_by_id
+        .values()
+        .filter(|file| file.file_type.eq_ignore_ascii_case(".nutexb"))
+        .map(|file| file.relative_path.clone())
+        .collect();
+
+    Ok(PreviewBundleBuildInput {
+        session_id: session.session_id.clone(),
+        candidate: candidate.clone(),
+        modl_file,
+        mesh_file,
+        skel_file,
+        matl_files,
+        nutexb_relative_paths,
+    })
+}
+
+fn build_preview_bundle_from_snapshot(
+    input: PreviewBundleBuildInput,
+) -> Result<SsbhModelPreviewBundle, String> {
+    let modl = load_modl_data(input.modl_file.data.as_ref())?;
+    let mesh = load_mesh_data(input.mesh_file.data.as_ref())?;
+
+    let skel_value = match input.skel_file.as_ref() {
         Some(file) => Some(
-            serde_json::to_value(load_skel_data(&file.data)?)
+            serde_json::to_value(load_skel_data(file.data.as_ref())?)
                 .map_err(|e| format!("Failed to serialize in-memory Skel: {e}"))?,
         ),
         None => None,
     };
 
-    let mut matl_files: Vec<&MemoryFileRecord> = Vec::new();
-    for path in &candidate.matl_virtual_paths {
-        let relative = parse_public_or_relative_path(&session.session_id, path)?;
-        if let Some(file) = session.file_by_relative_path(relative.as_str()) {
-            matl_files.push(file);
-        }
-    }
+    let matl_files: Vec<&MemoryFileRecord> = input.matl_files.iter().collect();
     let matl_combined = merge_matl_files(&matl_files)?;
     let texture_refs = matl_combined
         .as_ref()
@@ -818,9 +911,12 @@ fn build_preview_bundle_from_candidate(
     let mut texture_resolve = Vec::new();
     let mut warnings = Vec::new();
     for reference in &texture_refs {
-        match resolve_texture_reference_to_path(&session.files_by_id, reference.as_str()) {
+        match resolve_texture_reference_to_path_from_relative_paths(
+            &input.nutexb_relative_paths,
+            reference.as_str(),
+        ) {
             Ok(Some(relative_path)) => {
-                let public_path = public_virtual_path(&session.session_id, relative_path.as_str());
+                let public_path = public_virtual_path(&input.session_id, relative_path.as_str());
                 if !resolved_nutexb_paths.iter().any(|path| path == &public_path) {
                     resolved_nutexb_paths.push(public_path.clone());
                 }
@@ -847,14 +943,14 @@ fn build_preview_bundle_from_candidate(
             }
         }
     }
-    warnings.extend(candidate.issues.clone());
+    warnings.extend(input.candidate.issues.clone());
 
     Ok(SsbhModelPreviewBundle {
-        root_folder: candidate.folder_virtual_path.clone(),
-        modl_path: candidate.modl_virtual_path.clone(),
-        mesh_path: public_virtual_path(&session.session_id, &mesh_file.relative_path),
+        root_folder: input.candidate.folder_virtual_path.clone(),
+        modl_path: input.candidate.modl_virtual_path.clone(),
+        mesh_path: public_virtual_path(&input.session_id, &input.mesh_file.relative_path),
         skel_path: None,
-        matl_paths: candidate.matl_virtual_paths.clone(),
+        matl_paths: input.candidate.matl_virtual_paths.clone(),
         modl: serde_json::to_value(&modl)
             .map_err(|e| format!("Failed to serialize in-memory Modl: {e}"))?,
         mesh: serde_json::to_value(&mesh)
@@ -868,8 +964,8 @@ fn build_preview_bundle_from_candidate(
         texture_resolve,
         warnings,
         source_kind: "memory".to_string(),
-        source_session_id: Some(session.session_id.clone()),
-        virtual_modl_path: Some(candidate.modl_virtual_path.clone()),
+        source_session_id: Some(input.session_id.clone()),
+        virtual_modl_path: Some(input.candidate.modl_virtual_path.clone()),
     })
 }
 
@@ -883,19 +979,19 @@ pub async fn create_fhm2d_memory_session(
     let parsed_format = Fhm2dFormat::from_opt_str(format.as_deref())?;
     let safe_source_name = source_name.trim().to_string();
     let virtual_root_name = safe_virtual_root_name(safe_source_name.as_str());
-    let extraction = tauri::async_runtime::spawn_blocking(move || {
-        extract_fhm2d_to_memory_impl(source_bytes.as_slice(), virtual_root_name.as_str(), parsed_format)
+    let session_id = state.next_session_id();
+    let session_id_for_build = session_id.clone();
+    let safe_source_name_for_build = safe_source_name.clone();
+    let (session, summary) = tauri::async_runtime::spawn_blocking(move || {
+        let extraction = extract_fhm2d_to_memory_impl(
+            source_bytes.as_slice(),
+            virtual_root_name.as_str(),
+            parsed_format,
+        )?;
+        create_session_and_summary(session_id_for_build, safe_source_name_for_build, extraction)
     })
     .await
     .map_err(|e| e.to_string())??;
-
-    let session_id = state.next_session_id();
-    let session = Fhm2dMemorySession::from_extraction(
-        session_id.clone(),
-        safe_source_name,
-        extraction,
-    )?;
-    let summary = session_summary(&session);
     state
         .sessions
         .lock()
@@ -922,21 +1018,18 @@ pub async fn create_fhm2d_memory_session_from_path(
         .map(|s| s.to_string())
         .unwrap_or_else(|| "fhm2d_memory".to_string());
     let virtual_root_name = safe_virtual_root_name(safe_source_name.as_str());
-    let extraction = tauri::async_runtime::spawn_blocking(move || {
+    let session_id = state.next_session_id();
+    let session_id_for_build = session_id.clone();
+    let safe_source_name_for_build = safe_source_name.clone();
+    let (session, summary) = tauri::async_runtime::spawn_blocking(move || {
         let bytes = std::fs::read(path_owned.as_str())
             .map_err(|e| format!("Failed to read FHM2D file: {e}"))?;
-        extract_fhm2d_to_memory_impl(bytes.as_slice(), virtual_root_name.as_str(), parsed_format)
+        let extraction =
+            extract_fhm2d_to_memory_impl(bytes.as_slice(), virtual_root_name.as_str(), parsed_format)?;
+        create_session_and_summary(session_id_for_build, safe_source_name_for_build, extraction)
     })
     .await
     .map_err(|e| e.to_string())??;
-
-    let session_id = state.next_session_id();
-    let session = Fhm2dMemorySession::from_extraction(
-        session_id.clone(),
-        safe_source_name,
-        extraction,
-    )?;
-    let summary = session_summary(&session);
     state
         .sessions
         .lock()
@@ -961,114 +1054,198 @@ pub fn list_fhm2d_memory_preview_candidates(
 }
 
 #[tauri::command]
-pub fn rename_fhm2d_memory_entry(
+pub async fn rename_fhm2d_memory_entry(
     state: State<'_, Fhm2dMemorySessionState>,
     session_id: String,
     entry_id: String,
     next_name: Option<String>,
     next_virtual_path: Option<String>,
 ) -> Result<MemoryRenameImpact, String> {
+    let (base_session, current, resolved_relative_path, previous_virtual_path, base_revision) = {
+        let sessions = state
+            .sessions
+            .lock()
+            .map_err(|_| "Failed to lock FHM2D memory sessions.".to_string())?;
+        let session = sessions
+            .get(session_id.as_str())
+            .ok_or_else(|| format!("FHM2D memory session not found: {session_id}"))?;
+        let current = session
+            .files_by_id
+            .get(entry_id.as_str())
+            .cloned()
+            .ok_or_else(|| format!("Virtual entry is not a file in this session: {entry_id}"))?;
+        let current_ext = extension_from_relative_path(current.relative_path.as_str())
+            .ok_or_else(|| "Only file entries with an extension can be renamed.".to_string())?;
+
+        let resolved_relative_path = match next_virtual_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            Some(path) => parse_public_or_relative_path(&session.session_id, path)?,
+            None => {
+                let name = next_name
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| "Provide nextName or nextVirtualPath for rename.".to_string())?;
+                let current_parent = parent_relative_path(current.relative_path.as_str());
+                let next_file_name = if name.contains('/') || name.contains('\\') {
+                    return Err("nextName must not contain path separators.".to_string());
+                } else if name.to_ascii_lowercase().ends_with(current_ext.as_str()) {
+                    name.to_string()
+                } else {
+                    format!("{name}{current_ext}")
+                };
+                match current_parent {
+                    Some(parent) => {
+                        normalize_virtual_rel_path(format!("{parent}/{next_file_name}").as_str())?
+                    }
+                    None => normalize_virtual_rel_path(next_file_name.as_str())?,
+                }
+            }
+        };
+
+        let next_ext = extension_from_relative_path(resolved_relative_path.as_str())
+            .ok_or_else(|| "Target virtual path must include a file extension.".to_string())?;
+        if !current_ext.eq_ignore_ascii_case(next_ext.as_str()) {
+            return Err(format!(
+                "Rename must preserve the file extension {current_ext}, got {next_ext}."
+            ));
+        }
+
+        let lookup_key = resolved_relative_path.to_ascii_lowercase();
+        if let Some(existing_id) = session.relative_path_to_id.get(lookup_key.as_str()) {
+            if existing_id != &entry_id {
+                return Err(format!(
+                    "A virtual entry already exists at {resolved_relative_path}."
+                ));
+            }
+        }
+
+        (
+            session.clone(),
+            current.clone(),
+            resolved_relative_path,
+            public_virtual_path(&session.session_id, &current.relative_path),
+            session.rename_revision,
+        )
+    };
+
+    let entry_id_for_work = entry_id.clone();
+    let (updated_session, impact) = tauri::async_runtime::spawn_blocking(move || {
+        let mut session = base_session;
+        let lookup_key = resolved_relative_path.to_ascii_lowercase();
+        session
+            .relative_path_to_id
+            .remove(current.relative_path.to_ascii_lowercase().as_str());
+        let target = session
+            .files_by_id
+            .get_mut(entry_id_for_work.as_str())
+            .ok_or_else(|| format!("Virtual entry is not a file in this session: {entry_id_for_work}"))?;
+        target.relative_path = resolved_relative_path.clone();
+        session
+            .relative_path_to_id
+            .insert(lookup_key, entry_id_for_work.clone());
+        session.rename_revision += 1;
+        session.preview_candidates =
+            build_preview_candidates_for_files(&session.session_id, &session.files_by_id);
+        session.derived_preview_bundles_cache.clear();
+        session.nutexb_identity_cache.clear();
+
+        let old_folder = parent_relative_path(current.relative_path.as_str()).unwrap_or_default();
+        let new_folder = parent_relative_path(resolved_relative_path.as_str()).unwrap_or_default();
+        let affected_candidate_ids = session
+            .preview_candidates
+            .iter()
+            .filter(|candidate| {
+                candidate.folder_relative_path == old_folder
+                    || candidate.folder_relative_path == new_folder
+            })
+            .map(|candidate| candidate.id.clone())
+            .collect::<Vec<_>>();
+        let (virtual_tree, _) = build_virtual_tree(&session);
+        let impact = MemoryRenameImpact {
+            session_id: session.session_id.clone(),
+            entry_id: entry_id_for_work,
+            previous_virtual_path,
+            next_virtual_path: public_virtual_path(&session.session_id, &resolved_relative_path),
+            affected_candidate_ids,
+            preview_candidates: session.preview_candidates.clone(),
+            virtual_tree,
+            rename_revision: session.rename_revision,
+        };
+        Ok::<(Fhm2dMemorySession, MemoryRenameImpact), String>((session, impact))
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
     let mut sessions = state
         .sessions
         .lock()
         .map_err(|_| "Failed to lock FHM2D memory sessions.".to_string())?;
-    let session = sessions
+    let live_session = sessions
         .get_mut(session_id.as_str())
         .ok_or_else(|| format!("FHM2D memory session not found: {session_id}"))?;
-    let current = session
-        .files_by_id
-        .get(entry_id.as_str())
-        .cloned()
-        .ok_or_else(|| format!("Virtual entry is not a file in this session: {entry_id}"))?;
-    let current_ext = extension_from_relative_path(current.relative_path.as_str())
-        .ok_or_else(|| "Only file entries with an extension can be renamed.".to_string())?;
-
-    let resolved_relative_path = match next_virtual_path
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        Some(path) => parse_public_or_relative_path(&session.session_id, path)?,
-        None => {
-            let name = next_name
-                .as_deref()
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| "Provide nextName or nextVirtualPath for rename.".to_string())?;
-            let current_parent = parent_relative_path(current.relative_path.as_str());
-            let next_file_name = if name.contains('/') || name.contains('\\') {
-                return Err("nextName must not contain path separators.".to_string());
-            } else if name.to_ascii_lowercase().ends_with(current_ext.as_str()) {
-                name.to_string()
-            } else {
-                format!("{name}{current_ext}")
-            };
-            match current_parent {
-                Some(parent) => normalize_virtual_rel_path(format!("{parent}/{next_file_name}").as_str())?,
-                None => normalize_virtual_rel_path(next_file_name.as_str())?,
-            }
-        }
-    };
-
-    let next_ext = extension_from_relative_path(resolved_relative_path.as_str())
-        .ok_or_else(|| "Target virtual path must include a file extension.".to_string())?;
-    if !current_ext.eq_ignore_ascii_case(next_ext.as_str()) {
-        return Err(format!(
-            "Rename must preserve the file extension {current_ext}, got {next_ext}."
-        ));
+    if live_session.rename_revision != base_revision {
+        return Err("FHM2D memory session changed while rename was in progress.".to_string());
     }
-
-    let lookup_key = resolved_relative_path.to_ascii_lowercase();
-    if let Some(existing_id) = session.relative_path_to_id.get(lookup_key.as_str()) {
-        if existing_id != &entry_id {
-            return Err(format!(
-                "A virtual entry already exists at {resolved_relative_path}."
-            ));
-        }
-    }
-
-    let previous_virtual_path = public_virtual_path(&session.session_id, &current.relative_path);
-    session.relative_path_to_id.remove(current.relative_path.to_ascii_lowercase().as_str());
-    let target = session
-        .files_by_id
-        .get_mut(entry_id.as_str())
-        .ok_or_else(|| format!("Virtual entry is not a file in this session: {entry_id}"))?;
-    target.relative_path = resolved_relative_path.clone();
-    session
-        .relative_path_to_id
-        .insert(lookup_key, entry_id.clone());
-    session.rename_revision += 1;
-    session.preview_candidates = build_preview_candidates_for_files(&session.session_id, &session.files_by_id);
-    session.derived_preview_bundles_cache.clear();
-
-    let old_folder = parent_relative_path(current.relative_path.as_str()).unwrap_or_default();
-    let new_folder = parent_relative_path(resolved_relative_path.as_str()).unwrap_or_default();
-    let affected_candidate_ids = session
-        .preview_candidates
-        .iter()
-        .filter(|candidate| candidate.folder_relative_path == old_folder || candidate.folder_relative_path == new_folder)
-        .map(|candidate| candidate.id.clone())
-        .collect::<Vec<_>>();
-    let (virtual_tree, _) = build_virtual_tree(session);
-
-    Ok(MemoryRenameImpact {
-        session_id: session.session_id.clone(),
-        entry_id,
-        previous_virtual_path,
-        next_virtual_path: public_virtual_path(&session.session_id, &resolved_relative_path),
-        affected_candidate_ids,
-        preview_candidates: session.preview_candidates.clone(),
-        virtual_tree,
-        rename_revision: session.rename_revision,
-    })
+    *live_session = updated_session;
+    Ok(impact)
 }
 
 #[tauri::command]
-pub fn build_ssbh_preview_bundle_from_memory(
+pub async fn build_ssbh_preview_bundle_from_memory(
     state: State<'_, Fhm2dMemorySessionState>,
     session_id: String,
     modl_virtual_path: String,
 ) -> Result<SsbhModelPreviewBundle, String> {
+    let (cache_key, rename_revision, build_input) = {
+        let mut sessions = state
+            .sessions
+            .lock()
+            .map_err(|_| "Failed to lock FHM2D memory sessions.".to_string())?;
+        let session = sessions
+            .get_mut(session_id.as_str())
+            .ok_or_else(|| format!("FHM2D memory session not found: {session_id}"))?;
+        let relative_modl_path =
+            parse_public_or_relative_path(&session.session_id, modl_virtual_path.as_str())?;
+        let cache_key = format!("{relative_modl_path}|{}", session.rename_revision);
+        if let Some(bundle) = session.derived_preview_bundles_cache.get(cache_key.as_str()) {
+            return Ok(bundle.clone());
+        }
+        let candidate = session
+            .preview_candidates
+            .iter()
+            .find(|candidate| {
+                parse_public_or_relative_path(&session.session_id, candidate.modl_virtual_path.as_str())
+                    .ok()
+                    .as_deref()
+                    == Some(relative_modl_path.as_str())
+            })
+            .cloned()
+            .ok_or_else(|| format!("No memory preview candidate found for {relative_modl_path}"))?;
+        if !candidate.complete {
+            let reason = if candidate.issues.is_empty() {
+                "Selected memory candidate is incomplete.".to_string()
+            } else {
+                candidate.issues.join(" ")
+            };
+            return Err(reason);
+        }
+        (
+            cache_key,
+            session.rename_revision,
+            snapshot_preview_bundle_build_input(session, &candidate)?,
+        )
+    };
+
+    let bundle = tauri::async_runtime::spawn_blocking(move || {
+        build_preview_bundle_from_snapshot(build_input)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
     let mut sessions = state
         .sessions
         .lock()
@@ -1076,84 +1253,89 @@ pub fn build_ssbh_preview_bundle_from_memory(
     let session = sessions
         .get_mut(session_id.as_str())
         .ok_or_else(|| format!("FHM2D memory session not found: {session_id}"))?;
-    let relative_modl_path = parse_public_or_relative_path(&session.session_id, modl_virtual_path.as_str())?;
-    let cache_key = format!("{relative_modl_path}|{}", session.rename_revision);
-    if let Some(bundle) = session.derived_preview_bundles_cache.get(cache_key.as_str()) {
-        return Ok(bundle.clone());
+    if session.rename_revision == rename_revision {
+        session
+            .derived_preview_bundles_cache
+            .insert(cache_key, bundle.clone());
     }
-    let candidate = session
-        .preview_candidates
-        .iter()
-        .find(|candidate| {
-            parse_public_or_relative_path(&session.session_id, candidate.modl_virtual_path.as_str())
-                .ok()
-                .as_deref()
-                == Some(relative_modl_path.as_str())
-        })
-        .cloned()
-        .ok_or_else(|| format!("No memory preview candidate found for {relative_modl_path}"))?;
-    if !candidate.complete {
-        let reason = if candidate.issues.is_empty() {
-            "Selected memory candidate is incomplete.".to_string()
-        } else {
-            candidate.issues.join(" ")
-        };
-        return Err(reason);
-    }
-    let bundle = build_preview_bundle_from_candidate(session, &candidate)?;
-    session
-        .derived_preview_bundles_cache
-        .insert(cache_key, bundle.clone());
     Ok(bundle)
 }
 
 #[tauri::command]
-pub fn fhm2d_memory_nutexb_preview_identity(
+pub async fn fhm2d_memory_nutexb_preview_identity(
     state: State<'_, Fhm2dMemorySessionState>,
     session_id: String,
     virtual_path: String,
 ) -> Result<NutexbPreviewFileIdentity, String> {
-    let sessions = state
+    let (relative_path, file_data) = {
+        let mut sessions = state
+            .sessions
+            .lock()
+            .map_err(|_| "Failed to lock FHM2D memory sessions.".to_string())?;
+        let session = sessions
+            .get_mut(session_id.as_str())
+            .ok_or_else(|| format!("FHM2D memory session not found: {session_id}"))?;
+        let relative_path = parse_public_or_relative_path(&session.session_id, virtual_path.as_str())?;
+        let cache_key = normalize_name_for_lookup(relative_path.as_str());
+        if let Some(identity) = session.nutexb_identity_cache.get(cache_key.as_str()) {
+            return Ok(identity.clone());
+        }
+        let file = session
+            .file_by_relative_path(relative_path.as_str())
+            .ok_or_else(|| format!("Memory texture not found at {relative_path}"))?;
+        if !file.file_type.eq_ignore_ascii_case(".nutexb") {
+            return Err(format!("Virtual entry is not a .nutexb file: {relative_path}"));
+        }
+        (relative_path, file.data.clone())
+    };
+
+    let identity = tauri::async_runtime::spawn_blocking(move || NutexbPreviewFileIdentity {
+        nutexb_size: file_data.len() as u64,
+        crc32: nutexb_file_crc32(file_data.as_ref()),
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let mut sessions = state
         .sessions
         .lock()
         .map_err(|_| "Failed to lock FHM2D memory sessions.".to_string())?;
-    let session = sessions
-        .get(session_id.as_str())
-        .ok_or_else(|| format!("FHM2D memory session not found: {session_id}"))?;
-    let relative_path = parse_public_or_relative_path(&session.session_id, virtual_path.as_str())?;
-    let file = session
-        .file_by_relative_path(relative_path.as_str())
-        .ok_or_else(|| format!("Memory texture not found at {relative_path}"))?;
-    if !file.file_type.eq_ignore_ascii_case(".nutexb") {
-        return Err(format!("Virtual entry is not a .nutexb file: {relative_path}"));
+    if let Some(session) = sessions.get_mut(session_id.as_str()) {
+        session
+            .nutexb_identity_cache
+            .insert(normalize_name_for_lookup(relative_path.as_str()), identity.clone());
     }
-    Ok(NutexbPreviewFileIdentity {
-        nutexb_size: file.data.len() as u64,
-        crc32: nutexb_file_crc32(&file.data),
-    })
+    Ok(identity)
 }
 
 #[tauri::command]
-pub fn fhm2d_memory_nutexb_png_bytes(
+pub async fn fhm2d_memory_nutexb_png_bytes(
     state: State<'_, Fhm2dMemorySessionState>,
     session_id: String,
     virtual_path: String,
 ) -> Result<Response, String> {
-    let sessions = state
-        .sessions
-        .lock()
-        .map_err(|_| "Failed to lock FHM2D memory sessions.".to_string())?;
-    let session = sessions
-        .get(session_id.as_str())
-        .ok_or_else(|| format!("FHM2D memory session not found: {session_id}"))?;
-    let relative_path = parse_public_or_relative_path(&session.session_id, virtual_path.as_str())?;
-    let file = session
-        .file_by_relative_path(relative_path.as_str())
-        .ok_or_else(|| format!("Memory texture not found at {relative_path}"))?;
-    if !file.file_type.eq_ignore_ascii_case(".nutexb") {
-        return Err(format!("Virtual entry is not a .nutexb file: {relative_path}"));
-    }
-    let png = nutexb_to_png_bytes_from_bytes(&file.data)?;
+    let file_data = {
+        let sessions = state
+            .sessions
+            .lock()
+            .map_err(|_| "Failed to lock FHM2D memory sessions.".to_string())?;
+        let session = sessions
+            .get(session_id.as_str())
+            .ok_or_else(|| format!("FHM2D memory session not found: {session_id}"))?;
+        let relative_path = parse_public_or_relative_path(&session.session_id, virtual_path.as_str())?;
+        let file = session
+            .file_by_relative_path(relative_path.as_str())
+            .ok_or_else(|| format!("Memory texture not found at {relative_path}"))?;
+        if !file.file_type.eq_ignore_ascii_case(".nutexb") {
+            return Err(format!("Virtual entry is not a .nutexb file: {relative_path}"));
+        }
+        file.data.clone()
+    };
+    let png = tauri::async_runtime::spawn_blocking(move || {
+        nutexb_to_png_bytes_from_bytes(file_data.as_ref())
+    })
+    .await
+    .map_err(|e| e.to_string())??;
     Ok(Response::new(InvokeBody::Raw(png)))
 }
 

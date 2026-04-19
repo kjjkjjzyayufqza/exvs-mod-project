@@ -39,6 +39,23 @@ export type FlattenedVirtualTreeRow = {
   depth: number;
 };
 
+export type ConcurrencySettledSuccess<TItem, TValue> = {
+  index: number;
+  item: TItem;
+  value: TValue;
+};
+
+export type ConcurrencySettledFailure<TItem> = {
+  index: number;
+  item: TItem;
+  error: unknown;
+};
+
+export type ConcurrencySettledResult<TItem, TValue> = {
+  successes: Array<ConcurrencySettledSuccess<TItem, TValue>>;
+  failures: Array<ConcurrencySettledFailure<TItem>>;
+};
+
 export function flattenVirtualTree(
   tree: Fhm2dVirtualTreeNode[],
   collapsedFolderIds: ReadonlySet<string>,
@@ -62,27 +79,37 @@ export function flattenVirtualTree(
     );
   };
 
-  const includeNode = (node: Fhm2dVirtualTreeNode): boolean => {
-    if (nodeMatches(node)) {
-      return true;
-    }
-    return node.children.some(includeNode);
-  };
-
-  const visit = (node: Fhm2dVirtualTreeNode, depth: number) => {
-    if (!includeNode(node)) {
-      return;
-    }
-    rows.push({ node, depth });
-    if (node.kind === "folder" && !collapsedFolderIds.has(node.id)) {
-      for (const child of node.children) {
-        visit(child, depth + 1);
+  const collectRows = (
+    node: Fhm2dVirtualTreeNode,
+    depth: number,
+  ): FlattenedVirtualTreeRow[] | null => {
+    const nestedChildRows: FlattenedVirtualTreeRow[][] = [];
+    let childIncluded = false;
+    for (const child of node.children) {
+      const childRows = collectRows(child, depth + 1);
+      if (childRows) {
+        childIncluded = true;
+        nestedChildRows.push(childRows);
       }
     }
+    const includeSelf = nodeMatches(node) || childIncluded;
+    if (!includeSelf) {
+      return null;
+    }
+    const nextRows: FlattenedVirtualTreeRow[] = [{ node, depth }];
+    if (node.kind === "folder" && !collapsedFolderIds.has(node.id)) {
+      for (const childRows of nestedChildRows) {
+        nextRows.push(...childRows);
+      }
+    }
+    return nextRows;
   };
 
   for (const node of tree) {
-    visit(node, 0);
+    const nestedRows = collectRows(node, 0);
+    if (nestedRows) {
+      rows.push(...nestedRows);
+    }
   }
   return rows;
 }
@@ -137,4 +164,68 @@ export function toggleCandidateGroupSelection(
     }
   }
   return next;
+}
+
+export async function settleWithConcurrencyLimit<TItem, TValue>(
+  items: readonly TItem[],
+  concurrency: number,
+  worker: (item: TItem, index: number) => Promise<TValue>,
+  onSettled?: (update: {
+    index: number;
+    item: TItem;
+    completed: number;
+    total: number;
+    status: "fulfilled" | "rejected";
+  }) => void,
+): Promise<ConcurrencySettledResult<TItem, TValue>> {
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    throw new Error(`concurrency must be a positive integer, got ${concurrency}`);
+  }
+
+  const successes: Array<ConcurrencySettledSuccess<TItem, TValue> | null> = new Array(items.length).fill(null);
+  const failures: Array<ConcurrencySettledFailure<TItem>> = [];
+  let nextIndex = 0;
+  let completed = 0;
+
+  const runWorker = async () => {
+    while (true) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      if (currentIndex >= items.length) {
+        return;
+      }
+      const item = items[currentIndex] as TItem;
+      try {
+        const value = await worker(item, currentIndex);
+        successes[currentIndex] = { index: currentIndex, item, value };
+        completed += 1;
+        onSettled?.({
+          index: currentIndex,
+          item,
+          completed,
+          total: items.length,
+          status: "fulfilled",
+        });
+      } catch (error) {
+        failures.push({ index: currentIndex, item, error });
+        completed += 1;
+        onSettled?.({
+          index: currentIndex,
+          item,
+          completed,
+          total: items.length,
+          status: "rejected",
+        });
+      }
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, () => runWorker()),
+  );
+
+  return {
+    successes: successes.filter((entry): entry is ConcurrencySettledSuccess<TItem, TValue> => entry !== null),
+    failures,
+  };
 }

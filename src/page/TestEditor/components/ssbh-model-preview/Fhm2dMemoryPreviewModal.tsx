@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import {
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -58,9 +59,19 @@ import {
   flattenVirtualTree,
   groupPreviewCandidatesByFolder,
   indexVirtualTreeEntries,
+  settleWithConcurrencyLimit,
   toggleCandidateGroupSelection,
 } from "./fhm2dMemoryPreviewUtils";
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
+
+const MEMORY_PREVIEW_BUNDLE_BUILD_CONCURRENCY = 3;
+
+type MemoryWorkspaceProgress = {
+  stage: "build-bundles";
+  done: number;
+  total: number;
+  currentLabel: string | null;
+};
 
 function formatBytes(size: number | null): string {
   if (!size || size <= 0) {
@@ -94,10 +105,13 @@ export function Fhm2dMemoryPreviewModal() {
   const [renameName, setRenameName] = useState("");
   const [renameVirtualPath, setRenameVirtualPath] = useState("");
   const [busy, setBusy] = useState(false);
+  const [workspaceProgress, setWorkspaceProgress] = useState<MemoryWorkspaceProgress | null>(null);
   const [isPending, startTransition] = useTransition();
   const treeViewportRef = useRef<HTMLDivElement | null>(null);
+  const groupsViewportRef = useRef<HTMLDivElement | null>(null);
   const candidatesViewportRef = useRef<HTMLDivElement | null>(null);
   const memoryModalWasOpenRef = useRef(false);
+  const deferredTreeSearchText = useDeferredValue(treeSearchText);
 
   const virtualEntriesById = useMemo(
     () => indexVirtualTreeEntries(session?.virtualTree ?? []),
@@ -120,6 +134,7 @@ export function Fhm2dMemoryPreviewModal() {
     setCollapsedFolderIds(new Set());
     setRenameName("");
     setRenameVirtualPath("");
+    setWorkspaceProgress(null);
     if (!sessionStillReferenced) {
       await disposeFhm2dMemorySession(disposeId).catch(() => {});
     }
@@ -221,6 +236,7 @@ export function Fhm2dMemoryPreviewModal() {
     async (path: string) => {
       setBusy(true);
       try {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         if (session?.sessionId) {
           await disposeCurrentSession();
         }
@@ -282,10 +298,10 @@ export function Fhm2dMemoryPreviewModal() {
       flattenVirtualTree(
         session?.virtualTree ?? [],
         collapsedFolderIds,
-        treeSearchText,
+        deferredTreeSearchText,
         modelRelatedOnly,
       ),
-    [session?.virtualTree, collapsedFolderIds, treeSearchText, modelRelatedOnly],
+    [session?.virtualTree, collapsedFolderIds, deferredTreeSearchText, modelRelatedOnly],
   );
 
   const treeVirtualizer = useVirtualizer({
@@ -315,19 +331,42 @@ export function Fhm2dMemoryPreviewModal() {
     [filteredCandidates],
   );
 
+  const groupedCandidateVirtualizer = useVirtualizer({
+    count: groupedCandidates.length,
+    getScrollElement: () => groupsViewportRef.current,
+    estimateSize: () => 52,
+    overscan: 10,
+  });
+
+  const candidateById = useMemo(() => {
+    const next = new Map<string, Fhm2dPreviewCandidate>();
+    for (const candidate of filteredCandidates) {
+      next.set(candidate.id, candidate);
+    }
+    return next;
+  }, [filteredCandidates]);
+
+  const candidateByEntryId = useMemo(() => {
+    const next = new Map<string, Fhm2dPreviewCandidate>();
+    const nextByVirtualPath = new Map<string, Fhm2dPreviewCandidate>();
+    for (const candidate of filteredCandidates) {
+      next.set(candidate.modlEntryId, candidate);
+      nextByVirtualPath.set(candidate.modlVirtualPath, candidate);
+    }
+    return { byEntryId: next, byVirtualPath: nextByVirtualPath };
+  }, [filteredCandidates]);
+
   const activeEntry = activeEntryId ? virtualEntriesById[activeEntryId] ?? null : null;
   const activeCandidate = useMemo(() => {
     if (!activeEntry) {
       return null;
     }
     return (
-      filteredCandidates.find(
-        (candidate) =>
-          candidate.modlEntryId === activeEntry.id ||
-          candidate.modlVirtualPath === activeEntry.virtualPath,
-      ) ?? null
+      candidateByEntryId.byEntryId.get(activeEntry.id) ??
+      candidateByEntryId.byVirtualPath.get(activeEntry.virtualPath) ??
+      null
     );
-  }, [activeEntry, filteredCandidates]);
+  }, [activeEntry, candidateByEntryId]);
 
   useEffect(() => {
     if (!activeEntry || activeEntry.kind !== "file") {
@@ -345,6 +384,7 @@ export function Fhm2dMemoryPreviewModal() {
     }
     setBusy(true);
     try {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       const impact = await renameFhm2dMemoryEntry({
         sessionId: session.sessionId,
         entryId: activeEntry.id,
@@ -387,24 +427,37 @@ export function Fhm2dMemoryPreviewModal() {
     if (!session) {
       throw new Error("Open an FHM2D file before loading memory preview bundles.");
     }
-    const selected = filteredCandidates.filter((candidate) => selectedCandidateIds.has(candidate.id));
+    const selected = [...selectedCandidateIds]
+      .map((id) => candidateById.get(id) ?? null)
+      .filter((candidate): candidate is Fhm2dPreviewCandidate => candidate !== null);
     if (selected.length === 0) {
       throw new Error("Select at least one .numdlb candidate.");
     }
-    const settled = await Promise.allSettled(
-      selected.map((candidate) =>
+    setWorkspaceProgress({
+      stage: "build-bundles",
+      done: 0,
+      total: selected.length,
+      currentLabel: selected[0]?.displayLabel ?? null,
+    });
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    const settled = await settleWithConcurrencyLimit(
+      selected,
+      MEMORY_PREVIEW_BUNDLE_BUILD_CONCURRENCY,
+      (candidate) =>
         buildSsbhPreviewBundleFromMemory({
           sessionId: session.sessionId,
           modlVirtualPath: candidate.modlVirtualPath,
         }),
-      ),
+      ({ completed, item }) =>
+        setWorkspaceProgress({
+          stage: "build-bundles",
+          done: completed,
+          total: selected.length,
+          currentLabel: item.displayLabel,
+        }),
     );
-    const bundles = settled
-      .filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof buildSsbhPreviewBundleFromMemory>>> => result.status === "fulfilled")
-      .map((result) => result.value);
-    const failed = settled
-      .filter((result): result is PromiseRejectedResult => result.status === "rejected")
-      .map((result) => String(result.reason));
+    const bundles = settled.successes.map((result) => result.value);
+    const failed = settled.failures.map((result) => String(result.error));
     if (failed.length > 0) {
       toast.error("Some memory preview candidates failed", {
         description: failed.slice(0, 3).join("\n"),
@@ -414,7 +467,7 @@ export function Fhm2dMemoryPreviewModal() {
       throw new Error("No selected memory candidate could be loaded into the preview.");
     }
     return bundles;
-  }, [filteredCandidates, selectedCandidateIds, session]);
+  }, [candidateById, selectedCandidateIds, session]);
 
   const applySelectionToPreview = useCallback(
     async (mode: "replace" | "append") => {
@@ -431,6 +484,7 @@ export function Fhm2dMemoryPreviewModal() {
       } catch (e) {
         toast.error(String(e));
       } finally {
+        setWorkspaceProgress(null);
         setBusy(false);
       }
     },
@@ -789,7 +843,7 @@ export function Fhm2dMemoryPreviewModal() {
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-4 py-3">
-              <div className="max-h-[min(38vh,300px)] shrink-0 space-y-2 overflow-y-auto">
+              <div className="shrink-0 space-y-2">
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
                   Model folders ({groupedCandidates.length})
                 </div>
@@ -798,38 +852,55 @@ export function Fhm2dMemoryPreviewModal() {
                     No preview candidates in the current memory session.
                   </div>
                 ) : (
-                  groupedCandidates.map((group) => {
-                    const allChecked =
-                      group.candidates.length > 0 &&
-                      group.candidates.every((candidate) => selectedCandidateIds.has(candidate.id));
-                    return (
-                      <label
-                        key={group.folderRelativePath}
-                        className="flex items-start gap-2 rounded-lg border bg-muted/15 px-3 py-2"
-                      >
-                        <Checkbox
-                          checked={allChecked}
-                          onCheckedChange={(checked) =>
-                            startTransition(() =>
-                              setSelectedCandidateIds((prev) =>
-                                toggleCandidateGroupSelection(
-                                  prev,
-                                  group.candidates,
-                                  checked === true,
-                                ),
-                              ),
-                            )
-                          }
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate font-medium">{group.folderRelativePath}</div>
-                          <div className="text-[10px] text-muted-foreground">
-                            {group.candidates.length} .numdlb · {group.completeCount} loadable
-                          </div>
-                        </div>
-                      </label>
-                    );
-                  })
+                  <div ref={groupsViewportRef} className="max-h-[min(38vh,300px)] overflow-y-auto">
+                    <div
+                      style={{
+                        height: `${groupedCandidateVirtualizer.getTotalSize()}px`,
+                        position: "relative",
+                        width: "100%",
+                      }}
+                    >
+                      {groupedCandidateVirtualizer.getVirtualItems().map((virtualRow) => {
+                        const group = groupedCandidates[virtualRow.index];
+                        if (!group) {
+                          return null;
+                        }
+                        const allChecked =
+                          group.candidates.length > 0 &&
+                          group.candidates.every((candidate) => selectedCandidateIds.has(candidate.id));
+                        return (
+                          <label
+                            key={group.folderRelativePath}
+                            className="absolute left-0 right-0 flex items-start gap-2 rounded-lg border bg-muted/15 px-3 py-2"
+                            style={{
+                              transform: `translateY(${virtualRow.start}px)`,
+                            }}
+                          >
+                            <Checkbox
+                              checked={allChecked}
+                              onCheckedChange={(checked) =>
+                                startTransition(() =>
+                                  setSelectedCandidateIds((prev) =>
+                                    toggleCandidateGroupSelection(
+                                      prev,
+                                      group.candidates,
+                                      checked === true,
+                                    ),
+                                  ),
+                                )
+                              }
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate font-medium">{group.folderRelativePath}</div>
+                              <div className="text-[10px] text-muted-foreground">
+                                {group.candidates.length} .numdlb · {group.completeCount} loadable
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -908,9 +979,13 @@ export function Fhm2dMemoryPreviewModal() {
           </section>
         </div>
 
-        {(busy || isPending) && (
+        {(busy || isPending || workspaceProgress) && (
           <div className="border-t bg-muted/25 px-4 py-2 text-[10px] text-muted-foreground">
-            Working in memory workspace…
+            {workspaceProgress
+              ? `Building memory preview bundles ${workspaceProgress.done}/${workspaceProgress.total}${
+                  workspaceProgress.currentLabel ? ` · ${workspaceProgress.currentLabel}` : ""
+                }`
+              : "Working in memory workspace…"}
           </div>
         )}
       </DialogContent>

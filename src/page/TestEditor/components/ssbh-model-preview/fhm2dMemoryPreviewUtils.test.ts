@@ -3,6 +3,7 @@ import {
   flattenVirtualTree,
   groupPreviewCandidatesByFolder,
   indexVirtualTreeEntries,
+  settleWithConcurrencyLimit,
   toggleCandidateGroupSelection,
 } from "./fhm2dMemoryPreviewUtils";
 import type { Fhm2dPreviewCandidate, Fhm2dVirtualTreeNode } from "./fhm2dMemoryPreviewTypes";
@@ -152,5 +153,51 @@ describe("toggleCandidateGroupSelection", () => {
     ];
     expect([...toggleCandidateGroupSelection(new Set(), candidates, true)]).toEqual(["a", "b"]);
     expect([...toggleCandidateGroupSelection(new Set(["a", "b"]), candidates, false)]).toEqual([]);
+  });
+});
+
+describe("settleWithConcurrencyLimit", () => {
+  it("limits async work concurrency and preserves successful result order", async () => {
+    let activeCount = 0;
+    let maxActiveCount = 0;
+
+    const settled = await settleWithConcurrencyLimit(
+      [1, 2, 3, 4],
+      2,
+      async (value) => {
+        activeCount += 1;
+        maxActiveCount = Math.max(maxActiveCount, activeCount);
+        await new Promise((resolve) => setTimeout(resolve, value <= 2 ? 20 : 1));
+        activeCount -= 1;
+        return `bundle-${value}`;
+      },
+    );
+
+    expect(maxActiveCount).toBe(2);
+    expect(settled.failures).toEqual([]);
+    expect(settled.successes.map((entry) => entry.value)).toEqual([
+      "bundle-1",
+      "bundle-2",
+      "bundle-3",
+      "bundle-4",
+    ]);
+  });
+
+  it("collects failures without aborting the rest of the queue", async () => {
+    const settled = await settleWithConcurrencyLimit(
+      ["a", "b", "c"],
+      2,
+      async (value) => {
+        if (value === "b") {
+          throw new Error("broken");
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        return value.toUpperCase();
+      },
+    );
+
+    expect(settled.successes.map((entry) => entry.item)).toEqual(["a", "c"]);
+    expect(settled.failures).toHaveLength(1);
+    expect(String(settled.failures[0]?.error)).toContain("broken");
   });
 });
