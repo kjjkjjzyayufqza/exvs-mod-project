@@ -7,8 +7,10 @@ import {
   Stats,
   useTexture,
 } from "@react-three/drei";
+import { Perf } from "r3f-perf";
 import {
   Suspense,
+  memo,
   useLayoutEffect,
   useMemo,
   useState,
@@ -63,6 +65,12 @@ import {
 import { SsbhSkinnedMesh } from "./SsbhSkinnedMesh";
 import { fitCameraToObject } from "./cameraFit";
 import { applyPreviewUvFlip } from "./previewUvFlip";
+import {
+  getSsbhPerfMonitorOptions,
+  getSsbhCanvasPerformanceProfile,
+  isSsbhPreviewDebugEnabled,
+  measureDrawComplexity,
+} from "./ssbhCanvasPerformance";
 import type {
   BoneTransformMode,
   MaterialDebugViewMode,
@@ -86,8 +94,10 @@ const GRID_PLANE_HEIGHT = 200;
  * Must be large vs orbit distance or the grid vanishes when zooming out.
  */
 const GRID_FADE_DISTANCE = 5e6;
-const SSBH_PREVIEW_DEBUG =
-  import.meta.env.DEV && ((globalThis as { __SSBH_PREVIEW_DEBUG__?: boolean }).__SSBH_PREVIEW_DEBUG__ ?? true);
+const SSBH_PREVIEW_DEBUG = isSsbhPreviewDebugEnabled(
+  globalThis as { __SSBH_PREVIEW_DEBUG__?: boolean } | undefined,
+  import.meta.env.DEV,
+);
 
 function debugLog(message: string, data?: Record<string, unknown>): void {
   if (!SSBH_PREVIEW_DEBUG) {
@@ -535,7 +545,114 @@ function DrawMeshUnifiedPbr({
   );
 }
 
-function DrawMeshes({
+function buildDrawMeshSlots(
+  mats: DrawMaterialDataUrls | undefined,
+  materialDebugViewMode: MaterialDebugViewMode,
+  normalMapEnabled: boolean,
+): { kind: PbrSlotKind; url: string }[] {
+  const slots: { kind: PbrSlotKind; url: string }[] = [];
+  const mode = materialDebugViewMode;
+  const mapUrl = mats?.map ?? null;
+  if (mapUrl && (mode === "full" || mode === "baseColor")) {
+    slots.push({ kind: "map", url: mapUrl });
+  }
+  if (normalMapEnabled && mats?.normalMap && (mode === "full" || mode === "normals")) {
+    slots.push({ kind: "normalMap", url: mats.normalMap });
+  }
+  if (mats?.roughnessMap && (mode === "full" || mode === "roughnessMetalness")) {
+    slots.push({ kind: "roughnessMap", url: mats.roughnessMap });
+  }
+  if (mats?.metalnessMap && (mode === "full" || mode === "roughnessMetalness")) {
+    slots.push({ kind: "metalnessMap", url: mats.metalnessMap });
+  }
+  if (mats?.emissiveMap && (mode === "full" || mode === "emissive")) {
+    slots.push({ kind: "emissiveMap", url: mats.emissiveMap });
+  }
+  if (mats?.aoMap && (mode === "full" || mode === "roughnessMetalness")) {
+    slots.push({ kind: "aoMap", url: mats.aoMap });
+  }
+  if (mats?.cubeMap && (mode === "full" || mode === "reflection")) {
+    slots.push({ kind: "cubeMap", url: mats.cubeMap });
+  }
+  return slots;
+}
+
+const DrawMeshEntry = memo(function DrawMeshEntry({
+  draw,
+  mats,
+  binding,
+  visible,
+  wireframe,
+  ignoreRaycast,
+  textureFlipY,
+  normalMapEnabled,
+  materialDebugViewMode,
+  previewRenderStyle,
+  animeKeyLightDir,
+  skeleton,
+}: {
+  draw: BuiltMeshDraw;
+  mats: DrawMaterialDataUrls | undefined;
+  binding: ResolvedMaterialBinding | null;
+  visible: boolean;
+  wireframe: boolean;
+  ignoreRaycast: boolean;
+  textureFlipY: boolean;
+  normalMapEnabled: boolean;
+  materialDebugViewMode: MaterialDebugViewMode;
+  previewRenderStyle: PreviewRenderStyle;
+  animeKeyLightDir: Vector3;
+  skeleton: Skeleton | null;
+}) {
+  const slots = useMemo(
+    () => buildDrawMeshSlots(mats, materialDebugViewMode, normalMapEnabled),
+    [mats, materialDebugViewMode, normalMapEnabled],
+  );
+
+  return (
+    <Suspense fallback={null}>
+      {slots.length > 0 ? (
+        <DrawMeshUnifiedPbr
+          draw={draw}
+          slots={slots}
+          binding={binding}
+          visible={visible}
+          wireframe={wireframe}
+          ignoreRaycast={ignoreRaycast}
+          textureFlipY={textureFlipY}
+          normalMapEnabled={normalMapEnabled}
+          materialDebugViewMode={materialDebugViewMode}
+          previewRenderStyle={previewRenderStyle}
+          animeKeyLightDir={animeKeyLightDir}
+          skeleton={skeleton}
+        />
+      ) : (
+        <DrawMeshUntextured
+          draw={draw}
+          visible={visible}
+          wireframe={wireframe}
+          ignoreRaycast={ignoreRaycast}
+          skeleton={skeleton}
+        />
+      )}
+    </Suspense>
+  );
+}, (prev, next) =>
+  prev.draw === next.draw &&
+  prev.mats === next.mats &&
+  prev.binding === next.binding &&
+  prev.visible === next.visible &&
+  prev.wireframe === next.wireframe &&
+  prev.ignoreRaycast === next.ignoreRaycast &&
+  prev.textureFlipY === next.textureFlipY &&
+  prev.normalMapEnabled === next.normalMapEnabled &&
+  prev.materialDebugViewMode === next.materialDebugViewMode &&
+  prev.previewRenderStyle === next.previewRenderStyle &&
+  prev.animeKeyLightDir === next.animeKeyLightDir &&
+  prev.skeleton === next.skeleton,
+);
+
+const DrawMeshes = memo(function DrawMeshes({
   draws,
   drawMaterialDataUrlsByDrawKey,
   drawMaterialBindingsByDrawKey,
@@ -585,30 +702,6 @@ function DrawMeshes({
       {draws.map((d) => {
         const mats = drawMaterialDataUrlsByDrawKey.get(d.key);
         const binding = drawMaterialBindingsByDrawKey.get(d.key) ?? null;
-        const mapUrl = mats?.map ?? null;
-        const slots: { kind: PbrSlotKind; url: string }[] = [];
-        const mode = materialDebugViewMode;
-        if (mapUrl && (mode === "full" || mode === "baseColor")) {
-          slots.push({ kind: "map", url: mapUrl });
-        }
-        if (normalMapEnabled && mats?.normalMap && (mode === "full" || mode === "normals")) {
-          slots.push({ kind: "normalMap", url: mats.normalMap });
-        }
-        if (mats?.roughnessMap && (mode === "full" || mode === "roughnessMetalness")) {
-          slots.push({ kind: "roughnessMap", url: mats.roughnessMap });
-        }
-        if (mats?.metalnessMap && (mode === "full" || mode === "roughnessMetalness")) {
-          slots.push({ kind: "metalnessMap", url: mats.metalnessMap });
-        }
-        if (mats?.emissiveMap && (mode === "full" || mode === "emissive")) {
-          slots.push({ kind: "emissiveMap", url: mats.emissiveMap });
-        }
-        if (mats?.aoMap && (mode === "full" || mode === "roughnessMetalness")) {
-          slots.push({ kind: "aoMap", url: mats.aoMap });
-        }
-        if (mats?.cubeMap && (mode === "full" || mode === "reflection")) {
-          slots.push({ kind: "cubeMap", url: mats.cubeMap });
-        }
         const visible = resolveDrawVisibility({
           drawKey: d.key,
           meshObjectName: d.meshObjectName,
@@ -618,37 +711,26 @@ function DrawMeshes({
           motionPlaybackActive: Boolean(skeleton),
         });
         return (
-          <Suspense key={d.key} fallback={null}>
-            {slots.length > 0 ? (
-              <DrawMeshUnifiedPbr
-                draw={d}
-                slots={slots}
-                binding={binding}
-                visible={visible}
-                wireframe={wireframe}
-                ignoreRaycast={ignoreRaycast}
-                textureFlipY={textureFlipY}
-                normalMapEnabled={normalMapEnabled}
-                materialDebugViewMode={materialDebugViewMode}
-                previewRenderStyle={previewRenderStyle}
-                animeKeyLightDir={animeKeyLightDir}
-                skeleton={skeleton}
-              />
-            ) : (
-              <DrawMeshUntextured
-                draw={d}
-                visible={visible}
-                wireframe={wireframe}
-                ignoreRaycast={ignoreRaycast}
-                skeleton={skeleton}
-              />
-            )}
-          </Suspense>
+          <DrawMeshEntry
+            key={d.key}
+            draw={d}
+            mats={mats}
+            binding={binding}
+            visible={visible}
+            wireframe={wireframe}
+            ignoreRaycast={ignoreRaycast}
+            textureFlipY={textureFlipY}
+            normalMapEnabled={normalMapEnabled}
+            materialDebugViewMode={materialDebugViewMode}
+            previewRenderStyle={previewRenderStyle}
+            animeKeyLightDir={animeKeyLightDir}
+            skeleton={skeleton}
+          />
         );
       })}
     </>
   );
-}
+});
 
 function SkeletonLines({ geometry }: { geometry: BufferGeometry }) {
   const [material] = useState(
@@ -673,7 +755,7 @@ function SkeletonLines({ geometry }: { geometry: BufferGeometry }) {
   );
 }
 
-function Scene({
+const Scene = memo(function Scene({
   draws,
   drawMaterialDataUrlsByDrawKey,
   drawMaterialBindingsByDrawKey,
@@ -1326,12 +1408,11 @@ function Scene({
           <GizmoViewport axisColors={["#f87171", "#4ade80", "#60a5fa"]} labelColor="white" />
         </GizmoHelper>
       ) : null}
-      {showStats ? <Stats /> : null}
     </>
   );
-}
+});
 
-export function SsbhModelCanvas(props: SsbhModelCanvasProps) {
+export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCanvasProps) {
   const { background, previewSuspended = false, motionScrubbing, ...sceneProps } = props;
   const {
     onViewportBoneSelectionClear,
@@ -1350,6 +1431,32 @@ export function SsbhModelCanvas(props: SsbhModelCanvasProps) {
     () => Array.from(restSceneProps.motionStatesByInstanceId.values()).some((s) => s.playing),
     [restSceneProps.motionStatesByInstanceId],
   );
+  const drawComplexity = useMemo(
+    () => measureDrawComplexity(restSceneProps.draws),
+    [restSceneProps.draws],
+  );
+  const canvasPerformanceProfile = useMemo(
+    () =>
+      getSsbhCanvasPerformanceProfile({
+        drawCount: drawComplexity.drawCount,
+        triangleCount: drawComplexity.triangleCount,
+        motionPlaying: anyMotionPlaying,
+        motionScrubbing,
+        previewRenderStyle: restSceneProps.previewRenderStyle,
+      }),
+    [drawComplexity, anyMotionPlaying, motionScrubbing, restSceneProps.previewRenderStyle],
+  );
+  const perfMonitorOptions = useMemo(
+    () =>
+      getSsbhPerfMonitorOptions({
+        drawCount: drawComplexity.drawCount,
+        triangleCount: drawComplexity.triangleCount,
+        motionPlaying: anyMotionPlaying,
+        motionScrubbing,
+        previewRenderStyle: restSceneProps.previewRenderStyle,
+      }),
+    [drawComplexity, anyMotionPlaying, motionScrubbing, restSceneProps.previewRenderStyle],
+  );
 
   useRenderDebug("SsbhModelCanvas", {
     motionPlaying: anyMotionPlaying,
@@ -1361,6 +1468,9 @@ export function SsbhModelCanvas(props: SsbhModelCanvasProps) {
     selectedBoneIndex: selectedBoneIndex ?? -1,
     previewRenderStyle: restSceneProps.previewRenderStyle,
     visibleKeys: restSceneProps.visibleKeys.size,
+    triangleCount: drawComplexity.triangleCount,
+    dprMax: canvasPerformanceProfile.dpr[1],
+    antialias: canvasPerformanceProfile.antialias,
     showGrid: restSceneProps.showGrid,
     showSkeleton: restSceneProps.showSkeleton,
   });
@@ -1446,8 +1556,12 @@ export function SsbhModelCanvas(props: SsbhModelCanvasProps) {
       <Canvas
         className="h-full w-full touch-none"
         frameloop={previewSuspended ? "never" : anyMotionPlaying || motionScrubbing ? "always" : "demand"}
-        gl={{ antialias: true, alpha: false }}
-        dpr={[1, 2]}
+        gl={{
+          antialias: canvasPerformanceProfile.antialias,
+          alpha: false,
+          powerPreference: "high-performance",
+        }}
+        dpr={canvasPerformanceProfile.dpr}
         camera={{ position: [2.4, 1.6, 2.8], fov: 50, near: 0.02, far: 5e6 }}
         onPointerMissed={() => {
           if (selectedBoneIndex !== null) {
@@ -1455,9 +1569,17 @@ export function SsbhModelCanvas(props: SsbhModelCanvasProps) {
           }
         }}
       >
+        {restSceneProps.showStats ? (
+          <Perf
+            position={perfMonitorOptions.position}
+            minimal={perfMonitorOptions.minimal}
+            showGraph={perfMonitorOptions.showGraph}
+          />
+        ) : null}
+        {restSceneProps.showStats && perfMonitorOptions.showLegacyStats ? <Stats /> : null}
         {restSceneProps.previewRenderStyle === "anime" ? <AnimePreviewPostFx /> : null}
         <Scene {...restSceneProps} background={background} motionScrubbing={motionScrubbing} />
       </Canvas>
     </div>
   );
-}
+});
