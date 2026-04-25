@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react"
-import { Search } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Search, CopyPlus, Trash2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { formatHash } from "@/models/commandTable"
+import { DualValueProperty } from "@/components/ui/dual-value-property"
 import type { TypedFieldValue, TypedParamEntry, TypedParamFile } from "./typedParamTypes"
 
 function readEntryId(entry: TypedParamEntry, index: number): number {
@@ -69,6 +69,22 @@ export function TypedParamDataPanel({
     return all.filter((k) => k.toLowerCase().includes(q))
   }, [entry, search])
 
+  const fieldInfoMap = useMemo(() => {
+    if (!entry || !data.fieldSpecs) return {}
+    const map: Record<string, { kind: number; offset: number }> = {}
+    const keys = Object.keys(entry).filter((k) => k !== "entryId" && !k.endsWith("Size"))
+    keys.forEach((key, index) => {
+      const spec = data.fieldSpecs[index]
+      if (spec) {
+        map[key] = {
+          kind: spec.kind ?? 1,
+          offset: spec.entryOffset ?? spec.offset ?? 0,
+        }
+      }
+    })
+    return map
+  }, [entry, data.fieldSpecs])
+
   const updateField = (key: string, raw: string) => {
     if (!entry) return
     const current = entry[key]
@@ -108,94 +124,116 @@ export function TypedParamDataPanel({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 gap-2">
-      <Card className="flex w-56 shrink-0 flex-col">
-        <CardHeader className="p-2">
-          <CardTitle className="text-xs">Entries ({data.entries.length})</CardTitle>
-        </CardHeader>
-        <CardContent className="min-h-0 flex-1 overflow-auto p-0">
+    <div className="grid h-full min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[minmax(220px,280px)_minmax(0,1fr)]">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border bg-card shadow-sm">
+        <div className="flex items-center justify-between border-b bg-muted/20 px-3 py-2">
+          <h3 className="text-xs font-semibold">Entries ({data.entries.length})</h3>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           {data.entries.map((e, i) => {
             const id = readEntryId(e, i)
             return (
               <button
                 key={`${i}-${id}`}
                 type="button"
-                className={`flex w-full flex-col border-b border-border/40 px-2 py-1 text-left text-xs hover:bg-muted/50 ${
-                  selectedEntryIndex === i ? "bg-primary/10 font-medium" : ""
+                className={`flex w-full flex-col border-b border-border/40 px-3 py-2 text-left text-xs transition-colors hover:bg-muted/50 ${
+                  selectedEntryIndex === i ? "bg-primary/10 border-l-2 border-l-primary" : "border-l-2 border-l-transparent"
                 }`}
                 onClick={() => onSelectEntry(i)}
               >
-                <span className="font-mono text-[10px] text-muted-foreground">#{i}</span>
-                <span className="truncate font-mono">{formatHash(id)}</span>
+                <div className="flex items-center justify-between">
+                  <span className="truncate font-mono font-medium">{formatHash(id)}</span>
+                  <span className="font-mono text-[10px] text-muted-foreground">#{i}</span>
+                </div>
               </button>
             )
           })}
-        </CardContent>
-      </Card>
-      <Card className="flex min-w-0 flex-1 flex-col">
-        <CardHeader className="p-2">
+        </div>
+      </div>
+      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border bg-card shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/20 px-3 py-2">
           <div className="flex items-center gap-2">
-            <CardTitle className="text-xs">{fileType} typed entry</CardTitle>
+            <h3 className="text-xs font-semibold">{fileType} typed entry</h3>
             {entry && (
-              <span className="font-mono text-[10px] text-muted-foreground">
+              <span className="rounded-md border border-border/60 bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                 {formatHash(readEntryId(entry, selectedEntryIndex))} · {Object.keys(entry).length} fields
               </span>
             )}
-            <div className="flex-1" />
-            <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-[10px]" onClick={addEntry}>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 shadow-sm">
+              <Search className="h-3 w-3 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Filter field…"
+                className="h-4 w-32 bg-transparent text-[10px] outline-none placeholder:text-muted-foreground"
+              />
+            </div>
+            <Button type="button" size="sm" variant="outline" className="h-7 gap-1 px-2 text-[10px]" onClick={addEntry}>
+              <CopyPlus className="h-3 w-3" />
               Add row
             </Button>
             <Button
               type="button"
               size="sm"
               variant="outline"
-              className="h-7 px-2 text-[10px]"
+              className="h-7 gap-1 px-2 text-[10px] text-destructive hover:bg-destructive/10 hover:text-destructive"
               disabled={!data.entries.length}
               onClick={deleteEntry}
             >
-              Delete row
+              <Trash2 className="h-3 w-3" />
+              Delete
             </Button>
-            <div className="flex items-center gap-1">
-              <Search className="h-3 w-3 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Filter field…"
-                className="h-7 w-44 text-xs"
-              />
-            </div>
           </div>
-        </CardHeader>
-        <CardContent className="min-h-0 flex-1 overflow-auto p-0">
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-muted/5 p-4">
           {!entry ? (
-            <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">No entry</div>
+            <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">No entry selected</div>
           ) : (
-            <div className="w-full min-w-[680px] text-xs">
-              <div className="sticky top-0 z-1 grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-1 border-b bg-muted/80 px-2 py-1 font-medium backdrop-blur">
-                <span>field</span>
-                <span>value</span>
-              </div>
+            <div className="flex flex-col gap-2">
               {filteredKeys.map((key) => {
                 const value = entry[key]
                 const current = value === undefined ? null : value
+                const info = fieldInfoMap[key]
+                const kind = info?.kind || 1
+                const offset = info?.offset ?? -1
+                const isFloat = kind === 5
+
+                const offsetLabel = offset !== -1 ? ` (0x${offset.toString(16).toUpperCase()})` : ""
+
                 return (
-                  <div
+                  <DualValueProperty
                     key={key}
-                    className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-1 border-b border-border/40 px-2 py-0.5"
-                  >
-                    <span className="h-7 truncate self-center font-mono text-[11px]">{key}</span>
-                    <Input
-                      className="h-7 font-mono"
-                      value={displayValue(current)}
-                      onChange={(ev) => updateField(key, ev.target.value)}
-                    />
-                  </div>
+                    label={`${key}${offsetLabel}`}
+                    value={typeof current === "number" ? current : 0}
+                    property={key}
+                    editable={true}
+                    editingProperty={null}
+                    editValue={""}
+                    validationError={""}
+                    onStartEdit={() => {}}
+                    onSaveEdit={() => {}}
+                    onCancelEdit={() => {}}
+                    onValueChange={() => {}}
+                    onCommit={(nextValue) => {
+                      const nextEntries = data.entries.map((item, idx) =>
+                        idx === selectedEntryIndex ? { ...item, [key]: nextValue } : item
+                      )
+                      const nextEntryIds = nextEntries.map((item, idx) => readEntryId(item, idx))
+                      onChange({ ...data, entries: nextEntries, entryIds: nextEntryIds })
+                    }}
+                    showHex={true}
+                    isFloat={isFloat}
+                    variant="compact"
+                    mode="live"
+                  />
                 )
               })}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   )
 }

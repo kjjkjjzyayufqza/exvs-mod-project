@@ -154,15 +154,62 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
       : ""
 
   return (
-    <div className="flex h-full min-h-0 w-full max-w-full flex-col gap-3 pb-2">
-      <div className="border-b border-border/60 bg-muted/30 -mx-4 -mt-4 mb-0 px-4 py-3">
-        <h2 className="text-sm font-semibold tracking-tight">Param editor</h2>
-        <p className="text-xs text-muted-foreground">
-          Pick a file path (stored per type), load from disk via Rust, edit entry data, save.
-        </p>
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-2">
-        <div className="flex flex-wrap items-end gap-2">
+    <div className="flex h-full min-h-0 w-full max-w-full flex-col gap-4 pb-4">
+      <div className="flex shrink-0 flex-col gap-3 border-b pb-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0 flex-1 space-y-1">
+            <h2 className="text-lg font-semibold tracking-tight">Param Editor</h2>
+            <p className="break-all text-[11px] text-muted-foreground" title={currentPath}>
+              Pick a file path (stored per type), load from disk via Rust, edit entry data, save.
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={!currentPath.trim() || loading}
+              onClick={() => void loadFile(currentPath)}
+            >
+              <FileUp className="mr-2 h-4 w-4" />
+              Load
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!hasData || loading}
+              onClick={() => {
+                if (typed) void loadFile(typed.path)
+                if (chr) void loadFile(chr.path)
+              }}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Reload
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!canSave || saving}
+              onClick={() => void save()}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              Save
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!hasData}
+              onClick={() => void exportJson()}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export JSON
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-3">
           <div className="w-[min(100%,280px)]">
             <Label className="text-[10px] text-muted-foreground">Table type</Label>
             <Select value={kindId} onValueChange={tryChangeKind}>
@@ -199,60 +246,16 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
               }}
             />
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className="h-8"
-              disabled={!currentPath.trim() || loading}
-              onClick={() => void loadFile(currentPath)}
-            >
-              <FileUp className="mr-1 h-3.5 w-3.5" />
-              Load
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8"
-              disabled={!hasData || loading}
-              onClick={() => {
-                if (typed) void loadFile(typed.path)
-                if (chr) void loadFile(chr.path)
-              }}
-            >
-              <RefreshCw className="mr-1 h-3.5 w-3.5" />
-              Reload
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="h-8"
-              disabled={!canSave || saving}
-              onClick={() => void save()}
-            >
-              <Save className="mr-1 h-3.5 w-3.5" />
-              Save
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8"
-              disabled={!hasData}
-              onClick={() => void exportJson()}
-            >
-              <Download className="mr-1 h-3.5 w-3.5" />
-              Export JSON
-            </Button>
-          </div>
         </div>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col gap-2">
         {title && hasData && (
           <p className="text-[10px] text-muted-foreground">
             <span className="font-medium text-foreground">{title}</span>
             {typed && <span> · {typed.path}</span>}
             {chr && <span> · {chr.path}</span>}
+            {dirty && <span className="ml-2 font-medium text-amber-500">• Unsaved changes</span>}
           </p>
         )}
         {err && <p className="text-xs text-destructive">{err}</p>}
@@ -280,8 +283,9 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
             />
           )}
           {!hasData && !loading && (
-            <div className="flex h-48 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
-              Choose a type, set a file path, then Load.
+            <div className="flex h-48 flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-muted/5 text-sm text-muted-foreground">
+              <FileUp className="h-8 w-8 opacity-50" />
+              <p>Choose a type, set a file path, then Load.</p>
             </div>
           )}
         </div>

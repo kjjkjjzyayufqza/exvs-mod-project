@@ -292,3 +292,32 @@ export function validateHexInput(input: string): { isValid: boolean; formatted: 
     error: cleaned.length !== 8 ? 'Hex value must be exactly 8 characters' : undefined
   };
 }
+
+/**
+ * Convert float32 to hex string with byte reversal for display
+ * @param value - The float32 value
+ * @returns Hex string formatted as "XX XX XX XX"
+ */
+export function float32ToHexDisplay(value: number): string {
+  const buf = new ArrayBuffer(4);
+  new DataView(buf).setFloat32(0, value, true);
+  const bytes = new Uint8Array(buf);
+  return Array.from(bytes).map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+}
+
+/**
+ * Convert hex display string to float32
+ * @param hexDisplay - Hex string in format "XX XX XX XX" or "XXXXXXXX"
+ * @returns The float32 value
+ */
+export function hexDisplayToFloat32(hexDisplay: string): number {
+  const hex = hexDisplay.replace(/\s+/g, '').toUpperCase();
+  if (!/^[0-9A-F]{8}$/.test(hex)) {
+    throw new Error('Invalid hex format. Expected 8 hex characters.');
+  }
+  const bytes = new Uint8Array(4);
+  for (let i = 0; i < 4; i++) {
+    bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+  }
+  return new DataView(bytes.buffer).getFloat32(0, true);
+}

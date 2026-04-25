@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Edit3, Save, X } from "lucide-react";
 import { toast } from 'sonner';
-import { int32ToHexDisplay, hexDisplayToInt32, validateHexInput } from "@/module/commonFunc";
+import { int32ToHexDisplay, hexDisplayToInt32, float32ToHexDisplay, hexDisplayToFloat32, validateHexInput } from "@/module/commonFunc";
 
 interface DualValuePropertyProps {
   label: string;
@@ -22,7 +22,8 @@ interface DualValuePropertyProps {
   onCancelEdit: () => void;
   onValueChange: (value: string) => void;
   onValidationErrorChange?: (message: string) => void;
-  showHex?: boolean; // Option to hide hex display for simple int32 properties
+  showHex?: boolean; // Option to hide hex display for simple properties
+  isFloat?: boolean; // Toggle to parse/display as Float32 instead of Int32
   variant?: "default" | "compact";
   editOnRowClick?: boolean;
   mode?: "toggle" | "live";
@@ -32,7 +33,7 @@ interface DualValuePropertyProps {
 }
 
 /**
- * DualValueProperty component for displaying and editing values as both int32 and hex
+ * DualValueProperty component for displaying and editing values as both numeric (int32/float) and hex
  * Supports byte-order reversal for hex display (little-endian to big-endian)
  */
 export function DualValueProperty({
@@ -50,6 +51,7 @@ export function DualValueProperty({
   onValueChange,
   onValidationErrorChange,
   showHex = true,
+  isFloat = false,
   variant = "default",
   editOnRowClick = false,
   mode = "toggle",
@@ -57,13 +59,19 @@ export function DualValueProperty({
   onLiveIntInputFocus,
   onLiveIntInputClick,
 }: DualValuePropertyProps) {
-  const [editFormat, setEditFormat] = useState<'int32' | 'hex'>('int32');
+  const [editFormat, setEditFormat] = useState<'number' | 'hex'>('number');
   const isEditing = editingProperty === property;
   const displayValue = value !== undefined ? value : 0;
-  const hexValue = showHex ? int32ToHexDisplay(displayValue) : '';
+  
+  const hexValue = showHex 
+    ? (isFloat ? float32ToHexDisplay(displayValue) : int32ToHexDisplay(displayValue)) 
+    : '';
+    
   const [liveIntDraft, setLiveIntDraft] = useState<string>(String(displayValue));
   const [liveHexDraft, setLiveHexDraft] = useState<string>(hexValue);
   const [liveValidationError, setLiveValidationError] = useState<string>("");
+
+  const numberLabel = isFloat ? "Float32" : "Int32";
 
   useEffect(() => {
     if (mode !== "live") return;
@@ -73,31 +81,29 @@ export function DualValueProperty({
   }, [displayValue, hexValue, mode]);
 
   const resolvedEditFormat = useMemo(() => {
-    if (!showHex) return "int32" as const;
+    if (!showHex) return "number" as const;
     return editFormat;
   }, [editFormat, showHex]);
 
-  const handleStartEdit = (format: 'int32' | 'hex') => {
-    const nextFormat = showHex ? format : "int32";
+  const handleStartEdit = (format: 'number' | 'hex') => {
+    const nextFormat = showHex ? format : "number";
     setEditFormat(nextFormat);
     const initialValue = format === 'hex' ? hexValue : String(displayValue);
     onStartEdit(property, initialValue);
   };
 
-  const handleFormatChange = (newFormat: 'int32' | 'hex') => {
+  const handleFormatChange = (newFormat: 'number' | 'hex') => {
     if (!isEditing) return;
     if (!showHex) return;
     
     try {
       let convertedValue: string;
-      if (newFormat === 'hex' && editFormat === 'int32') {
-        // Convert from int32 to hex
-        const intValue = parseInt(editValue) || 0;
-        convertedValue = int32ToHexDisplay(intValue);
-      } else if (newFormat === 'int32' && editFormat === 'hex') {
-        // Convert from hex to int32
-        const intValue = hexDisplayToInt32(editValue);
-        convertedValue = String(intValue);
+      if (newFormat === 'hex' && editFormat === 'number') {
+        const numValue = isFloat ? parseFloat(editValue) || 0 : parseInt(editValue) || 0;
+        convertedValue = isFloat ? float32ToHexDisplay(numValue) : int32ToHexDisplay(numValue);
+      } else if (newFormat === 'number' && editFormat === 'hex') {
+        const numValue = isFloat ? hexDisplayToFloat32(editValue) : hexDisplayToInt32(editValue);
+        convertedValue = String(numValue);
       } else {
         convertedValue = editValue;
       }
@@ -106,7 +112,6 @@ export function DualValueProperty({
       onValueChange(convertedValue);
       onValidationErrorChange?.("");
     } catch (error) {
-      // If conversion fails, keep current format
       toast.error('Invalid value for conversion');
     }
   };
@@ -115,12 +120,11 @@ export function DualValueProperty({
     try {
       let finalValue: number;
       if (resolvedEditFormat === 'hex') {
-        finalValue = hexDisplayToInt32(editValue);
+        finalValue = isFloat ? hexDisplayToFloat32(editValue) : hexDisplayToInt32(editValue);
       } else {
-        finalValue = parseInt(editValue) || 0;
+        finalValue = isFloat ? parseFloat(editValue) || 0 : parseInt(editValue) || 0;
       }
       
-      // Update the edit value to the int32 value before saving
       onValueChange(String(finalValue));
       onValidationErrorChange?.("");
       onSaveEdit();
@@ -129,7 +133,6 @@ export function DualValueProperty({
     }
   };
 
-  // Non-editable display
   if (!editable) {
     return (
       <div className="flex justify-between items-center">
@@ -139,7 +142,7 @@ export function DualValueProperty({
         </div>
         {showHex ? (
           <div className="flex items-center gap-4 text-sm text-muted-foreground font-mono">
-            <span title="Int32 value">{displayValue}</span>
+            <span title={`${numberLabel} value`}>{displayValue}</span>
             <span title="Hex value" className="text-xs">({hexValue})</span>
           </div>
         ) : (
@@ -151,7 +154,6 @@ export function DualValueProperty({
     );
   }
 
-  // Compact editable display - card style with vertical layout
   if (editable && variant === "compact") {
     const startEditOnRowClick = editOnRowClick && !isEditing;
     const containerBaseClass = "group relative space-y-2 rounded-md border p-3";
@@ -186,16 +188,23 @@ export function DualValueProperty({
                     return;
                   }
 
-                  if (!/^-?\d+$/.test(trimmed)) {
-                    setLiveValidationError("Invalid int32 value");
-                    return;
+                  if (isFloat) {
+                    if (isNaN(Number(trimmed))) {
+                      setLiveValidationError("Invalid float32 value");
+                      return;
+                    }
+                    commit(Number.parseFloat(trimmed) || 0);
+                  } else {
+                    if (!/^-?\d+$/.test(trimmed)) {
+                      setLiveValidationError("Invalid int32 value");
+                      return;
+                    }
+                    commit(Number.parseInt(trimmed, 10) | 0);
                   }
-
-                  commit(Number.parseInt(trimmed, 10) | 0);
                 }}
                 onFocus={onLiveIntInputFocus}
                 onClick={onLiveIntInputClick}
-                placeholder="Int32"
+                placeholder={numberLabel}
                 className={[
                   "h-8 font-mono text-sm shadow-none rounded-l-md rounded-r-none -mr-px",
                   liveValidationError ? "border-red-500" : "",
@@ -213,7 +222,7 @@ export function DualValueProperty({
                   if (!validation.isValid) return;
 
                   try {
-                    commit(hexDisplayToInt32(validation.formatted));
+                    commit(isFloat ? hexDisplayToFloat32(validation.formatted) : hexDisplayToInt32(validation.formatted));
                   } catch (error) {
                     setLiveValidationError(error instanceof Error ? error.message : "Invalid hex format");
                   }
@@ -243,16 +252,23 @@ export function DualValueProperty({
                   return;
                 }
 
-                if (!/^-?\d+$/.test(trimmed)) {
-                  setLiveValidationError("Invalid int32 value");
-                  return;
+                if (isFloat) {
+                  if (isNaN(Number(trimmed))) {
+                    setLiveValidationError("Invalid float32 value");
+                    return;
+                  }
+                  commit(Number.parseFloat(trimmed) || 0);
+                } else {
+                  if (!/^-?\d+$/.test(trimmed)) {
+                    setLiveValidationError("Invalid int32 value");
+                    return;
+                  }
+                  commit(Number.parseInt(trimmed, 10) | 0);
                 }
-
-                commit(Number.parseInt(trimmed, 10) | 0);
               }}
               onFocus={onLiveIntInputFocus}
               onClick={onLiveIntInputClick}
-              placeholder="Int32"
+              placeholder={numberLabel}
               className={[
                 "h-8 font-mono text-sm",
                 liveValidationError ? "border-red-500" : "",
@@ -280,31 +296,30 @@ export function DualValueProperty({
           {labelExtra}
         </div>
 
-        {/* Input with add-ons style - two separate inputs */}
         {showHex ? (
           <div className="flex rounded-md shadow-xs">
             <Input
-              value={isEditing && resolvedEditFormat === "int32" ? editValue : String(displayValue)}
-              onChange={isEditing && resolvedEditFormat === "int32" ? (e) => {
+              value={isEditing && resolvedEditFormat === "number" ? editValue : String(displayValue)}
+              onChange={isEditing && resolvedEditFormat === "number" ? (e) => {
                 const newValue = e.target.value;
                 onValidationErrorChange?.("");
                 onValueChange(newValue);
               } : undefined}
-              onKeyDown={isEditing && resolvedEditFormat === "int32" ? (e) => {
+              onKeyDown={isEditing && resolvedEditFormat === "number" ? (e) => {
                 if (e.key === "Enter") handleSave();
                 if (e.key === "Escape") onCancelEdit();
               } : undefined}
-              onClick={!isEditing && startEditOnRowClick ? () => handleStartEdit("int32") : (isEditing && resolvedEditFormat !== "int32" ? () => handleFormatChange("int32") : undefined)}
-              readOnly={!isEditing || resolvedEditFormat !== "int32"}
-              placeholder="Int32"
+              onClick={!isEditing && startEditOnRowClick ? () => handleStartEdit("number") : (isEditing && resolvedEditFormat !== "number" ? () => handleFormatChange("number") : undefined)}
+              readOnly={!isEditing || resolvedEditFormat !== "number"}
+              placeholder={numberLabel}
               className={[
                 "h-8 font-mono text-sm shadow-none rounded-l-md rounded-r-none -mr-px",
-                !isEditing || resolvedEditFormat !== "int32" ? "cursor-pointer hover:bg-accent/20" : "",
-                isEditing && resolvedEditFormat === "int32" && validationError ? "border-red-500" : "",
+                !isEditing || resolvedEditFormat !== "number" ? "cursor-pointer hover:bg-accent/20" : "",
+                isEditing && resolvedEditFormat === "number" && validationError ? "border-red-500" : "",
               ].join(" ")}
-              autoFocus={isEditing && resolvedEditFormat === "int32"}
-              aria-invalid={isEditing && resolvedEditFormat === "int32" && validationError ? true : undefined}
-              title={!isEditing ? "Click to edit" : (resolvedEditFormat !== "int32" ? "Click to switch to Int32 format" : validationError || undefined)}
+              autoFocus={isEditing && resolvedEditFormat === "number"}
+              aria-invalid={isEditing && resolvedEditFormat === "number" && validationError ? true : undefined}
+              title={!isEditing ? "Click to edit" : (resolvedEditFormat !== "number" ? `Click to switch to ${numberLabel} format` : validationError || undefined)}
             />
             <Input
               value={isEditing && resolvedEditFormat === "hex" ? editValue : hexValue}
@@ -343,9 +358,9 @@ export function DualValueProperty({
               if (e.key === "Enter") handleSave();
               if (e.key === "Escape") onCancelEdit();
             } : undefined}
-            onClick={!isEditing && startEditOnRowClick ? () => handleStartEdit("int32") : undefined}
+            onClick={!isEditing && startEditOnRowClick ? () => handleStartEdit("number") : undefined}
             readOnly={!isEditing}
-            placeholder="Integer value"
+            placeholder={`${numberLabel} value`}
             className={[
               "h-8 font-mono text-sm",
               !isEditing ? "cursor-pointer hover:bg-accent/20" : "",
@@ -357,14 +372,12 @@ export function DualValueProperty({
           />
         )}
 
-        {/* Validation error */}
         {isEditing && validationError && (
           <div className="text-[11px] text-red-500">
             {validationError}
           </div>
         )}
 
-        {/* Action buttons - only show when editing or when not using editOnRowClick */}
         {isEditing ? (
           <div className="flex items-center justify-end gap-1">
             <Button size="icon" className="h-7 w-7" onClick={handleSave} title="Save">
@@ -379,7 +392,7 @@ export function DualValueProperty({
             size="sm"
             variant="outline"
             className="w-full h-7"
-            onClick={() => handleStartEdit("int32")}
+            onClick={() => handleStartEdit("number")}
             title="Edit"
           >
             <Edit3 className="h-3 w-3 mr-1.5" />
@@ -392,7 +405,6 @@ export function DualValueProperty({
     return CardContent;
   }
 
-  // Editable display (default)
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -402,11 +414,10 @@ export function DualValueProperty({
       
       {!isEditing ? (
         <div className="space-y-2">
-          {/* Display both values */}
           {showHex ? (
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="space-y-1">
-                <div className="text-xs text-muted-foreground">Int32</div>
+                <div className="text-xs text-muted-foreground">{numberLabel}</div>
                 <div className="font-mono p-2 bg-muted rounded-md text-center">
                   {displayValue}
                 </div>
@@ -424,16 +435,15 @@ export function DualValueProperty({
             </div>
           )}
           
-          {/* Edit buttons */}
           {showHex ? (
             <div className="grid grid-cols-2 gap-2">
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => handleStartEdit('int32')}
+                onClick={() => handleStartEdit('number')}
               >
                 <Edit3 className="h-3 w-3 mr-2" />
-                Edit Int32
+                Edit {numberLabel}
               </Button>
               <Button
                 size="sm"
@@ -449,7 +459,7 @@ export function DualValueProperty({
               size="sm"
               variant="outline"
               className="w-full"
-              onClick={() => handleStartEdit('int32')}
+              onClick={() => handleStartEdit('number')}
             >
               <Edit3 className="h-3 w-3 mr-2" />
               Edit
@@ -458,16 +468,15 @@ export function DualValueProperty({
         </div>
       ) : (
         <div className="space-y-3">
-          {/* Format toggle - only show if hex is enabled */}
           {showHex && (
             <ToggleGroup
               type="single"
               value={resolvedEditFormat}
-              onValueChange={(value) => value && handleFormatChange(value as 'int32' | 'hex')}
+              onValueChange={(value) => value && handleFormatChange(value as 'number' | 'hex')}
               className="justify-start"
             >
-              <ToggleGroupItem value="int32" aria-label="Int32 format">
-                Int32
+              <ToggleGroupItem value="number" aria-label={`${numberLabel} format`}>
+                {numberLabel}
               </ToggleGroupItem>
               <ToggleGroupItem value="hex" aria-label="Hex format">
                 Hex
@@ -475,7 +484,6 @@ export function DualValueProperty({
             </ToggleGroup>
           )}
           
-          {/* Input field */}
           <Input
             value={editValue}
             onChange={(e) => {
@@ -496,19 +504,17 @@ export function DualValueProperty({
             placeholder={
               showHex && resolvedEditFormat === 'hex' 
                 ? 'XX XX XX XX' 
-                : 'Integer value'
+                : `${numberLabel} value`
             }
             className={validationError ? 'border-red-500' : ''}
             autoFocus
           />
-          {/* Validation error */}
           {validationError && (
             <div className="text-xs text-red-500">
               {validationError}
             </div>
           )}
           
-          {/* Action buttons */}
           <div className="flex gap-2">
             <Button size="sm" onClick={handleSave} className="flex-1">
               <Save className="h-3 w-3 mr-2" />
