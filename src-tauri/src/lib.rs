@@ -94,7 +94,13 @@ pub fn run() {
             preview_collection_state::preview_collection_clear_active,
             preview_collection_state::preview_collection_set_view_range,
             preview_collection_state::preview_collection_set_control_range,
-            preview_collection_state::preview_collection_remove_missing_ids
+            preview_collection_state::preview_collection_remove_missing_ids,
+            commands::parse_command_table_file,
+            commands::parse_command_table_raw,
+            commands::build_command_table_file,
+            commands::update_command_table_entry,
+            commands::parse_chrsysparam_file,
+            commands::build_chrsysparam_file
         ])
         .setup(|app| {
             #[cfg(debug_assertions)]

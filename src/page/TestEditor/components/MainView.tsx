@@ -12,6 +12,7 @@ import CardIconListView from "./CardIconListView";
 import StageIconListView from "./StageIconListView";
 import StageListView from "./StageListView";
 import MscWorkspaceView from "./msc-editor/MscWorkspaceView";
+import CommandParamView from "./command-param/CommandParamView";
 import { SsbhModelPreviewViewport } from "./ssbh-model-preview/SsbhModelPreviewPanel";
 
 type StageTab = {
@@ -161,6 +162,17 @@ const tabs: StageTab[] = [
       />
     ),
   },
+  {
+    name: "Command Param",
+    value: "command-param",
+    render: (props: MainViewProps) => (
+      <CommandParamView
+        folderPath={props.folderPath ?? ""}
+        isActive={false}
+        onUnsavedChanges={props.onUnsavedChanges}
+      />
+    ),
+  },
 ];
 
 const MainView = ({
@@ -256,6 +268,11 @@ const MainView = ({
 
   const handleMscWorkspaceUnsaved = useCallback((hasChanges: boolean) => {
     setMscWorkspaceHasUnsaved(hasChanges);
+  }, []);
+
+  const [commandParamHasUnsaved, setCommandParamHasUnsaved] = useState(false);
+  const handleCommandParamUnsaved = useCallback((hasChanges: boolean) => {
+    setCommandParamHasUnsaved(hasChanges);
   }, []);
   const unsavedTabMap = useMemo<Record<string, boolean>>(
     () => ({
@@ -421,6 +438,19 @@ const MainView = ({
         };
       }
 
+      if (tab.value === "command-param") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <CommandParamView
+              folderPath={props.folderPath ?? ""}
+              isActive={activeTab === "command-param"}
+              onUnsavedChanges={handleCommandParamUnsaved}
+            />
+          ),
+        };
+      }
+
       return tab;
     });
   }, [
@@ -434,6 +464,7 @@ const MainView = ({
     handleStageIconListUnsaved,
     handleStageListUnsaved,
     handleMscWorkspaceUnsaved,
+    handleCommandParamUnsaved,
     handleUnsavedChanges,
     mscWorkspaceFolderPath,
     onMscWorkspaceFolderChange,

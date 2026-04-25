@@ -1,1 +1,13 @@
+pub mod armsparam;
+pub mod bulletparam;
+pub mod characterparam;
+pub mod chrsysparam;
+pub mod command_table;
+pub mod effect_project;
 pub mod fhm2d;
+pub mod grapparam;
+pub mod hitgroupiddef;
+pub mod interactionid;
+pub mod projectile_depiction_table;
+pub mod speedparam;
+pub mod vernier_table;

@@ -1054,3 +1054,70 @@ fn cleanup_artifacts(new_struct: &Path, new_folder: &Path) -> Result<(), String>
     }
     Ok(())
 }
+
+#[tauri::command]
+pub fn parse_command_table_file(path: &str, file_type: &str) -> Result<Value, String> {
+    let data = fs::read(path).map_err(|e| format!("Failed to read file: {e}"))?;
+    let parsed = crate::format::command_table::parse_command_table_with_fields(&data, file_type)?;
+    serde_json::to_value(&parsed).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[tauri::command]
+pub fn parse_command_table_raw(path: &str) -> Result<Value, String> {
+    let data = fs::read(path).map_err(|e| format!("Failed to read file: {e}"))?;
+    let parsed = crate::format::command_table::parse_command_table(&data)?;
+    serde_json::to_value(&parsed).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[tauri::command]
+pub fn build_command_table_file(table_json: Value, output_path: &str) -> Result<(), String> {
+    let table: crate::format::command_table::CommandTableFile =
+        serde_json::from_value(table_json).map_err(|e| format!("Deserialize failed: {e}"))?;
+    let bytes = crate::format::command_table::build_command_table(&table)?;
+    fs::write(output_path, &bytes).map_err(|e| format!("Write failed: {e}"))
+}
+
+#[tauri::command]
+pub fn update_command_table_entry(
+    path: &str,
+    entry_index: usize,
+    cmd_hash: u32,
+    value_hex: &str,
+) -> Result<(), String> {
+    let data = fs::read(path).map_err(|e| format!("Failed to read file: {e}"))?;
+    let mut table = crate::format::command_table::parse_command_table(&data)?;
+
+    let value_bytes: [u8; 4] = decode_hex_4bytes(value_hex)?;
+
+    crate::format::command_table::update_entry_field(&mut table, entry_index, cmd_hash, value_bytes)?;
+    let bytes = crate::format::command_table::build_command_table(&table)?;
+    fs::write(path, &bytes).map_err(|e| format!("Write failed: {e}"))
+}
+
+fn decode_hex_4bytes(hex_str: &str) -> Result<[u8; 4], String> {
+    let hex_str = hex_str.trim();
+    if hex_str.len() != 8 {
+        return Err(format!("Hex string must be 8 characters, got {}", hex_str.len()));
+    }
+    let mut bytes = [0u8; 4];
+    for i in 0..4 {
+        bytes[i] = u8::from_str_radix(&hex_str[i * 2..i * 2 + 2], 16)
+            .map_err(|e| format!("Invalid hex at position {}: {e}", i * 2))?;
+    }
+    Ok(bytes)
+}
+
+#[tauri::command]
+pub fn parse_chrsysparam_file(path: &str) -> Result<Value, String> {
+    let data = fs::read(path).map_err(|e| format!("Failed to read file: {e}"))?;
+    let parsed = crate::format::chrsysparam::parse_chrsysparam(&data)?;
+    serde_json::to_value(&parsed).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[tauri::command]
+pub fn build_chrsysparam_file(file_json: Value, output_path: &str) -> Result<(), String> {
+    let file: crate::format::chrsysparam::ChrSysParamFile =
+        serde_json::from_value(file_json).map_err(|e| format!("Deserialize failed: {e}"))?;
+    let bytes = crate::format::chrsysparam::build_chrsysparam(&file)?;
+    fs::write(output_path, &bytes).map_err(|e| format!("Write failed: {e}"))
+}
