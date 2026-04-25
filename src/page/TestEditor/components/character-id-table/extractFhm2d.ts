@@ -1,5 +1,6 @@
 import { readFile, exists } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
+import { invoke } from '@tauri-apps/api/core';
 import { Buffer } from 'buffer';
 import { ExtractFHMData, Fhm2d_type_format, ExtractType } from '@/models/fhm2d';
 import { AssetRefInfo } from './assetRef';
@@ -19,6 +20,19 @@ export type ExtractAssetOptions = {
   /** When true, writes decompressed OB meta section to `meta.bin` in the output folder. */
   writeMetaBin?: boolean;
 };
+
+export async function getExtractOutputFolderCollisionInfo(
+  extractOutputPath: string,
+  hashHex: string
+): Promise<{ targetDir: string; folderExists: boolean }> {
+  const root = extractOutputPath.trim();
+  if (!root) {
+    return { targetDir: '', folderExists: false };
+  }
+  const targetDir = await join(root, hashHex);
+  const folderExists = await invoke<boolean>('path_exists', { path: targetDir });
+  return { targetDir, folderExists };
+}
 
 export async function extractAsset(
   asset: AssetRefInfo,

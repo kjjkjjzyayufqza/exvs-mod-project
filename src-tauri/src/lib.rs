@@ -32,6 +32,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::my_custom_command,
             commands::read_file,
+            commands::path_exists,
             commands::exec_shell_command,
             commands::exec_shell_command_with_output,
             commands::exec_process_with_output,

@@ -41,7 +41,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { AssetRefInfo } from "./assetRef";
-import { extractAsset } from "./extractFhm2d";
+import { extractAsset, getExtractOutputFolderCollisionInfo } from "./extractFhm2d";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { copyAssetAsNew } from "./copyAssetAsNew";
 import { removeAssetWorkspace } from "./removeAssetWorkspace";
@@ -100,6 +100,8 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   const [removeExtractOutput, setRemoveExtractOutput] = useState(true);
   const [removeModFhm2d, setRemoveModFhm2d] = useState(true);
   const [writeMetaBin, setWriteMetaBin] = useState(false);
+  const [extractOverwriteOpen, setExtractOverwriteOpen] = useState(false);
+  const [extractCollisionPath, setExtractCollisionPath] = useState("");
   const trimmedSeed = copySeed.trim();
   const copySeedCrcPreview = useMemo(() => {
     const u = crc32IeeeUint32(trimmedSeed);
@@ -146,7 +148,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     checkExists();
   }, [asset.sourceFilePath, asset.workspaceFolderPath, asset.modFilePath]);
 
-  const handleExtract = async () => {
+  const runExtract = async () => {
     setIsExtracting(true);
     const result = await extractAsset(asset, extractOutputPath, { writeMetaBin });
     setIsExtracting(false);
@@ -173,6 +175,27 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     } else {
       toast.error(result.error || "Extraction failed");
     }
+  };
+
+  const handleExtract = async () => {
+    if (isExtracting) {
+      return;
+    }
+    const { targetDir, folderExists } = await getExtractOutputFolderCollisionInfo(
+      extractOutputPath,
+      asset.hashHex
+    );
+    if (folderExists) {
+      setExtractCollisionPath(targetDir);
+      setExtractOverwriteOpen(true);
+      return;
+    }
+    await runExtract();
+  };
+
+  const handleConfirmExtractOverwrite = () => {
+    setExtractOverwriteOpen(false);
+    void runExtract();
   };
 
   const handleOpenSourceFolder = async () => {
@@ -519,6 +542,35 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
               }
             >
               {isRemoving ? "Removing..." : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={extractOverwriteOpen} onOpenChange={setExtractOverwriteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Folder already exists</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="text-left text-sm text-muted-foreground space-y-2">
+                <p>
+                  Re-extracting will write into the existing output folder. Files may be merged or
+                  replaced.
+                </p>
+                <p className="font-mono text-xs break-all text-foreground">{extractCollisionPath}</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isExtracting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleConfirmExtractOverwrite();
+              }}
+              disabled={isExtracting}
+            >
+              {isExtracting ? "Extracting..." : "Extract"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

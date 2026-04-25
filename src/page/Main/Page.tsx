@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { useEffect, useState } from "react";
-import { ask, open } from "@tauri-apps/plugin-dialog";
+import { open } from "@tauri-apps/plugin-dialog";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { Resource, invoke } from '@tauri-apps/api/core';
 import { useConfigStore } from "../../store/configStore";

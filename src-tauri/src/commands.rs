@@ -28,6 +28,11 @@ pub fn my_custom_command() {
 }
 
 #[tauri::command]
+pub fn path_exists(path: String) -> bool {
+    Path::new(&path).exists()
+}
+
+#[tauri::command]
 pub fn read_file(path: &str) -> Response {
     match fs::read(path) {
         Ok(data) => {
