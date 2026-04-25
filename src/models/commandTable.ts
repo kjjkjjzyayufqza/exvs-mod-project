@@ -85,6 +85,29 @@ export function isCommandTableFile(fileName: string): boolean {
   return type !== 'unknown' && type !== 'chrsysparam'
 }
 
+export function isVgsht2File(fileName: string): boolean {
+  return fileName.toLowerCase().endsWith('.vgsht2')
+}
+
+export function scanParamFileNames(fileList: string[]): string[] {
+  const known = [
+    "grapparam.bin",
+    "projectile_depiction_table.bin",
+    "chrsysparam.csyspm",
+    "characterparam.bin",
+    "interactionid.bin",
+    "hitgroupiddef.bin",
+    "bulletparam.bin",
+    "speedparam.bin",
+    "armsparam.bin",
+  ]
+  const vgsht2 = fileList.filter(f => {
+    const lower = f.toLowerCase()
+    return lower.endsWith('.vgsht2') && (lower.includes('effect_project') || lower.includes('vernier_table') || lower.includes('projectile_depiction'))
+  })
+  return [...known, ...vgsht2]
+}
+
 export async function parseCommandTableFile(path: string, fileType: string): Promise<ParsedCommandTable> {
   return await invoke<ParsedCommandTable>('parse_command_table_file', { path, fileType })
 }

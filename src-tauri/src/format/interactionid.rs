@@ -1,11 +1,15 @@
+use binrw::{BinRead, BinWrite};
 use serde::{Deserialize, Serialize};
 
 pub const INTERACTIONID_ENTRY_SIZE: u32 = 124;
 pub const INTERACTIONID_CMD_COUNT: u32 = 31;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, BinRead, BinWrite, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[brw(little)]
 pub struct InteractionIdEntry {
+    #[brw(ignore)]
+    #[serde(default)]
     pub entry_id: u32,
     pub damage: i32,                   // 0x00C57BA3 +0x000 kind=2 base damage value
     pub correction_pct: i32,           // 0x06A06715 +0x004 kind=2 combo correction (usually 100)
@@ -53,96 +57,3 @@ pub const INTERACTIONID_FIELD_HASHES: [(u32, u32, u32); 31] = [
     (0xD5D4F8DB, 0x06C, 2), (0xEFEA436F, 0x070, 2), (0xFA03CBDA, 0x074, 2),
     (0xFABCA946, 0x078, 1),
 ];
-
-pub fn parse_interactionid_entry(entry_id: u32, data: &[u8]) -> Result<InteractionIdEntry, String> {
-    if data.len() < INTERACTIONID_ENTRY_SIZE as usize {
-        return Err(format!("InteractionId entry too small: {} < {}", data.len(), INTERACTIONID_ENTRY_SIZE));
-    }
-    Ok(InteractionIdEntry {
-        entry_id,
-        damage: read_i32(data, 0x000),
-        correction_pct: read_i32(data, 0x004),
-        interact_target_hash: read_u32(data, 0x008),
-        receive_mode_hash: read_u32(data, 0x00C),
-        interact_type: read_u32(data, 0x010),
-        interact_range: read_f32(data, 0x014),
-        priority: read_u32(data, 0x018),
-        stun_value: read_i32(data, 0x01C),
-        hit_effect_id: read_u32(data, 0x020),
-        down_value: read_i32(data, 0x024),
-        guard_interact_hash: read_u32(data, 0x028),
-        stun_frame: read_i32(data, 0x02C),
-        se_hash: read_u32(data, 0x030),
-        knockback_force: read_i32(data, 0x034),
-        unk_barrier_hash: read_u32(data, 0x038),
-        guard_type: read_u32(data, 0x03C),
-        damage_rate: read_f32(data, 0x040),
-        attack_property: read_u32(data, 0x044),
-        interact_id: read_u32(data, 0x048),
-        is_blockable: read_u32(data, 0x04C),
-        wall_bounce_type: read_u32(data, 0x050),
-        slide_type: read_u32(data, 0x054),
-        hitstop_frame: read_i32(data, 0x058),
-        knockback_distance: read_i32(data, 0x05C),
-        ground_bounce: read_i32(data, 0x060),
-        knockback_type: read_u32(data, 0x064),
-        can_tech: read_i32(data, 0x068),
-        hit_level: read_i32(data, 0x06C),
-        guard_break_level: read_i32(data, 0x070),
-        untechable_frame: read_i32(data, 0x074),
-        interact_category: read_u32(data, 0x078),
-    })
-}
-
-pub fn write_interactionid_entry(entry: &InteractionIdEntry, buf: &mut [u8]) {
-    write_i32(buf, 0x000, entry.damage);
-    write_i32(buf, 0x004, entry.correction_pct);
-    write_u32(buf, 0x008, entry.interact_target_hash);
-    write_u32(buf, 0x00C, entry.receive_mode_hash);
-    write_u32(buf, 0x010, entry.interact_type);
-    write_f32(buf, 0x014, entry.interact_range);
-    write_u32(buf, 0x018, entry.priority);
-    write_i32(buf, 0x01C, entry.stun_value);
-    write_u32(buf, 0x020, entry.hit_effect_id);
-    write_i32(buf, 0x024, entry.down_value);
-    write_u32(buf, 0x028, entry.guard_interact_hash);
-    write_i32(buf, 0x02C, entry.stun_frame);
-    write_u32(buf, 0x030, entry.se_hash);
-    write_i32(buf, 0x034, entry.knockback_force);
-    write_u32(buf, 0x038, entry.unk_barrier_hash);
-    write_u32(buf, 0x03C, entry.guard_type);
-    write_f32(buf, 0x040, entry.damage_rate);
-    write_u32(buf, 0x044, entry.attack_property);
-    write_u32(buf, 0x048, entry.interact_id);
-    write_u32(buf, 0x04C, entry.is_blockable);
-    write_u32(buf, 0x050, entry.wall_bounce_type);
-    write_u32(buf, 0x054, entry.slide_type);
-    write_i32(buf, 0x058, entry.hitstop_frame);
-    write_i32(buf, 0x05C, entry.knockback_distance);
-    write_i32(buf, 0x060, entry.ground_bounce);
-    write_u32(buf, 0x064, entry.knockback_type);
-    write_i32(buf, 0x068, entry.can_tech);
-    write_i32(buf, 0x06C, entry.hit_level);
-    write_i32(buf, 0x070, entry.guard_break_level);
-    write_i32(buf, 0x074, entry.untechable_frame);
-    write_u32(buf, 0x078, entry.interact_category);
-}
-
-fn read_u32(data: &[u8], offset: usize) -> u32 {
-    u32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]])
-}
-fn write_u32(buf: &mut [u8], offset: usize, val: u32) {
-    buf[offset..offset+4].copy_from_slice(&val.to_le_bytes());
-}
-fn read_i32(data: &[u8], offset: usize) -> i32 {
-    i32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]])
-}
-fn write_i32(buf: &mut [u8], offset: usize, val: i32) {
-    buf[offset..offset+4].copy_from_slice(&val.to_le_bytes());
-}
-fn read_f32(data: &[u8], offset: usize) -> f32 {
-    f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]])
-}
-fn write_f32(buf: &mut [u8], offset: usize, val: f32) {
-    buf[offset..offset+4].copy_from_slice(&val.to_le_bytes());
-}

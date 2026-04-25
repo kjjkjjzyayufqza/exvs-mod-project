@@ -1,17 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { exists, readFile, writeFile } from "@tauri-apps/plugin-fs"
+import { exists } from "@tauri-apps/plugin-fs"
 import { join } from "@tauri-apps/api/path"
 import { invoke } from "@tauri-apps/api/core"
-import { Buffer } from "buffer"
+import { writeFile } from "@tauri-apps/plugin-fs"
 import { toast } from "sonner"
-import { Save, RefreshCw, Search, Download, Upload } from "lucide-react"
+import { Save, RefreshCw, Search, Download, ToggleLeft, ToggleRight } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Select,
@@ -37,6 +35,8 @@ import {
   detectFileType,
   isCommandTableFile,
 } from "@/models/commandTable"
+import { getFieldMeta, hasRegistry } from "@/models/paramFieldRegistry"
+import TypedFieldEditorPanel from "./TypedFieldEditorPanel"
 
 const PARAM_FILE_NAMES = [
   "grapparam.bin",
@@ -70,6 +70,8 @@ interface ParamTableInfo {
   error: string | null
 }
 
+type ViewMode = "typed" | "raw"
+
 export default function CommandParamView({ folderPath, isActive, onUnsavedChanges }: CommandParamViewProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" })
   const [activeFileType, setActiveFileType] = useState<string>("")
@@ -78,6 +80,8 @@ export default function CommandParamView({ folderPath, isActive, onUnsavedChange
   const [searchQuery, setSearchQuery] = useState("")
   const [kindFilter, setKindFilter] = useState<string>("all")
   const [isSaving, setIsSaving] = useState(false)
+  const [viewMode, setViewMode] = useState<ViewMode>("typed")
+  const [entrySearchQuery, setEntrySearchQuery] = useState("")
 
   const activeTable = useMemo(() => {
     if (loadState.status !== "ready") return null
@@ -238,11 +242,12 @@ export default function CommandParamView({ folderPath, isActive, onUnsavedChange
 
   const readyTables = loadState.tables.filter(t => t.parsed !== null)
   const errorTables = loadState.tables.filter(t => t.error !== null && t.parsed === null)
+  const showTypedView = viewMode === "typed" && hasRegistry(activeFileType)
 
   return (
     <div className="flex flex-col h-full gap-2 p-2">
       <div className="flex items-center gap-2 shrink-0">
-        <Tabs value={activeFileType} onValueChange={v => { setActiveFileType(v); setSelectedEntryIndex(0); setSearchQuery(""); setKindFilter("all") }}>
+        <Tabs value={activeFileType} onValueChange={v => { setActiveFileType(v); setSelectedEntryIndex(0); setSearchQuery(""); setKindFilter("all"); setEntrySearchQuery("") }}>
           <TabsList className="h-8">
             {readyTables.map(t => (
               <TabsTrigger key={t.fileType} value={t.fileType} className="text-xs px-2 py-1">
@@ -255,6 +260,17 @@ export default function CommandParamView({ folderPath, isActive, onUnsavedChange
           </TabsList>
         </Tabs>
         <div className="flex-1" />
+        <Button
+          size="sm"
+          variant={viewMode === "typed" ? "default" : "outline"}
+          onClick={() => setViewMode(viewMode === "typed" ? "raw" : "typed")}
+          className="h-7 text-xs gap-1"
+        >
+          {viewMode === "typed"
+            ? <><ToggleRight className="w-3 h-3" /> Typed</>
+            : <><ToggleLeft className="w-3 h-3" /> Raw</>
+          }
+        </Button>
         <Button size="sm" variant="outline" onClick={loadAllParams} className="h-7 text-xs">
           <RefreshCw className="w-3 h-3 mr-1" /> Reload
         </Button>
@@ -283,19 +299,33 @@ export default function CommandParamView({ folderPath, isActive, onUnsavedChange
             selectedIndex={selectedEntryIndex}
             onSelect={setSelectedEntryIndex}
             fileType={activeTable.fileType}
+            searchQuery={entrySearchQuery}
+            onSearchChange={setEntrySearchQuery}
           />
-          <FieldEditorPanel
-            entry={selectedEntry}
-            commands={activeTable.parsed.commands}
-            fields={filteredFields}
-            entryIndex={selectedEntryIndex}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            kindFilter={kindFilter}
-            onKindFilterChange={setKindFilter}
-            onFieldChange={handleFieldChange}
-            header={activeTable.parsed.header}
-          />
+          {showTypedView ? (
+            <TypedFieldEditorPanel
+              entry={selectedEntry}
+              fileType={activeFileType}
+              entryIndex={selectedEntryIndex}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              onFieldChange={handleFieldChange}
+              header={activeTable.parsed.header}
+            />
+          ) : (
+            <FieldEditorPanel
+              entry={selectedEntry}
+              commands={activeTable.parsed.commands}
+              fields={filteredFields}
+              entryIndex={selectedEntryIndex}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              kindFilter={kindFilter}
+              onKindFilterChange={setKindFilter}
+              onFieldChange={handleFieldChange}
+              header={activeTable.parsed.header}
+            />
+          )}
         </div>
       )}
     </div>
@@ -307,32 +337,76 @@ function EntryListPanel({
   selectedIndex,
   onSelect,
   fileType,
+  searchQuery,
+  onSearchChange,
 }: {
   entries: ParsedEntry[]
   selectedIndex: number
   onSelect: (i: number) => void
   fileType: string
+  searchQuery: string
+  onSearchChange: (q: string) => void
 }) {
   const parentRef = useRef<HTMLDivElement>(null)
+
+  const filteredEntries = useMemo(() => {
+    if (!searchQuery.trim()) return entries.map((e, i) => ({ entry: e, originalIndex: i }))
+    const q = searchQuery.trim().toLowerCase()
+    return entries
+      .map((e, i) => ({ entry: e, originalIndex: i }))
+      .filter(({ entry, originalIndex }) =>
+        String(originalIndex).includes(q) ||
+        formatHash(entry.entryId).toLowerCase().includes(q)
+      )
+  }, [entries, searchQuery])
+
   const virtualizer = useVirtualizer({
-    count: entries.length,
+    count: filteredEntries.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 32,
+    estimateSize: () => 36,
     overscan: 10,
   })
 
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault()
+      const currentFilterIdx = filteredEntries.findIndex(f => f.originalIndex === selectedIndex)
+      const nextIdx = Math.min(currentFilterIdx + 1, filteredEntries.length - 1)
+      if (nextIdx >= 0 && filteredEntries[nextIdx]) {
+        onSelect(filteredEntries[nextIdx].originalIndex)
+      }
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault()
+      const currentFilterIdx = filteredEntries.findIndex(f => f.originalIndex === selectedIndex)
+      const prevIdx = Math.max(currentFilterIdx - 1, 0)
+      if (filteredEntries[prevIdx]) {
+        onSelect(filteredEntries[prevIdx].originalIndex)
+      }
+    }
+  }, [filteredEntries, selectedIndex, onSelect])
+
   return (
-    <Card className="w-56 shrink-0 flex flex-col">
-      <CardHeader className="p-2 pb-1">
+    <Card className="w-56 shrink-0 flex flex-col" onKeyDown={handleKeyDown} tabIndex={0}>
+      <CardHeader className="p-2 pb-1 space-y-1">
         <CardTitle className="text-xs font-medium">
           Entries ({entries.length})
         </CardTitle>
+        <div className="flex items-center gap-1">
+          <Search className="w-3 h-3 text-muted-foreground shrink-0" />
+          <Input
+            value={searchQuery}
+            onChange={e => onSearchChange(e.target.value)}
+            placeholder="Filter #/hash..."
+            className="h-6 text-xs"
+          />
+        </div>
       </CardHeader>
       <CardContent className="p-0 flex-1 min-h-0">
         <div ref={parentRef} className="h-full overflow-auto">
           <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
             {virtualizer.getVirtualItems().map(vi => {
-              const entry = entries[vi.index]
+              const { entry, originalIndex } = filteredEntries[vi.index]
+              const meta = getFieldMeta(fileType, entry.entryId)
               return (
                 <div
                   key={vi.index}
@@ -341,12 +415,19 @@ function EntryListPanel({
                   style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vi.start}px)` }}
                   className={cn(
                     "px-2 py-1 text-xs cursor-pointer border-b border-border/50 hover:bg-accent/50 transition-colors",
-                    selectedIndex === vi.index && "bg-accent text-accent-foreground font-medium"
+                    selectedIndex === originalIndex && "bg-accent text-accent-foreground font-medium"
                   )}
-                  onClick={() => onSelect(vi.index)}
+                  onClick={() => onSelect(originalIndex)}
                 >
-                  <span className="font-mono text-[10px] text-muted-foreground mr-1">#{vi.index}</span>
-                  <span className="font-mono">{formatHash(entry.entryId)}</span>
+                  <div className="flex items-center gap-1">
+                    <span className="font-mono text-[10px] text-muted-foreground">#{originalIndex}</span>
+                    <span className="font-mono text-[11px] truncate">{formatHash(entry.entryId)}</span>
+                  </div>
+                  {meta && (
+                    <div className="text-[9px] text-muted-foreground truncate pl-3">
+                      {meta.name}
+                    </div>
+                  )}
                 </div>
               )
             })}
