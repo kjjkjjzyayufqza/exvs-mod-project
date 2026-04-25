@@ -12,7 +12,7 @@ import CardIconListView from "./CardIconListView";
 import StageIconListView from "./StageIconListView";
 import StageListView from "./StageListView";
 import MscWorkspaceView from "./msc-editor/MscWorkspaceView";
-import CommandParamView from "./command-param/CommandParamView";
+import ParamEditorView from "./param-editor/ParamEditorView";
 import { SsbhModelPreviewViewport } from "./ssbh-model-preview/SsbhModelPreviewPanel";
 
 type StageTab = {
@@ -163,15 +163,9 @@ const tabs: StageTab[] = [
     ),
   },
   {
-    name: "Command Param",
-    value: "command-param",
-    render: (props: MainViewProps) => (
-      <CommandParamView
-        folderPath={props.folderPath ?? ""}
-        isActive={false}
-        onUnsavedChanges={props.onUnsavedChanges}
-      />
-    ),
+    name: "Param Editor",
+    value: "param-editor",
+    render: (props: MainViewProps) => <ParamEditorView onUnsavedChanges={props.onUnsavedChanges} />,
   },
 ];
 
@@ -270,9 +264,9 @@ const MainView = ({
     setMscWorkspaceHasUnsaved(hasChanges);
   }, []);
 
-  const [commandParamHasUnsaved, setCommandParamHasUnsaved] = useState(false);
-  const handleCommandParamUnsaved = useCallback((hasChanges: boolean) => {
-    setCommandParamHasUnsaved(hasChanges);
+  const [paramEditorHasUnsaved, setParamEditorHasUnsaved] = useState(false);
+  const handleParamEditorUnsaved = useCallback((hasChanges: boolean) => {
+    setParamEditorHasUnsaved(hasChanges);
   }, []);
   const unsavedTabMap = useMemo<Record<string, boolean>>(
     () => ({
@@ -285,6 +279,7 @@ const MainView = ({
       "stage-icon-list": stageIconListHasUnsaved,
       "stage-list": stageListHasUnsaved,
       "msc-workspace": mscWorkspaceHasUnsaved,
+      "param-editor": paramEditorHasUnsaved,
     }),
     [
       folderStructureHasUnsaved,
@@ -295,6 +290,7 @@ const MainView = ({
       stageIconListHasUnsaved,
       stageListHasUnsaved,
       mscWorkspaceHasUnsaved,
+      paramEditorHasUnsaved,
     ],
   );
 
@@ -438,16 +434,10 @@ const MainView = ({
         };
       }
 
-      if (tab.value === "command-param") {
+      if (tab.value === "param-editor") {
         return {
           ...tab,
-          render: (props: MainViewProps) => (
-            <CommandParamView
-              folderPath={props.folderPath ?? ""}
-              isActive={activeTab === "command-param"}
-              onUnsavedChanges={handleCommandParamUnsaved}
-            />
-          ),
+          render: (props: MainViewProps) => <ParamEditorView onUnsavedChanges={handleParamEditorUnsaved} />,
         };
       }
 
@@ -464,7 +454,7 @@ const MainView = ({
     handleStageIconListUnsaved,
     handleStageListUnsaved,
     handleMscWorkspaceUnsaved,
-    handleCommandParamUnsaved,
+    handleParamEditorUnsaved,
     handleUnsavedChanges,
     mscWorkspaceFolderPath,
     onMscWorkspaceFolderChange,
@@ -578,6 +568,13 @@ const MainView = ({
                       />
                     )}
                     {tab.value === "msc-workspace" && mscWorkspaceHasUnsaved && (
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
+                        aria-label="Unsaved changes"
+                        title="Unsaved changes"
+                      />
+                    )}
+                    {tab.value === "param-editor" && paramEditorHasUnsaved && (
                       <span
                         className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
                         aria-label="Unsaved changes"

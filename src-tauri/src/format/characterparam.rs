@@ -1,6 +1,10 @@
 use binrw::{BinRead, BinWrite};
 use serde::{Deserialize, Serialize};
 
+use crate::format::typed_param::{
+    build_typed_param_binary, parse_typed_param_binary, ParamEntryWithId, TypedParamBundle,
+};
+
 pub const CHARACTERPARAM_ENTRY_SIZE: u32 = 796;
 pub const CHARACTERPARAM_CMD_COUNT: u32 = 197;
 
@@ -11,40 +15,40 @@ pub struct CharacterParamEntry {
     #[brw(ignore)]
     #[serde(default)]
     pub entry_id: u32,
-    pub max_hp: i32, // 0x00D7CEDB +0x000 kind=2 IDA:sub_1405F9010 case8
-    pub hp_correction_rate: f32, // 0x00EC483C +0x004 kind=5
-    pub boost_gauge_pct: f32, // 0x01F15731 +0x008 kind=5
-    pub base_unit_cost: i32, // 0x04371326 +0x00C kind=2 IDA:sub_1405F9180 case14,15,18
-    pub ammo_count_main: i32, // 0x07B8E157 +0x010 kind=2
-    pub down_value_rate: f32, // 0x0804605C +0x014 kind=5
-    pub boost_gauge_max: i32, // 0x080AF70C +0x018 kind=2
+    pub max_hp: i32,               // 0x00D7CEDB +0x000 kind=2 IDA:sub_1405F9010 case8
+    pub hp_correction_rate: f32,   // 0x00EC483C +0x004 kind=5
+    pub boost_gauge_pct: f32,      // 0x01F15731 +0x008 kind=5
+    pub base_unit_cost: i32,       // 0x04371326 +0x00C kind=2 IDA:sub_1405F9180 case14,15,18
+    pub ammo_count_main: i32,      // 0x07B8E157 +0x010 kind=2
+    pub down_value_rate: f32,      // 0x0804605C +0x014 kind=5
+    pub boost_gauge_max: i32,      // 0x080AF70C +0x018 kind=2
     pub front_tracking_angle: f32, // 0x08218288 +0x01C kind=5
-    pub sub_shot_cost: i32, // 0x0872029D +0x020 kind=2 IDA:sub_1405F9180 case3
-    pub rear_tracking_angle: f32, // 0x08A0ADE8 +0x024 kind=5
-    pub red_lock_distance: f32, // 0x08ECF0BE +0x028 kind=5
+    pub sub_shot_cost: i32,        // 0x0872029D +0x020 kind=2 IDA:sub_1405F9180 case3
+    pub rear_tracking_angle: f32,  // 0x08A0ADE8 +0x024 kind=5
+    pub red_lock_distance: f32,    // 0x08ECF0BE +0x028 kind=5
     pub boost_recovery_speed: i32, // 0x0911077E +0x02C kind=2
     pub dmg_multiplier_tier_a: f32, // 0x0ACCE031 +0x030 kind=5
-    pub unit_id_composite: i32, // 0x0B25CB7F +0x034 kind=2
-    pub green_lock_distance: f32, // 0x0F8134A7 +0x038 kind=5
+    pub unit_id_composite: i32,    // 0x0B25CB7F +0x034 kind=2
+    pub green_lock_distance: f32,  // 0x0F8134A7 +0x038 kind=5
     pub dmg_multiplier_tier_b: f32, // 0x104DFF9D +0x03C kind=5
-    pub model_scale: f32, // 0x1113F30E +0x040 kind=5
-    pub movement_speed_base: f32, // 0x14F89980 +0x044 kind=5
-    pub boost_speed_pct: f32, // 0x157CC9FE +0x048 kind=5
-    pub gravity_offset: f32, // 0x15B67A85 +0x04C kind=5
+    pub model_scale: f32,          // 0x1113F30E +0x040 kind=5
+    pub movement_speed_base: f32,  // 0x14F89980 +0x044 kind=5
+    pub boost_speed_pct: f32,      // 0x157CC9FE +0x048 kind=5
+    pub gravity_offset: f32,       // 0x15B67A85 +0x04C kind=5
     pub body_collision_radius: f32, // 0x1698E3D8 +0x050 kind=5
-    pub is_transformable: i32, // 0x18415DC4 +0x054 kind=2
+    pub is_transformable: i32,     // 0x18415DC4 +0x054 kind=2
     pub unit_attribute_flags: u32, // 0x1B2228B5 +0x058 kind=1
-    pub has_shield: i32, // 0x1B8808F8 +0x05C kind=2
+    pub has_shield: i32,           // 0x1B8808F8 +0x05C kind=2
     pub dmg_multiplier_tier_c: f32, // 0x1BB18A48 +0x060 kind=5
-    pub lock_on_fov_angle: f32, // 0x1BFADFD3 +0x064 kind=5
+    pub lock_on_fov_angle: f32,    // 0x1BFADFD3 +0x064 kind=5
     pub down_value_threshold: f32, // 0x1C936B77 +0x068 kind=5
     pub assist_damage: i32, // 0x1D6EA3F1 +0x06C kind=2 IDA:sub_1405F9010 case6,7 +0x06C kind=2
     pub assist_correction_rate: f32, // 0x1E61CF9F +0x070 kind=5
-    pub burst_cost: i32, // 0x1EA3FAE1 +0x074 kind=2 IDA:sub_1405F9180 case9 +0x074 kind=2
+    pub burst_cost: i32,    // 0x1EA3FAE1 +0x074 kind=2 IDA:sub_1405F9180 case9 +0x074 kind=2
     pub step_tracking_angle_min: f32, // 0x21632B7A +0x078 kind=5
     pub step_tracking_angle_max: f32, // 0x21E2041A +0x07C kind=5
     pub boost_dash_speed_rate: f32, // 0x22169CCE +0x080 kind=5
-    pub special_cost: i32, // 0x22823596 +0x084 kind=2 IDA:sub_1405F9180 case2 +0x084 kind=2
+    pub special_cost: i32,  // 0x22823596 +0x084 kind=2 IDA:sub_1405F9180 case2 +0x084 kind=2
     pub special_gauge_start_rate: f32, // 0x24FA2A04 +0x088 kind=5
     pub reserved_flag_08c: i32, // 0x25346DCD +0x08C kind=2
     pub landing_recovery_rate: f32, // 0x25384033 +0x090 kind=5
@@ -59,9 +63,9 @@ pub struct CharacterParamEntry {
     pub melee_combo_limit: i32, // 0x2CF49283 +0x0B4 kind=2
     pub special_melee_damage: i32, // 0x2DA8874F +0x0B8 kind=2 IDA:sub_1405F9010 case11 +0x0B8 kind=2
     pub special_melee_correction_rate: f32, // 0x2DF82AD5 +0x0BC kind=5
-    pub guard_damage_rate: f32, // 0x30099C4D +0x0C0 kind=5
-    pub barrier_damage_rate: f32, // 0x324F2214 +0x0C4 kind=5
-    pub reserved_flag_0c8: i32, // 0x32F4D4BE +0x0C8 kind=2
+    pub guard_damage_rate: f32,    // 0x30099C4D +0x0C0 kind=5
+    pub barrier_damage_rate: f32,  // 0x324F2214 +0x0C4 kind=5
+    pub reserved_flag_0c8: i32,    // 0x32F4D4BE +0x0C8 kind=2
     pub melee_damage: i32, // 0x333722B6 +0x0CC kind=2 IDA:sub_1405F9010 case2,14 +0x0CC kind=2
     pub melee_correction_offset: f32, // 0x338D4823 +0x0D0 kind=5
     pub melee_tracking_angle: f32, // 0x379D0C45 +0x0D4 kind=5
@@ -87,7 +91,7 @@ pub struct CharacterParamEntry {
     pub camera_offset_z: f32, // 0x4FFACC86 +0x124 kind=5
     pub camera_offset_partner_x: f32, // 0x5175F1DE +0x128 kind=5
     pub camera_offset_partner_y: f32, // 0x51BBA4CB +0x12C kind=5
-    pub body_height: f32, // 0x51DD39F0 +0x130 kind=5
+    pub body_height: f32,  // 0x51DD39F0 +0x130 kind=5
     pub reserved_flag_134: i32, // 0x52335D5B +0x134 kind=2
     pub body_offset_y: f32, // 0x523F70A5 +0x138 kind=5
     pub partner_cost_penalty_frame: i32, // 0x5245EE3E +0x13C kind=2
@@ -118,7 +122,7 @@ pub struct CharacterParamEntry {
     pub respawn_cost: i32, // 0x7D1A0ACF +0x1A0 kind=2
     pub main_shot_cost: i32, // 0x8199A311 +0x1A4 kind=2 IDA:sub_1405F9180 case0 +0x1A4 kind=2
     pub score_bonus_cap: i32, // 0x8248401F +0x1A8 kind=2
-    pub walk_speed: f32, // 0x82B967A9 +0x1AC kind=5
+    pub walk_speed: f32,   // 0x82B967A9 +0x1AC kind=5
     pub team_cost_value: i32, // 0x8381BE8A +0x1B0 kind=2
     pub boost_consumption_rate: f32, // 0x85C483F0 +0x1B4 kind=5
     pub close_tracking_angle: f32, // 0x86579C72 +0x1B8 kind=5
@@ -143,29 +147,29 @@ pub struct CharacterParamEntry {
     pub aim_correction_offset_y: f32, // 0xAA841999 +0x204 kind=5
     pub aim_correction_offset_z: f32, // 0xAB4673AE +0x208 kind=5
     pub sub_shot_cost_scaled: i32, // 0xAE7FF94F +0x20C kind=2 IDA:sub_1405F9180 case4,5,12 +0x20C kind=2
-    pub reserved_flag_210: i32, // 0xAEAC01A7 +0x210 kind=2
-    pub melee_camera_angle: f32, // 0xAF153580 +0x214 kind=5
-    pub assist_reload_frame: i32, // 0xB2900720 +0x218 kind=2
-    pub reserved_flag_21c: i32, // 0xB2E6B445 +0x21C kind=2
+    pub reserved_flag_210: i32,    // 0xAEAC01A7 +0x210 kind=2
+    pub melee_camera_angle: f32,   // 0xAF153580 +0x214 kind=5
+    pub assist_reload_frame: i32,  // 0xB2900720 +0x218 kind=2
+    pub reserved_flag_21c: i32,    // 0xB2E6B445 +0x21C kind=2
     pub dmg_multiplier_tier_i: f32, // 0xB3373BD9 +0x220 kind=5
-    pub melee_lunge_offset: f32, // 0xB4F17B6F +0x224 kind=5
-    pub reserved_flag_228: i32, // 0xB58B705C +0x228 kind=2
-    pub step_cancel_count: i32, // 0xB5FDC339 +0x22C kind=2
-    pub boost_gauge_initial: i32, // 0xB7D5327E +0x230 kind=2
-    pub fall_speed_base: f32, // 0xB91793D4 +0x234 kind=5
-    pub air_dash_speed_base: f32, // 0xBA900811 +0x238 kind=5
+    pub melee_lunge_offset: f32,   // 0xB4F17B6F +0x224 kind=5
+    pub reserved_flag_228: i32,    // 0xB58B705C +0x228 kind=2
+    pub step_cancel_count: i32,    // 0xB5FDC339 +0x22C kind=2
+    pub boost_gauge_initial: i32,  // 0xB7D5327E +0x230 kind=2
+    pub fall_speed_base: f32,      // 0xB91793D4 +0x234 kind=5
+    pub air_dash_speed_base: f32,  // 0xBA900811 +0x238 kind=5
     pub alert_range_distance: f32, // 0xBAE8C388 +0x23C kind=5
-    pub alert_range_fov: f32, // 0xBB19842F +0x240 kind=5
-    pub radar_display_scale: f32, // 0xBC427D55 +0x244 kind=5
-    pub dash_speed_base: f32, // 0xBE256E0C +0x248 kind=5
-    pub reserved_flag_24c: i32, // 0xBE8D97FB +0x24C kind=2
-    pub radar_fov_pct: f32, // 0xC1405939 +0x250 kind=5
-    pub reserved_flag_254: i32, // 0xC28C40CA +0x254 kind=2
-    pub ammo_reserve_count: i32, // 0xC2FAF3AF +0x258 kind=2
+    pub alert_range_fov: f32,      // 0xBB19842F +0x240 kind=5
+    pub radar_display_scale: f32,  // 0xBC427D55 +0x244 kind=5
+    pub dash_speed_base: f32,      // 0xBE256E0C +0x248 kind=5
+    pub reserved_flag_24c: i32,    // 0xBE8D97FB +0x24C kind=2
+    pub radar_fov_pct: f32,        // 0xC1405939 +0x250 kind=5
+    pub reserved_flag_254: i32,    // 0xC28C40CA +0x254 kind=2
+    pub ammo_reserve_count: i32,   // 0xC2FAF3AF +0x258 kind=2
     pub ammo_correction_offset: f32, // 0xC3F64BF9 +0x25C kind=5
-    pub reserved_flag_260: i32, // 0xC4852F00 +0x260 kind=2
-    pub charge_time_frame: i32, // 0xC59737B6 +0x264 kind=2
-    pub reserved_flag_268: i32, // 0xC5E184D3 +0x268 kind=2
+    pub reserved_flag_260: i32,    // 0xC4852F00 +0x260 kind=2
+    pub charge_time_frame: i32,    // 0xC59737B6 +0x264 kind=2
+    pub reserved_flag_268: i32,    // 0xC5E184D3 +0x268 kind=2
     pub charge_shot_cost: i32, // 0xC6A88D7F +0x26C kind=2 IDA:sub_1405F9180 case10 +0x26C kind=2
     pub charge_damage_multiplier: f32, // 0xC6E2AD28 +0x270 kind=5
     pub charge_correction_offset: f32, // 0xC8B2F571 +0x274 kind=5
@@ -174,14 +178,14 @@ pub struct CharacterParamEntry {
     pub melee_lock_angle: f32, // 0xD01D00DF +0x280 kind=5
     pub target_range_distance: f32, // 0xD249350C +0x284 kind=5
     pub target_correction_offset: f32, // 0xD24DC1FD +0x288 kind=5
-    pub target_fov_pct: f32, // 0xD2D0C774 +0x28C kind=5
+    pub target_fov_pct: f32,   // 0xD2D0C774 +0x28C kind=5
     pub radar_range_distance: f32, // 0xD524F115 +0x290 kind=5
     pub radar_sweep_angle: f32, // 0xD54CE896 +0x294 kind=5
     pub radar_correction_offset: f32, // 0xD6F39D3C +0x298 kind=5
     pub radar_display_offset: f32, // 0xD854F864 +0x29C kind=5
-    pub melee_cost: i32, // 0xD8F4FBD2 +0x2A0 kind=2 IDA:sub_1405F9180 case1 +0x2A0 kind=2
+    pub melee_cost: i32,       // 0xD8F4FBD2 +0x2A0 kind=2 IDA:sub_1405F9180 case1 +0x2A0 kind=2
     pub melee_cost_correction_offset: f32, // 0xDC414338 +0x2A4 kind=5
-    pub melee_aim_angle: f32, // 0xDC9C3D2F +0x2A8 kind=5
+    pub melee_aim_angle: f32,  // 0xDC9C3D2F +0x2A8 kind=5
     pub melee_aim_correction_offset: f32, // 0xDD83290F +0x2AC kind=5
     pub melee_range_offset: f32, // 0xDE07FD61 +0x2B0 kind=5
     pub rotation_speed_degrees: i32, // 0xDF888E8B +0x2B4 kind=2
@@ -191,10 +195,10 @@ pub struct CharacterParamEntry {
     pub down_value_per_hit: f32, // 0xE3E5D41D +0x2C4 kind=5
     pub action_label_offset: u32, // 0xE6213731 +0x2C8 kind=7
     pub action_label_size: u32,
-    pub target_switch_distance: f32, // 0xE6E29192 +0x2D0 kind=5
-    pub target_switch_fov: f32, // 0xE883DFAB +0x2D4 kind=5
-    pub main_shot_speed_base: f32, // 0xE90161F5 +0x2D8 kind=5
-    pub damage_proration_rate: f32, // 0xE9F462F6 +0x2DC kind=5
+    pub target_switch_distance: f32,       // 0xE6E29192 +0x2D0 kind=5
+    pub target_switch_fov: f32,            // 0xE883DFAB +0x2D4 kind=5
+    pub main_shot_speed_base: f32,         // 0xE90161F5 +0x2D8 kind=5
+    pub damage_proration_rate: f32,        // 0xE9F462F6 +0x2DC kind=5
     pub main_shot_damage: i32, // 0xEB1219A4 +0x2E0 kind=2 IDA:sub_1405F9010 case0,1 +0x2E0 kind=2
     pub combo_proration_rate: f32, // 0xECBC202D +0x2E4 kind=5
     pub reserved_flag_2e8: i32, // 0xED170E69 +0x2E8 kind=2
@@ -206,9 +210,9 @@ pub struct CharacterParamEntry {
     pub resource_label_size: u32,
     pub projectile_tracking_angle_min: f32, // 0xF55FBBBD +0x304 kind=5
     pub projectile_tracking_angle_max: f32, // 0xF5DE94DD +0x308 kind=5
-    pub max_render_distance: f32, // 0xF73592C7 +0x30C kind=5
-    pub render_correction_offset: f32, // 0xFBB81BA9 +0x310 kind=5
-    pub final_damage_multiplier: f32, // 0xFEADD5BE +0x314 kind=5
+    pub max_render_distance: f32,           // 0xF73592C7 +0x30C kind=5
+    pub render_correction_offset: f32,      // 0xFBB81BA9 +0x310 kind=5
+    pub final_damage_multiplier: f32,       // 0xFEADD5BE +0x314 kind=5
     pub assist_cost: i32, // 0xFEE76495 +0x318 kind=2 IDA:sub_1405F9180 case6,7 +0x318 kind=2
 }
 
@@ -411,3 +415,22 @@ pub const CHARACTERPARAM_FIELD_HASHES: [(u32, u32, u32); 197] = [
     (0xFEADD5BE, 0x314, 5),
     (0xFEE76495, 0x318, 2),
 ];
+
+impl ParamEntryWithId for CharacterParamEntry {
+    fn set_row_id(&mut self, id: u32) {
+        self.entry_id = id;
+    }
+    fn get_row_id(&self) -> u32 {
+        self.entry_id
+    }
+}
+
+pub type CharacterParamData = TypedParamBundle<CharacterParamEntry>;
+
+pub fn parse_characterparam(data: &[u8]) -> Result<CharacterParamData, String> {
+    parse_typed_param_binary(data, CHARACTERPARAM_ENTRY_SIZE, CHARACTERPARAM_CMD_COUNT)
+}
+
+pub fn build_characterparam(b: &CharacterParamData) -> Result<Vec<u8>, String> {
+    build_typed_param_binary(b)
+}

@@ -218,7 +218,8 @@ impl<'a> Fhm2dExtractor<'a> {
     }
 
     pub fn extract(self) -> Result<ExtractFhm2dResult, String> {
-        let file_bytes = fs::read(self.source_path).map_err(|e| format!("Failed to read fhm2d file: {e}"))?;
+        let file_bytes =
+            fs::read(self.source_path).map_err(|e| format!("Failed to read fhm2d file: {e}"))?;
         let (parsed, meta_inflated) = parse_ob_fhm2d(file_bytes.as_slice())?;
 
         let out_name = Path::new(self.out_dir)
@@ -299,7 +300,14 @@ pub fn extract_fhm2d_to_folder_impl(
     list_output_file_name: Option<String>,
     write_meta_bin: bool,
 ) -> Result<ExtractFhm2dResult, String> {
-    Fhm2dExtractor::new(source_path, out_dir, format, list_output_file_name, write_meta_bin).extract()
+    Fhm2dExtractor::new(
+        source_path,
+        out_dir,
+        format,
+        list_output_file_name,
+        write_meta_bin,
+    )
+    .extract()
 }
 
 pub fn extract_fhm2d_to_memory_impl(
@@ -494,7 +502,9 @@ fn parse_file_type_entries(meta: &[u8], count: usize) -> Result<Vec<FileTypeEntr
     );
     let mut out = Vec::with_capacity(count);
     for _ in 0..count {
-        let entry: FileTypeEntry = cursor.read_le().map_err(|e| format!("Read FileTypeEntry failed: {e}"))?;
+        let entry: FileTypeEntry = cursor
+            .read_le()
+            .map_err(|e| format!("Read FileTypeEntry failed: {e}"))?;
         out.push(entry);
     }
     Ok(out)
@@ -511,7 +521,11 @@ fn build_type_list(entries: &[FileTypeEntry]) -> Vec<String> {
     out
 }
 
-fn parse_sub_entry(meta: &[u8], body_comp: &[u8], offset: usize) -> Result<(DecodedSubFile, usize), String> {
+fn parse_sub_entry(
+    meta: &[u8],
+    body_comp: &[u8],
+    offset: usize,
+) -> Result<(DecodedSubFile, usize), String> {
     let mut cursor = Cursor::new(
         meta.get(offset..)
             .ok_or_else(|| "Sub entry meta offset out of range".to_string())?,
@@ -530,7 +544,11 @@ fn parse_sub_entry(meta: &[u8], body_comp: &[u8], offset: usize) -> Result<(Deco
     } else {
         (file_size + PAGE_SIZE - 1) / PAGE_SIZE
     };
-    let bitmap_len = if page_count == 0 { 0 } else { (page_count + 7) / 8 };
+    let bitmap_len = if page_count == 0 {
+        0
+    } else {
+        (page_count + 7) / 8
+    };
     let bitmap_start = offset + 0x2c;
     let bitmap_end = bitmap_start
         .checked_add(bitmap_len)
@@ -608,11 +626,19 @@ fn parse_sub_entry(meta: &[u8], body_comp: &[u8], offset: usize) -> Result<(Deco
     if output.len() != file_size {
         return Err(format!(
             "Decompressed file size mismatch for fileIndex {}: expected {}, got {}",
-            file_index, file_size, output.len()
+            file_index,
+            file_size,
+            output.len()
         ));
     }
 
-    Ok((DecodedSubFile { file_index, data: output }, used_len))
+    Ok((
+        DecodedSubFile {
+            file_index,
+            data: output,
+        },
+        used_len,
+    ))
 }
 
 fn parse_sub_file_structure(data: &[u8]) -> Result<Vec<SubFileStructureEntry>, String> {
@@ -660,7 +686,9 @@ fn parse_sub_file_structure(data: &[u8]) -> Result<Vec<SubFileStructureEntry>, S
                     count += 1;
                     cursor += 1;
                 }
-                out.push(SubFileStructureEntry::EndMark { end_mark_count: count });
+                out.push(SubFileStructureEntry::EndMark {
+                    end_mark_count: count,
+                });
             }
             other => return Err(format!("Unsupported SubFileStructure type: 0x{other:02X}")),
         }
@@ -691,7 +719,9 @@ fn build_parse_tree(entries: &[SubFileStructureEntry]) -> ParseNode {
     let mut tokens = Vec::new();
     for entry in entries {
         match entry {
-            SubFileStructureEntry::Folder { unk1, unk2, unk3, .. } => {
+            SubFileStructureEntry::Folder {
+                unk1, unk2, unk3, ..
+            } => {
                 let idx = folder_counter.len() - 1;
                 let name = folder_counter[idx].to_string();
                 folder_counter[idx] += 1;
@@ -798,13 +828,18 @@ fn apply_naming(
     out_name: &str,
 ) -> Result<(), String> {
     match format {
-        Some(Fhm2dFormat::StageList) => apply_stage_list_name(output, list_output_file_name, out_name),
+        Some(Fhm2dFormat::StageList) => {
+            apply_stage_list_name(output, list_output_file_name, out_name)
+        }
         Some(Fhm2dFormat::CharacterParam) => apply_param_names(&mut output.sub_file_data),
         Some(Fhm2dFormat::CharacterCost) => apply_character_cost_names(&mut output.sub_file_data),
         Some(Fhm2dFormat::Msc) => apply_msc_names(&mut output.sub_file_data),
-        Some(Fhm2dFormat::Motion) => {
-            apply_motion_names(&mut output.sub_file_data, files, &output.sub_file_parse_structure, out_name)
-        }
+        Some(Fhm2dFormat::Motion) => apply_motion_names(
+            &mut output.sub_file_data,
+            files,
+            &output.sub_file_parse_structure,
+            out_name,
+        ),
         Some(Fhm2dFormat::AllNutexb) => apply_nutexb_names(&mut output.sub_file_data, files),
         Some(Fhm2dFormat::Character) => {
             numdlb_character_enrich::apply_numdlb_base_name_to_structure(
@@ -941,10 +976,17 @@ fn apply_motion_names(
     }
     let folder_map = build_folder_map(parse_root)?;
     for (idx, item) in sub.iter_mut().enumerate() {
-        let folder_segments = folder_map
-            .get(&item.file_index)
-            .ok_or_else(|| format!("Motion naming missing parse path for fileIndex {}", item.file_index))?;
-        let raw = read_c_string_utf8(files[idx].data.as_slice(), MOTION_INTERNAL_NAME_OFFSET, 4096)?;
+        let folder_segments = folder_map.get(&item.file_index).ok_or_else(|| {
+            format!(
+                "Motion naming missing parse path for fileIndex {}",
+                item.file_index
+            )
+        })?;
+        let raw = read_c_string_utf8(
+            files[idx].data.as_slice(),
+            MOTION_INTERNAL_NAME_OFFSET,
+            4096,
+        )?;
         let name = normalize_motion_file_name(raw.as_str())?;
         let mut prefix = Vec::with_capacity(1 + folder_segments.len());
         prefix.push(out_name.to_string());
@@ -955,9 +997,15 @@ fn apply_motion_names(
     Ok(())
 }
 
-fn apply_sound_names(sub: &mut [OutputSubFileData], files: &[DecodedSubFile]) -> Result<(), String> {
+fn apply_sound_names(
+    sub: &mut [OutputSubFileData],
+    files: &[DecodedSubFile],
+) -> Result<(), String> {
     let by_file_index = build_file_index_map(sub)?;
-    let mut used: HashSet<String> = sub.iter().map(|s| normalize_path_key(s.file_url.as_str())).collect();
+    let mut used: HashSet<String> = sub
+        .iter()
+        .map(|s| normalize_path_key(s.file_url.as_str()))
+        .collect();
     for item in sub {
         if !item.file_type.eq_ignore_ascii_case(".nus3bank") {
             continue;
@@ -985,7 +1033,10 @@ fn apply_sound_names(sub: &mut [OutputSubFileData], files: &[DecodedSubFile]) ->
             }
             suffix += 1;
             if suffix > 9999 {
-                return Err(format!("Sound naming overflow for fileIndex {}", item.file_index));
+                return Err(format!(
+                    "Sound naming overflow for fileIndex {}",
+                    item.file_index
+                ));
             }
         }
     }
@@ -1015,9 +1066,15 @@ fn parse_nus3bank_display_name(bytes: &[u8]) -> Result<String, String> {
     Ok(base)
 }
 
-fn apply_nutexb_names(sub: &mut [OutputSubFileData], files: &[DecodedSubFile]) -> Result<(), String> {
+fn apply_nutexb_names(
+    sub: &mut [OutputSubFileData],
+    files: &[DecodedSubFile],
+) -> Result<(), String> {
     let by_file_index = build_file_index_map(sub)?;
-    let mut used: HashSet<String> = sub.iter().map(|s| normalize_path_key(s.file_url.as_str())).collect();
+    let mut used: HashSet<String> = sub
+        .iter()
+        .map(|s| normalize_path_key(s.file_url.as_str()))
+        .collect();
     for item in sub {
         if !item.file_type.eq_ignore_ascii_case(".nutexb") {
             continue;
@@ -1045,7 +1102,10 @@ fn apply_nutexb_names(sub: &mut [OutputSubFileData], files: &[DecodedSubFile]) -
             }
             suffix += 1;
             if suffix > 9999 {
-                return Err(format!("Nutexb naming overflow for fileIndex {}", item.file_index));
+                return Err(format!(
+                    "Nutexb naming overflow for fileIndex {}",
+                    item.file_index
+                ));
             }
         }
     }
@@ -1070,7 +1130,8 @@ fn apply_effect_shallow_parent_bins_to_efxbn(
     // Items with path `["0","0"]` contribute parent `["0"]`; group items with `["0","0","0"]` contribute
     // `["0","0"]`. Using min depth keeps only `["0"]`, while loose bins sit at rel `["0","0"]` and never
     // match. Use max depth so the deepest shared directory (sibling to numbered group folders) wins.
-    let non_empty_parents: Vec<Vec<String>> = parent_dirs.into_iter().filter(|p| !p.is_empty()).collect();
+    let non_empty_parents: Vec<Vec<String>> =
+        parent_dirs.into_iter().filter(|p| !p.is_empty()).collect();
     if non_empty_parents.is_empty() {
         return Ok(());
     }
@@ -1113,7 +1174,10 @@ fn build_file_index_map(sub: &[OutputSubFileData]) -> Result<HashMap<i32, usize>
     let mut map = HashMap::new();
     for (idx, item) in sub.iter().enumerate() {
         if map.insert(item.file_index, idx).is_some() {
-            return Err(format!("Duplicate fileIndex in SubFileData: {}", item.file_index));
+            return Err(format!(
+                "Duplicate fileIndex in SubFileData: {}",
+                item.file_index
+            ));
         }
     }
     Ok(map)
@@ -1178,7 +1242,11 @@ fn ensure_unique_file_urls(sub: &[OutputSubFileData]) -> Result<(), String> {
 
 fn build_folder_map(root: &ParseNode) -> Result<HashMap<i32, Vec<String>>, String> {
     let mut out = HashMap::new();
-    fn walk(node: &ParseNode, path: &mut Vec<String>, out: &mut HashMap<i32, Vec<String>>) -> Result<(), String> {
+    fn walk(
+        node: &ParseNode,
+        path: &mut Vec<String>,
+        out: &mut HashMap<i32, Vec<String>>,
+    ) -> Result<(), String> {
         let children = match &node.children {
             Some(v) => v,
             None => return Ok(()),
@@ -1222,7 +1290,10 @@ fn write_files(
     let base = PathBuf::from(out_dir);
     fs::create_dir_all(&base).map_err(|e| format!("Create output dir failed: {e}"))?;
     for (idx, item) in sub_file_data.iter().enumerate() {
-        let rel = if matches!(format, Some(Fhm2dFormat::Motion) | Some(Fhm2dFormat::Effect)) {
+        let rel = if matches!(
+            format,
+            Some(Fhm2dFormat::Motion) | Some(Fhm2dFormat::Effect)
+        ) {
             motion_relative_path(item.file_url.as_str(), out_name)?
         } else {
             let parts = split_path_segments(item.file_url.as_str());
@@ -1255,7 +1326,11 @@ fn ensure_motion_empty_folders(out_dir: &str, root: &ParseNode) -> Result<(), St
                 continue;
             }
             prefix.push(child.name.clone());
-            let is_empty = child.children.as_ref().map(|v| v.is_empty()).unwrap_or(true);
+            let is_empty = child
+                .children
+                .as_ref()
+                .map(|v| v.is_empty())
+                .unwrap_or(true);
             if is_empty {
                 let mut path = PathBuf::from(out_dir);
                 for seg in prefix.iter() {
@@ -1279,7 +1354,9 @@ fn ensure_motion_empty_folders(out_dir: &str, root: &ParseNode) -> Result<(), St
 fn motion_relative_path(file_url: &str, out_name: &str) -> Result<String, String> {
     let segments = split_path_segments(file_url);
     if segments.len() < 2 {
-        return Err(format!("Invalid fileUrl (need output root + path): {file_url}"));
+        return Err(format!(
+            "Invalid fileUrl (need output root + path): {file_url}"
+        ));
     }
     if segments[0] != out_name {
         return Err(format!(
@@ -1325,7 +1402,9 @@ fn read_u64_le(data: &[u8], offset: usize) -> Result<u64, String> {
     let b = data
         .get(offset..offset + 8)
         .ok_or_else(|| format!("read_u64 out of range at 0x{offset:X}"))?;
-    Ok(u64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]))
+    Ok(u64::from_le_bytes([
+        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+    ]))
 }
 
 fn read_i16_le(data: &[u8], offset: usize) -> Result<i16, String> {
@@ -1406,7 +1485,9 @@ fn sanitize_file_name(input: &str) -> String {
 }
 
 fn has_windows_invalid_chars(input: &str) -> bool {
-    input.chars().any(|ch| is_windows_invalid_char(ch) || ch.is_control())
+    input
+        .chars()
+        .any(|ch| is_windows_invalid_char(ch) || ch.is_control())
 }
 
 fn validate_relative_path(rel: &str) -> Result<(), String> {

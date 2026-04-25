@@ -1056,55 +1056,111 @@ fn cleanup_artifacts(new_struct: &Path, new_folder: &Path) -> Result<(), String>
 }
 
 #[tauri::command]
-pub fn parse_command_table_file(path: &str, file_type: &str) -> Result<Value, String> {
+pub fn parse_typed_param_file(path: &str, param_type: &str) -> Result<Value, String> {
     let data = fs::read(path).map_err(|e| format!("Failed to read file: {e}"))?;
-    let parsed = crate::format::command_table::parse_command_table_with_fields(&data, file_type)?;
-    serde_json::to_value(&parsed).map_err(|e| format!("Serialize failed: {e}"))
+    let v: Value = match param_type {
+        "armsparam" => {
+            serde_json::to_value(crate::format::armsparam::parse_armsparam(&data)?)
+        }
+        "bulletparam" => {
+            serde_json::to_value(crate::format::bulletparam::parse_bulletparam(&data)?)
+        }
+        "characterparam" => {
+            serde_json::to_value(crate::format::characterparam::parse_characterparam(&data)?)
+        }
+        "grapparam" => {
+            serde_json::to_value(crate::format::grapparam::parse_grapparam(&data)?)
+        }
+        "hitgroupiddef" => {
+            serde_json::to_value(crate::format::hitgroupiddef::parse_hitgroupiddef(&data)?)
+        }
+        "interactionid" => {
+            serde_json::to_value(crate::format::interactionid::parse_interactionid(&data)?)
+        }
+        "projectile_depiction_table" => serde_json::to_value(
+            crate::format::projectile_depiction_table::parse_projectile_depiction_table(&data)?,
+        ),
+        "speedparam" => {
+            serde_json::to_value(crate::format::speedparam::parse_speedparam(&data)?)
+        }
+        "effect_project" => {
+            serde_json::to_value(crate::format::effect_project::parse_effect_project(&data)?)
+        }
+        "vernier_table" => {
+            serde_json::to_value(crate::format::vernier_table::parse_vernier_table(&data)?)
+        }
+        _ => {
+            return Err(format!(
+                "Unknown param type: {param_type} (use typed param name, e.g. armsparam)"
+            ));
+        }
+    }
+    .map_err(|e| format!("Serialize failed: {e}"))?;
+    Ok(v)
 }
 
 #[tauri::command]
-pub fn parse_command_table_raw(path: &str) -> Result<Value, String> {
-    let data = fs::read(path).map_err(|e| format!("Failed to read file: {e}"))?;
-    let parsed = crate::format::command_table::parse_command_table(&data)?;
-    serde_json::to_value(&parsed).map_err(|e| format!("Serialize failed: {e}"))
-}
-
-#[tauri::command]
-pub fn build_command_table_file(table_json: Value, output_path: &str) -> Result<(), String> {
-    let table: crate::format::command_table::CommandTableFile =
-        serde_json::from_value(table_json).map_err(|e| format!("Deserialize failed: {e}"))?;
-    let bytes = crate::format::command_table::build_command_table(&table)?;
-    fs::write(output_path, &bytes).map_err(|e| format!("Write failed: {e}"))
-}
-
-#[tauri::command]
-pub fn update_command_table_entry(
-    path: &str,
-    entry_index: usize,
-    cmd_hash: u32,
-    value_hex: &str,
+pub fn build_typed_param_file(
+    data_json: Value,
+    output_path: &str,
+    param_type: &str,
 ) -> Result<(), String> {
-    let data = fs::read(path).map_err(|e| format!("Failed to read file: {e}"))?;
-    let mut table = crate::format::command_table::parse_command_table(&data)?;
-
-    let value_bytes: [u8; 4] = decode_hex_4bytes(value_hex)?;
-
-    crate::format::command_table::update_entry_field(&mut table, entry_index, cmd_hash, value_bytes)?;
-    let bytes = crate::format::command_table::build_command_table(&table)?;
-    fs::write(path, &bytes).map_err(|e| format!("Write failed: {e}"))
-}
-
-fn decode_hex_4bytes(hex_str: &str) -> Result<[u8; 4], String> {
-    let hex_str = hex_str.trim();
-    if hex_str.len() != 8 {
-        return Err(format!("Hex string must be 8 characters, got {}", hex_str.len()));
-    }
-    let mut bytes = [0u8; 4];
-    for i in 0..4 {
-        bytes[i] = u8::from_str_radix(&hex_str[i * 2..i * 2 + 2], 16)
-            .map_err(|e| format!("Invalid hex at position {}: {e}", i * 2))?;
-    }
-    Ok(bytes)
+    let bytes: Vec<u8> = match param_type {
+        "armsparam" => {
+            let d: crate::format::armsparam::ArmsParamData =
+                serde_json::from_value(data_json).map_err(|e| e.to_string())?;
+            crate::format::armsparam::build_armsparam(&d)?
+        }
+        "bulletparam" => {
+            let d: crate::format::bulletparam::BulletParamData =
+                serde_json::from_value(data_json).map_err(|e| e.to_string())?;
+            crate::format::bulletparam::build_bulletparam(&d)?
+        }
+        "characterparam" => {
+            let d: crate::format::characterparam::CharacterParamData =
+                serde_json::from_value(data_json).map_err(|e| e.to_string())?;
+            crate::format::characterparam::build_characterparam(&d)?
+        }
+        "grapparam" => {
+            let d: crate::format::grapparam::GrapParamData =
+                serde_json::from_value(data_json).map_err(|e| e.to_string())?;
+            crate::format::grapparam::build_grapparam(&d)?
+        }
+        "hitgroupiddef" => {
+            let d: crate::format::hitgroupiddef::HitGroupIdDefData =
+                serde_json::from_value(data_json).map_err(|e| e.to_string())?;
+            crate::format::hitgroupiddef::build_hitgroupiddef(&d)?
+        }
+        "interactionid" => {
+            let d: crate::format::interactionid::InteractionIdData =
+                serde_json::from_value(data_json).map_err(|e| e.to_string())?;
+            crate::format::interactionid::build_interactionid(&d)?
+        }
+        "projectile_depiction_table" => {
+            let d: crate::format::projectile_depiction_table::ProjectileDepictionTableData =
+                serde_json::from_value(data_json).map_err(|e| e.to_string())?;
+            crate::format::projectile_depiction_table::build_projectile_depiction_table(&d)?
+        }
+        "speedparam" => {
+            let d: crate::format::speedparam::SpeedParamData =
+                serde_json::from_value(data_json).map_err(|e| e.to_string())?;
+            crate::format::speedparam::build_speedparam(&d)?
+        }
+        "effect_project" => {
+            let d: crate::format::effect_project::EffectProjectData =
+                serde_json::from_value(data_json).map_err(|e| e.to_string())?;
+            crate::format::effect_project::build_effect_project(&d)?
+        }
+        "vernier_table" => {
+            let d: crate::format::vernier_table::VernierTableData =
+                serde_json::from_value(data_json).map_err(|e| e.to_string())?;
+            crate::format::vernier_table::build_vernier_table(&d)?
+        }
+        _ => {
+            return Err(format!("Unknown param type: {param_type}"));
+        }
+    };
+    fs::write(output_path, &bytes).map_err(|e| format!("Write failed: {e}"))
 }
 
 #[tauri::command]

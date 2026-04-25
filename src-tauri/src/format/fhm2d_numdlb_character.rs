@@ -57,14 +57,18 @@ pub(super) fn apply_numdlb_base_name_to_structure(
     for &numdlb_idx in &numdlb_indices {
         let numdlb_item = &sub[numdlb_idx];
         let modl = parse_numdlb_modl_info_v17(
-            files[*by_file_index
-                .get(&numdlb_item.file_index)
-                .ok_or_else(|| format!("Character naming missing fileIndex {}", numdlb_item.file_index))?]
+            files[*by_file_index.get(&numdlb_item.file_index).ok_or_else(|| {
+                format!(
+                    "Character naming missing fileIndex {}",
+                    numdlb_item.file_index
+                )
+            })?]
             .data
             .as_slice(),
         )?;
 
-        let Some(folder_path) = find_folder_path_for_file_index(parse_root, numdlb_item.file_index) else {
+        let Some(folder_path) = find_folder_path_for_file_index(parse_root, numdlb_item.file_index)
+        else {
             continue;
         };
         let Some(folder_node) = find_folder_node_by_path(parse_root, folder_path.as_slice()) else {
@@ -147,7 +151,9 @@ pub(super) fn apply_numdlb_base_name_to_structure(
                 ));
             }
         }
-        let extra_numatb_count = material_candidates.len().saturating_sub(declared_material_count);
+        let extra_numatb_count = material_candidates
+            .len()
+            .saturating_sub(declared_material_count);
         if extra_numatb_count > 0 {
             if declared_material_count < 2 {
                 if mode == NumdlbCharacterNamingMode::Character {
@@ -161,7 +167,10 @@ pub(super) fn apply_numdlb_base_name_to_structure(
             } else {
                 let nust_template_desired = basename_from_mixed_path(material_names[1].as_str());
                 let nust_template_stripped = strip_extension(nust_template_desired.as_str());
-                assert_nust_material_template_for_extras(nust_template_stripped.as_str(), numdlb_item.file_index)?;
+                assert_nust_material_template_for_extras(
+                    nust_template_stripped.as_str(),
+                    numdlb_item.file_index,
+                )?;
             }
         }
 
@@ -190,11 +199,12 @@ pub(super) fn apply_numdlb_base_name_to_structure(
             item.file_url = build_file_url(prefix.as_slice(), desired.as_str());
         }
 
-        let nust_template_stripped_for_extras = if extra_numatb_count > 0 && declared_material_count >= 2 {
-            strip_extension(basename_from_mixed_path(material_names[1].as_str()).as_str())
-        } else {
-            String::new()
-        };
+        let nust_template_stripped_for_extras =
+            if extra_numatb_count > 0 && declared_material_count >= 2 {
+                strip_extension(basename_from_mixed_path(material_names[1].as_str()).as_str())
+            } else {
+                String::new()
+            };
 
         let main_material_rename = declared_material_count.min(material_candidates.len());
         for i in 0..main_material_rename {
@@ -210,8 +220,10 @@ pub(super) fn apply_numdlb_base_name_to_structure(
         if extra_numatb_count > 0 && declared_material_count >= 2 {
             for e in 0..extra_numatb_count {
                 let target = material_candidates[declared_material_count + e];
-                let desired =
-                    build_extra_nust_numatb_desired_file_name(nust_template_stripped_for_extras.as_str(), e + 1)?;
+                let desired = build_extra_nust_numatb_desired_file_name(
+                    nust_template_stripped_for_extras.as_str(),
+                    e + 1,
+                )?;
                 let desired_base = strip_extension(desired.as_str());
                 let item = &mut sub[target];
                 let prefix = parent_segments(item.file_url.as_str())?;
@@ -279,7 +291,9 @@ pub(super) fn apply_numdlb_base_name_to_structure(
                         .map(|m| m.model_name)
                 })
             });
-            let name = name.ok_or_else(|| "Missing modelName for numdlb in model folder under 0\\0".to_string())?;
+            let name = name.ok_or_else(|| {
+                "Missing modelName for numdlb in model folder under 0\\0".to_string()
+            })?;
             model_names.push(name);
         }
         model_names_for_package = model_names.clone();
@@ -349,7 +363,9 @@ pub(super) fn apply_numdlb_base_name_to_structure(
             ));
         }
 
-        let base_name = normalize_character_base_name_from_model_names(effective_model_names_for_shell.as_slice());
+        let base_name = normalize_character_base_name_from_model_names(
+            effective_model_names_for_shell.as_slice(),
+        );
         if !base_name.is_empty() {
             let character_id_item = folder0_bin_items[0];
             {
@@ -416,7 +432,8 @@ pub(super) fn apply_numdlb_base_name_to_structure(
             let base = strip_extension(old_name);
             item.file_base_name = Some(base.clone());
             item.file_type = new_ext.to_string();
-            item.file_url = build_file_url(prefix.as_slice(), format!("{}{}", base, new_ext).as_str());
+            item.file_url =
+                build_file_url(prefix.as_slice(), format!("{}{}", base, new_ext).as_str());
         }
     }
 
@@ -546,11 +563,20 @@ fn read_ssbh_array_header(data: &[u8], field_offset: usize) -> Result<SsbhArrayH
 
 fn basename_from_mixed_path(path: &str) -> String {
     let normalized = path.trim_start_matches(['.', '/', '\\']);
-    let parts: Vec<&str> = normalized.split(['/', '\\']).filter(|s| !s.is_empty()).collect();
-    parts.last().map(|s| (*s).to_string()).unwrap_or_else(|| path.to_string())
+    let parts: Vec<&str> = normalized
+        .split(['/', '\\'])
+        .filter(|s| !s.is_empty())
+        .collect();
+    parts
+        .last()
+        .map(|s| (*s).to_string())
+        .unwrap_or_else(|| path.to_string())
 }
 
-fn assert_nust_material_template_for_extras(stripped_basename: &str, numdlb_file_index: i32) -> Result<(), String> {
+fn assert_nust_material_template_for_extras(
+    stripped_basename: &str,
+    numdlb_file_index: i32,
+) -> Result<(), String> {
     if !stripped_basename.ends_with(NUST_NUMATB_SUFFIX) {
         return Err(format!(
             "numdlb fileIndex={numdlb_file_index}: materialFileNames[1] must be a __nust__ path (e.g. *{NUST_NUMATB_SUFFIX}.numatb), got \"{stripped_basename}\""
@@ -559,11 +585,17 @@ fn assert_nust_material_template_for_extras(stripped_basename: &str, numdlb_file
     Ok(())
 }
 
-fn build_extra_nust_numatb_desired_file_name(nust_template_stripped_basename: &str, variant_index_1_based: usize) -> Result<String, String> {
+fn build_extra_nust_numatb_desired_file_name(
+    nust_template_stripped_basename: &str,
+    variant_index_1_based: usize,
+) -> Result<String, String> {
     if !nust_template_stripped_basename.ends_with(NUST_NUMATB_SUFFIX) {
-        return Err(format!("Invalid nust template basename: \"{nust_template_stripped_basename}\""));
+        return Err(format!(
+            "Invalid nust template basename: \"{nust_template_stripped_basename}\""
+        ));
     }
-    let prefix = &nust_template_stripped_basename[..nust_template_stripped_basename.len() - NUST_NUMATB_SUFFIX.len()];
+    let prefix = &nust_template_stripped_basename
+        [..nust_template_stripped_basename.len() - NUST_NUMATB_SUFFIX.len()];
     let m_part = format!("_m{:03}", variant_index_1_based);
     Ok(format!("{prefix}{m_part}{NUST_NUMATB_SUFFIX}.numatb"))
 }
@@ -621,9 +653,9 @@ fn find_folder_node_by_path<'a>(
     for segment in folder_path {
         let seg = segment.as_ref();
         let children = current.children.as_ref()?;
-        let next = children.iter().find(|c| {
-            c.node_type.as_deref() == Some("Folder") && c.name.as_str() == seg
-        })?;
+        let next = children
+            .iter()
+            .find(|c| c.node_type.as_deref() == Some("Folder") && c.name.as_str() == seg)?;
         current = next;
     }
     Some(current)
@@ -740,7 +772,10 @@ mod tests {
         let info = parse_numdlb_modl_info_v17(bytes.as_slice()).expect("numdlb should parse");
 
         assert_eq!(info.model_name, "body_model");
-        assert_eq!(info.animation_file_name.as_deref(), Some("body_anim.nuanmb"));
+        assert_eq!(
+            info.animation_file_name.as_deref(),
+            Some("body_anim.nuanmb")
+        );
     }
 
     #[test]

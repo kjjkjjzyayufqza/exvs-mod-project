@@ -47,10 +47,30 @@ pub fn parse_chrsysparam(data: &[u8]) -> Result<ChrSysParamFile, String> {
         }
         entries.push(ChrSysParamEntry {
             hash: u32::from_le_bytes([data[base], data[base + 1], data[base + 2], data[base + 3]]),
-            value_a: u32::from_le_bytes([data[base + 4], data[base + 5], data[base + 6], data[base + 7]]),
-            value_b: u32::from_le_bytes([data[base + 8], data[base + 9], data[base + 10], data[base + 11]]),
-            value_c: u32::from_le_bytes([data[base + 12], data[base + 13], data[base + 14], data[base + 15]]),
-            value_d: u32::from_le_bytes([data[base + 16], data[base + 17], data[base + 18], data[base + 19]]),
+            value_a: u32::from_le_bytes([
+                data[base + 4],
+                data[base + 5],
+                data[base + 6],
+                data[base + 7],
+            ]),
+            value_b: u32::from_le_bytes([
+                data[base + 8],
+                data[base + 9],
+                data[base + 10],
+                data[base + 11],
+            ]),
+            value_c: u32::from_le_bytes([
+                data[base + 12],
+                data[base + 13],
+                data[base + 14],
+                data[base + 15],
+            ]),
+            value_d: u32::from_le_bytes([
+                data[base + 16],
+                data[base + 17],
+                data[base + 18],
+                data[base + 19],
+            ]),
         });
     }
 
