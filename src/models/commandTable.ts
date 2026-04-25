@@ -112,8 +112,8 @@ export async function parseCommandTableFile(path: string, fileType: string): Pro
   return await invoke<ParsedCommandTable>('parse_command_table_file', { path, fileType })
 }
 
-export async function buildCommandTableFile(tableJson: any, outputPath: string): Promise<void> {
-  return await invoke('build_command_table_file', { tableJson, outputPath })
+export async function buildCommandTableFile(tableJson: any, outputPath: string, fileType: string): Promise<void> {
+  return await invoke('build_command_table_file', { tableJson, outputPath, fileType })
 }
 
 export async function updateCommandTableEntry(

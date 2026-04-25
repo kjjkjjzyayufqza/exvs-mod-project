@@ -18,7 +18,7 @@ export type ParamKindRow =
       id: Exclude<ParamKindId, "chrsysparam" | "effect_project_named" | "vernier_table_named">
       label: string
       pathKey: string
-      mode: "command"
+      mode: "typed"
       fileType: string
     }
   | {
@@ -31,39 +31,39 @@ export type ParamKindRow =
       id: "effect_project_named"
       label: string
       pathKey: string
-      mode: "command"
+      mode: "typed"
       nameMustResolveTo: "effect_project"
     }
   | {
       id: "vernier_table_named"
       label: string
       pathKey: string
-      mode: "command"
+      mode: "typed"
       nameMustResolveTo: "vernier_table"
     }
 
 export const PARAM_KINDS: ParamKindRow[] = [
-  { id: "armsparam", label: "Arms param", pathKey: "paramEditor.v2.fp.armsparam", mode: "command", fileType: "armsparam" },
-  { id: "bulletparam", label: "Bullet param", pathKey: "paramEditor.v2.fp.bulletparam", mode: "command", fileType: "bulletparam" },
-  { id: "characterparam", label: "Character param", pathKey: "paramEditor.v2.fp.characterparam", mode: "command", fileType: "characterparam" },
+  { id: "armsparam", label: "Arms param", pathKey: "paramEditor.v2.fp.armsparam", mode: "typed", fileType: "armsparam" },
+  { id: "bulletparam", label: "Bullet param", pathKey: "paramEditor.v2.fp.bulletparam", mode: "typed", fileType: "bulletparam" },
+  { id: "characterparam", label: "Character param", pathKey: "paramEditor.v2.fp.characterparam", mode: "typed", fileType: "characterparam" },
   { id: "chrsysparam", label: "Chr sys param", pathKey: "paramEditor.v2.fp.chrsysparam", mode: "chrsys" },
-  { id: "grapparam", label: "Grap param", pathKey: "paramEditor.v2.fp.grapparam", mode: "command", fileType: "grapparam" },
-  { id: "hitgroupiddef", label: "Hit group ID def", pathKey: "paramEditor.v2.fp.hitgroupiddef", mode: "command", fileType: "hitgroupiddef" },
-  { id: "interactionid", label: "Interaction ID", pathKey: "paramEditor.v2.fp.interactionid", mode: "command", fileType: "interactionid" },
-  { id: "projectile_depiction_table", label: "Projectile depiction table", pathKey: "paramEditor.v2.fp.projectile_depiction_table", mode: "command", fileType: "projectile_depiction_table" },
-  { id: "speedparam", label: "Speed param", pathKey: "paramEditor.v2.fp.speedparam", mode: "command", fileType: "speedparam" },
+  { id: "grapparam", label: "Grap param", pathKey: "paramEditor.v2.fp.grapparam", mode: "typed", fileType: "grapparam" },
+  { id: "hitgroupiddef", label: "Hit group ID def", pathKey: "paramEditor.v2.fp.hitgroupiddef", mode: "typed", fileType: "hitgroupiddef" },
+  { id: "interactionid", label: "Interaction ID", pathKey: "paramEditor.v2.fp.interactionid", mode: "typed", fileType: "interactionid" },
+  { id: "projectile_depiction_table", label: "Projectile depiction table", pathKey: "paramEditor.v2.fp.projectile_depiction_table", mode: "typed", fileType: "projectile_depiction_table" },
+  { id: "speedparam", label: "Speed param", pathKey: "paramEditor.v2.fp.speedparam", mode: "typed", fileType: "speedparam" },
   {
     id: "effect_project_named",
     label: "Effect project (e.g. effect_project_*.bin)",
     pathKey: "paramEditor.v2.fp.effect_project_named",
-    mode: "command",
+    mode: "typed",
     nameMustResolveTo: "effect_project",
   },
   {
     id: "vernier_table_named",
     label: "Vernier table (e.g. vernier_table_*.bin)",
     pathKey: "paramEditor.v2.fp.vernier_table_named",
-    mode: "command",
+    mode: "typed",
     nameMustResolveTo: "vernier_table",
   },
 ]
@@ -77,9 +77,9 @@ function fileNameFromPath(filePath: string): string {
   return parts[parts.length - 1] ?? filePath
 }
 
-export function resolveCommandFileTypeForPath(row: ParamKindRow, filePath: string): string {
-  if (row.mode !== "command") {
-    throw new Error("Not a command-table kind")
+export function resolveTypedFileTypeForPath(row: ParamKindRow, filePath: string): string {
+  if (row.mode !== "typed") {
+    throw new Error("Not a typed-param kind")
   }
   if ("fileType" in row && row.fileType) {
     return row.fileType

@@ -102,3 +102,50 @@ pub fn build_chrsysparam(file: &ChrSysParamFile) -> Result<Vec<u8>, String> {
 
     Ok(out)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SAMPLE_PATH: &str =
+        "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\0x08248A8D\\chrsysparam.csyspm";
+
+    #[test]
+    fn chrsysparam_read_write_crud() {
+        let source = std::fs::read(SAMPLE_PATH).expect("failed to read chrsysparam sample file");
+
+        let parsed = parse_chrsysparam(&source).expect("failed to parse chrsysparam sample file");
+        let rebuilt =
+            build_chrsysparam(&parsed).expect("failed to rebuild chrsysparam sample file");
+        assert_eq!(rebuilt, source);
+
+        assert!(!parsed.entries.is_empty(), "chrsysparam sample has no entries");
+
+        let mut with_added = parsed.clone();
+        let mut added = with_added.entries[0].clone();
+        added.hash = added.hash.wrapping_add(1);
+        with_added.entries.push(added);
+        let added_bytes =
+            build_chrsysparam(&with_added).expect("failed to build chrsysparam after add");
+        let added_parsed =
+            parse_chrsysparam(&added_bytes).expect("failed to parse chrsysparam after add");
+        assert_eq!(added_parsed.entries.len(), parsed.entries.len() + 1);
+
+        let mut with_updated = added_parsed.clone();
+        let updated_value = with_updated.entries[0].value_a.wrapping_add(77);
+        with_updated.entries[0].value_a = updated_value;
+        let updated_bytes =
+            build_chrsysparam(&with_updated).expect("failed to build chrsysparam after update");
+        let updated_parsed =
+            parse_chrsysparam(&updated_bytes).expect("failed to parse chrsysparam after update");
+        assert_eq!(updated_parsed.entries[0].value_a, updated_value);
+
+        let mut with_deleted = updated_parsed.clone();
+        with_deleted.entries.pop();
+        let deleted_bytes =
+            build_chrsysparam(&with_deleted).expect("failed to build chrsysparam after delete");
+        let deleted_parsed =
+            parse_chrsysparam(&deleted_bytes).expect("failed to parse chrsysparam after delete");
+        assert_eq!(deleted_parsed.entries.len(), parsed.entries.len());
+    }
+}

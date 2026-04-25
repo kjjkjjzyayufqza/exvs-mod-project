@@ -1,8 +1,9 @@
 use binrw::{BinRead, BinWrite};
 use serde::{Deserialize, Serialize};
+use std::io::Cursor;
 
-use crate::format::typed_param::{
-    build_typed_param_binary, parse_typed_param_binary, ParamEntryWithId, TypedParamBundle,
+use crate::format::param_bin_format::{
+    build_param_binary, read_param_binary, ParamBinaryFile, ParamBinaryHeader, ParamFieldSpec,
 };
 
 pub const EFFECT_PROJECT_ENTRY_SIZE: u32 = 960;
@@ -500,21 +501,225 @@ pub const EFFECT_PROJECT_FIELD_HASHES: [(u32, u32, u32); 240] = [
     (0xFE147361, 0x3BC, 5),
 ];
 
-impl ParamEntryWithId for EffectProjectEntry {
-    fn set_row_id(&mut self, id: u32) {
-        self.entry_id = id;
-    }
-    fn get_row_id(&self) -> u32 {
-        self.entry_id
-    }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectProjectData {
+    pub header: ParamBinaryHeader,
+    pub field_specs: Vec<ParamFieldSpec>,
+    pub entry_ids: Vec<u32>,
+    pub entries: Vec<EffectProjectEntry>,
+    pub trailing_data: Vec<u8>,
 }
 
-pub type EffectProjectData = TypedParamBundle<EffectProjectEntry>;
+fn expected_field_specs() -> Vec<ParamFieldSpec> {
+    EFFECT_PROJECT_FIELD_HASHES
+        .iter()
+        .map(|(hash, entry_offset, kind)| ParamFieldSpec {
+            hash: *hash,
+            entry_offset: *entry_offset,
+            flags: 0,
+            kind: *kind,
+        })
+        .collect()
+}
+
+fn validate_field_specs(field_specs: &[ParamFieldSpec]) -> Result<(), String> {
+    if field_specs.len() != EFFECT_PROJECT_FIELD_HASHES.len() {
+        return Err(format!(
+            "effect_project command count mismatch: file has {}, expected {}",
+            field_specs.len(),
+            EFFECT_PROJECT_FIELD_HASHES.len()
+        ));
+    }
+    for (index, spec) in field_specs.iter().enumerate() {
+        let (expected_hash, expected_offset, expected_kind) = EFFECT_PROJECT_FIELD_HASHES[index];
+        if spec.hash != expected_hash
+            || spec.entry_offset != expected_offset
+            || spec.kind != expected_kind
+        {
+            return Err(format!(
+                "effect_project command mismatch at index {}: got (hash=0x{:08X}, offset=0x{:X}, kind={}), expected (hash=0x{:08X}, offset=0x{:X}, kind={})",
+                index,
+                spec.hash,
+                spec.entry_offset,
+                spec.kind,
+                expected_hash,
+                expected_offset,
+                expected_kind
+            ));
+        }
+    }
+    Ok(())
+}
 
 pub fn parse_effect_project(data: &[u8]) -> Result<EffectProjectData, String> {
-    parse_typed_param_binary(data, EFFECT_PROJECT_ENTRY_SIZE, EFFECT_PROJECT_CMD_COUNT)
+    let file = read_param_binary(data)?;
+    if file.header.entry_size != EFFECT_PROJECT_ENTRY_SIZE {
+        return Err(format!(
+            "effect_project entry_size mismatch: file has {}, expected {}",
+            file.header.entry_size, EFFECT_PROJECT_ENTRY_SIZE
+        ));
+    }
+    if file.header.commands_count != EFFECT_PROJECT_CMD_COUNT {
+        return Err(format!(
+            "effect_project command count mismatch: file has {}, expected {}",
+            file.header.commands_count, EFFECT_PROJECT_CMD_COUNT
+        ));
+    }
+    validate_field_specs(&file.field_specs)?;
+
+    let mut entries = Vec::with_capacity(file.entries_raw.len());
+    for (i, raw) in file.entries_raw.iter().enumerate() {
+        if raw.len() != EFFECT_PROJECT_ENTRY_SIZE as usize {
+            return Err(format!(
+                "effect_project row {} size {} != expected {}",
+                i,
+                raw.len(),
+                EFFECT_PROJECT_ENTRY_SIZE
+            ));
+        }
+        let mut cursor = Cursor::new(raw.as_slice());
+        let mut entry = EffectProjectEntry::read(&mut cursor).map_err(|e| e.to_string())?;
+        entry.entry_id = file.entry_ids.get(i).copied().unwrap_or(0);
+        entries.push(entry);
+    }
+
+    Ok(EffectProjectData {
+        header: file.header,
+        field_specs: file.field_specs,
+        entry_ids: file.entry_ids,
+        entries,
+        trailing_data: file.trailing_data,
+    })
 }
 
 pub fn build_effect_project(b: &EffectProjectData) -> Result<Vec<u8>, String> {
-    build_typed_param_binary(b)
+    if !b.field_specs.is_empty() {
+        validate_field_specs(&b.field_specs)?;
+    }
+    let field_specs = if b.field_specs.is_empty() {
+        expected_field_specs()
+    } else {
+        b.field_specs.clone()
+    };
+
+    let entry_size = EFFECT_PROJECT_ENTRY_SIZE as usize;
+    let mut entries_raw: Vec<Vec<u8>> = Vec::with_capacity(b.entries.len());
+    for entry in &b.entries {
+        let mut raw = vec![0u8; entry_size];
+        let mut cursor = Cursor::new(&mut raw[..]);
+        entry
+            .write(&mut cursor)
+            .map_err(|err| format!("effect_project write entry: {}", err))?;
+        if cursor.position() as usize > entry_size {
+            return Err("effect_project encoded entry larger than entry_size".to_string());
+        }
+        entries_raw.push(raw);
+    }
+
+    let mut header = b.header.clone();
+    header.entry_count = b.entries.len() as u32;
+    header.commands_count = EFFECT_PROJECT_CMD_COUNT;
+    header.entry_size = EFFECT_PROJECT_ENTRY_SIZE;
+
+    let file = ParamBinaryFile {
+        header,
+        field_specs,
+        entry_ids: b.entries.iter().map(|entry| entry.entry_id).collect(),
+        entries_raw,
+        trailing_data: b.trailing_data.clone(),
+    };
+    build_param_binary(&file)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SAMPLE_DIR: &str =
+        "E:\\XB\\\u{89e3}\u{5305}\\vs2\\x64\\006effect\\effect_project";
+
+    fn collect_candidates(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    collect_candidates(&path, out);
+                } else {
+                    let lower = path.to_string_lossy().to_ascii_lowercase();
+                    if (lower.ends_with(".bin") || lower.ends_with(".vgsht2"))
+                        && lower.contains("effect_project")
+                    {
+                        out.push(path);
+                    }
+                }
+            }
+        }
+    }
+
+    fn resolve_sample_path() -> std::path::PathBuf {
+        let mut candidates = Vec::new();
+        collect_candidates(std::path::Path::new(SAMPLE_DIR), &mut candidates);
+        candidates.sort();
+        if candidates.is_empty() {
+            panic!("no effect_project sample file found in {}", SAMPLE_DIR);
+        }
+        for candidate in candidates {
+            if let Ok(bytes) = std::fs::read(&candidate) {
+                if parse_effect_project(&bytes).is_ok() {
+                    return candidate;
+                }
+            }
+        }
+        panic!("no parseable effect_project sample file found in {}", SAMPLE_DIR);
+    }
+
+    #[test]
+    fn effect_project_read_write_crud() {
+        let sample_path = resolve_sample_path();
+        let source = std::fs::read(&sample_path).expect("failed to read effect_project sample file");
+
+        let parsed =
+            parse_effect_project(&source).expect("failed to parse effect_project sample file");
+        let rebuilt =
+            build_effect_project(&parsed).expect("failed to rebuild effect_project sample file");
+        assert_eq!(rebuilt, source);
+
+        assert!(!parsed.entries.is_empty(), "effect_project sample has no entries");
+
+        let mut with_added = parsed.clone();
+        let mut added = with_added.entries[0].clone();
+        let next_id = with_added
+            .entries
+            .iter()
+            .map(|entry| entry.entry_id)
+            .max()
+            .unwrap_or(0)
+            .wrapping_add(1);
+        added.entry_id = next_id;
+        with_added.entries.push(added);
+        let added_bytes =
+            build_effect_project(&with_added).expect("failed to build effect_project after add");
+        let added_parsed =
+            parse_effect_project(&added_bytes).expect("failed to parse effect_project after add");
+        assert_eq!(added_parsed.entries.len(), parsed.entries.len() + 1);
+        assert_eq!(added_parsed.entries.last().map(|entry| entry.entry_id), Some(next_id));
+
+        let mut with_updated = added_parsed.clone();
+        let updated_id = with_updated.entries[0].entry_id.wrapping_add(99);
+        with_updated.entries[0].entry_id = updated_id;
+        let updated_bytes =
+            build_effect_project(&with_updated).expect("failed to build effect_project after update");
+        let updated_parsed =
+            parse_effect_project(&updated_bytes).expect("failed to parse effect_project after update");
+        assert_eq!(updated_parsed.entries[0].entry_id, updated_id);
+
+        let mut with_deleted = updated_parsed.clone();
+        with_deleted.entries.pop();
+        let deleted_bytes =
+            build_effect_project(&with_deleted).expect("failed to build effect_project after delete");
+        let deleted_parsed =
+            parse_effect_project(&deleted_bytes).expect("failed to parse effect_project after delete");
+        assert_eq!(deleted_parsed.entries.len(), parsed.entries.len());
+    }
 }

@@ -10,5 +10,4 @@ pub mod interactionid;
 pub mod param_bin_format;
 pub mod projectile_depiction_table;
 pub mod speedparam;
-pub mod typed_param;
 pub mod vernier_table;

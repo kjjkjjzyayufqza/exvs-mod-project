@@ -18,6 +18,9 @@ use tauri::{
     ipc::{InvokeBody, Response},
     AppHandle, Emitter, State,
 };
+use crate::format::param_bin_format::{
+    build_param_binary, read_param_binary, ParamBinaryFile, ParamBinaryHeader, ParamFieldSpec,
+};
 
 #[tauri::command]
 pub fn my_custom_command() {
@@ -1053,6 +1056,255 @@ fn cleanup_artifacts(new_struct: &Path, new_folder: &Path) -> Result<(), String>
         })?;
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn parse_command_table_file(path: &str, file_type: &str) -> Result<Value, String> {
+    let data = fs::read(path).map_err(|e| format!("Failed to read file: {e}"))?;
+    validate_command_table_file_type(&data, file_type)?;
+
+    let parsed = read_param_binary(&data)?;
+    let commands = parsed
+        .field_specs
+        .iter()
+        .map(|spec| CommandDefinition {
+            hash: spec.hash,
+            entry_offset: spec.entry_offset,
+            flags: spec.flags,
+            kind: spec.kind,
+        })
+        .collect::<Vec<_>>();
+
+    let mut entries = Vec::with_capacity(parsed.entries_raw.len());
+    for (entry_index, raw) in parsed.entries_raw.iter().enumerate() {
+        let mut fields = Vec::with_capacity(parsed.field_specs.len());
+        for spec in &parsed.field_specs {
+            let offset = spec.entry_offset as usize;
+            if offset + 4 > raw.len() {
+                return Err(format!(
+                    "entry {} has out-of-range field offset 0x{:X}",
+                    entry_index, spec.entry_offset
+                ));
+            }
+            let bytes = [raw[offset], raw[offset + 1], raw[offset + 2], raw[offset + 3]];
+            let value_uint = u32::from_le_bytes(bytes);
+            let value_int = i32::from_le_bytes(bytes);
+            let value_float = f32::from_le_bytes(bytes);
+            let value_hex = bytes
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<Vec<_>>()
+                .join("");
+
+            let (field_int, field_uint, field_float, field_string) = match spec.kind {
+                1 => (None, Some(value_uint), None, None),
+                2 => (Some(value_int), None, None, None),
+                5 => (None, None, Some(value_float), None),
+                7 => (None, Some(value_uint), None, None),
+                _ => (None, Some(value_uint), None, None),
+            };
+
+            fields.push(CommandFieldValue {
+                hash: spec.hash,
+                kind: spec.kind,
+                offset: spec.entry_offset,
+                value_int: field_int,
+                value_uint: field_uint,
+                value_float: field_float,
+                value_string: field_string,
+                value_hex,
+            });
+        }
+
+        entries.push(ParsedEntry {
+            entry_id: parsed.entry_ids.get(entry_index).copied().unwrap_or(0),
+            entry_index: entry_index as u32,
+            fields,
+        });
+    }
+
+    let response = ParsedCommandTable {
+        header: CommandTableHeader {
+            magic: parsed.header.magic,
+            unk_04: parsed.header.unk_04,
+            file_size: parsed.header.file_size,
+            unk_0c: parsed.header.unk_0c,
+            entry_count: parsed.header.entry_count,
+            commands_count: parsed.header.commands_count,
+            entry_size: parsed.header.entry_size,
+            unk_1c: parsed.header.unk_1c,
+        },
+        commands,
+        entries,
+        file_type: file_type.to_string(),
+    };
+
+    serde_json::to_value(response).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CommandTableBuildPayload {
+    header: CommandTableHeader,
+    commands: Vec<CommandDefinition>,
+    entry_ids: Vec<u32>,
+    entries_raw: Vec<Vec<u8>>,
+    trailing_data: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CommandTableHeader {
+    magic: u32,
+    unk_04: u32,
+    file_size: u32,
+    unk_0c: u32,
+    entry_count: u32,
+    commands_count: u32,
+    entry_size: u32,
+    unk_1c: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CommandDefinition {
+    hash: u32,
+    entry_offset: u32,
+    flags: u32,
+    kind: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CommandFieldValue {
+    hash: u32,
+    kind: u32,
+    offset: u32,
+    value_int: Option<i32>,
+    value_uint: Option<u32>,
+    value_float: Option<f32>,
+    value_string: Option<String>,
+    value_hex: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ParsedEntry {
+    entry_id: u32,
+    entry_index: u32,
+    fields: Vec<CommandFieldValue>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ParsedCommandTable {
+    header: CommandTableHeader,
+    commands: Vec<CommandDefinition>,
+    entries: Vec<ParsedEntry>,
+    file_type: String,
+}
+
+fn validate_command_table_file_type(data: &[u8], file_type: &str) -> Result<(), String> {
+    match file_type {
+        "armsparam" => {
+            crate::format::armsparam::parse_armsparam(data)?;
+        }
+        "bulletparam" => {
+            crate::format::bulletparam::parse_bulletparam(data)?;
+        }
+        "characterparam" => {
+            crate::format::characterparam::parse_characterparam(data)?;
+        }
+        "grapparam" => {
+            crate::format::grapparam::parse_grapparam(data)?;
+        }
+        "hitgroupiddef" => {
+            crate::format::hitgroupiddef::parse_hitgroupiddef(data)?;
+        }
+        "interactionid" => {
+            crate::format::interactionid::parse_interactionid(data)?;
+        }
+        "projectile_depiction_table" => {
+            crate::format::projectile_depiction_table::parse_projectile_depiction_table(data)?;
+        }
+        "speedparam" => {
+            crate::format::speedparam::parse_speedparam(data)?;
+        }
+        "effect_project" => {
+            crate::format::effect_project::parse_effect_project(data)?;
+        }
+        "vernier_table" => {
+            crate::format::vernier_table::parse_vernier_table(data)?;
+        }
+        _ => {
+            return Err(format!("Unsupported command table type: {file_type}"));
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn build_command_table_file(
+    table_json: Value,
+    output_path: &str,
+    file_type: &str,
+) -> Result<(), String> {
+    let payload: CommandTableBuildPayload =
+        serde_json::from_value(table_json).map_err(|e| format!("Deserialize failed: {e}"))?;
+
+    if payload.entry_ids.len() != payload.entries_raw.len() {
+        return Err("entry_ids and entries_raw length mismatch".to_string());
+    }
+    if payload.header.entry_size == 0 {
+        return Err("header.entrySize must be greater than 0".to_string());
+    }
+
+    let mut header = ParamBinaryHeader {
+        magic: payload.header.magic,
+        unk_04: payload.header.unk_04,
+        file_size: payload.header.file_size,
+        unk_0c: payload.header.unk_0c,
+        entry_count: payload.entry_ids.len() as u32,
+        commands_count: payload.commands.len() as u32,
+        entry_size: payload.header.entry_size,
+        unk_1c: payload.header.unk_1c,
+    };
+    if header.magic == 0 {
+        header.magic = crate::format::param_bin_format::PARAM_BIN_MAGIC;
+    }
+
+    for (i, raw) in payload.entries_raw.iter().enumerate() {
+        if raw.len() > header.entry_size as usize {
+            return Err(format!(
+                "entry {} raw size {} is larger than entry_size {}",
+                i,
+                raw.len(),
+                header.entry_size
+            ));
+        }
+    }
+
+    let field_specs = payload
+        .commands
+        .iter()
+        .map(|cmd| ParamFieldSpec {
+            hash: cmd.hash,
+            entry_offset: cmd.entry_offset,
+            flags: cmd.flags,
+            kind: cmd.kind,
+        })
+        .collect::<Vec<_>>();
+
+    let file = ParamBinaryFile {
+        header,
+        field_specs,
+        entry_ids: payload.entry_ids,
+        entries_raw: payload.entries_raw,
+        trailing_data: payload.trailing_data,
+    };
+    let bytes = build_param_binary(&file)?;
+    validate_command_table_file_type(&bytes, file_type)?;
+    fs::write(output_path, &bytes).map_err(|e| format!("Write failed: {e}"))
 }
 
 #[tauri::command]

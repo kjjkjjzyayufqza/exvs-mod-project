@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useTransition } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { writeFile } from "@tauri-apps/plugin-fs"
 import { Download, FileUp, RefreshCw, Save } from "lucide-react"
@@ -8,12 +8,12 @@ import { Label } from "@/components/ui/label"
 import { FilePathInput } from "@/components/ui/filePathInput"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useConfigStore } from "@/store/configStore"
-import { FILE_TYPE_LABELS, type ParsedCommandTable } from "@/models/commandTable"
-import { rebuildCommandTableForSave, updateEntryField } from "./rebuildCommandTable"
-import { CommandTableDataPanel } from "./CommandTableDataPanel"
+import { FILE_TYPE_LABELS } from "@/models/commandTable"
 import { ChrSysDataPanel } from "./ChrSysDataPanel"
 import type { ChrSysParamFile } from "./chrSysTypes"
-import { PARAM_KINDS, type ParamKindId, resolveCommandFileTypeForPath, getParamKind } from "./paramKinds"
+import { PARAM_KINDS, type ParamKindId, resolveTypedFileTypeForPath, getParamKind } from "./paramKinds"
+import { TypedParamDataPanel } from "./TypedParamDataPanel"
+import type { TypedParamFile } from "./typedParamTypes"
 
 export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges?: (hasChanges: boolean) => void }) {
   const [kindId, setKindId] = useState<ParamKindId>("armsparam" as ParamKindId)
@@ -22,10 +22,10 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
   const kind = getParamKind(kindId)
   const pathKey = kind?.pathKey ?? "paramEditor.v2.fp.armsparam"
 
-  const [command, setCommand] = useState<{
+  const [typed, setTyped] = useState<{
     path: string
     fileType: string
-    parsed: ParsedCommandTable
+    data: TypedParamFile
   } | null>(null)
   const [chr, setChr] = useState<{ path: string; data: ChrSysParamFile } | null>(null)
   const [selectedEntry, setSelectedEntry] = useState(0)
@@ -33,7 +33,6 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
-  const [, startTransition] = useTransition()
 
   useEffect(() => {
     onUnsavedChanges?.(dirty)
@@ -56,7 +55,7 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
         if (!window.confirm("Discard unsaved changes and switch type?")) return
       }
       setDirty(false)
-      setCommand(null)
+      setTyped(null)
       setChr(null)
       setErr(null)
       setSelectedEntry(0)
@@ -74,11 +73,11 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
         if (kind.mode === "chrsys") {
           const data = await invoke<ChrSysParamFile>("parse_chrsysparam_file", { path })
           setChr({ path, data })
-          setCommand(null)
+          setTyped(null)
         } else {
-          const fileType = resolveCommandFileTypeForPath(kind, path)
-          const parsed = await invoke<ParsedCommandTable>("parse_command_table_file", { path, fileType })
-          setCommand({ path, fileType, parsed })
+          const fileType = resolveTypedFileTypeForPath(kind, path)
+          const data = await invoke<TypedParamFile>("parse_typed_param_file", { path, paramType: fileType })
+          setTyped({ path, fileType, data })
           setChr(null)
         }
         setDirty(false)
@@ -94,32 +93,15 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
     [kind]
   )
 
-  const handleField = useCallback(
-    (entryIndex: number, hash: number, fieldKind: number, v: number | string) => {
-      if (!command) return
-      startTransition(() => {
-        setCommand((c) => {
-          if (!c) return c
-          const nextEntries = c.parsed.entries.map((e, i) =>
-            i === entryIndex ? updateEntryField(e, hash, fieldKind, v) : e
-          )
-          return {
-            ...c,
-            parsed: { ...c.parsed, entries: nextEntries },
-          }
-        })
-        setDirty(true)
-      })
-    },
-    [command]
-  )
-
   const save = useCallback(async () => {
-    if (command) {
+    if (typed) {
       setSaving(true)
       try {
-        const payload = rebuildCommandTableForSave(command.parsed)
-        await invoke("build_command_table_file", { tableJson: payload, outputPath: command.path })
+        await invoke("build_typed_param_file", {
+          dataJson: typed.data,
+          outputPath: typed.path,
+          paramType: typed.fileType,
+        })
         setDirty(false)
         toast.success("Saved")
       } catch (e) {
@@ -141,13 +123,13 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
         setSaving(false)
       }
     }
-  }, [command, chr])
+  }, [typed, chr])
 
   const exportJson = useCallback(async () => {
     try {
-      if (command) {
-        const p = command.path + ".param_export.json"
-        const json = new TextEncoder().encode(JSON.stringify(command.parsed, null, 2))
+      if (typed) {
+        const p = typed.path + ".param_export.json"
+        const json = new TextEncoder().encode(JSON.stringify(typed.data, null, 2))
         await writeFile(p, json)
         toast.success(`Wrote ${p}`)
         return
@@ -161,12 +143,12 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
     } catch (e) {
       toast.error(String(e))
     }
-  }, [command, chr])
+  }, [typed, chr])
 
-  const canSave = (command || chr) && dirty
-  const hasData = Boolean(command || chr)
-  const title = command
-    ? FILE_TYPE_LABELS[command.fileType] ?? command.fileType
+  const canSave = (typed || chr) && dirty
+  const hasData = Boolean(typed || chr)
+  const title = typed
+    ? FILE_TYPE_LABELS[typed.fileType] ?? typed.fileType
     : chr
       ? "Chr sys param"
       : ""
@@ -206,7 +188,7 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
               picker={{
                 kind: "file",
                 title: "Select param file",
-                filters: [{ name: "Param", extensions: ["bin", "csyspm"] }],
+                filters: [{ name: "Param", extensions: ["bin", "csyspm", "vgsht2"] }],
               }}
               onPickedValue={(v) => {
                 const p = Array.isArray(v) ? v[0] : v
@@ -236,7 +218,7 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
               className="h-8"
               disabled={!hasData || loading}
               onClick={() => {
-                if (command) void loadFile(command.path)
+                if (typed) void loadFile(typed.path)
                 if (chr) void loadFile(chr.path)
               }}
             >
@@ -269,19 +251,23 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
         {title && hasData && (
           <p className="text-[10px] text-muted-foreground">
             <span className="font-medium text-foreground">{title}</span>
-            {command && <span> · {command.path}</span>}
+            {typed && <span> · {typed.path}</span>}
             {chr && <span> · {chr.path}</span>}
           </p>
         )}
         {err && <p className="text-xs text-destructive">{err}</p>}
         {loading && <p className="text-xs text-muted-foreground">Loading…</p>}
         <div className="min-h-0 flex-1">
-          {command && (
-            <CommandTableDataPanel
-              parsed={command.parsed}
+          {typed && (
+            <TypedParamDataPanel
+              fileType={typed.fileType}
+              data={typed.data}
               selectedEntryIndex={selectedEntry}
               onSelectEntry={setSelectedEntry}
-              onFieldChange={handleField}
+              onChange={(nextData) => {
+                setTyped((prev) => (prev ? { ...prev, data: nextData } : prev))
+                setDirty(true)
+              }}
             />
           )}
           {chr && (

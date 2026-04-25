@@ -1,8 +1,9 @@
 use binrw::{BinRead, BinWrite};
 use serde::{Deserialize, Serialize};
+use std::io::Cursor;
 
-use crate::format::typed_param::{
-    build_typed_param_binary, parse_typed_param_binary, ParamEntryWithId, TypedParamBundle,
+use crate::format::param_bin_format::{
+    build_param_binary, read_param_binary, ParamBinaryFile, ParamBinaryHeader, ParamFieldSpec,
 };
 
 pub const INTERACTIONID_ENTRY_SIZE: u32 = 124;
@@ -82,21 +83,188 @@ pub const INTERACTIONID_FIELD_HASHES: [(u32, u32, u32); 31] = [
     (0xFABCA946, 0x078, 1),
 ];
 
-impl ParamEntryWithId for InteractionIdEntry {
-    fn set_row_id(&mut self, id: u32) {
-        self.entry_id = id;
-    }
-    fn get_row_id(&self) -> u32 {
-        self.entry_id
-    }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InteractionIdData {
+    pub header: ParamBinaryHeader,
+    pub field_specs: Vec<ParamFieldSpec>,
+    pub entry_ids: Vec<u32>,
+    pub entries: Vec<InteractionIdEntry>,
+    pub trailing_data: Vec<u8>,
 }
 
-pub type InteractionIdData = TypedParamBundle<InteractionIdEntry>;
+fn expected_field_specs() -> Vec<ParamFieldSpec> {
+    INTERACTIONID_FIELD_HASHES
+        .iter()
+        .map(|(hash, entry_offset, kind)| ParamFieldSpec {
+            hash: *hash,
+            entry_offset: *entry_offset,
+            flags: 0,
+            kind: *kind,
+        })
+        .collect()
+}
+
+fn validate_field_specs(field_specs: &[ParamFieldSpec]) -> Result<(), String> {
+    if field_specs.len() != INTERACTIONID_FIELD_HASHES.len() {
+        return Err(format!(
+            "interactionid command count mismatch: file has {}, expected {}",
+            field_specs.len(),
+            INTERACTIONID_FIELD_HASHES.len()
+        ));
+    }
+    for (index, spec) in field_specs.iter().enumerate() {
+        let (expected_hash, expected_offset, expected_kind) = INTERACTIONID_FIELD_HASHES[index];
+        if spec.hash != expected_hash
+            || spec.entry_offset != expected_offset
+            || spec.kind != expected_kind
+        {
+            return Err(format!(
+                "interactionid command mismatch at index {}: got (hash=0x{:08X}, offset=0x{:X}, kind={}), expected (hash=0x{:08X}, offset=0x{:X}, kind={})",
+                index,
+                spec.hash,
+                spec.entry_offset,
+                spec.kind,
+                expected_hash,
+                expected_offset,
+                expected_kind
+            ));
+        }
+    }
+    Ok(())
+}
 
 pub fn parse_interactionid(data: &[u8]) -> Result<InteractionIdData, String> {
-    parse_typed_param_binary(data, INTERACTIONID_ENTRY_SIZE, INTERACTIONID_CMD_COUNT)
+    let file = read_param_binary(data)?;
+    if file.header.entry_size != INTERACTIONID_ENTRY_SIZE {
+        return Err(format!(
+            "interactionid entry_size mismatch: file has {}, expected {}",
+            file.header.entry_size, INTERACTIONID_ENTRY_SIZE
+        ));
+    }
+    if file.header.commands_count != INTERACTIONID_CMD_COUNT {
+        return Err(format!(
+            "interactionid command count mismatch: file has {}, expected {}",
+            file.header.commands_count, INTERACTIONID_CMD_COUNT
+        ));
+    }
+    validate_field_specs(&file.field_specs)?;
+
+    let mut entries = Vec::with_capacity(file.entries_raw.len());
+    for (i, raw) in file.entries_raw.iter().enumerate() {
+        if raw.len() != INTERACTIONID_ENTRY_SIZE as usize {
+            return Err(format!(
+                "interactionid row {} size {} != expected {}",
+                i,
+                raw.len(),
+                INTERACTIONID_ENTRY_SIZE
+            ));
+        }
+        let mut cursor = Cursor::new(raw.as_slice());
+        let mut entry = InteractionIdEntry::read(&mut cursor).map_err(|e| e.to_string())?;
+        entry.entry_id = file.entry_ids.get(i).copied().unwrap_or(0);
+        entries.push(entry);
+    }
+
+    Ok(InteractionIdData {
+        header: file.header,
+        field_specs: file.field_specs,
+        entry_ids: file.entry_ids,
+        entries,
+        trailing_data: file.trailing_data,
+    })
 }
 
 pub fn build_interactionid(b: &InteractionIdData) -> Result<Vec<u8>, String> {
-    build_typed_param_binary(b)
+    if !b.field_specs.is_empty() {
+        validate_field_specs(&b.field_specs)?;
+    }
+    let field_specs = if b.field_specs.is_empty() {
+        expected_field_specs()
+    } else {
+        b.field_specs.clone()
+    };
+
+    let entry_size = INTERACTIONID_ENTRY_SIZE as usize;
+    let mut entries_raw: Vec<Vec<u8>> = Vec::with_capacity(b.entries.len());
+    for entry in &b.entries {
+        let mut raw = vec![0u8; entry_size];
+        let mut cursor = Cursor::new(&mut raw[..]);
+        entry
+            .write(&mut cursor)
+            .map_err(|err| format!("interactionid write entry: {}", err))?;
+        if cursor.position() as usize > entry_size {
+            return Err("interactionid encoded entry larger than entry_size".to_string());
+        }
+        entries_raw.push(raw);
+    }
+
+    let mut header = b.header.clone();
+    header.entry_count = b.entries.len() as u32;
+    header.commands_count = INTERACTIONID_CMD_COUNT;
+    header.entry_size = INTERACTIONID_ENTRY_SIZE;
+
+    let file = ParamBinaryFile {
+        header,
+        field_specs,
+        entry_ids: b.entries.iter().map(|entry| entry.entry_id).collect(),
+        entries_raw,
+        trailing_data: b.trailing_data.clone(),
+    };
+    build_param_binary(&file)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SAMPLE_PATH: &str =
+        "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\0x08248A8D\\interactionid.bin";
+
+    #[test]
+    fn interactionid_read_write_crud() {
+        let source = std::fs::read(SAMPLE_PATH).expect("failed to read interactionid sample file");
+
+        let parsed = parse_interactionid(&source).expect("failed to parse interactionid sample file");
+        let rebuilt =
+            build_interactionid(&parsed).expect("failed to rebuild interactionid sample file");
+        assert_eq!(rebuilt, source);
+
+        assert!(!parsed.entries.is_empty(), "interactionid sample has no entries");
+
+        let mut with_added = parsed.clone();
+        let mut added = with_added.entries[0].clone();
+        let next_id = with_added
+            .entries
+            .iter()
+            .map(|entry| entry.entry_id)
+            .max()
+            .unwrap_or(0)
+            .wrapping_add(1);
+        added.entry_id = next_id;
+        with_added.entries.push(added);
+        let added_bytes =
+            build_interactionid(&with_added).expect("failed to build interactionid after add");
+        let added_parsed =
+            parse_interactionid(&added_bytes).expect("failed to parse interactionid after add");
+        assert_eq!(added_parsed.entries.len(), parsed.entries.len() + 1);
+        assert_eq!(added_parsed.entries.last().map(|entry| entry.entry_id), Some(next_id));
+
+        let mut with_updated = added_parsed.clone();
+        let updated_id = with_updated.entries[0].entry_id.wrapping_add(99);
+        with_updated.entries[0].entry_id = updated_id;
+        let updated_bytes =
+            build_interactionid(&with_updated).expect("failed to build interactionid after update");
+        let updated_parsed =
+            parse_interactionid(&updated_bytes).expect("failed to parse interactionid after update");
+        assert_eq!(updated_parsed.entries[0].entry_id, updated_id);
+
+        let mut with_deleted = updated_parsed.clone();
+        with_deleted.entries.pop();
+        let deleted_bytes =
+            build_interactionid(&with_deleted).expect("failed to build interactionid after delete");
+        let deleted_parsed =
+            parse_interactionid(&deleted_bytes).expect("failed to parse interactionid after delete");
+        assert_eq!(deleted_parsed.entries.len(), parsed.entries.len());
+    }
 }

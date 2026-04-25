@@ -95,6 +95,8 @@ pub fn run() {
             preview_collection_state::preview_collection_set_view_range,
             preview_collection_state::preview_collection_set_control_range,
             preview_collection_state::preview_collection_remove_missing_ids,
+            commands::parse_command_table_file,
+            commands::build_command_table_file,
             commands::parse_typed_param_file,
             commands::build_typed_param_file,
             commands::parse_chrsysparam_file,
