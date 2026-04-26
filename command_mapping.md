@@ -190,7 +190,7 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0x104DFF9D | 0x03C | float | dmg_multiplier_tier_b | damage tier B multiplier |
 | 0x1113F30E | 0x040 | float | model_scale | 3D model scale factor |
 | 0x14F89980 | 0x044 | float | movement_speed_base | base movement speed |
-| 0x157CC9FE | 0x048 | float | boost_speed_pct | boost speed percentage |
+| 0x157CC9FE | 0x048 | float | hp_correction_pct_tier_09 | HP guts correction tier 9 percentage |
 | 0x15B67A85 | 0x04C | float | gravity_offset | gravity offset value |
 | 0x1698E3D8 | 0x050 | float | body_collision_radius | body collision sphere radius |
 | 0x18415DC4 | 0x054 | int | is_transformable | transformation capability flag |
@@ -228,17 +228,17 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0x379D0C45 | 0x0D4 | float | melee_tracking_angle | melee tracking arc |
 | 0x38FDFC10 | 0x0D8 | float | melee_bonus_rate | melee bonus ratio |
 | 0x3AA41969 | 0x0DC | float | melee_reach_base | base melee reach |
-| 0x3C1E9E3B | 0x0E0 | int | score_value_base | base score value on kill |
+| 0x3C1E9E3B | 0x0E0 | int | hp_max_value | IDA:sub_1405F8E70; max HP value |
 | 0x3C43A0D1 | 0x0E4 | float | charge_time_offset | charge time modifier |
 | 0x3C475420 | 0x0E8 | float | camera_distance_near | camera near distance |
-| 0x3CBF4F6C | 0x0EC | float | camera_fov_default | default camera FOV |
+| 0x3CBF4F6C | 0x0EC | float | hp_correction_pct_tier_06 | HP guts correction tier 6 percentage |
 | 0x3D302D72 | 0x0F0 | float | dmg_multiplier_tier_e | damage tier E multiplier |
-| 0x3D501F3B | 0x0F4 | int | reserved_flag_0f4 | reserved |
+| 0x3D501F3B | 0x0F4 | int | hp_regen_value | IDA:sub_1405F8E70; HP regen value |
 | 0x3F29DFF4 | 0x0F8 | int | reserved_flag_0f8 | reserved |
 | 0x432ADAA1 | 0x0FC | float | camera_offset_x | camera X offset |
 | 0x43DC9679 | 0x100 | float | dmg_multiplier_tier_f | damage tier F multiplier |
 | 0x45C84958 | 0x104 | int | respawn_invincibility_frame | i-frame duration on respawn |
-| 0x46E6927A | 0x108 | float | camera_fov_battle | battle camera FOV |
+| 0x46E6927A | 0x108 | float | hp_correction_pct_tier_07 | HP guts correction tier 7 percentage |
 | 0x4769F064 | 0x10C | float | dmg_multiplier_tier_g | damage tier G multiplier |
 | 0x4778AB75 | 0x110 | u32 | movement_type | movement type enum |
 | 0x4B4064B6 | 0x114 | float | camera_distance_far | camera far distance |
@@ -263,11 +263,11 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0x5CE8D569 | 0x160 | int | reserved_flag_160 | reserved |
 | 0x5E0DDDD8 | 0x164 | int | special_melee_cost | IDA:case13; special melee cost |
 | 0x6133A20B | 0x168 | int | special_reload_frame | special weapon reload time |
-| 0x6674EE31 | 0x16C | float | special_fov_pct | special weapon FOV % |
+| 0x6674EE31 | 0x16C | float | hp_correction_pct_tier_01 | HP guts correction tier 1 percentage |
 | 0x6A14228B | 0x170 | float | special_correction_base | special correction base |
 | 0x6AF92610 | 0x174 | float | special_correction_rate | special correction rate |
 | 0x6ED37B1F | 0x178 | float | burst_correction_base | EX burst correction base |
-| 0x6F2514E8 | 0x17C | float | burst_fov_pct | burst FOV percentage |
+| 0x6F2514E8 | 0x17C | float | hp_correction_pct_tier_08 | HP guts correction tier 8 percentage |
 | 0x71D35821 | 0x180 | u32 | burst_attribute_flags | bitfield; burst attributes |
 | 0x71D87C2C | 0x184 | float | burst_speed_multiplier | burst speed multiplier |
 | 0x72785F9E | 0x188 | float | burst_lock_on_angle | burst lock-on arc |
@@ -278,10 +278,10 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0x7BA88A27 | 0x19C | float | auto_aim_angle_limit | auto-aim angle cap |
 | 0x7D1A0ACF | 0x1A0 | int | respawn_cost | respawn cost value |
 | 0x8199A311 | 0x1A4 | int | main_shot_cost | IDA:case0; main shot cost |
-| 0x8248401F | 0x1A8 | int | score_bonus_cap | score bonus cap value |
+| 0x8248401F | 0x1A8 | int | hp_regen_value_default | IDA:sub_1405F8E70; default HP regen value |
 | 0x82B967A9 | 0x1AC | float | walk_speed | walking speed |
 | 0x8381BE8A | 0x1B0 | int | team_cost_value | team cost contribution |
-| 0x85C483F0 | 0x1B4 | float | boost_consumption_rate | boost consumption ratio |
+| 0x85C483F0 | 0x1B4 | float | sub_damage_correction_rate | IDA:sub_1405F3E50; sub weapon damage correction rate |
 | 0x86579C72 | 0x1B8 | float | close_tracking_angle | close-range tracking arc |
 | 0x8A902D5F | 0x1BC | float | main_shot_correction_rate | main shot correction |
 | 0x8CBF2B3F | 0x1C0 | float | gravity_multiplier | gravity multiplier |
@@ -291,7 +291,7 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0x91CDEF2B | 0x1D0 | float | dmg_multiplier_tier_h | damage tier H multiplier |
 | 0x91E5A104 | 0x1D4 | float | engagement_range_far | far engagement range |
 | 0x9B20A527 | 0x1D8 | float | sub_shot_correction_base | sub shot correction base |
-| 0x9B8BF864 | 0x1DC | float | sub_shot_fov_pct | sub shot FOV % |
+| 0x9B8BF864 | 0x1DC | float | hp_correction_pct_tier_02 | HP guts correction tier 2 percentage |
 | 0x9BED4726 | 0x1E0 | float | sub_shot_correction_rate | sub shot correction rate |
 | 0x9D8ADBDF | 0x1E4 | int | reserved_flag_1e4 | reserved |
 | 0xA223C183 | 0x1E8 | float | lock_on_distance_max | max lock-on distance |
@@ -316,11 +316,11 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0xB91793D4 | 0x234 | float | fall_speed_base | base fall speed |
 | 0xBA900811 | 0x238 | float | air_dash_speed_base | base air dash speed |
 | 0xBAE8C388 | 0x23C | float | alert_range_distance | alert range distance |
-| 0xBB19842F | 0x240 | float | alert_range_fov | alert range FOV |
+| 0xBB19842F | 0x240 | float | hp_correction_pct_tier_04 | HP guts correction tier 4 percentage |
 | 0xBC427D55 | 0x244 | float | radar_display_scale | radar display scale |
 | 0xBE256E0C | 0x248 | float | dash_speed_base | base dash speed |
 | 0xBE8D97FB | 0x24C | int | reserved_flag_24c | reserved |
-| 0xC1405939 | 0x250 | float | radar_fov_pct | radar FOV percentage |
+| 0xC1405939 | 0x250 | float | hp_correction_pct_tier_05 | HP guts correction tier 5 percentage |
 | 0xC28C40CA | 0x254 | int | reserved_flag_254 | reserved |
 | 0xC2FAF3AF | 0x258 | int | ammo_reserve_count | ammo reserve count |
 | 0xC3F64BF9 | 0x25C | float | ammo_correction_offset | ammo correction offset |
@@ -346,13 +346,13 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0xDD83290F | 0x2AC | float | melee_aim_correction_offset | melee aim correction |
 | 0xDE07FD61 | 0x2B0 | float | melee_range_offset | melee range offset |
 | 0xDF888E8B | 0x2B4 | int | rotation_speed_degrees | rotation speed (degrees) |
-| 0xE1D22572 | 0x2B8 | float | sub_shot_fov_alt | alt sub shot FOV |
+| 0xE1D22572 | 0x2B8 | float | hp_correction_pct_tier_03 | HP guts correction tier 3 percentage |
 | 0xE1D56972 | 0x2BC | float | melee_reach_distance | melee reach distance |
 | 0xE2C6FD16 | 0x2C0 | int | sub_shot_damage | IDA:case4,5,12,13; sub dmg |
 | 0xE3E5D41D | 0x2C4 | float | down_value_per_hit | down value per hit |
 | 0xE6213731 | 0x2C8 | string | action_label | action label string ref (shared) |
 | 0xE6E29192 | 0x2D0 | float | target_switch_distance | target switch distance |
-| 0xE883DFAB | 0x2D4 | float | target_switch_fov | target switch FOV |
+| 0xE883DFAB | 0x2D4 | float | hp_correction_pct_tier_10 | HP guts correction tier 10 percentage |
 | 0xE90161F5 | 0x2D8 | float | main_shot_speed_base | main shot base speed |
 | 0xE9F462F6 | 0x2DC | float | damage_proration_rate | damage proration rate |
 | 0xEB1219A4 | 0x2E0 | int | main_shot_damage | IDA:case0,1; main shot dmg |

@@ -12,92 +12,103 @@ use crate::format::param_entry_schema::{
     parse_commands_map_from_entry_row, validate_file_specs_kind_match_pool, ParamCommandPool,
 };
 
+// Please keep comments for analysis.
+//
+// Data-verified against 432 bullet_param files (10681 entries, cmd_count=80 or 73).
+// No hashes appear as hardcoded immediates in the exe.
+// Tags: [D:range] = data range, HASH = u32 hash reference (many unique values, max near u32::MAX)
+//       PHANTOM = hash not present in any of the 432 files
+//
+// Naming corrections applied:
+//   is_beam           -> beam_type_hash       (19 unique, max ~4B, not boolean)
+//   is_penetrating    -> penetrate_type_hash  (17 unique, max ~4B, not boolean)
+//   inherit_speed_flag -> inherit_speed_hash  (34 unique, max ~4B, not a flag)
 pub const BULLETPARAM_COMMAND_POOL: ParamCommandPool = &[
-    (0x0594D6D4, 5, "initial_angle"),
-    (0x05D5D30D, 5, "max_range"),
-    (0x06E90346, 1, "move_type"),
-    (0x0D6A5CD5, 1, "hit_effect_hash"),
-    (0x130D4C0B, 5, "spread_angle"),
-    (0x13662C98, 5, "hitbox_width"),
-    (0x138B3675, 5, "hitbox_height"),
-    (0x13C6C469, 5, "hitbox_depth"),
-    (0x14AB0070, 5, "aim_offset_vertical"),
-    (0x20FEDE31, 5, "homing_range"),
-    (0x28BA5665, 5, "visual_scale"),
-    (0x2E1E75E5, 5, "hit_effect_scale"),
-    (0x2F446A4F, 5, "spawn_offset_forward"),
-    (0x319126CE, 1, "inherit_speed_flag"),
-    (0x32ACABFB, 2, "lifetime"),
-    (0x36FCE2D7, 1, "child_bullet_hash"),
-    (0x397CE80D, 1, "collision_type"),
-    (0x3B52DAAB, 5, "rotation_angle"),
-    (0x3C3F1EB2, 5, "elevation_angle"),
-    (0x3CDF1516, 1, "homing_type"),
-    (0x3F8653B3, 5, "reserved_050"),
-    (0x41435BE6, 1, "bullet_effect_hash"),
-    (0x41FBD241, 1, "trail_effect_hash"),
-    (0x46961658, 1, "muzzle_flash_hash"),
-    (0x48816325, 5, "reserved_060"),
-    (0x4B382E24, 5, "target_height_offset"),
-    (0x4B492895, 2, "pierce_count"),
-    (0x4C55EA3D, 5, "acceleration_value"),
-    (0x4D6BF281, 1, "bullet_action_hash"),
-    (0x52CA3B01, 5, "homing_start_distance"),
-    (0x55C77696, 5, "vertical_launch_angle"),
-    (0x58435AD9, 5, "horizontal_aim_angle"),
-    (0x59332F69, 2, "hit_interval_frame"),
-    (0x63AC30E6, 5, "max_altitude"),
-    (0x640A7C9D, 5, "spawn_offset_vertical"),
-    (0x6481E0F7, 2, "speed_internal"),
-    (0x64C1F4FF, 5, "collision_height"),
-    (0x67921CDD, 2, "homing_duration"),
-    (0x68CD7942, 1, "on_expire_hash"),
-    (0x6A62D65E, 2, "delay_frame"),
-    (0x74F469FA, 5, "gravity_rate"),
-    (0x7696F452, 5, "speed_scale"),
-    (0x7B4AA25E, 5, "effective_range"),
-    (0x81A816EB, 1, "bullet_shape"),
-    (0x8379D9F8, 5, "model_scale"),
-    (0x846DDC39, 5, "max_distance"),
-    (0x89BE0F56, 1, "bullet_resource_hash"),
-    (0x8ACF95D3, 5, "blast_radius"),
-    (0x8DA251CA, 5, "offset_angle_vertical"),
-    (0x8DBD5433, 5, "homing_strength"),
-    (0x90423264, 5, "turn_rate"),
-    (0x9375A247, 5, "homing_angle"),
-    (0x9C9D876E, 5, "offset_angle_horizontal"),
-    (0xA12E3B5F, 1, "is_beam"),
-    (0xA1E2C610, 5, "reserved_0d8"),
-    (0xA25B8B11, 5, "target_distance"),
-    (0xA36593AD, 1, "behavior_type"),
-    (0xA5364F08, 5, "aim_correction_angle"),
-    (0xA68F0209, 5, "reserved_0e8"),
-    (0xA8987774, 1, "ammo_type_hash"),
-    (0xAB606D9E, 5, "initial_speed"),
-    (0xABEDC73A, 5, "launch_angle_horizontal"),
-    (0xAF2B7098, 5, "tracking_angle"),
-    (0xB306BEE8, 5, "min_homing_distance"),
-    (0xBA9B8F5D, 5, "turn_acceleration"),
-    (0xD188329F, 5, "reserved_f4"),
-    (0xD32D39ED, 1, "hitgroup_hash"),
-    (0xD462A33B, 1, "spawn_pattern_hash"),
-    (0xD55CBB87, 5, "aim_limit_angle"),
-    (0xD6290BC9, 1, "is_penetrating"),
-    (0xD6E5F686, 5, "reserved_118"),
-    (0xD8F283FB, 1, "secondary_effect_hash"),
-    (0xDCEAF7AC, 5, "homing_effective_distance"),
-    (0xDE6C0636, 1, "reserved_flag_110"),
-    (0xDF9F47E2, 1, "explosion_effect_hash"),
-    (0xEDD1C108, 1, "interaction_hash"),
-    (0xEF44FC6B, 5, "speed_acceleration"),
-    (0xF33F8630, 2, "duration_frame"),
-    (0xF47EE96E, 5, "reserved_124"),
-    (0xF647567F, 1, "sound_effect_hash"),
-    (0xFAA5615C, 5, "muzzle_offset_horizontal"),
-    (0xFD032D27, 5, "muzzle_offset_vertical"),
-    (0xFD855759, 5, "induction_angle"),
-    (0xFDC8A545, 5, "spread_distance"),
-    (0xFF51E424, 5, "tracking_start_distance"),
+    (0x0594D6D4, 5, "initial_angle"),             // [V:sub_1405C4400] angular offset, 143 unique
+    (0x05D5D30D, 5, "max_range"),                 // [D:0~10000] distance, 112 unique
+    (0x06E90346, 1, "move_type"),                 // [D:0~255] enum, 9 unique
+    (0x0D6A5CD5, 1, "hit_effect_hash"),           // [V:sub_140606BB0] 815 unique hash refs
+    (0x130D4C0B, 5, "spread_angle"),              // [D:-320~320] degrees, 151 unique
+    (0x13662C98, 5, "hitbox_width"),              // [D:0~25]
+    (0x138B3675, 5, "hitbox_height"),             // [D:0~360]
+    (0x13C6C469, 5, "hitbox_depth"),              // [D:-40~80]
+    (0x14AB0070, 5, "aim_offset_vertical"),       // [D:-135~400]
+    (0x20FEDE31, 5, "homing_range"),              // [D:0~10000] distance
+    (0x28BA5665, 5, "visual_scale"),              // [D:0~1000]
+    (0x2E1E75E5, 5, "hit_effect_scale"),          // [D:0~50]
+    (0x2F446A4F, 5, "spawn_offset_forward"),      // [V:sub_1405C4400] converted deg->rad; angular, not distance. [D:-175~210]
+    (0x319126CE, 1, "inherit_speed_hash"),         // [D:HASH] 34 unique. was "inherit_speed_flag"
+    (0x32ACABFB, 2, "lifetime"),                  // [D:0~100000] frames
+    (0x36FCE2D7, 1, "child_bullet_hash"),         // [D:HASH] 204 unique
+    (0x397CE80D, 1, "collision_type"),            // [D:0~2] enum, 3 types
+    (0x3B52DAAB, 5, "rotation_angle"),            // [D:-180~360] degrees
+    (0x3C3F1EB2, 5, "elevation_angle"),           // [D:-135~1200] degrees
+    (0x3CDF1516, 1, "homing_type"),               // [D:0~3] enum, 4 types
+    (0x3F8653B3, 5, "reserved_050"),              // PHANTOM — not in any file
+    (0x41435BE6, 1, "bullet_effect_hash"),        // [D:HASH] 832 unique
+    (0x41FBD241, 1, "trail_effect_hash"),         // [D:HASH] 260 unique
+    (0x46961658, 1, "muzzle_flash_hash"),         // [D:HASH] 59 unique
+    (0x48816325, 5, "reserved_060"),              // PHANTOM — not in any file
+    (0x4B382E24, 5, "target_height_offset"),      // [D:-300~1000]
+    (0x4B492895, 2, "pierce_count"),              // [D:0~30] 27 unique
+    (0x4C55EA3D, 5, "acceleration_value"),        // [D:-360~3000]
+    (0x4D6BF281, 1, "bullet_action_hash"),        // [D:HASH] 1474 unique — most diverse action ref
+    (0x52CA3B01, 5, "homing_start_distance"),     // [D:0~5000]
+    (0x55C77696, 5, "vertical_launch_angle"),     // [V:sub_1405C4400] used as positional offset along source axes
+    (0x58435AD9, 5, "horizontal_aim_angle"),      // [V:sub_1405C4400] converted deg->rad for spawn rotation
+    (0x59332F69, 2, "hit_interval_frame"),        // [D:0~130] frames
+    (0x63AC30E6, 5, "max_altitude"),              // [D:-700~250]
+    (0x640A7C9D, 5, "spawn_offset_vertical"),     // [D:-350~300]
+    (0x6481E0F7, 2, "speed_internal"),            // [D:0~2147483646] 18 unique — possibly hash/special encoding
+    (0x64C1F4FF, 5, "collision_height"),          // [D:-10~90]
+    (0x67921CDD, 2, "homing_duration"),           // [D:0~10000] frames
+    (0x68CD7942, 1, "on_expire_hash"),            // [D:HASH] 985 unique
+    (0x6A62D65E, 2, "delay_frame"),               // [D:0~1000] frames, 9 unique
+    (0x74F469FA, 5, "gravity_rate"),              // [V:sub_140606BB0,sub_1405B5040] ballistic trajectory param. [D:0~0.5]
+    (0x7696F452, 5, "speed_scale"),               // [D:0~2.0] multiplier
+    (0x7B4AA25E, 5, "effective_range"),           // [D:0~360]
+    (0x81A816EB, 1, "bullet_shape"),              // [D:0~8] enum, 9 shapes
+    (0x8379D9F8, 5, "model_scale"),               // [D:0~17]
+    (0x846DDC39, 5, "max_distance"),              // [D:0~9000]
+    (0x89BE0F56, 1, "bullet_resource_hash"),      // [D:HASH] 3547 unique — most diverse resource ref
+    (0x8ACF95D3, 5, "blast_radius"),              // [D:-110~150]
+    (0x8DA251CA, 5, "offset_angle_vertical"),     // [D:-150~300]
+    (0x8DBD5433, 5, "homing_strength"),           // [D:0~1.0] multiplier
+    (0x90423264, 5, "turn_rate"),                 // [V:sub_140606BB0,sub_1405B5040] projectile turning speed. [D:0~1000]
+    (0x9375A247, 5, "homing_angle"),              // [D:0~180] degrees
+    (0x9C9D876E, 5, "offset_angle_horizontal"),   // [V:sub_1405C4400] used as positional offset along source axes
+    (0xA12E3B5F, 1, "beam_type_hash"),            // [D:HASH] 19 unique, max ~4B. was "is_beam"
+    (0xA1E2C610, 5, "reserved_0d8"),              // PHANTOM — not in any file
+    (0xA25B8B11, 5, "target_distance"),           // [D:-180~1200]
+    (0xA36593AD, 1, "behavior_type"),             // [D:HASH-like] 69 unique, max ~4B — behavior definition ref
+    (0xA5364F08, 5, "aim_correction_angle"),      // [D:-300~440]
+    (0xA68F0209, 5, "reserved_0e8"),              // PHANTOM — not in any file
+    (0xA8987774, 1, "ammo_type_hash"),            // [D:HASH] 153 unique
+    (0xAB606D9E, 5, "initial_speed"),             // [D:0~640]
+    (0xABEDC73A, 5, "launch_angle_horizontal"),   // [D:-140~500]
+    (0xAF2B7098, 5, "tracking_angle"),            // [D:0~180] degrees
+    (0xB306BEE8, 5, "min_homing_distance"),       // [D:0~360]
+    (0xBA9B8F5D, 5, "turn_acceleration"),         // [D:0~15]
+    (0xD188329F, 5, "reserved_f4"),               // [D:0~500] 5 unique, mostly 0
+    (0xD32D39ED, 1, "hitgroup_hash"),             // [D:HASH] 2371 unique
+    (0xD462A33B, 1, "spawn_pattern_hash"),        // [D:HASH] 107 unique
+    (0xD55CBB87, 5, "aim_limit_angle"),           // [D:-160~240]
+    (0xD6290BC9, 1, "penetrate_type_hash"),       // [D:HASH] 17 unique. was "is_penetrating"
+    (0xD6E5F686, 5, "reserved_118"),              // PHANTOM — not in any file
+    (0xD8F283FB, 1, "secondary_effect_hash"),     // [D:HASH] 1091 unique
+    (0xDCEAF7AC, 5, "homing_effective_distance"), // [D:-360~820]
+    (0xDE6C0636, 1, "reserved_flag_110"),         // [D:0~0xFFFFFFF6] 3 unique, 10652 zeros
+    (0xDF9F47E2, 1, "explosion_effect_hash"),     // [D:HASH] 106 unique
+    (0xEDD1C108, 1, "interaction_hash"),          // [D:HASH] 1670 unique
+    (0xEF44FC6B, 5, "speed_acceleration"),        // [D:-2~30]
+    (0xF33F8630, 2, "duration_frame"),            // [D:0~1000] frames
+    (0xF47EE96E, 5, "reserved_124"),              // [D:-5~1200] 13 unique, mostly 0
+    (0xF647567F, 1, "sound_effect_hash"),         // [D:HASH] 341 unique
+    (0xFAA5615C, 5, "muzzle_offset_horizontal"),  // [D:-360~87011]
+    (0xFD032D27, 5, "muzzle_offset_vertical"),    // [D:-100~300]
+    (0xFD855759, 5, "induction_angle"),           // [D:0~360]
+    (0xFDC8A545, 5, "spread_distance"),           // [D:-140~250]
+    (0xFF51E424, 5, "tracking_start_distance"),   // [D:0~1000]
 ];
 
 #[cfg(test)]

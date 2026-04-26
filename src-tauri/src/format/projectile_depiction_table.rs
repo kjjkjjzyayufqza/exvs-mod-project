@@ -12,22 +12,24 @@ use crate::format::param_entry_schema::{
     parse_commands_map_from_entry_row, validate_file_specs_kind_match_pool, ParamCommandPool,
 };
 
+// Please keep comments for analysis.
+// Data-verified: 344 files, 1086 entries. cmd_count={14,15}.
 pub const PROJECTILE_DEPICTION_TABLE_COMMAND_POOL: ParamCommandPool = &[
-    (0x049A712B, 1, "depiction_type"),
-    (0x057E839D, 1, "main_effect_hash"),
-    (0x08B05EA9, 1, "sub_effect_hash"),
-    (0x1B12E734, 5, "scale"),
-    (0x49672094, 1, "model_hash"),
-    (0x5896D450, 1, "trail_effect_hash"),
-    (0x5EF964EC, 1, "hit_effect_hash"),
-    (0x8F49B2DA, 5, "trail_length"),
-    (0x996BA1AC, 1, "sound_effect_hash"),
-    (0xBA4BBA9D, 1, "render_mode"),
-    (0xC19F85EA, 1, "material_hash"),
-    (0xD1097B21, 5, "z_offset"),
-    (0xD9EF5A79, 1, "spawn_effect_hash"),
-    (0xDABB1A5C, 2, "behavior_flags"),
-    (0xE9DE0A15, 1, "destroy_effect_hash"),
+    (0x049A712B, 1, "depiction_type"),       // [D:HASH-like] 7 unique, mostly 0 (1076/1086)
+    (0x057E839D, 1, "main_effect_hash"),     // [D:HASH] 262 unique
+    (0x08B05EA9, 1, "sub_effect_hash"),      // [D:HASH] 17 unique, mostly 0
+    (0x1B12E734, 5, "scale"),                // [D:-1~3] 21 unique, never 0
+    (0x49672094, 1, "model_hash"),           // [D:HASH] 640 unique
+    (0x5896D450, 1, "trail_effect_hash"),    // [D:HASH] 4 unique, mostly 0
+    (0x5EF964EC, 1, "has_hit_effect"),       // [D:0~1] boolean. was "hit_effect_hash" — NOT a hash
+    (0x8F49B2DA, 5, "trail_length"),         // [D:0~600] 29 unique
+    (0x996BA1AC, 1, "sound_effect_hash"),    // [D:HASH] 23 unique
+    (0xBA4BBA9D, 1, "render_mode"),          // [D:1~18] enum, 15 types, never 0
+    (0xC19F85EA, 1, "material_hash"),        // [D:HASH] 138 unique
+    (0xD1097B21, 5, "z_offset"),             // [D:-13~200] 58 unique
+    (0xD9EF5A79, 1, "spawn_effect_hash"),    // [D:HASH] 63 unique
+    (0xDABB1A5C, 2, "behavior_flags"),       // [D:always 0] unused
+    (0xE9DE0A15, 1, "destroy_effect_hash"),  // [D:HASH] 53 unique
 ];
 
 pub fn projectile_depiction_table_entry_to_json_value(entry: &ProjectileDepictionTableEntry) -> Value {

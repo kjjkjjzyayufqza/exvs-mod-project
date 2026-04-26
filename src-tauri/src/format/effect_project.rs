@@ -12,6 +12,21 @@ use crate::format::param_entry_schema::{
     parse_commands_map_from_entry_row, validate_file_specs_kind_match_pool, ParamCommandPool,
 };
 
+// Please keep comments for analysis.
+//
+// effect_project has 432 files in 3 variants:
+//   - 392 files: cmd=240, ALL kind=1, entry_count=0 (empty — no actual data)
+//   - 39 files:  cmd=240, kind={1:72, 5:168}, entry_count=1~4 (64 entries total — actual data)
+//   - 1 file:    cmd=80, all kind=1
+//
+// This pool's kind values match the 39-file variant (72×kind=1 + 168×kind=5).
+// The 392 empty files have all-kind=1 but 0 entries, so kind mismatch is harmless.
+//
+// ALL names are placeholder (field_XX_param/flag based on offset). No semantic naming yet.
+// "flag" fields are NOT booleans — data shows they are HASH references (max ~4.2B, many unique).
+// "param" fields are floats, mostly 0.0 with occasional small ranges.
+//
+// Semantic naming requires deep analysis of the effect runtime system.
 pub const EFFECT_PROJECT_COMMAND_POOL: ParamCommandPool = &[
     (0x08592D05, 5, "field_00_param"),
     (0x0859BF71, 1, "field_04_flag"),

@@ -12,22 +12,26 @@ use crate::format::param_entry_schema::{
     parse_commands_map_from_entry_row, validate_file_specs_kind_match_pool, ParamCommandPool,
 };
 
+// Please keep comments for analysis.
+// Data-verified: 432 files, 17677 entries. cmd_count={15}.
+// CRITICAL: 0xD32D39ED was "is_enabled" but has 141 unique hash values — renamed to parent_bone_hash.
+//           Same hash is "bone_hash" in vernier_table.rs, confirming it's a bone reference.
 pub const HITGROUPIDDEF_COMMAND_POOL: ParamCommandPool = &[
-    (0x11E501D5, 1, "hit_type"),
-    (0x3284A82D, 5, "offset_x"),
-    (0x42EE5CA2, 5, "offset_y"),
-    (0x458398BB, 5, "offset_z"),
-    (0x6514C413, 5, "radius"),
-    (0x7395D184, 1, "enable_state"),
-    (0x8B1AA53F, 5, "scale_x"),
-    (0xACE03D8E, 5, "scale_y"),
-    (0xC3656A99, 1, "bone_hash"),
-    (0xD32D39ED, 1, "is_enabled"),
-    (0xDBE70D18, 5, "scale_z"),
-    (0xDC8AC901, 5, "group_id"),
-    (0xEDD1C108, 1, "model_hash"),
-    (0xF89A41E1, 1, "collision_flags"),
-    (0xFC1D95A9, 5, "joint_offset"),
+    (0x11E501D5, 1, "hit_type"),           // [D:0~3] enum, 4 types
+    (0x3284A82D, 5, "offset_x"),           // [D:always 0] unused
+    (0x42EE5CA2, 5, "offset_y"),           // [D:always 0] unused
+    (0x458398BB, 5, "offset_z"),           // [D:-5~6] 6 unique, mostly 0
+    (0x6514C413, 5, "radius"),             // [D:-54~700] 146 unique
+    (0x7395D184, 1, "enable_state"),       // [D:0~1] boolean
+    (0x8B1AA53F, 5, "scale_x"),            // [D:-2000~2700] 306 unique
+    (0xACE03D8E, 5, "scale_y"),            // [D:always 0] unused
+    (0xC3656A99, 1, "bone_hash"),          // [D:HASH] 5856 unique
+    (0xD32D39ED, 1, "parent_bone_hash"),   // [D:HASH] 141 unique. was "is_enabled" — NOT boolean!
+    (0xDBE70D18, 5, "scale_z"),            // [D:always 0] unused
+    (0xDC8AC901, 5, "group_id"),           // [D:-12~150] float, 59 unique
+    (0xEDD1C108, 1, "model_hash"),         // [D:HASH] 587 unique
+    (0xF89A41E1, 1, "collision_flags"),    // [D:0~2] enum, 3 types
+    (0xFC1D95A9, 5, "joint_offset"),       // [D:-40~85] 86 unique
 ];
 
 pub fn hitgroupiddef_entry_to_json_value(entry: &HitGroupIdDefEntry) -> Value {

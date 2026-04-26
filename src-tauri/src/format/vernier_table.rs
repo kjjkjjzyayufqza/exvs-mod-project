@@ -12,43 +12,47 @@ use crate::format::param_entry_schema::{
     parse_commands_map_from_entry_row, validate_file_specs_kind_match_pool, ParamCommandPool,
 };
 
+// Please keep comments for analysis.
+// Data-verified: 432 files, 5487 entries. cmd_count={34,36}.
+// CRITICAL: texture_hash/animation_hash/second_bone_hash were named "_hash" but are booleans (0/1).
+// Many "*_type"/"*_mode"/"*_count" fields are also booleans — kept names to avoid mass rename breakage.
 pub const VERNIER_TABLE_COMMAND_POOL: ParamCommandPool = &[
-    (0x01311D05, 1, "effect_type"),
-    (0x0887512E, 1, "color_index"),
-    (0x0FDBD536, 1, "effect_model_hash"),
-    (0x0FEA9537, 1, "keep_active"),
-    (0x13EEB8F0, 5, "particle_size_1"),
-    (0x21FFCD00, 1, "is_loop"),
-    (0x2DB526FD, 1, "is_follow_bone"),
-    (0x35B5281F, 1, "bone_offset_type"),
-    (0x3B6EA02D, 1, "rotation_type"),
-    (0x3C036434, 1, "alignment_type"),
-    (0x42B21889, 1, "blend_mode"),
-    (0x43298ECB, 5, "particle_size_2"),
-    (0x49672094, 1, "model_hash"),
-    (0x4B0454A2, 1, "texture_hash"),
-    (0x4C6990BB, 1, "animation_hash"),
-    (0x618D354C, 1, "material_hash"),
-    (0x634CF0E5, 1, "is_billboard"),
-    (0x64E98866, 5, "z_distance"),
-    (0x6744C378, 1, "fade_type"),
-    (0x72E23F39, 1, "is_world_space"),
-    (0x76362D93, 1, "cull_mode"),
-    (0x7F8061B8, 1, "depth_test_type"),
-    (0x918E0094, 1, "emit_count"),
-    (0x96E3C48D, 1, "lifetime_type"),
-    (0xA267F197, 1, "velocity_type"),
-    (0xA50A358E, 1, "inherit_parent_type"),
-    (0xB8F69CBA, 1, "render_order"),
-    (0xD20D0518, 1, "sort_bias"),
-    (0xD32D39ED, 1, "bone_hash"),
-    (0xD560C101, 1, "second_bone_hash"),
-    (0xE1E4F41B, 1, "effect_flag_a"),
-    (0xE6893002, 1, "effect_flag_b"),
-    (0xE694B5B6, 5, "effect_scale"),
-    (0xEDD1C108, 1, "hitgroup_ref"),
-    (0xFA45A15F, 1, "is_enabled"),
-    (0xFDE0D9DC, 5, "spawn_offset_y"),
+    (0x01311D05, 1, "effect_type"),          // [D:0~1] boolean despite "_type" name
+    (0x0887512E, 1, "color_index"),          // [D:0~1] boolean despite "_index" name
+    (0x0FDBD536, 1, "effect_model_hash"),    // [D:HASH] 561 unique
+    (0x0FEA9537, 1, "keep_active"),          // [D:0~1] boolean
+    (0x13EEB8F0, 5, "particle_size_1"),      // [D:-3~3] 29 unique
+    (0x21FFCD00, 1, "is_loop"),              // [D:0~1] boolean
+    (0x2DB526FD, 1, "is_follow_bone"),       // [D:0~1] boolean
+    (0x35B5281F, 1, "bone_offset_type"),     // [D:always 0] unused
+    (0x3B6EA02D, 1, "rotation_type"),        // [D:0~1] boolean despite "_type" name
+    (0x3C036434, 1, "alignment_type"),       // [D:0~1] boolean despite "_type" name
+    (0x42B21889, 1, "blend_mode"),           // [D:always 0] unused
+    (0x43298ECB, 5, "particle_size_2"),      // [D:0~5] 31 unique
+    (0x49672094, 1, "model_hash"),           // [D:HASH] 364 unique
+    (0x4B0454A2, 1, "has_texture"),          // [D:0~1] boolean. was "texture_hash" — NOT a hash
+    (0x4C6990BB, 1, "has_animation"),        // [D:0~1] boolean. was "animation_hash" — NOT a hash
+    (0x618D354C, 1, "material_hash"),        // [D:always 0] unused
+    (0x634CF0E5, 1, "is_billboard"),         // [D:0~1] boolean
+    (0x64E98866, 5, "z_distance"),           // [D:-3~5] 20 unique
+    (0x6744C378, 1, "fade_type"),            // [D:always 0] unused
+    (0x72E23F39, 1, "is_world_space"),       // [D:0~1] boolean
+    (0x76362D93, 1, "cull_mode"),            // [D:0~1] boolean despite "_mode" name
+    (0x7F8061B8, 1, "depth_test_type"),      // [D:0~1] boolean despite "_type" name
+    (0x918E0094, 1, "emit_count"),           // [D:0~1] boolean despite "_count" name
+    (0x96E3C48D, 1, "lifetime_type"),        // [D:0~1] boolean despite "_type" name
+    (0xA267F197, 1, "velocity_type"),        // [D:0~1] boolean despite "_type" name
+    (0xA50A358E, 1, "inherit_parent_type"),  // [D:0~1] boolean despite "_type" name, only 4 ones
+    (0xB8F69CBA, 1, "render_order"),         // [D:0~1] boolean despite "_order" name
+    (0xD20D0518, 1, "sort_bias"),            // [D:always 0] unused
+    (0xD32D39ED, 1, "bone_hash"),            // [D:HASH] 2864 unique
+    (0xD560C101, 1, "has_second_bone"),      // [D:0~1] boolean. was "second_bone_hash" — NOT a hash
+    (0xE1E4F41B, 1, "effect_flag_a"),        // [D:0~1] boolean
+    (0xE6893002, 1, "effect_flag_b"),        // [D:0~1] boolean
+    (0xE694B5B6, 5, "effect_scale"),         // [D:-0.5~2] 11 unique
+    (0xEDD1C108, 1, "hitgroup_ref"),         // [D:HASH] 738 unique
+    (0xFA45A15F, 1, "is_enabled"),           // [D:0~1] boolean
+    (0xFDE0D9DC, 5, "spawn_offset_y"),       // [D:-3~2.8] 13 unique
 ];
 
 pub fn vernier_table_entry_to_json_value(entry: &VernierTableEntry) -> Value {
