@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from "react";
-import { Buffer } from "buffer";
 import { Plus } from "lucide-react";
 
 import {
@@ -13,16 +12,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import type { CharacterDataOB, CharacterListOB } from "@/models/characterListOB";
-import { CharacterDataOB as CharacterDataOBClass } from "@/models/characterListOB";
-import { cloneCharacterDataOB } from "@/module/commonFunc";
+import type { CharacterListData, CharacterListEntry } from "@/models/characterListEntry";
 import { CharacterForm } from "./CharacterForm";
 import { CharacterList } from "./CharacterList";
 import type { SeriesIdPickerItem } from "./SeriesIdPickerPopover";
 import type { CardIconIndexPickerItem } from "./CardIconIndexPickerPopover";
 
 interface CharacterEditorProps {
-  characterListData?: CharacterListOB;
+  characterListData?: CharacterListData;
   selectedIndex?: number;
   seriesIdPickerItems: SeriesIdPickerItem[];
   seriesIdPickerLoading?: boolean;
@@ -37,8 +34,117 @@ interface CharacterEditorProps {
     tooltip: string;
     onClick: () => void;
   };
-  onChange: (data: CharacterListOB) => void;
+  onChange: (data: CharacterListData) => void;
   onSelectChange?: (index: number) => void;
+}
+
+function createEmptyEntry(entryId: number, uniqueId: number): CharacterListEntry {
+  return {
+    entryId,
+    indexInSeries: 0,
+    legacyRemovedU320004: 0,
+    chargeLabelWeaponFight: 0,
+    vsPLC03: 0,
+    msIghR: 0,
+    msVsR: 0,
+    unkHash0x18: 0,
+    characterName: "",
+    threshold300ScoreCode: 0,
+    threshold200RuleCode: 0,
+    threshold100RuleCode: 0,
+    unkHash0x30: 0,
+    msVsL: 0,
+    threshold400RuleCode: 0,
+    profileSetAPrimaryDefault: 0,
+    profileSetBPrimarySlot2: 0,
+    vsPRC03: 0,
+    profileSetASharedSpecial: 0,
+    profileSetBPrimaryDefault: 0,
+    profileSetBPrimarySlot1: 0,
+    seriesAltGroupId: 0,
+    profileSetBSecondarySlot3: 0,
+    sticker1: 0,
+    unk0x060: 0,
+    profileSetAPrimarySlot2: 0,
+    variantDisplayNameDefault: "",
+    unk0x070: 0,
+    pilotPresentationHash: 0,
+    lmbPilotClothing: 0,
+    variantDisplayNameSlot4: "",
+    weaponTextSfight: "",
+    optionalSidecarHashSlot2: 0,
+    weaponTextMain: "",
+    variantDisplayNameSlot3: "",
+    optionalPilotPresentationHashSlot2: 0,
+    pilotNameShort: "",
+    secondarySelectorState: 0,
+    exPilotClothingLmbHash: 0,
+    seriesId: 0,
+    weaponTextSp: "",
+    pilotNameFull: "",
+    legacySparseWeaponInfoFlag: 0,
+    profileSetAPrimarySlot0: 0,
+    vsPRC02: 0,
+    msCardIconIndex: 0,
+    profileSetASecondaryDefault: 0,
+    unk0x0dc: 0,
+    stickerT01: 0,
+    profileSetBSecondaryDefault: 0,
+    profileSetBPrimarySlot0: 0,
+    selectorState: 0,
+    seriesDefaultGroupId: 0,
+    vsPLC02: 0,
+    profileSetBSharedSpecial: 0,
+    unk0x0fc: 0,
+    legacyRemovedU320100: 0,
+    suppressOptionalLmbSidecar: 0,
+    variantFlag: 0,
+    threshold1RuleCode: 0,
+    unk0x110: 0,
+    msTracker: 0,
+    profileSetASecondarySlot1: 0,
+    vsPLC04: 0,
+    profileSetBSecondarySlot2: 0,
+    unk0x124: 0,
+    profileSetAPrimarySlot3: 0,
+    optionalSidecarHashSlot3: 0,
+    profileSetBSecondarySlot1: 0,
+    weaponTextFight: "",
+    pairedBgmMusicIdPrimary: 0,
+    characterUniqueId: uniqueId,
+    variantDisplayNameSlot1: "",
+    profileSetASecondarySlot2: 0,
+    chargeLabelWeaponMain: 0,
+    profileSetBPrimarySlot3: 0,
+    variantDisplayNameSlot5: "",
+    lmbCutIn: 0,
+    stickerT05: 0,
+    seriesAltOrderIndex: 0,
+    trackerStickerHashSlot4: 0,
+    pairedBgmMusicIdSecondary: 0,
+    unk0x174: 0,
+    vsPRC04: 0,
+    trackerStickerHashSlot3: 0,
+    msMsL: 0,
+    unk0x184: 0,
+    vsPR: 0,
+    weaponTextSub: "",
+    lmbBoost: 0,
+    profileSetASecondarySlot0: 0,
+    variantDisplayNameSlot6: "",
+    rnkML: 0,
+    optionalPresentationVariantFlag: 0,
+    msCrs: 0,
+    variantDisplayNameSlot2: "",
+    optionalPilotPresentationHashSlot3: 0,
+    profileSetBSecondarySlot0: 0,
+    msMsS: 0,
+    vsPL: 0,
+    unk0x1c8: 0,
+    msMn: 0,
+    scP: 0,
+    partnerCommEntryEnabledCode: 0,
+  };
 }
 
 export function CharacterEditor({
@@ -63,28 +169,27 @@ export function CharacterEditor({
   const isControlled = controlledSelectedIndex !== undefined && onSelectChange !== undefined;
   const selectedIndex = isControlled ? controlledSelectedIndex : internalSelectedIndex;
 
+  const entries = characterListData?.entries ?? [];
+
   const getNextCharacterUniqueId = useCallback(() => {
-    if (!characterListData) return 1;
-    return Math.max(...characterListData.CharacterData.map((c) => c.characterUniqueId || 0), 0) + 1;
-  }, [characterListData]);
+    if (!entries.length) return 1;
+    return Math.max(...entries.map((c) => c.characterUniqueId || 0), 0) + 1;
+  }, [entries]);
 
-  const selectedCharacter = useMemo<CharacterDataOB | null>(() => {
-    if (!characterListData) return null;
+  const selectedCharacter = useMemo<CharacterListEntry | null>(() => {
     if (selectedIndex < 0) return null;
-    return characterListData.CharacterData[selectedIndex] ?? null;
-  }, [characterListData, selectedIndex]);
+    return entries[selectedIndex] ?? null;
+  }, [entries, selectedIndex]);
 
-  const deleteCandidateCharacter = useMemo<CharacterDataOB | null>(() => {
-    if (!characterListData) return null;
+  const deleteCandidateCharacter = useMemo<CharacterListEntry | null>(() => {
     if (deleteCandidateIndex === null) return null;
-    return characterListData.CharacterData[deleteCandidateIndex] ?? null;
-  }, [characterListData, deleteCandidateIndex]);
+    return entries[deleteCandidateIndex] ?? null;
+  }, [entries, deleteCandidateIndex]);
 
   const updateList = useCallback(
-    (updater: (prev: CharacterListOB) => CharacterListOB) => {
+    (updater: (prev: CharacterListData) => CharacterListData) => {
       if (!characterListData) return;
-      const next = updater(characterListData);
-      onChange(next);
+      onChange(updater(characterListData));
     },
     [characterListData, onChange]
   );
@@ -98,18 +203,15 @@ export function CharacterEditor({
   }, [isControlled, onSelectChange]);
 
   const handleUpdateCharacter = useCallback(
-    (updatedCharacter: CharacterDataOB) => {
+    (updatedCharacter: CharacterListEntry) => {
       if (!characterListData) return;
       if (selectedIndex < 0) return;
 
-      updateList((prevList) => {
-        const nextRows = [...prevList.CharacterData];
-        if (!nextRows[selectedIndex]) return prevList;
-        nextRows[selectedIndex] = updatedCharacter;
-        return Object.assign(Object.create(Object.getPrototypeOf(prevList)), prevList, {
-          CharacterData: nextRows,
-          CharacterCount: nextRows.length,
-        });
+      updateList((prev) => {
+        const nextEntries = [...prev.entries];
+        if (!nextEntries[selectedIndex]) return prev;
+        nextEntries[selectedIndex] = updatedCharacter;
+        return { ...prev, entries: nextEntries };
       });
     },
     [characterListData, selectedIndex, updateList]
@@ -129,13 +231,10 @@ export function CharacterEditor({
     if (!characterListData) return;
     if (deleteCandidateIndex === null) return;
 
-    updateList((prevList) => {
-      const nextRows = prevList.CharacterData.filter((_, i) => i !== deleteCandidateIndex);
-      return Object.assign(Object.create(Object.getPrototypeOf(prevList)), prevList, {
-        CharacterData: nextRows,
-        CharacterCount: nextRows.length,
-      });
-    });
+    updateList((prev) => ({
+      ...prev,
+      entries: prev.entries.filter((_, i) => i !== deleteCandidateIndex),
+    }));
 
     const nextSelectedIndex = (() => {
       if (selectedIndex === deleteCandidateIndex) return -1;
@@ -150,58 +249,51 @@ export function CharacterEditor({
     }
 
     closeDeleteDialog();
-  }, [characterListData, closeDeleteDialog, deleteCandidateIndex, updateList]);
+  }, [characterListData, closeDeleteDialog, deleteCandidateIndex, isControlled, onSelectChange, selectedIndex, updateList]);
 
   const handleCopy = useCallback(
     (index: number) => {
       if (!characterListData) return;
-      const characterToCopy = characterListData.CharacterData[index];
-      if (!characterToCopy) return;
+      const src = entries[index];
+      if (!src) return;
 
-      const newCharacterId = characterToCopy.CharacterId + 1;
+      const newEntryId = src.entryId + 1;
+      const newUniqueId = getNextCharacterUniqueId();
+      const cloned: CharacterListEntry = { ...src, entryId: newEntryId, characterUniqueId: newUniqueId };
 
-      const newCharacterUniqueId = getNextCharacterUniqueId();
-      const clonedCharacter = cloneCharacterDataOB(characterToCopy, newCharacterId, characterListData.bufferData, newCharacterUniqueId);
+      updateList((prev) => ({
+        ...prev,
+        entries: [...prev.entries, cloned],
+      }));
 
-      updateList((prevList) => {
-        const nextRows = [...prevList.CharacterData, clonedCharacter];
-        return Object.assign(Object.create(Object.getPrototypeOf(prevList)), prevList, {
-          CharacterData: nextRows,
-          CharacterCount: nextRows.length,
-        });
-      });
-
-      const nextIndex = characterListData.CharacterData.length;
+      const nextIndex = entries.length;
       if (isControlled) {
         onSelectChange?.(nextIndex);
       } else {
         setInternalSelectedIndex(nextIndex);
       }
     },
-    [characterListData, getNextCharacterUniqueId, isControlled, onSelectChange, updateList]
+    [characterListData, entries, getNextCharacterUniqueId, isControlled, onSelectChange, updateList]
   );
 
   const handleAdd = useCallback(() => {
     if (!characterListData) return;
-    const newCharacterId = Math.max(...characterListData.CharacterData.map((c) => c.CharacterId), 0) + 1;
-    const newCharacter = new CharacterDataOBClass(Buffer.alloc(0x2000), Buffer.alloc(0x1d8), newCharacterId);
-    newCharacter.characterUniqueId = getNextCharacterUniqueId();
+    const newEntryId = entries.length > 0 ? Math.max(...entries.map((c) => c.entryId), 0) + 1 : 1;
+    const newUniqueId = getNextCharacterUniqueId();
+    const newEntry = createEmptyEntry(newEntryId, newUniqueId);
 
-    updateList((prevList) => {
-      const nextRows = [...prevList.CharacterData, newCharacter];
-      return Object.assign(Object.create(Object.getPrototypeOf(prevList)), prevList, {
-        CharacterData: nextRows,
-        CharacterCount: nextRows.length,
-      });
-    });
+    updateList((prev) => ({
+      ...prev,
+      entries: [...prev.entries, newEntry],
+    }));
 
-    const nextIndex = characterListData.CharacterData.length;
+    const nextIndex = entries.length;
     if (isControlled) {
       onSelectChange?.(nextIndex);
     } else {
       setInternalSelectedIndex(nextIndex);
     }
-  }, [characterListData, getNextCharacterUniqueId, isControlled, onSelectChange, updateList]);
+  }, [characterListData, entries, getNextCharacterUniqueId, isControlled, onSelectChange, updateList]);
 
   if (!characterListData) {
     return <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground">Select this tab to load character_list.bin</div>;
@@ -211,7 +303,7 @@ export function CharacterEditor({
     <div className="flex h-full gap-4 min-h-0">
       <div className="w-1/3 border rounded-lg p-3 overflow-hidden flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-3">
-          <div className="font-semibold text-sm">Characters ({characterListData.CharacterData.length})</div>
+          <div className="font-semibold text-sm">Characters ({entries.length})</div>
           <Button size="sm" onClick={handleAdd} className="inline-flex items-center gap-2">
             <Plus className="w-4 h-4" />
             Add
@@ -219,7 +311,7 @@ export function CharacterEditor({
         </div>
 
         <CharacterList
-          characters={characterListData.CharacterData}
+          characters={entries}
           selectedIndex={selectedIndex}
           cardIconConvertDirPath={cardIconConvertDirPath}
           cardIconNameOrder={cardIconNameOrder}
@@ -233,7 +325,7 @@ export function CharacterEditor({
         {selectedCharacter ? (
           <CharacterForm
             character={selectedCharacter}
-            characterId={selectedCharacter.CharacterId}
+            characterId={selectedCharacter.entryId}
             seriesIdPickerItems={seriesIdPickerItems}
             seriesIdPickerLoading={seriesIdPickerLoading}
             seriesIdPickerError={seriesIdPickerError}
@@ -264,7 +356,7 @@ export function CharacterEditor({
             <AlertDialogDescription>
               {deleteCandidateCharacter ? (
                 <>
-                  Are you sure you want to delete Character ID {deleteCandidateCharacter.CharacterId} (index {deleteCandidateIndex})?
+                  Are you sure you want to delete Character ID {deleteCandidateCharacter.entryId} (index {deleteCandidateIndex})?
                 </>
               ) : (
                 <>Are you sure you want to delete this character? This action cannot be undone.</>
@@ -282,6 +374,3 @@ export function CharacterEditor({
     </div>
   );
 }
-
-
-

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { exists, readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { dirname, join } from "@tauri-apps/api/path";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { Buffer } from "buffer";
 import { toast } from "sonner";
 import { Download, Upload, RefreshCw, Save, Info, FolderOpen } from "lucide-react";
@@ -18,7 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { CharacterIdTable } from "@/models/characterIdTable";
-import { CharacterListOB, buildCharacterListBuffer } from "@/models/characterListOB";
+import type { CharacterListData } from "@/models/characterListEntry";
 import { SeriesList } from "@/models/seriesList";
 import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
 import { extractCardIconItems } from "./card-icon-list/cardIconStructure";
@@ -31,13 +31,10 @@ import {
 import { CharacterEditor } from "./character-list/CharacterEditor";
 import type { SeriesIdPickerItem } from "./character-list/SeriesIdPickerPopover";
 import {
-  applyCharaJsonImportToList,
-  exportCharaJsonToFile,
   pickCharaJsonImportPreview,
-  CHARACTER_STRING_FIELDS,
-  CHARACTER_STRING_FIELD_LABELS,
   type CharaJsonImportPreview,
 } from "./character-list/CharaJson";
+import { CHARACTERLIST_STRING_FIELDS } from "@/models/characterListEntry";
 import {
   checkStringCoverage,
   getDefaultRanges,
@@ -56,7 +53,7 @@ type LoadState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error"; filePath: string; message: string }
-  | { status: "ready"; filePath: string; list: CharacterListOB };
+  | { status: "ready"; filePath: string; list: CharacterListData };
 
 type SeriesPickerState =
   | { status: "idle"; filePath: string; convertDirPath: string }
@@ -168,8 +165,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
     const filePath = await resolveFilePath();
     setLoadState({ status: "loading" });
     try {
-      const fileData = await readFile(filePath);
-      const list = new CharacterListOB(Buffer.from(fileData));
+      const list = await invoke<CharacterListData>("parse_typed_param_file", { path: filePath, paramType: "characterlist" });
       setLoadState({ status: "ready", filePath, list });
       resetEditorState();
     } catch (error) {
@@ -278,14 +274,14 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
   useEffect(() => {
     if (loadState.status !== "ready") return;
     setSelectedIndex((prev) => {
-      if (loadState.list.CharacterData.length === 0) return -1;
+      if (loadState.list.entries.length === 0) return -1;
       if (prev < 0) return prev;
-      return Math.min(prev, loadState.list.CharacterData.length - 1);
+      return Math.min(prev, loadState.list.entries.length - 1);
     });
   }, [loadState]);
 
   const handleEditorChange = useCallback(
-    (next: CharacterListOB) => {
+    (next: CharacterListData) => {
       setLoadState((prev) => {
         if (prev.status !== "ready") return prev;
         return { ...prev, list: next };
@@ -303,8 +299,8 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
   const fileMeta = useMemo(() => {
     if (loadState.status !== "ready") return null;
     return {
-      count: loadState.list.CharacterCount,
-      commands: loadState.list.CommandsCount,
+      count: loadState.list.entries.length,
+      commands: loadState.list.header.commandsCount,
     };
   }, [loadState]);
 
@@ -350,18 +346,18 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
         // Ignore backup failures
       }
 
-      const sortedRows = [...loadState.list.CharacterData].sort((a, b) => {
-        const aIsPositive = a.CharacterId >= 0;
-        const bIsPositive = b.CharacterId >= 0;
+      const sortedEntries = [...loadState.list.entries].sort((a, b) => {
+        const aIsPositive = a.entryId >= 0;
+        const bIsPositive = b.entryId >= 0;
         if (aIsPositive !== bIsPositive) return aIsPositive ? -1 : 1;
-        return a.CharacterId - b.CharacterId;
+        return a.entryId - b.entryId;
       });
-      const sortedList = Object.assign(Object.create(Object.getPrototypeOf(loadState.list)), loadState.list, {
-        CharacterData: sortedRows,
-        CharacterCount: sortedRows.length,
+      const sortedList: CharacterListData = { ...loadState.list, entries: sortedEntries };
+      await invoke("build_typed_param_file", {
+        dataJson: sortedList,
+        outputPath: filePath,
+        paramType: "characterlist",
       });
-      const buffer = buildCharacterListBuffer(sortedList);
-      await writeFile(filePath, buffer);
       toast.success("Saved character_list.bin");
       setHasChanges(false);
       onUnsavedChanges?.(false);
@@ -380,17 +376,17 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
     const ranges = getDefaultRanges();
     const errors: Array<{ characterId: number; fieldName: string; fieldLabel: string; missing: MissingCodepoint[] }> = [];
 
-    for (const char of loadState.list.CharacterData) {
-      for (const fieldName of CHARACTER_STRING_FIELDS) {
-        const field = (char as unknown as Record<string, unknown>)[fieldName];
-        const str = field && typeof field === "object" && "Utf8String" in field ? String((field as { Utf8String: string }).Utf8String ?? "") : "";
+    for (const entry of loadState.list.entries) {
+      const rec = entry as unknown as Record<string, unknown>;
+      for (const fieldName of CHARACTERLIST_STRING_FIELDS) {
+        const str = typeof rec[fieldName] === "string" ? (rec[fieldName] as string) : "";
         if (str.length === 0) continue;
         const result = checkStringCoverage(str, ranges);
         if (!result.ok) {
           errors.push({
-            characterId: char.CharacterId,
+            characterId: entry.entryId,
             fieldName,
-            fieldLabel: CHARACTER_STRING_FIELD_LABELS[fieldName] ?? fieldName,
+            fieldLabel: fieldName,
             missing: result.missing,
           });
         }
@@ -417,9 +413,16 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
 
     setIsExporting(true);
     try {
-      const result = await exportCharaJsonToFile(loadState.list.CharacterData);
-      if (!result) return;
-      toast.success(`Exported ${result.count} characters`);
+      const { save } = await import("@tauri-apps/plugin-dialog");
+      const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+      const filePath = await save({
+        filters: [{ name: "Chara JSON", extensions: ["json"] }],
+        defaultPath: "character_list.json",
+      });
+      if (!filePath) return;
+      const jsonString = JSON.stringify(loadState.list.entries, null, 2);
+      await writeTextFile(filePath, jsonString);
+      toast.success(`Exported ${loadState.list.entries.length} characters`);
     } catch (error) {
       console.error(error);
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -461,7 +464,18 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
 
     setIsImporting(true);
     try {
-      const nextList = applyCharaJsonImportToList(loadState.list, importPreview.rows);
+      const importedEntries = importPreview.rows.map((row) => {
+        const entry: Record<string, unknown> = { entryId: row.id };
+        for (const [key, value] of Object.entries(row)) {
+          if (key === "id") continue;
+          entry[key] = value;
+        }
+        return entry;
+      });
+      const nextList: CharacterListData = {
+        ...loadState.list,
+        entries: importedEntries as any,
+      };
       setLoadState((prev) => {
         if (prev.status !== "ready") return prev;
         return { ...prev, list: nextList };
@@ -514,7 +528,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
         onClick: () => {},
       };
     }
-    const selected = loadState.list.CharacterData[selectedIndex];
+    const selected = loadState.list.entries[selectedIndex];
     if (!selected) {
       return {
         disabled: true,
@@ -522,7 +536,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
         onClick: () => {},
       };
     }
-    const id = selected.CharacterId;
+    const id = selected.entryId;
     if (!characterIdTableIdSet.has(id)) {
       return {
         disabled: true,
@@ -638,7 +652,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
                 size="sm"
                 variant="outline"
                 onClick={() => void handleExportCharaJson()}
-                disabled={isExporting || loadState.list.CharacterData.length === 0}
+                disabled={isExporting || loadState.list.entries.length === 0}
                 className="inline-flex items-center gap-2"
                 title="Export all characters to JSON"
               >

@@ -3,12 +3,12 @@ import { CircleXIcon, Search } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { CharacterDataOB } from "@/models/characterListOB";
+import type { CharacterListEntry } from "@/models/characterListEntry";
 import { cn } from "@/lib/utils";
 import { CharacterCard } from "./CharacterCard";
 
 interface CharacterListProps {
-  characters: CharacterDataOB[];
+  characters: CharacterListEntry[];
   selectedIndex: number;
   cardIconConvertDirPath?: string;
   cardIconNameOrder?: Array<string | null>;
@@ -44,7 +44,7 @@ export function CharacterList({
     if (!term) return characters.map((row, idx) => ({ row, idx }));
     return characters
       .map((row, idx) => ({ row, idx }))
-      .filter(({ row }) => row.CharacterId.toString().includes(term));
+      .filter(({ row }) => row.entryId.toString().includes(term));
   }, [characters, deferredSearchTerm]);
 
   const rowVirtualizer = useVirtualizer({
@@ -65,8 +65,6 @@ export function CharacterList({
     const targetIndex = lastSelectedIndexRef.current;
     if (targetIndex < 0 || targetIndex >= characters.length) return;
 
-    // Wait one frame for virtualizer to observe the new count,
-    // then scroll to the previously selected row.
     requestAnimationFrame(() => {
       rowVirtualizer.scrollToIndex(targetIndex, { align: "center" });
     });
@@ -158,6 +156,3 @@ export function CharacterList({
     </div>
   );
 }
-
-
-

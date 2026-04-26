@@ -1,3 +1,9 @@
+// DEPRECATED: This file is superseded by the Rust-side characterlist.rs parser.
+// Use `parse_typed_param_file(path, "characterlist")` and `build_typed_param_file(json, path, "characterlist")` instead.
+// The Rust parser supports automatic command-hash mapping, handles all 103 fields (this file misses 10),
+// and resolves obfuscated strings natively. No version-specific (VS2/OB) logic is needed — the command table
+// in each binary determines the field layout at runtime.
+
 import { Buffer } from 'buffer'
 import { CommandsData } from './commandsData'
 import { ErrorMessage } from './error'

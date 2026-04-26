@@ -1,5 +1,6 @@
 pub mod armsparam;
 pub mod bulletparam;
+pub mod characterlist;
 pub mod characterparam;
 pub mod chrsysparam;
 pub mod effect_project;
@@ -7,6 +8,7 @@ pub mod fhm2d;
 pub mod grapparam;
 pub mod hitgroupiddef;
 pub mod interactionid;
+pub mod obf_string;
 pub mod param_bin_format;
 pub mod param_entry_schema;
 pub mod projectile_depiction_table;

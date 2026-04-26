@@ -853,6 +853,164 @@ _Projectile visual depiction fields. RTTI: CProjectileDepictionTableDataHolder@G
 
 ---
 
+## commandlist (800etcetera, cmd=9, entry_size=40)
+_In-game command guide / move list per unit. 902 entries across 107 units._
+_Sequential hashes 0..8 (not VDK hashes). IDA: LookupCommandDescriptorByHash (0x1401A8BD0), Decide_Command UI (sub_140915070)._
+_File: `vs2/x64/800etcetera/commandlist/commandlist.bin`_
+_Detailed doc: [xDocs/commandlist_bin.md](xDocs/commandlist_bin.md)_
+
+| Hash | Offset | Kind | Field Name | Notes |
+|------|--------|------|------------|-------|
+| 0x00000000 | 0x000 | string (7) | command_name_hash | 30-byte obfuscated name hash in string pool |
+| 0x00000001 | 0x008 | u32 (2) | command_type | 1=MainShot, 2=Melee, 3=Sub, 4=SpShot, 5=SpMelee, 6=BurstAtk, 7=ChargeShot, 8=ChargeMelee |
+| 0x00000002 | 0x00C | u32 (2) | sub_variant | 0=base, 2-7=directional input variants (前/後/横 etc.) |
+| 0x00000003 | 0x010 | u32 (2) | unit_id | Character unique ID (e.g. 1001001=RX-78-2, 2005001=ZZ) |
+| 0x00000004 | 0x014 | u32 (2) | form_id | 1=base form, 2/3/4=transformed forms |
+| 0x00000005 | 0x018 | u32 (2) | linked_cmd_1 | Linked command reference (0xFFFFFFFF=none) |
+| 0x00000006 | 0x01C | u32 (2) | linked_cmd_2 | Linked command reference (0xFFFFFFFF=none) |
+| 0x00000007 | 0x020 | u32 (2) | linked_cmd_3 | Linked command reference (0xFFFFFFFF=none) |
+| 0x00000008 | 0x024 | u32 (2) | linked_cmd_4 | Linked command reference (0xFFFFFFFF=none) |
+
+### command_type values
+
+| Value | Japanese | English | Input |
+|-------|----------|---------|-------|
+| 1 | メイン射撃 | Main Shot | A button |
+| 2 | 格闘 | Melee | B button |
+| 3 | サブ射撃 | Sub Weapon | A+B |
+| 4 | 特殊射撃 | Special Shot | A+C |
+| 5 | 特殊格闘 | Special Melee | B+C |
+| 6 | 覚醒技 | Burst Attack | A+B+C (Burst) |
+| 7 | チャージ射撃 | Charge Shot | Hold A |
+| 8 | チャージ格闘 | Charge Melee | Hold B |
+
+### Statistics
+
+| command_type | Count |
+|-------------|-------|
+| 1 (Main Shot) | 125 |
+| 2 (Melee) | 81 |
+| 3 (Sub) | 125 |
+| 4 (Sp. Shot) | 30 |
+| 5 (Sp. Melee) | 136 |
+| 6 (Burst Atk) | 135 |
+| 7 (CS) | 140 |
+| 8 (CS Melee) | 130 |
+
+### Multi-form units (form_id > 1)
+
+| Unit ID | Forms | Description |
+|---------|-------|-------------|
+| 2005001 | 1,2 | Dual-form |
+| 3001001 | 1,2 | Dual-form |
+| 5001001 | 1,2,3,4 | Quad-form |
+| 8001001 | 1,2 | Dual-form |
+| 20001001 | 1,2,3,4 | Quad-form |
+| 33001001 | 1,2,3 | Tri-form |
+
+---
+
+## awakening_param (100system, cmd=71, entry_size=284)
+_Burst/Awakening system parameters. 6 entries = 6 burst types._
+_File: `vs2/x64/100system/awakening_param/awakening_param.vgsht2`_
+_IDA: sub_140612F30 (EnableAwakening handler). Renders GBuffer effects on activation._
+_Detailed doc: [xDocs/100system_files.md](xDocs/100system_files.md#awakening_param)_
+
+| Rows | Cols | Stride | Kind distribution |
+|------|------|--------|-------------------|
+| 6 | 71 | 284 | INT32(1):20, UINT32(2):28, FLOAT32(5):23 |
+
+6 rows correspond to burst types: F(Fighting/Red), E(Extend/Yellow), S(Shooting/Blue), M(Mobility/Green), R, C.
+71 hashed column keys (VDK hash, not sequential). Full hash listing pending deeper IDA analysis.
+
+---
+
+## battle_system_param (100system, cmd=54, entry_size=220)
+_Global battle system parameters. Single-row global config._
+_File: `vs2/x64/100system/battle_system_param/battle_system_param.vgsht2`_
+_Detailed doc: [xDocs/100system_files.md](xDocs/100system_files.md#battle_system_param)_
+
+| Rows | Cols | Stride | Kind distribution |
+|------|------|--------|-------------------|
+| 1 | 54 | 220 | UINT32(2):38, FLOAT32(5):15, STRING_REF(7):1 |
+
+Controls: battle time limit, COST system, boost max, guard rates, down thresholds, lock-on distances, etc.
+54 hashed column keys. Full hash listing pending deeper IDA analysis.
+
+---
+
+## enemy_adjust_param (100system/mode_adjust, cmd=20, entry_size=80)
+_Enemy AI difficulty adjustment. 32 entries = 32 AI difficulty levels._
+_File: `vs2/x64/100system/mode_adjust/enemy_adjust_param/enemy_adjust_param.vgsht2`_
+
+| Rows | Cols | Stride | Kind distribution |
+|------|------|--------|-------------------|
+| 32 | 20 | 80 | All FLOAT32(5) |
+
+20 float multipliers per difficulty level (attack rate, dodge rate, reaction speed, etc.).
+
+---
+
+## total_adjust_param (100system/mode_adjust, cmd=21, entry_size=84)
+_Global balance adjustment. 4 entries = 4 rank tiers._
+_File: `vs2/x64/100system/mode_adjust/total_adjust_param/total_adjust_param.vgsht2`_
+
+| Rows | Cols | Stride | Kind distribution |
+|------|------|--------|-------------------|
+| 4 | 21 | 84 | All FLOAT32(5) |
+
+---
+
+## triad_adjust_bonus_param (100system/mode_adjust, cmd=4, entry_size=16)
+_Triad Battle bonus parameters. 10 entries._
+_File: `vs2/x64/100system/mode_adjust/triad_adjust_param/triad_adjust_bonus_param.vgsht2`_
+
+| Rows | Cols | Stride | Kind distribution |
+|------|------|--------|-------------------|
+| 10 | 4 | 16 | INT32(1):2, FLOAT32(5):2 |
+
+---
+
+## triad_adjust_edit_param (100system/mode_adjust, cmd=24, entry_size=100)
+_Triad Battle edit/customization config. Single-row global._
+_File: `vs2/x64/100system/mode_adjust/triad_adjust_param/triad_adjust_edit_param.vgsht2`_
+
+| Rows | Cols | Stride | Kind distribution |
+|------|------|--------|-------------------|
+| 1 | 24 | 100 | FLOAT32(5):4, UINT32(2):14, INT32(1):1, STRING_REF(7):1 + others |
+
+---
+
+## triad_adjust_skill_param (100system/mode_adjust, cmd=7, entry_size=28)
+_Triad Battle skill parameters. 33 entries = 33 skills._
+_File: `vs2/x64/100system/mode_adjust/triad_adjust_param/triad_adjust_skill_param.vgsht2`_
+
+| Rows | Cols | Stride | Kind distribution |
+|------|------|--------|-------------------|
+| 33 | 7 | 28 | FLOAT32(5):4, INT32(1):3 |
+
+---
+
+## ultimate_battle_adjust_param (100system/mode_adjust, cmd=7, entry_size=28)
+_Ultimate Battle difficulty scaling. 55 entries = 55 stages._
+_File: `vs2/x64/100system/mode_adjust/ultimate_battle_adjust_param/ultimate_battle_adjust_param.vgsht2`_
+
+| Rows | Cols | Stride | Kind distribution |
+|------|------|--------|-------------------|
+| 55 | 7 | 28 | All FLOAT32(5) |
+
+---
+
+## winning_streak_adjust_param (100system/mode_adjust, cmd=4, entry_size=16)
+_Winning streak difficulty scaling. 20 entries = 1-20 win streaks._
+_File: `vs2/x64/100system/mode_adjust/winning_streak_adjust_param/winning_streak_adjust_param.vgsht2`_
+
+| Rows | Cols | Stride | Kind distribution |
+|------|------|--------|-------------------|
+| 20 | 4 | 16 | All FLOAT32(5) |
+
+---
+
 ## RegisterCommandAction_* Strings (from IDA)
 _Known command action registration strings found in vsac27_Release.exe_
 
@@ -882,6 +1040,14 @@ _Known command action registration strings found in vsac27_Release.exe_
 | 0x14066C890 | CheckChrSysParamMagic | Validates magic == 0xB4ACACAF |
 | 0x14066C880 | CheckChrSysParamVersion | Validates version == 0x00010000 |
 | 0x140635B30 | CharacterInit | Full character initialization from resource pack |
+| 0x140915070 | Decide_Command (UI) | Command guide display toggle: "Command" vs "Controller" mode |
+| 0x1409A8EB0 | LookupRecordIdByFieldValue | Find record ID where field matches value (used by BgmList) |
+| 0x140612F30 | EnableAwakening | Awakening param load + GBuffer render effects |
+| 0x1405F8C00 | CharParam_ReadU32ByHash | Generic hash→u32 reader for character_param table |
+| 0x1405F8600 | CharParam_LockDistance | Lock distance by category index (5 hardcoded hashes) |
+| 0x1405F8720 | CharParam_RangeDistance | Range distance by category index (5 hardcoded hashes) |
+| 0x1405F8D40 | CharParam_CorrectionFloat | Correction float by category index |
+| 0x1405F9500 | CharParam_HPSystemTick | HP damage/recovery/death event processor |
 
 ## Cross-Family Shared Hashes
 | Hash | Families | Likely Purpose |
@@ -890,6 +1056,7 @@ _Known command action registration strings found in vsac27_Release.exe_
 | 0xEDD1C108 | bullet_param, hitgroup | Shared resource hash reference |
 | 0xE6213731 | arms_param, character_param, speed_param | Blob/string reference (kind=7) |
 | 0xF3C4CAE9 | arms_param, character_param, speed_param | Blob/string reference (kind=7) |
+| 0x00000000..0x00000008 | commandlist (unique) | Sequential indices, not VDK hashes |
 
 ## Runtime Architecture Notes
 - **500+ CCmdAction_ RTTI classes** exist in the binary — the command action system is extensive
@@ -982,6 +1149,7 @@ These represent the game's command action system. Each class handles a specific 
 | Character@GAM@VDK | Character system |
 | CharacterData@Exvs2ResourceInstance | Character resource data |
 | AcSeqPcbTrainingCommandTable@SEQ | Training command table |
+| CCmdActionManager_{Series}_{Unit}_{Variant}_{Action} | Per-unit command action managers (500+ RTTI classes) |
 
 ## VDK::GAM Velocity/Physics Classes
 | Class | Purpose |

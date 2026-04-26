@@ -5,11 +5,11 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import type { CharacterDataOB } from "@/models/characterListOB";
+import type { CharacterListEntry } from "@/models/characterListEntry";
 import { buildCardIconPreviewPath } from "../card-icon-list/cardIconUtils";
 
 interface CharacterCardProps {
-  character: CharacterDataOB;
+  character: CharacterListEntry;
   index: number;
   cardIconConvertDirPath?: string;
   cardIconNameOrder?: Array<string | null>;
@@ -29,13 +29,13 @@ export function CharacterCard({
   onDelete,
   onCopy,
 }: CharacterCardProps) {
-  const characterName = character.CharacterNameOffset?.Utf8String || "";
+  const characterName = character.characterName || "";
   const cardIconName = useMemo(() => {
-    const iconIndex = character.MS_card_icon_index;
+    const iconIndex = character.msCardIconIndex;
     if (!cardIconNameOrder) return null;
     if (!Number.isFinite(iconIndex) || iconIndex < 0) return null;
     return cardIconNameOrder[iconIndex] ?? null;
-  }, [cardIconNameOrder, character.MS_card_icon_index]);
+  }, [cardIconNameOrder, character.msCardIconIndex]);
 
   const previewPath = useMemo(() => {
     if (!cardIconConvertDirPath || !cardIconName) return null;
@@ -69,7 +69,7 @@ export function CharacterCard({
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="text-sm font-medium line-clamp-2 wrap-break-word">
-                  {characterName || `Character ${character.CharacterId}`}
+                  {characterName || `Character ${character.entryId}`}
                 </div>
               </TooltipTrigger>
               {characterName && (
@@ -81,7 +81,7 @@ export function CharacterCard({
           </TooltipProvider>
 
           <div className="text-xs text-muted-foreground space-y-0.5">
-            <div>ID: {character.CharacterId}</div>
+            <div>ID: {character.entryId}</div>
           </div>
         </div>
       </div>
@@ -115,6 +115,3 @@ export function CharacterCard({
     </div>
   );
 }
-
-
-

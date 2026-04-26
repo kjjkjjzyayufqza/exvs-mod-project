@@ -1217,6 +1217,9 @@ fn validate_command_table_file_type(data: &[u8], file_type: &str) -> Result<(), 
         "bulletparam" => {
             crate::format::bulletparam::parse_bulletparam(data)?;
         }
+        "characterlist" => {
+            crate::format::characterlist::parse_characterlist(data)?;
+        }
         "characterparam" => {
             crate::format::characterparam::parse_characterparam(data)?;
         }
@@ -1322,6 +1325,9 @@ pub fn parse_typed_param_file(path: &str, param_type: &str) -> Result<Value, Str
         "bulletparam" => {
             serde_json::to_value(crate::format::bulletparam::parse_bulletparam(&data)?)
         }
+        "characterlist" => {
+            serde_json::to_value(crate::format::characterlist::parse_characterlist(&data)?)
+        }
         "characterparam" => {
             serde_json::to_value(crate::format::characterparam::parse_characterparam(&data)?)
         }
@@ -1372,6 +1378,11 @@ pub fn build_typed_param_file(
             let d: crate::format::bulletparam::BulletParamData =
                 serde_json::from_value(data_json).map_err(|e| e.to_string())?;
             crate::format::bulletparam::build_bulletparam(&d)?
+        }
+        "characterlist" => {
+            let d: crate::format::characterlist::CharacterListData =
+                serde_json::from_value(data_json).map_err(|e| e.to_string())?;
+            crate::format::characterlist::build_characterlist(&d)?
         }
         "characterparam" => {
             let d: crate::format::characterparam::CharacterParamData =
