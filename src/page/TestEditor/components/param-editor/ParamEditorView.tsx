@@ -4,6 +4,16 @@ import { writeFile } from "@tauri-apps/plugin-fs"
 import { Download, FileUp, RefreshCw, Save } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import { FilePathInput } from "@/components/ui/filePathInput"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -33,6 +43,7 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const [pendingKindId, setPendingKindId] = useState<ParamKindId | null>(null)
 
   useEffect(() => {
     onUnsavedChanges?.(dirty)
@@ -49,20 +60,38 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
     })()
   }, [getSetting, pathKey])
 
+  const changeKind = useCallback((next: ParamKindId) => {
+    setDirty(false)
+    setTyped(null)
+    setChr(null)
+    setErr(null)
+    setSelectedEntry(0)
+    setKindId(next)
+  }, [])
+
   const tryChangeKind = useCallback(
     (next: string) => {
+      const nextKindId = next as ParamKindId
+      if (nextKindId === kindId) return
       if (dirty) {
-        if (!window.confirm("Discard unsaved changes and switch type?")) return
+        setPendingKindId(nextKindId)
+        return
       }
-      setDirty(false)
-      setTyped(null)
-      setChr(null)
-      setErr(null)
-      setSelectedEntry(0)
-      setKindId(next as ParamKindId)
+      changeKind(nextKindId)
     },
-    [dirty]
+    [changeKind, dirty, kindId]
   )
+
+  const confirmKindChange = useCallback(() => {
+    if (pendingKindId) {
+      changeKind(pendingKindId)
+      setPendingKindId(null)
+    }
+  }, [changeKind, pendingKindId])
+
+  const cancelKindChange = useCallback(() => {
+    setPendingKindId(null)
+  }, [])
 
   const loadFile = useCallback(
     async (path: string) => {
@@ -290,6 +319,30 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
           )}
         </div>
       </div>
+
+      <AlertDialog
+        open={pendingKindId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingKindId(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard unsaved changes and switch type?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Switching the table type will close the current data and discard edits that have not been saved.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button" onClick={cancelKindChange}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction type="button" onClick={confirmKindChange}>
+              Discard Changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

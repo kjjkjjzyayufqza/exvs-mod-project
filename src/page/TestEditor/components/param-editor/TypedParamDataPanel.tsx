@@ -1,49 +1,23 @@
-import { useMemo, useState } from "react"
-import { Search, CopyPlus, Trash2 } from "lucide-react"
-import { Input } from "@/components/ui/input"
+import { useEffect, useMemo, useState, useTransition } from "react"
+import { Search, CopyPlus, Eye, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { formatHash } from "@/models/commandTable"
 import { DualValueProperty } from "@/components/ui/dual-value-property"
-import type { TypedFieldValue, TypedParamEntry, TypedParamFile } from "./typedParamTypes"
-
-function readEntryId(entry: TypedParamEntry, index: number): number {
-  const raw = entry.entryId
-  if (typeof raw === "number" && Number.isFinite(raw)) {
-    return raw >>> 0
-  }
-  return index >>> 0
-}
-
-function nextEntryId(entries: TypedParamEntry[]): number {
-  return entries.reduce((acc, entry, index) => Math.max(acc, readEntryId(entry, index)), 0) + 1
-}
-
-function parseValueByCurrentType(current: TypedFieldValue, raw: string): TypedFieldValue {
-  if (typeof current === "number") {
-    const n = Number(raw)
-    return Number.isFinite(n) ? n : current
-  }
-  if (typeof current === "boolean") {
-    if (raw === "true") return true
-    if (raw === "false") return false
-    return current
-  }
-  if (current === null) {
-    const n = Number(raw)
-    if (Number.isFinite(n)) return n
-    if (raw === "true") return true
-    if (raw === "false") return false
-    if (raw === "null") return null
-    return raw
-  }
-  return raw
-}
-
-function displayValue(v: TypedFieldValue): string {
-  if (v === null) return "null"
-  if (typeof v === "boolean") return v ? "true" : "false"
-  return String(v)
-}
+import type { TypedParamEntry, TypedParamFile } from "./typedParamTypes"
+import {
+  buildTypedEntryHexPreview,
+  createBlankTypedParamEntry,
+  createCopyAsNewTypedParamEntry,
+  filterTypedParamEntryRows,
+  readTypedEntryId,
+} from "./paramEntryUtils"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 export function TypedParamDataPanel({
   fileType,
@@ -58,16 +32,42 @@ export function TypedParamDataPanel({
   onSelectEntry: (i: number) => void
   onChange: (next: TypedParamFile) => void
 }) {
-  const [search, setSearch] = useState("")
+  const [fieldSearch, setFieldSearch] = useState("")
+  const [entrySearchDraft, setEntrySearchDraft] = useState("")
+  const [entrySearch, setEntrySearch] = useState("")
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [activePreviewSelection, setActivePreviewSelection] = useState<"hex" | "ascii" | null>(null)
+  const [isEntrySearchPending, startEntrySearchTransition] = useTransition()
   const entry = data.entries[selectedEntryIndex] ?? null
 
   const filteredKeys = useMemo(() => {
     if (!entry) return []
     const all = Object.keys(entry)
-    if (!search.trim()) return all
-    const q = search.trim().toLowerCase()
+    if (!fieldSearch.trim()) return all
+    const q = fieldSearch.trim().toLowerCase()
     return all.filter((k) => k.toLowerCase().includes(q))
-  }, [entry, search])
+  }, [entry, fieldSearch])
+
+  const filteredEntryRows = useMemo(
+    () => filterTypedParamEntryRows(data.entries, entrySearch),
+    [data.entries, entrySearch]
+  )
+
+  const preview = useMemo(
+    () => buildTypedEntryHexPreview(data, selectedEntryIndex),
+    [data, selectedEntryIndex]
+  )
+
+  useEffect(() => {
+    if (!activePreviewSelection) return
+    const clearSelectionMode = () => setActivePreviewSelection(null)
+    window.addEventListener("mouseup", clearSelectionMode)
+    window.addEventListener("blur", clearSelectionMode)
+    return () => {
+      window.removeEventListener("mouseup", clearSelectionMode)
+      window.removeEventListener("blur", clearSelectionMode)
+    }
+  }, [activePreviewSelection])
 
   const fieldInfoMap = useMemo(() => {
     if (!entry || !data.fieldSpecs) return {}
@@ -85,35 +85,26 @@ export function TypedParamDataPanel({
     return map
   }, [entry, data.fieldSpecs])
 
-  const updateField = (key: string, raw: string) => {
-    if (!entry) return
-    const current = entry[key]
-    if (current === undefined) return
-    const nextValue = parseValueByCurrentType(current, raw)
-    const nextEntries = data.entries.map((item, idx) =>
-      idx === selectedEntryIndex ? { ...item, [key]: nextValue } : item
-    )
-    const nextEntryIds = nextEntries.map((item, idx) => readEntryId(item, idx))
+  const appendEntry = (created: TypedParamEntry | null) => {
+    if (!created) return
+    const nextEntries = [...data.entries, created]
+    const nextEntryIds = nextEntries.map((item, idx) => readTypedEntryId(item, idx))
     onChange({ ...data, entries: nextEntries, entryIds: nextEntryIds })
+    onSelectEntry(nextEntries.length - 1)
+  }
+
+  const copyEntryAsNew = () => {
+    appendEntry(createCopyAsNewTypedParamEntry(data.entries, selectedEntryIndex))
   }
 
   const addEntry = () => {
-    const template = entry ?? data.entries[0]
-    if (!template) return
-    const created: TypedParamEntry = { ...template }
-    if (typeof created.entryId === "number" && Number.isFinite(created.entryId)) {
-      created.entryId = nextEntryId(data.entries)
-    }
-    const nextEntries = [...data.entries, created]
-    const nextEntryIds = nextEntries.map((item, idx) => readEntryId(item, idx))
-    onChange({ ...data, entries: nextEntries, entryIds: nextEntryIds })
-    onSelectEntry(nextEntries.length - 1)
+    appendEntry(createBlankTypedParamEntry(data.entries, selectedEntryIndex))
   }
 
   const deleteEntry = () => {
     if (!data.entries.length) return
     const nextEntries = data.entries.filter((_, idx) => idx !== selectedEntryIndex)
-    const nextEntryIds = nextEntries.map((item, idx) => readEntryId(item, idx))
+    const nextEntryIds = nextEntries.map((item, idx) => readTypedEntryId(item, idx))
     onChange({ ...data, entries: nextEntries, entryIds: nextEntryIds })
     if (!nextEntries.length) {
       onSelectEntry(0)
@@ -126,12 +117,34 @@ export function TypedParamDataPanel({
   return (
     <div className="grid h-full min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[minmax(220px,280px)_minmax(0,1fr)]">
       <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border bg-card shadow-sm">
-        <div className="flex items-center justify-between border-b bg-muted/20 px-3 py-2">
-          <h3 className="text-xs font-semibold">Entries ({data.entries.length})</h3>
+        <div className="space-y-2 border-b bg-muted/20 px-3 py-2">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-xs font-semibold">Entries</h3>
+            <span className="font-mono text-[10px] text-muted-foreground">
+              {entrySearch.trim() ? `${filteredEntryRows.length} / ${data.entries.length}` : `${data.entries.length} rows`}
+              {isEntrySearchPending ? " ..." : ""}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 shadow-sm">
+            <Search className="h-3 w-3 text-muted-foreground" />
+            <input
+              value={entrySearchDraft}
+              onChange={(e) => {
+                const next = e.target.value
+                setEntrySearchDraft(next)
+                startEntrySearchTransition(() => setEntrySearch(next))
+              }}
+              placeholder="Search id / field / value..."
+              className="h-4 w-full bg-transparent font-mono text-[10px] outline-none placeholder:text-muted-foreground"
+            />
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          {data.entries.map((e, i) => {
-            const id = readEntryId(e, i)
+          {filteredEntryRows.length === 0 ? (
+            <div className="flex h-28 items-center justify-center px-3 text-center text-xs text-muted-foreground">
+              No entries match the search.
+            </div>
+          ) : filteredEntryRows.map(({ entry: e, index: i, entryId: id }) => {
             return (
               <button
                 key={`${i}-${id}`}
@@ -156,7 +169,7 @@ export function TypedParamDataPanel({
             <h3 className="text-xs font-semibold">{fileType} typed entry</h3>
             {entry && (
               <span className="rounded-md border border-border/60 bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                {formatHash(readEntryId(entry, selectedEntryIndex))} · {Object.keys(entry).length} fields
+                {formatHash(readTypedEntryId(entry, selectedEntryIndex))} · {Object.keys(entry).length} fields
               </span>
             )}
           </div>
@@ -164,15 +177,30 @@ export function TypedParamDataPanel({
             <div className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 shadow-sm">
               <Search className="h-3 w-3 text-muted-foreground" />
               <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={fieldSearch}
+                onChange={(e) => setFieldSearch(e.target.value)}
                 placeholder="Filter field…"
                 className="h-4 w-32 bg-transparent text-[10px] outline-none placeholder:text-muted-foreground"
               />
             </div>
-            <Button type="button" size="sm" variant="outline" className="h-7 gap-1 px-2 text-[10px]" onClick={addEntry}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 px-2 text-[10px]"
+              disabled={!entry}
+              onClick={() => setPreviewOpen(true)}
+            >
+              <Eye className="h-3 w-3" />
+              Hex Preview
+            </Button>
+            <Button type="button" size="sm" variant="outline" className="h-7 gap-1 px-2 text-[10px]" onClick={copyEntryAsNew}>
               <CopyPlus className="h-3 w-3" />
-              Add row
+              Copy as New
+            </Button>
+            <Button type="button" size="sm" variant="secondary" className="h-7 gap-1 px-2 text-[10px]" onClick={addEntry}>
+              <Plus className="h-3 w-3" />
+              Add New
             </Button>
             <Button
               type="button"
@@ -220,7 +248,7 @@ export function TypedParamDataPanel({
                       const nextEntries = data.entries.map((item, idx) =>
                         idx === selectedEntryIndex ? { ...item, [key]: nextValue } : item
                       )
-                      const nextEntryIds = nextEntries.map((item, idx) => readEntryId(item, idx))
+                      const nextEntryIds = nextEntries.map((item, idx) => readTypedEntryId(item, idx))
                       onChange({ ...data, entries: nextEntries, entryIds: nextEntryIds })
                     }}
                     showHex={true}
@@ -234,6 +262,63 @@ export function TypedParamDataPanel({
           )}
         </div>
       </div>
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="grid max-h-[85vh] max-w-4xl grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b px-6 py-4">
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Eye className="h-4 w-4" />
+              Hex Preview
+            </DialogTitle>
+            <DialogDescription>
+              {preview
+                ? `${formatHash(preview.entryId)} · ${preview.bytes.length} bytes · little-endian row data`
+                : "No entry selected"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 overflow-auto bg-muted/20 p-4">
+            {preview ? (
+              <div className="overflow-hidden rounded-md border bg-[#0d1117] text-[#d6deeb] shadow-inner">
+                <div className="grid select-none grid-cols-[6.5rem_minmax(24rem,1fr)_minmax(8rem,0.35fr)] border-b border-white/10 bg-white/5 px-3 py-2 font-mono text-[10px] uppercase tracking-wide text-slate-400">
+                  <span>Offset</span>
+                  <span>Hex</span>
+                  <span>Ascii</span>
+                </div>
+                <div className="grid grid-cols-[6.5rem_minmax(24rem,1fr)_minmax(8rem,0.35fr)] px-3 font-mono text-[11px] leading-6">
+                  <div className="select-none text-slate-500">
+                    {preview.rows.map((row) => (
+                      <div key={`${row.offset}-offset`} className="border-b border-white/4 last:border-0">
+                        {row.offset}
+                      </div>
+                    ))}
+                  </div>
+                  <div
+                    className={`${activePreviewSelection === "ascii" ? "select-none" : "select-text"} text-slate-100`}
+                    onMouseDown={() => setActivePreviewSelection("hex")}
+                  >
+                    {preview.rows.map((row) => (
+                      <div key={`${row.offset}-hex`} className="border-b border-white/4 last:border-0 hover:bg-cyan-400/10">
+                        {row.hex}
+                      </div>
+                    ))}
+                  </div>
+                  <div
+                    className={`${activePreviewSelection === "hex" ? "select-none" : "select-text"} text-cyan-200/90`}
+                    onMouseDown={() => setActivePreviewSelection("ascii")}
+                  >
+                    {preview.rows.map((row) => (
+                      <div key={`${row.offset}-ascii`} className="border-b border-white/4 last:border-0 hover:bg-cyan-400/10">
+                        {row.ascii}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex h-28 items-center justify-center text-sm text-muted-foreground">No entry selected</div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
