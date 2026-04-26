@@ -1,87 +1,78 @@
-use binrw::{BinRead, BinWrite};
-use serde::{Deserialize, Serialize};
-use std::io::Cursor;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
+
+use serde_json::Value;
 
 use crate::format::param_bin_format::{
     build_param_binary, read_param_binary, ParamBinaryFile, ParamBinaryHeader, ParamFieldSpec,
 };
+use crate::format::param_entry_schema::{
+    entry_commands_from_named_json, entry_commands_to_named_json, entry_row_matches_command_map,
+    expected_field_specs_ordered_index_times_four, min_entry_data_size_for_specs,
+    parse_commands_map_from_entry_row, validate_file_specs_kind_match_pool, ParamCommandPool,
+};
 
-pub const INTERACTIONID_ENTRY_SIZE: u32 = 124;
-pub const INTERACTIONID_CMD_COUNT: u32 = 31;
+pub const INTERACTIONID_COMMAND_POOL: ParamCommandPool = &[
+    (0x00C57BA3, 2, "damage"),
+    (0x06A06715, 2, "correction_pct"),
+    (0x08A3B0DC, 1, "interact_target_hash"),
+    (0x148C8D49, 1, "receive_mode_hash"),
+    (0x154EF1ED, 1, "interact_type"),
+    (0x161FBB4F, 5, "interact_range"),
+    (0x18DC6CD1, 1, "priority"),
+    (0x22C412CA, 2, "stun_value"),
+    (0x270D2FD5, 1, "hit_effect_id"),
+    (0x2A6A7D8F, 2, "down_value"),
+    (0x2EBC0DC3, 1, "guard_interact_hash"),
+    (0x3626F732, 2, "stun_frame"),
+    (0x3D457926, 1, "se_hash"),
+    (0x477C2470, 2, "knockback_force"),
+    (0x50BC9332, 1, "unk_barrier_hash"),
+    (0x55815B3B, 1, "guard_type"),
+    (0x5E1DC3E4, 5, "damage_rate"),
+    (0x66957C67, 1, "attack_property"),
+    (0x6A0CCB8A, 1, "interact_id"),
+    (0x720584BA, 1, "is_blockable"),
+    (0x8029185D, 1, "wall_bounce_type"),
+    (0x90E41A78, 1, "slide_type"),
+    (0xA1A98180, 2, "hitstop_frame"),
+    (0xAD173242, 2, "knockback_distance"),
+    (0xB69B7051, 2, "ground_bounce"),
+    (0xBB0F3D7F, 1, "knockback_type"),
+    (0xC1361D23, 2, "can_tech"),
+    (0xD5D4F8DB, 2, "hit_level"),
+    (0xEFEA436F, 2, "guard_break_level"),
+    (0xFA03CBDA, 2, "untechable_frame"),
+    (0xFABCA946, 1, "interact_category"),
+];
 
-#[derive(Debug, Clone, PartialEq, BinRead, BinWrite, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[brw(little)]
-pub struct InteractionIdEntry {
-    #[brw(ignore)]
-    #[serde(default)]
-    pub entry_id: u32,
-    pub damage: i32,               // 0x00C57BA3 +0x000 kind=2 base damage value
-    pub correction_pct: i32,       // 0x06A06715 +0x004 kind=2 combo correction (usually 100)
-    pub interact_target_hash: u32, // 0x08A3B0DC +0x008 kind=1 target interaction hash ref
-    pub receive_mode_hash: u32,    // 0x148C8D49 +0x00C kind=1 receive-side interaction hash
-    pub interact_type: u32,        // 0x154EF1ED +0x010 kind=1 interaction type enum
-    pub interact_range: f32,       // 0x161FBB4F +0x014 kind=5 interaction range [6..10]
-    pub priority: u32,             // 0x18DC6CD1 +0x018 kind=1 interaction priority
-    pub stun_value: i32,           // 0x22C412CA +0x01C kind=2 stun inflicted
-    pub hit_effect_id: u32,        // 0x270D2FD5 +0x020 kind=1 hit visual effect type
-    pub down_value: i32,           // 0x2A6A7D8F +0x024 kind=2 down gauge contribution
-    pub guard_interact_hash: u32,  // 0x2EBC0DC3 +0x028 kind=1 guard interaction hash (OB-only)
-    pub stun_frame: i32,           // 0x3626F732 +0x02C kind=2 stun duration frames
-    pub se_hash: u32,              // 0x3D457926 +0x030 kind=1 sound effect hash
-    pub knockback_force: i32,      // 0x477C2470 +0x034 kind=2 knockback force value
-    pub unk_barrier_hash: u32,     // 0x50BC9332 +0x038 kind=1 barrier interaction hash
-    pub guard_type: u32,           // 0x55815B3B +0x03C kind=1 guard type {0=none,1=normal,2=super}
-    pub damage_rate: f32,          // 0x5E1DC3E4 +0x040 kind=5 damage multiplier [1.0..1.1]
-    pub attack_property: u32,      // 0x66957C67 +0x044 kind=1 attack attribute/element type
-    pub interact_id: u32,          // 0x6A0CCB8A +0x048 kind=1 unique interaction identifier
-    pub is_blockable: u32,         // 0x720584BA +0x04C kind=1 can be blocked {0,1}
-    pub wall_bounce_type: u32,     // 0x8029185D +0x050 kind=1 wall bounce behavior (OB-only)
-    pub slide_type: u32,           // 0x90E41A78 +0x054 kind=1 ground slide behavior (OB-only)
-    pub hitstop_frame: i32,        // 0xA1A98180 +0x058 kind=2 hit-freeze duration frames
-    pub knockback_distance: i32,   // 0xAD173242 +0x05C kind=2 knockback travel distance
-    pub ground_bounce: i32,        // 0xB69B7051 +0x060 kind=2 ground bounce behavior
-    pub knockback_type: u32,       // 0xBB0F3D7F +0x064 kind=1 knockback direction type
-    pub can_tech: i32,             // 0xC1361D23 +0x068 kind=2 can recover/tech after hit
-    pub hit_level: i32,            // 0xD5D4F8DB +0x06C kind=2 hit priority level
-    pub guard_break_level: i32,    // 0xEFEA436F +0x070 kind=2 guard break strength
-    pub untechable_frame: i32,     // 0xFA03CBDA +0x074 kind=2 forced untechable duration (OB-only)
-    pub interact_category: u32,    // 0xFABCA946 +0x078 kind=1 interaction category enum
+pub fn interactionid_entry_to_json_value(entry: &InteractionIdEntry) -> Value {
+    entry_commands_to_named_json(entry.entry_id, &entry.commands, INTERACTIONID_COMMAND_POOL)
 }
 
-pub const INTERACTIONID_FIELD_HASHES: [(u32, u32, u32); 31] = [
-    (0x00C57BA3, 0x000, 2),
-    (0x06A06715, 0x004, 2),
-    (0x08A3B0DC, 0x008, 1),
-    (0x148C8D49, 0x00C, 1),
-    (0x154EF1ED, 0x010, 1),
-    (0x161FBB4F, 0x014, 5),
-    (0x18DC6CD1, 0x018, 1),
-    (0x22C412CA, 0x01C, 2),
-    (0x270D2FD5, 0x020, 1),
-    (0x2A6A7D8F, 0x024, 2),
-    (0x2EBC0DC3, 0x028, 1),
-    (0x3626F732, 0x02C, 2),
-    (0x3D457926, 0x030, 1),
-    (0x477C2470, 0x034, 2),
-    (0x50BC9332, 0x038, 1),
-    (0x55815B3B, 0x03C, 1),
-    (0x5E1DC3E4, 0x040, 5),
-    (0x66957C67, 0x044, 1),
-    (0x6A0CCB8A, 0x048, 1),
-    (0x720584BA, 0x04C, 1),
-    (0x8029185D, 0x050, 1),
-    (0x90E41A78, 0x054, 1),
-    (0xA1A98180, 0x058, 2),
-    (0xAD173242, 0x05C, 2),
-    (0xB69B7051, 0x060, 2),
-    (0xBB0F3D7F, 0x064, 1),
-    (0xC1361D23, 0x068, 2),
-    (0xD5D4F8DB, 0x06C, 2),
-    (0xEFEA436F, 0x070, 2),
-    (0xFA03CBDA, 0x074, 2),
-    (0xFABCA946, 0x078, 1),
-];
+pub fn interactionid_entry_from_json_value(v: &Value) -> Result<InteractionIdEntry, String> {
+    let (entry_id, commands) = entry_commands_from_named_json(v, INTERACTIONID_COMMAND_POOL)?;
+    Ok(InteractionIdEntry { entry_id, commands })
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct InteractionIdEntry {
+    pub entry_id: u32,
+    pub commands: HashMap<u32, u32>,
+}
+
+impl Serialize for InteractionIdEntry {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        interactionid_entry_to_json_value(self).serialize(s)
+    }
+}
+
+impl<'de> Deserialize<'de> for InteractionIdEntry {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = Value::deserialize(d)?;
+        interactionid_entry_from_json_value(&v).map_err(serde::de::Error::custom)
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -91,79 +82,35 @@ pub struct InteractionIdData {
     pub entry_ids: Vec<u32>,
     pub entries: Vec<InteractionIdEntry>,
     pub trailing_data: Vec<u8>,
+    #[serde(skip)]
+    pub source_entries_raw: Vec<Vec<u8>>,
 }
 
 fn expected_field_specs() -> Vec<ParamFieldSpec> {
-    INTERACTIONID_FIELD_HASHES
-        .iter()
-        .map(|(hash, entry_offset, kind)| ParamFieldSpec {
-            hash: *hash,
-            entry_offset: *entry_offset,
-            flags: 0,
-            kind: *kind,
-        })
-        .collect()
+    expected_field_specs_ordered_index_times_four(INTERACTIONID_COMMAND_POOL)
 }
 
 fn validate_field_specs(field_specs: &[ParamFieldSpec]) -> Result<(), String> {
-    if field_specs.len() != INTERACTIONID_FIELD_HASHES.len() {
-        return Err(format!(
-            "interactionid command count mismatch: file has {}, expected {}",
-            field_specs.len(),
-            INTERACTIONID_FIELD_HASHES.len()
-        ));
-    }
-    for (index, spec) in field_specs.iter().enumerate() {
-        let (expected_hash, expected_offset, expected_kind) = INTERACTIONID_FIELD_HASHES[index];
-        if spec.hash != expected_hash
-            || spec.entry_offset != expected_offset
-            || spec.kind != expected_kind
-        {
-            return Err(format!(
-                "interactionid command mismatch at index {}: got (hash=0x{:08X}, offset=0x{:X}, kind={}), expected (hash=0x{:08X}, offset=0x{:X}, kind={})",
-                index,
-                spec.hash,
-                spec.entry_offset,
-                spec.kind,
-                expected_hash,
-                expected_offset,
-                expected_kind
-            ));
-        }
-    }
-    Ok(())
+    validate_file_specs_kind_match_pool(INTERACTIONID_COMMAND_POOL, field_specs)
+}
+
+fn parse_entry_from_raw(raw: &[u8], field_specs: &[ParamFieldSpec], entry_id: u32) -> InteractionIdEntry {
+    let commands = parse_commands_map_from_entry_row(raw, field_specs);
+    InteractionIdEntry { entry_id, commands }
+}
+
+fn entry_matches_raw(entry: &InteractionIdEntry, raw: &[u8], field_specs: &[ParamFieldSpec]) -> bool {
+    entry_row_matches_command_map(&entry.commands, raw, field_specs)
 }
 
 pub fn parse_interactionid(data: &[u8]) -> Result<InteractionIdData, String> {
     let file = read_param_binary(data)?;
-    if file.header.entry_size != INTERACTIONID_ENTRY_SIZE {
-        return Err(format!(
-            "interactionid entry_size mismatch: file has {}, expected {}",
-            file.header.entry_size, INTERACTIONID_ENTRY_SIZE
-        ));
-    }
-    if file.header.commands_count != INTERACTIONID_CMD_COUNT {
-        return Err(format!(
-            "interactionid command count mismatch: file has {}, expected {}",
-            file.header.commands_count, INTERACTIONID_CMD_COUNT
-        ));
-    }
     validate_field_specs(&file.field_specs)?;
 
     let mut entries = Vec::with_capacity(file.entries_raw.len());
     for (i, raw) in file.entries_raw.iter().enumerate() {
-        if raw.len() != INTERACTIONID_ENTRY_SIZE as usize {
-            return Err(format!(
-                "interactionid row {} size {} != expected {}",
-                i,
-                raw.len(),
-                INTERACTIONID_ENTRY_SIZE
-            ));
-        }
-        let mut cursor = Cursor::new(raw.as_slice());
-        let mut entry = InteractionIdEntry::read(&mut cursor).map_err(|e| e.to_string())?;
-        entry.entry_id = file.entry_ids.get(i).copied().unwrap_or(0);
-        entries.push(entry);
+        let id = file.entry_ids.get(i).copied().unwrap_or(0);
+        entries.push(parse_entry_from_raw(raw, &file.field_specs, id));
     }
 
     Ok(InteractionIdData {
@@ -172,6 +119,7 @@ pub fn parse_interactionid(data: &[u8]) -> Result<InteractionIdData, String> {
         entry_ids: file.entry_ids,
         entries,
         trailing_data: file.trailing_data,
+        source_entries_raw: file.entries_raw,
     })
 }
 
@@ -185,24 +133,42 @@ pub fn build_interactionid(b: &InteractionIdData) -> Result<Vec<u8>, String> {
         b.field_specs.clone()
     };
 
-    let entry_size = INTERACTIONID_ENTRY_SIZE as usize;
+    let min_size = min_entry_data_size_for_specs(&field_specs);
+    let default_floor = b.header.entry_size.max(min_size);
+    let entry_size = default_floor as usize;
+
     let mut entries_raw: Vec<Vec<u8>> = Vec::with_capacity(b.entries.len());
-    for entry in &b.entries {
-        let mut raw = vec![0u8; entry_size];
-        let mut cursor = Cursor::new(&mut raw[..]);
-        entry
-            .write(&mut cursor)
-            .map_err(|err| format!("interactionid write entry: {}", err))?;
-        if cursor.position() as usize > entry_size {
-            return Err("interactionid encoded entry larger than entry_size".to_string());
+    for (entry_index, entry) in b.entries.iter().enumerate() {
+        if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+            let r = &b.source_entries_raw[entry_index];
+            if entry_matches_raw(entry, r, &field_specs) {
+                entries_raw.push(b.source_entries_raw[entry_index].clone());
+                continue;
+            }
+        }
+
+        let mut raw = if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+            b.source_entries_raw[entry_index].clone()
+        } else {
+            vec![0u8; entry_size]
+        };
+
+        for spec in &field_specs {
+            let o = spec.entry_offset as usize;
+            if o + 4 > raw.len() {
+                return Err("interactionid entry field offset out of range for entry_size".to_string());
+            }
+            if let Some(v) = entry.commands.get(&spec.hash) {
+                raw[o..o + 4].copy_from_slice(&v.to_le_bytes());
+            }
         }
         entries_raw.push(raw);
     }
 
     let mut header = b.header.clone();
     header.entry_count = b.entries.len() as u32;
-    header.commands_count = INTERACTIONID_CMD_COUNT;
-    header.entry_size = INTERACTIONID_ENTRY_SIZE;
+    header.commands_count = field_specs.len() as u32;
+    header.entry_size = entry_size as u32;
 
     let file = ParamBinaryFile {
         header,

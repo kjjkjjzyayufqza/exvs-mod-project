@@ -1,57 +1,63 @@
-use binrw::{BinRead, BinWrite};
-use serde::{Deserialize, Serialize};
-use std::io::Cursor;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
+
+use serde_json::Value;
 
 use crate::format::param_bin_format::{
     build_param_binary, read_param_binary, ParamBinaryFile, ParamBinaryHeader, ParamFieldSpec,
 };
+use crate::format::param_entry_schema::{
+    entry_commands_from_named_json, entry_commands_to_named_json, entry_row_matches_command_map,
+    expected_field_specs_ordered_index_times_four, min_entry_data_size_for_specs,
+    parse_commands_map_from_entry_row, validate_file_specs_kind_match_pool, ParamCommandPool,
+};
 
-pub const GRAPPARAM_ENTRY_SIZE: u32 = 64;
-pub const GRAPPARAM_CMD_COUNT: u32 = 16;
+pub const GRAPPARAM_COMMAND_POOL: ParamCommandPool = &[
+    (0x17A9E2E1, 2, "down_value"),
+    (0x2272E3D6, 2, "charge_frame"),
+    (0x35857659, 2, "grap_total_frame"),
+    (0x465D80C6, 2, "stun_value"),
+    (0x534643A2, 2, "grap_priority"),
+    (0x550BCFAD, 2, "startup_frame"),
+    (0x55B8FC51, 2, "tracking_frame"),
+    (0x6906F0F4, 2, "damage"),
+    (0x7755981E, 2, "correction_pct"),
+    (0x83E900CD, 2, "reach"),
+    (0x976F9803, 2, "cancel_frame"),
+    (0x99D42DBB, 2, "recovery_frame"),
+    (0xA89F3A61, 2, "is_multi_hit"),
+    (0xB084851E, 2, "damage_2nd"),
+    (0xBEC81A41, 2, "damage_last"),
+    (0xC21ED1D8, 2, "down_value_last"),
+];
 
-#[derive(Debug, Clone, PartialEq, BinRead, BinWrite, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[brw(little)]
-pub struct GrapParamEntry {
-    #[brw(ignore)]
-    #[serde(default)]
-    pub entry_id: u32,
-    pub down_value: i32,       // 0x17A9E2E1 +0x000 range=[-6,60]
-    pub charge_frame: i32,     // 0x2272E3D6 +0x004 range=[0,300] usually 0
-    pub grap_total_frame: i32, // 0x35857659 +0x008 range=[0,400]
-    pub stun_value: i32,       // 0x465D80C6 +0x00C range=[0,80]
-    pub grap_priority: i32,    // 0x534643A2 +0x010 range=[0,60] often=10
-    pub startup_frame: i32,    // 0x550BCFAD +0x014 range=[0,350]
-    pub tracking_frame: i32,   // 0x55B8FC51 +0x018 range=[0,300]
-    pub damage: i32,           // 0x6906F0F4 +0x01C range=[0,600]
-    pub correction_pct: i32,   // 0x7755981E +0x020 range=[0,100] often=98
-    pub reach: i32,            // 0x83E900CD +0x024 range=[0,40]
-    pub cancel_frame: i32,     // 0x976F9803 +0x028 range=[0,40]
-    pub recovery_frame: i32,   // 0x99D42DBB +0x02C range=[0,60]
-    pub is_multi_hit: i32,     // 0xA89F3A61 +0x030 range=[0,1]
-    pub damage_2nd: i32,       // 0xB084851E +0x034 range=[0,550]
-    pub damage_last: i32,      // 0xBEC81A41 +0x038 range=[0,550]
-    pub down_value_last: i32,  // 0xC21ED1D8 +0x03C range=[0,100]
+pub fn grapparam_entry_to_json_value(entry: &GrapParamEntry) -> Value {
+    entry_commands_to_named_json(entry.entry_id, &entry.commands, GRAPPARAM_COMMAND_POOL)
 }
 
-pub const GRAPPARAM_FIELD_HASHES: [(u32, u32, u32); 16] = [
-    (0x17A9E2E1, 0x000, 2),
-    (0x2272E3D6, 0x004, 2),
-    (0x35857659, 0x008, 2),
-    (0x465D80C6, 0x00C, 2),
-    (0x534643A2, 0x010, 2),
-    (0x550BCFAD, 0x014, 2),
-    (0x55B8FC51, 0x018, 2),
-    (0x6906F0F4, 0x01C, 2),
-    (0x7755981E, 0x020, 2),
-    (0x83E900CD, 0x024, 2),
-    (0x976F9803, 0x028, 2),
-    (0x99D42DBB, 0x02C, 2),
-    (0xA89F3A61, 0x030, 2),
-    (0xB084851E, 0x034, 2),
-    (0xBEC81A41, 0x038, 2),
-    (0xC21ED1D8, 0x03C, 2),
-];
+pub fn grapparam_entry_from_json_value(v: &Value) -> Result<GrapParamEntry, String> {
+    let (entry_id, commands) = entry_commands_from_named_json(v, GRAPPARAM_COMMAND_POOL)?;
+    Ok(GrapParamEntry { entry_id, commands })
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GrapParamEntry {
+    pub entry_id: u32,
+    pub commands: HashMap<u32, u32>,
+}
+
+impl Serialize for GrapParamEntry {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        grapparam_entry_to_json_value(self).serialize(s)
+    }
+}
+
+impl<'de> Deserialize<'de> for GrapParamEntry {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = Value::deserialize(d)?;
+        grapparam_entry_from_json_value(&v).map_err(serde::de::Error::custom)
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -61,79 +67,35 @@ pub struct GrapParamData {
     pub entry_ids: Vec<u32>,
     pub entries: Vec<GrapParamEntry>,
     pub trailing_data: Vec<u8>,
+    #[serde(skip)]
+    pub source_entries_raw: Vec<Vec<u8>>,
 }
 
 fn expected_field_specs() -> Vec<ParamFieldSpec> {
-    GRAPPARAM_FIELD_HASHES
-        .iter()
-        .map(|(hash, entry_offset, kind)| ParamFieldSpec {
-            hash: *hash,
-            entry_offset: *entry_offset,
-            flags: 0,
-            kind: *kind,
-        })
-        .collect()
+    expected_field_specs_ordered_index_times_four(GRAPPARAM_COMMAND_POOL)
 }
 
 fn validate_field_specs(field_specs: &[ParamFieldSpec]) -> Result<(), String> {
-    if field_specs.len() != GRAPPARAM_FIELD_HASHES.len() {
-        return Err(format!(
-            "grapparam command count mismatch: file has {}, expected {}",
-            field_specs.len(),
-            GRAPPARAM_FIELD_HASHES.len()
-        ));
-    }
-    for (index, spec) in field_specs.iter().enumerate() {
-        let (expected_hash, expected_offset, expected_kind) = GRAPPARAM_FIELD_HASHES[index];
-        if spec.hash != expected_hash
-            || spec.entry_offset != expected_offset
-            || spec.kind != expected_kind
-        {
-            return Err(format!(
-                "grapparam command mismatch at index {}: got (hash=0x{:08X}, offset=0x{:X}, kind={}), expected (hash=0x{:08X}, offset=0x{:X}, kind={})",
-                index,
-                spec.hash,
-                spec.entry_offset,
-                spec.kind,
-                expected_hash,
-                expected_offset,
-                expected_kind
-            ));
-        }
-    }
-    Ok(())
+    validate_file_specs_kind_match_pool(GRAPPARAM_COMMAND_POOL, field_specs)
+}
+
+fn parse_entry_from_raw(raw: &[u8], field_specs: &[ParamFieldSpec], entry_id: u32) -> GrapParamEntry {
+    let commands = parse_commands_map_from_entry_row(raw, field_specs);
+    GrapParamEntry { entry_id, commands }
+}
+
+fn entry_matches_raw(entry: &GrapParamEntry, raw: &[u8], field_specs: &[ParamFieldSpec]) -> bool {
+    entry_row_matches_command_map(&entry.commands, raw, field_specs)
 }
 
 pub fn parse_grapparam(data: &[u8]) -> Result<GrapParamData, String> {
     let file = read_param_binary(data)?;
-    if file.header.entry_size != GRAPPARAM_ENTRY_SIZE {
-        return Err(format!(
-            "grapparam entry_size mismatch: file has {}, expected {}",
-            file.header.entry_size, GRAPPARAM_ENTRY_SIZE
-        ));
-    }
-    if file.header.commands_count != GRAPPARAM_CMD_COUNT {
-        return Err(format!(
-            "grapparam command count mismatch: file has {}, expected {}",
-            file.header.commands_count, GRAPPARAM_CMD_COUNT
-        ));
-    }
     validate_field_specs(&file.field_specs)?;
 
     let mut entries = Vec::with_capacity(file.entries_raw.len());
     for (i, raw) in file.entries_raw.iter().enumerate() {
-        if raw.len() != GRAPPARAM_ENTRY_SIZE as usize {
-            return Err(format!(
-                "grapparam row {} size {} != expected {}",
-                i,
-                raw.len(),
-                GRAPPARAM_ENTRY_SIZE
-            ));
-        }
-        let mut cursor = Cursor::new(raw.as_slice());
-        let mut entry = GrapParamEntry::read(&mut cursor).map_err(|e| e.to_string())?;
-        entry.entry_id = file.entry_ids.get(i).copied().unwrap_or(0);
-        entries.push(entry);
+        let id = file.entry_ids.get(i).copied().unwrap_or(0);
+        entries.push(parse_entry_from_raw(raw, &file.field_specs, id));
     }
 
     Ok(GrapParamData {
@@ -142,6 +104,7 @@ pub fn parse_grapparam(data: &[u8]) -> Result<GrapParamData, String> {
         entry_ids: file.entry_ids,
         entries,
         trailing_data: file.trailing_data,
+        source_entries_raw: file.entries_raw,
     })
 }
 
@@ -155,24 +118,42 @@ pub fn build_grapparam(b: &GrapParamData) -> Result<Vec<u8>, String> {
         b.field_specs.clone()
     };
 
-    let entry_size = GRAPPARAM_ENTRY_SIZE as usize;
+    let min_size = min_entry_data_size_for_specs(&field_specs);
+    let default_floor = b.header.entry_size.max(min_size);
+    let entry_size = default_floor as usize;
+
     let mut entries_raw: Vec<Vec<u8>> = Vec::with_capacity(b.entries.len());
-    for entry in &b.entries {
-        let mut raw = vec![0u8; entry_size];
-        let mut cursor = Cursor::new(&mut raw[..]);
-        entry
-            .write(&mut cursor)
-            .map_err(|err| format!("grapparam write entry: {}", err))?;
-        if cursor.position() as usize > entry_size {
-            return Err("grapparam encoded entry larger than entry_size".to_string());
+    for (entry_index, entry) in b.entries.iter().enumerate() {
+        if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+            let r = &b.source_entries_raw[entry_index];
+            if entry_matches_raw(entry, r, &field_specs) {
+                entries_raw.push(b.source_entries_raw[entry_index].clone());
+                continue;
+            }
+        }
+
+        let mut raw = if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+            b.source_entries_raw[entry_index].clone()
+        } else {
+            vec![0u8; entry_size]
+        };
+
+        for spec in &field_specs {
+            let o = spec.entry_offset as usize;
+            if o + 4 > raw.len() {
+                return Err("grapparam entry field offset out of range for entry_size".to_string());
+            }
+            if let Some(v) = entry.commands.get(&spec.hash) {
+                raw[o..o + 4].copy_from_slice(&v.to_le_bytes());
+            }
         }
         entries_raw.push(raw);
     }
 
     let mut header = b.header.clone();
     header.entry_count = b.entries.len() as u32;
-    header.commands_count = GRAPPARAM_CMD_COUNT;
-    header.entry_size = GRAPPARAM_ENTRY_SIZE;
+    header.commands_count = field_specs.len() as u32;
+    header.entry_size = entry_size as u32;
 
     let file = ParamBinaryFile {
         header,

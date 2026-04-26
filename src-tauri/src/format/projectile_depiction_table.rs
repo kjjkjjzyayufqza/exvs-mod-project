@@ -1,55 +1,62 @@
-use binrw::{BinRead, BinWrite};
-use serde::{Deserialize, Serialize};
-use std::io::Cursor;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
+
+use serde_json::Value;
 
 use crate::format::param_bin_format::{
     build_param_binary, read_param_binary, ParamBinaryFile, ParamBinaryHeader, ParamFieldSpec,
 };
+use crate::format::param_entry_schema::{
+    entry_commands_from_named_json, entry_commands_to_named_json, entry_row_matches_command_map,
+    expected_field_specs_ordered_index_times_four, min_entry_data_size_for_specs,
+    parse_commands_map_from_entry_row, validate_file_specs_kind_match_pool, ParamCommandPool,
+};
 
-pub const PROJECTILE_DEPICTION_TABLE_ENTRY_SIZE: u32 = 60;
-pub const PROJECTILE_DEPICTION_TABLE_CMD_COUNT: u32 = 15;
+pub const PROJECTILE_DEPICTION_TABLE_COMMAND_POOL: ParamCommandPool = &[
+    (0x049A712B, 1, "depiction_type"),
+    (0x057E839D, 1, "main_effect_hash"),
+    (0x08B05EA9, 1, "sub_effect_hash"),
+    (0x1B12E734, 5, "scale"),
+    (0x49672094, 1, "model_hash"),
+    (0x5896D450, 1, "trail_effect_hash"),
+    (0x5EF964EC, 1, "hit_effect_hash"),
+    (0x8F49B2DA, 5, "trail_length"),
+    (0x996BA1AC, 1, "sound_effect_hash"),
+    (0xBA4BBA9D, 1, "render_mode"),
+    (0xC19F85EA, 1, "material_hash"),
+    (0xD1097B21, 5, "z_offset"),
+    (0xD9EF5A79, 1, "spawn_effect_hash"),
+    (0xDABB1A5C, 2, "behavior_flags"),
+    (0xE9DE0A15, 1, "destroy_effect_hash"),
+];
 
-#[derive(Debug, Clone, PartialEq, BinRead, BinWrite, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[brw(little)]
-pub struct ProjectileDepictionTableEntry {
-    #[brw(ignore)]
-    #[serde(default)]
-    pub entry_id: u32,
-    pub depiction_type: u32, // 0x049A712B +0x000 kind=1 CEfxProjectileDepiction* class selector
-    pub main_effect_hash: u32, // 0x057E839D +0x004 kind=1 main visual effect resource
-    pub sub_effect_hash: u32, // 0x08B05EA9 +0x008 kind=1 secondary/sub visual effect
-    pub scale: f32,          // 0x1B12E734 +0x00C kind=5 projectile visual scale
-    pub model_hash: u32,     // 0x49672094 +0x010 kind=1 3D model hash (shared with vernier_table)
-    pub trail_effect_hash: u32, // 0x5896D450 +0x014 kind=1 trail/streak effect
-    pub hit_effect_hash: u32, // 0x5EF964EC +0x018 kind=1 on-hit visual effect
-    pub trail_length: f32,   // 0x8F49B2DA +0x01C kind=5 trail rendering length
-    pub sound_effect_hash: u32, // 0x996BA1AC +0x020 kind=1 sound/SE resource
-    pub render_mode: u32,    // 0xBA4BBA9D +0x024 kind=1 rendering mode enum
-    pub material_hash: u32,  // 0xC19F85EA +0x028 kind=1 material/shader override
-    pub z_offset: f32,       // 0xD1097B21 +0x02C kind=5 Z-axis spawn offset
-    pub spawn_effect_hash: u32, // 0xD9EF5A79 +0x030 kind=1 spawn/muzzle flash effect
-    pub behavior_flags: i32, // 0xDABB1A5C +0x034 kind=2 depiction behavior flags
-    pub destroy_effect_hash: u32, // 0xE9DE0A15 +0x038 kind=1 destruction/expire effect
+pub fn projectile_depiction_table_entry_to_json_value(entry: &ProjectileDepictionTableEntry) -> Value {
+    entry_commands_to_named_json(entry.entry_id, &entry.commands, PROJECTILE_DEPICTION_TABLE_COMMAND_POOL)
 }
 
-pub const PROJECTILE_DEPICTION_TABLE_FIELD_HASHES: [(u32, u32, u32); 15] = [
-    (0x049A712B, 0x000, 1),
-    (0x057E839D, 0x004, 1),
-    (0x08B05EA9, 0x008, 1),
-    (0x1B12E734, 0x00C, 5),
-    (0x49672094, 0x010, 1),
-    (0x5896D450, 0x014, 1),
-    (0x5EF964EC, 0x018, 1),
-    (0x8F49B2DA, 0x01C, 5),
-    (0x996BA1AC, 0x020, 1),
-    (0xBA4BBA9D, 0x024, 1),
-    (0xC19F85EA, 0x028, 1),
-    (0xD1097B21, 0x02C, 5),
-    (0xD9EF5A79, 0x030, 1),
-    (0xDABB1A5C, 0x034, 2),
-    (0xE9DE0A15, 0x038, 1),
-];
+pub fn projectile_depiction_table_entry_from_json_value(v: &Value) -> Result<ProjectileDepictionTableEntry, String> {
+    let (entry_id, commands) = entry_commands_from_named_json(v, PROJECTILE_DEPICTION_TABLE_COMMAND_POOL)?;
+    Ok(ProjectileDepictionTableEntry { entry_id, commands })
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProjectileDepictionTableEntry {
+    pub entry_id: u32,
+    pub commands: HashMap<u32, u32>,
+}
+
+impl Serialize for ProjectileDepictionTableEntry {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        projectile_depiction_table_entry_to_json_value(self).serialize(s)
+    }
+}
+
+impl<'de> Deserialize<'de> for ProjectileDepictionTableEntry {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = Value::deserialize(d)?;
+        projectile_depiction_table_entry_from_json_value(&v).map_err(serde::de::Error::custom)
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -59,83 +66,35 @@ pub struct ProjectileDepictionTableData {
     pub entry_ids: Vec<u32>,
     pub entries: Vec<ProjectileDepictionTableEntry>,
     pub trailing_data: Vec<u8>,
+    #[serde(skip)]
+    pub source_entries_raw: Vec<Vec<u8>>,
 }
 
 fn expected_field_specs() -> Vec<ParamFieldSpec> {
-    PROJECTILE_DEPICTION_TABLE_FIELD_HASHES
-        .iter()
-        .map(|(hash, entry_offset, kind)| ParamFieldSpec {
-            hash: *hash,
-            entry_offset: *entry_offset,
-            flags: 0,
-            kind: *kind,
-        })
-        .collect()
+    expected_field_specs_ordered_index_times_four(PROJECTILE_DEPICTION_TABLE_COMMAND_POOL)
 }
 
 fn validate_field_specs(field_specs: &[ParamFieldSpec]) -> Result<(), String> {
-    if field_specs.len() != PROJECTILE_DEPICTION_TABLE_FIELD_HASHES.len() {
-        return Err(format!(
-            "projectile_depiction_table command count mismatch: file has {}, expected {}",
-            field_specs.len(),
-            PROJECTILE_DEPICTION_TABLE_FIELD_HASHES.len()
-        ));
-    }
-    for (index, spec) in field_specs.iter().enumerate() {
-        let (expected_hash, expected_offset, expected_kind) =
-            PROJECTILE_DEPICTION_TABLE_FIELD_HASHES[index];
-        if spec.hash != expected_hash
-            || spec.entry_offset != expected_offset
-            || spec.kind != expected_kind
-        {
-            return Err(format!(
-                "projectile_depiction_table command mismatch at index {}: got (hash=0x{:08X}, offset=0x{:X}, kind={}), expected (hash=0x{:08X}, offset=0x{:X}, kind={})",
-                index,
-                spec.hash,
-                spec.entry_offset,
-                spec.kind,
-                expected_hash,
-                expected_offset,
-                expected_kind
-            ));
-        }
-    }
-    Ok(())
+    validate_file_specs_kind_match_pool(PROJECTILE_DEPICTION_TABLE_COMMAND_POOL, field_specs)
 }
 
-pub fn parse_projectile_depiction_table(
-    data: &[u8],
-) -> Result<ProjectileDepictionTableData, String> {
+fn parse_entry_from_raw(raw: &[u8], field_specs: &[ParamFieldSpec], entry_id: u32) -> ProjectileDepictionTableEntry {
+    let commands = parse_commands_map_from_entry_row(raw, field_specs);
+    ProjectileDepictionTableEntry { entry_id, commands }
+}
+
+fn entry_matches_raw(entry: &ProjectileDepictionTableEntry, raw: &[u8], field_specs: &[ParamFieldSpec]) -> bool {
+    entry_row_matches_command_map(&entry.commands, raw, field_specs)
+}
+
+pub fn parse_projectile_depiction_table(data: &[u8]) -> Result<ProjectileDepictionTableData, String> {
     let file = read_param_binary(data)?;
-    if file.header.entry_size != PROJECTILE_DEPICTION_TABLE_ENTRY_SIZE {
-        return Err(format!(
-            "projectile_depiction_table entry_size mismatch: file has {}, expected {}",
-            file.header.entry_size, PROJECTILE_DEPICTION_TABLE_ENTRY_SIZE
-        ));
-    }
-    if file.header.commands_count != PROJECTILE_DEPICTION_TABLE_CMD_COUNT {
-        return Err(format!(
-            "projectile_depiction_table command count mismatch: file has {}, expected {}",
-            file.header.commands_count, PROJECTILE_DEPICTION_TABLE_CMD_COUNT
-        ));
-    }
     validate_field_specs(&file.field_specs)?;
 
     let mut entries = Vec::with_capacity(file.entries_raw.len());
     for (i, raw) in file.entries_raw.iter().enumerate() {
-        if raw.len() != PROJECTILE_DEPICTION_TABLE_ENTRY_SIZE as usize {
-            return Err(format!(
-                "projectile_depiction_table row {} size {} != expected {}",
-                i,
-                raw.len(),
-                PROJECTILE_DEPICTION_TABLE_ENTRY_SIZE
-            ));
-        }
-        let mut cursor = Cursor::new(raw.as_slice());
-        let mut entry =
-            ProjectileDepictionTableEntry::read(&mut cursor).map_err(|e| e.to_string())?;
-        entry.entry_id = file.entry_ids.get(i).copied().unwrap_or(0);
-        entries.push(entry);
+        let id = file.entry_ids.get(i).copied().unwrap_or(0);
+        entries.push(parse_entry_from_raw(raw, &file.field_specs, id));
     }
 
     Ok(ProjectileDepictionTableData {
@@ -144,12 +103,11 @@ pub fn parse_projectile_depiction_table(
         entry_ids: file.entry_ids,
         entries,
         trailing_data: file.trailing_data,
+        source_entries_raw: file.entries_raw,
     })
 }
 
-pub fn build_projectile_depiction_table(
-    b: &ProjectileDepictionTableData,
-) -> Result<Vec<u8>, String> {
+pub fn build_projectile_depiction_table(b: &ProjectileDepictionTableData) -> Result<Vec<u8>, String> {
     if !b.field_specs.is_empty() {
         validate_field_specs(&b.field_specs)?;
     }
@@ -159,24 +117,42 @@ pub fn build_projectile_depiction_table(
         b.field_specs.clone()
     };
 
-    let entry_size = PROJECTILE_DEPICTION_TABLE_ENTRY_SIZE as usize;
+    let min_size = min_entry_data_size_for_specs(&field_specs);
+    let default_floor = b.header.entry_size.max(min_size);
+    let entry_size = default_floor as usize;
+
     let mut entries_raw: Vec<Vec<u8>> = Vec::with_capacity(b.entries.len());
-    for entry in &b.entries {
-        let mut raw = vec![0u8; entry_size];
-        let mut cursor = Cursor::new(&mut raw[..]);
-        entry
-            .write(&mut cursor)
-            .map_err(|err| format!("projectile_depiction_table write entry: {}", err))?;
-        if cursor.position() as usize > entry_size {
-            return Err("projectile_depiction_table encoded entry larger than entry_size".to_string());
+    for (entry_index, entry) in b.entries.iter().enumerate() {
+        if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+            let r = &b.source_entries_raw[entry_index];
+            if entry_matches_raw(entry, r, &field_specs) {
+                entries_raw.push(b.source_entries_raw[entry_index].clone());
+                continue;
+            }
+        }
+
+        let mut raw = if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+            b.source_entries_raw[entry_index].clone()
+        } else {
+            vec![0u8; entry_size]
+        };
+
+        for spec in &field_specs {
+            let o = spec.entry_offset as usize;
+            if o + 4 > raw.len() {
+                return Err("projectile_depiction_table entry field offset out of range for entry_size".to_string());
+            }
+            if let Some(v) = entry.commands.get(&spec.hash) {
+                raw[o..o + 4].copy_from_slice(&v.to_le_bytes());
+            }
         }
         entries_raw.push(raw);
     }
 
     let mut header = b.header.clone();
     header.entry_count = b.entries.len() as u32;
-    header.commands_count = PROJECTILE_DEPICTION_TABLE_CMD_COUNT;
-    header.entry_size = PROJECTILE_DEPICTION_TABLE_ENTRY_SIZE;
+    header.commands_count = field_specs.len() as u32;
+    header.entry_size = entry_size as u32;
 
     let file = ParamBinaryFile {
         header,

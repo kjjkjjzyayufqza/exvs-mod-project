@@ -1,175 +1,121 @@
-use binrw::{BinRead, BinWrite};
-use serde::{Deserialize, Serialize};
-use std::io::Cursor;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
+
+use serde_json::Value;
 
 use crate::format::param_bin_format::{
     build_param_binary, read_param_binary, ParamBinaryFile, ParamBinaryHeader, ParamFieldSpec,
 };
+use crate::format::param_entry_schema::{
+    entry_commands_from_named_json, entry_commands_to_named_json, entry_row_matches_command_map,
+    expected_field_specs_ordered_index_times_four, min_entry_data_size_for_specs,
+    parse_commands_map_from_entry_row, validate_file_specs_kind_match_pool, ParamCommandPool,
+};
 
-pub const SPEEDPARAM_ENTRY_SIZE: u32 = 304;
-pub const SPEEDPARAM_CMD_COUNT: u32 = 74;
+pub const SPEEDPARAM_COMMAND_POOL: ParamCommandPool = &[
+    (0x06D1922D, 2, "walk_speed_forward"),
+    (0x086B475D, 2, "walk_speed_base"),
+    (0x0B6480D5, 2, "walk_speed_backward"),
+    (0x0B9EBECE, 2, "boost_gauge_capacity"),
+    (0x0CF37AD7, 2, "boost_recovery_delay_frame"),
+    (0x0D5BB2EF, 2, "boost_recovery_speed"),
+    (0x0E682BA8, 2, "ground_run_speed"),
+    (0x11FFDDB4, 2, "boost_dash_initial_speed"),
+    (0x17A9D82D, 2, "step_distance"),
+    (0x18895A55, 2, "jump_initial_velocity"),
+    (0x29AA8A04, 2, "gravity_modifier"),
+    (0x2C76D0A7, 2, "movement_class"),
+    (0x2D28CC4B, 2, "air_dash_startup_frame"),
+    (0x2DF7AF95, 2, "step_startup_frame"),
+    (0x2EAE942B, 2, "boost_dash_sustained_speed"),
+    (0x32FD1EDC, 2, "dash_cancel_type"),
+    (0x37D1D056, 2, "fall_gravity"),
+    (0x3BF9E21E, 2, "max_ground_speed"),
+    (0x4031CB84, 2, "boost_dash_startup_frame"),
+    (0x41DABEC5, 2, "boost_dash_recovery_frame"),
+    (0x459455EA, 2, "landing_recovery_frame"),
+    (0x4D4B65EA, 2, "air_brake_speed"),
+    (0x4D601E55, 2, "step_speed"),
+    (0x4F705BAD, 2, "step_recovery_frame"),
+    (0x5481CCF4, 2, "boost_dash_distance"),
+    (0x56C51E87, 2, "air_dash_end_speed"),
+    (0x58313EF7, 2, "step_type"),
+    (0x5E8CAF43, 2, "air_dash_duration_frame"),
+    (0x5EF705B7, 2, "boost_dash_type"),
+    (0x607C25BC, 2, "air_speed_base"),
+    (0x6C640897, 2, "fall_speed"),
+    (0x6F6F1BF6, 2, "guard_move_speed"),
+    (0x7242066A, 2, "air_dash_distance"),
+    (0x737D64F4, 2, "air_speed_max"),
+    (0x77749DD2, 2, "speed_decay_base"),
+    (0x7BF44A41, 2, "air_steer_limit"),
+    (0x7C2572A1, 2, "rotation_speed"),
+    (0x7C3CF4DD, 2, "gauge_recovery_rate"),
+    (0x7CD3A712, 2, "boost_consumption_base"),
+    (0x7D79F6FA, 2, "boost_dash_max_speed"),
+    (0x7E5878A3, 2, "turning_speed"),
+    (0x8173DA19, 2, "jump_type"),
+    (0x84043A2D, 2, "fall_type"),
+    (0x8D0A9843, 2, "aerial_correction"),
+    (0x8EDC8D6E, 2, "air_efficiency"),
+    (0x9297EF74, 2, "air_gravity"),
+    (0x95FA2B6D, 2, "air_dash_max_distance"),
+    (0x97BE8DFC, 2, "step_cancel_frame"),
+    (0x9A378388, 2, "guard_recovery_frame"),
+    (0x9EAA4E96, 2, "vertical_move_speed"),
+    (0x9FD06227, 2, "boost_startup_frame"),
+    (0xA49287B9, 2, "boost_dash_duration_frame"),
+    (0xA55D6C5E, 2, "dash_end_speed"),
+    (0xA7CBBC07, 2, "fixed_step_distance"),
+    (0xB20B67C9, 2, "air_boost_efficiency"),
+    (0xBC0127E1, 2, "guard_speed_rate"),
+    (0xC6157381, 2, "air_dash_speed"),
+    (0xC6BBC347, 2, "fall_speed_rate"),
+    (0xCD5DF17C, 2, "air_dash_type"),
+    (0xCF452D59, 2, "guard_step_type"),
+    (0xD68023A4, 2, "dash_range"),
+    (0xDD7720EB, 2, "speed_decay_rate"),
+    (0xDE1EF15A, 2, "boost_consumption_type"),
+    (0xE2FD1BFB, 2, "air_deceleration"),
+    (0xE590DFE2, 2, "boost_dash_count"),
+    (0xE6213731, 7, "action_label_offset"),
+    (0xEC580BCC, 2, "turn_rate"),
+    (0xF3B9AD85, 2, "air_steer_speed"),
+    (0xF3C4CAE9, 7, "resource_label_offset"),
+    (0xF44C9D4E, 2, "boost_efficiency_air"),
+    (0xF559DCF1, 2, "boost_extension_rate"),
+    (0xF8B9B46E, 2, "boost_cap_rate"),
+    (0xFEC6069F, 2, "boost_dash_distance_max"),
+    (0xFF7A9C8B, 2, "gravity_air_modifier"),
+];
 
-#[derive(Debug, Clone, PartialEq, BinRead, BinWrite, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[brw(little)]
-pub struct SpeedParamEntry {
-    #[brw(ignore)]
-    #[serde(default)]
-    pub entry_id: u32,
-    pub walk_speed_forward: i32,   // 0x06D1922D +0x000 kind=2 [0,100]
-    pub walk_speed_base: i32,      // 0x086B475D +0x004 kind=2 [40,60]
-    pub walk_speed_backward: i32,  // 0x0B6480D5 +0x008 kind=2 [50,100]
-    pub boost_gauge_capacity: i32, // 0x0B9EBECE +0x00C kind=2 [0,500]
-    pub boost_recovery_delay_frame: i32, // 0x0CF37AD7 +0x010 kind=2 [0,320]
-    pub boost_recovery_speed: i32, // 0x0D5BB2EF +0x014 kind=2 [198,303]
-    pub ground_run_speed: i32,     // 0x0E682BA8 +0x018 kind=2 [100,180]
-    pub boost_dash_initial_speed: i32, // 0x11FFDDB4 +0x01C kind=2 [60,220]
-    pub step_distance: i32,        // 0x17A9D82D +0x020 kind=2 [4,31]
-    pub jump_initial_velocity: i32, // 0x18895A55 +0x024 kind=2 [0,93]
-    pub gravity_modifier: i32,     // 0x29AA8A04 +0x028 kind=2 always -2
-    pub movement_class: i32,       // 0x2C76D0A7 +0x02C kind=2 always 7
-    pub air_dash_startup_frame: i32, // 0x2D28CC4B +0x030 kind=2 [0,200]
-    pub step_startup_frame: i32,   // 0x2DF7AF95 +0x034 kind=2 [20,25]
-    pub boost_dash_sustained_speed: i32, // 0x2EAE942B +0x038 kind=2 [220,312]
-    pub dash_cancel_type: i32,     // 0x32FD1EDC +0x03C kind=2 [1,10]
-    pub fall_gravity: i32,         // 0x37D1D056 +0x040 kind=2 [-20,-10]
-    pub max_ground_speed: i32,     // 0x3BF9E21E +0x044 kind=2 always 100
-    pub boost_dash_startup_frame: i32, // 0x4031CB84 +0x048 kind=2 OB-only
-    pub boost_dash_recovery_frame: i32, // 0x41DABEC5 +0x04C kind=2 OB-only
-    pub landing_recovery_frame: i32, // 0x459455EA +0x050 kind=2 [0,300]
-    pub air_brake_speed: i32,      // 0x4D4B65EA +0x054 kind=2 [0,30]
-    pub step_speed: i32,           // 0x4D601E55 +0x058 kind=2 [25,35]
-    pub step_recovery_frame: i32,  // 0x4F705BAD +0x05C kind=2 [20,30]
-    pub boost_dash_distance: i32,  // 0x5481CCF4 +0x060 kind=2 [140,330]
-    pub air_dash_end_speed: i32,   // 0x56C51E87 +0x064 kind=2 [92,98]
-    pub step_type: i32,            // 0x58313EF7 +0x068 kind=2 [3,8]
-    pub air_dash_duration_frame: i32, // 0x5E8CAF43 +0x06C kind=2 [0,500]
-    pub boost_dash_type: i32,      // 0x5EF705B7 +0x070 kind=2 [6,9]
-    pub air_speed_base: i32,       // 0x607C25BC +0x074 kind=2 [130,310]
-    pub fall_speed: i32,           // 0x6C640897 +0x078 kind=2 [-10,-2]
-    pub guard_move_speed: i32,     // 0x6F6F1BF6 +0x07C kind=2 [0,40]
-    pub air_dash_distance: i32,    // 0x7242066A +0x080 kind=2 [0,240]
-    pub air_speed_max: i32,        // 0x737D64F4 +0x084 kind=2 [50,70]
-    pub speed_decay_base: i32,     // 0x77749DD2 +0x088 kind=2 always 92
-    pub air_steer_limit: i32,      // 0x7BF44A41 +0x08C kind=2 [0,30]
-    pub rotation_speed: i32,       // 0x7C2572A1 +0x090 kind=2 [12,80]
-    pub gauge_recovery_rate: i32,  // 0x7C3CF4DD +0x094 kind=2 OB-only
-    pub boost_consumption_base: i32, // 0x7CD3A712 +0x098 kind=2 [50,60]
-    pub boost_dash_max_speed: i32, // 0x7D79F6FA +0x09C kind=2 [280,380]
-    pub turning_speed: i32,        // 0x7E5878A3 +0x0A0 kind=2 [20,80]
-    pub jump_type: i32,            // 0x8173DA19 +0x0A4 kind=2 [3,4]
-    pub fall_type: i32,            // 0x84043A2D +0x0A8 kind=2 [3,6]
-    pub aerial_correction: i32,    // 0x8D0A9843 +0x0AC kind=2 OB-only
-    pub air_efficiency: i32,       // 0x8EDC8D6E +0x0B0 kind=2 [85,99]
-    pub air_gravity: i32,          // 0x9297EF74 +0x0B4 kind=2 [-5,0]
-    pub air_dash_max_distance: i32, // 0x95FA2B6D +0x0B8 kind=2 [0,350]
-    pub step_cancel_frame: i32,    // 0x97BE8DFC +0x0BC kind=2 [10,12]
-    pub guard_recovery_frame: i32, // 0x9A378388 +0x0C0 kind=2 [0,60]
-    pub vertical_move_speed: i32,  // 0x9EAA4E96 +0x0C4 kind=2 [20,80]
-    pub boost_startup_frame: i32,  // 0x9FD06227 +0x0C8 kind=2 [0,35]
-    pub boost_dash_duration_frame: i32, // 0xA49287B9 +0x0CC kind=2 [240,588]
-    pub dash_end_speed: i32,       // 0xA55D6C5E +0x0D0 kind=2 [90,95]
-    pub fixed_step_distance: i32,  // 0xA7CBBC07 +0x0D4 kind=2 always 35
-    pub air_boost_efficiency: i32, // 0xB20B67C9 +0x0D8 kind=2 [50,100]
-    pub guard_speed_rate: i32,     // 0xBC0127E1 +0x0DC kind=2 [70,80]
-    pub air_dash_speed: i32,       // 0xC6157381 +0x0E0 kind=2 [200,360]
-    pub fall_speed_rate: i32,      // 0xC6BBC347 +0x0E4 kind=2 [12,16]
-    pub air_dash_type: i32,        // 0xCD5DF17C +0x0E8 kind=2 [6,16]
-    pub guard_step_type: i32,      // 0xCF452D59 +0x0EC kind=2 [4,14]
-    pub dash_range: i32,           // 0xD68023A4 +0x0F0 kind=2 [15,51]
-    pub speed_decay_rate: i32,     // 0xDD7720EB +0x0F4 kind=2 always 92
-    pub boost_consumption_type: i32, // 0xDE1EF15A +0x0F8 kind=2 [2,5]
-    pub air_deceleration: i32,     // 0xE2FD1BFB +0x0FC kind=2 [-5,0]
-    pub boost_dash_count: i32,     // 0xE590DFE2 +0x100 kind=2 [0,8]
-    pub action_label_offset: u32,  // 0xE6213731 +0x104 kind=7
-    pub action_label_size: u32,
-    pub turn_rate: i32,             // 0xEC580BCC +0x10C kind=2 [15,25]
-    pub air_steer_speed: i32,       // 0xF3B9AD85 +0x110 kind=2 [0,40]
-    pub resource_label_offset: u32, // 0xF3C4CAE9 +0x114 kind=7
-    pub resource_label_size: u32,
-    pub boost_efficiency_air: i32, // 0xF44C9D4E +0x11C kind=2 [59,92]
-    pub boost_extension_rate: i32, // 0xF559DCF1 +0x120 kind=2 OB-only
-    pub boost_cap_rate: i32,       // 0xF8B9B46E +0x124 kind=2 [0,95]
-    pub boost_dash_distance_max: i32, // 0xFEC6069F +0x128 kind=2 [40,145]
-    pub gravity_air_modifier: i32, // 0xFF7A9C8B +0x12C kind=2 [-10,17]
+pub fn speedparam_entry_to_json_value(entry: &SpeedParamEntry) -> Value {
+    entry_commands_to_named_json(entry.entry_id, &entry.commands, SPEEDPARAM_COMMAND_POOL)
 }
 
-pub const SPEEDPARAM_FIELD_HASHES: [(u32, u32, u32); 74] = [
-    (0x06D1922D, 0x000, 2),
-    (0x086B475D, 0x004, 2),
-    (0x0B6480D5, 0x008, 2),
-    (0x0B9EBECE, 0x00C, 2),
-    (0x0CF37AD7, 0x010, 2),
-    (0x0D5BB2EF, 0x014, 2),
-    (0x0E682BA8, 0x018, 2),
-    (0x11FFDDB4, 0x01C, 2),
-    (0x17A9D82D, 0x020, 2),
-    (0x18895A55, 0x024, 2),
-    (0x29AA8A04, 0x028, 2),
-    (0x2C76D0A7, 0x02C, 2),
-    (0x2D28CC4B, 0x030, 2),
-    (0x2DF7AF95, 0x034, 2),
-    (0x2EAE942B, 0x038, 2),
-    (0x32FD1EDC, 0x03C, 2),
-    (0x37D1D056, 0x040, 2),
-    (0x3BF9E21E, 0x044, 2),
-    (0x4031CB84, 0x048, 2),
-    (0x41DABEC5, 0x04C, 2),
-    (0x459455EA, 0x050, 2),
-    (0x4D4B65EA, 0x054, 2),
-    (0x4D601E55, 0x058, 2),
-    (0x4F705BAD, 0x05C, 2),
-    (0x5481CCF4, 0x060, 2),
-    (0x56C51E87, 0x064, 2),
-    (0x58313EF7, 0x068, 2),
-    (0x5E8CAF43, 0x06C, 2),
-    (0x5EF705B7, 0x070, 2),
-    (0x607C25BC, 0x074, 2),
-    (0x6C640897, 0x078, 2),
-    (0x6F6F1BF6, 0x07C, 2),
-    (0x7242066A, 0x080, 2),
-    (0x737D64F4, 0x084, 2),
-    (0x77749DD2, 0x088, 2),
-    (0x7BF44A41, 0x08C, 2),
-    (0x7C2572A1, 0x090, 2),
-    (0x7C3CF4DD, 0x094, 2),
-    (0x7CD3A712, 0x098, 2),
-    (0x7D79F6FA, 0x09C, 2),
-    (0x7E5878A3, 0x0A0, 2),
-    (0x8173DA19, 0x0A4, 2),
-    (0x84043A2D, 0x0A8, 2),
-    (0x8D0A9843, 0x0AC, 2),
-    (0x8EDC8D6E, 0x0B0, 2),
-    (0x9297EF74, 0x0B4, 2),
-    (0x95FA2B6D, 0x0B8, 2),
-    (0x97BE8DFC, 0x0BC, 2),
-    (0x9A378388, 0x0C0, 2),
-    (0x9EAA4E96, 0x0C4, 2),
-    (0x9FD06227, 0x0C8, 2),
-    (0xA49287B9, 0x0CC, 2),
-    (0xA55D6C5E, 0x0D0, 2),
-    (0xA7CBBC07, 0x0D4, 2),
-    (0xB20B67C9, 0x0D8, 2),
-    (0xBC0127E1, 0x0DC, 2),
-    (0xC6157381, 0x0E0, 2),
-    (0xC6BBC347, 0x0E4, 2),
-    (0xCD5DF17C, 0x0E8, 2),
-    (0xCF452D59, 0x0EC, 2),
-    (0xD68023A4, 0x0F0, 2),
-    (0xDD7720EB, 0x0F4, 2),
-    (0xDE1EF15A, 0x0F8, 2),
-    (0xE2FD1BFB, 0x0FC, 2),
-    (0xE590DFE2, 0x100, 2),
-    (0xE6213731, 0x104, 7),
-    (0xEC580BCC, 0x10C, 2),
-    (0xF3B9AD85, 0x110, 2),
-    (0xF3C4CAE9, 0x114, 7),
-    (0xF44C9D4E, 0x11C, 2),
-    (0xF559DCF1, 0x120, 2),
-    (0xF8B9B46E, 0x124, 2),
-    (0xFEC6069F, 0x128, 2),
-    (0xFF7A9C8B, 0x12C, 2),
-];
+pub fn speedparam_entry_from_json_value(v: &Value) -> Result<SpeedParamEntry, String> {
+    let (entry_id, commands) = entry_commands_from_named_json(v, SPEEDPARAM_COMMAND_POOL)?;
+    Ok(SpeedParamEntry { entry_id, commands })
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpeedParamEntry {
+    pub entry_id: u32,
+    pub commands: HashMap<u32, u32>,
+}
+
+impl Serialize for SpeedParamEntry {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        speedparam_entry_to_json_value(self).serialize(s)
+    }
+}
+
+impl<'de> Deserialize<'de> for SpeedParamEntry {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = Value::deserialize(d)?;
+        speedparam_entry_from_json_value(&v).map_err(serde::de::Error::custom)
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -179,79 +125,35 @@ pub struct SpeedParamData {
     pub entry_ids: Vec<u32>,
     pub entries: Vec<SpeedParamEntry>,
     pub trailing_data: Vec<u8>,
+    #[serde(skip)]
+    pub source_entries_raw: Vec<Vec<u8>>,
 }
 
 fn expected_field_specs() -> Vec<ParamFieldSpec> {
-    SPEEDPARAM_FIELD_HASHES
-        .iter()
-        .map(|(hash, entry_offset, kind)| ParamFieldSpec {
-            hash: *hash,
-            entry_offset: *entry_offset,
-            flags: 0,
-            kind: *kind,
-        })
-        .collect()
+    expected_field_specs_ordered_index_times_four(SPEEDPARAM_COMMAND_POOL)
 }
 
 fn validate_field_specs(field_specs: &[ParamFieldSpec]) -> Result<(), String> {
-    if field_specs.len() != SPEEDPARAM_FIELD_HASHES.len() {
-        return Err(format!(
-            "speedparam command count mismatch: file has {}, expected {}",
-            field_specs.len(),
-            SPEEDPARAM_FIELD_HASHES.len()
-        ));
-    }
-    for (index, spec) in field_specs.iter().enumerate() {
-        let (expected_hash, expected_offset, expected_kind) = SPEEDPARAM_FIELD_HASHES[index];
-        if spec.hash != expected_hash
-            || spec.entry_offset != expected_offset
-            || spec.kind != expected_kind
-        {
-            return Err(format!(
-                "speedparam command mismatch at index {}: got (hash=0x{:08X}, offset=0x{:X}, kind={}), expected (hash=0x{:08X}, offset=0x{:X}, kind={})",
-                index,
-                spec.hash,
-                spec.entry_offset,
-                spec.kind,
-                expected_hash,
-                expected_offset,
-                expected_kind
-            ));
-        }
-    }
-    Ok(())
+    validate_file_specs_kind_match_pool(SPEEDPARAM_COMMAND_POOL, field_specs)
+}
+
+fn parse_entry_from_raw(raw: &[u8], field_specs: &[ParamFieldSpec], entry_id: u32) -> SpeedParamEntry {
+    let commands = parse_commands_map_from_entry_row(raw, field_specs);
+    SpeedParamEntry { entry_id, commands }
+}
+
+fn entry_matches_raw(entry: &SpeedParamEntry, raw: &[u8], field_specs: &[ParamFieldSpec]) -> bool {
+    entry_row_matches_command_map(&entry.commands, raw, field_specs)
 }
 
 pub fn parse_speedparam(data: &[u8]) -> Result<SpeedParamData, String> {
     let file = read_param_binary(data)?;
-    if file.header.entry_size != SPEEDPARAM_ENTRY_SIZE {
-        return Err(format!(
-            "speedparam entry_size mismatch: file has {}, expected {}",
-            file.header.entry_size, SPEEDPARAM_ENTRY_SIZE
-        ));
-    }
-    if file.header.commands_count != SPEEDPARAM_CMD_COUNT {
-        return Err(format!(
-            "speedparam command count mismatch: file has {}, expected {}",
-            file.header.commands_count, SPEEDPARAM_CMD_COUNT
-        ));
-    }
     validate_field_specs(&file.field_specs)?;
 
     let mut entries = Vec::with_capacity(file.entries_raw.len());
     for (i, raw) in file.entries_raw.iter().enumerate() {
-        if raw.len() != SPEEDPARAM_ENTRY_SIZE as usize {
-            return Err(format!(
-                "speedparam row {} size {} != expected {}",
-                i,
-                raw.len(),
-                SPEEDPARAM_ENTRY_SIZE
-            ));
-        }
-        let mut cursor = Cursor::new(raw.as_slice());
-        let mut entry = SpeedParamEntry::read(&mut cursor).map_err(|e| e.to_string())?;
-        entry.entry_id = file.entry_ids.get(i).copied().unwrap_or(0);
-        entries.push(entry);
+        let id = file.entry_ids.get(i).copied().unwrap_or(0);
+        entries.push(parse_entry_from_raw(raw, &file.field_specs, id));
     }
 
     Ok(SpeedParamData {
@@ -260,6 +162,7 @@ pub fn parse_speedparam(data: &[u8]) -> Result<SpeedParamData, String> {
         entry_ids: file.entry_ids,
         entries,
         trailing_data: file.trailing_data,
+        source_entries_raw: file.entries_raw,
     })
 }
 
@@ -273,24 +176,42 @@ pub fn build_speedparam(b: &SpeedParamData) -> Result<Vec<u8>, String> {
         b.field_specs.clone()
     };
 
-    let entry_size = SPEEDPARAM_ENTRY_SIZE as usize;
+    let min_size = min_entry_data_size_for_specs(&field_specs);
+    let default_floor = b.header.entry_size.max(min_size);
+    let entry_size = default_floor as usize;
+
     let mut entries_raw: Vec<Vec<u8>> = Vec::with_capacity(b.entries.len());
-    for entry in &b.entries {
-        let mut raw = vec![0u8; entry_size];
-        let mut cursor = Cursor::new(&mut raw[..]);
-        entry
-            .write(&mut cursor)
-            .map_err(|err| format!("speedparam write entry: {}", err))?;
-        if cursor.position() as usize > entry_size {
-            return Err("speedparam encoded entry larger than entry_size".to_string());
+    for (entry_index, entry) in b.entries.iter().enumerate() {
+        if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+            let r = &b.source_entries_raw[entry_index];
+            if entry_matches_raw(entry, r, &field_specs) {
+                entries_raw.push(b.source_entries_raw[entry_index].clone());
+                continue;
+            }
+        }
+
+        let mut raw = if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+            b.source_entries_raw[entry_index].clone()
+        } else {
+            vec![0u8; entry_size]
+        };
+
+        for spec in &field_specs {
+            let o = spec.entry_offset as usize;
+            if o + 4 > raw.len() {
+                return Err("speedparam entry field offset out of range for entry_size".to_string());
+            }
+            if let Some(v) = entry.commands.get(&spec.hash) {
+                raw[o..o + 4].copy_from_slice(&v.to_le_bytes());
+            }
         }
         entries_raw.push(raw);
     }
 
     let mut header = b.header.clone();
     header.entry_count = b.entries.len() as u32;
-    header.commands_count = SPEEDPARAM_CMD_COUNT;
-    header.entry_size = SPEEDPARAM_ENTRY_SIZE;
+    header.commands_count = field_specs.len() as u32;
+    header.entry_size = entry_size as u32;
 
     let file = ParamBinaryFile {
         header,

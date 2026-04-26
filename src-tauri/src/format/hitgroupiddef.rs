@@ -1,55 +1,62 @@
-use binrw::{BinRead, BinWrite};
-use serde::{Deserialize, Serialize};
-use std::io::Cursor;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
+
+use serde_json::Value;
 
 use crate::format::param_bin_format::{
     build_param_binary, read_param_binary, ParamBinaryFile, ParamBinaryHeader, ParamFieldSpec,
 };
+use crate::format::param_entry_schema::{
+    entry_commands_from_named_json, entry_commands_to_named_json, entry_row_matches_command_map,
+    expected_field_specs_ordered_index_times_four, min_entry_data_size_for_specs,
+    parse_commands_map_from_entry_row, validate_file_specs_kind_match_pool, ParamCommandPool,
+};
 
-pub const HITGROUPIDDEF_ENTRY_SIZE: u32 = 60;
-pub const HITGROUPIDDEF_CMD_COUNT: u32 = 15;
+pub const HITGROUPIDDEF_COMMAND_POOL: ParamCommandPool = &[
+    (0x11E501D5, 1, "hit_type"),
+    (0x3284A82D, 5, "offset_x"),
+    (0x42EE5CA2, 5, "offset_y"),
+    (0x458398BB, 5, "offset_z"),
+    (0x6514C413, 5, "radius"),
+    (0x7395D184, 1, "enable_state"),
+    (0x8B1AA53F, 5, "scale_x"),
+    (0xACE03D8E, 5, "scale_y"),
+    (0xC3656A99, 1, "bone_hash"),
+    (0xD32D39ED, 1, "is_enabled"),
+    (0xDBE70D18, 5, "scale_z"),
+    (0xDC8AC901, 5, "group_id"),
+    (0xEDD1C108, 1, "model_hash"),
+    (0xF89A41E1, 1, "collision_flags"),
+    (0xFC1D95A9, 5, "joint_offset"),
+];
 
-#[derive(Debug, Clone, PartialEq, BinRead, BinWrite, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[brw(little)]
-pub struct HitGroupIdDefEntry {
-    #[brw(ignore)]
-    #[serde(default)]
-    pub entry_id: u32,
-    pub hit_type: u32, // 0x11E501D5 +0x000 kind=1 collision shape type (0=sphere)
-    pub offset_x: f32, // 0x3284A82D +0x004 kind=5 sphere center offset X
-    pub offset_y: f32, // 0x42EE5CA2 +0x008 kind=5 sphere center offset Y
-    pub offset_z: f32, // 0x458398BB +0x00C kind=5 sphere center offset Z
-    pub radius: f32,   // 0x6514C413 +0x010 kind=5 sphere radius [9..15]
-    pub enable_state: u32, // 0x7395D184 +0x014 kind=1 enable state flag
-    pub scale_x: f32,  // 0x8B1AA53F +0x018 kind=5 scale X
-    pub scale_y: f32,  // 0xACE03D8E +0x01C kind=5 scale Y
-    pub bone_hash: u32, // 0xC3656A99 +0x020 kind=1 attached bone name hash
-    pub is_enabled: u32, // 0xD32D39ED +0x024 kind=1 enable flag (shared hash)
-    pub scale_z: f32,  // 0xDBE70D18 +0x028 kind=5 scale Z
-    pub group_id: f32, // 0xDC8AC901 +0x02C kind=5 collision group ID [6..7]
-    pub model_hash: u32, // 0xEDD1C108 +0x030 kind=1 model/resource hash (shared hash)
-    pub collision_flags: u32, // 0xF89A41E1 +0x034 kind=1 collision behavior flags
-    pub joint_offset: f32, // 0xFC1D95A9 +0x038 kind=5 joint offset value [-1..3]
+pub fn hitgroupiddef_entry_to_json_value(entry: &HitGroupIdDefEntry) -> Value {
+    entry_commands_to_named_json(entry.entry_id, &entry.commands, HITGROUPIDDEF_COMMAND_POOL)
 }
 
-pub const HITGROUPIDDEF_FIELD_HASHES: [(u32, u32, u32); 15] = [
-    (0x11E501D5, 0x000, 1),
-    (0x3284A82D, 0x004, 5),
-    (0x42EE5CA2, 0x008, 5),
-    (0x458398BB, 0x00C, 5),
-    (0x6514C413, 0x010, 5),
-    (0x7395D184, 0x014, 1),
-    (0x8B1AA53F, 0x018, 5),
-    (0xACE03D8E, 0x01C, 5),
-    (0xC3656A99, 0x020, 1),
-    (0xD32D39ED, 0x024, 1),
-    (0xDBE70D18, 0x028, 5),
-    (0xDC8AC901, 0x02C, 5),
-    (0xEDD1C108, 0x030, 1),
-    (0xF89A41E1, 0x034, 1),
-    (0xFC1D95A9, 0x038, 5),
-];
+pub fn hitgroupiddef_entry_from_json_value(v: &Value) -> Result<HitGroupIdDefEntry, String> {
+    let (entry_id, commands) = entry_commands_from_named_json(v, HITGROUPIDDEF_COMMAND_POOL)?;
+    Ok(HitGroupIdDefEntry { entry_id, commands })
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct HitGroupIdDefEntry {
+    pub entry_id: u32,
+    pub commands: HashMap<u32, u32>,
+}
+
+impl Serialize for HitGroupIdDefEntry {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        hitgroupiddef_entry_to_json_value(self).serialize(s)
+    }
+}
+
+impl<'de> Deserialize<'de> for HitGroupIdDefEntry {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = Value::deserialize(d)?;
+        hitgroupiddef_entry_from_json_value(&v).map_err(serde::de::Error::custom)
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -59,79 +66,35 @@ pub struct HitGroupIdDefData {
     pub entry_ids: Vec<u32>,
     pub entries: Vec<HitGroupIdDefEntry>,
     pub trailing_data: Vec<u8>,
+    #[serde(skip)]
+    pub source_entries_raw: Vec<Vec<u8>>,
 }
 
 fn expected_field_specs() -> Vec<ParamFieldSpec> {
-    HITGROUPIDDEF_FIELD_HASHES
-        .iter()
-        .map(|(hash, entry_offset, kind)| ParamFieldSpec {
-            hash: *hash,
-            entry_offset: *entry_offset,
-            flags: 0,
-            kind: *kind,
-        })
-        .collect()
+    expected_field_specs_ordered_index_times_four(HITGROUPIDDEF_COMMAND_POOL)
 }
 
 fn validate_field_specs(field_specs: &[ParamFieldSpec]) -> Result<(), String> {
-    if field_specs.len() != HITGROUPIDDEF_FIELD_HASHES.len() {
-        return Err(format!(
-            "hitgroupiddef command count mismatch: file has {}, expected {}",
-            field_specs.len(),
-            HITGROUPIDDEF_FIELD_HASHES.len()
-        ));
-    }
-    for (index, spec) in field_specs.iter().enumerate() {
-        let (expected_hash, expected_offset, expected_kind) = HITGROUPIDDEF_FIELD_HASHES[index];
-        if spec.hash != expected_hash
-            || spec.entry_offset != expected_offset
-            || spec.kind != expected_kind
-        {
-            return Err(format!(
-                "hitgroupiddef command mismatch at index {}: got (hash=0x{:08X}, offset=0x{:X}, kind={}), expected (hash=0x{:08X}, offset=0x{:X}, kind={})",
-                index,
-                spec.hash,
-                spec.entry_offset,
-                spec.kind,
-                expected_hash,
-                expected_offset,
-                expected_kind
-            ));
-        }
-    }
-    Ok(())
+    validate_file_specs_kind_match_pool(HITGROUPIDDEF_COMMAND_POOL, field_specs)
+}
+
+fn parse_entry_from_raw(raw: &[u8], field_specs: &[ParamFieldSpec], entry_id: u32) -> HitGroupIdDefEntry {
+    let commands = parse_commands_map_from_entry_row(raw, field_specs);
+    HitGroupIdDefEntry { entry_id, commands }
+}
+
+fn entry_matches_raw(entry: &HitGroupIdDefEntry, raw: &[u8], field_specs: &[ParamFieldSpec]) -> bool {
+    entry_row_matches_command_map(&entry.commands, raw, field_specs)
 }
 
 pub fn parse_hitgroupiddef(data: &[u8]) -> Result<HitGroupIdDefData, String> {
     let file = read_param_binary(data)?;
-    if file.header.entry_size != HITGROUPIDDEF_ENTRY_SIZE {
-        return Err(format!(
-            "hitgroupiddef entry_size mismatch: file has {}, expected {}",
-            file.header.entry_size, HITGROUPIDDEF_ENTRY_SIZE
-        ));
-    }
-    if file.header.commands_count != HITGROUPIDDEF_CMD_COUNT {
-        return Err(format!(
-            "hitgroupiddef command count mismatch: file has {}, expected {}",
-            file.header.commands_count, HITGROUPIDDEF_CMD_COUNT
-        ));
-    }
     validate_field_specs(&file.field_specs)?;
 
     let mut entries = Vec::with_capacity(file.entries_raw.len());
     for (i, raw) in file.entries_raw.iter().enumerate() {
-        if raw.len() != HITGROUPIDDEF_ENTRY_SIZE as usize {
-            return Err(format!(
-                "hitgroupiddef row {} size {} != expected {}",
-                i,
-                raw.len(),
-                HITGROUPIDDEF_ENTRY_SIZE
-            ));
-        }
-        let mut cursor = Cursor::new(raw.as_slice());
-        let mut entry = HitGroupIdDefEntry::read(&mut cursor).map_err(|e| e.to_string())?;
-        entry.entry_id = file.entry_ids.get(i).copied().unwrap_or(0);
-        entries.push(entry);
+        let id = file.entry_ids.get(i).copied().unwrap_or(0);
+        entries.push(parse_entry_from_raw(raw, &file.field_specs, id));
     }
 
     Ok(HitGroupIdDefData {
@@ -140,6 +103,7 @@ pub fn parse_hitgroupiddef(data: &[u8]) -> Result<HitGroupIdDefData, String> {
         entry_ids: file.entry_ids,
         entries,
         trailing_data: file.trailing_data,
+        source_entries_raw: file.entries_raw,
     })
 }
 
@@ -153,24 +117,42 @@ pub fn build_hitgroupiddef(b: &HitGroupIdDefData) -> Result<Vec<u8>, String> {
         b.field_specs.clone()
     };
 
-    let entry_size = HITGROUPIDDEF_ENTRY_SIZE as usize;
+    let min_size = min_entry_data_size_for_specs(&field_specs);
+    let default_floor = b.header.entry_size.max(min_size);
+    let entry_size = default_floor as usize;
+
     let mut entries_raw: Vec<Vec<u8>> = Vec::with_capacity(b.entries.len());
-    for entry in &b.entries {
-        let mut raw = vec![0u8; entry_size];
-        let mut cursor = Cursor::new(&mut raw[..]);
-        entry
-            .write(&mut cursor)
-            .map_err(|err| format!("hitgroupiddef write entry: {}", err))?;
-        if cursor.position() as usize > entry_size {
-            return Err("hitgroupiddef encoded entry larger than entry_size".to_string());
+    for (entry_index, entry) in b.entries.iter().enumerate() {
+        if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+            let r = &b.source_entries_raw[entry_index];
+            if entry_matches_raw(entry, r, &field_specs) {
+                entries_raw.push(b.source_entries_raw[entry_index].clone());
+                continue;
+            }
+        }
+
+        let mut raw = if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+            b.source_entries_raw[entry_index].clone()
+        } else {
+            vec![0u8; entry_size]
+        };
+
+        for spec in &field_specs {
+            let o = spec.entry_offset as usize;
+            if o + 4 > raw.len() {
+                return Err("hitgroupiddef entry field offset out of range for entry_size".to_string());
+            }
+            if let Some(v) = entry.commands.get(&spec.hash) {
+                raw[o..o + 4].copy_from_slice(&v.to_le_bytes());
+            }
         }
         entries_raw.push(raw);
     }
 
     let mut header = b.header.clone();
     header.entry_count = b.entries.len() as u32;
-    header.commands_count = HITGROUPIDDEF_CMD_COUNT;
-    header.entry_size = HITGROUPIDDEF_ENTRY_SIZE;
+    header.commands_count = field_specs.len() as u32;
+    header.entry_size = entry_size as u32;
 
     let file = ParamBinaryFile {
         header,

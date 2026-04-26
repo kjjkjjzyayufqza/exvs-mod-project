@@ -1,97 +1,83 @@
-use binrw::{BinRead, BinWrite};
-use serde::{Deserialize, Serialize};
-use std::io::Cursor;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
+
+use serde_json::Value;
 
 use crate::format::param_bin_format::{
     build_param_binary, read_param_binary, ParamBinaryFile, ParamBinaryHeader, ParamFieldSpec,
 };
+use crate::format::param_entry_schema::{
+    entry_commands_from_named_json, entry_commands_to_named_json, entry_row_matches_command_map,
+    expected_field_specs_ordered_index_times_four, min_entry_data_size_for_specs,
+    parse_commands_map_from_entry_row, validate_file_specs_kind_match_pool, ParamCommandPool,
+};
 
-pub const VERNIER_TABLE_ENTRY_SIZE: u32 = 144;
-pub const VERNIER_TABLE_CMD_COUNT: u32 = 36;
+pub const VERNIER_TABLE_COMMAND_POOL: ParamCommandPool = &[
+    (0x01311D05, 1, "effect_type"),
+    (0x0887512E, 1, "color_index"),
+    (0x0FDBD536, 1, "effect_model_hash"),
+    (0x0FEA9537, 1, "keep_active"),
+    (0x13EEB8F0, 5, "particle_size_1"),
+    (0x21FFCD00, 1, "is_loop"),
+    (0x2DB526FD, 1, "is_follow_bone"),
+    (0x35B5281F, 1, "bone_offset_type"),
+    (0x3B6EA02D, 1, "rotation_type"),
+    (0x3C036434, 1, "alignment_type"),
+    (0x42B21889, 1, "blend_mode"),
+    (0x43298ECB, 5, "particle_size_2"),
+    (0x49672094, 1, "model_hash"),
+    (0x4B0454A2, 1, "texture_hash"),
+    (0x4C6990BB, 1, "animation_hash"),
+    (0x618D354C, 1, "material_hash"),
+    (0x634CF0E5, 1, "is_billboard"),
+    (0x64E98866, 5, "z_distance"),
+    (0x6744C378, 1, "fade_type"),
+    (0x72E23F39, 1, "is_world_space"),
+    (0x76362D93, 1, "cull_mode"),
+    (0x7F8061B8, 1, "depth_test_type"),
+    (0x918E0094, 1, "emit_count"),
+    (0x96E3C48D, 1, "lifetime_type"),
+    (0xA267F197, 1, "velocity_type"),
+    (0xA50A358E, 1, "inherit_parent_type"),
+    (0xB8F69CBA, 1, "render_order"),
+    (0xD20D0518, 1, "sort_bias"),
+    (0xD32D39ED, 1, "bone_hash"),
+    (0xD560C101, 1, "second_bone_hash"),
+    (0xE1E4F41B, 1, "effect_flag_a"),
+    (0xE6893002, 1, "effect_flag_b"),
+    (0xE694B5B6, 5, "effect_scale"),
+    (0xEDD1C108, 1, "hitgroup_ref"),
+    (0xFA45A15F, 1, "is_enabled"),
+    (0xFDE0D9DC, 5, "spawn_offset_y"),
+];
 
-#[derive(Debug, Clone, PartialEq, BinRead, BinWrite, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[brw(little)]
-pub struct VernierTableEntry {
-    #[brw(ignore)]
-    #[serde(default)]
-    pub entry_id: u32,
-    pub effect_type: u32,         // 0x01311D05 +0x000 kind=1 IDA:flag_idx=0x0F
-    pub color_index: u32,         // 0x0887512E +0x004 kind=1 IDA:flag_idx=0x0B
-    pub effect_model_hash: u32,   // 0x0FDBD536 +0x008 kind=1 IDA:core_field[3]
-    pub keep_active: u32,         // 0x0FEA9537 +0x00C kind=1 IDA:flag_idx=0x07 {0,1}
-    pub particle_size_1: f32,     // 0x13EEB8F0 +0x010 kind=5 IDA:core_field[6]
-    pub is_loop: u32,             // 0x21FFCD00 +0x014 kind=1 IDA:flag_idx=0x04 {0,1}
-    pub is_follow_bone: u32,      // 0x2DB526FD +0x018 kind=1 IDA:flag_idx=0x03 {0,1}
-    pub bone_offset_type: u32,    // 0x35B5281F +0x01C kind=1 IDA:flag_idx=0x19
-    pub rotation_type: u32,       // 0x3B6EA02D +0x020 kind=1 IDA:flag_idx=0x11
-    pub alignment_type: u32,      // 0x3C036434 +0x024 kind=1 IDA:flag_idx=0x15
-    pub blend_mode: u32,          // 0x42B21889 +0x028 kind=1 IDA:flag_idx=0x18
-    pub particle_size_2: f32,     // 0x43298ECB +0x02C kind=5 IDA:core_field[4]
-    pub model_hash: u32,          // 0x49672094 +0x030 kind=1 IDA:core_field[2] shared
-    pub texture_hash: u32,        // 0x4B0454A2 +0x034 kind=1 IDA:flag_idx=0x14
-    pub animation_hash: u32,      // 0x4C6990BB +0x038 kind=1 IDA:flag_idx=0x10
-    pub material_hash: u32,       // 0x618D354C +0x03C kind=1 IDA:flag_idx=0x06
-    pub is_billboard: u32,        // 0x634CF0E5 +0x040 kind=1 IDA:flag_idx=0x02 {0,1}
-    pub z_distance: f32,          // 0x64E98866 +0x044 kind=5 IDA:core_field[7] optional
-    pub fade_type: u32,           // 0x6744C378 +0x048 kind=1 IDA:flag_idx=0x1A
-    pub is_world_space: u32,      // 0x72E23F39 +0x04C kind=1 IDA:flag_idx=0x00 {0,1}
-    pub cull_mode: u32,           // 0x76362D93 +0x050 kind=1 IDA:flag_idx=0x0E
-    pub depth_test_type: u32,     // 0x7F8061B8 +0x054 kind=1 IDA:flag_idx=0x0A
-    pub emit_count: u32,          // 0x918E0094 +0x058 kind=1 IDA:flag_idx=0x0C
-    pub lifetime_type: u32,       // 0x96E3C48D +0x05C kind=1 IDA:flag_idx=0x08
-    pub velocity_type: u32,       // 0xA267F197 +0x060 kind=1 IDA:flag_idx=0x12
-    pub inherit_parent_type: u32, // 0xA50A358E +0x064 kind=1 IDA:flag_idx=0x16
-    pub render_order: u32,        // 0xB8F69CBA +0x068 kind=1 IDA:flag_idx=0x05 {0,1}
-    pub sort_bias: u32,           // 0xD20D0518 +0x06C kind=1 IDA:flag_idx=0x17
-    pub bone_hash: u32,           // 0xD32D39ED +0x070 kind=1 IDA:core_field[1] shared
-    pub second_bone_hash: u32,    // 0xD560C101 +0x074 kind=1 IDA:flag_idx=0x13
-    pub effect_flag_a: u32,       // 0xE1E4F41B +0x078 kind=1 IDA:flag_idx=0x09
-    pub effect_flag_b: u32,       // 0xE6893002 +0x07C kind=1 IDA:flag_idx=0x0D
-    pub effect_scale: f32,        // 0xE694B5B6 +0x080 kind=5 IDA:core_field[5]
-    pub hitgroup_ref: u32, // 0xEDD1C108 +0x084 kind=1 IDA:core_field[0] shared; binary-searched first
-    pub is_enabled: u32,   // 0xFA45A15F +0x088 kind=1 IDA:flag_idx=0x01 {0,1}
-    pub spawn_offset_y: f32, // 0xFDE0D9DC +0x08C kind=5 IDA:core_field[8] optional
+pub fn vernier_table_entry_to_json_value(entry: &VernierTableEntry) -> Value {
+    entry_commands_to_named_json(entry.entry_id, &entry.commands, VERNIER_TABLE_COMMAND_POOL)
 }
 
-pub const VERNIER_TABLE_FIELD_HASHES: [(u32, u32, u32); 36] = [
-    (0x01311D05, 0x000, 1),
-    (0x0887512E, 0x004, 1),
-    (0x0FDBD536, 0x008, 1),
-    (0x0FEA9537, 0x00C, 1),
-    (0x13EEB8F0, 0x010, 5),
-    (0x21FFCD00, 0x014, 1),
-    (0x2DB526FD, 0x018, 1),
-    (0x35B5281F, 0x01C, 1),
-    (0x3B6EA02D, 0x020, 1),
-    (0x3C036434, 0x024, 1),
-    (0x42B21889, 0x028, 1),
-    (0x43298ECB, 0x02C, 5),
-    (0x49672094, 0x030, 1),
-    (0x4B0454A2, 0x034, 1),
-    (0x4C6990BB, 0x038, 1),
-    (0x618D354C, 0x03C, 1),
-    (0x634CF0E5, 0x040, 1),
-    (0x64E98866, 0x044, 5),
-    (0x6744C378, 0x048, 1),
-    (0x72E23F39, 0x04C, 1),
-    (0x76362D93, 0x050, 1),
-    (0x7F8061B8, 0x054, 1),
-    (0x918E0094, 0x058, 1),
-    (0x96E3C48D, 0x05C, 1),
-    (0xA267F197, 0x060, 1),
-    (0xA50A358E, 0x064, 1),
-    (0xB8F69CBA, 0x068, 1),
-    (0xD20D0518, 0x06C, 1),
-    (0xD32D39ED, 0x070, 1),
-    (0xD560C101, 0x074, 1),
-    (0xE1E4F41B, 0x078, 1),
-    (0xE6893002, 0x07C, 1),
-    (0xE694B5B6, 0x080, 5),
-    (0xEDD1C108, 0x084, 1),
-    (0xFA45A15F, 0x088, 1),
-    (0xFDE0D9DC, 0x08C, 5),
-];
+pub fn vernier_table_entry_from_json_value(v: &Value) -> Result<VernierTableEntry, String> {
+    let (entry_id, commands) = entry_commands_from_named_json(v, VERNIER_TABLE_COMMAND_POOL)?;
+    Ok(VernierTableEntry { entry_id, commands })
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VernierTableEntry {
+    pub entry_id: u32,
+    pub commands: HashMap<u32, u32>,
+}
+
+impl Serialize for VernierTableEntry {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        vernier_table_entry_to_json_value(self).serialize(s)
+    }
+}
+
+impl<'de> Deserialize<'de> for VernierTableEntry {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = Value::deserialize(d)?;
+        vernier_table_entry_from_json_value(&v).map_err(serde::de::Error::custom)
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -101,79 +87,35 @@ pub struct VernierTableData {
     pub entry_ids: Vec<u32>,
     pub entries: Vec<VernierTableEntry>,
     pub trailing_data: Vec<u8>,
+    #[serde(skip)]
+    pub source_entries_raw: Vec<Vec<u8>>,
 }
 
 fn expected_field_specs() -> Vec<ParamFieldSpec> {
-    VERNIER_TABLE_FIELD_HASHES
-        .iter()
-        .map(|(hash, entry_offset, kind)| ParamFieldSpec {
-            hash: *hash,
-            entry_offset: *entry_offset,
-            flags: 0,
-            kind: *kind,
-        })
-        .collect()
+    expected_field_specs_ordered_index_times_four(VERNIER_TABLE_COMMAND_POOL)
 }
 
 fn validate_field_specs(field_specs: &[ParamFieldSpec]) -> Result<(), String> {
-    if field_specs.len() != VERNIER_TABLE_FIELD_HASHES.len() {
-        return Err(format!(
-            "vernier_table command count mismatch: file has {}, expected {}",
-            field_specs.len(),
-            VERNIER_TABLE_FIELD_HASHES.len()
-        ));
-    }
-    for (index, spec) in field_specs.iter().enumerate() {
-        let (expected_hash, expected_offset, expected_kind) = VERNIER_TABLE_FIELD_HASHES[index];
-        if spec.hash != expected_hash
-            || spec.entry_offset != expected_offset
-            || spec.kind != expected_kind
-        {
-            return Err(format!(
-                "vernier_table command mismatch at index {}: got (hash=0x{:08X}, offset=0x{:X}, kind={}), expected (hash=0x{:08X}, offset=0x{:X}, kind={})",
-                index,
-                spec.hash,
-                spec.entry_offset,
-                spec.kind,
-                expected_hash,
-                expected_offset,
-                expected_kind
-            ));
-        }
-    }
-    Ok(())
+    validate_file_specs_kind_match_pool(VERNIER_TABLE_COMMAND_POOL, field_specs)
+}
+
+fn parse_entry_from_raw(raw: &[u8], field_specs: &[ParamFieldSpec], entry_id: u32) -> VernierTableEntry {
+    let commands = parse_commands_map_from_entry_row(raw, field_specs);
+    VernierTableEntry { entry_id, commands }
+}
+
+fn entry_matches_raw(entry: &VernierTableEntry, raw: &[u8], field_specs: &[ParamFieldSpec]) -> bool {
+    entry_row_matches_command_map(&entry.commands, raw, field_specs)
 }
 
 pub fn parse_vernier_table(data: &[u8]) -> Result<VernierTableData, String> {
     let file = read_param_binary(data)?;
-    if file.header.entry_size != VERNIER_TABLE_ENTRY_SIZE {
-        return Err(format!(
-            "vernier_table entry_size mismatch: file has {}, expected {}",
-            file.header.entry_size, VERNIER_TABLE_ENTRY_SIZE
-        ));
-    }
-    if file.header.commands_count != VERNIER_TABLE_CMD_COUNT {
-        return Err(format!(
-            "vernier_table command count mismatch: file has {}, expected {}",
-            file.header.commands_count, VERNIER_TABLE_CMD_COUNT
-        ));
-    }
     validate_field_specs(&file.field_specs)?;
 
     let mut entries = Vec::with_capacity(file.entries_raw.len());
     for (i, raw) in file.entries_raw.iter().enumerate() {
-        if raw.len() != VERNIER_TABLE_ENTRY_SIZE as usize {
-            return Err(format!(
-                "vernier_table row {} size {} != expected {}",
-                i,
-                raw.len(),
-                VERNIER_TABLE_ENTRY_SIZE
-            ));
-        }
-        let mut cursor = Cursor::new(raw.as_slice());
-        let mut entry = VernierTableEntry::read(&mut cursor).map_err(|e| e.to_string())?;
-        entry.entry_id = file.entry_ids.get(i).copied().unwrap_or(0);
-        entries.push(entry);
+        let id = file.entry_ids.get(i).copied().unwrap_or(0);
+        entries.push(parse_entry_from_raw(raw, &file.field_specs, id));
     }
 
     Ok(VernierTableData {
@@ -182,6 +124,7 @@ pub fn parse_vernier_table(data: &[u8]) -> Result<VernierTableData, String> {
         entry_ids: file.entry_ids,
         entries,
         trailing_data: file.trailing_data,
+        source_entries_raw: file.entries_raw,
     })
 }
 
@@ -195,24 +138,42 @@ pub fn build_vernier_table(b: &VernierTableData) -> Result<Vec<u8>, String> {
         b.field_specs.clone()
     };
 
-    let entry_size = VERNIER_TABLE_ENTRY_SIZE as usize;
+    let min_size = min_entry_data_size_for_specs(&field_specs);
+    let default_floor = b.header.entry_size.max(min_size);
+    let entry_size = default_floor as usize;
+
     let mut entries_raw: Vec<Vec<u8>> = Vec::with_capacity(b.entries.len());
-    for entry in &b.entries {
-        let mut raw = vec![0u8; entry_size];
-        let mut cursor = Cursor::new(&mut raw[..]);
-        entry
-            .write(&mut cursor)
-            .map_err(|err| format!("vernier_table write entry: {}", err))?;
-        if cursor.position() as usize > entry_size {
-            return Err("vernier_table encoded entry larger than entry_size".to_string());
+    for (entry_index, entry) in b.entries.iter().enumerate() {
+        if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+            let r = &b.source_entries_raw[entry_index];
+            if entry_matches_raw(entry, r, &field_specs) {
+                entries_raw.push(b.source_entries_raw[entry_index].clone());
+                continue;
+            }
+        }
+
+        let mut raw = if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+            b.source_entries_raw[entry_index].clone()
+        } else {
+            vec![0u8; entry_size]
+        };
+
+        for spec in &field_specs {
+            let o = spec.entry_offset as usize;
+            if o + 4 > raw.len() {
+                return Err("vernier_table entry field offset out of range for entry_size".to_string());
+            }
+            if let Some(v) = entry.commands.get(&spec.hash) {
+                raw[o..o + 4].copy_from_slice(&v.to_le_bytes());
+            }
         }
         entries_raw.push(raw);
     }
 
     let mut header = b.header.clone();
     header.entry_count = b.entries.len() as u32;
-    header.commands_count = VERNIER_TABLE_CMD_COUNT;
-    header.entry_size = VERNIER_TABLE_ENTRY_SIZE;
+    header.commands_count = field_specs.len() as u32;
+    header.entry_size = entry_size as u32;
 
     let file = ParamBinaryFile {
         header,

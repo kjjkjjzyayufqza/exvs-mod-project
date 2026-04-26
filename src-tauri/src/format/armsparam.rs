@@ -1,123 +1,95 @@
-use binrw::{BinRead, BinWrite};
-use serde::{Deserialize, Serialize};
-use std::io::Cursor;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
+
+use serde_json::Value;
 
 use crate::format::param_bin_format::{
     build_param_binary, read_param_binary, ParamBinaryFile, ParamBinaryHeader, ParamFieldSpec,
 };
+use crate::format::param_entry_schema::{
+    entry_commands_from_named_json, entry_commands_to_named_json, entry_row_matches_command_map,
+    expected_field_specs_ordered_index_times_four, min_entry_data_size_for_specs,
+    parse_commands_map_from_entry_row, validate_file_specs_kind_match_pool, ParamCommandPool,
+};
 
-pub const ARMSPARAM_ENTRY_SIZE: u32 = 200;
-pub const ARMSPARAM_CMD_COUNT: u32 = 48;
+pub const ARMSPARAM_COMMAND_POOL: ParamCommandPool = &[
+    (0x020A35DD, 1, "is_enabled"),
+    (0x02D35F32, 1, "unk_04_reserved"),
+    (0x0496C136, 1, "is_continuous_fire"),
+    (0x04A2CFD6, 2, "reload_start_frame"),
+    (0x103171AE, 2, "reload_time_total"),
+    (0x11DEE0C8, 1, "reload_type"),
+    (0x1348893F, 1, "is_charge_weapon"),
+    (0x1E8E41EF, 1, "can_move_while_firing"),
+    (0x31427CC3, 2, "homing_angle"),
+    (0x3A1D6254, 5, "induction_rate"),
+    (0x3BC65821, 5, "homing_start_rate"),
+    (0x3CAB9C38, 5, "homing_end_rate"),
+    (0x4961274C, 2, "ammo_count"),
+    (0x4A7796DB, 5, "damage_correction_rate"),
+    (0x4BACACAE, 5, "down_correction_rate"),
+    (0x4C527468, 2, "shot_type"),
+    (0x4C84F7C0, 2, "damage"),
+    (0x4D1A52C2, 5, "stun_correction_rate"),
+    (0x4E692ACD, 2, "down_value"),
+    (0x596FC1C3, 1, "cancel_route_type"),
+    (0x5B072B6C, 1, "is_vernier"),
+    (0x67364138, 2, "cooldown_frame"),
+    (0x73A5FF40, 2, "startup_frame"),
+    (0x74C83B59, 2, "active_frame"),
+    (0x89382014, 2, "recovery_frame"),
+    (0x8E55E40D, 2, "total_duration_frame"),
+    (0x9AC65A75, 2, "landing_recovery_frame"),
+    (0xA06CAAD5, 2, "stun_value"),
+    (0xA2CF099B, 5, "boost_consumption_rate"),
+    (0xA353F222, 2, "range"),
+    (0xA479F7F7, 5, "muzzle_correction_rate"),
+    (0xA502BCF2, 2, "reload_per_shot_frame"),
+    (0xA635CFC2, 2, "reload_lock_frame"),
+    (0xAB9AEF6C, 2, "overheat_frame"),
+    (0xABC33F14, 2, "charge_frame"),
+    (0xAC243293, 1, "guard_break_type"),
+    (0xB669A42A, 1, "landing_behavior_type"),
+    (0xB686E88C, 1, "is_super_armor"),
+    (0xBB93D195, 1, "bullet_type"),
+    (0xD37EC761, 5, "tracking_speed_rate"),
+    (0xD5C8390D, 5, "bullet_speed_rate"),
+    (0xE6213731, 7, "action_label_offset"),
+    (0xEDC16AE3, 2, "ammo_reload_wait_frame"),
+    (0xEF3F41B3, 1, "hit_effect_type"),
+    (0xF3C4CAE9, 7, "resource_label_offset"),
+    (0xF8AEEC77, 2, "bullet_count_per_shot"),
+    (0xF8E59F33, 2, "firing_interval_frame"),
+    (0xF952D49B, 2, "full_charge_frame"),
+];
 
-#[derive(Debug, Clone, PartialEq, BinRead, BinWrite, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[brw(little)]
-pub struct ArmsParamEntry {
-    #[brw(ignore)]
-    #[serde(default)]
-    pub entry_id: u32,
-    pub is_enabled: u32,             // 0x020A35DD +0x000 kind=1 {0,1}
-    pub unk_04_reserved: u32,        // 0x02D35F32 +0x004 kind=1 always 0
-    pub is_continuous_fire: u32,     // 0x0496C136 +0x008 kind=1 {0,1}
-    pub reload_start_frame: i32,     // 0x04A2CFD6 +0x00C kind=2 [0,1020]
-    pub reload_time_total: i32,      // 0x103171AE +0x010 kind=2 [0,1800]
-    pub reload_type: u32,            // 0x11DEE0C8 +0x014 kind=1 {0..3}
-    pub is_charge_weapon: u32,       // 0x1348893F +0x018 kind=1 {0,1}
-    pub can_move_while_firing: u32,  // 0x1E8E41EF +0x01C kind=1 {0,1}
-    pub homing_angle: i32,           // 0x31427CC3 +0x020 kind=2 [0,180]
-    pub induction_rate: f32,         // 0x3A1D6254 +0x024 kind=5 [0,1]
-    pub homing_start_rate: f32,      // 0x3BC65821 +0x028 kind=5 [0,1]
-    pub homing_end_rate: f32,        // 0x3CAB9C38 +0x02C kind=5 [0,1]
-    pub ammo_count: i32,             // 0x4961274C +0x030 kind=2 [1,120]
-    pub damage_correction_rate: f32, // 0x4A7796DB +0x034 kind=5 [0,1]
-    pub down_correction_rate: f32,   // 0x4BACACAE +0x038 kind=5 [0,1]
-    pub shot_type: i32,              // 0x4C527468 +0x03C kind=2 [0,3]
-    pub damage: i32,                 // 0x4C84F7C0 +0x040 kind=2 [0,1500]
-    pub stun_correction_rate: f32,   // 0x4D1A52C2 +0x044 kind=5 [0,1]
-    pub down_value: i32,             // 0x4E692ACD +0x048 kind=2 [0,120]
-    pub cancel_route_type: u32,      // 0x596FC1C3 +0x04C kind=1 {0..2}
-    pub is_vernier: u32,             // 0x5B072B6C +0x050 kind=1 {0,1}
-    pub cooldown_frame: i32,         // 0x67364138 +0x054 kind=2 [0,1800]
-    pub startup_frame: i32,          // 0x73A5FF40 +0x058 kind=2 [0,1020]
-    pub active_frame: i32,           // 0x74C83B59 +0x05C kind=2 [0,1020]
-    pub recovery_frame: i32,         // 0x89382014 +0x060 kind=2 [0,1800]
-    pub total_duration_frame: i32,   // 0x8E55E40D +0x064 kind=2 [0,1800]
-    pub landing_recovery_frame: i32, // 0x9AC65A75 +0x068 kind=2 [0,1020]
-    pub stun_value: i32,             // 0xA06CAAD5 +0x06C kind=2 [0,60]
-    pub boost_consumption_rate: f32, // 0xA2CF099B +0x070 kind=5 [0,1]
-    pub range: i32,                  // 0xA353F222 +0x074 kind=2 [0,600]
-    pub muzzle_correction_rate: f32, // 0xA479F7F7 +0x078 kind=5 [0,1]
-    pub reload_per_shot_frame: i32,  // 0xA502BCF2 +0x07C kind=2 [0,1800]
-    pub reload_lock_frame: i32,      // 0xA635CFC2 +0x080 kind=2 [0,120]
-    pub overheat_frame: i32,         // 0xAB9AEF6C +0x084 kind=2 [0,1200]
-    pub charge_frame: i32,           // 0xABC33F14 +0x088 kind=2 [0,600]
-    pub guard_break_type: u32,       // 0xAC243293 +0x08C kind=1 {0..2}
-    pub landing_behavior_type: u32,  // 0xB669A42A +0x090 kind=1 {0..2}
-    pub is_super_armor: u32,         // 0xB686E88C +0x094 kind=1 {0,1}
-    pub bullet_type: u32,            // 0xBB93D195 +0x098 kind=1 {0..7}
-    pub tracking_speed_rate: f32,    // 0xD37EC761 +0x09C kind=5 [0,1]
-    pub bullet_speed_rate: f32,      // 0xD5C8390D +0x0A0 kind=5 [0,1]
-    pub action_label_offset: u32,    // 0xE6213731 +0x0A4 kind=7 string
-    pub action_label_size: u32,      // +0x0A8 padding for 8-byte string slot
-    pub ammo_reload_wait_frame: i32, // 0xEDC16AE3 +0x0AC kind=2 [0,900]
-    pub hit_effect_type: u32,        // 0xEF3F41B3 +0x0B0 kind=1 {0..5}
-    pub resource_label_offset: u32,  // 0xF3C4CAE9 +0x0B4 kind=7 string
-    pub resource_label_size: u32,    // +0x0B8 padding for 8-byte string slot
-    pub bullet_count_per_shot: i32,  // 0xF8AEEC77 +0x0BC kind=2 [0,150]
-    pub firing_interval_frame: i32,  // 0xF8E59F33 +0x0C0 kind=2 [0,120]
-    pub full_charge_frame: i32,      // 0xF952D49B +0x0C4 kind=2 [0,1800]
+pub fn armsparam_entry_to_json_value(entry: &ArmsParamEntry) -> Value {
+    entry_commands_to_named_json(entry.entry_id, &entry.commands, ARMSPARAM_COMMAND_POOL)
 }
 
-pub const ARMSPARAM_FIELD_HASHES: [(u32, u32, u32); 48] = [
-    (0x020A35DD, 0x000, 1),
-    (0x02D35F32, 0x004, 1),
-    (0x0496C136, 0x008, 1),
-    (0x04A2CFD6, 0x00C, 2),
-    (0x103171AE, 0x010, 2),
-    (0x11DEE0C8, 0x014, 1),
-    (0x1348893F, 0x018, 1),
-    (0x1E8E41EF, 0x01C, 1),
-    (0x31427CC3, 0x020, 2),
-    (0x3A1D6254, 0x024, 5),
-    (0x3BC65821, 0x028, 5),
-    (0x3CAB9C38, 0x02C, 5),
-    (0x4961274C, 0x030, 2),
-    (0x4A7796DB, 0x034, 5),
-    (0x4BACACAE, 0x038, 5),
-    (0x4C527468, 0x03C, 2),
-    (0x4C84F7C0, 0x040, 2),
-    (0x4D1A52C2, 0x044, 5),
-    (0x4E692ACD, 0x048, 2),
-    (0x596FC1C3, 0x04C, 1),
-    (0x5B072B6C, 0x050, 1),
-    (0x67364138, 0x054, 2),
-    (0x73A5FF40, 0x058, 2),
-    (0x74C83B59, 0x05C, 2),
-    (0x89382014, 0x060, 2),
-    (0x8E55E40D, 0x064, 2),
-    (0x9AC65A75, 0x068, 2),
-    (0xA06CAAD5, 0x06C, 2),
-    (0xA2CF099B, 0x070, 5),
-    (0xA353F222, 0x074, 2),
-    (0xA479F7F7, 0x078, 5),
-    (0xA502BCF2, 0x07C, 2),
-    (0xA635CFC2, 0x080, 2),
-    (0xAB9AEF6C, 0x084, 2),
-    (0xABC33F14, 0x088, 2),
-    (0xAC243293, 0x08C, 1),
-    (0xB669A42A, 0x090, 1),
-    (0xB686E88C, 0x094, 1),
-    (0xBB93D195, 0x098, 1),
-    (0xD37EC761, 0x09C, 5),
-    (0xD5C8390D, 0x0A0, 5),
-    (0xE6213731, 0x0A4, 7),
-    (0xEDC16AE3, 0x0AC, 2),
-    (0xEF3F41B3, 0x0B0, 1),
-    (0xF3C4CAE9, 0x0B4, 7),
-    (0xF8AEEC77, 0x0BC, 2),
-    (0xF8E59F33, 0x0C0, 2),
-    (0xF952D49B, 0x0C4, 2),
-];
+pub fn armsparam_entry_from_json_value(v: &Value) -> Result<ArmsParamEntry, String> {
+    let (entry_id, commands) = entry_commands_from_named_json(v, ARMSPARAM_COMMAND_POOL)?;
+    Ok(ArmsParamEntry { entry_id, commands })
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArmsParamEntry {
+    pub entry_id: u32,
+    pub commands: HashMap<u32, u32>,
+}
+
+impl Serialize for ArmsParamEntry {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        armsparam_entry_to_json_value(self).serialize(s)
+    }
+}
+
+impl<'de> Deserialize<'de> for ArmsParamEntry {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = Value::deserialize(d)?;
+        armsparam_entry_from_json_value(&v).map_err(serde::de::Error::custom)
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -127,79 +99,35 @@ pub struct ArmsParamData {
     pub entry_ids: Vec<u32>,
     pub entries: Vec<ArmsParamEntry>,
     pub trailing_data: Vec<u8>,
+    #[serde(skip)]
+    pub source_entries_raw: Vec<Vec<u8>>,
 }
 
 fn expected_field_specs() -> Vec<ParamFieldSpec> {
-    ARMSPARAM_FIELD_HASHES
-        .iter()
-        .map(|(hash, entry_offset, kind)| ParamFieldSpec {
-            hash: *hash,
-            entry_offset: *entry_offset,
-            flags: 0,
-            kind: *kind,
-        })
-        .collect()
+    expected_field_specs_ordered_index_times_four(ARMSPARAM_COMMAND_POOL)
 }
 
 fn validate_field_specs(field_specs: &[ParamFieldSpec]) -> Result<(), String> {
-    if field_specs.len() != ARMSPARAM_FIELD_HASHES.len() {
-        return Err(format!(
-            "armsparam command count mismatch: file has {}, expected {}",
-            field_specs.len(),
-            ARMSPARAM_FIELD_HASHES.len()
-        ));
-    }
-    for (index, spec) in field_specs.iter().enumerate() {
-        let (expected_hash, expected_offset, expected_kind) = ARMSPARAM_FIELD_HASHES[index];
-        if spec.hash != expected_hash
-            || spec.entry_offset != expected_offset
-            || spec.kind != expected_kind
-        {
-            return Err(format!(
-                "armsparam command mismatch at index {}: got (hash=0x{:08X}, offset=0x{:X}, kind={}), expected (hash=0x{:08X}, offset=0x{:X}, kind={})",
-                index,
-                spec.hash,
-                spec.entry_offset,
-                spec.kind,
-                expected_hash,
-                expected_offset,
-                expected_kind
-            ));
-        }
-    }
-    Ok(())
+    validate_file_specs_kind_match_pool(ARMSPARAM_COMMAND_POOL, field_specs)
+}
+
+fn parse_entry_from_raw(raw: &[u8], field_specs: &[ParamFieldSpec], entry_id: u32) -> ArmsParamEntry {
+    let commands = parse_commands_map_from_entry_row(raw, field_specs);
+    ArmsParamEntry { entry_id, commands }
+}
+
+fn entry_matches_raw(entry: &ArmsParamEntry, raw: &[u8], field_specs: &[ParamFieldSpec]) -> bool {
+    entry_row_matches_command_map(&entry.commands, raw, field_specs)
 }
 
 pub fn parse_armsparam(data: &[u8]) -> Result<ArmsParamData, String> {
     let file = read_param_binary(data)?;
-    if file.header.entry_size != ARMSPARAM_ENTRY_SIZE {
-        return Err(format!(
-            "armsparam entry_size mismatch: file has {}, expected {}",
-            file.header.entry_size, ARMSPARAM_ENTRY_SIZE
-        ));
-    }
-    if file.header.commands_count != ARMSPARAM_CMD_COUNT {
-        return Err(format!(
-            "armsparam command count mismatch: file has {}, expected {}",
-            file.header.commands_count, ARMSPARAM_CMD_COUNT
-        ));
-    }
     validate_field_specs(&file.field_specs)?;
 
     let mut entries = Vec::with_capacity(file.entries_raw.len());
     for (i, raw) in file.entries_raw.iter().enumerate() {
-        if raw.len() != ARMSPARAM_ENTRY_SIZE as usize {
-            return Err(format!(
-                "armsparam row {} size {} != expected {}",
-                i,
-                raw.len(),
-                ARMSPARAM_ENTRY_SIZE
-            ));
-        }
-        let mut cursor = Cursor::new(raw.as_slice());
-        let mut entry = ArmsParamEntry::read(&mut cursor).map_err(|e| e.to_string())?;
-        entry.entry_id = file.entry_ids.get(i).copied().unwrap_or(0);
-        entries.push(entry);
+        let id = file.entry_ids.get(i).copied().unwrap_or(0);
+        entries.push(parse_entry_from_raw(raw, &file.field_specs, id));
     }
 
     Ok(ArmsParamData {
@@ -208,6 +136,7 @@ pub fn parse_armsparam(data: &[u8]) -> Result<ArmsParamData, String> {
         entry_ids: file.entry_ids,
         entries,
         trailing_data: file.trailing_data,
+        source_entries_raw: file.entries_raw,
     })
 }
 
@@ -221,24 +150,42 @@ pub fn build_armsparam(b: &ArmsParamData) -> Result<Vec<u8>, String> {
         b.field_specs.clone()
     };
 
-    let entry_size = ARMSPARAM_ENTRY_SIZE as usize;
+    let min_size = min_entry_data_size_for_specs(&field_specs);
+    let default_floor = b.header.entry_size.max(min_size);
+    let entry_size = default_floor as usize;
+
     let mut entries_raw: Vec<Vec<u8>> = Vec::with_capacity(b.entries.len());
-    for entry in &b.entries {
-        let mut raw = vec![0u8; entry_size];
-        let mut cursor = Cursor::new(&mut raw[..]);
-        entry
-            .write(&mut cursor)
-            .map_err(|err| format!("armsparam write entry: {}", err))?;
-        if cursor.position() as usize > entry_size {
-            return Err("armsparam encoded entry larger than entry_size".to_string());
+    for (entry_index, entry) in b.entries.iter().enumerate() {
+        if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+            let r = &b.source_entries_raw[entry_index];
+            if entry_matches_raw(entry, r, &field_specs) {
+                entries_raw.push(b.source_entries_raw[entry_index].clone());
+                continue;
+            }
+        }
+
+        let mut raw = if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+            b.source_entries_raw[entry_index].clone()
+        } else {
+            vec![0u8; entry_size]
+        };
+
+        for spec in &field_specs {
+            let o = spec.entry_offset as usize;
+            if o + 4 > raw.len() {
+                return Err("armsparam entry field offset out of range for entry_size".to_string());
+            }
+            if let Some(v) = entry.commands.get(&spec.hash) {
+                raw[o..o + 4].copy_from_slice(&v.to_le_bytes());
+            }
         }
         entries_raw.push(raw);
     }
 
     let mut header = b.header.clone();
     header.entry_count = b.entries.len() as u32;
-    header.commands_count = ARMSPARAM_CMD_COUNT;
-    header.entry_size = ARMSPARAM_ENTRY_SIZE;
+    header.commands_count = field_specs.len() as u32;
+    header.entry_size = entry_size as u32;
 
     let file = ParamBinaryFile {
         header,
