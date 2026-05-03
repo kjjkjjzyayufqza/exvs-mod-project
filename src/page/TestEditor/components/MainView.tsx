@@ -15,6 +15,15 @@ import MscWorkspaceView from "./msc-editor/MscWorkspaceView";
 import ParamEditorView from "./param-editor/ParamEditorView";
 import { SsbhModelPreviewViewport } from "./ssbh-model-preview/SsbhModelPreviewPanel";
 import { BulletPreviewViewport } from "./bullet-preview/BulletPreviewViewport";
+import { BulletEditorView } from "./param-editors/bullet-editor/BulletEditorView";
+import { ArmsEditorView } from "./param-editors/arms-editor/ArmsEditorView";
+import { SpeedEditorView } from "./param-editors/speed-editor/SpeedEditorView";
+import { CharacterEditorView } from "./param-editors/character-editor/CharacterEditorView";
+import { ChrSysEditorView } from "./param-editors/chrsys-editor/ChrSysEditorView";
+import { GrapEditorView } from "./param-editors/grap-editor/GrapEditorView";
+import { DepictionEditorView } from "./param-editors/depiction-editor/DepictionEditorView";
+import { HitGroupEditorView } from "./param-editors/hitgroup-editor/HitGroupEditorView";
+import { InteractionEditorView } from "./param-editors/interaction-editor/InteractionEditorView";
 
 type StageTab = {
   name: string;
@@ -172,6 +181,51 @@ const tabs: StageTab[] = [
     name: "Bullet 3D",
     value: "bullet-3d",
     render: () => <BulletPreviewViewport />,
+  },
+  {
+    name: "Bullet Editor",
+    value: "bullet-editor",
+    render: (props: MainViewProps) => <BulletEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+  },
+  {
+    name: "Arms Editor",
+    value: "arms-editor",
+    render: (props: MainViewProps) => <ArmsEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+  },
+  {
+    name: "Speed Editor",
+    value: "speed-editor",
+    render: (props: MainViewProps) => <SpeedEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+  },
+  {
+    name: "Character Editor",
+    value: "character-editor",
+    render: (props: MainViewProps) => <CharacterEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+  },
+  {
+    name: "ChrSys Editor",
+    value: "chrsys-editor",
+    render: (props: MainViewProps) => <ChrSysEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+  },
+  {
+    name: "Grap Editor",
+    value: "grap-editor",
+    render: (props: MainViewProps) => <GrapEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+  },
+  {
+    name: "Depiction Editor",
+    value: "depiction-editor",
+    render: (props: MainViewProps) => <DepictionEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+  },
+  {
+    name: "HitGroup Editor",
+    value: "hitgroup-editor",
+    render: (props: MainViewProps) => <HitGroupEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+  },
+  {
+    name: "Interaction Editor",
+    value: "interaction-editor",
+    render: (props: MainViewProps) => <InteractionEditorView onUnsavedChanges={props.onUnsavedChanges} />,
   },
 ];
 
@@ -608,7 +662,7 @@ const MainView = ({
           {resolvedTabs.map((tab) => {
             if (!visitedTabs.has(tab.value)) return null;
             const isActive = activeTab === tab.value;
-            const shouldKeepMounted = isActive || tab.value === "3d" || tab.value === "bullet-3d" || Boolean(unsavedTabMap[tab.value]);
+            const shouldKeepMounted = isActive || tab.value === "3d" || tab.value === "bullet-3d" || tab.value === "bullet-editor" || tab.value === "speed-editor" || tab.value === "depiction-editor" || Boolean(unsavedTabMap[tab.value]);
             if (!shouldKeepMounted) {
               return null;
             }
