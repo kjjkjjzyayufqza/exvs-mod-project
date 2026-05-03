@@ -14,6 +14,7 @@ import StageListView from "./StageListView";
 import MscWorkspaceView from "./msc-editor/MscWorkspaceView";
 import ParamEditorView from "./param-editor/ParamEditorView";
 import { SsbhModelPreviewViewport } from "./ssbh-model-preview/SsbhModelPreviewPanel";
+import { BulletPreviewViewport } from "./bullet-preview/BulletPreviewViewport";
 
 type StageTab = {
   name: string;
@@ -166,6 +167,11 @@ const tabs: StageTab[] = [
     name: "Param Editor",
     value: "param-editor",
     render: (props: MainViewProps) => <ParamEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+  },
+  {
+    name: "Bullet 3D",
+    value: "bullet-3d",
+    render: () => <BulletPreviewViewport />,
   },
 ];
 
@@ -602,7 +608,7 @@ const MainView = ({
           {resolvedTabs.map((tab) => {
             if (!visitedTabs.has(tab.value)) return null;
             const isActive = activeTab === tab.value;
-            const shouldKeepMounted = isActive || tab.value === "3d" || Boolean(unsavedTabMap[tab.value]);
+            const shouldKeepMounted = isActive || tab.value === "3d" || tab.value === "bullet-3d" || Boolean(unsavedTabMap[tab.value]);
             if (!shouldKeepMounted) {
               return null;
             }
@@ -617,7 +623,7 @@ const MainView = ({
                   isActive
                     ? "relative z-10 flex-1"
                     : "pointer-events-none invisible absolute inset-0 z-0 overflow-hidden",
-                  tab.value === "3d"
+                  tab.value === "3d" || tab.value === "bullet-3d"
                     ? isActive
                       ? "m-0 flex h-full w-full flex-1 flex-col overflow-hidden p-0"
                       : "p-0"

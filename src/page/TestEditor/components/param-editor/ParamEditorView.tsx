@@ -24,6 +24,7 @@ import type { ChrSysParamFile } from "./chrSysTypes"
 import { PARAM_KINDS, type ParamKindId, resolveTypedFileTypeForPath, getParamKind } from "./paramKinds"
 import { TypedParamDataPanel } from "./TypedParamDataPanel"
 import type { TypedParamFile } from "./typedParamTypes"
+import { useBulletPreviewStore } from "../bullet-preview/bulletPreviewStore"
 
 export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges?: (hasChanges: boolean) => void }) {
   const [kindId, setKindId] = useState<ParamKindId>("armsparam" as ParamKindId)
@@ -48,6 +49,13 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
   useEffect(() => {
     onUnsavedChanges?.(dirty)
   }, [dirty, onUnsavedChanges])
+
+  const setBulletEntry = useBulletPreviewStore((s) => s.setEntry)
+  useEffect(() => {
+    if (kindId === "bulletparam" && typed?.data?.entries?.[selectedEntry]) {
+      setBulletEntry(typed.data.entries[selectedEntry])
+    }
+  }, [kindId, typed, selectedEntry, setBulletEntry])
 
   useEffect(() => {
     void (async () => {
