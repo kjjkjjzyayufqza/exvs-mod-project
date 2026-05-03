@@ -4,6 +4,7 @@ import {
   Database,
   Filter,
   RefreshCw,
+  RotateCcw,
   Search,
   SlidersHorizontal,
   Target,
@@ -84,6 +85,7 @@ export function BulletPreviewControls() {
   const setPhysicsOverride = useBulletPreviewStore((s) => s.setPhysicsOverride);
   const resetPhysicsOverrides = useBulletPreviewStore((s) => s.resetPhysicsOverrides);
   const setScenario = useBulletPreviewStore((s) => s.setScenario);
+  const resetWorkbench = useBulletPreviewStore((s) => s.resetWorkbench);
 
   useEffect(() => {
     void (async () => {
@@ -166,9 +168,21 @@ export function BulletPreviewControls() {
   return (
     <div className="flex h-full min-h-0 flex-col border-r border-border/60 bg-background">
       <div className="space-y-3 border-b border-border/60 px-3 py-3">
-        <div className="flex items-center gap-2">
-          <Database className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold">Bullet Workbench</h2>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Database className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold">Bullet Workbench</h2>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1 px-2 text-[10px]"
+            onClick={resetWorkbench}
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Reset All
+          </Button>
         </div>
         <p className="text-[11px] leading-relaxed text-muted-foreground">
           Single-page flow: load bulletparam, choose weapon/shot row, tune values, inspect trajectory immediately.
@@ -483,10 +497,81 @@ export function BulletPreviewControls() {
                 />
               </div>
             </div>
+            <div className="space-y-1 rounded-md border border-border/60 p-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-[10px] text-muted-foreground">Enemy lateral motion</Label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={scenario.enemyLateralMotionEnabled ? "secondary" : "outline"}
+                  className="h-6 px-2 text-[10px]"
+                  onClick={() =>
+                    setScenario({
+                      enemyLateralMotionEnabled: !scenario.enemyLateralMotionEnabled,
+                    })
+                  }
+                >
+                  {scenario.enemyLateralMotionEnabled ? "Enabled" : "Disabled"}
+                </Button>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Amplitude X</Label>
+                  <Input
+                    type="number"
+                    step={0.5}
+                    value={numberInputValue(scenario.enemyLateralAmplitude)}
+                    disabled={!scenario.enemyLateralMotionEnabled}
+                    className="h-7 font-mono text-[11px]"
+                    onChange={(event) =>
+                      setScenario({
+                        enemyLateralAmplitude: Number(event.target.value) || 0,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Period (frames)</Label>
+                  <Input
+                    type="number"
+                    step={1}
+                    min={2}
+                    value={numberInputValue(scenario.enemyLateralPeriodFrames)}
+                    disabled={!scenario.enemyLateralMotionEnabled}
+                    className="h-7 font-mono text-[11px]"
+                    onChange={(event) =>
+                      setScenario({
+                        enemyLateralPeriodFrames: Math.max(
+                          2,
+                          Math.round(Number(event.target.value) || 2),
+                        ),
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Phase (deg)</Label>
+                  <Input
+                    type="number"
+                    step={1}
+                    value={numberInputValue(scenario.enemyLateralPhaseDeg)}
+                    disabled={!scenario.enemyLateralMotionEnabled}
+                    className="h-7 font-mono text-[11px]"
+                    onChange={(event) =>
+                      setScenario({
+                        enemyLateralPhaseDeg: Number(event.target.value) || 0,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+            </div>
             {trajectory?.warnings?.length ? (
-              <p className="text-[10px] leading-relaxed text-amber-400/95">
-                {trajectory.warnings[0]}
-              </p>
+              <div className="space-y-0.5 text-[10px] leading-relaxed text-amber-400/95">
+                {trajectory.warnings.slice(0, 3).map((warning) => (
+                  <p key={warning}>{warning}</p>
+                ))}
+              </div>
             ) : null}
           </div>
 

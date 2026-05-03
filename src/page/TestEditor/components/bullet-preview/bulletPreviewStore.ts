@@ -162,6 +162,7 @@ export interface BulletPreviewState {
   resetPhysicsOverrides: () => void;
   setScenario: (patch: Partial<BulletPreviewScenario>) => void;
   setVisualization: (patch: Partial<BulletPreviewVisualization>) => void;
+  resetWorkbench: () => void;
 
   setPlaybackFrame: (frame: number) => void;
   setIsPlaying: (playing: boolean) => void;
@@ -329,6 +330,30 @@ export const useBulletPreviewStore = create<BulletPreviewState>((set, get) => ({
 
   setVisualization: (patch) =>
     set((state) => ({ visualization: { ...state.visualization, ...patch } })),
+
+  resetWorkbench: () => {
+    const state = get();
+    const filter = { ...DEFAULT_BULLET_PREVIEW_FILTER };
+    const scenario = { ...DEFAULT_BULLET_PREVIEW_SCENARIO };
+    const next = recomputeState({
+      dataset: state.dataset,
+      externalEntry: state.externalEntry,
+      filter,
+      selectedSourceIndex: null,
+      physicsOverrides: {},
+      scenario,
+    });
+    set({
+      ...next,
+      filter,
+      physicsOverrides: {},
+      scenario,
+      visualization: { ...DEFAULT_BULLET_PREVIEW_VISUALIZATION },
+      playbackFrame: 0,
+      isPlaying: false,
+      playbackSpeed: 1,
+    });
+  },
 
   setPlaybackFrame: (frame) => {
     const { trajectory } = get();

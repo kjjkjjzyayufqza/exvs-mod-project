@@ -61,3 +61,34 @@
 - Command:
   - `pnpm -s tsc --noEmit`
   - Result: exit code `0`.
+
+### Follow-up fixes (Bullet 3D debug)
+- Added a new `resetWorkbench` store action to reset:
+  - filter/search selections
+  - scenario fields
+  - visualization toggles
+  - physics overrides
+  - playback state/speed
+- Added enemy lateral movement fields to scenario:
+  - `enemyLateralMotionEnabled`
+  - `enemyLateralAmplitude`
+  - `enemyLateralPeriodFrames`
+  - `enemyLateralPhaseDeg`
+- Added `computeScenarioTargetPosition()` in `bulletPreviewTypes.ts` as shared target-motion resolver.
+- Updated simulator to:
+  - use moving target position per frame for homing computation
+  - output `targetPositions` in trajectory results for viewport playback sync
+  - clamp/sanitize unsafe numeric inputs
+  - auto-flip negative gravity for preview stability
+  - truncate simulation with warning if non-finite values occur
+- Updated scene to render target dummy / distance line / range sphere at dynamic target position per playback frame.
+- Updated controls with:
+  - top-level `Reset All` button
+  - enemy lateral motion toggle + amplitude/period/phase inputs
+  - warning panel now shows multiple simulator warnings (not only first line)
+
+### Follow-up verification
+- IDE lint diagnostics for edited files: no errors.
+- Command:
+  - `pnpm -s tsc --noEmit`
+  - Result: exit code `0`.

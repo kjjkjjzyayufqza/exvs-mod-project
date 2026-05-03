@@ -29,6 +29,7 @@ tauri-plugin-shell = "2"
 tauri-plugin-store = "2"
 notify = "8.2.0"
 tauri-plugin-opener = "2"
+tauri-plugin-mcp-bridge = "0.2"
 
 nutexb = { git = "https://github.com/kjjkjjzyayufqza/nutexb", features = ["ddsfile"] }
 ssbh_data = { git = "https://github.com/kjjkjjzyayufqza/ssbh_lib", branch = "wmmt2", package = "ssbh_data", features = ["serde"] }

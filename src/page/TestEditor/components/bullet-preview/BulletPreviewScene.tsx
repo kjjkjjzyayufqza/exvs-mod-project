@@ -3,6 +3,26 @@ import { useFrame } from "@react-three/fiber";
 import { Html, Line } from "@react-three/drei";
 import * as THREE from "three";
 import { useBulletPreviewStore } from "./bulletPreviewStore";
+import {
+  computeScenarioTargetPosition,
+  type BulletPreviewScenario,
+} from "./bulletPreviewTypes";
+
+function resolveTargetPosition(
+  trajectory: { targetPositions: Float32Array; totalFrames: number } | null,
+  scenario: BulletPreviewScenario,
+  playbackFrame: number,
+): [number, number, number] {
+  if (!trajectory || trajectory.totalFrames <= 0 || trajectory.targetPositions.length < 3) {
+    return computeScenarioTargetPosition(scenario, playbackFrame);
+  }
+  const idx = Math.min(Math.floor(playbackFrame), trajectory.totalFrames - 1);
+  return [
+    trajectory.targetPositions[idx * 3] ?? 0,
+    trajectory.targetPositions[idx * 3 + 1] ?? 0,
+    trajectory.targetPositions[idx * 3 + 2] ?? 0,
+  ];
+}
 
 function PlayerUnit() {
   const visible = useBulletPreviewStore((s) => s.visualization.playerDummy);
@@ -52,14 +72,18 @@ function PlayerUnit() {
 }
 
 function EnemyUnit() {
-  const targetDistance = useBulletPreviewStore((s) => s.scenario.targetDistance);
-  const targetHeight = useBulletPreviewStore((s) => s.scenario.targetHeight);
-  const targetOffsetX = useBulletPreviewStore((s) => s.scenario.targetOffsetX);
+  const scenario = useBulletPreviewStore((s) => s.scenario);
+  const trajectory = useBulletPreviewStore((s) => s.trajectory);
+  const playbackFrame = useBulletPreviewStore((s) => s.playbackFrame);
   const visible = useBulletPreviewStore((s) => s.visualization.enemyDummy);
+  const targetPosition = useMemo(
+    () => resolveTargetPosition(trajectory, scenario, playbackFrame),
+    [trajectory, scenario, playbackFrame],
+  );
   if (!visible) return null;
 
   return (
-    <group position={[targetOffsetX, targetHeight, targetDistance]}>
+    <group position={targetPosition}>
       <mesh position={[0, 2.2, 0]}>
         <boxGeometry args={[1.8, 2.4, 1.0]} />
         <meshStandardMaterial color="#993333" metalness={0.35} roughness={0.45} />
@@ -107,32 +131,33 @@ function EnemyUnit() {
 
 function DistanceLine() {
   const scenario = useBulletPreviewStore((s) => s.scenario);
+  const trajectory = useBulletPreviewStore((s) => s.trajectory);
+  const playbackFrame = useBulletPreviewStore((s) => s.playbackFrame);
   const visible = useBulletPreviewStore((s) => s.visualization.distanceMeasure);
+  const targetPosition = useMemo(
+    () => resolveTargetPosition(trajectory, scenario, playbackFrame),
+    [trajectory, scenario, playbackFrame],
+  );
 
   const points = useMemo(
     () => [
       new THREE.Vector3(0, 0.05, 0),
-      new THREE.Vector3(scenario.targetOffsetX, scenario.targetHeight + 0.05, scenario.targetDistance),
+      new THREE.Vector3(targetPosition[0], targetPosition[1] + 0.05, targetPosition[2]),
     ],
-    [scenario.targetDistance, scenario.targetHeight, scenario.targetOffsetX],
+    [targetPosition],
   );
   const mid = useMemo(
     () =>
       new THREE.Vector3(
-        scenario.targetOffsetX * 0.5,
-        scenario.targetHeight * 0.5 + 0.5,
-        scenario.targetDistance * 0.5,
+        targetPosition[0] * 0.5,
+        targetPosition[1] * 0.5 + 0.5,
+        targetPosition[2] * 0.5,
       ),
-    [scenario.targetDistance, scenario.targetHeight, scenario.targetOffsetX],
+    [targetPosition],
   );
   const span = useMemo(
-    () =>
-      Math.hypot(
-        scenario.targetOffsetX,
-        scenario.targetHeight,
-        scenario.targetDistance,
-      ),
-    [scenario.targetDistance, scenario.targetHeight, scenario.targetOffsetX],
+    () => Math.hypot(targetPosition[0], targetPosition[1], targetPosition[2]),
+    [targetPosition],
   );
 
   if (!visible) return null;
@@ -251,14 +276,19 @@ function GhostTrailLine() {
 function RangeVisualization() {
   const trajectory = useBulletPreviewStore((s) => s.trajectory);
   const scenario = useBulletPreviewStore((s) => s.scenario);
+  const playbackFrame = useBulletPreviewStore((s) => s.playbackFrame);
   const viz = useBulletPreviewStore((s) => s.visualization);
+  const targetPosition = useMemo(
+    () => resolveTargetPosition(trajectory, scenario, playbackFrame),
+    [trajectory, scenario, playbackFrame],
+  );
 
   if (!trajectory) return null;
 
   return (
     <group>
       {viz.maxRangeAtTarget && trajectory.maxRange > 0 && (
-        <mesh position={[scenario.targetOffsetX, scenario.targetHeight + 2, scenario.targetDistance]}>
+        <mesh position={[targetPosition[0], targetPosition[1] + 2, targetPosition[2]]}>
           <sphereGeometry args={[trajectory.maxRange, 28, 18]} />
           <meshBasicMaterial color="#4ade80" wireframe transparent opacity={0.14} depthWrite={false} />
         </mesh>

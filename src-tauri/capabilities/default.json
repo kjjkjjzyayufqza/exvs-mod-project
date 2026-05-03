@@ -71,6 +71,7 @@
           "path": "*/**"
         }
       ]
-    }
+    },
+    "mcp-bridge:default"
   ]
 }

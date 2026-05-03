@@ -47,12 +47,20 @@ export interface BulletPreviewScenario {
   targetDistance: number;
   targetHeight: number;
   targetOffsetX: number;
+  enemyLateralMotionEnabled: boolean;
+  enemyLateralAmplitude: number;
+  enemyLateralPeriodFrames: number;
+  enemyLateralPhaseDeg: number;
 }
 
 export const DEFAULT_BULLET_PREVIEW_SCENARIO: BulletPreviewScenario = {
   targetDistance: 120,
   targetHeight: 0,
   targetOffsetX: 0,
+  enemyLateralMotionEnabled: false,
+  enemyLateralAmplitude: 25,
+  enemyLateralPeriodFrames: 120,
+  enemyLateralPhaseDeg: 0,
 };
 
 export interface BulletPreviewVisualization {
@@ -151,6 +159,30 @@ export function applyPhysicsOverrides(
     }
   }
   return next;
+}
+
+export function computeScenarioTargetPosition(
+  scenario: BulletPreviewScenario,
+  frame: number,
+): [number, number, number] {
+  const safeFrame = Number.isFinite(frame) ? frame : 0;
+  let x = Number.isFinite(scenario.targetOffsetX) ? scenario.targetOffsetX : 0;
+  const y = Number.isFinite(scenario.targetHeight) ? scenario.targetHeight : 0;
+  const z = Number.isFinite(scenario.targetDistance) ? scenario.targetDistance : 0;
+
+  if (
+    scenario.enemyLateralMotionEnabled &&
+    Number.isFinite(scenario.enemyLateralAmplitude) &&
+    Number.isFinite(scenario.enemyLateralPeriodFrames) &&
+    Math.abs(scenario.enemyLateralAmplitude) > 1e-6 &&
+    scenario.enemyLateralPeriodFrames > 1
+  ) {
+    const phase = (scenario.enemyLateralPhaseDeg * Math.PI) / 180;
+    const omega = (Math.PI * 2) / scenario.enemyLateralPeriodFrames;
+    x += scenario.enemyLateralAmplitude * Math.sin(safeFrame * omega + phase);
+  }
+
+  return [x, y, z];
 }
 
 export function computeBulletPhysicsDigest(entry: TypedParamEntry | null): string {

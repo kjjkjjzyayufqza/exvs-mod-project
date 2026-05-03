@@ -17,7 +17,7 @@ pub use ssbh_motion::smoke_decode_and_sample_nuanmb;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
@@ -102,7 +102,14 @@ pub fn run() {
             commands::build_typed_param_file,
             commands::parse_chrsysparam_file,
             commands::build_chrsysparam_file
-        ])
+        ]);
+
+    #[cfg(debug_assertions)]
+    {
+        builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+    }
+
+    builder
         .setup(|app| {
             #[cfg(debug_assertions)]
             {

@@ -11,6 +11,9 @@
 - [completed] Rebuild controls UI into one-page workbench (file load, weapon/shot selection, tuning controls).
 - [completed] Update simulator and scene to consume richer scenario inputs and live overrides.
 - [completed] Verify TypeScript/lints for edited files and record outcomes.
+- [completed] Add full workbench reset action for one-click state reset (filters, scenario, playback, visuals, overrides).
+- [completed] Add enemy lateral movement scenario controls and feed motion into homing trajectory simulation.
+- [completed] Add numeric safety guards in simulator to prevent blank scene / upside-down parabola from malformed data.
 
 ## Notes
 - Follow UnitTask docs naming semantics for moveType/action families.
