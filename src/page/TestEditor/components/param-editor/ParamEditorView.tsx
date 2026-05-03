@@ -54,6 +54,8 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
   useEffect(() => {
     if (kindId === "bulletparam" && typed?.data?.entries?.[selectedEntry]) {
       setBulletEntry(typed.data.entries[selectedEntry])
+    } else {
+      setBulletEntry(null)
     }
   }, [kindId, typed, selectedEntry, setBulletEntry])
 

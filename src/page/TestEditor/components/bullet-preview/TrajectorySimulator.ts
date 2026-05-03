@@ -1,4 +1,5 @@
 import type { TypedParamEntry } from "../param-editor/typedParamTypes";
+import type { BulletPreviewScenario } from "./bulletPreviewTypes";
 
 export interface TrajectoryResult {
   positions: Float32Array;
@@ -10,6 +11,7 @@ export interface TrajectoryResult {
   hitboxSize: [number, number, number];
   moveType: number;
   moveTypeLabel: string;
+  warnings: string[];
 }
 
 function f(v: unknown): number {
@@ -32,25 +34,40 @@ function vec3Normalize(x: number, y: number, z: number): [number, number, number
 }
 
 export const MOVE_TYPE_LABELS: Record<number, string> = {
-  0: "Standard Missile",
-  1: "Throw Projectile",
-  2: "Funnel Flight",
-  3: "Funnel Approach",
-  4: "Anchor / Chain",
-  5: "FunnelFlysword",
-  6: "Attach Change",
-  7: "Funnel Throw",
-  255: "Generic Projectile",
+  0: "Standard missile",
+  1: "Throw projectile",
+  2: "Funnel flight",
+  3: "Funnel approach",
+  4: "Anchor / chain",
+  5: "Funnel flysword",
+  6: "Attach change",
+  7: "Funnel throw",
+  255: "Generic projectile",
 };
 
+function resolveHorizontalLaunchDeg(entry: TypedParamEntry): number {
+  const launchH = f(entry.launchAngleHorizontal);
+  if (launchH !== 0 || entry.launchAngleHorizontal === 0) {
+    return launchH;
+  }
+  return f(entry.initialAngle);
+}
+
+/**
+ * Lightweight ballistic / homing approximation for authoring visualization only.
+ * Does not execute UnitTaskAutomata or bullet_action_hash pipelines (see docs under docs/).
+ */
 export function simulateTrajectory(
   entry: TypedParamEntry,
-  targetDistance: number,
+  scenario: BulletPreviewScenario,
 ): TrajectoryResult {
+  const warnings: string[] = [
+    "Visualization approximates physics only — bullet_action_hash / UnitTaskAutomata paths are not simulated.",
+  ];
+
   const moveType = f(entry.moveType);
-  const lifetime = Math.max(f(entry.lifetime), f(entry.durationFrame), 60);
-  const totalFrames = Math.min(lifetime, 600);
-  const positions = new Float32Array(totalFrames * 3);
+  const lifetimeRaw = Math.max(f(entry.lifetime), f(entry.durationFrame), 1);
+  const maxSimFrames = Math.min(Math.ceil(lifetimeRaw), 600);
 
   const maxRange = f(entry.maxRange);
   const effectiveRange = f(entry.effectiveRange);
@@ -61,10 +78,14 @@ export function simulateTrajectory(
     f(entry.hitboxDepth),
   ];
 
-  const targetPos: [number, number, number] = [0, 0, targetDistance];
-  let hitFrame = totalFrames;
+  const targetPos: [number, number, number] = [
+    scenario.targetOffsetX,
+    scenario.targetHeight,
+    scenario.targetDistance,
+  ];
+  let hitFrame = maxSimFrames;
 
-  const launchAngleH = degToRad(f(entry.initialAngle));
+  const launchAngleH = degToRad(resolveHorizontalLaunchDeg(entry));
   const launchAngleV = degToRad(f(entry.elevationAngle));
 
   const dirX = Math.sin(launchAngleH) * Math.cos(launchAngleV);
@@ -79,18 +100,41 @@ export function simulateTrajectory(
   const turnRate = degToRad(f(entry.turnRate));
   const homingDur = f(entry.homingDuration);
 
-  let px = 0, py = 0, pz = 0;
-  let vx = ndx * speed, vy = ndy * speed, vz = ndz * speed;
+  const positions = new Float32Array(maxSimFrames * 3);
+  let px = 0,
+    py = 0,
+    pz = 0;
+  let vx = ndx * speed,
+    vy = ndy * speed,
+    vz = ndz * speed;
+
+  let actualFrames = maxSimFrames;
 
   switch (moveType) {
-    case 4:
-      simulateAnchor(positions, totalFrames, entry, targetDistance);
+    case 4: {
+      actualFrames = simulateAnchor(positions, maxSimFrames, entry, scenario);
+      if (f(entry.effectiveRange) > 0 && actualFrames < maxSimFrames) {
+        warnings.push(
+          "Trajectory clipped at effectiveRange (ShouldCancel-style distance from origin).",
+        );
+      }
+      hitFrame = Math.min(hitFrame, Math.max(0, actualFrames - 1));
       break;
+    }
     default:
-      for (let frame = 0; frame < totalFrames; frame++) {
+      for (let frame = 0; frame < maxSimFrames; frame++) {
         positions[frame * 3] = px;
         positions[frame * 3 + 1] = py;
         positions[frame * 3 + 2] = pz;
+
+        const distOrigin = vec3Len(px, py, pz);
+        if (effectiveRange > 0 && distOrigin >= effectiveRange && frame > 0) {
+          actualFrames = frame + 1;
+          warnings.push(
+            "Trajectory clipped at effectiveRange (ShouldCancel-style distance from origin).",
+          );
+          break;
+        }
 
         const curSpeed = vec3Len(vx, vy, vz);
 
@@ -136,21 +180,21 @@ export function simulateTrajectory(
         py += vy;
         pz += vz;
 
-        const distToTarget = vec3Len(
-          px - targetPos[0],
-          py - targetPos[1],
-          pz - targetPos[2],
-        );
-        if (distToTarget < (maxRange > 0 ? maxRange : 2.0) && frame > 5) {
+        const distToTarget = vec3Len(px - targetPos[0], py - targetPos[1], pz - targetPos[2]);
+        const hitRadius = maxRange > 0 ? maxRange : 2.0;
+        if (distToTarget < hitRadius && frame > 5) {
           hitFrame = Math.min(hitFrame, frame);
         }
       }
       break;
   }
 
+  const trimmed =
+    actualFrames < maxSimFrames ? positions.subarray(0, actualFrames * 3) : positions;
+
   return {
-    positions,
-    totalFrames,
+    positions: new Float32Array(trimmed),
+    totalFrames: actualFrames,
     hitFrame,
     maxRange,
     effectiveRange,
@@ -158,6 +202,7 @@ export function simulateTrajectory(
     hitboxSize,
     moveType,
     moveTypeLabel: MOVE_TYPE_LABELS[moveType] ?? `Unknown (${moveType})`,
+    warnings,
   };
 }
 
@@ -165,12 +210,19 @@ function simulateAnchor(
   positions: Float32Array,
   totalFrames: number,
   entry: TypedParamEntry,
-  targetDistance: number,
-): void {
+  scenario: BulletPreviewScenario,
+): number {
+  const targetDistance = Math.max(1, vec3Len(scenario.targetOffsetX, scenario.targetHeight, scenario.targetDistance));
   const reach = Math.min(targetDistance * 0.8, f(entry.maxDistance) || targetDistance * 0.8);
   const speed = f(entry.initialSpeed) || 2.0;
   const extendFrames = Math.ceil(reach / Math.max(speed, 0.1));
   const retractStart = Math.min(extendFrames + 30, totalFrames - 30);
+  const anchorX = scenario.targetOffsetX * 0.82;
+  const anchorY = scenario.targetHeight * 0.82;
+  const anchorZ = scenario.targetDistance * 0.82;
+
+  const effectiveRange = f(entry.effectiveRange);
+  let clipFrame = totalFrames;
 
   for (let frame = 0; frame < totalFrames; frame++) {
     let t: number;
@@ -184,8 +236,19 @@ function simulateAnchor(
     }
 
     const swing = Math.sin(t * Math.PI) * reach * 0.15;
-    positions[frame * 3] = swing;
-    positions[frame * 3 + 1] = Math.sin(t * Math.PI * 0.5) * reach * 0.1;
-    positions[frame * 3 + 2] = t * reach;
+    const px = anchorX * t + swing;
+    const py = anchorY * t + Math.sin(t * Math.PI * 0.5) * reach * 0.1;
+    const pz = anchorZ * t;
+
+    positions[frame * 3] = px;
+    positions[frame * 3 + 1] = py;
+    positions[frame * 3 + 2] = pz;
+
+    if (effectiveRange > 0 && vec3Len(px, py, pz) >= effectiveRange && frame > 0) {
+      clipFrame = frame + 1;
+      break;
+    }
   }
+
+  return clipFrame;
 }

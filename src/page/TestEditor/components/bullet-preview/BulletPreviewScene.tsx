@@ -1,161 +1,164 @@
-import { useRef, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Html, Line } from "@react-three/drei";
 import * as THREE from "three";
 import { useBulletPreviewStore } from "./bulletPreviewStore";
 
-// ─── Player (Self) Unit ───────────────────────────────────────────────────────
-
 function PlayerUnit() {
+  const visible = useBulletPreviewStore((s) => s.visualization.playerDummy);
+  if (!visible) return null;
+
   return (
     <group position={[0, 0, 0]}>
-      {/* Body */}
       <mesh position={[0, 2.2, 0]}>
         <boxGeometry args={[1.8, 2.4, 1.0]} />
-        <meshStandardMaterial color="#3366cc" />
+        <meshStandardMaterial color="#3366cc" metalness={0.35} roughness={0.45} />
       </mesh>
-      {/* Head */}
       <mesh position={[0, 3.8, 0]}>
         <boxGeometry args={[0.9, 0.8, 0.8]} />
-        <meshStandardMaterial color="#3366cc" />
+        <meshStandardMaterial color="#3366cc" metalness={0.35} roughness={0.45} />
       </mesh>
-      {/* V-fin */}
-      <mesh position={[0, 4.3, 0]} rotation={[0, 0, 0]}>
+      <mesh position={[0, 4.3, 0]}>
         <coneGeometry args={[0.15, 0.7, 4]} />
-        <meshStandardMaterial color="#ffcc00" emissive="#ffaa00" emissiveIntensity={0.4} />
+        <meshStandardMaterial color="#ffcc00" emissive="#ffaa00" emissiveIntensity={0.35} />
       </mesh>
-      {/* Left arm */}
       <mesh position={[-1.4, 2.2, 0]}>
         <boxGeometry args={[0.6, 2.0, 0.7]} />
-        <meshStandardMaterial color="#2255aa" />
+        <meshStandardMaterial color="#2255aa" metalness={0.25} roughness={0.55} />
       </mesh>
-      {/* Right arm */}
       <mesh position={[1.4, 2.2, 0]}>
         <boxGeometry args={[0.6, 2.0, 0.7]} />
-        <meshStandardMaterial color="#2255aa" />
+        <meshStandardMaterial color="#2255aa" metalness={0.25} roughness={0.55} />
       </mesh>
-      {/* Left leg */}
       <mesh position={[-0.5, 0.0, 0]}>
         <boxGeometry args={[0.7, 2.0, 0.8]} />
-        <meshStandardMaterial color="#2244aa" />
+        <meshStandardMaterial color="#2244aa" metalness={0.2} roughness={0.6} />
       </mesh>
-      {/* Right leg */}
       <mesh position={[0.5, 0.0, 0]}>
         <boxGeometry args={[0.7, 2.0, 0.8]} />
-        <meshStandardMaterial color="#2244aa" />
+        <meshStandardMaterial color="#2244aa" metalness={0.2} roughness={0.6} />
       </mesh>
-      {/* Shield (left) */}
       <mesh position={[-1.8, 2.5, 0.3]}>
         <boxGeometry args={[0.15, 1.8, 1.2]} />
-        <meshStandardMaterial color="#cc3333" />
+        <meshStandardMaterial color="#cc3333" roughness={0.5} />
       </mesh>
-      {/* Label */}
       <Html position={[0, 5.2, 0]} center distanceFactor={60}>
-        <div className="whitespace-nowrap rounded bg-blue-900/80 px-2 py-0.5 text-[10px] font-bold text-blue-200 select-none">
-          PLAYER
+        <div className="pointer-events-none whitespace-nowrap rounded bg-blue-950/85 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-blue-100 shadow-md backdrop-blur-sm">
+          Self
         </div>
       </Html>
     </group>
   );
 }
 
-// ─── Enemy Unit ───────────────────────────────────────────────────────────────
-
 function EnemyUnit() {
-  const targetDistance = useBulletPreviewStore((s) => s.targetDistance);
+  const targetDistance = useBulletPreviewStore((s) => s.scenario.targetDistance);
+  const targetHeight = useBulletPreviewStore((s) => s.scenario.targetHeight);
+  const targetOffsetX = useBulletPreviewStore((s) => s.scenario.targetOffsetX);
+  const visible = useBulletPreviewStore((s) => s.visualization.enemyDummy);
+  if (!visible) return null;
 
   return (
-    <group position={[0, 0, targetDistance]}>
-      {/* Body */}
+    <group position={[targetOffsetX, targetHeight, targetDistance]}>
       <mesh position={[0, 2.2, 0]}>
         <boxGeometry args={[1.8, 2.4, 1.0]} />
-        <meshStandardMaterial color="#993333" />
+        <meshStandardMaterial color="#993333" metalness={0.35} roughness={0.45} />
       </mesh>
-      {/* Head */}
       <mesh position={[0, 3.8, 0]}>
         <boxGeometry args={[1.0, 0.7, 0.8]} />
-        <meshStandardMaterial color="#aa3333" />
+        <meshStandardMaterial color="#aa3333" metalness={0.3} roughness={0.5} />
       </mesh>
-      {/* Mono-eye */}
       <mesh position={[0, 3.8, 0.45]}>
-        <sphereGeometry args={[0.12, 8, 8]} />
-        <meshStandardMaterial color="#ff3366" emissive="#ff1144" emissiveIntensity={3} />
+        <sphereGeometry args={[0.12, 10, 10]} />
+        <meshStandardMaterial color="#ff3366" emissive="#ff1144" emissiveIntensity={2.5} />
       </mesh>
-      {/* Left arm */}
       <mesh position={[-1.4, 2.2, 0]}>
         <boxGeometry args={[0.6, 2.0, 0.7]} />
-        <meshStandardMaterial color="#882222" />
+        <meshStandardMaterial color="#882222" roughness={0.55} />
       </mesh>
-      {/* Right arm */}
       <mesh position={[1.4, 2.2, 0]}>
         <boxGeometry args={[0.6, 2.0, 0.7]} />
-        <meshStandardMaterial color="#882222" />
+        <meshStandardMaterial color="#882222" roughness={0.55} />
       </mesh>
-      {/* Left leg */}
       <mesh position={[-0.5, 0.0, 0]}>
         <boxGeometry args={[0.7, 2.0, 0.8]} />
-        <meshStandardMaterial color="#772222" />
+        <meshStandardMaterial color="#772222" roughness={0.58} />
       </mesh>
-      {/* Right leg */}
       <mesh position={[0.5, 0.0, 0]}>
         <boxGeometry args={[0.7, 2.0, 0.8]} />
-        <meshStandardMaterial color="#772222" />
+        <meshStandardMaterial color="#772222" roughness={0.58} />
       </mesh>
-      {/* Spike shoulder (left) */}
       <mesh position={[-1.6, 3.4, 0]}>
         <coneGeometry args={[0.3, 0.8, 6]} />
         <meshStandardMaterial color="#aa4444" />
       </mesh>
-      {/* Spike shoulder (right) */}
       <mesh position={[1.6, 3.4, 0]}>
         <coneGeometry args={[0.3, 0.8, 6]} />
         <meshStandardMaterial color="#aa4444" />
       </mesh>
-      {/* Label */}
       <Html position={[0, 5.2, 0]} center distanceFactor={60}>
-        <div className="whitespace-nowrap rounded bg-red-900/80 px-2 py-0.5 text-[10px] font-bold text-red-200 select-none">
-          ENEMY
+        <div className="pointer-events-none whitespace-nowrap rounded bg-red-950/85 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-red-100 shadow-md backdrop-blur-sm">
+          Target
         </div>
       </Html>
     </group>
   );
 }
 
-// ─── Distance Line ────────────────────────────────────────────────────────────
-
 function DistanceLine() {
-  const targetDistance = useBulletPreviewStore((s) => s.targetDistance);
+  const scenario = useBulletPreviewStore((s) => s.scenario);
+  const visible = useBulletPreviewStore((s) => s.visualization.distanceMeasure);
 
   const points = useMemo(
-    () => [new THREE.Vector3(0, 0.05, 0), new THREE.Vector3(0, 0.05, targetDistance)],
-    [targetDistance],
+    () => [
+      new THREE.Vector3(0, 0.05, 0),
+      new THREE.Vector3(scenario.targetOffsetX, scenario.targetHeight + 0.05, scenario.targetDistance),
+    ],
+    [scenario.targetDistance, scenario.targetHeight, scenario.targetOffsetX],
   );
+  const mid = useMemo(
+    () =>
+      new THREE.Vector3(
+        scenario.targetOffsetX * 0.5,
+        scenario.targetHeight * 0.5 + 0.5,
+        scenario.targetDistance * 0.5,
+      ),
+    [scenario.targetDistance, scenario.targetHeight, scenario.targetOffsetX],
+  );
+  const span = useMemo(
+    () =>
+      Math.hypot(
+        scenario.targetOffsetX,
+        scenario.targetHeight,
+        scenario.targetDistance,
+      ),
+    [scenario.targetDistance, scenario.targetHeight, scenario.targetOffsetX],
+  );
+
+  if (!visible) return null;
 
   return (
     <group>
-      <Line points={points} color="#556677" lineWidth={1} dashed dashSize={1} gapSize={0.5} opacity={0.4} transparent />
-      <Html position={[0, 0.5, targetDistance / 2]} center distanceFactor={80}>
-        <div className="whitespace-nowrap text-[9px] text-slate-400 select-none">
-          {targetDistance.toFixed(0)}m
+      <Line points={points} color="#64748b" lineWidth={1} dashed dashSize={1} gapSize={0.5} opacity={0.45} transparent />
+      <Html position={[mid.x, mid.y, mid.z]} center distanceFactor={80}>
+        <div className="pointer-events-none whitespace-nowrap text-[10px] text-slate-400 tabular-nums">
+          {span.toFixed(0)} u
         </div>
       </Html>
     </group>
   );
 }
 
-// ─── Projectile Red Dot ───────────────────────────────────────────────────────
-
-function ProjectileDot() {
+function ProjectileBody() {
   const meshRef = useRef<THREE.Mesh>(null);
   const glowRef = useRef<THREE.Mesh>(null);
+
   const trajectory = useBulletPreviewStore((s) => s.trajectory);
 
-  useFrame((_, delta) => {
+  useFrame(() => {
     const state = useBulletPreviewStore.getState();
     if (!state.trajectory) return;
-    state.advanceFrame(delta * 60);
-    const frame = Math.floor(state.currentFrame);
-    const idx = Math.min(frame, state.trajectory.totalFrames - 1);
+    const idx = Math.min(Math.floor(state.playbackFrame), state.trajectory.totalFrames - 1);
     const x = state.trajectory.positions[idx * 3];
     const y = state.trajectory.positions[idx * 3 + 1];
     const z = state.trajectory.positions[idx * 3 + 2];
@@ -168,92 +171,105 @@ function ProjectileDot() {
   return (
     <group>
       <mesh ref={meshRef}>
-        <sphereGeometry args={[0.35, 16, 16]} />
-        <meshStandardMaterial color="#ff2222" emissive="#ff0000" emissiveIntensity={3} />
+        <sphereGeometry args={[0.28, 24, 24]} />
+        <meshStandardMaterial color="#ff3344" emissive="#dd0018" emissiveIntensity={2.2} metalness={0.15} roughness={0.35} />
       </mesh>
       <mesh ref={glowRef}>
-        <sphereGeometry args={[0.7, 12, 12]} />
-        <meshBasicMaterial color="#ff4400" transparent opacity={0.15} />
+        <sphereGeometry args={[0.62, 16, 16]} />
+        <meshBasicMaterial color="#ff5522" transparent opacity={0.14} depthWrite={false} />
       </mesh>
     </group>
   );
 }
 
-// ─── Trail Lines ──────────────────────────────────────────────────────────────
-
-function TrailLine() {
-  const lineRef = useRef<THREE.Line>(null);
+function ProgressiveTrailLine() {
   const trajectory = useBulletPreviewStore((s) => s.trajectory);
-  const showTrail = useBulletPreviewStore((s) => s.showTrail);
+  const show = useBulletPreviewStore((s) => s.visualization.trail);
+  const [lineObj, setLineObj] = useState<THREE.Line | null>(null);
 
-  const geometry = useMemo(() => {
-    if (!trajectory) return null;
+  useEffect(() => {
+    if (!trajectory) {
+      setLineObj(null);
+      return;
+    }
+
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(trajectory.positions, 3));
-    geo.setDrawRange(0, 0);
-    return geo;
+    geo.setDrawRange(0, 1);
+    const mat = new THREE.LineBasicMaterial({
+      color: "#ff7744",
+      transparent: true,
+      opacity: 0.92,
+    });
+    const line = new THREE.Line(geo, mat);
+
+    setLineObj(line);
+
+    return () => {
+      geo.dispose();
+      mat.dispose();
+    };
   }, [trajectory]);
 
   useFrame(() => {
-    if (!geometry) return;
-    const { currentFrame, trajectory: traj } = useBulletPreviewStore.getState();
+    if (!lineObj) return;
+    const geo = lineObj.geometry as THREE.BufferGeometry;
+    const { trajectory: traj, playbackFrame } = useBulletPreviewStore.getState();
     if (!traj) return;
-    geometry.setDrawRange(0, Math.min(Math.floor(currentFrame) + 1, traj.totalFrames));
+    const frame = Math.floor(playbackFrame);
+    geo.setDrawRange(0, Math.min(frame + 1, traj.totalFrames));
   });
 
-  if (!geometry || !showTrail) return null;
-
-  return (
-    <primitive object={new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: "#ff6644", transparent: true, opacity: 0.8 }))} ref={lineRef} />
-  );
+  if (!lineObj || !show) return null;
+  return <primitive object={lineObj} />;
 }
 
-function FullTrailLine() {
+function GhostTrailLine() {
   const trajectory = useBulletPreviewStore((s) => s.trajectory);
-  const showTrail = useBulletPreviewStore((s) => s.showTrail);
+  const show = useBulletPreviewStore((s) => s.visualization.fullPathGhost);
 
   const points = useMemo(() => {
     if (!trajectory) return null;
     const pts: THREE.Vector3[] = [];
     for (let i = 0; i < trajectory.totalFrames; i++) {
-      pts.push(new THREE.Vector3(
-        trajectory.positions[i * 3],
-        trajectory.positions[i * 3 + 1],
-        trajectory.positions[i * 3 + 2],
-      ));
+      pts.push(
+        new THREE.Vector3(
+          trajectory.positions[i * 3],
+          trajectory.positions[i * 3 + 1],
+          trajectory.positions[i * 3 + 2],
+        ),
+      );
     }
     return pts.length >= 2 ? pts : null;
   }, [trajectory]);
 
-  if (!points || !showTrail) return null;
+  if (!points || !show) return null;
 
-  return <Line points={points} color="#553322" lineWidth={1} opacity={0.2} transparent />;
+  return <Line points={points} color="#475569" lineWidth={1} opacity={0.28} transparent />;
 }
-
-// ─── Range Visualization ──────────────────────────────────────────────────────
 
 function RangeVisualization() {
   const trajectory = useBulletPreviewStore((s) => s.trajectory);
-  const showRange = useBulletPreviewStore((s) => s.showRange);
-  const targetDistance = useBulletPreviewStore((s) => s.targetDistance);
+  const scenario = useBulletPreviewStore((s) => s.scenario);
+  const viz = useBulletPreviewStore((s) => s.visualization);
 
-  if (!trajectory || !showRange) return null;
+  if (!trajectory) return null;
 
   return (
     <group>
-      {trajectory.maxRange > 0 && (
-        <mesh position={[0, 2, targetDistance]}>
-          <sphereGeometry args={[trajectory.maxRange, 24, 16]} />
-          <meshBasicMaterial color="#44ff44" wireframe transparent opacity={0.12} />
+      {viz.maxRangeAtTarget && trajectory.maxRange > 0 && (
+        <mesh position={[scenario.targetOffsetX, scenario.targetHeight + 2, scenario.targetDistance]}>
+          <sphereGeometry args={[trajectory.maxRange, 28, 18]} />
+          <meshBasicMaterial color="#4ade80" wireframe transparent opacity={0.14} depthWrite={false} />
         </mesh>
       )}
-      {trajectory.effectiveRange > 0 && (
+      {viz.effectiveRangeAtOrigin && trajectory.effectiveRange > 0 && (
         <mesh position={[0, 0, 0]}>
-          <sphereGeometry args={[trajectory.effectiveRange, 32, 16]} />
-          <meshBasicMaterial color="#ffaa00" wireframe transparent opacity={0.06} />
+          <sphereGeometry args={[trajectory.effectiveRange, 36, 22]} />
+          <meshBasicMaterial color="#fbbf24" wireframe transparent opacity={0.09} depthWrite={false} />
         </mesh>
       )}
-      {trajectory.blastRadius > 0 && trajectory.hitFrame < trajectory.totalFrames && (
+      {viz.blastRadius && trajectory.blastRadius > 0 && trajectory.hitFrame < trajectory.totalFrames && (
         <mesh
           position={[
             trajectory.positions[trajectory.hitFrame * 3] ?? 0,
@@ -261,46 +277,42 @@ function RangeVisualization() {
             trajectory.positions[trajectory.hitFrame * 3 + 2] ?? 0,
           ]}
         >
-          <sphereGeometry args={[trajectory.blastRadius, 24, 16]} />
-          <meshBasicMaterial color="#ff4400" transparent opacity={0.1} />
+          <sphereGeometry args={[Math.abs(trajectory.blastRadius), 26, 18]} />
+          <meshBasicMaterial color="#fb923c" transparent opacity={0.14} depthWrite={false} />
         </mesh>
       )}
     </group>
   );
 }
 
-// ─── Hitbox Wireframe ─────────────────────────────────────────────────────────
-
 function HitboxVisualization() {
-  const ref = useRef<THREE.Mesh>(null);
+  const meshRef = useRef<THREE.Mesh>(null);
   const trajectory = useBulletPreviewStore((s) => s.trajectory);
-  const showHitbox = useBulletPreviewStore((s) => s.showHitbox);
+  const show = useBulletPreviewStore((s) => s.visualization.hitbox);
 
   useFrame(() => {
-    if (!ref.current) return;
-    const { currentFrame, trajectory: traj } = useBulletPreviewStore.getState();
+    if (!meshRef.current) return;
+    const { trajectory: traj, playbackFrame } = useBulletPreviewStore.getState();
     if (!traj) return;
-    const idx = Math.min(Math.floor(currentFrame), traj.totalFrames - 1);
-    ref.current.position.set(
-      traj.positions[idx * 3],
-      traj.positions[idx * 3 + 1],
-      traj.positions[idx * 3 + 2],
-    );
+    const idx = Math.min(Math.floor(playbackFrame), traj.totalFrames - 1);
+    meshRef.current.position.set(traj.positions[idx * 3], traj.positions[idx * 3 + 1], traj.positions[idx * 3 + 2]);
   });
 
-  if (!trajectory || !showHitbox) return null;
+  if (!trajectory || !show) return null;
   const [w, h, d] = trajectory.hitboxSize;
   if (w <= 0 && h <= 0 && d <= 0) return null;
 
+  const ew = Math.max(w, 0.08);
+  const eh = Math.max(h, 0.08);
+  const ed = Math.max(d, 0.08);
+
   return (
-    <mesh ref={ref}>
-      <boxGeometry args={[Math.max(w, 0.5), Math.max(h, 0.5), Math.max(d, 0.5)]} />
-      <meshBasicMaterial color="#00ffff" wireframe transparent opacity={0.3} />
+    <mesh ref={meshRef}>
+      <boxGeometry args={[ew, eh, ed]} />
+      <meshBasicMaterial color="#22d3ee" wireframe transparent opacity={0.38} depthWrite={false} />
     </mesh>
   );
 }
-
-// ─── Axis Arrows ──────────────────────────────────────────────────────────────
 
 const AXIS_ORIGIN = new THREE.Vector3(0, 0, 0);
 const AXIS_X = new THREE.Vector3(1, 0, 0);
@@ -308,16 +320,17 @@ const AXIS_Y = new THREE.Vector3(0, 1, 0);
 const AXIS_Z = new THREE.Vector3(0, 0, 1);
 
 function AxisHelper() {
+  const visible = useBulletPreviewStore((s) => s.visualization.axisHelpers);
+  if (!visible) return null;
+
   return (
     <group>
-      <arrowHelper args={[AXIS_X, AXIS_ORIGIN, 4, 0xff4444, 0.4, 0.25]} />
-      <arrowHelper args={[AXIS_Y, AXIS_ORIGIN, 4, 0x44ff44, 0.4, 0.25]} />
-      <arrowHelper args={[AXIS_Z, AXIS_ORIGIN, 4, 0x4488ff, 0.4, 0.25]} />
+      <arrowHelper args={[AXIS_X, AXIS_ORIGIN, 4, 0xff4444, 0.35, 0.22]} />
+      <arrowHelper args={[AXIS_Y, AXIS_ORIGIN, 4, 0x44ff44, 0.35, 0.22]} />
+      <arrowHelper args={[AXIS_Z, AXIS_ORIGIN, 4, 0x4488ff, 0.35, 0.22]} />
     </group>
   );
 }
-
-// ─── Main Scene ───────────────────────────────────────────────────────────────
 
 export function BulletPreviewScene() {
   const trajectory = useBulletPreviewStore((s) => s.trajectory);
@@ -330,9 +343,9 @@ export function BulletPreviewScene() {
       <DistanceLine />
       {trajectory && (
         <>
-          <FullTrailLine />
-          <TrailLine />
-          <ProjectileDot />
+          <GhostTrailLine />
+          <ProgressiveTrailLine />
+          <ProjectileBody />
           <RangeVisualization />
           <HitboxVisualization />
         </>
