@@ -1,6 +1,24 @@
 ---
+description: EXVS2 Tauri project mandatory context and development rules
 alwaysApply: true
 ---
+
+# Project Rule
+
+This Cursor rule is AI-only guidance for this repository. The cross-agent hub is
+`AGENTS.md`; read it before starting any task and keep this rule linked with it.
+
+## Mandatory Startup
+
+Before making code, asset, documentation, or command changes:
+
+1. Read `AGENTS.md`.
+2. Search `docs/` for Markdown files related to the user's task.
+3. Read the relevant specifications before editing.
+4. For multi-step tasks, create or update `docs/agent-sessions/<topic>/todo.md`
+   and `docs/agent-sessions/<topic>/process.md`.
+
+## Development Rules
 
 以下规则在本项目中**全局适用**：
 

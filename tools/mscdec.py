@@ -766,8 +766,10 @@ def getFuncTypes(mscFile):
             while funcTypes[i] in funcNames:
                 recursiveLevel += 1
                 if recursiveLevel > MAX_RECURSION:
-                    break # Prevent an infinite loop by timing out after MAX_RECURSION tries
+                    break
                 funcTypes[i] = funcTypes[funcNames.index(funcTypes[i])]
+            if funcTypes[i] == None or funcTypes[i] not in ("int", "float", "void", "string", "bool"):
+                funcTypes[i] = "int"
     return funcTypes
 
 

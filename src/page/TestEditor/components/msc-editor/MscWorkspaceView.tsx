@@ -330,6 +330,33 @@ export default function MscWorkspaceView({
     setConvertDialogTarget(null);
   };
 
+  const handleRenameActions = async (file: FileInfo) => {
+    try {
+      setProcessingFile(file.name);
+      const scriptFolder = await dirname(file.path);
+      const script0Path = await join(scriptFolder, "0.c");
+
+      if (!(await exists(script0Path))) {
+        toast.error("MSC workspace: 0.c not found, cannot rename actions");
+        return;
+      }
+
+      const script0Content = await readTextFile(script0Path);
+      const script2Content = await readTextFile(file.path);
+      const result = renameScript2CallbacksByActionMask(script0Content, script2Content);
+      const normalized = result.updatedScript2.replace(/func_0/g, "main");
+      await writeTextFile(file.path, normalized);
+      toast.success(
+        `Renamed ${result.renamedCallbackCount} callbacks, updated ${result.bindingCommentCount} action bindings, and replaced func_0→main in ${file.name}`,
+      );
+      void fetchFiles();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : `Error renaming actions in ${file.name}`);
+    } finally {
+      setProcessingFile(null);
+    }
+  };
+
   const handleRepackCToScript = async (file: FileInfo) => {
     try {
       setProcessingFile(file.name);
@@ -404,15 +431,25 @@ export default function MscWorkspaceView({
         if (!isMscCoreScriptCFile(file.name)) {
           return [openCursor];
         }
-        return [
-          openCursor,
-          {
-            label: processingFile === file.name ? "Repacking..." : "Repack",
-            onClick: () => handleRepackCToScript(file),
-            className: BUTTON_STYLES.repack,
+        const actions: FileAction[] = [openCursor];
+        if (file.name.toLowerCase() === "2.c") {
+          actions.push({
+            label:
+              processingFile === file.name
+                ? "Renaming..."
+                : "Rename Actions",
+            onClick: () => handleRenameActions(file),
+            className: BUTTON_STYLES.replace,
             disabled: processingFile === file.name,
-          },
-        ];
+          });
+        }
+        actions.push({
+          label: processingFile === file.name ? "Repacking..." : "Repack",
+          onClick: () => handleRepackCToScript(file),
+          className: BUTTON_STYLES.repack,
+          disabled: processingFile === file.name,
+        });
+        return actions;
       }
       case "txt":
         return [
