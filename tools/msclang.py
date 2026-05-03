@@ -1,4 +1,4 @@
-from msclang_msc import *
+from msc_core import *
 from argparse import ArgumentParser
 # Try and install pycparser if it's not found 
 try:
@@ -19,6 +19,7 @@ except ImportError:
 import re
 import math
 import struct
+import logging
 from subprocess import Popen, PIPE
 import os.path
 from xml_info import MscXmlInfo, VariableLabel, getXmlInfoPath
@@ -362,7 +363,6 @@ def isCommandFloat(cmd, lookingFor):
     if cmd is None: #debug
         return lookingFor
     if cmd.command == 0x2d and cmd.parameters[1] in FLOAT_RETURN_SYSCALLS:
-        print("debug: ", cmd.parameters[1])
         return True
     if cmd.command == 0x2d:
         return lookingFor
@@ -443,16 +443,30 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
         if len(nodeOut) > 0:
             i = 1
             while i <= len(nodeOut):
-                if type(nodeOut[-i]) == Command and not nodeOut[-i].command in range(0x2f,0x32) and not nodeOut[-i].command in range(0x38,0x3a):
-                    nodeOut[-i].pushBit = True
+                item = nodeOut[-i]
+                if not isinstance(item, Command):
+                    i += 1
+                    continue
+                if item.command in range(0x38, 0x3a):
+                    i += 1
+                    continue
+                if item.command not in range(0x2f, 0x32):
+                    item.pushBit = True
                     return
-                elif type(nodeOut[-i]) == Command and not nodeOut[-i].command in range(0x38,0x3a):
-                    while i <= len(nodeOut):
-                        if type(nodeOut[-i]) == Command and nodeOut[-i].command == 0x2e:
-                            nodeOut[-i].pushBit = True
-                            return
-                        i += 1
+                depth = 0
                 i += 1
+                while i <= len(nodeOut):
+                    inner = nodeOut[-i]
+                    if isinstance(inner, Command):
+                        if inner.command == 0x2f:
+                            depth += 1
+                        elif inner.command == 0x2e:
+                            if depth == 0:
+                                inner.pushBit = True
+                                return
+                            depth -= 1
+                    i += 1
+                return
 
     t = type(node)
 
@@ -656,7 +670,6 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
 
                 if localisNot == True and (binaryOpCount >= 2 or isFirstOR) and outputAB34 != True:
                     nodeOut.append(Command(0x2B, pushBit=True))
-                    print("nodeOut.append(Command(0x2B, pushBit=True))")
                     outputAB34 = True
                     
                 nodeOut.append(Command(0x34 if outputAB34 else 0x35, [falseLabel] if outputAB34 else [trueLabel]))
@@ -680,7 +693,6 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
 
                 if outputAB34 == True:
                    nodeOut.append(Command(0x2B, pushBit=True))
-                   print("b")
                 
                 nodeOut.append(Command(0x34, [falseLabel]))
                 nodeOut += compileNode(node.right, loopParent, parentLoopCondition)
@@ -731,7 +743,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
         ifFalseLabel = Label()
         if node.iffalse != None:
             endLabel = Label()
-        nodeOut.append(Command(0x34 if isIfNot else 0x34, [ifFalseLabel]))
+        nodeOut.append(Command(0x34, [ifFalseLabel]))
         nodeOut += compileNode(node.iftrue, loopParent, parentLoopCondition)
         if node.iffalse != None:
             nodeOut.append(Command(0x36, [endLabel]))
@@ -890,10 +902,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
             nodeOut.append(functionCallCommand)
             nodeOut.append(endLabel)
     else:
-        node.show()
-        print(node)
-        print(node.__slots__)
-        print()
+        raise CompilerError("Unsupported AST node type: %s at %s" % (type(node).__name__, str(getattr(node, 'coord', '<unknown>'))))
 
     nodeCount = nodeCount - 1
     position += len(nodeOut)
@@ -993,12 +1002,23 @@ def writeToFile(msc):
     if maxStringLength % 0x10 != 0:
         maxStringLength += 0x10 - (maxStringLength % 0x10)
 
-    # Write file header
-    fileBytes = MSC_MAGIC
+    has_try_pushbit = False
+    for script in msc.scripts:
+        for cmd in script.cmds:
+            if type(cmd) == Command and cmd.command == 0x2e and cmd.pushBit:
+                has_try_pushbit = True
+                break
+        if has_try_pushbit:
+            break
+
+    magic = bytearray(MSC_MAGIC)
+    if has_try_pushbit:
+        magic[0x0D] = 0xAE
+    fileBytes = bytes(magic)
     fileBytes += struct.pack(ENDIANESS, currentPos)
     fileBytes += struct.pack(ENDIANESS, 0x10 if not 'main' in refs.functions else refs.scriptPositions[refs.functions.index('main')])
     fileBytes += struct.pack(ENDIANESS, len(msc.scripts))
-    fileBytes += struct.pack(ENDIANESS, 0x16)#This probably doesn't matter? A: It doesn't.
+    fileBytes += struct.pack(ENDIANESS, 0x16 if len(msc.strings) > 0 or len(msc.scripts) > 10 else 0x00)
     fileBytes += struct.pack(ENDIANESS, maxStringLength)
     fileBytes += struct.pack(ENDIANESS, len(msc.strings))
     fileBytes += struct.pack(ENDIANESS, 0)
@@ -1114,37 +1134,6 @@ def main(arguments):
             args.filename = os.path.basename(os.path.splitext(file)[0]) + '.mscsb'
         compileString(preprocess(file))
 
-def handle_EXVS2_2E_to_AE(args):
-    file_name = args.filename or os.path.basename(os.path.splitext(args.files[0])[0]) + '.mscsb'
-    target_index1 = bytes([0x8A, 0x00, 0x01, 0x00, 0x01, 0x8A, 0x00, 0x00, 0x00, 0x10, 0x8B, 0x00, 0x00, 0x01])
-    target_index2 = bytes([0x8A, 0x00, 0x01, 0x00, 0x01, 0x8A, 0x00, 0x00, 0x00, 0x11, 0x8B, 0x00, 0x00, 0x01])
-    target_index3 = bytes([0x8A, 0x00, 0x01, 0x00, 0x01, 0x8A, 0x00, 0x00, 0x00, 0x12, 0x8B, 0x00, 0x00, 0x01])
-        
-    with open(file_name, 'rb') as file:
-        content = file.read()
-        content = bytearray(content)
-    target_position1 = content.find(target_index1)
-    target_position2 = content.find(target_index2)
-    target_position3 = content.find(target_index3)
-    
-    if target_position1:
-        # modify The 0x2E to 0xAE
-        content[target_position1 + len(target_index1)] = 0xAE
-    
-    if target_position2:
-        # modify The 0x2E to 0xAE
-        content[target_position2 + len(target_index2)] = 0xAE
-        
-    if target_position3:
-        # modify The 0x2E to 0xAE
-        content[target_position3 + len(target_index3)] = 0xAE
-    
-    with open(file_name, 'wb') as file:
-        file.write(content)
-    
-    print(f"Modify the {file_name} from 0x2E to 0xAE Done")
-        
-
 if __name__ == "__main__":
     parser = ArgumentParser(description="Compile msC to MSC bytecode")
     parser.add_argument('files', metavar='files', type=str, nargs='+',
@@ -1156,4 +1145,3 @@ if __name__ == "__main__":
     parser.add_argument('-x', '--xmlPath', dest='xmlPath', help="Path to load overload MSC xml info")
     parser.add_argument('--exvsMapping', dest='exvsMapping', help="Path to EXVS native-truth mapping JSON")
     main(parser.parse_args())
-    handle_EXVS2_2E_to_AE(args)

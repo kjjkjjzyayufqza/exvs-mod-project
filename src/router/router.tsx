@@ -5,7 +5,7 @@ import UnitEdit from "../page/UnitEdit/page"
 import FilesEdit from "../page/FilesEdit/page"
 import UnitList from "../page/UnitList/page"
 import ConfigPage from "../page/Config/page"
-import MSCEdit from "../page/MSCEdit/page"
+
 import RepackPage from "../page/Repack/page"
 import SceneEdit from "../page/SceneEdit/page"
 import MiscToolsPage from "../page/MiscTools/page"
@@ -55,12 +55,6 @@ export const RouterItems = [
         url: "/Config",
         icon: Settings,
         element: <ConfigPage />
-    },
-    {
-        title: "MSC Edit",
-        url: "/MSCEdit",
-        icon: FileCode,
-        element: <MSCEdit />
     },
     {
         title: "Scene Edit",

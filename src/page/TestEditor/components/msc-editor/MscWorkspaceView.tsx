@@ -262,10 +262,43 @@ export default function MscWorkspaceView({
 
       if (command.code !== 0) {
         toast.error(`Failed to convert ${file.name}: ${command.stderr}`);
+        return;
+      }
+
+      const cContent = await readTextFile(outputPath);
+      const baseName = file.name.split(".")[0].toLowerCase();
+
+      if (baseName === "2") {
+        try {
+          const scriptFolder = await dirname(file.path);
+          const script0Path = await join(scriptFolder, "0.c");
+          if (await exists(script0Path)) {
+            const script0Content = await readTextFile(script0Path);
+            const result = renameScript2CallbacksByActionMask(script0Content, cContent);
+            const normalized = result.updatedScript2.replace(/func_0/g, "main");
+            await writeTextFile(outputPath, normalized);
+            toast.success(
+              `Converted ${file.name}: renamed ${result.renamedCallbackCount} callbacks + func_0→main`,
+            );
+          } else {
+            const normalized = cContent.replace(/func_0/g, "main");
+            await writeTextFile(outputPath, normalized);
+            toast.success(`Converted ${file.name} + func_0→main (0.c not found, skipped action rename)`);
+          }
+        } catch (renameErr) {
+          const normalized = cContent.replace(/func_0/g, "main");
+          await writeTextFile(outputPath, normalized);
+          toast.success(`Converted ${file.name} + func_0→main (action rename skipped: ${renameErr})`);
+        }
+      } else if (baseName === "0" || baseName === "1") {
+        const normalized = cContent.replace(/func_0/g, "main");
+        await writeTextFile(outputPath, normalized);
+        toast.success(`Converted ${file.name} + func_0→main`);
       } else {
         toast.success(`Successfully converted ${file.name} to .c`);
-        void fetchFiles();
       }
+
+      void fetchFiles();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : `Error converting ${file.name}`);
     } finally {
@@ -295,38 +328,6 @@ export default function MscWorkspaceView({
     );
     setConvertDialogOpen(false);
     setConvertDialogTarget(null);
-  };
-
-  const handleReplaceFuncToMain = async (file: FileInfo) => {
-    try {
-      setProcessingFile(file.name);
-      const lowerName = file.name.toLowerCase();
-      if (lowerName === "2.c") {
-        const scriptFolder = await dirname(file.path);
-        const script0Path = await join(scriptFolder, "0.c");
-        if (!(await exists(script0Path))) {
-          throw new Error(`MSC workspace: missing 0.c for action rename: ${script0Path}`);
-        }
-        const script0Content = await readTextFile(script0Path);
-        const script2Content = await readTextFile(file.path);
-        const result = renameScript2CallbacksByActionMask(script0Content, script2Content);
-        const normalizedScript2 = result.updatedScript2.replace(/func_0/g, "main");
-        await writeTextFile(file.path, normalizedScript2);
-        toast.success(
-          `Renamed ${result.renamedCallbackCount} callbacks, updated ${result.bindingCommentCount} action bindings, and replaced func_0 to main in 2.c`,
-        );
-        return;
-      }
-
-      const fileContent = await readTextFile(file.path);
-      const replacedContent = fileContent.replace(/func_0/g, "main");
-      await writeTextFile(file.path, replacedContent);
-      toast.success(`Successfully replaced func_0 to main in ${file.name}`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : `Error replacing in ${file.name}`);
-    } finally {
-      setProcessingFile(null);
-    }
   };
 
   const handleRepackCToScript = async (file: FileInfo) => {
@@ -405,19 +406,6 @@ export default function MscWorkspaceView({
         }
         return [
           openCursor,
-          {
-            label:
-              processingFile === file.name
-                ? file.name.toLowerCase() === "2.c"
-                  ? "Renaming..."
-                  : "Replacing..."
-                : file.name.toLowerCase() === "2.c"
-                  ? "Rename Actions"
-                  : "Replace",
-            onClick: () => handleReplaceFuncToMain(file),
-            className: BUTTON_STYLES.replace,
-            disabled: processingFile === file.name,
-          },
           {
             label: processingFile === file.name ? "Repacking..." : "Repack",
             onClick: () => handleRepackCToScript(file),

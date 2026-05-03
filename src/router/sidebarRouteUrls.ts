@@ -10,7 +10,6 @@ export const SIDEBAR_ROUTE_URLS: readonly string[] = [
   "/FilesEdit",
   "/UnitList",
   "/Config",
-  "/MSCEdit",
   "/SceneEdit",
   "/MiscTools",
   "/TestEditor",

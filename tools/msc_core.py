@@ -1,19 +1,39 @@
-# DEPRECATED: This file is no longer used. Use msc_core.py instead.
-#**************************************************************************#
-# This file is part of pymsc which is released under MIT License. See file #
-# LICENSE or go to https://github.com/jam1garner/pymsc/blob/master/LICENSE #
-# for full license details.                                                #
-#**************************************************************************#
 from sys import version_info
 isPython3 = version_info >= (3,)
-assert isPython3 #If this fails switch to python 3
+assert isPython3
 import struct, tempfile
+import logging
+from dataclasses import dataclass
 
-MSC_MAGIC = b'\xB2\xAC\xBC\xBA\xE6\x90\x32\x01\x0A\x21\xAF\x16\x00\x00\x00\x00'
-ENDIANESS = '>'
+HEADER_SIZE = 0x30
+SCRIPT_BASE = 0x30
+
+@dataclass
+class MscFormat:
+    header_endian: str
+    body_endian: str
+    magic: bytes
+
+EXVS2_FORMAT = MscFormat(
+    header_endian='<',
+    body_endian='>',
+    magic=b'\xB2\xAC\xBC\xBA\xE6\x90\x32\x01\x0A\x21\xAF\x16\x00\x00\x00\x00',
+)
+
+SMASH_FORMAT = MscFormat(
+    header_endian='>',
+    body_endian='>',
+    magic=b'\xB2\xAC\xBC\xBA\xE6\x90\x32\x01\x0A\x21\xAF\x16\x00\x00\x00\x00',
+)
+
+DEFAULT_FORMAT = EXVS2_FORMAT
+
+MSC_MAGIC = EXVS2_FORMAT.magic
+ENDIANESS = EXVS2_FORMAT.body_endian
+
 COMMAND_IDS = {
     "nop"            : 0x0,
-    "custom_01"      : 0x1,  #DEBUG new add
+    "custom_01"      : 0x1,
     "begin"          : 0x2,
     "end"            : 0x3,
     "jump"           : 0x4,
@@ -89,7 +109,7 @@ COMMAND_IDS = {
     "floatNotEqual"       : 0x47,
     "floatLess"           : 0x48,
     "floatLessOrEqual"    : 0x49,
-    "floatGreater"        : 0x4a,    
+    "floatGreater"        : 0x4a,
     "floatGreaterOrEqual" : 0x4b,
     "error_4c"       : 0x4c,
     "exit"           : 0x4d,
@@ -101,7 +121,7 @@ COMMAND_NAMES = {}
 for k, v in COMMAND_IDS.items():
     if not v in COMMAND_NAMES:
         COMMAND_NAMES[v] = k
-        
+
 COMMAND_FORMAT = {
     0x0 : '',
     0x1 : '',
@@ -290,13 +310,14 @@ def disassembleCommands(rawCommands, startOffset):
         pos += (1 + newCommand.paramSize)
     return commands
 
-#Thanks Triptych https://stackoverflow.com/questions/1265665/python-check-if-a-string-represents-an-int-without-using-try-except
 def _RepresentsInt(s):
     try:
         int(s, 0)
         return True
     except:
         return False
+
+RepresentsInt = _RepresentsInt
 
 def _RepresentsFloat(s):
     try:
@@ -337,7 +358,6 @@ def parseCommands(text, refs={}, mscStrings=[]):
                     printString = printString[:-1]
                 cmd.parameters = [len(mscStrings)]
                 mscStrings.append(printString)
-
             cmds.append(cmd)
     labelNames = labels.keys()
     aliasNames = aliases.keys()
@@ -354,6 +374,7 @@ def parseCommands(text, refs={}, mscStrings=[]):
             elif _RepresentsFloat(cmd.parameters[i]):
                 cmd.parameters[i] = struct.unpack('>L', struct.pack('>f', float(cmd.parameters[i].rstrip('f'))))[0]
     return cmds
+
 
 class Command:
     def __init__(self, command=0, parameters=[], pushBit=False):
@@ -372,12 +393,12 @@ class Command:
         self.pushBit = (int(byteBuffer[pos]) & 0x80) != 0
         if self.command in COMMAND_NAMES:
             self.paramSize = getSizeFromFormat(COMMAND_FORMAT[self.command])
-            self.parameters = list(struct.unpack(ENDIANESS+COMMAND_FORMAT[self.command], byteBuffer[pos+1:pos+1+self.paramSize]))
+            self.parameters = list(struct.unpack('>'+COMMAND_FORMAT[self.command], byteBuffer[pos+1:pos+1+self.paramSize]))
         else:
             self.parameters = [self.command]
-            self.command = 0xFFFE #unknown command, display as "byte X"
+            self.command = 0xFFFE
 
-    def write(self, endian=ENDIANESS):
+    def write(self, endian='>'):
         if self.command in [0xFFFE, 0xFFFF]:
             returnBytes = bytes()
         else:
@@ -402,13 +423,13 @@ class Command:
             temp = ' -> '
         else:
             temp = '    '
-
         com = "{0:0{1}x}".format(self.commandPosition,8).upper()+':'+temp+' '+COMMAND_NAMES[self.command]+' '
         if len(com) < 37:
             com += (37 - len(com)) * ' '
         if self.debugString != None:
             return com+self.strParams()+'   #'+self.debugString
         return com+self.strParams()
+
 
 class MscScript:
     def __init__(self):
@@ -444,12 +465,12 @@ class MscScript:
         return len(self.cmds)
 
     def read(self, f, start, end):
-        self.bounds = [start - 0x30, end - 0x30]
+        self.bounds = [start - SCRIPT_BASE, end - SCRIPT_BASE]
         f.seek(start)
-        self.cmds = disassembleCommands(f.read(end - start), start - 0x30)
+        self.cmds = disassembleCommands(f.read(end - start), start - SCRIPT_BASE)
 
     def getInstructionText(self, index):
-        cmds = [str(cmd) for cmd in self.cmds] # debug
+        cmds = [str(cmd) for cmd in self.cmds]
         if index < 0 or index >= len(self.cmds):
             return ""
         else:
@@ -491,13 +512,13 @@ class MscScript:
                 s += (0 if cmd.command in [0xFFFE, 0xFFFF] else 1) + getSizeFromFormat(COMMAND_FORMAT[cmd.command])
         return s
 
+
 def readInt(f, endian):
     try:
         return struct.unpack(endian+'L', f.read(4))[0]
     except struct.error as e:
-        print('pos - '+str(f.tell()))
-        print(e.with_traceback)
         raise e
+
 
 class MscFile:
     def __init__(self):
@@ -508,6 +529,8 @@ class MscFile:
         self.stringSize = 0
         self.unk = 0
         self._iterationPosition = 0
+        self.format = DEFAULT_FORMAT
+        self.raw_magic = None
 
     def __getitem__(self, key):
         return self.scripts[key]
@@ -537,23 +560,38 @@ class MscFile:
     def __len__(self):
         return len(self.scripts)
 
-    def readFromFile(self, f, headerEndianess = ENDIANESS):
+    def readFromFile(self, f, fmt=None):
+        if fmt is None:
+            fmt = self.format
+        else:
+            self.format = fmt
+        he = fmt.header_endian
+
+        f.seek(0)
+        self.raw_magic = f.read(16)
+
         f.seek(0x10)
-        entriesOffset = readInt(f, headerEndianess) + 0x30
+        entriesOffset = readInt(f, he) + SCRIPT_BASE
         endOfScripts = entriesOffset
         if entriesOffset % 0x10 != 0:
             entriesOffset += 0x10 - (entriesOffset % 0x10)
-        self.entryPoint = readInt(f, headerEndianess)
-        entryCount = readInt(f, headerEndianess)
-        self.unk = readInt(f, headerEndianess)
-        self.stringSize = readInt(f, headerEndianess)
-        stringCount = readInt(f, headerEndianess)
+        self.entryPoint = readInt(f, he)
+        entryCount = readInt(f, he)
+        self.unk = readInt(f, he)
+        self.stringSize = readInt(f, he)
+        stringCount = readInt(f, he)
         scriptOffsets = []
         f.seek(entriesOffset)
         for i in range(entryCount):
-            scriptOffsets.append(readInt(f, headerEndianess) + 0x30)
-        sortedScriptOffsets = scriptOffsets
+            scriptOffsets.append(readInt(f, he) + SCRIPT_BASE)
+        sortedScriptOffsets = list(scriptOffsets)
         sortedScriptOffsets.sort()
+
+        count = 0
+        for i in sortedScriptOffsets:
+            logging.info("[func_name: func_%i, pointer: %i]" % (count, i))
+            count += 1
+
         if f.tell() % 0x10 != 0:
             f.seek(0x10 - (f.tell() % 0x10), 1)
         for i in range(stringCount):
@@ -566,18 +604,16 @@ class MscFile:
             else:
                 end = endOfScripts
             newScript = MscScript()
-            newScript.name = 'script_%i' % i
-            if i == self.entryPoint:
-                newScript.name = 'Entrypoint Script'
+            newScript.name = 'func_%i' % i
             newScript.read(f, start, end)
             self.scripts.append(newScript)
         return self
 
-    def readFromBytes(self, b, headerEndianess=ENDIANESS):
+    def readFromBytes(self, b, fmt=None):
         with tempfile.SpooledTemporaryFile(mode='w+b') as f:
             f.write(b)
             f.seek(0)
-            self.readFromFile(f, headerEndianess)
+            self.readFromFile(f, fmt)
 
     def getScriptAtLocation(self, location):
         for script in self.scripts:
@@ -597,15 +633,10 @@ class MscFile:
         for script in self.scripts:
             for i,command in enumerate(script):
                 if command.command in range(0x2f, 0x31):
-                    scriptName = None
-                    print(command)
                     for j in range(i - 1, -1, -1):
-                        print(j)
                         if script[j].pushBit:
-                            print(str(j)+' has pushBit')
                             if script[j].command in (0xa, 0xd):
                                 thisScript = self.getScriptAtLocation(script[j].parameters[0])
                                 scriptNum = self.scripts.index(thisScript)
-                                print("script_"+str(scriptNum))
-                                command.parameters.insert(0, "script_"+str(scriptNum))
+                                command.parameters.insert(0, "func_"+str(scriptNum))
                             break
