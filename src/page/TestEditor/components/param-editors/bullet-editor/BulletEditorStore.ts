@@ -5,6 +5,7 @@ import { simulateTrajectory, type TrajectoryResult } from "../../bullet-preview/
 import type { BulletPreviewScenario } from "../../bullet-preview/bulletPreviewTypes";
 import { DEFAULT_BULLET_PREVIEW_SCENARIO } from "../../bullet-preview/bulletPreviewTypes";
 import type { ValidationMessage } from "../shared/types";
+import { getMoveTypeDefinition } from "@/lib/gameAlgorithms/moveTypes";
 
 export interface BulletEditorState {
   data: TypedParamFile | null;
@@ -31,29 +32,30 @@ export interface BulletEditorState {
 function validateBulletEntry(entry: TypedParamEntry): ValidationMessage[] {
   const messages: ValidationMessage[] = [];
   const speed = typeof entry.initialSpeed === "number" ? entry.initialSpeed : 0;
-  const turnRate =
-    typeof entry.homingTurnRate === "number" ? entry.homingTurnRate : 0;
   const lifetime = typeof entry.lifetime === "number" ? entry.lifetime : 0;
+  const moveType =
+    typeof entry.moveType === "number" ? Math.trunc(entry.moveType) : 255;
+  const moveDef = getMoveTypeDefinition(moveType);
 
-  if (speed > 600) {
+  if (speed > 640) {
     messages.push({
       field: "initialSpeed",
       level: "error",
-      message: "Speed exceeds engine clamp (600)",
+      message: "Speed exceeds game engine max (640)",
     });
   }
-  if (turnRate > 0.1 && turnRate !== 0) {
+  if (!moveDef) {
     messages.push({
-      field: "homingTurnRate",
+      field: "moveType",
       level: "warning",
-      message: "High turn rate may feel broken",
+      message: `Unknown move type ${moveType}`,
     });
   }
   if (lifetime < 0) {
     messages.push({
       field: "lifetime",
       level: "info",
-      message: "Negative = absolute duration mode",
+      message: "Negative lifetime = absolute duration mode",
     });
   }
   return messages;

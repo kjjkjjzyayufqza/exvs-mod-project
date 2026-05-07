@@ -10,7 +10,7 @@ import { BulletPropertyPanel } from "./BulletPropertyPanel";
 import { BulletTrajectoryCanvas } from "./BulletTrajectoryCanvas";
 import { BulletDpsPanel } from "./BulletDpsPanel";
 import { useBulletEditorStore } from "./BulletEditorStore";
-import { MOVE_TYPE_LABELS } from "../../bullet-preview/TrajectorySimulator";
+import { getMoveTypeLabel } from "@/lib/gameAlgorithms/moveTypes";
 import { formatHash } from "@/models/commandTable";
 import type { TypedParamFile } from "../../param-editor/typedParamTypes";
 import type { EditorEntryRow } from "../shared/types";
@@ -83,8 +83,8 @@ export function BulletEditorView({ onUnsavedChanges }: BulletEditorViewProps) {
 
   const renderEntryLabel = (row: EditorEntryRow) => {
     const mt =
-      typeof row.entry.moveType === "number" ? row.entry.moveType : 255;
-    const label = MOVE_TYPE_LABELS[mt] ?? `Type ${mt}`;
+      typeof row.entry.moveType === "number" ? Math.trunc(row.entry.moveType) : 255;
+    const label = getMoveTypeLabel(mt);
     return (
       <div className="flex flex-col">
         <span className="font-mono text-[10px]">
