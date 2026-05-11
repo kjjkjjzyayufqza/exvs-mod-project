@@ -25,7 +25,8 @@ export default defineConfig(async () => ({
     },
   },
   build: {
-    target: "ES2022",
+    target: "es2022",
+    cssTarget: "es2022",
   },
   test: {
     environment: "jsdom",

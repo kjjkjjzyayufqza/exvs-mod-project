@@ -14,11 +14,13 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
+    "types": ["vite/client", "node"],
     /* Linting */
     "strict": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
