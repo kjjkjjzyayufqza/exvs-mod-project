@@ -14,7 +14,6 @@ import StageListView from "./StageListView";
 import MscWorkspaceView from "./msc-editor/MscWorkspaceView";
 import ParamEditorView from "./param-editor/ParamEditorView";
 import { SsbhModelPreviewViewport } from "./ssbh-model-preview/SsbhModelPreviewPanel";
-import { BulletPreviewViewport } from "./bullet-preview/BulletPreviewViewport";
 import { BulletEditorView } from "./param-editors/bullet-editor/BulletEditorView";
 import { ArmsEditorView } from "./param-editors/arms-editor/ArmsEditorView";
 import { SpeedEditorView } from "./param-editors/speed-editor/SpeedEditorView";
@@ -176,11 +175,6 @@ const tabs: StageTab[] = [
     name: "Param Editor",
     value: "param-editor",
     render: (props: MainViewProps) => <ParamEditorView onUnsavedChanges={props.onUnsavedChanges} />,
-  },
-  {
-    name: "Bullet 3D",
-    value: "bullet-3d",
-    render: () => <BulletPreviewViewport />,
   },
   {
     name: "Bullet Editor",
@@ -662,7 +656,7 @@ const MainView = ({
           {resolvedTabs.map((tab) => {
             if (!visitedTabs.has(tab.value)) return null;
             const isActive = activeTab === tab.value;
-            const shouldKeepMounted = isActive || tab.value === "3d" || tab.value === "bullet-3d" || tab.value === "bullet-editor" || tab.value === "speed-editor" || tab.value === "depiction-editor" || Boolean(unsavedTabMap[tab.value]);
+            const shouldKeepMounted = isActive || tab.value === "3d" || tab.value === "bullet-editor" || tab.value === "speed-editor" || tab.value === "depiction-editor" || Boolean(unsavedTabMap[tab.value]);
             if (!shouldKeepMounted) {
               return null;
             }

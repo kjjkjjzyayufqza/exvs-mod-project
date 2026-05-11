@@ -2,8 +2,8 @@ import { create } from "zustand";
 import type { TypedParamEntry, TypedParamFile } from "../../param-editor/typedParamTypes";
 import { readTypedEntryId } from "../../param-editor/paramEntryUtils";
 import { simulateTrajectory, type TrajectoryResult } from "../../bullet-preview/TrajectorySimulator";
-import type { BulletPreviewScenario } from "../../bullet-preview/bulletPreviewTypes";
-import { DEFAULT_BULLET_PREVIEW_SCENARIO } from "../../bullet-preview/bulletPreviewTypes";
+import type { BulletPreviewScenario, BulletPreviewVisualization } from "../../bullet-preview/bulletPreviewTypes";
+import { DEFAULT_BULLET_PREVIEW_SCENARIO, DEFAULT_BULLET_PREVIEW_VISUALIZATION } from "../../bullet-preview/bulletPreviewTypes";
 import type { ValidationMessage } from "../shared/types";
 import { getMoveTypeDefinition } from "@/lib/gameAlgorithms/moveTypes";
 import {
@@ -26,6 +26,7 @@ export interface BulletEditorState {
   playbackFrame: number;
   isPlaying: boolean;
   playbackSpeed: number;
+  visualization: BulletPreviewVisualization;
 
   setData: (data: TypedParamFile, filePath: string) => void;
   setArmsData: (data: TypedParamFile, filePath: string) => void;
@@ -36,6 +37,8 @@ export interface BulletEditorState {
   setPlaybackFrame: (frame: number) => void;
   togglePlayback: () => void;
   setPlaybackSpeed: (speed: number) => void;
+  setVisualization: (patch: Partial<BulletPreviewVisualization>) => void;
+  seekToHitFrame: () => void;
   tick: (delta: number) => void;
 }
 
@@ -129,6 +132,7 @@ export const useBulletEditorStore = create<BulletEditorState>((set, get) => ({
   playbackFrame: 0,
   isPlaying: false,
   playbackSpeed: 1,
+  visualization: { ...DEFAULT_BULLET_PREVIEW_VISUALIZATION },
 
   setData: (data, filePath) => {
     const { armsData, selectedArmsIndex } = get();
@@ -265,6 +269,16 @@ export const useBulletEditorStore = create<BulletEditorState>((set, get) => ({
   },
 
   setPlaybackSpeed: (speed) => set({ playbackSpeed: speed }),
+
+  setVisualization: (patch) =>
+    set((state) => ({ visualization: { ...state.visualization, ...patch } })),
+
+  seekToHitFrame: () => {
+    const { trajectory } = get();
+    if (!trajectory) return;
+    if (trajectory.hitFrame >= trajectory.totalFrames) return;
+    set({ playbackFrame: trajectory.hitFrame, isPlaying: false });
+  },
 
   tick: (delta) => {
     const {

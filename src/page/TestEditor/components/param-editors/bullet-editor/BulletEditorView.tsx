@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Save, Play, Pause, RotateCcw } from "lucide-react";
+import {
+  Save,
+  Play,
+  Pause,
+  RotateCcw,
+  Crosshair,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { EntryListPanel } from "../shared/EntryListPanel";
 import { EditorStatusBar } from "../shared/EditorStatusBar";
-import { BulletPropertyPanel } from "./BulletPropertyPanel";
 import { BulletTrajectoryCanvas } from "./BulletTrajectoryCanvas";
-import { BulletDpsPanel } from "./BulletDpsPanel";
-import { ShootingLoopPanel } from "./ShootingLoopPanel";
 import { useBulletEditorStore } from "./BulletEditorStore";
 import { getMoveTypeLabel } from "@/lib/gameAlgorithms/moveTypes";
 import { formatHash } from "@/models/commandTable";
@@ -20,9 +25,146 @@ const STORE_KEY = "paramEditors.v2.fp.bulletparam";
 const ARMS_STORE_KEY = "paramEditors.v2.fp.bulletWorkbench.armsparam";
 const PARAM_TYPE = "bulletparam";
 const ARMS_PARAM_TYPE = "armsparam";
+const SPEED_OPTIONS = [0.25, 0.5, 1, 2, 4];
 
 interface BulletEditorViewProps {
   onUnsavedChanges?: (dirty: boolean) => void;
+}
+
+function TimelineBar() {
+  const trajectory = useBulletEditorStore((s) => s.trajectory);
+  const playbackFrame = useBulletEditorStore((s) => s.playbackFrame);
+  const playbackSpeed = useBulletEditorStore((s) => s.playbackSpeed);
+  const isPlaying = useBulletEditorStore((s) => s.isPlaying);
+  const store = useBulletEditorStore;
+
+  const frame = Math.floor(playbackFrame);
+  const elapsed = (frame / 60).toFixed(2);
+  const hasHit = trajectory !== null && trajectory.hitFrame < trajectory.totalFrames;
+
+  type VisKey = "trail" | "fullPathGhost" | "hitbox" | "maxRangeAtTarget" | "effectiveRangeAtOrigin" | "blastRadius" | "playerDummy" | "enemyDummy" | "distanceMeasure" | "axisHelpers";
+  const visualization = useBulletEditorStore((s) => s.visualization);
+  const toggleLayer = (key: VisKey) => {
+    store.getState().setVisualization({ [key]: !visualization[key] });
+  };
+
+  return (
+    <div className="border-t border-border/60 bg-background/95">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-[10px] text-muted-foreground">
+        {trajectory ? (
+          <>
+            <span className="font-medium text-foreground">{trajectory.moveTypeLabel}</span>
+            <span>
+              frame <span className="font-mono text-foreground">{frame}</span>/
+              {trajectory.totalFrames}
+            </span>
+            <span>{elapsed}s</span>
+            {hasHit && (
+              <span className="text-amber-400/95">intercept ~ frame {trajectory.hitFrame}</span>
+            )}
+          </>
+        ) : (
+          <span>No trajectory</span>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2 border-t border-border/40 px-3 py-2">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 p-0"
+          type="button"
+          onClick={() => store.getState().togglePlayback()}
+          disabled={!trajectory}
+        >
+          {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 p-0"
+          type="button"
+          onClick={() => store.getState().setPlaybackFrame(0)}
+          disabled={!trajectory}
+        >
+          <RotateCcw className="h-4 w-4" />
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 gap-1 px-2 text-[10px]"
+          type="button"
+          disabled={!hasHit}
+          onClick={() => store.getState().seekToHitFrame()}
+        >
+          <Crosshair className="h-3.5 w-3.5" />
+          Hit
+        </Button>
+
+        {trajectory && (
+          <input
+            type="range"
+            min={0}
+            max={Math.max(trajectory.totalFrames - 1, 0)}
+            value={Math.min(frame, Math.max(trajectory.totalFrames - 1, 0))}
+            onChange={(e) => store.getState().setPlaybackFrame(Number(e.target.value))}
+            className="mx-1 h-1.5 min-w-[140px] flex-1 cursor-pointer accent-orange-500"
+          />
+        )}
+
+        <div className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+          {SPEED_OPTIONS.map((speed) => (
+            <button
+              key={speed}
+              type="button"
+              onClick={() => store.getState().setPlaybackSpeed(speed)}
+              className={`rounded px-2 py-1 transition-colors ${
+                playbackSpeed === speed
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "hover:bg-muted/80"
+              }`}
+            >
+              {speed}x
+            </button>
+          ))}
+        </div>
+
+        <div className="mx-1 hidden h-5 w-px bg-border/45 lg:block" />
+
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px]">
+          {(
+            [
+              ["trail", "Trail"],
+              ["fullPathGhost", "Ghost"],
+              ["hitbox", "Hitbox"],
+              ["maxRangeAtTarget", "Max R"],
+              ["effectiveRangeAtOrigin", "Eff R"],
+              ["blastRadius", "Blast"],
+              ["playerDummy", "Self"],
+              ["enemyDummy", "Target"],
+              ["distanceMeasure", "Span"],
+              ["axisHelpers", "Axes"],
+            ] as const
+          ).map(([key, label]) => {
+            const on = visualization[key];
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => toggleLayer(key)}
+                className={`flex items-center gap-1 rounded-md px-1.5 py-1 transition-colors ${
+                  on ? "text-foreground" : "text-muted-foreground opacity-55"
+                } hover:bg-muted/70`}
+              >
+                {on ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function BulletEditorView({ onUnsavedChanges }: BulletEditorViewProps) {
@@ -38,9 +180,7 @@ export function BulletEditorView({ onUnsavedChanges }: BulletEditorViewProps) {
   const selectedArmsIndex = useBulletEditorStore((s) => s.selectedArmsIndex);
   const dirty = useBulletEditorStore((s) => s.dirty);
   const trajectory = useBulletEditorStore((s) => s.trajectory);
-  const shootingLoopResult = useBulletEditorStore((s) => s.shootingLoopResult);
   const validationMessages = useBulletEditorStore((s) => s.validationMessages);
-  const isPlaying = useBulletEditorStore((s) => s.isPlaying);
 
   const store = useBulletEditorStore;
 
@@ -107,8 +247,6 @@ export function BulletEditorView({ onUnsavedChanges }: BulletEditorViewProps) {
     }
   };
 
-  const entry = data?.entries[selectedIndex] ?? null;
-
   const renderEntryLabel = (row: EditorEntryRow) => {
     const mt =
       typeof row.entry.moveType === "number" ? Math.trunc(row.entry.moveType) : 255;
@@ -144,9 +282,10 @@ export function BulletEditorView({ onUnsavedChanges }: BulletEditorViewProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {/* Top toolbar */}
       <div className="flex items-center gap-2 border-b bg-muted/20 px-3 py-2">
         <FilePathInput
-          className="h-7 w-80 font-mono text-[11px]"
+          className="h-7 w-72 font-mono text-[11px]"
           storeKey={STORE_KEY}
           value={filePath}
           onChange={(e) => setFilePath(e.target.value)}
@@ -164,11 +303,11 @@ export function BulletEditorView({ onUnsavedChanges }: BulletEditorViewProps) {
           }}
         />
         <FilePathInput
-          className="h-7 w-72 font-mono text-[11px]"
+          className="h-7 w-64 font-mono text-[11px]"
           storeKey={ARMS_STORE_KEY}
           value={armsFilePath}
           onChange={(e) => setArmsFilePath(e.target.value)}
-          placeholder="Optional armsparam for shooting loop"
+          placeholder="Optional armsparam"
           picker={{
             kind: "file",
             title: "Select armsparam file for shooting loop",
@@ -197,34 +336,12 @@ export function BulletEditorView({ onUnsavedChanges }: BulletEditorViewProps) {
             {loading ? "Loading bulletparam..." : "Loading armsparam..."}
           </span>
         )}
-        <div className="ml-auto flex items-center gap-1">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 w-7 p-0"
-            onClick={() => store.getState().togglePlayback()}
-            disabled={!trajectory}
-          >
-            {isPlaying ? (
-              <Pause className="h-3 w-3" />
-            ) : (
-              <Play className="h-3 w-3" />
-            )}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 w-7 p-0"
-            onClick={() => store.getState().setPlaybackFrame(0)}
-            disabled={!trajectory}
-          >
-            <RotateCcw className="h-3 w-3" />
-          </Button>
-        </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)_320px]">
-        <div className="flex min-h-0 flex-col gap-2 p-2">
+      {/* Main content area */}
+      <div className="flex min-h-0 flex-1">
+        {/* Left entry list */}
+        <div className="flex w-[200px] min-w-[200px] flex-col gap-2 border-r p-2">
           <div className="min-h-0 flex-1">
             <EntryListPanel
               entries={data?.entries ?? []}
@@ -244,50 +361,30 @@ export function BulletEditorView({ onUnsavedChanges }: BulletEditorViewProps) {
             ) : (
               <div className="flex h-full min-h-0 flex-col justify-center rounded-md border bg-card px-3 text-xs text-muted-foreground shadow-sm">
                 <div className="mb-1 font-semibold text-foreground">
-                  Manual shooting loop
+                  Shooting Loop
                 </div>
                 <div>
-                  Load an armsparam file above, then choose one arms entry and one
-                  bullet entry. This first slice does not auto-bind them.
+                  Load armsparam above, then choose an arms entry to enable the shooting loop.
                 </div>
               </div>
             )}
           </div>
         </div>
 
-        <div className="min-h-0 border-x">
-          {data ? (
-            <BulletTrajectoryCanvas />
-          ) : (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              Click the file path input above to select a bulletparam.bin
-            </div>
-          )}
+        {/* Center: 3D viewport takes remaining space */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1">
+            {data ? (
+              <BulletTrajectoryCanvas />
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                Select a bulletparam.bin file to begin
+              </div>
+            )}
+          </div>
+          <TimelineBar />
         </div>
 
-        <div className="flex min-h-0 flex-col overflow-hidden">
-          {entry ? (
-            <>
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                <BulletPropertyPanel
-                  entry={entry}
-                  fieldSpecs={data?.fieldSpecs}
-                  onFieldChange={(key, value) =>
-                    store.getState().updateField(key, value)
-                  }
-                />
-              </div>
-              <div className="space-y-2 border-t p-2">
-                <ShootingLoopPanel result={shootingLoopResult} />
-                <BulletDpsPanel entry={entry} trajectory={trajectory} />
-              </div>
-            </>
-          ) : (
-            <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-              No entry selected
-            </div>
-          )}
-        </div>
       </div>
 
       <EditorStatusBar

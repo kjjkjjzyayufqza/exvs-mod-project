@@ -11,12 +11,18 @@ import { SsbhModelPreviewInspector } from "./ssbh-model-preview/SsbhModelPreview
 import { SsbhModelPreviewMotionPanel } from "./ssbh-model-preview/SsbhModelPreviewMotionPanel";
 import { JnttblFileEditorPanel } from "./ssbh-model-preview/JnttblFileEditorPanel";
 import { NumdlbFileEditorPanel } from "./ssbh-model-preview/NumdlbFileEditorPanel";
+import { useBulletEditorStore } from "./param-editors/bullet-editor/BulletEditorStore";
+import { BulletPropertyPanel } from "./param-editors/bullet-editor/BulletPropertyPanel";
+import { ScenarioPanel } from "./param-editors/bullet-editor/ScenarioPanel";
+import { ShootingLoopPanel } from "./param-editors/bullet-editor/ShootingLoopPanel";
+import { BulletDpsPanel } from "./param-editors/bullet-editor/BulletDpsPanel";
 
 const BASE_TAB_ITEMS = [
   { name: "Info", value: "info" },
   { name: "Model Preview", value: "modelPreview" },
   { name: "Motion", value: "motion" },
   { name: "COLLADA (.dae)", value: "daeExchange" },
+  { name: "Bullet Info", value: "bulletInfo" },
 ] as const;
 const NUMDLB_TAB_ITEM = { name: "NUMDLB Mapping", value: "numdlbMapping" } as const;
 const JNTT_TAB_ITEM = { name: "JNTT Table", value: "jnttblMapping" } as const;
@@ -29,6 +35,33 @@ type TabValue =
 type InfoPanelProps = {
   selected?: TestTreeNode | null;
 };
+
+function BulletInfoTabContent() {
+  const data = useBulletEditorStore((s) => s.data);
+  const selectedIndex = useBulletEditorStore((s) => s.selectedIndex);
+  const trajectory = useBulletEditorStore((s) => s.trajectory);
+  const shootingLoopResult = useBulletEditorStore((s) => s.shootingLoopResult);
+  const entry = data?.entries[selectedIndex] ?? null;
+
+  if (!entry) {
+    return <p className="text-muted-foreground">No bullet entry selected.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      <BulletPropertyPanel
+        entry={entry}
+        fieldSpecs={data?.fieldSpecs}
+        onFieldChange={(key, value) =>
+          useBulletEditorStore.getState().updateField(key, value)
+        }
+      />
+      <ScenarioPanel />
+      <ShootingLoopPanel result={shootingLoopResult} />
+      <BulletDpsPanel entry={entry} trajectory={trajectory} />
+    </div>
+  );
+}
 
 const TAB_STRIP_SCROLL_EPSILON_px = 2;
 
@@ -155,6 +188,8 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
         return <NumdlbFileEditorPanel selected={selected} />;
       case "jnttblMapping":
         return <JnttblFileEditorPanel selected={selected} />;
+      case "bulletInfo":
+        return <BulletInfoTabContent />;
     }
   };
 
@@ -212,10 +247,12 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
                   : activeTab === "motion"
                     ? "Motion (NUANMB)"
                     : activeTab === "daeExchange"
-                    ? "COLLADA exchange"
-                    : activeTab === "numdlbMapping"
-                      ? "NUMDLB mapping"
-                      : "JNTT joint table"}
+                      ? "COLLADA exchange"
+                      : activeTab === "numdlbMapping"
+                        ? "NUMDLB mapping"
+                        : activeTab === "bulletInfo"
+                          ? "Bullet info"
+                          : "JNTT joint table"}
             </CardTitle>
             <CardDescription className="text-[10px] italic">
               {activeTab === "info"
@@ -225,10 +262,12 @@ const InfoPanel = ({ selected }: InfoPanelProps) => {
                   : activeTab === "motion"
                     ? "Load motion files and inspect clip metadata for the 3D view"
                     : activeTab === "daeExchange"
-                    ? "Export SSBH to .dae and convert .dae to SSBH (separate from scene preview)"
-                    : activeTab === "numdlbMapping"
-                      ? "Edit mesh object to material label mapping for the selected .numdlb"
-                      : "Edit hash to bone index pairs for the selected .jnttbl"}
+                      ? "Export SSBH to .dae and convert .dae to SSBH (separate from scene preview)"
+                      : activeTab === "numdlbMapping"
+                        ? "Edit mesh object to material label mapping for the selected .numdlb"
+                        : activeTab === "bulletInfo"
+                          ? "Bullet properties, scenario, shooting loop, and DPS"
+                          : "Edit hash to bone index pairs for the selected .jnttbl"}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto p-4 text-sm">
