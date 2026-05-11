@@ -12,6 +12,7 @@
  */
 
 import type { TypedParamEntry, TypedParamFile } from "@/page/TestEditor/components/param-editor/typedParamTypes";
+import { readTypedEntryId } from "@/page/TestEditor/components/param-editor/paramEntryUtils";
 
 export type ParamKind =
   | "bulletparam"
@@ -73,9 +74,8 @@ export function findEntryByHash(
   hash: number,
 ): TypedParamEntry | undefined {
   if (hash === 0) return undefined;
-  return entries.find((e) => {
-    const entryId = e["__entryId"];
-    return typeof entryId === "number" && entryId === hash;
+  return entries.find((entry, index) => {
+    return readTypedEntryId(entry, index) === (hash >>> 0);
   });
 }
 
@@ -83,9 +83,8 @@ export function findEntryById(
   entries: TypedParamEntry[],
   entryId: number,
 ): TypedParamEntry | undefined {
-  return entries.find((e) => {
-    const id = e["__entryId"];
-    return typeof id === "number" && id === entryId;
+  return entries.find((entry, index) => {
+    return readTypedEntryId(entry, index) === (entryId >>> 0);
   });
 }
 
@@ -98,7 +97,7 @@ export function resolveBulletCrossReferences(
   paramFiles: Partial<Record<ParamKind, TypedParamEntry[]>>,
 ): CrossReference[] {
   const results: CrossReference[] = [];
-  const sourceId = getFieldValue(bulletEntry, "__entryId");
+  const sourceId = readTypedEntryId(bulletEntry, 0);
 
   for (const ref of BULLET_CROSS_REFERENCES) {
     const targetHash = getFieldValue(bulletEntry, ref.sourceField);
@@ -130,7 +129,7 @@ export function resolveSingleReference(
   targetKind: ParamKind,
   targetEntries: TypedParamEntry[],
 ): CrossReference {
-  const sourceId = getFieldValue(entry, "__entryId");
+  const sourceId = readTypedEntryId(entry, 0);
   const targetHash = getFieldValue(entry, sourceField);
   const targetEntry = targetHash !== 0 ? findEntryByHash(targetEntries, targetHash) : undefined;
 
@@ -179,7 +178,7 @@ export function buildReverseReferenceMap(
     }
     map.get(targetHash)!.push({
       index,
-      entryId: getFieldValue(entry, "__entryId"),
+      entryId: readTypedEntryId(entry, index),
     });
   });
 

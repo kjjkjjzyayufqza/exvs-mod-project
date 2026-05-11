@@ -97,8 +97,16 @@ function SimTicker() {
 
 export function BulletTrajectoryCanvas() {
   const trajectory = useBulletEditorStore((s) => s.trajectory);
+  const shootingLoopResult = useBulletEditorStore((s) => s.shootingLoopResult);
   const scenario = useBulletEditorStore((s) => s.scenario);
   const playbackFrame = useBulletEditorStore((s) => s.playbackFrame);
+  const firstShot = shootingLoopResult?.shots[0];
+  const trajectoryFrame = firstShot
+    ? Math.max(0, playbackFrame - firstShot.spawnFrame)
+    : playbackFrame;
+  const shouldShowTrajectory = Boolean(
+    trajectory && (!firstShot || playbackFrame >= firstShot.spawnFrame),
+  );
 
   const targetPos: [number, number, number] = [
     scenario.targetOffsetX ?? 0,
@@ -141,15 +149,15 @@ export function BulletTrajectoryCanvas() {
         <SimTicker />
         <PlayerUnit />
         <EnemyUnit position={targetPos} />
-        {trajectory && (
+        {trajectory && shouldShowTrajectory && (
           <>
             <TrajectoryLine
               trajectory={trajectory}
-              currentFrame={playbackFrame}
+              currentFrame={trajectoryFrame}
             />
             <HitboxMarker
               trajectory={trajectory}
-              currentFrame={playbackFrame}
+              currentFrame={trajectoryFrame}
             />
           </>
         )}

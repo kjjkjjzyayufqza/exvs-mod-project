@@ -123,3 +123,14 @@ export {
   buildReverseReferenceMap,
   followChildBulletChain,
 } from "./crossParamResolver";
+
+export {
+  type ShootingEndReason,
+  type ShootingTrajectorySummary,
+  type ShootingTimeline,
+  type ShootingLoopShot,
+  type ShootingLoopResult,
+  buildShootingTimeline,
+  classifyShootingEndReason,
+  simulateShootingLoop,
+} from "./shootingLoop";

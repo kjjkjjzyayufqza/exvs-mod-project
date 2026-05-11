@@ -443,3 +443,24 @@ and sound cues when a bullet is created/hits/expires.
 | `sub_14066AC90` | WeaponStateInit | armsparam | Load weapon entry, reset state |
 | `sub_1406066A0` | HitProcessingLoop | interactionid | Collision → interaction lookup |
 | `sub_1403643B0` | EntityPosResolver | hitgroupiddef | Bone transform from hit group |
+
+---
+
+## 2026-05-08 Shooting Loop Workbench Slice
+
+Implemented the first verified bullet editor slice as a manual pairing workbench:
+
+- Added `src/lib/gameAlgorithms/shootingLoop.ts` as a pure TypeScript core that combines an `armsparam` entry, a `bulletparam` entry, and preview scenario data into a fire timeline, spawn frames, per-shot trajectory, and hit/despawn reason.
+- Added `src/lib/gameAlgorithms/shootingLoop.test.ts` covering single-shot startup spawn, burst spawn spacing, ammo limiting, hit classification, lifetime end, and effective-range despawn.
+- Fixed `src/lib/gameAlgorithms/crossParamResolver.ts` to resolve typed param entries through the real `entryId` field via `readTypedEntryId()` instead of the stale `__entryId` field.
+- Added `src/lib/gameAlgorithms/crossParamResolver.test.ts` for `entryId` lookup, fallback index lookup, bullet cross references, reverse maps, and child bullet chains.
+- Extended `BulletEditorStore` to hold optional `armsparam` data, selected arms entry index, and `ShootingLoopResult<TrajectoryResult>`.
+- Added manual armsparam loading and arms entry selection in `BulletEditorView`; no automatic arms-to-bullet binding is attempted in this slice.
+- Added `ShootingLoopPanel` to show startup, active/recovery/cooldown boundaries, ammo change, spawn frames, end frames, and end reasons.
+- Adjusted `BulletTrajectoryCanvas` so playback waits until the selected arms startup spawn frame before drawing the first shot trajectory.
+
+Verification:
+
+- `pnpm test "src/lib/gameAlgorithms/shootingLoop.test.ts" "src/lib/gameAlgorithms/crossParamResolver.test.ts" "src/lib/gameAlgorithms/moveTypes.test.ts" "src/lib/gameAlgorithms/ballisticSolver.test.ts"` → 4 files passed, 39 tests passed.
+- `pnpm exec tsc --noEmit` → passed.
+- Cursor lints on edited TypeScript/TSX files → no linter errors.
