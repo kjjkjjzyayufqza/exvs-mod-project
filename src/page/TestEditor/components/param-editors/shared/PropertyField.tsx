@@ -75,7 +75,17 @@ export function PropertyField({ def, value, onChange }: PropertyFieldProps) {
         <label className="text-[11px] text-muted-foreground">
           {def.label}
         </label>
-        <span className="font-mono text-[11px]">{formatHash(numValue)}</span>
+        <Input
+          type="text"
+          className="h-7 w-28 text-right font-mono text-[11px]"
+          value={formatHash(numValue)}
+          onChange={(e) => {
+            const raw = e.target.value.trim().replace(/^0x/i, "");
+            const parsed = parseInt(raw, 16);
+            if (!Number.isFinite(parsed)) return;
+            onChange(def.key, parsed >>> 0);
+          }}
+        />
       </div>
     );
   }

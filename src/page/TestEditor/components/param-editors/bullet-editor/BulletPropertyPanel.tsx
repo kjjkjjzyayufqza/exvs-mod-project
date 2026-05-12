@@ -23,7 +23,7 @@ function num(entry: TypedParamEntry, key: string): number {
   return typeof v === "number" ? v : 0;
 }
 
-const BULLET_GROUPS: PropertyGroupDef[] = [
+export const BULLET_GROUPS: PropertyGroupDef[] = [
   {
     id: "movement",
     label: "Movement",
@@ -161,7 +161,7 @@ const BULLET_GROUPS: PropertyGroupDef[] = [
   },
 ];
 
-function buildComputedSections(entry: TypedParamEntry): ComputedSection[] {
+export function buildBulletComputedSections(entry: TypedParamEntry): ComputedSection[] {
   const moveType = Math.trunc(num(entry, "moveType"));
   const moveDef = getMoveTypeDefinition(moveType);
   const category = getMoveTypeCategory(moveType);
@@ -218,7 +218,7 @@ export function BulletPropertyPanel({
   fieldSpecs,
   onFieldChange,
 }: BulletPropertyPanelProps) {
-  const computedSections = useMemo(() => buildComputedSections(entry), [entry]);
+  const computedSections = useMemo(() => buildBulletComputedSections(entry), [entry]);
 
   return (
     <GameAccuratePropertyPanel

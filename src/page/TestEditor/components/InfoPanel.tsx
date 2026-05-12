@@ -12,10 +12,14 @@ import { SsbhModelPreviewMotionPanel } from "./ssbh-model-preview/SsbhModelPrevi
 import { JnttblFileEditorPanel } from "./ssbh-model-preview/JnttblFileEditorPanel";
 import { NumdlbFileEditorPanel } from "./ssbh-model-preview/NumdlbFileEditorPanel";
 import { useBulletEditorStore } from "./param-editors/bullet-editor/BulletEditorStore";
-import { BulletPropertyPanel } from "./param-editors/bullet-editor/BulletPropertyPanel";
+import { BULLET_GROUPS, buildBulletComputedSections } from "./param-editors/bullet-editor/BulletPropertyPanel";
 import { ScenarioPanel } from "./param-editors/bullet-editor/ScenarioPanel";
 import { ShootingLoopPanel } from "./param-editors/bullet-editor/ShootingLoopPanel";
 import { BulletDpsPanel } from "./param-editors/bullet-editor/BulletDpsPanel";
+import { PropertyField } from "./param-editors/shared/PropertyField";
+import { MayaSection } from "./ssbh-model-preview/MayaInspectorSection";
+import { formatHash } from "@/models/commandTable";
+import { Crosshair, Info, Repeat, SlidersHorizontal, Swords } from "lucide-react";
 
 const BASE_TAB_ITEMS = [
   { name: "Info", value: "info" },
@@ -47,18 +51,67 @@ function BulletInfoTabContent() {
     return <p className="text-muted-foreground">No bullet entry selected.</p>;
   }
 
+  const entryId = typeof entry.entryId === "number" ? (entry.entryId as number) : 0;
+  const computedSections = buildBulletComputedSections(entry);
+  const onFieldChange = (key: string, value: number) =>
+    useBulletEditorStore.getState().updateField(key, value);
+  const visibleGroups = BULLET_GROUPS.filter((g) => !g.visible || g.visible(entry));
+
   return (
-    <div className="space-y-2">
-      <BulletPropertyPanel
-        entry={entry}
-        fieldSpecs={data?.fieldSpecs}
-        onFieldChange={(key, value) =>
-          useBulletEditorStore.getState().updateField(key, value)
-        }
-      />
-      <ScenarioPanel />
-      <ShootingLoopPanel result={shootingLoopResult} />
-      <BulletDpsPanel entry={entry} trajectory={trajectory} />
+    <div className="-mx-4 flex min-w-0 flex-col border-t bg-background/50">
+      <div className="flex items-center justify-between border-b border-muted bg-muted/20 px-3 py-1.5">
+        <span className="text-[10px] text-muted-foreground">Entry ID</span>
+        <span className="font-mono text-[11px]">{formatHash(entryId)}</span>
+      </div>
+
+      {computedSections.map((section) => (
+        <MayaSection key={section.label} title={section.label} icon={<Info className="h-3.5 w-3.5" />}>
+          <div className="flex flex-col gap-1.5">
+            {section.values.map((cv) => (
+              <div key={cv.label} className="flex items-center justify-between gap-2" title={cv.tooltip}>
+                <span className="min-w-0 shrink-0 text-[11px] text-muted-foreground">
+                  {cv.label}
+                  {cv.unit && <span className="ml-1 text-[9px] text-muted-foreground/60">({cv.unit})</span>}
+                </span>
+                <span
+                  className="font-mono text-[11px] font-medium"
+                  style={cv.color ? { color: cv.color } : undefined}
+                >
+                  {typeof cv.value === "number"
+                    ? Number.isInteger(cv.value) ? cv.value : cv.value.toFixed(4)
+                    : cv.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </MayaSection>
+      ))}
+
+      {visibleGroups.map((group) => (
+        <MayaSection key={group.id} title={group.label} icon={<SlidersHorizontal className="h-3.5 w-3.5" />}>
+          <div className="flex flex-col gap-1.5">
+            {group.fields.map((def) => (
+              <PropertyField key={def.key} def={def} value={entry[def.key] ?? 0} onChange={onFieldChange} />
+            ))}
+          </div>
+        </MayaSection>
+      ))}
+
+      <MayaSection title="Target Scenario" icon={<Crosshair className="h-3.5 w-3.5" />}>
+        <div className="-mx-1">
+          <ScenarioPanel />
+        </div>
+      </MayaSection>
+      <MayaSection title="Shooting Loop" icon={<Repeat className="h-3.5 w-3.5" />}>
+        <div className="[&>div]:border-0 [&>div]:p-0 [&>div]:shadow-none">
+          <ShootingLoopPanel result={shootingLoopResult} />
+        </div>
+      </MayaSection>
+      <MayaSection title="Combat Stats" icon={<Swords className="h-3.5 w-3.5" />}>
+        <div className="[&>div]:border-0 [&>div]:p-0 [&>div]:shadow-none">
+          <BulletDpsPanel entry={entry} trajectory={trajectory} />
+        </div>
+      </MayaSection>
     </div>
   );
 }
