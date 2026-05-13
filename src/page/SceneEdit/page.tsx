@@ -1,401 +1,536 @@
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls, TransformControls, useHelper } from "@react-three/drei";
-import { useRef, useEffect, useState, useCallback } from "react";
-import { useSceneStore, ModelState } from "../../store/sceneStore";
-import { ControlPanel } from "./components/ControlPanel";
-import { DAEModel } from "./components/DAEModel";
-import { HavokModel } from "./components/HavokModel";
-import { BoundingBoxGrid } from "./components/BoundingBoxGrid";
-import { SelectionManager } from "./utils/SelectionManager";
-import { PostProcessing } from "./components/PostProcessing";
-import { open } from '@tauri-apps/plugin-dialog';
-import * as THREE from 'three';
-import { DirectionalLightHelper } from 'three';
+import { useState, useCallback, useRef, useTransition } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
+import { toast } from "sonner";
 
-function LightWithHelper() {
-    const lightRef = useRef<THREE.DirectionalLight>(null);
-    useHelper(lightRef as any, DirectionalLightHelper, 50);
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
-    return (
-        <directionalLight ref={lightRef} position={[400, 400, 350]} intensity={1} />
-    );
-}
+import { MapToolbar } from "./components/MapToolbar";
+import {
+  StageHierarchyTree,
+  type StageTreeNode,
+} from "./components/StageHierarchyTree";
+import {
+  MapViewport,
+  type MapViewportHandle,
+} from "./components/MapViewport";
+import {
+  StagePropertyEditor,
+  type TransformData,
+} from "./components/StagePropertyEditor";
+import {
+  GraphicParamPanel,
+  type GraphicParam,
+} from "./components/GraphicParamPanel";
+import { PlacementPanel, type PlacementRow } from "./components/PlacementPanel";
+import {
+  StageRenamePreviewDialog,
+  type VirtualTreeFolder,
+} from "./components/StageRenamePreviewDialog";
 
-interface BoxProps {
-    boxState: ModelState;
-    color: string;
-    mode: 'translate' | 'rotate' | 'scale';
-    isSelected: boolean;
-    onClick: (id: string) => void;
-    onTransform: (modelState: ModelState) => void;
-}
+import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
 
-function Box({ boxState, color, mode, isSelected, onClick, onTransform }: BoxProps) {
-    const meshRef = useRef<any>(null);
-    const timeoutRef = useRef<number | null>(null);
-    const [isMeshReady, setIsMeshReady] = useState(false);
-
-    // Update mesh transform when boxState changes
-    useEffect(() => {
-        if (meshRef.current) {
-            meshRef.current.position.set(...boxState.position);
-            meshRef.current.rotation.set(...boxState.rotation);
-            meshRef.current.scale.set(...boxState.scale);
-            setIsMeshReady(true);
-        }
-    }, [boxState]);
-
-    const handleClick = (event: any) => {
-        event.stopPropagation();
-        onClick(boxState.id);
-    };
-
-    const handleObjectChange = () => {
-        // Clear previous timeout
-        if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current);
-        }
-
-        // Set new timeout to save after 300ms of no changes
-        timeoutRef.current = window.setTimeout(() => {
-            if (meshRef.current) {
-                const updatedModelState: ModelState = {
-                    id: boxState.id,
-                    name: boxState.name,
-                    type: 'box',
-                    position: meshRef.current.position.toArray(),
-                    rotation: meshRef.current.rotation.toArray().slice(0, 3),
-                    scale: meshRef.current.scale.toArray()
-                };
-                onTransform(updatedModelState);
-            }
-        }, 300);
-    };
-
-    return (
-        <>
-            <mesh ref={meshRef} onClick={handleClick}>
-                <boxGeometry args={[1, 1, 1]} />
-                <meshStandardMaterial color={color} />
-            </mesh>
-            {isSelected && isMeshReady && !boxState.isLocked && (
-                <>
-                    <BoundingBoxGrid
-                        target={meshRef.current}
-                        visible={true}
-                        color="#00ffff"
-                    />
-                    <TransformControls
-                        object={meshRef.current}
-                        mode={mode}
-                        showX
-                        showY
-                        showZ
-                        size={1}
-                        space="world"
-                        onObjectChange={handleObjectChange}
-                    />
-                </>
-            )}
-        </>
-    );
+interface StageBundleResponse {
+  rootPath: string;
+  baseModel: SsbhModelPreviewBundle | null;
+  subModels: Array<{
+    folderName: string;
+    objectIndex: number;
+    bundle: SsbhModelPreviewBundle;
+  }>;
+  graphicParams: Array<{ key: string; value: string }>;
+  placementHeader: string[];
+  placementEntries: Array<{
+    vdkType: string;
+    objectNumber: number | null;
+    posX: number;
+    posY: number;
+    posZ: number;
+    rotX: number;
+    rotY: number;
+    rotZ: number;
+    scaleX: number;
+    scaleY: number;
+    scaleZ: number;
+    rawFields: string[];
+  }>;
+  warnings: string[];
 }
 
 export default function SceneEdit() {
-    const {
-        models,
-        selectedModelId,
-        transformMode,
-        setSelectedModel,
-        clearSelection,
-        clearAllModels,
-        setTransformMode,
-        updateModelTransform,
-        getInitialModelState,
-        loadSpecificDAEModel,
-        undo,
-        redo,
-        canUndo,
-        canRedo,
-        vdkConfigs,
-        vdkObjectInfos,
-        isVdkLoading,
-        vdkLoadingError,
-        loadVdkConfig,
-        saveVdkConfig,
-        addVdkObject,
-        applyVdkConfigToScene
-    } = useSceneStore();
+  const viewportRef = useRef<MapViewportHandle>(null);
+  const [, startTransition] = useTransition();
 
-    const selectionManagerRef = useRef<SelectionManager | null>(null);
+  const [stageName, setStageName] = useState<string | null>(null);
+  const [stageRoot, setStageRoot] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-    const handleBoxClick = useCallback((boxId: string) => {
-        setSelectedModel(boxId);
-    }, [setSelectedModel]);
+  const [baseModel, setBaseModel] = useState<SsbhModelPreviewBundle | null>(
+    null
+  );
+  const [subModels, setSubModels] = useState<
+    StageBundleResponse["subModels"]
+  >([]);
+  const [graphicParams, setGraphicParams] = useState<GraphicParam[]>([]);
+  const [placementHeader, setPlacementHeader] = useState<string[]>([]);
+  const [placementColMap, setPlacementColMap] = useState<
+    Record<string, number>
+  >({});
+  const [placementEntries, setPlacementEntries] = useState<PlacementRow[]>([]);
+  const [treeRoot, setTreeRoot] = useState<StageTreeNode | null>(null);
 
-    const handleTransform = useCallback((boxState: any) => {
-        updateModelTransform(boxState);
-    }, [updateModelTransform]);
+  const [isMemoryImport, setIsMemoryImport] = useState(false);
+  const [renamePreview, setRenamePreview] = useState<{
+    folders: VirtualTreeFolder[];
+    warnings: string[];
+    bundle: StageBundleResponse;
+    sourceName: string;
+  } | null>(null);
 
-    const handleLoadVdkConfig = useCallback(async () => {
-        try {
-            const selectedFile = await open({
-                multiple: false,
-                filters: [{
-                    name: 'VDK Files',
-                    extensions: ['bin']
-                }]
-            });
+  const [selectedNodeId, setSelectedNodeIdRaw] = useState<string | null>(null);
+  const [selectedPlacementIdx, setSelectedPlacementIdxRaw] = useState<
+    number | null
+  >(null);
 
-            if (!selectedFile || typeof selectedFile !== 'string') {
-                return;
-            }
+  const [showGrid, setShowGrid] = useState(true);
+  const [showAxes, setShowAxes] = useState(true);
+  const [wireframe, setWireframe] = useState(false);
 
-            // Load VDK config
-            await loadVdkConfig(selectedFile);
-            // Apply to scene immediately
-            await applyVdkConfigToScene();
-        } catch (error) {
-            console.error('Failed to load and apply VDK config:', error);
+  const handleSelectNode = useCallback(
+    (id: string | null) => {
+      setSelectedNodeIdRaw(id);
+      if (!id) {
+        setSelectedPlacementIdxRaw(null);
+        return;
+      }
+      const sub = subModels.find((s) => s.folderName === id);
+      if (sub) {
+        const idx = placementEntries.findIndex(
+          (e) =>
+            e.vdkType.toUpperCase() === "OBJECT" &&
+            e.objectNumber === sub.objectIndex
+        );
+        setSelectedPlacementIdxRaw(idx >= 0 ? idx : null);
+      } else {
+        setSelectedPlacementIdxRaw(null);
+      }
+    },
+    [subModels, placementEntries]
+  );
+
+  const handleSelectPlacement = useCallback(
+    (idx: number) => {
+      setSelectedPlacementIdxRaw(idx);
+      const entry = placementEntries[idx];
+      if (entry?.vdkType.toUpperCase() === "OBJECT" && entry.objectNumber !== null) {
+        const sub = subModels.find((s) => s.objectIndex === entry.objectNumber);
+        if (sub) {
+          setSelectedNodeIdRaw(sub.folderName);
+          return;
         }
-    }, [loadVdkConfig, applyVdkConfigToScene]);
+      }
+    },
+    [subModels, placementEntries]
+  );
 
-    const handleCanvasClick = (event: any) => {
-        // 只有当点击的不是模型时才清除选择
-        // 检查事件对象是否有 intersections 且没有相交对象
-        if (event.intersections && event.intersections.length === 0) {
-            clearSelection();
-            // 同时清除SelectionManager的选中状态
-            if (selectionManagerRef.current) {
-                selectionManagerRef.current.clearSelection();
-            }
+  const applyBundle = useCallback(
+    (path: string, bundle: StageBundleResponse) => {
+      startTransition(() => {
+        const folderName =
+          path.split(/[/\\]/).filter(Boolean).pop() ?? "stage";
+        setStageName(folderName);
+        setStageRoot(path);
+        setBaseModel(bundle.baseModel);
+        setSubModels(bundle.subModels);
+        setGraphicParams(
+          bundle.graphicParams.map((p) => ({ key: p.key, value: p.value }))
+        );
+        setPlacementHeader(bundle.placementHeader);
+        const colMap: Record<string, number> = {};
+        bundle.placementHeader.forEach((h, i) => {
+          colMap[h.toUpperCase()] = i;
+        });
+        setPlacementColMap(colMap);
+        setPlacementEntries(
+          bundle.placementEntries.map((e) => ({
+            vdkType: e.vdkType,
+            objectNumber: e.objectNumber,
+            posX: e.posX,
+            posY: e.posY,
+            posZ: e.posZ,
+            rotX: e.rotX,
+            rotY: e.rotY,
+            rotZ: e.rotZ,
+            scaleX: e.scaleX,
+            scaleY: e.scaleY,
+            scaleZ: e.scaleZ,
+            rawFields: e.rawFields,
+          }))
+        );
+        const tree = buildTreeFromBundle(folderName, bundle);
+        setTreeRoot(tree);
+      });
+
+      if (bundle.warnings.length > 0) {
+        toast.warning(
+          `Stage loaded with ${bundle.warnings.length} warning(s)`,
+          { description: bundle.warnings.slice(0, 3).join("\n") }
+        );
+      } else {
+        toast.success("Stage loaded successfully");
+      }
+    },
+    []
+  );
+
+  const resetState = useCallback(() => {
+    setStageName(null);
+    setIsMemoryImport(false);
+    setBaseModel(null);
+    setSubModels([]);
+    setGraphicParams([]);
+    setPlacementHeader([]);
+    setPlacementEntries([]);
+    setTreeRoot(null);
+  }, []);
+
+  const handleOpenFolder = useCallback(async () => {
+    try {
+      const selected = await open({ directory: true });
+      if (!selected || typeof selected !== "string") return;
+
+      setIsLoading(true);
+      resetState();
+
+      const bundle = await invoke<StageBundleResponse>("load_stage_bundle", {
+        stageRoot: selected,
+      });
+      applyBundle(selected, bundle);
+    } catch (err: any) {
+      toast.error("Failed to load stage", { description: String(err) });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [applyBundle, resetState]);
+
+  const handleImportFhm2d = useCallback(async () => {
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [{ name: "FHM2D Stage Files", extensions: ["fhm2d"] }],
+      });
+      if (!selected || typeof selected !== "string") return;
+
+      setIsLoading(true);
+      resetState();
+
+      toast.info("Importing FHM2D (in-memory)...", { id: "fhm2d-progress" });
+
+      const result = await invoke<{
+        bundle: StageBundleResponse;
+        virtualTree: VirtualTreeFolder[];
+        warnings: string[];
+      }>("import_stage_fhm2d_in_memory", { sourcePath: selected });
+
+      toast.dismiss("fhm2d-progress");
+
+      const sourceName = selected
+        .split(/[/\\]/)
+        .filter(Boolean)
+        .pop()
+        ?.replace(/\.fhm2d$/i, "") ?? "stage";
+
+      setRenamePreview({
+        folders: result.virtualTree,
+        warnings: result.warnings,
+        bundle: result.bundle,
+        sourceName,
+      });
+    } catch (err: any) {
+      toast.dismiss("fhm2d-progress");
+      toast.error("FHM2D import failed", { description: String(err) });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [resetState]);
+
+  const handleRenameConfirm = useCallback(() => {
+    if (!renamePreview) return;
+    const { bundle, sourceName } = renamePreview;
+    setIsMemoryImport(true);
+    applyBundle(bundle.rootPath, bundle);
+    setStageName(sourceName);
+    setRenamePreview(null);
+  }, [renamePreview, applyBundle]);
+
+  const handleRenameCancel = useCallback(() => {
+    setRenamePreview(null);
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    if (!stageRoot) return;
+    try {
+      const gpCsv = graphicParams.map((p) => `${p.key},${p.value}`).join("\n");
+      await writeTextFile(`${stageRoot}/info/graphic_param.csv`, gpCsv);
+
+      if (placementHeader.length > 0 && placementEntries.length > 0) {
+        const headerLine = placementHeader.join(",");
+        const dataLines = placementEntries.map((e) => e.rawFields.join(","));
+        const placementCsv = [headerLine, ...dataLines].join("\n");
+        await writeTextFile(`${stageRoot}/info/placement.csv`, placementCsv);
+      }
+
+      toast.success("CSV files saved");
+    } catch (err: any) {
+      toast.error("Save failed", { description: String(err) });
+    }
+  }, [stageRoot, graphicParams, placementHeader, placementEntries]);
+
+  const handleGraphicParamChange = useCallback(
+    (index: number, value: string) => {
+      setGraphicParams((prev) => {
+        const next = [...prev];
+        next[index] = { ...next[index], value };
+        return next;
+      });
+    },
+    []
+  );
+
+  const handlePlacementChange = useCallback(
+    (
+      index: number,
+      field: keyof Pick<
+        PlacementRow,
+        | "posX"
+        | "posY"
+        | "posZ"
+        | "rotX"
+        | "rotY"
+        | "rotZ"
+        | "scaleX"
+        | "scaleY"
+        | "scaleZ"
+      >,
+      value: number
+    ) => {
+      const fieldToCol: Record<string, string> = {
+        posX: "VDK_POS_X",
+        posY: "VDK_POS_Y",
+        posZ: "VDK_POS_Z",
+        rotX: "VDK_ROT_X",
+        rotY: "VDK_ROT_Y",
+        rotZ: "VDK_ROT_Z",
+        scaleX: "VDK_SCALE_X",
+        scaleY: "VDK_SCALE_Y",
+        scaleZ: "VDK_SCALE_Z",
+      };
+      setPlacementEntries((prev) => {
+        const next = [...prev];
+        const entry = { ...next[index], [field]: value };
+        const colName = fieldToCol[field];
+        if (colName) {
+          const colIdx = placementColMap[colName];
+          if (colIdx !== undefined && entry.rawFields.length > colIdx) {
+            const updatedRaw = [...entry.rawFields];
+            updatedRaw[colIdx] = String(value);
+            entry.rawFields = updatedRaw;
+          }
         }
-    };
+        next[index] = entry;
+        return next;
+      });
+    },
+    [placementColMap]
+  );
 
-    // 初始化SelectionManager
-    const initializeSelectionManager = useCallback((scene: THREE.Scene, camera: THREE.Camera, canvas: HTMLCanvasElement) => {
-        if (!selectionManagerRef.current) {
-            selectionManagerRef.current = new SelectionManager(scene, camera);
-            
-            // 设置模型锁定检查回调
-            selectionManagerRef.current.setIsModelLockedCallback((modelId: string) => {
-                const model = models[modelId];
-                return model?.isLocked || false;
-            });
+  const handleTransformChange = useCallback(
+    (field: keyof TransformData, value: number) => {
+      if (selectedPlacementIdx === null) return;
+      const fieldMap: Record<keyof TransformData, keyof PlacementRow> = {
+        posX: "posX",
+        posY: "posY",
+        posZ: "posZ",
+        rotX: "rotX",
+        rotY: "rotY",
+        rotZ: "rotZ",
+        scaleX: "scaleX",
+        scaleY: "scaleY",
+        scaleZ: "scaleZ",
+      };
+      handlePlacementChange(
+        selectedPlacementIdx,
+        fieldMap[field] as any,
+        value
+      );
+    },
+    [selectedPlacementIdx, handlePlacementChange]
+  );
 
-            // 监听选中状态变化，但避免循环更新
-            selectionManagerRef.current.addSelectionChangeCallback((selectedObject) => {
-                if (selectedObject) {
-                    const modelId = selectedObject.userData?.modelId;
-                    if (modelId && modelId !== selectedModelId) {
-                        // 只有当选中的模型ID真正改变时才更新store
-                        setSelectedModel(modelId);
-                    }
-                } else if (selectedModelId !== null) {
-                    // 只有当当前有选中模型时才清除选择
-                    clearSelection();
-                }
-            });
-
-            // 添加鼠标事件监听
-            const handleMouseDown = (event: MouseEvent) => {
-                selectionManagerRef.current?.handleMouseDown(event, canvas);
-            };
-
-            const handleMouseMove = (event: MouseEvent) => {
-                selectionManagerRef.current?.handleMouseMove(event, canvas);
-            };
-
-            const handleMouseUp = (event: MouseEvent) => {
-                selectionManagerRef.current?.handleMouseUp(event);
-            };
-
-            const handleClick = (event: MouseEvent) => {
-                selectionManagerRef.current?.handleClick(event, canvas);
-            };
-
-            canvas.addEventListener('mousedown', handleMouseDown);
-            canvas.addEventListener('mousemove', handleMouseMove);
-            canvas.addEventListener('mouseup', handleMouseUp);
-            canvas.addEventListener('click', handleClick);
-
-            // 返回清理函数
-            return () => {
-                canvas.removeEventListener('mousedown', handleMouseDown);
-                canvas.removeEventListener('mousemove', handleMouseMove);
-                canvas.removeEventListener('mouseup', handleMouseUp);
-                canvas.removeEventListener('click', handleClick);
-                selectionManagerRef.current?.dispose();
-                selectionManagerRef.current = null;
-            };
+  const selectedNode = findNode(treeRoot, selectedNodeId);
+  const selectedTransform: TransformData | null =
+    selectedPlacementIdx !== null && placementEntries[selectedPlacementIdx]
+      ? {
+          posX: placementEntries[selectedPlacementIdx].posX,
+          posY: placementEntries[selectedPlacementIdx].posY,
+          posZ: placementEntries[selectedPlacementIdx].posZ,
+          rotX: placementEntries[selectedPlacementIdx].rotX,
+          rotY: placementEntries[selectedPlacementIdx].rotY,
+          rotZ: placementEntries[selectedPlacementIdx].rotZ,
+          scaleX: placementEntries[selectedPlacementIdx].scaleX,
+          scaleY: placementEntries[selectedPlacementIdx].scaleY,
+          scaleZ: placementEntries[selectedPlacementIdx].scaleZ,
         }
-    }, [setSelectedModel, clearSelection, selectedModelId]);
+      : null;
 
-    useEffect(() => {
-        const handleKeyPress = (event: KeyboardEvent) => {
-            // Handle undo/redo
-            if (event.ctrlKey || event.metaKey) {
-                if (event.key === 'z' && !event.shiftKey) {
-                    event.preventDefault();
-                    undo();
-                    return;
-                }
-                if ((event.key === 'y') || (event.key === 'z' && event.shiftKey)) {
-                    event.preventDefault();
-                    redo();
-                    return;
-                }
-            }
-
-            // Handle transform modes
-            switch (event.key.toLowerCase()) {
-                case 'w':
-                    setTransformMode('translate');
-                    break;
-                case 'e':
-                    setTransformMode('rotate');
-                    break;
-                case 'r':
-                    setTransformMode('scale');
-                    break;
-            }
-        };
-
-        // 阻止鼠标滚轮按下时的页面滚动
-        const handleContextMenu = (event: MouseEvent) => {
-            // 阻止右键菜单
-            event.preventDefault();
-        };
-
-        window.addEventListener('keydown', handleKeyPress);
-        window.addEventListener('contextmenu', handleContextMenu);
-
-        return () => {
-            window.removeEventListener('keydown', handleKeyPress);
-            window.removeEventListener('contextmenu', handleContextMenu);
-        };
-    }, []);
-
-    const selectedModelState = selectedModelId ? models[selectedModelId] : null;
-
-    // Load DAE model and VDK config on scene initialization
-    useEffect(() => {
-        const loadInitialScene = async () => {
-            try {
-                // Clear all existing models before loading new ones
-                clearAllModels();
-
-                // // Load DAE models
-                // await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_0.dae");
-                // await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_1.dae");
-                // await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\scene_2.dae");
-                // await loadSpecificDAEModel("E:\\XB\\解包\\gundamv\\16F73C97\\body.dae");
-            } catch (error) {
-                console.error('Failed to load initial scene:', error);
-            }
-        };
-
-        loadInitialScene();
-    }, [clearAllModels, loadSpecificDAEModel, loadVdkConfig, applyVdkConfigToScene]);
-
-    // Sync SelectionManager when selectedModelId changes
-    useEffect(() => {
-        if (selectionManagerRef.current && selectedModelId) {
-            selectionManagerRef.current.setSelectedById(selectedModelId);
-        } else if (selectionManagerRef.current && !selectedModelId) {
-            selectionManagerRef.current.clearSelection();
-        }
-    }, [selectedModelId]);
-
-    return (
-        <div className="h-full">
-            <ControlPanel
-                models={models}
-                selectedModelId={selectedModelId}
-                selectedModelState={selectedModelState}
-                onUpdateModelTransform={updateModelTransform}
-                getInitialModelState={getInitialModelState}
-                onModelSelect={setSelectedModel}
-                vdkConfigs={vdkConfigs}
-                vdkObjectInfos={vdkObjectInfos}
-                isVdkLoading={isVdkLoading}
-                vdkLoadingError={vdkLoadingError}
-                onLoadVdkConfig={handleLoadVdkConfig}
-                onSaveVdkConfig={saveVdkConfig}
-                onAddVdkObject={addVdkObject}
-            />
-
-            <Canvas
-                camera={{ position: [300, 300, 300], fov: 30, near: 0.1, far: 100000000 }}
-                style={{ background: '#1a1a1a' }}
-                className="z-10"
-                onClick={handleCanvasClick}
-                onCreated={({ scene, camera, gl }) => {
-                    // 初始化SelectionManager
-                    initializeSelectionManager(scene, camera, gl.domElement);
-                }}
-                onPointerDown={(event) => {
-                    // 阻止鼠标滚轮按下时的页面滚动
-                    if (event.button === 1) { // 中键
-                        event.preventDefault();
-                        event.stopPropagation();
-                    }
-                }}
-                onWheel={(event) => {
-                    // 确保滚轮事件不会导致页面滚动
-                    if (event.buttons === 4) { // 中键被按下
-                        event.preventDefault();
-                        event.stopPropagation();
-                    }
-                }}
-            >
-                <ambientLight intensity={0.5} />
-                <LightWithHelper />
-
-                {Object.values(models).map((modelState) => {
-                    if (modelState.type === 'dae') {
-                        return (
-                            <DAEModel
-                                key={modelState.id}
-                                modelState={modelState}
-                                mode={transformMode}
-                                onTransform={handleTransform}
-                                selectionManager={selectionManagerRef.current || undefined}
-                            />
-                        );
-                    } else if (modelState.type === 'havok') {
-                        return (
-                            <HavokModel
-                                key={modelState.id}
-                                modelState={modelState}
-                                mode={transformMode}
-                                onTransform={handleTransform}
-                                selectionManager={selectionManagerRef.current || undefined}
-                            />
-                        );
-                    } else {
-                        return (
-                            <Box
-                                key={modelState.id}
-                                boxState={modelState}
-                                color={modelState.id === 'box1' ? 'orange' : 'blue'}
-                                mode={transformMode}
-                                isSelected={selectedModelId === modelState.id}
-                                onClick={handleBoxClick}
-                                onTransform={handleTransform}
-                            />
-                        );
-                    }
-                })}
-
-                <OrbitControls
-                    makeDefault
-                    enableDamping={false}
-                    dampingFactor={1}
+  return (
+    <TooltipProvider>
+      <div className="h-full flex flex-col">
+        <MapToolbar
+          onOpenFolder={handleOpenFolder}
+          onImportFhm2d={handleImportFhm2d}
+          onSave={handleSave}
+          canSave={!!stageName && !isMemoryImport}
+          stageName={stageName}
+          isLoading={isLoading}
+          showGrid={showGrid}
+          showAxes={showAxes}
+          wireframe={wireframe}
+          onToggleGrid={() => setShowGrid((v) => !v)}
+          onToggleAxes={() => setShowAxes((v) => !v)}
+          onToggleWireframe={() => setWireframe((v) => !v)}
+          onResetCamera={() => viewportRef.current?.resetCamera()}
+        />
+        <ResizablePanelGroup
+          direction="horizontal"
+          className="flex-1 min-h-0 rounded-lg border bg-card shadow-sm"
+        >
+          <ResizablePanel defaultSize={20} minSize={15}>
+            <div className="h-full flex flex-col">
+              <div className="text-xs font-medium px-3 py-2 border-b bg-muted/40 text-muted-foreground uppercase tracking-wider">
+                Hierarchy
+              </div>
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <StageHierarchyTree
+                  root={treeRoot}
+                  selectedId={selectedNodeId}
+                  onSelect={handleSelectNode}
                 />
+              </div>
+            </div>
+          </ResizablePanel>
 
-                <PostProcessing />
-            </Canvas>
-        </div>
-    );
+          <ResizableHandle withHandle className="w-1 bg-border hover:bg-primary/20 transition-colors" />
+
+          <ResizablePanel defaultSize={55} minSize={30}>
+            <div className="h-full min-h-0">
+              <MapViewport
+                ref={viewportRef}
+                baseModel={baseModel}
+                subModels={subModels}
+                placementEntries={placementEntries}
+                showGrid={showGrid}
+                showAxes={showAxes}
+                wireframe={wireframe}
+                selectedNodeId={selectedNodeId}
+                onSelectNode={handleSelectNode}
+              />
+            </div>
+          </ResizablePanel>
+
+          <ResizableHandle withHandle className="w-1 bg-border hover:bg-primary/20 transition-colors" />
+
+          <ResizablePanel defaultSize={25} minSize={15}>
+            <div className="h-full flex flex-col">
+              <div className="text-xs font-medium px-3 py-2 border-b bg-muted/40 text-muted-foreground uppercase tracking-wider">
+                Properties
+              </div>
+              <div className="flex-1 min-h-0 overflow-auto p-2 space-y-2">
+                <StagePropertyEditor
+                  selectedNodeId={selectedNodeId}
+                  selectedNodeLabel={selectedNode?.label ?? null}
+                  selectedNodeRole={selectedNode?.role ?? null}
+                  transform={selectedTransform}
+                  onTransformChange={handleTransformChange}
+                />
+                <GraphicParamPanel
+                  params={graphicParams}
+                  onChange={handleGraphicParamChange}
+                />
+                <PlacementPanel
+                  entries={placementEntries}
+                  selectedIndex={selectedPlacementIdx}
+                  onSelectEntry={handleSelectPlacement}
+                  onEntryChange={handlePlacementChange}
+                />
+              </div>
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+        <StageRenamePreviewDialog
+          open={renamePreview !== null}
+          folders={renamePreview?.folders ?? []}
+          warnings={renamePreview?.warnings ?? []}
+          onConfirm={handleRenameConfirm}
+          onCancel={handleRenameCancel}
+        />
+      </div>
+    </TooltipProvider>
+  );
+}
+
+function buildTreeFromBundle(
+  name: string,
+  bundle: StageBundleResponse
+): StageTreeNode {
+  const children: StageTreeNode[] = [];
+
+  if (bundle.baseModel) {
+    children.push({
+      id: "base",
+      label: "base",
+      role: "base",
+    });
+  }
+
+  children.push({
+    id: "info",
+    label: "info",
+    role: "info",
+  });
+
+  for (const sub of bundle.subModels) {
+    children.push({
+      id: sub.folderName,
+      label: sub.folderName,
+      role: "sub_model",
+      objectIndex: sub.objectIndex,
+    });
+  }
+
+  return {
+    id: "root",
+    label: name,
+    role: "root",
+    children,
+  };
+}
+
+function findNode(
+  root: StageTreeNode | null,
+  id: string | null
+): StageTreeNode | null {
+  if (!root || !id) return null;
+  if (root.id === id) return root;
+  for (const child of root.children ?? []) {
+    const found = findNode(child, id);
+    if (found) return found;
+  }
+  return null;
 }
