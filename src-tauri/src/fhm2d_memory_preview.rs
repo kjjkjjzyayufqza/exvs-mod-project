@@ -1359,13 +1359,20 @@ pub fn build_stage_preview_models(
     source_name: String,
     extraction: InMemoryFhm2dExtraction,
     virtual_tree: &[crate::format::fhm2d_stage::StageVirtualTreeFolder],
+    mut on_progress: impl FnMut(&str, usize),
 ) -> Result<(Option<SsbhModelPreviewBundle>, Vec<crate::format::fhm2d_stage::StageSubModelEntry>, Vec<String>), String> {
+    eprintln!("[stage_import] model build start: {} candidates in session", source_name);
+    let t_start = std::time::Instant::now();
+
     let session_id = state.next_session_id();
     let session = Fhm2dMemorySession::from_extraction(
         session_id.clone(),
         source_name,
         extraction,
     )?;
+
+    eprintln!("[stage_import] session created: id={session_id}, {} preview candidates",
+        session.preview_candidates.len());
 
     let mut base_model: Option<SsbhModelPreviewBundle> = None;
     let mut sub_models: Vec<crate::format::fhm2d_stage::StageSubModelEntry> = Vec::new();
@@ -1379,6 +1386,8 @@ pub fn build_stage_preview_models(
             });
 
             if has_numdlb {
+                on_progress(&folder.renamed_name, folder.original_index);
+                let t_model = std::time::Instant::now();
                 let folder_prefix = folder.original_index.to_string();
                 let matched_candidate = session.preview_candidates.iter().find(|candidate| {
                     candidate.folder_relative_path.starts_with(&folder_prefix)
@@ -1398,8 +1407,12 @@ pub fn build_stage_preview_models(
                                 match build_preview_bundle_from_snapshot(build_input) {
                                     Ok(bundle) => {
                                         if folder.role == "base" {
+                                            eprintln!("[stage_import] model built: base, elapsed={}ms",
+                                                t_model.elapsed().as_millis());
                                             base_model = Some(bundle);
                                         } else {
+                                            eprintln!("[stage_import] model built: {}, object_index={}, elapsed={}ms",
+                                                folder.renamed_name, object_index, t_model.elapsed().as_millis());
                                             sub_models.push(crate::format::fhm2d_stage::StageSubModelEntry {
                                                 folder_name: folder.renamed_name.clone(),
                                                 object_index,
@@ -1436,6 +1449,9 @@ pub fn build_stage_preview_models(
             }
         }
     }
+
+    eprintln!("[stage_import] model build done: base={}, sub_models={}, warnings={}, elapsed={}ms",
+        base_model.is_some(), sub_models.len(), warnings.len(), t_start.elapsed().as_millis());
 
     state
         .sessions
