@@ -188,6 +188,7 @@ fn collect_folder_groups(structure: &[SubFileStructureEntry]) -> Vec<FolderGroup
 
 struct InMemoryFolderGroup {
     folder_index: usize,
+    #[allow(dead_code)]
     folder_prefix: String,
     files: Vec<InMemoryFolderFile>,
 }
