@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import {
   ResizablePanelGroup,
@@ -37,7 +38,6 @@ import {
   StageImportProgressDialog,
   type ImportStep,
 } from "./components/StageImportProgressDialog";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
 
@@ -92,10 +92,11 @@ export default function SceneEdit() {
 
   const [isMemoryImport, setIsMemoryImport] = useState(false);
   const [renamePreview, setRenamePreview] = useState<{
-    folders: VirtualTreeFolder[];
+    tree: VirtualTreeFolder;
     warnings: string[];
-    bundle: StageBundleResponse;
     sourceName: string;
+    totalFiles: number;
+    totalSizeBytes: number;
   } | null>(null);
 
   const [importProgress, setImportProgress] = useState<{
@@ -107,9 +108,7 @@ export default function SceneEdit() {
   const INITIAL_STEPS: ImportStep[] = [
     { step: "read", label: "Reading file...", status: "pending" },
     { step: "extract", label: "Decompressing FHM2D...", status: "pending" },
-    { step: "rename", label: "Analyzing folder structure...", status: "pending" },
-    { step: "csv", label: "Parsing stage data...", status: "pending" },
-    { step: "models", label: "Building model previews...", status: "pending" },
+    { step: "tree", label: "Parsing folder structure...", status: "pending" },
   ];
 
   const handleProgressEvent = useCallback(
@@ -304,7 +303,6 @@ export default function SceneEdit() {
       if (!selected || typeof selected !== "string") return;
 
       setIsLoading(true);
-      resetState();
       setImportProgress({
         open: true,
         progress: 0,
@@ -312,41 +310,29 @@ export default function SceneEdit() {
       });
 
       const result = await invoke<{
-        bundle: StageBundleResponse;
-        virtualTree: VirtualTreeFolder[];
+        tree: VirtualTreeFolder;
         warnings: string[];
-      }>("import_stage_fhm2d_in_memory", { sourcePath: selected });
+        sourceName: string;
+        totalFiles: number;
+        totalSizeBytes: number;
+      }>("preview_stage_fhm2d_rename", { sourcePath: selected });
 
       setImportProgress((prev) => ({ ...prev, open: false }));
 
-      const sourceName = selected
-        .split(/[/\\]/)
-        .filter(Boolean)
-        .pop()
-        ?.replace(/\.fhm2d$/i, "") ?? "stage";
-
       setRenamePreview({
-        folders: result.virtualTree,
+        tree: result.tree,
         warnings: result.warnings,
-        bundle: result.bundle,
-        sourceName,
+        sourceName: result.sourceName,
+        totalFiles: result.totalFiles,
+        totalSizeBytes: result.totalSizeBytes,
       });
     } catch (err: any) {
       setImportProgress((prev) => ({ ...prev, open: false }));
-      toast.error("FHM2D import failed", { description: String(err) });
+      toast.error("FHM2D rename preview failed", { description: String(err) });
     } finally {
       setIsLoading(false);
     }
-  }, [resetState]);
-
-  const handleRenameConfirm = useCallback(() => {
-    if (!renamePreview) return;
-    const { bundle, sourceName } = renamePreview;
-    setIsMemoryImport(true);
-    applyBundle(bundle.rootPath, bundle);
-    setStageName(sourceName);
-    setRenamePreview(null);
-  }, [renamePreview, applyBundle]);
+  }, []);
 
   const handleRenameCancel = useCallback(() => {
     setRenamePreview(null);
@@ -487,7 +473,7 @@ export default function SceneEdit() {
           onResetCamera={() => viewportRef.current?.resetCamera()}
         />
         <ResizablePanelGroup
-          direction="horizontal"
+          orientation="horizontal"
           className="flex-1 min-h-0 rounded-lg border bg-card shadow-sm"
         >
           <ResizablePanel defaultSize={20} minSize={15}>
@@ -559,10 +545,12 @@ export default function SceneEdit() {
         />
         <StageRenamePreviewDialog
           open={renamePreview !== null}
-          folders={renamePreview?.folders ?? []}
+          tree={renamePreview?.tree ?? null}
           warnings={renamePreview?.warnings ?? []}
-          onConfirm={handleRenameConfirm}
-          onCancel={handleRenameCancel}
+          sourceName={renamePreview?.sourceName ?? ""}
+          totalFiles={renamePreview?.totalFiles ?? 0}
+          totalSizeBytes={renamePreview?.totalSizeBytes ?? 0}
+          onClose={handleRenameCancel}
         />
       </div>
     </TooltipProvider>

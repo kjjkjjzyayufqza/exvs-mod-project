@@ -3,7 +3,7 @@
 
 use binrw::{BinRead, BinReaderExt};
 use flate2::read::DeflateDecoder;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{Cursor, Read};
@@ -35,6 +35,7 @@ pub struct InMemoryFhm2dExtraction {
     pub format: Option<Fhm2dFormat>,
     pub naming_error: Option<String>,
     pub files: Vec<InMemoryFhm2dFile>,
+    pub sub_file_structure: Vec<SubFileStructureEntry>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -81,9 +82,9 @@ struct OutputSubFileData {
     file_base_name: Option<String>,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all_fields = "camelCase")]
-enum SubFileStructureEntry {
+pub enum SubFileStructureEntry {
     Folder {
         unk1: String,
         folder_count: i32,
@@ -371,6 +372,7 @@ pub fn extract_fhm2d_to_memory_impl(
         format,
         naming_error,
         files: memory_files,
+        sub_file_structure: output.sub_file_structure,
     })
 }
 

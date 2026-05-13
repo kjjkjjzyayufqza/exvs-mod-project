@@ -1354,13 +1354,17 @@ pub fn dispose_fhm2d_memory_session(
     Ok(())
 }
 
+#[allow(unused_variables, unused_mut)]
 pub fn build_stage_preview_models(
     state: &Fhm2dMemorySessionState,
     source_name: String,
     extraction: InMemoryFhm2dExtraction,
-    virtual_tree: &[crate::format::fhm2d_stage::StageVirtualTreeFolder],
+    _virtual_tree: &[crate::format::fhm2d_stage::StageVirtualTreeFolder],
     mut on_progress: impl FnMut(&str, usize),
 ) -> Result<(Option<SsbhModelPreviewBundle>, Vec<crate::format::fhm2d_stage::StageSubModelEntry>, Vec<String>), String> {
+    Ok((None, Vec::new(), vec!["build_stage_preview_models is temporarily disabled".to_string()]))
+
+    /*
     eprintln!("[stage_import] model build start: {} candidates in session", source_name);
     let t_start = std::time::Instant::now();
 
@@ -1460,6 +1464,7 @@ pub fn build_stage_preview_models(
         .insert(session_id, session);
 
     Ok((base_model, sub_models, warnings))
+    */
 }
 
 #[cfg(test)]

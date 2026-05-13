@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::format::fhm2d::InMemoryFhm2dFile;
+use crate::format::fhm2d::{InMemoryFhm2dFile, SubFileStructureEntry};
 use crate::ssbh_preview::{self, SsbhModelPreviewBundle};
 
 const NUMDLB_MAGIC: &[u8; 4] = b"HBSS";
@@ -55,43 +55,6 @@ struct SubFileDataEntry {
     file_index: i32,
     file_url: String,
     file_base_name: Option<String>,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(tag = "type", rename_all_fields = "camelCase")]
-#[allow(dead_code)]
-enum SubFileStructureEntry {
-    Folder {
-        unk1: String,
-        folder_count: i32,
-        #[allow(dead_code)]
-        unk2: String,
-        #[allow(dead_code)]
-        unk3: i32,
-        #[allow(dead_code)]
-        unk4: i32,
-        #[allow(dead_code)]
-        unk5: i32,
-        #[allow(dead_code)]
-        unk6: i32,
-    },
-    Item {
-        unk1: String,
-        file_index: i32,
-        #[allow(dead_code)]
-        unk2: String,
-        #[allow(dead_code)]
-        unk3: i32,
-        #[allow(dead_code)]
-        unk4: i32,
-        #[allow(dead_code)]
-        original_file_index: i32,
-        #[serde(rename = "Name")]
-        display_name: Option<String>,
-    },
-    EndMark {
-        end_mark_count: i32,
-    },
 }
 
 // ── Numdlb name extraction (minimal) ───────────────────────────────────────
@@ -184,132 +147,380 @@ fn collect_folder_groups(structure: &[SubFileStructureEntry]) -> Vec<FolderGroup
     groups
 }
 
-// ── In-memory rename helpers ───────────────────────────────────────────────
+// ── Recursive SubFileStructure tree parser ──────────────────────────────────
+//
+// SubFileStructure is a pre-order serialized tree using Folder/EndMark bracket
+// pairing (same logic as build_parse_tree in fhm2d.rs). Each Folder pushes a
+// level; each EndMark(count) pops `count` levels. Items are leaf nodes.
 
-struct InMemoryFolderGroup {
-    folder_index: usize,
-    #[allow(dead_code)]
-    folder_prefix: String,
-    files: Vec<InMemoryFolderFile>,
+#[allow(dead_code)]
+struct InternalTreeNode {
+    name: String,
+    children: Vec<InternalTreeNode>,
+    item_file_indices: Vec<i32>,
 }
 
-struct InMemoryFolderFile {
-    file_name: String,
-    file_type: String,
-    data: Vec<u8>,
+enum StageToken {
+    FolderOpen { name: String },
+    Leaf { file_index: i32 },
+    End,
 }
 
-fn collect_memory_folder_groups(files: &[InMemoryFhm2dFile]) -> Vec<InMemoryFolderGroup> {
-    let mut groups_map: HashMap<String, Vec<InMemoryFolderFile>> = HashMap::new();
-    let mut folder_order: Vec<String> = Vec::new();
-
-    for file in files {
-        let normalized = file.file_url.replace('\\', "/");
-        let trimmed = normalized.trim_start_matches("./").to_string();
-        let parts: Vec<&str> = trimmed.split('/').collect();
-        let folder_prefix = if parts.len() > 1 {
-            parts[0].to_string()
-        } else {
-            "0".to_string()
-        };
-        let file_name = parts.last().unwrap_or(&"unknown").to_string();
-
-        if !folder_order.contains(&folder_prefix) {
-            folder_order.push(folder_prefix.clone());
+fn tokenize_structure(entries: &[SubFileStructureEntry]) -> Vec<StageToken> {
+    let mut folder_counter: Vec<i32> = vec![0];
+    let mut tokens = Vec::new();
+    for entry in entries {
+        match entry {
+            SubFileStructureEntry::Folder { .. } => {
+                let idx = folder_counter.len() - 1;
+                let name = folder_counter[idx].to_string();
+                folder_counter[idx] += 1;
+                folder_counter.push(0);
+                tokens.push(StageToken::FolderOpen { name });
+            }
+            SubFileStructureEntry::Item { file_index, .. } => {
+                tokens.push(StageToken::Leaf { file_index: *file_index });
+            }
+            SubFileStructureEntry::EndMark { end_mark_count } => {
+                let count = (*end_mark_count).max(0) as usize;
+                for _ in 0..count {
+                    if folder_counter.len() > 1 {
+                        folder_counter.pop();
+                    }
+                    tokens.push(StageToken::End);
+                }
+            }
         }
-
-        groups_map.entry(folder_prefix).or_default().push(InMemoryFolderFile {
-            file_name,
-            file_type: file.file_type.clone(),
-            data: file.data.clone(),
-        });
     }
-
-    folder_order
-        .into_iter()
-        .enumerate()
-        .map(|(idx, prefix)| InMemoryFolderGroup {
-            folder_index: idx,
-            folder_prefix: prefix.clone(),
-            files: groups_map.remove(&prefix).unwrap_or_default(),
-        })
-        .collect()
+    tokens
 }
 
-fn determine_memory_folder_name(
-    position: usize,
-    total: usize,
-    files: &[InMemoryFolderFile],
-    warnings: &mut Vec<String>,
-) -> (String, &'static str) {
-    if total >= 3 {
-        if position == 0 {
-            return (STAGE_BASE_NAME.to_string(), "base");
-        }
-        if position == 1 {
-            return (STAGE_INFO_NAME.to_string(), "info");
-        }
-        if position == total - 1 {
-            return (STAGE_TEXTURES_NAME.to_string(), "textures");
+fn parse_tree_children(tokens: &[StageToken], idx: &mut usize) -> Vec<InternalTreeNode> {
+    let mut out = Vec::new();
+    while *idx < tokens.len() {
+        match &tokens[*idx] {
+            StageToken::FolderOpen { name } => {
+                let folder_name = name.clone();
+                *idx += 1;
+                let children = parse_tree_children(tokens, idx);
+                out.push(InternalTreeNode {
+                    name: folder_name,
+                    children,
+                    item_file_indices: Vec::new(),
+                });
+            }
+            StageToken::Leaf { file_index } => {
+                *idx += 1;
+                out.push(InternalTreeNode {
+                    name: file_index.to_string(),
+                    children: Vec::new(),
+                    item_file_indices: vec![*file_index],
+                });
+            }
+            StageToken::End => {
+                *idx += 1;
+                return out;
+            }
         }
     }
+    out
+}
 
-    if total < 3 && position == 0 {
-        return (STAGE_BASE_NAME.to_string(), "base");
+fn build_stage_tree(entries: &[SubFileStructureEntry]) -> InternalTreeNode {
+    let tokens = tokenize_structure(entries);
+    let mut idx = 0;
+    let children = parse_tree_children(&tokens, &mut idx);
+    InternalTreeNode {
+        name: "Root".to_string(),
+        children,
+        item_file_indices: Vec::new(),
     }
+}
 
-    for file in files {
-        if file.file_type.eq_ignore_ascii_case(".numdlb") {
-            if let Some(name) = read_numdlb_model_name(&file.data) {
-                return (name, "sub_model");
+fn collect_all_file_indices(node: &InternalTreeNode) -> Vec<i32> {
+    let mut result = Vec::new();
+    result.extend(&node.item_file_indices);
+    for child in &node.children {
+        result.extend(collect_all_file_indices(child));
+    }
+    result
+}
+
+fn convert_to_virtual_tree(
+    node: &InternalTreeNode,
+    file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
+) -> StageVirtualTreeFolder {
+    let mut children = Vec::new();
+    let mut files = Vec::new();
+
+    for child in &node.children {
+        if !child.children.is_empty() {
+            children.push(convert_to_virtual_tree(child, file_index_map));
+        } else if !child.item_file_indices.is_empty() {
+            for fi in &child.item_file_indices {
+                if let Some(f) = file_index_map.get(fi) {
+                    let file_name = f.file_url
+                        .replace('\\', "/")
+                        .split('/')
+                        .last()
+                        .unwrap_or("unknown")
+                        .to_string();
+                    files.push(StageVirtualTreeFile {
+                        file_name,
+                        file_type: f.file_type.clone(),
+                        size_bytes: f.data.len(),
+                    });
+                }
             }
         }
     }
 
-    let fallback = format!("unknown_{position}");
-    warnings.push(format!(
-        "Could not infer name for folder at position {position}, using '{fallback}'"
-    ));
-    (fallback, "unknown")
+    StageVirtualTreeFolder {
+        name: node.name.clone(),
+        children,
+        files,
+    }
+}
+
+// ── In-memory semantic rename helpers ───────────────────────────────────────
+
+const SDKV_MAGIC: &[u8; 4] = b"SDKV";
+const SDKV_MAGIC_OFFSET: usize = 0x0C;
+
+fn infer_numdlb_name_from_tree(
+    node: &InternalTreeNode,
+    file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
+) -> Option<String> {
+    let all_indices = collect_all_file_indices(node);
+    for fi in &all_indices {
+        if let Some(f) = file_index_map.get(fi) {
+            if f.file_type.eq_ignore_ascii_case(".numdlb") {
+                if let Some(name) = read_numdlb_model_name(&f.data) {
+                    return Some(name);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn identify_info_file(data: &[u8]) -> &'static str {
+    if let Ok(text) = std::str::from_utf8(data) {
+        if text.contains("VDK_TYPE") {
+            return "placement.csv";
+        }
+        if text.contains("directional_lighting")
+            || text.contains("pfx_bloom")
+            || text.contains("curveedit_")
+        {
+            return "graphic_param.csv";
+        }
+    }
+    if data.len() >= SDKV_MAGIC_OFFSET + 4
+        && &data[SDKV_MAGIC_OFFSET..SDKV_MAGIC_OFFSET + 4] == SDKV_MAGIC
+    {
+        return "border_hit.hkt";
+    }
+    "plan_param.spbin"
+}
+
+fn rename_stage_content_folder(
+    folder: &mut StageVirtualTreeFolder,
+    position: usize,
+    node: &InternalTreeNode,
+    file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
+    warnings: &mut Vec<String>,
+) {
+    match position {
+        0 => {
+            folder.name = STAGE_BASE_NAME.to_string();
+            if let Some(first_file) = folder.files.first_mut() {
+                first_file.file_name = "map_hit.hkt".to_string();
+            }
+            for sub in &mut folder.children {
+                if let Some(child_node) = find_child_node_by_name(node, &sub.name) {
+                    if let Some(model_name) =
+                        infer_numdlb_name_from_tree(child_node, file_index_map)
+                    {
+                        sub.name = model_name;
+                    }
+                }
+            }
+        }
+        1 => {
+            folder.name = STAGE_INFO_NAME.to_string();
+            for (i, sub) in folder.children.iter_mut().enumerate() {
+                if i < INFO_SUBFOLDER_NAMES.len() {
+                    sub.name = INFO_SUBFOLDER_NAMES[i].to_string();
+                }
+            }
+            let file_data_pairs: Vec<Option<Vec<u8>>> = folder
+                .files
+                .iter()
+                .map(|vf| {
+                    find_file_data_by_name(node, file_index_map, &vf.file_name)
+                })
+                .collect();
+            for (i, maybe_data) in file_data_pairs.iter().enumerate() {
+                if let Some(data) = maybe_data {
+                    folder.files[i].file_name = identify_info_file(data).to_string();
+                }
+            }
+        }
+        _ => {
+            if let Some(model_name) = infer_numdlb_name_from_tree(node, file_index_map)
+            {
+                folder.name = model_name;
+            } else {
+                let fallback = format!("sub_{position}");
+                warnings.push(format!(
+                    "Could not infer name for folder at position {position}, using '{fallback}'"
+                ));
+                folder.name = fallback;
+            }
+        }
+    }
+}
+
+fn find_child_node_by_name<'a>(
+    parent: &'a InternalTreeNode,
+    name: &str,
+) -> Option<&'a InternalTreeNode> {
+    parent.children.iter().find(|c| c.name == name)
+}
+
+fn find_file_data_by_name(
+    node: &InternalTreeNode,
+    file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
+    file_name: &str,
+) -> Option<Vec<u8>> {
+    let all_indices = collect_all_file_indices(node);
+    for fi in &all_indices {
+        if let Some(f) = file_index_map.get(fi) {
+            let url_name = f
+                .file_url
+                .replace('\\', "/")
+                .split('/')
+                .last()
+                .unwrap_or("")
+                .to_string();
+            if url_name == file_name {
+                return Some(f.data.clone());
+            }
+        }
+    }
+    None
+}
+
+fn find_stage_content_level(root: &StageVirtualTreeFolder) -> Vec<usize> {
+    let mut path = Vec::new();
+    find_content_level_recursive(root, &mut path)
+}
+
+fn find_content_level_recursive(
+    folder: &StageVirtualTreeFolder,
+    path: &mut Vec<usize>,
+) -> Vec<usize> {
+    if folder.children.len() >= 3 {
+        let has_deep_children = folder.children.iter().any(|c| !c.children.is_empty());
+        if has_deep_children {
+            return path.clone();
+        }
+    }
+    for (i, child) in folder.children.iter().enumerate() {
+        path.push(i);
+        let result = find_content_level_recursive(child, path);
+        if !result.is_empty() || (child.children.len() >= 3) {
+            path.pop();
+            if child.children.len() >= 3 {
+                return path.iter().copied().chain(std::iter::once(i)).collect();
+            }
+            return result;
+        }
+        path.pop();
+    }
+    Vec::new()
+}
+
+fn apply_semantic_rename(
+    virtual_tree: &mut StageVirtualTreeFolder,
+    tree: &InternalTreeNode,
+    file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
+    warnings: &mut Vec<String>,
+) {
+    let path = find_stage_content_level(virtual_tree);
+    if path.is_empty() {
+        warnings.push("Could not locate stage content level for renaming".to_string());
+        return;
+    }
+
+    let content_node = navigate_internal_tree(tree, &path);
+    let content_folder = navigate_virtual_tree_mut(virtual_tree, &path);
+
+    if content_node.is_none() || content_folder.is_none() {
+        warnings.push("Failed to navigate to stage content level".to_string());
+        return;
+    }
+    let content_node = content_node.unwrap();
+    let content_folder = content_folder.unwrap();
+
+    let child_count = content_folder.children.len();
+    let node_children: Vec<&InternalTreeNode> = content_node.children.iter().collect();
+
+    for i in 0..child_count {
+        let node_ref = if i < node_children.len() {
+            node_children[i]
+        } else {
+            continue;
+        };
+
+        rename_stage_content_folder(
+            &mut content_folder.children[i],
+            i,
+            node_ref,
+            file_index_map,
+            warnings,
+        );
+    }
+}
+
+fn navigate_internal_tree<'a>(
+    root: &'a InternalTreeNode,
+    path: &[usize],
+) -> Option<&'a InternalTreeNode> {
+    let mut current = root;
+    for &idx in path {
+        current = current.children.get(idx)?;
+    }
+    Some(current)
+}
+
+fn navigate_virtual_tree_mut<'a>(
+    root: &'a mut StageVirtualTreeFolder,
+    path: &[usize],
+) -> Option<&'a mut StageVirtualTreeFolder> {
+    let mut current = root;
+    for &idx in path {
+        current = current.children.get_mut(idx)?;
+    }
+    Some(current)
 }
 
 pub fn stage_rename_in_memory(
     files: &[InMemoryFhm2dFile],
-) -> Result<(Vec<StageVirtualTreeFolder>, Vec<String>), String> {
-    let groups = collect_memory_folder_groups(files);
+    sub_file_structure: &[SubFileStructureEntry],
+) -> Result<(StageVirtualTreeFolder, Vec<String>), String> {
+    let file_index_map: HashMap<i32, &InMemoryFhm2dFile> = files
+        .iter()
+        .map(|f| (f.file_index, f))
+        .collect();
 
+    let tree = build_stage_tree(sub_file_structure);
     let mut warnings = Vec::new();
 
-    if groups.len() < 3 {
-        warnings.push(format!(
-            "[ERROR] Stage structure has only {} folder(s), expected at least 3 (base, info, textures). \
-             Rename mapping may be incorrect — review the tree below for debugging.",
-            groups.len()
-        ));
-    }
-    let total = groups.len();
-    let mut virtual_tree = Vec::new();
+    let mut virtual_tree = convert_to_virtual_tree(&tree, &file_index_map);
 
-    for (pos, group) in groups.iter().enumerate() {
-        let (folder_name, role) = determine_memory_folder_name(pos, total, &group.files, &mut warnings);
-
-        let tree_files: Vec<StageVirtualTreeFile> = group
-            .files
-            .iter()
-            .map(|f| StageVirtualTreeFile {
-                file_name: f.file_name.clone(),
-                file_type: f.file_type.clone(),
-                size_bytes: f.data.len(),
-            })
-            .collect();
-
-        virtual_tree.push(StageVirtualTreeFolder {
-            original_index: group.folder_index,
-            renamed_name: folder_name,
-            role: role.to_string(),
-            files: tree_files,
-        });
-    }
+    apply_semantic_rename(&mut virtual_tree, &tree, &file_index_map, &mut warnings);
 
     Ok((virtual_tree, warnings))
 }
@@ -344,9 +555,8 @@ pub struct StageVirtualTreeFile {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StageVirtualTreeFolder {
-    pub original_index: usize,
-    pub renamed_name: String,
-    pub role: String,
+    pub name: String,
+    pub children: Vec<StageVirtualTreeFolder>,
     pub files: Vec<StageVirtualTreeFile>,
 }
 
@@ -354,8 +564,18 @@ pub struct StageVirtualTreeFolder {
 #[serde(rename_all = "camelCase")]
 pub struct StageInMemoryImportResult {
     pub bundle: StageBundle,
-    pub virtual_tree: Vec<StageVirtualTreeFolder>,
+    pub tree: StageVirtualTreeFolder,
     pub warnings: Vec<String>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StageRenamePreviewResult {
+    pub tree: StageVirtualTreeFolder,
+    pub warnings: Vec<String>,
+    pub source_name: String,
+    pub total_files: usize,
+    pub total_size_bytes: usize,
 }
 
 // ── Core: stage_apply_rename_impl ───────────────────────────────────────────
@@ -934,31 +1154,9 @@ pub fn parse_placement_csv_from_bytes(
 }
 
 pub fn find_info_file_data<'a>(
-    files: &'a [InMemoryFhm2dFile],
-    virtual_tree: &[StageVirtualTreeFolder],
-    target_file_name: &str,
+    _files: &'a [InMemoryFhm2dFile],
+    _virtual_tree: &StageVirtualTreeFolder,
+    _target_file_name: &str,
 ) -> Option<&'a [u8]> {
-    let info_folder = virtual_tree.iter().find(|f| f.role == "info")?;
-    let info_prefix = info_folder.original_index.to_string();
-
-    let mut non_nutexb_index = 0usize;
-    for file in files {
-        let normalized = file.file_url.replace('\\', "/");
-        let trimmed = normalized.trim_start_matches("./");
-        let parts: Vec<&str> = trimmed.split('/').collect();
-        if parts.len() < 2 {
-            continue;
-        }
-        if parts[0] != info_prefix {
-            continue;
-        }
-        if file.file_type.eq_ignore_ascii_case(".nutexb") {
-            continue;
-        }
-        if non_nutexb_index < INFO_FILE_NAMES.len() && INFO_FILE_NAMES[non_nutexb_index] == target_file_name {
-            return Some(&file.data);
-        }
-        non_nutexb_index += 1;
-    }
     None
 }

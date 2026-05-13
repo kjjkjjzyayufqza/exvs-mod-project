@@ -105,6 +105,7 @@ pub fn run() {
             commands::build_chrsysparam_file,
             stage_commands::stage_apply_rename,
             stage_commands::load_stage_bundle,
+            stage_commands::preview_stage_fhm2d_rename,
             stage_commands::import_stage_fhm2d_in_memory
         ]);
 
