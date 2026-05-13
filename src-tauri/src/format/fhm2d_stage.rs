@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::format::fhm2d::InMemoryFhm2dFile;
 use crate::ssbh_preview::{self, SsbhModelPreviewBundle};
 
 const NUMDLB_MAGIC: &[u8; 4] = b"HBSS";
@@ -181,6 +182,127 @@ fn collect_folder_groups(structure: &[SubFileStructureEntry]) -> Vec<FolderGroup
         }
     }
     groups
+}
+
+// ── In-memory rename helpers ───────────────────────────────────────────────
+
+struct InMemoryFolderGroup {
+    folder_index: usize,
+    folder_prefix: String,
+    files: Vec<InMemoryFolderFile>,
+}
+
+struct InMemoryFolderFile {
+    file_name: String,
+    file_type: String,
+    data: Vec<u8>,
+}
+
+fn collect_memory_folder_groups(files: &[InMemoryFhm2dFile]) -> Vec<InMemoryFolderGroup> {
+    let mut groups_map: HashMap<String, Vec<InMemoryFolderFile>> = HashMap::new();
+    let mut folder_order: Vec<String> = Vec::new();
+
+    for file in files {
+        let normalized = file.file_url.replace('\\', "/");
+        let trimmed = normalized.trim_start_matches("./").to_string();
+        let parts: Vec<&str> = trimmed.split('/').collect();
+        let folder_prefix = if parts.len() > 1 {
+            parts[0].to_string()
+        } else {
+            "0".to_string()
+        };
+        let file_name = parts.last().unwrap_or(&"unknown").to_string();
+
+        if !folder_order.contains(&folder_prefix) {
+            folder_order.push(folder_prefix.clone());
+        }
+
+        groups_map.entry(folder_prefix).or_default().push(InMemoryFolderFile {
+            file_name,
+            file_type: file.file_type.clone(),
+            data: file.data.clone(),
+        });
+    }
+
+    folder_order
+        .into_iter()
+        .enumerate()
+        .map(|(idx, prefix)| InMemoryFolderGroup {
+            folder_index: idx,
+            folder_prefix: prefix.clone(),
+            files: groups_map.remove(&prefix).unwrap_or_default(),
+        })
+        .collect()
+}
+
+fn determine_memory_folder_name(
+    position: usize,
+    total: usize,
+    files: &[InMemoryFolderFile],
+    warnings: &mut Vec<String>,
+) -> (String, &'static str) {
+    if position == 0 {
+        return (STAGE_BASE_NAME.to_string(), "base");
+    }
+    if position == 1 {
+        return (STAGE_INFO_NAME.to_string(), "info");
+    }
+    if position == total - 1 {
+        return (STAGE_TEXTURES_NAME.to_string(), "textures");
+    }
+
+    for file in files {
+        if file.file_type.eq_ignore_ascii_case(".numdlb") {
+            if let Some(name) = read_numdlb_model_name(&file.data) {
+                return (name, "sub_model");
+            }
+        }
+    }
+
+    let fallback = format!("sub_{position}");
+    warnings.push(format!(
+        "Could not infer name for folder at position {position}, using '{fallback}'"
+    ));
+    (fallback, "sub_model")
+}
+
+pub fn stage_rename_in_memory(
+    files: &[InMemoryFhm2dFile],
+) -> Result<(Vec<StageVirtualTreeFolder>, Vec<String>), String> {
+    let groups = collect_memory_folder_groups(files);
+    if groups.len() < 3 {
+        return Err(format!(
+            "Stage structure has too few folders ({}), expected at least 3 (base, info, ...)",
+            groups.len()
+        ));
+    }
+
+    let mut warnings = Vec::new();
+    let total = groups.len();
+    let mut virtual_tree = Vec::new();
+
+    for (pos, group) in groups.iter().enumerate() {
+        let (folder_name, role) = determine_memory_folder_name(pos, total, &group.files, &mut warnings);
+
+        let tree_files: Vec<StageVirtualTreeFile> = group
+            .files
+            .iter()
+            .map(|f| StageVirtualTreeFile {
+                file_name: f.file_name.clone(),
+                file_type: f.file_type.clone(),
+                size_bytes: f.data.len(),
+            })
+            .collect();
+
+        virtual_tree.push(StageVirtualTreeFolder {
+            original_index: group.folder_index,
+            renamed_name: folder_name,
+            role: role.to_string(),
+            files: tree_files,
+        });
+    }
+
+    Ok((virtual_tree, warnings))
 }
 
 // ── Apply rename result ─────────────────────────────────────────────────────
@@ -695,4 +817,139 @@ fn parse_placement_csv(
         });
     }
     (header_strings, entries)
+}
+
+// ── In-memory CSV parsing helpers ──────────────────────────────────────────
+
+pub fn parse_graphic_param_csv_from_bytes(
+    data: &[u8],
+    warnings: &mut Vec<String>,
+) -> Vec<GraphicParamEntry> {
+    let content = match std::str::from_utf8(data) {
+        Ok(s) => s,
+        Err(e) => {
+            warnings.push(format!("graphic_param.csv is not valid UTF-8: {e}"));
+            return Vec::new();
+        }
+    };
+    content
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.splitn(2, ',').collect();
+            if parts.len() == 2 {
+                Some(GraphicParamEntry {
+                    key: parts[0].trim().to_string(),
+                    value: parts[1].trim().to_string(),
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+pub fn parse_placement_csv_from_bytes(
+    data: &[u8],
+    warnings: &mut Vec<String>,
+) -> (Vec<String>, Vec<PlacementEntry>) {
+    let content = match std::str::from_utf8(data) {
+        Ok(s) => s,
+        Err(e) => {
+            warnings.push(format!("placement.csv is not valid UTF-8: {e}"));
+            return (Vec::new(), Vec::new());
+        }
+    };
+
+    let lines: Vec<&str> = content.lines().collect();
+    if lines.is_empty() {
+        return (Vec::new(), Vec::new());
+    }
+
+    let header: Vec<&str> = lines[0].split(',').map(|s| s.trim()).collect();
+    let header_strings: Vec<String> = header.iter().map(|s| s.to_string()).collect();
+    let find_col = |name: &str| -> Option<usize> {
+        header.iter().position(|h| h.eq_ignore_ascii_case(name))
+    };
+
+    let col_type = find_col("VDK_TYPE");
+    let col_objnum = find_col("VDK_OBJECTNUMBER");
+    let col_px = find_col("VDK_POS_X");
+    let col_py = find_col("VDK_POS_Y");
+    let col_pz = find_col("VDK_POS_Z");
+    let col_rx = find_col("VDK_ROT_X");
+    let col_ry = find_col("VDK_ROT_Y");
+    let col_rz = find_col("VDK_ROT_Z");
+    let col_sx = find_col("VDK_SCALE_X");
+    let col_sy = find_col("VDK_SCALE_Y");
+    let col_sz = find_col("VDK_SCALE_Z");
+
+    let parse_f64 = |fields: &[&str], col: Option<usize>| -> f64 {
+        col.and_then(|c| fields.get(c))
+            .and_then(|v| v.trim().parse::<f64>().ok())
+            .unwrap_or(0.0)
+    };
+
+    let parse_i32 = |fields: &[&str], col: Option<usize>| -> Option<i32> {
+        col.and_then(|c| fields.get(c))
+            .and_then(|v| v.trim().parse::<i32>().ok())
+    };
+
+    let mut entries = Vec::new();
+    for line in &lines[1..] {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let fields: Vec<&str> = line.split(',').collect();
+        let vdk_type = col_type
+            .and_then(|c| fields.get(c))
+            .map(|v| v.trim().to_string())
+            .unwrap_or_default();
+
+        entries.push(PlacementEntry {
+            vdk_type,
+            object_number: parse_i32(&fields, col_objnum),
+            pos_x: parse_f64(&fields, col_px),
+            pos_y: parse_f64(&fields, col_py),
+            pos_z: parse_f64(&fields, col_pz),
+            rot_x: parse_f64(&fields, col_rx),
+            rot_y: parse_f64(&fields, col_ry),
+            rot_z: parse_f64(&fields, col_rz),
+            scale_x: parse_f64(&fields, col_sx),
+            scale_y: parse_f64(&fields, col_sy),
+            scale_z: parse_f64(&fields, col_sz),
+            raw_fields: fields.iter().map(|f| f.trim().to_string()).collect(),
+        });
+    }
+    (header_strings, entries)
+}
+
+pub fn find_info_file_data<'a>(
+    files: &'a [InMemoryFhm2dFile],
+    virtual_tree: &[StageVirtualTreeFolder],
+    target_file_name: &str,
+) -> Option<&'a [u8]> {
+    let info_folder = virtual_tree.iter().find(|f| f.role == "info")?;
+    let info_prefix = info_folder.original_index.to_string();
+
+    let mut non_nutexb_index = 0usize;
+    for file in files {
+        let normalized = file.file_url.replace('\\', "/");
+        let trimmed = normalized.trim_start_matches("./");
+        let parts: Vec<&str> = trimmed.split('/').collect();
+        if parts.len() < 2 {
+            continue;
+        }
+        if parts[0] != info_prefix {
+            continue;
+        }
+        if file.file_type.eq_ignore_ascii_case(".nutexb") {
+            continue;
+        }
+        if non_nutexb_index < INFO_FILE_NAMES.len() && INFO_FILE_NAMES[non_nutexb_index] == target_file_name {
+            return Some(&file.data);
+        }
+        non_nutexb_index += 1;
+    }
+    None
 }
