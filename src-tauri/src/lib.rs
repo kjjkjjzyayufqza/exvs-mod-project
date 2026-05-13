@@ -30,6 +30,7 @@ pub fn run() {
         .manage(preview_collection_state::PreviewCollectionState::default())
         .manage(fhm2d_memory_preview::Fhm2dMemorySessionState::default())
         .manage(ssbh_motion::MotionSampleCacheState::default())
+        .manage(stage_commands::StagePendingImportState::default())
         .invoke_handler(tauri::generate_handler![
             commands::my_custom_command,
             commands::read_file,
@@ -106,7 +107,7 @@ pub fn run() {
             stage_commands::stage_apply_rename,
             stage_commands::load_stage_bundle,
             stage_commands::preview_stage_fhm2d_rename,
-            stage_commands::import_stage_fhm2d_in_memory
+            stage_commands::load_stage_from_preview
         ]);
 
     #[cfg(debug_assertions)]

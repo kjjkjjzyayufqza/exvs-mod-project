@@ -12,8 +12,9 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::fhm2d_memory_preview;
 use crate::format::fhm2d::{InMemoryFhm2dFile, SubFileStructureEntry};
-use crate::ssbh_preview::{self, SsbhModelPreviewBundle};
+use crate::ssbh_preview::{self, SsbhModelPreviewBundle, TextureRefResolve};
 
 const NUMDLB_MAGIC: &[u8; 4] = b"HBSS";
 const NUMDLB_MODL_TAG: &[u8; 4] = b"LDOM";
@@ -1502,10 +1503,289 @@ pub fn parse_placement_csv_from_bytes(
     (header_strings, entries)
 }
 
-pub fn find_info_file_data<'a>(
-    _files: &'a [InMemoryFhm2dFile],
-    _virtual_tree: &StageVirtualTreeFolder,
-    _target_file_name: &str,
-) -> Option<&'a [u8]> {
-    None
+// ── In-memory stage bundle building ──────────────────────────────────────────
+
+fn navigate_virtual_tree_ref<'a>(
+    root: &'a StageVirtualTreeFolder,
+    path: &[usize],
+) -> Option<&'a StageVirtualTreeFolder> {
+    let mut current = root;
+    for &idx in path {
+        current = current.children.get(idx)?;
+    }
+    Some(current)
+}
+
+pub fn build_stage_bundle_from_memory(
+    files: &[InMemoryFhm2dFile],
+    tree: &StageVirtualTreeFolder,
+) -> Result<StageBundle, String> {
+    let file_index_map: HashMap<i32, &InMemoryFhm2dFile> = files
+        .iter()
+        .map(|f| (f.file_index, f))
+        .collect();
+
+    let path = find_stage_content_level(tree);
+    let content = if path.is_empty() {
+        tree
+    } else {
+        navigate_virtual_tree_ref(tree, &path)
+            .ok_or_else(|| "Failed to navigate to stage content level".to_string())?
+    };
+
+    let mut bundle_warnings = Vec::new();
+    let mut base_model: Option<SsbhModelPreviewBundle> = None;
+    let mut sub_models: Vec<StageSubModelEntry> = Vec::new();
+    let mut graphic_params = Vec::new();
+    let mut placement_header = Vec::new();
+    let mut placement_entries = Vec::new();
+
+    let child_count = content.children.len();
+
+    for (i, child) in content.children.iter().enumerate() {
+        let is_base = child.name == STAGE_BASE_NAME;
+        let is_info = child.name == STAGE_INFO_NAME;
+        let is_sky = child.name == STAGE_SKY_NAME;
+
+        if is_info {
+            for file in &child.files {
+                if file.file_name == "graphic_param.csv" {
+                    if let Some(f) = file_index_map.get(&file.file_index) {
+                        graphic_params =
+                            parse_graphic_param_csv_from_bytes(&f.data, &mut bundle_warnings);
+                    }
+                } else if file.file_name == "placement.csv" {
+                    if let Some(f) = file_index_map.get(&file.file_index) {
+                        let (h, e) =
+                            parse_placement_csv_from_bytes(&f.data, &mut bundle_warnings);
+                        placement_header = h;
+                        placement_entries = e;
+                    }
+                }
+            }
+            continue;
+        }
+
+        if is_base {
+            for sub_folder in &child.children {
+                if let Some(bundle) = build_model_bundle_from_virtual_folder(
+                    sub_folder,
+                    &file_index_map,
+                    &mut bundle_warnings,
+                ) {
+                    base_model = Some(bundle);
+                    break;
+                }
+            }
+            continue;
+        }
+
+        let object_index = if is_sky {
+            child_count.saturating_sub(1)
+        } else {
+            i
+        };
+
+        for sub_folder in &child.children {
+            if let Some(bundle) = build_model_bundle_from_virtual_folder(
+                sub_folder,
+                &file_index_map,
+                &mut bundle_warnings,
+            ) {
+                sub_models.push(StageSubModelEntry {
+                    folder_name: child.name.clone(),
+                    object_index,
+                    bundle,
+                });
+                break;
+            }
+        }
+
+        if !sub_models.iter().any(|s| s.folder_name == child.name) {
+            if let Some(bundle) = build_model_bundle_from_virtual_folder(
+                child,
+                &file_index_map,
+                &mut bundle_warnings,
+            ) {
+                sub_models.push(StageSubModelEntry {
+                    folder_name: child.name.clone(),
+                    object_index,
+                    bundle,
+                });
+            }
+        }
+    }
+
+    Ok(StageBundle {
+        root_path: "memory://stage".to_string(),
+        base_model,
+        sub_models,
+        graphic_params,
+        placement_header,
+        placement_entries,
+        warnings: bundle_warnings,
+    })
+}
+
+fn collect_all_nutexb_file_names(folder: &StageVirtualTreeFolder) -> Vec<String> {
+    let mut out: Vec<String> = folder
+        .files
+        .iter()
+        .filter(|f| f.file_type.eq_ignore_ascii_case(".nutexb"))
+        .map(|f| f.file_name.clone())
+        .collect();
+    for child in &folder.children {
+        out.extend(collect_all_nutexb_file_names(child));
+    }
+    out
+}
+
+fn build_model_bundle_from_virtual_folder(
+    folder: &StageVirtualTreeFolder,
+    file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
+    warnings: &mut Vec<String>,
+) -> Option<SsbhModelPreviewBundle> {
+    let numdlb_vf = folder
+        .files
+        .iter()
+        .find(|f| f.file_type.eq_ignore_ascii_case(".numdlb"))?;
+
+    let numdlb_data = file_index_map.get(&numdlb_vf.file_index)?;
+    let modl = match fhm2d_memory_preview::load_modl_data(&numdlb_data.data) {
+        Ok(m) => m,
+        Err(e) => {
+            warnings.push(format!("Failed to parse numdlb in '{}': {e}", folder.name));
+            return None;
+        }
+    };
+
+    let numshb_vf = folder
+        .files
+        .iter()
+        .find(|f| f.file_type.eq_ignore_ascii_case(".numshb"));
+
+    let mesh = numshb_vf
+        .and_then(|vf| file_index_map.get(&vf.file_index))
+        .and_then(|f| match fhm2d_memory_preview::load_mesh_data(&f.data) {
+            Ok(m) => Some(m),
+            Err(e) => {
+                warnings.push(format!("Failed to parse numshb in '{}': {e}", folder.name));
+                None
+            }
+        });
+
+    let mesh = match mesh {
+        Some(m) => m,
+        None => {
+            warnings.push(format!("No valid numshb in '{}', skipping model", folder.name));
+            return None;
+        }
+    };
+
+    let skel = folder
+        .files
+        .iter()
+        .find(|f| f.file_type.eq_ignore_ascii_case(".nusktb"))
+        .and_then(|vf| file_index_map.get(&vf.file_index))
+        .and_then(|f| fhm2d_memory_preview::load_skel_data(&f.data).ok());
+
+    let matl_files: Vec<&[u8]> = folder
+        .files
+        .iter()
+        .filter(|f| f.file_type.eq_ignore_ascii_case(".numatb"))
+        .filter_map(|vf| file_index_map.get(&vf.file_index))
+        .map(|f| f.data.as_slice())
+        .collect();
+
+    let mut matl_combined: Option<ssbh_data::prelude::MatlData> = None;
+    for bytes in &matl_files {
+        match fhm2d_memory_preview::load_matl_data(bytes) {
+            Ok(parsed) => match matl_combined.as_mut() {
+                None => matl_combined = Some(parsed),
+                Some(existing) => existing.entries.extend(parsed.entries),
+            },
+            Err(e) => {
+                warnings.push(format!("Failed to parse numatb in '{}': {e}", folder.name));
+            }
+        }
+    }
+
+    let texture_refs = matl_combined
+        .as_ref()
+        .map(fhm2d_memory_preview::collect_texture_refs)
+        .unwrap_or_default();
+
+    let nutexb_names = collect_all_nutexb_file_names(folder);
+
+    let mut texture_resolve = Vec::new();
+    let mut resolved_nutexb_paths = Vec::new();
+    for reference in &texture_refs {
+        let ref_stem = reference
+            .trim()
+            .replace('\\', "/")
+            .split('/')
+            .next_back()
+            .unwrap_or(reference.trim())
+            .to_string();
+        let ref_stem_lower = ref_stem.to_ascii_lowercase();
+        let ref_nutexb = if ref_stem_lower.ends_with(".nutexb") {
+            ref_stem_lower.clone()
+        } else {
+            let stem = ref_stem_lower
+                .strip_suffix(".nutexb")
+                .unwrap_or(&ref_stem_lower);
+            format!("{stem}.nutexb")
+        };
+
+        let matched = nutexb_names
+            .iter()
+            .find(|n| n.to_ascii_lowercase() == ref_nutexb);
+        if let Some(nutexb_name) = matched {
+            resolved_nutexb_paths.push(nutexb_name.clone());
+            texture_resolve.push(TextureRefResolve {
+                reference: reference.clone(),
+                nutexb_path: Some(nutexb_name.clone()),
+            });
+        } else {
+            texture_resolve.push(TextureRefResolve {
+                reference: reference.clone(),
+                nutexb_path: None,
+            });
+        }
+    }
+
+    let modl_json = serde_json::to_value(&modl).ok()?;
+    let mesh_json = serde_json::to_value(&mesh).ok()?;
+    let skel_json = skel
+        .as_ref()
+        .and_then(|s| serde_json::to_value(s).ok());
+    let matl_json = matl_combined
+        .as_ref()
+        .and_then(|m| serde_json::to_value(m).ok());
+
+    let matl_paths: Vec<String> = folder
+        .files
+        .iter()
+        .filter(|f| f.file_type.eq_ignore_ascii_case(".numatb"))
+        .map(|f| f.file_name.clone())
+        .collect();
+
+    Some(SsbhModelPreviewBundle {
+        root_folder: format!("memory://stage/{}", folder.name),
+        modl_path: numdlb_vf.file_name.clone(),
+        mesh_path: numshb_vf.map(|v| v.file_name.clone()).unwrap_or_default(),
+        skel_path: None,
+        matl_paths,
+        modl: modl_json,
+        mesh: mesh_json,
+        skel: skel_json,
+        matl: matl_json,
+        texture_refs,
+        resolved_nutexb_paths,
+        texture_resolve,
+        warnings: Vec::new(),
+        source_kind: "stage_memory".to_string(),
+        source_session_id: None,
+        virtual_modl_path: None,
+    })
 }

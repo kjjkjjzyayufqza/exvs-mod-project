@@ -33,6 +33,8 @@ interface StageRenamePreviewDialogProps {
   sourceName: string;
   totalFiles: number;
   totalSizeBytes: number;
+  isLoadingBundle: boolean;
+  onLoad: () => void;
   onClose: () => void;
 }
 
@@ -170,12 +172,14 @@ export function StageRenamePreviewDialog({
   sourceName,
   totalFiles,
   totalSizeBytes,
+  isLoadingBundle,
+  onLoad,
   onClose,
 }: StageRenamePreviewDialogProps) {
   const folderCount = tree?.children.length ?? 0;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v && !isLoadingBundle) onClose(); }}>
       <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Stage Structure Preview</DialogTitle>
@@ -205,9 +209,12 @@ export function StageRenamePreviewDialog({
           {tree && <FolderNode folder={tree} depth={0} />}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={onClose} disabled={isLoadingBundle}>
             Close
+          </Button>
+          <Button onClick={onLoad} disabled={isLoadingBundle}>
+            {isLoadingBundle ? "Loading..." : "Load into Scene"}
           </Button>
         </DialogFooter>
       </DialogContent>

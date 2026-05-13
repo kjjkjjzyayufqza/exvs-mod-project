@@ -248,27 +248,27 @@ fn safe_virtual_root_name(source_name: &str) -> String {
     }
 }
 
-fn load_modl_data(bytes: &[u8]) -> Result<ModlData, String> {
+pub(crate) fn load_modl_data(bytes: &[u8]) -> Result<ModlData, String> {
     let mut cursor = Cursor::new(bytes);
     ModlData::read(&mut cursor).map_err(|e| e.to_string())
 }
 
-fn load_mesh_data(bytes: &[u8]) -> Result<MeshData, String> {
+pub(crate) fn load_mesh_data(bytes: &[u8]) -> Result<MeshData, String> {
     let mut cursor = Cursor::new(bytes);
     MeshData::read(&mut cursor).map_err(|e| e.to_string())
 }
 
-fn load_skel_data(bytes: &[u8]) -> Result<SkelData, String> {
+pub(crate) fn load_skel_data(bytes: &[u8]) -> Result<SkelData, String> {
     let mut cursor = Cursor::new(bytes);
     SkelData::read(&mut cursor).map_err(|e| e.to_string())
 }
 
-fn load_matl_data(bytes: &[u8]) -> Result<MatlData, String> {
+pub(crate) fn load_matl_data(bytes: &[u8]) -> Result<MatlData, String> {
     let mut cursor = Cursor::new(bytes);
     MatlData::read(&mut cursor).map_err(|e| e.to_string())
 }
 
-fn collect_texture_refs(matl: &MatlData) -> Vec<String> {
+pub(crate) fn collect_texture_refs(matl: &MatlData) -> Vec<String> {
     let mut out = Vec::new();
     let mut seen = BTreeSet::new();
     for entry in &matl.entries {

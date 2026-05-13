@@ -338,6 +338,27 @@ export default function SceneEdit() {
     setRenamePreview(null);
   }, []);
 
+  const [isLoadingBundle, setIsLoadingBundle] = useState(false);
+
+  const handleRenameLoad = useCallback(async () => {
+    try {
+      setIsLoadingBundle(true);
+      const result = await invoke<{
+        bundle: StageBundleResponse;
+        tree: VirtualTreeFolder;
+        warnings: string[];
+      }>("load_stage_from_preview");
+
+      setRenamePreview(null);
+      setIsMemoryImport(true);
+      applyBundle("memory://stage", result.bundle);
+    } catch (err: any) {
+      toast.error("Failed to load stage into scene", { description: String(err) });
+    } finally {
+      setIsLoadingBundle(false);
+    }
+  }, [applyBundle]);
+
   const handleSave = useCallback(async () => {
     if (!stageRoot) return;
     try {
@@ -550,6 +571,8 @@ export default function SceneEdit() {
           sourceName={renamePreview?.sourceName ?? ""}
           totalFiles={renamePreview?.totalFiles ?? 0}
           totalSizeBytes={renamePreview?.totalSizeBytes ?? 0}
+          isLoadingBundle={isLoadingBundle}
+          onLoad={handleRenameLoad}
           onClose={handleRenameCancel}
         />
       </div>

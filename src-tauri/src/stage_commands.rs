@@ -1,12 +1,26 @@
 //! Tauri command wrappers for stage fhm2d rename and bundle loading.
 
 use serde::Serialize;
+use std::sync::Mutex;
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, State};
 
-use crate::fhm2d_memory_preview::Fhm2dMemorySessionState;
-use crate::format::fhm2d::extract_fhm2d_to_memory_impl;
+use crate::format::fhm2d::{extract_fhm2d_to_memory_impl, InMemoryFhm2dExtraction};
 use crate::format::fhm2d_stage;
+
+// ── Pending import state ────────────────────────────────────────────────────
+
+#[derive(Default)]
+pub struct StagePendingImportState {
+    pending: Mutex<Option<PendingStageImport>>,
+}
+
+struct PendingStageImport {
+    extraction: InMemoryFhm2dExtraction,
+    tree: fhm2d_stage::StageVirtualTreeFolder,
+    warnings: Vec<String>,
+    source_name: String,
+}
 
 fn stage_log(msg: &str) {
     eprintln!("[stage_import] {msg}");
@@ -58,6 +72,7 @@ pub async fn load_stage_bundle(
 #[tauri::command]
 pub async fn preview_stage_fhm2d_rename(
     app: AppHandle,
+    pending_state: State<'_, StagePendingImportState>,
     source_path: String,
 ) -> Result<fhm2d_stage::StageRenamePreviewResult, String> {
     let path = source_path.trim().to_string();
@@ -77,57 +92,123 @@ pub async fn preview_stage_fhm2d_rename(
 
     let source_name_clone = source_name.clone();
     let app_clone = app.clone();
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let t0 = Instant::now();
-        let bytes = std::fs::read(&path)
-            .map_err(|e| format!("Failed to read FHM2D file: {e}"))?;
-        let file_size = bytes.len();
-        let read_ms = t0.elapsed().as_millis() as u64;
-        stage_log(&format!("read done: {file_size} bytes, {read_ms}ms"));
+    let (result, extraction, tree_clone, warnings_clone) =
+        tauri::async_runtime::spawn_blocking(move || {
+            let t0 = Instant::now();
+            let bytes = std::fs::read(&path)
+                .map_err(|e| format!("Failed to read FHM2D file: {e}"))?;
+            let file_size = bytes.len();
+            let read_ms = t0.elapsed().as_millis() as u64;
+            stage_log(&format!("read done: {file_size} bytes, {read_ms}ms"));
 
-        emit_progress(&app_clone, "extract", "Decompressing FHM2D...", 25, Some(read_ms));
-        let t1 = Instant::now();
+            emit_progress(&app_clone, "extract", "Decompressing FHM2D...", 25, Some(read_ms));
+            let t1 = Instant::now();
 
-        let extraction = extract_fhm2d_to_memory_impl(&bytes, &source_name_clone, None)?;
-        let extract_ms = t1.elapsed().as_millis() as u64;
-        stage_log(&format!("extract done: {} files, {extract_ms}ms", extraction.files.len()));
+            let extraction = extract_fhm2d_to_memory_impl(&bytes, &source_name_clone, None)?;
+            let extract_ms = t1.elapsed().as_millis() as u64;
+            stage_log(&format!(
+                "extract done: {} files, {extract_ms}ms",
+                extraction.files.len()
+            ));
 
-        emit_progress(&app_clone, "tree", "Parsing folder structure...", 60, Some(extract_ms));
-        let t2 = Instant::now();
+            emit_progress(
+                &app_clone,
+                "tree",
+                "Parsing folder structure...",
+                60,
+                Some(extract_ms),
+            );
+            let t2 = Instant::now();
 
-        let (tree, warnings) =
-            fhm2d_stage::stage_rename_in_memory(&extraction.files, &extraction.sub_file_structure)?;
+            let (tree, warnings) = fhm2d_stage::stage_rename_in_memory(
+                &extraction.files,
+                &extraction.sub_file_structure,
+            )?;
 
-        let rename_ms = t2.elapsed().as_millis() as u64;
-        stage_log(&format!("tree done: {} children, {} warnings, {rename_ms}ms",
-            tree.children.len(), warnings.len()));
+            let rename_ms = t2.elapsed().as_millis() as u64;
+            stage_log(&format!(
+                "tree done: {} children, {} warnings, {rename_ms}ms",
+                tree.children.len(),
+                warnings.len()
+            ));
 
-        let total_files = extraction.files.len();
-        let total_size_bytes: usize = extraction.files.iter().map(|f| f.data.len()).sum();
+            let total_files = extraction.files.len();
+            let total_size_bytes: usize = extraction.files.iter().map(|f| f.data.len()).sum();
 
-        emit_progress(&app_clone, "done", "Complete", 100, Some(rename_ms));
+            emit_progress(&app_clone, "done", "Complete", 100, Some(rename_ms));
 
-        Ok::<_, String>(fhm2d_stage::StageRenamePreviewResult {
-            tree,
-            warnings,
-            source_name: source_name_clone,
-            total_files,
-            total_size_bytes,
+            let preview = fhm2d_stage::StageRenamePreviewResult {
+                tree: tree.clone(),
+                warnings: warnings.clone(),
+                source_name: source_name_clone.clone(),
+                total_files,
+                total_size_bytes,
+            };
+
+            Ok::<_, String>((preview, extraction, tree, warnings))
         })
-    })
-    .await
-    .map_err(|e| e.to_string())??;
+        .await
+        .map_err(|e| e.to_string())??;
+
+    {
+        let mut guard = pending_state
+            .pending
+            .lock()
+            .map_err(|_| "Failed to lock stage pending import state")?;
+        *guard = Some(PendingStageImport {
+            extraction,
+            tree: tree_clone,
+            warnings: warnings_clone,
+            source_name: result.source_name.clone(),
+        });
+    }
 
     Ok(result)
 }
 
-// Full import command is disabled while the tree preview is being validated.
-// It will be re-enabled once the rename mapping is confirmed correct.
 #[tauri::command]
-pub async fn import_stage_fhm2d_in_memory(
-    _app: AppHandle,
-    _state: State<'_, Fhm2dMemorySessionState>,
-    _source_path: String,
+pub async fn load_stage_from_preview(
+    app: AppHandle,
+    pending_state: State<'_, StagePendingImportState>,
 ) -> Result<fhm2d_stage::StageInMemoryImportResult, String> {
-    Err("import_stage_fhm2d_in_memory is temporarily disabled. Use preview_stage_fhm2d_rename instead.".to_string())
+    let pending = {
+        let mut guard = pending_state
+            .pending
+            .lock()
+            .map_err(|_| "Failed to lock stage pending import state")?;
+        guard
+            .take()
+            .ok_or_else(|| "No pending stage import. Run preview first.".to_string())?
+    };
+
+    stage_log(&format!(
+        "load_stage_from_preview: source={}, {} files",
+        pending.source_name,
+        pending.extraction.files.len()
+    ));
+
+    emit_progress(&app, "build", "Building model bundles...", 30, None);
+
+    let tree_for_result = pending.tree.clone();
+    let warnings_for_result = pending.warnings.clone();
+    let bundle = tauri::async_runtime::spawn_blocking(move || {
+        let t0 = Instant::now();
+        let result = fhm2d_stage::build_stage_bundle_from_memory(
+            &pending.extraction.files,
+            &pending.tree,
+        );
+        let elapsed = t0.elapsed().as_millis() as u64;
+        stage_log(&format!("build_stage_bundle_from_memory: {elapsed}ms"));
+        result
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
+    emit_progress(&app, "done", "Complete", 100, None);
+
+    Ok(fhm2d_stage::StageInMemoryImportResult {
+        bundle,
+        tree: tree_for_result,
+        warnings: warnings_for_result,
+    })
 }
