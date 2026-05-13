@@ -12,6 +12,7 @@ mod ssbh_dae;
 mod ssbh_dae_cmd;
 mod ssbh_preview;
 mod ssbh_motion;
+mod stage_commands;
 
 pub use ssbh_motion::smoke_decode_and_sample_nuanmb;
 
@@ -101,7 +102,10 @@ pub fn run() {
             commands::parse_typed_param_file,
             commands::build_typed_param_file,
             commands::parse_chrsysparam_file,
-            commands::build_chrsysparam_file
+            commands::build_chrsysparam_file,
+            stage_commands::stage_apply_rename,
+            stage_commands::load_stage_bundle,
+            stage_commands::import_stage_fhm2d_in_memory
         ]);
 
     #[cfg(debug_assertions)]

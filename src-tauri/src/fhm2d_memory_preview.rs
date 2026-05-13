@@ -1354,6 +1354,98 @@ pub fn dispose_fhm2d_memory_session(
     Ok(())
 }
 
+pub fn build_stage_preview_models(
+    state: &Fhm2dMemorySessionState,
+    source_name: String,
+    extraction: InMemoryFhm2dExtraction,
+    virtual_tree: &[crate::format::fhm2d_stage::StageVirtualTreeFolder],
+) -> Result<(Option<SsbhModelPreviewBundle>, Vec<crate::format::fhm2d_stage::StageSubModelEntry>, Vec<String>), String> {
+    let session_id = state.next_session_id();
+    let session = Fhm2dMemorySession::from_extraction(
+        session_id.clone(),
+        source_name,
+        extraction,
+    )?;
+
+    let mut base_model: Option<SsbhModelPreviewBundle> = None;
+    let mut sub_models: Vec<crate::format::fhm2d_stage::StageSubModelEntry> = Vec::new();
+    let mut warnings: Vec<String> = Vec::new();
+
+    let mut object_index = 0usize;
+    for folder in virtual_tree {
+        if folder.role == "base" || folder.role == "sub_model" {
+            let has_numdlb = folder.files.iter().any(|f| {
+                f.file_type.eq_ignore_ascii_case(".numdlb")
+            });
+
+            if has_numdlb {
+                let folder_prefix = folder.original_index.to_string();
+                let matched_candidate = session.preview_candidates.iter().find(|candidate| {
+                    candidate.folder_relative_path.starts_with(&folder_prefix)
+                        || candidate.folder_relative_path == folder_prefix
+                });
+
+                if let Some(candidate) = matched_candidate {
+                    if !candidate.complete {
+                        warnings.push(format!(
+                            "Model in {} is incomplete: {}",
+                            folder.renamed_name,
+                            candidate.issues.join(", ")
+                        ));
+                    } else {
+                        match snapshot_preview_bundle_build_input(&session, candidate) {
+                            Ok(build_input) => {
+                                match build_preview_bundle_from_snapshot(build_input) {
+                                    Ok(bundle) => {
+                                        if folder.role == "base" {
+                                            base_model = Some(bundle);
+                                        } else {
+                                            sub_models.push(crate::format::fhm2d_stage::StageSubModelEntry {
+                                                folder_name: folder.renamed_name.clone(),
+                                                object_index,
+                                                bundle,
+                                            });
+                                        }
+                                    }
+                                    Err(e) => {
+                                        warnings.push(format!(
+                                            "Failed to build preview for {}: {e}",
+                                            folder.renamed_name
+                                        ));
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                warnings.push(format!(
+                                    "Failed to prepare preview for {}: {e}",
+                                    folder.renamed_name
+                                ));
+                            }
+                        }
+                    }
+                } else {
+                    warnings.push(format!(
+                        "No preview candidate found for folder {}",
+                        folder.renamed_name
+                    ));
+                }
+            }
+
+            if folder.role != "base" {
+                object_index += 1;
+            }
+        }
+    }
+
+    state
+        .sessions
+        .lock()
+        .map_err(|_| "Failed to lock FHM2D memory sessions.".to_string())?
+        .insert(session_id, session);
+
+    Ok((base_model, sub_models, warnings))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
