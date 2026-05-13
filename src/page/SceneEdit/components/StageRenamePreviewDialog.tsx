@@ -17,6 +17,7 @@ export interface VirtualTreeFile {
   fileName: string;
   fileType: string;
   sizeBytes: number;
+  fileIndex: number;
 }
 
 export interface VirtualTreeFolder {
@@ -200,9 +201,9 @@ export function StageRenamePreviewDialog({
 
         <WarningsBlock warnings={warnings} />
 
-        <ScrollArea className="flex-1 min-h-0 max-h-[55vh] rounded-md border bg-background/50 p-2">
+        <div className="flex-1 min-h-0 max-h-[55vh] overflow-y-auto rounded-md border bg-background/50 p-2">
           {tree && <FolderNode folder={tree} depth={0} />}
-        </ScrollArea>
+        </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>

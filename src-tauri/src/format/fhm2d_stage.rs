@@ -249,26 +249,42 @@ fn collect_all_file_indices(node: &InternalTreeNode) -> Vec<i32> {
 fn convert_to_virtual_tree(
     node: &InternalTreeNode,
     file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
+    nutexb_name_map: &HashMap<i32, String>,
 ) -> StageVirtualTreeFolder {
     let mut children = Vec::new();
     let mut files = Vec::new();
 
     for child in &node.children {
         if !child.children.is_empty() {
-            children.push(convert_to_virtual_tree(child, file_index_map));
+            children.push(convert_to_virtual_tree(child, file_index_map, nutexb_name_map));
         } else if !child.item_file_indices.is_empty() {
             for fi in &child.item_file_indices {
                 if let Some(f) = file_index_map.get(fi) {
-                    let file_name = f.file_url
-                        .replace('\\', "/")
-                        .split('/')
-                        .last()
-                        .unwrap_or("unknown")
-                        .to_string();
+                    let file_name = if f.file_type.eq_ignore_ascii_case(".nutexb") {
+                        nutexb_name_map
+                            .get(fi)
+                            .map(|name| format!("{name}.nutexb"))
+                            .unwrap_or_else(|| {
+                                f.file_url
+                                    .replace('\\', "/")
+                                    .split('/')
+                                    .last()
+                                    .unwrap_or("unknown")
+                                    .to_string()
+                            })
+                    } else {
+                        f.file_url
+                            .replace('\\', "/")
+                            .split('/')
+                            .last()
+                            .unwrap_or("unknown")
+                            .to_string()
+                    };
                     files.push(StageVirtualTreeFile {
                         file_name,
                         file_type: f.file_type.clone(),
                         size_bytes: f.data.len(),
+                        file_index: *fi,
                     });
                 }
             }
@@ -286,6 +302,8 @@ fn convert_to_virtual_tree(
 
 const SDKV_MAGIC: &[u8; 4] = b"SDKV";
 const SDKV_MAGIC_OFFSET: usize = 0x0C;
+const STAGE_SKY_NAME: &str = "sky";
+const NUST_NUMATB_SUFFIX: &str = "__nust__";
 
 fn infer_numdlb_name_from_tree(
     node: &InternalTreeNode,
@@ -324,26 +342,360 @@ fn identify_info_file(data: &[u8]) -> &'static str {
     "plan_param.spbin"
 }
 
+// ── Nutexb internal name parsing ────────────────────────────────────────────
+
+fn stage_read_i16_le(data: &[u8], offset: usize) -> Option<i16> {
+    let b = data.get(offset..offset + 2)?;
+    Some(i16::from_le_bytes([b[0], b[1]]))
+}
+
+fn stage_read_c_string(data: &[u8], offset: usize, max_len: usize) -> Option<String> {
+    if offset >= data.len() {
+        return None;
+    }
+    let end_limit = (offset + max_len).min(data.len());
+    let mut end = offset;
+    while end < end_limit && data[end] != 0 {
+        end += 1;
+    }
+    String::from_utf8(data[offset..end].to_vec()).ok()
+}
+
+fn parse_nutexb_internal_name(bytes: &[u8]) -> Option<String> {
+    let size = bytes.len();
+    if size < 8 {
+        return None;
+    }
+    if bytes.get(size - 8..size - 4) != Some(b" XET") {
+        return None;
+    }
+    let major = stage_read_i16_le(bytes, size - 4)? as i32;
+    let minor = stage_read_i16_le(bytes, size - 2)? as i32;
+    let name_offset = if major == 1 && minor == 1 {
+        size.checked_sub(0x86c)?
+    } else if (major == 2 && minor == 0) || (major == 1 && minor == 2) {
+        size.checked_sub(0x70)?
+    } else {
+        return None;
+    };
+    if bytes.get(name_offset..name_offset + 4) != Some(b"46XT") {
+        return None;
+    }
+    let raw = stage_read_c_string(bytes, name_offset + 4, 4096)?;
+    let cleaned = raw
+        .replace(['/', '\\'], "_")
+        .trim()
+        .chars()
+        .map(|ch| if ch.is_control() || "<>:\"|?*".contains(ch) { '_' } else { ch })
+        .collect::<String>();
+    if cleaned.is_empty() {
+        return None;
+    }
+    Some(cleaned)
+}
+
+// ── Precompute nutexb internal names (flat iteration, no folder walking) ─────
+
+fn precompute_nutexb_names(
+    file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
+) -> (HashMap<i32, String>, Vec<String>) {
+    let mut names = HashMap::new();
+    let mut warnings = Vec::new();
+    for (&fi, f) in file_index_map {
+        if !f.file_type.eq_ignore_ascii_case(".nutexb") {
+            continue;
+        }
+        match parse_nutexb_internal_name(&f.data) {
+            Some(name) => {
+                names.insert(fi, name);
+            }
+            None => {
+                warnings.push(format!(
+                    "Could not read internal name from nutexb fileIndex={}",
+                    fi
+                ));
+            }
+        }
+    }
+    (names, warnings)
+}
+
+// ── Numdlb MODL info parsing (for skeleton/mesh/material names) ─────────────
+
+struct StageModlInfo {
+    model_name: String,
+    skeleton_file_name: String,
+    mesh_file_name: String,
+    material_file_names: Vec<String>,
+}
+
+fn stage_read_u64_le(data: &[u8], offset: usize) -> Option<u64> {
+    let b = data.get(offset..offset + 8)?;
+    Some(u64::from_le_bytes([
+        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+    ]))
+}
+
+fn stage_read_ssbh_string_at(data: &[u8], field_offset: usize) -> Option<String> {
+    let rel = stage_read_u64_le(data, field_offset)?;
+    if rel == 0 {
+        return Some(String::new());
+    }
+    let abs_off = field_offset.checked_add(rel as usize)?;
+    stage_read_c_string(data, abs_off, 4096)
+}
+
+fn parse_stage_numdlb_modl_info(data: &[u8]) -> Option<StageModlInfo> {
+    if data.get(0..4)? != NUMDLB_MAGIC || data.get(0x10..0x14)? != NUMDLB_MODL_TAG {
+        return None;
+    }
+    let major = u16::from_le_bytes([*data.get(0x14)?, *data.get(0x15)?]);
+    let minor = u16::from_le_bytes([*data.get(0x16)?, *data.get(0x17)?]);
+    if major != 1 || minor != 7 {
+        return None;
+    }
+    const BASE: usize = 0x18;
+    let model_raw = stage_read_ssbh_string_at(data, BASE)?;
+    let model_name = normalize_model_name(model_raw.trim());
+    if model_name.is_empty() {
+        return None;
+    }
+    let skeleton_file_name = stage_read_ssbh_string_at(data, BASE + 0x08).unwrap_or_default();
+
+    let mat_count_rel = stage_read_u64_le(data, BASE + 0x10)?;
+    let mat_count_abs = (BASE + 0x10).checked_add(mat_count_rel as usize)?;
+    let mat_count_raw = stage_read_u64_le(data, (BASE + 0x10) + 8)? as usize;
+    let mut material_file_names = Vec::with_capacity(mat_count_raw);
+    for i in 0..mat_count_raw {
+        let elem_off = mat_count_abs.checked_add(i * 8)?;
+        if let Some(name) = stage_read_ssbh_string_at(data, elem_off) {
+            material_file_names.push(name);
+        }
+    }
+
+    let mesh_file_name = stage_read_ssbh_string_at(data, BASE + 0x28).unwrap_or_default();
+
+    Some(StageModlInfo {
+        model_name,
+        skeleton_file_name,
+        mesh_file_name,
+        material_file_names,
+    })
+}
+
+fn basename_no_ext(path: &str) -> String {
+    let name = path
+        .replace('\\', "/")
+        .split('/')
+        .last()
+        .unwrap_or(path)
+        .to_string();
+    match name.rfind('.') {
+        Some(idx) if idx > 0 => name[..idx].to_string(),
+        _ => name,
+    }
+}
+
+// ── Folder-level bin rename (map_hit.hkt) ───────────────────────────────────
+
+fn rename_folder_level_bins(
+    folder: &mut StageVirtualTreeFolder,
+    warnings: &mut Vec<String>,
+) {
+    let bin_indices: Vec<usize> = folder
+        .files
+        .iter()
+        .enumerate()
+        .filter(|(_, f)| f.file_type.eq_ignore_ascii_case(".bin"))
+        .map(|(i, _)| i)
+        .collect();
+
+    match bin_indices.len() {
+        1 => {
+            folder.files[bin_indices[0]].file_name = "map_hit.hkt".to_string();
+        }
+        n if n > 1 => {
+            warnings.push(format!(
+                "Folder '{}' has {} bin files at top level, skipping map_hit.hkt rename",
+                folder.name, n
+            ));
+        }
+        _ => {}
+    }
+}
+
+// ── Model subfolder file rename ─────────────────────────────────────────────
+
+fn rename_model_subfolder_files(
+    subfolder: &mut StageVirtualTreeFolder,
+    subfolder_node: &InternalTreeNode,
+    file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
+    warnings: &mut Vec<String>,
+) {
+    let all_indices = collect_all_file_indices(subfolder_node);
+    let mut numdlb_data: Option<&[u8]> = None;
+    for fi in &all_indices {
+        if let Some(f) = file_index_map.get(fi) {
+            if f.file_type.eq_ignore_ascii_case(".numdlb") {
+                numdlb_data = Some(f.data.as_slice());
+                break;
+            }
+        }
+    }
+
+    let modl = numdlb_data.and_then(parse_stage_numdlb_modl_info);
+    let model_name = modl.as_ref().map(|m| m.model_name.clone());
+
+    if let Some(ref modl) = modl {
+        for file in &mut subfolder.files {
+            let ft = file.file_type.to_ascii_lowercase();
+            match ft.as_str() {
+                ".numdlb" => {
+                    file.file_name = format!("{}.numdlb", modl.model_name);
+                }
+                ".numshb" => {
+                    if !modl.mesh_file_name.is_empty() {
+                        let name = basename_no_ext(&modl.mesh_file_name);
+                        file.file_name = format!("{name}.numshb");
+                    } else {
+                        file.file_name = format!("{}.numshb", modl.model_name);
+                    }
+                }
+                ".nusktb" => {
+                    if !modl.skeleton_file_name.is_empty() {
+                        let name = basename_no_ext(&modl.skeleton_file_name);
+                        file.file_name = format!("{name}.nusktb");
+                    } else {
+                        file.file_name = format!("{}.nusktb", modl.model_name);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        rename_numatb_with_maya_nust(subfolder, modl, warnings);
+    }
+
+    let bin_indices: Vec<usize> = subfolder
+        .files
+        .iter()
+        .enumerate()
+        .filter(|(_, f)| f.file_type.eq_ignore_ascii_case(".bin"))
+        .map(|(i, _)| i)
+        .collect();
+
+    if bin_indices.len() == 1 {
+        let jnttbl_name = model_name
+            .as_deref()
+            .unwrap_or("unknown")
+            .to_string();
+        subfolder.files[bin_indices[0]].file_name = format!("{jnttbl_name}.jnttbl");
+    }
+}
+
+/// Rename numatb files using numdlb material_file_names (maya/nust pattern).
+///
+/// Sorted by file_index: first N match material_file_names[0..N] (maya first,
+/// nust template second). Extra numatb beyond declared count get variant names
+/// derived from the __nust__ template (material_file_names[1]).
+fn rename_numatb_with_maya_nust(
+    subfolder: &mut StageVirtualTreeFolder,
+    modl: &StageModlInfo,
+    warnings: &mut Vec<String>,
+) {
+    let mut numatb_indices: Vec<usize> = subfolder
+        .files
+        .iter()
+        .enumerate()
+        .filter(|(_, f)| f.file_type.eq_ignore_ascii_case(".numatb"))
+        .map(|(i, _)| i)
+        .collect();
+    if numatb_indices.is_empty() {
+        return;
+    }
+    numatb_indices.sort_by_key(|&i| subfolder.files[i].file_index);
+
+    let material_names: Vec<String> = modl
+        .material_file_names
+        .iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    let declared_count = material_names.len();
+
+    if declared_count == 0 {
+        for &idx in &numatb_indices {
+            subfolder.files[idx].file_name = format!("{}.numatb", modl.model_name);
+        }
+        return;
+    }
+
+    let main_rename_count = declared_count.min(numatb_indices.len());
+    for i in 0..main_rename_count {
+        let target = numatb_indices[i];
+        let name = basename_no_ext(&material_names[i]);
+        subfolder.files[target].file_name = format!("{name}.numatb");
+    }
+
+    let extra_count = numatb_indices.len().saturating_sub(declared_count);
+    if extra_count == 0 {
+        return;
+    }
+
+    if declared_count < 2 {
+        warnings.push(format!(
+            "Model '{}': {} extra numatb file(s) but only {} material path(s) in numdlb, \
+             cannot derive nust variant names",
+            modl.model_name, extra_count, declared_count
+        ));
+        return;
+    }
+
+    let nust_template_stripped = basename_no_ext(&material_names[1]);
+    if !nust_template_stripped.ends_with(NUST_NUMATB_SUFFIX) {
+        warnings.push(format!(
+            "Model '{}': material[1] '{}' does not end with '{}', \
+             cannot derive nust variant names for {} extra numatb file(s)",
+            modl.model_name, nust_template_stripped, NUST_NUMATB_SUFFIX, extra_count
+        ));
+        return;
+    }
+
+    let prefix =
+        &nust_template_stripped[..nust_template_stripped.len() - NUST_NUMATB_SUFFIX.len()];
+    for e in 0..extra_count {
+        let target = numatb_indices[declared_count + e];
+        let m_part = format!("_m{:03}", e + 1);
+        subfolder.files[target].file_name =
+            format!("{prefix}{m_part}{NUST_NUMATB_SUFFIX}.numatb");
+    }
+}
+
+
+// ── Main rename dispatcher ──────────────────────────────────────────────────
+
 fn rename_stage_content_folder(
     folder: &mut StageVirtualTreeFolder,
     position: usize,
+    total_children: usize,
     node: &InternalTreeNode,
     file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
     warnings: &mut Vec<String>,
 ) {
+    let is_last = position == total_children - 1;
+
     match position {
         0 => {
             folder.name = STAGE_BASE_NAME.to_string();
-            if let Some(first_file) = folder.files.first_mut() {
-                first_file.file_name = "map_hit.hkt".to_string();
-            }
+            rename_folder_level_bins(folder, warnings);
             for sub in &mut folder.children {
                 if let Some(child_node) = find_child_node_by_name(node, &sub.name) {
                     if let Some(model_name) =
                         infer_numdlb_name_from_tree(child_node, file_index_map)
                     {
-                        sub.name = model_name;
+                        sub.name = model_name.clone();
                     }
+                    rename_model_subfolder_files(sub, child_node, file_index_map, warnings);
                 }
             }
         }
@@ -354,22 +706,31 @@ fn rename_stage_content_folder(
                     sub.name = INFO_SUBFOLDER_NAMES[i].to_string();
                 }
             }
-            let file_data_pairs: Vec<Option<Vec<u8>>> = folder
+            let resolved_names: Vec<String> = folder
                 .files
                 .iter()
                 .map(|vf| {
-                    find_file_data_by_name(node, file_index_map, &vf.file_name)
+                    file_index_map
+                        .get(&vf.file_index)
+                        .map(|f| identify_info_file(&f.data).to_string())
+                        .unwrap_or_else(|| vf.file_name.clone())
                 })
                 .collect();
-            for (i, maybe_data) in file_data_pairs.iter().enumerate() {
-                if let Some(data) = maybe_data {
-                    folder.files[i].file_name = identify_info_file(data).to_string();
+            for (i, name) in resolved_names.into_iter().enumerate() {
+                folder.files[i].file_name = name;
+            }
+        }
+        _ if is_last => {
+            folder.name = STAGE_SKY_NAME.to_string();
+            rename_folder_level_bins(folder, warnings);
+            for sub in &mut folder.children {
+                if let Some(child_node) = find_child_node_by_name(node, &sub.name) {
+                    rename_model_subfolder_files(sub, child_node, file_index_map, warnings);
                 }
             }
         }
         _ => {
-            if let Some(model_name) = infer_numdlb_name_from_tree(node, file_index_map)
-            {
+            if let Some(model_name) = infer_numdlb_name_from_tree(node, file_index_map) {
                 folder.name = model_name;
             } else {
                 let fallback = format!("sub_{position}");
@@ -377,6 +738,12 @@ fn rename_stage_content_folder(
                     "Could not infer name for folder at position {position}, using '{fallback}'"
                 ));
                 folder.name = fallback;
+            }
+            rename_folder_level_bins(folder, warnings);
+            for sub in &mut folder.children {
+                if let Some(child_node) = find_child_node_by_name(node, &sub.name) {
+                    rename_model_subfolder_files(sub, child_node, file_index_map, warnings);
+                }
             }
         }
     }
@@ -387,29 +754,6 @@ fn find_child_node_by_name<'a>(
     name: &str,
 ) -> Option<&'a InternalTreeNode> {
     parent.children.iter().find(|c| c.name == name)
-}
-
-fn find_file_data_by_name(
-    node: &InternalTreeNode,
-    file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
-    file_name: &str,
-) -> Option<Vec<u8>> {
-    let all_indices = collect_all_file_indices(node);
-    for fi in &all_indices {
-        if let Some(f) = file_index_map.get(fi) {
-            let url_name = f
-                .file_url
-                .replace('\\', "/")
-                .split('/')
-                .last()
-                .unwrap_or("")
-                .to_string();
-            if url_name == file_name {
-                return Some(f.data.clone());
-            }
-        }
-    }
-    None
 }
 
 fn find_stage_content_level(root: &StageVirtualTreeFolder) -> Vec<usize> {
@@ -477,6 +821,7 @@ fn apply_semantic_rename(
         rename_stage_content_folder(
             &mut content_folder.children[i],
             i,
+            child_count,
             node_ref,
             file_index_map,
             warnings,
@@ -518,7 +863,10 @@ pub fn stage_rename_in_memory(
     let tree = build_stage_tree(sub_file_structure);
     let mut warnings = Vec::new();
 
-    let mut virtual_tree = convert_to_virtual_tree(&tree, &file_index_map);
+    let (nutexb_name_map, nutexb_warnings) = precompute_nutexb_names(&file_index_map);
+    warnings.extend(nutexb_warnings);
+
+    let mut virtual_tree = convert_to_virtual_tree(&tree, &file_index_map, &nutexb_name_map);
 
     apply_semantic_rename(&mut virtual_tree, &tree, &file_index_map, &mut warnings);
 
@@ -550,6 +898,7 @@ pub struct StageVirtualTreeFile {
     pub file_name: String,
     pub file_type: String,
     pub size_bytes: usize,
+    pub file_index: i32,
 }
 
 #[derive(Clone, Serialize)]
