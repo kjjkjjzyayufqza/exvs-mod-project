@@ -242,14 +242,20 @@ fn determine_memory_folder_name(
     files: &[InMemoryFolderFile],
     warnings: &mut Vec<String>,
 ) -> (String, &'static str) {
-    if position == 0 {
+    if total >= 3 {
+        if position == 0 {
+            return (STAGE_BASE_NAME.to_string(), "base");
+        }
+        if position == 1 {
+            return (STAGE_INFO_NAME.to_string(), "info");
+        }
+        if position == total - 1 {
+            return (STAGE_TEXTURES_NAME.to_string(), "textures");
+        }
+    }
+
+    if total < 3 && position == 0 {
         return (STAGE_BASE_NAME.to_string(), "base");
-    }
-    if position == 1 {
-        return (STAGE_INFO_NAME.to_string(), "info");
-    }
-    if position == total - 1 {
-        return (STAGE_TEXTURES_NAME.to_string(), "textures");
     }
 
     for file in files {
@@ -260,25 +266,27 @@ fn determine_memory_folder_name(
         }
     }
 
-    let fallback = format!("sub_{position}");
+    let fallback = format!("unknown_{position}");
     warnings.push(format!(
         "Could not infer name for folder at position {position}, using '{fallback}'"
     ));
-    (fallback, "sub_model")
+    (fallback, "unknown")
 }
 
 pub fn stage_rename_in_memory(
     files: &[InMemoryFhm2dFile],
 ) -> Result<(Vec<StageVirtualTreeFolder>, Vec<String>), String> {
     let groups = collect_memory_folder_groups(files);
+
+    let mut warnings = Vec::new();
+
     if groups.len() < 3 {
-        return Err(format!(
-            "Stage structure has too few folders ({}), expected at least 3 (base, info, ...)",
+        warnings.push(format!(
+            "[ERROR] Stage structure has only {} folder(s), expected at least 3 (base, info, textures). \
+             Rename mapping may be incorrect — review the tree below for debugging.",
             groups.len()
         ));
     }
-
-    let mut warnings = Vec::new();
     let total = groups.len();
     let mut virtual_tree = Vec::new();
 
