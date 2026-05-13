@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useTransition } from "react";
+import { useState, useCallback, useRef, useTransition, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
@@ -33,6 +33,11 @@ import {
   StageRenamePreviewDialog,
   type VirtualTreeFolder,
 } from "./components/StageRenamePreviewDialog";
+import {
+  StageImportProgressDialog,
+  type ImportStep,
+} from "./components/StageImportProgressDialog";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
 
@@ -92,6 +97,77 @@ export default function SceneEdit() {
     bundle: StageBundleResponse;
     sourceName: string;
   } | null>(null);
+
+  const [importProgress, setImportProgress] = useState<{
+    open: boolean;
+    progress: number;
+    steps: ImportStep[];
+  }>({ open: false, progress: 0, steps: [] });
+
+  const INITIAL_STEPS: ImportStep[] = [
+    { step: "read", label: "Reading file...", status: "pending" },
+    { step: "extract", label: "Decompressing FHM2D...", status: "pending" },
+    { step: "rename", label: "Analyzing folder structure...", status: "pending" },
+    { step: "csv", label: "Parsing stage data...", status: "pending" },
+    { step: "models", label: "Building model previews...", status: "pending" },
+  ];
+
+  const handleProgressEvent = useCallback(
+    (payload: { step: string; label: string; progress: number; elapsedMs: number | null }) => {
+      setImportProgress((prev) => {
+        if (payload.step === "done") {
+          return {
+            open: false,
+            progress: 100,
+            steps: prev.steps.map((s) => ({ ...s, status: "done" as const })),
+          };
+        }
+
+        const newSteps = prev.steps.map((s): ImportStep => {
+          if (s.step === payload.step) {
+            return { ...s, label: payload.label, status: "active" };
+          }
+          if (s.status === "active") {
+            return { ...s, status: "done", elapsedMs: payload.elapsedMs ?? undefined };
+          }
+          return s;
+        });
+
+        return {
+          open: true,
+          progress: payload.progress,
+          steps: newSteps,
+        };
+      });
+    },
+    []
+  );
+
+  const unlistenRef = useRef<UnlistenFn | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listen<{ step: string; label: string; progress: number; elapsedMs: number | null }>(
+      "stage-import-progress",
+      (event) => {
+        if (!cancelled) {
+          handleProgressEvent(event.payload);
+        }
+      }
+    ).then((unlisten) => {
+      if (cancelled) {
+        unlisten();
+      } else {
+        unlistenRef.current = unlisten;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unlistenRef.current?.();
+      unlistenRef.current = null;
+    };
+  }, [handleProgressEvent]);
 
   const [selectedNodeId, setSelectedNodeIdRaw] = useState<string | null>(null);
   const [selectedPlacementIdx, setSelectedPlacementIdxRaw] = useState<
@@ -229,8 +305,11 @@ export default function SceneEdit() {
 
       setIsLoading(true);
       resetState();
-
-      toast.info("Importing FHM2D (in-memory)...", { id: "fhm2d-progress" });
+      setImportProgress({
+        open: true,
+        progress: 0,
+        steps: INITIAL_STEPS.map((s) => ({ ...s })),
+      });
 
       const result = await invoke<{
         bundle: StageBundleResponse;
@@ -238,7 +317,7 @@ export default function SceneEdit() {
         warnings: string[];
       }>("import_stage_fhm2d_in_memory", { sourcePath: selected });
 
-      toast.dismiss("fhm2d-progress");
+      setImportProgress((prev) => ({ ...prev, open: false }));
 
       const sourceName = selected
         .split(/[/\\]/)
@@ -253,7 +332,7 @@ export default function SceneEdit() {
         sourceName,
       });
     } catch (err: any) {
-      toast.dismiss("fhm2d-progress");
+      setImportProgress((prev) => ({ ...prev, open: false }));
       toast.error("FHM2D import failed", { description: String(err) });
     } finally {
       setIsLoading(false);
@@ -473,6 +552,11 @@ export default function SceneEdit() {
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>
+        <StageImportProgressDialog
+          open={importProgress.open}
+          progress={importProgress.progress}
+          steps={importProgress.steps}
+        />
         <StageRenamePreviewDialog
           open={renamePreview !== null}
           folders={renamePreview?.folders ?? []}
