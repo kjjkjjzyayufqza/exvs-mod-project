@@ -6,7 +6,9 @@ import {
   Grid,
   Sphere,
   Html,
+  AdaptiveDpr,
 } from "@react-three/drei";
+import { Perf } from "r3f-perf";
 import {
   useRef,
   useCallback,
@@ -30,8 +32,10 @@ import {
   type ResolvedMaterialBinding,
   type ResolvedTextureSampling,
 } from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
-import type { NutexbBlobUrlMap } from "../hooks/useSceneTextureLoader";
+import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
+import type { NutexbRgbaData } from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
 import type { PlacementRow } from "./PlacementPanel";
+import type { SceneDrawStats } from "./SceneViewportOverlay";
 
 export interface GraphicParam {
   key: string;
@@ -44,9 +48,6 @@ interface StageLightingConfig {
   directionalIntensity: number;
   ambientColor: THREE.Color;
   ambientIntensity: number;
-  fogColor: THREE.Color | null;
-  fogNear: number;
-  fogFar: number;
 }
 
 const DEG2RAD = Math.PI / 180;
@@ -85,28 +86,12 @@ function parseGraphicParamConfig(params: GraphicParam[]): StageLightingConfig {
   const ambientColor = new THREE.Color(egR, egG, egB);
   const ambientIntensity = 0.35;
 
-  const fogWidth = m.get("mapfog_width") ?? 0;
-  const fogHeight = m.get("mapfog_height") ?? 0;
-  const hasFog = fogWidth > 0 && fogHeight > 0;
-  const fogAttenEnd = m.get("mapfog_atten_end") ?? 0.2;
-  const fogAlphaBoost = m.get("fog_alpha_boost") ?? 0.5;
-  const fogDensity = fogAlphaBoost * fogAttenEnd;
-  const fogExtent = Math.max(fogWidth, fogHeight);
-  const fogColor = hasFog && fogDensity > 0.001
-    ? new THREE.Color(dlR * 0.15, dlG * 0.15, dlB * 0.25)
-    : null;
-  const fogNear = hasFog ? fogExtent * (1 - fogAttenEnd) : 0;
-  const fogFar = hasFog ? fogExtent : 0;
-
   return {
     directionalPosition,
     directionalColor,
     directionalIntensity,
     ambientColor,
     ambientIntensity,
-    fogColor,
-    fogNear,
-    fogFar,
   };
 }
 
@@ -122,13 +107,38 @@ export interface MapViewportProps {
   showGrid: boolean;
   showAxes: boolean;
   wireframe: boolean;
+  showStats: boolean;
   selectedNodeId: string | null;
   onSelectNode: (id: string | null) => void;
-  blobUrlMap: NutexbBlobUrlMap;
+  textureDataMap: NutexbTextureDataMap;
+  onDrawStatsChange?: (stats: SceneDrawStats) => void;
 }
 
 export interface MapViewportHandle {
   resetCamera: () => void;
+}
+
+function ScenePerfMonitor({ showStats }: { showStats: boolean }) {
+  if (!showStats) return null;
+  return <Perf position="top-right" minimal showGraph={false} />;
+}
+
+function AdaptivePerformance() {
+  const regress = useThree((s) => s.performance.regress);
+  const invalidate = useThree((s) => s.invalidate);
+
+  const handleInteraction = useCallback(() => {
+    regress();
+    invalidate();
+  }, [regress, invalidate]);
+
+  useEffect(() => {
+    const handler = () => handleInteraction();
+    window.addEventListener("pointerdown", handler, { passive: true });
+    return () => window.removeEventListener("pointerdown", handler);
+  }, [handleInteraction]);
+
+  return <AdaptiveDpr pixelated />;
 }
 
 export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
@@ -141,9 +151,11 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       showGrid,
       showAxes,
       wireframe,
+      showStats,
       selectedNodeId,
       onSelectNode,
-      blobUrlMap,
+      textureDataMap,
+      onDrawStatsChange,
     },
     ref
   ) {
@@ -187,6 +199,58 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       [graphicParams]
     );
 
+    const handleCreated = useCallback(({ gl }: { gl: THREE.WebGLRenderer }) => {
+      const canvas = gl.domElement;
+      canvas.addEventListener("webglcontextlost", (e) => {
+        e.preventDefault();
+        console.warn("[SceneEdit] WebGL context lost — waiting for restore");
+      });
+      canvas.addEventListener("webglcontextrestored", () => {
+        console.warn("[SceneEdit] WebGL context restored");
+        gl.clear();
+      });
+    }, []);
+
+    useEffect(() => {
+      if (!onDrawStatsChange) return;
+      let totalDraws = 0;
+      let totalTris = 0;
+      let totalVerts = 0;
+
+      const collectFromBundle = (bundle: SsbhModelPreviewBundle) => {
+        try {
+          const modl = bundle.modl as any;
+          const mesh = bundle.mesh as any;
+          const skel = bundle.skel as any;
+          if (!modl || !mesh) return;
+          const draws = buildDrawListFromBundle(modl, mesh, skel ?? undefined);
+          totalDraws += draws.length;
+          for (const d of draws) {
+            const geo = d.geometry;
+            const idx = geo.getIndex();
+            if (idx) {
+              totalTris += Math.floor(idx.count / 3);
+            } else {
+              const pos = geo.getAttribute("position");
+              if (pos) totalTris += Math.floor(pos.count / 3);
+            }
+            const pos = geo.getAttribute("position");
+            if (pos) totalVerts += pos.count;
+          }
+        } catch { /* skip */ }
+      };
+
+      if (baseModel) collectFromBundle(baseModel);
+      for (const sub of subModels) collectFromBundle(sub.bundle);
+
+      onDrawStatsChange({
+        drawCount: totalDraws,
+        triangleCount: totalTris,
+        vertexCount: totalVerts,
+        subModelCount: subModels.length,
+      });
+    }, [baseModel, subModels, onDrawStatsChange]);
+
     return (
       <Canvas
         camera={{
@@ -195,13 +259,23 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           near: 0.1,
           far: 100000000,
         }}
-        style={{ background: "#1a1a2e" }}
+        gl={{
+          antialias: true,
+          alpha: false,
+          powerPreference: "high-performance",
+          failIfMajorPerformanceCaveat: false,
+        }}
+        performance={{ min: 0.5, max: 1, debounce: 500 }}
+        dpr={[1, 2]}
+        style={{ background: "#12121a" }}
         onPointerMissed={handlePointerMissed}
+        onCreated={handleCreated}
       >
-        {lighting.fogColor && (
-          <fog attach="fog" args={[lighting.fogColor, lighting.fogNear, lighting.fogFar]} />
-        )}
+        <AdaptivePerformance />
+        <ScenePerfMonitor showStats={showStats} />
+
         <ambientLight color={lighting.ambientColor} intensity={lighting.ambientIntensity} />
+        <hemisphereLight args={["#c8d8f0", "#0a0a14", 0.2]} />
         <directionalLight
           position={lighting.directionalPosition}
           color={lighting.directionalColor}
@@ -216,7 +290,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             wireframe={wireframe}
             isSelected={selectedNodeId === "base"}
             onClick={onSelectNode}
-            blobUrlMap={blobUrlMap}
+            textureDataMap={textureDataMap}
           />
         )}
 
@@ -230,7 +304,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
               wireframe={wireframe}
               isSelected={selectedNodeId === sub.folderName}
               onClick={onSelectNode}
-              blobUrlMap={blobUrlMap}
+              textureDataMap={textureDataMap}
               position={
                 placement
                   ? [placement.posX, placement.posY, placement.posZ]
@@ -263,10 +337,10 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             args={[1000, 1000]}
             cellSize={10}
             cellThickness={0.5}
-            cellColor="#404060"
+            cellColor="#353548"
             sectionSize={100}
             sectionThickness={1}
-            sectionColor="#606080"
+            sectionColor="#4a4a60"
             fadeDistance={2000}
             fadeStrength={1}
             followCamera={false}
@@ -279,11 +353,15 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
         <OrbitControls
           ref={controlsRef}
           makeDefault
-          enableDamping={false}
+          enableDamping
+          dampingFactor={0.08}
+          zoomSpeed={0.85}
+          rotateSpeed={0.65}
+          panSpeed={0.65}
         />
 
         <GizmoHelper alignment="bottom-right" margin={[60, 60]}>
-          <GizmoViewport labelColor="white" axisHeadScale={0.8} />
+          <GizmoViewport axisColors={["#f87171", "#4ade80", "#60a5fa"]} labelColor="white" axisHeadScale={0.8} />
         </GizmoHelper>
       </Canvas>
     );
@@ -343,9 +421,54 @@ function pathForSlot(binding: ResolvedMaterialBinding, slot: PbrSlotKind): strin
   }
 }
 
-function lookupBlobUrl(blobUrlMap: NutexbBlobUrlMap, path: string | null): string | null {
+function lookupTextureData(
+  textureDataMap: NutexbTextureDataMap,
+  path: string | null,
+): NutexbRgbaData | null {
   if (!path) return null;
-  return blobUrlMap.get(path) ?? blobUrlMap.get(path.toLowerCase()) ?? null;
+  return textureDataMap.get(path) ?? textureDataMap.get(path.toLowerCase()) ?? null;
+}
+
+function createDataTexture(
+  data: NutexbRgbaData,
+  slot: PbrSlotKind,
+  binding: ResolvedMaterialBinding,
+): THREE.DataTexture {
+  const tex = new THREE.DataTexture(
+    data.rgba,
+    data.width,
+    data.height,
+    THREE.RGBAFormat,
+    THREE.UnsignedByteType,
+  );
+  tex.colorSpace = SRGB_SLOTS.has(slot)
+    ? THREE.SRGBColorSpace
+    : THREE.LinearSRGBColorSpace;
+  tex.flipY = false;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+
+  if (slot === "cubeMap") {
+    tex.mapping = THREE.EquirectangularReflectionMapping;
+  } else {
+    const sampling = samplingForSlot(binding, slot);
+    tex.wrapS = toThreeWrapping(sampling?.wrapS ?? "ClampToEdge");
+    tex.wrapT = toThreeWrapping(sampling?.wrapT ?? "ClampToEdge");
+    tex.center.set(0, 0);
+    tex.repeat.set(
+      sampling?.uvTransform?.scale_u ?? 1,
+      sampling?.uvTransform?.scale_v ?? 1,
+    );
+    tex.offset.set(
+      sampling?.uvTransform?.translate_u ?? 0,
+      sampling?.uvTransform?.translate_v ?? 0,
+    );
+    tex.rotation = sampling?.uvTransform?.rotation ?? 0;
+  }
+
+  tex.needsUpdate = true;
+  return tex;
 }
 
 interface DrawBinding {
@@ -353,61 +476,42 @@ interface DrawBinding {
   binding: ResolvedMaterialBinding;
 }
 
+const SLOT_KEYS: PbrSlotKind[] = [
+  "map", "normalMap", "roughnessMap", "metalnessMap", "emissiveMap", "aoMap", "cubeMap",
+];
+
 const TexturedMesh = memo(function TexturedMesh({
   drawBinding,
-  blobUrlMap,
+  textureDataMap,
   wireframe,
   isSelected,
 }: {
   drawBinding: DrawBinding;
-  blobUrlMap: NutexbBlobUrlMap;
+  textureDataMap: NutexbTextureDataMap;
   wireframe: boolean;
   isSelected: boolean;
 }) {
-  const { gl } = useThree();
   const { draw, binding } = drawBinding;
 
-  const mapUrl = lookupBlobUrl(blobUrlMap, pathForSlot(binding, "map"));
-  const normalUrl = lookupBlobUrl(blobUrlMap, pathForSlot(binding, "normalMap"));
-  const roughnessUrl = lookupBlobUrl(blobUrlMap, pathForSlot(binding, "roughnessMap"));
-  const metalnessUrl = lookupBlobUrl(blobUrlMap, pathForSlot(binding, "metalnessMap"));
-  const emissiveUrl = lookupBlobUrl(blobUrlMap, pathForSlot(binding, "emissiveMap"));
-  const aoUrl = lookupBlobUrl(blobUrlMap, pathForSlot(binding, "aoMap"));
-  const cubeUrl = lookupBlobUrl(blobUrlMap, pathForSlot(binding, "cubeMap"));
+  const slotDataEntries = useMemo(() => {
+    return SLOT_KEYS.map((slot) => {
+      const data = lookupTextureData(textureDataMap, pathForSlot(binding, slot));
+      return [slot, data] as const;
+    });
+  }, [textureDataMap, binding]);
 
-  const urlKey = `${mapUrl}\0${normalUrl}\0${roughnessUrl}\0${metalnessUrl}\0${emissiveUrl}\0${aoUrl}\0${cubeUrl}`;
+  const dataKey = slotDataEntries
+    .map(([, d]) => (d ? `${d.width}x${d.height}` : ""))
+    .join("\0");
 
   const textures = useMemo(() => {
-    const urls: [PbrSlotKind, string | null][] = [
-      ["map", mapUrl], ["normalMap", normalUrl], ["roughnessMap", roughnessUrl],
-      ["metalnessMap", metalnessUrl], ["emissiveMap", emissiveUrl],
-      ["aoMap", aoUrl], ["cubeMap", cubeUrl],
-    ];
-    const result: Partial<Record<PbrSlotKind, THREE.Texture>> = {};
-    const loader = new THREE.TextureLoader();
+    const result: Partial<Record<PbrSlotKind, THREE.DataTexture>> = {};
     const loaded: string[] = [];
 
-    for (const [key, url] of urls) {
-      if (!url) continue;
-      const tex = loader.load(url, (t) => {
-        t.colorSpace = SRGB_SLOTS.has(key) ? THREE.SRGBColorSpace : THREE.LinearSRGBColorSpace;
-        t.flipY = false;
-        if (key === "cubeMap") {
-          t.mapping = THREE.EquirectangularReflectionMapping;
-        } else {
-          const sampling = samplingForSlot(binding, key);
-          t.wrapS = toThreeWrapping(sampling?.wrapS ?? "ClampToEdge");
-          t.wrapT = toThreeWrapping(sampling?.wrapT ?? "ClampToEdge");
-          t.center.set(0, 0);
-          t.repeat.set(sampling?.uvTransform?.scale_u ?? 1, sampling?.uvTransform?.scale_v ?? 1);
-          t.offset.set(sampling?.uvTransform?.translate_u ?? 0, sampling?.uvTransform?.translate_v ?? 0);
-          t.rotation = sampling?.uvTransform?.rotation ?? 0;
-        }
-        t.needsUpdate = true;
-        gl.initTexture(t);
-      });
-      result[key] = tex;
-      loaded.push(key);
+    for (const [slot, data] of slotDataEntries) {
+      if (!data) continue;
+      result[slot] = createDataTexture(data, slot, binding);
+      loaded.push(slot);
     }
 
     if (loaded.length > 0) {
@@ -418,7 +522,7 @@ const TexturedMesh = memo(function TexturedMesh({
 
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlKey, gl]);
+  }, [dataKey]);
 
   useEffect(() => {
     return () => {
@@ -506,7 +610,7 @@ const StageModelGroup = memo(function StageModelGroup({
   position,
   rotation,
   scale,
-  blobUrlMap,
+  textureDataMap,
 }: {
   nodeId: string;
   bundle: SsbhModelPreviewBundle;
@@ -516,7 +620,7 @@ const StageModelGroup = memo(function StageModelGroup({
   position?: [number, number, number];
   rotation?: [number, number, number];
   scale?: [number, number, number];
-  blobUrlMap: NutexbBlobUrlMap;
+  textureDataMap: NutexbTextureDataMap;
 }) {
   const groupRef = useRef<THREE.Group>(null);
 
@@ -590,7 +694,7 @@ const StageModelGroup = memo(function StageModelGroup({
         <TexturedMesh
           key={db.draw.key}
           drawBinding={db}
-          blobUrlMap={blobUrlMap}
+          textureDataMap={textureDataMap}
           wireframe={wireframe}
           isSelected={isSelected}
         />

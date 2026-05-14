@@ -4,8 +4,9 @@ import {
   Save,
   Grid3x3,
   Axis3D,
-  Eye,
+  Box,
   RotateCcw,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,9 +27,11 @@ interface MapToolbarProps {
   showGrid: boolean;
   showAxes: boolean;
   wireframe: boolean;
+  showStats: boolean;
   onToggleGrid: () => void;
   onToggleAxes: () => void;
   onToggleWireframe: () => void;
+  onToggleStats: () => void;
   onResetCamera: () => void;
 }
 
@@ -42,28 +45,30 @@ export function MapToolbar({
   showGrid,
   showAxes,
   wireframe,
+  showStats,
   onToggleGrid,
   onToggleAxes,
   onToggleWireframe,
+  onToggleStats,
   onResetCamera,
 }: MapToolbarProps) {
   return (
-    <div className="flex items-center gap-1.5 px-3 py-1.5 border-b bg-muted/30">
+    <div className="flex items-center gap-1 px-2 py-1 border-b bg-background/80 backdrop-blur-sm">
+      {/* File actions */}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
             variant="ghost"
             size="sm"
+            className="h-7 text-xs gap-1.5"
             onClick={onImportFhm2d}
             disabled={isLoading}
           >
-            <FileArchive className="h-4 w-4 mr-1.5" />
-            Import FHM2D
+            <FileArchive className="h-3.5 w-3.5" />
+            Import
           </Button>
         </TooltipTrigger>
-        <TooltipContent>
-          Extract a .fhm2d stage file, auto-rename, and load
-        </TooltipContent>
+        <TooltipContent side="bottom">Import .fhm2d stage file</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -71,14 +76,15 @@ export function MapToolbar({
           <Button
             variant="ghost"
             size="sm"
+            className="h-7 text-xs gap-1.5"
             onClick={onOpenFolder}
             disabled={isLoading}
           >
-            <FolderOpen className="h-4 w-4 mr-1.5" />
-            Open Stage
+            <FolderOpen className="h-3.5 w-3.5" />
+            Open
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Open an already-renamed stage folder</TooltipContent>
+        <TooltipContent side="bottom">Open a renamed stage folder</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -86,73 +92,79 @@ export function MapToolbar({
           <Button
             variant="ghost"
             size="sm"
+            className="h-7 text-xs gap-1.5"
             onClick={onSave}
             disabled={!canSave || isLoading}
           >
-            <Save className="h-4 w-4 mr-1.5" />
+            <Save className="h-3.5 w-3.5" />
             Save
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Save modified CSV files</TooltipContent>
+        <TooltipContent side="bottom">Save modified CSV files</TooltipContent>
       </Tooltip>
 
-      <Separator orientation="vertical" className="h-5 mx-1" />
+      <Separator orientation="vertical" className="h-4 mx-0.5" />
 
-      {stageName && (
-        <Badge variant="secondary" className="text-xs font-mono max-w-[200px] truncate">
-          {stageName}
-        </Badge>
-      )}
+      {/* Viewport display toggles */}
+      <div className="flex items-center gap-0.5">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={showGrid ? "secondary" : "ghost"}
+              size="icon"
+              className="h-7 w-7"
+              onClick={onToggleGrid}
+            >
+              <Grid3x3 className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Grid</TooltipContent>
+        </Tooltip>
 
-      {isLoading && (
-        <Badge variant="outline" className="text-xs animate-pulse">
-          Loading...
-        </Badge>
-      )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={showAxes ? "secondary" : "ghost"}
+              size="icon"
+              className="h-7 w-7"
+              onClick={onToggleAxes}
+            >
+              <Axis3D className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Axes</TooltipContent>
+        </Tooltip>
 
-      <div className="flex-1" />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={wireframe ? "secondary" : "ghost"}
+              size="icon"
+              className="h-7 w-7"
+              onClick={onToggleWireframe}
+            >
+              <Box className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Wireframe</TooltipContent>
+        </Tooltip>
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant={showGrid ? "secondary" : "ghost"}
-            size="icon"
-            className="h-7 w-7"
-            onClick={onToggleGrid}
-          >
-            <Grid3x3 className="h-3.5 w-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Toggle Grid</TooltipContent>
-      </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={showStats ? "secondary" : "ghost"}
+              size="icon"
+              className="h-7 w-7"
+              onClick={onToggleStats}
+            >
+              <Activity className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Performance Stats</TooltipContent>
+        </Tooltip>
+      </div>
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant={showAxes ? "secondary" : "ghost"}
-            size="icon"
-            className="h-7 w-7"
-            onClick={onToggleAxes}
-          >
-            <Axis3D className="h-3.5 w-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Toggle Axes</TooltipContent>
-      </Tooltip>
-
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant={wireframe ? "secondary" : "ghost"}
-            size="icon"
-            className="h-7 w-7"
-            onClick={onToggleWireframe}
-          >
-            <Eye className="h-3.5 w-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Toggle Wireframe</TooltipContent>
-      </Tooltip>
+      <Separator orientation="vertical" className="h-4 mx-0.5" />
 
       <Tooltip>
         <TooltipTrigger asChild>
@@ -165,8 +177,24 @@ export function MapToolbar({
             <RotateCcw className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Reset Camera</TooltipContent>
+        <TooltipContent side="bottom">Reset Camera</TooltipContent>
       </Tooltip>
+
+      {/* Stage name + loading state */}
+      <div className="flex-1" />
+
+      {stageName && (
+        <Badge variant="outline" className="text-[10px] font-mono max-w-[180px] truncate h-5 px-1.5">
+          {stageName}
+        </Badge>
+      )}
+
+      {isLoading && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <div className="w-2.5 h-2.5 border-[1.5px] border-muted-foreground/40 border-t-muted-foreground rounded-full animate-spin" />
+          <span>Loading</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 import { MapToolbar } from "./components/MapToolbar";
 import {
@@ -38,6 +39,10 @@ import {
   StageImportProgressDialog,
   type ImportStep,
 } from "./components/StageImportProgressDialog";
+import {
+  SceneViewportOverlay,
+  type SceneDrawStats,
+} from "./components/SceneViewportOverlay";
 import { useSceneTextureLoader } from "./hooks/useSceneTextureLoader";
 import { disposeFhm2dMemorySession } from "@/page/TestEditor/components/ssbh-model-preview/fhm2dMemoryPreviewService";
 
@@ -179,9 +184,11 @@ export default function SceneEdit() {
   const [showGrid, setShowGrid] = useState(true);
   const [showAxes, setShowAxes] = useState(true);
   const [wireframe, setWireframe] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const [drawStats, setDrawStats] = useState<SceneDrawStats | null>(null);
 
   const {
-    blobUrlMap,
+    textureDataMap,
     progress: textureProgress,
     warnings: textureWarnings,
   } = useSceneTextureLoader(baseModel, subModels, sessionId);
@@ -303,6 +310,7 @@ export default function SceneEdit() {
     setPlacementHeader([]);
     setPlacementEntries([]);
     setTreeRoot(null);
+    setDrawStats(null);
   }, [sessionId]);
 
   const handleOpenFolder = useCallback(async () => {
@@ -493,6 +501,10 @@ export default function SceneEdit() {
     [selectedPlacementIdx, handlePlacementChange]
   );
 
+  const handleDrawStatsChange = useCallback((stats: SceneDrawStats) => {
+    setDrawStats(stats);
+  }, []);
+
   const selectedNode = findNode(treeRoot, selectedNodeId);
   const selectedTransform: TransformData | null =
     selectedPlacementIdx !== null && placementEntries[selectedPlacementIdx]
@@ -511,7 +523,7 @@ export default function SceneEdit() {
 
   return (
     <TooltipProvider>
-      <div className="h-full flex flex-col">
+      <div className="h-full flex flex-col bg-background">
         <MapToolbar
           onOpenFolder={handleOpenFolder}
           onImportFhm2d={handleImportFhm2d}
@@ -522,19 +534,24 @@ export default function SceneEdit() {
           showGrid={showGrid}
           showAxes={showAxes}
           wireframe={wireframe}
+          showStats={showStats}
           onToggleGrid={() => setShowGrid((v) => !v)}
           onToggleAxes={() => setShowAxes((v) => !v)}
           onToggleWireframe={() => setWireframe((v) => !v)}
+          onToggleStats={() => setShowStats((v) => !v)}
           onResetCamera={() => viewportRef.current?.resetCamera()}
         />
+
         <ResizablePanelGroup
           orientation="horizontal"
-          className="flex-1 min-h-0 rounded-lg border bg-card shadow-sm"
+          className="flex-1 min-h-0"
+          autoSaveId="scene-edit-layout-v2"
         >
-          <ResizablePanel defaultSize={20} minSize={15}>
-            <div className="h-full flex flex-col">
-              <div className="text-xs font-medium px-3 py-2 border-b bg-muted/40 text-muted-foreground uppercase tracking-wider">
-                Hierarchy
+          {/* Left panel: Hierarchy */}
+          <ResizablePanel id="scene-hierarchy" defaultSize={18} minSize={12} maxSize={30}>
+            <div className="h-full flex flex-col border-r overflow-hidden">
+              <div className="text-[10px] font-semibold px-3 py-1.5 border-b bg-muted/30 text-muted-foreground uppercase tracking-widest select-none">
+                Scene
               </div>
               <div className="flex-1 min-h-0 overflow-hidden">
                 <StageHierarchyTree
@@ -546,10 +563,11 @@ export default function SceneEdit() {
             </div>
           </ResizablePanel>
 
-          <ResizableHandle withHandle className="w-1 bg-border hover:bg-primary/20 transition-colors" />
+          <ResizableHandle className="w-px bg-border/50 hover:bg-primary/30 transition-colors" />
 
-          <ResizablePanel defaultSize={55} minSize={30}>
-            <div className="h-full min-h-0 relative">
+          {/* Center: Viewport */}
+          <ResizablePanel id="scene-viewport" defaultSize={57} minSize={35}>
+            <div className="h-full min-h-0 relative overflow-hidden">
               <MapViewport
                 ref={viewportRef}
                 baseModel={baseModel}
@@ -559,53 +577,69 @@ export default function SceneEdit() {
                 showGrid={showGrid}
                 showAxes={showAxes}
                 wireframe={wireframe}
+                showStats={showStats}
                 selectedNodeId={selectedNodeId}
                 onSelectNode={handleSelectNode}
-                blobUrlMap={blobUrlMap}
+                textureDataMap={textureDataMap}
+                onDrawStatsChange={handleDrawStatsChange}
               />
-              {textureProgress && (
-                <div className="absolute bottom-3 left-3 right-3 pointer-events-none">
-                  <div className="bg-black/70 text-white text-xs px-3 py-2 rounded-md flex items-center gap-2">
-                    <div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                    <span>
-                      Decoding textures {textureProgress.done}/{textureProgress.total}
-                      {textureProgress.currentLabel ? `: ${textureProgress.currentLabel}` : ""}
-                    </span>
-                  </div>
-                </div>
-              )}
+              <SceneViewportOverlay
+                drawStats={drawStats}
+                textureProgress={textureProgress}
+                textureDataMap={textureDataMap}
+                showStats={showStats}
+              />
             </div>
           </ResizablePanel>
 
-          <ResizableHandle withHandle className="w-1 bg-border hover:bg-primary/20 transition-colors" />
+          <ResizableHandle className="w-px bg-border/50 hover:bg-primary/30 transition-colors" />
 
-          <ResizablePanel defaultSize={25} minSize={15}>
-            <div className="h-full flex flex-col">
-              <div className="text-xs font-medium px-3 py-2 border-b bg-muted/40 text-muted-foreground uppercase tracking-wider">
-                Properties
-              </div>
-              <div className="flex-1 min-h-0 overflow-auto p-2 space-y-2">
-                <StagePropertyEditor
-                  selectedNodeId={selectedNodeId}
-                  selectedNodeLabel={selectedNode?.label ?? null}
-                  selectedNodeRole={selectedNode?.role ?? null}
-                  transform={selectedTransform}
-                  onTransformChange={handleTransformChange}
-                />
-                <GraphicParamPanel
-                  params={graphicParams}
-                  onChange={handleGraphicParamChange}
-                />
-                <PlacementPanel
-                  entries={placementEntries}
-                  selectedIndex={selectedPlacementIdx}
-                  onSelectEntry={handleSelectPlacement}
-                  onEntryChange={handlePlacementChange}
-                />
-              </div>
+          {/* Right panel: Properties */}
+          <ResizablePanel id="scene-properties" defaultSize={25} minSize={16} maxSize={40}>
+            <div className="h-full flex flex-col border-l overflow-hidden">
+              <Tabs defaultValue="properties" className="flex-1 flex flex-col min-h-0">
+                <TabsList className="w-full justify-start rounded-none border-b bg-muted/30 h-8 px-1">
+                  <TabsTrigger value="properties" className="text-[10px] h-6 px-2.5">
+                    Properties
+                  </TabsTrigger>
+                  <TabsTrigger value="lighting" className="text-[10px] h-6 px-2.5">
+                    Lighting
+                  </TabsTrigger>
+                  <TabsTrigger value="placement" className="text-[10px] h-6 px-2.5">
+                    Placement
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="properties" className="flex-1 min-h-0 overflow-auto p-2 mt-0 space-y-2">
+                  <StagePropertyEditor
+                    selectedNodeId={selectedNodeId}
+                    selectedNodeLabel={selectedNode?.label ?? null}
+                    selectedNodeRole={selectedNode?.role ?? null}
+                    transform={selectedTransform}
+                    onTransformChange={handleTransformChange}
+                  />
+                </TabsContent>
+
+                <TabsContent value="lighting" className="flex-1 min-h-0 overflow-auto p-2 mt-0 space-y-2">
+                  <GraphicParamPanel
+                    params={graphicParams}
+                    onChange={handleGraphicParamChange}
+                  />
+                </TabsContent>
+
+                <TabsContent value="placement" className="flex-1 min-h-0 overflow-auto p-2 mt-0 space-y-2">
+                  <PlacementPanel
+                    entries={placementEntries}
+                    selectedIndex={selectedPlacementIdx}
+                    onSelectEntry={handleSelectPlacement}
+                    onEntryChange={handlePlacementChange}
+                  />
+                </TabsContent>
+              </Tabs>
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>
+
         <StageImportProgressDialog
           open={importProgress.open}
           progress={importProgress.progress}

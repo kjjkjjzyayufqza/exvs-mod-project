@@ -167,6 +167,21 @@ pub fn nutexb_png_bytes(input_path: String) -> Result<Response, String> {
     Ok(Response::new(InvokeBody::Raw(bytes)))
 }
 
+/// Returns raw RGBA pixels packed as [u32_LE width][u32_LE height][RGBA...].
+/// Skips PNG encode/decode round-trip for faster preview pipeline.
+/// Optional `max_dimension` caps the longest edge via Lanczos3 downsampling.
+#[tauri::command]
+pub async fn nutexb_rgba_bytes(input_path: String, max_dimension: Option<u32>) -> Result<Response, String> {
+    let (w, h, rgba) = tauri::async_runtime::spawn_blocking(move || {
+        crate::nutexb_lib::nutexb_to_rgba_from_path(&input_path, max_dimension)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    Ok(Response::new(InvokeBody::Raw(
+        crate::nutexb_lib::pack_rgba_response(w, h, rgba),
+    )))
+}
+
 #[tauri::command]
 pub async fn nutexb_batch_export_png(
     root_dir: String,

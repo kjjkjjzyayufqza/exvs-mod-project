@@ -109,6 +109,55 @@ pub fn export_nutexb_to_png(input_path: &str, output_path: &str) -> Result<(), S
     Ok(())
 }
 
+/// Decodes nutexb bytes to raw RGBA pixels, optionally downsampling to fit within `max_dimension`.
+/// Returns (width, height, rgba_bytes).
+pub fn nutexb_to_rgba_from_bytes(
+    nutexb_bytes: &[u8],
+    max_dimension: Option<u32>,
+) -> Result<(u32, u32, Vec<u8>), String> {
+    let mut cursor = Cursor::new(nutexb_bytes.to_vec());
+    let nutexb = NutexbFile::read(&mut cursor).map_err(|e| e.to_string())?;
+    let dds = nutexb.to_dds().map_err(|e| e.to_string())?;
+    let image: RgbaImage = image_dds::image_from_dds(&dds, 0).map_err(|e| e.to_string())?;
+
+    let (w, h) = (image.width(), image.height());
+
+    if let Some(max_dim) = max_dimension {
+        if w > max_dim || h > max_dim {
+            let scale = max_dim as f64 / (w.max(h) as f64);
+            let new_w = ((w as f64 * scale) as u32).max(1);
+            let new_h = ((h as f64 * scale) as u32).max(1);
+            let resized = image::imageops::resize(
+                &image,
+                new_w,
+                new_h,
+                image::imageops::FilterType::Lanczos3,
+            );
+            return Ok((new_w, new_h, resized.into_raw()));
+        }
+    }
+
+    Ok((w, h, image.into_raw()))
+}
+
+/// Decodes nutexb file to raw RGBA pixels, optionally downsampling.
+pub fn nutexb_to_rgba_from_path(
+    input_path: &str,
+    max_dimension: Option<u32>,
+) -> Result<(u32, u32, Vec<u8>), String> {
+    let bytes = fs::read(input_path).map_err(|e| e.to_string())?;
+    nutexb_to_rgba_from_bytes(&bytes, max_dimension)
+}
+
+/// Packs (width, height, rgba) into a single byte buffer: [u32_LE width][u32_LE height][rgba...].
+pub fn pack_rgba_response(width: u32, height: u32, rgba: Vec<u8>) -> Vec<u8> {
+    let mut result = Vec::with_capacity(8 + rgba.len());
+    result.extend_from_slice(&width.to_le_bytes());
+    result.extend_from_slice(&height.to_le_bytes());
+    result.extend_from_slice(&rgba);
+    result
+}
+
 /// Encodes nutexb bytes to PNG (same pipeline as path-based decode; avoids a second disk read when bytes are already in memory).
 pub fn nutexb_to_png_bytes_from_bytes(nutexb_bytes: &[u8]) -> Result<Vec<u8>, String> {
     let mut cursor = Cursor::new(nutexb_bytes.to_vec());

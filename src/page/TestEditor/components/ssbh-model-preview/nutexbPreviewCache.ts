@@ -319,3 +319,95 @@ export async function getNutexbPreviewCacheStats(): Promise<NutexbPreviewCacheSt
     return { memoryEntries: lru.size, idbEntries: null };
   }
 }
+
+// ---------------------------------------------------------------------------
+// RGBA texture data cache (SceneEdit pipeline — skips PNG encode/decode)
+// ---------------------------------------------------------------------------
+
+export interface NutexbRgbaData {
+  width: number;
+  height: number;
+  rgba: Uint8Array;
+}
+
+const RGBA_MAX_BYTES = 256 * 1024 * 1024;
+
+const rgbaLru = new Map<string, NutexbRgbaData>();
+const rgbaInflight = new Map<string, Promise<NutexbRgbaData>>();
+let rgbaTotalBytes = 0;
+
+function getRgbaLru(versionId: string): NutexbRgbaData | undefined {
+  const entry = rgbaLru.get(versionId);
+  if (entry === undefined) return undefined;
+  rgbaLru.delete(versionId);
+  rgbaLru.set(versionId, entry);
+  return entry;
+}
+
+function setRgbaLru(versionId: string, data: NutexbRgbaData) {
+  if (rgbaLru.has(versionId)) {
+    rgbaTotalBytes -= rgbaLru.get(versionId)!.rgba.byteLength;
+    rgbaLru.delete(versionId);
+  }
+  const dataBytes = data.rgba.byteLength;
+  while (rgbaTotalBytes + dataBytes > RGBA_MAX_BYTES && rgbaLru.size > 0) {
+    const first = rgbaLru.keys().next().value as string | undefined;
+    if (first === undefined) break;
+    rgbaTotalBytes -= rgbaLru.get(first)!.rgba.byteLength;
+    rgbaLru.delete(first);
+  }
+  rgbaLru.set(versionId, data);
+  rgbaTotalBytes += dataBytes;
+}
+
+export function parseRgbaResponse(raw: ArrayBuffer | Uint8Array): NutexbRgbaData {
+  const u8 = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
+  const view = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  const width = view.getUint32(0, true);
+  const height = view.getUint32(4, true);
+  const rgba = u8.slice(8);
+  return { width, height, rgba };
+}
+
+export async function getOrDecodeNutexbRgba(
+  versionId: string,
+  decode: () => Promise<ArrayBuffer | Uint8Array>,
+): Promise<NutexbRgbaData> {
+  const shortId = versionId.split("/").pop()?.split("|")[0] ?? versionId;
+
+  const cached = getRgbaLru(versionId);
+  if (cached) {
+    console.log(`[NutexbCache] RGBA-L1-HIT "${shortId}"`);
+    return cached;
+  }
+
+  const pending = rgbaInflight.get(versionId);
+  if (pending) {
+    console.log(`[NutexbCache] RGBA-INFLIGHT "${shortId}"`);
+    return pending;
+  }
+
+  const p = (async () => {
+    const t0 = performance.now();
+    const raw = await decode();
+    const data = parseRgbaResponse(raw);
+    const elapsed = performance.now() - t0;
+    console.log(
+      `[NutexbCache] RGBA-DECODED "${shortId}" ${data.width}x${data.height}` +
+      ` ${(data.rgba.byteLength / 1024).toFixed(0)}KB in ${elapsed.toFixed(0)}ms`,
+    );
+    setRgbaLru(versionId, data);
+    return data;
+  })().finally(() => {
+    rgbaInflight.delete(versionId);
+  });
+
+  rgbaInflight.set(versionId, p);
+  return p;
+}
+
+export function clearNutexbRgbaCache(): void {
+  rgbaLru.clear();
+  rgbaInflight.clear();
+  rgbaTotalBytes = 0;
+}

@@ -1,4 +1,4 @@
-import { ChevronRight, ChevronDown, Box, Map, Info, Layers } from "lucide-react";
+import { ChevronRight, ChevronDown, Box, Map, Info, Layers, FolderOpen } from "lucide-react";
 import { useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -26,12 +26,16 @@ export function StageHierarchyTree({
 }: StageHierarchyTreeProps) {
   if (!root) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm p-4 gap-2">
-        <Layers className="h-8 w-8 opacity-30" />
-        <span>No stage loaded</span>
-        <span className="text-xs text-center opacity-60">
-          Use "Import FHM2D" or "Open Stage" to begin
-        </span>
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-6 gap-3">
+        <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center">
+          <FolderOpen className="h-5 w-5 opacity-40" />
+        </div>
+        <div className="text-center space-y-1">
+          <p className="text-xs font-medium">No stage loaded</p>
+          <p className="text-[10px] opacity-60 leading-relaxed">
+            Import FHM2D or Open Stage to begin editing
+          </p>
+        </div>
       </div>
     );
   }
@@ -77,21 +81,22 @@ function TreeNodeItem({
   );
 
   const RoleIcon = getRoleIcon(node.role);
+  const isSelected = selectedId === node.id;
 
   return (
     <div>
       <div
         className={cn(
-          "flex items-center gap-1 px-1 py-0.5 rounded-sm cursor-pointer text-sm select-none",
-          "hover:bg-accent/50",
-          selectedId === node.id && "bg-accent text-accent-foreground"
+          "flex items-center gap-1.5 px-1.5 py-[3px] rounded-sm cursor-pointer text-xs select-none transition-colors",
+          "hover:bg-accent/60",
+          isSelected && "bg-primary/15 text-primary ring-1 ring-primary/20"
         )}
-        style={{ paddingLeft: `${depth * 12 + 4}px` }}
+        style={{ paddingLeft: `${depth * 14 + 4}px` }}
         onClick={handleClick}
       >
         {hasChildren ? (
           <button
-            className="h-4 w-4 flex items-center justify-center shrink-0"
+            className="h-4 w-4 flex items-center justify-center shrink-0 hover:bg-accent rounded-sm"
             onClick={handleToggle}
           >
             {expanded ? (
@@ -103,10 +108,13 @@ function TreeNodeItem({
         ) : (
           <span className="h-4 w-4 shrink-0" />
         )}
-        <RoleIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <span className="truncate">{node.label}</span>
+        <RoleIcon className={cn(
+          "h-3.5 w-3.5 shrink-0",
+          isSelected ? "text-primary" : "text-muted-foreground"
+        )} />
+        <span className="truncate font-medium">{node.label}</span>
         {node.objectIndex !== undefined && (
-          <span className="ml-auto text-xs text-muted-foreground font-mono">
+          <span className="ml-auto text-[9px] text-muted-foreground/70 font-mono tabular-nums">
             #{node.objectIndex}
           </span>
         )}

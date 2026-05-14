@@ -1354,6 +1354,42 @@ pub async fn fhm2d_memory_nutexb_png_bytes(
     Ok(Response::new(InvokeBody::Raw(png)))
 }
 
+/// Returns raw RGBA pixels from an in-memory nutexb, packed as [u32_LE width][u32_LE height][RGBA...].
+/// Skips PNG encode/decode round-trip. Optional `max_dimension` caps the longest edge.
+#[tauri::command]
+pub async fn fhm2d_memory_nutexb_rgba_bytes(
+    state: State<'_, Fhm2dMemorySessionState>,
+    session_id: String,
+    virtual_path: String,
+    max_dimension: Option<u32>,
+) -> Result<Response, String> {
+    let file_data = {
+        let sessions = state
+            .sessions
+            .lock()
+            .map_err(|_| "Failed to lock FHM2D memory sessions.".to_string())?;
+        let session = sessions
+            .get(session_id.as_str())
+            .ok_or_else(|| format!("FHM2D memory session not found: {session_id}"))?;
+        let relative_path = parse_public_or_relative_path(&session.session_id, virtual_path.as_str())?;
+        let file = session
+            .file_by_relative_path(relative_path.as_str())
+            .ok_or_else(|| format!("Memory texture not found at {relative_path}"))?;
+        if !file.file_type.eq_ignore_ascii_case(".nutexb") {
+            return Err(format!("Virtual entry is not a .nutexb file: {relative_path}"));
+        }
+        file.data.clone()
+    };
+    let (w, h, rgba) = tauri::async_runtime::spawn_blocking(move || {
+        crate::nutexb_lib::nutexb_to_rgba_from_bytes(file_data.as_ref(), max_dimension)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    Ok(Response::new(InvokeBody::Raw(
+        crate::nutexb_lib::pack_rgba_response(w, h, rgba),
+    )))
+}
+
 #[tauri::command]
 pub fn dispose_fhm2d_memory_session(
     state: State<'_, Fhm2dMemorySessionState>,
