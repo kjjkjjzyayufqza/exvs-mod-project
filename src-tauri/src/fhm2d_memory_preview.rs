@@ -777,6 +777,21 @@ impl Fhm2dMemorySessionState {
         let id = self.next_session_id.fetch_add(1, Ordering::Relaxed) + 1;
         format!("fhm_mem_{id:08x}")
     }
+
+    pub(crate) fn allocate_and_insert_session(
+        &self,
+        extraction: InMemoryFhm2dExtraction,
+        source_name: String,
+    ) -> Result<String, String> {
+        let session_id = self.next_session_id();
+        let session =
+            Fhm2dMemorySession::from_extraction(session_id.clone(), source_name, extraction)?;
+        self.sessions
+            .lock()
+            .map_err(|_| "Failed to lock FHM2D memory sessions.".to_string())?
+            .insert(session_id.clone(), session);
+        Ok(session_id)
+    }
 }
 
 impl Fhm2dMemorySession {
@@ -1354,118 +1369,6 @@ pub fn dispose_fhm2d_memory_session(
     Ok(())
 }
 
-#[allow(unused_variables, unused_mut)]
-pub fn build_stage_preview_models(
-    state: &Fhm2dMemorySessionState,
-    source_name: String,
-    extraction: InMemoryFhm2dExtraction,
-    _virtual_tree: &[crate::format::fhm2d_stage::StageVirtualTreeFolder],
-    mut on_progress: impl FnMut(&str, usize),
-) -> Result<(Option<SsbhModelPreviewBundle>, Vec<crate::format::fhm2d_stage::StageSubModelEntry>, Vec<String>), String> {
-    Ok((None, Vec::new(), vec!["build_stage_preview_models is temporarily disabled".to_string()]))
-
-    /*
-    eprintln!("[stage_import] model build start: {} candidates in session", source_name);
-    let t_start = std::time::Instant::now();
-
-    let session_id = state.next_session_id();
-    let session = Fhm2dMemorySession::from_extraction(
-        session_id.clone(),
-        source_name,
-        extraction,
-    )?;
-
-    eprintln!("[stage_import] session created: id={session_id}, {} preview candidates",
-        session.preview_candidates.len());
-
-    let mut base_model: Option<SsbhModelPreviewBundle> = None;
-    let mut sub_models: Vec<crate::format::fhm2d_stage::StageSubModelEntry> = Vec::new();
-    let mut warnings: Vec<String> = Vec::new();
-
-    let mut object_index = 0usize;
-    for folder in virtual_tree {
-        if folder.role == "base" || folder.role == "sub_model" {
-            let has_numdlb = folder.files.iter().any(|f| {
-                f.file_type.eq_ignore_ascii_case(".numdlb")
-            });
-
-            if has_numdlb {
-                on_progress(&folder.renamed_name, folder.original_index);
-                let t_model = std::time::Instant::now();
-                let folder_prefix = folder.original_index.to_string();
-                let matched_candidate = session.preview_candidates.iter().find(|candidate| {
-                    candidate.folder_relative_path.starts_with(&folder_prefix)
-                        || candidate.folder_relative_path == folder_prefix
-                });
-
-                if let Some(candidate) = matched_candidate {
-                    if !candidate.complete {
-                        warnings.push(format!(
-                            "Model in {} is incomplete: {}",
-                            folder.renamed_name,
-                            candidate.issues.join(", ")
-                        ));
-                    } else {
-                        match snapshot_preview_bundle_build_input(&session, candidate) {
-                            Ok(build_input) => {
-                                match build_preview_bundle_from_snapshot(build_input) {
-                                    Ok(bundle) => {
-                                        if folder.role == "base" {
-                                            eprintln!("[stage_import] model built: base, elapsed={}ms",
-                                                t_model.elapsed().as_millis());
-                                            base_model = Some(bundle);
-                                        } else {
-                                            eprintln!("[stage_import] model built: {}, object_index={}, elapsed={}ms",
-                                                folder.renamed_name, object_index, t_model.elapsed().as_millis());
-                                            sub_models.push(crate::format::fhm2d_stage::StageSubModelEntry {
-                                                folder_name: folder.renamed_name.clone(),
-                                                object_index,
-                                                bundle,
-                                            });
-                                        }
-                                    }
-                                    Err(e) => {
-                                        warnings.push(format!(
-                                            "Failed to build preview for {}: {e}",
-                                            folder.renamed_name
-                                        ));
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                warnings.push(format!(
-                                    "Failed to prepare preview for {}: {e}",
-                                    folder.renamed_name
-                                ));
-                            }
-                        }
-                    }
-                } else {
-                    warnings.push(format!(
-                        "No preview candidate found for folder {}",
-                        folder.renamed_name
-                    ));
-                }
-            }
-
-            if folder.role != "base" {
-                object_index += 1;
-            }
-        }
-    }
-
-    eprintln!("[stage_import] model build done: base={}, sub_models={}, warnings={}, elapsed={}ms",
-        base_model.is_some(), sub_models.len(), warnings.len(), t_start.elapsed().as_millis());
-
-    state
-        .sessions
-        .lock()
-        .map_err(|_| "Failed to lock FHM2D memory sessions.".to_string())?
-        .insert(session_id, session);
-
-    Ok((base_model, sub_models, warnings))
-    */
-}
 
 #[cfg(test)]
 mod tests {

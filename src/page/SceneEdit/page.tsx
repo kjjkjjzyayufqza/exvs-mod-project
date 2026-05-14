@@ -38,6 +38,8 @@ import {
   StageImportProgressDialog,
   type ImportStep,
 } from "./components/StageImportProgressDialog";
+import { useSceneTextureLoader } from "./hooks/useSceneTextureLoader";
+import { disposeFhm2dMemorySession } from "@/page/TestEditor/components/ssbh-model-preview/fhm2dMemoryPreviewService";
 
 import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
 
@@ -91,6 +93,7 @@ export default function SceneEdit() {
   const [treeRoot, setTreeRoot] = useState<StageTreeNode | null>(null);
 
   const [isMemoryImport, setIsMemoryImport] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [renamePreview, setRenamePreview] = useState<{
     tree: VirtualTreeFolder;
     warnings: string[];
@@ -176,6 +179,29 @@ export default function SceneEdit() {
   const [showGrid, setShowGrid] = useState(true);
   const [showAxes, setShowAxes] = useState(true);
   const [wireframe, setWireframe] = useState(false);
+
+  const {
+    blobUrlMap,
+    progress: textureProgress,
+    warnings: textureWarnings,
+  } = useSceneTextureLoader(baseModel, subModels, sessionId);
+
+  useEffect(() => {
+    if (textureWarnings.length > 0) {
+      toast.warning(
+        `${textureWarnings.length} texture(s) failed to decode`,
+        { description: textureWarnings.slice(0, 3).join("\n") },
+      );
+    }
+  }, [textureWarnings]);
+
+  useEffect(() => {
+    return () => {
+      if (sessionId) {
+        disposeFhm2dMemorySession(sessionId).catch(() => {});
+      }
+    };
+  }, [sessionId]);
 
   const handleSelectNode = useCallback(
     (id: string | null) => {
@@ -265,15 +291,19 @@ export default function SceneEdit() {
   );
 
   const resetState = useCallback(() => {
+    if (sessionId) {
+      disposeFhm2dMemorySession(sessionId).catch(() => {});
+    }
     setStageName(null);
     setIsMemoryImport(false);
+    setSessionId(null);
     setBaseModel(null);
     setSubModels([]);
     setGraphicParams([]);
     setPlacementHeader([]);
     setPlacementEntries([]);
     setTreeRoot(null);
-  }, []);
+  }, [sessionId]);
 
   const handleOpenFolder = useCallback(async () => {
     try {
@@ -347,10 +377,14 @@ export default function SceneEdit() {
         bundle: StageBundleResponse;
         tree: VirtualTreeFolder;
         warnings: string[];
+        sessionId: string | null;
       }>("load_stage_from_preview");
 
       setRenamePreview(null);
       setIsMemoryImport(true);
+      if (result.sessionId) {
+        setSessionId(result.sessionId);
+      }
       applyBundle("memory://stage", result.bundle);
     } catch (err: any) {
       toast.error("Failed to load stage into scene", { description: String(err) });
@@ -515,18 +549,31 @@ export default function SceneEdit() {
           <ResizableHandle withHandle className="w-1 bg-border hover:bg-primary/20 transition-colors" />
 
           <ResizablePanel defaultSize={55} minSize={30}>
-            <div className="h-full min-h-0">
+            <div className="h-full min-h-0 relative">
               <MapViewport
                 ref={viewportRef}
                 baseModel={baseModel}
                 subModels={subModels}
                 placementEntries={placementEntries}
+                graphicParams={graphicParams}
                 showGrid={showGrid}
                 showAxes={showAxes}
                 wireframe={wireframe}
                 selectedNodeId={selectedNodeId}
                 onSelectNode={handleSelectNode}
+                blobUrlMap={blobUrlMap}
               />
+              {textureProgress && (
+                <div className="absolute bottom-3 left-3 right-3 pointer-events-none">
+                  <div className="bg-black/70 text-white text-xs px-3 py-2 rounded-md flex items-center gap-2">
+                    <div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    <span>
+                      Decoding textures {textureProgress.done}/{textureProgress.total}
+                      {textureProgress.currentLabel ? `: ${textureProgress.currentLabel}` : ""}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </ResizablePanel>
 

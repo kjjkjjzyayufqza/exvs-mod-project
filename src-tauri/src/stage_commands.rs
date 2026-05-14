@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, State};
 
+use crate::fhm2d_memory_preview::Fhm2dMemorySessionState;
 use crate::format::fhm2d::{extract_fhm2d_to_memory_impl, InMemoryFhm2dExtraction};
 use crate::format::fhm2d_stage;
 
@@ -170,6 +171,7 @@ pub async fn preview_stage_fhm2d_rename(
 pub async fn load_stage_from_preview(
     app: AppHandle,
     pending_state: State<'_, StagePendingImportState>,
+    memory_state: State<'_, Fhm2dMemorySessionState>,
 ) -> Result<fhm2d_stage::StageInMemoryImportResult, String> {
     let pending = {
         let mut guard = pending_state
@@ -191,24 +193,63 @@ pub async fn load_stage_from_preview(
 
     let tree_for_result = pending.tree.clone();
     let warnings_for_result = pending.warnings.clone();
-    let bundle = tauri::async_runtime::spawn_blocking(move || {
+    let source_name = pending.source_name.clone();
+
+    let extraction = pending.extraction;
+    let tree = pending.tree;
+
+    let app_for_build = app.clone();
+    let (bundle, extraction_for_session) = tauri::async_runtime::spawn_blocking(move || {
         let t0 = Instant::now();
         let result = fhm2d_stage::build_stage_bundle_from_memory(
-            &pending.extraction.files,
-            &pending.tree,
+            &extraction.files,
+            &tree,
+            Some("pending"),
+            |done, total, name| {
+                let pct = if total == 0 {
+                    30
+                } else {
+                    30 + ((done as u64) * 60 / (total as u64)) as u8
+                };
+                let label = format!("Building model {}/{}: {}", done + 1, total, name);
+                stage_log(&format!("model progress: {label}"));
+                emit_progress(&app_for_build, "build_model", &label, pct, None);
+            },
         );
         let elapsed = t0.elapsed().as_millis() as u64;
         stage_log(&format!("build_stage_bundle_from_memory: {elapsed}ms"));
-        result
+        result.map(|b| (b, extraction))
     })
     .await
     .map_err(|e| e.to_string())??;
 
+    emit_progress(&app, "session", "Creating texture session...", 92, None);
+
+    let session_id = memory_state
+        .allocate_and_insert_session(extraction_for_session, source_name)
+        .map_err(|e| {
+            stage_log(&format!("session creation failed: {e}"));
+            e
+        })?;
+
+    stage_log(&format!("memory session created: {session_id}"));
+
+    let mut final_bundle = bundle;
+    if let Some(ref mut base) = final_bundle.base_model {
+        base.source_session_id = Some(session_id.clone());
+        base.source_kind = "memory".to_string();
+    }
+    for sub in &mut final_bundle.sub_models {
+        sub.bundle.source_session_id = Some(session_id.clone());
+        sub.bundle.source_kind = "memory".to_string();
+    }
+
     emit_progress(&app, "done", "Complete", 100, None);
 
     Ok(fhm2d_stage::StageInMemoryImportResult {
-        bundle,
+        bundle: final_bundle,
         tree: tree_for_result,
         warnings: warnings_for_result,
+        session_id: Some(session_id),
     })
 }

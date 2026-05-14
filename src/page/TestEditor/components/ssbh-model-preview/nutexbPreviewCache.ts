@@ -219,25 +219,35 @@ export async function getOrDecodeNutexbPngBlobUrl(
   persistEligible: boolean,
   decode: () => Promise<ArrayBuffer | Uint8Array>,
 ): Promise<string> {
+  const shortId = versionId.split("/").pop()?.split("|")[0] ?? versionId;
+
   const cached = getLru(versionId);
   if (cached) {
+    console.log(`[NutexbCache] L1-HIT "${shortId}"`);
     return cached;
   }
 
   const pending = inflight.get(versionId);
   if (pending) {
+    console.log(`[NutexbCache] INFLIGHT-JOIN "${shortId}"`);
     return pending;
   }
 
   const p = (async () => {
     const idbBytes = persistEligible ? await idbTryGetPngBytes(versionId) : null;
     if (idbBytes) {
+      console.log(`[NutexbCache] L2-HIT "${shortId}" idb=${(idbBytes.byteLength / 1024).toFixed(0)}KB`);
       const url = bufferToPngBlobUrl(idbBytes);
       setLru(versionId, url);
       return url;
     }
 
+    const t0 = performance.now();
     const raw = await decode();
+    const elapsed = performance.now() - t0;
+    const rawSize = raw instanceof Uint8Array ? raw.byteLength : raw.byteLength;
+    console.log(`[NutexbCache] DECODED "${shortId}" ${(rawSize / 1024).toFixed(0)}KB in ${elapsed.toFixed(0)}ms`);
+
     const url = bufferToPngBlobUrl(raw);
 
     if (persistEligible) {

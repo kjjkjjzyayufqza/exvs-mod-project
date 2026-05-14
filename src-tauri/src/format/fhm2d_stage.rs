@@ -916,6 +916,7 @@ pub struct StageInMemoryImportResult {
     pub bundle: StageBundle,
     pub tree: StageVirtualTreeFolder,
     pub warnings: Vec<String>,
+    pub session_id: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -1519,6 +1520,8 @@ fn navigate_virtual_tree_ref<'a>(
 pub fn build_stage_bundle_from_memory(
     files: &[InMemoryFhm2dFile],
     tree: &StageVirtualTreeFolder,
+    session_id: Option<&str>,
+    mut on_model_progress: impl FnMut(usize, usize, &str),
 ) -> Result<StageBundle, String> {
     let file_index_map: HashMap<i32, &InMemoryFhm2dFile> = files
         .iter()
@@ -1540,11 +1543,28 @@ pub fn build_stage_bundle_from_memory(
     let mut placement_header = Vec::new();
     let mut placement_entries = Vec::new();
 
-    let child_count = content.children.len();
+    let sub_folder_count = content
+        .children
+        .iter()
+        .filter(|c| {
+            let n = c.name.as_str();
+            n != STAGE_BASE_NAME && n != STAGE_INFO_NAME && n != STAGE_TEXTURES_NAME
+        })
+        .count();
+    let model_children: Vec<_> = content
+        .children
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| c.name != STAGE_INFO_NAME)
+        .collect();
+    let model_total = model_children.len();
+    let mut model_done = 0usize;
+    let mut object_index = 0usize;
 
-    for (i, child) in content.children.iter().enumerate() {
+    for child in content.children.iter() {
         let is_base = child.name == STAGE_BASE_NAME;
         let is_info = child.name == STAGE_INFO_NAME;
+        let is_textures = child.name.to_lowercase() == STAGE_TEXTURES_NAME;
         let is_sky = child.name == STAGE_SKY_NAME;
 
         if is_info {
@@ -1566,24 +1586,34 @@ pub fn build_stage_bundle_from_memory(
             continue;
         }
 
+        if is_textures {
+            continue;
+        }
+
+        on_model_progress(model_done, model_total, &child.name);
+
         if is_base {
             for sub_folder in &child.children {
                 if let Some(bundle) = build_model_bundle_from_virtual_folder(
                     sub_folder,
                     &file_index_map,
                     &mut bundle_warnings,
+                    session_id,
                 ) {
                     base_model = Some(bundle);
                     break;
                 }
             }
+            model_done += 1;
             continue;
         }
 
-        let object_index = if is_sky {
-            child_count.saturating_sub(1)
+        let current_index = if is_sky {
+            sub_folder_count.saturating_sub(1)
         } else {
-            i
+            let idx = object_index;
+            object_index += 1;
+            idx
         };
 
         for sub_folder in &child.children {
@@ -1591,10 +1621,11 @@ pub fn build_stage_bundle_from_memory(
                 sub_folder,
                 &file_index_map,
                 &mut bundle_warnings,
+                session_id,
             ) {
                 sub_models.push(StageSubModelEntry {
                     folder_name: child.name.clone(),
-                    object_index,
+                    object_index: current_index,
                     bundle,
                 });
                 break;
@@ -1606,14 +1637,17 @@ pub fn build_stage_bundle_from_memory(
                 child,
                 &file_index_map,
                 &mut bundle_warnings,
+                session_id,
             ) {
                 sub_models.push(StageSubModelEntry {
                     folder_name: child.name.clone(),
-                    object_index,
+                    object_index: current_index,
                     bundle,
                 });
             }
         }
+
+        model_done += 1;
     }
 
     Ok(StageBundle {
@@ -1627,15 +1661,29 @@ pub fn build_stage_bundle_from_memory(
     })
 }
 
-fn collect_all_nutexb_file_names(folder: &StageVirtualTreeFolder) -> Vec<String> {
-    let mut out: Vec<String> = folder
+/// Collects nutexb entries with (filename, virtual_path) pairs.
+/// The virtual_path comes from the extraction's file_url, suitable for session-based IPC lookup.
+fn collect_nutexb_entries_with_virtual_paths(
+    folder: &StageVirtualTreeFolder,
+    file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
+) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = folder
         .files
         .iter()
         .filter(|f| f.file_type.eq_ignore_ascii_case(".nutexb"))
-        .map(|f| f.file_name.clone())
+        .filter_map(|f| {
+            let extraction_file = file_index_map.get(&f.file_index)?;
+            let virtual_path = extraction_file
+                .file_url
+                .trim()
+                .replace('\\', "/")
+                .trim_start_matches("./")
+                .to_string();
+            Some((f.file_name.clone(), virtual_path))
+        })
         .collect();
     for child in &folder.children {
-        out.extend(collect_all_nutexb_file_names(child));
+        out.extend(collect_nutexb_entries_with_virtual_paths(child, file_index_map));
     }
     out
 }
@@ -1644,6 +1692,7 @@ fn build_model_bundle_from_virtual_folder(
     folder: &StageVirtualTreeFolder,
     file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
     warnings: &mut Vec<String>,
+    session_id: Option<&str>,
 ) -> Option<SsbhModelPreviewBundle> {
     let numdlb_vf = folder
         .files
@@ -1715,7 +1764,7 @@ fn build_model_bundle_from_virtual_folder(
         .map(fhm2d_memory_preview::collect_texture_refs)
         .unwrap_or_default();
 
-    let nutexb_names = collect_all_nutexb_file_names(folder);
+    let nutexb_entries = collect_nutexb_entries_with_virtual_paths(folder, file_index_map);
 
     let mut texture_resolve = Vec::new();
     let mut resolved_nutexb_paths = Vec::new();
@@ -1737,14 +1786,14 @@ fn build_model_bundle_from_virtual_folder(
             format!("{stem}.nutexb")
         };
 
-        let matched = nutexb_names
+        let matched = nutexb_entries
             .iter()
-            .find(|n| n.to_ascii_lowercase() == ref_nutexb);
-        if let Some(nutexb_name) = matched {
-            resolved_nutexb_paths.push(nutexb_name.clone());
+            .find(|(name, _)| name.to_ascii_lowercase() == ref_nutexb);
+        if let Some((_, virtual_path)) = matched {
+            resolved_nutexb_paths.push(virtual_path.clone());
             texture_resolve.push(TextureRefResolve {
                 reference: reference.clone(),
-                nutexb_path: Some(nutexb_name.clone()),
+                nutexb_path: Some(virtual_path.clone()),
             });
         } else {
             texture_resolve.push(TextureRefResolve {
@@ -1770,6 +1819,12 @@ fn build_model_bundle_from_virtual_folder(
         .map(|f| f.file_name.clone())
         .collect();
 
+    let (source_kind, source_session_id) = if let Some(sid) = session_id {
+        ("memory".to_string(), Some(sid.to_string()))
+    } else {
+        ("stage_memory".to_string(), None)
+    };
+
     Some(SsbhModelPreviewBundle {
         root_folder: format!("memory://stage/{}", folder.name),
         modl_path: numdlb_vf.file_name.clone(),
@@ -1784,8 +1839,8 @@ fn build_model_bundle_from_virtual_folder(
         resolved_nutexb_paths,
         texture_resolve,
         warnings: Vec::new(),
-        source_kind: "stage_memory".to_string(),
-        source_session_id: None,
+        source_kind,
+        source_session_id,
         virtual_modl_path: None,
     })
 }
