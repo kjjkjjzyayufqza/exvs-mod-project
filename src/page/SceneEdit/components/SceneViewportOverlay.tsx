@@ -33,8 +33,8 @@ export const SceneViewportOverlay = memo(function SceneViewportOverlay({
   return (
     <>
       {showStats && drawStats && (
-        <div className="absolute top-2 left-2 pointer-events-none">
-          <div className="bg-black/60 backdrop-blur-sm text-white text-[10px] font-mono px-2.5 py-1.5 rounded-md space-y-0.5 border border-white/10">
+        <div className="absolute bottom-4 left-4 pointer-events-none z-10">
+          <div className="bg-black/60 backdrop-blur-md text-white text-[9px] font-mono px-2 py-1.5 rounded-md space-y-0.5 border border-white/5 shadow-lg flex flex-col gap-0.5">
             <div className="flex items-center gap-1.5">
               <Triangle className="h-3 w-3 text-emerald-400" />
               <span className="text-white/70">Tris:</span>

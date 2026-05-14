@@ -8,7 +8,6 @@ import {
   Html,
   AdaptiveDpr,
 } from "@react-three/drei";
-import { Perf } from "r3f-perf";
 import {
   useRef,
   useCallback,
@@ -116,11 +115,6 @@ export interface MapViewportProps {
 
 export interface MapViewportHandle {
   resetCamera: () => void;
-}
-
-function ScenePerfMonitor({ showStats }: { showStats: boolean }) {
-  if (!showStats) return null;
-  return <Perf position="top-right" minimal showGraph={false} />;
 }
 
 function AdaptivePerformance() {
@@ -272,7 +266,6 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
         onCreated={handleCreated}
       >
         <AdaptivePerformance />
-        <ScenePerfMonitor showStats={showStats} />
 
         <ambientLight color={lighting.ambientColor} intensity={lighting.ambientIntensity} />
         <hemisphereLight args={["#c8d8f0", "#0a0a14", 0.2]} />
@@ -360,7 +353,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           panSpeed={0.65}
         />
 
-        <GizmoHelper alignment="bottom-right" margin={[60, 60]}>
+        <GizmoHelper alignment="bottom-right" margin={[76, 76]}>
           <GizmoViewport axisColors={["#f87171", "#4ade80", "#60a5fa"]} labelColor="white" axisHeadScale={0.8} />
         </GizmoHelper>
       </Canvas>

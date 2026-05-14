@@ -26,13 +26,13 @@ export function StageHierarchyTree({
 }: StageHierarchyTreeProps) {
   if (!root) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-6 gap-3">
-        <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center">
+      <div className="flex min-w-0 w-full max-w-full flex-col items-center justify-center h-full text-muted-foreground p-4 gap-3">
+        <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center shrink-0">
           <FolderOpen className="h-5 w-5 opacity-40" />
         </div>
-        <div className="text-center space-y-1">
-          <p className="text-xs font-medium">No stage loaded</p>
-          <p className="text-[10px] opacity-60 leading-relaxed">
+        <div className="text-center space-y-1 min-w-0 w-full px-1">
+          <p className="text-xs font-medium break-words">No stage loaded</p>
+          <p className="text-[10px] opacity-60 leading-relaxed break-words">
             Import FHM2D or Open Stage to begin editing
           </p>
         </div>

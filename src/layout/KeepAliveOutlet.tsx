@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { findMatchedRouteUrl, pathMatchesRoute } from "@/router/pathMatch";
 import { RouterItems } from "@/router/router";
 import { KeepAliveProvider } from "./KeepAliveContext";
+import { cn } from "@/lib/utils";
 
 /**
  * Renders matched sidebar pages in a stacked layout: visited routes stay mounted
@@ -29,16 +30,21 @@ export function KeepAliveOutlet() {
 
   return (
     <KeepAliveProvider activeMatchedUrl={matchedUrl}>
-      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       {RouterItems.map((item) => {
         if (!visited.has(item.url)) return null;
         const active = matchedUrl !== null && pathMatchesRoute(pathname, item.url);
+        const activeOverflow =
+          item.url === "/SceneEdit" ? "overflow-hidden" : "overflow-auto";
         return (
           <div
             key={item.url}
             className={
               active
-                ? "relative z-10 flex min-h-0 flex-1 flex-col overflow-auto outline-none"
+                ? cn(
+                    "relative z-10 flex min-h-0 min-w-0 flex-1 flex-col outline-none",
+                    activeOverflow,
+                  )
                 : "pointer-events-none invisible absolute inset-0 z-0 flex min-h-0 flex-col overflow-hidden outline-none"
             }
             aria-hidden={!active}

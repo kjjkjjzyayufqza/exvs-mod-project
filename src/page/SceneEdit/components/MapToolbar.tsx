@@ -22,6 +22,7 @@ interface MapToolbarProps {
   onImportFhm2d: () => void;
   onSave: () => void;
   canSave: boolean;
+  hasUnsavedChanges?: boolean;
   stageName: string | null;
   isLoading: boolean;
   showGrid: boolean;
@@ -40,6 +41,7 @@ export function MapToolbar({
   onImportFhm2d,
   onSave,
   canSave,
+  hasUnsavedChanges,
   stageName,
   isLoading,
   showGrid,
@@ -53,7 +55,7 @@ export function MapToolbar({
   onResetCamera,
 }: MapToolbarProps) {
   return (
-    <div className="flex items-center gap-1 px-2 py-1 border-b bg-background/80 backdrop-blur-sm">
+    <div className="flex shrink-0 items-center gap-1 px-2 py-1 border-b bg-background/80 backdrop-blur-sm">
       {/* File actions */}
       <Tooltip>
         <TooltipTrigger asChild>
@@ -92,15 +94,23 @@ export function MapToolbar({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 text-xs gap-1.5"
+            className="h-7 text-xs gap-1.5 relative"
             onClick={onSave}
             disabled={!canSave || isLoading}
           >
             <Save className="h-3.5 w-3.5" />
             Save
+            {hasUnsavedChanges && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
+              </span>
+            )}
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Save modified CSV files</TooltipContent>
+        <TooltipContent side="bottom">
+          {hasUnsavedChanges ? "Save unsaved changes" : "Save modified CSV files"}
+        </TooltipContent>
       </Tooltip>
 
       <Separator orientation="vertical" className="h-4 mx-0.5" />

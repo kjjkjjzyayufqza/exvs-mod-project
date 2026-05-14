@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef, useTransition, useEffect } from "react";
+import { useState, useCallback, useRef, useTransition, useEffect, useMemo } from "react";
+import { useDefaultLayout } from "react-resizable-panels";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
@@ -43,6 +44,7 @@ import {
   SceneViewportOverlay,
   type SceneDrawStats,
 } from "./components/SceneViewportOverlay";
+import { SceneStatusPanel } from "./components/SceneStatusPanel";
 import { useSceneTextureLoader } from "./hooks/useSceneTextureLoader";
 import { disposeFhm2dMemorySession } from "@/page/TestEditor/components/ssbh-model-preview/fhm2dMemoryPreviewService";
 
@@ -75,13 +77,39 @@ interface StageBundleResponse {
   warnings: string[];
 }
 
+const SCENE_EDIT_PANEL_IDS = [
+  "scene-hierarchy",
+  "scene-viewport",
+  "scene-properties",
+] as const;
+
+/** Default split: 20% | 60% | 20% (percent keys match Panel `id`) */
+const SCENE_EDIT_DEFAULT_LAYOUT: Record<(typeof SCENE_EDIT_PANEL_IDS)[number], number> =
+  {
+    "scene-hierarchy": 20,
+    "scene-viewport": 60,
+    "scene-properties": 20,
+  };
+
 export default function SceneEdit() {
   const viewportRef = useRef<MapViewportHandle>(null);
   const [, startTransition] = useTransition();
 
+  const { defaultLayout: persistedLayout, onLayoutChanged } = useDefaultLayout({
+    id: "scene-edit-layout",
+    panelIds: [...SCENE_EDIT_PANEL_IDS],
+    storage: globalThis.localStorage,
+  });
+
+  const sceneEditLayout = useMemo(
+    () => persistedLayout ?? SCENE_EDIT_DEFAULT_LAYOUT,
+    [persistedLayout],
+  );
+
   const [stageName, setStageName] = useState<string | null>(null);
   const [stageRoot, setStageRoot] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const [baseModel, setBaseModel] = useState<SsbhModelPreviewBundle | null>(
     null
@@ -414,6 +442,7 @@ export default function SceneEdit() {
         await writeTextFile(`${stageRoot}/info/placement.csv`, placementCsv);
       }
 
+      setHasUnsavedChanges(false);
       toast.success("CSV files saved");
     } catch (err: any) {
       toast.error("Save failed", { description: String(err) });
@@ -427,6 +456,7 @@ export default function SceneEdit() {
         next[index] = { ...next[index], value };
         return next;
       });
+      setHasUnsavedChanges(true);
     },
     []
   );
@@ -474,6 +504,7 @@ export default function SceneEdit() {
         next[index] = entry;
         return next;
       });
+      setHasUnsavedChanges(true);
     },
     [placementColMap]
   );
@@ -523,12 +554,13 @@ export default function SceneEdit() {
 
   return (
     <TooltipProvider>
-      <div className="h-full flex flex-col bg-background">
+      <div className="flex h-full min-h-0 min-w-0 flex-col bg-background">
         <MapToolbar
           onOpenFolder={handleOpenFolder}
           onImportFhm2d={handleImportFhm2d}
           onSave={handleSave}
           canSave={!!stageName && !isMemoryImport}
+          hasUnsavedChanges={hasUnsavedChanges}
           stageName={stageName}
           isLoading={isLoading}
           showGrid={showGrid}
@@ -543,17 +575,25 @@ export default function SceneEdit() {
         />
 
         <ResizablePanelGroup
+          id="scene-edit-layout"
           orientation="horizontal"
-          className="flex-1 min-h-0"
-          autoSaveId="scene-edit-layout-v2"
+          className="flex min-h-0 min-w-0 flex-1"
+          defaultLayout={sceneEditLayout}
+          onLayoutChanged={onLayoutChanged}
+          resizeTargetMinimumSize={{ fine: 16, coarse: 24 }}
         >
-          {/* Left panel: Hierarchy */}
-          <ResizablePanel id="scene-hierarchy" defaultSize={18} minSize={12} maxSize={30}>
-            <div className="h-full flex flex-col border-r overflow-hidden">
-              <div className="text-[10px] font-semibold px-3 py-1.5 border-b bg-muted/30 text-muted-foreground uppercase tracking-widest select-none">
+          <ResizablePanel
+            id="scene-hierarchy"
+            defaultSize="20%"
+            minSize="10%"
+            maxSize="50%"
+            className="min-w-0"
+          >
+            <div className="flex h-full min-w-0 flex-col overflow-hidden border-r">
+              <div className="shrink-0 text-[10px] font-semibold px-3 py-1.5 border-b bg-muted/30 text-muted-foreground uppercase tracking-widest select-none whitespace-nowrap">
                 Scene
               </div>
-              <div className="flex-1 min-h-0 overflow-hidden">
+              <div className="min-h-0 flex-1 overflow-hidden">
                 <StageHierarchyTree
                   root={treeRoot}
                   selectedId={selectedNodeId}
@@ -563,11 +603,19 @@ export default function SceneEdit() {
             </div>
           </ResizablePanel>
 
-          <ResizableHandle className="w-px bg-border/50 hover:bg-primary/30 transition-colors" />
+          <ResizableHandle
+            withHandle
+            className="relative z-30 w-2 shrink-0 bg-border/30 hover:bg-primary/25"
+          />
 
-          {/* Center: Viewport */}
-          <ResizablePanel id="scene-viewport" defaultSize={57} minSize={35}>
-            <div className="h-full min-h-0 relative overflow-hidden">
+          <ResizablePanel
+            id="scene-viewport"
+            defaultSize="60%"
+            minSize="35%"
+            maxSize="80%"
+            className="min-w-0"
+          >
+            <div className="relative h-full min-h-0 min-w-0 overflow-hidden">
               <MapViewport
                 ref={viewportRef}
                 baseModel={baseModel}
@@ -592,13 +640,24 @@ export default function SceneEdit() {
             </div>
           </ResizablePanel>
 
-          <ResizableHandle className="w-px bg-border/50 hover:bg-primary/30 transition-colors" />
+          <ResizableHandle
+            withHandle
+            className="relative z-30 w-2 shrink-0 bg-border/30 hover:bg-primary/25"
+          />
 
-          {/* Right panel: Properties */}
-          <ResizablePanel id="scene-properties" defaultSize={25} minSize={16} maxSize={40}>
-            <div className="h-full flex flex-col border-l overflow-hidden">
-              <Tabs defaultValue="properties" className="flex-1 flex flex-col min-h-0">
-                <TabsList className="w-full justify-start rounded-none border-b bg-muted/30 h-8 px-1">
+          <ResizablePanel
+            id="scene-properties"
+            defaultSize="20%"
+            minSize="10%"
+            maxSize="50%"
+            className="min-w-0"
+          >
+            <div className="flex h-full min-w-0 flex-col overflow-hidden border-l">
+              <Tabs defaultValue="status" className="flex min-h-0 min-w-0 flex-1 flex-col">
+                <TabsList className="h-8 w-full shrink-0 justify-start rounded-none border-b bg-muted/30 px-1">
+                  <TabsTrigger value="status" className="text-[10px] h-6 px-2.5 flex items-center gap-1">
+                    Status
+                  </TabsTrigger>
                   <TabsTrigger value="properties" className="text-[10px] h-6 px-2.5">
                     Properties
                   </TabsTrigger>
@@ -610,7 +669,20 @@ export default function SceneEdit() {
                   </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="properties" className="flex-1 min-h-0 overflow-auto p-2 mt-0 space-y-2">
+                <TabsContent value="status" className="mt-0 min-h-0 flex-1 overflow-hidden">
+                  <SceneStatusPanel
+                    stageName={stageName}
+                    stageRoot={stageRoot}
+                    selectedNode={selectedNode}
+                    selectedPlacementIdx={selectedPlacementIdx}
+                    placementEntry={selectedPlacementIdx !== null ? placementEntries[selectedPlacementIdx] : null}
+                    drawStats={drawStats}
+                    subModelCount={subModels.length}
+                    textureCount={textureDataMap.size}
+                  />
+                </TabsContent>
+
+                <TabsContent value="properties" className="mt-0 min-h-0 flex-1 space-y-2 overflow-auto p-2">
                   <StagePropertyEditor
                     selectedNodeId={selectedNodeId}
                     selectedNodeLabel={selectedNode?.label ?? null}
@@ -620,14 +692,14 @@ export default function SceneEdit() {
                   />
                 </TabsContent>
 
-                <TabsContent value="lighting" className="flex-1 min-h-0 overflow-auto p-2 mt-0 space-y-2">
+                <TabsContent value="lighting" className="mt-0 min-h-0 flex-1 space-y-2 overflow-auto p-2">
                   <GraphicParamPanel
                     params={graphicParams}
                     onChange={handleGraphicParamChange}
                   />
                 </TabsContent>
 
-                <TabsContent value="placement" className="flex-1 min-h-0 overflow-auto p-2 mt-0 space-y-2">
+                <TabsContent value="placement" className="mt-0 min-h-0 flex-1 space-y-2 overflow-auto p-2">
                   <PlacementPanel
                     entries={placementEntries}
                     selectedIndex={selectedPlacementIdx}
