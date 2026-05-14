@@ -621,7 +621,6 @@ export default function SceneEdit() {
                 baseModel={baseModel}
                 subModels={subModels}
                 placementEntries={placementEntries}
-                graphicParams={graphicParams}
                 showGrid={showGrid}
                 showAxes={showAxes}
                 wireframe={wireframe}
@@ -631,12 +630,7 @@ export default function SceneEdit() {
                 textureDataMap={textureDataMap}
                 onDrawStatsChange={handleDrawStatsChange}
               />
-              <SceneViewportOverlay
-                drawStats={drawStats}
-                textureProgress={textureProgress}
-                textureDataMap={textureDataMap}
-                showStats={showStats}
-              />
+              <SceneViewportOverlay textureProgress={textureProgress} />
             </div>
           </ResizablePanel>
 

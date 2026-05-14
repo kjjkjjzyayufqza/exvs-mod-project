@@ -97,7 +97,14 @@ export type PreviewControlScope = "all" | "single";
 export type PreviewRenderStyle = "standard" | "anime";
 
 /** Blender Dark theme 3D Viewport grid background high (0.22, 0.22, 0.22). */
-const DEFAULT_PREVIEW_3D_BACKGROUND = "#383838";
+export const DEFAULT_PREVIEW_3D_BACKGROUND = "#383838";
+
+/** Matches initial `ambientIntensity` / directional defaults in preview context. */
+export const DEFAULT_PREVIEW_AMBIENT_INTENSITY = 0.4;
+export const DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY = 1.05;
+export const DEFAULT_PREVIEW_DIRECTIONAL_X = 8;
+export const DEFAULT_PREVIEW_DIRECTIONAL_Y = 14;
+export const DEFAULT_PREVIEW_DIRECTIONAL_Z = 6;
 
 export type MaterialDebugViewMode =
   | "full"
@@ -465,11 +472,11 @@ export function SsbhModelPreviewProvider({
   const [showAxesGizmo, setShowAxesGizmo] = useState(true);
   const [showStats, setShowStats] = useState(false);
   const [background, setBackground] = useState(DEFAULT_PREVIEW_3D_BACKGROUND);
-  const [ambientIntensity, setAmbientIntensity] = useState(0.4);
-  const [directionalIntensity, setDirectionalIntensity] = useState(1.05);
-  const [directionalX, setDirectionalX] = useState(8);
-  const [directionalY, setDirectionalY] = useState(14);
-  const [directionalZ, setDirectionalZ] = useState(6);
+  const [ambientIntensity, setAmbientIntensity] = useState(DEFAULT_PREVIEW_AMBIENT_INTENSITY);
+  const [directionalIntensity, setDirectionalIntensity] = useState(DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY);
+  const [directionalX, setDirectionalX] = useState(DEFAULT_PREVIEW_DIRECTIONAL_X);
+  const [directionalY, setDirectionalY] = useState(DEFAULT_PREVIEW_DIRECTIONAL_Y);
+  const [directionalZ, setDirectionalZ] = useState(DEFAULT_PREVIEW_DIRECTIONAL_Z);
   const [normalMapEnabled, setNormalMapEnabled] = useState(true);
   const [selectedDebugDrawKey, setSelectedDebugDrawKey] = useState<string | null>(null);
   const [drawMaterialDataUrlsByDrawKey, setDrawMaterialDataUrlsByDrawKey] = useState<

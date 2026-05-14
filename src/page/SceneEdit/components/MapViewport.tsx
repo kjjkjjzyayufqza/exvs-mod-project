@@ -6,7 +6,7 @@ import {
   Grid,
   Sphere,
   Html,
-  AdaptiveDpr,
+  Stats,
 } from "@react-three/drei";
 import {
   useRef,
@@ -16,6 +16,7 @@ import {
   memo,
   forwardRef,
   useImperativeHandle,
+  type RefObject,
 } from "react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsType } from "three-stdlib";
@@ -35,74 +36,106 @@ import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
 import type { NutexbRgbaData } from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
 import type { PlacementRow } from "./PlacementPanel";
 import type { SceneDrawStats } from "./SceneViewportOverlay";
-
-export interface GraphicParam {
-  key: string;
-  value: string;
-}
-
-interface StageLightingConfig {
-  directionalPosition: [number, number, number];
-  directionalColor: THREE.Color;
-  directionalIntensity: number;
-  ambientColor: THREE.Color;
-  ambientIntensity: number;
-}
+import type { PreviewRenderStyle } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
+import {
+  DEFAULT_PREVIEW_3D_BACKGROUND,
+  DEFAULT_PREVIEW_AMBIENT_INTENSITY,
+  DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY,
+  DEFAULT_PREVIEW_DIRECTIONAL_X,
+  DEFAULT_PREVIEW_DIRECTIONAL_Y,
+  DEFAULT_PREVIEW_DIRECTIONAL_Z,
+} from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
+import {
+  getSsbhAdaptiveDpr,
+  getSsbhAdaptivePerformanceOptions,
+  getSsbhCanvasPerformanceProfile,
+  measureDrawComplexity,
+} from "@/page/TestEditor/components/ssbh-model-preview/ssbhCanvasPerformance";
 
 const DEG2RAD = Math.PI / 180;
 
-function parseGraphicParamConfig(params: GraphicParam[]): StageLightingConfig {
-  const m = new Map<string, number>();
-  for (const p of params) {
-    const v = parseFloat(p.value);
-    if (!isNaN(v)) m.set(p.key, v);
-  }
+/** Blender-style finite grid plane (aligned with TestEditor ssbh-model-preview). */
+const GRID_PLANE_WIDTH = 200;
+const GRID_PLANE_HEIGHT = 200;
+const GRID_FADE_DISTANCE = 5e6;
+const BLENDER_GRID_CELL_COLOR = "#464646";
+const BLENDER_GRID_SECTION_COLOR = "#545454";
 
-  const rotX = (m.get("directional_lighting_rot_x") ?? -40) * DEG2RAD;
-  const rotY = (m.get("directional_lighting_rot_y") ?? 142) * DEG2RAD;
-  const rotZ = (m.get("directional_lighting_rot_z") ?? 0) * DEG2RAD;
+function resolveBaseDpr(dprRange: [number, number]): number {
+  const deviceDpr =
+    typeof window !== "undefined" && Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0
+      ? window.devicePixelRatio
+      : 1;
+  return Math.min(dprRange[1], Math.max(dprRange[0], deviceDpr));
+}
 
-  const euler = new THREE.Euler(rotX, rotY, rotZ, "YXZ");
-  const dir = new THREE.Vector3(0, 0, -1).applyEuler(euler).normalize();
-  const distance = 500;
-  const directionalPosition: [number, number, number] = [
-    -dir.x * distance,
-    -dir.y * distance,
-    -dir.z * distance,
-  ];
+export type SceneMapSubModelEntry = {
+  folderName: string;
+  objectIndex: number;
+  bundle: SsbhModelPreviewBundle;
+};
 
-  const dlR = m.get("directional_lighting_color_r") ?? 1;
-  const dlG = m.get("directional_lighting_color_g") ?? 1;
-  const dlB = m.get("directional_lighting_color_b") ?? 1;
-  const directionalColor = new THREE.Color(dlR, dlG, dlB);
-
-  const rawIntensity = m.get("directional_lighting_intensity") ?? 5.5;
-  const directionalIntensity = rawIntensity / 5;
-
-  const egR = m.get("effect_ground_color_r") ?? 1;
-  const egG = m.get("effect_ground_color_g") ?? 0.9;
-  const egB = m.get("effect_ground_color_b") ?? 0.8;
-  const ambientColor = new THREE.Color(egR, egG, egB);
-  const ambientIntensity = 0.35;
-
-  return {
-    directionalPosition,
-    directionalColor,
-    directionalIntensity,
-    ambientColor,
-    ambientIntensity,
+function collectSceneDrawsForComplexity(
+  baseModel: SsbhModelPreviewBundle | null,
+  subModels: SceneMapSubModelEntry[],
+): BuiltMeshDraw[] {
+  const out: BuiltMeshDraw[] = [];
+  const append = (bundle: SsbhModelPreviewBundle) => {
+    try {
+      const modl = bundle.modl as Parameters<typeof buildDrawListFromBundle>[0];
+      const mesh = bundle.mesh as Parameters<typeof buildDrawListFromBundle>[1];
+      const skel = bundle.skel as Parameters<typeof buildDrawListFromBundle>[2];
+      if (!modl || !mesh) return;
+      out.push(...buildDrawListFromBundle(modl, mesh, skel ?? undefined));
+    } catch {
+      /* skip */
+    }
   };
+  if (baseModel) append(baseModel);
+  for (const sub of subModels) append(sub.bundle);
+  return out;
+}
+
+function SceneCanvasPerformanceHud({
+  drawsForComplexity,
+  showStats,
+  previewRenderStyle,
+}: {
+  drawsForComplexity: BuiltMeshDraw[];
+  showStats: boolean;
+  previewRenderStyle: PreviewRenderStyle;
+}) {
+  const drawComplexity = useMemo(() => measureDrawComplexity(drawsForComplexity), [drawsForComplexity]);
+  const motionPlaying = false;
+  const motionScrubbing = false;
+  const baseDprRange = useMemo(
+    () =>
+      getSsbhCanvasPerformanceProfile({
+        drawCount: drawComplexity.drawCount,
+        triangleCount: drawComplexity.triangleCount,
+        motionPlaying,
+        motionScrubbing,
+        previewRenderStyle,
+      }).dpr,
+    [drawComplexity.drawCount, drawComplexity.triangleCount, previewRenderStyle],
+  );
+  const current = useThree((s) => s.performance.current);
+  const setDpr = useThree((s) => s.setDpr);
+  const resolvedBaseDpr = useMemo(() => resolveBaseDpr(baseDprRange), [baseDprRange]);
+
+  useEffect(() => {
+    setDpr(getSsbhAdaptiveDpr(resolvedBaseDpr, current));
+  }, [current, resolvedBaseDpr, setDpr]);
+
+  return (
+    <>{showStats ? <Stats className="fixed! top-2! right-2! left-auto! z-2147483000" /> : null}</>
+  );
 }
 
 export interface MapViewportProps {
   baseModel: SsbhModelPreviewBundle | null;
-  subModels: Array<{
-    folderName: string;
-    objectIndex: number;
-    bundle: SsbhModelPreviewBundle;
-  }>;
+  subModels: SceneMapSubModelEntry[];
   placementEntries: PlacementRow[];
-  graphicParams: GraphicParam[];
   showGrid: boolean;
   showAxes: boolean;
   wireframe: boolean;
@@ -117,22 +150,35 @@ export interface MapViewportHandle {
   resetCamera: () => void;
 }
 
-function AdaptivePerformance() {
+function StageOrbitControls({
+  controlsRef,
+}: {
+  controlsRef: RefObject<OrbitControlsType | null>;
+}) {
   const regress = useThree((s) => s.performance.regress);
   const invalidate = useThree((s) => s.invalidate);
-
-  const handleInteraction = useCallback(() => {
+  const onInteract = useCallback(() => {
     regress();
     invalidate();
   }, [regress, invalidate]);
-
-  useEffect(() => {
-    const handler = () => handleInteraction();
-    window.addEventListener("pointerdown", handler, { passive: true });
-    return () => window.removeEventListener("pointerdown", handler);
-  }, [handleInteraction]);
-
-  return <AdaptiveDpr pixelated />;
+  return (
+    <OrbitControls
+      ref={controlsRef}
+      makeDefault
+      minDistance={0.08}
+      maxDistance={5e6}
+      enableDamping
+      dampingFactor={0.06}
+      screenSpacePanning
+      zoomSpeed={0.85}
+      rotateSpeed={0.65}
+      panSpeed={0.65}
+      minPolarAngle={0.05}
+      maxPolarAngle={Math.PI - 0.05}
+      onStart={onInteract}
+      onChange={onInteract}
+    />
+  );
 }
 
 export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
@@ -141,7 +187,6 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       baseModel,
       subModels,
       placementEntries,
-      graphicParams,
       showGrid,
       showAxes,
       wireframe,
@@ -188,9 +233,47 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       [placementEntries]
     );
 
-    const lighting = useMemo(
-      () => parseGraphicParamConfig(graphicParams),
-      [graphicParams]
+    const previewRenderStyle: PreviewRenderStyle = "standard";
+    const drawsForComplexity = useMemo(
+      () => collectSceneDrawsForComplexity(baseModel, subModels),
+      [baseModel, subModels],
+    );
+    const sceneComplexity = useMemo(() => measureDrawComplexity(drawsForComplexity), [drawsForComplexity]);
+    const motionPlaying = false;
+    const motionScrubbing = false;
+    const canvasPerformanceProfile = useMemo(
+      () =>
+        getSsbhCanvasPerformanceProfile({
+          drawCount: sceneComplexity.drawCount,
+          triangleCount: sceneComplexity.triangleCount,
+          motionPlaying,
+          motionScrubbing,
+          previewRenderStyle,
+        }),
+      [sceneComplexity.drawCount, sceneComplexity.triangleCount, previewRenderStyle],
+    );
+    const adaptivePerformanceOptions = useMemo(
+      () =>
+        getSsbhAdaptivePerformanceOptions({
+          drawCount: sceneComplexity.drawCount,
+          triangleCount: sceneComplexity.triangleCount,
+          motionPlaying,
+          motionScrubbing,
+          previewRenderStyle,
+        }),
+      [sceneComplexity.drawCount, sceneComplexity.triangleCount, previewRenderStyle],
+    );
+    const primaryKeyLightPosition = useMemo<[number, number, number]>(
+      () => [DEFAULT_PREVIEW_DIRECTIONAL_X, DEFAULT_PREVIEW_DIRECTIONAL_Y, DEFAULT_PREVIEW_DIRECTIONAL_Z],
+      [],
+    );
+    const fillKeyLightPosition = useMemo<[number, number, number]>(
+      () => [
+        -DEFAULT_PREVIEW_DIRECTIONAL_X * 0.7,
+        DEFAULT_PREVIEW_DIRECTIONAL_Y * 0.45,
+        -DEFAULT_PREVIEW_DIRECTIONAL_Z * 0.7,
+      ],
+      [],
     );
 
     const handleCreated = useCallback(({ gl }: { gl: THREE.WebGLRenderer }) => {
@@ -247,6 +330,8 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
 
     return (
       <Canvas
+        className="h-full w-full touch-none"
+        frameloop="demand"
         camera={{
           position: [300, 300, 300],
           fov: 30,
@@ -254,27 +339,36 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           far: 100000000,
         }}
         gl={{
-          antialias: true,
+          antialias: canvasPerformanceProfile.antialias,
           alpha: false,
           powerPreference: "high-performance",
           failIfMajorPerformanceCaveat: false,
         }}
-        performance={{ min: 0.5, max: 1, debounce: 500 }}
-        dpr={[1, 2]}
-        style={{ background: "#12121a" }}
+        performance={adaptivePerformanceOptions}
+        dpr={canvasPerformanceProfile.dpr}
+        style={{ touchAction: "none", background: DEFAULT_PREVIEW_3D_BACKGROUND }}
         onPointerMissed={handlePointerMissed}
         onCreated={handleCreated}
       >
-        <AdaptivePerformance />
-
-        <ambientLight color={lighting.ambientColor} intensity={lighting.ambientIntensity} />
-        <hemisphereLight args={["#c8d8f0", "#0a0a14", 0.2]} />
-        <directionalLight
-          position={lighting.directionalPosition}
-          color={lighting.directionalColor}
-          intensity={lighting.directionalIntensity}
+        <SceneCanvasPerformanceHud
+          drawsForComplexity={drawsForComplexity}
+          showStats={showStats}
+          previewRenderStyle={previewRenderStyle}
         />
-        <directionalLight position={[-200, 300, -200]} intensity={0.15} />
+
+        <color attach="background" args={[DEFAULT_PREVIEW_3D_BACKGROUND]} />
+        <ambientLight intensity={DEFAULT_PREVIEW_AMBIENT_INTENSITY} />
+        <hemisphereLight args={["#dbeafe", "#111827", 0.26]} />
+        <directionalLight
+          color="#ffffff"
+          position={primaryKeyLightPosition}
+          intensity={DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY}
+        />
+        <directionalLight
+          color="#ffffff"
+          position={fillKeyLightPosition}
+          intensity={DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY * 0.28}
+        />
 
         {baseModel && (
           <StageModelGroup
@@ -327,35 +421,26 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
 
         {showGrid && (
           <Grid
-            args={[1000, 1000]}
-            cellSize={10}
-            cellThickness={0.5}
-            cellColor="#353548"
-            sectionSize={100}
-            sectionThickness={1}
-            sectionColor="#4a4a60"
-            fadeDistance={2000}
+            args={[GRID_PLANE_WIDTH, GRID_PLANE_HEIGHT]}
+            infiniteGrid={false}
+            cellSize={1}
+            sectionSize={5}
+            fadeDistance={GRID_FADE_DISTANCE}
             fadeStrength={1}
-            followCamera={false}
-            infiniteGrid
+            sectionColor={BLENDER_GRID_SECTION_COLOR}
+            cellColor={BLENDER_GRID_CELL_COLOR}
+            sectionThickness={1}
+            cellThickness={0.6}
           />
         )}
 
-        {showAxes && <axesHelper args={[200]} />}
+        {showAxes && (
+          <GizmoHelper alignment="bottom-right" margin={[72, 72]}>
+            <GizmoViewport axisColors={["#f87171", "#4ade80", "#60a5fa"]} labelColor="white" />
+          </GizmoHelper>
+        )}
 
-        <OrbitControls
-          ref={controlsRef}
-          makeDefault
-          enableDamping
-          dampingFactor={0.08}
-          zoomSpeed={0.85}
-          rotateSpeed={0.65}
-          panSpeed={0.65}
-        />
-
-        <GizmoHelper alignment="bottom-right" margin={[76, 76]}>
-          <GizmoViewport axisColors={["#f87171", "#4ade80", "#60a5fa"]} labelColor="white" axisHeadScale={0.8} />
-        </GizmoHelper>
+        <StageOrbitControls controlsRef={controlsRef} />
       </Canvas>
     );
   }

@@ -1,6 +1,8 @@
 import { memo } from "react";
-import { Activity, Triangle, Cpu } from "lucide-react";
-import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
+
+interface SceneViewportOverlayProps {
+  textureProgress: { done: number; total: number; currentLabel?: string } | null;
+}
 
 export interface SceneDrawStats {
   drawCount: number;
@@ -9,63 +11,11 @@ export interface SceneDrawStats {
   subModelCount: number;
 }
 
-interface SceneViewportOverlayProps {
-  drawStats: SceneDrawStats | null;
-  textureProgress: { done: number; total: number; currentLabel?: string } | null;
-  textureDataMap: NutexbTextureDataMap;
-  showStats: boolean;
-}
-
-function formatCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
-
 export const SceneViewportOverlay = memo(function SceneViewportOverlay({
-  drawStats,
   textureProgress,
-  textureDataMap,
-  showStats,
 }: SceneViewportOverlayProps) {
-  const textureCount = textureDataMap.size;
-
   return (
     <>
-      {showStats && drawStats && (
-        <div className="absolute bottom-4 left-4 pointer-events-none z-10">
-          <div className="bg-black/60 backdrop-blur-md text-white text-[9px] font-mono px-2 py-1.5 rounded-md space-y-0.5 border border-white/5 shadow-lg flex flex-col gap-0.5">
-            <div className="flex items-center gap-1.5">
-              <Triangle className="h-3 w-3 text-emerald-400" />
-              <span className="text-white/70">Tris:</span>
-              <span className="text-emerald-300">{formatCount(drawStats.triangleCount)}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Activity className="h-3 w-3 text-blue-400" />
-              <span className="text-white/70">Draws:</span>
-              <span className="text-blue-300">{drawStats.drawCount}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Cpu className="h-3 w-3 text-amber-400" />
-              <span className="text-white/70">Verts:</span>
-              <span className="text-amber-300">{formatCount(drawStats.vertexCount)}</span>
-            </div>
-            {textureCount > 0 && (
-              <div className="flex items-center gap-1.5 pt-0.5 border-t border-white/10">
-                <span className="text-white/70">Tex:</span>
-                <span className="text-purple-300">{textureCount}</span>
-              </div>
-            )}
-            {drawStats.subModelCount > 0 && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-white/70">Objects:</span>
-                <span className="text-orange-300">{drawStats.subModelCount}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {textureProgress && (
         <div className="absolute bottom-3 left-3 right-3 pointer-events-none">
           <div className="bg-black/75 backdrop-blur-sm text-white text-xs px-3 py-2 rounded-lg flex items-center gap-2.5 border border-white/10">

@@ -209,8 +209,10 @@ export function SceneStatusPanel({
       return (
         <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
           <Layers className="h-8 w-8 mb-2 opacity-40" />
-          <p className="text-sm">No stats available</p>
-          <p className="text-xs mt-1 opacity-60">Enable stats display to see rendering metrics</p>
+          <p className="text-sm">No stats collected</p>
+          <p className="text-xs mt-1 opacity-60 text-center px-4">
+            Load a stage first. Enable the viewport toolbar Stats toggle for the Three.js Stats overlay (upper-right).
+          </p>
         </div>
       );
     }
@@ -225,8 +227,11 @@ export function SceneStatusPanel({
       <div className="flex flex-col gap-3">
         <div className="rounded-lg border bg-muted/20 p-3">
           <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-            Rendering Stats
+            Rendering Stats (mesh)
           </h4>
+          <p className="text-[10px] text-muted-foreground mb-2">
+            GPU metrics: enable the viewport toolbar Stats button for Three.js Stats (upper-right).
+          </p>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex items-center justify-between rounded bg-background/50 px-2 py-1.5">
               <span className="text-muted-foreground text-xs">Draw Calls</span>
