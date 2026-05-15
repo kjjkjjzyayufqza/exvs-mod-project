@@ -51,6 +51,7 @@ import {
   getSsbhCanvasPerformanceProfile,
   measureDrawComplexity,
 } from "@/page/TestEditor/components/ssbh-model-preview/ssbhCanvasPerformance";
+import { SceneTexturePool } from "../utils/SceneTexturePool";
 
 const DEG2RAD = Math.PI / 180;
 
@@ -210,6 +211,9 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       },
     }));
 
+    const texturePool = useMemo(() => new SceneTexturePool(), []);
+    useEffect(() => () => texturePool.disposeAll(), [texturePool]);
+
     const handlePointerMissed = useCallback(() => {
       onSelectNode(null);
     }, [onSelectNode]);
@@ -368,6 +372,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             isSelected={selectedNodeId === "base"}
             onClick={onSelectNode}
             textureDataMap={textureDataMap}
+            texturePool={texturePool}
           />
         )}
 
@@ -393,6 +398,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                 }
                 onClick={onSelectNode}
                 textureDataMap={textureDataMap}
+                texturePool={texturePool}
               />,
             ];
           }
@@ -406,6 +412,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
               isSelected={selectedPlacementIdx === globalIdx}
               onClick={onSelectNode}
               textureDataMap={textureDataMap}
+              texturePool={texturePool}
               position={[entry.posX, entry.posY, entry.posZ]}
               rotation={[entry.rotX, entry.rotY, entry.rotZ]}
               scale={[entry.scaleX, entry.scaleY, entry.scaleZ]}
@@ -501,6 +508,25 @@ function pathForSlot(binding: ResolvedMaterialBinding, slot: PbrSlotKind): strin
   }
 }
 
+function buildTexturePoolKey(
+  path: string,
+  slot: PbrSlotKind,
+  binding: ResolvedMaterialBinding,
+): string {
+  const sampling = samplingForSlot(binding, slot);
+  return [
+    path.toLowerCase(),
+    slot,
+    sampling?.wrapS ?? "ClampToEdge",
+    sampling?.wrapT ?? "ClampToEdge",
+    sampling?.uvTransform?.scale_u ?? 1,
+    sampling?.uvTransform?.scale_v ?? 1,
+    sampling?.uvTransform?.translate_u ?? 0,
+    sampling?.uvTransform?.translate_v ?? 0,
+    sampling?.uvTransform?.rotation ?? 0,
+  ].join("|");
+}
+
 function lookupTextureData(
   textureDataMap: NutexbTextureDataMap,
   path: string | null,
@@ -567,11 +593,13 @@ const TexturedMesh = memo(function TexturedMesh({
   textureDataMap,
   wireframe,
   isSelected,
+  texturePool,
 }: {
   drawBinding: DrawBinding;
   textureDataMap: NutexbTextureDataMap;
   wireframe: boolean;
   isSelected: boolean;
+  texturePool: SceneTexturePool;
 }) {
   const { draw, binding } = drawBinding;
 
@@ -592,27 +620,23 @@ const TexturedMesh = memo(function TexturedMesh({
 
     for (const [slot, data] of slotDataEntries) {
       if (!data) continue;
-      result[slot] = createDataTexture(data, slot, binding);
-      loaded.push(slot);
+      const path = pathForSlot(binding, slot);
+      if (!path) continue;
+      const poolKey = buildTexturePoolKey(path, slot, binding);
+      const shared = texturePool.has(poolKey);
+      result[slot] = texturePool.acquire(poolKey, () => createDataTexture(data, slot, binding));
+      loaded.push(shared ? `${slot}(shared)` : slot);
     }
 
     if (loaded.length > 0) {
       console.log(
-        `[SceneEdit:Texture] mat="${binding.materialLabel}" shader="${binding.shaderFamily}" applied=[${loaded.join(",")}]`,
+        `[SceneEdit:Texture] mat="${binding.materialLabel}" shader="${binding.shaderFamily}" applied=[${loaded.join(",")}] poolSize=${texturePool.size}`,
       );
     }
 
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataKey]);
-
-  useEffect(() => {
-    return () => {
-      for (const tex of Object.values(textures)) {
-        tex.dispose();
-      }
-    };
-  }, [textures]);
+  }, [dataKey, texturePool]);
 
   const shaderFamily = binding.shaderFamily;
   const hasMap = !!textures.map;
@@ -693,6 +717,7 @@ const StageModelGroup = memo(function StageModelGroup({
   rotation,
   scale,
   textureDataMap,
+  texturePool,
 }: {
   nodeId: string;
   bundle: SsbhModelPreviewBundle;
@@ -703,6 +728,7 @@ const StageModelGroup = memo(function StageModelGroup({
   rotation?: [number, number, number];
   scale?: [number, number, number];
   textureDataMap: NutexbTextureDataMap;
+  texturePool: SceneTexturePool;
 }) {
   const groupRef = useRef<THREE.Group>(null);
 
@@ -779,6 +805,7 @@ const StageModelGroup = memo(function StageModelGroup({
           textureDataMap={textureDataMap}
           wireframe={wireframe}
           isSelected={isSelected}
+          texturePool={texturePool}
         />
       ))}
     </group>
