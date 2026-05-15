@@ -7,6 +7,7 @@ import {
   Box,
   RotateCcw,
   Activity,
+  Eraser,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +35,8 @@ interface MapToolbarProps {
   onToggleWireframe: () => void;
   onToggleStats: () => void;
   onResetCamera: () => void;
+  onClearCache: () => void;
+  clearCacheDisabled?: boolean;
 }
 
 export function MapToolbar({
@@ -53,6 +56,8 @@ export function MapToolbar({
   onToggleWireframe,
   onToggleStats,
   onResetCamera,
+  onClearCache,
+  clearCacheDisabled,
 }: MapToolbarProps) {
   return (
     <div className="flex shrink-0 items-center gap-1 px-2 py-1 border-b bg-background/80 backdrop-blur-sm">
@@ -188,6 +193,23 @@ export function MapToolbar({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom">Reset Camera</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={onClearCache}
+            disabled={clearCacheDisabled}
+          >
+            <Eraser className="h-3.5 w-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          Clear scene memory and texture caches (unloads current stage)
+        </TooltipContent>
       </Tooltip>
 
       {/* Stage name + loading state */}

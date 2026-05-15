@@ -13,6 +13,16 @@ import {
 } from "@/components/ui/resizable";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import { MapToolbar } from "./components/MapToolbar";
 import {
@@ -33,6 +43,14 @@ import {
 } from "./components/GraphicParamPanel";
 import { PlacementPanel, type PlacementRow } from "./components/PlacementPanel";
 import {
+  formatPlacementViewportNodeId,
+  parsePlacementViewportNodeId,
+} from "./utils/placementNodeId";
+import {
+  clonePlacementRow,
+  patchPlacementRawFieldsForNumericField,
+} from "./utils/patchPlacementRawFields";
+import {
   StageRenamePreviewDialog,
   type VirtualTreeFolder,
 } from "./components/StageRenamePreviewDialog";
@@ -47,6 +65,12 @@ import {
 import { SceneStatusPanel } from "./components/SceneStatusPanel";
 import { useSceneTextureLoader } from "./hooks/useSceneTextureLoader";
 import { disposeFhm2dMemorySession } from "@/page/TestEditor/components/ssbh-model-preview/fhm2dMemoryPreviewService";
+import {
+  clearNutexbPreviewCacheAsync,
+  clearNutexbRgbaCache,
+} from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
+import { clearSceneEditColladaModelCache } from "./components/DAEModel";
+import { reorderPlacementEntriesBySubModels } from "./utils/reorderPlacementBySubModels";
 
 import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
 
@@ -214,6 +238,7 @@ export default function SceneEdit() {
   const [wireframe, setWireframe] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [drawStats, setDrawStats] = useState<SceneDrawStats | null>(null);
+  const [clearCacheDialogOpen, setClearCacheDialogOpen] = useState(false);
 
   const {
     textureDataMap,
@@ -240,11 +265,18 @@ export default function SceneEdit() {
 
   const handleSelectNode = useCallback(
     (id: string | null) => {
-      setSelectedNodeIdRaw(id);
       if (!id) {
+        setSelectedNodeIdRaw(null);
         setSelectedPlacementIdxRaw(null);
         return;
       }
+      const parsed = parsePlacementViewportNodeId(id);
+      if (parsed) {
+        setSelectedNodeIdRaw(id);
+        setSelectedPlacementIdxRaw(parsed.placementEntryIndex);
+        return;
+      }
+      setSelectedNodeIdRaw(id);
       const sub = subModels.find((s) => s.folderName === id);
       if (sub) {
         const idx = placementEntries.findIndex(
@@ -264,16 +296,46 @@ export default function SceneEdit() {
     (idx: number) => {
       setSelectedPlacementIdxRaw(idx);
       const entry = placementEntries[idx];
-      if (entry?.vdkType.toUpperCase() === "OBJECT" && entry.objectNumber !== null) {
+      if (
+        entry?.vdkType.toUpperCase() === "OBJECT" &&
+        entry.objectNumber !== null
+      ) {
         const sub = subModels.find((s) => s.objectIndex === entry.objectNumber);
         if (sub) {
-          setSelectedNodeIdRaw(sub.folderName);
-          return;
+          setSelectedNodeIdRaw(
+            formatPlacementViewportNodeId(sub.folderName, idx)
+          );
         }
       }
     },
     [subModels, placementEntries]
   );
+
+  const handleDuplicatePlacement = useCallback(() => {
+    if (selectedPlacementIdx === null) return;
+    const src = placementEntries[selectedPlacementIdx];
+    if (src.vdkType.toUpperCase() !== "OBJECT") {
+      toast.error("Only OBJECT rows can be duplicated");
+      return;
+    }
+    const dup = clonePlacementRow(src);
+    const insertAt = selectedPlacementIdx + 1;
+    setPlacementEntries((prev) => {
+      const next = [...prev];
+      next.splice(insertAt, 0, dup);
+      return next;
+    });
+    setSelectedPlacementIdxRaw(insertAt);
+    const sub =
+      src.objectNumber !== null
+        ? subModels.find((s) => s.objectIndex === src.objectNumber)
+        : null;
+    if (sub) {
+      setSelectedNodeIdRaw(formatPlacementViewportNodeId(sub.folderName, insertAt));
+    }
+    setHasUnsavedChanges(true);
+    toast.success("Placement row duplicated");
+  }, [selectedPlacementIdx, placementEntries, subModels]);
 
   const applyBundle = useCallback(
     (path: string, bundle: StageBundleResponse) => {
@@ -293,21 +355,22 @@ export default function SceneEdit() {
           colMap[h.toUpperCase()] = i;
         });
         setPlacementColMap(colMap);
+        const mappedPlacements = bundle.placementEntries.map((e) => ({
+          vdkType: e.vdkType,
+          objectNumber: e.objectNumber,
+          posX: e.posX,
+          posY: e.posY,
+          posZ: e.posZ,
+          rotX: e.rotX,
+          rotY: e.rotY,
+          rotZ: e.rotZ,
+          scaleX: e.scaleX,
+          scaleY: e.scaleY,
+          scaleZ: e.scaleZ,
+          rawFields: e.rawFields,
+        }));
         setPlacementEntries(
-          bundle.placementEntries.map((e) => ({
-            vdkType: e.vdkType,
-            objectNumber: e.objectNumber,
-            posX: e.posX,
-            posY: e.posY,
-            posZ: e.posZ,
-            rotX: e.rotX,
-            rotY: e.rotY,
-            rotZ: e.rotZ,
-            scaleX: e.scaleX,
-            scaleY: e.scaleY,
-            scaleZ: e.scaleZ,
-            rawFields: e.rawFields,
-          }))
+          reorderPlacementEntriesBySubModels(mappedPlacements, bundle.subModels),
         );
         const tree = buildTreeFromBundle(folderName, bundle);
         setTreeRoot(tree);
@@ -330,16 +393,37 @@ export default function SceneEdit() {
       disposeFhm2dMemorySession(sessionId).catch(() => {});
     }
     setStageName(null);
+    setStageRoot(null);
     setIsMemoryImport(false);
     setSessionId(null);
     setBaseModel(null);
     setSubModels([]);
     setGraphicParams([]);
     setPlacementHeader([]);
+    setPlacementColMap({});
     setPlacementEntries([]);
     setTreeRoot(null);
     setDrawStats(null);
+    setSelectedNodeIdRaw(null);
+    setSelectedPlacementIdxRaw(null);
+    setHasUnsavedChanges(false);
+    setRenamePreview(null);
+    setImportProgress((prev) => ({ ...prev, open: false }));
   }, [sessionId]);
+
+  const handleConfirmClearCache = useCallback(async () => {
+    setClearCacheDialogOpen(false);
+    resetState();
+    clearNutexbRgbaCache();
+    clearSceneEditColladaModelCache();
+    try {
+      await clearNutexbPreviewCacheAsync();
+    } catch (err) {
+      console.warn("[SceneEdit] Failed to clear nutexb preview cache:", err);
+    }
+    viewportRef.current?.resetCamera();
+    toast.success("Scene memory and caches cleared");
+  }, [resetState]);
 
   const handleOpenFolder = useCallback(async () => {
     try {
@@ -478,30 +562,16 @@ export default function SceneEdit() {
       >,
       value: number
     ) => {
-      const fieldToCol: Record<string, string> = {
-        posX: "VDK_POS_X",
-        posY: "VDK_POS_Y",
-        posZ: "VDK_POS_Z",
-        rotX: "VDK_ROT_X",
-        rotY: "VDK_ROT_Y",
-        rotZ: "VDK_ROT_Z",
-        scaleX: "VDK_SCALE_X",
-        scaleY: "VDK_SCALE_Y",
-        scaleZ: "VDK_SCALE_Z",
-      };
       setPlacementEntries((prev) => {
         const next = [...prev];
-        const entry = { ...next[index], [field]: value };
-        const colName = fieldToCol[field];
-        if (colName) {
-          const colIdx = placementColMap[colName];
-          if (colIdx !== undefined && entry.rawFields.length > colIdx) {
-            const updatedRaw = [...entry.rawFields];
-            updatedRaw[colIdx] = String(value);
-            entry.rawFields = updatedRaw;
-          }
-        }
-        next[index] = entry;
+        const entry = prev[index];
+        if (!entry) return prev;
+        next[index] = patchPlacementRawFieldsForNumericField(
+          entry,
+          field,
+          value,
+          placementColMap
+        );
         return next;
       });
       setHasUnsavedChanges(true);
@@ -536,7 +606,18 @@ export default function SceneEdit() {
     setDrawStats(stats);
   }, []);
 
-  const selectedNode = findNode(treeRoot, selectedNodeId);
+  const selectedTreeId = useMemo(() => {
+    if (!selectedNodeId) return null;
+    const parsed = parsePlacementViewportNodeId(selectedNodeId);
+    return parsed ? parsed.folderName : selectedNodeId;
+  }, [selectedNodeId]);
+
+  const selectedNode = useMemo(() => {
+    if (!selectedNodeId) return null;
+    const parsed = parsePlacementViewportNodeId(selectedNodeId);
+    const treeLookupId = parsed ? parsed.folderName : selectedNodeId;
+    return findNode(treeRoot, treeLookupId);
+  }, [treeRoot, selectedNodeId]);
   const selectedTransform: TransformData | null =
     selectedPlacementIdx !== null && placementEntries[selectedPlacementIdx]
       ? {
@@ -551,6 +632,10 @@ export default function SceneEdit() {
           scaleZ: placementEntries[selectedPlacementIdx].scaleZ,
         }
       : null;
+
+  const canDuplicatePlacement =
+    selectedPlacementIdx !== null &&
+    placementEntries[selectedPlacementIdx]?.vdkType.toUpperCase() === "OBJECT";
 
   return (
     <TooltipProvider>
@@ -572,7 +657,32 @@ export default function SceneEdit() {
           onToggleWireframe={() => setWireframe((v) => !v)}
           onToggleStats={() => setShowStats((v) => !v)}
           onResetCamera={() => viewportRef.current?.resetCamera()}
+          onClearCache={() => setClearCacheDialogOpen(true)}
+          clearCacheDisabled={isLoading || isLoadingBundle}
         />
+
+        <AlertDialog open={clearCacheDialogOpen} onOpenChange={setClearCacheDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear scene memory and caches?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This unloads the current stage (including memory-import sessions), clears decoded RGBA texture caches and
+                nutexb preview cache (IndexedDB + in-memory blobs), and clears legacy Collada model cache used by scene
+                import tools. Unsaved CSV edits will be lost unless you saved to disk first.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                type="button"
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => void handleConfirmClearCache()}
+              >
+                Clear
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <ResizablePanelGroup
           id="scene-edit-layout"
@@ -596,7 +706,7 @@ export default function SceneEdit() {
               <div className="min-h-0 flex-1 overflow-hidden">
                 <StageHierarchyTree
                   root={treeRoot}
-                  selectedId={selectedNodeId}
+                  selectedId={selectedTreeId}
                   onSelect={handleSelectNode}
                 />
               </div>
@@ -626,6 +736,7 @@ export default function SceneEdit() {
                 wireframe={wireframe}
                 showStats={showStats}
                 selectedNodeId={selectedNodeId}
+                selectedPlacementIdx={selectedPlacementIdx}
                 onSelectNode={handleSelectNode}
                 textureDataMap={textureDataMap}
                 onDrawStatsChange={handleDrawStatsChange}
@@ -699,6 +810,8 @@ export default function SceneEdit() {
                     selectedIndex={selectedPlacementIdx}
                     onSelectEntry={handleSelectPlacement}
                     onEntryChange={handlePlacementChange}
+                    onDuplicate={handleDuplicatePlacement}
+                    duplicateDisabled={!canDuplicatePlacement}
                   />
                 </TabsContent>
               </Tabs>

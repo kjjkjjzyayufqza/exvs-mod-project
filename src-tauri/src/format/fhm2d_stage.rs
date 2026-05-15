@@ -324,16 +324,27 @@ fn infer_numdlb_name_from_tree(
 }
 
 fn identify_info_file(data: &[u8]) -> &'static str {
-    if let Ok(text) = std::str::from_utf8(data) {
-        if text.contains("VDK_TYPE") {
-            return "placement.csv";
+    fn contains_needle_ci(haystack: &[u8], needle_lower: &[u8]) -> bool {
+        if needle_lower.is_empty() || haystack.len() < needle_lower.len() {
+            return false;
         }
-        if text.contains("directional_lighting")
-            || text.contains("pfx_bloom")
-            || text.contains("curveedit_")
-        {
-            return "graphic_param.csv";
-        }
+        haystack.windows(needle_lower.len()).any(|window| {
+            window
+                .iter()
+                .zip(needle_lower.iter())
+                .all(|(a, b)| a.to_ascii_lowercase() == *b)
+        })
+    }
+
+    // Do not require valid UTF-8 for the whole file (BOM / invalid bytes broke classification).
+    if contains_needle_ci(data, b"vdk_type") {
+        return "placement.csv";
+    }
+    if contains_needle_ci(data, b"directional_lighting")
+        || contains_needle_ci(data, b"pfx_bloom")
+        || contains_needle_ci(data, b"curveedit_")
+    {
+        return "graphic_param.csv";
     }
     if data.len() >= SDKV_MAGIC_OFFSET + 4
         && &data[SDKV_MAGIC_OFFSET..SDKV_MAGIC_OFFSET + 4] == SDKV_MAGIC
@@ -341,6 +352,231 @@ fn identify_info_file(data: &[u8]) -> &'static str {
         return "border_hit.hkt";
     }
     "plan_param.spbin"
+}
+
+/// RFC4180-style record split (commas inside quoted fields).
+fn split_csv_record(line: &str) -> Vec<String> {
+    let mut fields: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut chars = line.chars().peekable();
+    let mut in_quotes = false;
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' => {
+                if in_quotes {
+                    if chars.peek() == Some(&'"') {
+                        chars.next();
+                        current.push('"');
+                    } else {
+                        in_quotes = false;
+                    }
+                } else {
+                    in_quotes = true;
+                }
+            }
+            ',' if !in_quotes => {
+                fields.push(current);
+                current = String::new();
+            }
+            c => current.push(c),
+        }
+    }
+    fields.push(current);
+    fields.into_iter().map(normalize_csv_cell).collect()
+}
+
+fn normalize_csv_cell(raw: String) -> String {
+    let t = raw.trim();
+    if t.len() >= 2 && t.starts_with('"') && t.ends_with('"') {
+        t[1..t.len() - 1].replace("\"\"", "\"")
+    } else {
+        t.to_string()
+    }
+}
+
+/// True when the row is EXVS \"flat\" layout: `VDK_TYPE,<category>,KEY,VALUE,...` (no separate header row).
+fn placement_row_looks_kv_pairs(fields: &[String]) -> bool {
+    if fields.len() < 4 {
+        return false;
+    }
+    if !fields[0].eq_ignore_ascii_case("VDK_TYPE") {
+        return false;
+    }
+    let cat = fields[1].to_ascii_uppercase();
+    matches!(
+        cat.as_str(),
+        "OBJECT" | "EFFECT" | "SKY" | "PROP"
+    )
+}
+
+fn kv_pairs_upper_map(fields: &[String]) -> HashMap<String, String> {
+    let mut m = HashMap::new();
+    let mut i = 0usize;
+    while i + 1 < fields.len() {
+        let k = fields[i].trim().to_ascii_uppercase();
+        let v = fields[i + 1].trim().to_string();
+        m.insert(k, v);
+        i += 2;
+    }
+    m
+}
+
+fn kv_get_f64(m: &HashMap<String, String>, keys: &[&str]) -> f64 {
+    for k in keys {
+        if let Some(v) = m.get(&k.to_ascii_uppercase()) {
+            if let Ok(x) = v.parse::<f64>() {
+                return x;
+            }
+        }
+    }
+    0.0
+}
+
+fn kv_get_i32(m: &HashMap<String, String>, key: &str) -> Option<i32> {
+    m.get(&key.to_ascii_uppercase())
+        .and_then(|v| v.parse::<i32>().ok())
+}
+
+fn kv_get_string(m: &HashMap<String, String>, key: &str) -> String {
+    m.get(&key.to_ascii_uppercase())
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn parse_placement_kv_record(fields: Vec<String>) -> PlacementEntry {
+    let m = kv_pairs_upper_map(&fields);
+    PlacementEntry {
+        vdk_type: kv_get_string(&m, "VDK_TYPE"),
+        object_number: kv_get_i32(&m, "VDK_OBJECTNUMBER"),
+        pos_x: kv_get_f64(&m, &["VDK_POSITION_X", "VDK_POS_X"]),
+        pos_y: kv_get_f64(&m, &["VDK_POSITION_Y", "VDK_POS_Y"]),
+        pos_z: kv_get_f64(&m, &["VDK_POSITION_Z", "VDK_POS_Z"]),
+        rot_x: kv_get_f64(&m, &["VDK_ROTATION_X", "VDK_ROT_X"]),
+        rot_y: kv_get_f64(&m, &["VDK_ROTATION_Y", "VDK_ROT_Y"]),
+        rot_z: kv_get_f64(&m, &["VDK_ROTATION_Z", "VDK_ROT_Z"]),
+        scale_x: kv_get_f64(&m, &["VDK_SCALE_X"]),
+        scale_y: kv_get_f64(&m, &["VDK_SCALE_Y"]),
+        scale_z: kv_get_f64(&m, &["VDK_SCALE_Z"]),
+        raw_fields: fields,
+    }
+}
+
+fn parse_placement_table(content: &str, warnings: &mut Vec<String>) -> (Vec<String>, Vec<PlacementEntry>) {
+    let lines: Vec<&str> = content.lines().collect();
+    if lines.is_empty() {
+        return (Vec::new(), Vec::new());
+    }
+
+    let first_fields = split_csv_record(lines[0]);
+    if placement_row_looks_kv_pairs(&first_fields) {
+        let mut entries = Vec::new();
+        for line in &lines {
+            if line.trim().is_empty() {
+                continue;
+            }
+            let fields = split_csv_record(line);
+            if fields.is_empty() {
+                continue;
+            }
+            entries.push(parse_placement_kv_record(fields));
+        }
+        return (Vec::new(), entries);
+    }
+
+    let header_strings = first_fields;
+    let find_col_any = |names: &[&str]| -> Option<usize> {
+        for &n in names {
+            if let Some(i) = header_strings.iter().position(|h| h.eq_ignore_ascii_case(n)) {
+                return Some(i);
+            }
+        }
+        None
+    };
+
+    if find_col_any(&["VDK_TYPE"]).is_none() {
+        warnings.push(
+            "placement.csv header has no VDK_TYPE column (check encoding or delimiter)".to_string(),
+        );
+    }
+
+    let col_type = find_col_any(&["VDK_TYPE"]);
+    let col_objnum = find_col_any(&["VDK_OBJECTNUMBER"]);
+    let col_px = find_col_any(&["VDK_POS_X", "VDK_POSITION_X"]);
+    let col_py = find_col_any(&["VDK_POS_Y", "VDK_POSITION_Y"]);
+    let col_pz = find_col_any(&["VDK_POS_Z", "VDK_POSITION_Z"]);
+    let col_rx = find_col_any(&["VDK_ROT_X", "VDK_ROTATION_X"]);
+    let col_ry = find_col_any(&["VDK_ROT_Y", "VDK_ROTATION_Y"]);
+    let col_rz = find_col_any(&["VDK_ROT_Z", "VDK_ROTATION_Z"]);
+    let col_sx = find_col_any(&["VDK_SCALE_X"]);
+    let col_sy = find_col_any(&["VDK_SCALE_Y"]);
+    let col_sz = find_col_any(&["VDK_SCALE_Z"]);
+
+    let parse_f64 = |fields: &[String], col: Option<usize>| -> f64 {
+        col.and_then(|c| fields.get(c))
+            .and_then(|v| v.trim().parse::<f64>().ok())
+            .unwrap_or(0.0)
+    };
+
+    let parse_i32 = |fields: &[String], col: Option<usize>| -> Option<i32> {
+        col.and_then(|c| fields.get(c))
+            .and_then(|v| v.trim().parse::<i32>().ok())
+    };
+
+    let mut entries = Vec::new();
+    for line in &lines[1..] {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let fields = split_csv_record(line);
+        let vdk_type = col_type
+            .and_then(|c| fields.get(c))
+            .map(|v| v.trim().to_string())
+            .unwrap_or_default();
+
+        entries.push(PlacementEntry {
+            vdk_type,
+            object_number: parse_i32(&fields, col_objnum),
+            pos_x: parse_f64(&fields, col_px),
+            pos_y: parse_f64(&fields, col_py),
+            pos_z: parse_f64(&fields, col_pz),
+            rot_x: parse_f64(&fields, col_rx),
+            rot_y: parse_f64(&fields, col_ry),
+            rot_z: parse_f64(&fields, col_rz),
+            scale_x: parse_f64(&fields, col_sx),
+            scale_y: parse_f64(&fields, col_sy),
+            scale_z: parse_f64(&fields, col_sz),
+            raw_fields: fields,
+        });
+    }
+    (header_strings, entries)
+}
+
+fn collect_placement_csv_from_virtual_tree(
+    folder: &StageVirtualTreeFolder,
+    file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
+    warnings: &mut Vec<String>,
+) -> Option<(Vec<String>, Vec<PlacementEntry>)> {
+    for f in &folder.files {
+        if f.file_name.eq_ignore_ascii_case("placement.csv") {
+            let Some(bin) = file_index_map.get(&f.file_index) else {
+                continue;
+            };
+            let mut local = Vec::new();
+            let parsed = parse_placement_csv_from_bytes(&bin.data, &mut local);
+            warnings.extend(local);
+            if !parsed.1.is_empty() {
+                return Some(parsed);
+            }
+        }
+    }
+    for child in &folder.children {
+        if let Some(hit) =
+            collect_placement_csv_from_virtual_tree(child, file_index_map, warnings)
+        {
+            return Some(hit);
+        }
+    }
+    None
 }
 
 // ── Nutexb internal name parsing ────────────────────────────────────────────
@@ -1328,75 +1564,17 @@ fn parse_placement_csv(
         warnings.push("placement.csv not found".to_string());
         return (Vec::new(), Vec::new());
     }
-    let content = match fs::read_to_string(&csv_path) {
+    let mut content = match fs::read_to_string(&csv_path) {
         Ok(c) => c,
         Err(e) => {
             warnings.push(format!("Failed to read placement.csv: {e}"));
             return (Vec::new(), Vec::new());
         }
     };
-
-    let lines: Vec<&str> = content.lines().collect();
-    if lines.is_empty() {
-        return (Vec::new(), Vec::new());
+    if content.starts_with('\u{feff}') {
+        content.remove(0);
     }
-
-    let header: Vec<&str> = lines[0].split(',').map(|s| s.trim()).collect();
-    let header_strings: Vec<String> = header.iter().map(|s| s.to_string()).collect();
-    let find_col = |name: &str| -> Option<usize> {
-        header.iter().position(|h| h.eq_ignore_ascii_case(name))
-    };
-
-    let col_type = find_col("VDK_TYPE");
-    let col_objnum = find_col("VDK_OBJECTNUMBER");
-    let col_px = find_col("VDK_POS_X");
-    let col_py = find_col("VDK_POS_Y");
-    let col_pz = find_col("VDK_POS_Z");
-    let col_rx = find_col("VDK_ROT_X");
-    let col_ry = find_col("VDK_ROT_Y");
-    let col_rz = find_col("VDK_ROT_Z");
-    let col_sx = find_col("VDK_SCALE_X");
-    let col_sy = find_col("VDK_SCALE_Y");
-    let col_sz = find_col("VDK_SCALE_Z");
-
-    let parse_f64 = |fields: &[&str], col: Option<usize>| -> f64 {
-        col.and_then(|c| fields.get(c))
-            .and_then(|v| v.trim().parse::<f64>().ok())
-            .unwrap_or(0.0)
-    };
-
-    let parse_i32 = |fields: &[&str], col: Option<usize>| -> Option<i32> {
-        col.and_then(|c| fields.get(c))
-            .and_then(|v| v.trim().parse::<i32>().ok())
-    };
-
-    let mut entries = Vec::new();
-    for line in &lines[1..] {
-        if line.trim().is_empty() {
-            continue;
-        }
-        let fields: Vec<&str> = line.split(',').collect();
-        let vdk_type = col_type
-            .and_then(|c| fields.get(c))
-            .map(|v| v.trim().to_string())
-            .unwrap_or_default();
-
-        entries.push(PlacementEntry {
-            vdk_type,
-            object_number: parse_i32(&fields, col_objnum),
-            pos_x: parse_f64(&fields, col_px),
-            pos_y: parse_f64(&fields, col_py),
-            pos_z: parse_f64(&fields, col_pz),
-            rot_x: parse_f64(&fields, col_rx),
-            rot_y: parse_f64(&fields, col_ry),
-            rot_z: parse_f64(&fields, col_rz),
-            scale_x: parse_f64(&fields, col_sx),
-            scale_y: parse_f64(&fields, col_sy),
-            scale_z: parse_f64(&fields, col_sz),
-            raw_fields: fields.iter().map(|f| f.trim().to_string()).collect(),
-        });
-    }
-    (header_strings, entries)
+    parse_placement_table(content.as_str(), warnings)
 }
 
 // ── In-memory CSV parsing helpers ──────────────────────────────────────────
@@ -1433,75 +1611,14 @@ pub fn parse_placement_csv_from_bytes(
     data: &[u8],
     warnings: &mut Vec<String>,
 ) -> (Vec<String>, Vec<PlacementEntry>) {
-    let content = match std::str::from_utf8(data) {
-        Ok(s) => s,
-        Err(e) => {
-            warnings.push(format!("placement.csv is not valid UTF-8: {e}"));
-            return (Vec::new(), Vec::new());
-        }
-    };
-
-    let lines: Vec<&str> = content.lines().collect();
-    if lines.is_empty() {
-        return (Vec::new(), Vec::new());
+    if std::str::from_utf8(data).is_err() {
+        warnings.push(
+            "placement.csv contains invalid UTF-8; decoding with replacement characters".to_string(),
+        );
     }
-
-    let header: Vec<&str> = lines[0].split(',').map(|s| s.trim()).collect();
-    let header_strings: Vec<String> = header.iter().map(|s| s.to_string()).collect();
-    let find_col = |name: &str| -> Option<usize> {
-        header.iter().position(|h| h.eq_ignore_ascii_case(name))
-    };
-
-    let col_type = find_col("VDK_TYPE");
-    let col_objnum = find_col("VDK_OBJECTNUMBER");
-    let col_px = find_col("VDK_POS_X");
-    let col_py = find_col("VDK_POS_Y");
-    let col_pz = find_col("VDK_POS_Z");
-    let col_rx = find_col("VDK_ROT_X");
-    let col_ry = find_col("VDK_ROT_Y");
-    let col_rz = find_col("VDK_ROT_Z");
-    let col_sx = find_col("VDK_SCALE_X");
-    let col_sy = find_col("VDK_SCALE_Y");
-    let col_sz = find_col("VDK_SCALE_Z");
-
-    let parse_f64 = |fields: &[&str], col: Option<usize>| -> f64 {
-        col.and_then(|c| fields.get(c))
-            .and_then(|v| v.trim().parse::<f64>().ok())
-            .unwrap_or(0.0)
-    };
-
-    let parse_i32 = |fields: &[&str], col: Option<usize>| -> Option<i32> {
-        col.and_then(|c| fields.get(c))
-            .and_then(|v| v.trim().parse::<i32>().ok())
-    };
-
-    let mut entries = Vec::new();
-    for line in &lines[1..] {
-        if line.trim().is_empty() {
-            continue;
-        }
-        let fields: Vec<&str> = line.split(',').collect();
-        let vdk_type = col_type
-            .and_then(|c| fields.get(c))
-            .map(|v| v.trim().to_string())
-            .unwrap_or_default();
-
-        entries.push(PlacementEntry {
-            vdk_type,
-            object_number: parse_i32(&fields, col_objnum),
-            pos_x: parse_f64(&fields, col_px),
-            pos_y: parse_f64(&fields, col_py),
-            pos_z: parse_f64(&fields, col_pz),
-            rot_x: parse_f64(&fields, col_rx),
-            rot_y: parse_f64(&fields, col_ry),
-            rot_z: parse_f64(&fields, col_rz),
-            scale_x: parse_f64(&fields, col_sx),
-            scale_y: parse_f64(&fields, col_sy),
-            scale_z: parse_f64(&fields, col_sz),
-            raw_fields: fields.iter().map(|f| f.trim().to_string()).collect(),
-        });
-    }
-    (header_strings, entries)
+    let text = String::from_utf8_lossy(data);
+    let content = text.strip_prefix('\u{feff}').unwrap_or(text.as_ref());
+    parse_placement_table(content, warnings)
 }
 
 // ── In-memory stage bundle building ──────────────────────────────────────────
@@ -1648,6 +1765,20 @@ pub fn build_stage_bundle_from_memory(
         }
 
         model_done += 1;
+    }
+
+    if placement_entries.is_empty() {
+        if let Some((h, e)) =
+            collect_placement_csv_from_virtual_tree(tree, &file_index_map, &mut bundle_warnings)
+        {
+            if !e.is_empty() {
+                placement_header = h;
+                placement_entries = e;
+                bundle_warnings.push(
+                    "placement.csv loaded via tree scan (info slot did not attach rows)".to_string(),
+                );
+            }
+        }
     }
 
     Ok(StageBundle {

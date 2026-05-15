@@ -35,6 +35,7 @@ import {
 import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
 import type { NutexbRgbaData } from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
 import type { PlacementRow } from "./PlacementPanel";
+import { formatPlacementViewportNodeId } from "../utils/placementNodeId";
 import type { SceneDrawStats } from "./SceneViewportOverlay";
 import type { PreviewRenderStyle } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
 import {
@@ -46,7 +47,6 @@ import {
   DEFAULT_PREVIEW_DIRECTIONAL_Z,
 } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
 import {
-  getSsbhAdaptiveDpr,
   getSsbhAdaptivePerformanceOptions,
   getSsbhCanvasPerformanceProfile,
   measureDrawComplexity,
@@ -61,12 +61,34 @@ const GRID_FADE_DISTANCE = 5e6;
 const BLENDER_GRID_CELL_COLOR = "#464646";
 const BLENDER_GRID_SECTION_COLOR = "#545454";
 
-function resolveBaseDpr(dprRange: [number, number]): number {
-  const deviceDpr =
-    typeof window !== "undefined" && Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0
-      ? window.devicePixelRatio
-      : 1;
-  return Math.min(dprRange[1], Math.max(dprRange[0], deviceDpr));
+/**
+ * Scene Edit viewport: skip GPU mip chains on decoded nutexb DataTextures (~⅓ less VRAM per 2D texture);
+ * editor preview favors stability over distant minification quality.
+ */
+const SCENE_EDIT_TEXTURE_MIPS = false;
+
+/**
+ * Clip distance far enough for large placements without 1e8 depth precision collapse / driver quirks.
+ */
+const SCENE_EDIT_CAMERA_FAR = 5e6;
+
+/** Extra DPR / AA clamp from triangle budget — Chromium RSS scales ~ pixelArea × oversampling. */
+function clampSceneViewportRasterProfile(
+  base: { dpr: [number, number]; antialias: boolean },
+  triangleCount: number,
+): { dpr: [number, number]; antialias: boolean } {
+  let maxDpr = base.dpr[1];
+  let antialias = base.antialias;
+  if (triangleCount >= 1_000_000) {
+    maxDpr = Math.min(maxDpr, 1);
+    antialias = false;
+  } else if (triangleCount >= 400_000) {
+    maxDpr = Math.min(maxDpr, 1.15);
+    antialias = false;
+  } else if (triangleCount >= 150_000) {
+    maxDpr = Math.min(maxDpr, 1.35);
+  }
+  return { dpr: [1, maxDpr], antialias };
 }
 
 export type SceneMapSubModelEntry = {
@@ -96,37 +118,7 @@ function collectSceneDrawsForComplexity(
   return out;
 }
 
-function SceneCanvasPerformanceHud({
-  drawsForComplexity,
-  showStats,
-  previewRenderStyle,
-}: {
-  drawsForComplexity: BuiltMeshDraw[];
-  showStats: boolean;
-  previewRenderStyle: PreviewRenderStyle;
-}) {
-  const drawComplexity = useMemo(() => measureDrawComplexity(drawsForComplexity), [drawsForComplexity]);
-  const motionPlaying = false;
-  const motionScrubbing = false;
-  const baseDprRange = useMemo(
-    () =>
-      getSsbhCanvasPerformanceProfile({
-        drawCount: drawComplexity.drawCount,
-        triangleCount: drawComplexity.triangleCount,
-        motionPlaying,
-        motionScrubbing,
-        previewRenderStyle,
-      }).dpr,
-    [drawComplexity.drawCount, drawComplexity.triangleCount, previewRenderStyle],
-  );
-  const current = useThree((s) => s.performance.current);
-  const setDpr = useThree((s) => s.setDpr);
-  const resolvedBaseDpr = useMemo(() => resolveBaseDpr(baseDprRange), [baseDprRange]);
-
-  useEffect(() => {
-    setDpr(getSsbhAdaptiveDpr(resolvedBaseDpr, current));
-  }, [current, resolvedBaseDpr, setDpr]);
-
+function SceneCanvasPerformanceHud({ showStats }: { showStats: boolean }) {
   return (
     <>{showStats ? <Stats className="fixed! top-2! right-2! left-auto! z-2147483000" /> : null}</>
   );
@@ -141,6 +133,7 @@ export interface MapViewportProps {
   wireframe: boolean;
   showStats: boolean;
   selectedNodeId: string | null;
+  selectedPlacementIdx: number | null;
   onSelectNode: (id: string | null) => void;
   textureDataMap: NutexbTextureDataMap;
   onDrawStatsChange?: (stats: SceneDrawStats) => void;
@@ -157,10 +150,18 @@ function StageOrbitControls({
 }) {
   const regress = useThree((s) => s.performance.regress);
   const invalidate = useThree((s) => s.invalidate);
-  const onInteract = useCallback(() => {
+  /**
+   * regress() updates performance.current; pairing it with Canvas-level adaptive setDpr caused
+   * WebGL buffer reallocations every orbit-control change event (~many/sec), doubling RSS on large scenes.
+   * Match prior Scene Editor behavior: regress once per gesture (pointer down / orbit start).
+   */
+  const onGestureStart = useCallback(() => {
     regress();
     invalidate();
   }, [regress, invalidate]);
+  const onDemandFrame = useCallback(() => {
+    invalidate();
+  }, [invalidate]);
   return (
     <OrbitControls
       ref={controlsRef}
@@ -175,8 +176,8 @@ function StageOrbitControls({
       panSpeed={0.65}
       minPolarAngle={0.05}
       maxPolarAngle={Math.PI - 0.05}
-      onStart={onInteract}
-      onChange={onInteract}
+      onStart={onGestureStart}
+      onChange={onDemandFrame}
     />
   );
 }
@@ -192,6 +193,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       wireframe,
       showStats,
       selectedNodeId,
+      selectedPlacementIdx,
       onSelectNode,
       textureDataMap,
       onDrawStatsChange,
@@ -211,19 +213,6 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
     const handlePointerMissed = useCallback(() => {
       onSelectNode(null);
     }, [onSelectNode]);
-
-    const placementByObjectNumber = useMemo(() => {
-      const map = new Map<number, PlacementRow>();
-      for (const entry of placementEntries) {
-        if (
-          entry.vdkType.toUpperCase() === "OBJECT" &&
-          entry.objectNumber !== null
-        ) {
-          map.set(entry.objectNumber, entry);
-        }
-      }
-      return map;
-    }, [placementEntries]);
 
     const effectEntries = useMemo(
       () =>
@@ -262,6 +251,10 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           previewRenderStyle,
         }),
       [sceneComplexity.drawCount, sceneComplexity.triangleCount, previewRenderStyle],
+    );
+    const sceneRasterProfile = useMemo(
+      () => clampSceneViewportRasterProfile(canvasPerformanceProfile, sceneComplexity.triangleCount),
+      [canvasPerformanceProfile, sceneComplexity.triangleCount],
     );
     const primaryKeyLightPosition = useMemo<[number, number, number]>(
       () => [DEFAULT_PREVIEW_DIRECTIONAL_X, DEFAULT_PREVIEW_DIRECTIONAL_Y, DEFAULT_PREVIEW_DIRECTIONAL_Z],
@@ -336,25 +329,22 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           position: [300, 300, 300],
           fov: 30,
           near: 0.1,
-          far: 100000000,
+          far: SCENE_EDIT_CAMERA_FAR,
         }}
         gl={{
-          antialias: canvasPerformanceProfile.antialias,
+          antialias: sceneRasterProfile.antialias,
           alpha: false,
           powerPreference: "high-performance",
           failIfMajorPerformanceCaveat: false,
+          logarithmicDepthBuffer: true,
         }}
         performance={adaptivePerformanceOptions}
-        dpr={canvasPerformanceProfile.dpr}
+        dpr={sceneRasterProfile.dpr}
         style={{ touchAction: "none", background: DEFAULT_PREVIEW_3D_BACKGROUND }}
         onPointerMissed={handlePointerMissed}
         onCreated={handleCreated}
       >
-        <SceneCanvasPerformanceHud
-          drawsForComplexity={drawsForComplexity}
-          showStats={showStats}
-          previewRenderStyle={previewRenderStyle}
-        />
+        <SceneCanvasPerformanceHud showStats={showStats} />
 
         <color attach="background" args={[DEFAULT_PREVIEW_3D_BACKGROUND]} />
         <ambientLight intensity={DEFAULT_PREVIEW_AMBIENT_INTENSITY} />
@@ -381,34 +371,46 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           />
         )}
 
-        {subModels.map((sub) => {
-          const placement = placementByObjectNumber.get(sub.objectIndex);
-          return (
+        {subModels.flatMap((sub) => {
+          const objectRows = placementEntries
+            .map((entry, globalIdx) => ({ entry, globalIdx }))
+            .filter(
+              ({ entry }) =>
+                entry.vdkType.toUpperCase() === "OBJECT" &&
+                entry.objectNumber === sub.objectIndex,
+            );
+
+          if (objectRows.length === 0) {
+            return [
+              <StageModelGroup
+                key={sub.folderName}
+                nodeId={sub.folderName}
+                bundle={sub.bundle}
+                wireframe={wireframe}
+                isSelected={
+                  selectedNodeId === sub.folderName &&
+                  selectedPlacementIdx === null
+                }
+                onClick={onSelectNode}
+                textureDataMap={textureDataMap}
+              />,
+            ];
+          }
+
+          return objectRows.map(({ entry, globalIdx }) => (
             <StageModelGroup
-              key={sub.folderName}
-              nodeId={sub.folderName}
+              key={`${sub.folderName}-pl-${globalIdx}`}
+              nodeId={formatPlacementViewportNodeId(sub.folderName, globalIdx)}
               bundle={sub.bundle}
               wireframe={wireframe}
-              isSelected={selectedNodeId === sub.folderName}
+              isSelected={selectedPlacementIdx === globalIdx}
               onClick={onSelectNode}
               textureDataMap={textureDataMap}
-              position={
-                placement
-                  ? [placement.posX, placement.posY, placement.posZ]
-                  : undefined
-              }
-              rotation={
-                placement
-                  ? [placement.rotX, placement.rotY, placement.rotZ]
-                  : undefined
-              }
-              scale={
-                placement
-                  ? [placement.scaleX, placement.scaleY, placement.scaleZ]
-                  : undefined
-              }
+              position={[entry.posX, entry.posY, entry.posZ]}
+              rotation={[entry.rotX, entry.rotY, entry.rotZ]}
+              scale={[entry.scaleX, entry.scaleY, entry.scaleZ]}
             />
-          );
+          ));
         })}
 
         {effectEntries.map((eff, i) => (
@@ -523,8 +525,10 @@ function createDataTexture(
     ? THREE.SRGBColorSpace
     : THREE.LinearSRGBColorSpace;
   tex.flipY = false;
-  tex.generateMipmaps = true;
-  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = SCENE_EDIT_TEXTURE_MIPS;
+  tex.minFilter = SCENE_EDIT_TEXTURE_MIPS
+    ? THREE.LinearMipmapLinearFilter
+    : THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
 
   if (slot === "cubeMap") {

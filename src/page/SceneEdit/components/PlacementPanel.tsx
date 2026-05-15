@@ -3,7 +3,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { MapPin } from "lucide-react";
+import { MapPin, Copy } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export interface PlacementRow {
   vdkType: string;
@@ -40,6 +41,8 @@ interface PlacementPanelProps {
     >,
     value: number
   ) => void;
+  onDuplicate?: () => void;
+  duplicateDisabled?: boolean;
 }
 
 export function PlacementPanel({
@@ -47,6 +50,8 @@ export function PlacementPanel({
   selectedIndex,
   onSelectEntry,
   onEntryChange,
+  onDuplicate,
+  duplicateDisabled = false,
 }: PlacementPanelProps) {
   if (entries.length === 0) {
     return (
@@ -63,11 +68,29 @@ export function PlacementPanel({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 px-1">
-        <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+        <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         <span className="text-xs font-semibold">Placement</span>
-        <span className="text-[9px] text-muted-foreground ml-auto">
-          {entries.length} entries
-        </span>
+        <div className="ml-auto flex items-center gap-1.5 shrink-0">
+          <span className="text-[9px] text-muted-foreground">
+            {entries.length} entries
+          </span>
+          {onDuplicate && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-6 text-[10px] px-2 gap-1"
+              disabled={duplicateDisabled}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDuplicate();
+              }}
+            >
+              <Copy className="h-3 w-3" />
+              Duplicate
+            </Button>
+          )}
+        </div>
       </div>
 
       <ScrollArea className="max-h-[500px]">

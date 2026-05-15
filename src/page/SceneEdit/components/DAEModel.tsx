@@ -7,8 +7,11 @@ import { BoundingBoxGrid } from './BoundingBoxGrid';
 import { SelectionManager } from '../utils/SelectionManager';
 import * as THREE from 'three';
 
-// 全局模型缓存
-const modelCache = new Map<string, any>();
+const colladaSceneCache = new Map<string, unknown>();
+
+export function clearSceneEditColladaModelCache(): void {
+  colladaSceneCache.clear();
+}
 
 interface DAEModelProps {
     modelState: ModelState;
@@ -17,7 +20,7 @@ interface DAEModelProps {
     selectionManager?: SelectionManager;
 }
 
-// 自定义Hook用于管理模型缓存和加载
+/** Hook for Collada loading with blob-URL keyed cache (see clearSceneEditColladaModelCache). */
 function useDAEModel(filePath: string) {
     const [collada, setCollada] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -33,9 +36,9 @@ function useDAEModel(filePath: string) {
             return;
         }
         // 检查缓存
-        if (modelCache.has(filePath)) {
+        if (colladaSceneCache.has(filePath)) {
             console.log('DAEModel: Using cached model for:', filePath);
-            setCollada(modelCache.get(filePath));
+            setCollada(colladaSceneCache.get(filePath));
             setIsLoading(false);
             return;
         }
@@ -51,7 +54,7 @@ function useDAEModel(filePath: string) {
             (loadedCollada) => {
                 console.log('DAEModel: Model loaded and cached:', filePath);
                 // 缓存加载的模型
-                modelCache.set(filePath, loadedCollada);
+                colladaSceneCache.set(filePath, loadedCollada);
                 setCollada(loadedCollada);
                 setIsLoading(false);
             },
