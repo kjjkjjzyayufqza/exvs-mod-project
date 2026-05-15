@@ -64,6 +64,7 @@ import {
 } from "./components/SceneViewportOverlay";
 import { SceneStatusPanel } from "./components/SceneStatusPanel";
 import { useSceneTextureLoader } from "./hooks/useSceneTextureLoader";
+import { TextureQualityPanel, getMaxDimensionForQuality } from "./components/TextureQualityPanel";
 import { disposeFhm2dMemorySession } from "@/page/TestEditor/components/ssbh-model-preview/fhm2dMemoryPreviewService";
 import {
   clearNutexbPreviewCacheAsync,
@@ -237,14 +238,16 @@ export default function SceneEdit() {
   const [showAxes, setShowAxes] = useState(true);
   const [wireframe, setWireframe] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [textureQuality, setTextureQuality] = useState("original");
   const [drawStats, setDrawStats] = useState<SceneDrawStats | null>(null);
   const [clearCacheDialogOpen, setClearCacheDialogOpen] = useState(false);
 
+  const textureMaxDimension = getMaxDimensionForQuality(textureQuality);
   const {
     textureDataMap,
     progress: textureProgress,
     warnings: textureWarnings,
-  } = useSceneTextureLoader(baseModel, subModels, sessionId);
+  } = useSceneTextureLoader(baseModel, subModels, sessionId, textureMaxDimension);
 
   useEffect(() => {
     if (textureWarnings.length > 0) {
@@ -606,6 +609,11 @@ export default function SceneEdit() {
     setDrawStats(stats);
   }, []);
 
+  const handleTextureQualityChange = useCallback((quality: string) => {
+    setTextureQuality(quality);
+    clearNutexbRgbaCache();
+  }, []);
+
   const selectedTreeId = useMemo(() => {
     if (!selectedNodeId) return null;
     const parsed = parsePlacementViewportNodeId(selectedNodeId);
@@ -772,6 +780,9 @@ export default function SceneEdit() {
                   <TabsTrigger value="placement" className="text-[10px] h-6 px-2.5">
                     Placement
                   </TabsTrigger>
+                  <TabsTrigger value="texture" className="text-[10px] h-6 px-2.5">
+                    Texture
+                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="status" className="mt-0 min-h-0 flex-1 overflow-hidden">
@@ -812,6 +823,15 @@ export default function SceneEdit() {
                     onEntryChange={handlePlacementChange}
                     onDuplicate={handleDuplicatePlacement}
                     duplicateDisabled={!canDuplicatePlacement}
+                  />
+                </TabsContent>
+
+                <TabsContent value="texture" className="mt-0 min-h-0 flex-1 overflow-auto">
+                  <TextureQualityPanel
+                    quality={textureQuality}
+                    onQualityChange={handleTextureQualityChange}
+                    textureDataMap={textureDataMap}
+                    isDecoding={textureProgress !== null}
                   />
                 </TabsContent>
               </Tabs>

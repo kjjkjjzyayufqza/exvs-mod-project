@@ -92,6 +92,68 @@ texture (no upload, no allocation) → no VRAM spike.
 |------|--------|
 | `utils/SceneTexturePool.ts` | New shared GPU texture pool class |
 | `components/MapViewport.tsx` | Pool creation, prop threading, pooled texture acquisition, disposal removal |
+| `components/TextureQualityPanel.tsx` | Texture quality preset UI (Draft / Standard / High / Original) |
+| `hooks/useSceneTextureLoader.ts` | `maxDimension` parameterised (was hardcoded 2048), resolution-tagged cache keys |
+| `page.tsx` | `textureQuality` state, new "Texture" tab, auto-reload on quality change |
+
+---
+
+## Texture Quality Presets
+
+Users can switch texture resolution at runtime via the **Texture** tab in the right-side
+panel. Changing a preset clears the RGBA CPU cache and re-decodes all textures from the
+backend at the new resolution. The existing `SceneViewportOverlay` progress bar shows
+decode progress.
+
+| Preset    | `maxDimension` | Per-texture VRAM (2048 original) | Use case |
+|-----------|----------------|----------------------------------|----------|
+| Draft     | 512            | ~1 MB                            | Fast layout preview |
+| Standard  | 1024           | ~4 MB                            | Daily editing |
+| High      | 2048           | ~16 MB                           | Detail inspection (default) |
+| Original  | `null`         | Depends on source                | Full native resolution |
+
+### Cache key differentiation
+
+The RGBA LRU cache key (versionId) now includes a `@{maxDimension}` suffix, so entries
+decoded at different resolutions are cached independently. Switching back to a
+previously-used resolution may partially hit the cache (if entries haven't been evicted
+by the 256 MB byte limit).
+
+### Pool key includes data dimensions
+
+`buildTexturePoolKey()` encodes `{width}x{height}` so that when the same texture file is
+re-decoded at a different resolution, the pool creates a new GPU texture rather than
+returning the stale one.
+
+## Shared Texture Folder Resolution (PBR Fix)
+
+### Problem
+
+Stage maps have a top-level `textures` folder that holds shared PBR textures (normal maps,
+roughness, metalness, emissive, AO). Individual sub-model folders typically only contain
+their albedo (base color) textures locally.
+
+When building model bundles from memory (fhm2d), `build_model_bundle_from_virtual_folder`
+only searched for nutexb files within each sub-model's own virtual folder tree. Texture
+references pointing to shared textures (e.g. `../../textures/some_normal.nutexb`) failed to
+resolve, leaving `textureResolve` entries with `nutexb_path: None`.
+
+Result: normal maps, roughness maps, metalness maps, and other PBR textures were completely
+missing in SceneEdit's 3D viewport, while TestEditor's per-model preview worked correctly
+(its disk-based `resolve_nutexb_path` walks ancestor directories and finds shared textures).
+
+### Fix
+
+`build_stage_bundle_from_memory` now:
+
+1. Collects nutexb entries from the stage-level `textures` folder before iterating sub-models
+2. Passes these shared entries (`shared_nutexb_entries`) to `build_model_bundle_from_virtual_folder`
+3. When a texture reference isn't found in the sub-model's local folder, the resolver falls
+   back to the shared entries
+
+| File | Change |
+|------|--------|
+| `src-tauri/src/format/fhm2d_stage.rs` | Collect shared nutexb entries from `textures` folder; pass to bundle builder; fallback lookup |
 
 ## Future Improvements
 

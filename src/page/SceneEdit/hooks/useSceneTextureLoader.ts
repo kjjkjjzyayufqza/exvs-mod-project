@@ -18,7 +18,6 @@ export interface TextureDecodeProgress {
 
 export type NutexbTextureDataMap = Map<string, NutexbRgbaData>;
 
-const PREVIEW_MAX_DIMENSION = 2048;
 const DECODE_CONCURRENCY = 4;
 
 function collectUniqueNutexbPaths(
@@ -53,6 +52,7 @@ export function useSceneTextureLoader(
   baseModel: SsbhModelPreviewBundle | null,
   subModels: Array<{ folderName: string; objectIndex: number; bundle: SsbhModelPreviewBundle }>,
   sessionId: string | null,
+  maxDimension: number | null,
 ): {
   textureDataMap: NutexbTextureDataMap;
   progress: TextureDecodeProgress | null;
@@ -89,7 +89,7 @@ export function useSceneTextureLoader(
 
     console.log(
       `[SceneEdit:Decode] START unique=${uniquePaths.length} source=${sourceKind}` +
-      ` concurrency=${concurrency} maxDim=${PREVIEW_MAX_DIMENSION} mode=RGBA`,
+      ` concurrency=${concurrency} maxDim=${maxDimension ?? "full"} mode=RGBA`,
     );
     const batchT0 = performance.now();
     let errors = 0;
@@ -129,23 +129,23 @@ export function useSceneTextureLoader(
               sessionId,
               virtualPath: path,
             });
-            versionId = makeNutexbVersionId(path, identity.nutexbSize, identity.crc32);
+            versionId = makeNutexbVersionId(path, identity.nutexbSize, identity.crc32) + `@${maxDimension ?? "full"}`;
             decodeFn = () =>
               invoke<ArrayBuffer | Uint8Array>("fhm2d_memory_nutexb_rgba_bytes", {
                 sessionId,
                 virtualPath: path,
-                maxDimension: PREVIEW_MAX_DIMENSION,
+                maxDimension: maxDimension ?? undefined,
               });
           } else {
             const identity = await invoke<{ nutexbSize: number; crc32: number }>(
               "nutexb_preview_file_identity",
               { path },
             );
-            versionId = makeNutexbVersionId(path, identity.nutexbSize, identity.crc32);
+            versionId = makeNutexbVersionId(path, identity.nutexbSize, identity.crc32) + `@${maxDimension ?? "full"}`;
             decodeFn = () =>
               invoke<ArrayBuffer | Uint8Array>("nutexb_rgba_bytes", {
                 inputPath: path,
-                maxDimension: PREVIEW_MAX_DIMENSION,
+                maxDimension: maxDimension ?? undefined,
               });
           }
 
@@ -193,7 +193,7 @@ export function useSceneTextureLoader(
         pendingFlush = null;
       }
     };
-  }, [baseModel, subModels, sessionId, sourceKind]);
+  }, [baseModel, subModels, sessionId, sourceKind, maxDimension]);
 
   return { textureDataMap, progress, warnings };
 }

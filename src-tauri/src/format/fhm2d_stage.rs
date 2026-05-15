@@ -1675,6 +1675,13 @@ pub fn build_stage_bundle_from_memory(
         .filter(|(_, c)| c.name != STAGE_INFO_NAME)
         .collect();
     let model_total = model_children.len();
+    let shared_nutexb_entries: Vec<(String, String)> = content
+        .children
+        .iter()
+        .find(|c| c.name.to_lowercase() == STAGE_TEXTURES_NAME)
+        .map(|tex_folder| collect_nutexb_entries_with_virtual_paths(tex_folder, &file_index_map))
+        .unwrap_or_default();
+
     let mut model_done = 0usize;
     let mut object_index = 0usize;
 
@@ -1710,12 +1717,14 @@ pub fn build_stage_bundle_from_memory(
         on_model_progress(model_done, model_total, &child.name);
 
         if is_base {
+
             for sub_folder in &child.children {
                 if let Some(bundle) = build_model_bundle_from_virtual_folder(
                     sub_folder,
                     &file_index_map,
                     &mut bundle_warnings,
                     session_id,
+                    &shared_nutexb_entries,
                 ) {
                     base_model = Some(bundle);
                     break;
@@ -1739,6 +1748,7 @@ pub fn build_stage_bundle_from_memory(
                 &file_index_map,
                 &mut bundle_warnings,
                 session_id,
+                &shared_nutexb_entries,
             ) {
                 sub_models.push(StageSubModelEntry {
                     folder_name: child.name.clone(),
@@ -1755,6 +1765,7 @@ pub fn build_stage_bundle_from_memory(
                 &file_index_map,
                 &mut bundle_warnings,
                 session_id,
+                &shared_nutexb_entries,
             ) {
                 sub_models.push(StageSubModelEntry {
                     folder_name: child.name.clone(),
@@ -1824,6 +1835,7 @@ fn build_model_bundle_from_virtual_folder(
     file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
     warnings: &mut Vec<String>,
     session_id: Option<&str>,
+    shared_nutexb_entries: &[(String, String)],
 ) -> Option<SsbhModelPreviewBundle> {
     let numdlb_vf = folder
         .files
@@ -1919,7 +1931,12 @@ fn build_model_bundle_from_virtual_folder(
 
         let matched = nutexb_entries
             .iter()
-            .find(|(name, _)| name.to_ascii_lowercase() == ref_nutexb);
+            .find(|(name, _)| name.to_ascii_lowercase() == ref_nutexb)
+            .or_else(|| {
+                shared_nutexb_entries
+                    .iter()
+                    .find(|(name, _)| name.to_ascii_lowercase() == ref_nutexb)
+            });
         if let Some((_, virtual_path)) = matched {
             resolved_nutexb_paths.push(virtual_path.clone());
             texture_resolve.push(TextureRefResolve {

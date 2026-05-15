@@ -7,6 +7,8 @@ import {
   Sphere,
   Html,
   Stats,
+  Environment,
+  Lightformer,
 } from "@react-three/drei";
 import {
   useRef,
@@ -67,6 +69,8 @@ const BLENDER_GRID_SECTION_COLOR = "#545454";
  * editor preview favors stability over distant minification quality.
  */
 const SCENE_EDIT_TEXTURE_MIPS = false;
+
+const NORMAL_SCALE_DEFAULT = new THREE.Vector2(1, 1);
 
 /**
  * Clip distance far enough for large placements without 1e8 depth precision collapse / driver quirks.
@@ -364,6 +368,13 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           intensity={DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY * 0.28}
         />
 
+        <Environment resolution={64} frames={1} background={false}>
+          <Lightformer form="rect" intensity={0.8} position={[0, 5, -2]} scale={[10, 5, 1]} />
+          <Lightformer form="ring" intensity={0.5} position={[-5, 3, 2]} scale={3} color="#dbeafe" />
+          <Lightformer form="rect" intensity={0.3} position={[5, -1, -3]} scale={[8, 3, 1]} color="#aab0ba" />
+          <color attach="background" args={["#1a1a2e"]} />
+        </Environment>
+
         {baseModel && (
           <StageModelGroup
             nodeId="base"
@@ -512,11 +523,14 @@ function buildTexturePoolKey(
   path: string,
   slot: PbrSlotKind,
   binding: ResolvedMaterialBinding,
+  dataWidth: number,
+  dataHeight: number,
 ): string {
   const sampling = samplingForSlot(binding, slot);
   return [
     path.toLowerCase(),
     slot,
+    `${dataWidth}x${dataHeight}`,
     sampling?.wrapS ?? "ClampToEdge",
     sampling?.wrapT ?? "ClampToEdge",
     sampling?.uvTransform?.scale_u ?? 1,
@@ -622,7 +636,7 @@ const TexturedMesh = memo(function TexturedMesh({
       if (!data) continue;
       const path = pathForSlot(binding, slot);
       if (!path) continue;
-      const poolKey = buildTexturePoolKey(path, slot, binding);
+      const poolKey = buildTexturePoolKey(path, slot, binding, data.width, data.height);
       const shared = texturePool.has(poolKey);
       result[slot] = texturePool.acquire(poolKey, () => createDataTexture(data, slot, binding));
       loaded.push(shared ? `${slot}(shared)` : slot);
@@ -676,10 +690,7 @@ const TexturedMesh = memo(function TexturedMesh({
     ? 1.55
     : hasCube
       ? 1.15
-      : 0;
-
-  const effectiveMetalnessMap = hasCube ? textures.metalnessMap : undefined;
-  const effectiveMetalnessValue = hasCube ? metalnessValue : Math.min(metalnessValue, 0.2);
+      : 0.6;
 
   return (
     <mesh geometry={draw.geometry}>
@@ -689,8 +700,9 @@ const TexturedMesh = memo(function TexturedMesh({
         side={THREE.DoubleSide}
         map={textures.map ?? null}
         normalMap={textures.normalMap ?? null}
+        normalScale={textures.normalMap ? NORMAL_SCALE_DEFAULT : undefined}
         roughnessMap={textures.roughnessMap ?? null}
-        metalnessMap={effectiveMetalnessMap ?? null}
+        metalnessMap={textures.metalnessMap ?? null}
         emissiveMap={textures.emissiveMap ?? null}
         emissive={hasEmit ? new THREE.Color(0xffffff) : new THREE.Color(0)}
         emissiveIntensity={emissiveIntensity}
@@ -701,7 +713,7 @@ const TexturedMesh = memo(function TexturedMesh({
         alphaTest={hasMap ? 0.001 : 0}
         transparent={transparent}
         roughness={roughnessValue}
-        metalness={effectiveMetalnessValue}
+        metalness={metalnessValue}
       />
     </mesh>
   );
