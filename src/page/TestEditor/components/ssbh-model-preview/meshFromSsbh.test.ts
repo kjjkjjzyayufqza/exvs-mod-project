@@ -145,6 +145,46 @@ describe("resolveMaterialTexturePaths", () => {
     );
     expect(resolved.cubePath).toBe("E:/XB/share/textures/barispecular00_cubemap.nutexb");
   });
+
+  it("resolves stage diffuse textures as base color maps", () => {
+    const matl: MatlDataJson = {
+      major_version: 1,
+      minor_version: 6,
+      entries: [
+        {
+          material_label: "m_panel_02",
+          shader_label: "generic",
+          textures: [],
+          textures2: [
+            { param_id: "Param0", data: "../../textures/stage001_panel_02_normal" },
+            { param_id: "Param1", data: "../../textures/stage001_panel_02_roughness" },
+            { param_id: "Param2", data: "../../textures/stage001_panel_02_diffuse" },
+          ],
+        },
+      ],
+    };
+    const refToPath = new Map<string, string>([
+      [
+        "../../textures/stage001_panel_02_diffuse",
+        "E:/XB/textures/stage001_panel_02_diffuse.nutexb",
+      ],
+      [
+        "../../textures/stage001_panel_02_normal",
+        "E:/XB/textures/stage001_panel_02_normal.nutexb",
+      ],
+      [
+        "../../textures/stage001_panel_02_roughness",
+        "E:/XB/textures/stage001_panel_02_roughness.nutexb",
+      ],
+    ]);
+
+    const lookup = buildMatlLookup(matl);
+    const resolved = resolveMaterialTexturePaths("m_panel_02", lookup, refToPath);
+
+    expect(resolved.mapPath).toBe("E:/XB/textures/stage001_panel_02_diffuse.nutexb");
+    expect(resolved.normalPath).toBe("E:/XB/textures/stage001_panel_02_normal.nutexb");
+    expect(resolved.roughnessPath).toBe("E:/XB/textures/stage001_panel_02_roughness.nutexb");
+  });
 });
 
 describe("resolveMaterialBinding", () => {

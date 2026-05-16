@@ -74,6 +74,8 @@ const BLENDER_GRID_SECTION_COLOR = "#545454";
  * editor preview favors stability over distant minification quality.
  */
 const SCENE_EDIT_TEXTURE_MIPS = false;
+const GENERIC_STAGE_EMISSIVE_INTENSITY = 0.12;
+const GENERIC_STAGE_ANIME_EMISSIVE_INTENSITY = 0.18;
 
 const NORMAL_SCALE_DEFAULT = new THREE.Vector2(1, 1);
 
@@ -878,6 +880,7 @@ const TexturedMesh = memo(function TexturedMesh({
   const hasRough = !!textures.roughnessMap || typeof binding.uniforms.roughnessScalar === "number";
   const hasMetal = !!textures.metalnessMap || typeof binding.uniforms.metalnessScalar === "number";
   const hasEmit = !!textures.emissiveMap;
+  const canUseEmissiveMap = hasEmit && shaderFamily !== "generic";
   const hasAo = !!textures.aoMap;
   const hasCube = !!textures.cubeMap;
   const hasAnyTexture = hasMap || hasRough || hasMetal || hasEmit || hasAo || hasCube || !!textures.normalMap;
@@ -905,13 +908,13 @@ const TexturedMesh = memo(function TexturedMesh({
   const emissiveIntensity = exvsActive
     ? shaderFamily === "vsngCharaSparkle"
       ? 2.15
-      : hasEmit
-        ? 1.18
+      : canUseEmissiveMap
+        ? GENERIC_STAGE_ANIME_EMISSIVE_INTENSITY
         : 0
     : shaderFamily === "vsngCharaSparkle"
       ? 1.8
-      : hasEmit
-        ? 1
+      : canUseEmissiveMap
+        ? GENERIC_STAGE_EMISSIVE_INTENSITY
         : 0;
 
   const transparent = binding.renderHints.isTransparent ?? hasMap;
@@ -961,8 +964,8 @@ const TexturedMesh = memo(function TexturedMesh({
         normalScale={textures.normalMap ? NORMAL_SCALE_DEFAULT : undefined}
         roughnessMap={textures.roughnessMap ?? null}
         metalnessMap={effectiveMetalnessMap}
-        emissiveMap={textures.emissiveMap ?? null}
-        emissive={hasEmit ? new THREE.Color(0xffffff) : new THREE.Color(0)}
+        emissiveMap={canUseEmissiveMap ? textures.emissiveMap ?? null : null}
+        emissive={canUseEmissiveMap ? new THREE.Color(0xffffff) : new THREE.Color(0)}
         emissiveIntensity={emissiveIntensity}
         aoMap={textures.aoMap ?? null}
         aoMapIntensity={hasAo ? 0.35 : 0}

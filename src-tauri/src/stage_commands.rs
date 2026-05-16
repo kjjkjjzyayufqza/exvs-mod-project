@@ -49,6 +49,26 @@ fn emit_progress(app: &AppHandle, step: &str, label: &str, progress: u8, elapsed
 }
 
 #[tauri::command]
+pub async fn extract_stage_fhm2d_to_folder(
+    source_path: String,
+    output_dir: String,
+) -> Result<fhm2d_stage::StageExtractResult, String> {
+    let src = source_path.trim().to_string();
+    let out = output_dir.trim().to_string();
+    if src.is_empty() {
+        return Err("source_path cannot be empty.".to_string());
+    }
+    if out.is_empty() {
+        return Err("output_dir cannot be empty.".to_string());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        fhm2d_stage::extract_stage_fhm2d_to_folder_impl(&src, &out)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 pub async fn stage_apply_rename(
     extracted_dir: String,
 ) -> Result<fhm2d_stage::StageApplyRenameResult, String> {

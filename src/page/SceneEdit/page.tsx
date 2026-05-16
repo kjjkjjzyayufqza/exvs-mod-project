@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
+import { DialogLastPathKey, getDialogDefaultPath, rememberDialogSelection } from "@/utils/dialogLastPath";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import {
@@ -477,8 +478,12 @@ export default function SceneEdit() {
 
   const handleOpenFolder = useCallback(async () => {
     try {
-      const selected = await open({ directory: true });
+      const selected = await open({
+        directory: true,
+        defaultPath: getDialogDefaultPath(DialogLastPathKey.sceneEditOpenFolder),
+      });
       if (!selected || typeof selected !== "string") return;
+      rememberDialogSelection(DialogLastPathKey.sceneEditOpenFolder, selected, "directory");
 
       setIsLoading(true);
       resetState();
@@ -499,8 +504,10 @@ export default function SceneEdit() {
       const selected = await open({
         multiple: false,
         filters: [{ name: "FHM2D Stage Files", extensions: ["fhm2d"] }],
+        defaultPath: getDialogDefaultPath(DialogLastPathKey.sceneEditImportFhm2d),
       });
       if (!selected || typeof selected !== "string") return;
+      rememberDialogSelection(DialogLastPathKey.sceneEditImportFhm2d, selected, "file");
 
       setIsLoading(true);
       setImportProgress({
@@ -529,6 +536,53 @@ export default function SceneEdit() {
     } catch (err: any) {
       setImportProgress((prev) => ({ ...prev, open: false }));
       toast.error("FHM2D rename preview failed", { description: String(err) });
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const handleExtractFhm2d = useCallback(async () => {
+    try {
+      const sourcePath = await open({
+        multiple: false,
+        filters: [{ name: "FHM2D Stage Files", extensions: ["fhm2d"] }],
+        defaultPath: getDialogDefaultPath(DialogLastPathKey.sceneEditExtractFhm2dSource),
+      });
+      if (!sourcePath || typeof sourcePath !== "string") return;
+      rememberDialogSelection(DialogLastPathKey.sceneEditExtractFhm2dSource, sourcePath, "file");
+
+      const outputDir = await open({
+        directory: true,
+        title: "Select output folder",
+        defaultPath: getDialogDefaultPath(DialogLastPathKey.sceneEditExtractFhm2dOutput),
+      });
+      if (!outputDir || typeof outputDir !== "string") return;
+      rememberDialogSelection(DialogLastPathKey.sceneEditExtractFhm2dOutput, outputDir, "directory");
+
+      setIsLoading(true);
+      const result = await invoke<{
+        outputDir: string;
+        totalFiles: number;
+        totalBytes: number;
+        warnings: string[];
+      }>("extract_stage_fhm2d_to_folder", {
+        sourcePath,
+        outputDir,
+      });
+
+      if (result.warnings.length > 0) {
+        toast.warning(
+          `Extracted with ${result.warnings.length} warning(s)`,
+          { description: result.warnings.slice(0, 3).join("\n") },
+        );
+      } else {
+        const sizeMb = (result.totalBytes / (1024 * 1024)).toFixed(1);
+        toast.success(`Extracted ${result.totalFiles} files (${sizeMb} MB)`, {
+          description: result.outputDir,
+        });
+      }
+    } catch (err: any) {
+      toast.error("FHM2D extraction failed", { description: String(err) });
     } finally {
       setIsLoading(false);
     }
@@ -781,6 +835,7 @@ export default function SceneEdit() {
         <MapToolbar
           onOpenFolder={handleOpenFolder}
           onImportFhm2d={handleImportFhm2d}
+          onExtractFhm2d={handleExtractFhm2d}
           onSave={handleSave}
           canSave={!!stageName && !isMemoryImport}
           hasUnsavedChanges={hasUnsavedChanges}

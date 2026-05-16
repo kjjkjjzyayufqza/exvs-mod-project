@@ -109,7 +109,8 @@ pub fn run() {
             stage_commands::stage_apply_rename,
             stage_commands::load_stage_bundle,
             stage_commands::preview_stage_fhm2d_rename,
-            stage_commands::load_stage_from_preview
+            stage_commands::load_stage_from_preview,
+            stage_commands::extract_stage_fhm2d_to_folder
         ]);
 
     #[cfg(debug_assertions)]

@@ -1,6 +1,7 @@
 import {
   FolderOpen,
   FileArchive,
+  PackageOpen,
   Save,
   Grid3x3,
   Axis3D,
@@ -33,6 +34,7 @@ const GIZMO_MODES = [
 interface MapToolbarProps {
   onOpenFolder: () => void;
   onImportFhm2d: () => void;
+  onExtractFhm2d: () => void;
   onSave: () => void;
   canSave: boolean;
   hasUnsavedChanges?: boolean;
@@ -58,6 +60,7 @@ interface MapToolbarProps {
 export function MapToolbar({
   onOpenFolder,
   onImportFhm2d,
+  onExtractFhm2d,
   onSave,
   canSave,
   hasUnsavedChanges,
@@ -94,6 +97,21 @@ export function MapToolbar({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom">Import .fhm2d</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={onExtractFhm2d}
+            disabled={isLoading}
+          >
+            <PackageOpen className="h-3.5 w-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Extract .fhm2d to folder</TooltipContent>
       </Tooltip>
 
       <Tooltip>

@@ -96,7 +96,13 @@ fn read_numdlb_model_name(data: &[u8]) -> Option<String> {
 }
 
 fn normalize_model_name(raw: &str) -> String {
-    raw.replace(['/', '\\'], "_")
+    let stripped = raw.trim_start_matches(['/', '\\']);
+    let without_ext = match stripped.rfind('.') {
+        Some(dot) if dot > 0 => &stripped[..dot],
+        _ => stripped,
+    };
+    without_ext
+        .replace(['/', '\\'], "_")
         .replace(' ', "_")
         .to_ascii_lowercase()
 }
@@ -1108,6 +1114,112 @@ pub fn stage_rename_in_memory(
     apply_semantic_rename(&mut virtual_tree, &tree, &file_index_map, &mut warnings);
 
     Ok((virtual_tree, warnings))
+}
+
+// ── Extract stage FHM2D to folder (in-memory rename → disk) ────────────────
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StageExtractResult {
+    pub output_dir: String,
+    pub total_files: usize,
+    pub total_bytes: u64,
+    pub warnings: Vec<String>,
+}
+
+fn write_virtual_tree_to_disk(
+    tree: &StageVirtualTreeFolder,
+    files: &[InMemoryFhm2dFile],
+    dest: &Path,
+) -> Result<(usize, u64), String> {
+    let file_map: HashMap<i32, &InMemoryFhm2dFile> = files
+        .iter()
+        .map(|f| (f.file_index, f))
+        .collect();
+
+    let mut count = 0usize;
+    let mut bytes = 0u64;
+
+    fn recurse(
+        node: &StageVirtualTreeFolder,
+        parent: &Path,
+        file_map: &HashMap<i32, &InMemoryFhm2dFile>,
+        count: &mut usize,
+        bytes: &mut u64,
+    ) -> Result<(), String> {
+        let dir = parent.join(&node.name);
+        fs::create_dir_all(&dir)
+            .map_err(|e| format!("Failed to create dir {}: {e}", dir.display()))?;
+
+        for vf in &node.files {
+            if let Some(mem_file) = file_map.get(&vf.file_index) {
+                let dest_path = dir.join(&vf.file_name);
+                fs::write(&dest_path, &mem_file.data)
+                    .map_err(|e| format!("Failed to write {}: {e}", dest_path.display()))?;
+                *count += 1;
+                *bytes += mem_file.data.len() as u64;
+            }
+        }
+
+        for child in &node.children {
+            recurse(child, &dir, file_map, count, bytes)?;
+        }
+        Ok(())
+    }
+
+    for child in &tree.children {
+        recurse(child, dest, &file_map, &mut count, &mut bytes)?;
+    }
+
+    for vf in &tree.files {
+        if let Some(mem_file) = file_map.get(&vf.file_index) {
+            let dest_path = dest.join(&vf.file_name);
+            fs::write(&dest_path, &mem_file.data)
+                .map_err(|e| format!("Failed to write {}: {e}", dest_path.display()))?;
+            count += 1;
+            bytes += mem_file.data.len() as u64;
+        }
+    }
+
+    Ok((count, bytes))
+}
+
+pub fn extract_stage_fhm2d_to_folder_impl(
+    source_path: &str,
+    output_dir: &str,
+) -> Result<StageExtractResult, String> {
+    let bytes = fs::read(source_path)
+        .map_err(|e| format!("Failed to read FHM2D file: {e}"))?;
+
+    let source_name = Path::new(source_path)
+        .file_stem()
+        .and_then(|n| n.to_str())
+        .unwrap_or("stage")
+        .to_string();
+
+    let extraction = crate::format::fhm2d::extract_fhm2d_to_memory_impl(&bytes, &source_name, None)?;
+
+    let (tree, warnings) = stage_rename_in_memory(
+        &extraction.files,
+        &extraction.sub_file_structure,
+    )?;
+
+    let dest = Path::new(output_dir).join(&source_name);
+    if dest.exists() {
+        fs::remove_dir_all(&dest)
+            .map_err(|e| format!("Failed to clean existing output dir: {e}"))?;
+    }
+    fs::create_dir_all(&dest)
+        .map_err(|e| format!("Failed to create output dir: {e}"))?;
+
+    let (total_files, total_bytes) = write_virtual_tree_to_disk(&tree, &extraction.files, &dest)?;
+
+    Ok(StageExtractResult {
+        output_dir: dest.to_string_lossy().replace('\\', "/"),
+        total_files,
+        total_bytes,
+        warnings,
+    })
 }
 
 // ── Apply rename result ─────────────────────────────────────────────────────

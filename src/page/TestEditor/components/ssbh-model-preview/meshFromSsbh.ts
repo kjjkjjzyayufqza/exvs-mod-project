@@ -174,7 +174,13 @@ function pickExvsPbrTextureRefs(entry: MatlEntryJson | undefined): {
       basePbr1() ??
       find(
         (b) =>
-          (b.includes("basecolor") || b.includes("base_color") || b.includes("_albedo")) &&
+          (b.includes("basecolor") ||
+            b.includes("base_color") ||
+            b.includes("_albedo") ||
+            b.includes("diffuse") ||
+            b.includes("_dif") ||
+            b.includes("_col") ||
+            b.includes("color")) &&
           !b.includes("roughnessandmask"),
       ),
     normal:
