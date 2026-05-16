@@ -7,16 +7,9 @@ import {
 } from "react";
 import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { TransformControls as TransformControlsImpl } from "three-stdlib";
+import { UnrealTransformGizmo } from "./gizmo/UnrealTransformGizmo";
 
 export type SceneTransformControlsMode = "translate" | "rotate" | "scale";
-type SceneTransformControlsEventName = "change" | "objectChange" | "mouseDown" | "mouseUp";
-type SceneTransformControlsEventTarget = {
-  addEventListener(type: SceneTransformControlsEventName, listener: () => void): void;
-  addEventListener(type: "dragging-changed", listener: (e: { value: boolean }) => void): void;
-  removeEventListener(type: SceneTransformControlsEventName, listener: () => void): void;
-  removeEventListener(type: "dragging-changed", listener: (e: { value: boolean }) => void): void;
-};
 
 interface SceneTransformControlsProps {
   object: THREE.Object3D | RefObject<THREE.Object3D | null>;
@@ -39,7 +32,7 @@ function resolveObject(
   return object.current;
 }
 
-export const SceneTransformControls = forwardRef<TransformControlsImpl, SceneTransformControlsProps>(
+export const SceneTransformControls = forwardRef<UnrealTransformGizmo, SceneTransformControlsProps>(
   function SceneTransformControls(
     {
       object,
@@ -61,39 +54,33 @@ export const SceneTransformControls = forwardRef<TransformControlsImpl, SceneTra
     const invalidate = useThree((state) => state.invalidate);
     const defaultControls = useThree((state) => state.controls) as unknown as { enabled: boolean } | null;
 
-    const controls = useMemo(
-      () => new TransformControlsImpl(camera, gl.domElement),
+    const gizmo = useMemo(
+      () => new UnrealTransformGizmo(camera, gl.domElement),
       [camera, gl.domElement],
     );
 
-    useImperativeHandle(ref, () => controls, [controls]);
+    useImperativeHandle(ref, () => gizmo, [gizmo]);
 
     useEffect(() => {
       const target = resolveObject(object);
       if (!target) return;
-      controls.attach(target);
+      gizmo.attach(target);
       invalidate();
       return () => {
-        controls.detach();
+        gizmo.detach();
         invalidate();
       };
-    }, [controls, invalidate, object]);
+    }, [gizmo, invalidate, object]);
 
     useEffect(() => {
-      controls.setMode(mode);
-      controls.setSpace(space);
-      controls.setSize(size);
-      const writable = controls as unknown as {
-        showX: boolean;
-        showY: boolean;
-        showZ: boolean;
-      };
-      writable.showX = showX;
-      writable.showY = showY;
-      writable.showZ = showZ;
-      controls.update();
+      gizmo.setMode(mode);
+      gizmo.setSpace(space);
+      gizmo.setSize(size);
+      gizmo.showX = showX;
+      gizmo.showY = showY;
+      gizmo.showZ = showZ;
       invalidate();
-    }, [controls, invalidate, mode, showX, showY, showZ, size, space]);
+    }, [gizmo, invalidate, mode, showX, showY, showZ, size, space]);
 
     useEffect(() => {
       const handleChange = () => {
@@ -107,25 +94,24 @@ export const SceneTransformControls = forwardRef<TransformControlsImpl, SceneTra
         if (defaultControls) defaultControls.enabled = !e.value;
       };
 
-      const eventTarget = controls as unknown as SceneTransformControlsEventTarget;
-      eventTarget.addEventListener("change", handleChange);
-      eventTarget.addEventListener("objectChange", handleObjectChange);
-      eventTarget.addEventListener("mouseDown", handleMouseDown);
-      eventTarget.addEventListener("mouseUp", handleMouseUp);
-      eventTarget.addEventListener("dragging-changed", handleDraggingChanged);
+      gizmo.addEventListener("change", handleChange);
+      gizmo.addEventListener("objectChange", handleObjectChange);
+      gizmo.addEventListener("mouseDown", handleMouseDown);
+      gizmo.addEventListener("mouseUp", handleMouseUp);
+      gizmo.addEventListener("dragging-changed", handleDraggingChanged);
 
       return () => {
-        eventTarget.removeEventListener("change", handleChange);
-        eventTarget.removeEventListener("objectChange", handleObjectChange);
-        eventTarget.removeEventListener("mouseDown", handleMouseDown);
-        eventTarget.removeEventListener("mouseUp", handleMouseUp);
-        eventTarget.removeEventListener("dragging-changed", handleDraggingChanged);
+        gizmo.removeEventListener("change", handleChange);
+        gizmo.removeEventListener("objectChange", handleObjectChange);
+        gizmo.removeEventListener("mouseDown", handleMouseDown);
+        gizmo.removeEventListener("mouseUp", handleMouseUp);
+        gizmo.removeEventListener("dragging-changed", handleDraggingChanged);
         if (defaultControls) defaultControls.enabled = true;
       };
-    }, [controls, defaultControls, invalidate, onChange, onMouseDown, onMouseUp, onObjectChange]);
+    }, [gizmo, defaultControls, invalidate, onChange, onMouseDown, onMouseUp, onObjectChange]);
 
-    useEffect(() => () => controls.dispose(), [controls]);
+    useEffect(() => () => gizmo.dispose(), [gizmo]);
 
-    return <primitive object={controls} />;
+    return <primitive object={gizmo} />;
   },
 );
