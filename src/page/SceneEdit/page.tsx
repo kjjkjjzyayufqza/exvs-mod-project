@@ -30,6 +30,11 @@ import {
   StageHierarchyTree,
   type StageTreeNode,
 } from "./components/StageHierarchyTree";
+import { SceneOutliner } from "./components/SceneOutliner";
+import { ModelTextureSlotPanel } from "./components/ModelTextureSlotPanel";
+import { ViewportContextMenu } from "./components/ViewportContextMenu";
+import { useSceneKeyboard } from "./hooks/useSceneKeyboard";
+import { useSceneEditorStore } from "./store/sceneEditorStore";
 import {
   MapViewport,
   type MapViewportHandle,
@@ -818,6 +823,84 @@ export default function SceneEdit() {
     [],
   );
 
+  const outlinerRoot = useMemo((): StageTreeNode | null => {
+    if (!treeRoot) return null;
+    const children: StageTreeNode[] = [];
+    if (treeRoot.children) {
+      for (const child of treeRoot.children) {
+        if (child.role === "base") {
+          children.push(child);
+          continue;
+        }
+        if (child.role === "sub_model" && child.objectIndex != null) {
+          const instances = placementEntries
+            .map((entry, idx) => ({ entry, idx }))
+            .filter(
+              ({ entry }) =>
+                entry.vdkType.toUpperCase() === "OBJECT" &&
+                entry.objectNumber === child.objectIndex,
+            );
+          if (instances.length === 0) {
+            children.push(child);
+          } else {
+            for (const { entry, idx } of instances) {
+              const suffix = instances.length > 1 ? ` (${idx})` : "";
+              children.push({
+                id: formatPlacementViewportNodeId(child.id, idx),
+                label: `${child.label}${suffix}`,
+                role: "placement",
+                objectIndex: child.objectIndex,
+              });
+            }
+          }
+          continue;
+        }
+        children.push(child);
+      }
+    }
+    const effects = placementEntries
+      .map((entry, idx) => ({ entry, idx }))
+      .filter(({ entry }) => entry.vdkType.toUpperCase() !== "OBJECT");
+    for (const { entry, idx } of effects) {
+      children.push({
+        id: `__effect__${idx}`,
+        label: `${entry.vdkType}#${idx}`,
+        role: "effect",
+      });
+    }
+    return { ...treeRoot, children };
+  }, [treeRoot, placementEntries]);
+
+  const allNodeIds = useMemo(() => {
+    if (!outlinerRoot) return [];
+    const ids: string[] = [];
+    const collect = (node: StageTreeNode) => {
+      if (node.id !== "root") ids.push(node.id);
+      node.children?.forEach(collect);
+    };
+    collect(outlinerRoot);
+    return ids;
+  }, [outlinerRoot]);
+
+  const handleFocusSelected = useCallback(() => {
+    viewportRef.current?.resetCamera();
+  }, []);
+
+  const handleDeleteSelected = useCallback(() => {
+    if (selectedPlacementIdx === null) return;
+    setPlacementEntries((prev) => prev.filter((_, i) => i !== selectedPlacementIdx));
+    setSelectedNodeIdRaw(null);
+    setSelectedPlacementIdxRaw(null);
+    setHasUnsavedChanges(true);
+  }, [selectedPlacementIdx]);
+
+  useSceneKeyboard({
+    onDelete: handleDeleteSelected,
+    onDuplicate: handleDuplicatePlacement,
+    onFocus: handleFocusSelected,
+    allNodeIds,
+  });
+
   const selectedTreeId = useMemo(() => {
     if (!selectedNodeId) return null;
     const parsed = parsePlacementViewportNodeId(selectedNodeId);
@@ -826,10 +909,12 @@ export default function SceneEdit() {
 
   const selectedNode = useMemo(() => {
     if (!selectedNodeId) return null;
+    const direct = findNode(outlinerRoot, selectedNodeId);
+    if (direct) return direct;
     const parsed = parsePlacementViewportNodeId(selectedNodeId);
     const treeLookupId = parsed ? parsed.folderName : selectedNodeId;
-    return findNode(treeRoot, treeLookupId);
-  }, [treeRoot, selectedNodeId]);
+    return findNode(outlinerRoot, treeLookupId);
+  }, [outlinerRoot, selectedNodeId]);
 
   const isBaseSelected = selectedNodeId === "base";
 
@@ -933,10 +1018,12 @@ export default function SceneEdit() {
                 Outliner
               </div>
               <div className="min-h-0 flex-1 overflow-hidden">
-                <StageHierarchyTree
-                  root={treeRoot}
-                  selectedId={selectedTreeId}
+                <SceneOutliner
+                  root={outlinerRoot}
                   onSelect={handleSelectNode}
+                  onDuplicate={() => handleDuplicatePlacement()}
+                  onDelete={handleDeleteSelected}
+                  onFocusSelected={handleFocusSelected}
                 />
               </div>
             </div>
@@ -955,6 +1042,21 @@ export default function SceneEdit() {
             maxSize="80%"
             className="min-w-0"
           >
+            <ViewportContextMenu
+              showGrid={showGrid}
+              showAxes={showAxes}
+              wireframe={wireframe}
+              onToggleGrid={() => setShowGrid((v) => !v)}
+              onToggleAxes={() => setShowAxes((v) => !v)}
+              onToggleWireframe={() => setWireframe((v) => !v)}
+              onResetCamera={() => viewportRef.current?.resetCamera()}
+              onFocusSelected={handleFocusSelected}
+              onGizmoMode={setPlacementGizmoMode}
+              gizmoMode={placementGizmoMode}
+              onDuplicateSelected={handleDuplicatePlacement}
+              onDeleteSelected={handleDeleteSelected}
+              hasSelection={selectedNodeId !== null}
+            >
             <div className="relative h-full min-h-0 min-w-0 overflow-hidden">
               <MapViewport
                 ref={viewportRef}
@@ -984,6 +1086,7 @@ export default function SceneEdit() {
               />
               <SceneViewportOverlay textureProgress={textureProgress} />
             </div>
+            </ViewportContextMenu>
           </ResizablePanel>
 
           <ResizableHandle
@@ -1076,6 +1179,24 @@ export default function SceneEdit() {
                     isDecoding={textureProgress !== null}
                   />
                 </MayaSection>
+
+                {selectedNode && selectedNodeId && (() => {
+                  const bundle = selectedNodeId === "base"
+                    ? baseModel
+                    : subModels.find((s) => s.folderName === selectedNodeId)?.bundle ?? null;
+                  if (!bundle) return null;
+                  return (
+                    <MayaSection title="Model Textures" defaultOpen>
+                      <ModelTextureSlotPanel
+                        bundle={bundle}
+                        textureDataMap={textureDataMap}
+                        textureSlotLoadEnabled={textureSlotLoadEnabled}
+                        onSlotToggle={handleTextureSlotToggle}
+                        modelLabel={selectedNode.label}
+                      />
+                    </MayaSection>
+                  );
+                })()}
 
                 <MayaSection title="Stats" defaultOpen={false}>
                   <SceneStatsContent

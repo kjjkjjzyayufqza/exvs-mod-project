@@ -66,6 +66,8 @@ pub fn run() {
             ssbh_dae_cmd::ssbh_write_nuhlpb,
             ssbh_dae_cmd::ssbh_template_read_numatb,
             ssbh_dae_cmd::ssbh_template_write_numatb,
+            ssbh_dae_cmd::stage_batch_export_dae,
+            ssbh_dae_cmd::stage_export_single_dae,
             jnttbl_cmd::jnttbl_read_file,
             jnttbl_cmd::jnttbl_write_file,
             jnttbl_cmd::ssbh_read_nusktb_bone_names,

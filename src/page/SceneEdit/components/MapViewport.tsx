@@ -12,6 +12,11 @@ import {
   TransformControls,
 } from "@react-three/drei";
 import {
+  EffectComposer,
+  Outline,
+} from "@react-three/postprocessing";
+import { BlendFunction, KernelSize } from "postprocessing";
+import {
   useRef,
   useCallback,
   useMemo,
@@ -20,6 +25,9 @@ import {
   forwardRef,
   useImperativeHandle,
   Fragment,
+  useState,
+  createContext,
+  useContext,
   type RefObject,
 } from "react";
 import * as THREE from "three";
@@ -62,6 +70,53 @@ import {
 import { SceneTexturePool } from "../utils/SceneTexturePool";
 
 const DEG2RAD = Math.PI / 180;
+
+type SelectedGroupMap = Map<string, THREE.Group>;
+const SelectedGroupsCtx = createContext<React.RefObject<SelectedGroupMap>>(
+  { current: new Map() } as React.RefObject<SelectedGroupMap>
+);
+
+const OUTLINE_EDGE_COLOR = new THREE.Color("#ff8c00").getHex();
+const OUTLINE_HIDDEN_COLOR = new THREE.Color("#4a3000").getHex();
+
+function SceneSelectionOutline({ selectedGroupsRef }: { selectedGroupsRef: React.RefObject<SelectedGroupMap> }) {
+  const [outlineMeshes, setOutlineMeshes] = useState<THREE.Mesh[]>([]);
+  const invalidate = useThree((s) => s.invalidate);
+
+  useFrame(() => {
+    const groups = selectedGroupsRef.current;
+    const meshes: THREE.Mesh[] = [];
+    for (const group of groups.values()) {
+      group.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          meshes.push(child);
+        }
+      });
+    }
+    if (meshes.length !== outlineMeshes.length || meshes.some((m, i) => m !== outlineMeshes[i])) {
+      setOutlineMeshes(meshes);
+      invalidate();
+    }
+  });
+
+  if (outlineMeshes.length === 0) return null;
+
+  return (
+    <EffectComposer multisampling={0} autoClear={false}>
+      <Outline
+        selection={outlineMeshes}
+        edgeStrength={4}
+        pulseSpeed={0}
+        visibleEdgeColor={OUTLINE_EDGE_COLOR}
+        hiddenEdgeColor={OUTLINE_HIDDEN_COLOR}
+        blur
+        kernelSize={KernelSize.SMALL}
+        xRay={true}
+        blendFunction={BlendFunction.ALPHA}
+      />
+    </EffectComposer>
+  );
+}
 
 /** Blender-style finite grid plane (aligned with TestEditor ssbh-model-preview). */
 const GRID_PLANE_WIDTH = 200;
@@ -218,20 +273,23 @@ export interface MapViewportHandle {
 
 function StageOrbitControls({
   controlsRef,
+  orbitActiveRef,
 }: {
   controlsRef: RefObject<OrbitControlsType | null>;
+  orbitActiveRef?: React.RefObject<boolean>;
 }) {
   const regress = useThree((s) => s.performance.regress);
   const invalidate = useThree((s) => s.invalidate);
-  /**
-   * regress() updates performance.current; pairing it with Canvas-level adaptive setDpr caused
-   * WebGL buffer reallocations every orbit-control change event (~many/sec), doubling RSS on large scenes.
-   * Match prior Scene Editor behavior: regress once per gesture (pointer down / orbit start).
-   */
   const onGestureStart = useCallback(() => {
+    if (orbitActiveRef) orbitActiveRef.current = true;
     regress();
     invalidate();
-  }, [regress, invalidate]);
+  }, [regress, invalidate, orbitActiveRef]);
+  const onGestureEnd = useCallback(() => {
+    setTimeout(() => {
+      if (orbitActiveRef) orbitActiveRef.current = false;
+    }, 80);
+  }, [orbitActiveRef]);
   const onDemandFrame = useCallback(() => {
     invalidate();
   }, [invalidate]);
@@ -250,6 +308,7 @@ function StageOrbitControls({
       minPolarAngle={0.05}
       maxPolarAngle={Math.PI - 0.05}
       onStart={onGestureStart}
+      onEnd={onGestureEnd}
       onChange={onDemandFrame}
     />
   );
@@ -298,9 +357,15 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
     useEffect(() => () => texturePool.disposeAll(), [texturePool]);
 
     const gizmoDraggingRef = useRef(false);
+    const selectedGroupsRef = useRef<SelectedGroupMap>(new Map());
+    const orbitActiveRef = useRef(false);
+    const pointerDownTimeRef = useRef(0);
 
     const handlePointerMissed = useCallback(() => {
       if (!clickPickSelectionEnabled || gizmoDraggingRef.current) return;
+      if (orbitActiveRef.current) return;
+      const elapsed = performance.now() - pointerDownTimeRef.current;
+      if (elapsed > 250) return;
       onSelectNode(null);
     }, [clickPickSelectionEnabled, onSelectNode]);
 
@@ -476,6 +541,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
         dpr={sceneRasterProfile.dpr}
         style={{ touchAction: "none", background: DEFAULT_PREVIEW_3D_BACKGROUND }}
         onPointerMissed={handlePointerMissed}
+        onPointerDown={() => { pointerDownTimeRef.current = performance.now(); orbitActiveRef.current = false; }}
         onCreated={handleCreated}
       >
         <SceneCanvasPerformanceHud showStats={showStats} />
@@ -549,6 +615,9 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                 : undefined
             }
             gizmoDraggingRef={gizmoDraggingRef}
+            orbitActiveRef={orbitActiveRef}
+            pointerDownTimeRef={pointerDownTimeRef}
+            selectedGroupsRef={selectedGroupsRef}
           />
         )}
 
@@ -579,6 +648,8 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                 previewRenderStyle={previewRenderStyle}
                 animeKeyLightDir={animeKeyLightDir}
                 gizmoDraggingRef={gizmoDraggingRef}
+                orbitActiveRef={orbitActiveRef}
+                pointerDownTimeRef={pointerDownTimeRef}
                 position={st ? [st.posX, st.posY, st.posZ] : undefined}
                 rotation={st ? [st.rotX, st.rotY, st.rotZ] : undefined}
                 scale={st ? placementScaleForViewport(st.scaleX, st.scaleY, st.scaleZ) : undefined}
@@ -594,6 +665,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                     ? (_idx: number, t: TransformData) => onStandaloneTransformChange(sub.folderName, t)
                     : undefined
                 }
+                selectedGroupsRef={selectedGroupsRef}
               />,
             ];
           }
@@ -624,6 +696,9 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
               onPlacementGizmoFrame={onPlacementGizmoFrame}
               onPlacementGizmoCommit={onPlacementGizmoCommit}
               gizmoDraggingRef={gizmoDraggingRef}
+              orbitActiveRef={orbitActiveRef}
+              pointerDownTimeRef={pointerDownTimeRef}
+              selectedGroupsRef={selectedGroupsRef}
             />
           ));
         })}
@@ -644,6 +719,8 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             onPlacementGizmoFrame={onPlacementGizmoFrame}
             onPlacementGizmoCommit={onPlacementGizmoCommit}
             gizmoDraggingRef={gizmoDraggingRef}
+            orbitActiveRef={orbitActiveRef}
+            pointerDownTimeRef={pointerDownTimeRef}
           />
         ))}
 
@@ -668,7 +745,8 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           </GizmoHelper>
         )}
 
-        <StageOrbitControls controlsRef={controlsRef} />
+        <StageOrbitControls controlsRef={controlsRef} orbitActiveRef={orbitActiveRef} />
+        <SceneSelectionOutline selectedGroupsRef={selectedGroupsRef} />
       </Canvas>
     );
   }
@@ -965,15 +1043,7 @@ const TexturedMesh = memo(function TexturedMesh({
       : Math.min(metalnessValue, 0.2)
     : metalnessValue;
 
-  const baseColor = exvsActive
-    ? hasAnyTexture
-      ? "#ffffff"
-      : "#cccccc"
-    : isSelected
-      ? "#88aaff"
-      : hasAnyTexture
-        ? "#ffffff"
-        : "#cccccc";
+  const baseColor = hasAnyTexture ? "#ffffff" : "#cccccc";
 
   return (
     <mesh geometry={draw.geometry}>
@@ -1025,6 +1095,9 @@ const StageModelGroup = memo(function StageModelGroup({
   onPlacementGizmoFrame,
   onPlacementGizmoCommit,
   gizmoDraggingRef,
+  orbitActiveRef,
+  pointerDownTimeRef,
+  selectedGroupsRef,
 }: {
   nodeId: string;
   bundle: SsbhModelPreviewBundle;
@@ -1046,8 +1119,22 @@ const StageModelGroup = memo(function StageModelGroup({
   onPlacementGizmoFrame?: (placementIdx: number, t: TransformData) => void;
   onPlacementGizmoCommit?: (placementIdx: number, t: TransformData) => void;
   gizmoDraggingRef?: React.RefObject<boolean>;
+  orbitActiveRef?: React.RefObject<boolean>;
+  pointerDownTimeRef?: React.RefObject<number>;
+  selectedGroupsRef?: React.RefObject<SelectedGroupMap>;
 }) {
   const groupRef = useRef<THREE.Group>(null);
+
+  useEffect(() => {
+    const g = groupRef.current;
+    if (!g || !selectedGroupsRef) return;
+    if (isSelected) {
+      selectedGroupsRef.current.set(nodeId, g);
+    } else {
+      selectedGroupsRef.current.delete(nodeId);
+    }
+    return () => { selectedGroupsRef.current.delete(nodeId); };
+  }, [isSelected, nodeId, selectedGroupsRef]);
 
   const draws = useMemo((): BuiltMeshDraw[] => {
     try {
@@ -1091,9 +1178,12 @@ const StageModelGroup = memo(function StageModelGroup({
       e.stopPropagation();
       if (!clickPickSelectionEnabled) return;
       if (gizmoDraggingRef?.current) return;
+      if (orbitActiveRef?.current) return;
+      const elapsed = performance.now() - (pointerDownTimeRef?.current ?? 0);
+      if (elapsed > 250) return;
       onClick(nodeId);
     },
-    [clickPickSelectionEnabled, nodeId, onClick, gizmoDraggingRef]
+    [clickPickSelectionEnabled, nodeId, onClick, gizmoDraggingRef, orbitActiveRef, pointerDownTimeRef]
   );
 
   const euler = useMemo(
@@ -1112,6 +1202,21 @@ const StageModelGroup = memo(function StageModelGroup({
     showPlacementTransformGizmo &&
     onPlacementGizmoFrame &&
     onPlacementGizmoCommit;
+
+  const tcRef = useRef<any>(null);
+
+  useEffect(() => {
+    const tc = tcRef.current;
+    if (!tc || placementGizmoMode !== "scale") return;
+    const enlargeUniformHandle = () => {
+      tc.traverse((child: THREE.Object3D) => {
+        if (child.name === "XYZS" || child.name === "XYZ") {
+          child.scale.setScalar(1.8);
+        }
+      });
+    };
+    enlargeUniformHandle();
+  }, [placementGizmoMode]);
 
   const handleTcObjectChange = useCallback(() => {
     const g = groupRef.current;
@@ -1151,6 +1256,7 @@ const StageModelGroup = memo(function StageModelGroup({
       </group>
       {gizmoReady ? (
         <TransformControls
+          ref={tcRef}
           key={`${nodeId}-${placementGizmoMode}`}
           object={groupRef as unknown as RefObject<THREE.Object3D>}
           mode={placementGizmoMode}
@@ -1182,6 +1288,8 @@ const EffectMarker = memo(function EffectMarker({
   onPlacementGizmoFrame,
   onPlacementGizmoCommit,
   gizmoDraggingRef,
+  orbitActiveRef,
+  pointerDownTimeRef,
 }: {
   entry: PlacementRow;
   globalIdx: number;
@@ -1193,6 +1301,8 @@ const EffectMarker = memo(function EffectMarker({
   onPlacementGizmoFrame?: (idx: number, t: TransformData) => void;
   onPlacementGizmoCommit?: (idx: number, t: TransformData) => void;
   gizmoDraggingRef?: React.RefObject<boolean>;
+  orbitActiveRef?: React.RefObject<boolean>;
+  pointerDownTimeRef?: React.RefObject<number>;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const invalidate = useThree((s) => s.invalidate);
@@ -1202,10 +1312,13 @@ const EffectMarker = memo(function EffectMarker({
     (e: any) => {
       if (!clickPickSelectionEnabled) return;
       if (gizmoDraggingRef?.current) return;
+      if (orbitActiveRef?.current) return;
+      const elapsed = performance.now() - (pointerDownTimeRef?.current ?? 0);
+      if (elapsed > 250) return;
       e.stopPropagation();
       onClick(nodeId);
     },
-    [clickPickSelectionEnabled, onClick, nodeId, gizmoDraggingRef],
+    [clickPickSelectionEnabled, onClick, nodeId, gizmoDraggingRef, orbitActiveRef, pointerDownTimeRef],
   );
 
   const handleGizmoChange = useCallback(() => {

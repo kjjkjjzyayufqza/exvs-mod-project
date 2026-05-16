@@ -610,3 +610,220 @@ pub fn ssbh_template_write_numatb(
 ) -> Result<(), String> {
     write_numatb_from_json_value(&matl_json, &PathBuf::from(file_path.trim()))
 }
+
+// ── Stage Scene Editor: batch DAE export ────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchDaeExportEntry {
+    pub root_path: String,
+    pub output_name: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchDaeExportResult {
+    pub exported: Vec<BatchDaeExportedFile>,
+    pub errors: Vec<String>,
+    pub total_exported: usize,
+    pub total_failed: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchDaeExportedFile {
+    pub name: String,
+    pub path: String,
+    pub mesh_count: usize,
+    pub vertex_count: usize,
+}
+
+/// Batch-export multiple SSBH model folders to DAE files.
+/// Each entry specifies a model `root_path` (folder containing .numdlb) and a desired `output_name`.
+/// All DAE files are written to `output_dir`.
+#[tauri::command]
+pub async fn stage_batch_export_dae(
+    output_dir: String,
+    entries: Vec<BatchDaeExportEntry>,
+    scale_factor: Option<f32>,
+    up_axis: Option<String>,
+    export_textures: Option<bool>,
+) -> Result<BatchDaeExportResult, String> {
+    let out_dir = output_dir.trim().to_string();
+    if out_dir.is_empty() {
+        return Err("output_dir cannot be empty".to_string());
+    }
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let out_path = PathBuf::from(&out_dir);
+        std::fs::create_dir_all(&out_path)
+            .map_err(|e| format!("Failed to create output directory: {e}"))?;
+
+        let scale = scale_factor.unwrap_or(1.0);
+        if !scale.is_finite() || scale <= 0.0 {
+            return Err("scale_factor must be a finite positive number".to_string());
+        }
+
+        let axis = up_axis
+            .as_deref()
+            .unwrap_or("y_up");
+        let axis_conv = parse_up_axis(axis)?;
+        let with_textures = export_textures.unwrap_or(false);
+
+        let cfg = DaeExportConfig {
+            up_axis: axis_conv,
+            scale_factor: scale,
+            ..Default::default()
+        };
+
+        let mut exported: Vec<BatchDaeExportedFile> = Vec::new();
+        let mut errors: Vec<String> = Vec::new();
+
+        for entry in &entries {
+            let root = entry.root_path.trim();
+            if root.is_empty() {
+                errors.push(format!("Skipped '{}': empty root_path", entry.output_name));
+                continue;
+            }
+
+            match export_single_to_dae(root, &out_path, &entry.output_name, &cfg, with_textures) {
+                Ok(info) => exported.push(info),
+                Err(e) => errors.push(format!("{}: {e}", entry.output_name)),
+            }
+        }
+
+        let total_exported = exported.len();
+        let total_failed = errors.len();
+
+        Ok(BatchDaeExportResult {
+            exported,
+            errors,
+            total_exported,
+            total_failed,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn export_single_to_dae(
+    root_path: &str,
+    out_dir: &Path,
+    output_name: &str,
+    cfg: &DaeExportConfig,
+    export_textures: bool,
+) -> Result<BatchDaeExportedFile, String> {
+    let bundle = load_model_preview_bundle(root_path)?;
+    let mesh_path = PathBuf::from(&bundle.mesh_path);
+    let mesh: MeshData =
+        MeshData::from_file(&mesh_path).map_err(|e| format!("Failed to read Mesh: {e}"))?;
+
+    let skel = if let Some(ref p) = bundle.skel_path {
+        let s: SkelData =
+            SkelData::from_file(p).map_err(|e| format!("Failed to read Skel: {e}"))?;
+        Some(s)
+    } else {
+        None
+    };
+
+    let safe_name = output_name
+        .replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
+    let dae_path = out_dir.join(format!("{safe_name}.dae"));
+
+    let stats = if export_textures {
+        let matl_json = bundle.matl.clone().ok_or_else(|| {
+            "matl data is missing; cannot export textures".to_string()
+        })?;
+        let modl: ssbh_data::modl_data::ModlData =
+            serde_json::from_value(bundle.modl.clone())
+                .map_err(|e| format!("Failed to parse modl: {e}"))?;
+        let matl: ssbh_data::matl_data::MatlData =
+            serde_json::from_value(matl_json)
+                .map_err(|e| format!("Failed to parse matl: {e}"))?;
+        let root_canon = PathBuf::from(bundle.root_folder.trim());
+        let material_export = DaeMaterialTextureExport {
+            root_canon: &root_canon,
+            output_dir: out_dir,
+            modl: &modl,
+            matl: &matl,
+        };
+        export_ssbh_bundle_to_dae(
+            &mesh,
+            skel.as_ref(),
+            &dae_path,
+            cfg,
+            None,
+            Some(&material_export),
+        )
+    } else {
+        export_ssbh_bundle_to_dae(&mesh, skel.as_ref(), &dae_path, cfg, None, None)
+    }
+    .map_err(|e| format!("DAE export failed: {e:#}"))?;
+
+    let mesh_count = stats.objects_exported;
+    let vertex_count = stats.triangles_exported * 3;
+
+    Ok(BatchDaeExportedFile {
+        name: safe_name,
+        path: dae_path.to_string_lossy().to_string(),
+        mesh_count,
+        vertex_count,
+    })
+}
+
+/// Export a single model to DAE by selecting specific folder path, returning the output path.
+#[tauri::command]
+pub async fn stage_export_single_dae(
+    root_path: String,
+    output_path: String,
+    scale_factor: Option<f32>,
+    up_axis: Option<String>,
+    export_textures: Option<bool>,
+) -> Result<serde_json::Value, String> {
+    let root = root_path.trim().to_string();
+    let out = output_path.trim().to_string();
+    if root.is_empty() {
+        return Err("root_path cannot be empty".to_string());
+    }
+    if out.is_empty() {
+        return Err("output_path cannot be empty".to_string());
+    }
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let scale = scale_factor.unwrap_or(1.0);
+        if !scale.is_finite() || scale <= 0.0 {
+            return Err("scale_factor must be a finite positive number".to_string());
+        }
+        let axis = up_axis.as_deref().unwrap_or("y_up");
+        let axis_conv = parse_up_axis(axis)?;
+
+        let cfg = DaeExportConfig {
+            up_axis: axis_conv,
+            scale_factor: scale,
+            ..Default::default()
+        };
+
+        let out_path = PathBuf::from(&out);
+        let out_dir = out_path.parent().ok_or_else(|| {
+            "output_path must have a parent directory".to_string()
+        })?;
+        std::fs::create_dir_all(out_dir)
+            .map_err(|e| format!("Failed to create output directory: {e}"))?;
+
+        let output_name = out_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("export");
+
+        let with_textures = export_textures.unwrap_or(false);
+        let info = export_single_to_dae(&root, out_dir, output_name, &cfg, with_textures)?;
+
+        Ok(json!({
+            "path": info.path,
+            "meshCount": info.mesh_count,
+            "vertexCount": info.vertex_count,
+        }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
