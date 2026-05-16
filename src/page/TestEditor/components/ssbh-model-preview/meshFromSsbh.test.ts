@@ -4,6 +4,8 @@ import {
   buildMatlLookup,
   resolveMaterialBinding,
   resolveMaterialTexturePaths,
+  createStageSafeTextureSlotLoadEnabled,
+  createUniformTextureSlotLoadEnabled,
 } from "./meshFromSsbh";
 import type { MatlDataJson, MeshDataJson, ModlDataJson } from "./types";
 
@@ -443,5 +445,25 @@ describe("buildDrawListFromBundle", () => {
     expect(idx?.[0]).toBe(4);
     expect(idx?.[4]).toBe(4);
     expect(idx?.[8]).toBe(4);
+  });
+});
+
+describe("texture slot load presets", () => {
+  it("stage safe enables core maps and disables emissive, metalness, cube", () => {
+    const s = createStageSafeTextureSlotLoadEnabled();
+    expect(s.map).toBe(true);
+    expect(s.normalMap).toBe(true);
+    expect(s.roughnessMap).toBe(true);
+    expect(s.aoMap).toBe(true);
+    expect(s.emissiveMap).toBe(false);
+    expect(s.metalnessMap).toBe(false);
+    expect(s.cubeMap).toBe(false);
+  });
+
+  it("uniform preset sets every slot to the same flag", () => {
+    const on = createUniformTextureSlotLoadEnabled(true);
+    const off = createUniformTextureSlotLoadEnabled(false);
+    expect(on.map && on.emissiveMap && on.cubeMap).toBe(true);
+    expect(off.map || off.emissiveMap || off.cubeMap).toBe(false);
   });
 });

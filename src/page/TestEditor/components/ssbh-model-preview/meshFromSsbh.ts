@@ -335,6 +335,90 @@ export const TEXTURE_SLOT_TO_PATH_FIELD: Record<TexturePreviewSlotKey, keyof Res
 };
 
 /**
+ * SceneEdit default: core PBR maps on; game-specific / easily misleading slots off for generic stage shaders.
+ */
+export function createStageSafeTextureSlotLoadEnabled(): Record<TexturePreviewSlotKey, boolean> {
+  return {
+    map: true,
+    normalMap: true,
+    roughnessMap: true,
+    metalnessMap: false,
+    emissiveMap: false,
+    aoMap: true,
+    cubeMap: false,
+  };
+}
+
+/** All slots on or off (e.g. SceneEdit "Load all" / "Load none"). */
+export function createUniformTextureSlotLoadEnabled(
+  enabled: boolean,
+): Record<TexturePreviewSlotKey, boolean> {
+  const out = {} as Record<TexturePreviewSlotKey, boolean>;
+  for (const { key } of TEXTURE_PREVIEW_SLOT_META) {
+    out[key] = enabled;
+  }
+  return out;
+}
+
+/**
+ * Unique nutexb disk/virtual paths referenced by enabled texture slots only (all draws in each bundle).
+ */
+export function collectUniqueTexturePathsForSceneBundles(
+  baseModel: SsbhModelPreviewBundle | null,
+  subModels: Array<{ bundle: SsbhModelPreviewBundle }>,
+  textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>,
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const pushBundle = (bundle: SsbhModelPreviewBundle) => {
+    for (const p of collectUniqueTexturePathsForSingleBundle(bundle, textureSlotLoadEnabled)) {
+      const k = p.toLowerCase();
+      if (!seen.has(k)) {
+        seen.add(k);
+        out.push(p);
+      }
+    }
+  };
+  if (baseModel) pushBundle(baseModel);
+  for (const sub of subModels) pushBundle(sub.bundle);
+  return out;
+}
+
+function collectUniqueTexturePathsForSingleBundle(
+  bundle: SsbhModelPreviewBundle,
+  textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>,
+): string[] {
+  try {
+    const modl = bundle.modl as ModlDataJson;
+    const mesh = bundle.mesh as MeshDataJson;
+    const skel = bundle.skel as SkelDataJson | null | undefined;
+    if (!modl || !mesh) return [];
+    const lookup = buildMatlLookup(bundle.matl as MatlDataJson | null);
+    const refMap = buildTextureRefToPathMap(bundle);
+    const draws = buildDrawListFromBundle(modl, mesh, skel ?? undefined);
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const d of draws) {
+      const paths = resolveMaterialTexturePaths(d.materialLabel, lookup, refMap);
+      for (const { key } of TEXTURE_PREVIEW_SLOT_META) {
+        if (!textureSlotLoadEnabled[key]) continue;
+        const field = TEXTURE_SLOT_TO_PATH_FIELD[key];
+        const p = paths[field];
+        if (!p) continue;
+        const k = p.toLowerCase();
+        if (!seen.has(k)) {
+          seen.add(k);
+          out.push(p);
+        }
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Counts nutexb decode operations for preview (one per mesh draw × enabled slot with a resolved path).
  * Matches the decode loop in `SsbhModelPreviewProvider` texture loading.
  */

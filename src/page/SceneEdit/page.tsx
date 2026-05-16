@@ -77,6 +77,11 @@ import { clearSceneEditColladaModelCache } from "./components/DAEModel";
 import { reorderPlacementEntriesBySubModels } from "./utils/reorderPlacementBySubModels";
 import { MayaSection } from "./components/MayaSection";
 import { PlacementConfigPanel } from "./components/PlacementConfigPanel";
+import {
+  createDefaultTextureSlotLoadEnabled,
+  createUniformTextureSlotLoadEnabled,
+  type TexturePreviewSlotKey,
+} from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
 
 import type { PreviewRenderStyle } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
 
@@ -249,6 +254,9 @@ export default function SceneEdit() {
   const [wireframe, setWireframe] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [textureQuality, setTextureQuality] = useState("original");
+  const [textureSlotLoadEnabled, setTextureSlotLoadEnabled] = useState<
+    Record<TexturePreviewSlotKey, boolean>
+  >(() => createDefaultTextureSlotLoadEnabled());
   const [sceneAnimeRenderEnabled, setSceneAnimeRenderEnabled] = useState(false);
   const [placementGizmoMode, setPlacementGizmoMode] = useState<PlacementGizmoMode>("translate");
   const [drawStats, setDrawStats] = useState<SceneDrawStats | null>(null);
@@ -262,7 +270,13 @@ export default function SceneEdit() {
     textureDataMap,
     progress: textureProgress,
     warnings: textureWarnings,
-  } = useSceneTextureLoader(baseModel, subModels, sessionId, textureMaxDimension);
+  } = useSceneTextureLoader(
+    baseModel,
+    subModels,
+    sessionId,
+    textureMaxDimension,
+    textureSlotLoadEnabled,
+  );
 
   useEffect(() => {
     if (textureWarnings.length > 0) {
@@ -787,6 +801,23 @@ export default function SceneEdit() {
     clearNutexbRgbaCache();
   }, []);
 
+  const handleTextureSlotMode = useCallback((mode: "all" | "none") => {
+    clearNutexbRgbaCache();
+    setTextureSlotLoadEnabled(
+      mode === "all"
+        ? createDefaultTextureSlotLoadEnabled()
+        : createUniformTextureSlotLoadEnabled(false),
+    );
+  }, []);
+
+  const handleTextureSlotToggle = useCallback(
+    (key: TexturePreviewSlotKey, enabled: boolean) => {
+      clearNutexbRgbaCache();
+      setTextureSlotLoadEnabled((prev) => ({ ...prev, [key]: enabled }));
+    },
+    [],
+  );
+
   const selectedTreeId = useMemo(() => {
     if (!selectedNodeId) return null;
     const parsed = parsePlacementViewportNodeId(selectedNodeId);
@@ -938,6 +969,7 @@ export default function SceneEdit() {
                 selectedPlacementIdx={selectedPlacementIdx}
                 onSelectNode={handleSelectNode}
                 textureDataMap={textureDataMap}
+                textureSlotLoadEnabled={textureSlotLoadEnabled}
                 onDrawStatsChange={handleDrawStatsChange}
                 graphicParams={graphicParams}
                 baseTransform={baseTransform}
@@ -1037,6 +1069,9 @@ export default function SceneEdit() {
                   <TextureQualityPanel
                     quality={textureQuality}
                     onQualityChange={handleTextureQualityChange}
+                    textureSlotLoadEnabled={textureSlotLoadEnabled}
+                    onTextureSlotMode={handleTextureSlotMode}
+                    onTextureSlotToggle={handleTextureSlotToggle}
                     textureDataMap={textureDataMap}
                     isDecoding={textureProgress !== null}
                   />

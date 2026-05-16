@@ -2,6 +2,10 @@ import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
 import {
+  collectUniqueTexturePathsForSceneBundles,
+  type TexturePreviewSlotKey,
+} from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
+import {
   getOrDecodeNutexbRgba,
   makeNutexbVersionId,
   type NutexbRgbaData,
@@ -23,24 +27,9 @@ const DECODE_CONCURRENCY = 4;
 function collectUniqueNutexbPaths(
   baseModel: SsbhModelPreviewBundle | null,
   subModels: Array<{ bundle: SsbhModelPreviewBundle }>,
+  textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>,
 ): string[] {
-  const seen = new Set<string>();
-  const paths: string[] = [];
-
-  const addFromBundle = (bundle: SsbhModelPreviewBundle) => {
-    for (const p of bundle.resolvedNutexbPaths) {
-      const key = p.toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        paths.push(p);
-      }
-    }
-  };
-
-  if (baseModel) addFromBundle(baseModel);
-  for (const sub of subModels) addFromBundle(sub.bundle);
-
-  return paths;
+  return collectUniqueTexturePathsForSceneBundles(baseModel, subModels, textureSlotLoadEnabled);
 }
 
 function basenameOf(path: string): string {
@@ -53,6 +42,7 @@ export function useSceneTextureLoader(
   subModels: Array<{ folderName: string; objectIndex: number; bundle: SsbhModelPreviewBundle }>,
   sessionId: string | null,
   maxDimension: number | null,
+  textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>,
 ): {
   textureDataMap: NutexbTextureDataMap;
   progress: TextureDecodeProgress | null;
@@ -67,7 +57,7 @@ export function useSceneTextureLoader(
   const sourceKind = baseModel?.sourceKind ?? subModels[0]?.bundle.sourceKind ?? "disk";
 
   useEffect(() => {
-    const uniquePaths = collectUniqueNutexbPaths(baseModel, subModels);
+    const uniquePaths = collectUniqueNutexbPaths(baseModel, subModels, textureSlotLoadEnabled);
     if (uniquePaths.length === 0) {
       setTextureDataMap(new Map());
       setProgress(null);
@@ -193,7 +183,7 @@ export function useSceneTextureLoader(
         pendingFlush = null;
       }
     };
-  }, [baseModel, subModels, sessionId, sourceKind, maxDimension]);
+  }, [baseModel, subModels, sessionId, sourceKind, maxDimension, textureSlotLoadEnabled]);
 
   return { textureDataMap, progress, warnings };
 }

@@ -1,6 +1,12 @@
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
+import {
+  TEXTURE_PREVIEW_SLOT_META,
+  type TexturePreviewSlotKey,
+} from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
 
 export interface TextureQualityPreset {
   key: string;
@@ -60,9 +66,29 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
+/** Quick preset: all slots on, all off, or custom mix (toggle group shows no segment pressed). */
+function inferTextureSlotPreset(
+  textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>,
+): "all" | "none" | "" {
+  const allOn = TEXTURE_PREVIEW_SLOT_META.every(({ key }) => textureSlotLoadEnabled[key]);
+  const allOff = TEXTURE_PREVIEW_SLOT_META.every(({ key }) => !textureSlotLoadEnabled[key]);
+  if (allOn) return "all";
+  if (allOff) return "none";
+  return "";
+}
+
+const SLOT_WARNINGS: Partial<Record<TexturePreviewSlotKey, string>> = {
+  emissiveMap: "Game emissive paths can blow out Three.js preview.",
+  metalnessMap: "Often tied to custom EXVS shaders; can look wrong in generic PBR.",
+  cubeMap: "Environment cube is game IBL; may cause harsh highlights when mis-mapped.",
+};
+
 interface TextureQualityPanelProps {
   quality: string;
   onQualityChange: (quality: string) => void;
+  textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>;
+  onTextureSlotMode: (mode: "all" | "none") => void;
+  onTextureSlotToggle: (key: TexturePreviewSlotKey, enabled: boolean) => void;
   textureDataMap: NutexbTextureDataMap;
   isDecoding: boolean;
 }
@@ -70,10 +96,14 @@ interface TextureQualityPanelProps {
 export function TextureQualityPanel({
   quality,
   onQualityChange,
+  textureSlotLoadEnabled,
+  onTextureSlotMode,
+  onTextureSlotToggle,
   textureDataMap,
   isDecoding,
 }: TextureQualityPanelProps) {
   const stats = useMemo(() => computeTextureStats(textureDataMap), [textureDataMap]);
+  const slotPreset = inferTextureSlotPreset(textureSlotLoadEnabled);
 
   const sortedBuckets = useMemo(() => {
     return [...stats.resolutionBuckets.entries()].sort((a, b) => {
@@ -122,6 +152,86 @@ export function TextureQualityPanel({
           Full resolution may require more VRAM.
         </div>
       )}
+
+      <div className="border-t border-border/30 pt-1.5 space-y-1">
+        <div className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
+          Texture slots
+        </div>
+        <ToggleGroup
+          type="single"
+          value={slotPreset}
+          onValueChange={(v) => {
+            if (v === "all" || v === "none") onTextureSlotMode(v);
+          }}
+          variant="default"
+          size="sm"
+          className={cn(
+            "inline-flex h-8 w-full items-stretch rounded-lg border border-input bg-muted p-0.5 shadow-sm",
+          )}
+        >
+          <ToggleGroupItem
+            value="all"
+            aria-label="Load all texture slots"
+            className={cn(
+              "min-h-0 flex-1 rounded-md px-2 text-[10px] font-medium",
+              "min-w-0! border-0! shadow-none! bg-transparent text-muted-foreground",
+              "hover:bg-muted-foreground/15 hover:text-foreground",
+              "data-[state=on]:bg-background! data-[state=on]:text-foreground! data-[state=on]:shadow-sm",
+              "focus-visible:z-10 focus-visible:ring-2! focus-visible:ring-ring!",
+            )}
+          >
+            Load all
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="none"
+            aria-label="Load no texture slots"
+            className={cn(
+              "min-h-0 flex-1 rounded-md border-y-0 border-r-0 border-l border-border/60 bg-transparent px-2 text-[10px] font-medium",
+              "min-w-0! shadow-none! text-muted-foreground",
+              "hover:bg-muted-foreground/15 hover:text-foreground",
+              "data-[state=on]:bg-background! data-[state=on]:text-foreground! data-[state=on]:shadow-sm",
+              "focus-visible:z-10 focus-visible:ring-2! focus-visible:ring-ring!",
+            )}
+          >
+            Load none
+          </ToggleGroupItem>
+        </ToggleGroup>
+
+        <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-0.5 mt-1.5">
+          <div className="text-[9px] text-muted-foreground/80 leading-snug">
+            Per-channel overrides (decode + viewport). Presets above set all on or off at once.
+          </div>
+          {TEXTURE_PREVIEW_SLOT_META.map(({ key, label, short }) => {
+            const warning = SLOT_WARNINGS[key];
+            const checked = textureSlotLoadEnabled[key];
+            return (
+              <div key={key} className="space-y-0.5">
+                <label
+                  className="flex items-start gap-2 rounded-sm px-1 py-0.5 hover:bg-accent/40 cursor-pointer"
+                >
+                  <Checkbox
+                    className="mt-0.5"
+                    checked={checked}
+                    onCheckedChange={(v) => onTextureSlotToggle(key, v === true)}
+                    aria-label={label}
+                  />
+                  <span className="flex flex-col min-w-0">
+                    <span className="text-[10px] leading-tight text-foreground">
+                      <span className="font-medium">{short}</span>
+                      <span className="text-muted-foreground font-normal"> — {label}</span>
+                    </span>
+                    {warning ? (
+                      <span className="text-[8px] text-amber-600/90 leading-snug mt-0.5">
+                        {warning}
+                      </span>
+                    ) : null}
+                  </span>
+                </label>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="border-t border-border/30 pt-1.5 space-y-1">
         <div className="flex items-center justify-between text-[10px] text-muted-foreground">

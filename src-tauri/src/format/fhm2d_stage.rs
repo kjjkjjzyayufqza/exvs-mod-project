@@ -438,6 +438,26 @@ fn kv_get_f64(m: &HashMap<String, String>, keys: &[&str]) -> f64 {
     0.0
 }
 
+/// Scale in placement: missing or empty fields must not become 0 (Three.js would collapse the mesh).
+/// Explicit 0 is treated as unset and defaults to 1.0 for preview parity with common CSV omissions.
+fn kv_get_scale_f64(m: &HashMap<String, String>, keys: &[&str]) -> f64 {
+    for k in keys {
+        if let Some(v) = m.get(&k.to_ascii_uppercase()) {
+            let t = v.trim();
+            if t.is_empty() {
+                continue;
+            }
+            if let Ok(x) = t.parse::<f64>() {
+                if x == 0.0 {
+                    return 1.0;
+                }
+                return x;
+            }
+        }
+    }
+    1.0
+}
+
 fn kv_get_i32(m: &HashMap<String, String>, key: &str) -> Option<i32> {
     m.get(&key.to_ascii_uppercase())
         .and_then(|v| v.parse::<i32>().ok())
@@ -460,9 +480,9 @@ fn parse_placement_kv_record(fields: Vec<String>) -> PlacementEntry {
         rot_x: kv_get_f64(&m, &["VDK_ROTATION_X", "VDK_ROT_X"]),
         rot_y: kv_get_f64(&m, &["VDK_ROTATION_Y", "VDK_ROT_Y"]),
         rot_z: kv_get_f64(&m, &["VDK_ROTATION_Z", "VDK_ROT_Z"]),
-        scale_x: kv_get_f64(&m, &["VDK_SCALE_X"]),
-        scale_y: kv_get_f64(&m, &["VDK_SCALE_Y"]),
-        scale_z: kv_get_f64(&m, &["VDK_SCALE_Z"]),
+        scale_x: kv_get_scale_f64(&m, &["VDK_SCALE_X"]),
+        scale_y: kv_get_scale_f64(&m, &["VDK_SCALE_Y"]),
+        scale_z: kv_get_scale_f64(&m, &["VDK_SCALE_Z"]),
         raw_fields: fields,
     }
 }
@@ -523,6 +543,23 @@ fn parse_placement_table(content: &str, warnings: &mut Vec<String>) -> (Vec<Stri
             .unwrap_or(0.0)
     };
 
+    let parse_scale_f64 = |fields: &[String], col: Option<usize>| -> f64 {
+        match col.and_then(|c| fields.get(c)) {
+            None => 1.0,
+            Some(cell) => {
+                let t = cell.trim();
+                if t.is_empty() {
+                    return 1.0;
+                }
+                match t.parse::<f64>() {
+                    Ok(x) if x == 0.0 => 1.0,
+                    Ok(x) => x,
+                    Err(_) => 1.0,
+                }
+            }
+        }
+    };
+
     let parse_i32 = |fields: &[String], col: Option<usize>| -> Option<i32> {
         col.and_then(|c| fields.get(c))
             .and_then(|v| v.trim().parse::<i32>().ok())
@@ -548,9 +585,9 @@ fn parse_placement_table(content: &str, warnings: &mut Vec<String>) -> (Vec<Stri
             rot_x: parse_f64(&fields, col_rx),
             rot_y: parse_f64(&fields, col_ry),
             rot_z: parse_f64(&fields, col_rz),
-            scale_x: parse_f64(&fields, col_sx),
-            scale_y: parse_f64(&fields, col_sy),
-            scale_z: parse_f64(&fields, col_sz),
+            scale_x: parse_scale_f64(&fields, col_sx),
+            scale_y: parse_scale_f64(&fields, col_sy),
+            scale_z: parse_scale_f64(&fields, col_sz),
             raw_fields: fields,
         });
     }

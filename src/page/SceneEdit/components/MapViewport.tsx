@@ -35,6 +35,7 @@ import {
   resolveMaterialBinding,
   type ResolvedMaterialBinding,
   type ResolvedTextureSampling,
+  type TexturePreviewSlotKey,
 } from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
 import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
 import type { NutexbRgbaData } from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
@@ -148,6 +149,15 @@ function readTransformFromGroup(group: THREE.Group): TransformData {
   };
 }
 
+/** placement rows often have 0 scale when CSV omitted columns; Three.js would hide the mesh. */
+function placementScaleForViewport(sx: number, sy: number, sz: number): [number, number, number] {
+  const each = (v: number) => {
+    if (!Number.isFinite(v) || v === 0) return 1;
+    return Math.max(MIN_GIZMO_SCALE, v);
+  };
+  return [each(sx), each(sy), each(sz)];
+}
+
 function SceneCanvasPerformanceHud({ showStats }: { showStats: boolean }) {
   return (
     <>{showStats ? <Stats className="fixed! top-2! right-2! left-auto! z-2147483000" /> : null}</>
@@ -182,6 +192,8 @@ export interface MapViewportProps {
   selectedPlacementIdx: number | null;
   onSelectNode: (id: string | null) => void;
   textureDataMap: NutexbTextureDataMap;
+  /** Global PBR slot toggles (decode + render). */
+  textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>;
   onDrawStatsChange?: (stats: SceneDrawStats) => void;
   /** Parsed graphic_param.csv rows — drives directional / IBL preview lighting when keys exist */
   graphicParams?: GraphicParam[];
@@ -257,6 +269,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       selectedPlacementIdx,
       onSelectNode,
       textureDataMap,
+      textureSlotLoadEnabled,
       onDrawStatsChange,
       graphicParams = [],
       baseTransform,
@@ -516,6 +529,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             onClick={onSelectNode}
             clickPickSelectionEnabled={clickPickSelectionEnabled}
             textureDataMap={textureDataMap}
+            textureSlotLoadEnabled={textureSlotLoadEnabled}
             texturePool={texturePool}
             previewRenderStyle={previewRenderStyle}
             animeKeyLightDir={animeKeyLightDir}
@@ -560,13 +574,14 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                 onClick={onSelectNode}
                 clickPickSelectionEnabled={clickPickSelectionEnabled}
                 textureDataMap={textureDataMap}
+                textureSlotLoadEnabled={textureSlotLoadEnabled}
                 texturePool={texturePool}
                 previewRenderStyle={previewRenderStyle}
                 animeKeyLightDir={animeKeyLightDir}
                 gizmoDraggingRef={gizmoDraggingRef}
                 position={st ? [st.posX, st.posY, st.posZ] : undefined}
                 rotation={st ? [st.rotX, st.rotY, st.rotZ] : undefined}
-                scale={st ? [st.scaleX, st.scaleY, st.scaleZ] : undefined}
+                scale={st ? placementScaleForViewport(st.scaleX, st.scaleY, st.scaleZ) : undefined}
                 showPlacementTransformGizmo={isStandaloneSel}
                 placementGizmoMode={placementGizmoMode}
                 onPlacementGizmoFrame={
@@ -593,12 +608,13 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
               onClick={onSelectNode}
               clickPickSelectionEnabled={clickPickSelectionEnabled}
               textureDataMap={textureDataMap}
+              textureSlotLoadEnabled={textureSlotLoadEnabled}
               texturePool={texturePool}
               previewRenderStyle={previewRenderStyle}
               animeKeyLightDir={animeKeyLightDir}
               position={[entry.posX, entry.posY, entry.posZ]}
               rotation={[entry.rotX, entry.rotY, entry.rotZ]}
-              scale={[entry.scaleX, entry.scaleY, entry.scaleZ]}
+              scale={placementScaleForViewport(entry.scaleX, entry.scaleY, entry.scaleZ)}
               placementGlobalIdx={globalIdx}
               showPlacementTransformGizmo={
                 selectedPlacementIdx !== null &&
@@ -797,6 +813,7 @@ const SLOT_KEYS: PbrSlotKind[] = [
 const TexturedMesh = memo(function TexturedMesh({
   drawBinding,
   textureDataMap,
+  textureSlotLoadEnabled,
   wireframe,
   isSelected,
   texturePool,
@@ -805,6 +822,7 @@ const TexturedMesh = memo(function TexturedMesh({
 }: {
   drawBinding: DrawBinding;
   textureDataMap: NutexbTextureDataMap;
+  textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>;
   wireframe: boolean;
   isSelected: boolean;
   texturePool: SceneTexturePool;
@@ -815,10 +833,13 @@ const TexturedMesh = memo(function TexturedMesh({
 
   const slotDataEntries = useMemo(() => {
     return SLOT_KEYS.map((slot) => {
+      if (!textureSlotLoadEnabled[slot]) {
+        return [slot, null] as const;
+      }
       const data = lookupTextureData(textureDataMap, pathForSlot(binding, slot));
       return [slot, data] as const;
     });
-  }, [textureDataMap, binding]);
+  }, [textureDataMap, binding, textureSlotLoadEnabled]);
 
   const dataKey = slotDataEntries
     .map(([, d]) => (d ? `${d.width}x${d.height}` : ""))
@@ -930,14 +951,16 @@ const TexturedMesh = memo(function TexturedMesh({
         ? 1.15
         : 0.6;
 
-  const canUseMetalnessMap = hasCube;
+  const exvsUsesMetalnessMap = hasCube && textureSlotLoadEnabled.metalnessMap;
   const effectiveMetalnessMap = exvsActive
-    ? canUseMetalnessMap
+    ? exvsUsesMetalnessMap
       ? textures.metalnessMap ?? null
       : null
-    : textures.metalnessMap ?? null;
+    : textureSlotLoadEnabled.metalnessMap
+      ? textures.metalnessMap ?? null
+      : null;
   const effectiveMetalnessValue = exvsActive
-    ? canUseMetalnessMap
+    ? exvsUsesMetalnessMap
       ? metalnessValue
       : Math.min(metalnessValue, 0.2)
     : metalnessValue;
@@ -992,6 +1015,7 @@ const StageModelGroup = memo(function StageModelGroup({
   rotation,
   scale,
   textureDataMap,
+  textureSlotLoadEnabled,
   texturePool,
   previewRenderStyle,
   animeKeyLightDir,
@@ -1012,6 +1036,7 @@ const StageModelGroup = memo(function StageModelGroup({
   rotation?: [number, number, number];
   scale?: [number, number, number];
   textureDataMap: NutexbTextureDataMap;
+  textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>;
   texturePool: SceneTexturePool;
   previewRenderStyle: PreviewRenderStyle;
   animeKeyLightDir: THREE.Vector3;
@@ -1115,6 +1140,7 @@ const StageModelGroup = memo(function StageModelGroup({
             key={db.draw.key}
             drawBinding={db}
             textureDataMap={textureDataMap}
+            textureSlotLoadEnabled={textureSlotLoadEnabled}
             wireframe={wireframe}
             isSelected={isSelected}
             texturePool={texturePool}
