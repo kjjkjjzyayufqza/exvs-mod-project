@@ -40,6 +40,7 @@ interface SceneOutlinerProps {
   onSelect: (id: string | null) => void;
   onDuplicate?: (ids: string[]) => void;
   onDelete?: (ids: string[]) => void;
+  onPaste?: () => void;
   onFocusSelected?: () => void;
 }
 
@@ -48,6 +49,7 @@ export function SceneOutliner({
   onSelect,
   onDuplicate,
   onDelete,
+  onPaste,
   onFocusSelected,
 }: SceneOutlinerProps) {
   const {
@@ -150,6 +152,8 @@ export function SceneOutliner({
                 toggleVisibility={toggleVisibility}
                 isLocked={isLocked}
                 toggleLock={toggleLock}
+                onDuplicate={onDuplicate}
+                onDelete={onDelete}
               />
             ))}
             <OutlinerNode
@@ -162,6 +166,8 @@ export function SceneOutliner({
               toggleVisibility={toggleVisibility}
               isLocked={isLocked}
               toggleLock={toggleLock}
+              onDuplicate={onDuplicate}
+              onDelete={onDelete}
             />
           </div>
         </ScrollArea>
@@ -185,6 +191,11 @@ export function SceneOutliner({
           <Clipboard className="mr-2 h-3.5 w-3.5" />
           Duplicate
           <ContextMenuShortcut>Ctrl+D</ContextMenuShortcut>
+        </ContextMenuItem>
+        <ContextMenuItem onClick={onPaste} disabled={clipboard.length === 0}>
+          <Clipboard className="mr-2 h-3.5 w-3.5" />
+          Paste as New
+          <ContextMenuShortcut>Ctrl+V</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuItem onClick={handleDeleteSelected} disabled={selectedIds.size === 0} className="text-destructive">
           <Trash2 className="mr-2 h-3.5 w-3.5" />
@@ -232,6 +243,8 @@ function GroupNode({
   toggleVisibility,
   isLocked,
   toggleLock,
+  onDuplicate,
+  onDelete,
 }: {
   group: OutlinerGroup;
   root: StageTreeNode;
@@ -243,6 +256,8 @@ function GroupNode({
   toggleVisibility: (id: string) => void;
   isLocked: (id: string) => boolean;
   toggleLock: (id: string) => void;
+  onDuplicate?: (ids: string[]) => void;
+  onDelete?: (ids: string[]) => void;
 }) {
   const childNodes = useMemo(() => {
     const findNode = (node: StageTreeNode, id: string): StageTreeNode | null => {
@@ -297,6 +312,8 @@ function GroupNode({
                   toggleVisibility={toggleVisibility}
                   isLocked={isLocked}
                   toggleLock={toggleLock}
+                  onDuplicate={onDuplicate}
+                  onDelete={onDelete}
                 />
               ))}
             </div>
@@ -323,6 +340,8 @@ function OutlinerNode({
   toggleVisibility,
   isLocked,
   toggleLock,
+  onDuplicate,
+  onDelete,
 }: {
   node: StageTreeNode;
   depth: number;
@@ -333,6 +352,8 @@ function OutlinerNode({
   toggleVisibility: (id: string) => void;
   isLocked: (id: string) => boolean;
   toggleLock: (id: string) => void;
+  onDuplicate?: (ids: string[]) => void;
+  onDelete?: (ids: string[]) => void;
 }) {
   const [expanded, setExpanded] = useState(depth < 2);
   const hasChildren = node.children && node.children.length > 0;
@@ -364,6 +385,8 @@ function OutlinerNode({
           toggleVisibility={toggleVisibility}
           isLocked={isLocked}
           toggleLock={toggleLock}
+          onDuplicate={onDuplicate}
+          onDelete={onDelete}
           hasChildren={hasChildren}
           expanded={expanded}
           onToggle={() => setExpanded((v) => !v)}
@@ -397,6 +420,8 @@ function OutlinerNode({
           toggleVisibility={toggleVisibility}
           isLocked={isLocked}
           toggleLock={toggleLock}
+          onDuplicate={onDuplicate}
+          onDelete={onDelete}
         />
       ))}
     </div>
@@ -412,6 +437,8 @@ function OutlinerNodeRow({
   toggleVisibility,
   isLocked,
   toggleLock,
+  onDuplicate,
+  onDelete,
   hasChildren,
   expanded,
   onToggle,
@@ -424,6 +451,8 @@ function OutlinerNodeRow({
   toggleVisibility: (id: string) => void;
   isLocked: (id: string) => boolean;
   toggleLock: (id: string) => void;
+  onDuplicate?: (ids: string[]) => void;
+  onDelete?: (ids: string[]) => void;
   hasChildren?: boolean;
   expanded?: boolean;
   onToggle?: () => void;
@@ -494,7 +523,7 @@ function OutlinerNodeRow({
           Copy
           <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
         </ContextMenuItem>
-        <ContextMenuItem>
+        <ContextMenuItem onClick={() => onDuplicate?.([node.id])}>
           <Clipboard className="mr-2 h-3.5 w-3.5" />
           Duplicate as New
           <ContextMenuShortcut>Ctrl+D</ContextMenuShortcut>
@@ -510,7 +539,7 @@ function OutlinerNodeRow({
           {locked ? "Unlock" : "Lock"}
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem className="text-destructive">
+        <ContextMenuItem onClick={() => onDelete?.([node.id])} className="text-destructive">
           <Trash2 className="mr-2 h-3.5 w-3.5" />
           Delete
           <ContextMenuShortcut>Del</ContextMenuShortcut>
@@ -530,6 +559,8 @@ function getRoleIcon(role: StageTreeNode["role"]) {
       return Component;
     case "effect":
       return Sparkles;
+    case "imported_dae":
+      return Box;
     case "root":
       return Layers;
     default:

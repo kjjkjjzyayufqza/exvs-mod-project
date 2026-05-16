@@ -68,6 +68,11 @@ import {
   previewSelectionOnBeforeCompile,
 } from "@/page/TestEditor/components/ssbh-model-preview/previewSelectionMaterial";
 import { SceneTexturePool } from "../utils/SceneTexturePool";
+import {
+  shouldInvalidateViewportForGizmoEvent,
+  shouldRenderGizmoControls,
+  shouldSyncSceneStateForGizmoEvent,
+} from "../utils/sceneEditorGizmoSync";
 
 const DEG2RAD = Math.PI / 180;
 
@@ -165,6 +170,19 @@ export type SceneMapSubModelEntry = {
   bundle: SsbhModelPreviewBundle;
 };
 
+export type ImportedDaeObject = {
+  id: string;
+  name: string;
+  sourcePath: string;
+  scene: THREE.Group;
+  transform: TransformData;
+};
+
+export type SceneExportObject = {
+  object: THREE.Object3D;
+  name: string;
+};
+
 function collectSceneDrawsForComplexity(
   baseModel: SsbhModelPreviewBundle | null,
   subModels: SceneMapSubModelEntry[],
@@ -238,12 +256,14 @@ function SceneAnimePostFxGate({ previewRenderStyle }: { previewRenderStyle: Prev
 export interface MapViewportProps {
   baseModel: SsbhModelPreviewBundle | null;
   subModels: SceneMapSubModelEntry[];
+  importedDaeObjects?: ImportedDaeObject[];
   placementEntries: PlacementRow[];
   showGrid: boolean;
   showAxes: boolean;
   wireframe: boolean;
   showStats: boolean;
   selectedNodeId: string | null;
+  selectedNodeIds?: ReadonlySet<string>;
   selectedPlacementIdx: number | null;
   onSelectNode: (id: string | null) => void;
   textureDataMap: NutexbTextureDataMap;
@@ -256,19 +276,21 @@ export interface MapViewportProps {
   onBaseTransformChange?: (t: TransformData) => void;
   standaloneTransforms?: Map<string, TransformData>;
   onStandaloneTransformChange?: (nodeId: string, t: TransformData) => void;
+  onImportedDaeTransformChange?: (nodeId: string, t: TransformData) => void;
   clickPickSelectionEnabled?: boolean;
   /** Test Editor-style anime pipeline: bloom + warm lights + cel-tinted PBR when "anime". */
   previewRenderStyle?: PreviewRenderStyle;
   /** Placement manipulator mode for OBJECT rows selected in hierarchy/placement list */
   placementGizmoMode?: PlacementGizmoMode;
-  /** Batched transform sync while dragging viewport gizmo (placement CSV row index). */
+  /** Optional preview-only hook for viewport gizmo frames; avoid editor state writes here. */
   onPlacementGizmoFrame?: (placementIdx: number, t: TransformData) => void;
-  /** Final transform sync when releasing gizmo drag */
+  /** Final editor state sync when releasing gizmo drag. */
   onPlacementGizmoCommit?: (placementIdx: number, t: TransformData) => void;
 }
 
 export interface MapViewportHandle {
   resetCamera: () => void;
+  getSelectedExportObjects: () => SceneExportObject[];
 }
 
 function StageOrbitControls({
@@ -319,12 +341,14 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
     {
       baseModel,
       subModels,
+      importedDaeObjects = [],
       placementEntries,
       showGrid,
       showAxes,
       wireframe,
       showStats,
       selectedNodeId,
+      selectedNodeIds,
       selectedPlacementIdx,
       onSelectNode,
       textureDataMap,
@@ -335,6 +359,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       onBaseTransformChange,
       standaloneTransforms,
       onStandaloneTransformChange,
+      onImportedDaeTransformChange,
       clickPickSelectionEnabled = false,
       previewRenderStyle = "standard",
       placementGizmoMode = "translate",
@@ -344,6 +369,12 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
     ref
   ) {
     const controlsRef = useRef<OrbitControlsType>(null);
+    const texturePool = useMemo(() => new SceneTexturePool(), []);
+    useEffect(() => () => texturePool.disposeAll(), [texturePool]);
+    const gizmoDraggingRef = useRef(false);
+    const selectedGroupsRef = useRef<SelectedGroupMap>(new Map());
+    const orbitActiveRef = useRef(false);
+    const pointerDownTimeRef = useRef(0);
 
     useImperativeHandle(ref, () => ({
       resetCamera: () => {
@@ -351,15 +382,17 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           controlsRef.current.reset();
         }
       },
+      getSelectedExportObjects: () =>
+        [...selectedGroupsRef.current.entries()].map(([name, object]) => ({
+          name,
+          object,
+        })),
     }));
 
-    const texturePool = useMemo(() => new SceneTexturePool(), []);
-    useEffect(() => () => texturePool.disposeAll(), [texturePool]);
-
-    const gizmoDraggingRef = useRef(false);
-    const selectedGroupsRef = useRef<SelectedGroupMap>(new Map());
-    const orbitActiveRef = useRef(false);
-    const pointerDownTimeRef = useRef(0);
+    const isNodeSelected = useCallback(
+      (nodeId: string) => selectedNodeId === nodeId || selectedNodeIds?.has(nodeId) === true,
+      [selectedNodeId, selectedNodeIds],
+    );
 
     const handlePointerMissed = useCallback(() => {
       if (!clickPickSelectionEnabled || gizmoDraggingRef.current) return;
@@ -591,7 +624,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             nodeId="base"
             bundle={baseModel}
             wireframe={wireframe}
-            isSelected={selectedNodeId === "base"}
+            isSelected={isNodeSelected("base")}
             onClick={onSelectNode}
             clickPickSelectionEnabled={clickPickSelectionEnabled}
             textureDataMap={textureDataMap}
@@ -604,11 +637,6 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             scale={baseTransform ? [baseTransform.scaleX, baseTransform.scaleY, baseTransform.scaleZ] : undefined}
             showPlacementTransformGizmo={selectedNodeId === "base"}
             placementGizmoMode={placementGizmoMode}
-            onPlacementGizmoFrame={
-              onBaseTransformChange
-                ? (_idx: number, t: TransformData) => onBaseTransformChange(t)
-                : undefined
-            }
             onPlacementGizmoCommit={
               onBaseTransformChange
                 ? (_idx: number, t: TransformData) => onBaseTransformChange(t)
@@ -639,7 +667,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                 nodeId={sub.folderName}
                 bundle={sub.bundle}
                 wireframe={wireframe}
-                isSelected={isStandaloneSel}
+                isSelected={isStandaloneSel || selectedNodeIds?.has(sub.folderName) === true}
                 onClick={onSelectNode}
                 clickPickSelectionEnabled={clickPickSelectionEnabled}
                 textureDataMap={textureDataMap}
@@ -655,11 +683,6 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                 scale={st ? placementScaleForViewport(st.scaleX, st.scaleY, st.scaleZ) : undefined}
                 showPlacementTransformGizmo={isStandaloneSel}
                 placementGizmoMode={placementGizmoMode}
-                onPlacementGizmoFrame={
-                  onStandaloneTransformChange
-                    ? (_idx: number, t: TransformData) => onStandaloneTransformChange(sub.folderName, t)
-                    : undefined
-                }
                 onPlacementGizmoCommit={
                   onStandaloneTransformChange
                     ? (_idx: number, t: TransformData) => onStandaloneTransformChange(sub.folderName, t)
@@ -676,7 +699,10 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
               nodeId={formatPlacementViewportNodeId(sub.folderName, globalIdx)}
               bundle={sub.bundle}
               wireframe={wireframe}
-              isSelected={selectedPlacementIdx === globalIdx}
+              isSelected={
+                selectedPlacementIdx === globalIdx ||
+                selectedNodeIds?.has(formatPlacementViewportNodeId(sub.folderName, globalIdx)) === true
+              }
               onClick={onSelectNode}
               clickPickSelectionEnabled={clickPickSelectionEnabled}
               textureDataMap={textureDataMap}
@@ -708,7 +734,10 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             key={`effect-${globalIdx}`}
             entry={eff}
             globalIdx={globalIdx}
-            isSelected={selectedPlacementIdx === globalIdx}
+            isSelected={
+              selectedPlacementIdx === globalIdx ||
+              selectedNodeIds?.has(`__effect__${globalIdx}`) === true
+            }
             onClick={onSelectNode}
             clickPickSelectionEnabled={clickPickSelectionEnabled}
             showGizmo={
@@ -721,6 +750,23 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             gizmoDraggingRef={gizmoDraggingRef}
             orbitActiveRef={orbitActiveRef}
             pointerDownTimeRef={pointerDownTimeRef}
+          />
+        ))}
+
+        {importedDaeObjects.map((obj) => (
+          <ImportedDaeGroup
+            key={obj.id}
+            object={obj}
+            isSelected={isNodeSelected(obj.id)}
+            onClick={onSelectNode}
+            clickPickSelectionEnabled={clickPickSelectionEnabled}
+            showGizmo={selectedNodeId === obj.id}
+            placementGizmoMode={placementGizmoMode}
+            onTransformCommit={onImportedDaeTransformChange}
+            gizmoDraggingRef={gizmoDraggingRef}
+            orbitActiveRef={orbitActiveRef}
+            pointerDownTimeRef={pointerDownTimeRef}
+            selectedGroupsRef={selectedGroupsRef}
           />
         ))}
 
@@ -751,6 +797,136 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
     );
   }
 );
+
+const ImportedDaeGroup = memo(function ImportedDaeGroup({
+  object,
+  isSelected,
+  onClick,
+  clickPickSelectionEnabled,
+  showGizmo,
+  placementGizmoMode = "translate",
+  onTransformFrame,
+  onTransformCommit,
+  gizmoDraggingRef,
+  orbitActiveRef,
+  pointerDownTimeRef,
+  selectedGroupsRef,
+}: {
+  object: ImportedDaeObject;
+  isSelected: boolean;
+  onClick: (id: string | null) => void;
+  clickPickSelectionEnabled: boolean;
+  showGizmo: boolean;
+  placementGizmoMode?: PlacementGizmoMode;
+  onTransformFrame?: (nodeId: string, t: TransformData) => void;
+  onTransformCommit?: (nodeId: string, t: TransformData) => void;
+  gizmoDraggingRef?: React.RefObject<boolean>;
+  orbitActiveRef?: React.RefObject<boolean>;
+  pointerDownTimeRef?: React.RefObject<number>;
+  selectedGroupsRef?: React.RefObject<SelectedGroupMap>;
+}) {
+  const groupRef = useRef<THREE.Group>(null);
+  const invalidate = useThree((s) => s.invalidate);
+  const regress = useThree((s) => s.performance.regress);
+  const sceneClone = useMemo(() => object.scene.clone(true), [object.scene]);
+
+  useEffect(() => {
+    const g = groupRef.current;
+    if (!g || !selectedGroupsRef) return;
+    if (isSelected) {
+      selectedGroupsRef.current.set(object.id, g);
+    } else {
+      selectedGroupsRef.current.delete(object.id);
+    }
+    return () => {
+      selectedGroupsRef.current.delete(object.id);
+    };
+  }, [isSelected, object.id, selectedGroupsRef]);
+
+  const handleClick = useCallback(
+    (e: any) => {
+      e.stopPropagation();
+      if (!clickPickSelectionEnabled) return;
+      if (gizmoDraggingRef?.current) return;
+      if (orbitActiveRef?.current) return;
+      const elapsed = performance.now() - (pointerDownTimeRef?.current ?? 0);
+      if (elapsed > 250) return;
+      onClick(object.id);
+    },
+    [clickPickSelectionEnabled, gizmoDraggingRef, object.id, onClick, orbitActiveRef, pointerDownTimeRef],
+  );
+
+  const euler = useMemo(
+    () =>
+      new THREE.Euler(
+        object.transform.rotX * DEG2RAD,
+        object.transform.rotY * DEG2RAD,
+        object.transform.rotZ * DEG2RAD,
+      ),
+    [object.transform.rotX, object.transform.rotY, object.transform.rotZ],
+  );
+
+  const handleObjectChange = useCallback(() => {
+    if (shouldInvalidateViewportForGizmoEvent("drag")) {
+      regress();
+      invalidate();
+    }
+    if (!shouldSyncSceneStateForGizmoEvent("drag")) return;
+    const group = groupRef.current;
+    if (!group || !onTransformFrame) return;
+    onTransformFrame(object.id, readTransformFromGroup(group));
+  }, [invalidate, object.id, onTransformFrame, regress]);
+
+  const handleMouseUp = useCallback(() => {
+    if (shouldInvalidateViewportForGizmoEvent("commit")) {
+      invalidate();
+    }
+    if (!shouldSyncSceneStateForGizmoEvent("commit")) return;
+    const group = groupRef.current;
+    if (!group || !onTransformCommit) return;
+    onTransformCommit(object.id, readTransformFromGroup(group));
+  }, [invalidate, object.id, onTransformCommit]);
+
+  return (
+    <Fragment>
+      <group
+        ref={groupRef}
+        name={object.id}
+        onClick={handleClick}
+        position={[
+          object.transform.posX,
+          object.transform.posY,
+          object.transform.posZ,
+        ]}
+        rotation={euler}
+        scale={placementScaleForViewport(
+          object.transform.scaleX,
+          object.transform.scaleY,
+          object.transform.scaleZ,
+        )}
+      >
+        <primitive object={sceneClone} />
+      </group>
+      {showGizmo ? (
+        <TransformControls
+          key={`dae-gizmo-${object.id}-${placementGizmoMode}`}
+          object={groupRef as unknown as RefObject<THREE.Object3D>}
+          mode={placementGizmoMode}
+          space="world"
+          size={1.12}
+          onObjectChange={handleObjectChange}
+          onMouseDown={() => {
+            if (gizmoDraggingRef) gizmoDraggingRef.current = true;
+          }}
+          onMouseUp={() => {
+            if (gizmoDraggingRef) setTimeout(() => { gizmoDraggingRef.current = false; }, 50);
+            handleMouseUp();
+          }}
+        />
+      ) : null}
+    </Fragment>
+  );
+});
 
 const SRGB_SLOTS = new Set<PbrSlotKind>(["map", "emissiveMap"]);
 
@@ -1124,6 +1300,8 @@ const StageModelGroup = memo(function StageModelGroup({
   selectedGroupsRef?: React.RefObject<SelectedGroupMap>;
 }) {
   const groupRef = useRef<THREE.Group>(null);
+  const invalidate = useThree((s) => s.invalidate);
+  const regress = useThree((s) => s.performance.regress);
 
   useEffect(() => {
     const g = groupRef.current;
@@ -1199,9 +1377,10 @@ const StageModelGroup = memo(function StageModelGroup({
   );
 
   const gizmoReady =
-    showPlacementTransformGizmo &&
-    onPlacementGizmoFrame &&
-    onPlacementGizmoCommit;
+    shouldRenderGizmoControls({
+      isSelected: showPlacementTransformGizmo,
+      hasCommitHandler: Boolean(onPlacementGizmoCommit),
+    });
 
   const tcRef = useRef<any>(null);
 
@@ -1219,16 +1398,25 @@ const StageModelGroup = memo(function StageModelGroup({
   }, [placementGizmoMode]);
 
   const handleTcObjectChange = useCallback(() => {
+    if (shouldInvalidateViewportForGizmoEvent("drag")) {
+      regress();
+      invalidate();
+    }
+    if (!shouldSyncSceneStateForGizmoEvent("drag")) return;
     const g = groupRef.current;
     if (!g || !onPlacementGizmoFrame) return;
     onPlacementGizmoFrame(placementGlobalIdx ?? -1, readTransformFromGroup(g));
-  }, [placementGlobalIdx, onPlacementGizmoFrame]);
+  }, [invalidate, placementGlobalIdx, onPlacementGizmoFrame, regress]);
 
   const handleTcMouseUp = useCallback(() => {
+    if (shouldInvalidateViewportForGizmoEvent("commit")) {
+      invalidate();
+    }
+    if (!shouldSyncSceneStateForGizmoEvent("commit")) return;
     const g = groupRef.current;
     if (!g || !onPlacementGizmoCommit) return;
     onPlacementGizmoCommit(placementGlobalIdx ?? -1, readTransformFromGroup(g));
-  }, [placementGlobalIdx, onPlacementGizmoCommit]);
+  }, [invalidate, placementGlobalIdx, onPlacementGizmoCommit]);
 
   return (
     <Fragment>
@@ -1306,6 +1494,7 @@ const EffectMarker = memo(function EffectMarker({
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const invalidate = useThree((s) => s.invalidate);
+  const regress = useThree((s) => s.performance.regress);
   const nodeId = `__effect__${globalIdx}`;
 
   const handleClick = useCallback(
@@ -1322,15 +1511,23 @@ const EffectMarker = memo(function EffectMarker({
   );
 
   const handleGizmoChange = useCallback(() => {
+    if (shouldInvalidateViewportForGizmoEvent("drag")) {
+      regress();
+      invalidate();
+    }
+    if (!shouldSyncSceneStateForGizmoEvent("drag")) return;
     if (!groupRef.current || !onPlacementGizmoFrame) return;
     onPlacementGizmoFrame(globalIdx, readTransformFromGroup(groupRef.current));
-    invalidate();
-  }, [globalIdx, onPlacementGizmoFrame, invalidate]);
+  }, [globalIdx, onPlacementGizmoFrame, invalidate, regress]);
 
   const handleGizmoEnd = useCallback(() => {
+    if (shouldInvalidateViewportForGizmoEvent("commit")) {
+      invalidate();
+    }
+    if (!shouldSyncSceneStateForGizmoEvent("commit")) return;
     if (!groupRef.current || !onPlacementGizmoCommit) return;
     onPlacementGizmoCommit(globalIdx, readTransformFromGroup(groupRef.current));
-  }, [globalIdx, onPlacementGizmoCommit]);
+  }, [globalIdx, onPlacementGizmoCommit, invalidate]);
 
   return (
     <Fragment>

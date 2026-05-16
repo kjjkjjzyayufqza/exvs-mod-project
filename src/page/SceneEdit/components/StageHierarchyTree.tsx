@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 export interface StageTreeNode {
   id: string;
   label: string;
-  role: "base" | "sub_model" | "textures" | "root" | "placement" | "effect";
+  role: "base" | "sub_model" | "textures" | "root" | "placement" | "effect" | "imported_dae";
   children?: StageTreeNode[];
   objectIndex?: number;
   visible?: boolean;

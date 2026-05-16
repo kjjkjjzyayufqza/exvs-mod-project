@@ -4,6 +4,7 @@ import { useSceneEditorStore } from "../store/sceneEditorStore";
 interface SceneKeyboardOptions {
   onDelete?: () => void;
   onDuplicate?: () => void;
+  onPaste?: () => void;
   onFocus?: () => void;
   onSelectAll?: () => void;
   allNodeIds?: string[];
@@ -12,6 +13,7 @@ interface SceneKeyboardOptions {
 export function useSceneKeyboard({
   onDelete,
   onDuplicate,
+  onPaste,
   onFocus,
   onSelectAll,
   allNodeIds = [],
@@ -63,6 +65,12 @@ export function useSceneKeyboard({
         return;
       }
 
+      if (ctrl && e.key === "v") {
+        e.preventDefault();
+        onPaste?.();
+        return;
+      }
+
       if (ctrl && e.key === "g") {
         e.preventDefault();
         const store = useSceneEditorStore.getState();
@@ -104,5 +112,5 @@ export function useSceneKeyboard({
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onDelete, onDuplicate, onFocus, onSelectAll, allNodeIds]);
+  }, [onDelete, onDuplicate, onPaste, onFocus, onSelectAll, allNodeIds]);
 }

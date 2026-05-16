@@ -58,6 +58,7 @@ interface SceneEditorActions {
   clearClipboard: () => void;
 
   pushCommand: (entry: Omit<HistoryEntry, "redo"> & { execute: () => void }) => void;
+  recordCommand: (entry: HistoryEntry) => void;
   undo: () => void;
   redo: () => void;
   canUndo: () => boolean;
@@ -227,6 +228,16 @@ export const useSceneEditorStore = create<SceneEditorState & SceneEditorActions>
           redo: entry.execute,
         };
         state.undoStack.push(histEntry);
+        if (state.undoStack.length > MAX_HISTORY) {
+          state.undoStack.shift();
+        }
+        state.redoStack = [];
+      });
+    },
+
+    recordCommand: (entry) => {
+      set((state) => {
+        state.undoStack.push(entry);
         if (state.undoStack.length > MAX_HISTORY) {
           state.undoStack.shift();
         }

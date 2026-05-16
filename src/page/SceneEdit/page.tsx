@@ -38,6 +38,7 @@ import { useSceneEditorStore } from "./store/sceneEditorStore";
 import {
   MapViewport,
   type MapViewportHandle,
+  type ImportedDaeObject,
   type PlacementGizmoMode,
 } from "./components/MapViewport";
 import {
@@ -54,10 +55,14 @@ import {
   parsePlacementViewportNodeId,
 } from "./utils/placementNodeId";
 import {
-  clonePlacementRow,
   patchPlacementRawFieldsForNumericField,
   patchPlacementRowTransform,
 } from "./utils/patchPlacementRawFields";
+import {
+  deletePlacementAt,
+  duplicatePlacementAt,
+  pastePlacementsAfter,
+} from "./utils/sceneEditorObjectOps";
 import {
   StageRenamePreviewDialog,
   type VirtualTreeFolder,
@@ -87,6 +92,11 @@ import {
   createUniformTextureSlotLoadEnabled,
   type TexturePreviewSlotKey,
 } from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
+import {
+  exportMultipleObjectsAsDAE,
+  exportObjectAsDAE,
+  importDAEFiles,
+} from "./utils/daeExportImport";
 
 import type { PreviewRenderStyle } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
 
@@ -132,6 +142,38 @@ const SCENE_EDIT_DEFAULT_LAYOUT: Record<(typeof SCENE_EDIT_PANEL_IDS)[number], n
     "scene-properties": 20,
   };
 
+function nearlyEqual(a: number, b: number): boolean {
+  return Math.abs(a - b) <= 1e-6;
+}
+
+function transformEquals(a: TransformData, b: TransformData): boolean {
+  return (
+    nearlyEqual(a.posX, b.posX) &&
+    nearlyEqual(a.posY, b.posY) &&
+    nearlyEqual(a.posZ, b.posZ) &&
+    nearlyEqual(a.rotX, b.rotX) &&
+    nearlyEqual(a.rotY, b.rotY) &&
+    nearlyEqual(a.rotZ, b.rotZ) &&
+    nearlyEqual(a.scaleX, b.scaleX) &&
+    nearlyEqual(a.scaleY, b.scaleY) &&
+    nearlyEqual(a.scaleZ, b.scaleZ)
+  );
+}
+
+function placementToTransform(row: PlacementRow): TransformData {
+  return {
+    posX: row.posX,
+    posY: row.posY,
+    posZ: row.posZ,
+    rotX: row.rotX,
+    rotY: row.rotY,
+    rotZ: row.rotZ,
+    scaleX: row.scaleX,
+    scaleY: row.scaleY,
+    scaleZ: row.scaleZ,
+  };
+}
+
 export default function SceneEdit() {
   const viewportRef = useRef<MapViewportHandle>(null);
   const [, startTransition] = useTransition();
@@ -164,6 +206,7 @@ export default function SceneEdit() {
     Record<string, number>
   >({});
   const [placementEntries, setPlacementEntries] = useState<PlacementRow[]>([]);
+  const [importedDaeObjects, setImportedDaeObjects] = useState<ImportedDaeObject[]>([]);
   const [treeRoot, setTreeRoot] = useState<StageTreeNode | null>(null);
 
   const [isMemoryImport, setIsMemoryImport] = useState(false);
@@ -266,6 +309,7 @@ export default function SceneEdit() {
   const [placementGizmoMode, setPlacementGizmoMode] = useState<PlacementGizmoMode>("translate");
   const [drawStats, setDrawStats] = useState<SceneDrawStats | null>(null);
   const [clearCacheDialogOpen, setClearCacheDialogOpen] = useState(false);
+  const editorSelectedIds = useSceneEditorStore((state) => state.selectedIds);
 
   const textureMaxDimension = getMaxDimensionForQuality(textureQuality);
   const scenePreviewRenderStyle: PreviewRenderStyle = sceneAnimeRenderEnabled
@@ -379,31 +423,104 @@ export default function SceneEdit() {
     [subModels, placementEntries]
   );
 
-  const handleDuplicatePlacement = useCallback(() => {
-    if (selectedPlacementIdx === null) return;
-    const src = placementEntries[selectedPlacementIdx];
-    if (src.vdkType.toUpperCase() !== "OBJECT") {
-      toast.error("Only OBJECT rows can be duplicated");
-      return;
-    }
-    const dup = clonePlacementRow(src);
-    const insertAt = selectedPlacementIdx + 1;
-    setPlacementEntries((prev) => {
-      const next = [...prev];
-      next.splice(insertAt, 0, dup);
-      return next;
-    });
-    setSelectedPlacementIdxRaw(insertAt);
-    const sub =
-      src.objectNumber !== null
-        ? subModels.find((s) => s.objectIndex === src.objectNumber)
-        : null;
-    if (sub) {
-      setSelectedNodeIdRaw(formatPlacementViewportNodeId(sub.folderName, insertAt));
-    }
-    setHasUnsavedChanges(true);
-    toast.success("Placement row duplicated");
-  }, [selectedPlacementIdx, placementEntries, subModels]);
+  const placementIndexForNodeId = useCallback(
+    (id: string): number | null => {
+      const parsed = parsePlacementViewportNodeId(id);
+      if (parsed) return parsed.placementEntryIndex;
+      const effectMatch = id.match(/^__effect__(\d+)$/);
+      if (effectMatch) return Number(effectMatch[1]);
+      const sub = subModels.find((s) => s.folderName === id);
+      if (!sub) return null;
+      const idx = placementEntries.findIndex(
+        (entry) =>
+          entry.vdkType.toUpperCase() === "OBJECT" &&
+          entry.objectNumber === sub.objectIndex,
+      );
+      return idx >= 0 ? idx : null;
+    },
+    [placementEntries, subModels],
+  );
+
+  const handleDuplicateSelected = useCallback(
+    (ids?: string[]) => {
+      const requestedIds = ids && ids.length > 0
+        ? ids
+        : selectedNodeId
+          ? [selectedNodeId]
+          : selectedPlacementIdx !== null
+            ? [formatPlacementViewportNodeId("", selectedPlacementIdx)]
+            : [];
+
+      const daeIds = requestedIds.filter((id) => importedDaeObjects.some((obj) => obj.id === id));
+      if (daeIds.length > 0) {
+        const originals = importedDaeObjects.filter((obj) => daeIds.includes(obj.id));
+        const created = originals.map((obj, index) => ({
+          ...obj,
+          id: `dae_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${index}`,
+          name: `${obj.name} Copy`,
+          transform: {
+            ...obj.transform,
+            posX: obj.transform.posX + 1,
+          },
+        }));
+        setImportedDaeObjects((prev) => [...prev, ...created]);
+        useSceneEditorStore.getState().recordCommand({
+          type: "duplicate-dae",
+          description: "Duplicate imported DAE actor",
+          undo: () => {
+            setImportedDaeObjects((prev) => prev.filter((obj) => !created.some((c) => c.id === obj.id)));
+          },
+          redo: () => {
+            setImportedDaeObjects((prev) => [...prev, ...created]);
+          },
+        });
+        setSelectedNodeIdRaw(created[0]?.id ?? selectedNodeId);
+        toast.success(`Duplicated ${created.length} DAE object(s)`);
+        return;
+      }
+
+      const firstPlacementIdx =
+        requestedIds.map(placementIndexForNodeId).find((idx): idx is number => idx !== null) ??
+        selectedPlacementIdx;
+      if (firstPlacementIdx === null) return;
+
+      try {
+        const result = duplicatePlacementAt(placementEntries, firstPlacementIdx);
+        setPlacementEntries(result.entries);
+        setSelectedPlacementIdxRaw(result.insertedIndex);
+        setHasUnsavedChanges(true);
+        const inserted = result.insertedRow;
+        const sub = inserted.objectNumber !== null
+          ? subModels.find((s) => s.objectIndex === inserted.objectNumber)
+          : null;
+        if (sub) {
+          setSelectedNodeIdRaw(formatPlacementViewportNodeId(sub.folderName, result.insertedIndex));
+        }
+        useSceneEditorStore.getState().recordCommand({
+          type: "duplicate-placement",
+          description: "Duplicate placement row",
+          undo: () => {
+            setPlacementEntries((prev) => prev.filter((_, i) => i !== result.insertedIndex));
+            setSelectedPlacementIdxRaw(firstPlacementIdx);
+            setHasUnsavedChanges(true);
+          },
+          redo: () => {
+            setPlacementEntries((prev) => {
+              const next = [...prev];
+              next.splice(result.insertedIndex, 0, result.insertedRow);
+              return next;
+            });
+            setSelectedPlacementIdxRaw(result.insertedIndex);
+            setHasUnsavedChanges(true);
+          },
+        });
+        toast.success("Placement row duplicated");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to duplicate selection");
+      }
+    },
+    [importedDaeObjects, placementEntries, placementIndexForNodeId, selectedNodeId, selectedPlacementIdx, subModels],
+  );
 
   const applyBundle = useCallback(
     (path: string, bundle: StageBundleResponse) => {
@@ -470,6 +587,7 @@ export default function SceneEdit() {
     setPlacementHeader([]);
     setPlacementColMap({});
     setPlacementEntries([]);
+    setImportedDaeObjects([]);
     setTreeRoot(null);
     setDrawStats(null);
     setBaseTransform({ ...DEFAULT_TRANSFORM });
@@ -685,82 +803,168 @@ export default function SceneEdit() {
       >,
       value: number
     ) => {
+      const previous = placementEntries[index];
+      if (!previous) return;
+      const nextEntry = patchPlacementRawFieldsForNumericField(
+        previous,
+        field,
+        value,
+        placementColMap,
+      );
       setPlacementEntries((prev) => {
         const next = [...prev];
-        const entry = prev[index];
-        if (!entry) return prev;
-        next[index] = patchPlacementRawFieldsForNumericField(
-          entry,
-          field,
-          value,
-          placementColMap
-        );
+        next[index] = nextEntry;
         return next;
       });
       setHasUnsavedChanges(true);
-    },
-    [placementColMap]
-  );
-
-  const gizmoRafRef = useRef<number | null>(null);
-  const gizmoPendingRef = useRef<{ idx: number; t: TransformData } | null>(null);
-
-  const applyPlacementTransformImmediate = useCallback(
-    (idx: number, t: TransformData) => {
-      setPlacementEntries((prev) => {
-        const entry = prev[idx];
-        if (!entry) return prev;
-        const patched = patchPlacementRowTransform(entry, t, placementColMap);
-        const next = [...prev];
-        next[idx] = patched;
-        return next;
-      });
-      setHasUnsavedChanges(true);
-    },
-    [placementColMap],
-  );
-
-  const schedulePlacementGizmo = useCallback(
-    (idx: number, t: TransformData) => {
-      gizmoPendingRef.current = { idx, t };
-      if (gizmoRafRef.current !== null) return;
-      gizmoRafRef.current = requestAnimationFrame(() => {
-        gizmoRafRef.current = null;
-        const p = gizmoPendingRef.current;
-        if (!p) return;
-        applyPlacementTransformImmediate(p.idx, p.t);
+      useSceneEditorStore.getState().recordCommand({
+        type: "edit-placement-field",
+        description: "Edit placement transform",
+        undo: () => {
+          setPlacementEntries((prev) => {
+            const next = [...prev];
+            next[index] = previous;
+            return next;
+          });
+          setHasUnsavedChanges(true);
+        },
+        redo: () => {
+          setPlacementEntries((prev) => {
+            const next = [...prev];
+            next[index] = nextEntry;
+            return next;
+          });
+          setHasUnsavedChanges(true);
+        },
       });
     },
-    [applyPlacementTransformImmediate],
+    [placementColMap, placementEntries]
   );
 
   const commitPlacementGizmo = useCallback(
     (idx: number, t: TransformData) => {
-      if (gizmoRafRef.current !== null) {
-        cancelAnimationFrame(gizmoRafRef.current);
-        gizmoRafRef.current = null;
-      }
-      gizmoPendingRef.current = null;
-      applyPlacementTransformImmediate(idx, t);
+      const previous = placementEntries[idx];
+      if (!previous) return;
+      if (transformEquals(placementToTransform(previous), t)) return;
+      const nextEntry = patchPlacementRowTransform(previous, t, placementColMap);
+      setPlacementEntries((prev) => {
+        const entry = prev[idx];
+        if (!entry) return prev;
+        const next = [...prev];
+        next[idx] = patchPlacementRowTransform(entry, t, placementColMap);
+        return next;
+      });
+      setHasUnsavedChanges(true);
+      useSceneEditorStore.getState().recordCommand({
+        type: "gizmo-placement-transform",
+        description: "Move placement gizmo",
+        undo: () => {
+          setPlacementEntries((prev) => {
+            const next = [...prev];
+            next[idx] = previous;
+            return next;
+          });
+          setHasUnsavedChanges(true);
+        },
+        redo: () => {
+          setPlacementEntries((prev) => {
+            const next = [...prev];
+            next[idx] = nextEntry;
+            return next;
+          });
+          setHasUnsavedChanges(true);
+        },
+      });
     },
-    [applyPlacementTransformImmediate],
+    [placementColMap, placementEntries],
   );
 
-  const updateStandaloneTransform = useCallback(
+  const updateImportedDaeTransform = useCallback(
     (nodeId: string, t: TransformData) => {
+      setImportedDaeObjects((prev) =>
+        prev.map((obj) =>
+          obj.id === nodeId
+            ? { ...obj, transform: t }
+            : obj,
+        ),
+      );
+    },
+    [],
+  );
+
+  const commitBaseGizmoTransform = useCallback(
+    (t: TransformData) => {
+      const previous = baseTransform;
+      if (transformEquals(previous, t)) return;
+      setBaseTransform(t);
+      useSceneEditorStore.getState().recordCommand({
+        type: "gizmo-base-transform",
+        description: "Move base model gizmo",
+        undo: () => setBaseTransform(previous),
+        redo: () => setBaseTransform(t),
+      });
+    },
+    [baseTransform],
+  );
+
+  const commitStandaloneGizmoTransform = useCallback(
+    (nodeId: string, t: TransformData) => {
+      const previous = standaloneTransforms.get(nodeId) ?? { ...DEFAULT_TRANSFORM };
+      if (transformEquals(previous, t)) return;
       setStandaloneTransforms((prev) => {
         const next = new Map(prev);
         next.set(nodeId, t);
         return next;
       });
+      useSceneEditorStore.getState().recordCommand({
+        type: "gizmo-standalone-transform",
+        description: "Move standalone model gizmo",
+        undo: () => {
+          setStandaloneTransforms((prev) => {
+            const next = new Map(prev);
+            next.set(nodeId, previous);
+            return next;
+          });
+        },
+        redo: () => {
+          setStandaloneTransforms((prev) => {
+            const next = new Map(prev);
+            next.set(nodeId, t);
+            return next;
+          });
+        },
+      });
     },
-    [],
+    [standaloneTransforms],
+  );
+
+  const commitImportedDaeGizmoTransform = useCallback(
+    (nodeId: string, t: TransformData) => {
+      const previous = importedDaeObjects.find((obj) => obj.id === nodeId)?.transform;
+      if (!previous || transformEquals(previous, t)) return;
+      updateImportedDaeTransform(nodeId, t);
+      useSceneEditorStore.getState().recordCommand({
+        type: "gizmo-dae-transform",
+        description: "Move imported DAE gizmo",
+        undo: () => updateImportedDaeTransform(nodeId, previous),
+        redo: () => updateImportedDaeTransform(nodeId, t),
+      });
+    },
+    [importedDaeObjects, updateImportedDaeTransform],
   );
 
   const handleTransformChange = useCallback(
     (field: keyof TransformData, value: number) => {
       if (selectedNodeId === "base") {
-        setBaseTransform((prev) => ({ ...prev, [field]: value }));
+        const previous = baseTransform;
+        const next = { ...previous, [field]: value };
+        setBaseTransform(next);
+        useSceneEditorStore.getState().recordCommand({
+          type: "edit-base-transform",
+          description: "Edit base transform",
+          undo: () => setBaseTransform(previous),
+          redo: () => setBaseTransform(next),
+        });
         return;
       }
       if (
@@ -768,11 +972,49 @@ export default function SceneEdit() {
         selectedPlacementIdx === null &&
         subModels.some((s) => s.folderName === selectedNodeId)
       ) {
+        const previous = standaloneTransforms.get(selectedNodeId) ?? { ...DEFAULT_TRANSFORM };
+        const nextTransform = { ...previous, [field]: value };
         setStandaloneTransforms((prev) => {
           const next = new Map(prev);
-          const current = prev.get(selectedNodeId) ?? { ...DEFAULT_TRANSFORM };
-          next.set(selectedNodeId, { ...current, [field]: value });
+          next.set(selectedNodeId, nextTransform);
           return next;
+        });
+        useSceneEditorStore.getState().recordCommand({
+          type: "edit-standalone-transform",
+          description: "Edit standalone model transform",
+          undo: () => {
+            setStandaloneTransforms((prev) => {
+              const nextMap = new Map(prev);
+              nextMap.set(selectedNodeId, previous);
+              return nextMap;
+            });
+          },
+          redo: () => {
+            setStandaloneTransforms((prev) => {
+              const nextMap = new Map(prev);
+              nextMap.set(selectedNodeId, nextTransform);
+              return nextMap;
+            });
+          },
+        });
+        return;
+      }
+      if (selectedNodeId && importedDaeObjects.some((obj) => obj.id === selectedNodeId)) {
+        const previous = importedDaeObjects.find((obj) => obj.id === selectedNodeId)?.transform;
+        if (!previous) return;
+        const nextTransform = { ...previous, [field]: value };
+        setImportedDaeObjects((prev) =>
+          prev.map((obj) =>
+            obj.id === selectedNodeId
+              ? { ...obj, transform: nextTransform }
+              : obj,
+          ),
+        );
+        useSceneEditorStore.getState().recordCommand({
+          type: "edit-dae-transform",
+          description: "Edit DAE transform",
+          undo: () => updateImportedDaeTransform(selectedNodeId, previous),
+          redo: () => updateImportedDaeTransform(selectedNodeId, nextTransform),
         });
         return;
       }
@@ -794,7 +1036,16 @@ export default function SceneEdit() {
         value
       );
     },
-    [selectedNodeId, selectedPlacementIdx, handlePlacementChange, subModels]
+    [
+      selectedNodeId,
+      selectedPlacementIdx,
+      baseTransform,
+      standaloneTransforms,
+      handlePlacementChange,
+      importedDaeObjects,
+      subModels,
+      updateImportedDaeTransform,
+    ]
   );
 
   const handleDrawStatsChange = useCallback((stats: SceneDrawStats) => {
@@ -824,7 +1075,19 @@ export default function SceneEdit() {
   );
 
   const outlinerRoot = useMemo((): StageTreeNode | null => {
-    if (!treeRoot) return null;
+    if (!treeRoot) {
+      if (importedDaeObjects.length === 0) return null;
+      return {
+        id: "root",
+        label: "Scene",
+        role: "root",
+        children: importedDaeObjects.map((obj) => ({
+          id: obj.id,
+          label: obj.name,
+          role: "imported_dae",
+        })),
+      };
+    }
     const children: StageTreeNode[] = [];
     if (treeRoot.children) {
       for (const child of treeRoot.children) {
@@ -868,8 +1131,15 @@ export default function SceneEdit() {
         role: "effect",
       });
     }
+    for (const obj of importedDaeObjects) {
+      children.push({
+        id: obj.id,
+        label: obj.name,
+        role: "imported_dae",
+      });
+    }
     return { ...treeRoot, children };
-  }, [treeRoot, placementEntries]);
+  }, [treeRoot, placementEntries, importedDaeObjects]);
 
   const allNodeIds = useMemo(() => {
     if (!outlinerRoot) return [];
@@ -886,17 +1156,186 @@ export default function SceneEdit() {
     viewportRef.current?.resetCamera();
   }, []);
 
-  const handleDeleteSelected = useCallback(() => {
-    if (selectedPlacementIdx === null) return;
-    setPlacementEntries((prev) => prev.filter((_, i) => i !== selectedPlacementIdx));
-    setSelectedNodeIdRaw(null);
-    setSelectedPlacementIdxRaw(null);
-    setHasUnsavedChanges(true);
-  }, [selectedPlacementIdx]);
+  const handlePasteAsNew = useCallback(() => {
+    const clipboard = useSceneEditorStore.getState().clipboard;
+    if (clipboard.length === 0) return;
+
+    const clipboardIds = clipboard.map((entry) => entry.nodeId);
+    const daeSources = importedDaeObjects.filter((obj) => clipboardIds.includes(obj.id));
+    if (daeSources.length > 0) {
+      const created = daeSources.map((obj, index) => ({
+        ...obj,
+        id: `dae_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${index}`,
+        name: `${obj.name} Copy`,
+        transform: {
+          ...obj.transform,
+          posX: obj.transform.posX + 1,
+        },
+      }));
+      setImportedDaeObjects((prev) => [...prev, ...created]);
+      setSelectedNodeIdRaw(created[0]?.id ?? null);
+      useSceneEditorStore.getState().recordCommand({
+        type: "paste-dae",
+        description: "Paste imported DAE actor",
+        undo: () => setImportedDaeObjects((prev) => prev.filter((obj) => !created.some((c) => c.id === obj.id))),
+        redo: () => setImportedDaeObjects((prev) => [...prev, ...created]),
+      });
+      toast.success(`Pasted ${created.length} DAE object(s)`);
+      return;
+    }
+
+    const copiedRows = clipboardIds
+      .map(placementIndexForNodeId)
+      .filter((idx): idx is number => idx !== null)
+      .map((idx) => placementEntries[idx])
+      .filter((entry): entry is PlacementRow => Boolean(entry));
+
+    if (copiedRows.length === 0) {
+      toast.error("Clipboard does not contain pasteable scene objects");
+      return;
+    }
+
+    try {
+      const result = pastePlacementsAfter(placementEntries, copiedRows, selectedPlacementIdx);
+      setPlacementEntries(result.entries);
+      setSelectedPlacementIdxRaw(result.insertedStart);
+      setHasUnsavedChanges(true);
+      useSceneEditorStore.getState().recordCommand({
+        type: "paste-placement",
+        description: "Paste placement rows",
+        undo: () => {
+          setPlacementEntries((prev) =>
+            prev.filter((_, i) => i < result.insertedStart || i >= result.insertedStart + result.insertedRows.length),
+          );
+          setHasUnsavedChanges(true);
+        },
+        redo: () => {
+          setPlacementEntries((prev) => {
+            const next = [...prev];
+            next.splice(result.insertedStart, 0, ...result.insertedRows);
+            return next;
+          });
+          setSelectedPlacementIdxRaw(result.insertedStart);
+          setHasUnsavedChanges(true);
+        },
+      });
+      toast.success(`Pasted ${result.insertedRows.length} placement row(s)`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to paste selection");
+    }
+  }, [importedDaeObjects, placementEntries, placementIndexForNodeId, selectedPlacementIdx]);
+
+  const handleImportDae = useCallback(async () => {
+    try {
+      const results = await importDAEFiles(true);
+      if (results.length === 0) return;
+      const created: ImportedDaeObject[] = results.map((result, index) => ({
+        id: `dae_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${index}`,
+        name: result.fileName.replace(/\.dae$/i, ""),
+        sourcePath: result.filePath,
+        scene: result.scene,
+        transform: { ...DEFAULT_TRANSFORM, posX: index },
+      }));
+      setImportedDaeObjects((prev) => [...prev, ...created]);
+      setSelectedNodeIdRaw(created[0]?.id ?? null);
+      setSelectedPlacementIdxRaw(null);
+      useSceneEditorStore.getState().recordCommand({
+        type: "import-dae",
+        description: "Import DAE object",
+        undo: () => setImportedDaeObjects((prev) => prev.filter((obj) => !created.some((c) => c.id === obj.id))),
+        redo: () => setImportedDaeObjects((prev) => [...prev, ...created]),
+      });
+      toast.success(`Imported ${created.length} DAE object(s)`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to import DAE");
+    }
+  }, []);
+
+  const handleExportSelectedDae = useCallback(async () => {
+    const objects = viewportRef.current?.getSelectedExportObjects() ?? [];
+    if (objects.length === 0) {
+      toast.error("Select one or more scene objects before exporting DAE");
+      return;
+    }
+    const safeObjects = objects.map((entry) => ({
+      ...entry,
+      name: entry.name.replace(/[\/\\:*?"<>|]/g, "_"),
+    }));
+    try {
+      if (safeObjects.length === 1) {
+        await exportObjectAsDAE(safeObjects[0].object, safeObjects[0].name);
+      } else {
+        await exportMultipleObjectsAsDAE(safeObjects);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to export DAE");
+    }
+  }, []);
+
+  const handleDeleteSelected = useCallback(
+    (ids?: string[]) => {
+      const requestedIds = ids && ids.length > 0
+        ? ids
+        : selectedNodeId
+          ? [selectedNodeId]
+          : [];
+
+      const daeIds = requestedIds.filter((id) => importedDaeObjects.some((obj) => obj.id === id));
+      if (daeIds.length > 0) {
+        const deleted = importedDaeObjects.filter((obj) => daeIds.includes(obj.id));
+        setImportedDaeObjects((prev) => prev.filter((obj) => !daeIds.includes(obj.id)));
+        setSelectedNodeIdRaw(null);
+        useSceneEditorStore.getState().recordCommand({
+          type: "delete-dae",
+          description: "Delete imported DAE actor",
+          undo: () => setImportedDaeObjects((prev) => [...prev, ...deleted]),
+          redo: () => setImportedDaeObjects((prev) => prev.filter((obj) => !daeIds.includes(obj.id))),
+        });
+        toast.success(`Deleted ${deleted.length} DAE object(s)`);
+        return;
+      }
+
+      const idx =
+        requestedIds.map(placementIndexForNodeId).find((value): value is number => value !== null) ??
+        selectedPlacementIdx;
+      if (idx === null) return;
+
+      try {
+        const result = deletePlacementAt(placementEntries, idx);
+        setPlacementEntries(result.entries);
+        setSelectedNodeIdRaw(null);
+        setSelectedPlacementIdxRaw(null);
+        setHasUnsavedChanges(true);
+        useSceneEditorStore.getState().recordCommand({
+          type: "delete-placement",
+          description: "Delete placement row",
+          undo: () => {
+            setPlacementEntries((prev) => {
+              const next = [...prev];
+              next.splice(idx, 0, result.deleted);
+              return next;
+            });
+            setSelectedPlacementIdxRaw(idx);
+            setHasUnsavedChanges(true);
+          },
+          redo: () => {
+            setPlacementEntries((prev) => prev.filter((_, i) => i !== idx));
+            setSelectedNodeIdRaw(null);
+            setSelectedPlacementIdxRaw(null);
+            setHasUnsavedChanges(true);
+          },
+        });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to delete selection");
+      }
+    },
+    [importedDaeObjects, placementEntries, placementIndexForNodeId, selectedNodeId, selectedPlacementIdx],
+  );
 
   useSceneKeyboard({
     onDelete: handleDeleteSelected,
-    onDuplicate: handleDuplicatePlacement,
+    onDuplicate: () => handleDuplicateSelected(),
+    onPaste: handlePasteAsNew,
     onFocus: handleFocusSelected,
     allNodeIds,
   });
@@ -923,10 +1362,16 @@ export default function SceneEdit() {
     selectedPlacementIdx === null &&
     subModels.some((s) => s.folderName === selectedNodeId);
 
+  const selectedImportedDae = selectedNodeId
+    ? importedDaeObjects.find((obj) => obj.id === selectedNodeId) ?? null
+    : null;
+
   const selectedTransform: TransformData | null = isBaseSelected
     ? baseTransform
     : isStandaloneSubModel
       ? (standaloneTransforms.get(selectedNodeId!) ?? { ...DEFAULT_TRANSFORM })
+      : selectedImportedDae
+        ? selectedImportedDae.transform
       : selectedPlacementIdx !== null && placementEntries[selectedPlacementIdx]
         ? {
             posX: placementEntries[selectedPlacementIdx].posX,
@@ -1021,8 +1466,9 @@ export default function SceneEdit() {
                 <SceneOutliner
                   root={outlinerRoot}
                   onSelect={handleSelectNode}
-                  onDuplicate={() => handleDuplicatePlacement()}
+                  onDuplicate={handleDuplicateSelected}
                   onDelete={handleDeleteSelected}
+                  onPaste={handlePasteAsNew}
                   onFocusSelected={handleFocusSelected}
                 />
               </div>
@@ -1053,7 +1499,9 @@ export default function SceneEdit() {
               onFocusSelected={handleFocusSelected}
               onGizmoMode={setPlacementGizmoMode}
               gizmoMode={placementGizmoMode}
-              onDuplicateSelected={handleDuplicatePlacement}
+              onImportDAE={handleImportDae}
+              onExportDAE={handleExportSelectedDae}
+              onDuplicateSelected={() => handleDuplicateSelected()}
               onDeleteSelected={handleDeleteSelected}
               hasSelection={selectedNodeId !== null}
             >
@@ -1062,12 +1510,14 @@ export default function SceneEdit() {
                 ref={viewportRef}
                 baseModel={baseModel}
                 subModels={subModels}
+                importedDaeObjects={importedDaeObjects}
                 placementEntries={placementEntries}
                 showGrid={showGrid}
                 showAxes={showAxes}
                 wireframe={wireframe}
                 showStats={showStats}
                 selectedNodeId={selectedNodeId}
+                selectedNodeIds={editorSelectedIds}
                 selectedPlacementIdx={selectedPlacementIdx}
                 onSelectNode={handleSelectNode}
                 textureDataMap={textureDataMap}
@@ -1075,13 +1525,13 @@ export default function SceneEdit() {
                 onDrawStatsChange={handleDrawStatsChange}
                 graphicParams={graphicParams}
                 baseTransform={baseTransform}
-                onBaseTransformChange={setBaseTransform}
+                onBaseTransformChange={commitBaseGizmoTransform}
                 standaloneTransforms={standaloneTransforms}
-                onStandaloneTransformChange={updateStandaloneTransform}
+                onStandaloneTransformChange={commitStandaloneGizmoTransform}
+                onImportedDaeTransformChange={commitImportedDaeGizmoTransform}
                 clickPickSelectionEnabled
                 previewRenderStyle={scenePreviewRenderStyle}
                 placementGizmoMode={placementGizmoMode}
-                onPlacementGizmoFrame={schedulePlacementGizmo}
                 onPlacementGizmoCommit={commitPlacementGizmo}
               />
               <SceneViewportOverlay textureProgress={textureProgress} />
@@ -1143,7 +1593,7 @@ export default function SceneEdit() {
                     selectedIndex={selectedPlacementIdx}
                     onSelectEntry={handleSelectPlacement}
                     onEntryChange={handlePlacementChange}
-                    onDuplicate={handleDuplicatePlacement}
+                    onDuplicate={() => handleDuplicateSelected()}
                     duplicateDisabled={!canDuplicatePlacement}
                   />
                 </MayaSection>
