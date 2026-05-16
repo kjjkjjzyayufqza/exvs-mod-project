@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, memo } from 'react';
-import { TransformControls } from '@react-three/drei';
+import { SceneTransformControls } from './SceneTransformControls';
 import { ModelState } from '../../../store/sceneStore';
 import { BoundingBoxGrid } from './BoundingBoxGrid';
 import { SelectionManager } from '../utils/SelectionManager';
@@ -165,7 +165,7 @@ function HavokModelInner({ modelState, mode, onTransform, selectionManager }: Ha
                         visible={true}
                         color="#ff00ff"
                     />
-                    <TransformControls
+                    <SceneTransformControls
                         object={meshRef.current}
                         mode={mode}
                         showX

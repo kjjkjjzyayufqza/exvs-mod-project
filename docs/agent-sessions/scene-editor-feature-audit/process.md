@@ -71,3 +71,26 @@ Check whether the requested Unreal-like Scene Editor feature list has been imple
 - `npm test -- src/page/SceneEdit/utils/sceneEditorGizmoSync.test.ts` -> failed first because `shouldRenderGizmoControls` did not exist.
 - `npm test -- src/page/SceneEdit/utils/sceneEditorGizmoSync.test.ts src/page/SceneEdit/utils/sceneEditorObjectOps.test.ts` -> passed, 9 tests.
 - `npm run build` -> passed. Vite still reports the existing large chunk and plugin timing warnings.
+
+## Outliner Scene State And Local Transform Controls
+
+- User requested three follow-ups: make Outliner hide/lock affect actual scene contents, add clear DAE import/export controls, and replace drei TransformControls with a custom implementation.
+- Used `grill-me` workflow: questions that can be answered from the codebase were answered by inspection instead of asking the user.
+- Referenced Three.js official GitHub TransformControls implementation. Relevant semantics retained locally: controls attach to a scene graph object and emit `change`, `objectChange`, `mouseDown`, and `mouseUp` events.
+- Added `sceneEditorNodeState.ts` with focused tests:
+  - default nodes are visible and unlocked;
+  - hidden nodes do not render or edit;
+  - locked nodes remain visible but cannot edit.
+- Wired `nodeVisibility` and `objectLocks` from `sceneEditorStore` into `MapViewport`.
+- Hidden nodes are now skipped by viewport rendering, selection outline registration, and selected DAE export collection.
+- Locked nodes remain visible, but viewport click selection, gizmo display, transform commits, Details transform edits, duplicate, and delete are blocked.
+- Added visible toolbar buttons for DAE import and selected DAE export in `MapToolbar`; right-click menu remains available.
+- Added `SceneTransformControls.tsx`, a local React Three Fiber wrapper around `three-stdlib`/Three examples TransformControls, and replaced SceneEdit usage of the drei TransformControls component in `MapViewport`, `DAEModel`, and `HavokModel`.
+
+## Verification
+
+- `npm test -- src/page/SceneEdit/utils/sceneEditorNodeState.test.ts` -> failed first because the policy module did not exist.
+- `npm test -- src/page/SceneEdit/utils/sceneEditorNodeState.test.ts` -> passed, 3 tests.
+- `npm test -- src/page/SceneEdit/utils/sceneEditorNodeState.test.ts src/page/SceneEdit/utils/sceneEditorGizmoSync.test.ts src/page/SceneEdit/utils/sceneEditorObjectOps.test.ts` -> passed, 12 tests.
+- `npx tsc --noEmit` -> passed after adding a typed event bridge for local transform control events.
+- `npm run build` -> passed. Vite still reports the existing large chunk and plugin timing warnings.

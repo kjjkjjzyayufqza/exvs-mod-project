@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, Suspense, useMemo, useCallback, memo } from 'react';
 import { useLoader } from '@react-three/fiber';
 import { ColladaLoader } from 'three-stdlib';
-import { TransformControls } from '@react-three/drei';
+import { SceneTransformControls } from './SceneTransformControls';
 import { ModelState, SubModelState } from '../../../store/sceneStore';
 import { BoundingBoxGrid } from './BoundingBoxGrid';
 import { SelectionManager } from '../utils/SelectionManager';
@@ -377,7 +377,7 @@ function DAEModelInner({ modelState, mode, onTransform, selectionManager }: DAEM
                         visible={true}
                         color="#00ffff"
                     />
-                    <TransformControls
+                    <SceneTransformControls
                         object={meshRef.current}
                         mode={mode}
                         showX

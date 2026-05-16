@@ -11,3 +11,7 @@
 - [x] Add focused regression coverage for gizmo drag state sync policy.
 - [x] Fix high-frequency transform state writes during viewport dragging.
 - [x] Verify focused tests and production build.
+- [x] Make Outliner visibility and lock states affect the actual scene.
+- [x] Add clear toolbar DAE import/export controls.
+- [x] Replace drei TransformControls with a local SceneEdit transform controls wrapper.
+- [x] Verify hide/lock, DAE toolbar, and transform control changes.

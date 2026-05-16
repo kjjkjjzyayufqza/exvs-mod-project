@@ -9,6 +9,8 @@ import {
   RotateCcw,
   Activity,
   Eraser,
+  Upload,
+  Download,
   Move3D,
   RotateCw,
   Maximize,
@@ -36,7 +38,10 @@ interface MapToolbarProps {
   onImportFhm2d: () => void;
   onExtractFhm2d: () => void;
   onSave: () => void;
+  onImportDae: () => void;
+  onExportSelectedDae: () => void;
   canSave: boolean;
+  canExportDae: boolean;
   hasUnsavedChanges?: boolean;
   stageName: string | null;
   isLoading: boolean;
@@ -62,7 +67,10 @@ export function MapToolbar({
   onImportFhm2d,
   onExtractFhm2d,
   onSave,
+  onImportDae,
+  onExportSelectedDae,
   canSave,
+  canExportDae,
   hasUnsavedChanges,
   stageName,
   isLoading,
@@ -150,6 +158,38 @@ export function MapToolbar({
         <TooltipContent side="bottom">
           {hasUnsavedChanges ? "Save changes" : "Save CSV"}
         </TooltipContent>
+      </Tooltip>
+
+      <Separator orientation="vertical" className="h-4 mx-0.5" />
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={onImportDae}
+            disabled={isLoading}
+          >
+            <Upload className="h-3.5 w-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Import DAE object(s)</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={onExportSelectedDae}
+            disabled={!canExportDae || isLoading}
+          >
+            <Download className="h-3.5 w-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Export selected DAE object(s)</TooltipContent>
       </Tooltip>
 
       <Separator orientation="vertical" className="h-4 mx-0.5" />

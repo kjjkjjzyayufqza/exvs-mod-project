@@ -44,6 +44,6 @@
 
 ## Library Direction
 
-- Keep `@react-three/drei` for `TransformControls`, `GizmoHelper`, and `OrbitControls` because it already integrates with React Three Fiber and is in the project.
+- Keep `@react-three/drei` for `GizmoHelper`, `GizmoViewport`, `Grid`, `Html`, and OrbitControls integration, but SceneEdit transform handles now use the local `SceneTransformControls` wrapper instead of drei's TransformControls component.
 - Consider `@react-three/editor` or Triplex only for future authoring workflows that write JSX/source changes. They are not a clean fit for this Tauri asset editor because SceneEdit data comes from game files, `placement.csv`, and imported DAE actors rather than static JSX.
 - Avoid adopting a full alternate scene framework such as ThreePipe until there is a clear need for its serialization/editor stack; it would compete with the current SSBH/placement data model.

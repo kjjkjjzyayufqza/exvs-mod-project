@@ -97,6 +97,7 @@ import {
   exportObjectAsDAE,
   importDAEFiles,
 } from "./utils/daeExportImport";
+import { canEditSceneNode } from "./utils/sceneEditorNodeState";
 
 import type { PreviewRenderStyle } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
 
@@ -310,6 +311,8 @@ export default function SceneEdit() {
   const [drawStats, setDrawStats] = useState<SceneDrawStats | null>(null);
   const [clearCacheDialogOpen, setClearCacheDialogOpen] = useState(false);
   const editorSelectedIds = useSceneEditorStore((state) => state.selectedIds);
+  const nodeVisibility = useSceneEditorStore((state) => state.nodeVisibility);
+  const objectLocks = useSceneEditorStore((state) => state.objectLocks);
 
   const textureMaxDimension = getMaxDimensionForQuality(textureQuality);
   const scenePreviewRenderStyle: PreviewRenderStyle = sceneAnimeRenderEnabled
@@ -441,6 +444,31 @@ export default function SceneEdit() {
     [placementEntries, subModels],
   );
 
+  const nodeIdForPlacementIndex = useCallback(
+    (idx: number): string | null => {
+      const entry = placementEntries[idx];
+      if (!entry) return null;
+      if (entry.vdkType.toUpperCase() !== "OBJECT") return `__effect__${idx}`;
+      if (entry.objectNumber === null) return null;
+      const sub = subModels.find((s) => s.objectIndex === entry.objectNumber);
+      return sub ? formatPlacementViewportNodeId(sub.folderName, idx) : null;
+    },
+    [placementEntries, subModels],
+  );
+
+  const canEditNode = useCallback(
+    (nodeId: string | null) => {
+      if (!nodeId) return true;
+      return canEditSceneNode(nodeId, nodeVisibility, objectLocks);
+    },
+    [nodeVisibility, objectLocks],
+  );
+
+  const hasLockedOrHiddenNode = useCallback(
+    (ids: string[]) => ids.some((id) => !canEditNode(id)),
+    [canEditNode],
+  );
+
   const handleDuplicateSelected = useCallback(
     (ids?: string[]) => {
       const requestedIds = ids && ids.length > 0
@@ -448,8 +476,13 @@ export default function SceneEdit() {
         : selectedNodeId
           ? [selectedNodeId]
           : selectedPlacementIdx !== null
-            ? [formatPlacementViewportNodeId("", selectedPlacementIdx)]
+            ? [nodeIdForPlacementIndex(selectedPlacementIdx)].filter((id): id is string => Boolean(id))
             : [];
+
+      if (hasLockedOrHiddenNode(requestedIds)) {
+        toast.error("Locked or hidden scene objects cannot be duplicated");
+        return;
+      }
 
       const daeIds = requestedIds.filter((id) => importedDaeObjects.some((obj) => obj.id === id));
       if (daeIds.length > 0) {
@@ -519,7 +552,16 @@ export default function SceneEdit() {
         toast.error(err instanceof Error ? err.message : "Failed to duplicate selection");
       }
     },
-    [importedDaeObjects, placementEntries, placementIndexForNodeId, selectedNodeId, selectedPlacementIdx, subModels],
+    [
+      hasLockedOrHiddenNode,
+      importedDaeObjects,
+      nodeIdForPlacementIndex,
+      placementEntries,
+      placementIndexForNodeId,
+      selectedNodeId,
+      selectedPlacementIdx,
+      subModels,
+    ],
   );
 
   const applyBundle = useCallback(
@@ -843,6 +885,7 @@ export default function SceneEdit() {
 
   const commitPlacementGizmo = useCallback(
     (idx: number, t: TransformData) => {
+      if (!canEditNode(nodeIdForPlacementIndex(idx))) return;
       const previous = placementEntries[idx];
       if (!previous) return;
       if (transformEquals(placementToTransform(previous), t)) return;
@@ -876,7 +919,7 @@ export default function SceneEdit() {
         },
       });
     },
-    [placementColMap, placementEntries],
+    [canEditNode, nodeIdForPlacementIndex, placementColMap, placementEntries],
   );
 
   const updateImportedDaeTransform = useCallback(
@@ -894,6 +937,7 @@ export default function SceneEdit() {
 
   const commitBaseGizmoTransform = useCallback(
     (t: TransformData) => {
+      if (!canEditNode("base")) return;
       const previous = baseTransform;
       if (transformEquals(previous, t)) return;
       setBaseTransform(t);
@@ -904,11 +948,12 @@ export default function SceneEdit() {
         redo: () => setBaseTransform(t),
       });
     },
-    [baseTransform],
+    [baseTransform, canEditNode],
   );
 
   const commitStandaloneGizmoTransform = useCallback(
     (nodeId: string, t: TransformData) => {
+      if (!canEditNode(nodeId)) return;
       const previous = standaloneTransforms.get(nodeId) ?? { ...DEFAULT_TRANSFORM };
       if (transformEquals(previous, t)) return;
       setStandaloneTransforms((prev) => {
@@ -935,11 +980,12 @@ export default function SceneEdit() {
         },
       });
     },
-    [standaloneTransforms],
+    [canEditNode, standaloneTransforms],
   );
 
   const commitImportedDaeGizmoTransform = useCallback(
     (nodeId: string, t: TransformData) => {
+      if (!canEditNode(nodeId)) return;
       const previous = importedDaeObjects.find((obj) => obj.id === nodeId)?.transform;
       if (!previous || transformEquals(previous, t)) return;
       updateImportedDaeTransform(nodeId, t);
@@ -950,11 +996,18 @@ export default function SceneEdit() {
         redo: () => updateImportedDaeTransform(nodeId, t),
       });
     },
-    [importedDaeObjects, updateImportedDaeTransform],
+    [canEditNode, importedDaeObjects, updateImportedDaeTransform],
   );
 
   const handleTransformChange = useCallback(
     (field: keyof TransformData, value: number) => {
+      const editableNodeId =
+        selectedNodeId ??
+        (selectedPlacementIdx !== null ? nodeIdForPlacementIndex(selectedPlacementIdx) : null);
+      if (!canEditNode(editableNodeId)) {
+        toast.error("Locked or hidden scene objects cannot be edited");
+        return;
+      }
       if (selectedNodeId === "base") {
         const previous = baseTransform;
         const next = { ...previous, [field]: value };
@@ -1040,9 +1093,11 @@ export default function SceneEdit() {
       selectedNodeId,
       selectedPlacementIdx,
       baseTransform,
+      canEditNode,
       standaloneTransforms,
       handlePlacementChange,
       importedDaeObjects,
+      nodeIdForPlacementIndex,
       subModels,
       updateImportedDaeTransform,
     ]
@@ -1278,7 +1333,14 @@ export default function SceneEdit() {
         ? ids
         : selectedNodeId
           ? [selectedNodeId]
-          : [];
+          : selectedPlacementIdx !== null
+            ? [nodeIdForPlacementIndex(selectedPlacementIdx)].filter((id): id is string => Boolean(id))
+            : [];
+
+      if (hasLockedOrHiddenNode(requestedIds)) {
+        toast.error("Locked or hidden scene objects cannot be deleted");
+        return;
+      }
 
       const daeIds = requestedIds.filter((id) => importedDaeObjects.some((obj) => obj.id === id));
       if (daeIds.length > 0) {
@@ -1329,7 +1391,15 @@ export default function SceneEdit() {
         toast.error(err instanceof Error ? err.message : "Failed to delete selection");
       }
     },
-    [importedDaeObjects, placementEntries, placementIndexForNodeId, selectedNodeId, selectedPlacementIdx],
+    [
+      hasLockedOrHiddenNode,
+      importedDaeObjects,
+      nodeIdForPlacementIndex,
+      placementEntries,
+      placementIndexForNodeId,
+      selectedNodeId,
+      selectedPlacementIdx,
+    ],
   );
 
   useSceneKeyboard({
@@ -1390,6 +1460,10 @@ export default function SceneEdit() {
     selectedPlacementIdx !== null &&
     placementEntries[selectedPlacementIdx]?.vdkType.toUpperCase() === "OBJECT";
 
+  const canExportSelectedDae =
+    selectedNodeId !== null &&
+    (nodeVisibility[selectedNodeId] ?? true);
+
   return (
     <TooltipProvider>
       <div className="flex h-full min-h-0 min-w-0 flex-col bg-background">
@@ -1398,7 +1472,10 @@ export default function SceneEdit() {
           onImportFhm2d={handleImportFhm2d}
           onExtractFhm2d={handleExtractFhm2d}
           onSave={handleSave}
+          onImportDae={handleImportDae}
+          onExportSelectedDae={handleExportSelectedDae}
           canSave={!!stageName && !isMemoryImport}
+          canExportDae={canExportSelectedDae}
           hasUnsavedChanges={hasUnsavedChanges}
           stageName={stageName}
           isLoading={isLoading}
@@ -1518,6 +1595,8 @@ export default function SceneEdit() {
                 showStats={showStats}
                 selectedNodeId={selectedNodeId}
                 selectedNodeIds={editorSelectedIds}
+                nodeVisibility={nodeVisibility}
+                objectLocks={objectLocks}
                 selectedPlacementIdx={selectedPlacementIdx}
                 onSelectNode={handleSelectNode}
                 textureDataMap={textureDataMap}

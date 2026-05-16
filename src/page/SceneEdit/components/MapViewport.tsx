@@ -9,7 +9,6 @@ import {
   Stats,
   Environment,
   Lightformer,
-  TransformControls,
 } from "@react-three/drei";
 import {
   EffectComposer,
@@ -73,6 +72,13 @@ import {
   shouldRenderGizmoControls,
   shouldSyncSceneStateForGizmoEvent,
 } from "../utils/sceneEditorGizmoSync";
+import {
+  canEditSceneNode,
+  canRenderSceneNode,
+  type SceneNodeLockMap,
+  type SceneNodeVisibilityMap,
+} from "../utils/sceneEditorNodeState";
+import { SceneTransformControls } from "./SceneTransformControls";
 
 const DEG2RAD = Math.PI / 180;
 
@@ -83,6 +89,8 @@ const SelectedGroupsCtx = createContext<React.RefObject<SelectedGroupMap>>(
 
 const OUTLINE_EDGE_COLOR = new THREE.Color("#ff8c00").getHex();
 const OUTLINE_HIDDEN_COLOR = new THREE.Color("#4a3000").getHex();
+const EMPTY_NODE_VISIBILITY: SceneNodeVisibilityMap = {};
+const EMPTY_NODE_LOCKS: SceneNodeLockMap = {};
 
 function SceneSelectionOutline({ selectedGroupsRef }: { selectedGroupsRef: React.RefObject<SelectedGroupMap> }) {
   const [outlineMeshes, setOutlineMeshes] = useState<THREE.Mesh[]>([]);
@@ -264,6 +272,8 @@ export interface MapViewportProps {
   showStats: boolean;
   selectedNodeId: string | null;
   selectedNodeIds?: ReadonlySet<string>;
+  nodeVisibility?: SceneNodeVisibilityMap;
+  objectLocks?: SceneNodeLockMap;
   selectedPlacementIdx: number | null;
   onSelectNode: (id: string | null) => void;
   textureDataMap: NutexbTextureDataMap;
@@ -349,6 +359,8 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       showStats,
       selectedNodeId,
       selectedNodeIds,
+      nodeVisibility = EMPTY_NODE_VISIBILITY,
+      objectLocks = EMPTY_NODE_LOCKS,
       selectedPlacementIdx,
       onSelectNode,
       textureDataMap,
@@ -392,6 +404,14 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
     const isNodeSelected = useCallback(
       (nodeId: string) => selectedNodeId === nodeId || selectedNodeIds?.has(nodeId) === true,
       [selectedNodeId, selectedNodeIds],
+    );
+    const isNodeVisible = useCallback(
+      (nodeId: string) => canRenderSceneNode(nodeId, nodeVisibility, objectLocks),
+      [nodeVisibility, objectLocks],
+    );
+    const isNodeEditable = useCallback(
+      (nodeId: string) => canEditSceneNode(nodeId, nodeVisibility, objectLocks),
+      [nodeVisibility, objectLocks],
     );
 
     const handlePointerMissed = useCallback(() => {
@@ -619,12 +639,13 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           <color attach="background" args={["#1a1a2e"]} />
         </Environment>
 
-        {baseModel && (
+        {baseModel && isNodeVisible("base") && (
           <StageModelGroup
             nodeId="base"
             bundle={baseModel}
             wireframe={wireframe}
             isSelected={isNodeSelected("base")}
+            isLocked={!isNodeEditable("base")}
             onClick={onSelectNode}
             clickPickSelectionEnabled={clickPickSelectionEnabled}
             textureDataMap={textureDataMap}
@@ -635,7 +656,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             position={baseTransform ? [baseTransform.posX, baseTransform.posY, baseTransform.posZ] : undefined}
             rotation={baseTransform ? [baseTransform.rotX, baseTransform.rotY, baseTransform.rotZ] : undefined}
             scale={baseTransform ? [baseTransform.scaleX, baseTransform.scaleY, baseTransform.scaleZ] : undefined}
-            showPlacementTransformGizmo={selectedNodeId === "base"}
+            showPlacementTransformGizmo={selectedNodeId === "base" && isNodeEditable("base")}
             placementGizmoMode={placementGizmoMode}
             onPlacementGizmoCommit={
               onBaseTransformChange
@@ -661,6 +682,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           if (objectRows.length === 0) {
             const st = standaloneTransforms?.get(sub.folderName);
             const isStandaloneSel = selectedNodeId === sub.folderName && selectedPlacementIdx === null;
+            if (!isNodeVisible(sub.folderName)) return [];
             return [
               <StageModelGroup
                 key={sub.folderName}
@@ -668,6 +690,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                 bundle={sub.bundle}
                 wireframe={wireframe}
                 isSelected={isStandaloneSel || selectedNodeIds?.has(sub.folderName) === true}
+                isLocked={!isNodeEditable(sub.folderName)}
                 onClick={onSelectNode}
                 clickPickSelectionEnabled={clickPickSelectionEnabled}
                 textureDataMap={textureDataMap}
@@ -681,7 +704,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                 position={st ? [st.posX, st.posY, st.posZ] : undefined}
                 rotation={st ? [st.rotX, st.rotY, st.rotZ] : undefined}
                 scale={st ? placementScaleForViewport(st.scaleX, st.scaleY, st.scaleZ) : undefined}
-                showPlacementTransformGizmo={isStandaloneSel}
+                showPlacementTransformGizmo={isStandaloneSel && isNodeEditable(sub.folderName)}
                 placementGizmoMode={placementGizmoMode}
                 onPlacementGizmoCommit={
                   onStandaloneTransformChange
@@ -693,16 +716,20 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             ];
           }
 
-          return objectRows.map(({ entry, globalIdx }) => (
+          return objectRows.flatMap(({ entry, globalIdx }) => {
+            const nodeId = formatPlacementViewportNodeId(sub.folderName, globalIdx);
+            if (!isNodeVisible(nodeId)) return [];
+            return [(
             <StageModelGroup
               key={`${sub.folderName}-pl-${globalIdx}`}
-              nodeId={formatPlacementViewportNodeId(sub.folderName, globalIdx)}
+              nodeId={nodeId}
               bundle={sub.bundle}
               wireframe={wireframe}
               isSelected={
                 selectedPlacementIdx === globalIdx ||
-                selectedNodeIds?.has(formatPlacementViewportNodeId(sub.folderName, globalIdx)) === true
+                selectedNodeIds?.has(nodeId) === true
               }
+              isLocked={!isNodeEditable(nodeId)}
               onClick={onSelectNode}
               clickPickSelectionEnabled={clickPickSelectionEnabled}
               textureDataMap={textureDataMap}
@@ -716,7 +743,8 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
               placementGlobalIdx={globalIdx}
               showPlacementTransformGizmo={
                 selectedPlacementIdx !== null &&
-                selectedPlacementIdx === globalIdx
+                selectedPlacementIdx === globalIdx &&
+                isNodeEditable(nodeId)
               }
               placementGizmoMode={placementGizmoMode}
               onPlacementGizmoFrame={onPlacementGizmoFrame}
@@ -726,23 +754,29 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
               pointerDownTimeRef={pointerDownTimeRef}
               selectedGroupsRef={selectedGroupsRef}
             />
-          ));
+            )];
+          });
         })}
 
-        {effectEntries.map(({ entry: eff, globalIdx }) => (
+        {effectEntries.flatMap(({ entry: eff, globalIdx }) => {
+          const nodeId = `__effect__${globalIdx}`;
+          if (!isNodeVisible(nodeId)) return [];
+          return [(
           <EffectMarker
             key={`effect-${globalIdx}`}
             entry={eff}
             globalIdx={globalIdx}
             isSelected={
               selectedPlacementIdx === globalIdx ||
-              selectedNodeIds?.has(`__effect__${globalIdx}`) === true
+              selectedNodeIds?.has(nodeId) === true
             }
+            isLocked={!isNodeEditable(nodeId)}
             onClick={onSelectNode}
             clickPickSelectionEnabled={clickPickSelectionEnabled}
             showGizmo={
               selectedPlacementIdx !== null &&
-              selectedPlacementIdx === globalIdx
+              selectedPlacementIdx === globalIdx &&
+              isNodeEditable(nodeId)
             }
             placementGizmoMode={placementGizmoMode}
             onPlacementGizmoFrame={onPlacementGizmoFrame}
@@ -751,16 +785,20 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             orbitActiveRef={orbitActiveRef}
             pointerDownTimeRef={pointerDownTimeRef}
           />
-        ))}
+          )];
+        })}
 
-        {importedDaeObjects.map((obj) => (
+        {importedDaeObjects.flatMap((obj) => {
+          if (!isNodeVisible(obj.id)) return [];
+          return [(
           <ImportedDaeGroup
             key={obj.id}
             object={obj}
             isSelected={isNodeSelected(obj.id)}
+            isLocked={!isNodeEditable(obj.id)}
             onClick={onSelectNode}
             clickPickSelectionEnabled={clickPickSelectionEnabled}
-            showGizmo={selectedNodeId === obj.id}
+            showGizmo={selectedNodeId === obj.id && isNodeEditable(obj.id)}
             placementGizmoMode={placementGizmoMode}
             onTransformCommit={onImportedDaeTransformChange}
             gizmoDraggingRef={gizmoDraggingRef}
@@ -768,7 +806,8 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             pointerDownTimeRef={pointerDownTimeRef}
             selectedGroupsRef={selectedGroupsRef}
           />
-        ))}
+          )];
+        })}
 
         {showGrid && (
           <Grid
@@ -801,6 +840,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
 const ImportedDaeGroup = memo(function ImportedDaeGroup({
   object,
   isSelected,
+  isLocked,
   onClick,
   clickPickSelectionEnabled,
   showGizmo,
@@ -814,6 +854,7 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
 }: {
   object: ImportedDaeObject;
   isSelected: boolean;
+  isLocked?: boolean;
   onClick: (id: string | null) => void;
   clickPickSelectionEnabled: boolean;
   showGizmo: boolean;
@@ -846,6 +887,7 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
   const handleClick = useCallback(
     (e: any) => {
       e.stopPropagation();
+      if (isLocked) return;
       if (!clickPickSelectionEnabled) return;
       if (gizmoDraggingRef?.current) return;
       if (orbitActiveRef?.current) return;
@@ -853,7 +895,7 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
       if (elapsed > 250) return;
       onClick(object.id);
     },
-    [clickPickSelectionEnabled, gizmoDraggingRef, object.id, onClick, orbitActiveRef, pointerDownTimeRef],
+    [clickPickSelectionEnabled, gizmoDraggingRef, isLocked, object.id, onClick, orbitActiveRef, pointerDownTimeRef],
   );
 
   const euler = useMemo(
@@ -908,7 +950,7 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
         <primitive object={sceneClone} />
       </group>
       {showGizmo ? (
-        <TransformControls
+        <SceneTransformControls
           key={`dae-gizmo-${object.id}-${placementGizmoMode}`}
           object={groupRef as unknown as RefObject<THREE.Object3D>}
           mode={placementGizmoMode}
@@ -1255,6 +1297,7 @@ const StageModelGroup = memo(function StageModelGroup({
   bundle,
   wireframe,
   isSelected,
+  isLocked,
   onClick,
   clickPickSelectionEnabled,
   position,
@@ -1279,6 +1322,7 @@ const StageModelGroup = memo(function StageModelGroup({
   bundle: SsbhModelPreviewBundle;
   wireframe: boolean;
   isSelected: boolean;
+  isLocked?: boolean;
   onClick: (id: string) => void;
   clickPickSelectionEnabled: boolean;
   position?: [number, number, number];
@@ -1354,6 +1398,7 @@ const StageModelGroup = memo(function StageModelGroup({
   const handleClick = useCallback(
     (e: any) => {
       e.stopPropagation();
+      if (isLocked) return;
       if (!clickPickSelectionEnabled) return;
       if (gizmoDraggingRef?.current) return;
       if (orbitActiveRef?.current) return;
@@ -1361,7 +1406,7 @@ const StageModelGroup = memo(function StageModelGroup({
       if (elapsed > 250) return;
       onClick(nodeId);
     },
-    [clickPickSelectionEnabled, nodeId, onClick, gizmoDraggingRef, orbitActiveRef, pointerDownTimeRef]
+    [clickPickSelectionEnabled, isLocked, nodeId, onClick, gizmoDraggingRef, orbitActiveRef, pointerDownTimeRef]
   );
 
   const euler = useMemo(
@@ -1443,7 +1488,7 @@ const StageModelGroup = memo(function StageModelGroup({
         ))}
       </group>
       {gizmoReady ? (
-        <TransformControls
+        <SceneTransformControls
           ref={tcRef}
           key={`${nodeId}-${placementGizmoMode}`}
           object={groupRef as unknown as RefObject<THREE.Object3D>}
@@ -1469,6 +1514,7 @@ const EffectMarker = memo(function EffectMarker({
   entry,
   globalIdx,
   isSelected,
+  isLocked,
   onClick,
   clickPickSelectionEnabled,
   showGizmo,
@@ -1482,6 +1528,7 @@ const EffectMarker = memo(function EffectMarker({
   entry: PlacementRow;
   globalIdx: number;
   isSelected: boolean;
+  isLocked?: boolean;
   onClick: (id: string | null) => void;
   clickPickSelectionEnabled: boolean;
   showGizmo: boolean;
@@ -1499,6 +1546,7 @@ const EffectMarker = memo(function EffectMarker({
 
   const handleClick = useCallback(
     (e: any) => {
+      if (isLocked) return;
       if (!clickPickSelectionEnabled) return;
       if (gizmoDraggingRef?.current) return;
       if (orbitActiveRef?.current) return;
@@ -1507,7 +1555,7 @@ const EffectMarker = memo(function EffectMarker({
       e.stopPropagation();
       onClick(nodeId);
     },
-    [clickPickSelectionEnabled, onClick, nodeId, gizmoDraggingRef, orbitActiveRef, pointerDownTimeRef],
+    [clickPickSelectionEnabled, isLocked, onClick, nodeId, gizmoDraggingRef, orbitActiveRef, pointerDownTimeRef],
   );
 
   const handleGizmoChange = useCallback(() => {
@@ -1555,7 +1603,7 @@ const EffectMarker = memo(function EffectMarker({
         </Html>
       </group>
       {showGizmo && groupRef.current ? (
-        <TransformControls
+        <SceneTransformControls
           key={`eff-gizmo-${globalIdx}-${placementGizmoMode}`}
           object={groupRef.current}
           mode={placementGizmoMode}
