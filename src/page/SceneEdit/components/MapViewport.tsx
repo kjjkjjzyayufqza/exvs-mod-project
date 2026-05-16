@@ -1,4 +1,4 @@
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
   OrbitControls,
   GizmoHelper,
@@ -9,6 +9,7 @@ import {
   Stats,
   Environment,
   Lightformer,
+  TransformControls,
 } from "@react-three/drei";
 import {
   useRef,
@@ -18,6 +19,7 @@ import {
   memo,
   forwardRef,
   useImperativeHandle,
+  Fragment,
   type RefObject,
 } from "react";
 import * as THREE from "three";
@@ -37,22 +39,25 @@ import {
 import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
 import type { NutexbRgbaData } from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
 import type { PlacementRow } from "./PlacementPanel";
+import type { GraphicParam } from "./GraphicParamPanel";
+import { deriveSceneLightingFromGraphicParams } from "../utils/graphicParamSceneLighting";
 import { formatPlacementViewportNodeId } from "../utils/placementNodeId";
 import type { SceneDrawStats } from "./SceneViewportOverlay";
+import type { TransformData } from "./StagePropertyEditor";
 import type { PreviewRenderStyle } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
-import {
-  DEFAULT_PREVIEW_3D_BACKGROUND,
-  DEFAULT_PREVIEW_AMBIENT_INTENSITY,
-  DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY,
-  DEFAULT_PREVIEW_DIRECTIONAL_X,
-  DEFAULT_PREVIEW_DIRECTIONAL_Y,
-  DEFAULT_PREVIEW_DIRECTIONAL_Z,
-} from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
+import { DEFAULT_PREVIEW_3D_BACKGROUND } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
 import {
   getSsbhAdaptivePerformanceOptions,
   getSsbhCanvasPerformanceProfile,
   measureDrawComplexity,
+  shouldDisableSsbhAnimePostFx,
 } from "@/page/TestEditor/components/ssbh-model-preview/ssbhCanvasPerformance";
+import { animeExvsOnBeforeCompile, createAnimeExvsUniforms } from "@/page/TestEditor/components/ssbh-model-preview/animeExvsMeshStandard";
+import { AnimePreviewPostFx } from "@/page/TestEditor/components/ssbh-model-preview/AnimePreviewPostFx";
+import {
+  createPreviewSelectionUniforms,
+  previewSelectionOnBeforeCompile,
+} from "@/page/TestEditor/components/ssbh-model-preview/previewSelectionMaterial";
 import { SceneTexturePool } from "../utils/SceneTexturePool";
 
 const DEG2RAD = Math.PI / 180;
@@ -123,10 +128,44 @@ function collectSceneDrawsForComplexity(
   return out;
 }
 
+export type PlacementGizmoMode = "translate" | "rotate" | "scale";
+
+const MIN_GIZMO_SCALE = 1e-4;
+
+function readTransformFromGroup(group: THREE.Group): TransformData {
+  return {
+    posX: group.position.x,
+    posY: group.position.y,
+    posZ: group.position.z,
+    rotX: THREE.MathUtils.radToDeg(group.rotation.x),
+    rotY: THREE.MathUtils.radToDeg(group.rotation.y),
+    rotZ: THREE.MathUtils.radToDeg(group.rotation.z),
+    scaleX: Math.max(MIN_GIZMO_SCALE, group.scale.x),
+    scaleY: Math.max(MIN_GIZMO_SCALE, group.scale.y),
+    scaleZ: Math.max(MIN_GIZMO_SCALE, group.scale.z),
+  };
+}
+
 function SceneCanvasPerformanceHud({ showStats }: { showStats: boolean }) {
   return (
     <>{showStats ? <Stats className="fixed! top-2! right-2! left-auto! z-2147483000" /> : null}</>
   );
+}
+
+/** demand-draw Canvas does not always repaint when light props change — force one frame */
+function InvalidateGraphicLightingSync({ canvasSyncKey }: { canvasSyncKey: string }) {
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    invalidate();
+  }, [canvasSyncKey, invalidate]);
+  return null;
+}
+
+function SceneAnimePostFxGate({ previewRenderStyle }: { previewRenderStyle: PreviewRenderStyle }) {
+  const current = useThree((s) => s.performance.current);
+  if (previewRenderStyle !== "anime") return null;
+  if (shouldDisableSsbhAnimePostFx("anime", current)) return null;
+  return <AnimePreviewPostFx />;
 }
 
 export interface MapViewportProps {
@@ -142,6 +181,18 @@ export interface MapViewportProps {
   onSelectNode: (id: string | null) => void;
   textureDataMap: NutexbTextureDataMap;
   onDrawStatsChange?: (stats: SceneDrawStats) => void;
+  /** Parsed graphic_param.csv rows — drives directional / IBL preview lighting when keys exist */
+  graphicParams?: GraphicParam[];
+  /** When false, viewport clicks do not change hierarchy/placement selection (orbit-only). Default false from SceneEdit page. */
+  clickPickSelectionEnabled?: boolean;
+  /** Test Editor-style anime pipeline: bloom + warm lights + cel-tinted PBR when "anime". */
+  previewRenderStyle?: PreviewRenderStyle;
+  /** Placement manipulator mode for OBJECT rows selected in hierarchy/placement list */
+  placementGizmoMode?: PlacementGizmoMode;
+  /** Batched transform sync while dragging viewport gizmo (placement CSV row index). */
+  onPlacementGizmoFrame?: (placementIdx: number, t: TransformData) => void;
+  /** Final transform sync when releasing gizmo drag */
+  onPlacementGizmoCommit?: (placementIdx: number, t: TransformData) => void;
 }
 
 export interface MapViewportHandle {
@@ -202,6 +253,12 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       onSelectNode,
       textureDataMap,
       onDrawStatsChange,
+      graphicParams = [],
+      clickPickSelectionEnabled = false,
+      previewRenderStyle = "standard",
+      placementGizmoMode = "translate",
+      onPlacementGizmoFrame,
+      onPlacementGizmoCommit,
     },
     ref
   ) {
@@ -219,8 +276,9 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
     useEffect(() => () => texturePool.disposeAll(), [texturePool]);
 
     const handlePointerMissed = useCallback(() => {
+      if (!clickPickSelectionEnabled) return;
       onSelectNode(null);
-    }, [onSelectNode]);
+    }, [clickPickSelectionEnabled, onSelectNode]);
 
     const effectEntries = useMemo(
       () =>
@@ -230,7 +288,6 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       [placementEntries]
     );
 
-    const previewRenderStyle: PreviewRenderStyle = "standard";
     const drawsForComplexity = useMemo(
       () => collectSceneDrawsForComplexity(baseModel, subModels),
       [baseModel, subModels],
@@ -264,18 +321,63 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       () => clampSceneViewportRasterProfile(canvasPerformanceProfile, sceneComplexity.triangleCount),
       [canvasPerformanceProfile, sceneComplexity.triangleCount],
     );
-    const primaryKeyLightPosition = useMemo<[number, number, number]>(
-      () => [DEFAULT_PREVIEW_DIRECTIONAL_X, DEFAULT_PREVIEW_DIRECTIONAL_Y, DEFAULT_PREVIEW_DIRECTIONAL_Z],
-      [],
+    const sceneLighting = useMemo(
+      () => deriveSceneLightingFromGraphicParams(graphicParams),
+      [graphicParams],
     );
-    const fillKeyLightPosition = useMemo<[number, number, number]>(
-      () => [
-        -DEFAULT_PREVIEW_DIRECTIONAL_X * 0.7,
-        DEFAULT_PREVIEW_DIRECTIONAL_Y * 0.45,
-        -DEFAULT_PREVIEW_DIRECTIONAL_Z * 0.7,
-      ],
-      [],
-    );
+
+    const viewportLights = useMemo(() => {
+      if (previewRenderStyle !== "anime") {
+        return {
+          ambientIntensity: sceneLighting.ambientIntensity,
+          hemisphereArgs: [
+            sceneLighting.hemisphereSky,
+            sceneLighting.hemisphereGround,
+            sceneLighting.hemisphereIntensity,
+          ] as [string, string, number],
+          primaryColor: sceneLighting.directionalColor,
+          primaryIntensity: sceneLighting.directionalIntensity,
+          primaryPosition: sceneLighting.primaryPosition,
+          fillColor: sceneLighting.directionalColor,
+          fillIntensity: sceneLighting.fillIntensity,
+          fillPosition: sceneLighting.fillPosition,
+        };
+      }
+      return {
+        ambientIntensity: sceneLighting.ambientIntensity,
+        hemisphereArgs: ["#b8c8e8", "#101820", 0.32] as [string, string, number],
+        primaryColor: "#fff4ea",
+        primaryIntensity: sceneLighting.directionalIntensity * 1.1,
+        primaryPosition: sceneLighting.primaryPosition,
+        fillColor: "#9eb6d4",
+        fillIntensity: sceneLighting.directionalIntensity * 0.22,
+        fillPosition: sceneLighting.fillPosition,
+      };
+    }, [previewRenderStyle, sceneLighting]);
+
+    const animeKeyLightDir = useMemo(() => {
+      const [x, y, z] = sceneLighting.primaryPosition;
+      const v = new THREE.Vector3(x, y, z);
+      if (v.lengthSq() < 1e-12) {
+        v.set(0.35, 0.85, 0.45);
+      } else {
+        v.normalize();
+      }
+      return v;
+    }, [sceneLighting.primaryPosition]);
+
+    const graphicLightingInvalidateKey = useMemo(() => {
+      const relevant = graphicParams.filter((p) => {
+        const k = p.key.trim().toLowerCase();
+        return (
+          k.startsWith("directional_lighting_") ||
+          k === "ibl_lighting_intensity"
+        );
+      });
+      return relevant.map((p) => `${p.key}=${p.value}`).join("|");
+    }, [graphicParams]);
+
+    const canvasSyncKey = `${graphicLightingInvalidateKey}|style:${previewRenderStyle}`;
 
     const handleCreated = useCallback(({ gl }: { gl: THREE.WebGLRenderer }) => {
       const canvas = gl.domElement;
@@ -353,25 +455,44 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
         onCreated={handleCreated}
       >
         <SceneCanvasPerformanceHud showStats={showStats} />
+        <InvalidateGraphicLightingSync canvasSyncKey={canvasSyncKey} />
+        <SceneAnimePostFxGate previewRenderStyle={previewRenderStyle} />
 
         <color attach="background" args={[DEFAULT_PREVIEW_3D_BACKGROUND]} />
-        <ambientLight intensity={DEFAULT_PREVIEW_AMBIENT_INTENSITY} />
-        <hemisphereLight args={["#dbeafe", "#111827", 0.26]} />
+        <ambientLight intensity={viewportLights.ambientIntensity} />
+        <hemisphereLight args={viewportLights.hemisphereArgs} />
         <directionalLight
-          color="#ffffff"
-          position={primaryKeyLightPosition}
-          intensity={DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY}
+          color={viewportLights.primaryColor}
+          position={viewportLights.primaryPosition}
+          intensity={viewportLights.primaryIntensity}
         />
         <directionalLight
-          color="#ffffff"
-          position={fillKeyLightPosition}
-          intensity={DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY * 0.28}
+          color={viewportLights.fillColor}
+          position={viewportLights.fillPosition}
+          intensity={viewportLights.fillIntensity}
         />
 
         <Environment resolution={64} frames={1} background={false}>
-          <Lightformer form="rect" intensity={0.8} position={[0, 5, -2]} scale={[10, 5, 1]} />
-          <Lightformer form="ring" intensity={0.5} position={[-5, 3, 2]} scale={3} color="#dbeafe" />
-          <Lightformer form="rect" intensity={0.3} position={[5, -1, -3]} scale={[8, 3, 1]} color="#aab0ba" />
+          <Lightformer
+            form="rect"
+            intensity={0.8 * sceneLighting.environmentScale}
+            position={[0, 5, -2]}
+            scale={[10, 5, 1]}
+          />
+          <Lightformer
+            form="ring"
+            intensity={0.5 * sceneLighting.environmentScale}
+            position={[-5, 3, 2]}
+            scale={3}
+            color="#dbeafe"
+          />
+          <Lightformer
+            form="rect"
+            intensity={0.3 * sceneLighting.environmentScale}
+            position={[5, -1, -3]}
+            scale={[8, 3, 1]}
+            color="#aab0ba"
+          />
           <color attach="background" args={["#1a1a2e"]} />
         </Environment>
 
@@ -382,8 +503,11 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             wireframe={wireframe}
             isSelected={selectedNodeId === "base"}
             onClick={onSelectNode}
+            clickPickSelectionEnabled={clickPickSelectionEnabled}
             textureDataMap={textureDataMap}
             texturePool={texturePool}
+            previewRenderStyle={previewRenderStyle}
+            animeKeyLightDir={animeKeyLightDir}
           />
         )}
 
@@ -408,8 +532,11 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                   selectedPlacementIdx === null
                 }
                 onClick={onSelectNode}
+                clickPickSelectionEnabled={clickPickSelectionEnabled}
                 textureDataMap={textureDataMap}
                 texturePool={texturePool}
+                previewRenderStyle={previewRenderStyle}
+                animeKeyLightDir={animeKeyLightDir}
               />,
             ];
           }
@@ -422,11 +549,23 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
               wireframe={wireframe}
               isSelected={selectedPlacementIdx === globalIdx}
               onClick={onSelectNode}
+              clickPickSelectionEnabled={clickPickSelectionEnabled}
               textureDataMap={textureDataMap}
               texturePool={texturePool}
+              previewRenderStyle={previewRenderStyle}
+              animeKeyLightDir={animeKeyLightDir}
               position={[entry.posX, entry.posY, entry.posZ]}
               rotation={[entry.rotX, entry.rotY, entry.rotZ]}
               scale={[entry.scaleX, entry.scaleY, entry.scaleZ]}
+              placementGlobalIdx={globalIdx}
+              showPlacementTransformGizmo={
+                selectedPlacementIdx !== null &&
+                selectedPlacementIdx === globalIdx &&
+                entry.vdkType.toUpperCase() === "OBJECT"
+              }
+              placementGizmoMode={placementGizmoMode}
+              onPlacementGizmoFrame={onPlacementGizmoFrame}
+              onPlacementGizmoCommit={onPlacementGizmoCommit}
             />
           ));
         })}
@@ -608,12 +747,16 @@ const TexturedMesh = memo(function TexturedMesh({
   wireframe,
   isSelected,
   texturePool,
+  previewRenderStyle,
+  animeKeyLightDir,
 }: {
   drawBinding: DrawBinding;
   textureDataMap: NutexbTextureDataMap;
   wireframe: boolean;
   isSelected: boolean;
   texturePool: SceneTexturePool;
+  previewRenderStyle: PreviewRenderStyle;
+  animeKeyLightDir: THREE.Vector3;
 }) {
   const { draw, binding } = drawBinding;
 
@@ -652,6 +795,33 @@ const TexturedMesh = memo(function TexturedMesh({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataKey, texturePool]);
 
+  const exvsActive = previewRenderStyle === "anime";
+  const exvsUniforms = useMemo(() => createAnimeExvsUniforms(), [draw.key]);
+  const onBeforeCompileExvs = useMemo(() => animeExvsOnBeforeCompile(exvsUniforms), [exvsUniforms]);
+  const selectionUniforms = useMemo(() => createPreviewSelectionUniforms(), [draw.key]);
+  const onBeforeCompileSelection = useMemo(
+    () => previewSelectionOnBeforeCompile(selectionUniforms),
+    [selectionUniforms],
+  );
+  const onBeforeCompileAnime = useMemo(
+    () => (shader: { fragmentShader: string; uniforms: Record<string, { value: unknown }> }) => {
+      onBeforeCompileExvs(shader);
+      onBeforeCompileSelection(shader);
+    },
+    [onBeforeCompileExvs, onBeforeCompileSelection],
+  );
+
+  useFrame(() => {
+    if (!exvsActive) return;
+    exvsUniforms.uAnimeKeyDir.value.copy(animeKeyLightDir);
+  });
+
+  useFrame((state) => {
+    if (!exvsActive) return;
+    selectionUniforms.uSelectionEnabled.value = isSelected ? 1 : 0;
+    selectionUniforms.uSelectionTime.value = state.clock.elapsedTime;
+  });
+
   const shaderFamily = binding.shaderFamily;
   const hasMap = !!textures.map;
   const hasRough = !!textures.roughnessMap || typeof binding.uniforms.roughnessScalar === "number";
@@ -679,30 +849,67 @@ const TexturedMesh = memo(function TexturedMesh({
           ? 0.35
           : 0.12;
 
-  const emissiveIntensity = shaderFamily === "vsngCharaSparkle"
-    ? 1.8
-    : hasEmit
-      ? 1
-      : 0;
+  const roughnessForStyle = exvsActive ? Math.min(1, roughnessValue * 0.84) : roughnessValue;
+
+  const emissiveIntensity = exvsActive
+    ? shaderFamily === "vsngCharaSparkle"
+      ? 2.15
+      : hasEmit
+        ? 1.18
+        : 0
+    : shaderFamily === "vsngCharaSparkle"
+      ? 1.8
+      : hasEmit
+        ? 1
+        : 0;
 
   const transparent = binding.renderHints.isTransparent ?? hasMap;
-  const envIntensity = shaderFamily === "vsngCharaSparkle"
-    ? 1.55
-    : hasCube
-      ? 1.15
-      : 0.6;
+  const envIntensity = exvsActive
+    ? shaderFamily === "vsngCharaSparkle"
+      ? 1.38
+      : hasCube
+        ? 1.05
+        : 0
+    : shaderFamily === "vsngCharaSparkle"
+      ? 1.55
+      : hasCube
+        ? 1.15
+        : 0.6;
+
+  const canUseMetalnessMap = hasCube;
+  const effectiveMetalnessMap = exvsActive
+    ? canUseMetalnessMap
+      ? textures.metalnessMap ?? null
+      : null
+    : textures.metalnessMap ?? null;
+  const effectiveMetalnessValue = exvsActive
+    ? canUseMetalnessMap
+      ? metalnessValue
+      : Math.min(metalnessValue, 0.2)
+    : metalnessValue;
+
+  const baseColor = exvsActive
+    ? hasAnyTexture
+      ? "#ffffff"
+      : "#cccccc"
+    : isSelected
+      ? "#88aaff"
+      : hasAnyTexture
+        ? "#ffffff"
+        : "#cccccc";
 
   return (
     <mesh geometry={draw.geometry}>
       <meshStandardMaterial
-        color={isSelected ? "#88aaff" : hasAnyTexture ? "#ffffff" : "#cccccc"}
+        key={exvsActive ? "exvs" : "std"}
+        color={baseColor}
         wireframe={wireframe}
         side={THREE.DoubleSide}
         map={textures.map ?? null}
         normalMap={textures.normalMap ?? null}
         normalScale={textures.normalMap ? NORMAL_SCALE_DEFAULT : undefined}
         roughnessMap={textures.roughnessMap ?? null}
-        metalnessMap={textures.metalnessMap ?? null}
+        metalnessMap={effectiveMetalnessMap}
         emissiveMap={textures.emissiveMap ?? null}
         emissive={hasEmit ? new THREE.Color(0xffffff) : new THREE.Color(0)}
         emissiveIntensity={emissiveIntensity}
@@ -712,8 +919,9 @@ const TexturedMesh = memo(function TexturedMesh({
         envMapIntensity={envIntensity}
         alphaTest={hasMap ? 0.001 : 0}
         transparent={transparent}
-        roughness={roughnessValue}
-        metalness={metalnessValue}
+        roughness={roughnessForStyle}
+        metalness={effectiveMetalnessValue}
+        onBeforeCompile={exvsActive ? onBeforeCompileAnime : undefined}
       />
     </mesh>
   );
@@ -725,22 +933,38 @@ const StageModelGroup = memo(function StageModelGroup({
   wireframe,
   isSelected,
   onClick,
+  clickPickSelectionEnabled,
   position,
   rotation,
   scale,
   textureDataMap,
   texturePool,
+  previewRenderStyle,
+  animeKeyLightDir,
+  placementGlobalIdx,
+  showPlacementTransformGizmo = false,
+  placementGizmoMode = "translate",
+  onPlacementGizmoFrame,
+  onPlacementGizmoCommit,
 }: {
   nodeId: string;
   bundle: SsbhModelPreviewBundle;
   wireframe: boolean;
   isSelected: boolean;
   onClick: (id: string) => void;
+  clickPickSelectionEnabled: boolean;
   position?: [number, number, number];
   rotation?: [number, number, number];
   scale?: [number, number, number];
   textureDataMap: NutexbTextureDataMap;
   texturePool: SceneTexturePool;
+  previewRenderStyle: PreviewRenderStyle;
+  animeKeyLightDir: THREE.Vector3;
+  placementGlobalIdx?: number;
+  showPlacementTransformGizmo?: boolean;
+  placementGizmoMode?: PlacementGizmoMode;
+  onPlacementGizmoFrame?: (placementIdx: number, t: TransformData) => void;
+  onPlacementGizmoCommit?: (placementIdx: number, t: TransformData) => void;
 }) {
   const groupRef = useRef<THREE.Group>(null);
 
@@ -784,9 +1008,10 @@ const StageModelGroup = memo(function StageModelGroup({
   const handleClick = useCallback(
     (e: any) => {
       e.stopPropagation();
+      if (!clickPickSelectionEnabled) return;
       onClick(nodeId);
     },
-    [nodeId, onClick]
+    [clickPickSelectionEnabled, nodeId, onClick]
   );
 
   const euler = useMemo(
@@ -801,26 +1026,62 @@ const StageModelGroup = memo(function StageModelGroup({
     [rotation]
   );
 
+  const gizmoReady =
+    showPlacementTransformGizmo &&
+    placementGlobalIdx !== undefined &&
+    onPlacementGizmoFrame &&
+    onPlacementGizmoCommit;
+
+  const handleTcObjectChange = useCallback(() => {
+    const g = groupRef.current;
+    if (!g || placementGlobalIdx === undefined || !onPlacementGizmoFrame) return;
+    onPlacementGizmoFrame(placementGlobalIdx, readTransformFromGroup(g));
+  }, [placementGlobalIdx, onPlacementGizmoFrame]);
+
+  const handleTcMouseUp = useCallback(() => {
+    const g = groupRef.current;
+    if (!g || placementGlobalIdx === undefined || !onPlacementGizmoCommit) return;
+    onPlacementGizmoCommit(placementGlobalIdx, readTransformFromGroup(g));
+  }, [placementGlobalIdx, onPlacementGizmoCommit]);
+
   return (
-    <group
-      ref={groupRef}
-      name={nodeId}
-      onClick={handleClick}
-      position={position}
-      rotation={euler}
-      scale={scale}
-    >
-      {drawBindings.map((db) => (
-        <TexturedMesh
-          key={db.draw.key}
-          drawBinding={db}
-          textureDataMap={textureDataMap}
-          wireframe={wireframe}
-          isSelected={isSelected}
-          texturePool={texturePool}
+    <Fragment>
+      <group
+        ref={groupRef}
+        name={nodeId}
+        onClick={handleClick}
+        position={position}
+        rotation={euler}
+        scale={scale}
+      >
+        {drawBindings.map((db) => (
+          <TexturedMesh
+            key={db.draw.key}
+            drawBinding={db}
+            textureDataMap={textureDataMap}
+            wireframe={wireframe}
+            isSelected={isSelected}
+            texturePool={texturePool}
+            previewRenderStyle={previewRenderStyle}
+            animeKeyLightDir={animeKeyLightDir}
+          />
+        ))}
+      </group>
+      {gizmoReady ? (
+        <TransformControls
+          key={`${placementGlobalIdx}-${placementGizmoMode}`}
+          object={groupRef as unknown as RefObject<THREE.Object3D>}
+          mode={placementGizmoMode}
+          space="world"
+          size={1.12}
+          showX
+          showY
+          showZ
+          onObjectChange={handleTcObjectChange}
+          onMouseUp={handleTcMouseUp}
         />
-      ))}
-    </group>
+      ) : null}
+    </Fragment>
   );
 });
 

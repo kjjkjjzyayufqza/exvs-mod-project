@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/resizable";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +34,7 @@ import {
 import {
   MapViewport,
   type MapViewportHandle,
+  type PlacementGizmoMode,
 } from "./components/MapViewport";
 import {
   StagePropertyEditor,
@@ -49,6 +52,7 @@ import {
 import {
   clonePlacementRow,
   patchPlacementRawFieldsForNumericField,
+  patchPlacementRowTransform,
 } from "./utils/patchPlacementRawFields";
 import {
   StageRenamePreviewDialog,
@@ -72,6 +76,9 @@ import {
 } from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
 import { clearSceneEditColladaModelCache } from "./components/DAEModel";
 import { reorderPlacementEntriesBySubModels } from "./utils/reorderPlacementBySubModels";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+
+import type { PreviewRenderStyle } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
 
 import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
 
@@ -239,10 +246,16 @@ export default function SceneEdit() {
   const [wireframe, setWireframe] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [textureQuality, setTextureQuality] = useState("original");
+  const [viewportClickPickSelection, setViewportClickPickSelection] = useState(false);
+  const [sceneAnimeRenderEnabled, setSceneAnimeRenderEnabled] = useState(false);
+  const [placementGizmoMode, setPlacementGizmoMode] = useState<PlacementGizmoMode>("translate");
   const [drawStats, setDrawStats] = useState<SceneDrawStats | null>(null);
   const [clearCacheDialogOpen, setClearCacheDialogOpen] = useState(false);
 
   const textureMaxDimension = getMaxDimensionForQuality(textureQuality);
+  const scenePreviewRenderStyle: PreviewRenderStyle = sceneAnimeRenderEnabled
+    ? "anime"
+    : "standard";
   const {
     textureDataMap,
     progress: textureProgress,
@@ -582,6 +595,50 @@ export default function SceneEdit() {
     [placementColMap]
   );
 
+  const gizmoRafRef = useRef<number | null>(null);
+  const gizmoPendingRef = useRef<{ idx: number; t: TransformData } | null>(null);
+
+  const applyPlacementTransformImmediate = useCallback(
+    (idx: number, t: TransformData) => {
+      setPlacementEntries((prev) => {
+        const entry = prev[idx];
+        if (!entry || entry.vdkType.toUpperCase() !== "OBJECT") return prev;
+        const patched = patchPlacementRowTransform(entry, t, placementColMap);
+        const next = [...prev];
+        next[idx] = patched;
+        return next;
+      });
+      setHasUnsavedChanges(true);
+    },
+    [placementColMap],
+  );
+
+  const schedulePlacementGizmo = useCallback(
+    (idx: number, t: TransformData) => {
+      gizmoPendingRef.current = { idx, t };
+      if (gizmoRafRef.current !== null) return;
+      gizmoRafRef.current = requestAnimationFrame(() => {
+        gizmoRafRef.current = null;
+        const p = gizmoPendingRef.current;
+        if (!p) return;
+        applyPlacementTransformImmediate(p.idx, p.t);
+      });
+    },
+    [applyPlacementTransformImmediate],
+  );
+
+  const commitPlacementGizmo = useCallback(
+    (idx: number, t: TransformData) => {
+      if (gizmoRafRef.current !== null) {
+        cancelAnimationFrame(gizmoRafRef.current);
+        gizmoRafRef.current = null;
+      }
+      gizmoPendingRef.current = null;
+      applyPlacementTransformImmediate(idx, t);
+    },
+    [applyPlacementTransformImmediate],
+  );
+
   const handleTransformChange = useCallback(
     (field: keyof TransformData, value: number) => {
       if (selectedPlacementIdx === null) return;
@@ -748,6 +805,12 @@ export default function SceneEdit() {
                 onSelectNode={handleSelectNode}
                 textureDataMap={textureDataMap}
                 onDrawStatsChange={handleDrawStatsChange}
+                graphicParams={graphicParams}
+                clickPickSelectionEnabled={viewportClickPickSelection}
+                previewRenderStyle={scenePreviewRenderStyle}
+                placementGizmoMode={placementGizmoMode}
+                onPlacementGizmoFrame={schedulePlacementGizmo}
+                onPlacementGizmoCommit={commitPlacementGizmo}
               />
               <SceneViewportOverlay textureProgress={textureProgress} />
             </div>
@@ -766,6 +829,69 @@ export default function SceneEdit() {
             className="min-w-0"
           >
             <div className="flex h-full min-w-0 flex-col overflow-hidden border-l">
+              <div className="shrink-0 flex flex-col gap-2 px-3 py-2 border-b bg-muted/30">
+                <div className="flex items-center justify-between gap-2">
+                  <Label
+                    htmlFor="scene-viewport-click-pick"
+                    className="text-[10px] font-medium cursor-pointer leading-tight text-muted-foreground"
+                  >
+                    Viewport click select
+                  </Label>
+                  <Switch
+                    id="scene-viewport-click-pick"
+                    checked={viewportClickPickSelection}
+                    onCheckedChange={setViewportClickPickSelection}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <Label
+                    htmlFor="scene-anime-render-style"
+                    className="text-[10px] font-medium cursor-pointer leading-tight text-muted-foreground"
+                    title="Bloom + warm lights + cel-shaded PBR (matches Test Editor Anime style)"
+                  >
+                    Anime render
+                  </Label>
+                  <Switch
+                    id="scene-anime-render-style"
+                    checked={sceneAnimeRenderEnabled}
+                    onCheckedChange={setSceneAnimeRenderEnabled}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] text-muted-foreground">Placement gizmo</Label>
+                  <ToggleGroup
+                    type="single"
+                    value={placementGizmoMode}
+                    onValueChange={(v) => {
+                      if (v) setPlacementGizmoMode(v as PlacementGizmoMode);
+                    }}
+                    variant="outline"
+                    className="flex w-full flex-wrap justify-start gap-1"
+                  >
+                    <ToggleGroupItem
+                      value="translate"
+                      className="h-7 flex-1 min-w-[4rem] px-2 text-[10px]"
+                      aria-label="Move"
+                    >
+                      Move
+                    </ToggleGroupItem>
+                    <ToggleGroupItem
+                      value="rotate"
+                      className="h-7 flex-1 min-w-[4rem] px-2 text-[10px]"
+                      aria-label="Rotate"
+                    >
+                      Rotate
+                    </ToggleGroupItem>
+                    <ToggleGroupItem
+                      value="scale"
+                      className="h-7 flex-1 min-w-[4rem] px-2 text-[10px]"
+                      aria-label="Scale"
+                    >
+                      Scale
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
+              </div>
               <Tabs defaultValue="status" className="flex min-h-0 min-w-0 flex-1 flex-col">
                 <TabsList className="h-8 w-full shrink-0 justify-start rounded-none border-b bg-muted/30 px-1">
                   <TabsTrigger value="status" className="text-[10px] h-6 px-2.5 flex items-center gap-1">

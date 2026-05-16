@@ -67,6 +67,42 @@ export function patchPlacementRawFieldsForNumericField(
   return { ...entry, [field]: value };
 }
 
+const TRANSFORM_NUMERIC_FIELDS: (keyof typeof FIELD_TO_HEADER_ALIASES)[] = [
+  "posX",
+  "posY",
+  "posZ",
+  "rotX",
+  "rotY",
+  "rotZ",
+  "scaleX",
+  "scaleY",
+  "scaleZ",
+];
+
+/** Apply all placement transform components (used by viewport TransformControls). */
+export function patchPlacementRowTransform(
+  entry: PlacementRow,
+  t: Pick<
+    PlacementRow,
+    | "posX"
+    | "posY"
+    | "posZ"
+    | "rotX"
+    | "rotY"
+    | "rotZ"
+    | "scaleX"
+    | "scaleY"
+    | "scaleZ"
+  >,
+  placementColMap: Record<string, number>,
+): PlacementRow {
+  return TRANSFORM_NUMERIC_FIELDS.reduce(
+    (acc, field) =>
+      patchPlacementRawFieldsForNumericField(acc, field, t[field], placementColMap),
+    entry,
+  );
+}
+
 export function clonePlacementRow(source: PlacementRow): PlacementRow {
   return {
     vdkType: source.vdkType,
