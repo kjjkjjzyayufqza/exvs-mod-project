@@ -3,7 +3,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { MapPin, Copy } from "lucide-react";
+import { Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export interface PlacementRow {
@@ -39,7 +39,7 @@ interface PlacementPanelProps {
       | "scaleY"
       | "scaleZ"
     >,
-    value: number
+    value: number,
   ) => void;
   onDuplicate?: () => void;
   duplicateDisabled?: boolean;
@@ -55,46 +55,38 @@ export function PlacementPanel({
 }: PlacementPanelProps) {
   if (entries.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center text-muted-foreground p-6 gap-2">
-        <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center">
-          <MapPin className="h-4 w-4 opacity-40" />
-        </div>
-        <p className="text-xs">No placement data</p>
-        <p className="text-[10px] opacity-60">Load a stage to view placements</p>
+      <div className="py-2 text-center text-[10px] text-muted-foreground">
+        No placement data
       </div>
     );
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 px-1">
-        <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        <span className="text-xs font-semibold">Placement</span>
-        <div className="ml-auto flex items-center gap-1.5 shrink-0">
+    <div className="space-y-1.5">
+      {onDuplicate && (
+        <div className="flex items-center justify-between">
           <span className="text-[9px] text-muted-foreground">
             {entries.length} entries
           </span>
-          {onDuplicate && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-6 text-[10px] px-2 gap-1"
-              disabled={duplicateDisabled}
-              onClick={(e) => {
-                e.stopPropagation();
-                onDuplicate();
-              }}
-            >
-              <Copy className="h-3 w-3" />
-              Duplicate
-            </Button>
-          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-5 text-[9px] px-1.5 gap-1"
+            disabled={duplicateDisabled}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDuplicate();
+            }}
+          >
+            <Copy className="h-2.5 w-2.5" />
+            Dup
+          </Button>
         </div>
-      </div>
+      )}
 
       <ScrollArea className="max-h-[500px]">
-        <div className="space-y-0.5">
+        <div className="space-y-0">
           {entries.map((entry, i) => (
             <PlacementEntry
               key={i}
@@ -127,10 +119,10 @@ function PlacementEntry({
   return (
     <div
       className={cn(
-        "px-2 py-1.5 rounded-md cursor-pointer border transition-colors",
+        "px-1.5 py-1 cursor-pointer transition-colors rounded-sm",
         isSelected
-          ? "border-primary/30 bg-primary/5"
-          : "border-transparent hover:bg-muted/40"
+          ? "bg-primary/10 text-foreground"
+          : "hover:bg-muted/40",
       )}
       onClick={() => onSelect(index)}
     >
@@ -143,16 +135,17 @@ function PlacementEntry({
         </Badge>
         {entry.objectNumber !== null && (
           <span className="text-[9px] text-muted-foreground font-mono">
-            obj#{entry.objectNumber}
+            #{entry.objectNumber}
           </span>
         )}
         <span className="text-[8px] text-muted-foreground/50 ml-auto font-mono">
-          [{entry.posX.toFixed(0)}, {entry.posY.toFixed(0)}, {entry.posZ.toFixed(0)}]
+          [{entry.posX.toFixed(0)}, {entry.posY.toFixed(0)},{" "}
+          {entry.posZ.toFixed(0)}]
         </span>
       </div>
 
       {isSelected && (
-        <div className="mt-2 space-y-1.5">
+        <div className="mt-1.5 space-y-1">
           <FieldGroup
             label="Position"
             fields={[
@@ -199,14 +192,27 @@ function FieldGroup({
   fields: Array<{
     label: string;
     value: number;
-    field: keyof Pick<PlacementRow, "posX" | "posY" | "posZ" | "rotX" | "rotY" | "rotZ" | "scaleX" | "scaleY" | "scaleZ">;
+    field: keyof Pick<
+      PlacementRow,
+      | "posX"
+      | "posY"
+      | "posZ"
+      | "rotX"
+      | "rotY"
+      | "rotZ"
+      | "scaleX"
+      | "scaleY"
+      | "scaleZ"
+    >;
   }>;
   index: number;
   onChange: PlacementPanelProps["onEntryChange"];
 }) {
   return (
     <div>
-      <span className="text-[8px] text-muted-foreground uppercase tracking-wider">{label}</span>
+      <span className="text-[8px] text-muted-foreground uppercase tracking-wider">
+        {label}
+      </span>
       <div className="grid grid-cols-3 gap-1 mt-0.5">
         {fields.map((f) => (
           <CompactField
@@ -234,9 +240,7 @@ function CompactField({
   const focusedRef = useRef(false);
 
   useEffect(() => {
-    if (!focusedRef.current) {
-      setText(value.toFixed(2));
-    }
+    if (!focusedRef.current) setText(value.toFixed(2));
   }, [value]);
 
   return (
@@ -245,7 +249,7 @@ function CompactField({
       <Input
         type="number"
         step="0.1"
-        className="h-5 text-[9px] font-mono px-1 bg-background"
+        className="h-5 text-[9px] font-mono px-1 bg-background/60"
         value={text}
         onChange={(e) => setText(e.target.value)}
         onFocus={() => {
@@ -254,15 +258,11 @@ function CompactField({
         onBlur={() => {
           focusedRef.current = false;
           const v = parseFloat(text);
-          if (!isNaN(v)) {
-            onChange(v);
-          }
+          if (!isNaN(v)) onChange(v);
           setText((isNaN(v) ? value : v).toFixed(2));
         }}
         onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            (e.target as HTMLInputElement).blur();
-          }
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         }}
       />
     </div>

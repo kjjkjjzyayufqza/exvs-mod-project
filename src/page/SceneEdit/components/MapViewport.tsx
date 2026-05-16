@@ -183,7 +183,10 @@ export interface MapViewportProps {
   onDrawStatsChange?: (stats: SceneDrawStats) => void;
   /** Parsed graphic_param.csv rows — drives directional / IBL preview lighting when keys exist */
   graphicParams?: GraphicParam[];
-  /** When false, viewport clicks do not change hierarchy/placement selection (orbit-only). Default false from SceneEdit page. */
+  baseTransform?: TransformData;
+  onBaseTransformChange?: (t: TransformData) => void;
+  standaloneTransforms?: Map<string, TransformData>;
+  onStandaloneTransformChange?: (nodeId: string, t: TransformData) => void;
   clickPickSelectionEnabled?: boolean;
   /** Test Editor-style anime pipeline: bloom + warm lights + cel-tinted PBR when "anime". */
   previewRenderStyle?: PreviewRenderStyle;
@@ -254,6 +257,10 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       textureDataMap,
       onDrawStatsChange,
       graphicParams = [],
+      baseTransform,
+      onBaseTransformChange,
+      standaloneTransforms,
+      onStandaloneTransformChange,
       clickPickSelectionEnabled = false,
       previewRenderStyle = "standard",
       placementGizmoMode = "translate",
@@ -275,17 +282,19 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
     const texturePool = useMemo(() => new SceneTexturePool(), []);
     useEffect(() => () => texturePool.disposeAll(), [texturePool]);
 
+    const gizmoDraggingRef = useRef(false);
+
     const handlePointerMissed = useCallback(() => {
-      if (!clickPickSelectionEnabled) return;
+      if (!clickPickSelectionEnabled || gizmoDraggingRef.current) return;
       onSelectNode(null);
     }, [clickPickSelectionEnabled, onSelectNode]);
 
     const effectEntries = useMemo(
       () =>
-        placementEntries.filter(
-          (e) => e.vdkType.toUpperCase() === "EFFECT"
-        ),
-      [placementEntries]
+        placementEntries
+          .map((e, globalIdx) => ({ entry: e, globalIdx }))
+          .filter(({ entry }) => entry.vdkType.toUpperCase() !== "OBJECT"),
+      [placementEntries],
     );
 
     const drawsForComplexity = useMemo(
@@ -508,6 +517,22 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             texturePool={texturePool}
             previewRenderStyle={previewRenderStyle}
             animeKeyLightDir={animeKeyLightDir}
+            position={baseTransform ? [baseTransform.posX, baseTransform.posY, baseTransform.posZ] : undefined}
+            rotation={baseTransform ? [baseTransform.rotX, baseTransform.rotY, baseTransform.rotZ] : undefined}
+            scale={baseTransform ? [baseTransform.scaleX, baseTransform.scaleY, baseTransform.scaleZ] : undefined}
+            showPlacementTransformGizmo={selectedNodeId === "base"}
+            placementGizmoMode={placementGizmoMode}
+            onPlacementGizmoFrame={
+              onBaseTransformChange
+                ? (_idx: number, t: TransformData) => onBaseTransformChange(t)
+                : undefined
+            }
+            onPlacementGizmoCommit={
+              onBaseTransformChange
+                ? (_idx: number, t: TransformData) => onBaseTransformChange(t)
+                : undefined
+            }
+            gizmoDraggingRef={gizmoDraggingRef}
           />
         )}
 
@@ -521,22 +546,37 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             );
 
           if (objectRows.length === 0) {
+            const st = standaloneTransforms?.get(sub.folderName);
+            const isStandaloneSel = selectedNodeId === sub.folderName && selectedPlacementIdx === null;
             return [
               <StageModelGroup
                 key={sub.folderName}
                 nodeId={sub.folderName}
                 bundle={sub.bundle}
                 wireframe={wireframe}
-                isSelected={
-                  selectedNodeId === sub.folderName &&
-                  selectedPlacementIdx === null
-                }
+                isSelected={isStandaloneSel}
                 onClick={onSelectNode}
                 clickPickSelectionEnabled={clickPickSelectionEnabled}
                 textureDataMap={textureDataMap}
                 texturePool={texturePool}
                 previewRenderStyle={previewRenderStyle}
                 animeKeyLightDir={animeKeyLightDir}
+                gizmoDraggingRef={gizmoDraggingRef}
+                position={st ? [st.posX, st.posY, st.posZ] : undefined}
+                rotation={st ? [st.rotX, st.rotY, st.rotZ] : undefined}
+                scale={st ? [st.scaleX, st.scaleY, st.scaleZ] : undefined}
+                showPlacementTransformGizmo={isStandaloneSel}
+                placementGizmoMode={placementGizmoMode}
+                onPlacementGizmoFrame={
+                  onStandaloneTransformChange
+                    ? (_idx: number, t: TransformData) => onStandaloneTransformChange(sub.folderName, t)
+                    : undefined
+                }
+                onPlacementGizmoCommit={
+                  onStandaloneTransformChange
+                    ? (_idx: number, t: TransformData) => onStandaloneTransformChange(sub.folderName, t)
+                    : undefined
+                }
               />,
             ];
           }
@@ -560,21 +600,32 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
               placementGlobalIdx={globalIdx}
               showPlacementTransformGizmo={
                 selectedPlacementIdx !== null &&
-                selectedPlacementIdx === globalIdx &&
-                entry.vdkType.toUpperCase() === "OBJECT"
+                selectedPlacementIdx === globalIdx
               }
               placementGizmoMode={placementGizmoMode}
               onPlacementGizmoFrame={onPlacementGizmoFrame}
               onPlacementGizmoCommit={onPlacementGizmoCommit}
+              gizmoDraggingRef={gizmoDraggingRef}
             />
           ));
         })}
 
-        {effectEntries.map((eff, i) => (
+        {effectEntries.map(({ entry: eff, globalIdx }) => (
           <EffectMarker
-            key={`effect-${i}`}
-            position={[eff.posX, eff.posY, eff.posZ]}
-            index={i}
+            key={`effect-${globalIdx}`}
+            entry={eff}
+            globalIdx={globalIdx}
+            isSelected={selectedPlacementIdx === globalIdx}
+            onClick={onSelectNode}
+            clickPickSelectionEnabled={clickPickSelectionEnabled}
+            showGizmo={
+              selectedPlacementIdx !== null &&
+              selectedPlacementIdx === globalIdx
+            }
+            placementGizmoMode={placementGizmoMode}
+            onPlacementGizmoFrame={onPlacementGizmoFrame}
+            onPlacementGizmoCommit={onPlacementGizmoCommit}
+            gizmoDraggingRef={gizmoDraggingRef}
           />
         ))}
 
@@ -946,6 +997,7 @@ const StageModelGroup = memo(function StageModelGroup({
   placementGizmoMode = "translate",
   onPlacementGizmoFrame,
   onPlacementGizmoCommit,
+  gizmoDraggingRef,
 }: {
   nodeId: string;
   bundle: SsbhModelPreviewBundle;
@@ -965,6 +1017,7 @@ const StageModelGroup = memo(function StageModelGroup({
   placementGizmoMode?: PlacementGizmoMode;
   onPlacementGizmoFrame?: (placementIdx: number, t: TransformData) => void;
   onPlacementGizmoCommit?: (placementIdx: number, t: TransformData) => void;
+  gizmoDraggingRef?: React.RefObject<boolean>;
 }) {
   const groupRef = useRef<THREE.Group>(null);
 
@@ -1009,9 +1062,10 @@ const StageModelGroup = memo(function StageModelGroup({
     (e: any) => {
       e.stopPropagation();
       if (!clickPickSelectionEnabled) return;
+      if (gizmoDraggingRef?.current) return;
       onClick(nodeId);
     },
-    [clickPickSelectionEnabled, nodeId, onClick]
+    [clickPickSelectionEnabled, nodeId, onClick, gizmoDraggingRef]
   );
 
   const euler = useMemo(
@@ -1028,20 +1082,19 @@ const StageModelGroup = memo(function StageModelGroup({
 
   const gizmoReady =
     showPlacementTransformGizmo &&
-    placementGlobalIdx !== undefined &&
     onPlacementGizmoFrame &&
     onPlacementGizmoCommit;
 
   const handleTcObjectChange = useCallback(() => {
     const g = groupRef.current;
-    if (!g || placementGlobalIdx === undefined || !onPlacementGizmoFrame) return;
-    onPlacementGizmoFrame(placementGlobalIdx, readTransformFromGroup(g));
+    if (!g || !onPlacementGizmoFrame) return;
+    onPlacementGizmoFrame(placementGlobalIdx ?? -1, readTransformFromGroup(g));
   }, [placementGlobalIdx, onPlacementGizmoFrame]);
 
   const handleTcMouseUp = useCallback(() => {
     const g = groupRef.current;
-    if (!g || placementGlobalIdx === undefined || !onPlacementGizmoCommit) return;
-    onPlacementGizmoCommit(placementGlobalIdx, readTransformFromGroup(g));
+    if (!g || !onPlacementGizmoCommit) return;
+    onPlacementGizmoCommit(placementGlobalIdx ?? -1, readTransformFromGroup(g));
   }, [placementGlobalIdx, onPlacementGizmoCommit]);
 
   return (
@@ -1069,7 +1122,7 @@ const StageModelGroup = memo(function StageModelGroup({
       </group>
       {gizmoReady ? (
         <TransformControls
-          key={`${placementGlobalIdx}-${placementGizmoMode}`}
+          key={`${nodeId}-${placementGizmoMode}`}
           object={groupRef as unknown as RefObject<THREE.Object3D>}
           mode={placementGizmoMode}
           space="world"
@@ -1078,34 +1131,104 @@ const StageModelGroup = memo(function StageModelGroup({
           showY
           showZ
           onObjectChange={handleTcObjectChange}
-          onMouseUp={handleTcMouseUp}
+          onMouseDown={() => { if (gizmoDraggingRef) gizmoDraggingRef.current = true; }}
+          onMouseUp={() => {
+            if (gizmoDraggingRef) setTimeout(() => { gizmoDraggingRef.current = false; }, 50);
+            handleTcMouseUp();
+          }}
         />
       ) : null}
     </Fragment>
   );
 });
 
-function EffectMarker({
-  position,
-  index,
+const EffectMarker = memo(function EffectMarker({
+  entry,
+  globalIdx,
+  isSelected,
+  onClick,
+  clickPickSelectionEnabled,
+  showGizmo,
+  placementGizmoMode = "translate",
+  onPlacementGizmoFrame,
+  onPlacementGizmoCommit,
+  gizmoDraggingRef,
 }: {
-  position: [number, number, number];
-  index: number;
+  entry: PlacementRow;
+  globalIdx: number;
+  isSelected: boolean;
+  onClick: (id: string | null) => void;
+  clickPickSelectionEnabled: boolean;
+  showGizmo: boolean;
+  placementGizmoMode?: PlacementGizmoMode;
+  onPlacementGizmoFrame?: (idx: number, t: TransformData) => void;
+  onPlacementGizmoCommit?: (idx: number, t: TransformData) => void;
+  gizmoDraggingRef?: React.RefObject<boolean>;
 }) {
-  return (
-    <group position={position}>
-      <Sphere args={[2, 8, 8]}>
-        <meshStandardMaterial
-          color="#ff6644"
-          emissive="#ff4422"
-          emissiveIntensity={0.5}
-        />
-      </Sphere>
-      <Html center distanceFactor={200} style={{ pointerEvents: "none" }}>
-        <div className="text-[9px] text-orange-400 font-mono whitespace-nowrap bg-black/60 px-1 rounded">
-          FX#{index}
-        </div>
-      </Html>
-    </group>
+  const groupRef = useRef<THREE.Group>(null);
+  const invalidate = useThree((s) => s.invalidate);
+  const nodeId = `__effect__${globalIdx}`;
+
+  const handleClick = useCallback(
+    (e: any) => {
+      if (!clickPickSelectionEnabled) return;
+      if (gizmoDraggingRef?.current) return;
+      e.stopPropagation();
+      onClick(nodeId);
+    },
+    [clickPickSelectionEnabled, onClick, nodeId, gizmoDraggingRef],
   );
-}
+
+  const handleGizmoChange = useCallback(() => {
+    if (!groupRef.current || !onPlacementGizmoFrame) return;
+    onPlacementGizmoFrame(globalIdx, readTransformFromGroup(groupRef.current));
+    invalidate();
+  }, [globalIdx, onPlacementGizmoFrame, invalidate]);
+
+  const handleGizmoEnd = useCallback(() => {
+    if (!groupRef.current || !onPlacementGizmoCommit) return;
+    onPlacementGizmoCommit(globalIdx, readTransformFromGroup(groupRef.current));
+  }, [globalIdx, onPlacementGizmoCommit]);
+
+  return (
+    <Fragment>
+      <group
+        ref={groupRef}
+        position={[entry.posX, entry.posY, entry.posZ]}
+        rotation={[entry.rotX * DEG2RAD, entry.rotY * DEG2RAD, entry.rotZ * DEG2RAD]}
+        scale={[
+          Math.max(1e-4, entry.scaleX),
+          Math.max(1e-4, entry.scaleY),
+          Math.max(1e-4, entry.scaleZ),
+        ]}
+      >
+        <Sphere args={[2, 8, 8]} onClick={handleClick}>
+          <meshStandardMaterial
+            color={isSelected ? "#ffaa22" : "#ff6644"}
+            emissive={isSelected ? "#ffaa22" : "#ff4422"}
+            emissiveIntensity={isSelected ? 0.8 : 0.5}
+          />
+        </Sphere>
+        <Html center distanceFactor={200} style={{ pointerEvents: "none" }}>
+          <div className="text-[9px] text-orange-400 font-mono whitespace-nowrap bg-black/60 px-1 rounded">
+            {entry.vdkType}#{globalIdx}
+          </div>
+        </Html>
+      </group>
+      {showGizmo && groupRef.current ? (
+        <TransformControls
+          key={`eff-gizmo-${globalIdx}-${placementGizmoMode}`}
+          object={groupRef.current}
+          mode={placementGizmoMode}
+          size={0.6}
+          onChange={handleGizmoChange}
+          onMouseDown={() => { if (gizmoDraggingRef) gizmoDraggingRef.current = true; }}
+          onMouseUp={() => {
+            if (gizmoDraggingRef) setTimeout(() => { gizmoDraggingRef.current = false; }, 50);
+            handleGizmoEnd();
+          }}
+        />
+      ) : null}
+    </Fragment>
+  );
+});

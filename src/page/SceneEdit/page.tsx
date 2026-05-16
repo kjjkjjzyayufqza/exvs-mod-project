@@ -12,9 +12,7 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -66,7 +64,7 @@ import {
   SceneViewportOverlay,
   type SceneDrawStats,
 } from "./components/SceneViewportOverlay";
-import { SceneStatusPanel } from "./components/SceneStatusPanel";
+import { SceneInfoContent, SceneStatsContent } from "./components/SceneStatusPanel";
 import { useSceneTextureLoader } from "./hooks/useSceneTextureLoader";
 import { TextureQualityPanel, getMaxDimensionForQuality } from "./components/TextureQualityPanel";
 import { disposeFhm2dMemorySession } from "@/page/TestEditor/components/ssbh-model-preview/fhm2dMemoryPreviewService";
@@ -76,7 +74,8 @@ import {
 } from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
 import { clearSceneEditColladaModelCache } from "./components/DAEModel";
 import { reorderPlacementEntriesBySubModels } from "./utils/reorderPlacementBySubModels";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { MayaSection } from "./components/MayaSection";
+import { PlacementConfigPanel } from "./components/PlacementConfigPanel";
 
 import type { PreviewRenderStyle } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
 
@@ -115,7 +114,6 @@ const SCENE_EDIT_PANEL_IDS = [
   "scene-properties",
 ] as const;
 
-/** Default split: 20% | 60% | 20% (percent keys match Panel `id`) */
 const SCENE_EDIT_DEFAULT_LAYOUT: Record<(typeof SCENE_EDIT_PANEL_IDS)[number], number> =
   {
     "scene-hierarchy": 20,
@@ -241,12 +239,15 @@ export default function SceneEdit() {
     number | null
   >(null);
 
+  const DEFAULT_TRANSFORM: TransformData = { posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, scaleX: 1, scaleY: 1, scaleZ: 1 };
+  const [baseTransform, setBaseTransform] = useState<TransformData>({ ...DEFAULT_TRANSFORM });
+  const [standaloneTransforms, setStandaloneTransforms] = useState<Map<string, TransformData>>(new Map());
+
   const [showGrid, setShowGrid] = useState(true);
   const [showAxes, setShowAxes] = useState(true);
   const [wireframe, setWireframe] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [textureQuality, setTextureQuality] = useState("original");
-  const [viewportClickPickSelection, setViewportClickPickSelection] = useState(false);
   const [sceneAnimeRenderEnabled, setSceneAnimeRenderEnabled] = useState(false);
   const [placementGizmoMode, setPlacementGizmoMode] = useState<PlacementGizmoMode>("translate");
   const [drawStats, setDrawStats] = useState<SceneDrawStats | null>(null);
@@ -279,6 +280,27 @@ export default function SceneEdit() {
     };
   }, [sessionId]);
 
+  // Maya-style W/E/R keyboard shortcuts for gizmo mode
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      switch (e.key.toLowerCase()) {
+        case "w":
+          setPlacementGizmoMode("translate");
+          break;
+        case "e":
+          setPlacementGizmoMode("rotate");
+          break;
+        case "r":
+          setPlacementGizmoMode("scale");
+          break;
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   const handleSelectNode = useCallback(
     (id: string | null) => {
       if (!id) {
@@ -286,12 +308,22 @@ export default function SceneEdit() {
         setSelectedPlacementIdxRaw(null);
         return;
       }
+
+      const effectMatch = id.match(/^__effect__(\d+)$/);
+      if (effectMatch) {
+        const idx = Number(effectMatch[1]);
+        setSelectedNodeIdRaw(id);
+        setSelectedPlacementIdxRaw(idx);
+        return;
+      }
+
       const parsed = parsePlacementViewportNodeId(id);
       if (parsed) {
         setSelectedNodeIdRaw(id);
         setSelectedPlacementIdxRaw(parsed.placementEntryIndex);
         return;
       }
+
       setSelectedNodeIdRaw(id);
       const sub = subModels.find((s) => s.folderName === id);
       if (sub) {
@@ -420,6 +452,8 @@ export default function SceneEdit() {
     setPlacementEntries([]);
     setTreeRoot(null);
     setDrawStats(null);
+    setBaseTransform({ ...DEFAULT_TRANSFORM });
+    setStandaloneTransforms(new Map());
     setSelectedNodeIdRaw(null);
     setSelectedPlacementIdxRaw(null);
     setHasUnsavedChanges(false);
@@ -602,7 +636,7 @@ export default function SceneEdit() {
     (idx: number, t: TransformData) => {
       setPlacementEntries((prev) => {
         const entry = prev[idx];
-        if (!entry || entry.vdkType.toUpperCase() !== "OBJECT") return prev;
+        if (!entry) return prev;
         const patched = patchPlacementRowTransform(entry, t, placementColMap);
         const next = [...prev];
         next[idx] = patched;
@@ -639,8 +673,36 @@ export default function SceneEdit() {
     [applyPlacementTransformImmediate],
   );
 
+  const updateStandaloneTransform = useCallback(
+    (nodeId: string, t: TransformData) => {
+      setStandaloneTransforms((prev) => {
+        const next = new Map(prev);
+        next.set(nodeId, t);
+        return next;
+      });
+    },
+    [],
+  );
+
   const handleTransformChange = useCallback(
     (field: keyof TransformData, value: number) => {
+      if (selectedNodeId === "base") {
+        setBaseTransform((prev) => ({ ...prev, [field]: value }));
+        return;
+      }
+      if (
+        selectedNodeId &&
+        selectedPlacementIdx === null &&
+        subModels.some((s) => s.folderName === selectedNodeId)
+      ) {
+        setStandaloneTransforms((prev) => {
+          const next = new Map(prev);
+          const current = prev.get(selectedNodeId) ?? { ...DEFAULT_TRANSFORM };
+          next.set(selectedNodeId, { ...current, [field]: value });
+          return next;
+        });
+        return;
+      }
       if (selectedPlacementIdx === null) return;
       const fieldMap: Record<keyof TransformData, keyof PlacementRow> = {
         posX: "posX",
@@ -659,7 +721,7 @@ export default function SceneEdit() {
         value
       );
     },
-    [selectedPlacementIdx, handlePlacementChange]
+    [selectedNodeId, selectedPlacementIdx, handlePlacementChange, subModels]
   );
 
   const handleDrawStatsChange = useCallback((stats: SceneDrawStats) => {
@@ -683,20 +745,31 @@ export default function SceneEdit() {
     const treeLookupId = parsed ? parsed.folderName : selectedNodeId;
     return findNode(treeRoot, treeLookupId);
   }, [treeRoot, selectedNodeId]);
-  const selectedTransform: TransformData | null =
-    selectedPlacementIdx !== null && placementEntries[selectedPlacementIdx]
-      ? {
-          posX: placementEntries[selectedPlacementIdx].posX,
-          posY: placementEntries[selectedPlacementIdx].posY,
-          posZ: placementEntries[selectedPlacementIdx].posZ,
-          rotX: placementEntries[selectedPlacementIdx].rotX,
-          rotY: placementEntries[selectedPlacementIdx].rotY,
-          rotZ: placementEntries[selectedPlacementIdx].rotZ,
-          scaleX: placementEntries[selectedPlacementIdx].scaleX,
-          scaleY: placementEntries[selectedPlacementIdx].scaleY,
-          scaleZ: placementEntries[selectedPlacementIdx].scaleZ,
-        }
-      : null;
+
+  const isBaseSelected = selectedNodeId === "base";
+
+  const isStandaloneSubModel = !isBaseSelected &&
+    selectedNodeId !== null &&
+    selectedPlacementIdx === null &&
+    subModels.some((s) => s.folderName === selectedNodeId);
+
+  const selectedTransform: TransformData | null = isBaseSelected
+    ? baseTransform
+    : isStandaloneSubModel
+      ? (standaloneTransforms.get(selectedNodeId!) ?? { ...DEFAULT_TRANSFORM })
+      : selectedPlacementIdx !== null && placementEntries[selectedPlacementIdx]
+        ? {
+            posX: placementEntries[selectedPlacementIdx].posX,
+            posY: placementEntries[selectedPlacementIdx].posY,
+            posZ: placementEntries[selectedPlacementIdx].posZ,
+            rotX: placementEntries[selectedPlacementIdx].rotX,
+            rotY: placementEntries[selectedPlacementIdx].rotY,
+            rotZ: placementEntries[selectedPlacementIdx].rotZ,
+            scaleX: placementEntries[selectedPlacementIdx].scaleX,
+            scaleY: placementEntries[selectedPlacementIdx].scaleY,
+            scaleZ: placementEntries[selectedPlacementIdx].scaleZ,
+          }
+        : null;
 
   const canDuplicatePlacement =
     selectedPlacementIdx !== null &&
@@ -724,6 +797,10 @@ export default function SceneEdit() {
           onResetCamera={() => viewportRef.current?.resetCamera()}
           onClearCache={() => setClearCacheDialogOpen(true)}
           clearCacheDisabled={isLoading || isLoadingBundle}
+          placementGizmoMode={placementGizmoMode}
+          onGizmoModeChange={setPlacementGizmoMode}
+          animeRenderEnabled={sceneAnimeRenderEnabled}
+          onToggleAnimeRender={setSceneAnimeRenderEnabled}
         />
 
         <AlertDialog open={clearCacheDialogOpen} onOpenChange={setClearCacheDialogOpen}>
@@ -757,6 +834,7 @@ export default function SceneEdit() {
           onLayoutChanged={onLayoutChanged}
           resizeTargetMinimumSize={{ fine: 16, coarse: 24 }}
         >
+          {/* Outliner (left panel) */}
           <ResizablePanel
             id="scene-hierarchy"
             defaultSize="20%"
@@ -765,8 +843,8 @@ export default function SceneEdit() {
             className="min-w-0"
           >
             <div className="flex h-full min-w-0 flex-col overflow-hidden border-r">
-              <div className="shrink-0 text-[10px] font-semibold px-3 py-1.5 border-b bg-muted/30 text-muted-foreground uppercase tracking-widest select-none whitespace-nowrap">
-                Scene
+              <div className="shrink-0 text-[10px] font-semibold px-3 py-1 border-b bg-muted/20 text-muted-foreground uppercase tracking-widest select-none whitespace-nowrap">
+                Outliner
               </div>
               <div className="min-h-0 flex-1 overflow-hidden">
                 <StageHierarchyTree
@@ -780,9 +858,10 @@ export default function SceneEdit() {
 
           <ResizableHandle
             withHandle
-            className="relative z-30 w-2 shrink-0 bg-border/30 hover:bg-primary/25"
+            className="relative z-30 w-1.5 shrink-0 bg-border/20 hover:bg-primary/25"
           />
 
+          {/* Viewport (center) */}
           <ResizablePanel
             id="scene-viewport"
             defaultSize="60%"
@@ -806,7 +885,11 @@ export default function SceneEdit() {
                 textureDataMap={textureDataMap}
                 onDrawStatsChange={handleDrawStatsChange}
                 graphicParams={graphicParams}
-                clickPickSelectionEnabled={viewportClickPickSelection}
+                baseTransform={baseTransform}
+                onBaseTransformChange={setBaseTransform}
+                standaloneTransforms={standaloneTransforms}
+                onStandaloneTransformChange={updateStandaloneTransform}
+                clickPickSelectionEnabled
                 previewRenderStyle={scenePreviewRenderStyle}
                 placementGizmoMode={placementGizmoMode}
                 onPlacementGizmoFrame={schedulePlacementGizmo}
@@ -818,9 +901,10 @@ export default function SceneEdit() {
 
           <ResizableHandle
             withHandle
-            className="relative z-30 w-2 shrink-0 bg-border/30 hover:bg-primary/25"
+            className="relative z-30 w-1.5 shrink-0 bg-border/20 hover:bg-primary/25"
           />
 
+          {/* Properties (right panel — stacked Maya sections) */}
           <ResizablePanel
             id="scene-properties"
             defaultSize="20%"
@@ -829,119 +913,41 @@ export default function SceneEdit() {
             className="min-w-0"
           >
             <div className="flex h-full min-w-0 flex-col overflow-hidden border-l">
-              <div className="shrink-0 flex flex-col gap-2 px-3 py-2 border-b bg-muted/30">
-                <div className="flex items-center justify-between gap-2">
-                  <Label
-                    htmlFor="scene-viewport-click-pick"
-                    className="text-[10px] font-medium cursor-pointer leading-tight text-muted-foreground"
-                  >
-                    Viewport click select
-                  </Label>
-                  <Switch
-                    id="scene-viewport-click-pick"
-                    checked={viewportClickPickSelection}
-                    onCheckedChange={setViewportClickPickSelection}
-                  />
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <Label
-                    htmlFor="scene-anime-render-style"
-                    className="text-[10px] font-medium cursor-pointer leading-tight text-muted-foreground"
-                    title="Bloom + warm lights + cel-shaded PBR (matches Test Editor Anime style)"
-                  >
-                    Anime render
-                  </Label>
-                  <Switch
-                    id="scene-anime-render-style"
-                    checked={sceneAnimeRenderEnabled}
-                    onCheckedChange={setSceneAnimeRenderEnabled}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label className="text-[10px] text-muted-foreground">Placement gizmo</Label>
-                  <ToggleGroup
-                    type="single"
-                    value={placementGizmoMode}
-                    onValueChange={(v) => {
-                      if (v) setPlacementGizmoMode(v as PlacementGizmoMode);
-                    }}
-                    variant="outline"
-                    className="flex w-full flex-wrap justify-start gap-1"
-                  >
-                    <ToggleGroupItem
-                      value="translate"
-                      className="h-7 flex-1 min-w-[4rem] px-2 text-[10px]"
-                      aria-label="Move"
-                    >
-                      Move
-                    </ToggleGroupItem>
-                    <ToggleGroupItem
-                      value="rotate"
-                      className="h-7 flex-1 min-w-[4rem] px-2 text-[10px]"
-                      aria-label="Rotate"
-                    >
-                      Rotate
-                    </ToggleGroupItem>
-                    <ToggleGroupItem
-                      value="scale"
-                      className="h-7 flex-1 min-w-[4rem] px-2 text-[10px]"
-                      aria-label="Scale"
-                    >
-                      Scale
-                    </ToggleGroupItem>
-                  </ToggleGroup>
-                </div>
+              <div className="shrink-0 text-[10px] font-semibold px-3 py-1 border-b bg-muted/20 text-muted-foreground uppercase tracking-widest select-none whitespace-nowrap">
+                Properties
               </div>
-              <Tabs defaultValue="status" className="flex min-h-0 min-w-0 flex-1 flex-col">
-                <TabsList className="h-8 w-full shrink-0 justify-start rounded-none border-b bg-muted/30 px-1">
-                  <TabsTrigger value="status" className="text-[10px] h-6 px-2.5 flex items-center gap-1">
-                    Status
-                  </TabsTrigger>
-                  <TabsTrigger value="properties" className="text-[10px] h-6 px-2.5">
-                    Properties
-                  </TabsTrigger>
-                  <TabsTrigger value="lighting" className="text-[10px] h-6 px-2.5">
-                    Lighting
-                  </TabsTrigger>
-                  <TabsTrigger value="placement" className="text-[10px] h-6 px-2.5">
-                    Placement
-                  </TabsTrigger>
-                  <TabsTrigger value="texture" className="text-[10px] h-6 px-2.5">
-                    Texture
-                  </TabsTrigger>
-                </TabsList>
+              <ScrollArea className="flex-1">
+                {selectedTransform && (
+                  <MayaSection
+                    title={`Transform${selectedNode ? ` — ${selectedNode.label}` : ""}`}
+                  >
+                    <StagePropertyEditor
+                      transform={selectedTransform}
+                      onTransformChange={handleTransformChange}
+                    />
+                  </MayaSection>
+                )}
 
-                <TabsContent value="status" className="mt-0 min-h-0 flex-1 overflow-hidden">
-                  <SceneStatusPanel
+                <MayaSection title="Scene">
+                  <SceneInfoContent
                     stageName={stageName}
                     stageRoot={stageRoot}
                     selectedNode={selectedNode}
                     selectedPlacementIdx={selectedPlacementIdx}
-                    placementEntry={selectedPlacementIdx !== null ? placementEntries[selectedPlacementIdx] : null}
-                    drawStats={drawStats}
+                    placementEntry={
+                      selectedPlacementIdx !== null
+                        ? placementEntries[selectedPlacementIdx]
+                        : null
+                    }
                     subModelCount={subModels.length}
                     textureCount={textureDataMap.size}
                   />
-                </TabsContent>
+                </MayaSection>
 
-                <TabsContent value="properties" className="mt-0 min-h-0 flex-1 space-y-2 overflow-auto p-2">
-                  <StagePropertyEditor
-                    selectedNodeId={selectedNodeId}
-                    selectedNodeLabel={selectedNode?.label ?? null}
-                    selectedNodeRole={selectedNode?.role ?? null}
-                    transform={selectedTransform}
-                    onTransformChange={handleTransformChange}
-                  />
-                </TabsContent>
-
-                <TabsContent value="lighting" className="mt-0 min-h-0 flex-1 space-y-2 overflow-auto p-2">
-                  <GraphicParamPanel
-                    params={graphicParams}
-                    onChange={handleGraphicParamChange}
-                  />
-                </TabsContent>
-
-                <TabsContent value="placement" className="mt-0 min-h-0 flex-1 space-y-2 overflow-auto p-2">
+                <MayaSection
+                  title="Placement"
+                  badge={placementEntries.length || undefined}
+                >
                   <PlacementPanel
                     entries={placementEntries}
                     selectedIndex={selectedPlacementIdx}
@@ -950,17 +956,46 @@ export default function SceneEdit() {
                     onDuplicate={handleDuplicatePlacement}
                     duplicateDisabled={!canDuplicatePlacement}
                   />
-                </TabsContent>
+                </MayaSection>
 
-                <TabsContent value="texture" className="mt-0 min-h-0 flex-1 overflow-auto">
+                {selectedPlacementIdx !== null && placementEntries[selectedPlacementIdx] && (
+                  <MayaSection title="Object Config" defaultOpen>
+                    <PlacementConfigPanel
+                      entry={placementEntries[selectedPlacementIdx]}
+                      placementHeader={placementHeader}
+                    />
+                  </MayaSection>
+                )}
+
+                <MayaSection
+                  title="Lighting"
+                  badge={graphicParams.length || undefined}
+                  defaultOpen={false}
+                >
+                  <GraphicParamPanel
+                    params={graphicParams}
+                    onChange={handleGraphicParamChange}
+                  />
+                </MayaSection>
+
+                <MayaSection title="Texture">
                   <TextureQualityPanel
                     quality={textureQuality}
                     onQualityChange={handleTextureQualityChange}
                     textureDataMap={textureDataMap}
                     isDecoding={textureProgress !== null}
                   />
-                </TabsContent>
-              </Tabs>
+                </MayaSection>
+
+                <MayaSection title="Stats" defaultOpen={false}>
+                  <SceneStatsContent
+                    drawStats={drawStats}
+                    subModelCount={subModels.length}
+                    textureCount={textureDataMap.size}
+                    stageName={stageName}
+                  />
+                </MayaSection>
+              </ScrollArea>
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>
@@ -999,12 +1034,6 @@ function buildTreeFromBundle(
       role: "base",
     });
   }
-
-  children.push({
-    id: "info",
-    label: "info",
-    role: "info",
-  });
 
   for (const sub of bundle.subModels) {
     children.push({

@@ -1,4 +1,4 @@
-import { ChevronRight, ChevronDown, Box, Map, Info, Layers, FolderOpen } from "lucide-react";
+import { ChevronRight, ChevronDown, Box, Map, Layers, FolderOpen } from "lucide-react";
 import { useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 export interface StageTreeNode {
   id: string;
   label: string;
-  role: "base" | "info" | "sub_model" | "textures" | "root";
+  role: "base" | "sub_model" | "textures" | "root";
   children?: StageTreeNode[];
   objectIndex?: number;
   visible?: boolean;
@@ -140,8 +140,6 @@ function getRoleIcon(role: StageTreeNode["role"]) {
   switch (role) {
     case "base":
       return Map;
-    case "info":
-      return Info;
     case "sub_model":
       return Box;
     case "root":
