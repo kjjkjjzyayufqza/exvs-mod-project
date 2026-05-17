@@ -42,6 +42,7 @@ import {
   type MapViewportHandle,
   type ImportedDaeObject,
   type PlacementGizmoMode,
+  type SceneExportObject,
 } from "./components/MapViewport";
 import {
   StagePropertyEditor,
@@ -104,8 +105,16 @@ import {
 import {
   exportMultipleObjectsAsDAE,
   exportObjectAsDAE,
+  exportSingleStageDae,
+  batchExportStageDae,
   importDAEFiles,
+  type BatchDaeExportEntry,
 } from "./utils/daeExportImport";
+import {
+  DaeExportDialog,
+  type DaeExportConfig,
+  type DaeExportTarget,
+} from "./components/DaeExportDialog";
 import { canEditSceneNode } from "./utils/sceneEditorNodeState";
 import {
   addGraphicParam,
@@ -279,6 +288,12 @@ export default function SceneEdit() {
     progress: number;
     steps: ImportStep[];
   }>({ open: false, progress: 0, steps: [] });
+
+  const [daeExportDialog, setDaeExportDialog] = useState<{
+    open: boolean;
+    targets: DaeExportTarget[];
+    threeObjects: SceneExportObject[];
+  }>({ open: false, targets: [], threeObjects: [] });
 
   const INITIAL_STEPS: ImportStep[] = [
     { step: "read", label: "Reading file...", status: "pending" },
@@ -1768,13 +1783,19 @@ export default function SceneEdit() {
     try {
       const results = await importDAEFiles(true);
       if (results.length === 0) return;
-      const created: ImportedDaeObject[] = results.map((result, index) => ({
-        id: `dae_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${index}`,
-        name: result.fileName.replace(/\.dae$/i, ""),
-        sourcePath: result.filePath,
-        scene: result.scene,
-        transform: { ...DEFAULT_TRANSFORM, posX: index },
-      }));
+      let offsetX = 0;
+      const SPACING = 2;
+      const created: ImportedDaeObject[] = results.map((result, index) => {
+        const posX = offsetX;
+        offsetX += result.boundingSize.x + SPACING;
+        return {
+          id: `dae_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${index}`,
+          name: result.fileName.replace(/\.dae$/i, ""),
+          sourcePath: result.filePath,
+          scene: result.scene,
+          transform: { ...DEFAULT_TRANSFORM, posX: posX },
+        };
+      });
       setImportedDaeObjects((prev) => [...prev, ...created]);
       handleSelectNode(created[0]?.id ?? null);
       useSceneEditorStore.getState().recordCommand({
@@ -1795,26 +1816,86 @@ export default function SceneEdit() {
     }
   }, [handleClearSelection, handleSelectNode]);
 
-  const handleExportSelectedDae = useCallback(async () => {
+  const handleExportSelectedDae = useCallback(() => {
     const objects = viewportRef.current?.getSelectedExportObjects() ?? [];
     if (objects.length === 0) {
       toast.error("Select one or more scene objects before exporting DAE");
       return;
     }
-    const safeObjects = objects.map((entry) => ({
-      ...entry,
-      name: entry.name.replace(/[\/\\:*?"<>|]/g, "_"),
-    }));
+
+    const targets: DaeExportTarget[] = objects.map((entry) => {
+      const safeName = entry.name.replace(/[\/\\:*?"<>|]/g, "_");
+      const sub = subModels.find((s) => s.folderName === entry.name);
+      if (sub) {
+        return {
+          nodeId: entry.name,
+          name: safeName,
+          rootPath: sub.bundle.rootFolder,
+          type: "ssbh" as const,
+        };
+      }
+      if (entry.name === "base" && baseModel) {
+        return {
+          nodeId: "base",
+          name: safeName,
+          rootPath: baseModel.rootFolder,
+          type: "ssbh" as const,
+        };
+      }
+      return {
+        nodeId: entry.name,
+        name: safeName,
+        rootPath: null,
+        type: "imported-dae" as const,
+      };
+    });
+
+    setDaeExportDialog({ open: true, targets, threeObjects: objects });
+  }, [baseModel, subModels]);
+
+  const handleDaeExportConfirm = useCallback(async (config: DaeExportConfig) => {
+    const { targets, threeObjects } = daeExportDialog;
+    setDaeExportDialog((prev) => ({ ...prev, open: false }));
+
     try {
-      if (safeObjects.length === 1) {
-        await exportObjectAsDAE(safeObjects[0].object, safeObjects[0].name);
-      } else {
-        await exportMultipleObjectsAsDAE(safeObjects);
+      const ssbhTargets = targets.filter((t) => t.type === "ssbh" && t.rootPath);
+      const daeTargets = targets.filter((t) => t.type === "imported-dae");
+
+      if (ssbhTargets.length === 1) {
+        await exportSingleStageDae(ssbhTargets[0].rootPath!, {
+          scaleFactor: config.scaleFactor,
+          upAxis: config.upAxis,
+          exportTextures: config.exportTextures,
+        });
+      } else if (ssbhTargets.length > 1) {
+        const entries: BatchDaeExportEntry[] = ssbhTargets.map((t) => ({
+          rootPath: t.rootPath!,
+          outputName: t.name,
+        }));
+        await batchExportStageDae(entries, {
+          scaleFactor: config.scaleFactor,
+          upAxis: config.upAxis,
+          exportTextures: config.exportTextures,
+        });
+      }
+
+      if (daeTargets.length > 0) {
+        const daeObjects: SceneExportObject[] = daeTargets
+          .map((t) => {
+            const found = threeObjects.find((o) => o.name === t.nodeId);
+            return found ? { object: found.object, name: t.name } : null;
+          })
+          .filter((o): o is SceneExportObject => o !== null);
+        if (daeObjects.length === 1) {
+          await exportObjectAsDAE(daeObjects[0].object, daeObjects[0].name);
+        } else if (daeObjects.length > 1) {
+          await exportMultipleObjectsAsDAE(daeObjects);
+        }
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to export DAE");
     }
-  }, []);
+  }, [daeExportDialog]);
 
   const handleDeleteSelected = useCallback(
     (ids?: string[]) => {
@@ -2378,6 +2459,12 @@ export default function SceneEdit() {
           isLoadingBundle={isLoadingBundle}
           onLoad={handleRenameLoad}
           onClose={handleRenameCancel}
+        />
+        <DaeExportDialog
+          open={daeExportDialog.open}
+          targets={daeExportDialog.targets}
+          onExport={handleDaeExportConfirm}
+          onCancel={() => setDaeExportDialog((prev) => ({ ...prev, open: false }))}
         />
       </div>
     </TooltipProvider>

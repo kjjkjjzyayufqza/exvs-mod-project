@@ -11,6 +11,7 @@ export interface DAEImportResult {
   filePath: string;
   scene: THREE.Group;
   blobUrl: string;
+  boundingSize: THREE.Vector3;
 }
 
 export async function importDAEFiles(multiple = false): Promise<DAEImportResult[]> {
@@ -36,11 +37,18 @@ export async function importDAEFiles(multiple = false): Promise<DAEImportResult[
     });
 
     const fileName = filePath.split(/[/\\]/).pop() ?? "model.dae";
+    const bbox = new THREE.Box3().setFromObject(collada.scene);
+    const size = new THREE.Vector3();
+    bbox.getSize(size);
+    if (!size.x || !Number.isFinite(size.x)) size.x = 1;
+    if (!size.y || !Number.isFinite(size.y)) size.y = 1;
+    if (!size.z || !Number.isFinite(size.z)) size.z = 1;
     results.push({
       fileName,
       filePath,
       scene: collada.scene,
       blobUrl,
+      boundingSize: size,
     });
   }
 
@@ -48,11 +56,15 @@ export async function importDAEFiles(multiple = false): Promise<DAEImportResult[
 }
 
 function parseDAE(exporter: InstanceType<typeof ColladaExporter>, object: THREE.Object3D): string {
-  let result = "";
-  exporter.parse(object, (res) => {
-    result = res.data;
+  let callbackResult = "";
+  const returned = exporter.parse(object, (res) => {
+    callbackResult = res.data;
   }, {});
-  return result;
+  const data = returned?.data ?? callbackResult;
+  if (!data) {
+    throw new Error("ColladaExporter produced empty output — object may lack exportable geometry");
+  }
+  return data;
 }
 
 export async function exportObjectAsDAE(

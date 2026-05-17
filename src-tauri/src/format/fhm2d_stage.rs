@@ -1600,6 +1600,15 @@ pub fn load_stage_bundle_impl(stage_root: &str) -> Result<StageBundle, String> {
     let mut warnings = Vec::new();
 
     let base_model = load_model_in_subfolder(root, STAGE_BASE_NAME, &mut warnings);
+    if base_model.is_none() {
+        let base_dir = root.join(STAGE_BASE_NAME);
+        if base_dir.is_dir() {
+            warnings.push(format!(
+                "base/ directory exists but no .numdlb found (searched subdirectories too): {}",
+                base_dir.display()
+            ));
+        }
+    }
 
     let mut sub_models = Vec::new();
     let mut entries: Vec<_> = fs::read_dir(root)
@@ -1664,11 +1673,28 @@ fn load_model_in_subfolder(
 
 fn find_numdlb_in_dir(dir: &Path) -> Option<PathBuf> {
     let entries = fs::read_dir(dir).ok()?;
+    let mut subdirs = Vec::new();
     for entry in entries.filter_map(|e| e.ok()) {
         let path = entry.path();
-        if let Some(ext) = path.extension() {
-            if ext.eq_ignore_ascii_case("numdlb") {
-                return Some(path);
+        if path.is_file() {
+            if let Some(ext) = path.extension() {
+                if ext.eq_ignore_ascii_case("numdlb") {
+                    return Some(path);
+                }
+            }
+        } else if path.is_dir() {
+            subdirs.push(path);
+        }
+    }
+    for sub in subdirs {
+        if let Ok(sub_entries) = fs::read_dir(&sub) {
+            for entry in sub_entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if let Some(ext) = path.extension() {
+                    if ext.eq_ignore_ascii_case("numdlb") {
+                        return Some(path);
+                    }
+                }
             }
         }
     }
@@ -1676,7 +1702,11 @@ fn find_numdlb_in_dir(dir: &Path) -> Option<PathBuf> {
 }
 
 fn parse_graphic_param_csv(root: &Path, warnings: &mut Vec<String>) -> Vec<GraphicParamEntry> {
-    let csv_path = root.join(STAGE_INFO_NAME).join("graphic_param.csv");
+    let info_dir = root.join(STAGE_INFO_NAME);
+    if !info_dir.is_dir() {
+        return Vec::new();
+    }
+    let csv_path = info_dir.join("graphic_param.csv");
     if !csv_path.exists() {
         warnings.push("graphic_param.csv not found".to_string());
         return Vec::new();
@@ -1708,7 +1738,11 @@ fn parse_placement_csv(
     root: &Path,
     warnings: &mut Vec<String>,
 ) -> (Vec<String>, Vec<PlacementEntry>) {
-    let csv_path = root.join(STAGE_INFO_NAME).join("placement.csv");
+    let info_dir = root.join(STAGE_INFO_NAME);
+    if !info_dir.is_dir() {
+        return (Vec::new(), Vec::new());
+    }
+    let csv_path = info_dir.join("placement.csv");
     if !csv_path.exists() {
         warnings.push("placement.csv not found".to_string());
         return (Vec::new(), Vec::new());

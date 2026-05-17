@@ -707,6 +707,33 @@ fn find_nutexb_in_texture_trees(
                 &found,
             )?));
         }
+        // Scan numeric subdirectories (generic fhm2d extraction produces 0/, 1/, 2/, etc.)
+        if let Ok(entries) = fs::read_dir(base_dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let sub = entry.path();
+                if !sub.is_dir() {
+                    continue;
+                }
+                let name = entry.file_name();
+                let name_str = name.to_string_lossy();
+                if !name_str.chars().all(|c| c.is_ascii_digit()) {
+                    continue;
+                }
+                let candidate = sub.join(want_file);
+                if candidate.is_file() {
+                    return Ok(Some(verify_preview_path_under_model_tree(
+                        model_root_canon,
+                        &candidate,
+                    )?));
+                }
+                if let Some(found) = find_case_insensitive_file_in_dir(&sub, want_file) {
+                    return Ok(Some(verify_preview_path_under_model_tree(
+                        model_root_canon,
+                        &found,
+                    )?));
+                }
+            }
+        }
     }
     let subdir_chains: &[&[&str]] = &[
         &["textures"],
@@ -964,15 +991,24 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
     )?;
 
     // Prefer game runtime material files: when `__nust__.numatb` exists, ignore non-`__nust__` files.
+    // However, if `__nust__` yields 0 texture refs, fall back to all files (the `__maya__` variant
+    // often carries the development-time texture bindings that are missing from a minimal `__nust__`).
     let (preferred_matl_paths, ignored_non_nust_paths) = select_preferred_matl_paths(&matl_paths);
     if !ignored_non_nust_paths.is_empty() {
-        warnings.push(format!(
-            "Using only __nust__.numatb material files for preview; ignored {} non-__nust__ file(s).",
-            ignored_non_nust_paths.len()
-        ));
+        let nust_matl = load_and_merge_matl_paths(&preferred_matl_paths, &mut warnings);
+        let nust_has_textures = nust_matl
+            .as_ref()
+            .map(|m| !collect_texture_refs(m).is_empty())
+            .unwrap_or(false);
+        if nust_has_textures {
+            matl_paths = preferred_matl_paths;
+            matl_combined = nust_matl;
+        } else {
+            matl_combined = load_and_merge_matl_paths(&matl_paths, &mut warnings);
+        }
+    } else {
+        matl_combined = load_and_merge_matl_paths(&matl_paths, &mut warnings);
     }
-    matl_paths = preferred_matl_paths;
-    matl_combined = load_and_merge_matl_paths(&matl_paths, &mut warnings);
 
     let (texture_refs, resolved_nutexb_paths, texture_resolve, matl_value) =
         if let Some(ref m) = matl_combined {
