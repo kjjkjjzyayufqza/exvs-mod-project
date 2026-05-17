@@ -42,6 +42,8 @@ interface SceneOutlinerProps {
   onDelete?: (ids: string[]) => void;
   onPaste?: () => void;
   onFocusSelected?: () => void;
+  onClearSelection?: () => void;
+  onSelectAll?: (ids: string[]) => void;
 }
 
 export function SceneOutliner({
@@ -51,6 +53,8 @@ export function SceneOutliner({
   onDelete,
   onPaste,
   onFocusSelected,
+  onClearSelection,
+  onSelectAll,
 }: SceneOutlinerProps) {
   const {
     selectedIds,
@@ -93,7 +97,8 @@ export function SceneOutliner({
 
   const handleSelectAll = useCallback(() => {
     selectAll(allNodeIds);
-  }, [selectAll, allNodeIds]);
+    onSelectAll?.(allNodeIds);
+  }, [selectAll, allNodeIds, onSelectAll]);
 
   const handleGroup = useCallback(() => {
     const ids = [...selectedIds];
@@ -177,7 +182,10 @@ export function SceneOutliner({
           Select All
           <ContextMenuShortcut>Ctrl+A</ContextMenuShortcut>
         </ContextMenuItem>
-        <ContextMenuItem onClick={() => deselectAll()}>
+        <ContextMenuItem onClick={() => {
+          deselectAll();
+          onClearSelection?.();
+        }}>
           Deselect All
           <ContextMenuShortcut>Esc</ContextMenuShortcut>
         </ContextMenuItem>
@@ -487,11 +495,17 @@ function OutlinerNodeRow({
           )}
           <RoleIcon className={cn("h-3.5 w-3.5 shrink-0", isSelected ? "text-primary" : "text-muted-foreground")} />
           <span className={cn("truncate font-medium flex-1", locked && "italic")}>{node.label}</span>
-          <div className="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity">
+          <div
+            className={cn(
+              "flex items-center gap-0.5 transition-opacity",
+              isSelected || !visible || locked ? "opacity-100" : "opacity-0 group-hover/row:opacity-100",
+            )}
+          >
             <button
               className="h-4 w-4 flex items-center justify-center rounded-sm hover:bg-accent"
               onClick={(e) => { e.stopPropagation(); toggleVisibility(node.id); }}
               title={visible ? "Hide" : "Show"}
+              aria-label={visible ? `Hide ${node.label}` : `Show ${node.label}`}
             >
               {visible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3 text-muted-foreground" />}
             </button>
@@ -499,6 +513,7 @@ function OutlinerNodeRow({
               className="h-4 w-4 flex items-center justify-center rounded-sm hover:bg-accent"
               onClick={(e) => { e.stopPropagation(); toggleLock(node.id); }}
               title={locked ? "Unlock" : "Lock"}
+              aria-label={locked ? `Unlock ${node.label}` : `Lock ${node.label}`}
             >
               {locked ? <Lock className="h-3 w-3 text-amber-500" /> : <Unlock className="h-3 w-3" />}
             </button>

@@ -6,13 +6,14 @@ import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 import { DialogLastPathKey, getDialogDefaultPath, rememberDialogSelection } from "@/utils/dialogLastPath";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { RotateCcw } from "lucide-react";
 
 import {
   ResizablePanelGroup,
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -197,6 +198,24 @@ function placementToTransform(row: PlacementRow): TransformData {
   };
 }
 
+function ResetIconButton({ onClick, label, disabled }: { onClick: () => void; label: string; disabled?: boolean }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex h-4 w-4 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+          onClick={onClick}
+          disabled={disabled}
+        >
+          <RotateCcw className="h-3 w-3" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="text-[10px]">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export default function SceneEdit() {
   const viewportRef = useRef<MapViewportHandle>(null);
   const [, startTransition] = useTransition();
@@ -232,6 +251,18 @@ export default function SceneEdit() {
   const [placementEntries, setPlacementEntries] = useState<PlacementRow[]>([]);
   const [importedDaeObjects, setImportedDaeObjects] = useState<ImportedDaeObject[]>([]);
   const [treeRoot, setTreeRoot] = useState<StageTreeNode | null>(null);
+
+  const initialSnapshotRef = useRef<{
+    graphicParams: GraphicParam[];
+    placementEntries: PlacementRow[];
+  } | null>(null);
+
+  const [resetDialogState, setResetDialogState] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void;
+  }>({ open: false, title: "", description: "", onConfirm: () => {} });
 
   const [isMemoryImport, setIsMemoryImport] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -630,6 +661,10 @@ export default function SceneEdit() {
         }));
         const orderedPlacements = reorderPlacementEntriesBySubModels(mappedPlacements, bundle.subModels);
         setPlacementEntries(orderedPlacements);
+        initialSnapshotRef.current = {
+          graphicParams: bundle.graphicParams.map((p) => ({ key: p.key, value: p.value })),
+          placementEntries: orderedPlacements.map((e) => ({ ...e, rawFields: [...e.rawFields] })),
+        };
         setObjectTextureLoadState({});
         const tree = buildTreeFromBundle(folderName, bundle);
         setTreeRoot(tree);
@@ -654,6 +689,7 @@ export default function SceneEdit() {
     if (sessionId) {
       disposeFhm2dMemorySession(sessionId).catch(() => {});
     }
+    initialSnapshotRef.current = null;
     setStageName(null);
     setStageRoot(null);
     setIsMemoryImport(false);
@@ -889,6 +925,202 @@ export default function SceneEdit() {
       else next.delete(key);
       return next;
     });
+  }, []);
+
+  const openResetDialog = useCallback((title: string, description: string, onConfirm: () => void) => {
+    setResetDialogState({ open: true, title, description, onConfirm });
+  }, []);
+
+  const handleResetSession = useCallback(() => {
+    const snap = initialSnapshotRef.current;
+    if (!snap) return;
+    openResetDialog(
+      "Reset all changes?",
+      "This will revert all graphic param and placement edits back to the originally loaded state. Undo history will be cleared.",
+      () => {
+        setGraphicParams(snap.graphicParams.map((p) => ({ ...p })));
+        setAppliedGraphicParamKeys(new Set());
+        setPlacementEntries(snap.placementEntries.map((e) => ({ ...e, rawFields: [...e.rawFields] })));
+        setBaseTransform({ ...DEFAULT_TRANSFORM });
+        setStandaloneTransforms(new Map());
+        useSceneEditorStore.getState().clearHistory();
+        setHasUnsavedChanges(false);
+        toast.success("All changes reverted to loaded state");
+      },
+    );
+  }, [openResetDialog]);
+
+  const handleResetGraphicParams = useCallback(() => {
+    const snap = initialSnapshotRef.current;
+    if (!snap) return;
+    openResetDialog(
+      "Reset graphic params?",
+      "This will revert all graphic_param edits back to the originally loaded values.",
+      () => {
+        setGraphicParams(snap.graphicParams.map((p) => ({ ...p })));
+        setAppliedGraphicParamKeys(new Set());
+        setHasUnsavedChanges(true);
+        toast.success("Graphic params reverted");
+      },
+    );
+  }, [openResetDialog]);
+
+  const handleResetPlacement = useCallback(() => {
+    const snap = initialSnapshotRef.current;
+    if (!snap) return;
+    openResetDialog(
+      "Reset all placements?",
+      "This will revert all placement edits (add, delete, field changes) back to the originally loaded state.",
+      () => {
+        setPlacementEntries(snap.placementEntries.map((e) => ({ ...e, rawFields: [...e.rawFields] })));
+        setSelectedPlacementIdxRaw(null);
+        setHasUnsavedChanges(true);
+        toast.success("Placements reverted");
+      },
+    );
+  }, [openResetDialog]);
+
+  const handleResetPlacementRow = useCallback((index: number) => {
+    const snap = initialSnapshotRef.current;
+    if (!snap) return;
+    const original = snap.placementEntries[index];
+    if (!original) {
+      toast.error("This row was added after loading — use delete instead");
+      return;
+    }
+    const before = placementEntries[index];
+    if (!before) return;
+    const restored = { ...original, rawFields: [...original.rawFields] };
+    setPlacementEntries((prev) => {
+      const next = [...prev];
+      next[index] = restored;
+      return next;
+    });
+    setHasUnsavedChanges(true);
+    useSceneEditorStore.getState().recordCommand({
+      type: "reset-placement-row",
+      description: `Reset placement row #${index}`,
+      undo: () => {
+        setPlacementEntries((prev) => {
+          const next = [...prev];
+          next[index] = before;
+          return next;
+        });
+        setHasUnsavedChanges(true);
+      },
+      redo: () => {
+        setPlacementEntries((prev) => {
+          const next = [...prev];
+          next[index] = { ...original, rawFields: [...original.rawFields] };
+          return next;
+        });
+        setHasUnsavedChanges(true);
+      },
+    });
+    toast.success(`Placement row #${index} reverted`);
+  }, [placementEntries]);
+
+  const handleResetPlacementField = useCallback((index: number, fieldIndex: number) => {
+    const snap = initialSnapshotRef.current;
+    if (!snap) return;
+    const original = snap.placementEntries[index];
+    if (!original || original.rawFields[fieldIndex] === undefined) return;
+    const current = placementEntries[index];
+    if (!current) return;
+    const beforeValue = current.rawFields[fieldIndex];
+    const originalValue = original.rawFields[fieldIndex];
+    if (beforeValue === originalValue) return;
+    const rawFields = [...current.rawFields];
+    rawFields[fieldIndex] = originalValue;
+    const nextEntry = syncParsedFieldsFromRaw({ ...current, rawFields });
+    setPlacementEntries((prev) => {
+      const next = [...prev];
+      next[index] = nextEntry;
+      return next;
+    });
+    setHasUnsavedChanges(true);
+    useSceneEditorStore.getState().recordCommand({
+      type: "reset-placement-field",
+      description: "Reset placement field",
+      undo: () => {
+        setPlacementEntries((prev) => {
+          const next = [...prev];
+          next[index] = current;
+          return next;
+        });
+        setHasUnsavedChanges(true);
+      },
+      redo: () => {
+        setPlacementEntries((prev) => {
+          const next = [...prev];
+          next[index] = nextEntry;
+          return next;
+        });
+        setHasUnsavedChanges(true);
+      },
+    });
+  }, [placementEntries]);
+
+  const handleResetTransform = useCallback(() => {
+    if (!selectedNodeId) return;
+    if (selectedNodeId === "base") {
+      const before = baseTransform;
+      setBaseTransform({ ...DEFAULT_TRANSFORM });
+      useSceneEditorStore.getState().recordCommand({
+        type: "reset-transform",
+        description: "Reset base transform",
+        undo: () => setBaseTransform(before),
+        redo: () => setBaseTransform({ ...DEFAULT_TRANSFORM }),
+      });
+    } else if (standaloneTransforms.has(selectedNodeId)) {
+      const before = standaloneTransforms.get(selectedNodeId)!;
+      setStandaloneTransforms((prev) => {
+        const next = new Map(prev);
+        next.set(selectedNodeId, { ...DEFAULT_TRANSFORM });
+        return next;
+      });
+      useSceneEditorStore.getState().recordCommand({
+        type: "reset-transform",
+        description: "Reset standalone transform",
+        undo: () => setStandaloneTransforms((prev) => { const next = new Map(prev); next.set(selectedNodeId, before); return next; }),
+        redo: () => setStandaloneTransforms((prev) => { const next = new Map(prev); next.set(selectedNodeId, { ...DEFAULT_TRANSFORM }); return next; }),
+      });
+    } else if (selectedPlacementIdx !== null) {
+      const snap = initialSnapshotRef.current;
+      const original = snap?.placementEntries[selectedPlacementIdx];
+      const current = placementEntries[selectedPlacementIdx];
+      if (!current) return;
+      const target = original
+        ? placementToTransform(original)
+        : { posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, scaleX: 1, scaleY: 1, scaleZ: 1 };
+      const before = { ...current };
+      const nextEntry = patchPlacementRowTransform(current, target, placementColMap);
+      setPlacementEntries((prev) => {
+        const next = [...prev];
+        next[selectedPlacementIdx] = nextEntry;
+        return next;
+      });
+      setHasUnsavedChanges(true);
+      useSceneEditorStore.getState().recordCommand({
+        type: "reset-placement-transform",
+        description: "Reset placement transform",
+        undo: () => { setPlacementEntries((prev) => { const next = [...prev]; next[selectedPlacementIdx] = before; return next; }); setHasUnsavedChanges(true); },
+        redo: () => { setPlacementEntries((prev) => { const next = [...prev]; next[selectedPlacementIdx] = nextEntry; return next; }); setHasUnsavedChanges(true); },
+      });
+    }
+  }, [selectedNodeId, baseTransform, standaloneTransforms, selectedPlacementIdx, placementEntries, placementColMap]);
+
+  const handleResetGraphicParamValue = useCallback((index: number) => {
+    const snap = initialSnapshotRef.current;
+    if (!snap) return;
+    const original = snap.graphicParams[index];
+    if (!original) return;
+    setGraphicParams((prev) => {
+      const next = [...prev];
+      if (next[index]) next[index] = { ...original };
+      return next;
+    });
+    setHasUnsavedChanges(true);
   }, []);
 
   const handlePlacementChange = useCallback(
@@ -1196,13 +1428,39 @@ export default function SceneEdit() {
     setObjectTextureLoadState((prev) => setTexturePathEnabledForObject(prev, objectId, path, enabled));
   }, []);
 
-  const handlePlacementFieldChange = useCallback(
+  const fieldEditSnapshotRef = useRef<{ index: number; fieldIndex: number; before: PlacementRow } | null>(null);
+
+  const handlePlacementFieldPreview = useCallback(
     (index: number, fieldIndex: number, value: string) => {
-      const previous = placementEntries[index];
-      if (!previous) return;
-      const rawFields = [...previous.rawFields];
+      const current = placementEntries[index];
+      if (!current) return;
+      if (!fieldEditSnapshotRef.current || fieldEditSnapshotRef.current.index !== index || fieldEditSnapshotRef.current.fieldIndex !== fieldIndex) {
+        fieldEditSnapshotRef.current = { index, fieldIndex, before: current };
+      }
+      const rawFields = [...current.rawFields];
       rawFields[fieldIndex] = value;
-      const nextEntry = syncParsedFieldsFromRaw({ ...previous, rawFields });
+      const nextEntry = syncParsedFieldsFromRaw({ ...current, rawFields });
+      setPlacementEntries((prev) => {
+        const next = [...prev];
+        next[index] = nextEntry;
+        return next;
+      });
+      setHasUnsavedChanges(true);
+    },
+    [placementEntries],
+  );
+
+  const handlePlacementFieldCommit = useCallback(
+    (index: number, fieldIndex: number, value: string) => {
+      const snapshot = fieldEditSnapshotRef.current;
+      const before = snapshot && snapshot.index === index && snapshot.fieldIndex === fieldIndex
+        ? snapshot.before
+        : placementEntries[index];
+      fieldEditSnapshotRef.current = null;
+      if (!before) return;
+      const rawFields = [...before.rawFields];
+      rawFields[fieldIndex] = value;
+      const nextEntry = syncParsedFieldsFromRaw({ ...before, rawFields });
       setPlacementEntries((prev) => {
         const next = [...prev];
         next[index] = nextEntry;
@@ -1215,7 +1473,7 @@ export default function SceneEdit() {
         undo: () => {
           setPlacementEntries((prev) => {
             const next = [...prev];
-            next[index] = previous;
+            next[index] = before;
             return next;
           });
           setHasUnsavedChanges(true);
@@ -1837,6 +2095,25 @@ export default function SceneEdit() {
           </AlertDialogContent>
         </AlertDialog>
 
+        <AlertDialog open={resetDialogState.open} onOpenChange={(open) => { if (!open) setResetDialogState((prev) => ({ ...prev, open: false })); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{resetDialogState.title}</AlertDialogTitle>
+              <AlertDialogDescription>{resetDialogState.description}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                type="button"
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => { setResetDialogState((prev) => ({ ...prev, open: false })); resetDialogState.onConfirm(); }}
+              >
+                Reset
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         <ResizablePanelGroup
           id="scene-edit-layout"
           orientation="horizontal"
@@ -1955,8 +2232,11 @@ export default function SceneEdit() {
             className="min-w-0"
           >
             <div className="flex h-full min-w-0 flex-col overflow-hidden border-l">
-              <div className="shrink-0 text-[10px] font-semibold px-3 py-1 border-b bg-muted/20 text-muted-foreground uppercase tracking-widest select-none whitespace-nowrap">
-                Properties
+              <div className="flex shrink-0 items-center px-3 py-1 border-b bg-muted/20 select-none whitespace-nowrap">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Properties</span>
+                <span className="ml-auto">
+                  <ResetIconButton onClick={handleResetSession} label="Reset all changes" disabled={!initialSnapshotRef.current} />
+                </span>
               </div>
               <Tabs defaultValue="inspect" className="flex min-h-0 flex-1 flex-col">
                 <TabsList className="mx-2 mt-2 grid h-8 grid-cols-3 rounded-md">
@@ -1967,7 +2247,10 @@ export default function SceneEdit() {
                 <ScrollArea className="min-h-0 flex-1">
                   <TabsContent value="inspect" className="m-0 pb-3">
                     {selectedTransform && (
-                      <MayaSection title={`Transform${selectedNode ? ` — ${selectedNode.label}` : ""}`}>
+                      <MayaSection
+                        title={`Transform${selectedNode ? ` — ${selectedNode.label}` : ""}`}
+                        actions={<ResetIconButton onClick={handleResetTransform} label="Reset transform" disabled={!initialSnapshotRef.current} />}
+                      >
                         <StagePropertyEditor transform={selectedTransform} onTransformChange={handleTransformChange} />
                       </MayaSection>
                     )}
@@ -2026,9 +2309,15 @@ export default function SceneEdit() {
                   </TabsContent>
 
                   <TabsContent value="graphic" className="m-0 pb-3">
-                    <MayaSection title="Graphic Param" badge={`${appliedGraphicParamKeys.size}/${graphicParams.length}`} defaultOpen>
+                    <MayaSection
+                      title="Graphic Param"
+                      badge={`${appliedGraphicParamKeys.size}/${graphicParams.length}`}
+                      defaultOpen
+                      actions={<ResetIconButton onClick={handleResetGraphicParams} label="Reset all graphic params" disabled={!initialSnapshotRef.current} />}
+                    >
                       <GraphicParamPanel
                         params={graphicParams}
+                        initialParams={initialSnapshotRef.current?.graphicParams ?? null}
                         appliedKeys={appliedGraphicParamKeys}
                         onValueChange={handleGraphicParamValueChange}
                         onKeyChange={handleGraphicParamKeyChange}
@@ -2037,17 +2326,25 @@ export default function SceneEdit() {
                         onToggleApplied={handleToggleGraphicParamApplied}
                         onApplyAll={() => setAppliedGraphicParamKeys(new Set(graphicParams.map((p) => p.key)))}
                         onClearApplied={() => setAppliedGraphicParamKeys(new Set())}
+                        onResetValue={handleResetGraphicParamValue}
                       />
                     </MayaSection>
                   </TabsContent>
 
                   <TabsContent value="placement" className="m-0 pb-3">
-                    <MayaSection title="Placement" badge={placementEntries.length || undefined} defaultOpen>
+                    <MayaSection
+                      title="Placement"
+                      badge={placementEntries.length || undefined}
+                      defaultOpen
+                      actions={<ResetIconButton onClick={handleResetPlacement} label="Reset all placements" disabled={!initialSnapshotRef.current} />}
+                    >
                       <PlacementCsvEditorPanel
                         entries={placementEntries}
+                        initialEntries={initialSnapshotRef.current?.placementEntries ?? null}
                         selectedIndex={selectedPlacementIdx}
                         onSelectEntry={handleSelectPlacement}
-                        onFieldChange={handlePlacementFieldChange}
+                        onFieldPreview={handlePlacementFieldPreview}
+                        onFieldCommit={handlePlacementFieldCommit}
                         onAddFieldPair={handleAddPlacementFieldPair}
                         onRemoveFieldPair={handleRemovePlacementFieldPair}
                         onAddTyped={handleAddTypedPlacement}
@@ -2055,6 +2352,8 @@ export default function SceneEdit() {
                           const nodeId = resolveNodeIdForPlacementIndex(index, placementEntries, subModels);
                           handleDeleteSelected(nodeId ? [nodeId] : undefined);
                         }}
+                        onResetRow={handleResetPlacementRow}
+                        onResetField={handleResetPlacementField}
                       />
                     </MayaSection>
                   </TabsContent>

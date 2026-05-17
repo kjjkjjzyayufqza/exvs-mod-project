@@ -6,7 +6,8 @@ interface SceneKeyboardOptions {
   onDuplicate?: () => void;
   onPaste?: () => void;
   onFocus?: () => void;
-  onSelectAll?: () => void;
+  onSelectAll?: (ids: string[]) => void;
+  onClearSelection?: () => void;
   allNodeIds?: string[];
 }
 
@@ -16,6 +17,7 @@ export function useSceneKeyboard({
   onPaste,
   onFocus,
   onSelectAll,
+  onClearSelection,
   allNodeIds = [],
 }: SceneKeyboardOptions) {
   useEffect(() => {
@@ -42,7 +44,7 @@ export function useSceneKeyboard({
         if (allNodeIds.length > 0) {
           useSceneEditorStore.getState().selectAll(allNodeIds);
         }
-        onSelectAll?.();
+        onSelectAll?.(allNodeIds);
         return;
       }
 
@@ -97,6 +99,7 @@ export function useSceneKeyboard({
       if (e.key === "Escape") {
         e.preventDefault();
         useSceneEditorStore.getState().deselectAll();
+        onClearSelection?.();
         return;
       }
 
@@ -112,5 +115,5 @@ export function useSceneKeyboard({
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onDelete, onDuplicate, onPaste, onFocus, onSelectAll, allNodeIds]);
+  }, [onDelete, onDuplicate, onPaste, onFocus, onSelectAll, onClearSelection, allNodeIds]);
 }

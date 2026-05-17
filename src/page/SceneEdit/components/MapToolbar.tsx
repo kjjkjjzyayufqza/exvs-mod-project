@@ -91,7 +91,7 @@ export function MapToolbar({
   onToggleAnimeRender,
 }: MapToolbarProps) {
   return (
-    <div className="flex shrink-0 items-center gap-1 px-1.5 py-0.5 border-b bg-muted/20">
+    <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b bg-muted/20 px-1.5 py-0.5">
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -100,6 +100,7 @@ export function MapToolbar({
             className="h-6 w-6"
             onClick={onImportFhm2d}
             disabled={isLoading}
+            aria-label="Import FHM2D"
           >
             <FileArchive className="h-3.5 w-3.5" />
           </Button>
@@ -115,6 +116,7 @@ export function MapToolbar({
             className="h-6 w-6"
             onClick={onExtractFhm2d}
             disabled={isLoading}
+            aria-label="Extract FHM2D to folder"
           >
             <PackageOpen className="h-3.5 w-3.5" />
           </Button>
@@ -130,6 +132,7 @@ export function MapToolbar({
             className="h-6 w-6"
             onClick={onOpenFolder}
             disabled={isLoading}
+            aria-label="Open stage folder"
           >
             <FolderOpen className="h-3.5 w-3.5" />
           </Button>
@@ -145,6 +148,7 @@ export function MapToolbar({
             className="h-6 w-6 relative"
             onClick={onSave}
             disabled={!canSave || isLoading}
+            aria-label={hasUnsavedChanges ? "Save changes" : "Save CSV files"}
           >
             <Save className="h-3.5 w-3.5" />
             {hasUnsavedChanges && (
@@ -170,6 +174,7 @@ export function MapToolbar({
             className="h-6 w-6"
             onClick={onImportDae}
             disabled={isLoading}
+            aria-label="Import DAE objects"
           >
             <Upload className="h-3.5 w-3.5" />
           </Button>
@@ -185,6 +190,7 @@ export function MapToolbar({
             className="h-6 w-6"
             onClick={onExportSelectedDae}
             disabled={!canExportDae || isLoading}
+            aria-label="Export selected objects as DAE"
           >
             <Download className="h-3.5 w-3.5" />
           </Button>
@@ -207,6 +213,7 @@ export function MapToolbar({
                     : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
                 )}
                 onClick={() => onGizmoModeChange(mode)}
+                aria-label={`Set transform mode to ${mode}`}
               >
                 <Icon className="h-3 w-3" />
                 <span className="hidden sm:inline">{label}</span>
@@ -232,6 +239,7 @@ export function MapToolbar({
               size="icon"
               className="h-6 w-6"
               onClick={onToggleGrid}
+              aria-label={showGrid ? "Hide grid" : "Show grid"}
             >
               <Grid3x3 className="h-3 w-3" />
             </Button>
@@ -246,6 +254,7 @@ export function MapToolbar({
               size="icon"
               className="h-6 w-6"
               onClick={onToggleAxes}
+              aria-label={showAxes ? "Hide axes" : "Show axes"}
             >
               <Axis3D className="h-3 w-3" />
             </Button>
@@ -260,6 +269,7 @@ export function MapToolbar({
               size="icon"
               className="h-6 w-6"
               onClick={onToggleWireframe}
+              aria-label={wireframe ? "Disable wireframe" : "Enable wireframe"}
             >
               <Box className="h-3 w-3" />
             </Button>
@@ -274,6 +284,7 @@ export function MapToolbar({
               size="icon"
               className="h-6 w-6"
               onClick={onToggleStats}
+              aria-label={showStats ? "Hide stats" : "Show stats"}
             >
               <Activity className="h-3 w-3" />
             </Button>
@@ -291,6 +302,7 @@ export function MapToolbar({
             size="icon"
             className={cn("h-6 w-6", animeRenderEnabled && "text-pink-400")}
             onClick={() => onToggleAnimeRender(!animeRenderEnabled)}
+            aria-label={animeRenderEnabled ? "Disable anime render" : "Enable anime render"}
           >
             <Sparkles className="h-3 w-3" />
           </Button>
@@ -307,6 +319,7 @@ export function MapToolbar({
             size="icon"
             className="h-6 w-6"
             onClick={onResetCamera}
+            aria-label="Reset camera"
           >
             <RotateCcw className="h-3 w-3" />
           </Button>
@@ -322,6 +335,7 @@ export function MapToolbar({
             className="h-6 w-6"
             onClick={onClearCache}
             disabled={clearCacheDisabled}
+            aria-label="Clear scene memory and caches"
           >
             <Eraser className="h-3 w-3" />
           </Button>
@@ -335,6 +349,7 @@ export function MapToolbar({
         <Badge
           variant="outline"
           className="text-[9px] font-mono max-w-[160px] truncate h-4 px-1"
+          title={stageName}
         >
           {stageName}
         </Badge>

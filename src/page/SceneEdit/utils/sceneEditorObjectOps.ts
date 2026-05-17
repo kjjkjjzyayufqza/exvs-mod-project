@@ -42,6 +42,28 @@ export function deletePlacementAt(
   };
 }
 
+export function deletePlacementsAt(
+  entries: readonly PlacementRow[],
+  indices: readonly number[],
+): { entries: PlacementRow[]; deleted: Array<{ index: number; row: PlacementRow }> } {
+  const uniqueIndices = [...new Set(indices)].sort((a, b) => a - b);
+  if (uniqueIndices.length === 0) {
+    throw new Error("Cannot delete an empty placement selection.");
+  }
+  for (const index of uniqueIndices) {
+    assertValidIndex(entries, index);
+  }
+
+  const deleteSet = new Set(uniqueIndices);
+  return {
+    entries: entries.filter((_, index) => !deleteSet.has(index)),
+    deleted: uniqueIndices.map((index) => ({
+      index,
+      row: clonePlacementRow(entries[index]!),
+    })),
+  };
+}
+
 export function pastePlacementsAfter(
   entries: readonly PlacementRow[],
   copiedRows: readonly PlacementRow[],

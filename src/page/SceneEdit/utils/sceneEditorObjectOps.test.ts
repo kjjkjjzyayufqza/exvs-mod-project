@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PlacementRow } from "../types/placement";
 import {
   deletePlacementAt,
+  deletePlacementsAt,
   duplicatePlacementAt,
   pastePlacementsAfter,
 } from "./sceneEditorObjectOps";
@@ -49,6 +50,18 @@ describe("scene editor object operations", () => {
 
     expect(result.deleted).toEqual(rows[1]);
     expect(result.entries.map((entry) => entry.objectNumber)).toEqual([10, 30]);
+  });
+
+  it("deletes multiple placement rows without index shift errors", () => {
+    const rows = [row(10), row(20), row(30), row(40)];
+
+    const result = deletePlacementsAt(rows, [1, 3]);
+
+    expect(result.entries.map((entry) => entry.objectNumber)).toEqual([10, 30]);
+    expect(result.deleted.map((item) => [item.index, item.row.objectNumber])).toEqual([
+      [1, 20],
+      [3, 40],
+    ]);
   });
 
   it("pastes copied rows as new cloned rows after the selected row", () => {

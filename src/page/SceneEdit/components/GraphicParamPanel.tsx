@@ -3,7 +3,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, RotateCcw } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export interface GraphicParam {
@@ -13,6 +18,7 @@ export interface GraphicParam {
 
 interface GraphicParamPanelProps {
   params: GraphicParam[];
+  initialParams: GraphicParam[] | null;
   appliedKeys: ReadonlySet<string>;
   onValueChange: (index: number, value: string) => void;
   onKeyChange: (index: number, key: string) => void;
@@ -21,6 +27,7 @@ interface GraphicParamPanelProps {
   onToggleApplied: (key: string, applied: boolean) => void;
   onApplyAll: () => void;
   onClearApplied: () => void;
+  onResetValue: (index: number) => void;
 }
 
 function numericConfig(key: string, value: string): { value: number; min: number; max: number; step: number } | null {
@@ -44,6 +51,7 @@ function numericConfig(key: string, value: string): { value: number; min: number
 
 export function GraphicParamPanel({
   params,
+  initialParams,
   appliedKeys,
   onValueChange,
   onKeyChange,
@@ -52,8 +60,16 @@ export function GraphicParamPanel({
   onToggleApplied,
   onApplyAll,
   onClearApplied,
+  onResetValue,
 }: GraphicParamPanelProps) {
   const [filter, setFilter] = useState("");
+
+  const initialMap = useMemo(() => {
+    if (!initialParams) return null;
+    const m = new Map<string, string>();
+    for (const p of initialParams) m.set(p.key, p.value);
+    return m;
+  }, [initialParams]);
 
   const filteredParams = useMemo(() => {
     if (!filter) return params.map((p, i) => ({ ...p, originalIndex: i }));
@@ -97,12 +113,15 @@ export function GraphicParamPanel({
         {filteredParams.map((p) => {
           const applied = appliedKeys.has(p.key);
           const slider = numericConfig(p.key, p.value);
+          const originalValue = initialMap?.get(p.key);
+          const valueModified = originalValue !== undefined && p.value !== originalValue;
           return (
             <div
               key={`${p.key}-${p.originalIndex}`}
               className={cn(
                 "space-y-1 rounded-sm border border-transparent px-1 py-1 hover:bg-muted/40 group",
                 applied && "border-primary/30 bg-primary/5",
+                valueModified && "bg-yellow-500/10",
               )}
             >
               <div className="flex items-center gap-1.5">
@@ -116,6 +135,20 @@ export function GraphicParamPanel({
                   value={p.key}
                   onChange={(e) => onKeyChange(p.originalIndex, e.target.value)}
                 />
+                {valueModified && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground"
+                        onClick={() => onResetValue(p.originalIndex)}
+                      >
+                        <RotateCcw className="h-2.5 w-2.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-[10px]">Reset to: {originalValue}</TooltipContent>
+                  </Tooltip>
+                )}
                 <Button
                   type="button"
                   size="sm"

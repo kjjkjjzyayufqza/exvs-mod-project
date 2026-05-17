@@ -6,6 +6,7 @@ interface MayaSectionProps {
   title: string;
   defaultOpen?: boolean;
   badge?: string | number;
+  actions?: ReactNode;
   children: ReactNode;
 }
 
@@ -13,6 +14,7 @@ export function MayaSection({
   title,
   defaultOpen = true,
   badge,
+  actions,
   children,
 }: MayaSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
@@ -38,6 +40,11 @@ export function MayaSection({
         {badge !== undefined && (
           <span className="ml-auto text-[9px] font-mono opacity-60">
             {badge}
+          </span>
+        )}
+        {actions && (
+          <span className={cn("flex items-center gap-0.5", badge === undefined && "ml-auto")} onClick={(e) => e.stopPropagation()}>
+            {actions}
           </span>
         )}
       </button>

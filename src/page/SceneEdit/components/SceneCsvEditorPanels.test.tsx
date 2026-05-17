@@ -25,6 +25,7 @@ describe("Scene CSV editor panels", () => {
     render(
       <GraphicParamPanel
         params={params}
+        initialParams={null}
         appliedKeys={new Set(["directional_lighting_intensity"])}
         onValueChange={vi.fn()}
         onKeyChange={vi.fn()}
@@ -33,6 +34,7 @@ describe("Scene CSV editor panels", () => {
         onToggleApplied={vi.fn()}
         onApplyAll={vi.fn()}
         onClearApplied={vi.fn()}
+        onResetValue={vi.fn()}
       />,
     );
 
@@ -68,13 +70,17 @@ describe("Scene CSV editor panels", () => {
     render(
       <PlacementCsvEditorPanel
         entries={[row]}
+        initialEntries={null}
         selectedIndex={0}
         onSelectEntry={vi.fn()}
-        onFieldChange={vi.fn()}
+        onFieldPreview={vi.fn()}
+        onFieldCommit={vi.fn()}
         onAddFieldPair={vi.fn()}
         onRemoveFieldPair={vi.fn()}
         onAddTyped={vi.fn()}
         onDeleteRow={vi.fn()}
+        onResetRow={vi.fn()}
+        onResetField={vi.fn()}
       />,
     );
 

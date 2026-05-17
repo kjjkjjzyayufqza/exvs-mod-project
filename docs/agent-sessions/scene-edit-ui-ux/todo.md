@@ -1,7 +1,9 @@
 # SceneEdit UI/UX Improvements Todo
 
-- [ ] Fix scaling and drag-and-drop issues in SceneEdit layout [pending]
-- [ ] Relocate stats panel to avoid blocking viewport elements [pending]
-- [ ] Implement "status" functionality from TestEditor (dirty state indicator) [pending]
-- [ ] General UI/UX polish using ui-ux-pro-max skills [pending]
-- [ ] Verify changes with a new screenshot [pending]
+- [x] Reuse project rules, SceneEdit session notes, and relevant SceneEdit docs
+- [x] Add regression coverage for unified SceneEdit selection behavior
+- [x] Replace selected-object shader/postprocess effect with a simple wireframe overlay
+- [x] Synchronize viewport picks, outliner highlight, placement editor selection, and keyboard clearing
+- [x] Audit and fix at least ten SceneEdit button/operation details
+- [x] Update process notes with decisions, commands, and verification results
+- [x] Run focused tests, TypeScript check, and build verification

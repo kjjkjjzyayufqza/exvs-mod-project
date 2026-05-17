@@ -1,4 +1,4 @@
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import {
   OrbitControls,
   GizmoHelper,
@@ -11,11 +11,6 @@ import {
   Lightformer,
 } from "@react-three/drei";
 import {
-  EffectComposer,
-  Outline,
-} from "@react-three/postprocessing";
-import { BlendFunction, KernelSize } from "postprocessing";
-import {
   useRef,
   useCallback,
   useMemo,
@@ -24,7 +19,6 @@ import {
   forwardRef,
   useImperativeHandle,
   Fragment,
-  useState,
   type RefObject,
 } from "react";
 import * as THREE from "three";
@@ -61,10 +55,6 @@ import {
 } from "@/page/TestEditor/components/ssbh-model-preview/ssbhCanvasPerformance";
 import { animeExvsOnBeforeCompile, createAnimeExvsUniforms } from "@/page/TestEditor/components/ssbh-model-preview/animeExvsMeshStandard";
 import { AnimePreviewPostFx } from "@/page/TestEditor/components/ssbh-model-preview/AnimePreviewPostFx";
-import {
-  createPreviewSelectionUniforms,
-  previewSelectionOnBeforeCompile,
-} from "@/page/TestEditor/components/ssbh-model-preview/previewSelectionMaterial";
 import { SceneTexturePool } from "../utils/SceneTexturePool";
 import {
   shouldInvalidateViewportForGizmoEvent,
@@ -83,55 +73,13 @@ import {
   isTexturePathEnabledForObject,
   type ObjectTextureLoadState,
 } from "../utils/sceneTextureInventory";
+import { getSelectionWireframeOverlayProps } from "../utils/sceneSelectionOverlay";
 
 const DEG2RAD = Math.PI / 180;
 
 type SelectedGroupMap = Map<string, THREE.Group>;
-const OUTLINE_EDGE_COLOR = new THREE.Color("#ff8c00").getHex();
-const OUTLINE_HIDDEN_COLOR = new THREE.Color("#4a3000").getHex();
 const EMPTY_NODE_VISIBILITY: SceneNodeVisibilityMap = {};
 const EMPTY_NODE_LOCKS: SceneNodeLockMap = {};
-
-function SceneSelectionOutline({ selectedGroupsRef }: { selectedGroupsRef: React.RefObject<SelectedGroupMap> }) {
-  const [outlineMeshes, setOutlineMeshes] = useState<THREE.Mesh[]>([]);
-  const invalidate = useThree((s) => s.invalidate);
-  const prevCountRef = useRef(0);
-
-  useEffect(() => {
-    const groups = selectedGroupsRef.current;
-    const meshes: THREE.Mesh[] = [];
-    for (const group of groups.values()) {
-      group.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          meshes.push(child);
-        }
-      });
-    }
-    if (meshes.length !== prevCountRef.current || meshes.some((m, i) => m !== outlineMeshes[i])) {
-      prevCountRef.current = meshes.length;
-      setOutlineMeshes(meshes);
-      invalidate();
-    }
-  });
-
-  if (outlineMeshes.length === 0) return null;
-
-  return (
-    <EffectComposer multisampling={0} autoClear={false}>
-      <Outline
-        selection={outlineMeshes}
-        edgeStrength={4}
-        pulseSpeed={0}
-        visibleEdgeColor={OUTLINE_EDGE_COLOR}
-        hiddenEdgeColor={OUTLINE_HIDDEN_COLOR}
-        blur
-        kernelSize={KernelSize.SMALL}
-        xRay={true}
-        blendFunction={BlendFunction.ALPHA}
-      />
-    </EffectComposer>
-  );
-}
 
 /** Blender-style finite grid plane (aligned with TestEditor ssbh-model-preview). */
 const GRID_PLANE_WIDTH = 200;
@@ -303,6 +251,7 @@ export interface MapViewportProps {
 
 export interface MapViewportHandle {
   resetCamera: () => void;
+  focusSelected: () => void;
   getSelectedExportObjects: () => SceneExportObject[];
 }
 
@@ -385,6 +334,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
     ref
   ) {
     const controlsRef = useRef<OrbitControlsType>(null);
+    const cameraRef = useRef<THREE.Camera | null>(null);
     const texturePool = useMemo(() => new SceneTexturePool(), []);
     useEffect(() => () => texturePool.disposeAll(), [texturePool]);
     const gizmoDraggingRef = useRef(false);
@@ -397,6 +347,46 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
         if (controlsRef.current) {
           controlsRef.current.reset();
         }
+      },
+      focusSelected: () => {
+        const groups = [...selectedGroupsRef.current.values()];
+        if (groups.length === 0 || !cameraRef.current || !controlsRef.current) {
+          controlsRef.current?.reset();
+          return;
+        }
+
+        const box = new THREE.Box3();
+        for (const group of groups) {
+          box.expandByObject(group);
+        }
+        if (box.isEmpty()) return;
+
+        const center = new THREE.Vector3();
+        const size = new THREE.Vector3();
+        box.getCenter(center);
+        box.getSize(size);
+
+        const camera = cameraRef.current;
+        const controls = controlsRef.current;
+        const radius = Math.max(size.length() * 0.5, 1);
+        const fov = camera instanceof THREE.PerspectiveCamera
+          ? THREE.MathUtils.degToRad(camera.fov)
+          : THREE.MathUtils.degToRad(45);
+        const distance = Math.max(radius / Math.sin(fov * 0.5), radius * 2.5);
+        const direction = camera.position.clone().sub(controls.target);
+        if (direction.lengthSq() < 1e-6) {
+          direction.set(0.8, 0.5, 0.8);
+        }
+        direction.normalize();
+
+        controls.target.copy(center);
+        camera.position.copy(center).addScaledVector(direction, distance);
+        if (camera instanceof THREE.PerspectiveCamera || camera instanceof THREE.OrthographicCamera) {
+          camera.near = Math.max(0.01, distance / 1000);
+          camera.far = Math.max(SCENE_EDIT_CAMERA_FAR, distance * 100);
+          camera.updateProjectionMatrix();
+        }
+        controls.update();
       },
       getSelectedExportObjects: () =>
         [...selectedGroupsRef.current.entries()].map(([name, object]) => ({
@@ -525,7 +515,8 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
 
     const canvasSyncKey = `${graphicLightingInvalidateKey}|style:${previewRenderStyle}`;
 
-    const handleCreated = useCallback(({ gl }: { gl: THREE.WebGLRenderer }) => {
+    const handleCreated = useCallback(({ gl, camera }: { gl: THREE.WebGLRenderer; camera: THREE.Camera }) => {
+      cameraRef.current = camera;
       const canvas = gl.domElement;
       canvas.addEventListener("webglcontextlost", (e) => {
         e.preventDefault();
@@ -873,7 +864,6 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
         )}
 
         <StageOrbitControls controlsRef={controlsRef} orbitActiveRef={orbitActiveRef} />
-        <SceneSelectionOutline selectedGroupsRef={selectedGroupsRef} />
       </Canvas>
     );
   }
@@ -912,6 +902,33 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
   const invalidate = useThree((s) => s.invalidate);
   const regress = useThree((s) => s.performance.regress);
   const sceneClone = useMemo(() => object.scene.clone(true), [object.scene]);
+  const selectionOverlay = useMemo(() => getSelectionWireframeOverlayProps(isSelected), [isSelected]);
+  const selectionClone = useMemo(() => {
+    if (!selectionOverlay.visible) return null;
+    const material = new THREE.MeshBasicMaterial({
+      color: selectionOverlay.color,
+      wireframe: selectionOverlay.wireframe,
+      transparent: selectionOverlay.transparent,
+      opacity: selectionOverlay.opacity,
+      depthTest: selectionOverlay.depthTest,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const clone = object.scene.clone(true);
+    clone.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.material = material;
+        child.renderOrder = 10_000;
+      }
+    });
+    return { clone, material };
+  }, [object.scene, selectionOverlay]);
+
+  useEffect(() => {
+    return () => {
+      selectionClone?.material.dispose();
+    };
+  }, [selectionClone]);
 
   useEffect(() => {
     const g = groupRef.current;
@@ -990,6 +1007,7 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
         )}
       >
         <primitive object={sceneClone} />
+        {selectionClone ? <primitive object={selectionClone.clone} /> : null}
       </group>
       {showGizmo ? (
         <SceneTransformControls
@@ -1209,28 +1227,15 @@ const TexturedMesh = memo(function TexturedMesh({
   const exvsActive = previewRenderStyle === "anime";
   const exvsUniforms = useMemo(() => createAnimeExvsUniforms(), [draw.key]);
   const onBeforeCompileExvs = useMemo(() => animeExvsOnBeforeCompile(exvsUniforms), [exvsUniforms]);
-  const selectionUniforms = useMemo(() => createPreviewSelectionUniforms(), [draw.key]);
-  const onBeforeCompileSelection = useMemo(
-    () => previewSelectionOnBeforeCompile(selectionUniforms),
-    [selectionUniforms],
-  );
-  const onBeforeCompileMaterial = useMemo(
-    () => (shader: { fragmentShader: string; uniforms: Record<string, { value: unknown }> }) => {
-      if (exvsActive) {
-        onBeforeCompileExvs(shader);
-      }
-      onBeforeCompileSelection(shader);
-    },
-    [exvsActive, onBeforeCompileExvs, onBeforeCompileSelection],
+  const onBeforeCompileMaterial = exvsActive ? onBeforeCompileExvs : undefined;
+  const selectionOverlay = useMemo(
+    () => getSelectionWireframeOverlayProps(isSelected),
+    [isSelected],
   );
   useEffect(() => {
     if (!exvsActive) return;
     exvsUniforms.uAnimeKeyDir.value.copy(animeKeyLightDir);
   }, [exvsActive, exvsUniforms, animeKeyLightDir]);
-  useFrame((state) => {
-    selectionUniforms.uSelectionEnabled.value = isSelected ? 1 : 0;
-    selectionUniforms.uSelectionTime.value = state.clock.elapsedTime;
-  });
 
   const shaderFamily = binding.shaderFamily;
   const hasMap = !!textures.map;
@@ -1305,31 +1310,46 @@ const TexturedMesh = memo(function TexturedMesh({
   const baseColor = hasAnyTexture ? "#ffffff" : "#cccccc";
 
   return (
-    <mesh geometry={draw.geometry}>
-      <meshStandardMaterial
-        key={exvsActive ? "exvs" : "std"}
-        color={baseColor}
-        wireframe={wireframe}
-        side={materialSide}
-        map={textures.map ?? null}
-        normalMap={textures.normalMap ?? null}
-        normalScale={textures.normalMap ? NORMAL_SCALE_DEFAULT : undefined}
-        roughnessMap={textures.roughnessMap ?? null}
-        metalnessMap={effectiveMetalnessMap}
-        emissiveMap={canUseEmissiveMap ? textures.emissiveMap ?? null : null}
-        emissive={canUseEmissiveMap ? new THREE.Color(0xffffff) : new THREE.Color(0)}
-        emissiveIntensity={emissiveIntensity}
-        aoMap={textures.aoMap ?? null}
-        aoMapIntensity={hasAo ? 0.35 : 0}
-        envMap={textures.cubeMap ?? null}
-        envMapIntensity={envIntensity}
-        alphaTest={hasMap ? 0.001 : 0}
-        transparent={transparent}
-        roughness={roughnessForStyle}
-        metalness={effectiveMetalnessValue}
-        onBeforeCompile={onBeforeCompileMaterial}
-      />
-    </mesh>
+    <Fragment>
+      <mesh geometry={draw.geometry}>
+        <meshStandardMaterial
+          key={exvsActive ? "exvs" : "std"}
+          color={baseColor}
+          wireframe={wireframe}
+          side={materialSide}
+          map={textures.map ?? null}
+          normalMap={textures.normalMap ?? null}
+          normalScale={textures.normalMap ? NORMAL_SCALE_DEFAULT : undefined}
+          roughnessMap={textures.roughnessMap ?? null}
+          metalnessMap={effectiveMetalnessMap}
+          emissiveMap={canUseEmissiveMap ? textures.emissiveMap ?? null : null}
+          emissive={canUseEmissiveMap ? new THREE.Color(0xffffff) : new THREE.Color(0)}
+          emissiveIntensity={emissiveIntensity}
+          aoMap={textures.aoMap ?? null}
+          aoMapIntensity={hasAo ? 0.35 : 0}
+          envMap={textures.cubeMap ?? null}
+          envMapIntensity={envIntensity}
+          alphaTest={hasMap ? 0.001 : 0}
+          transparent={transparent}
+          roughness={roughnessForStyle}
+          metalness={effectiveMetalnessValue}
+          onBeforeCompile={onBeforeCompileMaterial}
+        />
+      </mesh>
+      {selectionOverlay.visible ? (
+        <mesh geometry={draw.geometry} renderOrder={10_000}>
+          <meshBasicMaterial
+            color={selectionOverlay.color}
+            wireframe={selectionOverlay.wireframe}
+            transparent={selectionOverlay.transparent}
+            opacity={selectionOverlay.opacity}
+            depthTest={selectionOverlay.depthTest}
+            depthWrite={false}
+            toneMapped={false}
+          />
+        </mesh>
+      ) : null}
+    </Fragment>
   );
 });
 
@@ -1438,16 +1458,16 @@ const InstancedStageModel = memo(function InstancedStageModel({
     [instances, nodeVisibility, objectLocks],
   );
 
-  const selectedInstance = useMemo(
-    () => visibleInstances.find(
+  const selectedInstances = useMemo(
+    () => visibleInstances.filter(
       (inst) => inst.globalIdx === selectedPlacementIdx || selectedNodeIds?.has(inst.nodeId),
-    ) ?? null,
+    ),
     [visibleInstances, selectedPlacementIdx, selectedNodeIds],
   );
 
   const nonSelectedInstances = useMemo(
-    () => visibleInstances.filter((inst) => inst !== selectedInstance),
-    [visibleInstances, selectedInstance],
+    () => visibleInstances.filter((inst) => !selectedInstances.includes(inst)),
+    [visibleInstances, selectedInstances],
   );
 
   const hasNonSelectedTextureOverrides = useMemo(
@@ -1538,7 +1558,7 @@ const InstancedStageModel = memo(function InstancedStageModel({
         />
       ))}
 
-      {selectedInstance && (
+      {selectedInstances.map((selectedInstance) => (
         <StageModelGroup
           key={`sel-${selectedInstance.nodeId}`}
           nodeId={selectedInstance.nodeId}
@@ -1567,7 +1587,7 @@ const InstancedStageModel = memo(function InstancedStageModel({
           pointerDownTimeRef={pointerDownTimeRef}
           selectedGroupsRef={selectedGroupsRef}
         />
-      )}
+      ))}
     </Fragment>
   );
 });

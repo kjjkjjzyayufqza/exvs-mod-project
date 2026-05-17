@@ -4,24 +4,33 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { Plus, Trash2, Box, Sparkles, Cloud } from "lucide-react";
+import { Plus, Trash2, Box, Sparkles, Cloud, RotateCcw } from "lucide-react";
 import type { PlacementRow } from "../types/placement";
 
 interface PlacementCsvEditorPanelProps {
   entries: PlacementRow[];
+  initialEntries: PlacementRow[] | null;
   selectedIndex: number | null;
   onSelectEntry: (index: number) => void;
-  onFieldChange: (index: number, fieldIndex: number, value: string) => void;
+  onFieldPreview: (index: number, fieldIndex: number, value: string) => void;
+  onFieldCommit: (index: number, fieldIndex: number, value: string) => void;
   onAddFieldPair: (index: number) => void;
   onRemoveFieldPair: (index: number, fieldIndex: number) => void;
   onAddTyped: (vdkType: string) => void;
   onDeleteRow: (index: number) => void;
+  onResetRow: (index: number) => void;
+  onResetField: (index: number, fieldIndex: number) => void;
 }
 
 const KNOWN_VDK_TYPES = [
@@ -44,13 +53,17 @@ const TRANSFORM_KEYS = new Set([
 
 export function PlacementCsvEditorPanel({
   entries,
+  initialEntries,
   selectedIndex,
   onSelectEntry,
-  onFieldChange,
+  onFieldPreview,
+  onFieldCommit,
   onAddFieldPair,
   onRemoveFieldPair,
   onAddTyped,
   onDeleteRow,
+  onResetRow,
+  onResetField,
 }: PlacementCsvEditorPanelProps) {
   const [filter, setFilter] = useState("");
   const rows = useMemo(() => {
@@ -88,13 +101,17 @@ export function PlacementCsvEditorPanel({
           <PlacementRowItem
             key={index}
             entry={entry}
+            initialEntry={initialEntries?.[index] ?? null}
             index={index}
             selected={selectedIndex === index}
             onSelectEntry={onSelectEntry}
-            onFieldChange={onFieldChange}
+            onFieldPreview={onFieldPreview}
+            onFieldCommit={onFieldCommit}
             onAddFieldPair={onAddFieldPair}
             onRemoveFieldPair={onRemoveFieldPair}
             onDeleteRow={onDeleteRow}
+            onResetRow={onResetRow}
+            onResetField={onResetField}
           />
         ))}
       </div>
@@ -125,23 +142,34 @@ function AddTypedButton({ onAddTyped }: { onAddTyped: (vdkType: string) => void 
 
 function PlacementRowItem({
   entry,
+  initialEntry,
   index,
   selected,
   onSelectEntry,
-  onFieldChange,
+  onFieldPreview,
+  onFieldCommit,
   onAddFieldPair,
   onRemoveFieldPair,
   onDeleteRow,
+  onResetRow,
+  onResetField,
 }: {
   entry: PlacementRow;
+  initialEntry: PlacementRow | null;
   index: number;
   selected: boolean;
   onSelectEntry: (index: number) => void;
-  onFieldChange: (index: number, fieldIndex: number, value: string) => void;
+  onFieldPreview: (index: number, fieldIndex: number, value: string) => void;
+  onFieldCommit: (index: number, fieldIndex: number, value: string) => void;
   onAddFieldPair: (index: number) => void;
   onRemoveFieldPair: (index: number, fieldIndex: number) => void;
   onDeleteRow: (index: number) => void;
+  onResetRow: (index: number) => void;
+  onResetField: (index: number, fieldIndex: number) => void;
 }) {
+  const rowModified = initialEntry !== null && JSON.stringify(entry.rawFields) !== JSON.stringify(initialEntry.rawFields);
+  const isNewRow = initialEntry === null;
+
   return (
     <div className={cn("rounded-sm border px-1.5 py-1", selected ? "border-primary/50 bg-primary/5" : "border-border/50")}>
       <button type="button" className="flex w-full items-center gap-1.5 text-left" onClick={() => onSelectEntry(index)}>
@@ -150,6 +178,8 @@ function PlacementRowItem({
         </Badge>
         <span className="text-[9px] font-mono text-muted-foreground">#{index}</span>
         {entry.objectNumber !== null && <span className="text-[9px] font-mono">obj {entry.objectNumber}</span>}
+        {isNewRow && <span className="text-[8px] text-green-500 font-medium">NEW</span>}
+        {rowModified && !isNewRow && <span className="text-[8px] text-yellow-500 font-medium">MOD</span>}
       </button>
       {selected && (
         <div className="mt-2 space-y-1">
@@ -164,6 +194,22 @@ function PlacementRowItem({
               <Plus className="h-3 w-3 mr-1" />
               Field
             </Button>
+            {rowModified && !isNewRow && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => onResetRow(index)}
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-[10px]">Reset row to loaded state</TooltipContent>
+              </Tooltip>
+            )}
             <Button
               type="button"
               size="sm"
@@ -181,6 +227,8 @@ function PlacementRowItem({
             const numericValue = Number.parseFloat(value);
             const numeric = Number.isFinite(numericValue);
             const key = field.trim().toUpperCase();
+            const originalValue = initialEntry?.rawFields[valueIndex];
+            const fieldModified = originalValue !== undefined && value !== originalValue;
             const sliderRange = key.includes("ROTATION")
               ? { min: -360, max: 360, step: 0.1 }
               : key.includes("SCALE")
@@ -189,7 +237,7 @@ function PlacementRowItem({
                   ? { min: -10000, max: 10000, step: 0.1 }
                   : null;
             return (
-              <div key={`${fieldIndex}-${field}`} className="space-y-1 rounded-sm bg-muted/20 px-1 py-1">
+              <div key={`${fieldIndex}-${field}`} className={cn("space-y-1 rounded-sm px-1 py-1", fieldModified ? "bg-yellow-500/10" : "bg-muted/20")}>
                 <div className="flex items-center gap-1.5">
                   <span className={cn("w-28 shrink-0 truncate text-[9px] font-mono", TRANSFORM_KEYS.has(key) ? "text-foreground" : "text-muted-foreground")} title={field}>
                     {field}
@@ -197,8 +245,23 @@ function PlacementRowItem({
                   <Input
                     className="h-6 min-w-0 flex-1 text-[10px] font-mono"
                     value={value}
-                    onChange={(event) => onFieldChange(index, valueIndex, event.target.value)}
+                    onChange={(event) => onFieldPreview(index, valueIndex, event.target.value)}
+                    onBlur={(event) => onFieldCommit(index, valueIndex, event.target.value)}
                   />
+                  {fieldModified && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground"
+                          onClick={() => onResetField(index, valueIndex)}
+                        >
+                          <RotateCcw className="h-2.5 w-2.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-[10px]">Reset to: {originalValue}</TooltipContent>
+                    </Tooltip>
+                  )}
                   <Button
                     type="button"
                     size="sm"
@@ -216,7 +279,10 @@ function PlacementRowItem({
                     max={sliderRange.max}
                     step={sliderRange.step}
                     onValueChange={(values) => {
-                      onFieldChange(index, valueIndex, String(values[0] ?? numericValue));
+                      onFieldPreview(index, valueIndex, String(values[0] ?? numericValue));
+                    }}
+                    onValueCommit={(values) => {
+                      onFieldCommit(index, valueIndex, String(values[0] ?? numericValue));
                     }}
                   />
                 )}

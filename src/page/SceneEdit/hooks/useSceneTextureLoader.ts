@@ -97,6 +97,8 @@ export function useSceneTextureLoader(
   const [warnings, setWarnings] = useState<string[]>([]);
   const cancelledRef = useRef(false);
   const runIdRef = useRef(0);
+  const textureDataMapRef = useRef(textureDataMap);
+  textureDataMapRef.current = textureDataMap;
 
   const sourceKind = baseModel?.sourceKind ?? subModels[0]?.bundle.sourceKind ?? "disk";
 
@@ -126,6 +128,11 @@ export function useSceneTextureLoader(
     }
 
     if (sourceKind === "memory" && !sessionId) {
+      return;
+    }
+
+    const currentMap = textureDataMapRef.current;
+    if (uniquePaths.every((p) => currentMap.has(p))) {
       return;
     }
 
