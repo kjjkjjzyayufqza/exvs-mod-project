@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
 import {
@@ -100,11 +100,21 @@ export function useSceneTextureLoader(
 
   const sourceKind = baseModel?.sourceKind ?? subModels[0]?.bundle.sourceKind ?? "disk";
 
+  const stablePlacementIdentity = useMemo(
+    () => placementEntries.map((e, i) => `${i}:${e.vdkType}:${e.objectNumber ?? ""}`).join("|"),
+    [placementEntries],
+  );
+
+  const stablePlacementEntries = useRef(placementEntries);
+  if (stablePlacementIdentity) {
+    stablePlacementEntries.current = placementEntries;
+  }
+
   useEffect(() => {
     const uniquePaths = collectUniqueNutexbPaths(
       baseModel,
       subModels,
-      placementEntries,
+      stablePlacementEntries.current,
       textureSlotLoadEnabled,
       objectTextureLoadState,
     );
@@ -233,7 +243,8 @@ export function useSceneTextureLoader(
         pendingFlush = null;
       }
     };
-  }, [baseModel, subModels, placementEntries, sessionId, sourceKind, maxDimension, textureSlotLoadEnabled, objectTextureLoadState]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- stablePlacementIdentity replaces placementEntries to avoid re-decode on coordinate-only changes
+  }, [baseModel, subModels, stablePlacementIdentity, sessionId, sourceKind, maxDimension, textureSlotLoadEnabled, objectTextureLoadState]);
 
   return { textureDataMap, progress, warnings };
 }
