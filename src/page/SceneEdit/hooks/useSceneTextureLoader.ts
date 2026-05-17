@@ -13,6 +13,13 @@ import {
 import {
   getMemoryNutexbPreviewIdentity,
 } from "@/page/TestEditor/components/ssbh-model-preview/fhm2dMemoryPreviewService";
+import type { PlacementRow } from "../components/PlacementPanel";
+import {
+  collectEnabledTexturePathsForBundle,
+  normalizeTexturePathKey,
+  type ObjectTextureLoadState,
+} from "../utils/sceneTextureInventory";
+import { formatPlacementViewportNodeId } from "../utils/placementNodeId";
 
 export interface TextureDecodeProgress {
   done: number;
@@ -26,10 +33,45 @@ const DECODE_CONCURRENCY = 4;
 
 function collectUniqueNutexbPaths(
   baseModel: SsbhModelPreviewBundle | null,
-  subModels: Array<{ bundle: SsbhModelPreviewBundle }>,
+  subModels: Array<{ folderName: string; objectIndex: number; bundle: SsbhModelPreviewBundle }>,
+  placementEntries: PlacementRow[],
   textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>,
+  objectTextureLoadState: ObjectTextureLoadState,
 ): string[] {
-  return collectUniqueTexturePathsForSceneBundles(baseModel, subModels, textureSlotLoadEnabled);
+  if (Object.keys(objectTextureLoadState).length === 0) {
+    return collectUniqueTexturePathsForSceneBundles(baseModel, subModels, textureSlotLoadEnabled);
+  }
+
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const pushPath = (path: string) => {
+    const key = normalizeTexturePathKey(path);
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(path);
+  };
+
+  if (baseModel) {
+    for (const path of collectEnabledTexturePathsForBundle(baseModel, textureSlotLoadEnabled, objectTextureLoadState, "base")) {
+      pushPath(path);
+    }
+  }
+
+  for (const sub of subModels) {
+    const rows = placementEntries
+      .map((entry, index) => ({ entry, index }))
+      .filter(({ entry }) => entry.vdkType.toUpperCase() === "OBJECT" && entry.objectNumber === sub.objectIndex);
+    const objectIds = rows.length === 0
+      ? [sub.folderName]
+      : rows.map(({ index }) => formatPlacementViewportNodeId(sub.folderName, index));
+    for (const objectId of objectIds) {
+      for (const path of collectEnabledTexturePathsForBundle(sub.bundle, textureSlotLoadEnabled, objectTextureLoadState, objectId)) {
+        pushPath(path);
+      }
+    }
+  }
+
+  return out;
 }
 
 function basenameOf(path: string): string {
@@ -40,9 +82,11 @@ function basenameOf(path: string): string {
 export function useSceneTextureLoader(
   baseModel: SsbhModelPreviewBundle | null,
   subModels: Array<{ folderName: string; objectIndex: number; bundle: SsbhModelPreviewBundle }>,
+  placementEntries: PlacementRow[],
   sessionId: string | null,
   maxDimension: number | null,
   textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>,
+  objectTextureLoadState: ObjectTextureLoadState,
 ): {
   textureDataMap: NutexbTextureDataMap;
   progress: TextureDecodeProgress | null;
@@ -57,7 +101,13 @@ export function useSceneTextureLoader(
   const sourceKind = baseModel?.sourceKind ?? subModels[0]?.bundle.sourceKind ?? "disk";
 
   useEffect(() => {
-    const uniquePaths = collectUniqueNutexbPaths(baseModel, subModels, textureSlotLoadEnabled);
+    const uniquePaths = collectUniqueNutexbPaths(
+      baseModel,
+      subModels,
+      placementEntries,
+      textureSlotLoadEnabled,
+      objectTextureLoadState,
+    );
     if (uniquePaths.length === 0) {
       setTextureDataMap(new Map());
       setProgress(null);
@@ -183,7 +233,7 @@ export function useSceneTextureLoader(
         pendingFlush = null;
       }
     };
-  }, [baseModel, subModels, sessionId, sourceKind, maxDimension, textureSlotLoadEnabled]);
+  }, [baseModel, subModels, placementEntries, sessionId, sourceKind, maxDimension, textureSlotLoadEnabled, objectTextureLoadState]);
 
   return { textureDataMap, progress, warnings };
 }

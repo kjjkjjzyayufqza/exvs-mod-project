@@ -25,11 +25,10 @@ import {
   useImperativeHandle,
   Fragment,
   useState,
-  createContext,
-  useContext,
   type RefObject,
 } from "react";
 import * as THREE from "three";
+import { mergeBufferGeometries } from "three-stdlib";
 import type { OrbitControls as OrbitControlsType } from "three-stdlib";
 import type {
   SsbhModelPreviewBundle,
@@ -79,14 +78,15 @@ import {
   type SceneNodeVisibilityMap,
 } from "../utils/sceneEditorNodeState";
 import { SceneTransformControls } from "./SceneTransformControls";
+import {
+  hasTextureOverridesForObject,
+  isTexturePathEnabledForObject,
+  type ObjectTextureLoadState,
+} from "../utils/sceneTextureInventory";
 
 const DEG2RAD = Math.PI / 180;
 
 type SelectedGroupMap = Map<string, THREE.Group>;
-const SelectedGroupsCtx = createContext<React.RefObject<SelectedGroupMap>>(
-  { current: new Map() } as React.RefObject<SelectedGroupMap>
-);
-
 const OUTLINE_EDGE_COLOR = new THREE.Color("#ff8c00").getHex();
 const OUTLINE_HIDDEN_COLOR = new THREE.Color("#4a3000").getHex();
 const EMPTY_NODE_VISIBILITY: SceneNodeVisibilityMap = {};
@@ -95,8 +95,9 @@ const EMPTY_NODE_LOCKS: SceneNodeLockMap = {};
 function SceneSelectionOutline({ selectedGroupsRef }: { selectedGroupsRef: React.RefObject<SelectedGroupMap> }) {
   const [outlineMeshes, setOutlineMeshes] = useState<THREE.Mesh[]>([]);
   const invalidate = useThree((s) => s.invalidate);
+  const prevCountRef = useRef(0);
 
-  useFrame(() => {
+  useEffect(() => {
     const groups = selectedGroupsRef.current;
     const meshes: THREE.Mesh[] = [];
     for (const group of groups.values()) {
@@ -106,7 +107,8 @@ function SceneSelectionOutline({ selectedGroupsRef }: { selectedGroupsRef: React
         }
       });
     }
-    if (meshes.length !== outlineMeshes.length || meshes.some((m, i) => m !== outlineMeshes[i])) {
+    if (meshes.length !== prevCountRef.current || meshes.some((m, i) => m !== outlineMeshes[i])) {
+      prevCountRef.current = meshes.length;
       setOutlineMeshes(meshes);
       invalidate();
     }
@@ -279,6 +281,7 @@ export interface MapViewportProps {
   textureDataMap: NutexbTextureDataMap;
   /** Global PBR slot toggles (decode + render). */
   textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>;
+  objectTextureLoadState?: ObjectTextureLoadState;
   onDrawStatsChange?: (stats: SceneDrawStats) => void;
   /** Parsed graphic_param.csv rows — drives directional / IBL preview lighting when keys exist */
   graphicParams?: GraphicParam[];
@@ -365,6 +368,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       onSelectNode,
       textureDataMap,
       textureSlotLoadEnabled,
+      objectTextureLoadState = {},
       onDrawStatsChange,
       graphicParams = [],
       baseTransform,
@@ -650,6 +654,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             clickPickSelectionEnabled={clickPickSelectionEnabled}
             textureDataMap={textureDataMap}
             textureSlotLoadEnabled={textureSlotLoadEnabled}
+            objectTextureLoadState={objectTextureLoadState}
             texturePool={texturePool}
             previewRenderStyle={previewRenderStyle}
             animeKeyLightDir={animeKeyLightDir}
@@ -695,6 +700,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                 clickPickSelectionEnabled={clickPickSelectionEnabled}
                 textureDataMap={textureDataMap}
                 textureSlotLoadEnabled={textureSlotLoadEnabled}
+                objectTextureLoadState={objectTextureLoadState}
                 texturePool={texturePool}
                 previewRenderStyle={previewRenderStyle}
                 animeKeyLightDir={animeKeyLightDir}
@@ -716,36 +722,73 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             ];
           }
 
-          return objectRows.flatMap(({ entry, globalIdx }) => {
+          if (objectRows.length === 1) {
+            const { entry, globalIdx } = objectRows[0];
             const nodeId = formatPlacementViewportNodeId(sub.folderName, globalIdx);
             if (!isNodeVisible(nodeId)) return [];
             return [(
-            <StageModelGroup
-              key={`${sub.folderName}-pl-${globalIdx}`}
-              nodeId={nodeId}
+              <StageModelGroup
+                key={`${sub.folderName}-pl-${globalIdx}`}
+                nodeId={nodeId}
+                bundle={sub.bundle}
+                wireframe={wireframe}
+                isSelected={
+                  selectedPlacementIdx === globalIdx ||
+                  selectedNodeIds?.has(nodeId) === true
+                }
+                isLocked={!isNodeEditable(nodeId)}
+                onClick={onSelectNode}
+                clickPickSelectionEnabled={clickPickSelectionEnabled}
+                textureDataMap={textureDataMap}
+                textureSlotLoadEnabled={textureSlotLoadEnabled}
+                objectTextureLoadState={objectTextureLoadState}
+                texturePool={texturePool}
+                previewRenderStyle={previewRenderStyle}
+                animeKeyLightDir={animeKeyLightDir}
+                position={[entry.posX, entry.posY, entry.posZ]}
+                rotation={[entry.rotX, entry.rotY, entry.rotZ]}
+                scale={placementScaleForViewport(entry.scaleX, entry.scaleY, entry.scaleZ)}
+                placementGlobalIdx={globalIdx}
+                showPlacementTransformGizmo={
+                  selectedPlacementIdx !== null &&
+                  selectedPlacementIdx === globalIdx &&
+                  isNodeEditable(nodeId)
+                }
+                placementGizmoMode={placementGizmoMode}
+                onPlacementGizmoFrame={onPlacementGizmoFrame}
+                onPlacementGizmoCommit={onPlacementGizmoCommit}
+                gizmoDraggingRef={gizmoDraggingRef}
+                orbitActiveRef={orbitActiveRef}
+                pointerDownTimeRef={pointerDownTimeRef}
+                selectedGroupsRef={selectedGroupsRef}
+              />
+            )];
+          }
+
+          const instances: PlacementInstance[] = objectRows.map(({ entry, globalIdx }) => ({
+            entry,
+            globalIdx,
+            nodeId: formatPlacementViewportNodeId(sub.folderName, globalIdx),
+          }));
+
+          return [(
+            <InstancedStageModel
+              key={`inst-${sub.folderName}`}
               bundle={sub.bundle}
+              instances={instances}
               wireframe={wireframe}
-              isSelected={
-                selectedPlacementIdx === globalIdx ||
-                selectedNodeIds?.has(nodeId) === true
-              }
-              isLocked={!isNodeEditable(nodeId)}
-              onClick={onSelectNode}
+              selectedPlacementIdx={selectedPlacementIdx}
+              selectedNodeIds={selectedNodeIds}
+              nodeVisibility={nodeVisibility}
+              objectLocks={objectLocks}
+              onSelectNode={onSelectNode}
               clickPickSelectionEnabled={clickPickSelectionEnabled}
               textureDataMap={textureDataMap}
               textureSlotLoadEnabled={textureSlotLoadEnabled}
+              objectTextureLoadState={objectTextureLoadState}
               texturePool={texturePool}
               previewRenderStyle={previewRenderStyle}
               animeKeyLightDir={animeKeyLightDir}
-              position={[entry.posX, entry.posY, entry.posZ]}
-              rotation={[entry.rotX, entry.rotY, entry.rotZ]}
-              scale={placementScaleForViewport(entry.scaleX, entry.scaleY, entry.scaleZ)}
-              placementGlobalIdx={globalIdx}
-              showPlacementTransformGizmo={
-                selectedPlacementIdx !== null &&
-                selectedPlacementIdx === globalIdx &&
-                isNodeEditable(nodeId)
-              }
               placementGizmoMode={placementGizmoMode}
               onPlacementGizmoFrame={onPlacementGizmoFrame}
               onPlacementGizmoCommit={onPlacementGizmoCommit}
@@ -754,8 +797,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
               pointerDownTimeRef={pointerDownTimeRef}
               selectedGroupsRef={selectedGroupsRef}
             />
-            )];
-          });
+          )];
         })}
 
         {effectEntries.flatMap(({ entry: eff, globalIdx }) => {
@@ -1110,8 +1152,10 @@ const TexturedMesh = memo(function TexturedMesh({
   drawBinding,
   textureDataMap,
   textureSlotLoadEnabled,
+  objectTextureLoadState,
   wireframe,
   isSelected,
+  objectId,
   texturePool,
   previewRenderStyle,
   animeKeyLightDir,
@@ -1119,8 +1163,10 @@ const TexturedMesh = memo(function TexturedMesh({
   drawBinding: DrawBinding;
   textureDataMap: NutexbTextureDataMap;
   textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>;
+  objectTextureLoadState: ObjectTextureLoadState;
   wireframe: boolean;
   isSelected: boolean;
+  objectId: string;
   texturePool: SceneTexturePool;
   previewRenderStyle: PreviewRenderStyle;
   animeKeyLightDir: THREE.Vector3;
@@ -1132,10 +1178,14 @@ const TexturedMesh = memo(function TexturedMesh({
       if (!textureSlotLoadEnabled[slot]) {
         return [slot, null] as const;
       }
-      const data = lookupTextureData(textureDataMap, pathForSlot(binding, slot));
+      const path = pathForSlot(binding, slot);
+      if (path && !isTexturePathEnabledForObject(objectTextureLoadState, objectId, path)) {
+        return [slot, null] as const;
+      }
+      const data = lookupTextureData(textureDataMap, path);
       return [slot, data] as const;
     });
-  }, [textureDataMap, binding, textureSlotLoadEnabled]);
+  }, [textureDataMap, binding, textureSlotLoadEnabled, objectTextureLoadState, objectId]);
 
   const dataKey = slotDataEntries
     .map(([, d]) => (d ? `${d.width}x${d.height}` : ""))
@@ -1143,22 +1193,13 @@ const TexturedMesh = memo(function TexturedMesh({
 
   const textures = useMemo(() => {
     const result: Partial<Record<PbrSlotKind, THREE.DataTexture>> = {};
-    const loaded: string[] = [];
 
     for (const [slot, data] of slotDataEntries) {
       if (!data) continue;
       const path = pathForSlot(binding, slot);
       if (!path) continue;
       const poolKey = buildTexturePoolKey(path, slot, binding, data.width, data.height);
-      const shared = texturePool.has(poolKey);
       result[slot] = texturePool.acquire(poolKey, () => createDataTexture(data, slot, binding));
-      loaded.push(shared ? `${slot}(shared)` : slot);
-    }
-
-    if (loaded.length > 0) {
-      console.log(
-        `[SceneEdit:Texture] mat="${binding.materialLabel}" shader="${binding.shaderFamily}" applied=[${loaded.join(",")}] poolSize=${texturePool.size}`,
-      );
     }
 
     return result;
@@ -1173,21 +1214,20 @@ const TexturedMesh = memo(function TexturedMesh({
     () => previewSelectionOnBeforeCompile(selectionUniforms),
     [selectionUniforms],
   );
-  const onBeforeCompileAnime = useMemo(
+  const onBeforeCompileMaterial = useMemo(
     () => (shader: { fragmentShader: string; uniforms: Record<string, { value: unknown }> }) => {
-      onBeforeCompileExvs(shader);
+      if (exvsActive) {
+        onBeforeCompileExvs(shader);
+      }
       onBeforeCompileSelection(shader);
     },
-    [onBeforeCompileExvs, onBeforeCompileSelection],
+    [exvsActive, onBeforeCompileExvs, onBeforeCompileSelection],
   );
-
-  useFrame(() => {
+  useEffect(() => {
     if (!exvsActive) return;
     exvsUniforms.uAnimeKeyDir.value.copy(animeKeyLightDir);
-  });
-
+  }, [exvsActive, exvsUniforms, animeKeyLightDir]);
   useFrame((state) => {
-    if (!exvsActive) return;
     selectionUniforms.uSelectionEnabled.value = isSelected ? 1 : 0;
     selectionUniforms.uSelectionTime.value = state.clock.elapsedTime;
   });
@@ -1234,7 +1274,8 @@ const TexturedMesh = memo(function TexturedMesh({
         ? GENERIC_STAGE_EMISSIVE_INTENSITY
         : 0;
 
-  const transparent = binding.renderHints.isTransparent ?? hasMap;
+  const transparent = binding.renderHints.isTransparent === true;
+  const materialSide = transparent ? THREE.DoubleSide : THREE.FrontSide;
   const envIntensity = exvsActive
     ? shaderFamily === "vsngCharaSparkle"
       ? 1.38
@@ -1269,7 +1310,7 @@ const TexturedMesh = memo(function TexturedMesh({
         key={exvsActive ? "exvs" : "std"}
         color={baseColor}
         wireframe={wireframe}
-        side={THREE.DoubleSide}
+        side={materialSide}
         map={textures.map ?? null}
         normalMap={textures.normalMap ?? null}
         normalScale={textures.normalMap ? NORMAL_SCALE_DEFAULT : undefined}
@@ -1286,9 +1327,400 @@ const TexturedMesh = memo(function TexturedMesh({
         transparent={transparent}
         roughness={roughnessForStyle}
         metalness={effectiveMetalnessValue}
-        onBeforeCompile={exvsActive ? onBeforeCompileAnime : undefined}
+        onBeforeCompile={onBeforeCompileMaterial}
       />
     </mesh>
+  );
+});
+
+interface PlacementInstance {
+  entry: PlacementRow;
+  globalIdx: number;
+  nodeId: string;
+}
+
+const InstancedStageModel = memo(function InstancedStageModel({
+  bundle,
+  instances,
+  wireframe,
+  selectedPlacementIdx,
+  selectedNodeIds,
+  nodeVisibility,
+  objectLocks,
+  onSelectNode,
+  clickPickSelectionEnabled,
+  textureDataMap,
+  textureSlotLoadEnabled,
+  objectTextureLoadState,
+  texturePool,
+  previewRenderStyle,
+  animeKeyLightDir,
+  placementGizmoMode,
+  onPlacementGizmoFrame,
+  onPlacementGizmoCommit,
+  gizmoDraggingRef,
+  orbitActiveRef,
+  pointerDownTimeRef,
+  selectedGroupsRef,
+}: {
+  bundle: SsbhModelPreviewBundle;
+  instances: PlacementInstance[];
+  wireframe: boolean;
+  selectedPlacementIdx: number | null;
+  selectedNodeIds?: ReadonlySet<string>;
+  nodeVisibility: SceneNodeVisibilityMap;
+  objectLocks: SceneNodeLockMap;
+  onSelectNode: (id: string | null) => void;
+  clickPickSelectionEnabled: boolean;
+  textureDataMap: NutexbTextureDataMap;
+  textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>;
+  objectTextureLoadState: ObjectTextureLoadState;
+  texturePool: SceneTexturePool;
+  previewRenderStyle: PreviewRenderStyle;
+  animeKeyLightDir: THREE.Vector3;
+  placementGizmoMode: PlacementGizmoMode;
+  onPlacementGizmoFrame?: (placementIdx: number, t: TransformData) => void;
+  onPlacementGizmoCommit?: (placementIdx: number, t: TransformData) => void;
+  gizmoDraggingRef: React.RefObject<boolean>;
+  orbitActiveRef: React.RefObject<boolean>;
+  pointerDownTimeRef: React.RefObject<number>;
+  selectedGroupsRef: React.RefObject<SelectedGroupMap>;
+}) {
+  const draws = useMemo((): BuiltMeshDraw[] => {
+    try {
+      const modl = bundle.modl as any;
+      const mesh = bundle.mesh as any;
+      const skel = bundle.skel as any;
+      if (!modl || !mesh) return [];
+      return buildDrawListFromBundle(modl, mesh, skel ?? undefined);
+    } catch {
+      return [];
+    }
+  }, [bundle]);
+
+  const matlLookup = useMemo(() => buildMatlLookup(bundle.matl as any), [bundle.matl]);
+  const refToPathMap = useMemo(() => buildTextureRefToPathMap(bundle), [bundle]);
+
+  const drawBindings = useMemo((): DrawBinding[] => {
+    const rawBindings = draws.map((draw) => {
+      const binding = resolveMaterialBinding(draw.materialLabel, matlLookup, refToPathMap);
+      return { draw, binding };
+    });
+    const grouped = new Map<string, DrawBinding[]>();
+    for (const db of rawBindings) {
+      const key = db.draw.materialLabel;
+      const list = grouped.get(key);
+      if (list) list.push(db);
+      else grouped.set(key, [db]);
+    }
+    const merged: DrawBinding[] = [];
+    for (const group of grouped.values()) {
+      if (group.length === 1) {
+        merged.push(group[0]);
+        continue;
+      }
+      const geometries = group.map((db) => db.draw.geometry);
+      const mergedGeo = mergeBufferGeometries(geometries, false);
+      if (mergedGeo) {
+        merged.push({
+          draw: { ...group[0].draw, geometry: mergedGeo, key: `merged_${group[0].draw.materialLabel}` },
+          binding: group[0].binding,
+        });
+      } else {
+        merged.push(...group);
+      }
+    }
+    return merged;
+  }, [draws, matlLookup, refToPathMap]);
+
+  const visibleInstances = useMemo(
+    () => instances.filter((inst) => canRenderSceneNode(inst.nodeId, nodeVisibility, objectLocks)),
+    [instances, nodeVisibility, objectLocks],
+  );
+
+  const selectedInstance = useMemo(
+    () => visibleInstances.find(
+      (inst) => inst.globalIdx === selectedPlacementIdx || selectedNodeIds?.has(inst.nodeId),
+    ) ?? null,
+    [visibleInstances, selectedPlacementIdx, selectedNodeIds],
+  );
+
+  const nonSelectedInstances = useMemo(
+    () => visibleInstances.filter((inst) => inst !== selectedInstance),
+    [visibleInstances, selectedInstance],
+  );
+
+  const hasNonSelectedTextureOverrides = useMemo(
+    () => nonSelectedInstances.some((inst) => hasTextureOverridesForObject(objectTextureLoadState, inst.nodeId)),
+    [nonSelectedInstances, objectTextureLoadState],
+  );
+
+  if (hasNonSelectedTextureOverrides) {
+    return (
+      <Fragment>
+        {visibleInstances.map((inst) => (
+          <StageModelGroup
+            key={inst.nodeId}
+            nodeId={inst.nodeId}
+            bundle={bundle}
+            wireframe={wireframe}
+            isSelected={inst.globalIdx === selectedPlacementIdx || selectedNodeIds?.has(inst.nodeId) === true}
+            isLocked={!canEditSceneNode(inst.nodeId, nodeVisibility, objectLocks)}
+            onClick={onSelectNode}
+            clickPickSelectionEnabled={clickPickSelectionEnabled}
+            textureDataMap={textureDataMap}
+            textureSlotLoadEnabled={textureSlotLoadEnabled}
+            objectTextureLoadState={objectTextureLoadState}
+            texturePool={texturePool}
+            previewRenderStyle={previewRenderStyle}
+            animeKeyLightDir={animeKeyLightDir}
+            position={[inst.entry.posX, inst.entry.posY, inst.entry.posZ]}
+            rotation={[inst.entry.rotX, inst.entry.rotY, inst.entry.rotZ]}
+            scale={placementScaleForViewport(inst.entry.scaleX, inst.entry.scaleY, inst.entry.scaleZ)}
+            placementGlobalIdx={inst.globalIdx}
+            showPlacementTransformGizmo={
+              inst.globalIdx === selectedPlacementIdx &&
+              canEditSceneNode(inst.nodeId, nodeVisibility, objectLocks)
+            }
+            placementGizmoMode={placementGizmoMode}
+            onPlacementGizmoFrame={onPlacementGizmoFrame}
+            onPlacementGizmoCommit={onPlacementGizmoCommit}
+            gizmoDraggingRef={gizmoDraggingRef}
+            orbitActiveRef={orbitActiveRef}
+            pointerDownTimeRef={pointerDownTimeRef}
+            selectedGroupsRef={selectedGroupsRef}
+          />
+        ))}
+      </Fragment>
+    );
+  }
+
+  const instanceMatrices = useMemo(() => {
+    const matrices = new Float32Array(nonSelectedInstances.length * 16);
+    const m = new THREE.Matrix4();
+    const pos = new THREE.Vector3();
+    const quat = new THREE.Quaternion();
+    const scl = new THREE.Vector3();
+    const euler = new THREE.Euler();
+    for (let i = 0; i < nonSelectedInstances.length; i++) {
+      const { entry } = nonSelectedInstances[i];
+      pos.set(entry.posX, entry.posY, entry.posZ);
+      euler.set(entry.rotX * DEG2RAD, entry.rotY * DEG2RAD, entry.rotZ * DEG2RAD);
+      quat.setFromEuler(euler);
+      const [sx, sy, sz] = placementScaleForViewport(entry.scaleX, entry.scaleY, entry.scaleZ);
+      scl.set(sx, sy, sz);
+      m.compose(pos, quat, scl);
+      m.toArray(matrices, i * 16);
+    }
+    return matrices;
+  }, [nonSelectedInstances]);
+
+  return (
+    <Fragment>
+      {drawBindings.map((db) => (
+        <InstancedTexturedMesh
+          key={db.draw.key}
+          drawBinding={db}
+          instanceMatrices={instanceMatrices}
+          instanceCount={nonSelectedInstances.length}
+          textureDataMap={textureDataMap}
+          textureSlotLoadEnabled={textureSlotLoadEnabled}
+          wireframe={wireframe}
+          texturePool={texturePool}
+          previewRenderStyle={previewRenderStyle}
+          animeKeyLightDir={animeKeyLightDir}
+          clickPickSelectionEnabled={clickPickSelectionEnabled}
+          instances={nonSelectedInstances}
+          onSelectNode={onSelectNode}
+          gizmoDraggingRef={gizmoDraggingRef}
+          orbitActiveRef={orbitActiveRef}
+          pointerDownTimeRef={pointerDownTimeRef}
+        />
+      ))}
+
+      {selectedInstance && (
+        <StageModelGroup
+          key={`sel-${selectedInstance.nodeId}`}
+          nodeId={selectedInstance.nodeId}
+          bundle={bundle}
+          wireframe={wireframe}
+          isSelected
+          isLocked={!canEditSceneNode(selectedInstance.nodeId, nodeVisibility, objectLocks)}
+          onClick={onSelectNode}
+          clickPickSelectionEnabled={clickPickSelectionEnabled}
+          textureDataMap={textureDataMap}
+          textureSlotLoadEnabled={textureSlotLoadEnabled}
+          objectTextureLoadState={objectTextureLoadState}
+          texturePool={texturePool}
+          previewRenderStyle={previewRenderStyle}
+          animeKeyLightDir={animeKeyLightDir}
+          position={[selectedInstance.entry.posX, selectedInstance.entry.posY, selectedInstance.entry.posZ]}
+          rotation={[selectedInstance.entry.rotX, selectedInstance.entry.rotY, selectedInstance.entry.rotZ]}
+          scale={placementScaleForViewport(selectedInstance.entry.scaleX, selectedInstance.entry.scaleY, selectedInstance.entry.scaleZ)}
+          placementGlobalIdx={selectedInstance.globalIdx}
+          showPlacementTransformGizmo={canEditSceneNode(selectedInstance.nodeId, nodeVisibility, objectLocks)}
+          placementGizmoMode={placementGizmoMode}
+          onPlacementGizmoFrame={onPlacementGizmoFrame}
+          onPlacementGizmoCommit={onPlacementGizmoCommit}
+          gizmoDraggingRef={gizmoDraggingRef}
+          orbitActiveRef={orbitActiveRef}
+          pointerDownTimeRef={pointerDownTimeRef}
+          selectedGroupsRef={selectedGroupsRef}
+        />
+      )}
+    </Fragment>
+  );
+});
+
+const InstancedTexturedMesh = memo(function InstancedTexturedMesh({
+  drawBinding,
+  instanceMatrices,
+  instanceCount,
+  textureDataMap,
+  textureSlotLoadEnabled,
+  wireframe,
+  texturePool,
+  previewRenderStyle,
+  animeKeyLightDir,
+  clickPickSelectionEnabled,
+  instances,
+  onSelectNode,
+  gizmoDraggingRef,
+  orbitActiveRef,
+  pointerDownTimeRef,
+}: {
+  drawBinding: DrawBinding;
+  instanceMatrices: Float32Array;
+  instanceCount: number;
+  textureDataMap: NutexbTextureDataMap;
+  textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>;
+  wireframe: boolean;
+  texturePool: SceneTexturePool;
+  previewRenderStyle: PreviewRenderStyle;
+  animeKeyLightDir: THREE.Vector3;
+  clickPickSelectionEnabled: boolean;
+  instances: PlacementInstance[];
+  onSelectNode: (id: string | null) => void;
+  gizmoDraggingRef: React.RefObject<boolean>;
+  orbitActiveRef: React.RefObject<boolean>;
+  pointerDownTimeRef: React.RefObject<number>;
+}) {
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const { draw, binding } = drawBinding;
+
+  useEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    const m = new THREE.Matrix4();
+    for (let i = 0; i < instanceCount; i++) {
+      m.fromArray(instanceMatrices, i * 16);
+      mesh.setMatrixAt(i, m);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  }, [instanceMatrices, instanceCount]);
+
+  const slotDataEntries = useMemo(() => {
+    return SLOT_KEYS.map((slot) => {
+      if (!textureSlotLoadEnabled[slot]) return [slot, null] as const;
+      const data = lookupTextureData(textureDataMap, pathForSlot(binding, slot));
+      return [slot, data] as const;
+    });
+  }, [textureDataMap, binding, textureSlotLoadEnabled]);
+
+  const dataKey = slotDataEntries.map(([, d]) => (d ? `${d.width}x${d.height}` : "")).join("\0");
+
+  const textures = useMemo(() => {
+    const result: Partial<Record<PbrSlotKind, THREE.DataTexture>> = {};
+    for (const [slot, data] of slotDataEntries) {
+      if (!data) continue;
+      const path = pathForSlot(binding, slot);
+      if (!path) continue;
+      const poolKey = buildTexturePoolKey(path, slot, binding, data.width, data.height);
+      result[slot] = texturePool.acquire(poolKey, () => createDataTexture(data, slot, binding));
+    }
+    return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataKey, texturePool]);
+
+  const exvsActive = previewRenderStyle === "anime";
+  const shaderFamily = binding.shaderFamily;
+  const hasMap = !!textures.map;
+  const hasRough = !!textures.roughnessMap || typeof binding.uniforms.roughnessScalar === "number";
+  const hasMetal = !!textures.metalnessMap || typeof binding.uniforms.metalnessScalar === "number";
+  const hasEmit = !!textures.emissiveMap;
+  const canUseEmissiveMap = hasEmit && shaderFamily !== "generic";
+  const hasAo = !!textures.aoMap;
+  const hasCube = !!textures.cubeMap;
+  const hasAnyTexture = hasMap || hasRough || hasMetal || hasEmit || hasAo || hasCube || !!textures.normalMap;
+  const transparent = binding.renderHints.isTransparent === true;
+  const materialSide = transparent ? THREE.DoubleSide : THREE.FrontSide;
+
+  const roughnessValue = typeof binding.uniforms.roughnessScalar === "number"
+    ? binding.uniforms.roughnessScalar
+    : hasRough ? 1 : shaderFamily === "vsngCharaSparkle" ? 0.45 : 0.65;
+  const metalnessValue = typeof binding.uniforms.metalnessScalar === "number"
+    ? binding.uniforms.metalnessScalar
+    : hasMetal ? 1 : shaderFamily === "vsngCharaSparkle" ? 0.35 : 0.12;
+  const roughnessForStyle = exvsActive ? Math.min(1, roughnessValue * 0.84) : roughnessValue;
+  const emissiveIntensity = exvsActive
+    ? shaderFamily === "vsngCharaSparkle" ? 2.15 : canUseEmissiveMap ? GENERIC_STAGE_ANIME_EMISSIVE_INTENSITY : 0
+    : shaderFamily === "vsngCharaSparkle" ? 1.8 : canUseEmissiveMap ? GENERIC_STAGE_EMISSIVE_INTENSITY : 0;
+  const envIntensity = exvsActive
+    ? shaderFamily === "vsngCharaSparkle" ? 1.38 : hasCube ? 1.05 : 0
+    : shaderFamily === "vsngCharaSparkle" ? 1.55 : hasCube ? 1.15 : 0.6;
+  const exvsUsesMetalnessMap = hasCube && textureSlotLoadEnabled.metalnessMap;
+  const effectiveMetalnessMap = exvsActive
+    ? exvsUsesMetalnessMap ? textures.metalnessMap ?? null : null
+    : textureSlotLoadEnabled.metalnessMap ? textures.metalnessMap ?? null : null;
+  const effectiveMetalnessValue = exvsActive
+    ? exvsUsesMetalnessMap ? metalnessValue : Math.min(metalnessValue, 0.2)
+    : metalnessValue;
+  const baseColor = hasAnyTexture ? "#ffffff" : "#cccccc";
+
+  const handleClick = useCallback((e: any) => {
+    if (!clickPickSelectionEnabled) return;
+    if (gizmoDraggingRef?.current || orbitActiveRef?.current) return;
+    const elapsed = performance.now() - (pointerDownTimeRef?.current ?? 0);
+    if (elapsed > 250) return;
+    e.stopPropagation();
+    const instanceId = e.instanceId;
+    if (instanceId != null && instanceId < instances.length) {
+      onSelectNode(instances[instanceId].nodeId);
+    }
+  }, [clickPickSelectionEnabled, gizmoDraggingRef, instances, onSelectNode, orbitActiveRef, pointerDownTimeRef]);
+
+  if (instanceCount === 0) return null;
+
+  return (
+    <instancedMesh
+      ref={meshRef}
+      args={[draw.geometry, undefined, instanceCount]}
+      frustumCulled={false}
+      onClick={handleClick}
+    >
+      <meshStandardMaterial
+        color={baseColor}
+        wireframe={wireframe}
+        side={materialSide}
+        map={textures.map ?? null}
+        normalMap={textures.normalMap ?? null}
+        normalScale={textures.normalMap ? NORMAL_SCALE_DEFAULT : undefined}
+        roughnessMap={textures.roughnessMap ?? null}
+        metalnessMap={effectiveMetalnessMap}
+        emissiveMap={canUseEmissiveMap ? textures.emissiveMap ?? null : null}
+        emissive={canUseEmissiveMap ? new THREE.Color(0xffffff) : new THREE.Color(0)}
+        emissiveIntensity={emissiveIntensity}
+        aoMap={textures.aoMap ?? null}
+        aoMapIntensity={hasAo ? 0.35 : 0}
+        envMap={textures.cubeMap ?? null}
+        envMapIntensity={envIntensity}
+        alphaTest={hasMap ? 0.001 : 0}
+        transparent={transparent}
+        roughness={roughnessForStyle}
+        metalness={effectiveMetalnessValue}
+      />
+    </instancedMesh>
   );
 });
 
@@ -1305,6 +1737,7 @@ const StageModelGroup = memo(function StageModelGroup({
   scale,
   textureDataMap,
   textureSlotLoadEnabled,
+  objectTextureLoadState,
   texturePool,
   previewRenderStyle,
   animeKeyLightDir,
@@ -1330,6 +1763,7 @@ const StageModelGroup = memo(function StageModelGroup({
   scale?: [number, number, number];
   textureDataMap: NutexbTextureDataMap;
   textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>;
+  objectTextureLoadState: ObjectTextureLoadState;
   texturePool: SceneTexturePool;
   previewRenderStyle: PreviewRenderStyle;
   animeKeyLightDir: THREE.Vector3;
@@ -1381,19 +1815,38 @@ const StageModelGroup = memo(function StageModelGroup({
   );
 
   const drawBindings = useMemo((): DrawBinding[] => {
-    return draws.map((draw) => {
+    const rawBindings = draws.map((draw) => {
       const binding = resolveMaterialBinding(draw.materialLabel, matlLookup, refToPathMap);
-      console.log(
-        `[SceneEdit:Material] node="${nodeId}" mat="${binding.materialLabel}" shader="${binding.shaderFamily}"` +
-        ` texPaths={map=${binding.texturePaths.mapPath ? "Y" : "N"}, nrm=${binding.texturePaths.normalPath ? "Y" : "N"},` +
-        ` rgh=${binding.texturePaths.roughnessPath ? "Y" : "N"}, mtl=${binding.texturePaths.metalnessPath ? "Y" : "N"},` +
-        ` emi=${binding.texturePaths.emissivePath ? "Y" : "N"}, ao=${binding.texturePaths.aoPath ? "Y" : "N"},` +
-        ` cube=${binding.texturePaths.cubePath ? "Y" : "N"}}` +
-        ` uniforms={rough=${binding.uniforms.roughnessScalar}, metal=${binding.uniforms.metalnessScalar}}`,
-      );
       return { draw, binding };
     });
-  }, [draws, matlLookup, refToPathMap, nodeId]);
+
+    const grouped = new Map<string, DrawBinding[]>();
+    for (const db of rawBindings) {
+      const key = db.draw.materialLabel;
+      const list = grouped.get(key);
+      if (list) list.push(db);
+      else grouped.set(key, [db]);
+    }
+
+    const merged: DrawBinding[] = [];
+    for (const group of grouped.values()) {
+      if (group.length === 1) {
+        merged.push(group[0]);
+        continue;
+      }
+      const geometries = group.map((db) => db.draw.geometry);
+      const mergedGeo = mergeBufferGeometries(geometries, false);
+      if (mergedGeo) {
+        merged.push({
+          draw: { ...group[0].draw, geometry: mergedGeo, key: `merged_${group[0].draw.materialLabel}` },
+          binding: group[0].binding,
+        });
+      } else {
+        merged.push(...group);
+      }
+    }
+    return merged;
+  }, [draws, matlLookup, refToPathMap]);
 
   const handleClick = useCallback(
     (e: any) => {
@@ -1479,8 +1932,10 @@ const StageModelGroup = memo(function StageModelGroup({
             drawBinding={db}
             textureDataMap={textureDataMap}
             textureSlotLoadEnabled={textureSlotLoadEnabled}
+            objectTextureLoadState={objectTextureLoadState}
             wireframe={wireframe}
             isSelected={isSelected}
+            objectId={nodeId}
             texturePool={texturePool}
             previewRenderStyle={previewRenderStyle}
             animeKeyLightDir={animeKeyLightDir}

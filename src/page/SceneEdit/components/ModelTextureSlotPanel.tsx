@@ -2,101 +2,45 @@ import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import {
-  TEXTURE_PREVIEW_SLOT_META,
-  type TexturePreviewSlotKey,
-} from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
+import { type TexturePreviewSlotKey } from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
 import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
 import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
 import {
-  buildMatlLookup,
-  buildTextureRefToPathMap,
-  resolveMaterialBinding,
-  buildDrawListFromBundle,
-} from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
-
-interface ModelTextureInfo {
-  slot: TexturePreviewSlotKey;
-  label: string;
-  path: string | null;
-  loaded: boolean;
-  resolution: string | null;
-}
-
-function collectModelTextures(
-  bundle: SsbhModelPreviewBundle,
-  textureDataMap: NutexbTextureDataMap,
-): ModelTextureInfo[] {
-  const results: ModelTextureInfo[] = [];
-  const seen = new Set<string>();
-
-  try {
-    const modl = bundle.modl as any;
-    const mesh = bundle.mesh as any;
-    const skel = bundle.skel as any;
-    if (!modl || !mesh) return results;
-
-    const draws = buildDrawListFromBundle(modl, mesh, skel ?? undefined);
-    const matlLookup = buildMatlLookup(bundle.matl as any);
-    const refMap = buildTextureRefToPathMap(bundle);
-
-    for (const draw of draws) {
-      const binding = resolveMaterialBinding(draw.materialLabel, matlLookup, refMap);
-      const paths = binding.texturePaths;
-
-      const slotPaths: Array<[TexturePreviewSlotKey, string | null]> = [
-        ["map", paths.mapPath],
-        ["normalMap", paths.normalPath],
-        ["roughnessMap", paths.roughnessPath],
-        ["metalnessMap", paths.metalnessPath],
-        ["emissiveMap", paths.emissivePath],
-        ["aoMap", paths.aoPath],
-        ["cubeMap", paths.cubePath],
-      ];
-
-      for (const [slot, path] of slotPaths) {
-        if (!path) continue;
-        const key = `${slot}:${path.toLowerCase()}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-
-        const texData = textureDataMap.get(path) ?? textureDataMap.get(path.toLowerCase());
-        const meta = TEXTURE_PREVIEW_SLOT_META.find((m) => m.key === slot);
-
-        results.push({
-          slot,
-          label: meta?.label ?? slot,
-          path,
-          loaded: !!texData,
-          resolution: texData ? `${texData.width}×${texData.height}` : null,
-        });
-      }
-    }
-  } catch {
-    // skip
-  }
-
-  return results;
-}
+  collectBundleTextureInventory,
+  collectGlobalLoadedNutexbInventory,
+  textureSlotShortLabel,
+  type ObjectTextureInventory,
+  type ObjectTextureLoadState,
+} from "../utils/sceneTextureInventory";
 
 interface ModelTextureSlotPanelProps {
+  objectId: string;
   bundle: SsbhModelPreviewBundle;
   textureDataMap: NutexbTextureDataMap;
   textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>;
-  onSlotToggle: (key: TexturePreviewSlotKey, enabled: boolean) => void;
+  objectTextureLoadState: ObjectTextureLoadState;
+  onTexturePathToggle: (objectId: string, path: string, enabled: boolean) => void;
   modelLabel?: string;
 }
 
 export function ModelTextureSlotPanel({
+  objectId,
   bundle,
   textureDataMap,
   textureSlotLoadEnabled,
-  onSlotToggle,
+  objectTextureLoadState,
+  onTexturePathToggle,
   modelLabel,
 }: ModelTextureSlotPanelProps) {
   const textures = useMemo(
-    () => collectModelTextures(bundle, textureDataMap),
-    [bundle, textureDataMap],
+    () => collectBundleTextureInventory(
+      bundle,
+      textureDataMap,
+      textureSlotLoadEnabled,
+      objectTextureLoadState,
+      objectId,
+    ),
+    [bundle, textureDataMap, textureSlotLoadEnabled, objectTextureLoadState, objectId],
   );
 
   if (textures.length === 0) {
@@ -107,16 +51,6 @@ export function ModelTextureSlotPanel({
     );
   }
 
-  const slotGroups = useMemo(() => {
-    const groups = new Map<TexturePreviewSlotKey, ModelTextureInfo[]>();
-    for (const tex of textures) {
-      const list = groups.get(tex.slot) ?? [];
-      list.push(tex);
-      groups.set(tex.slot, list);
-    }
-    return groups;
-  }, [textures]);
-
   return (
     <div className="space-y-1.5">
       {modelLabel && (
@@ -124,57 +58,79 @@ export function ModelTextureSlotPanel({
           {modelLabel}
         </div>
       )}
-      {[...slotGroups.entries()].map(([slot, items]) => {
-        const enabled = textureSlotLoadEnabled[slot];
-        const meta = TEXTURE_PREVIEW_SLOT_META.find((m) => m.key === slot);
+      {textures.map((tex) => {
+        const slotLabel = tex.slots.map(textureSlotShortLabel).join(", ");
         return (
-          <div key={slot} className="space-y-0.5">
+          <div key={tex.pathKey} className="space-y-0.5 rounded-sm px-1 py-1 hover:bg-muted/30">
             <div className="flex items-center gap-2">
               <Checkbox
-                id={`model-slot-${slot}`}
-                checked={enabled}
-                onCheckedChange={(checked) => onSlotToggle(slot, !!checked)}
+                id={`model-texture-${objectId}-${tex.pathKey}`}
+                checked={tex.enabled}
+                onCheckedChange={(checked) => onTexturePathToggle(objectId, tex.path, !!checked)}
                 className="h-3.5 w-3.5"
               />
               <label
-                htmlFor={`model-slot-${slot}`}
+                htmlFor={`model-texture-${objectId}-${tex.pathKey}`}
                 className={cn(
-                  "text-[11px] font-medium cursor-pointer flex-1",
-                  !enabled && "text-muted-foreground line-through",
+                  "text-[11px] font-medium cursor-pointer flex-1 truncate font-mono",
+                  !tex.enabled && "text-muted-foreground line-through",
                 )}
+                title={tex.internalName}
               >
-                {meta?.label ?? slot}
+                {tex.internalName}
               </label>
               <Badge variant="outline" className="text-[9px] h-4 px-1">
-                {items.length}
+                {tex.loaded ? "loaded" : "idle"}
               </Badge>
             </div>
-            {enabled && (
-              <div className="ml-5 space-y-0.5">
-                {items.map((tex) => (
-                  <div
-                    key={tex.path}
-                    className="flex items-center gap-1.5 text-[9px] text-muted-foreground"
-                  >
-                    <span
-                      className={cn(
-                        "h-1.5 w-1.5 rounded-full shrink-0",
-                        tex.loaded ? "bg-green-500" : "bg-muted-foreground/40",
-                      )}
-                    />
-                    <span className="truncate flex-1 font-mono">
-                      {tex.path?.split(/[/\\]/).pop() ?? "—"}
-                    </span>
-                    {tex.resolution && (
-                      <span className="tabular-nums shrink-0">{tex.resolution}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="ml-5 flex items-center gap-1.5 text-[9px] text-muted-foreground">
+              <span
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full shrink-0",
+                  tex.loaded ? "bg-green-500" : "bg-muted-foreground/40",
+                )}
+              />
+              <span className="truncate flex-1">{slotLabel}</span>
+              {tex.resolution && <span className="tabular-nums shrink-0">{tex.resolution}</span>}
+            </div>
           </div>
         );
       })}
+    </div>
+  );
+}
+
+export function GlobalLoadedTexturePanel({
+  objects,
+}: {
+  objects: ObjectTextureInventory[];
+}) {
+  const loaded = useMemo(() => collectGlobalLoadedNutexbInventory(objects), [objects]);
+
+  if (loaded.length === 0) {
+    return (
+      <div className="text-[10px] text-muted-foreground italic py-1">
+        No nutexb textures are currently loaded
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      {loaded.map((entry) => (
+        <div key={entry.path.toLowerCase()} className="rounded-sm px-1 py-1 hover:bg-muted/30">
+          <div className="flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
+            <span className="min-w-0 flex-1 truncate text-[10px] font-mono" title={entry.internalName}>
+              {entry.internalName}
+            </span>
+            <span className="text-[9px] tabular-nums text-muted-foreground">{entry.resolution}</span>
+          </div>
+          <div className="ml-3 truncate text-[9px] text-muted-foreground" title={entry.objectLabels.join(", ")}>
+            {entry.objectLabels.join(", ")}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

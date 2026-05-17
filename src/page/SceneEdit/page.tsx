@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/resizable";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,7 +32,7 @@ import {
   type StageTreeNode,
 } from "./components/StageHierarchyTree";
 import { SceneOutliner } from "./components/SceneOutliner";
-import { ModelTextureSlotPanel } from "./components/ModelTextureSlotPanel";
+import { GlobalLoadedTexturePanel, ModelTextureSlotPanel } from "./components/ModelTextureSlotPanel";
 import { ViewportContextMenu } from "./components/ViewportContextMenu";
 import { useSceneKeyboard } from "./hooks/useSceneKeyboard";
 import { useSceneEditorStore } from "./store/sceneEditorStore";
@@ -49,7 +50,8 @@ import {
   GraphicParamPanel,
   type GraphicParam,
 } from "./components/GraphicParamPanel";
-import { PlacementPanel, type PlacementRow } from "./components/PlacementPanel";
+import { type PlacementRow } from "./components/PlacementPanel";
+import { PlacementCsvEditorPanel } from "./components/PlacementCsvEditorPanel";
 import {
   formatPlacementViewportNodeId,
   parsePlacementViewportNodeId,
@@ -98,6 +100,22 @@ import {
   importDAEFiles,
 } from "./utils/daeExportImport";
 import { canEditSceneNode } from "./utils/sceneEditorNodeState";
+import {
+  addGraphicParam,
+  addPlacementRow,
+  applyGraphicParamSelection,
+  deleteGraphicParamAt,
+  deletePlacementRowAt,
+  replacePlacementRow,
+  updateGraphicParamKey,
+  updateGraphicParamValue,
+} from "./utils/sceneCsvEditors";
+import {
+  collectBundleTextureInventory,
+  setTexturePathEnabledForObject,
+  type ObjectTextureInventory,
+  type ObjectTextureLoadState,
+} from "./utils/sceneTextureInventory";
 
 import type { PreviewRenderStyle } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
 
@@ -202,11 +220,13 @@ export default function SceneEdit() {
     StageBundleResponse["subModels"]
   >([]);
   const [graphicParams, setGraphicParams] = useState<GraphicParam[]>([]);
+  const [appliedGraphicParamKeys, setAppliedGraphicParamKeys] = useState<Set<string>>(() => new Set());
   const [placementHeader, setPlacementHeader] = useState<string[]>([]);
   const [placementColMap, setPlacementColMap] = useState<
     Record<string, number>
   >({});
   const [placementEntries, setPlacementEntries] = useState<PlacementRow[]>([]);
+  const [placementDraftEntries, setPlacementDraftEntries] = useState<PlacementRow[]>([]);
   const [importedDaeObjects, setImportedDaeObjects] = useState<ImportedDaeObject[]>([]);
   const [treeRoot, setTreeRoot] = useState<StageTreeNode | null>(null);
 
@@ -306,6 +326,7 @@ export default function SceneEdit() {
   const [textureSlotLoadEnabled, setTextureSlotLoadEnabled] = useState<
     Record<TexturePreviewSlotKey, boolean>
   >(() => createDefaultTextureSlotLoadEnabled());
+  const [objectTextureLoadState, setObjectTextureLoadState] = useState<ObjectTextureLoadState>({});
   const [sceneAnimeRenderEnabled, setSceneAnimeRenderEnabled] = useState(false);
   const [placementGizmoMode, setPlacementGizmoMode] = useState<PlacementGizmoMode>("translate");
   const [drawStats, setDrawStats] = useState<SceneDrawStats | null>(null);
@@ -318,6 +339,10 @@ export default function SceneEdit() {
   const scenePreviewRenderStyle: PreviewRenderStyle = sceneAnimeRenderEnabled
     ? "anime"
     : "standard";
+  const appliedGraphicParams = useMemo(
+    () => applyGraphicParamSelection(graphicParams, appliedGraphicParamKeys),
+    [graphicParams, appliedGraphicParamKeys],
+  );
   const {
     textureDataMap,
     progress: textureProgress,
@@ -325,9 +350,11 @@ export default function SceneEdit() {
   } = useSceneTextureLoader(
     baseModel,
     subModels,
+    placementEntries,
     sessionId,
     textureMaxDimension,
     textureSlotLoadEnabled,
+    objectTextureLoadState,
   );
 
   useEffect(() => {
@@ -576,6 +603,7 @@ export default function SceneEdit() {
         setGraphicParams(
           bundle.graphicParams.map((p) => ({ key: p.key, value: p.value }))
         );
+        setAppliedGraphicParamKeys(new Set());
         setPlacementHeader(bundle.placementHeader);
         const colMap: Record<string, number> = {};
         bundle.placementHeader.forEach((h, i) => {
@@ -596,9 +624,10 @@ export default function SceneEdit() {
           scaleZ: e.scaleZ,
           rawFields: e.rawFields,
         }));
-        setPlacementEntries(
-          reorderPlacementEntriesBySubModels(mappedPlacements, bundle.subModels),
-        );
+        const orderedPlacements = reorderPlacementEntriesBySubModels(mappedPlacements, bundle.subModels);
+        setPlacementEntries(orderedPlacements);
+        setPlacementDraftEntries(orderedPlacements.map((entry) => ({ ...entry, rawFields: [...entry.rawFields] })));
+        setObjectTextureLoadState({});
         const tree = buildTreeFromBundle(folderName, bundle);
         setTreeRoot(tree);
       });
@@ -626,9 +655,11 @@ export default function SceneEdit() {
     setBaseModel(null);
     setSubModels([]);
     setGraphicParams([]);
+    setAppliedGraphicParamKeys(new Set());
     setPlacementHeader([]);
     setPlacementColMap({});
     setPlacementEntries([]);
+    setPlacementDraftEntries([]);
     setImportedDaeObjects([]);
     setTreeRoot(null);
     setDrawStats(null);
@@ -802,10 +833,13 @@ export default function SceneEdit() {
       const gpCsv = graphicParams.map((p) => `${p.key},${p.value}`).join("\n");
       await writeTextFile(`${stageRoot}/info/graphic_param.csv`, gpCsv);
 
-      if (placementHeader.length > 0 && placementEntries.length > 0) {
+      if (placementHeader.length > 0 && placementDraftEntries.length > 0) {
         const headerLine = placementHeader.join(",");
-        const dataLines = placementEntries.map((e) => e.rawFields.join(","));
+        const dataLines = placementDraftEntries.map((e) => e.rawFields.join(","));
         const placementCsv = [headerLine, ...dataLines].join("\n");
+        await writeTextFile(`${stageRoot}/info/placement.csv`, placementCsv);
+      } else if (placementDraftEntries.length > 0) {
+        const placementCsv = placementDraftEntries.map((e) => e.rawFields.join(",")).join("\n");
         await writeTextFile(`${stageRoot}/info/placement.csv`, placementCsv);
       }
 
@@ -814,19 +848,43 @@ export default function SceneEdit() {
     } catch (err: any) {
       toast.error("Save failed", { description: String(err) });
     }
-  }, [stageRoot, graphicParams, placementHeader, placementEntries]);
+  }, [stageRoot, graphicParams, placementHeader, placementDraftEntries]);
 
-  const handleGraphicParamChange = useCallback(
+  const handleGraphicParamValueChange = useCallback(
     (index: number, value: string) => {
-      setGraphicParams((prev) => {
-        const next = [...prev];
-        next[index] = { ...next[index], value };
-        return next;
-      });
+      setGraphicParams((prev) => updateGraphicParamValue(prev, index, value));
       setHasUnsavedChanges(true);
     },
     []
   );
+  const handleGraphicParamKeyChange = useCallback((index: number, key: string) => {
+    try {
+      setGraphicParams((prev) => updateGraphicParamKey(prev, index, key));
+      setHasUnsavedChanges(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Invalid graphic_param key");
+    }
+  }, []);
+  const handleAddGraphicParam = useCallback(() => {
+    try {
+      setGraphicParams((prev) => addGraphicParam(prev, "new_param", "0"));
+      setHasUnsavedChanges(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add graphic_param row");
+    }
+  }, []);
+  const handleDeleteGraphicParam = useCallback((index: number) => {
+    setGraphicParams((prev) => deleteGraphicParamAt(prev, index));
+    setHasUnsavedChanges(true);
+  }, []);
+  const handleToggleGraphicParamApplied = useCallback((key: string, applied: boolean) => {
+    setAppliedGraphicParamKeys((prev) => {
+      const next = new Set(prev);
+      if (applied) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }, []);
 
   const handlePlacementChange = useCallback(
     (
@@ -854,6 +912,12 @@ export default function SceneEdit() {
         placementColMap,
       );
       setPlacementEntries((prev) => {
+        const next = [...prev];
+        next[index] = nextEntry;
+        return next;
+      });
+      setPlacementDraftEntries((prev) => {
+        if (!prev[index]) return prev;
         const next = [...prev];
         next[index] = nextEntry;
         return next;
@@ -891,6 +955,13 @@ export default function SceneEdit() {
       if (transformEquals(placementToTransform(previous), t)) return;
       const nextEntry = patchPlacementRowTransform(previous, t, placementColMap);
       setPlacementEntries((prev) => {
+        const entry = prev[idx];
+        if (!entry) return prev;
+        const next = [...prev];
+        next[idx] = patchPlacementRowTransform(entry, t, placementColMap);
+        return next;
+      });
+      setPlacementDraftEntries((prev) => {
         const entry = prev[idx];
         if (!entry) return prev;
         const next = [...prev];
@@ -1128,6 +1199,40 @@ export default function SceneEdit() {
     },
     [],
   );
+
+  const handleObjectTexturePathToggle = useCallback((objectId: string, path: string, enabled: boolean) => {
+    setObjectTextureLoadState((prev) => setTexturePathEnabledForObject(prev, objectId, path, enabled));
+  }, []);
+
+  const handlePlacementDraftRowChange = useCallback((index: number, row: PlacementRow) => {
+    setPlacementDraftEntries((prev) => replacePlacementRow(prev, index, row));
+    setHasUnsavedChanges(true);
+  }, []);
+
+  const handleAddPlacementDraftRow = useCallback(() => {
+    setPlacementDraftEntries((prev) => addPlacementRow(prev, selectedPlacementIdx !== null ? prev[selectedPlacementIdx] : undefined));
+    setHasUnsavedChanges(true);
+  }, [selectedPlacementIdx]);
+
+  const handleDeletePlacementDraftRow = useCallback((index: number) => {
+    setPlacementDraftEntries((prev) => deletePlacementRowAt(prev, index));
+    setHasUnsavedChanges(true);
+  }, []);
+
+  const handleApplyPlacementDraftRow = useCallback((index: number) => {
+    const row = placementDraftEntries[index];
+    if (!row) return;
+    setPlacementEntries((prev) => {
+      if (index >= prev.length) {
+        return addPlacementRow(prev, row);
+      }
+      return replacePlacementRow(prev, index, row);
+    });
+  }, [placementDraftEntries]);
+
+  const handleApplyAllPlacementDraftRows = useCallback(() => {
+    setPlacementEntries(placementDraftEntries.map((entry) => ({ ...entry, rawFields: [...entry.rawFields] })));
+  }, [placementDraftEntries]);
 
   const outlinerRoot = useMemo((): StageTreeNode | null => {
     if (!treeRoot) {
@@ -1456,13 +1561,67 @@ export default function SceneEdit() {
           }
         : null;
 
-  const canDuplicatePlacement =
-    selectedPlacementIdx !== null &&
-    placementEntries[selectedPlacementIdx]?.vdkType.toUpperCase() === "OBJECT";
-
   const canExportSelectedDae =
     selectedNodeId !== null &&
     (nodeVisibility[selectedNodeId] ?? true);
+
+  const selectedTextureObject = useMemo(() => {
+    if (!selectedNodeId) return null;
+    if (selectedNodeId === "base" && baseModel) {
+      return { objectId: "base", label: "base", bundle: baseModel };
+    }
+    const parsed = parsePlacementViewportNodeId(selectedNodeId);
+    const folderName = parsed?.folderName ?? selectedNodeId;
+    const sub = subModels.find((s) => s.folderName === folderName);
+    if (!sub) return null;
+    return {
+      objectId: selectedNodeId,
+      label: selectedNode?.label ?? folderName,
+      bundle: sub.bundle,
+    };
+  }, [baseModel, selectedNode?.label, selectedNodeId, subModels]);
+
+  const textureInventories = useMemo((): ObjectTextureInventory[] => {
+    const objects: ObjectTextureInventory[] = [];
+    if (baseModel) {
+      objects.push({
+        objectId: "base",
+        objectLabel: "base",
+        textures: collectBundleTextureInventory(
+          baseModel,
+          textureDataMap,
+          textureSlotLoadEnabled,
+          objectTextureLoadState,
+          "base",
+        ),
+      });
+    }
+    for (const sub of subModels) {
+      const placements = placementEntries
+        .map((entry, index) => ({ entry, index }))
+        .filter(({ entry }) => entry.vdkType.toUpperCase() === "OBJECT" && entry.objectNumber === sub.objectIndex);
+      const objectIds = placements.length === 0
+        ? [{ objectId: sub.folderName, label: sub.folderName }]
+        : placements.map(({ index }) => ({
+            objectId: formatPlacementViewportNodeId(sub.folderName, index),
+            label: `${sub.folderName} (${index})`,
+          }));
+      for (const item of objectIds) {
+        objects.push({
+          objectId: item.objectId,
+          objectLabel: item.label,
+          textures: collectBundleTextureInventory(
+            sub.bundle,
+            textureDataMap,
+            textureSlotLoadEnabled,
+            objectTextureLoadState,
+            item.objectId,
+          ),
+        });
+      }
+    }
+    return objects;
+  }, [baseModel, objectTextureLoadState, placementEntries, subModels, textureDataMap, textureSlotLoadEnabled]);
 
   return (
     <TooltipProvider>
@@ -1602,7 +1761,7 @@ export default function SceneEdit() {
                 textureDataMap={textureDataMap}
                 textureSlotLoadEnabled={textureSlotLoadEnabled}
                 onDrawStatsChange={handleDrawStatsChange}
-                graphicParams={graphicParams}
+                graphicParams={appliedGraphicParams}
                 baseTransform={baseTransform}
                 onBaseTransformChange={commitBaseGizmoTransform}
                 standaloneTransforms={standaloneTransforms}
@@ -1610,6 +1769,7 @@ export default function SceneEdit() {
                 onImportedDaeTransformChange={commitImportedDaeGizmoTransform}
                 clickPickSelectionEnabled
                 previewRenderStyle={scenePreviewRenderStyle}
+                objectTextureLoadState={objectTextureLoadState}
                 placementGizmoMode={placementGizmoMode}
                 onPlacementGizmoCommit={commitPlacementGizmo}
               />
@@ -1635,107 +1795,106 @@ export default function SceneEdit() {
               <div className="shrink-0 text-[10px] font-semibold px-3 py-1 border-b bg-muted/20 text-muted-foreground uppercase tracking-widest select-none whitespace-nowrap">
                 Properties
               </div>
-              <ScrollArea className="flex-1">
-                {selectedTransform && (
-                  <MayaSection
-                    title={`Transform${selectedNode ? ` — ${selectedNode.label}` : ""}`}
-                  >
-                    <StagePropertyEditor
-                      transform={selectedTransform}
-                      onTransformChange={handleTransformChange}
-                    />
-                  </MayaSection>
-                )}
+              <Tabs defaultValue="inspect" className="flex min-h-0 flex-1 flex-col">
+                <TabsList className="mx-2 mt-2 grid h-8 grid-cols-3 rounded-md">
+                  <TabsTrigger value="inspect" className="text-[10px]">Inspect</TabsTrigger>
+                  <TabsTrigger value="graphic" className="text-[10px]">Graphic</TabsTrigger>
+                  <TabsTrigger value="placement" className="text-[10px]">Placement</TabsTrigger>
+                </TabsList>
+                <ScrollArea className="flex-1">
+                  <TabsContent value="inspect" className="m-0">
+                    {selectedTransform && (
+                      <MayaSection title={`Transform${selectedNode ? ` — ${selectedNode.label}` : ""}`}>
+                        <StagePropertyEditor transform={selectedTransform} onTransformChange={handleTransformChange} />
+                      </MayaSection>
+                    )}
 
-                <MayaSection title="Scene">
-                  <SceneInfoContent
-                    stageName={stageName}
-                    stageRoot={stageRoot}
-                    selectedNode={selectedNode}
-                    selectedPlacementIdx={selectedPlacementIdx}
-                    placementEntry={
-                      selectedPlacementIdx !== null
-                        ? placementEntries[selectedPlacementIdx]
-                        : null
-                    }
-                    subModelCount={subModels.length}
-                    textureCount={textureDataMap.size}
-                  />
-                </MayaSection>
-
-                <MayaSection
-                  title="Placement"
-                  badge={placementEntries.length || undefined}
-                >
-                  <PlacementPanel
-                    entries={placementEntries}
-                    selectedIndex={selectedPlacementIdx}
-                    onSelectEntry={handleSelectPlacement}
-                    onEntryChange={handlePlacementChange}
-                    onDuplicate={() => handleDuplicateSelected()}
-                    duplicateDisabled={!canDuplicatePlacement}
-                  />
-                </MayaSection>
-
-                {selectedPlacementIdx !== null && placementEntries[selectedPlacementIdx] && (
-                  <MayaSection title="Object Config" defaultOpen>
-                    <PlacementConfigPanel
-                      entry={placementEntries[selectedPlacementIdx]}
-                      placementHeader={placementHeader}
-                    />
-                  </MayaSection>
-                )}
-
-                <MayaSection
-                  title="Lighting"
-                  badge={graphicParams.length || undefined}
-                  defaultOpen={false}
-                >
-                  <GraphicParamPanel
-                    params={graphicParams}
-                    onChange={handleGraphicParamChange}
-                  />
-                </MayaSection>
-
-                <MayaSection title="Texture">
-                  <TextureQualityPanel
-                    quality={textureQuality}
-                    onQualityChange={handleTextureQualityChange}
-                    textureSlotLoadEnabled={textureSlotLoadEnabled}
-                    onTextureSlotMode={handleTextureSlotMode}
-                    onTextureSlotToggle={handleTextureSlotToggle}
-                    textureDataMap={textureDataMap}
-                    isDecoding={textureProgress !== null}
-                  />
-                </MayaSection>
-
-                {selectedNode && selectedNodeId && (() => {
-                  const bundle = selectedNodeId === "base"
-                    ? baseModel
-                    : subModels.find((s) => s.folderName === selectedNodeId)?.bundle ?? null;
-                  if (!bundle) return null;
-                  return (
-                    <MayaSection title="Model Textures" defaultOpen>
-                      <ModelTextureSlotPanel
-                        bundle={bundle}
-                        textureDataMap={textureDataMap}
-                        textureSlotLoadEnabled={textureSlotLoadEnabled}
-                        onSlotToggle={handleTextureSlotToggle}
-                        modelLabel={selectedNode.label}
+                    <MayaSection title="Scene">
+                      <SceneInfoContent
+                        stageName={stageName}
+                        stageRoot={stageRoot}
+                        selectedNode={selectedNode}
+                        selectedPlacementIdx={selectedPlacementIdx}
+                        placementEntry={selectedPlacementIdx !== null ? placementEntries[selectedPlacementIdx] : null}
+                        subModelCount={subModels.length}
+                        textureCount={textureDataMap.size}
                       />
                     </MayaSection>
-                  );
-                })()}
 
-                <MayaSection title="Stats" defaultOpen={false}>
-                  <SceneStatsContent
-                    drawStats={drawStats}
-                    subModelCount={subModels.length}
-                    textureCount={textureDataMap.size}
-                    stageName={stageName}
-                  />
-                </MayaSection>
-              </ScrollArea>
+                    {selectedPlacementIdx !== null && placementEntries[selectedPlacementIdx] && (
+                      <MayaSection title="Object Config" defaultOpen>
+                        <PlacementConfigPanel entry={placementEntries[selectedPlacementIdx]} placementHeader={placementHeader} />
+                      </MayaSection>
+                    )}
+
+                    <MayaSection title="Texture">
+                      <TextureQualityPanel
+                        quality={textureQuality}
+                        onQualityChange={handleTextureQualityChange}
+                        textureSlotLoadEnabled={textureSlotLoadEnabled}
+                        onTextureSlotMode={handleTextureSlotMode}
+                        onTextureSlotToggle={handleTextureSlotToggle}
+                        textureDataMap={textureDataMap}
+                        isDecoding={textureProgress !== null}
+                      />
+                    </MayaSection>
+
+                    {selectedTextureObject && (
+                      <MayaSection title="Object Nutexb" defaultOpen>
+                        <ModelTextureSlotPanel
+                          objectId={selectedTextureObject.objectId}
+                          bundle={selectedTextureObject.bundle}
+                          textureDataMap={textureDataMap}
+                          textureSlotLoadEnabled={textureSlotLoadEnabled}
+                          objectTextureLoadState={objectTextureLoadState}
+                          onTexturePathToggle={handleObjectTexturePathToggle}
+                          modelLabel={selectedTextureObject.label}
+                        />
+                      </MayaSection>
+                    )}
+
+                    <MayaSection title="Loaded Nutexb" badge={textureInventories.length || undefined} defaultOpen={false}>
+                      <GlobalLoadedTexturePanel objects={textureInventories} />
+                    </MayaSection>
+
+                    <MayaSection title="Stats" defaultOpen={false}>
+                      <SceneStatsContent drawStats={drawStats} subModelCount={subModels.length} textureCount={textureDataMap.size} stageName={stageName} />
+                    </MayaSection>
+                  </TabsContent>
+
+                  <TabsContent value="graphic" className="m-0">
+                    <MayaSection title="Graphic Param" badge={`${appliedGraphicParamKeys.size}/${graphicParams.length}`} defaultOpen>
+                      <GraphicParamPanel
+                        params={graphicParams}
+                        appliedKeys={appliedGraphicParamKeys}
+                        onValueChange={handleGraphicParamValueChange}
+                        onKeyChange={handleGraphicParamKeyChange}
+                        onAdd={handleAddGraphicParam}
+                        onDelete={handleDeleteGraphicParam}
+                        onToggleApplied={handleToggleGraphicParamApplied}
+                        onApplyAll={() => setAppliedGraphicParamKeys(new Set(graphicParams.map((p) => p.key)))}
+                        onClearApplied={() => setAppliedGraphicParamKeys(new Set())}
+                      />
+                    </MayaSection>
+                  </TabsContent>
+
+                  <TabsContent value="placement" className="m-0">
+                    <MayaSection title="Placement Draft" badge={`${placementEntries.length}/${placementDraftEntries.length}`} defaultOpen>
+                      <PlacementCsvEditorPanel
+                        draftEntries={placementDraftEntries}
+                        appliedEntries={placementEntries}
+                        selectedIndex={selectedPlacementIdx}
+                        onSelectEntry={handleSelectPlacement}
+                        onDraftRowChange={handlePlacementDraftRowChange}
+                        onAddRow={handleAddPlacementDraftRow}
+                        onDeleteRow={handleDeletePlacementDraftRow}
+                        onApplyRow={handleApplyPlacementDraftRow}
+                        onApplyAll={handleApplyAllPlacementDraftRows}
+                      />
+                    </MayaSection>
+                  </TabsContent>
+                </ScrollArea>
+              </Tabs>
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>
