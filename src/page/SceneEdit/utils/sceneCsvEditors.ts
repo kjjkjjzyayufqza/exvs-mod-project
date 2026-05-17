@@ -129,6 +129,34 @@ export function deletePlacementRowAt(
   return rows.filter((_, i) => i !== index).map((row) => clonePlacement(row));
 }
 
+const BASE_TRANSFORM_FIELDS = [
+  "VDK_POSITION_X", "0",
+  "VDK_POSITION_Y", "0",
+  "VDK_POSITION_Z", "0",
+  "VDK_ROTATION_X", "0",
+  "VDK_ROTATION_Y", "0",
+  "VDK_ROTATION_Z", "0",
+  "VDK_SCALE_X", "1",
+  "VDK_SCALE_Y", "1",
+  "VDK_SCALE_Z", "1",
+];
+
+export function createPlacementRowForType(vdkType: string): PlacementRow {
+  const upper = vdkType.toUpperCase();
+  const rawFields = upper === "OBJECT"
+    ? ["VDK_TYPE", upper, "VDK_OBJECTNUMBER", "", "VDK_PROGRAMID", "0", ...BASE_TRANSFORM_FIELDS]
+    : ["VDK_TYPE", upper, ...BASE_TRANSFORM_FIELDS];
+
+  return {
+    vdkType: upper,
+    objectNumber: null,
+    posX: 0, posY: 0, posZ: 0,
+    rotX: 0, rotY: 0, rotZ: 0,
+    scaleX: 1, scaleY: 1, scaleZ: 1,
+    rawFields,
+  };
+}
+
 function assertValidIndex<T>(rows: readonly T[], index: number, label: string): void {
   if (!Number.isInteger(index) || index < 0 || index >= rows.length) {
     throw new Error(`Invalid ${label} row index: ${index}`);

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   addGraphicParam,
   applyGraphicParamSelection,
+  createPlacementRowForType,
   deleteGraphicParamAt,
   replacePlacementRawField,
   updateGraphicParamValue,
@@ -62,5 +63,39 @@ describe("scene CSV editor helpers", () => {
       "VDK_SUBSTITUTE_PLACEMENT",
       "42",
     ]);
+  });
+});
+
+describe("createPlacementRowForType", () => {
+  test("creates an OBJECT row with transform and objectNumber fields", () => {
+    const row = createPlacementRowForType("OBJECT");
+    expect(row.vdkType).toBe("OBJECT");
+    expect(row.objectNumber).toBeNull();
+    expect(row.posX).toBe(0);
+    expect(row.scaleX).toBe(1);
+    expect(row.rawFields).toContain("VDK_TYPE");
+    expect(row.rawFields).toContain("OBJECT");
+    expect(row.rawFields).toContain("VDK_OBJECTNUMBER");
+  });
+
+  test("creates an EFFECT row without objectNumber field", () => {
+    const row = createPlacementRowForType("EFFECT");
+    expect(row.vdkType).toBe("EFFECT");
+    expect(row.objectNumber).toBeNull();
+    expect(row.rawFields).toContain("EFFECT");
+    expect(row.rawFields).not.toContain("VDK_OBJECTNUMBER");
+  });
+
+  test("creates a SKY row without objectNumber field", () => {
+    const row = createPlacementRowForType("SKY");
+    expect(row.vdkType).toBe("SKY");
+    expect(row.rawFields).toContain("SKY");
+    expect(row.rawFields).not.toContain("VDK_OBJECTNUMBER");
+  });
+
+  test("defaults to OBJECT for unknown type", () => {
+    const row = createPlacementRowForType("UNKNOWN");
+    expect(row.vdkType).toBe("UNKNOWN");
+    expect(row.rawFields[1]).toBe("UNKNOWN");
   });
 });
