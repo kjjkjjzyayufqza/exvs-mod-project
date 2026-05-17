@@ -7,6 +7,7 @@ import {
   replacePlacementRawField,
   updateGraphicParamValue,
 } from "./sceneCsvEditors";
+import { syncParsedFieldsFromRaw } from "./patchPlacementRawFields";
 import type { GraphicParam } from "../components/GraphicParamPanel";
 import type { PlacementRow } from "../types/placement";
 
@@ -97,5 +98,38 @@ describe("createPlacementRowForType", () => {
     const row = createPlacementRowForType("UNKNOWN");
     expect(row.vdkType).toBe("UNKNOWN");
     expect(row.rawFields[1]).toBe("UNKNOWN");
+  });
+});
+
+describe("syncParsedFieldsFromRaw", () => {
+  test("syncs objectNumber when VDK_OBJECTNUMBER rawField is edited", () => {
+    const row = createPlacementRowForType("OBJECT");
+    expect(row.objectNumber).toBeNull();
+
+    const rawFields = [...row.rawFields];
+    const objNumIdx = rawFields.indexOf("VDK_OBJECTNUMBER");
+    rawFields[objNumIdx + 1] = "0";
+
+    const synced = syncParsedFieldsFromRaw({ ...row, rawFields });
+    expect(synced.objectNumber).toBe(0);
+  });
+
+  test("syncs vdkType when VDK_TYPE rawField is edited", () => {
+    const row = createPlacementRowForType("OBJECT");
+    const rawFields = [...row.rawFields];
+    rawFields[1] = "EFFECT";
+
+    const synced = syncParsedFieldsFromRaw({ ...row, rawFields });
+    expect(synced.vdkType).toBe("EFFECT");
+  });
+
+  test("syncs transform fields from rawFields", () => {
+    const row = createPlacementRowForType("OBJECT");
+    const rawFields = [...row.rawFields];
+    const posXIdx = rawFields.indexOf("VDK_POSITION_X");
+    rawFields[posXIdx + 1] = "42.5";
+
+    const synced = syncParsedFieldsFromRaw({ ...row, rawFields });
+    expect(synced.posX).toBe(42.5);
   });
 });

@@ -64,6 +64,7 @@ import {
 import {
   patchPlacementRawFieldsForNumericField,
   patchPlacementRowTransform,
+  syncParsedFieldsFromRaw,
 } from "./utils/patchPlacementRawFields";
 import {
   deletePlacementAt,
@@ -1201,7 +1202,7 @@ export default function SceneEdit() {
       if (!previous) return;
       const rawFields = [...previous.rawFields];
       rawFields[fieldIndex] = value;
-      const nextEntry: PlacementRow = { ...previous, rawFields };
+      const nextEntry = syncParsedFieldsFromRaw({ ...previous, rawFields });
       setPlacementEntries((prev) => {
         const next = [...prev];
         next[index] = nextEntry;
@@ -1237,7 +1238,7 @@ export default function SceneEdit() {
       const previous = placementEntries[index];
       if (!previous) return;
       const rawFields = [...previous.rawFields, "VDK_NEW_FIELD", "0"];
-      const nextEntry: PlacementRow = { ...previous, rawFields };
+      const nextEntry = syncParsedFieldsFromRaw({ ...previous, rawFields });
       setPlacementEntries((prev) => {
         const next = [...prev];
         next[index] = nextEntry;
@@ -1274,7 +1275,7 @@ export default function SceneEdit() {
       if (!previous) return;
       const valueIndex = fieldIndex + 1;
       const rawFields = previous.rawFields.filter((_, i) => i !== fieldIndex && i !== valueIndex);
-      const nextEntry: PlacementRow = { ...previous, rawFields };
+      const nextEntry = syncParsedFieldsFromRaw({ ...previous, rawFields });
       setPlacementEntries((prev) => {
         const next = [...prev];
         next[index] = nextEntry;

@@ -103,6 +103,57 @@ export function patchPlacementRowTransform(
   );
 }
 
+const KV_KEY_TO_NUMERIC_FIELD: Record<string, keyof Pick<PlacementRow, "posX" | "posY" | "posZ" | "rotX" | "rotY" | "rotZ" | "scaleX" | "scaleY" | "scaleZ">> = {
+  VDK_POS_X: "posX", VDK_POSITION_X: "posX",
+  VDK_POS_Y: "posY", VDK_POSITION_Y: "posY",
+  VDK_POS_Z: "posZ", VDK_POSITION_Z: "posZ",
+  VDK_ROT_X: "rotX", VDK_ROTATION_X: "rotX",
+  VDK_ROT_Y: "rotY", VDK_ROTATION_Y: "rotY",
+  VDK_ROT_Z: "rotZ", VDK_ROTATION_Z: "rotZ",
+  VDK_SCALE_X: "scaleX",
+  VDK_SCALE_Y: "scaleY",
+  VDK_SCALE_Z: "scaleZ",
+};
+
+export function syncParsedFieldsFromRaw(row: PlacementRow): PlacementRow {
+  let vdkType = row.vdkType;
+  let objectNumber = row.objectNumber;
+  const transform: Record<string, number> = {};
+
+  for (let i = 0; i + 1 < row.rawFields.length; i += 2) {
+    const key = row.rawFields[i].trim().toUpperCase();
+    const val = row.rawFields[i + 1];
+
+    if (key === "VDK_TYPE") {
+      vdkType = val.trim().toUpperCase();
+    } else if (key === "VDK_OBJECTNUMBER") {
+      const parsed = Number.parseInt(val, 10);
+      objectNumber = Number.isFinite(parsed) ? parsed : null;
+    } else {
+      const numField = KV_KEY_TO_NUMERIC_FIELD[key];
+      if (numField) {
+        const n = Number.parseFloat(val);
+        if (Number.isFinite(n)) transform[numField] = n;
+      }
+    }
+  }
+
+  return {
+    ...row,
+    vdkType,
+    objectNumber,
+    posX: transform.posX ?? row.posX,
+    posY: transform.posY ?? row.posY,
+    posZ: transform.posZ ?? row.posZ,
+    rotX: transform.rotX ?? row.rotX,
+    rotY: transform.rotY ?? row.rotY,
+    rotZ: transform.rotZ ?? row.rotZ,
+    scaleX: transform.scaleX ?? row.scaleX,
+    scaleY: transform.scaleY ?? row.scaleY,
+    scaleZ: transform.scaleZ ?? row.scaleZ,
+  };
+}
+
 export function clonePlacementRow(source: PlacementRow): PlacementRow {
   return {
     vdkType: source.vdkType,
