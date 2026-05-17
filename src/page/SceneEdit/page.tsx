@@ -57,11 +57,17 @@ import {
   parsePlacementViewportNodeId,
 } from "./utils/placementNodeId";
 import {
+  getRequestedSceneNodeIds,
+  resolveNodeIdForPlacementIndex,
+  resolveSelectionForSceneNode,
+} from "./utils/sceneEditorSelection";
+import {
   patchPlacementRawFieldsForNumericField,
   patchPlacementRowTransform,
 } from "./utils/patchPlacementRawFields";
 import {
   deletePlacementAt,
+  deletePlacementsAt,
   duplicatePlacementAt,
   pastePlacementsAfter,
 } from "./utils/sceneEditorObjectOps";
@@ -101,11 +107,9 @@ import {
 import { canEditSceneNode } from "./utils/sceneEditorNodeState";
 import {
   addGraphicParam,
-  addPlacementRow,
   applyGraphicParamSelection,
+  createPlacementRowForType,
   deleteGraphicParamAt,
-  deletePlacementRowAt,
-  replacePlacementRow,
   updateGraphicParamKey,
   updateGraphicParamValue,
 } from "./utils/sceneCsvEditors";
@@ -225,7 +229,6 @@ export default function SceneEdit() {
     Record<string, number>
   >({});
   const [placementEntries, setPlacementEntries] = useState<PlacementRow[]>([]);
-  const [placementDraftEntries, setPlacementDraftEntries] = useState<PlacementRow[]>([]);
   const [importedDaeObjects, setImportedDaeObjects] = useState<ImportedDaeObject[]>([]);
   const [treeRoot, setTreeRoot] = useState<StageTreeNode | null>(null);
 
@@ -394,60 +397,45 @@ export default function SceneEdit() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  const applyPrimarySelectionState = useCallback(
+    (id: string | null) => {
+      const next = resolveSelectionForSceneNode(id, subModels, placementEntries);
+      setSelectedNodeIdRaw(next.selectedNodeId);
+      setSelectedPlacementIdxRaw(next.selectedPlacementIdx);
+    },
+    [placementEntries, subModels],
+  );
+
+  const handleClearSelection = useCallback(() => {
+    applyPrimarySelectionState(null);
+    useSceneEditorStore.getState().deselectAll();
+  }, [applyPrimarySelectionState]);
+
   const handleSelectNode = useCallback(
     (id: string | null) => {
-      if (!id) {
-        setSelectedNodeIdRaw(null);
-        setSelectedPlacementIdxRaw(null);
-        return;
-      }
-
-      const effectMatch = id.match(/^__effect__(\d+)$/);
-      if (effectMatch) {
-        const idx = Number(effectMatch[1]);
-        setSelectedNodeIdRaw(id);
-        setSelectedPlacementIdxRaw(idx);
-        return;
-      }
-
-      const parsed = parsePlacementViewportNodeId(id);
-      if (parsed) {
-        setSelectedNodeIdRaw(id);
-        setSelectedPlacementIdxRaw(parsed.placementEntryIndex);
-        return;
-      }
-
-      setSelectedNodeIdRaw(id);
-      const sub = subModels.find((s) => s.folderName === id);
-      if (sub) {
-        const idx = placementEntries.findIndex(
-          (e) =>
-            e.vdkType.toUpperCase() === "OBJECT" &&
-            e.objectNumber === sub.objectIndex
-        );
-        setSelectedPlacementIdxRaw(idx >= 0 ? idx : null);
-      } else {
-        setSelectedPlacementIdxRaw(null);
-      }
+      applyPrimarySelectionState(id);
+      const store = useSceneEditorStore.getState();
+      if (id) store.select(id);
+      else store.deselectAll();
     },
-    [subModels, placementEntries]
+    [applyPrimarySelectionState],
+  );
+
+  const handleOutlinerSelectNode = useCallback(
+    (id: string | null) => {
+      applyPrimarySelectionState(id);
+    },
+    [applyPrimarySelectionState],
   );
 
   const handleSelectPlacement = useCallback(
     (idx: number) => {
       setSelectedPlacementIdxRaw(idx);
-      const entry = placementEntries[idx];
-      if (
-        entry?.vdkType.toUpperCase() === "OBJECT" &&
-        entry.objectNumber !== null
-      ) {
-        const sub = subModels.find((s) => s.objectIndex === entry.objectNumber);
-        if (sub) {
-          setSelectedNodeIdRaw(
-            formatPlacementViewportNodeId(sub.folderName, idx)
-          );
-        }
-      }
+      const nodeId = resolveNodeIdForPlacementIndex(idx, placementEntries, subModels);
+      setSelectedNodeIdRaw(nodeId);
+      const store = useSceneEditorStore.getState();
+      if (nodeId) store.select(nodeId);
+      else store.deselectAll();
     },
     [subModels, placementEntries]
   );
@@ -472,12 +460,7 @@ export default function SceneEdit() {
 
   const nodeIdForPlacementIndex = useCallback(
     (idx: number): string | null => {
-      const entry = placementEntries[idx];
-      if (!entry) return null;
-      if (entry.vdkType.toUpperCase() !== "OBJECT") return `__effect__${idx}`;
-      if (entry.objectNumber === null) return null;
-      const sub = subModels.find((s) => s.objectIndex === entry.objectNumber);
-      return sub ? formatPlacementViewportNodeId(sub.folderName, idx) : null;
+      return resolveNodeIdForPlacementIndex(idx, placementEntries, subModels);
     },
     [placementEntries, subModels],
   );
@@ -497,13 +480,13 @@ export default function SceneEdit() {
 
   const handleDuplicateSelected = useCallback(
     (ids?: string[]) => {
-      const requestedIds = ids && ids.length > 0
-        ? ids
-        : selectedNodeId
-          ? [selectedNodeId]
-          : selectedPlacementIdx !== null
-            ? [nodeIdForPlacementIndex(selectedPlacementIdx)].filter((id): id is string => Boolean(id))
-            : [];
+      const requestedIds = getRequestedSceneNodeIds({
+        explicitIds: ids,
+        storeSelectedIds: useSceneEditorStore.getState().getSelectedIds(),
+        selectedNodeId,
+        selectedPlacementIdx,
+        nodeIdForPlacementIndex,
+      });
 
       if (hasLockedOrHiddenNode(requestedIds)) {
         toast.error("Locked or hidden scene objects cannot be duplicated");
@@ -528,12 +511,18 @@ export default function SceneEdit() {
           description: "Duplicate imported DAE actor",
           undo: () => {
             setImportedDaeObjects((prev) => prev.filter((obj) => !created.some((c) => c.id === obj.id)));
+            handleClearSelection();
           },
           redo: () => {
             setImportedDaeObjects((prev) => [...prev, ...created]);
+            const id = created[0]?.id ?? null;
+            if (id) handleSelectNode(id);
           },
         });
-        setSelectedNodeIdRaw(created[0]?.id ?? selectedNodeId);
+        const nextSelectedId = created[0]?.id ?? selectedNodeId;
+        setSelectedNodeIdRaw(nextSelectedId);
+        setSelectedPlacementIdxRaw(null);
+        if (nextSelectedId) useSceneEditorStore.getState().select(nextSelectedId);
         toast.success(`Duplicated ${created.length} DAE object(s)`);
         return;
       }
@@ -552,8 +541,12 @@ export default function SceneEdit() {
         const sub = inserted.objectNumber !== null
           ? subModels.find((s) => s.objectIndex === inserted.objectNumber)
           : null;
-        if (sub) {
-          setSelectedNodeIdRaw(formatPlacementViewportNodeId(sub.folderName, result.insertedIndex));
+        const insertedNodeId = sub
+          ? formatPlacementViewportNodeId(sub.folderName, result.insertedIndex)
+          : null;
+        if (insertedNodeId) {
+          setSelectedNodeIdRaw(insertedNodeId);
+          useSceneEditorStore.getState().select(insertedNodeId);
         }
         useSceneEditorStore.getState().recordCommand({
           type: "duplicate-placement",
@@ -561,6 +554,11 @@ export default function SceneEdit() {
           undo: () => {
             setPlacementEntries((prev) => prev.filter((_, i) => i !== result.insertedIndex));
             setSelectedPlacementIdxRaw(firstPlacementIdx);
+            const restoredNodeId = nodeIdForPlacementIndex(firstPlacementIdx);
+            if (restoredNodeId) {
+              setSelectedNodeIdRaw(restoredNodeId);
+              useSceneEditorStore.getState().select(restoredNodeId);
+            }
             setHasUnsavedChanges(true);
           },
           redo: () => {
@@ -570,6 +568,10 @@ export default function SceneEdit() {
               return next;
             });
             setSelectedPlacementIdxRaw(result.insertedIndex);
+            if (insertedNodeId) {
+              setSelectedNodeIdRaw(insertedNodeId);
+              useSceneEditorStore.getState().select(insertedNodeId);
+            }
             setHasUnsavedChanges(true);
           },
         });
@@ -579,7 +581,9 @@ export default function SceneEdit() {
       }
     },
     [
+      handleClearSelection,
       hasLockedOrHiddenNode,
+      handleSelectNode,
       importedDaeObjects,
       nodeIdForPlacementIndex,
       placementEntries,
@@ -625,10 +629,12 @@ export default function SceneEdit() {
         }));
         const orderedPlacements = reorderPlacementEntriesBySubModels(mappedPlacements, bundle.subModels);
         setPlacementEntries(orderedPlacements);
-        setPlacementDraftEntries(orderedPlacements.map((entry) => ({ ...entry, rawFields: [...entry.rawFields] })));
         setObjectTextureLoadState({});
         const tree = buildTreeFromBundle(folderName, bundle);
         setTreeRoot(tree);
+        setSelectedNodeIdRaw(null);
+        setSelectedPlacementIdxRaw(null);
+        useSceneEditorStore.getState().deselectAll();
       });
 
       if (bundle.warnings.length > 0) {
@@ -658,7 +664,6 @@ export default function SceneEdit() {
     setPlacementHeader([]);
     setPlacementColMap({});
     setPlacementEntries([]);
-    setPlacementDraftEntries([]);
     setImportedDaeObjects([]);
     setTreeRoot(null);
     setDrawStats(null);
@@ -666,6 +671,7 @@ export default function SceneEdit() {
     setStandaloneTransforms(new Map());
     setSelectedNodeIdRaw(null);
     setSelectedPlacementIdxRaw(null);
+    useSceneEditorStore.getState().deselectAll();
     setHasUnsavedChanges(false);
     setRenamePreview(null);
     setImportProgress((prev) => ({ ...prev, open: false }));
@@ -831,13 +837,13 @@ export default function SceneEdit() {
       const gpCsv = graphicParams.map((p) => `${p.key},${p.value}`).join("\n");
       await writeTextFile(`${stageRoot}/info/graphic_param.csv`, gpCsv);
 
-      if (placementHeader.length > 0 && placementDraftEntries.length > 0) {
+      if (placementHeader.length > 0 && placementEntries.length > 0) {
         const headerLine = placementHeader.join(",");
-        const dataLines = placementDraftEntries.map((e) => e.rawFields.join(","));
+        const dataLines = placementEntries.map((e) => e.rawFields.join(","));
         const placementCsv = [headerLine, ...dataLines].join("\n");
         await writeTextFile(`${stageRoot}/info/placement.csv`, placementCsv);
-      } else if (placementDraftEntries.length > 0) {
-        const placementCsv = placementDraftEntries.map((e) => e.rawFields.join(",")).join("\n");
+      } else if (placementEntries.length > 0) {
+        const placementCsv = placementEntries.map((e) => e.rawFields.join(",")).join("\n");
         await writeTextFile(`${stageRoot}/info/placement.csv`, placementCsv);
       }
 
@@ -846,7 +852,7 @@ export default function SceneEdit() {
     } catch (err: any) {
       toast.error("Save failed", { description: String(err) });
     }
-  }, [stageRoot, graphicParams, placementHeader, placementDraftEntries]);
+  }, [stageRoot, graphicParams, placementHeader, placementEntries]);
 
   const handleGraphicParamValueChange = useCallback(
     (index: number, value: string) => {
@@ -914,12 +920,6 @@ export default function SceneEdit() {
         next[index] = nextEntry;
         return next;
       });
-      setPlacementDraftEntries((prev) => {
-        if (!prev[index]) return prev;
-        const next = [...prev];
-        next[index] = nextEntry;
-        return next;
-      });
       setHasUnsavedChanges(true);
       useSceneEditorStore.getState().recordCommand({
         type: "edit-placement-field",
@@ -953,13 +953,6 @@ export default function SceneEdit() {
       if (transformEquals(placementToTransform(previous), t)) return;
       const nextEntry = patchPlacementRowTransform(previous, t, placementColMap);
       setPlacementEntries((prev) => {
-        const entry = prev[idx];
-        if (!entry) return prev;
-        const next = [...prev];
-        next[idx] = patchPlacementRowTransform(entry, t, placementColMap);
-        return next;
-      });
-      setPlacementDraftEntries((prev) => {
         const entry = prev[idx];
         if (!entry) return prev;
         const next = [...prev];
@@ -1202,35 +1195,152 @@ export default function SceneEdit() {
     setObjectTextureLoadState((prev) => setTexturePathEnabledForObject(prev, objectId, path, enabled));
   }, []);
 
-  const handlePlacementDraftRowChange = useCallback((index: number, row: PlacementRow) => {
-    setPlacementDraftEntries((prev) => replacePlacementRow(prev, index, row));
-    setHasUnsavedChanges(true);
-  }, []);
+  const handlePlacementFieldChange = useCallback(
+    (index: number, fieldIndex: number, value: string) => {
+      const previous = placementEntries[index];
+      if (!previous) return;
+      const rawFields = [...previous.rawFields];
+      rawFields[fieldIndex] = value;
+      const nextEntry: PlacementRow = { ...previous, rawFields };
+      setPlacementEntries((prev) => {
+        const next = [...prev];
+        next[index] = nextEntry;
+        return next;
+      });
+      setHasUnsavedChanges(true);
+      useSceneEditorStore.getState().recordCommand({
+        type: "edit-placement-field",
+        description: "Edit placement field",
+        undo: () => {
+          setPlacementEntries((prev) => {
+            const next = [...prev];
+            next[index] = previous;
+            return next;
+          });
+          setHasUnsavedChanges(true);
+        },
+        redo: () => {
+          setPlacementEntries((prev) => {
+            const next = [...prev];
+            next[index] = nextEntry;
+            return next;
+          });
+          setHasUnsavedChanges(true);
+        },
+      });
+    },
+    [placementEntries],
+  );
 
-  const handleAddPlacementDraftRow = useCallback(() => {
-    setPlacementDraftEntries((prev) => addPlacementRow(prev, selectedPlacementIdx !== null ? prev[selectedPlacementIdx] : undefined));
-    setHasUnsavedChanges(true);
-  }, [selectedPlacementIdx]);
+  const handleAddPlacementFieldPair = useCallback(
+    (index: number) => {
+      const previous = placementEntries[index];
+      if (!previous) return;
+      const rawFields = [...previous.rawFields, "VDK_NEW_FIELD", "0"];
+      const nextEntry: PlacementRow = { ...previous, rawFields };
+      setPlacementEntries((prev) => {
+        const next = [...prev];
+        next[index] = nextEntry;
+        return next;
+      });
+      setHasUnsavedChanges(true);
+      useSceneEditorStore.getState().recordCommand({
+        type: "add-placement-field",
+        description: "Add placement field pair",
+        undo: () => {
+          setPlacementEntries((prev) => {
+            const next = [...prev];
+            next[index] = previous;
+            return next;
+          });
+          setHasUnsavedChanges(true);
+        },
+        redo: () => {
+          setPlacementEntries((prev) => {
+            const next = [...prev];
+            next[index] = nextEntry;
+            return next;
+          });
+          setHasUnsavedChanges(true);
+        },
+      });
+    },
+    [placementEntries],
+  );
 
-  const handleDeletePlacementDraftRow = useCallback((index: number) => {
-    setPlacementDraftEntries((prev) => deletePlacementRowAt(prev, index));
-    setHasUnsavedChanges(true);
-  }, []);
+  const handleRemovePlacementFieldPair = useCallback(
+    (index: number, fieldIndex: number) => {
+      const previous = placementEntries[index];
+      if (!previous) return;
+      const valueIndex = fieldIndex + 1;
+      const rawFields = previous.rawFields.filter((_, i) => i !== fieldIndex && i !== valueIndex);
+      const nextEntry: PlacementRow = { ...previous, rawFields };
+      setPlacementEntries((prev) => {
+        const next = [...prev];
+        next[index] = nextEntry;
+        return next;
+      });
+      setHasUnsavedChanges(true);
+      useSceneEditorStore.getState().recordCommand({
+        type: "remove-placement-field",
+        description: "Remove placement field pair",
+        undo: () => {
+          setPlacementEntries((prev) => {
+            const next = [...prev];
+            next[index] = previous;
+            return next;
+          });
+          setHasUnsavedChanges(true);
+        },
+        redo: () => {
+          setPlacementEntries((prev) => {
+            const next = [...prev];
+            next[index] = nextEntry;
+            return next;
+          });
+          setHasUnsavedChanges(true);
+        },
+      });
+    },
+    [placementEntries],
+  );
 
-  const handleApplyPlacementDraftRow = useCallback((index: number) => {
-    const row = placementDraftEntries[index];
-    if (!row) return;
-    setPlacementEntries((prev) => {
-      if (index >= prev.length) {
-        return addPlacementRow(prev, row);
-      }
-      return replacePlacementRow(prev, index, row);
-    });
-  }, [placementDraftEntries]);
-
-  const handleApplyAllPlacementDraftRows = useCallback(() => {
-    setPlacementEntries(placementDraftEntries.map((entry) => ({ ...entry, rawFields: [...entry.rawFields] })));
-  }, [placementDraftEntries]);
+  const handleAddTypedPlacement = useCallback(
+    (vdkType: string) => {
+      const newRow = createPlacementRowForType(vdkType);
+      const insertAt = selectedPlacementIdx !== null ? selectedPlacementIdx + 1 : placementEntries.length;
+      setPlacementEntries((prev) => {
+        const next = [...prev];
+        next.splice(insertAt, 0, newRow);
+        return next;
+      });
+      setSelectedPlacementIdxRaw(insertAt);
+      const nextEntries = [...placementEntries.slice(0, insertAt), newRow, ...placementEntries.slice(insertAt)];
+      const insertedNodeId = resolveNodeIdForPlacementIndex(insertAt, nextEntries, subModels);
+      setSelectedNodeIdRaw(insertedNodeId);
+      if (insertedNodeId) useSceneEditorStore.getState().select(insertedNodeId);
+      setHasUnsavedChanges(true);
+      useSceneEditorStore.getState().recordCommand({
+        type: "add-typed-placement",
+        description: `Add ${vdkType} placement`,
+        undo: () => {
+          setPlacementEntries((prev) => prev.filter((_, i) => i !== insertAt));
+          handleClearSelection();
+          setHasUnsavedChanges(true);
+        },
+        redo: () => {
+          setPlacementEntries((prev) => {
+            const next = [...prev];
+            next.splice(insertAt, 0, newRow);
+            return next;
+          });
+          setSelectedPlacementIdxRaw(insertAt);
+          setHasUnsavedChanges(true);
+        },
+      });
+    },
+    [handleClearSelection, placementEntries, selectedPlacementIdx, subModels],
+  );
 
   const outlinerRoot = useMemo((): StageTreeNode | null => {
     if (!treeRoot) {
@@ -1311,7 +1421,7 @@ export default function SceneEdit() {
   }, [outlinerRoot]);
 
   const handleFocusSelected = useCallback(() => {
-    viewportRef.current?.resetCamera();
+    viewportRef.current?.focusSelected();
   }, []);
 
   const handlePasteAsNew = useCallback(() => {
@@ -1331,12 +1441,18 @@ export default function SceneEdit() {
         },
       }));
       setImportedDaeObjects((prev) => [...prev, ...created]);
-      setSelectedNodeIdRaw(created[0]?.id ?? null);
+      handleSelectNode(created[0]?.id ?? null);
       useSceneEditorStore.getState().recordCommand({
         type: "paste-dae",
         description: "Paste imported DAE actor",
-        undo: () => setImportedDaeObjects((prev) => prev.filter((obj) => !created.some((c) => c.id === obj.id))),
-        redo: () => setImportedDaeObjects((prev) => [...prev, ...created]),
+        undo: () => {
+          setImportedDaeObjects((prev) => prev.filter((obj) => !created.some((c) => c.id === obj.id)));
+          handleClearSelection();
+        },
+        redo: () => {
+          setImportedDaeObjects((prev) => [...prev, ...created]);
+          handleSelectNode(created[0]?.id ?? null);
+        },
       });
       toast.success(`Pasted ${created.length} DAE object(s)`);
       return;
@@ -1357,6 +1473,9 @@ export default function SceneEdit() {
       const result = pastePlacementsAfter(placementEntries, copiedRows, selectedPlacementIdx);
       setPlacementEntries(result.entries);
       setSelectedPlacementIdxRaw(result.insertedStart);
+      const insertedNodeId = resolveNodeIdForPlacementIndex(result.insertedStart, result.entries, subModels);
+      setSelectedNodeIdRaw(insertedNodeId);
+      if (insertedNodeId) useSceneEditorStore.getState().select(insertedNodeId);
       setHasUnsavedChanges(true);
       useSceneEditorStore.getState().recordCommand({
         type: "paste-placement",
@@ -1365,6 +1484,7 @@ export default function SceneEdit() {
           setPlacementEntries((prev) =>
             prev.filter((_, i) => i < result.insertedStart || i >= result.insertedStart + result.insertedRows.length),
           );
+          handleClearSelection();
           setHasUnsavedChanges(true);
         },
         redo: () => {
@@ -1374,6 +1494,8 @@ export default function SceneEdit() {
             return next;
           });
           setSelectedPlacementIdxRaw(result.insertedStart);
+          setSelectedNodeIdRaw(insertedNodeId);
+          if (insertedNodeId) useSceneEditorStore.getState().select(insertedNodeId);
           setHasUnsavedChanges(true);
         },
       });
@@ -1381,7 +1503,7 @@ export default function SceneEdit() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to paste selection");
     }
-  }, [importedDaeObjects, placementEntries, placementIndexForNodeId, selectedPlacementIdx]);
+  }, [handleClearSelection, handleSelectNode, importedDaeObjects, placementEntries, placementIndexForNodeId, selectedPlacementIdx, subModels]);
 
   const handleImportDae = useCallback(async () => {
     try {
@@ -1395,19 +1517,24 @@ export default function SceneEdit() {
         transform: { ...DEFAULT_TRANSFORM, posX: index },
       }));
       setImportedDaeObjects((prev) => [...prev, ...created]);
-      setSelectedNodeIdRaw(created[0]?.id ?? null);
-      setSelectedPlacementIdxRaw(null);
+      handleSelectNode(created[0]?.id ?? null);
       useSceneEditorStore.getState().recordCommand({
         type: "import-dae",
         description: "Import DAE object",
-        undo: () => setImportedDaeObjects((prev) => prev.filter((obj) => !created.some((c) => c.id === obj.id))),
-        redo: () => setImportedDaeObjects((prev) => [...prev, ...created]),
+        undo: () => {
+          setImportedDaeObjects((prev) => prev.filter((obj) => !created.some((c) => c.id === obj.id)));
+          handleClearSelection();
+        },
+        redo: () => {
+          setImportedDaeObjects((prev) => [...prev, ...created]);
+          handleSelectNode(created[0]?.id ?? null);
+        },
       });
       toast.success(`Imported ${created.length} DAE object(s)`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to import DAE");
     }
-  }, []);
+  }, [handleClearSelection, handleSelectNode]);
 
   const handleExportSelectedDae = useCallback(async () => {
     const objects = viewportRef.current?.getSelectedExportObjects() ?? [];
@@ -1432,13 +1559,13 @@ export default function SceneEdit() {
 
   const handleDeleteSelected = useCallback(
     (ids?: string[]) => {
-      const requestedIds = ids && ids.length > 0
-        ? ids
-        : selectedNodeId
-          ? [selectedNodeId]
-          : selectedPlacementIdx !== null
-            ? [nodeIdForPlacementIndex(selectedPlacementIdx)].filter((id): id is string => Boolean(id))
-            : [];
+      const requestedIds = getRequestedSceneNodeIds({
+        explicitIds: ids,
+        storeSelectedIds: useSceneEditorStore.getState().getSelectedIds(),
+        selectedNodeId,
+        selectedPlacementIdx,
+        nodeIdForPlacementIndex,
+      });
 
       if (hasLockedOrHiddenNode(requestedIds)) {
         toast.error("Locked or hidden scene objects cannot be deleted");
@@ -1449,44 +1576,67 @@ export default function SceneEdit() {
       if (daeIds.length > 0) {
         const deleted = importedDaeObjects.filter((obj) => daeIds.includes(obj.id));
         setImportedDaeObjects((prev) => prev.filter((obj) => !daeIds.includes(obj.id)));
-        setSelectedNodeIdRaw(null);
+        handleClearSelection();
         useSceneEditorStore.getState().recordCommand({
           type: "delete-dae",
           description: "Delete imported DAE actor",
-          undo: () => setImportedDaeObjects((prev) => [...prev, ...deleted]),
-          redo: () => setImportedDaeObjects((prev) => prev.filter((obj) => !daeIds.includes(obj.id))),
+          undo: () => {
+            setImportedDaeObjects((prev) => [...prev, ...deleted]);
+            handleSelectNode(deleted[0]?.id ?? null);
+          },
+          redo: () => {
+            setImportedDaeObjects((prev) => prev.filter((obj) => !daeIds.includes(obj.id)));
+            handleClearSelection();
+          },
         });
         toast.success(`Deleted ${deleted.length} DAE object(s)`);
         return;
       }
 
-      const idx =
-        requestedIds.map(placementIndexForNodeId).find((value): value is number => value !== null) ??
-        selectedPlacementIdx;
-      if (idx === null) return;
+      const placementIndices = requestedIds
+        .map(placementIndexForNodeId)
+        .filter((value): value is number => value !== null);
+      if (placementIndices.length === 0 && selectedPlacementIdx !== null) {
+        placementIndices.push(selectedPlacementIdx);
+      }
+      if (placementIndices.length === 0) return;
 
       try {
-        const result = deletePlacementAt(placementEntries, idx);
+        const result = placementIndices.length === 1
+          ? (() => {
+              const idx = placementIndices[0]!;
+              const single = deletePlacementAt(placementEntries, idx);
+              return {
+                entries: single.entries,
+                deleted: [{ index: idx, row: single.deleted }],
+              };
+          })()
+          : deletePlacementsAt(placementEntries, placementIndices);
         setPlacementEntries(result.entries);
-        setSelectedNodeIdRaw(null);
-        setSelectedPlacementIdxRaw(null);
+        handleClearSelection();
         setHasUnsavedChanges(true);
         useSceneEditorStore.getState().recordCommand({
           type: "delete-placement",
-          description: "Delete placement row",
+          description: result.deleted.length === 1 ? "Delete placement row" : "Delete placement rows",
           undo: () => {
             setPlacementEntries((prev) => {
               const next = [...prev];
-              next.splice(idx, 0, result.deleted);
+              for (const item of result.deleted) {
+                next.splice(item.index, 0, item.row);
+              }
               return next;
             });
-            setSelectedPlacementIdxRaw(idx);
+            const firstDeleted = result.deleted[0]!;
+            setSelectedPlacementIdxRaw(firstDeleted.index);
+            const restoredNodeId = resolveNodeIdForPlacementIndex(firstDeleted.index, placementEntries, subModels);
+            setSelectedNodeIdRaw(restoredNodeId);
+            if (restoredNodeId) useSceneEditorStore.getState().select(restoredNodeId);
             setHasUnsavedChanges(true);
           },
           redo: () => {
-            setPlacementEntries((prev) => prev.filter((_, i) => i !== idx));
-            setSelectedNodeIdRaw(null);
-            setSelectedPlacementIdxRaw(null);
+            const deleteSet = new Set(result.deleted.map((item) => item.index));
+            setPlacementEntries((prev) => prev.filter((_, i) => !deleteSet.has(i)));
+            handleClearSelection();
             setHasUnsavedChanges(true);
           },
         });
@@ -1495,13 +1645,16 @@ export default function SceneEdit() {
       }
     },
     [
+      handleClearSelection,
       hasLockedOrHiddenNode,
+      handleSelectNode,
       importedDaeObjects,
       nodeIdForPlacementIndex,
       placementEntries,
       placementIndexForNodeId,
       selectedNodeId,
       selectedPlacementIdx,
+      subModels,
     ],
   );
 
@@ -1510,6 +1663,10 @@ export default function SceneEdit() {
     onDuplicate: () => handleDuplicateSelected(),
     onPaste: handlePasteAsNew,
     onFocus: handleFocusSelected,
+    onSelectAll: (ids) => {
+      if (ids.length > 0) applyPrimarySelectionState(ids[ids.length - 1]);
+    },
+    onClearSelection: handleClearSelection,
     allNodeIds,
   });
 
@@ -1559,9 +1716,12 @@ export default function SceneEdit() {
           }
         : null;
 
+  const hasSceneSelection = selectedNodeId !== null || editorSelectedIds.size > 0;
   const canExportSelectedDae =
-    selectedNodeId !== null &&
-    (nodeVisibility[selectedNodeId] ?? true);
+    hasSceneSelection &&
+    (editorSelectedIds.size > 0
+      ? [...editorSelectedIds].some((id) => nodeVisibility[id] ?? true)
+      : selectedNodeId !== null && (nodeVisibility[selectedNodeId] ?? true));
 
   const selectedTextureObject = useMemo(() => {
     if (!selectedNodeId) return null;
@@ -1699,11 +1859,15 @@ export default function SceneEdit() {
               <div className="min-h-0 flex-1 overflow-hidden">
                 <SceneOutliner
                   root={outlinerRoot}
-                  onSelect={handleSelectNode}
+                  onSelect={handleOutlinerSelectNode}
                   onDuplicate={handleDuplicateSelected}
                   onDelete={handleDeleteSelected}
                   onPaste={handlePasteAsNew}
                   onFocusSelected={handleFocusSelected}
+                  onClearSelection={handleClearSelection}
+                  onSelectAll={(ids) => {
+                    if (ids.length > 0) applyPrimarySelectionState(ids[ids.length - 1]);
+                  }}
                 />
               </div>
             </div>
@@ -1737,7 +1901,7 @@ export default function SceneEdit() {
               onExportDAE={handleExportSelectedDae}
               onDuplicateSelected={() => handleDuplicateSelected()}
               onDeleteSelected={handleDeleteSelected}
-              hasSelection={selectedNodeId !== null}
+              hasSelection={hasSceneSelection}
             >
             <div className="relative h-full min-h-0 min-w-0 overflow-hidden">
               <MapViewport
@@ -1877,17 +2041,19 @@ export default function SceneEdit() {
                   </TabsContent>
 
                   <TabsContent value="placement" className="m-0 pb-3">
-                    <MayaSection title="Placement Draft" badge={`${placementEntries.length}/${placementDraftEntries.length}`} defaultOpen>
+                    <MayaSection title="Placement" badge={placementEntries.length || undefined} defaultOpen>
                       <PlacementCsvEditorPanel
-                        draftEntries={placementDraftEntries}
-                        appliedEntries={placementEntries}
+                        entries={placementEntries}
                         selectedIndex={selectedPlacementIdx}
                         onSelectEntry={handleSelectPlacement}
-                        onDraftRowChange={handlePlacementDraftRowChange}
-                        onAddRow={handleAddPlacementDraftRow}
-                        onDeleteRow={handleDeletePlacementDraftRow}
-                        onApplyRow={handleApplyPlacementDraftRow}
-                        onApplyAll={handleApplyAllPlacementDraftRows}
+                        onFieldChange={handlePlacementFieldChange}
+                        onAddFieldPair={handleAddPlacementFieldPair}
+                        onRemoveFieldPair={handleRemovePlacementFieldPair}
+                        onAddTyped={handleAddTypedPlacement}
+                        onDeleteRow={(index) => {
+                          const nodeId = resolveNodeIdForPlacementIndex(index, placementEntries, subModels);
+                          handleDeleteSelected(nodeId ? [nodeId] : undefined);
+                        }}
                       />
                     </MayaSection>
                   </TabsContent>
