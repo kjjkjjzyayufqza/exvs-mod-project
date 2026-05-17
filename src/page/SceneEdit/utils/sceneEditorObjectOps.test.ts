@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PlacementRow } from "../components/PlacementPanel";
+import type { PlacementRow } from "../types/placement";
 import {
   deletePlacementAt,
   duplicatePlacementAt,

@@ -1,5 +1,5 @@
 import type { StageTreeNode } from "./StageHierarchyTree";
-import type { PlacementRow } from "./PlacementPanel";
+import type { PlacementRow } from "../types/placement";
 import type { SceneDrawStats } from "./SceneViewportOverlay";
 
 interface SceneInfoContentProps {

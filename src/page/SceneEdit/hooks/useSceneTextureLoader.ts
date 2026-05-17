@@ -13,7 +13,7 @@ import {
 import {
   getMemoryNutexbPreviewIdentity,
 } from "@/page/TestEditor/components/ssbh-model-preview/fhm2dMemoryPreviewService";
-import type { PlacementRow } from "../components/PlacementPanel";
+import type { PlacementRow } from "../types/placement";
 import {
   collectEnabledTexturePathsForBundle,
   normalizeTexturePathKey,

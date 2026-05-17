@@ -1,4 +1,4 @@
-import type { PlacementRow } from "../components/PlacementPanel";
+import type { PlacementRow } from "../types/placement";
 
 /** Column names tried in order for tabular placement.csv headers. */
 const FIELD_TO_HEADER_ALIASES: Record<

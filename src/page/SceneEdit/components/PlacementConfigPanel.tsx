@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
-import type { PlacementRow } from "./PlacementPanel";
+import type { PlacementRow } from "../types/placement";
 import { extractVdkConfig, type VdkConfigEntry } from "../utils/extractPlacementVdkConfig";
 
 interface PlacementConfigPanelProps {

@@ -1,5 +1,5 @@
 import type { GraphicParam } from "../components/GraphicParamPanel";
-import type { PlacementRow } from "../components/PlacementPanel";
+import type { PlacementRow } from "../types/placement";
 
 export function applyGraphicParamSelection(
   rows: readonly GraphicParam[],

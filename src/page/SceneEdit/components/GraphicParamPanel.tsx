@@ -1,5 +1,4 @@
 import { useState, useMemo } from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -66,14 +65,14 @@ export function GraphicParamPanel({
 
   if (params.length === 0) {
     return (
-      <div className="py-2 text-center text-[10px] text-muted-foreground">
+      <div data-testid="graphic-param-panel" className="flex min-h-0 flex-col py-2 text-center text-[10px] text-muted-foreground">
         No parameters
       </div>
     );
   }
 
   return (
-    <div className="space-y-1.5">
+    <div data-testid="graphic-param-panel" className="flex min-h-0 flex-col gap-1.5">
       <div className="flex items-center gap-1">
         <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={onApplyAll}>
           Apply all
@@ -94,14 +93,13 @@ export function GraphicParamPanel({
         />
       )}
 
-      <ScrollArea className="max-h-[400px]">
-        <div className="space-y-1">
-          {filteredParams.map((p) => {
-            const applied = appliedKeys.has(p.key);
-            const slider = numericConfig(p.key, p.value);
-            return (
+      <div className="space-y-1">
+        {filteredParams.map((p) => {
+          const applied = appliedKeys.has(p.key);
+          const slider = numericConfig(p.key, p.value);
+          return (
             <div
-              key={p.key}
+              key={`${p.key}-${p.originalIndex}`}
               className={cn(
                 "space-y-1 rounded-sm border border-transparent px-1 py-1 hover:bg-muted/40 group",
                 applied && "border-primary/30 bg-primary/5",
@@ -145,10 +143,9 @@ export function GraphicParamPanel({
                 )}
               </div>
             </div>
-            );
-          })}
-        </div>
-      </ScrollArea>
+          );
+        })}
+      </div>
     </div>
   );
 }

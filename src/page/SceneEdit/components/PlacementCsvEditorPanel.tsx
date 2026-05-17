@@ -1,12 +1,11 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import { Plus, Trash2, Upload } from "lucide-react";
-import type { PlacementRow } from "./PlacementPanel";
+import type { PlacementRow } from "../types/placement";
 
 interface PlacementCsvEditorPanelProps {
   draftEntries: PlacementRow[];
@@ -56,7 +55,7 @@ export function PlacementCsvEditorPanel({
 
   if (draftEntries.length === 0) {
     return (
-      <div className="space-y-2">
+      <div data-testid="placement-csv-editor-panel" className="flex min-h-0 flex-col gap-2">
         <Button type="button" size="sm" variant="outline" className="h-7 text-[10px]" onClick={onAddRow}>
           <Plus className="h-3 w-3 mr-1" />
           Add row
@@ -67,7 +66,7 @@ export function PlacementCsvEditorPanel({
   }
 
   return (
-    <div className="space-y-2">
+    <div data-testid="placement-csv-editor-panel" className="flex min-h-0 flex-col gap-2">
       <div className="flex items-center gap-1">
         <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={onApplyAll}>
           <Upload className="h-3 w-3 mr-1" />
@@ -83,23 +82,21 @@ export function PlacementCsvEditorPanel({
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
       />
-      <ScrollArea className="max-h-[620px]">
-        <div className="space-y-1">
-          {rows.map(({ entry, index }) => (
-            <PlacementDraftRow
-              key={index}
-              entry={entry}
-              appliedEntry={appliedEntries[index] ?? null}
-              index={index}
-              selected={selectedIndex === index}
-              onSelectEntry={onSelectEntry}
-              onDraftRowChange={onDraftRowChange}
-              onDeleteRow={onDeleteRow}
-              onApplyRow={onApplyRow}
-            />
-          ))}
-        </div>
-      </ScrollArea>
+      <div className="space-y-1">
+        {rows.map(({ entry, index }) => (
+          <PlacementDraftRow
+            key={index}
+            entry={entry}
+            appliedEntry={appliedEntries[index] ?? null}
+            index={index}
+            selected={selectedIndex === index}
+            onSelectEntry={onSelectEntry}
+            onDraftRowChange={onDraftRowChange}
+            onDeleteRow={onDeleteRow}
+            onApplyRow={onApplyRow}
+          />
+        ))}
+      </div>
     </div>
   );
 }

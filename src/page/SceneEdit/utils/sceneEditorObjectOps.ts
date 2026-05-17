@@ -1,4 +1,4 @@
-import type { PlacementRow } from "../components/PlacementPanel";
+import type { PlacementRow } from "../types/placement";
 import { clonePlacementRow } from "./patchPlacementRawFields";
 
 function assertValidIndex(entries: readonly PlacementRow[], index: number): void {

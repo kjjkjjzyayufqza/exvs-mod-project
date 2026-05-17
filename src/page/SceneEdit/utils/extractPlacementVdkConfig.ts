@@ -1,4 +1,4 @@
-import type { PlacementRow } from "../components/PlacementPanel";
+import type { PlacementRow } from "../types/placement";
 
 const TRANSFORM_KEYS = new Set([
   "VDK_TYPE",

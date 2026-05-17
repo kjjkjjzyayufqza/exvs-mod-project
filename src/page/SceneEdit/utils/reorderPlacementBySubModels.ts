@@ -1,4 +1,4 @@
-import type { PlacementRow } from "../components/PlacementPanel";
+import type { PlacementRow } from "../types/placement";
 
 export type SubModelPlacementOrderRef = {
   objectIndex: number;

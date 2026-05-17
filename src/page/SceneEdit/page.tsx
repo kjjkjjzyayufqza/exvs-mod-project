@@ -50,7 +50,7 @@ import {
   GraphicParamPanel,
   type GraphicParam,
 } from "./components/GraphicParamPanel";
-import { type PlacementRow } from "./components/PlacementPanel";
+import { type PlacementRow } from "./types/placement";
 import { PlacementCsvEditorPanel } from "./components/PlacementCsvEditorPanel";
 import {
   formatPlacementViewportNodeId,
@@ -85,7 +85,6 @@ import {
   clearNutexbPreviewCacheAsync,
   clearNutexbRgbaCache,
 } from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
-import { clearSceneEditColladaModelCache } from "./components/DAEModel";
 import { reorderPlacementEntriesBySubModels } from "./utils/reorderPlacementBySubModels";
 import { MayaSection } from "./components/MayaSection";
 import { PlacementConfigPanel } from "./components/PlacementConfigPanel";
@@ -676,7 +675,6 @@ export default function SceneEdit() {
     setClearCacheDialogOpen(false);
     resetState();
     clearNutexbRgbaCache();
-    clearSceneEditColladaModelCache();
     try {
       await clearNutexbPreviewCacheAsync();
     } catch (err) {
@@ -1661,8 +1659,8 @@ export default function SceneEdit() {
               <AlertDialogTitle>Clear scene memory and caches?</AlertDialogTitle>
               <AlertDialogDescription>
                 This unloads the current stage (including memory-import sessions), clears decoded RGBA texture caches and
-                nutexb preview cache (IndexedDB + in-memory blobs), and clears legacy Collada model cache used by scene
-                import tools. Unsaved CSV edits will be lost unless you saved to disk first.
+                nutexb preview cache (IndexedDB + in-memory blobs). Unsaved CSV edits will be lost unless you saved to disk
+                first.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -1801,8 +1799,8 @@ export default function SceneEdit() {
                   <TabsTrigger value="graphic" className="text-[10px]">Graphic</TabsTrigger>
                   <TabsTrigger value="placement" className="text-[10px]">Placement</TabsTrigger>
                 </TabsList>
-                <ScrollArea className="flex-1">
-                  <TabsContent value="inspect" className="m-0">
+                <ScrollArea className="min-h-0 flex-1">
+                  <TabsContent value="inspect" className="m-0 pb-3">
                     {selectedTransform && (
                       <MayaSection title={`Transform${selectedNode ? ` — ${selectedNode.label}` : ""}`}>
                         <StagePropertyEditor transform={selectedTransform} onTransformChange={handleTransformChange} />
@@ -1862,7 +1860,7 @@ export default function SceneEdit() {
                     </MayaSection>
                   </TabsContent>
 
-                  <TabsContent value="graphic" className="m-0">
+                  <TabsContent value="graphic" className="m-0 pb-3">
                     <MayaSection title="Graphic Param" badge={`${appliedGraphicParamKeys.size}/${graphicParams.length}`} defaultOpen>
                       <GraphicParamPanel
                         params={graphicParams}
@@ -1878,7 +1876,7 @@ export default function SceneEdit() {
                     </MayaSection>
                   </TabsContent>
 
-                  <TabsContent value="placement" className="m-0">
+                  <TabsContent value="placement" className="m-0 pb-3">
                     <MayaSection title="Placement Draft" badge={`${placementEntries.length}/${placementDraftEntries.length}`} defaultOpen>
                       <PlacementCsvEditorPanel
                         draftEntries={placementDraftEntries}

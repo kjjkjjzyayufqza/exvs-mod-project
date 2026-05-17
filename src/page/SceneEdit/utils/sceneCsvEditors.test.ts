@@ -7,7 +7,7 @@ import {
   updateGraphicParamValue,
 } from "./sceneCsvEditors";
 import type { GraphicParam } from "../components/GraphicParamPanel";
-import type { PlacementRow } from "../components/PlacementPanel";
+import type { PlacementRow } from "../types/placement";
 
 describe("scene CSV editor helpers", () => {
   test("applies only selected graphic_param rows", () => {

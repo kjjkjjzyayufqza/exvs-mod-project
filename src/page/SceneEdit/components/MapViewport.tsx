@@ -45,7 +45,7 @@ import {
 } from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
 import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
 import type { NutexbRgbaData } from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
-import type { PlacementRow } from "./PlacementPanel";
+import type { PlacementRow } from "../types/placement";
 import type { GraphicParam } from "./GraphicParamPanel";
 import { deriveSceneLightingFromGraphicParams } from "../utils/graphicParamSceneLighting";
 import { formatPlacementViewportNodeId } from "../utils/placementNodeId";

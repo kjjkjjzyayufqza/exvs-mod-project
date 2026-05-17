@@ -174,7 +174,7 @@
   }
 }
 
-/* Custom text selection colors for PropertySection inputs */
+/* Custom text selection colors for inputs */
 input::selection {
   background-color: #3b82f6;
   color: white;
