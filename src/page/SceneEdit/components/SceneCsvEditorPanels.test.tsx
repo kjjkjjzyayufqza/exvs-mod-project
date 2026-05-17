@@ -67,21 +67,19 @@ describe("Scene CSV editor panels", () => {
 
     render(
       <PlacementCsvEditorPanel
-        draftEntries={[row]}
-        appliedEntries={[]}
+        entries={[row]}
         selectedIndex={0}
         onSelectEntry={vi.fn()}
-        onDraftRowChange={vi.fn()}
-        onAddRow={vi.fn()}
+        onFieldChange={vi.fn()}
+        onAddFieldPair={vi.fn()}
+        onRemoveFieldPair={vi.fn()}
+        onAddTyped={vi.fn()}
         onDeleteRow={vi.fn()}
-        onApplyRow={vi.fn()}
-        onApplyAll={vi.fn()}
       />,
     );
 
     expect(screen.getByText("VDK_LENS_FLARE_ENABLE")).toBeInTheDocument();
     expect(screen.getByDisplayValue("TRUE")).toBeInTheDocument();
     expect(screen.getByTestId("placement-csv-editor-panel")).toHaveClass("flex", "min-h-0");
-    expect(screen.queryByTestId("placement-fixed-scroll")).not.toBeInTheDocument();
   });
 });

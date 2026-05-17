@@ -3,21 +3,32 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { Plus, Trash2, Upload } from "lucide-react";
+import { Plus, Trash2, Box, Sparkles, Cloud } from "lucide-react";
 import type { PlacementRow } from "../types/placement";
 
 interface PlacementCsvEditorPanelProps {
-  draftEntries: PlacementRow[];
-  appliedEntries: PlacementRow[];
+  entries: PlacementRow[];
   selectedIndex: number | null;
   onSelectEntry: (index: number) => void;
-  onDraftRowChange: (index: number, row: PlacementRow) => void;
-  onAddRow: () => void;
+  onFieldChange: (index: number, fieldIndex: number, value: string) => void;
+  onAddFieldPair: (index: number) => void;
+  onRemoveFieldPair: (index: number, fieldIndex: number) => void;
+  onAddTyped: (vdkType: string) => void;
   onDeleteRow: (index: number) => void;
-  onApplyRow: (index: number) => void;
-  onApplyAll: () => void;
 }
+
+const KNOWN_VDK_TYPES = [
+  { type: "OBJECT", label: "Object", icon: Box },
+  { type: "EFFECT", label: "Effect", icon: Sparkles },
+  { type: "SKY", label: "Sky", icon: Cloud },
+] as const;
 
 const TRANSFORM_KEYS = new Set([
   "VDK_POSITION_X",
@@ -32,34 +43,30 @@ const TRANSFORM_KEYS = new Set([
 ]);
 
 export function PlacementCsvEditorPanel({
-  draftEntries,
-  appliedEntries,
+  entries,
   selectedIndex,
   onSelectEntry,
-  onDraftRowChange,
-  onAddRow,
+  onFieldChange,
+  onAddFieldPair,
+  onRemoveFieldPair,
+  onAddTyped,
   onDeleteRow,
-  onApplyRow,
-  onApplyAll,
 }: PlacementCsvEditorPanelProps) {
   const [filter, setFilter] = useState("");
   const rows = useMemo(() => {
     const lower = filter.trim().toLowerCase();
-    return draftEntries
+    return entries
       .map((entry, index) => ({ entry, index }))
       .filter(({ entry, index }) => {
         if (!lower) return true;
         return `${index} ${entry.vdkType} ${entry.objectNumber ?? ""} ${entry.rawFields.join(" ")}`.toLowerCase().includes(lower);
       });
-  }, [draftEntries, filter]);
+  }, [entries, filter]);
 
-  if (draftEntries.length === 0) {
+  if (entries.length === 0) {
     return (
       <div data-testid="placement-csv-editor-panel" className="flex min-h-0 flex-col gap-2">
-        <Button type="button" size="sm" variant="outline" className="h-7 text-[10px]" onClick={onAddRow}>
-          <Plus className="h-3 w-3 mr-1" />
-          Add row
-        </Button>
+        <AddTypedButton onAddTyped={onAddTyped} />
         <div className="py-2 text-center text-[10px] text-muted-foreground">No placement data</div>
       </div>
     );
@@ -68,13 +75,7 @@ export function PlacementCsvEditorPanel({
   return (
     <div data-testid="placement-csv-editor-panel" className="flex min-h-0 flex-col gap-2">
       <div className="flex items-center gap-1">
-        <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={onApplyAll}>
-          <Upload className="h-3 w-3 mr-1" />
-          Apply all
-        </Button>
-        <Button type="button" size="sm" variant="outline" className="h-6 w-6 p-0 ml-auto" onClick={onAddRow}>
-          <Plus className="h-3 w-3" />
-        </Button>
+        <AddTypedButton onAddTyped={onAddTyped} />
       </div>
       <Input
         className="h-6 text-[10px]"
@@ -84,16 +85,16 @@ export function PlacementCsvEditorPanel({
       />
       <div className="space-y-1">
         {rows.map(({ entry, index }) => (
-          <PlacementDraftRow
+          <PlacementRowItem
             key={index}
             entry={entry}
-            appliedEntry={appliedEntries[index] ?? null}
             index={index}
             selected={selectedIndex === index}
             onSelectEntry={onSelectEntry}
-            onDraftRowChange={onDraftRowChange}
+            onFieldChange={onFieldChange}
+            onAddFieldPair={onAddFieldPair}
+            onRemoveFieldPair={onRemoveFieldPair}
             onDeleteRow={onDeleteRow}
-            onApplyRow={onApplyRow}
           />
         ))}
       </div>
@@ -101,49 +102,64 @@ export function PlacementCsvEditorPanel({
   );
 }
 
-function PlacementDraftRow({
+function AddTypedButton({ onAddTyped }: { onAddTyped: (vdkType: string) => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px]">
+          <Plus className="h-3 w-3 mr-1" />
+          Add
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-36">
+        {KNOWN_VDK_TYPES.map(({ type, label, icon: Icon }) => (
+          <DropdownMenuItem key={type} onClick={() => onAddTyped(type)}>
+            <Icon className="mr-2 h-3.5 w-3.5" />
+            {label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function PlacementRowItem({
   entry,
-  appliedEntry,
   index,
   selected,
   onSelectEntry,
-  onDraftRowChange,
+  onFieldChange,
+  onAddFieldPair,
+  onRemoveFieldPair,
   onDeleteRow,
-  onApplyRow,
 }: {
   entry: PlacementRow;
-  appliedEntry: PlacementRow | null;
   index: number;
   selected: boolean;
   onSelectEntry: (index: number) => void;
-  onDraftRowChange: (index: number, row: PlacementRow) => void;
+  onFieldChange: (index: number, fieldIndex: number, value: string) => void;
+  onAddFieldPair: (index: number) => void;
+  onRemoveFieldPair: (index: number, fieldIndex: number) => void;
   onDeleteRow: (index: number) => void;
-  onApplyRow: (index: number) => void;
 }) {
-  const dirty = JSON.stringify(entry.rawFields) !== JSON.stringify(appliedEntry?.rawFields ?? null);
   return (
     <div className={cn("rounded-sm border px-1.5 py-1", selected ? "border-primary/50 bg-primary/5" : "border-border/50")}>
       <button type="button" className="flex w-full items-center gap-1.5 text-left" onClick={() => onSelectEntry(index)}>
-        <Badge variant={entry.vdkType === "EFFECT" ? "destructive" : "secondary"} className="h-4 px-1 text-[8px]">
+        <Badge variant={entry.vdkType === "EFFECT" ? "destructive" : entry.vdkType === "SKY" ? "outline" : "secondary"} className="h-4 px-1 text-[8px]">
           {entry.vdkType || "ROW"}
         </Badge>
         <span className="text-[9px] font-mono text-muted-foreground">#{index}</span>
         {entry.objectNumber !== null && <span className="text-[9px] font-mono">obj {entry.objectNumber}</span>}
-        {dirty && <span className="ml-auto text-[8px] text-primary">draft</span>}
       </button>
       {selected && (
         <div className="mt-2 space-y-1">
           <div className="flex items-center gap-1">
-            <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => onApplyRow(index)}>
-              <Upload className="h-3 w-3 mr-1" />
-              Apply
-            </Button>
             <Button
               type="button"
               size="sm"
               variant="outline"
               className="h-6 px-2 text-[10px]"
-              onClick={() => onDraftRowChange(index, { ...entry, rawFields: [...entry.rawFields, "VDK_NEW_FIELD", "0"] })}
+              onClick={() => onAddFieldPair(index)}
             >
               <Plus className="h-3 w-3 mr-1" />
               Field
@@ -181,21 +197,14 @@ function PlacementDraftRow({
                   <Input
                     className="h-6 min-w-0 flex-1 text-[10px] font-mono"
                     value={value}
-                    onChange={(event) => {
-                      const rawFields = [...entry.rawFields];
-                      rawFields[valueIndex] = event.target.value;
-                      onDraftRowChange(index, { ...entry, rawFields });
-                    }}
+                    onChange={(event) => onFieldChange(index, valueIndex, event.target.value)}
                   />
                   <Button
                     type="button"
                     size="sm"
                     variant="ghost"
                     className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                    onClick={() => {
-                      const rawFields = entry.rawFields.filter((_, i) => i !== fieldIndex && i !== valueIndex);
-                      onDraftRowChange(index, { ...entry, rawFields });
-                    }}
+                    onClick={() => onRemoveFieldPair(index, fieldIndex)}
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
@@ -207,9 +216,7 @@ function PlacementDraftRow({
                     max={sliderRange.max}
                     step={sliderRange.step}
                     onValueChange={(values) => {
-                      const rawFields = [...entry.rawFields];
-                      rawFields[valueIndex] = String(values[0] ?? numericValue);
-                      onDraftRowChange(index, { ...entry, rawFields });
+                      onFieldChange(index, valueIndex, String(values[0] ?? numericValue));
                     }}
                   />
                 )}
