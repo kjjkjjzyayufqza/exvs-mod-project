@@ -24,8 +24,8 @@ export function PlacementConfigPanel({ entry, placementHeader }: PlacementConfig
 
   return (
     <div className="space-y-0.5">
-      {configs.map((c) => (
-        <ConfigRow key={c.key} config={c} />
+      {configs.map((c, i) => (
+        <ConfigRow key={`${i}-${c.key}`} config={c} />
       ))}
     </div>
   );

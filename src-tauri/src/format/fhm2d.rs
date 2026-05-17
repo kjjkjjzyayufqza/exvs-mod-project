@@ -36,6 +36,8 @@ pub struct InMemoryFhm2dExtraction {
     pub naming_error: Option<String>,
     pub files: Vec<InMemoryFhm2dFile>,
     pub sub_file_structure: Vec<SubFileStructureEntry>,
+    pub meta_header: u32,
+    pub unk_count: u32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -373,6 +375,8 @@ pub fn extract_fhm2d_to_memory_impl(
         naming_error,
         files: memory_files,
         sub_file_structure: output.sub_file_structure,
+        meta_header: output.magic,
+        unk_count: output.unk_count,
     })
 }
 

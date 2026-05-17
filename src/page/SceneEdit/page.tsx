@@ -2,8 +2,8 @@ import { useState, useCallback, useRef, useTransition, useEffect, useMemo } from
 import { useDefaultLayout } from "react-resizable-panels";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
+import * as THREE from "three";
 import { DialogLastPathKey, getDialogDefaultPath, rememberDialogSelection } from "@/utils/dialogLastPath";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { RotateCcw } from "lucide-react";
@@ -130,6 +130,9 @@ import {
   type ObjectTextureInventory,
   type ObjectTextureLoadState,
 } from "./utils/sceneTextureInventory";
+import { useConfigStore } from "@/store/configStore";
+import { DEFAULT_SCENE_GIZMO_SIZE, normalizeSceneGizmoSize } from "./utils/sceneEditorSettings";
+import { executeStageSave } from "./utils/sceneSavePipeline";
 
 import type { PreviewRenderStyle } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
 
@@ -378,6 +381,8 @@ export default function SceneEdit() {
   const [objectTextureLoadState, setObjectTextureLoadState] = useState<ObjectTextureLoadState>({});
   const [sceneAnimeRenderEnabled, setSceneAnimeRenderEnabled] = useState(false);
   const [placementGizmoMode, setPlacementGizmoMode] = useState<PlacementGizmoMode>("translate");
+  const sceneEditGizmoSize = useConfigStore((state) => state.sceneEditGizmoSize ?? DEFAULT_SCENE_GIZMO_SIZE);
+  const setSceneEditGizmoSize = useConfigStore((state) => state.setSceneEditGizmoSize);
   const [drawStats, setDrawStats] = useState<SceneDrawStats | null>(null);
   const [clearCacheDialogOpen, setClearCacheDialogOpen] = useState(false);
   const editorSelectedIds = useSceneEditorStore((state) => state.selectedIds);
@@ -443,6 +448,16 @@ export default function SceneEdit() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
+
+  const handleGizmoSizeChange = useCallback(
+    (size: number) => {
+      const normalized = normalizeSceneGizmoSize(size);
+      void setSceneEditGizmoSize(normalized).catch((err) => {
+        toast.error("Failed to save gizmo size", { description: String(err) });
+      });
+    },
+    [setSceneEditGizmoSize],
+  );
 
   const applyPrimarySelectionState = useCallback(
     (id: string | null) => {
@@ -553,17 +568,20 @@ export default function SceneEdit() {
           },
         }));
         setImportedDaeObjects((prev) => [...prev, ...created]);
+        setHasUnsavedChanges(true);
         useSceneEditorStore.getState().recordCommand({
           type: "duplicate-dae",
           description: "Duplicate imported DAE actor",
           undo: () => {
             setImportedDaeObjects((prev) => prev.filter((obj) => !created.some((c) => c.id === obj.id)));
             handleClearSelection();
+            setHasUnsavedChanges(true);
           },
           redo: () => {
             setImportedDaeObjects((prev) => [...prev, ...created]);
             const id = created[0]?.id ?? null;
             if (id) handleSelectNode(id);
+            setHasUnsavedChanges(true);
           },
         });
         const nextSelectedId = created[0]?.id ?? selectedNodeId;
@@ -642,7 +660,7 @@ export default function SceneEdit() {
   );
 
   const applyBundle = useCallback(
-    (path: string, bundle: StageBundleResponse) => {
+    (path: string, bundle: StageBundleResponse, options: { showToast?: boolean } = {}) => {
       startTransition(() => {
         const folderName =
           path.split(/[/\\]/).filter(Boolean).pop() ?? "stage";
@@ -687,6 +705,9 @@ export default function SceneEdit() {
         setSelectedPlacementIdxRaw(null);
         useSceneEditorStore.getState().deselectAll();
       });
+
+      const showToast = options.showToast ?? true;
+      if (!showToast) return;
 
       if (bundle.warnings.length > 0) {
         toast.warning(
@@ -885,26 +906,50 @@ export default function SceneEdit() {
 
   const handleSave = useCallback(async () => {
     if (!stageRoot) return;
+    setIsLoading(true);
     try {
-      const gpCsv = graphicParams.map((p) => `${p.key},${p.value}`).join("\n");
-      await writeTextFile(`${stageRoot}/info/graphic_param.csv`, gpCsv);
+      const result = await executeStageSave({
+        stageRoot,
+        graphicParams,
+        placementHeader,
+        placementEntries,
+        importedDaeObjects,
+        onProgress: (p) => {
+          if (p.phase === "converting" && p.total > 0) {
+            toast.loading(`Converting DAE ${p.current}/${p.total}...`, { id: "save-progress" });
+          }
+        },
+      });
 
-      if (placementHeader.length > 0 && placementEntries.length > 0) {
-        const headerLine = placementHeader.join(",");
-        const dataLines = placementEntries.map((e) => e.rawFields.join(","));
-        const placementCsv = [headerLine, ...dataLines].join("\n");
-        await writeTextFile(`${stageRoot}/info/placement.csv`, placementCsv);
-      } else if (placementEntries.length > 0) {
-        const placementCsv = placementEntries.map((e) => e.rawFields.join(",")).join("\n");
-        await writeTextFile(`${stageRoot}/info/placement.csv`, placementCsv);
+      if (result.reloadedBundle) {
+        applyBundle(stageRoot, result.reloadedBundle as any, { showToast: false });
       }
 
       setHasUnsavedChanges(false);
-      toast.success("CSV files saved");
+      toast.dismiss("save-progress");
+
+      if (result.failedCount > 0 && result.convertedCount > 0) {
+        toast.warning(
+          `Saved with partial results: ${result.convertedCount} converted, ${result.failedCount} failed (${result.failedNames.join(", ")})`,
+        );
+      } else if (result.failedCount > 0) {
+        toast.error(
+          `All ${result.failedCount} DAE conversion(s) failed: ${result.failedNames.join(", ")}`,
+        );
+      } else if (result.convertedCount > 0) {
+        toast.success(
+          `CSV files saved; converted ${result.convertedCount} imported DAE object(s) to SSBH`,
+        );
+      } else {
+        toast.success("CSV files saved");
+      }
     } catch (err: any) {
+      toast.dismiss("save-progress");
       toast.error("Save failed", { description: String(err) });
+    } finally {
+      setIsLoading(false);
     }
-  }, [stageRoot, graphicParams, placementHeader, placementEntries]);
+  }, [stageRoot, graphicParams, placementHeader, placementEntries, importedDaeObjects, applyBundle]);
 
   const handleGraphicParamValueChange = useCallback(
     (index: number, value: string) => {
@@ -1241,6 +1286,7 @@ export default function SceneEdit() {
             : obj,
         ),
       );
+      setHasUnsavedChanges(true);
     },
     [],
   );
@@ -1715,6 +1761,7 @@ export default function SceneEdit() {
         },
       }));
       setImportedDaeObjects((prev) => [...prev, ...created]);
+      setHasUnsavedChanges(true);
       handleSelectNode(created[0]?.id ?? null);
       useSceneEditorStore.getState().recordCommand({
         type: "paste-dae",
@@ -1722,10 +1769,12 @@ export default function SceneEdit() {
         undo: () => {
           setImportedDaeObjects((prev) => prev.filter((obj) => !created.some((c) => c.id === obj.id)));
           handleClearSelection();
+          setHasUnsavedChanges(true);
         },
         redo: () => {
           setImportedDaeObjects((prev) => [...prev, ...created]);
           handleSelectNode(created[0]?.id ?? null);
+          setHasUnsavedChanges(true);
         },
       });
       toast.success(`Pasted ${created.length} DAE object(s)`);
@@ -1797,6 +1846,7 @@ export default function SceneEdit() {
         };
       });
       setImportedDaeObjects((prev) => [...prev, ...created]);
+      setHasUnsavedChanges(true);
       handleSelectNode(created[0]?.id ?? null);
       useSceneEditorStore.getState().recordCommand({
         type: "import-dae",
@@ -1804,10 +1854,12 @@ export default function SceneEdit() {
         undo: () => {
           setImportedDaeObjects((prev) => prev.filter((obj) => !created.some((c) => c.id === obj.id)));
           handleClearSelection();
+          setHasUnsavedChanges(true);
         },
         redo: () => {
           setImportedDaeObjects((prev) => [...prev, ...created]);
           handleSelectNode(created[0]?.id ?? null);
+          setHasUnsavedChanges(true);
         },
       });
       toast.success(`Imported ${created.length} DAE object(s)`);
@@ -1916,6 +1968,7 @@ export default function SceneEdit() {
       if (daeIds.length > 0) {
         const deleted = importedDaeObjects.filter((obj) => daeIds.includes(obj.id));
         setImportedDaeObjects((prev) => prev.filter((obj) => !daeIds.includes(obj.id)));
+        setHasUnsavedChanges(true);
         handleClearSelection();
         useSceneEditorStore.getState().recordCommand({
           type: "delete-dae",
@@ -1923,10 +1976,12 @@ export default function SceneEdit() {
           undo: () => {
             setImportedDaeObjects((prev) => [...prev, ...deleted]);
             handleSelectNode(deleted[0]?.id ?? null);
+            setHasUnsavedChanges(true);
           },
           redo: () => {
             setImportedDaeObjects((prev) => prev.filter((obj) => !daeIds.includes(obj.id)));
             handleClearSelection();
+            setHasUnsavedChanges(true);
           },
         });
         toast.success(`Deleted ${deleted.length} DAE object(s)`);
@@ -2149,6 +2204,8 @@ export default function SceneEdit() {
           clearCacheDisabled={isLoading || isLoadingBundle}
           placementGizmoMode={placementGizmoMode}
           onGizmoModeChange={setPlacementGizmoMode}
+          gizmoSize={sceneEditGizmoSize}
+          onGizmoSizeChange={handleGizmoSizeChange}
           animeRenderEnabled={sceneAnimeRenderEnabled}
           onToggleAnimeRender={setSceneAnimeRenderEnabled}
         />
@@ -2292,6 +2349,7 @@ export default function SceneEdit() {
                 previewRenderStyle={scenePreviewRenderStyle}
                 objectTextureLoadState={objectTextureLoadState}
                 placementGizmoMode={placementGizmoMode}
+                transformGizmoSize={sceneEditGizmoSize}
                 onPlacementGizmoCommit={commitPlacementGizmo}
               />
               <SceneViewportOverlay textureProgress={textureProgress} />

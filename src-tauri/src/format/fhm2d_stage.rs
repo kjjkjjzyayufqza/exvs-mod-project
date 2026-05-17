@@ -1251,12 +1251,95 @@ pub fn extract_stage_fhm2d_to_folder_impl(
 
     let (total_files, total_bytes) = write_virtual_tree_to_disk(&tree, &extraction.files, &dest)?;
 
+    write_stage_structure_json(&dest, &extraction)?;
+
     Ok(StageExtractResult {
         output_dir: dest.to_string_lossy().replace('\\', "/"),
         total_files,
         total_bytes,
         warnings,
     })
+}
+
+fn write_stage_structure_json(
+    dest: &Path,
+    extraction: &crate::format::fhm2d::InMemoryFhm2dExtraction,
+) -> Result<(), String> {
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct StageStructureOutput {
+        #[serde(rename = "Magic")]
+        magic: i32,
+        #[serde(rename = "Fhm2dTotalCount")]
+        fhm2d_total_count: usize,
+        #[serde(rename = "UnkCount")]
+        unk_count: u32,
+        #[serde(rename = "SubFileData")]
+        sub_file_data: Vec<StageSubFileDataOutput>,
+        #[serde(rename = "SubFileStructure")]
+        sub_file_structure: Vec<crate::format::fhm2d::SubFileStructureEntry>,
+    }
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct StageSubFileDataOutput {
+        index: usize,
+        file_type: String,
+        file_index: i32,
+        file_url: String,
+        file_base_name: String,
+    }
+
+    let dest_name = dest
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("stage");
+
+    let sub_file_data: Vec<StageSubFileDataOutput> = extraction
+        .files
+        .iter()
+        .enumerate()
+        .map(|(i, f)| {
+            let base_name = f
+                .file_url
+                .replace('\\', "/")
+                .split('/')
+                .last()
+                .unwrap_or("")
+                .to_string();
+            let base_name_no_ext = match base_name.rfind('.') {
+                Some(idx) if idx > 0 => base_name[..idx].to_string(),
+                _ => base_name.clone(),
+            };
+            StageSubFileDataOutput {
+                index: i,
+                file_type: f.file_type.clone(),
+                file_index: f.file_index,
+                file_url: f.file_url.clone(),
+                file_base_name: base_name_no_ext,
+            }
+        })
+        .collect();
+
+    let output = StageStructureOutput {
+        magic: extraction.meta_header as i32,
+        fhm2d_total_count: extraction.files.len(),
+        unk_count: extraction.unk_count,
+        sub_file_data,
+        sub_file_structure: extraction.sub_file_structure.clone(),
+    };
+
+    let structure_path = dest
+        .parent()
+        .unwrap_or(dest)
+        .join(format!("{dest_name}_structure.json"));
+
+    let json = serde_json::to_string_pretty(&output)
+        .map_err(|e| format!("Failed to serialize structure JSON: {e}"))?;
+    fs::write(&structure_path, json)
+        .map_err(|e| format!("Failed to write structure JSON at {}: {e}", structure_path.display()))?;
+
+    Ok(())
 }
 
 // ── Apply rename result ─────────────────────────────────────────────────────

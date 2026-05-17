@@ -67,6 +67,20 @@ function parseDAE(exporter: InstanceType<typeof ColladaExporter>, object: THREE.
   return data;
 }
 
+export function serializeObjectAsDAE(object: THREE.Object3D): string {
+  const exporter = new ColladaExporter();
+  return parseDAE(exporter, object);
+}
+
+export async function writeObjectAsDAE(
+  object: THREE.Object3D,
+  filePath: string,
+): Promise<string> {
+  const content = serializeObjectAsDAE(object);
+  await writeTextFile(filePath, content);
+  return filePath;
+}
+
 export async function exportObjectAsDAE(
   object: THREE.Object3D,
   defaultName = "export",

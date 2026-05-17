@@ -15,6 +15,7 @@ import {
   RotateCw,
   Maximize,
   Sparkles,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,8 +25,11 @@ import {
 } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import type { PlacementGizmoMode } from "./MapViewport";
+import { MAX_SCENE_GIZMO_SIZE, MIN_SCENE_GIZMO_SIZE } from "../utils/sceneEditorSettings";
 
 const GIZMO_MODES = [
   { key: "W", mode: "translate" as const, label: "Move", icon: Move3D },
@@ -58,6 +62,8 @@ interface MapToolbarProps {
   clearCacheDisabled?: boolean;
   placementGizmoMode: PlacementGizmoMode;
   onGizmoModeChange: (mode: PlacementGizmoMode) => void;
+  gizmoSize: number;
+  onGizmoSizeChange: (size: number) => void;
   animeRenderEnabled: boolean;
   onToggleAnimeRender: (enabled: boolean) => void;
 }
@@ -87,6 +93,8 @@ export function MapToolbar({
   clearCacheDisabled,
   placementGizmoMode,
   onGizmoModeChange,
+  gizmoSize,
+  onGizmoSizeChange,
   animeRenderEnabled,
   onToggleAnimeRender,
 }: MapToolbarProps) {
@@ -228,6 +236,44 @@ export function MapToolbar({
           </Tooltip>
         ))}
       </div>
+
+      <Separator orientation="vertical" className="h-4 mx-0.5" />
+
+      <Popover>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                aria-label="Gizmo size"
+              >
+                <SlidersHorizontal className="h-3 w-3" />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Gizmo size</TooltipContent>
+        </Tooltip>
+        <PopoverContent side="bottom" align="start" className="w-56 p-3">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+              <span>Gizmo Size</span>
+              <span className="font-mono text-foreground">{gizmoSize.toFixed(2)}</span>
+            </div>
+            <Slider
+              min={MIN_SCENE_GIZMO_SIZE}
+              max={MAX_SCENE_GIZMO_SIZE}
+              step={0.05}
+              value={[gizmoSize]}
+              onValueChange={(value) => {
+                const next = value[0];
+                if (typeof next === "number") onGizmoSizeChange(next);
+              }}
+            />
+          </div>
+        </PopoverContent>
+      </Popover>
 
       <Separator orientation="vertical" className="h-4 mx-0.5" />
 

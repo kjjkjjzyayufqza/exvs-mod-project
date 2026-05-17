@@ -1,6 +1,11 @@
 import { create } from "zustand";
 import { Store } from "@tauri-apps/plugin-store";
 import { ConfigState } from "../models/conifgStoreModel";
+import {
+  DEFAULT_SCENE_GIZMO_SIZE,
+  SCENE_GIZMO_SIZE_SETTING_KEY,
+  normalizeSceneGizmoSize,
+} from "@/page/SceneEdit/utils/sceneEditorSettings";
 
 export const useConfigStore = create<ConfigState>((set, get) => ({
   store: null,
@@ -9,6 +14,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   extractOutputPath: "",
   imgToNutexbOutputPath: "",
   repackInputPath: "",
+  sceneEditGizmoSize: DEFAULT_SCENE_GIZMO_SIZE,
 
   initStore: async () => {
     // Init the tauri store
@@ -21,6 +27,9 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     const extractOutputPath = await _store.get("extractOutputPath") || "";
     const imgToNutexbOutputPath = await _store.get("imgToNutexbOutputPath") || "";
     const repackInputPath = await _store.get("repackInputPath") || "";
+    const sceneEditGizmoSize = normalizeSceneGizmoSize(
+      await _store.get(SCENE_GIZMO_SIZE_SETTING_KEY),
+    );
 
     // Update state with loaded values
     set({
@@ -28,7 +37,8 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       obModPath: obModPath as string,
       extractOutputPath: extractOutputPath as string,
       imgToNutexbOutputPath: imgToNutexbOutputPath as string,
-      repackInputPath: repackInputPath as string
+      repackInputPath: repackInputPath as string,
+      sceneEditGizmoSize,
     });
 
     // Save changes
@@ -55,6 +65,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     if (key === "extractOutputPath") set({ extractOutputPath: String(value ?? "") });
     if (key === "imgToNutexbOutputPath") set({ imgToNutexbOutputPath: String(value ?? "") });
     if (key === "repackInputPath") set({ repackInputPath: String(value ?? "") });
+    if (key === SCENE_GIZMO_SIZE_SETTING_KEY) set({ sceneEditGizmoSize: normalizeSceneGizmoSize(value) });
   },
 
   setRepackInputPath: async (path: string) => {
@@ -64,5 +75,15 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       await store.save();
       set({ repackInputPath: path });
     }
+  },
+
+  setSceneEditGizmoSize: async (size: number) => {
+    const normalized = normalizeSceneGizmoSize(size);
+    const { store } = get();
+    if (store) {
+      await store.set(SCENE_GIZMO_SIZE_SETTING_KEY, normalized);
+      await store.save();
+    }
+    set({ sceneEditGizmoSize: normalized });
   },
 }));

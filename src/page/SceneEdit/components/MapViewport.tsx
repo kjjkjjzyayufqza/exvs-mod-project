@@ -74,6 +74,7 @@ import {
   type ObjectTextureLoadState,
 } from "../utils/sceneTextureInventory";
 import { getSelectionWireframeOverlayProps } from "../utils/sceneSelectionOverlay";
+import { DEFAULT_SCENE_GIZMO_SIZE } from "../utils/sceneEditorSettings";
 
 const DEG2RAD = Math.PI / 180;
 
@@ -243,6 +244,7 @@ export interface MapViewportProps {
   previewRenderStyle?: PreviewRenderStyle;
   /** Placement manipulator mode for OBJECT rows selected in hierarchy/placement list */
   placementGizmoMode?: PlacementGizmoMode;
+  transformGizmoSize?: number;
   /** Optional preview-only hook for viewport gizmo frames; avoid editor state writes here. */
   onPlacementGizmoFrame?: (placementIdx: number, t: TransformData) => void;
   /** Final editor state sync when releasing gizmo drag. */
@@ -328,6 +330,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       clickPickSelectionEnabled = false,
       previewRenderStyle = "standard",
       placementGizmoMode = "translate",
+      transformGizmoSize = DEFAULT_SCENE_GIZMO_SIZE,
       onPlacementGizmoFrame,
       onPlacementGizmoCommit,
     },
@@ -654,6 +657,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             scale={baseTransform ? [baseTransform.scaleX, baseTransform.scaleY, baseTransform.scaleZ] : undefined}
             showPlacementTransformGizmo={selectedNodeId === "base" && isNodeEditable("base")}
             placementGizmoMode={placementGizmoMode}
+            transformGizmoSize={transformGizmoSize}
             onPlacementGizmoCommit={
               onBaseTransformChange
                 ? (_idx: number, t: TransformData) => onBaseTransformChange(t)
@@ -703,6 +707,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                 scale={st ? placementScaleForViewport(st.scaleX, st.scaleY, st.scaleZ) : undefined}
                 showPlacementTransformGizmo={isStandaloneSel && isNodeEditable(sub.folderName)}
                 placementGizmoMode={placementGizmoMode}
+                transformGizmoSize={transformGizmoSize}
                 onPlacementGizmoCommit={
                   onStandaloneTransformChange
                     ? (_idx: number, t: TransformData) => onStandaloneTransformChange(sub.folderName, t)
@@ -746,6 +751,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                   isNodeEditable(nodeId)
                 }
                 placementGizmoMode={placementGizmoMode}
+                transformGizmoSize={transformGizmoSize}
                 onPlacementGizmoFrame={onPlacementGizmoFrame}
                 onPlacementGizmoCommit={onPlacementGizmoCommit}
                 gizmoDraggingRef={gizmoDraggingRef}
@@ -781,6 +787,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
               previewRenderStyle={previewRenderStyle}
               animeKeyLightDir={animeKeyLightDir}
               placementGizmoMode={placementGizmoMode}
+              transformGizmoSize={transformGizmoSize}
               onPlacementGizmoFrame={onPlacementGizmoFrame}
               onPlacementGizmoCommit={onPlacementGizmoCommit}
               gizmoDraggingRef={gizmoDraggingRef}
@@ -812,6 +819,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
               isNodeEditable(nodeId)
             }
             placementGizmoMode={placementGizmoMode}
+            transformGizmoSize={transformGizmoSize}
             onPlacementGizmoFrame={onPlacementGizmoFrame}
             onPlacementGizmoCommit={onPlacementGizmoCommit}
             gizmoDraggingRef={gizmoDraggingRef}
@@ -833,6 +841,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             clickPickSelectionEnabled={clickPickSelectionEnabled}
             showGizmo={selectedNodeId === obj.id && isNodeEditable(obj.id)}
             placementGizmoMode={placementGizmoMode}
+            transformGizmoSize={transformGizmoSize}
             onTransformCommit={onImportedDaeTransformChange}
             gizmoDraggingRef={gizmoDraggingRef}
             orbitActiveRef={orbitActiveRef}
@@ -877,6 +886,7 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
   clickPickSelectionEnabled,
   showGizmo,
   placementGizmoMode = "translate",
+  transformGizmoSize = DEFAULT_SCENE_GIZMO_SIZE,
   onTransformFrame,
   onTransformCommit,
   gizmoDraggingRef,
@@ -891,6 +901,7 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
   clickPickSelectionEnabled: boolean;
   showGizmo: boolean;
   placementGizmoMode?: PlacementGizmoMode;
+  transformGizmoSize?: number;
   onTransformFrame?: (nodeId: string, t: TransformData) => void;
   onTransformCommit?: (nodeId: string, t: TransformData) => void;
   gizmoDraggingRef?: React.RefObject<boolean>;
@@ -901,7 +912,14 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
   const groupRef = useRef<THREE.Group>(null);
   const invalidate = useThree((s) => s.invalidate);
   const regress = useThree((s) => s.performance.regress);
-  const sceneClone = useMemo(() => object.scene.clone(true), [object.scene]);
+  const isDraggingRef = useRef(false);
+  const sceneClone = useMemo(() => {
+    const clone = object.scene.clone(true);
+    clone.traverse((child) => {
+      child.matrixAutoUpdate = true;
+    });
+    return clone;
+  }, [object.scene]);
   const selectionOverlay = useMemo(() => getSelectionWireframeOverlayProps(isSelected), [isSelected]);
   const selectionClone = useMemo(() => {
     if (!selectionOverlay.visible) return null;
@@ -931,6 +949,18 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
   }, [selectionClone]);
 
   useEffect(() => {
+    if (isDraggingRef.current) return;
+    const g = groupRef.current;
+    if (!g) return;
+    const t = object.transform;
+    g.position.set(t.posX, t.posY, t.posZ);
+    g.rotation.set(t.rotX * DEG2RAD, t.rotY * DEG2RAD, t.rotZ * DEG2RAD);
+    const [sx, sy, sz] = placementScaleForViewport(t.scaleX, t.scaleY, t.scaleZ);
+    g.scale.set(sx, sy, sz);
+    invalidate();
+  }, [object.transform, invalidate]);
+
+  useEffect(() => {
     const g = groupRef.current;
     if (!g || !selectedGroupsRef) return;
     if (isSelected) {
@@ -957,16 +987,6 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
     [clickPickSelectionEnabled, gizmoDraggingRef, isLocked, object.id, onClick, orbitActiveRef, pointerDownTimeRef],
   );
 
-  const euler = useMemo(
-    () =>
-      new THREE.Euler(
-        object.transform.rotX * DEG2RAD,
-        object.transform.rotY * DEG2RAD,
-        object.transform.rotZ * DEG2RAD,
-      ),
-    [object.transform.rotX, object.transform.rotY, object.transform.rotZ],
-  );
-
   const handleObjectChange = useCallback(() => {
     if (shouldInvalidateViewportForGizmoEvent("drag")) {
       regress();
@@ -979,6 +999,7 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
   }, [invalidate, object.id, onTransformFrame, regress]);
 
   const handleMouseUp = useCallback(() => {
+    isDraggingRef.current = false;
     if (shouldInvalidateViewportForGizmoEvent("commit")) {
       invalidate();
     }
@@ -994,17 +1015,6 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
         ref={groupRef}
         name={object.id}
         onClick={handleClick}
-        position={[
-          object.transform.posX,
-          object.transform.posY,
-          object.transform.posZ,
-        ]}
-        rotation={euler}
-        scale={placementScaleForViewport(
-          object.transform.scaleX,
-          object.transform.scaleY,
-          object.transform.scaleZ,
-        )}
       >
         <primitive object={sceneClone} />
         {selectionClone ? <primitive object={selectionClone.clone} /> : null}
@@ -1015,9 +1025,10 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
           object={groupRef as unknown as RefObject<THREE.Object3D>}
           mode={placementGizmoMode}
           space="world"
-          size={1.12}
+          size={transformGizmoSize}
           onObjectChange={handleObjectChange}
           onMouseDown={() => {
+            isDraggingRef.current = true;
             if (gizmoDraggingRef) gizmoDraggingRef.current = true;
           }}
           onMouseUp={() => {
@@ -1376,6 +1387,7 @@ const InstancedStageModel = memo(function InstancedStageModel({
   previewRenderStyle,
   animeKeyLightDir,
   placementGizmoMode,
+  transformGizmoSize,
   onPlacementGizmoFrame,
   onPlacementGizmoCommit,
   gizmoDraggingRef,
@@ -1399,6 +1411,7 @@ const InstancedStageModel = memo(function InstancedStageModel({
   previewRenderStyle: PreviewRenderStyle;
   animeKeyLightDir: THREE.Vector3;
   placementGizmoMode: PlacementGizmoMode;
+  transformGizmoSize: number;
   onPlacementGizmoFrame?: (placementIdx: number, t: TransformData) => void;
   onPlacementGizmoCommit?: (placementIdx: number, t: TransformData) => void;
   gizmoDraggingRef: React.RefObject<boolean>;
@@ -1503,6 +1516,7 @@ const InstancedStageModel = memo(function InstancedStageModel({
               canEditSceneNode(inst.nodeId, nodeVisibility, objectLocks)
             }
             placementGizmoMode={placementGizmoMode}
+            transformGizmoSize={transformGizmoSize}
             onPlacementGizmoFrame={onPlacementGizmoFrame}
             onPlacementGizmoCommit={onPlacementGizmoCommit}
             gizmoDraggingRef={gizmoDraggingRef}
@@ -1580,6 +1594,7 @@ const InstancedStageModel = memo(function InstancedStageModel({
           placementGlobalIdx={selectedInstance.globalIdx}
           showPlacementTransformGizmo={canEditSceneNode(selectedInstance.nodeId, nodeVisibility, objectLocks)}
           placementGizmoMode={placementGizmoMode}
+          transformGizmoSize={transformGizmoSize}
           onPlacementGizmoFrame={onPlacementGizmoFrame}
           onPlacementGizmoCommit={onPlacementGizmoCommit}
           gizmoDraggingRef={gizmoDraggingRef}
@@ -1764,6 +1779,7 @@ const StageModelGroup = memo(function StageModelGroup({
   placementGlobalIdx,
   showPlacementTransformGizmo = false,
   placementGizmoMode = "translate",
+  transformGizmoSize = DEFAULT_SCENE_GIZMO_SIZE,
   onPlacementGizmoFrame,
   onPlacementGizmoCommit,
   gizmoDraggingRef,
@@ -1790,6 +1806,7 @@ const StageModelGroup = memo(function StageModelGroup({
   placementGlobalIdx?: number;
   showPlacementTransformGizmo?: boolean;
   placementGizmoMode?: PlacementGizmoMode;
+  transformGizmoSize?: number;
   onPlacementGizmoFrame?: (placementIdx: number, t: TransformData) => void;
   onPlacementGizmoCommit?: (placementIdx: number, t: TransformData) => void;
   gizmoDraggingRef?: React.RefObject<boolean>;
@@ -1969,7 +1986,7 @@ const StageModelGroup = memo(function StageModelGroup({
           object={groupRef as unknown as RefObject<THREE.Object3D>}
           mode={placementGizmoMode}
           space="world"
-          size={1.12}
+          size={transformGizmoSize}
           showX
           showY
           showZ
@@ -1994,6 +2011,7 @@ const EffectMarker = memo(function EffectMarker({
   clickPickSelectionEnabled,
   showGizmo,
   placementGizmoMode = "translate",
+  transformGizmoSize = DEFAULT_SCENE_GIZMO_SIZE,
   onPlacementGizmoFrame,
   onPlacementGizmoCommit,
   gizmoDraggingRef,
@@ -2008,6 +2026,7 @@ const EffectMarker = memo(function EffectMarker({
   clickPickSelectionEnabled: boolean;
   showGizmo: boolean;
   placementGizmoMode?: PlacementGizmoMode;
+  transformGizmoSize?: number;
   onPlacementGizmoFrame?: (idx: number, t: TransformData) => void;
   onPlacementGizmoCommit?: (idx: number, t: TransformData) => void;
   gizmoDraggingRef?: React.RefObject<boolean>;
@@ -2082,7 +2101,7 @@ const EffectMarker = memo(function EffectMarker({
           key={`eff-gizmo-${globalIdx}-${placementGizmoMode}`}
           object={groupRef.current}
           mode={placementGizmoMode}
-          size={0.6}
+          size={transformGizmoSize * 0.54}
           onChange={handleGizmoChange}
           onMouseDown={() => { if (gizmoDraggingRef) gizmoDraggingRef.current = true; }}
           onMouseUp={() => {
