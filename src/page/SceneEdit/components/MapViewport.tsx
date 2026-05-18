@@ -75,6 +75,8 @@ import {
 } from "../utils/sceneTextureInventory";
 import { getSelectionWireframeOverlayProps } from "../utils/sceneSelectionOverlay";
 import { DEFAULT_SCENE_GIZMO_SIZE } from "../utils/sceneEditorSettings";
+import { HavokCollisionOverlay } from "./havok/HavokCollisionOverlay";
+import type { HavokMeshData } from "@/utils/havokXmlParser";
 
 const DEG2RAD = Math.PI / 180;
 
@@ -249,6 +251,8 @@ export interface MapViewportProps {
   onPlacementGizmoFrame?: (placementIdx: number, t: TransformData) => void;
   /** Final editor state sync when releasing gizmo drag. */
   onPlacementGizmoCommit?: (placementIdx: number, t: TransformData) => void;
+  viewMode?: "normal" | "collision" | "both";
+  havokMeshDataMap?: Map<string, HavokMeshData>;
 }
 
 export interface MapViewportHandle {
@@ -333,6 +337,8 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       transformGizmoSize = DEFAULT_SCENE_GIZMO_SIZE,
       onPlacementGizmoFrame,
       onPlacementGizmoCommit,
+      viewMode = "normal",
+      havokMeshDataMap,
     },
     ref
   ) {
@@ -850,6 +856,13 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           />
           )];
         })}
+
+        {havokMeshDataMap && (
+          <HavokCollisionOverlay
+            meshDataMap={havokMeshDataMap}
+            viewMode={viewMode}
+          />
+        )}
 
         {showGrid && (
           <Grid

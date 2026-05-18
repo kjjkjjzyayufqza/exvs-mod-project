@@ -133,6 +133,10 @@ import {
 import { useConfigStore } from "@/store/configStore";
 import { DEFAULT_SCENE_GIZMO_SIZE, normalizeSceneGizmoSize } from "./utils/sceneEditorSettings";
 import { executeStageSave } from "./utils/sceneSavePipeline";
+import { DaeImportConfigModal } from "./components/dae-import/DaeImportConfigModal";
+import type { DaeImportEntry, HavokInstallInfo } from "./components/dae-import/daeImportTypes";
+import { createDefaultDaeImportConfig, sanitizeBaseFilename } from "./components/dae-import/daeImportDefaults";
+import type { HavokMeshData } from "@/utils/havokXmlParser";
 
 import type { PreviewRenderStyle } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
 
@@ -298,6 +302,14 @@ export default function SceneEdit() {
     threeObjects: SceneExportObject[];
   }>({ open: false, targets: [], threeObjects: [] });
 
+  const [daeImportEntries, setDaeImportEntries] = useState<DaeImportEntry[]>([]);
+  const [showDaeImportModal, setShowDaeImportModal] = useState(false);
+  const [havokInfo, setHavokInfo] = useState<HavokInstallInfo | null>(null);
+  const [havokMeshDataMap] = useState(() => new Map<string, HavokMeshData>());
+
+  const viewMode = useSceneEditorStore((s) => s.viewMode);
+  const setViewMode = useSceneEditorStore((s) => s.setViewMode);
+
   const INITIAL_STEPS: ImportStep[] = [
     { step: "read", label: "Reading file...", status: "pending" },
     { step: "extract", label: "Decompressing FHM2D...", status: "pending" },
@@ -336,6 +348,10 @@ export default function SceneEdit() {
   );
 
   const unlistenRef = useRef<UnlistenFn | null>(null);
+
+  useEffect(() => {
+    invoke<HavokInstallInfo | null>("detect_havok_installation").then(setHavokInfo);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1868,6 +1884,52 @@ export default function SceneEdit() {
     }
   }, [handleClearSelection, handleSelectNode]);
 
+  const handleImportDaeWithConfig = useCallback(async () => {
+    const selected = await open({
+      multiple: true,
+      filters: [{ name: "Collada DAE", extensions: ["dae"] }],
+    });
+    if (!selected) return;
+    const paths = Array.isArray(selected) ? selected : [selected];
+
+    const entries: DaeImportEntry[] = paths.map((filePath) => {
+      const fileName = filePath.split(/[/\\]/).pop() ?? "model.dae";
+      const baseName = sanitizeBaseFilename(fileName);
+      return {
+        importId: `dae_cfg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        fileName,
+        filePath,
+        analysis: null,
+        config: createDefaultDaeImportConfig(baseName),
+        analyzing: true,
+        analyzeError: null,
+      };
+    });
+
+    setDaeImportEntries(entries);
+    setShowDaeImportModal(true);
+
+    for (let i = 0; i < entries.length; i++) {
+      try {
+        const analysis = await invoke("ssbh_analyze_dae", { daePath: paths[i] });
+        setDaeImportEntries((prev) =>
+          prev.map((e, idx) =>
+            idx === i ? { ...e, analysis: analysis as DaeImportEntry["analysis"], analyzing: false } : e,
+          ),
+        );
+      } catch (err) {
+        setDaeImportEntries((prev) =>
+          prev.map((e, idx) =>
+            idx === i
+              ? { ...e, analyzing: false, analyzeError: String(err) }
+              : e,
+          ),
+        );
+      }
+    }
+  }, []);
+
+
   const handleExportSelectedDae = useCallback(() => {
     const objects = viewportRef.current?.getSelectedExportObjects() ?? [];
     if (objects.length === 0) {
@@ -2208,6 +2270,9 @@ export default function SceneEdit() {
           onGizmoSizeChange={handleGizmoSizeChange}
           animeRenderEnabled={sceneAnimeRenderEnabled}
           onToggleAnimeRender={setSceneAnimeRenderEnabled}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          hasCollisionData={havokMeshDataMap.size > 0}
         />
 
         <AlertDialog open={clearCacheDialogOpen} onOpenChange={setClearCacheDialogOpen}>
@@ -2351,6 +2416,8 @@ export default function SceneEdit() {
                 placementGizmoMode={placementGizmoMode}
                 transformGizmoSize={sceneEditGizmoSize}
                 onPlacementGizmoCommit={commitPlacementGizmo}
+                viewMode={viewMode}
+                havokMeshDataMap={havokMeshDataMap}
               />
               <SceneViewportOverlay textureProgress={textureProgress} />
             </div>
@@ -2524,6 +2591,28 @@ export default function SceneEdit() {
           onExport={handleDaeExportConfirm}
           onCancel={() => setDaeExportDialog((prev) => ({ ...prev, open: false }))}
         />
+
+        {showDaeImportModal && daeImportEntries.length > 0 && (
+          <DaeImportConfigModal
+            entries={daeImportEntries}
+            havokInfo={havokInfo}
+            onConfigChange={(importId, config) => {
+              setDaeImportEntries((prev) =>
+                prev.map((e) =>
+                  e.importId === importId ? { ...e, config } : e,
+                ),
+              );
+            }}
+            onImport={() => {
+              setShowDaeImportModal(false);
+              handleImportDae();
+            }}
+            onCancel={() => {
+              setShowDaeImportModal(false);
+              setDaeImportEntries([]);
+            }}
+          />
+        )}
       </div>
     </TooltipProvider>
   );

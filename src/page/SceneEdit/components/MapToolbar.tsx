@@ -30,6 +30,7 @@ import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import type { PlacementGizmoMode } from "./MapViewport";
 import { MAX_SCENE_GIZMO_SIZE, MIN_SCENE_GIZMO_SIZE } from "../utils/sceneEditorSettings";
+import { HavokViewModeToggle } from "./havok/HavokViewModeToggle";
 
 const GIZMO_MODES = [
   { key: "W", mode: "translate" as const, label: "Move", icon: Move3D },
@@ -66,6 +67,9 @@ interface MapToolbarProps {
   onGizmoSizeChange: (size: number) => void;
   animeRenderEnabled: boolean;
   onToggleAnimeRender: (enabled: boolean) => void;
+  viewMode: "normal" | "collision" | "both";
+  onViewModeChange: (mode: "normal" | "collision" | "both") => void;
+  hasCollisionData: boolean;
 }
 
 export function MapToolbar({
@@ -97,6 +101,9 @@ export function MapToolbar({
   onGizmoSizeChange,
   animeRenderEnabled,
   onToggleAnimeRender,
+  viewMode,
+  onViewModeChange,
+  hasCollisionData,
 }: MapToolbarProps) {
   return (
     <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b bg-muted/20 px-1.5 py-0.5">
@@ -338,6 +345,14 @@ export function MapToolbar({
           <TooltipContent side="bottom">Stats</TooltipContent>
         </Tooltip>
       </div>
+
+      <Separator orientation="vertical" className="h-4 mx-0.5" />
+
+      <HavokViewModeToggle
+        value={viewMode}
+        onChange={onViewModeChange}
+        disabled={!hasCollisionData}
+      />
 
       <Separator orientation="vertical" className="h-4 mx-0.5" />
 
