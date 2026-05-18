@@ -36,6 +36,9 @@ interface SceneEditorState {
   nodeVisibility: Record<string, boolean>;
 
   objectLocks: Record<string, boolean>;
+
+  viewMode: "normal" | "collision" | "both";
+  sessionId: string | null;
 }
 
 interface SceneEditorActions {
@@ -71,6 +74,9 @@ interface SceneEditorActions {
 
   toggleLock: (nodeId: string) => void;
   isLocked: (nodeId: string) => boolean;
+
+  setViewMode: (mode: "normal" | "collision" | "both") => void;
+  setSessionId: (id: string | null) => void;
 }
 
 const MAX_HISTORY = 100;
@@ -87,6 +93,8 @@ export const useSceneEditorStore = create<SceneEditorState & SceneEditorActions>
     redoStack: [],
     nodeVisibility: {},
     objectLocks: {},
+    viewMode: "normal",
+    sessionId: null,
 
     select: (id, opts) => {
       set((state) => {
@@ -299,5 +307,17 @@ export const useSceneEditorStore = create<SceneEditorState & SceneEditorActions>
     },
 
     isLocked: (nodeId) => get().objectLocks[nodeId] ?? false,
+
+    setViewMode: (mode) => {
+      set((state) => {
+        state.viewMode = mode;
+      });
+    },
+
+    setSessionId: (id) => {
+      set((state) => {
+        state.sessionId = id;
+      });
+    },
   })),
 );
