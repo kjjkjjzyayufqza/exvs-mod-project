@@ -34,6 +34,7 @@ pub fn run() {
         .manage(fhm2d_memory_preview::Fhm2dMemorySessionState::default())
         .manage(ssbh_motion::MotionSampleCacheState::default())
         .manage(stage_commands::StagePendingImportState::default())
+        .manage(scene_memory_session::SceneSessionState::default())
         .invoke_handler(tauri::generate_handler![
             commands::my_custom_command,
             commands::read_file,
@@ -115,7 +116,15 @@ pub fn run() {
             stage_commands::load_stage_bundle,
             stage_commands::preview_stage_fhm2d_rename,
             stage_commands::load_stage_from_preview,
-            stage_commands::extract_stage_fhm2d_to_folder
+            stage_commands::extract_stage_fhm2d_to_folder,
+            scene_session_commands::scene_session_create,
+            scene_session_commands::scene_session_destroy,
+            scene_session_commands::scene_session_is_dirty,
+            scene_session_commands::scene_import_dae,
+            scene_session_commands::scene_configure_import,
+            scene_session_commands::scene_remove_import,
+            scene_session_commands::scene_open_folder,
+            havok_cli::detect_havok_installation
         ]);
 
     #[cfg(debug_assertions)]
