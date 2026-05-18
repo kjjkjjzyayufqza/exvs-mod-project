@@ -47,3 +47,5 @@ topological-sort = "0.2.2"
 indexmap = "2.2.5"
 ufbx = "0.10"
 flate2 = "1"
+tempfile = "3"
+uuid = { version = "1", features = ["v4"] }

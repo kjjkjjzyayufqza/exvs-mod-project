@@ -108,8 +108,10 @@ dependencies = [
  "tauri-plugin-persisted-scope",
  "tauri-plugin-shell",
  "tauri-plugin-store",
+ "tempfile",
  "topological-sort",
  "ufbx",
+ "uuid",
  "xmltree",
 ]
 
