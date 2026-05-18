@@ -137,6 +137,17 @@ import { DaeImportConfigModal } from "./components/dae-import/DaeImportConfigMod
 import type { DaeImportEntry, HavokInstallInfo } from "./components/dae-import/daeImportTypes";
 import { createDefaultDaeImportConfig, sanitizeBaseFilename } from "./components/dae-import/daeImportDefaults";
 import type { HavokMeshData } from "@/utils/havokXmlParser";
+import {
+  sceneSessionCreate,
+  sceneSessionDestroy,
+  sceneImportDae,
+  sceneConfigureImport,
+  sceneExecuteImport,
+  sceneGenerateHkt,
+  sceneSaveAsFolder,
+  sceneRepackInPlace,
+  mapDaeImportConfigToBackend,
+} from "./utils/sceneSessionService";
 
 import type { PreviewRenderStyle } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
 
@@ -306,6 +317,7 @@ export default function SceneEdit() {
   const [showDaeImportModal, setShowDaeImportModal] = useState(false);
   const [havokInfo, setHavokInfo] = useState<HavokInstallInfo | null>(null);
   const [havokMeshDataMap] = useState(() => new Map<string, HavokMeshData>());
+  const [sceneSessionId, setSceneSessionId] = useState<string | null>(null);
 
   const viewMode = useSceneEditorStore((s) => s.viewMode);
   const setViewMode = useSceneEditorStore((s) => s.setViewMode);
@@ -443,6 +455,14 @@ export default function SceneEdit() {
       }
     };
   }, [sessionId]);
+
+  useEffect(() => {
+    return () => {
+      if (sceneSessionId) {
+        sceneSessionDestroy(sceneSessionId).catch(() => {});
+      }
+    };
+  }, [sceneSessionId]);
 
   // Maya-style W/E/R keyboard shortcuts for gizmo mode
   useEffect(() => {
@@ -741,11 +761,15 @@ export default function SceneEdit() {
     if (sessionId) {
       disposeFhm2dMemorySession(sessionId).catch(() => {});
     }
+    if (sceneSessionId) {
+      sceneSessionDestroy(sceneSessionId).catch(() => {});
+    }
     initialSnapshotRef.current = null;
     setStageName(null);
     setStageRoot(null);
     setIsMemoryImport(false);
     setSessionId(null);
+    setSceneSessionId(null);
     setBaseModel(null);
     setSubModels([]);
     setGraphicParams([]);
@@ -764,7 +788,7 @@ export default function SceneEdit() {
     setHasUnsavedChanges(false);
     setRenamePreview(null);
     setImportProgress((prev) => ({ ...prev, open: false }));
-  }, [sessionId]);
+  }, [sessionId, sceneSessionId]);
 
   const handleConfirmClearCache = useCallback(async () => {
     setClearCacheDialogOpen(false);
@@ -937,6 +961,14 @@ export default function SceneEdit() {
         },
       });
 
+      if (sceneSessionId) {
+        try {
+          await sceneSaveAsFolder(sceneSessionId, stageRoot);
+        } catch (sessionErr) {
+          toast.warning(`Session artifacts save warning: ${sessionErr}`);
+        }
+      }
+
       if (result.reloadedBundle) {
         applyBundle(stageRoot, result.reloadedBundle as any, { showToast: false });
       }
@@ -965,7 +997,7 @@ export default function SceneEdit() {
     } finally {
       setIsLoading(false);
     }
-  }, [stageRoot, graphicParams, placementHeader, placementEntries, importedDaeObjects, applyBundle]);
+  }, [stageRoot, graphicParams, placementHeader, placementEntries, importedDaeObjects, applyBundle, sceneSessionId]);
 
   const handleGraphicParamValueChange = useCallback(
     (index: number, value: string) => {
@@ -1929,6 +1961,50 @@ export default function SceneEdit() {
     }
   }, []);
 
+  const processSessionImports = useCallback(
+    async (sid: string, entries: DaeImportEntry[]) => {
+      let successCount = 0;
+      let failCount = 0;
+      for (const entry of entries) {
+        try {
+          const daeBytes = await invoke<number[]>("read_file", { path: entry.filePath });
+          const importId = await sceneImportDae(sid, daeBytes, entry.fileName.replace(/\.dae$/i, ""));
+          await sceneConfigureImport(sid, importId, mapDaeImportConfigToBackend(entry.config));
+
+          if (entry.config.convertToSsbh || entry.config.generateHkt) {
+            const result = await sceneExecuteImport(sid, importId);
+            if (result.ssbhGenerated) successCount++;
+            if (entry.config.generateHkt && entry.config.hktConfig.configProfile) {
+              await sceneGenerateHkt(sid, importId, entry.config.hktConfig.configProfile);
+            }
+          }
+
+          if (entry.config.loadToScene) {
+            const results = await importDAEFiles(true);
+            if (results.length > 0) {
+              const created: ImportedDaeObject[] = results.map((r, idx) => ({
+                id: `dae_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${idx}`,
+                name: r.fileName.replace(/\.dae$/i, ""),
+                sourcePath: r.filePath,
+                scene: r.scene,
+                transform: { ...DEFAULT_TRANSFORM },
+              }));
+              setImportedDaeObjects((prev) => [...prev, ...created]);
+              setHasUnsavedChanges(true);
+            }
+          }
+          successCount++;
+        } catch (err) {
+          failCount++;
+          toast.error(`Import failed for ${entry.fileName}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      if (successCount > 0) {
+        toast.success(`Session import: ${successCount} succeeded, ${failCount} failed`);
+      }
+    },
+    [],
+  );
 
   const handleExportSelectedDae = useCallback(() => {
     const objects = viewportRef.current?.getSelectedExportObjects() ?? [];
@@ -2247,6 +2323,7 @@ export default function SceneEdit() {
           onExtractFhm2d={handleExtractFhm2d}
           onSave={handleSave}
           onImportDae={handleImportDae}
+          onImportDaeWithConfig={handleImportDaeWithConfig}
           onExportSelectedDae={handleExportSelectedDae}
           canSave={!!stageName && !isMemoryImport}
           canExportDae={canExportSelectedDae}
@@ -2603,9 +2680,18 @@ export default function SceneEdit() {
                 ),
               );
             }}
-            onImport={() => {
+            onImport={async () => {
               setShowDaeImportModal(false);
-              handleImportDae();
+              const entriesToProcess = [...daeImportEntries];
+              setDaeImportEntries([]);
+
+              if (!sceneSessionId) {
+                const sid = await sceneSessionCreate({ type: "new" });
+                setSceneSessionId(sid);
+                await processSessionImports(sid, entriesToProcess);
+              } else {
+                await processSessionImports(sceneSessionId, entriesToProcess);
+              }
             }}
             onCancel={() => {
               setShowDaeImportModal(false);

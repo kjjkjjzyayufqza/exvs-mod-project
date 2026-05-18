@@ -32,6 +32,9 @@ export function DaeImportAnalysisPanel({
 
   if (!analysis) return null;
 
+  const meshCount = analysis.meshRows.length;
+  const vertexCount = analysis.meshRows.reduce((sum, r) => sum + r.vertexCount, 0);
+
   return (
     <div className="space-y-1 py-2">
       <div className="flex items-center gap-2 text-xs">
@@ -41,8 +44,8 @@ export function DaeImportAnalysisPanel({
           <AlertCircle className="h-3 w-3 text-destructive" />
         )}
         <span className="text-muted-foreground">
-          Meshes: {analysis.meshCount} | Vertices:{" "}
-          {analysis.vertexCount.toLocaleString()} | Bones:{" "}
+          Meshes: {meshCount} | Vertices:{" "}
+          {vertexCount.toLocaleString()} | Bones:{" "}
           {analysis.boneCount}
         </span>
       </div>

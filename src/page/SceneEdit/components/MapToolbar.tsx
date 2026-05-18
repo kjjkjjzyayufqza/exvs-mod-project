@@ -28,6 +28,13 @@ import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Settings2, ChevronDown } from "lucide-react";
 import type { PlacementGizmoMode } from "./MapViewport";
 import { MAX_SCENE_GIZMO_SIZE, MIN_SCENE_GIZMO_SIZE } from "../utils/sceneEditorSettings";
 import { HavokViewModeToggle } from "./havok/HavokViewModeToggle";
@@ -44,6 +51,7 @@ interface MapToolbarProps {
   onExtractFhm2d: () => void;
   onSave: () => void;
   onImportDae: () => void;
+  onImportDaeWithConfig: () => void;
   onExportSelectedDae: () => void;
   canSave: boolean;
   canExportDae: boolean;
@@ -78,6 +86,7 @@ export function MapToolbar({
   onExtractFhm2d,
   onSave,
   onImportDae,
+  onImportDaeWithConfig,
   onExportSelectedDae,
   canSave,
   canExportDae,
@@ -181,21 +190,34 @@ export function MapToolbar({
 
       <Separator orientation="vertical" className="h-4 mx-0.5" />
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={onImportDae}
-            disabled={isLoading}
-            aria-label="Import DAE objects"
-          >
-            <Upload className="h-3.5 w-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">Import DAE object(s)</TooltipContent>
-      </Tooltip>
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                disabled={isLoading}
+                aria-label="Import DAE objects"
+              >
+                <Upload className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Import DAE object(s)</TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent align="start" className="min-w-[200px]">
+          <DropdownMenuItem onClick={onImportDae}>
+            <Upload className="mr-2 h-4 w-4" />
+            Quick Import
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onImportDaeWithConfig}>
+            <Settings2 className="mr-2 h-4 w-4" />
+            Import with Config...
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <Tooltip>
         <TooltipTrigger asChild>

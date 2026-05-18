@@ -68,7 +68,13 @@ pub struct ImportMaterial {
 
 /// Validate scene before SSBH conversion (shared by DAE and FBX paths).
 pub fn validate_import_scene(scene: &ImportScene) -> Result<()> {
+    eprintln!(
+        "[validate] validating scene: {} meshes, {} bones",
+        scene.meshes.len(), scene.bones.len()
+    );
+
     if scene.meshes.is_empty() {
+        eprintln!("[validate] scene contains no meshes");
         return Err(anyhow!("Scene contains no meshes"));
     }
 
@@ -76,18 +82,29 @@ pub fn validate_import_scene(scene: &ImportScene) -> Result<()> {
 
     for (index, mesh) in scene.meshes.iter().enumerate() {
         if mesh.vertices.is_empty() {
+            eprintln!("[validate] mesh[{}] '{}': skipping (empty vertices)", index, mesh.name);
             continue;
         }
 
         if mesh.indices.is_empty() {
+            eprintln!("[validate] mesh[{}] '{}': skipping (empty indices)", index, mesh.name);
             continue;
         }
 
         valid_mesh_count += 1;
+        eprintln!(
+            "[validate] mesh[{}] '{}': verts={} indices={} normals={} uvs={} bone_groups={}",
+            index, mesh.name, mesh.vertices.len(), mesh.indices.len(),
+            mesh.normals.len(), mesh.uvs.len(), mesh.bone_influences.len()
+        );
 
         let max_vertex_index = mesh.vertices.len() as u32;
         for (idx_pos, &index_val) in mesh.indices.iter().enumerate() {
             if index_val >= max_vertex_index {
+                eprintln!(
+                    "[validate] mesh[{}] '{}': out-of-bounds index {} at position {} (vertex_count={})",
+                    index, mesh.name, index_val, idx_pos, mesh.vertices.len()
+                );
                 return Err(anyhow!(
                     "Mesh '{}' (index {}) has out-of-bounds index: {} at position {} (max valid index: {}, vertex count: {})",
                     mesh.name,
@@ -101,6 +118,10 @@ pub fn validate_import_scene(scene: &ImportScene) -> Result<()> {
         }
 
         if mesh.indices.len() % 3 != 0 {
+            eprintln!(
+                "[validate] mesh[{}] '{}': index count {} not divisible by 3",
+                index, mesh.name, mesh.indices.len()
+            );
             return Err(anyhow!(
                 "Mesh '{}' (index {}) has invalid index count: {} (must be divisible by 3 for triangles)",
                 mesh.name,
@@ -110,6 +131,10 @@ pub fn validate_import_scene(scene: &ImportScene) -> Result<()> {
         }
 
         if !mesh.normals.is_empty() && mesh.normals.len() != mesh.vertices.len() {
+            eprintln!(
+                "[validate] mesh[{}] '{}': normals {} != vertices {}",
+                index, mesh.name, mesh.normals.len(), mesh.vertices.len()
+            );
             return Err(anyhow!(
                 "Mesh '{}' (index {}): normals count {} does not match vertex count {}",
                 mesh.name,
@@ -120,6 +145,10 @@ pub fn validate_import_scene(scene: &ImportScene) -> Result<()> {
         }
 
         if !mesh.uvs.is_empty() && mesh.uvs.len() != mesh.vertices.len() {
+            eprintln!(
+                "[validate] mesh[{}] '{}': uvs {} != vertices {}",
+                index, mesh.name, mesh.uvs.len(), mesh.vertices.len()
+            );
             return Err(anyhow!(
                 "Mesh '{}' (index {}): UV count {} does not match vertex count {}",
                 mesh.name,
@@ -133,11 +162,13 @@ pub fn validate_import_scene(scene: &ImportScene) -> Result<()> {
     }
 
     if valid_mesh_count == 0 {
+        eprintln!("[validate] no valid meshes after filtering");
         return Err(anyhow!(
             "Scene contains no valid meshes after filtering empty ones"
         ));
     }
 
+    eprintln!("[validate] validation passed: {} valid meshes", valid_mesh_count);
     Ok(())
 }
 
@@ -145,6 +176,11 @@ fn validate_mesh_skinning_constraints(mesh: &ImportMesh, mesh_index: usize) -> R
     if mesh.vertices.is_empty() || mesh.bone_influences.is_empty() {
         return Ok(());
     }
+
+    eprintln!(
+        "[validate] skinning check mesh[{}] '{}': vertex_count={} bone_groups={}",
+        mesh_index, mesh.name, mesh.vertices.len(), mesh.bone_influences.len()
+    );
 
     let vertex_count = mesh.vertices.len();
     let mut influences_per_vertex = vec![0usize; vertex_count];
@@ -253,7 +289,16 @@ fn validate_mesh_skinning_constraints(mesh: &ImportMesh, mesh_index: usize) -> R
     }
 
     if issues.is_empty() {
+        eprintln!("[validate] skinning OK for mesh[{}] '{}'", mesh_index, mesh.name);
         return Ok(());
+    }
+
+    eprintln!(
+        "[validate] skinning failed for mesh[{}] '{}': {} issues",
+        mesh_index, mesh.name, issues.len()
+    );
+    for issue in &issues {
+        eprintln!("[validate]   {}", issue);
     }
 
     let mut message = format!(

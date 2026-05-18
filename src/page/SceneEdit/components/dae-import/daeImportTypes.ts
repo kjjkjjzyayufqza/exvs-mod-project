@@ -26,14 +26,30 @@ export interface DaeImportConfig {
   hktConfig: HktImportConfig;
 }
 
-export interface DaeAnalysisResult {
-  meshCount: number;
+export interface DaeMeshAnalysisRow {
+  name: string;
   vertexCount: number;
+  indexCount: number;
+  triangleCount: number;
+  normalCount: number;
+  uvCount: number;
+  normalsMatchVertices: boolean;
+  uvsMatchVertices: boolean;
+  boneInfluenceGroups: number;
+  maxInfluencesPerVertex: number;
+  exceedsFourInfluences: boolean;
+}
+
+export interface DaeAnalysisResult {
+  daePath: string;
+  upAxis: string;
+  meshRows: DaeMeshAnalysisRow[];
   boneCount: number;
+  boneNames: string[];
   geometryNames: string[];
-  canConvert: boolean;
-  warnings: string[];
   blockingErrors: string[];
+  warnings: string[];
+  canConvert: boolean;
 }
 
 export interface DaeImportEntry {

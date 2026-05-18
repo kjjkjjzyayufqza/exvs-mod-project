@@ -72,20 +72,21 @@ impl Default for DaeConvertConfig {
 
 /// Parse DAE file and extract scene data using xmltree
 pub fn parse_dae_file(file_path: &Path) -> Result<ImportScene> {
+    eprintln!("[dae_parse] parsing file: {}", file_path.display());
     let content = std::fs::read_to_string(file_path)
         .map_err(|e| anyhow!("Failed to read DAE file: {}", e))?;
-    
+    eprintln!("[dae_parse] file size: {} bytes", content.len());
+
     let root = Element::parse(content.as_bytes())
         .map_err(|e| anyhow!("Failed to parse DAE XML: {}", e))?;
-    
+
     let mut scene = ImportScene {
         meshes: Vec::new(),
         materials: Vec::new(),
         bones: Vec::new(),
         up_axis: UpAxisConversion::YUp,
     };
-    
-    // Extract up axis from asset information
+
     if let Some(asset) = find_child(&root, "asset") {
         if let Some(up_axis) = find_child(asset, "up_axis") {
             if let Some(text) = get_element_text(up_axis) {
@@ -95,38 +96,82 @@ pub fn parse_dae_file(file_path: &Path) -> Result<ImportScene> {
                     "Z_UP" => UpAxisConversion::ZUp,
                     _ => UpAxisConversion::YUp,
                 };
+                eprintln!("[dae_parse] up_axis={}", text);
             }
         }
     }
-    
-    // Parse materials
+
     if let Some(lib_materials) = find_child(&root, "library_materials") {
         scene.materials = parse_materials_from_xml(lib_materials)?;
+        eprintln!("[dae_parse] parsed {} materials", scene.materials.len());
+    } else {
+        eprintln!("[dae_parse] no library_materials found");
     }
-    
-    // Parse geometries
-    let mut geometry_id_to_name_map = std::collections::HashMap::new();
+
+    let mut geometry_id_to_index_map = std::collections::HashMap::new();
     if let Some(lib_geometries) = find_child(&root, "library_geometries") {
-        scene.meshes = parse_geometries_from_xml(lib_geometries, &mut geometry_id_to_name_map)?;
+        scene.meshes = parse_geometries_from_xml(lib_geometries, &mut geometry_id_to_index_map)?;
+        eprintln!("[dae_parse] parsed {} geometries", scene.meshes.len());
+        for (i, m) in scene.meshes.iter().enumerate() {
+            eprintln!(
+                "[dae_parse]   mesh[{}] name={} verts={} indices={} normals={} uvs={}",
+                i, m.name, m.vertices.len(), m.indices.len(), m.normals.len(), m.uvs.len()
+            );
+        }
+    } else {
+        eprintln!("[dae_parse] no library_geometries found");
     }
-    
-    // Parse controllers (bone influences and weights)
+
     if let Some(lib_controllers) = find_child(&root, "library_controllers") {
-        parse_controllers_and_apply_to_meshes(lib_controllers, &mut scene.meshes, &geometry_id_to_name_map)?;
+        eprintln!("[dae_parse] parsing controllers (skinning)...");
+        parse_controllers_and_apply_to_meshes(lib_controllers, &mut scene.meshes, &geometry_id_to_index_map)?;
+        for (i, m) in scene.meshes.iter().enumerate() {
+            if !m.bone_influences.is_empty() {
+                let total_weights: usize = m.bone_influences.iter().map(|bi| bi.vertex_weights.len()).sum();
+                eprintln!(
+                    "[dae_parse]   mesh[{}] name={} bone_influence_groups={} total_vertex_weights={}",
+                    i, m.name, m.bone_influences.len(), total_weights
+                );
+            }
+        }
+    } else {
+        eprintln!("[dae_parse] no library_controllers found");
     }
-    
-    // Parse visual scenes for bone hierarchy
+
     if let Some(lib_visual_scenes) = find_child(&root, "library_visual_scenes") {
         scene.bones = parse_bone_hierarchy_from_visual_scenes(lib_visual_scenes)?;
+        eprintln!("[dae_parse] parsed {} bones from visual_scenes", scene.bones.len());
     }
-    
-    // If no bones found in visual scenes, try library_nodes
+
     if scene.bones.is_empty() {
         if let Some(lib_nodes) = find_child(&root, "library_nodes") {
             scene.bones = parse_bone_hierarchy_from_nodes(lib_nodes)?;
+            eprintln!("[dae_parse] parsed {} bones from library_nodes", scene.bones.len());
         }
     }
-    
+
+    if !scene.bones.is_empty() {
+        eprintln!("[dae_parse] bone names (first 10): {:?}",
+            scene.bones.iter().take(10).map(|b| &b.name).collect::<Vec<_>>()
+        );
+    }
+
+    for (i, mesh) in scene.meshes.iter_mut().enumerate() {
+        let pre_verts = mesh.vertices.len();
+        let pre_indices = mesh.indices.len();
+        optimize_mesh_data(mesh);
+        if mesh.vertices.len() != pre_verts || mesh.indices.len() != pre_indices {
+            eprintln!(
+                "[dae_parse] optimize mesh[{}] name={}: verts {} -> {} indices {} -> {}",
+                i, mesh.name, pre_verts, mesh.vertices.len(), pre_indices, mesh.indices.len()
+            );
+        }
+    }
+
+    eprintln!(
+        "[dae_parse] done: {} meshes, {} materials, {} bones, up_axis={:?}",
+        scene.meshes.len(), scene.materials.len(), scene.bones.len(), scene.up_axis
+    );
     Ok(scene)
 }
 
@@ -222,54 +267,87 @@ fn parse_materials_from_xml(lib_materials: &Element) -> Result<Vec<DaeMaterial>>
     Ok(materials)
 }
 
-fn parse_geometries_from_xml(lib_geometries: &Element, geometry_id_to_name_map: &mut HashMap<String, String>) -> Result<Vec<DaeMesh>> {
+fn parse_geometries_from_xml(lib_geometries: &Element, geometry_id_to_index_map: &mut HashMap<String, usize>) -> Result<Vec<DaeMesh>> {
     let mut meshes = Vec::new();
-    
+    let mut name_counts: HashMap<String, usize> = HashMap::new();
+
     for geometry_elem in find_all_children(lib_geometries, "geometry") {
         if let Some(id) = geometry_elem.attributes.get("id") {
             if let Some(mesh_elem) = find_child(geometry_elem, "mesh") {
-                // Use 'name' attribute if available, otherwise fall back to 'id'
-                let mesh_name = geometry_elem.attributes.get("name")
+                let raw_name = geometry_elem.attributes.get("name")
                     .unwrap_or(id)
                     .clone();
-                
-                // Store the mapping from geometry id to mesh name
-                geometry_id_to_name_map.insert(id.clone(), mesh_name.clone());
-                
-                let mut dae_mesh = DaeMesh {
+
+                let count = name_counts.entry(raw_name.clone()).or_insert(0);
+                let mesh_name = if *count == 0 {
+                    raw_name.clone()
+                } else {
+                    eprintln!(
+                        "[dae_parse] duplicate geometry name '{}' (occurrence {}), renaming to '{}_{}'",
+                        raw_name, *count + 1, raw_name, count
+                    );
+                    format!("{}_{}", raw_name, count)
+                };
+                *count += 1;
+
+                eprintln!("[dae_parse] geometry id={} -> mesh_name={} (index={})", id, mesh_name, meshes.len());
+                geometry_id_to_index_map.insert(id.clone(), meshes.len());
+
+                let vertices = extract_vertices_from_xml_mesh(mesh_elem)?;
+                let normals = extract_normals_from_xml_mesh(mesh_elem)?;
+                let uvs = extract_uvs_from_xml_mesh(mesh_elem)?;
+                let indices = extract_indices_from_xml_mesh(mesh_elem)?;
+
+                eprintln!(
+                    "[dae_parse] geometry '{}': {} verts, {} normals, {} uvs, {} indices",
+                    mesh_name, vertices.len(), normals.len(), uvs.len(), indices.len()
+                );
+
+                let dae_mesh = DaeMesh {
                     name: mesh_name,
-                    vertices: extract_vertices_from_xml_mesh(mesh_elem)?,
-                    normals: extract_normals_from_xml_mesh(mesh_elem)?,
-                    uvs: extract_uvs_from_xml_mesh(mesh_elem)?,
-                    indices: extract_indices_from_xml_mesh(mesh_elem)?,
+                    vertices,
+                    normals,
+                    uvs,
+                    indices,
                     material_name: None,
                     bone_influences: Vec::new(),
                 };
-                
-                // Post-process to ensure indices and vertex data are consistent
-                optimize_mesh_data(&mut dae_mesh);
-                
+
                 meshes.push(dae_mesh);
             }
         }
     }
-    
+
     Ok(meshes)
 }
 
 /// Parse controllers from DAE and apply bone influences to meshes
-fn parse_controllers_and_apply_to_meshes(lib_controllers: &Element, meshes: &mut [DaeMesh], geometry_id_to_name_map: &HashMap<String, String>) -> Result<()> {
-    for controller_elem in find_all_children(lib_controllers, "controller") {
-        if controller_elem.attributes.get("id").is_some() {
-            if let Some(skin_elem) = find_child(controller_elem, "skin") {
-                if let Some(source_attr) = skin_elem.attributes.get("source") {
-                    let geometry_id = source_attr.trim_start_matches('#');
+fn parse_controllers_and_apply_to_meshes(lib_controllers: &Element, meshes: &mut [DaeMesh], geometry_id_to_index_map: &HashMap<String, usize>) -> Result<()> {
+    let controllers = find_all_children(lib_controllers, "controller");
+    eprintln!("[dae_parse] processing {} controllers", controllers.len());
 
-                    if let Some(mesh_name) = geometry_id_to_name_map.get(geometry_id) {
-                        if let Some(mesh) = meshes.iter_mut().find(|m| &m.name == mesh_name) {
-                            parse_skin_data_to_mesh(skin_elem, mesh)?;
-                        }
+    for controller_elem in controllers {
+        let ctrl_id = controller_elem.attributes.get("id").map(|s| s.as_str()).unwrap_or("<no-id>");
+        if let Some(skin_elem) = find_child(controller_elem, "skin") {
+            if let Some(source_attr) = skin_elem.attributes.get("source") {
+                let geometry_id = source_attr.trim_start_matches('#');
+                eprintln!("[dae_parse] controller '{}' skin source -> geometry_id='{}'", ctrl_id, geometry_id);
+
+                if let Some(&mesh_idx) = geometry_id_to_index_map.get(geometry_id) {
+                    if let Some(mesh) = meshes.get_mut(mesh_idx) {
+                        eprintln!(
+                            "[dae_parse] applying skinning: controller='{}' -> mesh[{}] name='{}'",
+                            ctrl_id, mesh_idx, mesh.name
+                        );
+                        parse_skin_data_to_mesh(skin_elem, mesh)?;
+                    } else {
+                        eprintln!("[dae_parse] mesh_idx={} out of bounds for controller '{}'", mesh_idx, ctrl_id);
                     }
+                } else {
+                    eprintln!(
+                        "[dae_parse] geometry_id='{}' not found in geometry_id_to_index_map for controller '{}'",
+                        geometry_id, ctrl_id
+                    );
                 }
             }
         }
@@ -279,11 +357,9 @@ fn parse_controllers_and_apply_to_meshes(lib_controllers: &Element, meshes: &mut
 
 /// Parse skin data from DAE and convert to mesh bone influences
 fn parse_skin_data_to_mesh(skin_elem: &Element, mesh: &mut DaeMesh) -> Result<()> {
-    // Parse joints source
     let mut joint_names = Vec::new();
     let mut weights = Vec::new();
-    
-    // Find joints source
+
     for source_elem in find_all_children(skin_elem, "source") {
         if let Some(source_id) = source_elem.attributes.get("id") {
             if source_id.contains("joints") || source_id.contains("Joint") {
@@ -304,20 +380,36 @@ fn parse_skin_data_to_mesh(skin_elem: &Element, mesh: &mut DaeMesh) -> Result<()
             }
         }
     }
-    
+
+    eprintln!(
+        "[dae_parse] skin data for mesh '{}': {} joint_names, {} weight_values",
+        mesh.name, joint_names.len(), weights.len()
+    );
+
     if joint_names.is_empty() || weights.is_empty() {
+        eprintln!("[dae_parse] skipping skinning for mesh '{}': empty joints or weights", mesh.name);
         return Ok(());
     }
-    
-    // Parse vertex weights
+
     if let Some(vertex_weights_elem) = find_child(skin_elem, "vertex_weights") {
         if let Some(count_attr) = vertex_weights_elem.attributes.get("count") {
             if let Ok(vertex_count) = count_attr.parse::<usize>() {
+                eprintln!(
+                    "[dae_parse] vertex_weights count={} for mesh '{}' (mesh verts={})",
+                    vertex_count, mesh.name, mesh.vertices.len()
+                );
                 parse_vertex_weights_data(vertex_weights_elem, mesh, &joint_names, &weights, vertex_count)?;
+                let total_weights: usize = mesh.bone_influences.iter().map(|bi| bi.vertex_weights.len()).sum();
+                eprintln!(
+                    "[dae_parse] skinning applied to mesh '{}': {} bone groups, {} total vertex weights",
+                    mesh.name, mesh.bone_influences.len(), total_weights
+                );
             }
         }
+    } else {
+        eprintln!("[dae_parse] no vertex_weights element found for mesh '{}'", mesh.name);
     }
-    
+
     Ok(())
 }
 
@@ -674,79 +766,131 @@ fn optimize_mesh_data(mesh: &mut DaeMesh) {
     if mesh.indices.is_empty() || mesh.vertices.is_empty() {
         return;
     }
-    
-    
-    // First, ensure all attribute data has consistent length with vertices
+
     align_attribute_data(mesh);
-    
-    // Find the maximum index used
+
     let max_index = mesh.indices.iter().max().copied().unwrap_or(0);
     let vertex_count = mesh.vertices.len() as u32;
-    
-    // If indices are within bounds and data is consistent, no further optimization needed
+
     if max_index < vertex_count {
+        eprintln!(
+            "[dae_parse] optimize '{}': indices in bounds (max_index={} < vertex_count={}), skipping compaction",
+            mesh.name, max_index, vertex_count
+        );
         return;
     }
-    
-    
-    // Create a mapping of used indices to compact vertex data
+
+    eprintln!(
+        "[dae_parse] optimize '{}': compacting (max_index={} >= vertex_count={})",
+        mesh.name, max_index, vertex_count
+    );
+
     let mut used_indices: Vec<u32> = mesh.indices.iter().cloned().collect();
     used_indices.sort();
     used_indices.dedup();
-    
-    // Filter to only include valid indices
+
+    let before_filter = used_indices.len();
     used_indices.retain(|&idx| (idx as usize) < mesh.vertices.len());
-    
+    if used_indices.len() < before_filter {
+        eprintln!(
+            "[dae_parse] optimize '{}': dropped {} out-of-bounds unique indices",
+            mesh.name,
+            before_filter - used_indices.len()
+        );
+    }
+
     if used_indices.is_empty() {
+        eprintln!("[dae_parse] optimize '{}': no valid indices remain", mesh.name);
         mesh.indices.clear();
         return;
     }
-    
-    // Create new vertex data using only referenced vertices
+
     let mut new_vertices = Vec::new();
     let mut new_normals = Vec::new();
     let mut new_uvs = Vec::new();
     let mut index_map = std::collections::HashMap::new();
-    
+
     for (new_idx, &old_idx) in used_indices.iter().enumerate() {
         let old_idx_usize = old_idx as usize;
         if old_idx_usize < mesh.vertices.len() {
             new_vertices.push(mesh.vertices[old_idx_usize]);
             index_map.insert(old_idx, new_idx as u32);
-            
-            // Copy normals if available (should be same length as vertices now)
+
             if old_idx_usize < mesh.normals.len() {
                 new_normals.push(mesh.normals[old_idx_usize]);
             }
-            
-            // Copy UVs if available (should be same length as vertices now)
+
             if old_idx_usize < mesh.uvs.len() {
                 new_uvs.push(mesh.uvs[old_idx_usize]);
             }
         }
     }
-    
-    // Remap indices
+
     let mut new_indices = Vec::new();
+    let mut dropped_indices = 0u32;
     for &old_index in &mesh.indices {
         if let Some(&new_index) = index_map.get(&old_index) {
             new_indices.push(new_index);
         } else {
+            dropped_indices += 1;
         }
     }
-    
-    // Ensure we have triangles (index count divisible by 3)
+    if dropped_indices > 0 {
+        eprintln!(
+            "[dae_parse] optimize '{}': {} indices dropped during remap",
+            mesh.name, dropped_indices
+        );
+    }
+
     let remainder = new_indices.len() % 3;
     if remainder != 0 {
+        eprintln!(
+            "[dae_parse] optimize '{}': trimming {} trailing indices for triangle alignment",
+            mesh.name, remainder
+        );
         new_indices.truncate(new_indices.len() - remainder);
     }
-    
-    // Update mesh data
+
+    let pre_bone_groups = mesh.bone_influences.len();
+    for influence in &mut mesh.bone_influences {
+        let pre = influence.vertex_weights.len();
+        influence.vertex_weights.retain_mut(|vw| {
+            if let Some(&new_vi) = index_map.get(&vw.vertex_index) {
+                vw.vertex_index = new_vi;
+                true
+            } else {
+                false
+            }
+        });
+        let dropped = pre - influence.vertex_weights.len();
+        if dropped > 0 {
+            eprintln!(
+                "[dae_parse] optimize '{}': bone '{}' dropped {} unmapped vertex weights",
+                mesh.name, influence.bone_name, dropped
+            );
+        }
+    }
+    mesh.bone_influences.retain(|inf| !inf.vertex_weights.is_empty());
+    if mesh.bone_influences.len() < pre_bone_groups {
+        eprintln!(
+            "[dae_parse] optimize '{}': bone groups {} -> {} after remap",
+            mesh.name, pre_bone_groups, mesh.bone_influences.len()
+        );
+    }
+
+    eprintln!(
+        "[dae_parse] optimize '{}': verts {} -> {}, indices {} -> {}",
+        mesh.name,
+        mesh.vertices.len(),
+        new_vertices.len(),
+        mesh.indices.len(),
+        new_indices.len()
+    );
+
     mesh.vertices = new_vertices;
     mesh.normals = new_normals;
     mesh.uvs = new_uvs;
     mesh.indices = new_indices;
-    
 }
 
 /// Align attribute data to ensure all arrays have the same length as vertices

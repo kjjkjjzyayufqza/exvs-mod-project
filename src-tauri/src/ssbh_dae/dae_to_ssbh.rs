@@ -43,23 +43,41 @@ pub fn convert_import_scene_to_ssbh_files(
     scene: &ImportScene,
     config: &DaeConvertConfig,
 ) -> Result<(ConvertedFiles, SsbhConvertStats)> {
+    eprintln!(
+        "[dae_to_ssbh] converting scene: {} meshes, {} bones, base_filename={}",
+        scene.meshes.len(), scene.bones.len(), config.base_filename
+    );
     let mut converted_files = ConvertedFiles::default();
 
     if !config.write_numdlb && !config.write_numshb && !config.write_nusktb {
+        eprintln!("[dae_to_ssbh] no output format selected");
         return Err(anyhow!("Select at least one SSBH output (.numdlb / .numshb / .nusktb)"));
     }
     if config.write_numdlb && (!config.write_numshb || !config.write_nusktb) {
+        eprintln!("[dae_to_ssbh] numdlb requires numshb + nusktb");
         return Err(anyhow!(
             "Writing .numdlb requires both .numshb and .nusktb in this pipeline (modl references both)"
         ));
     }
 
+    eprintln!("[dae_to_ssbh] checking unique geometry names...");
     ensure_unique_geometry_names_for_vs2(&scene.meshes)?;
 
+    eprintln!("[dae_to_ssbh] converting skeleton...");
     let skel_data = convert_skeleton_from_dae(&scene.bones, &scene.meshes, config)?;
+    eprintln!("[dae_to_ssbh] skeleton: {} bones", skel_data.bones.len());
+
+    eprintln!("[dae_to_ssbh] converting meshes...");
     let mesh_data = convert_meshes_to_ssbh(&scene.meshes, config)?;
     let stats = compute_convert_stats(&mesh_data, skel_data.bones.len());
+    eprintln!(
+        "[dae_to_ssbh] mesh stats: {} objects, {} vertices, {} triangle_indices",
+        stats.mesh_objects, stats.total_vertices, stats.total_triangle_indices
+    );
+
+    eprintln!("[dae_to_ssbh] converting model entries...");
     let modl_data = convert_model_to_ssbh(&scene.meshes, config)?;
+    eprintln!("[dae_to_ssbh] modl entries: {}", modl_data.entries.len());
 
     if config.write_nusktb {
         let skel_path = config
@@ -107,19 +125,34 @@ pub fn convert_dae_file(
     dae_file_path: &Path,
     config: &DaeConvertConfig,
 ) -> Result<(ConvertedFiles, SsbhConvertStats)> {
+    eprintln!("[dae_to_ssbh] convert_dae_file: {}", dae_file_path.display());
     let mut scene = parse_dae_file(dae_file_path)?;
     if !config.include_geometry_names.is_empty() {
+        eprintln!("[dae_to_ssbh] filtering by include_geometry_names: {:?}", config.include_geometry_names);
         let allowed: HashSet<String> = config.include_geometry_names.iter().cloned().collect();
+        let before = scene.meshes.len();
         scene.meshes.retain(|m| !m.vertices.is_empty() && allowed.contains(&m.name));
+        eprintln!("[dae_to_ssbh] geometry filter: {} -> {} meshes", before, scene.meshes.len());
         if scene.meshes.is_empty() {
+            eprintln!("[dae_to_ssbh] include_geometry_names filter left no geometries");
             return Err(anyhow!(
                 "include_geometry_names left no geometries (check exact COLLADA geometry names)"
             ));
         }
     }
-    validate_dae_scene(&scene)?;
+    eprintln!("[dae_to_ssbh] validating scene...");
+    validate_dae_scene(&scene).map_err(|e| {
+        eprintln!("[dae_to_ssbh] scene validation failed: {}", e);
+        e
+    })?;
+    eprintln!("[dae_to_ssbh] scene validation passed");
     let (converted_files, stats) = convert_dae_to_ssbh_files(&scene, config)?;
-    validate_converted_files(&converted_files)?;
+    eprintln!("[dae_to_ssbh] validating output files...");
+    validate_converted_files(&converted_files).map_err(|e| {
+        eprintln!("[dae_to_ssbh] output file validation failed: {}", e);
+        e
+    })?;
+    eprintln!("[dae_to_ssbh] convert_dae_file done successfully");
     Ok((converted_files, stats))
 }
 
@@ -152,12 +185,17 @@ fn ensure_unique_geometry_names_for_vs2(meshes: &[DaeMesh]) -> Result<()> {
             continue;
         }
         if !seen.insert(m.name.clone()) {
+            eprintln!(
+                "[dae_to_ssbh] duplicate geometry name '{}' (VS2 requires unique names)",
+                m.name
+            );
             return Err(anyhow!(
                 "Duplicate geometry name '{}' in DAE: VS2 export requires unique names (mesh subindex is always 0 on disk)",
                 m.name
             ));
         }
     }
+    eprintln!("[dae_to_ssbh] all {} geometry names are unique", seen.len());
     Ok(())
 }
 
@@ -166,8 +204,14 @@ fn convert_meshes_to_ssbh(meshes: &[DaeMesh], config: &DaeConvertConfig) -> Resu
 
     for dae_mesh in meshes {
         if dae_mesh.vertices.is_empty() {
+            eprintln!("[dae_to_ssbh] skipping empty mesh '{}'", dae_mesh.name);
             continue;
         }
+
+        eprintln!(
+            "[dae_to_ssbh] converting mesh '{}': {} verts, {} indices, {} bone_influences",
+            dae_mesh.name, dae_mesh.vertices.len(), dae_mesh.indices.len(), dae_mesh.bone_influences.len()
+        );
 
         let vertices = apply_transforms(&dae_mesh.vertices, config);
         let vertex_count = vertices.len();

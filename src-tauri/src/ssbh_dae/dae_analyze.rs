@@ -89,6 +89,10 @@ fn analyze_mesh_row(mesh: &DaeMesh) -> DaeMeshAnalysisRow {
 
 /// Build the same analysis report used for DAE preflight, for any `ImportScene` (DAE, FBX, etc.).
 pub fn analysis_report_for_import_scene(source_path: String, scene: &ImportScene) -> DaeAnalysisReport {
+    eprintln!(
+        "[dae_analyze] building report for '{}': {} meshes, {} bones",
+        source_path, scene.meshes.len(), scene.bones.len()
+    );
     let mut mesh_rows: Vec<DaeMeshAnalysisRow> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
 
@@ -138,10 +142,21 @@ pub fn analysis_report_for_import_scene(source_path: String, scene: &ImportScene
 
     let mut blocking_errors: Vec<String> = Vec::new();
     if let Err(e) = validate_dae_scene(scene) {
+        eprintln!("[dae_analyze] validation blocking error: {}", e);
         blocking_errors.push(e.to_string());
     }
 
+    if !warnings.is_empty() {
+        for w in &warnings {
+            eprintln!("[dae_analyze] warning: {}", w);
+        }
+    }
+
     let can_convert = blocking_errors.is_empty();
+    eprintln!(
+        "[dae_analyze] report: {} mesh_rows, {} warnings, {} blocking_errors, can_convert={}",
+        mesh_rows.len(), warnings.len(), blocking_errors.len(), can_convert
+    );
 
     DaeAnalysisReport {
         dae_path: source_path,
@@ -158,9 +173,18 @@ pub fn analysis_report_for_import_scene(source_path: String, scene: &ImportScene
 
 /// Parse and summarize a DAE without writing SSBH files.
 pub fn analyze_dae_path(path: &Path) -> Result<DaeAnalysisReport, String> {
-    let scene = parse_dae_file(path).map_err(|e| e.to_string())?;
-    Ok(analysis_report_for_import_scene(
+    eprintln!("[dae_analyze] analyzing path: {}", path.display());
+    let scene = parse_dae_file(path).map_err(|e| {
+        eprintln!("[dae_analyze] parse_dae_file failed for '{}': {}", path.display(), e);
+        e.to_string()
+    })?;
+    let report = analysis_report_for_import_scene(
         path.to_string_lossy().to_string(),
         &scene,
-    ))
+    );
+    eprintln!(
+        "[dae_analyze] analysis complete: can_convert={} meshes={} bones={}",
+        report.can_convert, report.mesh_rows.len(), report.bone_count
+    );
+    Ok(report)
 }

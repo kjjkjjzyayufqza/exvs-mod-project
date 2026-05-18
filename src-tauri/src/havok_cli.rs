@@ -84,11 +84,18 @@ pub fn generate_hkt_from_dae(
         .map_err(|e| format!("Failed to run FileConvert.exe: {e}"))?;
 
     if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!(
+            "[havok_cli] FileConvert failed: code={:?} profile={}\n  stdout={}\n  stderr={}",
+            output.status.code(), config_profile, stdout.trim(), stderr.trim()
+        );
         return Err(format!(
-            "FileConvert exited with code {:?}: {}",
+            "FileConvert exited with code {:?} (profile={}): stdout=[{}] stderr=[{}]",
             output.status.code(),
-            stderr
+            config_profile,
+            stdout.trim(),
+            stderr.trim()
         ));
     }
 

@@ -130,15 +130,25 @@ fn variant_numatb_paths(base: &str, output_dir: &Path) -> (PathBuf, PathBuf) {
 /// Preflight a `.dae` file: per-geometry metrics, bone list, blocking errors vs `validate_dae_scene`.
 #[tauri::command]
 pub fn ssbh_analyze_dae(dae_path: String) -> Result<DaeAnalysisReport, String> {
+    eprintln!("[ssbh_analyze_dae] path={}", dae_path);
     let p = PathBuf::from(dae_path.trim());
-    analyze_dae_path(&p)
+    let result = analyze_dae_path(&p);
+    match &result {
+        Ok(r) => eprintln!(
+            "[ssbh_analyze_dae] done: can_convert={} meshes={} bones={} warnings={} errors={}",
+            r.can_convert, r.mesh_rows.len(), r.bone_count, r.warnings.len(), r.blocking_errors.len()
+        ),
+        Err(e) => eprintln!("[ssbh_analyze_dae] failed: {}", e),
+    }
+    result
 }
 
 /// Preflight a `.fbx` file (same report shape as `ssbh_analyze_dae`).
 #[tauri::command]
 pub fn ssbh_analyze_fbx(fbx_path: String) -> Result<DaeAnalysisReport, String> {
+    eprintln!("[ssbh_analyze_fbx] path={}", fbx_path);
     let p = PathBuf::from(fbx_path.trim());
-    analyze_fbx_path(&p)
+    analyze_fbx_path(&p).inspect_err(|e| eprintln!("[ssbh_analyze_fbx] failed: {}", e))
 }
 
 /// Export model to COLLADA. `root_path` is passed to `load_model_preview_bundle`: use the same `.numdlb`
@@ -254,7 +264,12 @@ pub fn ssbh_convert_dae_to_ssbh(
     maya_file: Option<serde_json::Value>,
     nust_file: Option<serde_json::Value>,
 ) -> Result<serde_json::Value, String> {
+    eprintln!(
+        "[ssbh_convert_dae_to_ssbh] dae_path={} output_dir={} base={} scale={} up_axis={} flip_uv={} geometries={:?}",
+        dae_path, output_dir, base_filename, scale_factor, up_axis, flip_uv, include_geometry_names
+    );
     if !scale_factor.is_finite() || scale_factor <= 0.0 {
+        eprintln!("[ssbh_convert_dae_to_ssbh] invalid scale_factor: {}", scale_factor);
         return Err("scale_factor must be a finite positive number".to_string());
     }
     let base = base_filename.trim();

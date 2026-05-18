@@ -124,6 +124,13 @@ pub fn run() {
             scene_session_commands::scene_configure_import,
             scene_session_commands::scene_remove_import,
             scene_session_commands::scene_open_folder,
+            scene_session_commands::scene_execute_import,
+            scene_session_commands::scene_generate_hkt,
+            scene_session_commands::scene_get_havok_data,
+            scene_session_commands::scene_list_havok_data,
+            scene_session_commands::scene_save_as_folder,
+            scene_session_commands::scene_repack_in_place,
+            scene_session_commands::scene_list_imports,
             havok_cli::detect_havok_installation
         ]);
 
