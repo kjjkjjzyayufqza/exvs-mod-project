@@ -13,6 +13,8 @@ mod ssbh_dae_cmd;
 mod ssbh_preview;
 mod ssbh_motion;
 mod scene_memory_session;
+mod scene_session_commands;
+mod havok_cli;
 mod stage_commands;
 
 pub use ssbh_motion::smoke_decode_and_sample_nuanmb;
