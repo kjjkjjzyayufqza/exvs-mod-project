@@ -6,7 +6,7 @@ mod fhm2d_memory_preview;
 mod format;
 mod jnttbl_cmd;
 mod jnttbl_format;
-mod nutexb_lib;
+pub mod nutexb_lib;
 mod preview_collection_state;
 mod ssbh_dae;
 mod ssbh_dae_cmd;
@@ -51,6 +51,7 @@ pub fn run() {
             commands::nutexb_png_base64,
             commands::nutexb_png_bytes,
             commands::nutexb_rgba_bytes,
+            commands::nutexb_compressed_bytes,
             commands::nutexb_batch_export_png,
             ssbh_preview::ssbh_load_model_preview,
             ssbh_preview::ssbh_list_numdlb_under_tree,

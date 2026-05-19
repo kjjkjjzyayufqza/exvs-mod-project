@@ -1,190 +1,395 @@
-[NutexbCache] RGBA-L1-HIT "nutexb"
-VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 304ms
-VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 760ms
-VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 746ms
-VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 936ms
+[NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 7ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 324ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x512 2048KB in 327ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x512 2048KB in 328ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 329ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 330ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 332ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x1024 8192KB in 339ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 384ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 77ms
+2VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 80ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x512 2048KB in 81ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 347ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 427ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 914ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 921ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 570ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 515ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 856ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 1319ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 755ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 757ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 64x64 16KB in 101ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 101ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 104ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 536ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x256 512KB in 446ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x256 512KB in 458ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x128 128KB in 435ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x128 128KB in 436ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 277ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 550ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 508ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 383ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x512 2048KB in 378ms
+2VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x512 2048KB in 380ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 383ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x512 2048KB in 336ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x512 2048KB in 266ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 242ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 240ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 253ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 245ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 704ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 467ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 939ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 313ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 64x64 16KB in 314ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 315ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 317ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 318ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 251ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 240ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 195ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 64x64 16KB in 344ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 345ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 444ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 549ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 932ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x512 2048KB in 592ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x1024 8192KB in 681ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x1024 8192KB in 685ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 311ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 311ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 589ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 471ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 619ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 628ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 940ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 1177ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 64x64 16KB in 684ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 756ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 196ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 792ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 534ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 527ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 548ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 545ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 541ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 1076ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 464ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 64ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 61ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 626ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 892ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x512 2048KB in 888ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 952ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 962ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 967ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x512 2048KB in 599ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x256 512KB in 599ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 228ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 238ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 324ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 326ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 327ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 337ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 550ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 623ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 514ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 427ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 433ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 270ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 326ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 294ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 369ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 382ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 448ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 463ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 453ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 473ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x1024 8192KB in 529ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x1024 8192KB in 544ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x256 512KB in 408ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x256 512KB in 335ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 302ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 191ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 234ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 275ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 597ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 629ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 592ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 675ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 713ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 514ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 382ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 354ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 452ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 288ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 688ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 293ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 246ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 448ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 449ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 506ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 64x64 16KB in 253ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 256ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 269ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 306ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 288ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 289ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 584ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 596ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 618ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 611ms
+VM17:46 [Havok] sceneOpenFolder done, sessionId: d8c7d2ef-9587-4bed-bdcd-e7973f70112d
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 125ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 126ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 127ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 478ms
+VM17:46 [Havok] sceneListHavokData returned 22 entries
+VM17:46 [Havok] Setting havokMeshDataMap with 22 entries
+index.mjs:966 [Violation]
+    'setTimeout' handler took 192ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 4392ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 4393ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 4351ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 4356ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 388ms
+2VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 389ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 390ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 97ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 91ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 328ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 252ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 303ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 654ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 866ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 889ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 653ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 659ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 207ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 203ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 210ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 80ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 232ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 431ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 630ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 633ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 423ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 428ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 230ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 243ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 231ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 267ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 222ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 266ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 290ms
+2VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 240ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 381ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 269ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 289ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 585ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 456ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 425ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 32x32 4KB in 174ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 175ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 176ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 281ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 485ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 487ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 503ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 489ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 286ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 515ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 520ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 361ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 319ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 483ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 496ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 447ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 282ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 268ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 269ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 487ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 437ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 477ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 590ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 426ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 297ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 211ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 212ms
+2VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 185ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 234ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 298ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 287ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 684ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 466ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 16x16 1KB in 488ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 488ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 697ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 499ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 558ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 504ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 117ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 407ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 433ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 435ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 419ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 461ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 830ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 965ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 532ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 84ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 85ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 506ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 421ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 452ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 515ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 530ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 4096x2048 32768KB in 1021ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x64 32KB in 525ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x1024 8192KB in 528ms
+2VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 87ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 88ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 459ms
+2VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 371ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 375ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 468ms
+2VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 384ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 385ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 225ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 64x128 32KB in 225ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 64x64 16KB in 225ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 220ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x2048 8192KB in 229ms
+3VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 221ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 419ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 420ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 426ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 428ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 432ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 242ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 242ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 244ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 322ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 321ms
+2VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 323ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 325ms
+2VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 311ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 312ms
+2VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 63ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x512 4096KB in 297ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x512 4096KB in 511ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x512 4096KB in 507ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 577ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 587ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 679ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 230ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 230ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 334ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 335ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 32ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 256ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 555ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 568ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 668ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 430ms
+VM17:46 [NutexbCache] RGBA-INFLIGHT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 823ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 811ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 1172ms
+74VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 325ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 622ms
+VM17:46 [NutexbCache] RGBA-INFLIGHT "nutexb"
+2VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 813ms
+VM17:46 [NutexbCache] RGBA-INFLIGHT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 849ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 1071ms
+71VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+3VM17:46 [NutexbCache] RGBA-INFLIGHT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 454ms
+VM17:46 [NutexbCache] RGBA-INFLIGHT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 510ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 789ms
+2VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 950ms
+27VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+VM17:46 [NutexbCache] RGBA-INFLIGHT "nutexb"
+4VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 735ms
+44VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+3VM17:46 [NutexbCache] RGBA-INFLIGHT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 191ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 456ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 534ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 786ms
 3VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
-VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 372ms
-72VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
-VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 308ms
-VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 604ms
-VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 607ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 1006ms
+35VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 318ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 27ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 66ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 201ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 271ms
+2VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 269ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 269ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 348ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 218ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x256 512KB in 413ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x256 512KB in 301ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x256 512KB in 295ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x256 512KB in 335ms
+2VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 64x64 16KB in 336ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 211ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 220ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 276ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 422ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 412ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 478ms
+VM17:46 [NutexbCache] RGBA-INFLIGHT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 480ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 482ms
+2VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 435ms
 VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
-VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 1272ms
-34VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
-VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 527ms
-50VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
-VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 320ms
-VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 1073ms
-VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 758ms
-VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 746ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 187ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 38ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 215ms
+2VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 216ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 390ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 392ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 398ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 218ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 168ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 222ms
+2VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 265ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 260ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 261ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 262ms
+VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 408ms
 3VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
-VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 205ms
-38VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_03/0/201stage201_object_build_c_03.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_03/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_03/0/201stage201_object_build_c_03__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_03/0/201stage201_object_build_c_03.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=73
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_04/0/201stage201_object_build_c_04.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_04/0/201stage201_object_build_c_04.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_04/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_04/0/201stage201_object_build_c_04__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_04/0/201stage201_object_build_c_04.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=54
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_05/0/201stage201_object_build_c_05.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_05/0/201stage201_object_build_c_05.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_05/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_05/0/201stage201_object_build_c_05__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_05/0/201stage201_object_build_c_05.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=58
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_after/0/201stage201_object_build_c_left_after.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_after/0/201stage201_object_build_c_left_after.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_after/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_after/0/201stage201_object_build_c_left_after__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_after/0/201stage201_object_build_c_left_after.numdlb matl_files=1 textures_ref=9 textures_resolved=9 warnings=0 elapsed_ms=14
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_before/0/201stage201_object_build_c_left_before.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_before/0/201stage201_object_build_c_left_before.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_before/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_before/0/201stage201_object_build_c_left_before__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_before/0/201stage201_object_build_c_left_before.numdlb matl_files=1 textures_ref=9 textures_resolved=9 warnings=0 elapsed_ms=45
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_break/0/201stage201_object_build_c_left_break.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_break/0/201stage201_object_build_c_left_break.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_break/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_break/0/201stage201_object_build_c_left_break__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_break/0/201stage201_object_build_c_left_break.numdlb matl_files=1 textures_ref=9 textures_resolved=9 warnings=0 elapsed_ms=45
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_after/0/201stage201_object_build_c_right_after.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_after/0/201stage201_object_build_c_right_after.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_after/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_after/0/201stage201_object_build_c_right_after__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_after/0/201stage201_object_build_c_right_after.numdlb matl_files=1 textures_ref=9 textures_resolved=9 warnings=0 elapsed_ms=12
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_before/0/201stage201_object_build_c_right_before.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_before/0/201stage201_object_build_c_right_before.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_before/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_before/0/201stage201_object_build_c_right_before__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_before/0/201stage201_object_build_c_right_before.numdlb matl_files=1 textures_ref=9 textures_resolved=9 warnings=0 elapsed_ms=39
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_break/0/201stage201_object_build_c_right_break.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_break/0/201stage201_object_build_c_right_break.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_break/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_break/0/201stage201_object_build_c_right_break__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_break/0/201stage201_object_build_c_right_break.numdlb matl_files=1 textures_ref=8 textures_resolved=8 warnings=0 elapsed_ms=45
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_back_before/0/201stage201_object_build_d_back_before.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_back_before/0/201stage201_object_build_d_back_before.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_back_before/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_back_before/0/201stage201_object_build_d_back_before__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_back_before/0/201stage201_object_build_d_back_before.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=4
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_after/0/201stage201_object_build_d_front_after.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_after/0/201stage201_object_build_d_front_after.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_after/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_after/0/201stage201_object_build_d_front_after__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_after/0/201stage201_object_build_d_front_after.numdlb matl_files=1 textures_ref=9 textures_resolved=9 warnings=0 elapsed_ms=29
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_before/0/201stage201_object_build_d_front_before.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_before/0/201stage201_object_build_d_front_before.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_before/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_before/0/201stage201_object_build_d_front_before__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_before/0/201stage201_object_build_d_front_before.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=31
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_break/0/201stage201_object_build_d_front_break.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_break/0/201stage201_object_build_d_front_break.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_break/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_break/0/201stage201_object_build_d_front_break__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_break/0/201stage201_object_build_d_front_break.numdlb matl_files=1 textures_ref=8 textures_resolved=8 warnings=0 elapsed_ms=62
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s01/0/201stage201_object_build_d_s01.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s01/0/201stage201_object_build_d_s01.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s01/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s01/0/201stage201_object_build_d_s01__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s01/0/201stage201_object_build_d_s01.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=34
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s02/0/201stage201_object_build_d_s02.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s02/0/201stage201_object_build_d_s02.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s02/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s02/0/201stage201_object_build_d_s02__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s02/0/201stage201_object_build_d_s02.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=32
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s03/0/201stage201_object_build_d_s03.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s03/0/201stage201_object_build_d_s03.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s03/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s03/0/201stage201_object_build_d_s03__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s03/0/201stage201_object_build_d_s03.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=32
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s04/0/201stage201_object_build_d_s04.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s04/0/201stage201_object_build_d_s04.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s04/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s04/0/201stage201_object_build_d_s04__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s04/0/201stage201_object_build_d_s04.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=31
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_cone/0/201stage201_object_cone.numdlb  
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_cone/0/201stage201_object_cone.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_cone/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_cone/0/201stage201_object_cone__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_cone/0/201stage201_object_cone.numdlb matl_files=1 textures_ref=2 textures_resolved=2 warnings=0 elapsed_ms=7
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_crane/0/201stage201_object_crane.numdlb[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_crane/0/201stage201_object_crane.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_crane/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_crane/0/201stage201_object_crane__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_crane/0/201stage201_object_crane.numdlb matl_files=1 textures_ref=8 textures_resolved=8 warnings=0 elapsed_ms=9
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_fence/0/201stage201_object_fence.numdlb[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_fence/0/201stage201_object_fence.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_fence/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_fence/0/201stage201_object_fence__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_fence/0/201stage201_object_fence.numdlb matl_files=1 textures_ref=6 textures_resolved=6 warnings=0 elapsed_ms=9
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_flowerbase/0/201stage201_object_flowerbase.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_flowerbase/0/201stage201_object_flowerbase.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_flowerbase/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_flowerbase/0/201stage201_object_flowerbase__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_flowerbase/0/201stage201_object_flowerbase.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=7
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree01/0/201stage201_object_htree01.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree01/0/201stage201_object_htree01.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree01/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree01/0/201stage201_object_Htree01__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree01/0/201stage201_object_htree01.numdlb matl_files=1 textures_ref=4 textures_resolved=4 warnings=0 elapsed_ms=17
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree02/0/201stage201_object_htree02.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree02/0/201stage201_object_htree02.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree02/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree02/0/201stage201_object_Htree02__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree02/0/201stage201_object_htree02.numdlb matl_files=1 textures_ref=4 textures_resolved=4 warnings=0 elapsed_ms=22
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_joint/0/201stage201_object_joint.numdlb[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_joint/0/201stage201_object_joint.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_joint/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_joint/0/201stage201_object_joint__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_joint/0/201stage201_object_joint.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=7
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_ltree03/0/201stage201_object_ltree03.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_ltree03/0/201stage201_object_ltree03.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_ltree03/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_ltree03/0/201stage201_object_Ltree03__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_ltree03/0/201stage201_object_ltree03.numdlb matl_files=1 textures_ref=4 textures_resolved=4 warnings=0 elapsed_ms=4
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_manhole/0/201stage201_object_manhole.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_manhole/0/201stage201_object_manhole.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_manhole/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_manhole/0/201stage201_object_manhole__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_manhole/0/201stage201_object_manhole.numdlb matl_files=1 textures_ref=4 textures_resolved=4 warnings=0 elapsed_ms=5
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_01/0/201stage201_object_roadside_01.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_01/0/201stage201_object_roadside_01.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_01/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_01/0/201stage201_object_roadside_01__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_01/0/201stage201_object_roadside_01.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=9
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_02/0/201stage201_object_roadside_02.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_02/0/201stage201_object_roadside_02.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_02/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_02/0/201stage201_object_roadside_02__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_02/0/201stage201_object_roadside_02.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=3
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_03/0/201stage201_object_roadside_03.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_03/0/201stage201_object_roadside_03.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_03/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_03/0/201stage201_object_roadside_03__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_03/0/201stage201_object_roadside_03.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=11
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_04/0/201stage201_object_roadside_04.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_04/0/201stage201_object_roadside_04.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_04/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_04/0/201stage201_object_roadside_04__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_04/0/201stage201_object_roadside_04.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=3
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_05/0/201stage201_object_roadside_05.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_05/0/201stage201_object_roadside_05.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_05/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_05/0/201stage201_object_roadside_05__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_05/0/201stage201_object_roadside_05.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=6
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_06/0/201stage201_object_roadside_06.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_06/0/201stage201_object_roadside_06.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_06/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_06/0/201stage201_object_roadside_06__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_06/0/201stage201_object_roadside_06.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=9
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_streetlight/0/201stage201_object_streetlight.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_streetlight/0/201stage201_object_streetlight.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_streetlight/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_streetlight/0/201stage201_object_streetLight__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_streetlight/0/201stage201_object_streetlight.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=4
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_tree06/0/201stage201_object_tree06.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_tree06/0/201stage201_object_tree06.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_tree06/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_tree06/0/201stage201_object_tree06__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_tree06/0/201stage201_object_tree06.numdlb matl_files=1 textures_ref=3 textures_resolved=3 warnings=0 elapsed_ms=4
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood01/0/201stage201_object_wood01.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood01/0/201stage201_object_wood01.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood01/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood01/0/201stage201_object_wood01__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood01/0/201stage201_object_wood01.numdlb matl_files=1 textures_ref=4 textures_resolved=4 warnings=0 elapsed_ms=7
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood02/0/201stage201_object_wood02.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood02/0/201stage201_object_wood02.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood02/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood02/0/201stage201_object_wood02__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood02/0/201stage201_object_wood02.numdlb matl_files=1 textures_ref=4 textures_resolved=4 warnings=0 elapsed_ms=6
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/sky/0/201stage201_sky.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/sky/0/201stage201_sky.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/sky/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/sky/0/201stage201_sky__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/sky/0/201stage201_sky.numdlb matl_files=1 textures_ref=4 textures_resolved=4 warnings=0 elapsed_ms=40
-[collect_hkt_as_xml] converted: 201stage201_object_build_a_02_left_before\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_a_02_right_before\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_a_left_before\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_a_left_break\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_a_right_before\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_a_right_break\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_b_02_left_before\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_b_02_right_before\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_b_left_before\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_b_left_break\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_b_right_before\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_b_right_break\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_c_02_left_before\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_c_02_right_before\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_c_left_before\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_c_left_break\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_c_right_before\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_c_right_break\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_d_front_before\map_hit.hkt
-[collect_hkt_as_xml] converted: 201stage201_object_build_d_front_break\map_hit.hkt
-[collect_hkt_as_xml] converted: base\map_hit.hkt
-[collect_hkt_as_xml] converted: info\border_hit.hkt
-[scene_open_folder] success session_id=517315b0-e311-482b-93a2-8140b3e4ed5d warnings=0
+VM17:46 [NutexbCache] RGBA-INFLIGHT "nutexb"
+VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 456ms
+24VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+VM17:46 [NutexbCache] RGBA-INFLIGHT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 207ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 45ms
+VM17:46 [NutexbCache] RGBA-INFLIGHT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 401ms
+VM17:46 [NutexbCache] RGBA-INFLIGHT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 396ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 399ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 404ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 410ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 128x128 64KB in 9ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 256x256 256KB in 369ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 512x512 1024KB in 374ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x1024 8192KB in 561ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 4096x2048 32768KB in 1134ms
+VM17:46 [SceneEdit:Decode] DONE total=689 resolved=689 errors=0 elapsed=61.1s

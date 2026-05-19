@@ -275,6 +275,7 @@ export interface MapViewportProps {
   havokMeshDataMap?: Map<string, HavokMeshData>;
   showAabb?: boolean;
   showCollisionMesh?: boolean;
+  collisionVisibility?: Record<string, boolean>;
 }
 
 export interface MapViewportHandle {
@@ -364,6 +365,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       havokMeshDataMap,
       showAabb = true,
       showCollisionMesh = true,
+      collisionVisibility,
     },
     ref
   ) {
@@ -891,6 +893,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             showMesh={showCollisionMesh}
             subModels={subModels}
             placementEntries={placementEntries}
+            collisionVisibility={collisionVisibility}
           />
         )}
 

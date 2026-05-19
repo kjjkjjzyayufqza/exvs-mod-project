@@ -28,7 +28,7 @@ export interface TextureDecodeProgress {
 
 export type NutexbTextureDataMap = Map<string, NutexbRgbaData>;
 
-const DECODE_CONCURRENCY = 4;
+const DECODE_CONCURRENCY = 8;
 
 function collectUniqueNutexbPaths(
   baseModel: SsbhModelPreviewBundle | null,
@@ -137,30 +137,80 @@ export function useSceneTextureLoader(
 
     cancelledRef.current = false;
     const currentRunId = ++runIdRef.current;
+    let pendingFlush: ReturnType<typeof requestAnimationFrame> | null = null;
+
+    (async () => {
     const nextMap = new Map<string, NutexbRgbaData>();
     const nextWarnings: string[] = [];
-    let done = 0;
-    const total = uniquePaths.length;
-    const concurrency = Math.min(DECODE_CONCURRENCY, uniquePaths.length);
-
-    console.log(
-      `[SceneEdit:Decode] START unique=${uniquePaths.length} source=${sourceKind}` +
-      ` concurrency=${concurrency} maxDim=${maxDimension ?? "full"} mode=RGBA`,
-    );
     const batchT0 = performance.now();
     let errors = 0;
 
-    setProgress({ done: 0, total, currentLabel: "" });
+    setProgress({ done: 0, total: uniquePaths.length, currentLabel: "Resolving identities..." });
 
-    const queue = [...uniquePaths];
-    let idx = 0;
+    // Phase 1: Resolve all identities in parallel to get content-based keys
+    type PathIdentity = { path: string; versionId: string };
+    const identities: PathIdentity[] = [];
+    const identityConcurrency = 16;
 
+    {
+      const idQueue = [...uniquePaths];
+      let idIdx = 0;
+      const resolveWorker = async () => {
+        while (idIdx < idQueue.length) {
+          if (cancelledRef.current || currentRunId !== runIdRef.current) return;
+          const path = idQueue[idIdx++];
+          try {
+            let versionId: string;
+            if (sourceKind === "memory" && sessionId) {
+              const identity = await getMemoryNutexbPreviewIdentity({ sessionId, virtualPath: path });
+              versionId = `nutexb|${identity.nutexbSize}|${(identity.crc32 >>> 0).toString(16).padStart(8, "0")}@${maxDimension ?? "full"}`;
+            } else {
+              const identity = await invoke<{ nutexbSize: number; crc32: number }>("nutexb_preview_file_identity", { path });
+              versionId = `nutexb|${identity.nutexbSize}|${(identity.crc32 >>> 0).toString(16).padStart(8, "0")}@${maxDimension ?? "full"}`;
+            }
+            identities.push({ path, versionId });
+          } catch (err) {
+            errors++;
+            nextWarnings.push(`${basenameOf(path)}: identity failed: ${err}`);
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(identityConcurrency, uniquePaths.length) }, () => resolveWorker()));
+    }
+
+    if (cancelledRef.current || currentRunId !== runIdRef.current) return;
+
+    // Phase 2: Deduplicate by versionId
+    const uniqueByVersion = new Map<string, PathIdentity>();
+    const versionToPaths = new Map<string, string[]>();
+    for (const entry of identities) {
+      if (!uniqueByVersion.has(entry.versionId)) {
+        uniqueByVersion.set(entry.versionId, entry);
+        versionToPaths.set(entry.versionId, [entry.path]);
+      } else {
+        versionToPaths.get(entry.versionId)!.push(entry.path);
+      }
+    }
+
+    const deduped = Array.from(uniqueByVersion.values());
+    const total = uniquePaths.length;
+    const uniqueCount = deduped.length;
+    let done = 0;
+    const concurrency = Math.min(DECODE_CONCURRENCY, deduped.length);
+
+    console.log(
+      `[SceneEdit:Decode] START paths=${total} unique=${uniqueCount} (${total - uniqueCount} deduped)` +
+      ` source=${sourceKind} concurrency=${concurrency} maxDim=${maxDimension ?? "full"}`,
+    );
+
+    setProgress({ done: 0, total: uniqueCount, currentLabel: "Decoding textures..." });
+
+    // Phase 3: Decode only unique textures
     const flushMap = () => {
       if (cancelledRef.current || currentRunId !== runIdRef.current) return;
       setTextureDataMap(new Map(nextMap));
     };
 
-    let pendingFlush: ReturnType<typeof requestAnimationFrame> | null = null;
     const scheduleFlush = () => {
       if (pendingFlush != null) return;
       pendingFlush = requestAnimationFrame(() => {
@@ -169,80 +219,63 @@ export function useSceneTextureLoader(
       });
     };
 
-    const processNext = async (): Promise<void> => {
-      while (idx < queue.length) {
+    let decodeIdx = 0;
+    const decodeWorker = async (): Promise<void> => {
+      while (decodeIdx < deduped.length) {
         if (cancelledRef.current || currentRunId !== runIdRef.current) return;
 
-        const path = queue[idx++];
+        const { path, versionId } = deduped[decodeIdx++];
         const label = basenameOf(path);
 
         try {
-          let versionId: string;
-          let decodeFn: () => Promise<ArrayBuffer | Uint8Array>;
-
-          if (sourceKind === "memory" && sessionId) {
-            const identity = await getMemoryNutexbPreviewIdentity({
-              sessionId,
-              virtualPath: path,
-            });
-            // Use content-based key (size+crc32) for dedup across duplicate files
-            versionId = `nutexb|${identity.nutexbSize}|${(identity.crc32 >>> 0).toString(16).padStart(8, "0")}@${maxDimension ?? "full"}`;
-            decodeFn = () =>
-              invoke<ArrayBuffer | Uint8Array>("fhm2d_memory_nutexb_rgba_bytes", {
-                sessionId,
-                virtualPath: path,
-                maxDimension: maxDimension ?? undefined,
+          const decodeFn = sourceKind === "memory" && sessionId
+            ? () => invoke<ArrayBuffer | Uint8Array>("fhm2d_memory_nutexb_rgba_bytes", {
+                sessionId, virtualPath: path, maxDimension: maxDimension ?? undefined,
+              })
+            : () => invoke<ArrayBuffer | Uint8Array>("nutexb_rgba_bytes", {
+                inputPath: path, maxDimension: maxDimension ?? undefined,
               });
-          } else {
-            const identity = await invoke<{ nutexbSize: number; crc32: number }>(
-              "nutexb_preview_file_identity",
-              { path },
-            );
-            // Use content-based key (size+crc32) for dedup across duplicate files
-            versionId = `nutexb|${identity.nutexbSize}|${(identity.crc32 >>> 0).toString(16).padStart(8, "0")}@${maxDimension ?? "full"}`;
-            decodeFn = () =>
-              invoke<ArrayBuffer | Uint8Array>("nutexb_rgba_bytes", {
-                inputPath: path,
-                maxDimension: maxDimension ?? undefined,
-              });
-          }
-
-          if (cancelledRef.current || currentRunId !== runIdRef.current) return;
 
           const rgbaData = await getOrDecodeNutexbRgba(versionId, decodeFn);
 
           if (cancelledRef.current || currentRunId !== runIdRef.current) return;
 
-          nextMap.set(path, rgbaData);
-          nextMap.set(path.toLowerCase(), rgbaData);
+          const allPaths = versionToPaths.get(versionId) ?? [path];
+          for (const p of allPaths) {
+            nextMap.set(p, rgbaData);
+            nextMap.set(p.toLowerCase(), rgbaData);
+          }
         } catch (err) {
           errors++;
           nextWarnings.push(`${label}: ${err}`);
         }
 
         done += 1;
-        setProgress({ done, total, currentLabel: label });
-        scheduleFlush();
+        setProgress({ done, total: uniqueCount, currentLabel: label });
+        if (done % 5 === 0 || done === uniqueCount) {
+          scheduleFlush();
+        }
       }
     };
 
-    const workers = Array.from({ length: concurrency }, () => processNext());
+    const workers = Array.from({ length: concurrency }, () => decodeWorker());
 
-    Promise.all(workers).then(() => {
-      if (cancelledRef.current || currentRunId !== runIdRef.current) return;
-      if (pendingFlush != null) {
-        cancelAnimationFrame(pendingFlush);
-        pendingFlush = null;
-      }
-      const elapsed = performance.now() - batchT0;
-      console.log(
-        `[SceneEdit:Decode] DONE total=${uniquePaths.length} resolved=${nextMap.size / 2}` +
-        ` errors=${errors} elapsed=${(elapsed / 1000).toFixed(1)}s`,
-      );
-      setTextureDataMap(new Map(nextMap));
-      setProgress(null);
-      setWarnings(nextWarnings);
-    });
+    await Promise.all(workers);
+
+    if (cancelledRef.current || currentRunId !== runIdRef.current) return;
+    if (pendingFlush != null) {
+      cancelAnimationFrame(pendingFlush);
+      pendingFlush = null;
+    }
+    const elapsed = performance.now() - batchT0;
+    console.log(
+      `[SceneEdit:Decode] DONE paths=${total} unique=${uniqueCount} decoded=${done}` +
+      ` errors=${errors} elapsed=${(elapsed / 1000).toFixed(1)}s`,
+    );
+    setTextureDataMap(new Map(nextMap));
+    setProgress(null);
+    setWarnings(nextWarnings);
+    })();
 
     return () => {
       cancelledRef.current = true;

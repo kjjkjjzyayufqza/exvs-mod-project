@@ -84,6 +84,7 @@ interface HavokCollisionOverlayProps {
   showMesh?: boolean;
   subModels?: SubModelEntry[];
   placementEntries?: PlacementRow[];
+  collisionVisibility?: Record<string, boolean>;
 }
 
 export function HavokCollisionOverlay({
@@ -93,6 +94,7 @@ export function HavokCollisionOverlay({
   showMesh = true,
   subModels,
   placementEntries,
+  collisionVisibility,
 }: HavokCollisionOverlayProps) {
   if (viewMode === "normal" || meshDataMap.size === 0) return null;
 
@@ -165,9 +167,19 @@ export function HavokCollisionOverlay({
     return result;
   }, [meshDataMap, folderToMesh, subModels, placementEntries]);
 
+  // Filter instances by collisionVisibility
+  const visibleInstances = useMemo(() => {
+    if (!collisionVisibility) return instances;
+    return instances.filter(({ key }) => {
+      // Extract the folder name from the key for visibility check
+      const folder = key.replace(/_standalone$|_pl\d+$/, "");
+      return collisionVisibility[folder] !== false;
+    });
+  }, [instances, collisionVisibility]);
+
   return (
     <group name="havok-collision-overlay">
-      {instances.map(({ key, data, position, rotation }) => (
+      {visibleInstances.map(({ key, data, position, rotation }) => (
         <group
           key={key}
           position={position}

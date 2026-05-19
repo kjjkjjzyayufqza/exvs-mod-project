@@ -413,6 +413,70 @@ fn format_series_ms_index(icon_file_index: i32) -> Result<String, String> {
     Ok(format!("{:03}", icon_file_index))
 }
 
+/// Returns raw GPU-compressed texture data from a nutexb file without CPU decode.
+/// Response format: [u32 width][u32 height][u8 format_id][compressed_data...]
+/// format_id: 1=BC1, 2=BC2, 3=BC3, 4=BC4, 5=BC5, 6=BC6H, 7=BC7, 0=uncompressed RGBA
+pub fn nutexb_compressed_data_from_path(input_path: &str) -> Result<(u32, u32, u8, Vec<u8>), String> {
+    let bytes = fs::read(input_path).map_err(|e| e.to_string())?;
+    nutexb_compressed_data_from_bytes(&bytes)
+}
+
+pub fn nutexb_compressed_data_from_bytes(nutexb_bytes: &[u8]) -> Result<(u32, u32, u8, Vec<u8>), String> {
+    let mut cursor = Cursor::new(nutexb_bytes.to_vec());
+    let nutexb = NutexbFile::read(&mut cursor).map_err(|e| e.to_string())?;
+    let w = nutexb.footer.width;
+    let h = nutexb.footer.height;
+    let fmt = nutexb.footer.image_format;
+
+    let format_id = match fmt {
+        NutexbFormat::BC1Unorm | NutexbFormat::BC1Srgb => 1u8,
+        NutexbFormat::BC2Unorm | NutexbFormat::BC2Srgb => 2,
+        NutexbFormat::BC3Unorm | NutexbFormat::BC3Srgb => 3,
+        NutexbFormat::BC4Unorm | NutexbFormat::BC4Snorm => 4,
+        NutexbFormat::BC5Unorm | NutexbFormat::BC5Snorm => 5,
+        NutexbFormat::BC6Ufloat | NutexbFormat::BC6Sfloat => 6,
+        NutexbFormat::BC7Unorm | NutexbFormat::BC7Srgb => 7,
+        _ => 0, // uncompressed — fallback to RGBA path
+    };
+
+    if format_id == 0 {
+        // Uncompressed format — decode to RGBA
+        let dds = nutexb.to_dds().map_err(|e| e.to_string())?;
+        let image: RgbaImage = image_dds::image_from_dds(&dds, 0).map_err(|e| e.to_string())?;
+        return Ok((w, h, 0, image.into_raw()));
+    }
+
+    // Compressed format — extract raw DDS data (mip 0 only)
+    let dds = nutexb.to_dds().map_err(|e| e.to_string())?;
+
+    // DDS data contains all mip levels; we only need mip 0
+    let block_size: usize = match format_id {
+        1 | 4 => 8,  // BC1, BC4: 8 bytes per 4x4 block
+        _ => 16,     // BC2, BC3, BC5, BC6H, BC7: 16 bytes per 4x4 block
+    };
+    let blocks_x = ((w as usize) + 3) / 4;
+    let blocks_y = ((h as usize) + 3) / 4;
+    let mip0_size = blocks_x * blocks_y * block_size;
+
+    let data = if dds.data.len() >= mip0_size {
+        dds.data[..mip0_size].to_vec()
+    } else {
+        dds.data
+    };
+
+    Ok((w, h, format_id, data))
+}
+
+/// Pack compressed response: [u32_LE width][u32_LE height][u8 format_id][data...]
+pub fn pack_compressed_response(width: u32, height: u32, format_id: u8, data: Vec<u8>) -> Vec<u8> {
+    let mut result = Vec::with_capacity(9 + data.len());
+    result.extend_from_slice(&width.to_le_bytes());
+    result.extend_from_slice(&height.to_le_bytes());
+    result.push(format_id);
+    result.extend_from_slice(&data);
+    result
+}
+
 fn nutexb_format_to_dds_image_format(fmt: NutexbFormat) -> DdsImageFormat {
     match fmt {
         NutexbFormat::R8Unorm => DdsImageFormat::R8Unorm,

@@ -147,6 +147,7 @@ import type { DaeImportEntry, HavokInstallInfo } from "./components/dae-import/d
 import { createDefaultDaeImportConfig, sanitizeBaseFilename } from "./components/dae-import/daeImportDefaults";
 import type { HavokMeshData } from "@/utils/havokXmlParser";
 import { parseHavokXML } from "@/utils/havokXmlParser";
+import { CollisionListPanel } from "./components/havok/CollisionListPanel";
 import {
   sceneSessionCreate,
   sceneSessionDestroy,
@@ -337,6 +338,7 @@ export default function SceneEdit() {
   const setShowAabb = useSceneEditorStore((s) => s.setShowAabb);
   const showCollisionMesh = useSceneEditorStore((s) => s.showCollisionMesh);
   const setShowCollisionMesh = useSceneEditorStore((s) => s.setShowCollisionMesh);
+  const collisionVisibility = useSceneEditorStore((s) => s.collisionVisibility);
 
   const INITIAL_STEPS: ImportStep[] = [
     { step: "read", label: "Reading file...", status: "pending" },
@@ -2517,6 +2519,11 @@ export default function SceneEdit() {
                     if (ids.length > 0) applyPrimarySelectionState(ids[ids.length - 1]);
                   }}
                 />
+                {havokMeshDataMap.size > 0 && (
+                  <MayaSection title="Collision" badge={havokMeshDataMap.size}>
+                    <CollisionListPanel sourceIds={Array.from(havokMeshDataMap.keys())} />
+                  </MayaSection>
+                )}
               </div>
             </div>
           </ResizablePanel>
@@ -2588,6 +2595,7 @@ export default function SceneEdit() {
                 havokMeshDataMap={havokMeshDataMap}
                 showAabb={showAabb}
                 showCollisionMesh={showCollisionMesh}
+                collisionVisibility={collisionVisibility}
               />
               <SceneViewportOverlay textureProgress={textureProgress} />
             </div>

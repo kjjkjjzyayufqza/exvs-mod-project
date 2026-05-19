@@ -40,6 +40,7 @@ interface SceneEditorState {
   viewMode: "normal" | "collision" | "both";
   showAabb: boolean;
   showCollisionMesh: boolean;
+  collisionVisibility: Record<string, boolean>;
   sessionId: string | null;
 }
 
@@ -80,6 +81,9 @@ interface SceneEditorActions {
   setViewMode: (mode: "normal" | "collision" | "both") => void;
   setShowAabb: (v: boolean) => void;
   setShowCollisionMesh: (v: boolean) => void;
+  toggleCollisionVisibility: (sourceId: string) => void;
+  setCollisionVisibility: (sourceId: string, visible: boolean) => void;
+  setAllCollisionVisibility: (visible: boolean) => void;
   setSessionId: (id: string | null) => void;
 }
 
@@ -100,6 +104,7 @@ export const useSceneEditorStore = create<SceneEditorState & SceneEditorActions>
     viewMode: "normal",
     showAabb: true,
     showCollisionMesh: true,
+    collisionVisibility: {},
     sessionId: null,
 
     select: (id, opts) => {
@@ -329,6 +334,27 @@ export const useSceneEditorStore = create<SceneEditorState & SceneEditorActions>
     setShowCollisionMesh: (v) => {
       set((state) => {
         state.showCollisionMesh = v;
+      });
+    },
+
+    toggleCollisionVisibility: (sourceId) => {
+      set((state) => {
+        const current = state.collisionVisibility[sourceId] ?? true;
+        state.collisionVisibility[sourceId] = !current;
+      });
+    },
+
+    setCollisionVisibility: (sourceId, visible) => {
+      set((state) => {
+        state.collisionVisibility[sourceId] = visible;
+      });
+    },
+
+    setAllCollisionVisibility: (visible) => {
+      set((state) => {
+        for (const key of Object.keys(state.collisionVisibility)) {
+          state.collisionVisibility[key] = visible;
+        }
       });
     },
 

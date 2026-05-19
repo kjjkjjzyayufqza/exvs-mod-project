@@ -182,6 +182,21 @@ pub async fn nutexb_rgba_bytes(input_path: String, max_dimension: Option<u32>) -
     )))
 }
 
+/// Returns GPU-compressed texture data (BC1-BC7) without CPU decode.
+/// For compressed formats, data goes directly to GPU via CompressedTexture.
+/// For uncompressed formats, falls back to RGBA.
+#[tauri::command]
+pub async fn nutexb_compressed_bytes(input_path: String) -> Result<Response, String> {
+    let (w, h, fmt, data) = tauri::async_runtime::spawn_blocking(move || {
+        crate::nutexb_lib::nutexb_compressed_data_from_path(&input_path)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    Ok(Response::new(InvokeBody::Raw(
+        crate::nutexb_lib::pack_compressed_response(w, h, fmt, data),
+    )))
+}
+
 #[tauri::command]
 pub async fn nutexb_batch_export_png(
     root_dir: String,
