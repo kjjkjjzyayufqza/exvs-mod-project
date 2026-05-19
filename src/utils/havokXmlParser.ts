@@ -1,215 +1,166 @@
 // Havok XML parser utility
-// Parses Havok 2018 HKT XML collision model data
+// Parses Havok 2018 HKT XML collision model data (hknpCompressedMeshShape)
 
-export interface HavokNode {
-    xyz: [number, number, number];
-    data: number;
+export interface HavokAabb {
+    min: [number, number, number];
+    max: [number, number, number];
 }
 
-export interface HavokPrimitive {
-    indices: number[]; // 4 indices forming a quad
+export interface HavokBodyInfo {
+    name: string;
+    position: [number, number, number];
+    orientation: [number, number, number, number];
 }
 
 export interface HavokMeshData {
-    nodes: HavokNode[];
-    primitives: HavokPrimitive[];
-    metadata: {
-        numPrimitiveKeys: number;
-        bitsPerKey: number;
-        maxKeyValue: number;
-    };
+    vertices: [number, number, number][];
+    quads: [number, number, number, number][];
+    aabb: HavokAabb | null;
+    bodies: HavokBodyInfo[];
 }
 
 /**
- * Parse Havok XML content and extract mesh data
+ * Parse Havok XML content and extract collision mesh data.
+ * Uses packedVertices (uint32 encoded as x:11|y:11|z:10 bits) mapped to domain AABB.
  */
 export function parseHavokXML(xmlContent: string): HavokMeshData {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
-    
-    // Check for parsing errors
+
     const parserError = xmlDoc.querySelector('parsererror');
     if (parserError) {
         throw new Error('XML parsing failed: ' + parserError.textContent);
     }
-    
-    const nodes = extractSections(xmlDoc);
-    const primitives = extractPrimitives(xmlDoc);
-    const metadata = extractMetadata(xmlDoc);
-    
-    console.log(`Havok XML parsed: ${nodes.length} nodes, ${primitives.length} primitives`);
-    console.log('Sample nodes with values:', nodes.slice(0, 5).map(n => ({xyz: n.xyz, data: n.data})));
-    console.log('Sample primitives with values:', primitives.slice(0, 5).map(p => ({indices: p.indices})));
-    console.log('Metadata:', metadata);
-    
-    return {
-        nodes,
-        primitives,
-        metadata
-    };
+
+    const aabb = extractDomainAabb(xmlDoc);
+    const { vertices, quads } = extractMesh(xmlDoc, aabb);
+    const bodies = extractBodies(xmlDoc);
+
+    return { vertices, quads, aabb, bodies };
 }
 
-/**
- * Extract sections data (nodes with xyz coordinates)
- */
-function extractSections(xmlDoc: Document): HavokNode[] {
-    // Find all sections fields and get the one that contains actual array data
-    const allSectionsFields = Array.from(xmlDoc.querySelectorAll('field'))
-        .filter(field => field.getAttribute('name') === 'sections');
-    
-    let sectionsFieldWithArray = null;
-    for (const field of allSectionsFields) {
-        const array = field.querySelector('array');
-        if (array) {
-            sectionsFieldWithArray = field;
+function extractDomainAabb(xmlDoc: Document): HavokAabb | null {
+    // Find "domain" field containing hkAabb with min/max real arrays
+    const domainFields = Array.from(xmlDoc.querySelectorAll('field'))
+        .filter(f => f.getAttribute('name') === 'domain');
+
+    for (const domainField of domainFields) {
+        const record = domainField.querySelector('record');
+        if (!record) continue;
+        const minField = record.querySelector('field[name="min"]');
+        const maxField = record.querySelector('field[name="max"]');
+        if (!minField || !maxField) continue;
+
+        const minReals = parseRealArray(minField);
+        const maxReals = parseRealArray(maxField);
+        if (minReals.length >= 3 && maxReals.length >= 3) {
+            return {
+                min: [minReals[0], minReals[1], minReals[2]],
+                max: [maxReals[0], maxReals[1], maxReals[2]],
+            };
+        }
+    }
+    return null;
+}
+
+function extractMesh(xmlDoc: Document, aabb: HavokAabb | null): { vertices: [number, number, number][]; quads: [number, number, number, number][] } {
+    const vertices: [number, number, number][] = [];
+    const quads: [number, number, number, number][] = [];
+
+    // Find packedVertices field (array of unsigned int at meshTree level)
+    const pvFields = Array.from(xmlDoc.querySelectorAll('field'))
+        .filter(f => f.getAttribute('name') === 'packedVertices');
+
+    let packedArray: Element | null = null;
+    for (const pv of pvFields) {
+        const arr = pv.querySelector('array');
+        if (arr && arr.getAttribute('count') !== '0') {
+            packedArray = arr;
             break;
         }
     }
-    
-    if (!sectionsFieldWithArray) {
-        throw new Error('No sections field with array found in XML');
+
+    if (!packedArray) return { vertices, quads };
+
+    // Decode packed vertices: each uint32 = (x:11 bits << 21) | (y:11 bits << 10) | (z:10 bits)
+    const domainMin = aabb?.min ?? [0, 0, 0];
+    const domainMax = aabb?.max ?? [1, 1, 1];
+    const xRange = domainMax[0] - domainMin[0];
+    const yRange = domainMax[1] - domainMin[1];
+    const zRange = domainMax[2] - domainMin[2];
+
+    const intElements = packedArray.querySelectorAll('integer');
+    for (const el of Array.from(intElements)) {
+        const packed = parseInt(el.getAttribute('value') || '0') >>> 0;
+        const xi = (packed >>> 21) & 0x7FF;
+        const yi = (packed >>> 10) & 0x7FF;
+        const zi = packed & 0x3FF;
+        const x = domainMin[0] + (xi / 2047) * xRange;
+        const y = domainMin[1] + (yi / 2047) * yRange;
+        const z = domainMin[2] + (zi / 1023) * zRange;
+        vertices.push([x, y, z]);
     }
-    
-    const nodes: HavokNode[] = [];
-    
-    // Find the array under sections field, then get the first record
-    const sectionsArray = sectionsFieldWithArray.querySelector('array');
-    if (!sectionsArray) {
-        throw new Error('Sections array not found');
-    }
-    
-    const sectionRecords = sectionsArray.querySelectorAll('record');
-    if (sectionRecords.length === 0) {
-        throw new Error('No section records found');
-    }
-    
-    // Get the first section record
-    const firstSection = sectionRecords[0];
-    const nodesField = firstSection.querySelector('field[name="nodes"]');
-    if (!nodesField) {
-        throw new Error('Nodes field not found in section');
-    }
-    
-    const nodeRecords = nodesField.querySelectorAll('record');
-    
-    nodeRecords.forEach(record => {
-        const xyzField = record.querySelector('field[name="xyz"]');
-        const dataField = record.querySelector('field[name="data"]');
-        
-        if (xyzField && dataField) {
-            // xyz field contains an array with 3 integer values
-            const xyzArray = xyzField.querySelector('array');
-            if (xyzArray) {
-                const xyzValues = Array.from(xyzArray.querySelectorAll('integer'))
-                    .map(int => parseInt(int.getAttribute('value') || '0'));
-                const dataValue = parseInt(dataField.querySelector('integer')?.getAttribute('value') || '0');
-                
-                if (xyzValues.length === 3) {
-                    nodes.push({
-                        xyz: [xyzValues[0], xyzValues[1], xyzValues[2]],
-                        data: dataValue
-                    });
-                }
+
+    // Find primitives field (array of records with indices)
+    const primFields = Array.from(xmlDoc.querySelectorAll('field'))
+        .filter(f => f.getAttribute('name') === 'primitives');
+
+    for (const primField of primFields) {
+        const arr = primField.querySelector('array');
+        if (!arr) continue;
+        const count = arr.getAttribute('count');
+        if (!count || count === '0') continue;
+        // Check this is the right primitives (has records with "indices" field)
+        const firstRec = arr.querySelector('record');
+        if (!firstRec || !firstRec.querySelector('field[name="indices"]')) continue;
+
+        for (const rec of Array.from(arr.querySelectorAll(':scope > record'))) {
+            const idxField = rec.querySelector('field[name="indices"]');
+            if (!idxField) continue;
+            const idxArr = idxField.querySelector('array');
+            if (!idxArr) continue;
+            const ints = Array.from(idxArr.querySelectorAll('integer'))
+                .map(e => parseInt(e.getAttribute('value') || '0'));
+            if (ints.length >= 4) {
+                quads.push([ints[0], ints[1], ints[2], ints[3]]);
             }
         }
-    });
-    
-    return nodes;
+        break; // only use first matching primitives field
+    }
+
+    return { vertices, quads };
 }
 
-/**
- * Extract primitives data (index arrays)
- */
-function extractPrimitives(xmlDoc: Document): HavokPrimitive[] {
-    // Find all primitives fields and get the one that contains actual array data
-    const allPrimitivesFields = Array.from(xmlDoc.querySelectorAll('field'))
-        .filter(field => field.getAttribute('name') === 'primitives');
-    
-    let primitivesFieldWithArray = null;
-    for (const field of allPrimitivesFields) {
-        const array = field.querySelector('array');
-        if (array) {
-            primitivesFieldWithArray = field;
-            break;
+function extractBodies(xmlDoc: Document): HavokBodyInfo[] {
+    const bodies: HavokBodyInfo[] = [];
+    const bodyCinfosFields = Array.from(xmlDoc.querySelectorAll('field'))
+        .filter(f => f.getAttribute('name') === 'bodyCinfos');
+
+    for (const field of bodyCinfosFields) {
+        const arr = field.querySelector('array');
+        if (!arr) continue;
+        for (const rec of Array.from(arr.querySelectorAll(':scope > record'))) {
+            const nameEl = rec.querySelector(':scope > field[name="name"] string');
+            const name = nameEl?.getAttribute('value') || 'unnamed';
+
+            const posReals = parseRealArray(rec.querySelector(':scope > field[name="position"]'));
+            const position: [number, number, number] = posReals.length >= 3
+                ? [posReals[0], posReals[1], posReals[2]] : [0, 0, 0];
+
+            const oriReals = parseRealArray(rec.querySelector(':scope > field[name="orientation"]'));
+            const orientation: [number, number, number, number] = oriReals.length >= 4
+                ? [oriReals[0], oriReals[1], oriReals[2], oriReals[3]] : [0, 0, 0, 1];
+
+            bodies.push({ name, position, orientation });
         }
     }
-    
-    if (!primitivesFieldWithArray) {
-        throw new Error('No primitives field with array found in XML');
-    }
-    
-    const primitives: HavokPrimitive[] = [];
-    
-    // Find the array under primitives field, then get records
-    const primitivesArray = primitivesFieldWithArray.querySelector('array');
-    if (!primitivesArray) {
-        throw new Error('Primitives array not found');
-    }
-    
-    const primitiveRecords = primitivesArray.querySelectorAll('record');
-    
-    primitiveRecords.forEach(record => {
-        const indicesField = record.querySelector('field[name="indices"]');
-        
-        if (indicesField) {
-            // indices field contains an array with 4 integer values
-            const indicesArray = indicesField.querySelector('array');
-            if (indicesArray) {
-                const indices = Array.from(indicesArray.querySelectorAll('integer'))
-                    .map(int => parseInt(int.getAttribute('value') || '0'));
-                
-                primitives.push({ indices });
-            }
-        }
-    });
-    
-    return primitives;
+    return bodies;
 }
 
-/**
- * Extract metadata from XML
- */
-function extractMetadata(xmlDoc: Document): { numPrimitiveKeys: number; bitsPerKey: number; maxKeyValue: number } {
-    let numPrimitiveKeys = 0;
-    let bitsPerKey = 8;
-    let maxKeyValue = 255;
-    
-    // Try to extract actual values from XML
-    const numPrimitiveKeysField = Array.from(xmlDoc.querySelectorAll('field'))
-        .find(field => field.getAttribute('name') === 'numPrimitiveKeys');
-    if (numPrimitiveKeysField) {
-        const value = numPrimitiveKeysField.querySelector('integer')?.getAttribute('value');
-        if (value) {
-            numPrimitiveKeys = parseInt(value);
-            console.log('[DEBUG] Found numPrimitiveKeys:', numPrimitiveKeys);
-        }
-    } else {
-        console.log('[DEBUG] numPrimitiveKeys field not found');
-    }
-    
-    const bitsPerKeyField = Array.from(xmlDoc.querySelectorAll('field'))
-        .find(field => field.getAttribute('name') === 'bitsPerKey');
-    if (bitsPerKeyField) {
-        const value = bitsPerKeyField.querySelector('integer')?.getAttribute('value');
-        if (value) {
-            bitsPerKey = parseInt(value);
-            console.log('[DEBUG] Found bitsPerKey:', bitsPerKey);
-        }
-    }
-    
-    const maxKeyValueField = Array.from(xmlDoc.querySelectorAll('field'))
-        .find(field => field.getAttribute('name') === 'maxKeyValue');
-    if (maxKeyValueField) {
-        const value = maxKeyValueField.querySelector('integer')?.getAttribute('value');
-        if (value) {
-            maxKeyValue = parseInt(value);
-            console.log('[DEBUG] Found maxKeyValue:', maxKeyValue);
-        }
-    }
-    
-    return {
-        numPrimitiveKeys,
-        bitsPerKey,
-        maxKeyValue
-    };
+function parseRealArray(field: Element | null): number[] {
+    if (!field) return [];
+    const arr = field.querySelector('array');
+    if (!arr) return [];
+    return Array.from(arr.querySelectorAll('real'))
+        .map(r => parseFloat(r.getAttribute('dec') || '0'));
 }

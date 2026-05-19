@@ -1405,6 +1405,74 @@ pub fn dispose_fhm2d_memory_session(
     Ok(())
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryHktEntry {
+    pub source_id: String,
+    pub hkt_xml: String,
+}
+
+#[tauri::command]
+pub async fn fhm2d_memory_convert_hkt_to_xml(
+    state: State<'_, Fhm2dMemorySessionState>,
+    session_id: String,
+) -> Result<Vec<MemoryHktEntry>, String> {
+    let hkt_files: Vec<(String, Vec<u8>)> = {
+        let sessions = state
+            .sessions
+            .lock()
+            .map_err(|_| "Failed to lock FHM2D memory sessions.".to_string())?;
+        let session = sessions
+            .get(&session_id)
+            .ok_or_else(|| format!("FHM2D memory session not found: {session_id}"))?;
+        session
+            .files_by_id
+            .values()
+            .filter(|f| {
+                // HKT files in fhm2d are stored as .bin type or already renamed to .hkt
+                if f.relative_path.ends_with(".hkt") {
+                    return true;
+                }
+                // .bin files that are actually Havok tagfiles (magic: "TAG0" at offset 4)
+                if f.file_type.eq_ignore_ascii_case(".bin") && f.data.len() >= 8 {
+                    return &f.data[4..8] == b"TAG0";
+                }
+                false
+            })
+            .map(|f| (f.relative_path.clone(), f.data.to_vec()))
+            .collect()
+    };
+
+    if hkt_files.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let config = crate::havok_cli::HavokCliConfig::detect()
+        .ok_or("Havok Content Tools not found")?;
+    if !std::path::Path::new(&config.filter_manager_path).exists() {
+        return Err("hctStandAloneFilterManager.exe not found".to_string());
+    }
+
+    let filter_path = config.filter_manager_path.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut results = Vec::new();
+        for (source_id, bytes) in hkt_files {
+            match crate::havok_cli::convert_hkt_bytes_to_xml(&filter_path, &bytes) {
+                Ok(xml) => {
+                    eprintln!("[fhm2d_memory_convert_hkt] converted: {source_id}");
+                    results.push(MemoryHktEntry { source_id, hkt_xml: xml });
+                }
+                Err(e) => {
+                    eprintln!("[fhm2d_memory_convert_hkt] failed {source_id}: {e}");
+                }
+            }
+        }
+        Ok(results)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
 
 #[cfg(test)]
 mod tests {

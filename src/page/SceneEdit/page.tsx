@@ -146,6 +146,7 @@ import { DaeImportConfigModal } from "./components/dae-import/DaeImportConfigMod
 import type { DaeImportEntry, HavokInstallInfo } from "./components/dae-import/daeImportTypes";
 import { createDefaultDaeImportConfig, sanitizeBaseFilename } from "./components/dae-import/daeImportDefaults";
 import type { HavokMeshData } from "@/utils/havokXmlParser";
+import { parseHavokXML } from "@/utils/havokXmlParser";
 import {
   sceneSessionCreate,
   sceneSessionDestroy,
@@ -156,6 +157,8 @@ import {
   sceneSaveAsFolder,
   sceneRepackInPlace,
   mapDaeImportConfigToBackend,
+  sceneOpenFolder,
+  sceneListHavokData,
 } from "./utils/sceneSessionService";
 
 import type { PreviewRenderStyle } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
@@ -325,11 +328,15 @@ export default function SceneEdit() {
   const [daeImportEntries, setDaeImportEntries] = useState<DaeImportEntry[]>([]);
   const [showDaeImportModal, setShowDaeImportModal] = useState(false);
   const [havokInfo, setHavokInfo] = useState<HavokInstallInfo | null>(null);
-  const [havokMeshDataMap] = useState(() => new Map<string, HavokMeshData>());
+  const [havokMeshDataMap, setHavokMeshDataMap] = useState(() => new Map<string, HavokMeshData>());
   const [sceneSessionId, setSceneSessionId] = useState<string | null>(null);
 
   const viewMode = useSceneEditorStore((s) => s.viewMode);
   const setViewMode = useSceneEditorStore((s) => s.setViewMode);
+  const showAabb = useSceneEditorStore((s) => s.showAabb);
+  const setShowAabb = useSceneEditorStore((s) => s.setShowAabb);
+  const showCollisionMesh = useSceneEditorStore((s) => s.showCollisionMesh);
+  const setShowCollisionMesh = useSceneEditorStore((s) => s.setShowCollisionMesh);
 
   const INITIAL_STEPS: ImportStep[] = [
     { step: "read", label: "Reading file...", status: "pending" },
@@ -797,6 +804,7 @@ export default function SceneEdit() {
     setHasUnsavedChanges(false);
     setRenamePreview(null);
     setImportProgress((prev) => ({ ...prev, open: false }));
+    setHavokMeshDataMap(new Map());
   }, [sessionId, sceneSessionId]);
 
   const handleConfirmClearCache = useCallback(async () => {
@@ -828,6 +836,38 @@ export default function SceneEdit() {
         stageRoot: selected,
       });
       applyBundle(selected, bundle);
+
+      // Create scene session and load HKT collision data in background
+      sceneOpenFolder(selected).then(async (result) => {
+        setSceneSessionId(result.sessionId);
+        console.log("[Havok] sceneOpenFolder done, sessionId:", result.sessionId);
+        try {
+          const havokList = await sceneListHavokData(result.sessionId);
+          console.log(`[Havok] sceneListHavokData returned ${havokList.length} entries`);
+          if (havokList.length > 0) {
+            const map = new Map<string, HavokMeshData>();
+            for (const item of havokList) {
+              try {
+                const meshData = parseHavokXML(item.hktXml);
+                map.set(item.sourceId, meshData);
+              } catch (e) {
+                console.warn(`[Havok] Failed to parse ${item.sourceId}:`, e);
+              }
+            }
+            console.log(`[Havok] Setting havokMeshDataMap with ${map.size} entries`);
+            setHavokMeshDataMap(map);
+            toast.success(`Loaded ${map.size} collision mesh(es)`);
+          } else {
+            toast.info("No HKT collision files found");
+          }
+        } catch (e) {
+          console.error("[Havok] Failed to load collision data:", e);
+          toast.error("Failed to load collision data", { description: String(e) });
+        }
+      }).catch((e) => {
+        console.error("[Havok] scene_open_folder failed:", e);
+        toast.error("Havok scene session failed", { description: String(e) });
+      });
     } catch (err: any) {
       toast.error("Failed to load stage", { description: String(err) });
     } finally {
@@ -946,6 +986,40 @@ export default function SceneEdit() {
         setSessionId(result.sessionId);
       }
       applyBundle("memory://stage", result.bundle);
+
+      // Load HKT collision data from memory session
+      if (result.sessionId) {
+        console.log("[Havok] Starting HKT conversion for session:", result.sessionId);
+        invoke<{ sourceId: string; hktXml: string }[]>(
+          "fhm2d_memory_convert_hkt_to_xml",
+          { sessionId: result.sessionId },
+        ).then((entries) => {
+          console.log(`[Havok] Received ${entries.length} HKT entries`);
+          if (entries.length > 0) {
+            const map = new Map<string, HavokMeshData>();
+            for (const item of entries) {
+              try {
+                const meshData = parseHavokXML(item.hktXml);
+                map.set(item.sourceId, meshData);
+                console.log(`[Havok] Parsed: ${item.sourceId}`);
+              } catch (e) {
+                console.warn(`[Havok] Failed to parse ${item.sourceId}:`, e);
+              }
+            }
+            console.log(`[Havok] Setting havokMeshDataMap with ${map.size} entries`);
+            setHavokMeshDataMap(map);
+            toast.success(`Loaded ${map.size} collision mesh(es)`);
+          } else {
+            console.log("[Havok] No HKT files found in memory session");
+            toast.info("No HKT collision files found in this stage");
+          }
+        }).catch((e) => {
+          console.error("[Havok] Failed to convert HKT from memory:", e);
+          toast.error("Failed to load collision data", { description: String(e) });
+        });
+      } else {
+        console.log("[Havok] No sessionId, skipping HKT load");
+      }
     } catch (err: any) {
       toast.error("Failed to load stage into scene", { description: String(err) });
     } finally {
@@ -2362,6 +2436,10 @@ export default function SceneEdit() {
           viewMode={viewMode}
           onViewModeChange={setViewMode}
           hasCollisionData={havokMeshDataMap.size > 0}
+          showAabb={showAabb}
+          onToggleAabb={setShowAabb}
+          showCollisionMesh={showCollisionMesh}
+          onToggleCollisionMesh={setShowCollisionMesh}
         />
 
         <AlertDialog open={clearCacheDialogOpen} onOpenChange={setClearCacheDialogOpen}>
@@ -2508,6 +2586,8 @@ export default function SceneEdit() {
                 onPlacementGizmoCommit={commitPlacementGizmo}
                 viewMode={viewMode}
                 havokMeshDataMap={havokMeshDataMap}
+                showAabb={showAabb}
+                showCollisionMesh={showCollisionMesh}
               />
               <SceneViewportOverlay textureProgress={textureProgress} />
             </div>

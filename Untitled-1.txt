@@ -1,0 +1,190 @@
+[NutexbCache] RGBA-L1-HIT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 304ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 760ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 746ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 936ms
+3VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 372ms
+72VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 308ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 604ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 607ms
+VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 1272ms
+34VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 527ms
+50VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 320ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 1073ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 758ms
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 2048x2048 16384KB in 746ms
+3VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+VM17:46 [NutexbCache] RGBA-DECODED "nutexb" 1024x1024 4096KB in 205ms
+38VM17:46 [NutexbCache] RGBA-L1-HIT "nutexb"
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_03/0/201stage201_object_build_c_03.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_03/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_03/0/201stage201_object_build_c_03__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_03/0/201stage201_object_build_c_03.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=73
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_04/0/201stage201_object_build_c_04.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_04/0/201stage201_object_build_c_04.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_04/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_04/0/201stage201_object_build_c_04__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_04/0/201stage201_object_build_c_04.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=54
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_05/0/201stage201_object_build_c_05.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_05/0/201stage201_object_build_c_05.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_05/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_05/0/201stage201_object_build_c_05__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_05/0/201stage201_object_build_c_05.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=58
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_after/0/201stage201_object_build_c_left_after.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_after/0/201stage201_object_build_c_left_after.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_after/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_after/0/201stage201_object_build_c_left_after__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_after/0/201stage201_object_build_c_left_after.numdlb matl_files=1 textures_ref=9 textures_resolved=9 warnings=0 elapsed_ms=14
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_before/0/201stage201_object_build_c_left_before.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_before/0/201stage201_object_build_c_left_before.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_before/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_before/0/201stage201_object_build_c_left_before__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_before/0/201stage201_object_build_c_left_before.numdlb matl_files=1 textures_ref=9 textures_resolved=9 warnings=0 elapsed_ms=45
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_break/0/201stage201_object_build_c_left_break.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_break/0/201stage201_object_build_c_left_break.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_break/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_break/0/201stage201_object_build_c_left_break__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_left_break/0/201stage201_object_build_c_left_break.numdlb matl_files=1 textures_ref=9 textures_resolved=9 warnings=0 elapsed_ms=45
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_after/0/201stage201_object_build_c_right_after.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_after/0/201stage201_object_build_c_right_after.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_after/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_after/0/201stage201_object_build_c_right_after__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_after/0/201stage201_object_build_c_right_after.numdlb matl_files=1 textures_ref=9 textures_resolved=9 warnings=0 elapsed_ms=12
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_before/0/201stage201_object_build_c_right_before.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_before/0/201stage201_object_build_c_right_before.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_before/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_before/0/201stage201_object_build_c_right_before__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_before/0/201stage201_object_build_c_right_before.numdlb matl_files=1 textures_ref=9 textures_resolved=9 warnings=0 elapsed_ms=39
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_break/0/201stage201_object_build_c_right_break.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_break/0/201stage201_object_build_c_right_break.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_break/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_break/0/201stage201_object_build_c_right_break__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_c_right_break/0/201stage201_object_build_c_right_break.numdlb matl_files=1 textures_ref=8 textures_resolved=8 warnings=0 elapsed_ms=45
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_back_before/0/201stage201_object_build_d_back_before.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_back_before/0/201stage201_object_build_d_back_before.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_back_before/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_back_before/0/201stage201_object_build_d_back_before__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_back_before/0/201stage201_object_build_d_back_before.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=4
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_after/0/201stage201_object_build_d_front_after.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_after/0/201stage201_object_build_d_front_after.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_after/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_after/0/201stage201_object_build_d_front_after__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_after/0/201stage201_object_build_d_front_after.numdlb matl_files=1 textures_ref=9 textures_resolved=9 warnings=0 elapsed_ms=29
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_before/0/201stage201_object_build_d_front_before.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_before/0/201stage201_object_build_d_front_before.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_before/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_before/0/201stage201_object_build_d_front_before__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_before/0/201stage201_object_build_d_front_before.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=31
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_break/0/201stage201_object_build_d_front_break.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_break/0/201stage201_object_build_d_front_break.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_break/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_break/0/201stage201_object_build_d_front_break__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_front_break/0/201stage201_object_build_d_front_break.numdlb matl_files=1 textures_ref=8 textures_resolved=8 warnings=0 elapsed_ms=62
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s01/0/201stage201_object_build_d_s01.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s01/0/201stage201_object_build_d_s01.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s01/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s01/0/201stage201_object_build_d_s01__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s01/0/201stage201_object_build_d_s01.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=34
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s02/0/201stage201_object_build_d_s02.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s02/0/201stage201_object_build_d_s02.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s02/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s02/0/201stage201_object_build_d_s02__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s02/0/201stage201_object_build_d_s02.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=32
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s03/0/201stage201_object_build_d_s03.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s03/0/201stage201_object_build_d_s03.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s03/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s03/0/201stage201_object_build_d_s03__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s03/0/201stage201_object_build_d_s03.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=32
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s04/0/201stage201_object_build_d_s04.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s04/0/201stage201_object_build_d_s04.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s04/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s04/0/201stage201_object_build_d_s04__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_build_d_s04/0/201stage201_object_build_d_s04.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=31
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_cone/0/201stage201_object_cone.numdlb  
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_cone/0/201stage201_object_cone.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_cone/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_cone/0/201stage201_object_cone__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_cone/0/201stage201_object_cone.numdlb matl_files=1 textures_ref=2 textures_resolved=2 warnings=0 elapsed_ms=7
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_crane/0/201stage201_object_crane.numdlb[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_crane/0/201stage201_object_crane.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_crane/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_crane/0/201stage201_object_crane__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_crane/0/201stage201_object_crane.numdlb matl_files=1 textures_ref=8 textures_resolved=8 warnings=0 elapsed_ms=9
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_fence/0/201stage201_object_fence.numdlb[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_fence/0/201stage201_object_fence.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_fence/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_fence/0/201stage201_object_fence__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_fence/0/201stage201_object_fence.numdlb matl_files=1 textures_ref=6 textures_resolved=6 warnings=0 elapsed_ms=9
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_flowerbase/0/201stage201_object_flowerbase.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_flowerbase/0/201stage201_object_flowerbase.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_flowerbase/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_flowerbase/0/201stage201_object_flowerbase__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_flowerbase/0/201stage201_object_flowerbase.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=7
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree01/0/201stage201_object_htree01.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree01/0/201stage201_object_htree01.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree01/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree01/0/201stage201_object_Htree01__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree01/0/201stage201_object_htree01.numdlb matl_files=1 textures_ref=4 textures_resolved=4 warnings=0 elapsed_ms=17
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree02/0/201stage201_object_htree02.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree02/0/201stage201_object_htree02.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree02/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree02/0/201stage201_object_Htree02__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_htree02/0/201stage201_object_htree02.numdlb matl_files=1 textures_ref=4 textures_resolved=4 warnings=0 elapsed_ms=22
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_joint/0/201stage201_object_joint.numdlb[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_joint/0/201stage201_object_joint.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_joint/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_joint/0/201stage201_object_joint__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_joint/0/201stage201_object_joint.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=7
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_ltree03/0/201stage201_object_ltree03.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_ltree03/0/201stage201_object_ltree03.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_ltree03/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_ltree03/0/201stage201_object_Ltree03__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_ltree03/0/201stage201_object_ltree03.numdlb matl_files=1 textures_ref=4 textures_resolved=4 warnings=0 elapsed_ms=4
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_manhole/0/201stage201_object_manhole.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_manhole/0/201stage201_object_manhole.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_manhole/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_manhole/0/201stage201_object_manhole__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_manhole/0/201stage201_object_manhole.numdlb matl_files=1 textures_ref=4 textures_resolved=4 warnings=0 elapsed_ms=5
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_01/0/201stage201_object_roadside_01.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_01/0/201stage201_object_roadside_01.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_01/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_01/0/201stage201_object_roadside_01__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_01/0/201stage201_object_roadside_01.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=9
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_02/0/201stage201_object_roadside_02.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_02/0/201stage201_object_roadside_02.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_02/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_02/0/201stage201_object_roadside_02__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_02/0/201stage201_object_roadside_02.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=3
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_03/0/201stage201_object_roadside_03.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_03/0/201stage201_object_roadside_03.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_03/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_03/0/201stage201_object_roadside_03__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_03/0/201stage201_object_roadside_03.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=11
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_04/0/201stage201_object_roadside_04.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_04/0/201stage201_object_roadside_04.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_04/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_04/0/201stage201_object_roadside_04__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_04/0/201stage201_object_roadside_04.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=3
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_05/0/201stage201_object_roadside_05.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_05/0/201stage201_object_roadside_05.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_05/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_05/0/201stage201_object_roadside_05__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_05/0/201stage201_object_roadside_05.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=6
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_06/0/201stage201_object_roadside_06.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_06/0/201stage201_object_roadside_06.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_06/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_06/0/201stage201_object_roadside_06__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_roadside_06/0/201stage201_object_roadside_06.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=9
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_streetlight/0/201stage201_object_streetlight.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_streetlight/0/201stage201_object_streetlight.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_streetlight/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_streetlight/0/201stage201_object_streetLight__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_streetlight/0/201stage201_object_streetlight.numdlb matl_files=1 textures_ref=5 textures_resolved=5 warnings=0 elapsed_ms=4
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_tree06/0/201stage201_object_tree06.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_tree06/0/201stage201_object_tree06.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_tree06/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_tree06/0/201stage201_object_tree06__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_tree06/0/201stage201_object_tree06.numdlb matl_files=1 textures_ref=3 textures_resolved=3 warnings=0 elapsed_ms=4
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood01/0/201stage201_object_wood01.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood01/0/201stage201_object_wood01.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood01/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood01/0/201stage201_object_wood01__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood01/0/201stage201_object_wood01.numdlb matl_files=1 textures_ref=4 textures_resolved=4 warnings=0 elapsed_ms=7
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood02/0/201stage201_object_wood02.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood02/0/201stage201_object_wood02.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood02/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood02/0/201stage201_object_wood02__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/201stage201_object_wood02/0/201stage201_object_wood02.numdlb matl_files=1 textures_ref=4 textures_resolved=4 warnings=0 elapsed_ms=6
+[ssbh_preview] load start: input=E:/XB/解包/com/test/0x4D1F5138/0/0/sky/0/201stage201_sky.numdlb
+[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/sky/0/201stage201_sky.numdlb root=E:/XB/解包/com/test/0x4D1F5138/0/0/sky/0
+[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x4D1F5138/0/0/sky/0/201stage201_sky__maya__.numshb
+[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x4D1F5138/0/0/sky/0/201stage201_sky.numdlb matl_files=1 textures_ref=4 textures_resolved=4 warnings=0 elapsed_ms=40
+[collect_hkt_as_xml] converted: 201stage201_object_build_a_02_left_before\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_a_02_right_before\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_a_left_before\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_a_left_break\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_a_right_before\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_a_right_break\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_b_02_left_before\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_b_02_right_before\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_b_left_before\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_b_left_break\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_b_right_before\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_b_right_break\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_c_02_left_before\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_c_02_right_before\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_c_left_before\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_c_left_break\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_c_right_before\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_c_right_break\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_d_front_before\map_hit.hkt
+[collect_hkt_as_xml] converted: 201stage201_object_build_d_front_break\map_hit.hkt
+[collect_hkt_as_xml] converted: base\map_hit.hkt
+[collect_hkt_as_xml] converted: info\border_hit.hkt
+[scene_open_folder] success session_id=517315b0-e311-482b-93a2-8140b3e4ed5d warnings=0

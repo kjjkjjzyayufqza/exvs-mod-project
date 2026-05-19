@@ -94,6 +94,7 @@ pub fn run() {
             fhm2d_memory_preview::fhm2d_memory_nutexb_png_bytes,
             fhm2d_memory_preview::fhm2d_memory_nutexb_rgba_bytes,
             fhm2d_memory_preview::dispose_fhm2d_memory_session,
+            fhm2d_memory_preview::fhm2d_memory_convert_hkt_to_xml,
             preview_collection_state::preview_collection_replace_from_bundles,
             preview_collection_state::preview_collection_append_from_bundles,
             preview_collection_state::preview_collection_snapshot,

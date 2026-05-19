@@ -38,6 +38,8 @@ interface SceneEditorState {
   objectLocks: Record<string, boolean>;
 
   viewMode: "normal" | "collision" | "both";
+  showAabb: boolean;
+  showCollisionMesh: boolean;
   sessionId: string | null;
 }
 
@@ -76,6 +78,8 @@ interface SceneEditorActions {
   isLocked: (nodeId: string) => boolean;
 
   setViewMode: (mode: "normal" | "collision" | "both") => void;
+  setShowAabb: (v: boolean) => void;
+  setShowCollisionMesh: (v: boolean) => void;
   setSessionId: (id: string | null) => void;
 }
 
@@ -94,6 +98,8 @@ export const useSceneEditorStore = create<SceneEditorState & SceneEditorActions>
     nodeVisibility: {},
     objectLocks: {},
     viewMode: "normal",
+    showAabb: true,
+    showCollisionMesh: true,
     sessionId: null,
 
     select: (id, opts) => {
@@ -311,6 +317,18 @@ export const useSceneEditorStore = create<SceneEditorState & SceneEditorActions>
     setViewMode: (mode) => {
       set((state) => {
         state.viewMode = mode;
+      });
+    },
+
+    setShowAabb: (v) => {
+      set((state) => {
+        state.showAabb = v;
+      });
+    },
+
+    setShowCollisionMesh: (v) => {
+      set((state) => {
+        state.showCollisionMesh = v;
       });
     },
 

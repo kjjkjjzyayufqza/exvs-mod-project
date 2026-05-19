@@ -145,18 +145,14 @@ fn run_filter_manager(
     std::fs::write(&hko_path, hko_content)
         .map_err(|e| format!("Failed to write .hko config: {e}"))?;
 
-    let work_dir = Path::new(filter_manager_exe)
-        .parent()
-        .unwrap_or(Path::new("."));
-
     let result = Command::new(filter_manager_exe)
-        .current_dir(work_dir)
-        .arg(format!("--settings={}", hko_path.display()))
-        .arg(format!("--output={}", temp_dir.display()))
-        .arg(format!("--asset={}", temp_dir.display()))
-        .arg("--interactive=0")
-        .arg("--standard=1")
-        .arg("--verbose=0")
+        .current_dir(&temp_dir)
+        .arg("-s")
+        .arg(&hko_path)
+        .arg("-p")
+        .arg(format!("{}\\", temp_dir.display()))
+        .arg("-o")
+        .arg(format!("{}\\", temp_dir.display()))
         .arg(input_path.as_os_str())
         .output()
         .map_err(|e| format!("Failed to run hctStandAloneFilterManager: {e}"))?;
@@ -167,7 +163,11 @@ fn run_filter_manager(
         .map_err(|e| format!("Failed to read temp dir: {e}"))?
         .filter_map(|e| e.ok())
         .map(|e| e.path())
-        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("hkx"))
+        .filter(|p| {
+            let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
+            (ext == "hkx" || ext == "hkt" || ext == "xml")
+                && p.file_name().map(|n| n != "settings.hko").unwrap_or(false)
+        })
         .collect();
 
     let cleanup = || {
@@ -196,6 +196,40 @@ fn run_filter_manager(
 
     cleanup();
     Ok(())
+}
+
+/// Convert HKT bytes to XML string in memory (writes to temp, reads back).
+pub fn convert_hkt_bytes_to_xml(
+    filter_manager_exe: &str,
+    hkt_bytes: &[u8],
+) -> Result<String, String> {
+    let temp_dir = std::env::temp_dir().join(format!("havok_mem_{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&temp_dir)
+        .map_err(|e| format!("Failed to create temp dir: {e}"))?;
+
+    let input_path = temp_dir.join("input.hkt");
+    std::fs::write(&input_path, hkt_bytes)
+        .map_err(|e| format!("Failed to write temp HKT: {e}"))?;
+
+    let output_path = temp_dir.join("output.xml");
+    let result = run_filter_manager(filter_manager_exe, HKO_WRITE_XML, &input_path, &output_path);
+
+    let cleanup = || {
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    };
+
+    match result {
+        Ok(()) => {
+            let xml = std::fs::read_to_string(&output_path)
+                .map_err(|e| format!("Failed to read output XML: {e}"))?;
+            cleanup();
+            Ok(xml)
+        }
+        Err(e) => {
+            cleanup();
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]

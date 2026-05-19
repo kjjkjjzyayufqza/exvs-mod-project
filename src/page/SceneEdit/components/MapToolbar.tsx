@@ -78,6 +78,10 @@ interface MapToolbarProps {
   viewMode: "normal" | "collision" | "both";
   onViewModeChange: (mode: "normal" | "collision" | "both") => void;
   hasCollisionData: boolean;
+  showAabb: boolean;
+  onToggleAabb: (v: boolean) => void;
+  showCollisionMesh: boolean;
+  onToggleCollisionMesh: (v: boolean) => void;
 }
 
 export function MapToolbar({
@@ -113,6 +117,10 @@ export function MapToolbar({
   viewMode,
   onViewModeChange,
   hasCollisionData,
+  showAabb,
+  onToggleAabb,
+  showCollisionMesh,
+  onToggleCollisionMesh,
 }: MapToolbarProps) {
   return (
     <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b bg-muted/20 px-1.5 py-0.5">
@@ -374,6 +382,12 @@ export function MapToolbar({
         value={viewMode}
         onChange={onViewModeChange}
         disabled={!hasCollisionData}
+        showWireframe={wireframe}
+        onToggleWireframe={onToggleWireframe}
+        showAabb={showAabb}
+        onToggleAabb={onToggleAabb}
+        showMesh={showCollisionMesh}
+        onToggleMesh={onToggleCollisionMesh}
       />
 
       <Separator orientation="vertical" className="h-4 mx-0.5" />

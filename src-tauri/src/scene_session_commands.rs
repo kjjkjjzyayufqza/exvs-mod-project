@@ -171,6 +171,14 @@ pub async fn scene_open_folder(
     let placement_entries = bundle.placement_entries;
     let graphic_params = bundle.graphic_params;
 
+    // Scan all .hkt files and convert to XML in memory
+    let stage_path = path.clone();
+    let havok_data_list = tauri::async_runtime::spawn_blocking(move || {
+        collect_hkt_as_xml(&stage_path)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
     let session_id = state.create_session(SceneSource::Folder { path: path.clone() });
     state.with_session_mut(&session_id, |s| {
         s.placement_header = placement_header;
@@ -198,6 +206,7 @@ pub async fn scene_open_folder(
                 value: g.value,
             })
             .collect();
+        s.havok_data = havok_data_list;
         Ok(())
     })?;
 
@@ -211,6 +220,62 @@ pub async fn scene_open_folder(
         root_path: path,
         warnings,
     })
+}
+
+/// Scan stage folder for all .hkt files and convert each to XML via Havok Content Tools.
+fn collect_hkt_as_xml(stage_root: &str) -> Vec<HavokCollisionData> {
+    let config = match havok_cli::HavokCliConfig::detect() {
+        Some(c) => c,
+        None => {
+            eprintln!("[collect_hkt_as_xml] Havok Content Tools not found, skipping HKT conversion");
+            return Vec::new();
+        }
+    };
+    if !Path::new(&config.filter_manager_path).exists() {
+        eprintln!("[collect_hkt_as_xml] filter manager exe not found");
+        return Vec::new();
+    }
+
+    let root = Path::new(stage_root);
+    let mut results = Vec::new();
+
+    fn find_hkt_files(dir: &Path, root: &Path, out: &mut Vec<(String, Vec<u8>)>) {
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                find_hkt_files(&p, root, out);
+            } else if p.extension().and_then(|e| e.to_str()) == Some("hkt") {
+                let rel = p.strip_prefix(root)
+                    .map(|r| r.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| p.file_name().unwrap().to_string_lossy().to_string());
+                if let Ok(bytes) = std::fs::read(&p) {
+                    out.push((rel, bytes));
+                }
+            }
+        }
+    }
+
+    let mut hkt_files: Vec<(String, Vec<u8>)> = Vec::new();
+    find_hkt_files(root, root, &mut hkt_files);
+
+    for (source_id, raw_bytes) in hkt_files {
+        match havok_cli::convert_hkt_bytes_to_xml(&config.filter_manager_path, &raw_bytes) {
+            Ok(xml) => {
+                eprintln!("[collect_hkt_as_xml] converted: {}", source_id);
+                results.push(HavokCollisionData {
+                    source_id,
+                    hkt_xml: xml,
+                    raw_bytes,
+                });
+            }
+            Err(e) => {
+                eprintln!("[collect_hkt_as_xml] failed to convert {}: {}", source_id, e);
+            }
+        }
+    }
+
+    results
 }
 
 #[tauri::command]

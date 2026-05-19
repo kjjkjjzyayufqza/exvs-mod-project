@@ -7,7 +7,6 @@ import {
 } from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
 import {
   getOrDecodeNutexbRgba,
-  makeNutexbVersionId,
   type NutexbRgbaData,
 } from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
 import {
@@ -186,7 +185,8 @@ export function useSceneTextureLoader(
               sessionId,
               virtualPath: path,
             });
-            versionId = makeNutexbVersionId(path, identity.nutexbSize, identity.crc32) + `@${maxDimension ?? "full"}`;
+            // Use content-based key (size+crc32) for dedup across duplicate files
+            versionId = `nutexb|${identity.nutexbSize}|${(identity.crc32 >>> 0).toString(16).padStart(8, "0")}@${maxDimension ?? "full"}`;
             decodeFn = () =>
               invoke<ArrayBuffer | Uint8Array>("fhm2d_memory_nutexb_rgba_bytes", {
                 sessionId,
@@ -198,7 +198,8 @@ export function useSceneTextureLoader(
               "nutexb_preview_file_identity",
               { path },
             );
-            versionId = makeNutexbVersionId(path, identity.nutexbSize, identity.crc32) + `@${maxDimension ?? "full"}`;
+            // Use content-based key (size+crc32) for dedup across duplicate files
+            versionId = `nutexb|${identity.nutexbSize}|${(identity.crc32 >>> 0).toString(16).padStart(8, "0")}@${maxDimension ?? "full"}`;
             decodeFn = () =>
               invoke<ArrayBuffer | Uint8Array>("nutexb_rgba_bytes", {
                 inputPath: path,

@@ -273,6 +273,8 @@ export interface MapViewportProps {
   onPlacementGizmoCommit?: (placementIdx: number, t: TransformData) => void;
   viewMode?: "normal" | "collision" | "both";
   havokMeshDataMap?: Map<string, HavokMeshData>;
+  showAabb?: boolean;
+  showCollisionMesh?: boolean;
 }
 
 export interface MapViewportHandle {
@@ -360,6 +362,8 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       onPlacementGizmoCommit,
       viewMode = "normal",
       havokMeshDataMap,
+      showAabb = true,
+      showCollisionMesh = true,
     },
     ref
   ) {
@@ -664,7 +668,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           <color attach="background" args={["#1a1a2e"]} />
         </Environment>
 
-        {baseModel && isNodeVisible("base") && (
+        {baseModel && isNodeVisible("base") && viewMode !== "collision" && (
           <StageModelGroup
             nodeId="base"
             bundle={baseModel}
@@ -697,7 +701,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           />
         )}
 
-        {subModels.flatMap((sub) => {
+        {viewMode !== "collision" && subModels.flatMap((sub) => {
           const objectRows = placementEntries
             .map((entry, globalIdx) => ({ entry, globalIdx }))
             .filter(
@@ -856,7 +860,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           )];
         })}
 
-        {importedDaeObjects.flatMap((obj) => {
+        {viewMode !== "collision" && importedDaeObjects.flatMap((obj) => {
           if (!isNodeVisible(obj.id)) return [];
           return [(
           <ImportedDaeGroup
@@ -883,6 +887,10 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           <HavokCollisionOverlay
             meshDataMap={havokMeshDataMap}
             viewMode={viewMode}
+            showAabb={showAabb}
+            showMesh={showCollisionMesh}
+            subModels={subModels}
+            placementEntries={placementEntries}
           />
         )}
 
