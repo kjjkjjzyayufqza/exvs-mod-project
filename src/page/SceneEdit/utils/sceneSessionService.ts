@@ -118,6 +118,14 @@ export function sceneRepackInPlace(sessionId: string): Promise<SaveResult> {
   return invoke<SaveResult>("scene_repack_in_place", { sessionId });
 }
 
+export function convertHktToXml(inputPath: string, outputPath: string): Promise<string> {
+  return invoke<string>("convert_hkt_to_xml", { inputPath, outputPath });
+}
+
+export function convertXmlToHkt(inputPath: string, outputPath: string): Promise<string> {
+  return invoke<string>("convert_xml_to_hkt", { inputPath, outputPath });
+}
+
 export function sceneListImports(sessionId: string): Promise<ImportResult[]> {
   return invoke<ImportResult[]>("scene_list_imports", { sessionId });
 }

@@ -1,5 +1,6 @@
 use serde::Serialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -70,6 +71,189 @@ pub fn generate_hkt_from_dae(
     // exporter plugin, which is not available as a CLI tool.
     Err("HKT generation from DAE is not supported: Havok Content Tools cannot load DAE files directly. \
          Use a DCC tool (3ds Max/Maya) with the Havok exporter plugin to produce HKT files.".to_string())
+}
+
+const HKO_WRITE_XML: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+<hkoptions>
+	<hkobject class="hctConfigurationSetData">
+		<hkparam name="filterManagerVersion">65537</hkparam>
+		<hkparam name="activeConfiguration">0</hkparam>
+	</hkobject>
+	<hkobject class="hctConfigurationData">
+		<hkparam name="configurationName">HKT2XML</hkparam>
+		<hkparam name="numFilters">1</hkparam>
+	</hkobject>
+	<hkobject name="Write to Platform" class="hctFilterData">
+		<hkparam name="id">2876798309</hkparam>
+		<hkparam name="ver">66049</hkparam>
+		<hkparam name="hasOptions">true</hkparam>
+	</hkobject>
+	<hkobject name="Write to Platform" class="hctPlatformWriterOptions">
+		<hkparam name="filename"></hkparam>
+		<hkparam name="tagfile">true</hkparam>
+		<hkparam name="bytesInPointer">8</hkparam>
+		<hkparam name="littleEndian">true</hkparam>
+		<hkparam name="reusePaddingOptimized">false</hkparam>
+		<hkparam name="emptyBaseClassOptimized">false</hkparam>
+		<hkparam name="removeMetadata">false</hkparam>
+		<hkparam name="userTag">0</hkparam>
+		<hkparam name="saveEnvironmentData">true</hkparam>
+		<hkparam name="xmlFormat">true</hkparam>
+	</hkobject>
+</hkoptions>"#;
+
+const HKO_WRITE_HKT: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+<hkoptions>
+	<hkobject class="hctConfigurationSetData">
+		<hkparam name="filterManagerVersion">65537</hkparam>
+		<hkparam name="activeConfiguration">0</hkparam>
+	</hkobject>
+	<hkobject class="hctConfigurationData">
+		<hkparam name="configurationName">XML2HKT</hkparam>
+		<hkparam name="numFilters">1</hkparam>
+	</hkobject>
+	<hkobject name="Write to Platform" class="hctFilterData">
+		<hkparam name="id">2876798309</hkparam>
+		<hkparam name="ver">66049</hkparam>
+		<hkparam name="hasOptions">true</hkparam>
+	</hkobject>
+	<hkobject name="Write to Platform" class="hctPlatformWriterOptions">
+		<hkparam name="filename"></hkparam>
+		<hkparam name="tagfile">true</hkparam>
+		<hkparam name="bytesInPointer">8</hkparam>
+		<hkparam name="littleEndian">true</hkparam>
+		<hkparam name="reusePaddingOptimized">false</hkparam>
+		<hkparam name="emptyBaseClassOptimized">false</hkparam>
+		<hkparam name="removeMetadata">false</hkparam>
+		<hkparam name="userTag">0</hkparam>
+		<hkparam name="saveEnvironmentData">true</hkparam>
+		<hkparam name="xmlFormat">false</hkparam>
+	</hkobject>
+</hkoptions>"#;
+
+fn run_filter_manager(
+    filter_manager_exe: &str,
+    hko_content: &str,
+    input_path: &Path,
+    output_path: &Path,
+) -> Result<(), String> {
+    let temp_dir = std::env::temp_dir().join(format!("havok_convert_{}", std::process::id()));
+    std::fs::create_dir_all(&temp_dir)
+        .map_err(|e| format!("Failed to create temp dir: {e}"))?;
+
+    let hko_path = temp_dir.join("settings.hko");
+    std::fs::write(&hko_path, hko_content)
+        .map_err(|e| format!("Failed to write .hko config: {e}"))?;
+
+    let work_dir = Path::new(filter_manager_exe)
+        .parent()
+        .unwrap_or(Path::new("."));
+
+    let result = Command::new(filter_manager_exe)
+        .current_dir(work_dir)
+        .arg(format!("--settings={}", hko_path.display()))
+        .arg(format!("--output={}", temp_dir.display()))
+        .arg(format!("--asset={}", temp_dir.display()))
+        .arg("--interactive=0")
+        .arg("--standard=1")
+        .arg("--verbose=0")
+        .arg(input_path.as_os_str())
+        .output()
+        .map_err(|e| format!("Failed to run hctStandAloneFilterManager: {e}"))?;
+
+    let stdout = String::from_utf8_lossy(&result.stdout);
+
+    let generated: Vec<PathBuf> = std::fs::read_dir(&temp_dir)
+        .map_err(|e| format!("Failed to read temp dir: {e}"))?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("hkx"))
+        .collect();
+
+    let cleanup = || {
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    };
+
+    if generated.is_empty() {
+        let err_detail = if stdout.contains("Warning") || stdout.contains("Error") {
+            stdout.to_string()
+        } else {
+            format!("No output file produced. Exit code: {}", result.status)
+        };
+        cleanup();
+        return Err(format!("Havok conversion failed: {err_detail}"));
+    }
+
+    if let Some(parent) = output_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create output directory: {e}"))?;
+    }
+
+    std::fs::copy(&generated[0], output_path).map_err(|e| {
+        cleanup();
+        format!("Failed to copy output file: {e}")
+    })?;
+
+    cleanup();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn convert_hkt_to_xml(input_path: String, output_path: String) -> Result<String, String> {
+    let config = HavokCliConfig::detect()
+        .ok_or("Havok Content Tools not found")?;
+
+    if !Path::new(&config.filter_manager_path).exists() {
+        return Err("hctStandAloneFilterManager.exe not found".to_string());
+    }
+
+    let input = PathBuf::from(&input_path);
+    if !input.exists() {
+        return Err(format!("Input file not found: {input_path}"));
+    }
+
+    let output = PathBuf::from(&output_path);
+    tauri::async_runtime::spawn_blocking(move || {
+        run_filter_manager(
+            &config.filter_manager_path,
+            HKO_WRITE_XML,
+            &input,
+            &output,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+
+    Ok(output_path)
+}
+
+#[tauri::command]
+pub async fn convert_xml_to_hkt(input_path: String, output_path: String) -> Result<String, String> {
+    let config = HavokCliConfig::detect()
+        .ok_or("Havok Content Tools not found")?;
+
+    if !Path::new(&config.filter_manager_path).exists() {
+        return Err("hctStandAloneFilterManager.exe not found".to_string());
+    }
+
+    let input = PathBuf::from(&input_path);
+    if !input.exists() {
+        return Err(format!("Input file not found: {input_path}"));
+    }
+
+    let output = PathBuf::from(&output_path);
+    tauri::async_runtime::spawn_blocking(move || {
+        run_filter_manager(
+            &config.filter_manager_path,
+            HKO_WRITE_HKT,
+            &input,
+            &output,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+
+    Ok(output_path)
 }
 
 #[tauri::command]

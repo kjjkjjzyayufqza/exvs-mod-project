@@ -131,7 +131,9 @@ pub fn run() {
             scene_session_commands::scene_save_as_folder,
             scene_session_commands::scene_repack_in_place,
             scene_session_commands::scene_list_imports,
-            havok_cli::detect_havok_installation
+            havok_cli::detect_havok_installation,
+            havok_cli::convert_hkt_to_xml,
+            havok_cli::convert_xml_to_hkt
         ]);
 
     #[cfg(debug_assertions)]
