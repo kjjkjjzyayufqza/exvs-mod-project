@@ -2,6 +2,7 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   type RefObject,
 } from "react";
@@ -61,16 +62,17 @@ export const SceneTransformControls = forwardRef<UnrealTransformGizmo, SceneTran
 
     useImperativeHandle(ref, () => gizmo, [gizmo]);
 
-    useEffect(() => {
-      const target = resolveObject(object);
-      if (!target) return;
-      gizmo.attach(target);
+    const attachTarget = resolveObject(object);
+
+    useLayoutEffect(() => {
+      if (!attachTarget) return;
+      gizmo.attach(attachTarget);
       invalidate();
       return () => {
         gizmo.detach();
         invalidate();
       };
-    }, [gizmo, invalidate, object]);
+    }, [attachTarget, gizmo, invalidate]);
 
     useEffect(() => {
       gizmo.setMode(mode);

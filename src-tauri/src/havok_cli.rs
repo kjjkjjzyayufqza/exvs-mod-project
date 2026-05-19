@@ -60,50 +60,16 @@ fn collect_hko_files(base: &Path, dir: &Path, out: &mut Vec<String>) {
 }
 
 pub fn generate_hkt_from_dae(
-    dae_bytes: &[u8],
-    config_profile: &str,
-    havok_config: &HavokCliConfig,
+    _dae_bytes: &[u8],
+    _config_profile: &str,
+    _havok_config: &HavokCliConfig,
 ) -> Result<Vec<u8>, String> {
-    let temp_dir = tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {e}"))?;
-    let input_path = temp_dir.path().join("input.dae");
-    let output_path = temp_dir.path().join("output.hkt");
-
-    std::fs::write(&input_path, dae_bytes)
-        .map_err(|e| format!("Failed to write temp DAE: {e}"))?;
-
-    let config_path = format!(r"{}\{}", havok_config.config_dir, config_profile);
-
-    let output = std::process::Command::new(&havok_config.file_convert_path)
-        .arg("-i")
-        .arg(&input_path)
-        .arg("-o")
-        .arg(&output_path)
-        .arg("-c")
-        .arg(&config_path)
-        .output()
-        .map_err(|e| format!("Failed to run FileConvert.exe: {e}"))?;
-
-    if !output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        eprintln!(
-            "[havok_cli] FileConvert failed: code={:?} profile={}\n  stdout={}\n  stderr={}",
-            output.status.code(), config_profile, stdout.trim(), stderr.trim()
-        );
-        return Err(format!(
-            "FileConvert exited with code {:?} (profile={}): stdout=[{}] stderr=[{}]",
-            output.status.code(),
-            config_profile,
-            stdout.trim(),
-            stderr.trim()
-        ));
-    }
-
-    if !output_path.exists() {
-        return Err("FileConvert did not produce output file".to_string());
-    }
-
-    std::fs::read(&output_path).map_err(|e| format!("Failed to read HKT output: {e}"))
+    // Havok Content Tools (FileConvert.exe, hctStandAloneFilterManager.exe) cannot
+    // load DAE files directly. They only support Havok-native formats (.hkx, .hkt,
+    // XML tagfile/packfile). DAE→HKT conversion requires the Havok 3ds Max/Maya
+    // exporter plugin, which is not available as a CLI tool.
+    Err("HKT generation from DAE is not supported: Havok Content Tools cannot load DAE files directly. \
+         Use a DCC tool (3ds Max/Maya) with the Havok exporter plugin to produce HKT files.".to_string())
 }
 
 #[tauri::command]

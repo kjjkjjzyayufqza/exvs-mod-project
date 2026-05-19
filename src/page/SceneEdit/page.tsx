@@ -5,6 +5,10 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import * as THREE from "three";
 import { DialogLastPathKey, getDialogDefaultPath, rememberDialogSelection } from "@/utils/dialogLastPath";
+import {
+  getStoredDialogDefaultPath,
+  rememberStoredDialogSelection,
+} from "@/utils/dialogDefaultPathStore";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { RotateCcw } from "lucide-react";
 
@@ -108,6 +112,7 @@ import {
   exportSingleStageDae,
   batchExportStageDae,
   importDAEFiles,
+  loadDAEFromPath,
   type BatchDaeExportEntry,
 } from "./utils/daeExportImport";
 import {
@@ -131,7 +136,11 @@ import {
   type ObjectTextureLoadState,
 } from "./utils/sceneTextureInventory";
 import { useConfigStore } from "@/store/configStore";
-import { DEFAULT_SCENE_GIZMO_SIZE, normalizeSceneGizmoSize } from "./utils/sceneEditorSettings";
+import {
+  DEFAULT_SCENE_GIZMO_SIZE,
+  normalizeSceneGizmoSize,
+  SCENE_IMPORT_DAE_DIALOG_PATH_KEY,
+} from "./utils/sceneEditorSettings";
 import { executeStageSave } from "./utils/sceneSavePipeline";
 import { DaeImportConfigModal } from "./components/dae-import/DaeImportConfigModal";
 import type { DaeImportEntry, HavokInstallInfo } from "./components/dae-import/daeImportTypes";
@@ -1920,9 +1929,14 @@ export default function SceneEdit() {
     const selected = await open({
       multiple: true,
       filters: [{ name: "Collada DAE", extensions: ["dae"] }],
+      defaultPath: await getStoredDialogDefaultPath(SCENE_IMPORT_DAE_DIALOG_PATH_KEY),
     });
     if (!selected) return;
     const paths = Array.isArray(selected) ? selected : [selected];
+    const lastPath = paths[paths.length - 1];
+    if (lastPath) {
+      await rememberStoredDialogSelection(SCENE_IMPORT_DAE_DIALOG_PATH_KEY, lastPath, "file");
+    }
 
     const entries: DaeImportEntry[] = paths.map((filePath) => {
       const fileName = filePath.split(/[/\\]/).pop() ?? "model.dae";
@@ -1980,18 +1994,16 @@ export default function SceneEdit() {
           }
 
           if (entry.config.loadToScene) {
-            const results = await importDAEFiles(true);
-            if (results.length > 0) {
-              const created: ImportedDaeObject[] = results.map((r, idx) => ({
-                id: `dae_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${idx}`,
-                name: r.fileName.replace(/\.dae$/i, ""),
-                sourcePath: r.filePath,
-                scene: r.scene,
-                transform: { ...DEFAULT_TRANSFORM },
-              }));
-              setImportedDaeObjects((prev) => [...prev, ...created]);
-              setHasUnsavedChanges(true);
-            }
+            const loaded = await loadDAEFromPath(entry.filePath);
+            const created: ImportedDaeObject = {
+              id: `dae_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+              name: loaded.fileName.replace(/\.dae$/i, ""),
+              sourcePath: loaded.filePath,
+              scene: loaded.scene,
+              transform: { ...DEFAULT_TRANSFORM },
+            };
+            setImportedDaeObjects((prev) => [...prev, created]);
+            setHasUnsavedChanges(true);
           }
           successCount++;
         } catch (err) {
@@ -2486,6 +2498,7 @@ export default function SceneEdit() {
                 onBaseTransformChange={commitBaseGizmoTransform}
                 standaloneTransforms={standaloneTransforms}
                 onStandaloneTransformChange={commitStandaloneGizmoTransform}
+                onImportedDaeTransformFrame={updateImportedDaeTransform}
                 onImportedDaeTransformChange={commitImportedDaeGizmoTransform}
                 clickPickSelectionEnabled
                 previewRenderStyle={scenePreviewRenderStyle}
@@ -2684,6 +2697,41 @@ export default function SceneEdit() {
               setShowDaeImportModal(false);
               const entriesToProcess = [...daeImportEntries];
               setDaeImportEntries([]);
+
+              const previewOnly = entriesToProcess.every(
+                (entry) =>
+                  entry.config.loadToScene &&
+                  !entry.config.convertToSsbh &&
+                  !entry.config.generateHkt,
+              );
+
+              if (previewOnly) {
+                try {
+                  let offsetX = 0;
+                  const SPACING = 2;
+                  const created: ImportedDaeObject[] = [];
+                  for (const entry of entriesToProcess) {
+                    const loaded = await loadDAEFromPath(entry.filePath);
+                    const posX = offsetX;
+                    offsetX += loaded.boundingSize.x + SPACING;
+                    created.push({
+                      id: `dae_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${created.length}`,
+                      name: loaded.fileName.replace(/\.dae$/i, ""),
+                      sourcePath: loaded.filePath,
+                      scene: loaded.scene,
+                      transform: { ...DEFAULT_TRANSFORM, posX },
+                    });
+                  }
+                  if (created.length === 0) return;
+                  setImportedDaeObjects((prev) => [...prev, ...created]);
+                  setHasUnsavedChanges(true);
+                  handleSelectNode(created[0]?.id ?? null);
+                  toast.success(`Imported ${created.length} DAE object(s) to scene`);
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Failed to import DAE");
+                }
+                return;
+              }
 
               if (!sceneSessionId) {
                 const sid = await sceneSessionCreate({ type: "new" });

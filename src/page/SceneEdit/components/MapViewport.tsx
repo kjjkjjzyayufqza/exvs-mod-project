@@ -15,6 +15,8 @@ import {
   useCallback,
   useMemo,
   useEffect,
+  useLayoutEffect,
+  useState,
   memo,
   forwardRef,
   useImperativeHandle,
@@ -56,6 +58,7 @@ import {
 import { animeExvsOnBeforeCompile, createAnimeExvsUniforms } from "@/page/TestEditor/components/ssbh-model-preview/animeExvsMeshStandard";
 import { AnimePreviewPostFx } from "@/page/TestEditor/components/ssbh-model-preview/AnimePreviewPostFx";
 import { SceneTexturePool } from "../utils/SceneTexturePool";
+import { buildImportedDaeDisplayRoot } from "../utils/importedDaeSceneNormalize";
 import {
   shouldInvalidateViewportForGizmoEvent,
   shouldRenderGizmoControls,
@@ -183,6 +186,22 @@ function readTransformFromGroup(group: THREE.Group): TransformData {
   };
 }
 
+function applyTransformToGroup(group: THREE.Object3D, transform: TransformData): void {
+  group.position.set(transform.posX, transform.posY, transform.posZ);
+  group.rotation.set(
+    transform.rotX * DEG2RAD,
+    transform.rotY * DEG2RAD,
+    transform.rotZ * DEG2RAD,
+  );
+  const [sx, sy, sz] = placementScaleForViewport(
+    transform.scaleX,
+    transform.scaleY,
+    transform.scaleZ,
+  );
+  group.scale.set(sx, sy, sz);
+  group.updateMatrixWorld(true);
+}
+
 /** placement rows often have 0 scale when CSV omitted columns; Three.js would hide the mesh. */
 function placementScaleForViewport(sx: number, sy: number, sz: number): [number, number, number] {
   const each = (v: number) => {
@@ -240,6 +259,7 @@ export interface MapViewportProps {
   onBaseTransformChange?: (t: TransformData) => void;
   standaloneTransforms?: Map<string, TransformData>;
   onStandaloneTransformChange?: (nodeId: string, t: TransformData) => void;
+  onImportedDaeTransformFrame?: (nodeId: string, t: TransformData) => void;
   onImportedDaeTransformChange?: (nodeId: string, t: TransformData) => void;
   clickPickSelectionEnabled?: boolean;
   /** Test Editor-style anime pipeline: bloom + warm lights + cel-tinted PBR when "anime". */
@@ -330,6 +350,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       onBaseTransformChange,
       standaloneTransforms,
       onStandaloneTransformChange,
+      onImportedDaeTransformFrame,
       onImportedDaeTransformChange,
       clickPickSelectionEnabled = false,
       previewRenderStyle = "standard",
@@ -848,6 +869,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             showGizmo={selectedNodeId === obj.id && isNodeEditable(obj.id)}
             placementGizmoMode={placementGizmoMode}
             transformGizmoSize={transformGizmoSize}
+            onTransformFrame={onImportedDaeTransformFrame}
             onTransformCommit={onImportedDaeTransformChange}
             gizmoDraggingRef={gizmoDraggingRef}
             orbitActiveRef={orbitActiveRef}
@@ -922,62 +944,75 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
   pointerDownTimeRef?: React.RefObject<number>;
   selectedGroupsRef?: React.RefObject<SelectedGroupMap>;
 }) {
-  const groupRef = useRef<THREE.Group>(null);
+  const wrapperRef = useRef<THREE.Group | null>(null);
+  const [gizmoTarget, setGizmoTarget] = useState<THREE.Group | null>(null);
   const invalidate = useThree((s) => s.invalidate);
   const regress = useThree((s) => s.performance.regress);
-  const isDraggingRef = useRef(false);
-  const sceneClone = useMemo(() => {
-    const clone = object.scene.clone(true);
-    clone.traverse((child) => {
-      child.matrixAutoUpdate = true;
-    });
-    return clone;
-  }, [object.scene]);
+  const transform = object.transform;
+  const groupPosition = useMemo(
+    () => [transform.posX, transform.posY, transform.posZ] as [number, number, number],
+    [transform.posX, transform.posY, transform.posZ],
+  );
+  const groupRotation = useMemo(
+    () =>
+      [
+        transform.rotX * DEG2RAD,
+        transform.rotY * DEG2RAD,
+        transform.rotZ * DEG2RAD,
+      ] as [number, number, number],
+    [transform.rotX, transform.rotY, transform.rotZ],
+  );
+  const groupScale = useMemo(
+    () => placementScaleForViewport(transform.scaleX, transform.scaleY, transform.scaleZ),
+    [transform.scaleX, transform.scaleY, transform.scaleZ],
+  );
   const selectionOverlay = useMemo(() => getSelectionWireframeOverlayProps(isSelected), [isSelected]);
-  const selectionClone = useMemo(() => {
-    if (!selectionOverlay.visible) return null;
-    const material = new THREE.MeshBasicMaterial({
-      color: selectionOverlay.color,
-      wireframe: selectionOverlay.wireframe,
-      transparent: selectionOverlay.transparent,
-      opacity: selectionOverlay.opacity,
-      depthTest: selectionOverlay.depthTest,
-      depthWrite: false,
-      toneMapped: false,
-    });
-    const clone = object.scene.clone(true);
-    clone.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        child.material = material;
-        child.renderOrder = 10_000;
-      }
-    });
-    return { clone, material };
-  }, [object.scene, selectionOverlay]);
+  const sceneClone = useMemo(() => {
+    const display = buildImportedDaeDisplayRoot(object.scene);
+    display.name = `${object.id}_mesh`;
+    if (selectionOverlay.visible) {
+      const material = new THREE.MeshBasicMaterial({
+        color: selectionOverlay.color,
+        wireframe: selectionOverlay.wireframe,
+        transparent: selectionOverlay.transparent,
+        opacity: selectionOverlay.opacity,
+        depthTest: selectionOverlay.depthTest,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      const overlay = display.clone(true);
+      overlay.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.material = material;
+          child.renderOrder = 10_000;
+        }
+      });
+      display.add(overlay);
+    }
+    display.updateMatrixWorld(true);
+    return display;
+  }, [object.id, object.scene, selectionOverlay]);
+
+  const assignWrapperRef = useCallback((node: THREE.Group | null) => {
+    wrapperRef.current = node;
+    setGizmoTarget(node);
+  }, []);
+
+  useLayoutEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    applyTransformToGroup(wrapper, transform);
+  }, [transform]);
 
   useEffect(() => {
-    return () => {
-      selectionClone?.material.dispose();
-    };
-  }, [selectionClone]);
-
-  useEffect(() => {
-    if (isDraggingRef.current) return;
-    const g = groupRef.current;
-    if (!g) return;
-    const t = object.transform;
-    g.position.set(t.posX, t.posY, t.posZ);
-    g.rotation.set(t.rotX * DEG2RAD, t.rotY * DEG2RAD, t.rotZ * DEG2RAD);
-    const [sx, sy, sz] = placementScaleForViewport(t.scaleX, t.scaleY, t.scaleZ);
-    g.scale.set(sx, sy, sz);
     invalidate();
-  }, [object.transform, invalidate]);
+  }, [groupPosition, groupRotation, groupScale, invalidate]);
 
   useEffect(() => {
-    const g = groupRef.current;
-    if (!g || !selectedGroupsRef) return;
+    const wrapper = wrapperRef.current;
+    if (!wrapper || !selectedGroupsRef) return;
     if (isSelected) {
-      selectedGroupsRef.current.set(object.id, g);
+      selectedGroupsRef.current.set(object.id, wrapper);
     } else {
       selectedGroupsRef.current.delete(object.id);
     }
@@ -1000,48 +1035,56 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
     [clickPickSelectionEnabled, gizmoDraggingRef, isLocked, object.id, onClick, orbitActiveRef, pointerDownTimeRef],
   );
 
+  const gizmoReady = shouldRenderGizmoControls({
+    isSelected: showGizmo,
+    hasCommitHandler: Boolean(onTransformCommit),
+  });
+
   const handleObjectChange = useCallback(() => {
+    const wrapper = wrapperRef.current;
+    if (wrapper && onTransformFrame && shouldSyncSceneStateForGizmoEvent("drag")) {
+      onTransformFrame(object.id, readTransformFromGroup(wrapper));
+    }
     if (shouldInvalidateViewportForGizmoEvent("drag")) {
       regress();
       invalidate();
     }
-    if (!shouldSyncSceneStateForGizmoEvent("drag")) return;
-    const group = groupRef.current;
-    if (!group || !onTransformFrame) return;
-    onTransformFrame(object.id, readTransformFromGroup(group));
   }, [invalidate, object.id, onTransformFrame, regress]);
 
   const handleMouseUp = useCallback(() => {
-    isDraggingRef.current = false;
+    const wrapper = wrapperRef.current;
+    if (wrapper && onTransformCommit) {
+      onTransformCommit(object.id, readTransformFromGroup(wrapper));
+    }
     if (shouldInvalidateViewportForGizmoEvent("commit")) {
       invalidate();
     }
-    if (!shouldSyncSceneStateForGizmoEvent("commit")) return;
-    const group = groupRef.current;
-    if (!group || !onTransformCommit) return;
-    onTransformCommit(object.id, readTransformFromGroup(group));
   }, [invalidate, object.id, onTransformCommit]);
 
   return (
     <Fragment>
       <group
-        ref={groupRef}
+        ref={assignWrapperRef}
         name={object.id}
+        position={groupPosition}
+        rotation={groupRotation}
+        scale={groupScale}
         onClick={handleClick}
       >
         <primitive object={sceneClone} />
-        {selectionClone ? <primitive object={selectionClone.clone} /> : null}
       </group>
-      {showGizmo ? (
+      {gizmoReady && gizmoTarget ? (
         <SceneTransformControls
           key={`dae-gizmo-${object.id}-${placementGizmoMode}`}
-          object={groupRef as unknown as RefObject<THREE.Object3D>}
+          object={gizmoTarget}
           mode={placementGizmoMode}
           space="world"
           size={transformGizmoSize}
+          showX
+          showY
+          showZ
           onObjectChange={handleObjectChange}
           onMouseDown={() => {
-            isDraggingRef.current = true;
             if (gizmoDraggingRef) gizmoDraggingRef.current = true;
           }}
           onMouseUp={() => {
@@ -1827,9 +1870,15 @@ const StageModelGroup = memo(function StageModelGroup({
   pointerDownTimeRef?: React.RefObject<number>;
   selectedGroupsRef?: React.RefObject<SelectedGroupMap>;
 }) {
-  const groupRef = useRef<THREE.Group>(null);
+  const groupRef = useRef<THREE.Group | null>(null);
+  const [gizmoTarget, setGizmoTarget] = useState<THREE.Group | null>(null);
   const invalidate = useThree((s) => s.invalidate);
   const regress = useThree((s) => s.performance.regress);
+
+  const assignGroupRef = useCallback((node: THREE.Group | null) => {
+    groupRef.current = node;
+    setGizmoTarget(node);
+  }, []);
 
   useEffect(() => {
     const g = groupRef.current;
@@ -1969,7 +2018,7 @@ const StageModelGroup = memo(function StageModelGroup({
   return (
     <Fragment>
       <group
-        ref={groupRef}
+        ref={assignGroupRef}
         name={nodeId}
         onClick={handleClick}
         position={position}
@@ -1992,11 +2041,11 @@ const StageModelGroup = memo(function StageModelGroup({
           />
         ))}
       </group>
-      {gizmoReady ? (
+      {gizmoReady && gizmoTarget ? (
         <SceneTransformControls
           ref={tcRef}
           key={`${nodeId}-${placementGizmoMode}`}
-          object={groupRef as unknown as RefObject<THREE.Object3D>}
+          object={gizmoTarget}
           mode={placementGizmoMode}
           space="world"
           size={transformGizmoSize}
@@ -2046,10 +2095,16 @@ const EffectMarker = memo(function EffectMarker({
   orbitActiveRef?: React.RefObject<boolean>;
   pointerDownTimeRef?: React.RefObject<number>;
 }) {
-  const groupRef = useRef<THREE.Group>(null);
+  const groupRef = useRef<THREE.Group | null>(null);
+  const [gizmoTarget, setGizmoTarget] = useState<THREE.Group | null>(null);
   const invalidate = useThree((s) => s.invalidate);
   const regress = useThree((s) => s.performance.regress);
   const nodeId = `__effect__${globalIdx}`;
+
+  const assignGroupRef = useCallback((node: THREE.Group | null) => {
+    groupRef.current = node;
+    setGizmoTarget(node);
+  }, []);
 
   const handleClick = useCallback(
     (e: any) => {
@@ -2087,7 +2142,7 @@ const EffectMarker = memo(function EffectMarker({
   return (
     <Fragment>
       <group
-        ref={groupRef}
+        ref={assignGroupRef}
         position={[entry.posX, entry.posY, entry.posZ]}
         rotation={[entry.rotX * DEG2RAD, entry.rotY * DEG2RAD, entry.rotZ * DEG2RAD]}
         scale={[
@@ -2109,10 +2164,10 @@ const EffectMarker = memo(function EffectMarker({
           </div>
         </Html>
       </group>
-      {showGizmo && groupRef.current ? (
+      {showGizmo && gizmoTarget ? (
         <SceneTransformControls
           key={`eff-gizmo-${globalIdx}-${placementGizmoMode}`}
-          object={groupRef.current}
+          object={gizmoTarget}
           mode={placementGizmoMode}
           size={transformGizmoSize * 0.54}
           onChange={handleGizmoChange}

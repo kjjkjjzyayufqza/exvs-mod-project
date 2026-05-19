@@ -5,6 +5,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { readFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
+import {
+  getStoredDialogDefaultPath,
+  rememberStoredDialogSelection,
+} from "@/utils/dialogDefaultPathStore";
+import { SCENE_IMPORT_DAE_DIALOG_PATH_KEY } from "./sceneEditorSettings";
 
 export interface DAEImportResult {
   fileName: string;
@@ -14,45 +19,58 @@ export interface DAEImportResult {
   boundingSize: THREE.Vector3;
 }
 
+export async function loadDAEFromPath(filePath: string): Promise<DAEImportResult> {
+  const loader = new ColladaLoader();
+  const content = await readFile(filePath);
+  const text = new TextDecoder().decode(content);
+  const blob = new Blob([text], { type: "application/xml" });
+  const blobUrl = URL.createObjectURL(blob);
+
+  const collada = await new Promise<any>((resolve, reject) => {
+    loader.load(blobUrl, resolve, undefined, reject);
+  });
+
+  const fileName = filePath.split(/[/\\]/).pop() ?? "model.dae";
+  const bbox = new THREE.Box3().setFromObject(collada.scene);
+  const size = new THREE.Vector3();
+  bbox.getSize(size);
+  if (!size.x || !Number.isFinite(size.x)) size.x = 1;
+  if (!size.y || !Number.isFinite(size.y)) size.y = 1;
+  if (!size.z || !Number.isFinite(size.z)) size.z = 1;
+
+  return {
+    fileName,
+    filePath,
+    scene: collada.scene,
+    blobUrl,
+    boundingSize: size,
+  };
+}
+
+export async function loadDAEFromPaths(filePaths: string[]): Promise<DAEImportResult[]> {
+  const results: DAEImportResult[] = [];
+  for (const filePath of filePaths) {
+    results.push(await loadDAEFromPath(filePath));
+  }
+  return results;
+}
+
 export async function importDAEFiles(multiple = false): Promise<DAEImportResult[]> {
   const selected = await open({
     multiple,
     filters: [{ name: "Collada DAE", extensions: ["dae"] }],
+    defaultPath: await getStoredDialogDefaultPath(SCENE_IMPORT_DAE_DIALOG_PATH_KEY),
   });
 
   if (!selected) return [];
 
   const paths = Array.isArray(selected) ? selected : [selected];
-  const results: DAEImportResult[] = [];
-  const loader = new ColladaLoader();
-
-  for (const filePath of paths) {
-    const content = await readFile(filePath);
-    const text = new TextDecoder().decode(content);
-    const blob = new Blob([text], { type: "application/xml" });
-    const blobUrl = URL.createObjectURL(blob);
-
-    const collada = await new Promise<any>((resolve, reject) => {
-      loader.load(blobUrl, resolve, undefined, reject);
-    });
-
-    const fileName = filePath.split(/[/\\]/).pop() ?? "model.dae";
-    const bbox = new THREE.Box3().setFromObject(collada.scene);
-    const size = new THREE.Vector3();
-    bbox.getSize(size);
-    if (!size.x || !Number.isFinite(size.x)) size.x = 1;
-    if (!size.y || !Number.isFinite(size.y)) size.y = 1;
-    if (!size.z || !Number.isFinite(size.z)) size.z = 1;
-    results.push({
-      fileName,
-      filePath,
-      scene: collada.scene,
-      blobUrl,
-      boundingSize: size,
-    });
+  const lastPath = paths[paths.length - 1];
+  if (lastPath) {
+    await rememberStoredDialogSelection(SCENE_IMPORT_DAE_DIALOG_PATH_KEY, lastPath, "file");
   }
 
-  return results;
+  return loadDAEFromPaths(paths);
 }
 
 function parseDAE(exporter: InstanceType<typeof ColladaExporter>, object: THREE.Object3D): string {

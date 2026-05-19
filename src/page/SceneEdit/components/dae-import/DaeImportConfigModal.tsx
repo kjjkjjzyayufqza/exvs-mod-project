@@ -1,7 +1,9 @@
 import { FileCode2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useDraggableModal } from "@/hooks/useDraggableModal";
 import { DaeImportAnalysisPanel } from "./DaeImportAnalysisPanel";
 import { DaeImportSsbhConfigPanel } from "./DaeImportSsbhConfigPanel";
@@ -14,12 +16,18 @@ import type {
   HktImportConfig,
 } from "./daeImportTypes";
 
+export type DaeImportPrimaryMode = "preview" | "ssbh";
+
 interface DaeImportConfigModalProps {
   entries: DaeImportEntry[];
   havokInfo: HavokInstallInfo | null;
   onConfigChange: (importId: string, config: DaeImportConfig) => void;
   onImport: () => void;
   onCancel: () => void;
+}
+
+function getPrimaryMode(config: DaeImportConfig): DaeImportPrimaryMode {
+  return config.convertToSsbh ? "ssbh" : "preview";
 }
 
 export function DaeImportConfigModal({
@@ -37,9 +45,17 @@ export function DaeImportConfigModal({
   if (!entry) return null;
 
   const config = entry.config;
+  const primaryMode = getPrimaryMode(config);
 
   const updateConfig = (partial: Partial<DaeImportConfig>) => {
     onConfigChange(entry.importId, { ...config, ...partial });
+  };
+
+  const setPrimaryMode = (mode: DaeImportPrimaryMode) => {
+    updateConfig({
+      loadToScene: mode === "preview",
+      convertToSsbh: mode === "ssbh",
+    });
   };
 
   const updateSsbhConfig = (next: SsbhImportConfig) => {
@@ -52,7 +68,7 @@ export function DaeImportConfigModal({
 
   const canImport =
     !entry.analyzing &&
-    (!config.convertToSsbh || (entry.analysis?.canConvert ?? false));
+    (primaryMode === "preview" || (entry.analysis?.canConvert ?? false));
 
   return (
     <div className="pointer-events-none absolute inset-0 z-50">
@@ -93,44 +109,63 @@ export function DaeImportConfigModal({
               analyzeError={entry.analyzeError}
             />
 
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <Checkbox
-                  checked={config.loadToScene}
-                  onCheckedChange={(checked) =>
-                    updateConfig({ loadToScene: checked === true })
-                  }
-                />
-                Load to scene (preview only)
-              </label>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Import mode</Label>
+                <ToggleGroup
+                  type="single"
+                  value={primaryMode}
+                  onValueChange={(value) => {
+                    if (value === "preview" || value === "ssbh") {
+                      setPrimaryMode(value);
+                    }
+                  }}
+                  className="flex w-full"
+                >
+                  <ToggleGroupItem
+                    value="preview"
+                    className="h-8 flex-1 text-[11px] px-2"
+                    aria-label="Load to scene preview only"
+                  >
+                    Load to scene (preview only)
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="ssbh"
+                    className="h-8 flex-1 text-[11px] px-2"
+                    aria-label="Convert to SSBH"
+                  >
+                    Convert to SSBH
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </div>
 
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <Checkbox
-                  checked={config.convertToSsbh}
-                  onCheckedChange={(checked) =>
-                    updateConfig({ convertToSsbh: checked === true })
-                  }
-                />
-                Convert to SSBH
-              </label>
-
-              {config.convertToSsbh && (
+              {primaryMode === "ssbh" && (
                 <DaeImportSsbhConfigPanel
                   config={config.ssbhConfig}
                   onChange={updateSsbhConfig}
                 />
               )}
 
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <Checkbox
+              <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2">
+                <div className="space-y-0.5">
+                  <Label htmlFor="dae-import-generate-hkt" className="text-sm">
+                    Generate HKT collision
+                  </Label>
+                  {!havokInfo?.fileConvertAvailable && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Havok tools are not available on this machine
+                    </p>
+                  )}
+                </div>
+                <Switch
+                  id="dae-import-generate-hkt"
                   checked={config.generateHkt}
                   onCheckedChange={(checked) =>
                     updateConfig({ generateHkt: checked === true })
                   }
                   disabled={!havokInfo?.fileConvertAvailable}
                 />
-                Generate HKT collision
-              </label>
+              </div>
 
               {config.generateHkt && (
                 <DaeImportHktConfigPanel
