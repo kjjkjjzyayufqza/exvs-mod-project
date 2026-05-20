@@ -1,5 +1,12 @@
 # Havok 2018 HKT XML Import Feature - Development Documentation
 
+## Related Documents
+
+- [havok_compressed_mesh_decode.md](./havok_compressed_mesh_decode.md) — Decode algorithm formal reference
+- [havok_compressed_mesh_encode.md](./havok_compressed_mesh_encode.md) — Encode pipeline reference
+- [havok_hkt_to_obj.md](./havok_hkt_to_obj.md) — HKT to OBJ conversion process and pitfalls
+- [havok-hkt-xml-conversion-analysis.md](./havok-hkt-xml-conversion-analysis.md) — HKT binary format reverse engineering via IDA Pro
+
 ## 概述
 
 此功能旨在將Havok 2018版本的HKT XML物理碰撞模型數據導入到React Three.js場景中。我們不實現完整的Havok物理功能，而是專注於提取網格頂點數據並在Three.js中渲染為網格模型。

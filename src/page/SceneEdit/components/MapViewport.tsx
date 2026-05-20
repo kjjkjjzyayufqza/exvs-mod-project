@@ -282,6 +282,7 @@ export interface MapViewportHandle {
   resetCamera: () => void;
   focusSelected: () => void;
   getSelectedExportObjects: () => SceneExportObject[];
+  disposeTextures: () => void;
 }
 
 function StageOrbitControls({
@@ -429,6 +430,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           name,
           object,
         })),
+      disposeTextures: () => texturePool.disposeAll(),
     }));
 
     const isNodeSelected = useCallback(
@@ -510,7 +512,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           primaryColor: sceneLighting.directionalColor,
           primaryIntensity: sceneLighting.directionalIntensity,
           primaryPosition: sceneLighting.primaryPosition,
-          fillColor: sceneLighting.directionalColor,
+          fillColor: "#c4d4f0",
           fillIntensity: sceneLighting.fillIntensity,
           fillPosition: sceneLighting.fillPosition,
         };
@@ -649,25 +651,32 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
         <Environment resolution={64} frames={1} background={false}>
           <Lightformer
             form="rect"
-            intensity={0.8 * sceneLighting.environmentScale}
+            intensity={1.4 * sceneLighting.environmentScale}
             position={[0, 5, -2]}
             scale={[10, 5, 1]}
           />
           <Lightformer
             form="ring"
-            intensity={0.5 * sceneLighting.environmentScale}
+            intensity={0.9 * sceneLighting.environmentScale}
             position={[-5, 3, 2]}
             scale={3}
             color="#dbeafe"
           />
           <Lightformer
             form="rect"
-            intensity={0.3 * sceneLighting.environmentScale}
+            intensity={0.6 * sceneLighting.environmentScale}
             position={[5, -1, -3]}
             scale={[8, 3, 1]}
-            color="#aab0ba"
+            color="#b0bac8"
           />
-          <color attach="background" args={["#1a1a2e"]} />
+          <Lightformer
+            form="rect"
+            intensity={0.5 * sceneLighting.environmentScale}
+            position={[0, -2, 4]}
+            scale={[12, 4, 1]}
+            color="#d4dae4"
+          />
+          <color attach="background" args={["#2a2a3e"]} />
         </Environment>
 
         {baseModel && isNodeVisible("base") && viewMode !== "collision" && (
@@ -1369,7 +1378,7 @@ const TexturedMesh = memo(function TexturedMesh({
       ? 1.55
       : hasCube
         ? 1.15
-        : 0.6;
+        : 0.9;
 
   const exvsUsesMetalnessMap = hasCube && textureSlotLoadEnabled.metalnessMap;
   const effectiveMetalnessMap = exvsActive
@@ -1770,7 +1779,7 @@ const InstancedTexturedMesh = memo(function InstancedTexturedMesh({
     : shaderFamily === "vsngCharaSparkle" ? 1.8 : canUseEmissiveMap ? GENERIC_STAGE_EMISSIVE_INTENSITY : 0;
   const envIntensity = exvsActive
     ? shaderFamily === "vsngCharaSparkle" ? 1.38 : hasCube ? 1.05 : 0
-    : shaderFamily === "vsngCharaSparkle" ? 1.55 : hasCube ? 1.15 : 0.6;
+    : shaderFamily === "vsngCharaSparkle" ? 1.55 : hasCube ? 1.15 : 0.9;
   const exvsUsesMetalnessMap = hasCube && textureSlotLoadEnabled.metalnessMap;
   const effectiveMetalnessMap = exvsActive
     ? exvsUsesMetalnessMap ? textures.metalnessMap ?? null : null

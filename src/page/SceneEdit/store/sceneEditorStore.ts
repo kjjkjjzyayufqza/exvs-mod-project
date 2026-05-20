@@ -85,6 +85,7 @@ interface SceneEditorActions {
   setCollisionVisibility: (sourceId: string, visible: boolean) => void;
   setAllCollisionVisibility: (visible: boolean) => void;
   setSessionId: (id: string | null) => void;
+  resetAll: () => void;
 }
 
 const MAX_HISTORY = 100;
@@ -361,6 +362,23 @@ export const useSceneEditorStore = create<SceneEditorState & SceneEditorActions>
     setSessionId: (id) => {
       set((state) => {
         state.sessionId = id;
+      });
+    },
+
+    resetAll: () => {
+      set((state) => {
+        state.selectedIds = new Set();
+        state.lastSelectedId = null;
+        state.anchorId = null;
+        state.groups = [];
+        state.clipboard = [];
+        state.clipboardOperation = null;
+        state.undoStack = [];
+        state.redoStack = [];
+        state.nodeVisibility = {};
+        state.objectLocks = {};
+        state.collisionVisibility = {};
+        state.sessionId = null;
       });
     },
   })),

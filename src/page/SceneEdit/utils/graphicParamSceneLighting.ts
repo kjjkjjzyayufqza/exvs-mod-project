@@ -1,8 +1,6 @@
 import * as THREE from "three";
 import type { GraphicParam } from "../components/GraphicParamPanel";
 import {
-  DEFAULT_PREVIEW_AMBIENT_INTENSITY,
-  DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY,
   DEFAULT_PREVIEW_DIRECTIONAL_X,
   DEFAULT_PREVIEW_DIRECTIONAL_Y,
   DEFAULT_PREVIEW_DIRECTIONAL_Z,
@@ -10,7 +8,7 @@ import {
 
 const DEG2RAD = Math.PI / 180;
 
-/** Typical game CSV directional_lighting_intensity; aligns preview scale to DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY. */
+/** Typical game CSV directional_lighting_intensity; aligns preview scale to SCENE_DIRECTIONAL_INTENSITY. */
 const GAME_DIRECTIONAL_INTENSITY_NORM = 3.14;
 
 export type GraphicParamLightingDerived = {
@@ -53,20 +51,25 @@ function fillLightPosition(
   return [-px * 0.7, py * 0.45, -pz * 0.7];
 }
 
+const SCENE_AMBIENT_INTENSITY = 1.1;
+const SCENE_DIRECTIONAL_INTENSITY = 2.2;
+const SCENE_HEMISPHERE_INTENSITY = 0.7;
+const SCENE_FILL_RATIO = 0.45;
+
 function defaultLighting(usesGraphicParamLighting: boolean): GraphicParamLightingDerived {
   const px = DEFAULT_PREVIEW_DIRECTIONAL_X;
   const py = DEFAULT_PREVIEW_DIRECTIONAL_Y;
   const pz = DEFAULT_PREVIEW_DIRECTIONAL_Z;
   return {
-    ambientIntensity: DEFAULT_PREVIEW_AMBIENT_INTENSITY,
+    ambientIntensity: SCENE_AMBIENT_INTENSITY,
     hemisphereSky: "#dbeafe",
-    hemisphereGround: "#111827",
-    hemisphereIntensity: 0.26,
+    hemisphereGround: "#1e293b",
+    hemisphereIntensity: SCENE_HEMISPHERE_INTENSITY,
     primaryPosition: [px, py, pz],
     fillPosition: fillLightPosition(px, py, pz),
     directionalColor: "#ffffff",
-    directionalIntensity: DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY,
-    fillIntensity: DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY * 0.28,
+    directionalIntensity: SCENE_DIRECTIONAL_INTENSITY,
+    fillIntensity: SCENE_DIRECTIONAL_INTENSITY * SCENE_FILL_RATIO,
     environmentScale: 1,
     usesGraphicParamLighting,
   };
@@ -101,12 +104,12 @@ export function deriveSceneLightingFromGraphicParams(
   if (ibl !== undefined) {
     const iblClamped = THREE.MathUtils.clamp(ibl, 0, 5);
     out.ambientIntensity =
-      DEFAULT_PREVIEW_AMBIENT_INTENSITY *
+      SCENE_AMBIENT_INTENSITY *
       THREE.MathUtils.clamp(0.45 + iblClamped * 0.35, 0.2, 1.65);
     out.hemisphereIntensity = THREE.MathUtils.clamp(
-      0.12 + iblClamped * 0.12,
-      0.06,
-      0.55,
+      0.2 + iblClamped * 0.15,
+      0.1,
+      0.7,
     );
     out.environmentScale = THREE.MathUtils.clamp(iblClamped, 0.15, 5);
   }
@@ -148,14 +151,14 @@ export function deriveSceneLightingFromGraphicParams(
     gpIntensity !== undefined
       ? THREE.MathUtils.clamp(
           (gpIntensity / GAME_DIRECTIONAL_INTENSITY_NORM) *
-            DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY,
-          0.06,
-          8,
+            SCENE_DIRECTIONAL_INTENSITY,
+          0.1,
+          10,
         )
-      : DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY;
+      : SCENE_DIRECTIONAL_INTENSITY;
 
   out.directionalIntensity = baseIntensity * THREE.MathUtils.clamp(lum, 1, 4);
-  out.fillIntensity = out.directionalIntensity * 0.28;
+  out.fillIntensity = out.directionalIntensity * SCENE_FILL_RATIO;
 
   return out;
 }

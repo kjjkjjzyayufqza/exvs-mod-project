@@ -802,7 +802,7 @@ export default function SceneEdit() {
     setStandaloneTransforms(new Map());
     setSelectedNodeIdRaw(null);
     setSelectedPlacementIdxRaw(null);
-    useSceneEditorStore.getState().deselectAll();
+    useSceneEditorStore.getState().resetAll();
     setHasUnsavedChanges(false);
     setRenamePreview(null);
     setImportProgress((prev) => ({ ...prev, open: false }));
@@ -812,6 +812,7 @@ export default function SceneEdit() {
   const handleConfirmClearCache = useCallback(async () => {
     setClearCacheDialogOpen(false);
     resetState();
+    viewportRef.current?.disposeTextures();
     clearNutexbRgbaCache();
     try {
       await clearNutexbPreviewCacheAsync();
@@ -831,16 +832,18 @@ export default function SceneEdit() {
       if (!selected || typeof selected !== "string") return;
       rememberDialogSelection(DialogLastPathKey.sceneEditOpenFolder, selected, "directory");
 
+      const stageRoot = `${selected}\\0\\0`;
+
       setIsLoading(true);
       resetState();
 
       const bundle = await invoke<StageBundleResponse>("load_stage_bundle", {
-        stageRoot: selected,
+        stageRoot,
       });
-      applyBundle(selected, bundle);
+      applyBundle(stageRoot, bundle);
 
       // Create scene session and load HKT collision data in background
-      sceneOpenFolder(selected).then(async (result) => {
+      sceneOpenFolder(stageRoot).then(async (result) => {
         setSceneSessionId(result.sessionId);
         console.log("[Havok] sceneOpenFolder done, sessionId:", result.sessionId);
         try {
@@ -2597,7 +2600,7 @@ export default function SceneEdit() {
                 showCollisionMesh={showCollisionMesh}
                 collisionVisibility={collisionVisibility}
               />
-              <SceneViewportOverlay textureProgress={textureProgress} />
+              <SceneViewportOverlay isLoading={isLoading} textureProgress={textureProgress} />
             </div>
             </ViewportContextMenu>
           </ResizablePanel>

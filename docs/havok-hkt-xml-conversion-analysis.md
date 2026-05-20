@@ -1,5 +1,12 @@
 # Havok HKT ↔ XML Conversion: Complete Reverse Engineering & Implementation Analysis
 
+## Related Documents
+
+- [havok_compressed_mesh_decode.md](./havok_compressed_mesh_decode.md) — Decode algorithm formal reference
+- [havok_compressed_mesh_encode.md](./havok_compressed_mesh_encode.md) — Encode pipeline reference
+- [havok_hkt_to_obj.md](./havok_hkt_to_obj.md) — HKT to OBJ conversion process and pitfalls
+- [havok-xml-import-feature.md](./havok-xml-import-feature.md) — Three.js import feature design
+
 > **Date**: 2026-05-19  
 > **Havok Version**: Havok 2018 Content Tools (SDK version `20180100`)  
 > **Installation Path**: `C:\Program Files\Havok\HavokContentTools`  
