@@ -63,3 +63,34 @@ export async function repackFolderUsingStructureToDir({
   }
 }
 
+type RepackToFileParams = {
+  structurePath: string;
+  inputFolderPath: string;
+  outputFilePath: string;
+  toolPath?: string;
+};
+
+export async function repackFolderToFhm2dFile({
+  structurePath,
+  inputFolderPath,
+  outputFilePath,
+  toolPath,
+}: RepackToFileParams): Promise<void> {
+  const tool = toolPath ?? "E:\\XB\\解包\\com\\compression.js";
+  const normalizedStructurePath = toWindowsPath(structurePath);
+  const normalizedInputPath = toWindowsPath(inputFolderPath);
+  const normalizedOutputPath = toWindowsPath(outputFilePath);
+  const parentSegments = normalizedInputPath.split("\\").slice(0, -1);
+  const comPath = parentSegments.join("\\") + (parentSegments.length ? "\\" : "");
+
+  const command = await Command.create(
+    "exec-node",
+    [tool, normalizedStructurePath, "-r", "-com-path", comPath, "-o", normalizedOutputPath],
+    { encoding: "utf-8" },
+  ).execute();
+
+  if (command.code !== 0) {
+    throw new Error(command.stderr || "Repack to FHM2D failed");
+  }
+}
+

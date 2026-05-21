@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useTransition, useEffect, useMemo } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import * as THREE from "three";
 import { DialogLastPathKey, getDialogDefaultPath, rememberDialogSelection } from "@/utils/dialogLastPath";
@@ -141,7 +141,12 @@ import {
   normalizeSceneGizmoSize,
   SCENE_IMPORT_DAE_DIALOG_PATH_KEY,
 } from "./utils/sceneEditorSettings";
-import { executeStageSave } from "./utils/sceneSavePipeline";
+import { useSceneDirtyStore } from "./store/sceneDirtyStore";
+import { executeSaveFolderPipeline } from "./utils/sceneSaveFolderPipeline";
+import { executeSaveFhm2dPipeline } from "./utils/sceneSaveFhm2dPipeline";
+import { SaveProgressDialog, type SaveStepInfo } from "./components/SaveProgressDialog";
+import { DeleteConfirmDialog } from "./components/DeleteConfirmDialog";
+import type { DeleteConfirmation } from "./utils/sceneDeleteConfirm";
 import { DaeImportConfigModal } from "./components/dae-import/DaeImportConfigModal";
 import type { DaeImportEntry, HavokInstallInfo } from "./components/dae-import/daeImportTypes";
 import { createDefaultDaeImportConfig, sanitizeBaseFilename } from "./components/dae-import/daeImportDefaults";
@@ -274,7 +279,20 @@ export default function SceneEdit() {
   const [stageName, setStageName] = useState<string | null>(null);
   const [stageRoot, setStageRoot] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const hasUnsavedChanges = useSceneDirtyStore(
+    (s) => Object.keys(s.objects).length > 0 || s.global.graphicParams || s.global.placementOrder,
+  );
+  const [saveProgressState, setSaveProgressState] = useState<{
+    open: boolean;
+    title: string;
+    steps: SaveStepInfo[];
+    canClose: boolean;
+  }>({ open: false, title: "", steps: [], canClose: false });
+  const [deleteConfirmState, setDeleteConfirmState] = useState<{
+    open: boolean;
+    preview: DeleteConfirmation | null;
+    resolve: ((confirmed: boolean) => void) | null;
+  }>({ open: false, preview: null, resolve: null });
 
   const [baseModel, setBaseModel] = useState<SsbhModelPreviewBundle | null>(
     null
@@ -622,20 +640,23 @@ export default function SceneEdit() {
           },
         }));
         setImportedDaeObjects((prev) => [...prev, ...created]);
-        setHasUnsavedChanges(true);
+        created.forEach((c) => useSceneDirtyStore.getState().markObjectAdded(c.name));
+        useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         useSceneEditorStore.getState().recordCommand({
           type: "duplicate-dae",
           description: "Duplicate imported DAE actor",
           undo: () => {
             setImportedDaeObjects((prev) => prev.filter((obj) => !created.some((c) => c.id === obj.id)));
+            created.forEach((c) => useSceneDirtyStore.getState().resetObject(c.name));
             handleClearSelection();
-            setHasUnsavedChanges(true);
+            useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
           },
           redo: () => {
             setImportedDaeObjects((prev) => [...prev, ...created]);
+            created.forEach((c) => useSceneDirtyStore.getState().markObjectAdded(c.name));
             const id = created[0]?.id ?? null;
             if (id) handleSelectNode(id);
-            setHasUnsavedChanges(true);
+            useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
           },
         });
         const nextSelectedId = created[0]?.id ?? selectedNodeId;
@@ -655,7 +676,7 @@ export default function SceneEdit() {
         const result = duplicatePlacementAt(placementEntries, firstPlacementIdx);
         setPlacementEntries(result.entries);
         setSelectedPlacementIdxRaw(result.insertedIndex);
-        setHasUnsavedChanges(true);
+        useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         const inserted = result.insertedRow;
         const sub = inserted.objectNumber !== null
           ? subModels.find((s) => s.objectIndex === inserted.objectNumber)
@@ -678,7 +699,7 @@ export default function SceneEdit() {
               setSelectedNodeIdRaw(restoredNodeId);
               useSceneEditorStore.getState().select(restoredNodeId);
             }
-            setHasUnsavedChanges(true);
+            useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
           },
           redo: () => {
             setPlacementEntries((prev) => {
@@ -691,7 +712,7 @@ export default function SceneEdit() {
               setSelectedNodeIdRaw(insertedNodeId);
               useSceneEditorStore.getState().select(insertedNodeId);
             }
-            setHasUnsavedChanges(true);
+            useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
           },
         });
         toast.success("Placement row duplicated");
@@ -803,7 +824,7 @@ export default function SceneEdit() {
     setSelectedNodeIdRaw(null);
     setSelectedPlacementIdxRaw(null);
     useSceneEditorStore.getState().resetAll();
-    setHasUnsavedChanges(false);
+    useSceneDirtyStore.getState().reset();
     setRenamePreview(null);
     setImportProgress((prev) => ({ ...prev, open: false }));
     setHavokMeshDataMap(new Map());
@@ -1032,37 +1053,62 @@ export default function SceneEdit() {
     }
   }, [applyBundle]);
 
-  const handleSave = useCallback(async () => {
+  const updateSaveProgress = useCallback((step: SaveStepInfo) => {
+    setSaveProgressState((prev) => {
+      const idx = prev.steps.findIndex((s) => s.id === step.id);
+      const nextSteps = [...prev.steps];
+      if (idx >= 0) nextSteps[idx] = step;
+      else nextSteps.push(step);
+      return { ...prev, steps: nextSteps };
+    });
+  }, []);
+
+  const promptDeleteConfirm = useCallback(
+    (preview: DeleteConfirmation) =>
+      new Promise<boolean>((resolve) => {
+        setDeleteConfirmState({ open: true, preview, resolve });
+      }),
+    [],
+  );
+
+  const handleDeleteConfirmAccept = useCallback(() => {
+    deleteConfirmState.resolve?.(true);
+    setDeleteConfirmState({ open: false, preview: null, resolve: null });
+  }, [deleteConfirmState.resolve]);
+
+  const handleDeleteConfirmCancel = useCallback(() => {
+    deleteConfirmState.resolve?.(false);
+    setDeleteConfirmState({ open: false, preview: null, resolve: null });
+  }, [deleteConfirmState.resolve]);
+
+  const handleSaveFolder = useCallback(async () => {
     if (!stageRoot) return;
-    setIsLoading(true);
+    setSaveProgressState({ open: true, title: "Save as Folder", steps: [], canClose: false });
+
     try {
-      const result = await executeStageSave({
+      const result = await executeSaveFolderPipeline({
         stageRoot,
+        dirtyStore: useSceneDirtyStore.getState(),
         graphicParams,
         placementHeader,
         placementEntries,
         importedDaeObjects,
-        onProgress: (p) => {
-          if (p.phase === "converting" && p.total > 0) {
-            toast.loading(`Converting DAE ${p.current}/${p.total}...`, { id: "save-progress" });
-          }
-        },
+        sceneSessionId,
+        onProgress: updateSaveProgress,
+        onDeleteConfirm: promptDeleteConfirm,
       });
 
-      if (sceneSessionId) {
-        try {
-          await sceneSaveAsFolder(sceneSessionId, stageRoot);
-        } catch (sessionErr) {
-          toast.warning(`Session artifacts save warning: ${sessionErr}`);
-        }
+      if (!result.success) {
+        setSaveProgressState((prev) => ({ ...prev, canClose: true }));
+        return;
       }
 
       if (result.reloadedBundle) {
         applyBundle(stageRoot, result.reloadedBundle as any, { showToast: false });
       }
 
-      setHasUnsavedChanges(false);
-      toast.dismiss("save-progress");
+      useSceneDirtyStore.getState().reset();
+      setSaveProgressState((prev) => ({ ...prev, canClose: true }));
 
       if (result.failedCount > 0 && result.convertedCount > 0) {
         toast.warning(
@@ -1074,30 +1120,70 @@ export default function SceneEdit() {
         );
       } else if (result.convertedCount > 0) {
         toast.success(
-          `CSV files saved; converted ${result.convertedCount} imported DAE object(s) to SSBH`,
+          `Folder saved; converted ${result.convertedCount} imported DAE object(s) to SSBH`,
         );
       } else {
-        toast.success("CSV files saved");
+        toast.success("Folder saved");
       }
     } catch (err: any) {
-      toast.dismiss("save-progress");
+      setSaveProgressState((prev) => ({ ...prev, canClose: true }));
       toast.error("Save failed", { description: String(err) });
-    } finally {
-      setIsLoading(false);
     }
-  }, [stageRoot, graphicParams, placementHeader, placementEntries, importedDaeObjects, applyBundle, sceneSessionId]);
+  }, [stageRoot, graphicParams, placementHeader, placementEntries, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, promptDeleteConfirm]);
+
+  const handleSaveFhm2d = useCallback(async () => {
+    if (!stageRoot) return;
+    const outputPath = await save({
+      filters: [{ name: "FHM2D File", extensions: ["fhm2d"] }],
+    });
+    if (!outputPath) return;
+
+    setSaveProgressState({ open: true, title: "Save as FHM2D", steps: [], canClose: false });
+
+    try {
+      const result = await executeSaveFhm2dPipeline({
+        stageRoot,
+        dirtyStore: useSceneDirtyStore.getState(),
+        graphicParams,
+        placementHeader,
+        placementEntries,
+        importedDaeObjects,
+        sceneSessionId,
+        outputFhm2dPath: outputPath,
+        onProgress: updateSaveProgress,
+        onDeleteConfirm: promptDeleteConfirm,
+      });
+
+      if (!result.success) {
+        setSaveProgressState((prev) => ({ ...prev, canClose: true }));
+        return;
+      }
+
+      if (result.reloadedBundle) {
+        applyBundle(stageRoot, result.reloadedBundle as any, { showToast: false });
+      }
+
+      useSceneDirtyStore.getState().reset();
+      setSaveProgressState((prev) => ({ ...prev, canClose: true }));
+
+      toast.success(`FHM2D saved (${(result.fhm2dSizeBytes / (1024 * 1024)).toFixed(1)} MB)`);
+    } catch (err: any) {
+      setSaveProgressState((prev) => ({ ...prev, canClose: true }));
+      toast.error("FHM2D save failed", { description: String(err) });
+    }
+  }, [stageRoot, graphicParams, placementHeader, placementEntries, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, promptDeleteConfirm]);
 
   const handleGraphicParamValueChange = useCallback(
     (index: number, value: string) => {
       setGraphicParams((prev) => updateGraphicParamValue(prev, index, value));
-      setHasUnsavedChanges(true);
+      useSceneDirtyStore.getState().markGlobalDirty("graphicParams");
     },
     []
   );
   const handleGraphicParamKeyChange = useCallback((index: number, key: string) => {
     try {
       setGraphicParams((prev) => updateGraphicParamKey(prev, index, key));
-      setHasUnsavedChanges(true);
+      useSceneDirtyStore.getState().markGlobalDirty("graphicParams");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Invalid graphic_param key");
     }
@@ -1105,14 +1191,14 @@ export default function SceneEdit() {
   const handleAddGraphicParam = useCallback(() => {
     try {
       setGraphicParams((prev) => addGraphicParam(prev, "new_param", "0"));
-      setHasUnsavedChanges(true);
+      useSceneDirtyStore.getState().markGlobalDirty("graphicParams");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to add graphic_param row");
     }
   }, []);
   const handleDeleteGraphicParam = useCallback((index: number) => {
     setGraphicParams((prev) => deleteGraphicParamAt(prev, index));
-    setHasUnsavedChanges(true);
+    useSceneDirtyStore.getState().markGlobalDirty("graphicParams");
   }, []);
   const handleToggleGraphicParamApplied = useCallback((key: string, applied: boolean) => {
     setAppliedGraphicParamKeys((prev) => {
@@ -1140,7 +1226,7 @@ export default function SceneEdit() {
         setBaseTransform({ ...DEFAULT_TRANSFORM });
         setStandaloneTransforms(new Map());
         useSceneEditorStore.getState().clearHistory();
-        setHasUnsavedChanges(false);
+        useSceneDirtyStore.getState().reset();
         toast.success("All changes reverted to loaded state");
       },
     );
@@ -1155,7 +1241,7 @@ export default function SceneEdit() {
       () => {
         setGraphicParams(snap.graphicParams.map((p) => ({ ...p })));
         setAppliedGraphicParamKeys(new Set());
-        setHasUnsavedChanges(true);
+        useSceneDirtyStore.getState().markGlobalDirty("graphicParams");
         toast.success("Graphic params reverted");
       },
     );
@@ -1170,7 +1256,7 @@ export default function SceneEdit() {
       () => {
         setPlacementEntries(snap.placementEntries.map((e) => ({ ...e, rawFields: [...e.rawFields] })));
         setSelectedPlacementIdxRaw(null);
-        setHasUnsavedChanges(true);
+        useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         toast.success("Placements reverted");
       },
     );
@@ -1192,7 +1278,7 @@ export default function SceneEdit() {
       next[index] = restored;
       return next;
     });
-    setHasUnsavedChanges(true);
+    useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
     useSceneEditorStore.getState().recordCommand({
       type: "reset-placement-row",
       description: `Reset placement row #${index}`,
@@ -1202,7 +1288,7 @@ export default function SceneEdit() {
           next[index] = before;
           return next;
         });
-        setHasUnsavedChanges(true);
+        useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       },
       redo: () => {
         setPlacementEntries((prev) => {
@@ -1210,7 +1296,7 @@ export default function SceneEdit() {
           next[index] = { ...original, rawFields: [...original.rawFields] };
           return next;
         });
-        setHasUnsavedChanges(true);
+        useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       },
     });
     toast.success(`Placement row #${index} reverted`);
@@ -1234,7 +1320,7 @@ export default function SceneEdit() {
       next[index] = nextEntry;
       return next;
     });
-    setHasUnsavedChanges(true);
+    useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
     useSceneEditorStore.getState().recordCommand({
       type: "reset-placement-field",
       description: "Reset placement field",
@@ -1244,7 +1330,7 @@ export default function SceneEdit() {
           next[index] = current;
           return next;
         });
-        setHasUnsavedChanges(true);
+        useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       },
       redo: () => {
         setPlacementEntries((prev) => {
@@ -1252,7 +1338,7 @@ export default function SceneEdit() {
           next[index] = nextEntry;
           return next;
         });
-        setHasUnsavedChanges(true);
+        useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       },
     });
   }, [placementEntries]);
@@ -1296,12 +1382,12 @@ export default function SceneEdit() {
         next[selectedPlacementIdx] = nextEntry;
         return next;
       });
-      setHasUnsavedChanges(true);
+      useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       useSceneEditorStore.getState().recordCommand({
         type: "reset-placement-transform",
         description: "Reset placement transform",
-        undo: () => { setPlacementEntries((prev) => { const next = [...prev]; next[selectedPlacementIdx] = before; return next; }); setHasUnsavedChanges(true); },
-        redo: () => { setPlacementEntries((prev) => { const next = [...prev]; next[selectedPlacementIdx] = nextEntry; return next; }); setHasUnsavedChanges(true); },
+        undo: () => { setPlacementEntries((prev) => { const next = [...prev]; next[selectedPlacementIdx] = before; return next; }); useSceneDirtyStore.getState().markGlobalDirty("placementOrder"); },
+        redo: () => { setPlacementEntries((prev) => { const next = [...prev]; next[selectedPlacementIdx] = nextEntry; return next; }); useSceneDirtyStore.getState().markGlobalDirty("placementOrder"); },
       });
     }
   }, [selectedNodeId, baseTransform, standaloneTransforms, selectedPlacementIdx, placementEntries, placementColMap]);
@@ -1316,7 +1402,7 @@ export default function SceneEdit() {
       if (next[index]) next[index] = { ...original };
       return next;
     });
-    setHasUnsavedChanges(true);
+    useSceneDirtyStore.getState().markGlobalDirty("graphicParams");
   }, []);
 
   const handlePlacementChange = useCallback(
@@ -1349,7 +1435,7 @@ export default function SceneEdit() {
         next[index] = nextEntry;
         return next;
       });
-      setHasUnsavedChanges(true);
+      useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       useSceneEditorStore.getState().recordCommand({
         type: "edit-placement-field",
         description: "Edit placement transform",
@@ -1359,7 +1445,7 @@ export default function SceneEdit() {
             next[index] = previous;
             return next;
           });
-          setHasUnsavedChanges(true);
+          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
         redo: () => {
           setPlacementEntries((prev) => {
@@ -1367,7 +1453,7 @@ export default function SceneEdit() {
             next[index] = nextEntry;
             return next;
           });
-          setHasUnsavedChanges(true);
+          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
       });
     },
@@ -1388,7 +1474,7 @@ export default function SceneEdit() {
         next[idx] = patchPlacementRowTransform(entry, t, placementColMap);
         return next;
       });
-      setHasUnsavedChanges(true);
+      useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       useSceneEditorStore.getState().recordCommand({
         type: "gizmo-placement-transform",
         description: "Move placement gizmo",
@@ -1398,7 +1484,7 @@ export default function SceneEdit() {
             next[idx] = previous;
             return next;
           });
-          setHasUnsavedChanges(true);
+          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
         redo: () => {
           setPlacementEntries((prev) => {
@@ -1406,7 +1492,7 @@ export default function SceneEdit() {
             next[idx] = nextEntry;
             return next;
           });
-          setHasUnsavedChanges(true);
+          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
       });
     },
@@ -1422,7 +1508,7 @@ export default function SceneEdit() {
             : obj,
         ),
       );
-      setHasUnsavedChanges(true);
+      useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
     },
     [],
   );
@@ -1642,7 +1728,7 @@ export default function SceneEdit() {
         next[index] = nextEntry;
         return next;
       });
-      setHasUnsavedChanges(true);
+      useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
     },
     [placementEntries],
   );
@@ -1663,7 +1749,7 @@ export default function SceneEdit() {
         next[index] = nextEntry;
         return next;
       });
-      setHasUnsavedChanges(true);
+      useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       useSceneEditorStore.getState().recordCommand({
         type: "edit-placement-field",
         description: "Edit placement field",
@@ -1673,7 +1759,7 @@ export default function SceneEdit() {
             next[index] = before;
             return next;
           });
-          setHasUnsavedChanges(true);
+          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
         redo: () => {
           setPlacementEntries((prev) => {
@@ -1681,7 +1767,7 @@ export default function SceneEdit() {
             next[index] = nextEntry;
             return next;
           });
-          setHasUnsavedChanges(true);
+          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
       });
     },
@@ -1699,7 +1785,7 @@ export default function SceneEdit() {
         next[index] = nextEntry;
         return next;
       });
-      setHasUnsavedChanges(true);
+      useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       useSceneEditorStore.getState().recordCommand({
         type: "add-placement-field",
         description: "Add placement field pair",
@@ -1709,7 +1795,7 @@ export default function SceneEdit() {
             next[index] = previous;
             return next;
           });
-          setHasUnsavedChanges(true);
+          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
         redo: () => {
           setPlacementEntries((prev) => {
@@ -1717,7 +1803,7 @@ export default function SceneEdit() {
             next[index] = nextEntry;
             return next;
           });
-          setHasUnsavedChanges(true);
+          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
       });
     },
@@ -1736,7 +1822,7 @@ export default function SceneEdit() {
         next[index] = nextEntry;
         return next;
       });
-      setHasUnsavedChanges(true);
+      useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       useSceneEditorStore.getState().recordCommand({
         type: "remove-placement-field",
         description: "Remove placement field pair",
@@ -1746,7 +1832,7 @@ export default function SceneEdit() {
             next[index] = previous;
             return next;
           });
-          setHasUnsavedChanges(true);
+          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
         redo: () => {
           setPlacementEntries((prev) => {
@@ -1754,7 +1840,7 @@ export default function SceneEdit() {
             next[index] = nextEntry;
             return next;
           });
-          setHasUnsavedChanges(true);
+          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
       });
     },
@@ -1775,14 +1861,14 @@ export default function SceneEdit() {
       const insertedNodeId = resolveNodeIdForPlacementIndex(insertAt, nextEntries, subModels);
       setSelectedNodeIdRaw(insertedNodeId);
       if (insertedNodeId) useSceneEditorStore.getState().select(insertedNodeId);
-      setHasUnsavedChanges(true);
+      useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       useSceneEditorStore.getState().recordCommand({
         type: "add-typed-placement",
         description: `Add ${vdkType} placement`,
         undo: () => {
           setPlacementEntries((prev) => prev.filter((_, i) => i !== insertAt));
           handleClearSelection();
-          setHasUnsavedChanges(true);
+          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
         redo: () => {
           setPlacementEntries((prev) => {
@@ -1791,7 +1877,7 @@ export default function SceneEdit() {
             return next;
           });
           setSelectedPlacementIdxRaw(insertAt);
-          setHasUnsavedChanges(true);
+          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
       });
     },
@@ -1897,20 +1983,23 @@ export default function SceneEdit() {
         },
       }));
       setImportedDaeObjects((prev) => [...prev, ...created]);
-      setHasUnsavedChanges(true);
+      created.forEach((c) => useSceneDirtyStore.getState().markObjectAdded(c.name));
+      useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       handleSelectNode(created[0]?.id ?? null);
       useSceneEditorStore.getState().recordCommand({
         type: "paste-dae",
         description: "Paste imported DAE actor",
         undo: () => {
           setImportedDaeObjects((prev) => prev.filter((obj) => !created.some((c) => c.id === obj.id)));
+          created.forEach((c) => useSceneDirtyStore.getState().resetObject(c.name));
           handleClearSelection();
-          setHasUnsavedChanges(true);
+          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
         redo: () => {
           setImportedDaeObjects((prev) => [...prev, ...created]);
+          created.forEach((c) => useSceneDirtyStore.getState().markObjectAdded(c.name));
           handleSelectNode(created[0]?.id ?? null);
-          setHasUnsavedChanges(true);
+          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
       });
       toast.success(`Pasted ${created.length} DAE object(s)`);
@@ -1935,7 +2024,7 @@ export default function SceneEdit() {
       const insertedNodeId = resolveNodeIdForPlacementIndex(result.insertedStart, result.entries, subModels);
       setSelectedNodeIdRaw(insertedNodeId);
       if (insertedNodeId) useSceneEditorStore.getState().select(insertedNodeId);
-      setHasUnsavedChanges(true);
+      useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       useSceneEditorStore.getState().recordCommand({
         type: "paste-placement",
         description: "Paste placement rows",
@@ -1944,7 +2033,7 @@ export default function SceneEdit() {
             prev.filter((_, i) => i < result.insertedStart || i >= result.insertedStart + result.insertedRows.length),
           );
           handleClearSelection();
-          setHasUnsavedChanges(true);
+          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
         redo: () => {
           setPlacementEntries((prev) => {
@@ -1955,7 +2044,7 @@ export default function SceneEdit() {
           setSelectedPlacementIdxRaw(result.insertedStart);
           setSelectedNodeIdRaw(insertedNodeId);
           if (insertedNodeId) useSceneEditorStore.getState().select(insertedNodeId);
-          setHasUnsavedChanges(true);
+          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
       });
       toast.success(`Pasted ${result.insertedRows.length} placement row(s)`);
@@ -1982,20 +2071,23 @@ export default function SceneEdit() {
         };
       });
       setImportedDaeObjects((prev) => [...prev, ...created]);
-      setHasUnsavedChanges(true);
+      created.forEach((c) => useSceneDirtyStore.getState().markObjectAdded(c.name));
+      useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       handleSelectNode(created[0]?.id ?? null);
       useSceneEditorStore.getState().recordCommand({
         type: "import-dae",
         description: "Import DAE object",
         undo: () => {
           setImportedDaeObjects((prev) => prev.filter((obj) => !created.some((c) => c.id === obj.id)));
+          created.forEach((c) => useSceneDirtyStore.getState().resetObject(c.name));
           handleClearSelection();
-          setHasUnsavedChanges(true);
+          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
         redo: () => {
           setImportedDaeObjects((prev) => [...prev, ...created]);
+          created.forEach((c) => useSceneDirtyStore.getState().markObjectAdded(c.name));
           handleSelectNode(created[0]?.id ?? null);
-          setHasUnsavedChanges(true);
+          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
       });
       toast.success(`Imported ${created.length} DAE object(s)`);
@@ -2082,7 +2174,8 @@ export default function SceneEdit() {
               transform: { ...DEFAULT_TRANSFORM },
             };
             setImportedDaeObjects((prev) => [...prev, created]);
-            setHasUnsavedChanges(true);
+            useSceneDirtyStore.getState().markObjectAdded(created.name);
+            useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
           }
           successCount++;
         } catch (err) {
@@ -2197,7 +2290,7 @@ export default function SceneEdit() {
       if (daeIds.length > 0) {
         const deleted = importedDaeObjects.filter((obj) => daeIds.includes(obj.id));
         setImportedDaeObjects((prev) => prev.filter((obj) => !daeIds.includes(obj.id)));
-        setHasUnsavedChanges(true);
+        useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         handleClearSelection();
         useSceneEditorStore.getState().recordCommand({
           type: "delete-dae",
@@ -2205,12 +2298,12 @@ export default function SceneEdit() {
           undo: () => {
             setImportedDaeObjects((prev) => [...prev, ...deleted]);
             handleSelectNode(deleted[0]?.id ?? null);
-            setHasUnsavedChanges(true);
+            useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
           },
           redo: () => {
             setImportedDaeObjects((prev) => prev.filter((obj) => !daeIds.includes(obj.id)));
             handleClearSelection();
-            setHasUnsavedChanges(true);
+            useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
           },
         });
         toast.success(`Deleted ${deleted.length} DAE object(s)`);
@@ -2238,7 +2331,7 @@ export default function SceneEdit() {
           : deletePlacementsAt(placementEntries, placementIndices);
         setPlacementEntries(result.entries);
         handleClearSelection();
-        setHasUnsavedChanges(true);
+        useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         useSceneEditorStore.getState().recordCommand({
           type: "delete-placement",
           description: result.deleted.length === 1 ? "Delete placement row" : "Delete placement rows",
@@ -2255,13 +2348,13 @@ export default function SceneEdit() {
             const restoredNodeId = resolveNodeIdForPlacementIndex(firstDeleted.index, placementEntries, subModels);
             setSelectedNodeIdRaw(restoredNodeId);
             if (restoredNodeId) useSceneEditorStore.getState().select(restoredNodeId);
-            setHasUnsavedChanges(true);
+            useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
           },
           redo: () => {
             const deleteSet = new Set(result.deleted.map((item) => item.index));
             setPlacementEntries((prev) => prev.filter((_, i) => !deleteSet.has(i)));
             handleClearSelection();
-            setHasUnsavedChanges(true);
+            useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
           },
         });
       } catch (err) {
@@ -2412,7 +2505,8 @@ export default function SceneEdit() {
           onOpenFolder={handleOpenFolder}
           onImportFhm2d={handleImportFhm2d}
           onExtractFhm2d={handleExtractFhm2d}
-          onSave={handleSave}
+          onSaveFolder={handleSaveFolder}
+          onSaveFhm2d={handleSaveFhm2d}
           onImportDae={handleImportDae}
           onImportDaeWithConfig={handleImportDaeWithConfig}
           onExportSelectedDae={handleExportSelectedDae}
@@ -2815,7 +2909,8 @@ export default function SceneEdit() {
                   }
                   if (created.length === 0) return;
                   setImportedDaeObjects((prev) => [...prev, ...created]);
-                  setHasUnsavedChanges(true);
+                  created.forEach((c) => useSceneDirtyStore.getState().markObjectAdded(c.name));
+                  useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
                   handleSelectNode(created[0]?.id ?? null);
                   toast.success(`Imported ${created.length} DAE object(s) to scene`);
                 } catch (err) {

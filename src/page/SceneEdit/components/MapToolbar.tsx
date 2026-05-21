@@ -3,6 +3,7 @@ import {
   FileArchive,
   PackageOpen,
   Save,
+  HardDriveDownload,
   Grid3x3,
   Axis3D,
   Box,
@@ -49,7 +50,8 @@ interface MapToolbarProps {
   onOpenFolder: () => void;
   onImportFhm2d: () => void;
   onExtractFhm2d: () => void;
-  onSave: () => void;
+  onSaveFolder: () => void;
+  onSaveFhm2d: () => void;
   onImportDae: () => void;
   onImportDaeWithConfig: () => void;
   onExportSelectedDae: () => void;
@@ -88,7 +90,8 @@ export function MapToolbar({
   onOpenFolder,
   onImportFhm2d,
   onExtractFhm2d,
-  onSave,
+  onSaveFolder,
+  onSaveFhm2d,
   onImportDae,
   onImportDaeWithConfig,
   onExportSelectedDae,
@@ -178,9 +181,9 @@ export function MapToolbar({
             variant="ghost"
             size="icon"
             className="h-6 w-6 relative"
-            onClick={onSave}
+            onClick={onSaveFolder}
             disabled={!canSave || isLoading}
-            aria-label={hasUnsavedChanges ? "Save changes" : "Save CSV files"}
+            aria-label="Save as Folder"
           >
             <Save className="h-3.5 w-3.5" />
             {hasUnsavedChanges && (
@@ -191,9 +194,23 @@ export function MapToolbar({
             )}
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">
-          {hasUnsavedChanges ? "Save changes" : "Save CSV"}
-        </TooltipContent>
+        <TooltipContent side="bottom">Save as Folder</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={onSaveFhm2d}
+            disabled={!canSave || isLoading}
+            aria-label="Save as FHM2D"
+          >
+            <HardDriveDownload className="h-3.5 w-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Save as FHM2D</TooltipContent>
       </Tooltip>
 
       <Separator orientation="vertical" className="h-4 mx-0.5" />

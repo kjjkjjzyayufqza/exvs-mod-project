@@ -18,12 +18,20 @@ export interface HktImportConfig {
   configProfile: string;
 }
 
+export interface TextureImportEntry {
+  slot: string;
+  source:
+    | { type: "existing"; path: string }
+    | { type: "new"; pngPath: string; ddsFormat: string };
+}
+
 export interface DaeImportConfig {
   loadToScene: boolean;
   convertToSsbh: boolean;
   generateHkt: boolean;
   ssbhConfig: SsbhImportConfig;
   hktConfig: HktImportConfig;
+  textureEntries?: TextureImportEntry[];
 }
 
 export interface DaeMeshAnalysisRow {
