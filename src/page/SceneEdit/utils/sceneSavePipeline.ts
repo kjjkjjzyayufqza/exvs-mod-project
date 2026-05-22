@@ -265,6 +265,7 @@ export type StageSaveResult = {
   reloadedBundle: StageBundleResponse | null;
 };
 
+/** @deprecated Use {@link executeSaveFolderPipeline} from sceneSaveFolderPipeline.ts instead. */
 export async function executeStageSave(params: {
   stageRoot: string;
   graphicParams: Array<{ key: string; value: string }>;

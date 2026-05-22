@@ -2866,6 +2866,19 @@ export default function SceneEdit() {
           onExport={handleDaeExportConfirm}
           onCancel={() => setDaeExportDialog((prev) => ({ ...prev, open: false }))}
         />
+        <SaveProgressDialog
+          open={saveProgressState.open}
+          title={saveProgressState.title}
+          steps={saveProgressState.steps}
+          canClose={saveProgressState.canClose}
+          onClose={() => setSaveProgressState({ open: false, title: "", steps: [], canClose: false })}
+        />
+        <DeleteConfirmDialog
+          open={deleteConfirmState.open}
+          preview={deleteConfirmState.preview}
+          onConfirm={handleDeleteConfirmAccept}
+          onCancel={handleDeleteConfirmCancel}
+        />
 
         {showDaeImportModal && daeImportEntries.length > 0 && (
           <DaeImportConfigModal

@@ -8,6 +8,7 @@ import { useDraggableModal } from "@/hooks/useDraggableModal";
 import { DaeImportAnalysisPanel } from "./DaeImportAnalysisPanel";
 import { DaeImportSsbhConfigPanel } from "./DaeImportSsbhConfigPanel";
 import { DaeImportHktConfigPanel } from "./DaeImportHktConfigPanel";
+import { TextureFormatSelect, type DdsFormat } from "../TextureFormatSelect";
 import type {
   DaeImportEntry,
   DaeImportConfig,
@@ -173,6 +174,21 @@ export function DaeImportConfigModal({
                   havokInfo={havokInfo}
                   onChange={updateHktConfig}
                 />
+              )}
+
+              {primaryMode === "ssbh" && (
+                <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm">Texture format</Label>
+                    <p className="text-[10px] text-muted-foreground">
+                      DDS format for imported PNG textures
+                    </p>
+                  </div>
+                  <TextureFormatSelect
+                    value={config.defaultDdsFormat as DdsFormat}
+                    onChange={(fmt) => updateConfig({ defaultDdsFormat: fmt })}
+                  />
+                </div>
               )}
             </div>
 

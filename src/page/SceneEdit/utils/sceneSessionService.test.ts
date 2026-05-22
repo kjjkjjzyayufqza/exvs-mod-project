@@ -23,6 +23,7 @@ function makeDefaultDaeImportConfig(): DaeImportConfig {
       havokToolPath: "",
       configProfile: "",
     },
+    defaultDdsFormat: "BC7_UNORM",
   };
 }
 
@@ -107,7 +108,7 @@ describe("sceneSessionService", () => {
     const SESSION_ID = "test-session-abc123";
     const IMPORT_ID = "import-backpack-xyz";
 
-    let mockInvoke: ReturnType<typeof vi.fn>;
+    let mockInvoke: (...args: unknown[]) => unknown;
 
     const stageOpenResult: SceneOpenResult = {
       sessionId: SESSION_ID,

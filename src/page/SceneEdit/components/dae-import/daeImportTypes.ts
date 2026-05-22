@@ -32,6 +32,7 @@ export interface DaeImportConfig {
   ssbhConfig: SsbhImportConfig;
   hktConfig: HktImportConfig;
   textureEntries?: TextureImportEntry[];
+  defaultDdsFormat: string;
 }
 
 export interface DaeMeshAnalysisRow {

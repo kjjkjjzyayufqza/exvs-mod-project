@@ -37,6 +37,7 @@ export function createDefaultDaeImportConfig(
     generateHkt: false,
     ssbhConfig: createDefaultSsbhConfig(baseFilename),
     hktConfig: createDefaultHktConfig(),
+    defaultDdsFormat: "BC7_UNORM",
   };
 }
 

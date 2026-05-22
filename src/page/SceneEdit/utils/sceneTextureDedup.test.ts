@@ -28,22 +28,22 @@ describe("sceneTextureDedup", () => {
 
   describe("compareNutexbContent", () => {
     it("returns true for identical content", async () => {
-      const data = new Uint8Array([1, 2, 3, 4]).buffer;
+      const data = new Uint8Array([1, 2, 3, 4]);
       mockReadFile.mockResolvedValueOnce(data).mockResolvedValueOnce(data);
       expect(await compareNutexbContent("a.nutexb", "b.nutexb")).toBe(true);
     });
 
     it("returns false for different content", async () => {
       mockReadFile
-        .mockResolvedValueOnce(new Uint8Array([1, 2, 3]).buffer)
-        .mockResolvedValueOnce(new Uint8Array([1, 2, 4]).buffer);
+        .mockResolvedValueOnce(new Uint8Array([1, 2, 3]))
+        .mockResolvedValueOnce(new Uint8Array([1, 2, 4]));
       expect(await compareNutexbContent("a.nutexb", "b.nutexb")).toBe(false);
     });
 
     it("returns false for different lengths", async () => {
       mockReadFile
-        .mockResolvedValueOnce(new Uint8Array([1, 2]).buffer)
-        .mockResolvedValueOnce(new Uint8Array([1, 2, 3]).buffer);
+        .mockResolvedValueOnce(new Uint8Array([1, 2]))
+        .mockResolvedValueOnce(new Uint8Array([1, 2, 3]));
       expect(await compareNutexbContent("a.nutexb", "b.nutexb")).toBe(false);
     });
   });
