@@ -5,9 +5,8 @@ import { Label } from "@/components/ui/label";
 import { FolderOpen, Loader2 } from "lucide-react";
 import { readDir } from "@tauri-apps/plugin-fs";
 import { Button } from "@/components/ui/button";
-import { Command } from '@tauri-apps/plugin-shell';
+import { invoke } from "@tauri-apps/api/core";
 import { FileList } from "./components/FileList";
-import { resourceDir } from "@tauri-apps/api/path";
 
 interface FileInfo {
   name: string;
@@ -55,22 +54,21 @@ export default function MSCEdit() {
   const handleTestRepack = async () => {
     try {
       setHandleDebugRepack(true);
-      const toolPath = "E:\\XB\\解包\\com\\compression.js";
-      const filePath = folderPath + "_structure.json"
-      const command = await Command.create('exec-node', [
-        toolPath,
-        filePath,
-        "-r",
-        "-com-path",
-        folderPath.split("\\").slice(0, -1).join("\\") + "\\"
-      ], { encoding: 'utf-8' }).execute();
-      if (command.code !== 0) {
-        console.error("Repack failed:", command.stderr);
-      }
+      const normalized = folderPath.replace(/\//g, "\\");
+      const structurePath = normalized + "_structure.json";
+      const parentDir = normalized.split("\\").slice(0, -1).join("\\");
+      const folderName = normalized.split("\\").pop() ?? "";
+      const outputPath = `${parentDir}\\${folderName}.fhm2d`;
+
+      await invoke("repack_fhm2d", {
+        structureJsonPath: structurePath,
+        outputPath,
+        atomicWrite: true,
+      });
       console.log("Repack completed");
-      setHandleDebugRepack(false);
     } catch (error) {
       console.error("Error during repack:", error);
+    } finally {
       setHandleDebugRepack(false);
     }
   }

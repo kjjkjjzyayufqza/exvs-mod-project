@@ -1382,7 +1382,7 @@ export function GvsMapToVs2Tool() {
             <div>Debug numatb: extract only .numatb files from package without full Step1.</div>
             <div>Direct Step2: Select extracted folders directly and run numatb fix without Step1.</div>
             <div>Step2: Migrate extracted `.numatb` files from GVS format to EXVS2-compatible settings.</div>
-            <div>Step3: Pack the folder using compression.js and output to `obModPath` as `0xHASH.fhm2d`.</div>
+            <div>Step3: Pack the folder into FHM2D and output to `obModPath` as `0xHASH.fhm2d`.</div>
           </Card>
         )}
 

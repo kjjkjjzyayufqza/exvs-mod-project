@@ -2258,3 +2258,771 @@ fn build_model_bundle_from_virtual_folder(
         virtual_modl_path: None,
     })
 }
+
+// ── Tests ───────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io;
+
+    const TEST_DATA_ROOT: &str = r"E:\XB\解包\com\test";
+
+    fn test_stage_root(stage_name: &str) -> PathBuf {
+        Path::new(TEST_DATA_ROOT).join(stage_name).join("0").join("0")
+    }
+
+    fn copy_dir_recursive(src: &Path, dst: &Path) -> io::Result<()> {
+        fs::create_dir_all(dst)?;
+        for entry in fs::read_dir(src)? {
+            let entry = entry?;
+            let ft = entry.file_type()?;
+            let dest_path = dst.join(entry.file_name());
+            if ft.is_dir() {
+                copy_dir_recursive(&entry.path(), &dest_path)?;
+            } else {
+                fs::copy(entry.path(), &dest_path)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn copy_stage_to_temp(stage_name: &str) -> (tempfile::TempDir, PathBuf) {
+        let src = test_stage_root(stage_name);
+        assert!(src.is_dir(), "Test data not found at {}", src.display());
+        let tmp = tempfile::tempdir().expect("create temp dir");
+        let dst = tmp.path().join("0").join("0");
+        copy_dir_recursive(&src, &dst).expect("copy stage data");
+        (tmp, dst)
+    }
+
+    fn skip_if_test_data_missing() -> bool {
+        !Path::new(TEST_DATA_ROOT).is_dir()
+    }
+
+    // ── load_stage_bundle_impl ──────────────────────────────────────────
+
+    #[test]
+    fn test_load_stage_84f085e5_basic_structure() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let root = test_stage_root("84F085E5");
+        let bundle = load_stage_bundle_impl(&root.to_string_lossy()).unwrap();
+
+        assert!(bundle.base_model.is_some(), "should have base model");
+        assert!(!bundle.sub_models.is_empty(), "should have sub models");
+        assert!(!bundle.graphic_params.is_empty(), "should have graphic params");
+        assert!(!bundle.placement_entries.is_empty(), "should have placement entries");
+
+        let sky_entry = bundle.placement_entries.iter().find(|e| e.vdk_type == "SKY");
+        assert!(sky_entry.is_some(), "should have a SKY placement entry");
+
+        // Stage 84F085E5 is a menu stage — it has only SKY in placement, no OBJECT rows
+        assert_eq!(bundle.placement_entries.len(), 1,
+            "menu stage should have exactly 1 placement entry (SKY only)");
+    }
+
+    #[test]
+    fn test_load_stage_16f73c97_object_box01() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let root = test_stage_root("16F73C97");
+        let bundle = load_stage_bundle_impl(&root.to_string_lossy()).unwrap();
+
+        assert!(bundle.base_model.is_some(), "should have base model");
+
+        let box_model = bundle.sub_models.iter()
+            .find(|m| m.folder_name.contains("object_box01"));
+        assert!(box_model.is_some(), "should find 001stage001_object_box01 sub model");
+
+        let sky_model = bundle.sub_models.iter()
+            .find(|m| m.folder_name == "sky");
+        assert!(sky_model.is_some(), "should find sky sub model");
+
+        let sky_placement = bundle.placement_entries.iter()
+            .find(|e| e.vdk_type == "SKY");
+        assert!(sky_placement.is_some(), "should have SKY placement");
+        assert_eq!(sky_placement.unwrap().object_number, Some(1), "SKY objectNumber=1");
+
+        let obj_placements: Vec<_> = bundle.placement_entries.iter()
+            .filter(|e| e.vdk_type == "OBJECT")
+            .collect();
+        assert_eq!(obj_placements.len(), 4, "should have 4 OBJECT placement entries");
+        for p in &obj_placements {
+            assert_eq!(p.object_number, Some(0), "all OBJECTs reference objectNumber=0");
+        }
+    }
+
+    #[test]
+    fn test_load_stage_35516817_effect_entries() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let root = test_stage_root("35516817");
+        let bundle = load_stage_bundle_impl(&root.to_string_lossy()).unwrap();
+
+        let effect_count = bundle.placement_entries.iter()
+            .filter(|e| e.vdk_type == "EFFECT")
+            .count();
+        assert!(effect_count > 10, "stage 018 should have many EFFECT entries, got {effect_count}");
+
+        let sky_count = bundle.placement_entries.iter()
+            .filter(|e| e.vdk_type == "SKY")
+            .count();
+        assert_eq!(sky_count, 1, "should have exactly 1 SKY entry");
+
+        assert!(bundle.sub_models.len() >= 10, "stage 018 should have many sub models, got {}", bundle.sub_models.len());
+    }
+
+    #[test]
+    fn test_load_stage_nonexistent_dir() {
+        let result = load_stage_bundle_impl(r"E:\nonexistent\path");
+        assert!(result.is_err(), "should fail for nonexistent dir");
+    }
+
+    // ── Placement CSV parsing (KV format) ───────────────────────────────
+
+    #[test]
+    fn test_parse_placement_kv_format_basic() {
+        let csv = "VDK_TYPE,SKY,VDK_POSITION_X,10.0,VDK_POSITION_Y,20.0,VDK_POSITION_Z,30.0,VDK_OBJECTNUMBER,1\n\
+                   VDK_TYPE,OBJECT,VDK_POSITION_X,100.0,VDK_POSITION_Y,0.0,VDK_POSITION_Z,-50.0,VDK_OBJECTNUMBER,0";
+        let mut warnings = Vec::new();
+        let (header, entries) = parse_placement_table(csv, &mut warnings);
+
+        assert!(header.is_empty(), "KV format has no header row");
+        assert_eq!(entries.len(), 2);
+
+        assert_eq!(entries[0].vdk_type, "SKY");
+        assert_eq!(entries[0].object_number, Some(1));
+        assert!((entries[0].pos_x - 10.0).abs() < f64::EPSILON);
+        assert!((entries[0].pos_y - 20.0).abs() < f64::EPSILON);
+        assert!((entries[0].pos_z - 30.0).abs() < f64::EPSILON);
+
+        assert_eq!(entries[1].vdk_type, "OBJECT");
+        assert_eq!(entries[1].object_number, Some(0));
+        assert!((entries[1].pos_x - 100.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_parse_placement_kv_effect_entries() {
+        let csv = "VDK_TYPE,EFFECT,VDK_POSITION_X,1046.77,VDK_POSITION_Y,-65.75,VDK_POSITION_Z,-242.80,VDK_EFFECT_ID,EFF_018STAGE018_MIST_001,VDK_SCALE_X,1.0,VDK_SCALE_Y,1.0,VDK_SCALE_Z,1.0\n\
+                   VDK_TYPE,OBJECT,VDK_POSITION_X,0.0,VDK_POSITION_Y,0.0,VDK_POSITION_Z,0.0,VDK_OBJECTNUMBER,0";
+        let mut warnings = Vec::new();
+        let (_, entries) = parse_placement_table(csv, &mut warnings);
+
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].vdk_type, "EFFECT");
+        assert!(entries[0].object_number.is_none(), "EFFECT entries have no objectNumber");
+        assert!((entries[0].pos_x - 1046.77).abs() < 0.01);
+        assert!((entries[0].scale_x - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_parse_placement_kv_scale_defaults() {
+        let csv = "VDK_TYPE,OBJECT,VDK_POSITION_X,0.0,VDK_POSITION_Y,0.0,VDK_POSITION_Z,0.0,VDK_OBJECTNUMBER,0";
+        let mut warnings = Vec::new();
+        let (_, entries) = parse_placement_table(csv, &mut warnings);
+
+        assert_eq!(entries.len(), 1);
+        assert!((entries[0].scale_x - 1.0).abs() < f64::EPSILON, "missing scale_x defaults to 1.0");
+        assert!((entries[0].scale_y - 1.0).abs() < f64::EPSILON, "missing scale_y defaults to 1.0");
+        assert!((entries[0].scale_z - 1.0).abs() < f64::EPSILON, "missing scale_z defaults to 1.0");
+    }
+
+    #[test]
+    fn test_parse_placement_kv_zero_scale_defaults_to_one() {
+        let csv = "VDK_TYPE,OBJECT,VDK_POSITION_X,0.0,VDK_POSITION_Y,0.0,VDK_POSITION_Z,0.0,VDK_OBJECTNUMBER,0,VDK_SCALE_X,0,VDK_SCALE_Y,0,VDK_SCALE_Z,0";
+        let mut warnings = Vec::new();
+        let (_, entries) = parse_placement_table(csv, &mut warnings);
+
+        assert_eq!(entries.len(), 1);
+        assert!((entries[0].scale_x - 1.0).abs() < f64::EPSILON, "explicit 0 scale_x -> 1.0");
+        assert!((entries[0].scale_y - 1.0).abs() < f64::EPSILON, "explicit 0 scale_y -> 1.0");
+        assert!((entries[0].scale_z - 1.0).abs() < f64::EPSILON, "explicit 0 scale_z -> 1.0");
+    }
+
+    #[test]
+    fn test_parse_placement_empty_content() {
+        let mut warnings = Vec::new();
+        let (header, entries) = parse_placement_table("", &mut warnings);
+        assert!(header.is_empty());
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn test_parse_placement_preserves_raw_fields() {
+        let csv = "VDK_TYPE,OBJECT,VDK_INITIAL_SPAWN,TRUE,VDK_POSITION_X,250.0,VDK_POSITION_Y,-2.0,VDK_POSITION_Z,-250.0,VDK_ROTATION_X,0.0,VDK_ROTATION_Y,0.0,VDK_ROTATION_Z,0.0,VDK_OBJECTNUMBER,0,VDK_HITPOINT,UNBREAKABLE";
+        let mut warnings = Vec::new();
+        let (_, entries) = parse_placement_table(csv, &mut warnings);
+
+        assert_eq!(entries.len(), 1);
+        assert!(entries[0].raw_fields.len() > 10, "raw_fields should preserve all fields");
+        assert!(entries[0].raw_fields.contains(&"UNBREAKABLE".to_string()),
+            "raw_fields should contain UNBREAKABLE");
+    }
+
+    // ── Graphic param CSV parsing ───────────────────────────────────────
+
+    #[test]
+    fn test_parse_graphic_param_csv_from_bytes_basic() {
+        let csv = b"directional_lighting_rot_x,-45\ndirectional_lighting_rot_y,45\nibl_lighting_intensity,1";
+        let mut warnings = Vec::new();
+        let params = parse_graphic_param_csv_from_bytes(csv, &mut warnings);
+
+        assert_eq!(params.len(), 3);
+        assert_eq!(params[0].key, "directional_lighting_rot_x");
+        assert_eq!(params[0].value, "-45");
+        assert_eq!(params[2].key, "ibl_lighting_intensity");
+        assert_eq!(params[2].value, "1");
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn test_parse_graphic_param_csv_empty_lines() {
+        let csv = b"key1,value1\n\nkey2,value2\n";
+        let mut warnings = Vec::new();
+        let params = parse_graphic_param_csv_from_bytes(csv, &mut warnings);
+        assert_eq!(params.len(), 2, "empty lines should be skipped");
+    }
+
+    // ── Graphic param CSV roundtrip ─────────────────────────────────────
+
+    #[test]
+    fn test_graphic_param_csv_write_read_roundtrip() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let (_tmp, stage_copy) = copy_stage_to_temp("84F085E5");
+        let bundle = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
+        let original_params = bundle.graphic_params.clone();
+        assert!(!original_params.is_empty());
+
+        let csv_content: String = original_params.iter()
+            .map(|p| format!("{},{}", p.key, p.value))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let csv_path = stage_copy.join("info").join("graphic_param.csv");
+        fs::write(&csv_path, &csv_content).unwrap();
+
+        let reloaded = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
+        assert_eq!(reloaded.graphic_params.len(), original_params.len(),
+            "roundtrip should preserve param count");
+        for (orig, reload) in original_params.iter().zip(reloaded.graphic_params.iter()) {
+            assert_eq!(orig.key, reload.key, "roundtrip should preserve key");
+            assert_eq!(orig.value, reload.value, "roundtrip should preserve value");
+        }
+    }
+
+    #[test]
+    fn test_graphic_param_csv_modify_and_reload() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let (_tmp, stage_copy) = copy_stage_to_temp("84F085E5");
+        let bundle = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
+
+        let mut params = bundle.graphic_params.clone();
+        let original_first_value = params[0].value.clone();
+        params[0].value = "999.5".to_string();
+
+        let csv_content: String = params.iter()
+            .map(|p| format!("{},{}", p.key, p.value))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let csv_path = stage_copy.join("info").join("graphic_param.csv");
+        fs::write(&csv_path, &csv_content).unwrap();
+
+        let reloaded = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
+        assert_eq!(reloaded.graphic_params[0].value, "999.5", "modified value should persist");
+        assert_ne!(reloaded.graphic_params[0].value, original_first_value);
+    }
+
+    // ── Placement CSV roundtrip ─────────────────────────────────────────
+
+    #[test]
+    fn test_placement_csv_write_read_roundtrip_kv_format() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let (_tmp, stage_copy) = copy_stage_to_temp("16F73C97");
+        let bundle = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
+        let original_entries = bundle.placement_entries.clone();
+        let original_header = bundle.placement_header.clone();
+        assert!(!original_entries.is_empty());
+
+        let csv_content = if original_header.is_empty() {
+            original_entries.iter()
+                .map(|e| e.raw_fields.join(","))
+                .collect::<Vec<_>>()
+                .join("\n")
+        } else {
+            let header_line = original_header.join(",");
+            let data_lines: Vec<String> = original_entries.iter()
+                .map(|e| e.raw_fields.join(","))
+                .collect();
+            std::iter::once(header_line).chain(data_lines).collect::<Vec<_>>().join("\n")
+        };
+
+        let csv_path = stage_copy.join("info").join("placement.csv");
+        fs::write(&csv_path, &csv_content).unwrap();
+
+        let reloaded = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
+        assert_eq!(reloaded.placement_entries.len(), original_entries.len(),
+            "roundtrip should preserve entry count");
+
+        for (i, (orig, reload)) in original_entries.iter().zip(reloaded.placement_entries.iter()).enumerate() {
+            assert_eq!(orig.vdk_type, reload.vdk_type, "entry {i}: vdk_type mismatch");
+            assert_eq!(orig.object_number, reload.object_number, "entry {i}: objectNumber mismatch");
+            assert!((orig.pos_x - reload.pos_x).abs() < 0.001, "entry {i}: pos_x mismatch");
+            assert!((orig.pos_y - reload.pos_y).abs() < 0.001, "entry {i}: pos_y mismatch");
+            assert!((orig.pos_z - reload.pos_z).abs() < 0.001, "entry {i}: pos_z mismatch");
+        }
+    }
+
+    #[test]
+    fn test_placement_csv_effect_preservation_on_rewrite() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let (_tmp, stage_copy) = copy_stage_to_temp("35516817");
+        let bundle = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
+        let original_entries = bundle.placement_entries.clone();
+
+        let effect_entries: Vec<_> = original_entries.iter()
+            .filter(|e| e.vdk_type == "EFFECT")
+            .collect();
+        let original_effect_count = effect_entries.len();
+        assert!(original_effect_count > 0, "stage 018 must have EFFECT entries");
+
+        let csv_content = original_entries.iter()
+            .map(|e| e.raw_fields.join(","))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let csv_path = stage_copy.join("info").join("placement.csv");
+        fs::write(&csv_path, &csv_content).unwrap();
+
+        let reloaded = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
+        let reloaded_effects: Vec<_> = reloaded.placement_entries.iter()
+            .filter(|e| e.vdk_type == "EFFECT")
+            .collect();
+        assert_eq!(reloaded_effects.len(), original_effect_count,
+            "EFFECT entries must be preserved through write-reload cycle");
+
+        for (orig, reload) in effect_entries.iter().zip(reloaded_effects.iter()) {
+            assert_eq!(orig.raw_fields.len(), reload.raw_fields.len(),
+                "EFFECT raw_fields length must match");
+        }
+    }
+
+    // ── ObjectNumber re-indexing after delete ────────────────────────────
+
+    #[test]
+    fn test_object_index_after_folder_deletion() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let (_tmp, stage_copy) = copy_stage_to_temp("16F73C97");
+        let bundle_before = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
+
+        let original_sub_count = bundle_before.sub_models.len();
+        assert!(original_sub_count >= 1, "need at least 1 sub model for delete test");
+
+        let deleted_folder = &bundle_before.sub_models[0].folder_name;
+        let deleted_path = stage_copy.join(deleted_folder);
+        assert!(deleted_path.is_dir(), "folder to delete should exist: {}", deleted_path.display());
+
+        fs::remove_dir_all(&deleted_path).expect("delete sub model folder");
+
+        let bundle_after = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
+        assert_eq!(bundle_after.sub_models.len(), original_sub_count - 1,
+            "sub_models count should decrease by 1 after deletion");
+
+        for (i, sub) in bundle_after.sub_models.iter().enumerate() {
+            assert_eq!(sub.object_index, i,
+                "objectIndex should be re-indexed: expected {i}, got {}", sub.object_index);
+        }
+    }
+
+    #[test]
+    fn test_sky_folder_not_counted_as_sub_model() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let root = test_stage_root("16F73C97");
+        let bundle = load_stage_bundle_impl(&root.to_string_lossy()).unwrap();
+
+        let sky_as_sub = bundle.sub_models.iter().find(|m| m.folder_name == "sky");
+        assert!(sky_as_sub.is_some(), "sky should appear as a sub model entry");
+
+        let base_as_sub = bundle.sub_models.iter().find(|m| m.folder_name == "base");
+        assert!(base_as_sub.is_none(), "base should NOT appear as a sub model entry");
+    }
+
+    // ── Old texture format detection ────────────────────────────────────
+
+    #[test]
+    fn test_old_texture_format_has_numbered_subdirs_with_nutexb() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let root = test_stage_root("16F73C97");
+
+        let object_dir = root.join("001stage001_object_box01").join("0");
+        assert!(object_dir.is_dir(), "model SSBH dir should exist");
+
+        let subdir_0 = object_dir.join("0");
+        let subdir_1 = object_dir.join("1");
+        assert!(subdir_0.is_dir(), "numbered subdir 0/ should exist (old format)");
+        assert!(subdir_1.is_dir(), "numbered subdir 1/ should exist (old format)");
+
+        let has_nutexb_in_0 = fs::read_dir(&subdir_0).unwrap()
+            .filter_map(|e| e.ok())
+            .any(|e| {
+                e.path().extension()
+                    .map(|ext| ext.eq_ignore_ascii_case("nutexb"))
+                    .unwrap_or(false)
+            });
+        assert!(has_nutexb_in_0, "subdir 0/ should contain .nutexb files");
+    }
+
+    #[test]
+    fn test_detect_old_texture_format_in_stage() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let root = test_stage_root("16F73C97");
+        let reserved = ["base", "info", "textures", "sky"];
+
+        // Old texture format: model_folder/SSBH_NUM/TEX_NUM/*.nutexb
+        // e.g., 001stage001_object_box01/0/0/*.nutexb, .../0/1/*.nutexb
+        let mut found_old_format = false;
+        for entry in fs::read_dir(&root).unwrap().filter_map(|e| e.ok()) {
+            if !entry.file_type().unwrap().is_dir() {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().to_string();
+            if reserved.contains(&name.as_str()) {
+                continue;
+            }
+            // Walk into model_folder looking for numbered SSBH subdirs
+            for ssbh_dir in fs::read_dir(entry.path()).unwrap().filter_map(|e| e.ok()) {
+                if !ssbh_dir.file_type().unwrap().is_dir() {
+                    continue;
+                }
+                let ssbh_name = ssbh_dir.file_name().to_string_lossy().to_string();
+                if !ssbh_name.chars().all(|c| c.is_ascii_digit()) {
+                    continue;
+                }
+                // Inside SSBH dir (e.g. 0/), look for numbered texture variant dirs
+                for tex_dir in fs::read_dir(ssbh_dir.path()).unwrap().filter_map(|e| e.ok()) {
+                    if !tex_dir.file_type().unwrap().is_dir() {
+                        continue;
+                    }
+                    let tex_name = tex_dir.file_name().to_string_lossy().to_string();
+                    if !tex_name.chars().all(|c| c.is_ascii_digit()) {
+                        continue;
+                    }
+                    // Check if this numbered dir contains .nutexb files
+                    for file in fs::read_dir(tex_dir.path()).unwrap().filter_map(|e| e.ok()) {
+                        if let Some(ext) = file.path().extension() {
+                            if ext.eq_ignore_ascii_case("nutexb") {
+                                found_old_format = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(found_old_format, "stage 16F73C97 should have old texture format");
+    }
+
+    #[test]
+    fn test_no_shared_textures_folder_in_stage_16f73c97() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let root = test_stage_root("16F73C97");
+        let textures_dir = root.join("textures");
+        assert!(!textures_dir.exists(),
+            "stage 16F73C97 should NOT have a textures/ folder (old format, pre-migration)");
+    }
+
+    // ── Texture migration simulation (copy to temp, create textures/) ───
+
+    #[test]
+    fn test_texture_migration_creates_textures_folder() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let (_tmp, stage_copy) = copy_stage_to_temp("16F73C97");
+
+        let reserved = ["base", "info", "textures", "sky"];
+        let textures_dir = stage_copy.join("textures");
+        fs::create_dir_all(&textures_dir).unwrap();
+
+        // Migrate: model_folder/SSBH_NUM/TEX_NUM/*.nutexb → textures/
+        let mut migrated_count = 0usize;
+        for entry in fs::read_dir(&stage_copy).unwrap().filter_map(|e| e.ok()) {
+            if !entry.file_type().unwrap().is_dir() { continue; }
+            let name = entry.file_name().to_string_lossy().to_string();
+            if reserved.contains(&name.as_str()) { continue; }
+
+            for ssbh_dir in fs::read_dir(entry.path()).unwrap().filter_map(|e| e.ok()) {
+                if !ssbh_dir.file_type().unwrap().is_dir() { continue; }
+                let ssbh_name = ssbh_dir.file_name().to_string_lossy().to_string();
+                if !ssbh_name.chars().all(|c| c.is_ascii_digit()) { continue; }
+
+                for tex_dir in fs::read_dir(ssbh_dir.path()).unwrap().filter_map(|e| e.ok()) {
+                    if !tex_dir.file_type().unwrap().is_dir() { continue; }
+                    let tex_name = tex_dir.file_name().to_string_lossy().to_string();
+                    if !tex_name.chars().all(|c| c.is_ascii_digit()) { continue; }
+
+                    for file in fs::read_dir(tex_dir.path()).unwrap().filter_map(|e| e.ok()) {
+                        let path = file.path();
+                        if let Some(ext) = path.extension() {
+                            if ext.eq_ignore_ascii_case("nutexb") {
+                                let dest = textures_dir.join(path.file_name().unwrap());
+                                if !dest.exists() {
+                                    fs::copy(&path, &dest).unwrap();
+                                    migrated_count += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(migrated_count > 0, "should have migrated some nutexb files");
+        assert!(textures_dir.is_dir(), "textures/ should exist after migration");
+
+        let tex_files: Vec<_> = fs::read_dir(&textures_dir).unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map(|ext| ext.eq_ignore_ascii_case("nutexb")).unwrap_or(false))
+            .collect();
+        assert!(!tex_files.is_empty(), "textures/ should contain nutexb files after migration");
+    }
+
+    // ── Bundle still loads after simulated save modifications ────────────
+
+    #[test]
+    fn test_bundle_loads_after_csv_rewrite() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let (_tmp, stage_copy) = copy_stage_to_temp("84F085E5");
+
+        let bundle = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
+
+        let gp_csv: String = bundle.graphic_params.iter()
+            .map(|p| format!("{},{}", p.key, p.value))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(stage_copy.join("info").join("graphic_param.csv"), &gp_csv).unwrap();
+
+        let pl_csv: String = bundle.placement_entries.iter()
+            .map(|e| e.raw_fields.join(","))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(stage_copy.join("info").join("placement.csv"), &pl_csv).unwrap();
+
+        let reloaded = load_stage_bundle_impl(&stage_copy.to_string_lossy());
+        assert!(reloaded.is_ok(), "bundle should load after CSV rewrite: {:?}", reloaded.err());
+        let reloaded = reloaded.unwrap();
+        assert_eq!(reloaded.graphic_params.len(), bundle.graphic_params.len());
+        assert_eq!(reloaded.placement_entries.len(), bundle.placement_entries.len());
+    }
+
+    // ── Placement modification + save ───────────────────────────────────
+
+    #[test]
+    fn test_placement_position_modification_persists() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let (_tmp, stage_copy) = copy_stage_to_temp("16F73C97");
+        let bundle = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
+
+        let mut entries = bundle.placement_entries.clone();
+        let obj_idx = entries.iter().position(|e| e.vdk_type == "OBJECT").unwrap();
+        let mut raw = entries[obj_idx].raw_fields.clone();
+        let px_idx = raw.iter().position(|f| f.eq_ignore_ascii_case("VDK_POSITION_X")).unwrap();
+        raw[px_idx + 1] = "12345.0".to_string();
+        entries[obj_idx].raw_fields = raw;
+
+        let csv_content = entries.iter()
+            .map(|e| e.raw_fields.join(","))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(stage_copy.join("info").join("placement.csv"), &csv_content).unwrap();
+
+        let reloaded = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
+        let modified_obj = &reloaded.placement_entries[obj_idx];
+        assert!((modified_obj.pos_x - 12345.0).abs() < 0.01,
+            "modified position should persist, got {}", modified_obj.pos_x);
+    }
+
+    // ── CSV field identification ────────────────────────────────────────
+
+    #[test]
+    fn test_identify_info_file_placement_csv() {
+        let sample = b"VDK_TYPE,OBJECT,VDK_POSITION_X,0";
+        assert_eq!(identify_info_file(sample), "placement.csv");
+    }
+
+    #[test]
+    fn test_identify_info_file_graphic_param_csv() {
+        let sample = b"directional_lighting_rot_x,-45\npfx_bloom_intensity,0.5";
+        assert_eq!(identify_info_file(sample), "graphic_param.csv");
+    }
+
+    #[test]
+    fn test_identify_info_file_hkt() {
+        let mut data = vec![0u8; 20];
+        data[0x0C..0x10].copy_from_slice(b"SDKV");
+        assert_eq!(identify_info_file(&data), "border_hit.hkt");
+    }
+
+    // ── Numdlb name extraction ──────────────────────────────────────────
+
+    #[test]
+    fn test_numdlb_name_from_real_file() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let numdlb_path = test_stage_root("16F73C97")
+            .join("001stage001_object_box01")
+            .join("0")
+            .join("001stage001_object_box01.numdlb");
+        if !numdlb_path.exists() {
+            eprintln!("SKIP: numdlb file not found");
+            return;
+        }
+        let data = fs::read(&numdlb_path).unwrap();
+        let name = read_numdlb_model_name(&data);
+        assert!(name.is_some(), "should extract name from real numdlb");
+        let name = name.unwrap();
+        assert!(name.contains("001stage001"), "name should contain stage identifier, got: {name}");
+    }
+
+    #[test]
+    fn test_numdlb_name_too_short() {
+        let data = vec![0u8; 10];
+        assert!(read_numdlb_model_name(&data).is_none());
+    }
+
+    #[test]
+    fn test_numdlb_name_wrong_magic() {
+        let mut data = vec![0u8; 0x40];
+        data[0..4].copy_from_slice(b"NOPE");
+        assert!(read_numdlb_model_name(&data).is_none());
+    }
+
+    // ── Split CSV record ────────────────────────────────────────────────
+
+    #[test]
+    fn test_split_csv_simple() {
+        let fields = split_csv_record("a,b,c");
+        assert_eq!(fields, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn test_split_csv_quoted() {
+        let fields = split_csv_record("\"hello, world\",b,c");
+        assert_eq!(fields[0], "hello, world");
+        assert_eq!(fields.len(), 3);
+    }
+
+    #[test]
+    fn test_split_csv_escaped_quotes() {
+        let fields = split_csv_record("\"he said \"\"hi\"\"\",b");
+        assert_eq!(fields[0], "he said \"hi\"");
+    }
+
+    // ── Normalize model name ────────────────────────────────────────────
+
+    #[test]
+    fn test_normalize_model_name_basic() {
+        assert_eq!(normalize_model_name("Model01.numdlb"), "model01");
+    }
+
+    #[test]
+    fn test_normalize_model_name_slashes() {
+        assert_eq!(normalize_model_name("/path/to/Model.ext"), "path_to_model");
+    }
+
+    #[test]
+    fn test_normalize_model_name_spaces() {
+        assert_eq!(normalize_model_name("My Model"), "my_model");
+    }
+
+    // ── Stage root with missing info dir ────────────────────────────────
+
+    #[test]
+    fn test_bundle_with_missing_info_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stage = tmp.path().join("stage");
+        fs::create_dir_all(stage.join("base")).unwrap();
+        let bundle = load_stage_bundle_impl(&stage.to_string_lossy()).unwrap();
+        assert!(bundle.graphic_params.is_empty());
+        assert!(bundle.placement_entries.is_empty());
+    }
+
+    // ── Nutexb internal name parsing ────────────────────────────────────
+
+    #[test]
+    fn test_parse_nutexb_name_from_real_file() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let root = test_stage_root("16F73C97");
+        let nutexb_dir = root.join("001stage001_object_box01").join("0").join("0");
+        if !nutexb_dir.is_dir() {
+            eprintln!("SKIP: nutexb dir not found");
+            return;
+        }
+        let mut tested = 0;
+        for entry in fs::read_dir(&nutexb_dir).unwrap().filter_map(|e| e.ok()) {
+            if entry.path().extension().map(|e| e.eq_ignore_ascii_case("nutexb")).unwrap_or(false) {
+                let data = fs::read(entry.path()).unwrap();
+                let name = parse_nutexb_internal_name(&data);
+                assert!(name.is_some(), "should parse nutexb internal name from {}", entry.path().display());
+                tested += 1;
+            }
+        }
+        assert!(tested > 0, "should have tested at least one nutexb file");
+    }
+
+    #[test]
+    fn test_parse_nutexb_name_too_short() {
+        assert!(parse_nutexb_internal_name(&[0; 4]).is_none());
+    }
+
+    #[test]
+    fn test_parse_nutexb_name_wrong_magic() {
+        let mut data = vec![0u8; 100];
+        let len = data.len();
+        data[len - 8..len - 4].copy_from_slice(b"NOPE");
+        assert!(parse_nutexb_internal_name(&data).is_none());
+    }
+}

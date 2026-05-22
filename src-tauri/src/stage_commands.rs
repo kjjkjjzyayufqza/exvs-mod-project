@@ -1,4 +1,4 @@
-//! Tauri command wrappers for stage fhm2d rename and bundle loading.
+//! Tauri command wrappers for stage fhm2d rename, bundle loading, and repacking.
 
 use serde::Serialize;
 use std::sync::Mutex;
@@ -185,6 +185,30 @@ pub async fn preview_stage_fhm2d_rename(
     }
 
     Ok(result)
+}
+
+#[tauri::command]
+pub async fn repack_fhm2d(
+    app: AppHandle,
+    structure_json_path: String,
+    output_path: String,
+    atomic_write: Option<bool>,
+) -> Result<crate::format::fhm2d_pack::RepackResult, String> {
+    let atomic = atomic_write.unwrap_or(true);
+    let app_clone = app.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::format::fhm2d_pack::repack_fhm2d_from_structure(
+            &structure_json_path,
+            &output_path,
+            atomic,
+            Some(&|progress| {
+                let _ = app_clone.emit("repack-fhm2d-progress", progress.clone());
+            }),
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 #[tauri::command]

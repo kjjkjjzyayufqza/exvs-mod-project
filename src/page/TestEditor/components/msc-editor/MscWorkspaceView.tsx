@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
 import { dirname, join, resourceDir } from "@tauri-apps/api/path";
 import { FileEdit, FolderOpen, Code, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -193,28 +194,21 @@ export default function MscWorkspaceView({
     if (!mscFolderPath) return;
     try {
       setIsFolderRepacking(true);
-      const toolPath = "E:\\XB\\解包\\com\\compression.js";
-      const normalizedFolderPath = mscFolderPath.replace(/\\/g, "/");
-      const folderName = normalizedFolderPath.split("/").filter(Boolean).pop() ?? "";
-      const parentDir = normalizedFolderPath.split("/").slice(0, -1).join("/");
+      const normalized = mscFolderPath.replace(/\//g, "\\");
+      const folderName = normalized.split("\\").filter(Boolean).pop() ?? "";
+      const parentDir = normalized.split("\\").slice(0, -1).join("\\");
+      const structurePath = `${parentDir}\\${folderName}_structure.json`;
+      const outputPath = `${parentDir}\\${folderName}.fhm2d`;
 
-      const filePath = `${parentDir}/${folderName}_structure.json`;
-
-      const command = await Command.create(
-        "exec-node",
-        [toolPath, filePath, "-r", "-com-path", `${parentDir}/`],
-        { encoding: "utf-8" },
-      ).execute();
-
-      if (command.code !== 0) {
-        console.error("Repack Folder failed:", command.stderr);
-        toast.error(`Repack Folder failed: ${command.stderr}`);
-      } else {
-        toast.success("Repack Folder completed successfully");
-      }
+      await invoke("repack_fhm2d", {
+        structureJsonPath: structurePath,
+        outputPath,
+        atomicWrite: true,
+      });
+      toast.success("Repack Folder completed successfully");
     } catch (error) {
       console.error("Error during repack folder:", error);
-      toast.error("Error during Repack Folder");
+      toast.error(`Repack Folder failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsFolderRepacking(false);
     }
