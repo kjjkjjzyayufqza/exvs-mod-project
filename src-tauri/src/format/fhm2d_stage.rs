@@ -8,8 +8,9 @@
 //! remaining files are renamed to fixed names by JSON array order.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
 use crate::fhm2d_memory_preview;
@@ -1251,7 +1252,8 @@ pub fn extract_stage_fhm2d_to_folder_impl(
 
     let (total_files, total_bytes) = write_virtual_tree_to_disk(&tree, &extraction.files, &dest)?;
 
-    write_stage_structure_json(&dest, &extraction)?;
+    let disk_path_map = build_file_index_disk_path_map(&tree);
+    write_stage_structure_json(&dest, &extraction, &disk_path_map)?;
 
     Ok(StageExtractResult {
         output_dir: dest.to_string_lossy().replace('\\', "/"),
@@ -1261,9 +1263,36 @@ pub fn extract_stage_fhm2d_to_folder_impl(
     })
 }
 
+fn build_file_index_disk_path_map(tree: &StageVirtualTreeFolder) -> HashMap<i32, String> {
+    let mut map = HashMap::new();
+    fn recurse(node: &StageVirtualTreeFolder, prefix: &str, map: &mut HashMap<i32, String>) {
+        let current = if prefix.is_empty() {
+            node.name.clone()
+        } else {
+            format!("{}/{}", prefix, node.name)
+        };
+        for vf in &node.files {
+            let path = format!("{}/{}", current, vf.file_name);
+            map.insert(vf.file_index, path);
+        }
+        for child in &node.children {
+            recurse(child, &current, map);
+        }
+    }
+    for child in &tree.children {
+        recurse(child, "", &mut map);
+    }
+    for vf in &tree.files {
+        let path = format!("{}/{}", tree.name, vf.file_name);
+        map.insert(vf.file_index, path);
+    }
+    map
+}
+
 fn write_stage_structure_json(
     dest: &Path,
     extraction: &crate::format::fhm2d::InMemoryFhm2dExtraction,
+    disk_path_map: &HashMap<i32, String>,
 ) -> Result<(), String> {
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
@@ -1300,8 +1329,11 @@ fn write_stage_structure_json(
         .iter()
         .enumerate()
         .map(|(i, f)| {
-            let base_name = f
-                .file_url
+            let disk_url = disk_path_map
+                .get(&f.file_index)
+                .map(|p| format!(".\\{}\\{}", dest_name, p.replace('/', "\\")))
+                .unwrap_or_else(|| f.file_url.clone());
+            let base_name = disk_url
                 .replace('\\', "/")
                 .split('/')
                 .last()
@@ -1315,7 +1347,7 @@ fn write_stage_structure_json(
                 index: i,
                 file_type: f.file_type.clone(),
                 file_index: f.file_index,
-                file_url: f.file_url.clone(),
+                file_url: disk_url,
                 file_base_name: base_name_no_ext,
             }
         })
@@ -2259,6 +2291,435 @@ fn build_model_bundle_from_virtual_folder(
     })
 }
 
+// ── Texture Redistribution (shared textures/ → per-model numbered subdirs) ─
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RedistributeResult {
+    pub models_processed: usize,
+    pub textures_copied: usize,
+    pub textures_folder_removed: bool,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreSharedResult {
+    pub textures_collected: usize,
+    pub subdirs_removed: usize,
+    pub warnings: Vec<String>,
+}
+
+// ── Structure JSON path helper ────────────────────────────────────────────
+
+fn find_structure_json_path(stage_root: &Path) -> Option<PathBuf> {
+    let folder_name = stage_root.file_name()?.to_str()?;
+    let parent = stage_root.parent()?;
+    let candidate = parent.join(format!("{folder_name}_structure.json"));
+    if candidate.is_file() {
+        Some(candidate)
+    } else {
+        let hex = format!("0x{}", folder_name.to_uppercase());
+        let alt = parent.join(format!("{hex}_structure.json"));
+        if alt.is_file() { Some(alt) } else { None }
+    }
+}
+
+/// Batch-replace `fileUrl` values in an existing `_structure.json`.
+/// `url_map` maps `old_relative_suffix` → `new_relative_suffix` (backslash-separated).
+fn patch_structure_json_urls(
+    structure_path: &Path,
+    url_map: &HashMap<String, String>,
+) -> Result<(), String> {
+    if url_map.is_empty() {
+        return Ok(());
+    }
+    let content = fs::read_to_string(structure_path)
+        .map_err(|e| format!("Failed to read structure JSON for patching: {e}"))?;
+    let mut doc: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse structure JSON for patching: {e}"))?;
+
+    if let Some(arr) = doc.get_mut("SubFileData").and_then(|v| v.as_array_mut()) {
+        for entry in arr.iter_mut() {
+            if let Some(url_val) = entry.get_mut("fileUrl") {
+                if let Some(url_str) = url_val.as_str() {
+                    let normalized = url_str.replace('/', "\\");
+                    if let Some(new_url) = url_map.get(&normalized) {
+                        *url_val = serde_json::Value::String(new_url.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    let json = serde_json::to_string_pretty(&doc)
+        .map_err(|e| format!("Failed to serialize patched structure JSON: {e}"))?;
+    fs::write(structure_path, json)
+        .map_err(|e| format!("Failed to write patched structure JSON: {e}"))?;
+    Ok(())
+}
+
+/// Redistribute nutexb files from a shared `textures/` folder back into
+/// per-numatb numbered subdirectories under each model's SSBH folder.
+pub fn redistribute_stage_textures(stage_root: &str) -> Result<RedistributeResult, String> {
+    let root = Path::new(stage_root);
+    let textures_dir = root.join(STAGE_TEXTURES_NAME);
+    if !textures_dir.is_dir() {
+        return Ok(RedistributeResult {
+            models_processed: 0,
+            textures_copied: 0,
+            textures_folder_removed: false,
+            warnings: vec!["No textures/ folder found, skipping redistribution".into()],
+        });
+    }
+
+    let available_textures = index_nutexb_folder(&textures_dir)?;
+    if available_textures.is_empty() {
+        return Ok(RedistributeResult {
+            models_processed: 0,
+            textures_copied: 0,
+            textures_folder_removed: false,
+            warnings: vec!["textures/ folder is empty, skipping redistribution".into()],
+        });
+    }
+
+    let mut warnings = Vec::new();
+    let mut models_processed = 0usize;
+    let mut textures_copied = 0usize;
+    let mut url_remap: HashMap<String, String> = HashMap::new();
+
+    let folder_name = root.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("stage");
+
+    let ssbh_folders = find_ssbh_folders(root, &mut warnings)?;
+    for ssbh_folder in &ssbh_folders {
+        let numatb_refs = parse_numatb_texture_refs(ssbh_folder, &mut warnings);
+        if numatb_refs.is_empty() {
+            continue;
+        }
+        models_processed += 1;
+
+        for (subdir_index, refs) in numatb_refs.iter().enumerate() {
+            let subdir = ssbh_folder.join(subdir_index.to_string());
+            fs::create_dir_all(&subdir)
+                .map_err(|e| format!("Failed to create texture subdir {}: {e}", subdir.display()))?;
+
+            for ref_name in refs {
+                let ref_lower = ref_name.to_ascii_lowercase();
+                if let Some(src_path) = available_textures.get(&ref_lower) {
+                    let fname = src_path.file_name().unwrap();
+                    let dest_path = subdir.join(fname);
+                    if !dest_path.exists() {
+                        fs::copy(src_path, &dest_path).map_err(|e| {
+                            format!("Failed to copy {} → {}: {e}",
+                                src_path.display(), dest_path.display())
+                        })?;
+                        textures_copied += 1;
+                    }
+                    if let (Ok(old_rel), Ok(new_rel)) = (
+                        src_path.strip_prefix(root),
+                        dest_path.strip_prefix(root),
+                    ) {
+                        let old_url = format!(".\\{}\\{}", folder_name, old_rel.to_string_lossy().replace('/', "\\"));
+                        let new_url = format!(".\\{}\\{}", folder_name, new_rel.to_string_lossy().replace('/', "\\"));
+                        url_remap.insert(old_url, new_url);
+                    }
+                } else {
+                    warnings.push(format!(
+                        "Texture '{}' referenced by numatb in {} not found in textures/",
+                        ref_name, ssbh_folder.display()
+                    ));
+                }
+            }
+        }
+    }
+
+    let textures_folder_removed = if textures_copied > 0 {
+        fs::remove_dir_all(&textures_dir).map_err(|e| {
+            format!("Failed to remove textures/ after redistribution: {e}")
+        })?;
+        true
+    } else {
+        false
+    };
+
+    if !url_remap.is_empty() {
+        if let Some(sj_path) = find_structure_json_path(root) {
+            if let Err(e) = patch_structure_json_urls(&sj_path, &url_remap) {
+                warnings.push(format!("Failed to patch structure JSON after redistribution: {e}"));
+            }
+        }
+    }
+
+    Ok(RedistributeResult {
+        models_processed,
+        textures_copied,
+        textures_folder_removed,
+        warnings,
+    })
+}
+
+/// Reverse operation: collect nutexb files from per-model numbered subdirs
+/// back into a shared `textures/` folder, deduplicating by filename.
+pub fn restore_shared_textures(stage_root: &str) -> Result<RestoreSharedResult, String> {
+    let root = Path::new(stage_root);
+    let textures_dir = root.join(STAGE_TEXTURES_NAME);
+    fs::create_dir_all(&textures_dir)
+        .map_err(|e| format!("Failed to create textures/ folder: {e}"))?;
+
+    let folder_name = root.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("stage");
+
+    let mut warnings = Vec::new();
+    let mut collected = 0usize;
+    let mut subdirs_removed = 0usize;
+    let mut seen_names: HashSet<String> = HashSet::new();
+    let mut url_remap: HashMap<String, String> = HashMap::new();
+
+    let ssbh_folders = find_ssbh_folders(root, &mut warnings)?;
+    let mut all_texture_subdirs: Vec<PathBuf> = Vec::new();
+
+    for ssbh_folder in &ssbh_folders {
+        let entries = fs::read_dir(ssbh_folder)
+            .map_err(|e| format!("Failed to read {}: {e}", ssbh_folder.display()))?;
+        for entry in entries.filter_map(|e| e.ok()) {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) { continue; }
+            if !name.chars().all(|c| c.is_ascii_digit()) { continue; }
+
+            let subdir_path = entry.path();
+            let has_only_nutexb = dir_contains_only_nutexb(&subdir_path);
+            if !has_only_nutexb { continue; }
+
+            for nutexb_entry in fs::read_dir(&subdir_path).into_iter().flatten().filter_map(|e| e.ok()) {
+                let fname = nutexb_entry.file_name().to_string_lossy().to_string();
+                if fname.to_ascii_lowercase().ends_with(".nutexb") && !nutexb_entry.file_type().map(|t| t.is_dir()).unwrap_or(true) {
+                    let lower = fname.to_ascii_lowercase();
+                    let src = nutexb_entry.path();
+                    let dest = textures_dir.join(&fname);
+                    if seen_names.insert(lower) {
+                        fs::copy(&src, &dest).map_err(|e| {
+                            format!("Failed to copy {} → {}: {e}",
+                                src.display(), dest.display())
+                        })?;
+                        collected += 1;
+                    }
+                    if let (Ok(old_rel), Ok(new_rel)) = (
+                        src.strip_prefix(root),
+                        dest.strip_prefix(root),
+                    ) {
+                        let old_url = format!(".\\{}\\{}", folder_name, old_rel.to_string_lossy().replace('/', "\\"));
+                        let new_url = format!(".\\{}\\{}", folder_name, new_rel.to_string_lossy().replace('/', "\\"));
+                        url_remap.insert(old_url, new_url);
+                    }
+                }
+            }
+            all_texture_subdirs.push(subdir_path);
+        }
+    }
+
+    for subdir in &all_texture_subdirs {
+        if subdir.is_dir() {
+            fs::remove_dir_all(subdir).map_err(|e| {
+                format!("Failed to remove texture subdir {}: {e}", subdir.display())
+            })?;
+            subdirs_removed += 1;
+        }
+    }
+
+    if !url_remap.is_empty() {
+        if let Some(sj_path) = find_structure_json_path(root) {
+            if let Err(e) = patch_structure_json_urls(&sj_path, &url_remap) {
+                warnings.push(format!("Failed to patch structure JSON after restore: {e}"));
+            }
+        }
+    }
+
+    Ok(RestoreSharedResult {
+        textures_collected: collected,
+        subdirs_removed,
+        warnings,
+    })
+}
+
+fn index_nutexb_folder(textures_dir: &Path) -> Result<BTreeMap<String, PathBuf>, String> {
+    let mut map = BTreeMap::new();
+    let entries = fs::read_dir(textures_dir)
+        .map_err(|e| format!("Failed to read textures dir: {e}"))?;
+    for entry in entries.filter_map(|e| e.ok()) {
+        let fname = entry.file_name().to_string_lossy().to_string();
+        if fname.to_ascii_lowercase().ends_with(".nutexb")
+            && !entry.file_type().map(|t| t.is_dir()).unwrap_or(true)
+        {
+            map.insert(fname.to_ascii_lowercase(), entry.path());
+        }
+    }
+    Ok(map)
+}
+
+/// Find all directories that contain `.numatb` files — these are SSBH folders.
+/// Skips `info/`, `textures/`, and hidden directories.
+fn find_ssbh_folders(root: &Path, warnings: &mut Vec<String>) -> Result<Vec<PathBuf>, String> {
+    let skip_names: HashSet<&str> = [STAGE_INFO_NAME, STAGE_TEXTURES_NAME].into_iter().collect();
+    let mut result = Vec::new();
+    find_ssbh_folders_recurse(root, root, &skip_names, &mut result, warnings, 0)?;
+    Ok(result)
+}
+
+fn find_ssbh_folders_recurse(
+    dir: &Path,
+    root: &Path,
+    skip_names: &HashSet<&str>,
+    result: &mut Vec<PathBuf>,
+    warnings: &mut Vec<String>,
+    depth: usize,
+) -> Result<(), String> {
+    if depth > 8 { return Ok(()); }
+
+    let entries = match fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(e) => {
+            warnings.push(format!("Cannot read {}: {e}", dir.display()));
+            return Ok(());
+        }
+    };
+
+    let mut has_numatb = false;
+    let mut subdirs = Vec::new();
+
+    for entry in entries.filter_map(|e| e.ok()) {
+        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+        let name = entry.file_name().to_string_lossy().to_string();
+
+        if is_dir {
+            if dir == root && skip_names.contains(name.as_str()) { continue; }
+            if name.starts_with('.') || name.starts_with('_') { continue; }
+            subdirs.push(entry.path());
+        } else if name.to_ascii_lowercase().ends_with(".numatb") {
+            has_numatb = true;
+        }
+    }
+
+    if has_numatb {
+        result.push(dir.to_path_buf());
+    }
+
+    for subdir in subdirs {
+        find_ssbh_folders_recurse(&subdir, root, skip_names, result, warnings, depth + 1)?;
+    }
+
+    Ok(())
+}
+
+/// Parse all `.numatb` files in a directory, sorted by filename.
+/// Returns a Vec of texture reference lists, one per numatb file.
+fn parse_numatb_texture_refs(ssbh_folder: &Path, warnings: &mut Vec<String>) -> Vec<Vec<String>> {
+    let mut numatb_files: Vec<(String, PathBuf)> = Vec::new();
+
+    if let Ok(entries) = fs::read_dir(ssbh_folder) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.to_ascii_lowercase().ends_with(".numatb")
+                && !entry.file_type().map(|t| t.is_dir()).unwrap_or(true)
+            {
+                numatb_files.push((name.clone(), entry.path()));
+            }
+        }
+    }
+
+    numatb_files.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let mut all_refs = Vec::new();
+    for (name, path) in &numatb_files {
+        match fs::read(path) {
+            Ok(data) => {
+                let mut cursor = Cursor::new(&data);
+                match ssbh_data::prelude::MatlData::read(&mut cursor) {
+                    Ok(matl) => {
+                        let refs = extract_nutexb_names_from_matl(&matl);
+                        all_refs.push(refs);
+                    }
+                    Err(e) => {
+                        warnings.push(format!("Failed to parse numatb '{}': {e}", name));
+                        all_refs.push(Vec::new());
+                    }
+                }
+            }
+            Err(e) => {
+                warnings.push(format!("Failed to read numatb '{}': {e}", name));
+                all_refs.push(Vec::new());
+            }
+        }
+    }
+    all_refs
+}
+
+/// Extract deduplicated texture filenames (with .nutexb extension) from a MatlData.
+fn extract_nutexb_names_from_matl(matl: &ssbh_data::prelude::MatlData) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for entry in &matl.entries {
+        for tex in &entry.textures {
+            let raw = tex.data.trim();
+            if raw.is_empty() { continue; }
+            let base = raw
+                .replace('\\', "/")
+                .split('/')
+                .last()
+                .unwrap_or(raw)
+                .to_string();
+            let nutexb = if base.to_ascii_lowercase().ends_with(".nutexb") {
+                base
+            } else {
+                format!("{base}.nutexb")
+            };
+            if seen.insert(nutexb.to_ascii_lowercase()) {
+                out.push(nutexb);
+            }
+        }
+        for tex in &entry.textures2 {
+            let raw = tex.data.trim();
+            if raw.is_empty() { continue; }
+            let base = raw
+                .replace('\\', "/")
+                .split('/')
+                .last()
+                .unwrap_or(raw)
+                .to_string();
+            let nutexb = if base.to_ascii_lowercase().ends_with(".nutexb") {
+                base
+            } else {
+                format!("{base}.nutexb")
+            };
+            if seen.insert(nutexb.to_ascii_lowercase()) {
+                out.push(nutexb);
+            }
+        }
+    }
+    out
+}
+
+fn dir_contains_only_nutexb(dir: &Path) -> bool {
+    let entries = match fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return false,
+    };
+    let mut has_any = false;
+    for entry in entries.filter_map(|e| e.ok()) {
+        if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            return false;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !name.to_ascii_lowercase().ends_with(".nutexb") {
+            return false;
+        }
+        has_any = true;
+    }
+    has_any
+}
+
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -3024,5 +3485,459 @@ mod tests {
         let len = data.len();
         data[len - 8..len - 4].copy_from_slice(b"NOPE");
         assert!(parse_nutexb_internal_name(&data).is_none());
+    }
+
+    // ── Texture redistribution tests ──────────────────────────────────
+
+    #[test]
+    fn test_redistribute_no_textures_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stage = tmp.path().join("stage");
+        fs::create_dir_all(stage.join("base")).unwrap();
+        let result = redistribute_stage_textures(&stage.to_string_lossy()).unwrap();
+        assert_eq!(result.models_processed, 0);
+        assert_eq!(result.textures_copied, 0);
+        assert!(!result.textures_folder_removed);
+    }
+
+    #[test]
+    fn test_redistribute_and_restore_roundtrip() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let (_tmp, stage_copy) = copy_stage_to_temp("16F73C97");
+
+        let before_nutexb = count_nutexb_recursive(&stage_copy);
+        assert!(before_nutexb > 0, "stage should have nutexb files");
+
+        let ssbh_folders_before = find_ssbh_folders(&stage_copy, &mut Vec::new()).unwrap();
+        let mut orig_texture_subdirs: Vec<PathBuf> = Vec::new();
+        let mut orig_texture_files: HashMap<String, Vec<String>> = HashMap::new();
+        for ssbh in &ssbh_folders_before {
+            for entry in fs::read_dir(ssbh).unwrap().filter_map(|e| e.ok()) {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if entry.file_type().unwrap().is_dir() && name.chars().all(|c| c.is_ascii_digit()) {
+                    if dir_contains_only_nutexb(&entry.path()) {
+                        let mut files: Vec<String> = fs::read_dir(entry.path())
+                            .unwrap()
+                            .filter_map(|e| e.ok())
+                            .map(|e| e.file_name().to_string_lossy().to_string())
+                            .collect();
+                        files.sort();
+                        let key = format!("{}:{}", ssbh.strip_prefix(&stage_copy).unwrap().display(), name);
+                        orig_texture_files.insert(key, files);
+                        orig_texture_subdirs.push(entry.path());
+                    }
+                }
+            }
+        }
+        assert!(!orig_texture_subdirs.is_empty(), "should find original texture subdirs");
+        eprintln!("Original texture subdirs: {}", orig_texture_subdirs.len());
+        eprintln!("Original total nutexb: {before_nutexb}");
+
+        let collect_result = restore_shared_textures(&stage_copy.to_string_lossy()).unwrap();
+        eprintln!("Collected {} textures, removed {} subdirs", collect_result.textures_collected, collect_result.subdirs_removed);
+        assert!(collect_result.textures_collected > 0, "should collect textures");
+
+        let textures_dir = stage_copy.join("textures");
+        assert!(textures_dir.is_dir(), "textures/ folder should exist after restore");
+        let shared_count = fs::read_dir(&textures_dir).unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().to_ascii_lowercase().ends_with(".nutexb"))
+            .count();
+        assert!(shared_count > 0, "shared textures/ should have nutexb files");
+        eprintln!("Shared textures: {shared_count}");
+
+        let redist_result = redistribute_stage_textures(&stage_copy.to_string_lossy()).unwrap();
+        eprintln!("Redistribute: {} models, {} copies, removed={}",
+            redist_result.models_processed, redist_result.textures_copied,
+            redist_result.textures_folder_removed);
+        for w in &redist_result.warnings {
+            eprintln!("  WARN: {w}");
+        }
+        assert!(redist_result.models_processed > 0, "should process at least one model");
+        assert!(redist_result.textures_copied > 0, "should copy textures");
+        assert!(redist_result.textures_folder_removed, "textures/ folder should be removed");
+        assert!(!textures_dir.exists(), "textures/ folder should no longer exist");
+
+        let ssbh_folders_after = find_ssbh_folders(&stage_copy, &mut Vec::new()).unwrap();
+        for ssbh in &ssbh_folders_after {
+            for entry in fs::read_dir(ssbh).unwrap().filter_map(|e| e.ok()) {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if entry.file_type().unwrap().is_dir() && name.chars().all(|c| c.is_ascii_digit()) {
+                    if dir_contains_only_nutexb(&entry.path()) {
+                        let key = format!("{}:{}", ssbh.strip_prefix(&stage_copy).unwrap().display(), name);
+                        let mut files: Vec<String> = fs::read_dir(entry.path())
+                            .unwrap()
+                            .filter_map(|e| e.ok())
+                            .map(|e| e.file_name().to_string_lossy().to_string())
+                            .collect();
+                        files.sort();
+                        if let Some(orig) = orig_texture_files.get(&key) {
+                            assert_eq!(&files, orig,
+                                "Texture files in {key} should match original after redistribute");
+                        }
+                    }
+                }
+            }
+        }
+
+        let after_nutexb = count_nutexb_recursive(&stage_copy);
+        assert_eq!(after_nutexb, before_nutexb,
+            "total nutexb count should be same after redistribute (before={before_nutexb}, after={after_nutexb})");
+    }
+
+    #[test]
+    fn test_full_shared_texture_repack_roundtrip() {
+        if skip_if_test_data_missing() {
+            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
+            return;
+        }
+        let fhm2d_path = Path::new(TEST_DATA_ROOT).join("16F73C97.fhm2d");
+        if !fhm2d_path.exists() {
+            eprintln!("SKIP: 16F73C97.fhm2d not found");
+            return;
+        }
+
+        let tmp = tempfile::tempdir().unwrap();
+        let extract_dir = tmp.path().join("extract");
+        fs::create_dir_all(&extract_dir).unwrap();
+
+        let extract_result = extract_stage_fhm2d_to_folder_impl(
+            &fhm2d_path.to_string_lossy(),
+            &extract_dir.to_string_lossy(),
+        ).unwrap();
+        eprintln!("Extracted: {} files, {} bytes", extract_result.total_files, extract_result.total_bytes);
+
+        let stage_root = PathBuf::from(&extract_result.output_dir);
+        let original_file_count = extract_result.total_files;
+
+        let restore_result = restore_shared_textures(&stage_root.to_string_lossy()).unwrap();
+        eprintln!("Restored shared: {} textures, {} subdirs removed",
+            restore_result.textures_collected, restore_result.subdirs_removed);
+
+        let textures_dir = stage_root.join("textures");
+        assert!(textures_dir.is_dir(), "textures/ should exist after restore");
+
+        let redist_result = redistribute_stage_textures(&stage_root.to_string_lossy()).unwrap();
+        eprintln!("Redistributed: {} models, {} copies, warnings={}",
+            redist_result.models_processed, redist_result.textures_copied,
+            redist_result.warnings.len());
+        for w in &redist_result.warnings {
+            eprintln!("  WARN: {w}");
+        }
+        assert!(redist_result.textures_folder_removed, "textures/ should be removed");
+
+        let pack_files = collect_pack_files_recursive(&stage_root);
+        let structure_json = build_test_structure_json(&stage_root, &pack_files);
+        let structure_path = stage_root.parent().unwrap().join("pack_structure.json");
+        fs::write(&structure_path, &structure_json).unwrap();
+
+        let repack_output = tmp.path().join("repacked.fhm2d");
+        let repack_result = crate::format::fhm2d_pack::repack_fhm2d_from_structure(
+            &structure_path.to_string_lossy(),
+            &repack_output.to_string_lossy(),
+            false,
+            None,
+        ).unwrap();
+        eprintln!("Repacked: {} files, {} bytes", repack_result.total_files, repack_result.output_size);
+
+        let re_extract_dir = tmp.path().join("re_extract");
+        fs::create_dir_all(&re_extract_dir).unwrap();
+        let re_extract = extract_stage_fhm2d_to_folder_impl(
+            &repack_output.to_string_lossy(),
+            &re_extract_dir.to_string_lossy(),
+        ).unwrap();
+        eprintln!("Re-extracted: {} files, {} bytes", re_extract.total_files, re_extract.total_bytes);
+
+        assert_eq!(re_extract.total_files, original_file_count,
+            "re-extracted file count should match original (orig={original_file_count}, got={})",
+            re_extract.total_files);
+    }
+
+    fn count_nutexb_recursive(dir: &Path) -> usize {
+        let mut count = 0;
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                    count += count_nutexb_recursive(&entry.path());
+                } else {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if name.to_ascii_lowercase().ends_with(".nutexb") {
+                        count += 1;
+                    }
+                }
+            }
+        }
+        count
+    }
+
+    fn collect_pack_files_recursive(root: &Path) -> Vec<(String, String)> {
+        let mut files = Vec::new();
+        collect_recursive(root, root, &mut files);
+        files.sort_by(|a, b| a.0.cmp(&b.0));
+        files
+    }
+
+    fn collect_recursive(base: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if path.is_dir() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if name.starts_with('_') || name.starts_with('.') { continue; }
+                    collect_recursive(base, &path, out);
+                } else {
+                    let ext = path.extension()
+                        .map(|e| format!(".{}", e.to_string_lossy().to_ascii_lowercase()))
+                        .unwrap_or_default();
+                    if ext == ".json" { continue; }
+                    let rel = path.strip_prefix(base)
+                        .unwrap()
+                        .to_string_lossy()
+                        .replace('\\', "/");
+                    out.push((rel, ext));
+                }
+            }
+        }
+    }
+
+    fn build_test_structure_json(stage_root: &Path, files: &[(String, String)]) -> String {
+        let folder_name = stage_root.file_name().unwrap().to_string_lossy().to_string();
+
+        #[derive(serde::Serialize)]
+        struct SubFileData {
+            index: usize,
+            #[serde(rename = "fileType")]
+            file_type: String,
+            #[serde(rename = "fileIndex")]
+            file_index: usize,
+            #[serde(rename = "fileUrl")]
+            file_url: String,
+            #[serde(rename = "fileBaseName")]
+            file_base_name: String,
+        }
+
+        let sub_file_data: Vec<SubFileData> = files.iter().enumerate().map(|(i, (rel, ext))| {
+            let base_name = rel.split('/').last().unwrap_or(rel);
+            let base_no_ext = match base_name.rfind('.') {
+                Some(idx) if idx > 0 => base_name[..idx].to_string(),
+                _ => base_name.to_string(),
+            };
+            SubFileData {
+                index: i,
+                file_type: ext.clone(),
+                file_index: i,
+                file_url: format!("{folder_name}/{rel}"),
+                file_base_name: base_no_ext,
+            }
+        }).collect();
+
+        struct TreeNode {
+            folders: std::collections::BTreeMap<String, TreeNode>,
+            files: Vec<(String, usize)>,
+        }
+
+        fn insert(node: &mut TreeNode, parts: &[&str], file_index: usize) {
+            if parts.len() == 1 {
+                node.files.push((parts[0].to_string(), file_index));
+            } else {
+                let child = node.folders.entry(parts[0].to_string())
+                    .or_insert_with(|| TreeNode {
+                        folders: std::collections::BTreeMap::new(),
+                        files: Vec::new(),
+                    });
+                insert(child, &parts[1..], file_index);
+            }
+        }
+
+        let mut tree = TreeNode { folders: std::collections::BTreeMap::new(), files: Vec::new() };
+        for (i, (rel, _)) in files.iter().enumerate() {
+            let parts: Vec<&str> = rel.split('/').collect();
+            insert(&mut tree, &parts, i);
+        }
+
+        fn emit_structure(node: &TreeNode, out: &mut Vec<serde_json::Value>) {
+            let child_count = node.folders.len() + node.files.len();
+            out.push(serde_json::json!({
+                "type": "Folder",
+                "unk1": "00000000",
+                "folderCount": child_count,
+                "unk2": "00000000",
+                "unk2_1": 0,
+                "unk3": 0, "unk4": 0, "unk5": 0, "unk6": 0
+            }));
+            let mut sorted_files = node.files.clone();
+            sorted_files.sort_by(|a, b| a.0.cmp(&b.0));
+            for (name, fi) in &sorted_files {
+                out.push(serde_json::json!({
+                    "type": "Item",
+                    "unk1": "00000000",
+                    "fileIndex": fi,
+                    "unk2": "00000000",
+                    "unk2_1": 0,
+                    "unk3": 0, "unk4": 0,
+                    "originalFileIndex": fi,
+                    "Name": name
+                }));
+            }
+            for (_name, child) in &node.folders {
+                emit_structure(child, out);
+            }
+            out.push(serde_json::json!({"type": "EndMark", "endMarkCount": 1}));
+        }
+
+        let mut structure = Vec::new();
+        for (_name, child) in &tree.folders {
+            emit_structure(child, &mut structure);
+        }
+        let mut sorted_root_files = tree.files.clone();
+        sorted_root_files.sort_by(|a, b| a.0.cmp(&b.0));
+        for (name, fi) in &sorted_root_files {
+            structure.push(serde_json::json!({
+                "type": "Item",
+                "unk1": "00000000",
+                "fileIndex": fi,
+                "unk2": "00000000",
+                "unk2_1": 0,
+                "unk3": 0, "unk4": 0,
+                "originalFileIndex": fi,
+                "Name": name
+            }));
+        }
+
+        let output = serde_json::json!({
+            "Magic": -843925575i32,
+            "Fhm2dTotalCount": files.len(),
+            "UnkCount": 0,
+            "SubFileData": sub_file_data,
+            "SubFileStructure": structure,
+        });
+        serde_json::to_string_pretty(&output).unwrap()
+    }
+
+    #[test]
+    fn test_structure_json_uses_disk_paths_after_extract() {
+        if skip_if_test_data_missing() { return; }
+        let fhm2d_path = Path::new(TEST_DATA_ROOT).join("test.fhm2d");
+        if !fhm2d_path.exists() {
+            eprintln!("SKIP: test.fhm2d not found");
+            return;
+        }
+
+        let tmp = tempfile::tempdir().unwrap();
+        let extract_dir = tmp.path().join("extract");
+        fs::create_dir_all(&extract_dir).unwrap();
+
+        let result = extract_stage_fhm2d_to_folder_impl(
+            &fhm2d_path.to_string_lossy(),
+            &extract_dir.to_string_lossy(),
+        ).unwrap();
+
+        let stage_root = PathBuf::from(&result.output_dir);
+        let sj = find_structure_json_path(&stage_root)
+            .expect("structure JSON should exist after extraction");
+        let content = fs::read_to_string(&sj).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&content).unwrap();
+
+        let sub_file_data = doc["SubFileData"].as_array().unwrap();
+        for entry in sub_file_data {
+            let url = entry["fileUrl"].as_str().unwrap();
+            assert!(!url.ends_with(".nutexb") || !url.matches('\\').count().eq(&2),
+                "Structure fileUrl should not be flat numbered: {url}");
+            let relative = url.trim_start_matches(".\\");
+            let file_path = sj.parent().unwrap().join(relative.replace('\\', "/"));
+            assert!(file_path.exists(),
+                "File in structure JSON must exist on disk: {} (resolved: {})",
+                url, file_path.display());
+        }
+        eprintln!("All {} structure fileUrl entries point to actual files on disk", sub_file_data.len());
+
+        let unk_count = doc["UnkCount"].as_u64().unwrap_or(0);
+        eprintln!("UnkCount preserved from original FHM2D: {unk_count}");
+    }
+
+    #[test]
+    fn test_repack_with_original_structure_json_roundtrip() {
+        if skip_if_test_data_missing() { return; }
+        let fhm2d_path = Path::new(TEST_DATA_ROOT).join("test.fhm2d");
+        if !fhm2d_path.exists() {
+            eprintln!("SKIP: test.fhm2d not found");
+            return;
+        }
+        let original_bytes = fs::read(&fhm2d_path).unwrap();
+
+        let tmp = tempfile::tempdir().unwrap();
+        let extract_dir = tmp.path().join("extract");
+        fs::create_dir_all(&extract_dir).unwrap();
+
+        eprintln!("Step 1: Extract FHM2D");
+        let result = extract_stage_fhm2d_to_folder_impl(
+            &fhm2d_path.to_string_lossy(),
+            &extract_dir.to_string_lossy(),
+        ).unwrap();
+        let stage_root = PathBuf::from(&result.output_dir);
+        let original_file_count = result.total_files;
+        eprintln!("  Extracted {} files", original_file_count);
+
+        eprintln!("Step 2: Restore shared textures");
+        let restore = restore_shared_textures(&stage_root.to_string_lossy()).unwrap();
+        eprintln!("  Collected {} textures, removed {} subdirs",
+            restore.textures_collected, restore.subdirs_removed);
+
+        eprintln!("Step 3: Redistribute textures");
+        let redist = redistribute_stage_textures(&stage_root.to_string_lossy()).unwrap();
+        eprintln!("  {} models, {} copies", redist.models_processed, redist.textures_copied);
+        for w in &redist.warnings {
+            eprintln!("  WARN: {w}");
+        }
+
+        eprintln!("Step 4: Verify structure JSON URLs match disk");
+        let sj_path = find_structure_json_path(&stage_root)
+            .expect("structure JSON should exist");
+        let sj_content = fs::read_to_string(&sj_path).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&sj_content).unwrap();
+        let sub_file_data = doc["SubFileData"].as_array().unwrap();
+        for entry in sub_file_data {
+            let url = entry["fileUrl"].as_str().unwrap();
+            let relative = url.trim_start_matches(".\\");
+            let file_path = sj_path.parent().unwrap().join(relative.replace('\\', "/"));
+            assert!(file_path.exists(),
+                "After redist, file must exist: {} (resolved: {})",
+                url, file_path.display());
+        }
+        eprintln!("  All {} URLs valid", sub_file_data.len());
+
+        eprintln!("Step 5: Repack using original structure JSON");
+        let repack_output = tmp.path().join("repacked.fhm2d");
+        let repack_result = crate::format::fhm2d_pack::repack_fhm2d_from_structure(
+            &sj_path.to_string_lossy(),
+            &repack_output.to_string_lossy(),
+            false,
+            None,
+        ).unwrap();
+        eprintln!("  Repacked: {} files, {} bytes", repack_result.total_files, repack_result.output_size);
+
+        eprintln!("Step 6: Re-extract and verify file count");
+        let re_extract_dir = tmp.path().join("re_extract");
+        fs::create_dir_all(&re_extract_dir).unwrap();
+        let re_extract = extract_stage_fhm2d_to_folder_impl(
+            &repack_output.to_string_lossy(),
+            &re_extract_dir.to_string_lossy(),
+        ).unwrap();
+        eprintln!("  Re-extracted {} files", re_extract.total_files);
+        assert_eq!(re_extract.total_files, original_file_count,
+            "File count mismatch (expected {original_file_count}, got {})", re_extract.total_files);
+
+        eprintln!("Step 7: Verify original vs repacked binary similarity");
+        let repacked_bytes = fs::read(&repack_output).unwrap();
+        let size_diff = (original_bytes.len() as i64 - repacked_bytes.len() as i64).abs();
+        let size_pct = (size_diff as f64 / original_bytes.len() as f64) * 100.0;
+        eprintln!("  Original: {} bytes, Repacked: {} bytes (diff: {size_diff}, {size_pct:.1}%)",
+            original_bytes.len(), repacked_bytes.len());
+        assert!(size_pct < 5.0,
+            "Binary size difference too large: {size_pct:.1}%");
+        eprintln!("PASS: Full roundtrip with original SubFileStructure");
     }
 }

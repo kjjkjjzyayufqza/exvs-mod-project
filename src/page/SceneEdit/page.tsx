@@ -961,32 +961,75 @@ export default function SceneEdit() {
       if (!outputDir || typeof outputDir !== "string") return;
       rememberDialogSelection(DialogLastPathKey.sceneEditExtractFhm2dOutput, outputDir, "directory");
 
-      setIsLoading(true);
-      const result = await invoke<{
-        outputDir: string;
-        totalFiles: number;
-        totalBytes: number;
-        warnings: string[];
-      }>("extract_stage_fhm2d_to_folder", {
-        sourcePath,
-        outputDir,
-      });
+      const extractSteps: SaveStepInfo[] = [
+        { id: "extract", label: "Extract FHM2D binary", status: "running" },
+        { id: "textures", label: "Consolidate textures to shared folder", status: "pending" },
+        { id: "done", label: "Complete", status: "pending" },
+      ];
+      setSaveProgressState({ open: true, title: "Extract FHM2D", steps: extractSteps, canClose: false });
 
-      if (result.warnings.length > 0) {
-        toast.warning(
-          `Extracted with ${result.warnings.length} warning(s)`,
-          { description: result.warnings.slice(0, 3).join("\n") },
-        );
-      } else {
-        const sizeMb = (result.totalBytes / (1024 * 1024)).toFixed(1);
-        toast.success(`Extracted ${result.totalFiles} files (${sizeMb} MB)`, {
-          description: result.outputDir,
+      const unlisten = await listen<{ step: string; label: string; detail: string | null }>(
+        "extract-fhm2d-progress",
+        (event) => {
+          const { step, detail } = event.payload;
+          setSaveProgressState((prev) => {
+            const steps = prev.steps.map((s) => {
+              if (s.id === step) {
+                return { ...s, status: "running" as const, detail: detail ?? undefined };
+              }
+              return s;
+            });
+            const stepIdx = steps.findIndex((s) => s.id === step);
+            for (let i = 0; i < stepIdx; i++) {
+              if (steps[i].status === "running" || steps[i].status === "pending") {
+                steps[i] = { ...steps[i], status: "done" };
+              }
+            }
+            return { ...prev, steps };
+          });
+        },
+      );
+
+      try {
+        const result = await invoke<{
+          outputDir: string;
+          totalFiles: number;
+          totalBytes: number;
+          warnings: string[];
+        }>("extract_stage_fhm2d_to_folder", {
+          sourcePath,
+          outputDir,
         });
+
+        setSaveProgressState((prev) => ({
+          ...prev,
+          steps: prev.steps.map((s) => ({ ...s, status: "done" as const })),
+          canClose: true,
+        }));
+
+        if (result.warnings.length > 0) {
+          toast.warning(
+            `Extracted with ${result.warnings.length} warning(s)`,
+            { description: result.warnings.slice(0, 3).join("\n") },
+          );
+        } else {
+          const sizeMb = (result.totalBytes / (1024 * 1024)).toFixed(1);
+          toast.success(`Extracted ${result.totalFiles} files (${sizeMb} MB)`, {
+            description: result.outputDir,
+          });
+        }
+      } finally {
+        unlisten();
       }
     } catch (err: any) {
+      setSaveProgressState((prev) => ({
+        ...prev,
+        steps: prev.steps.map((s) =>
+          s.status === "running" ? { ...s, status: "error" as const, error: String(err) } : s,
+        ),
+        canClose: true,
+      }));
       toast.error("FHM2D extraction failed", { description: String(err) });
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 

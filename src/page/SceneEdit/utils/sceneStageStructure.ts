@@ -79,7 +79,7 @@ export function resolveStagePackStructureTarget(stageRoot: string): StagePackStr
   const hashHex = `0x${hashBody}`;
   const parentParts = parts.slice(0, packIndex);
   const packRoot = joinPath(...parts.slice(0, packIndex + 1));
-  const structurePath = joinPath(...parentParts, `${hashHex}_structure.json`);
+  const structurePath = joinPath(...parentParts, `${packFolderName}_structure.json`);
 
   return {
     packRoot,

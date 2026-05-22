@@ -6,7 +6,7 @@
 
 **Architecture:** Incremental dirty-tracking per object (added/modified/deleted) drives a save pipeline that writes only changed assets. A shared `textures/` folder at stage root holds all nutexb files (deduplicated by filename). Structure JSON is always fully rebuilt from disk state after writes. Save as FHM2D wraps the folder save and invokes compression.js for packing.
 
-**Tech Stack:** TypeScript (frontend UI + save orchestration), Rust/Tauri (nutexb conversion, SSBH generation, HKT), Three.js (scene state), Zustand (dirty tracking store), compression.js (fhm2d packing)
+**Tech Stack:** TypeScript (frontend UI + save orchestration), Rust/Tauri (nutexb conversion, SSBH generation, HKT, FHM2D packing via `fhm2d_pack.rs`, texture redistribution via `fhm2d_stage.rs`), Three.js (scene state), Zustand (dirty tracking store)
 
 ---
 
@@ -49,7 +49,7 @@ This plan implements the full save pipeline with two distinct UI buttons.
 | placement.csv | base has no entry; sky has `VDK_TYPE=SKY`; EFFECT entries preserved as-is |
 | New texture import | User selects DDS format; source is PNG |
 | HKT | Auto-generated on DAE import + can be replaced; existing objects support replace only |
-| FHM2D texture redistribution | Deferred (assumes compression.js will be updated separately) |
+| FHM2D texture redistribution | **Implemented** — Rust `redistribute_stage_textures` + `restore_shared_textures` (parses numatb refs, copies nutexb to model subdirs before pack, restores shared layout after) |
 
 ---
 

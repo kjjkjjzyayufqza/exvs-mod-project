@@ -120,6 +120,8 @@ pub fn run() {
             stage_commands::load_stage_from_preview,
             stage_commands::extract_stage_fhm2d_to_folder,
             stage_commands::repack_fhm2d,
+            stage_commands::redistribute_stage_textures,
+            stage_commands::restore_shared_textures,
             scene_session_commands::scene_session_create,
             scene_session_commands::scene_session_destroy,
             scene_session_commands::scene_session_is_dirty,

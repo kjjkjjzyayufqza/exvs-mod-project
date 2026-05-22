@@ -63,7 +63,7 @@ async function collectStagePackFiles(root: string, relativeDir = ""): Promise<St
   return collected.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 }
 
-async function writeStagePackStructureJson(
+export async function writeStagePackStructureJson(
   root: string,
 ): Promise<{ structurePath: string; packRoot: string }> {
   const target = resolveStagePackStructureTarget(root);
@@ -152,6 +152,7 @@ export type SaveFolderParams = {
   sceneSessionId: string | null;
   onProgress: (step: SaveStepInfo) => void;
   onDeleteConfirm: (preview: DeleteConfirmation) => Promise<boolean>;
+  skipStructureRebuild?: boolean;
 };
 
 export type SaveFolderResult = {
@@ -172,6 +173,14 @@ function emitStep(
   detail?: string,
   error?: string,
 ): void {
+  const tag = "[SaveFolder]";
+  if (status === "running") {
+    console.log(`${tag} [${id}] ${label}`);
+  } else if (status === "done") {
+    console.log(`${tag} [${id}] done${detail ? ` — ${detail}` : ""}`);
+  } else if (status === "error") {
+    console.error(`${tag} [${id}] ERROR: ${error ?? "unknown"}`);
+  }
   onProgress({ id, label, status, detail, error });
 }
 
@@ -349,13 +358,15 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
     emitStep(onProgress, "csv", "Writing CSV files...", "error", undefined, err instanceof Error ? err.message : String(err));
   }
 
-  // Phase 8: Rebuild structure JSON
-  emitStep(onProgress, "structure", "Rebuilding structure JSON...", "running");
-  try {
-    await writeStagePackStructureJson(stageRoot);
-    emitStep(onProgress, "structure", "Rebuilding structure JSON...", "done");
-  } catch (err) {
-    emitStep(onProgress, "structure", "Rebuilding structure JSON...", "error", undefined, err instanceof Error ? err.message : String(err));
+  // Phase 8: Rebuild structure JSON (skip when saving as FHM2D — Rust manages it)
+  if (!params.skipStructureRebuild) {
+    emitStep(onProgress, "structure", "Rebuilding structure JSON...", "running");
+    try {
+      await writeStagePackStructureJson(stageRoot);
+      emitStep(onProgress, "structure", "Rebuilding structure JSON...", "done");
+    } catch (err) {
+      emitStep(onProgress, "structure", "Rebuilding structure JSON...", "error", undefined, err instanceof Error ? err.message : String(err));
+    }
   }
 
   // Phase 9: Reload

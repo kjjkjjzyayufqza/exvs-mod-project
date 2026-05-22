@@ -140,7 +140,7 @@ export function MapToolbar({
             <FileArchive className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Import .fhm2d</TooltipContent>
+        <TooltipContent side="bottom">Import .fhm2d (load into editor)</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -156,7 +156,7 @@ export function MapToolbar({
             <PackageOpen className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Extract .fhm2d to folder</TooltipContent>
+        <TooltipContent side="bottom">Extract .fhm2d to editable folder</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -172,7 +172,7 @@ export function MapToolbar({
             <FolderOpen className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Open stage folder</TooltipContent>
+        <TooltipContent side="bottom">Open extracted stage folder</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -194,7 +194,7 @@ export function MapToolbar({
             )}
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Save as Folder</TooltipContent>
+        <TooltipContent side="bottom">Save changes to folder</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -210,7 +210,7 @@ export function MapToolbar({
             <HardDriveDownload className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Save as FHM2D</TooltipContent>
+        <TooltipContent side="bottom">Repack and save as .fhm2d</TooltipContent>
       </Tooltip>
 
       <Separator orientation="vertical" className="h-4 mx-0.5" />

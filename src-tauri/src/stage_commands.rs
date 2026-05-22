@@ -48,8 +48,27 @@ fn emit_progress(app: &AppHandle, step: &str, label: &str, progress: u8, elapsed
     });
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExtractStepProgress {
+    step: String,
+    label: String,
+    detail: Option<String>,
+}
+
+fn emit_extract_step(app: &AppHandle, step: &str, label: &str, detail: Option<&str>) {
+    eprintln!("[extract_fhm2d] {step}: {label}{}",
+        detail.map(|d| format!(" ({d})")).unwrap_or_default());
+    let _ = app.emit("extract-fhm2d-progress", ExtractStepProgress {
+        step: step.to_string(),
+        label: label.to_string(),
+        detail: detail.map(|d| d.to_string()),
+    });
+}
+
 #[tauri::command]
 pub async fn extract_stage_fhm2d_to_folder(
+    app: AppHandle,
     source_path: String,
     output_dir: String,
 ) -> Result<fhm2d_stage::StageExtractResult, String> {
@@ -61,8 +80,53 @@ pub async fn extract_stage_fhm2d_to_folder(
     if out.is_empty() {
         return Err("output_dir cannot be empty.".to_string());
     }
+    let app_clone = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        fhm2d_stage::extract_stage_fhm2d_to_folder_impl(&src, &out)
+        emit_extract_step(&app_clone, "extract", "Reading and extracting FHM2D...", None);
+        let t0 = Instant::now();
+        let mut result = fhm2d_stage::extract_stage_fhm2d_to_folder_impl(&src, &out)?;
+        let extract_ms = t0.elapsed().as_millis();
+        emit_extract_step(
+            &app_clone,
+            "extract",
+            "Reading and extracting FHM2D...",
+            Some(&format!("{} files, {extract_ms}ms", result.total_files)),
+        );
+
+        emit_extract_step(&app_clone, "textures", "Consolidating textures to shared folder...", None);
+        let t1 = Instant::now();
+        match fhm2d_stage::restore_shared_textures(&result.output_dir) {
+            Ok(restore) => {
+                let restore_ms = t1.elapsed().as_millis();
+                if restore.textures_collected > 0 {
+                    emit_extract_step(
+                        &app_clone,
+                        "textures",
+                        "Consolidating textures to shared folder...",
+                        Some(&format!(
+                            "{} textures, {} subdirs cleaned, {restore_ms}ms",
+                            restore.textures_collected, restore.subdirs_removed
+                        )),
+                    );
+                } else {
+                    emit_extract_step(
+                        &app_clone,
+                        "textures",
+                        "Consolidating textures to shared folder...",
+                        Some("No textures to consolidate"),
+                    );
+                }
+                result.warnings.extend(restore.warnings);
+            }
+            Err(e) => {
+                let msg = format!("Texture consolidation failed: {e}");
+                eprintln!("[extract_fhm2d] WARN: {msg}");
+                result.warnings.push(msg);
+            }
+        }
+
+        emit_extract_step(&app_clone, "done", "Extraction complete", None);
+        Ok(result)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -83,11 +147,21 @@ pub async fn stage_apply_rename(
 pub async fn load_stage_bundle(
     stage_root: String,
 ) -> Result<fhm2d_stage::StageBundle, String> {
-    tauri::async_runtime::spawn_blocking(move || {
+    eprintln!("[load_bundle] Loading: {stage_root}");
+    let t = Instant::now();
+    let result = tauri::async_runtime::spawn_blocking(move || {
         fhm2d_stage::load_stage_bundle_impl(&stage_root)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+    match &result {
+        Ok(b) => eprintln!(
+            "[load_bundle] Done in {}ms — {} sub-models",
+            t.elapsed().as_millis(), b.sub_models.len()
+        ),
+        Err(e) => eprintln!("[load_bundle] Failed in {}ms — {e}", t.elapsed().as_millis()),
+    }
+    result
 }
 
 #[tauri::command]
@@ -197,7 +271,9 @@ pub async fn repack_fhm2d(
     let atomic = atomic_write.unwrap_or(true);
     let app_clone = app.clone();
 
-    tauri::async_runtime::spawn_blocking(move || {
+    eprintln!("[repack_fhm2d] Starting — structure: {structure_json_path}, output: {output_path}");
+    let t = Instant::now();
+    let result = tauri::async_runtime::spawn_blocking(move || {
         crate::format::fhm2d_pack::repack_fhm2d_from_structure(
             &structure_json_path,
             &output_path,
@@ -208,7 +284,57 @@ pub async fn repack_fhm2d(
         )
     })
     .await
-    .map_err(|e| format!("Task join error: {e}"))?
+    .map_err(|e| format!("Task join error: {e}"))?;
+    match &result {
+        Ok(r) => eprintln!(
+            "[repack_fhm2d] Done in {}ms — {} bytes",
+            t.elapsed().as_millis(), r.output_size
+        ),
+        Err(e) => eprintln!("[repack_fhm2d] Failed in {}ms — {e}", t.elapsed().as_millis()),
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn redistribute_stage_textures(
+    stage_root: String,
+) -> Result<fhm2d_stage::RedistributeResult, String> {
+    eprintln!("[redistribute] Starting for: {stage_root}");
+    let t = Instant::now();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        fhm2d_stage::redistribute_stage_textures(&stage_root)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?;
+    match &result {
+        Ok(r) => eprintln!(
+            "[redistribute] Done in {}ms — {} models, {} textures copied, {} warnings",
+            t.elapsed().as_millis(), r.models_processed, r.textures_copied, r.warnings.len()
+        ),
+        Err(e) => eprintln!("[redistribute] Failed in {}ms — {e}", t.elapsed().as_millis()),
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn restore_shared_textures(
+    stage_root: String,
+) -> Result<fhm2d_stage::RestoreSharedResult, String> {
+    eprintln!("[restore_textures] Starting for: {stage_root}");
+    let t = Instant::now();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        fhm2d_stage::restore_shared_textures(&stage_root)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?;
+    match &result {
+        Ok(r) => eprintln!(
+            "[restore_textures] Done in {}ms — {} textures collected, {} subdirs removed, {} warnings",
+            t.elapsed().as_millis(), r.textures_collected, r.subdirs_removed, r.warnings.len()
+        ),
+        Err(e) => eprintln!("[restore_textures] Failed in {}ms — {e}", t.elapsed().as_millis()),
+    }
+    result
 }
 
 #[tauri::command]

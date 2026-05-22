@@ -97,9 +97,9 @@ export function SaveProgressDialog({
   const activeStep = steps.find((s) => s.status === "running");
 
   const displayTitle = allDone
-    ? "Save Complete"
+    ? `${title} — Complete`
     : hasError
-      ? "Save Failed"
+      ? `${title} — Failed`
       : title;
 
   return (
@@ -128,7 +128,7 @@ export function SaveProgressDialog({
             disabled={!canClose}
             onClick={onClose}
           >
-            {canClose ? "Close" : "Saving..."}
+            {canClose ? "Close" : "Processing..."}
           </Button>
         </DialogFooter>
       </DialogContent>
