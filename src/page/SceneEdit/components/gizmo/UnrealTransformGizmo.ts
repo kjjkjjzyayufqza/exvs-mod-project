@@ -4,6 +4,7 @@ import {
   type GizmoSpace,
   type AxisId,
   PICKER_LAYER,
+  GIZMO_RENDER_ORDER,
 } from "./gizmoConstants";
 import {
   createGizmoMaterials,
@@ -79,13 +80,16 @@ export class UnrealTransformGizmo extends THREE.Object3D {
     this._domElement = domElement;
     this._materials = createGizmoMaterials();
 
+    this.renderOrder = GIZMO_RENDER_ORDER;
+    this.frustumCulled = false;
+
     this._pickerRaycaster.layers.set(PICKER_LAYER);
 
     this.add(this._gizmoGroup);
     this.add(this._pickerGroup);
 
-    this._gizmoGroup.renderOrder = 1000;
-    this._pickerGroup.renderOrder = 1001;
+    this._gizmoGroup.renderOrder = GIZMO_RENDER_ORDER;
+    this._pickerGroup.renderOrder = GIZMO_RENDER_ORDER + 1;
 
     this._buildMode();
 
@@ -218,6 +222,10 @@ export class UnrealTransformGizmo extends THREE.Object3D {
 
     this._currentGeometry = geo;
     for (const el of geo.elements) {
+      el.visual.traverse((child) => {
+        child.renderOrder = GIZMO_RENDER_ORDER;
+      });
+      el.picker.renderOrder = GIZMO_RENDER_ORDER + 1;
       this._gizmoGroup.add(el.visual);
       this._pickerGroup.add(el.picker);
     }

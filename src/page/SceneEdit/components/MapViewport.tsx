@@ -1,4 +1,4 @@
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import {
   GizmoHelper,
   GizmoViewport,
@@ -87,7 +87,11 @@ import {
   isTexturePathEnabledForObject,
   type ObjectTextureLoadState,
 } from "../utils/sceneTextureInventory";
-import { getSelectionWireframeOverlayProps } from "../utils/sceneSelectionOverlay";
+import { appendSelectionOutlineShell, createSelectionOutlineMaterial, SCENE_SELECTION_RENDER_ORDER } from "../utils/sceneSelectionOverlay";
+import {
+  createPreviewSelectionUniforms,
+  previewSelectionOnBeforeCompile,
+} from "@/page/TestEditor/components/ssbh-model-preview/previewSelectionMaterial";
 import { DEFAULT_SCENE_GIZMO_SIZE } from "../utils/sceneEditorSettings";
 import { HavokCollisionOverlay } from "./havok/HavokCollisionOverlay";
 import type { HavokMeshData } from "@/utils/havokXmlParser";
@@ -1034,32 +1038,15 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
     () => placementScaleForViewport(transform.scaleX, transform.scaleY, transform.scaleZ),
     [transform.scaleX, transform.scaleY, transform.scaleZ],
   );
-  const selectionOverlay = useMemo(() => getSelectionWireframeOverlayProps(isSelected), [isSelected]);
   const sceneClone = useMemo(() => {
     const display = buildImportedDaeDisplayRoot(object.scene);
     display.name = `${object.id}_mesh`;
-    if (selectionOverlay.visible) {
-      const material = new THREE.MeshBasicMaterial({
-        color: selectionOverlay.color,
-        wireframe: selectionOverlay.wireframe,
-        transparent: selectionOverlay.transparent,
-        opacity: selectionOverlay.opacity,
-        depthTest: selectionOverlay.depthTest,
-        depthWrite: false,
-        toneMapped: false,
-      });
-      const overlay = display.clone(true);
-      overlay.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          child.material = material;
-          child.renderOrder = 10_000;
-        }
-      });
-      display.add(overlay);
+    if (isSelected) {
+      appendSelectionOutlineShell(display, display);
     }
     display.updateMatrixWorld(true);
     return display;
-  }, [object.id, object.scene, selectionOverlay]);
+  }, [object.id, object.scene, isSelected]);
 
   const assignWrapperRef = useCallback((node: THREE.Group | null) => {
     wrapperRef.current = node;
@@ -1419,15 +1406,28 @@ const TexturedMesh = memo(function TexturedMesh({
   const exvsActive = previewRenderStyle === "anime";
   const exvsUniforms = useMemo(() => createAnimeExvsUniforms(), [draw.key]);
   const onBeforeCompileExvs = useMemo(() => animeExvsOnBeforeCompile(exvsUniforms), [exvsUniforms]);
-  const onBeforeCompileMaterial = exvsActive ? onBeforeCompileExvs : undefined;
-  const selectionOverlay = useMemo(
-    () => getSelectionWireframeOverlayProps(isSelected),
-    [isSelected],
+  const selectionUniforms = useMemo(() => createPreviewSelectionUniforms(), [draw.key]);
+  const onBeforeCompileSelection = useMemo(
+    () => previewSelectionOnBeforeCompile(selectionUniforms),
+    [selectionUniforms],
+  );
+  const onBeforeCompileCombined = useMemo(
+    () => (shader: { fragmentShader: string; uniforms: Record<string, { value: unknown }> }) => {
+      if (exvsActive) {
+        onBeforeCompileExvs(shader);
+      }
+      onBeforeCompileSelection(shader);
+    },
+    [exvsActive, onBeforeCompileExvs, onBeforeCompileSelection],
   );
   useEffect(() => {
     if (!exvsActive) return;
     exvsUniforms.uAnimeKeyDir.value.copy(animeKeyLightDir);
   }, [exvsActive, exvsUniforms, animeKeyLightDir]);
+  useFrame((state) => {
+    selectionUniforms.uSelectionEnabled.value = isSelected ? 1 : 0;
+    selectionUniforms.uSelectionTime.value = state.clock.elapsedTime;
+  });
 
   const shaderFamily = binding.shaderFamily;
   const hasMap = !!textures.map;
@@ -1525,22 +1525,9 @@ const TexturedMesh = memo(function TexturedMesh({
           transparent={transparent}
           roughness={roughnessForStyle}
           metalness={effectiveMetalnessValue}
-          onBeforeCompile={onBeforeCompileMaterial}
+          onBeforeCompile={onBeforeCompileCombined}
         />
       </mesh>
-      {selectionOverlay.visible ? (
-        <mesh geometry={draw.geometry} renderOrder={10_000}>
-          <meshBasicMaterial
-            color={selectionOverlay.color}
-            wireframe={selectionOverlay.wireframe}
-            transparent={selectionOverlay.transparent}
-            opacity={selectionOverlay.opacity}
-            depthTest={selectionOverlay.depthTest}
-            depthWrite={false}
-            toneMapped={false}
-          />
-        </mesh>
-      ) : null}
     </Fragment>
   );
 });
@@ -2251,6 +2238,7 @@ const EffectMarker = memo(function EffectMarker({
   const invalidate = useThree((s) => s.invalidate);
   const regress = useThree((s) => s.performance.regress);
   const nodeId = `__effect__${globalIdx}`;
+  const selectionOutlineMaterial = useMemo(() => createSelectionOutlineMaterial(), []);
 
   useRegisterSelectableNode(nodeId, gizmoTarget, selectableNodesRef);
 
@@ -2313,11 +2301,16 @@ const EffectMarker = memo(function EffectMarker({
       >
         <Sphere args={[2, 8, 8]} onClick={handleClick}>
           <meshStandardMaterial
-            color={isSelected ? "#ffaa22" : "#ff6644"}
-            emissive={isSelected ? "#ffaa22" : "#ff4422"}
-            emissiveIntensity={isSelected ? 0.8 : 0.5}
+            color={isSelected ? "#ffb840" : "#ff6644"}
+            emissive={isSelected ? "#ffb840" : "#ff4422"}
+            emissiveIntensity={isSelected ? 0.55 : 0.5}
           />
         </Sphere>
+        {isSelected ? (
+          <Sphere args={[2.08, 12, 12]} renderOrder={SCENE_SELECTION_RENDER_ORDER}>
+            <primitive object={selectionOutlineMaterial} attach="material" />
+          </Sphere>
+        ) : null}
         <Html center distanceFactor={200} style={{ pointerEvents: "none" }}>
           <div className="text-[9px] text-orange-400 font-mono whitespace-nowrap bg-black/60 px-1 rounded">
             {entry.vdkType}#{globalIdx}

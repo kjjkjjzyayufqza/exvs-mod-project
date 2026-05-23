@@ -60,5 +60,8 @@ export const PICKER_PLANE_SIZE = 30;
 
 export const INACTIVE_OPACITY = 0.3;
 
+/** Always render above scene geometry and selection outline */
+export const GIZMO_RENDER_ORDER = 50_000;
+
 export const GIZMO_LAYER = 1;
 export const PICKER_LAYER = 2;

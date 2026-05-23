@@ -6,7 +6,7 @@ import {
   useMemo,
   type RefObject,
 } from "react";
-import { useThree } from "@react-three/fiber";
+import { useThree, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { UnrealTransformGizmo } from "./gizmo/UnrealTransformGizmo";
 
@@ -114,6 +114,10 @@ export const SceneTransformControls = forwardRef<UnrealTransformGizmo, SceneTran
 
     useEffect(() => () => gizmo.dispose(), [gizmo]);
 
-    return <primitive object={gizmo} />;
+    useFrame(() => {
+      gizmo.updateMatrixWorld(true);
+    });
+
+    return <primitive object={gizmo} renderOrder={gizmo.renderOrder} />;
   },
 );

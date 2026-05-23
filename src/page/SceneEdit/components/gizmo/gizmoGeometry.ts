@@ -18,6 +18,7 @@ import {
   PICKER_RING_TUBE,
   PICKER_PLANE_SIZE,
   PICKER_LAYER,
+  GIZMO_RENDER_ORDER,
   type AxisId,
 } from "./gizmoConstants";
 import type { GizmoMaterials } from "./gizmoMaterials";
@@ -347,7 +348,7 @@ export function createRotationArcMesh(
   const quat = new THREE.Quaternion().setFromUnitVectors(up, axis.clone().normalize());
   mesh.quaternion.copy(quat);
 
-  mesh.renderOrder = 999;
+  mesh.renderOrder = GIZMO_RENDER_ORDER;
   return mesh;
 }
 
