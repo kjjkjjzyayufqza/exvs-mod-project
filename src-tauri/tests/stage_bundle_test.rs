@@ -1694,3 +1694,69 @@ fn bench_stage211_texture_decode() {
     eprintln!("[BENCH-TEX]  END");
     eprintln!("{}", "=".repeat(80));
 }
+
+
+#[test]
+#[ignore]
+fn debug_sky_texture_resolve() {
+    use ssbh_data::matl_data::MatlData;
+
+    let path = r"E:\XB\解包\com\test\0xBBC60B47\0\0";
+    if !Path::new(path).is_dir() { return; }
+    let root = Path::new(path);
+    let mut warnings = Vec::new();
+    let bundle = load_model_in_subfolder_pub(root, "sky", &mut warnings).expect("sky model should load");
+
+    eprintln!("\n[SKY] texture_refs ({}):", bundle.texture_refs.len());
+    for r in &bundle.texture_refs {
+        eprintln!("  ref: {r}");
+    }
+    eprintln!("\n[SKY] texture_resolve ({}):", bundle.texture_resolve.len());
+    for tr in &bundle.texture_resolve {
+        let status = if tr.nutexb_path.is_some() { "OK" } else { "MISSING" };
+        eprintln!("  [{status}] ref={} -> {:?}", tr.reference, tr.nutexb_path);
+    }
+
+    // Parse both matl files independently to compare material labels
+    let sky_dir = Path::new(path).join("sky").join("0");
+    let nust = sky_dir.join("211stage211_sky__nust__.numatb");
+    let maya = sky_dir.join("211stage211_sky__maya__.numatb");
+
+    if nust.exists() {
+        match MatlData::from_file(&nust) {
+            Ok(data) => {
+                eprintln!("\n[SKY] __nust__.numatb entries ({}):", data.entries.len());
+                for e in &data.entries {
+                    let tex_params: Vec<String> = e.textures.iter()
+                        .map(|t| format!("{:?}={}", t.param_id, t.data))
+                        .collect();
+                    eprintln!("  label={} textures=[{}]", e.material_label, tex_params.join(", "));
+                }
+            }
+            Err(e) => eprintln!("[SKY] __nust__ parse error: {e}"),
+        }
+    }
+    if maya.exists() {
+        match MatlData::from_file(&maya) {
+            Ok(data) => {
+                eprintln!("\n[SKY] __maya__.numatb entries ({}):", data.entries.len());
+                for e in &data.entries {
+                    eprintln!("  label={}", e.material_label);
+                }
+            }
+            Err(e) => eprintln!("[SKY] __maya__ parse error: {e}"),
+        }
+    }
+
+    // Show modl entries (mesh → material mapping)
+    let modl: serde_json::Value = serde_json::from_value(bundle.modl.clone()).unwrap();
+    if let Some(entries) = modl.get("entries").and_then(|e| e.as_array()) {
+        eprintln!("\n[SKY] modl entries ({}):", entries.len());
+        for e in entries {
+            let mesh = e.get("mesh_object_name").and_then(|v| v.as_str()).unwrap_or("?");
+            let sub = e.get("mesh_object_subindex").and_then(|v| v.as_u64()).unwrap_or(0);
+            let mat = e.get("material_label").and_then(|v| v.as_str()).unwrap_or("?");
+            eprintln!("  mesh={mesh}[{sub}] -> material={mat}");
+        }
+    }
+}

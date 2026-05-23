@@ -993,6 +993,7 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
     // Prefer game runtime material files: when `__nust__.numatb` exists, ignore non-`__nust__` files.
     // However, if `__nust__` yields 0 texture refs, fall back to all files (the `__maya__` variant
     // often carries the development-time texture bindings that are missing from a minimal `__nust__`).
+    // When `__nust__` has some textures but individual entries are empty, fill from `__maya__`.
     let (preferred_matl_paths, ignored_non_nust_paths) = select_preferred_matl_paths(&matl_paths);
     if !ignored_non_nust_paths.is_empty() {
         let nust_matl = load_and_merge_matl_paths(&preferred_matl_paths, &mut warnings);
@@ -1001,8 +1002,23 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
             .map(|m| !collect_texture_refs(m).is_empty())
             .unwrap_or(false);
         if nust_has_textures {
+            let maya_matl = load_and_merge_matl_paths(&ignored_non_nust_paths, &mut warnings);
+            matl_combined = match (nust_matl, maya_matl) {
+                (Some(mut nust), Some(maya)) => {
+                    for entry in &mut nust.entries {
+                        if entry.textures.is_empty() {
+                            if let Some(maya_entry) = maya.entries.iter()
+                                .find(|e| e.material_label == entry.material_label)
+                            {
+                                entry.textures = maya_entry.textures.clone();
+                            }
+                        }
+                    }
+                    Some(nust)
+                }
+                (some, None) | (None, some) => some,
+            };
             matl_paths = preferred_matl_paths;
-            matl_combined = nust_matl;
         } else {
             matl_combined = load_and_merge_matl_paths(&matl_paths, &mut warnings);
         }
