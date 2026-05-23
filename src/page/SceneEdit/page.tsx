@@ -145,23 +145,27 @@ import { useSceneDirtyStore } from "./store/sceneDirtyStore";
 import { executeSaveFolderPipeline } from "./utils/sceneSaveFolderPipeline";
 import { executeSaveFhm2dPipeline } from "./utils/sceneSaveFhm2dPipeline";
 import { SaveProgressDialog, type SaveStepInfo } from "./components/SaveProgressDialog";
+import { SaveConfirmDialog } from "./components/SaveConfirmDialog";
 import { DeleteConfirmDialog } from "./components/DeleteConfirmDialog";
 import type { DeleteConfirmation } from "./utils/sceneDeleteConfirm";
+import {
+  buildSaveChangePreview,
+  buildSaveResultSummary,
+  type SaveChangePreview,
+} from "./utils/sceneSaveConfirm";
 import { DaeImportConfigModal } from "./components/dae-import/DaeImportConfigModal";
 import type { DaeImportEntry, HavokInstallInfo } from "./components/dae-import/daeImportTypes";
 import { createDefaultDaeImportConfig, sanitizeBaseFilename } from "./components/dae-import/daeImportDefaults";
+import { SceneAssetConfigPanel } from "./components/SceneAssetConfigPanel";
+import { useSceneAssetStore } from "./store/sceneAssetStore";
 import type { HavokMeshData } from "@/utils/havokXmlParser";
 import { parseHavokXML } from "@/utils/havokXmlParser";
 import { CollisionListPanel } from "./components/havok/CollisionListPanel";
 import {
   sceneSessionCreate,
   sceneSessionDestroy,
-  sceneImportDae,
-  sceneConfigureImport,
-  sceneExecuteImport,
   sceneSaveAsFolder,
   sceneRepackInPlace,
-  mapDaeImportConfigToBackend,
   sceneOpenFolder,
   sceneListHavokData,
   stageLoadSkeleton,
@@ -292,7 +296,13 @@ export default function SceneEdit() {
     title: string;
     steps: SaveStepInfo[];
     canClose: boolean;
+    completionSummary?: string[];
   }>({ open: false, title: "", steps: [], canClose: false });
+  const [saveConfirmState, setSaveConfirmState] = useState<{
+    open: boolean;
+    preview: SaveChangePreview | null;
+    resolve: ((confirmed: boolean) => void) | null;
+  }>({ open: false, preview: null, resolve: null });
   const [deleteConfirmState, setDeleteConfirmState] = useState<{
     open: boolean;
     preview: DeleteConfirmation | null;
@@ -690,6 +700,10 @@ export default function SceneEdit() {
         }));
         setImportedDaeObjects((prev) => [...prev, ...created]);
         created.forEach((c) => useSceneDirtyStore.getState().markObjectAdded(c.name));
+        // Clone asset config with parent inheritance
+        originals.forEach((orig, i) => {
+          useSceneAssetStore.getState().cloneAsset(orig.id, created[i].id);
+        });
         useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         useSceneEditorStore.getState().recordCommand({
           type: "duplicate-dae",
@@ -1226,6 +1240,24 @@ export default function SceneEdit() {
     [],
   );
 
+  const promptSaveConfirm = useCallback(
+    (preview: SaveChangePreview) =>
+      new Promise<boolean>((resolve) => {
+        setSaveConfirmState({ open: true, preview, resolve });
+      }),
+    [],
+  );
+
+  const handleSaveConfirmAccept = useCallback(() => {
+    saveConfirmState.resolve?.(true);
+    setSaveConfirmState({ open: false, preview: null, resolve: null });
+  }, [saveConfirmState.resolve]);
+
+  const handleSaveConfirmCancel = useCallback(() => {
+    saveConfirmState.resolve?.(false);
+    setSaveConfirmState({ open: false, preview: null, resolve: null });
+  }, [saveConfirmState.resolve]);
+
   const handleDeleteConfirmAccept = useCallback(() => {
     deleteConfirmState.resolve?.(true);
     setDeleteConfirmState({ open: false, preview: null, resolve: null });
@@ -1238,12 +1270,26 @@ export default function SceneEdit() {
 
   const handleSaveFolder = useCallback(async () => {
     if (!stageRoot) return;
-    setSaveProgressState({ open: true, title: "Save as Folder", steps: [], canClose: false });
+
+    const dirtyStore = useSceneDirtyStore.getState();
+    const changePreview = buildSaveChangePreview(dirtyStore);
+    if (changePreview.hasChanges) {
+      const confirmed = await promptSaveConfirm(changePreview);
+      if (!confirmed) return;
+    }
+
+    setSaveProgressState({
+      open: true,
+      title: "Save as Folder",
+      steps: [],
+      canClose: false,
+      completionSummary: undefined,
+    });
 
     try {
       const result = await executeSaveFolderPipeline({
         stageRoot,
-        dirtyStore: useSceneDirtyStore.getState(),
+        dirtyStore,
         graphicParams,
         placementHeader,
         placementEntries,
@@ -1263,7 +1309,8 @@ export default function SceneEdit() {
       }
 
       useSceneDirtyStore.getState().reset();
-      setSaveProgressState((prev) => ({ ...prev, canClose: true }));
+      const completionSummary = buildSaveResultSummary(changePreview, result);
+      setSaveProgressState((prev) => ({ ...prev, canClose: true, completionSummary }));
 
       if (result.failedCount > 0 && result.convertedCount > 0) {
         toast.warning(
@@ -1284,21 +1331,35 @@ export default function SceneEdit() {
       setSaveProgressState((prev) => ({ ...prev, canClose: true }));
       toast.error("Save failed", { description: String(err) });
     }
-  }, [stageRoot, graphicParams, placementHeader, placementEntries, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, promptDeleteConfirm]);
+  }, [stageRoot, graphicParams, placementHeader, placementEntries, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, promptDeleteConfirm, promptSaveConfirm]);
 
   const handleSaveFhm2d = useCallback(async () => {
     if (!stageRoot) return;
+
+    const dirtyStore = useSceneDirtyStore.getState();
+    const changePreview = buildSaveChangePreview(dirtyStore);
+    if (changePreview.hasChanges) {
+      const confirmed = await promptSaveConfirm(changePreview);
+      if (!confirmed) return;
+    }
+
     const outputPath = await save({
       filters: [{ name: "FHM2D File", extensions: ["fhm2d"] }],
     });
     if (!outputPath) return;
 
-    setSaveProgressState({ open: true, title: "Save as FHM2D", steps: [], canClose: false });
+    setSaveProgressState({
+      open: true,
+      title: "Save as FHM2D",
+      steps: [],
+      canClose: false,
+      completionSummary: undefined,
+    });
 
     try {
       const result = await executeSaveFhm2dPipeline({
         stageRoot,
-        dirtyStore: useSceneDirtyStore.getState(),
+        dirtyStore,
         graphicParams,
         placementHeader,
         placementEntries,
@@ -1319,14 +1380,18 @@ export default function SceneEdit() {
       }
 
       useSceneDirtyStore.getState().reset();
-      setSaveProgressState((prev) => ({ ...prev, canClose: true }));
+      const completionSummary = [
+        ...buildSaveResultSummary(changePreview, result),
+        `Packed FHM2D (${(result.fhm2dSizeBytes / (1024 * 1024)).toFixed(1)} MB)`,
+      ];
+      setSaveProgressState((prev) => ({ ...prev, canClose: true, completionSummary }));
 
       toast.success(`FHM2D saved (${(result.fhm2dSizeBytes / (1024 * 1024)).toFixed(1)} MB)`);
     } catch (err: any) {
       setSaveProgressState((prev) => ({ ...prev, canClose: true }));
       toast.error("FHM2D save failed", { description: String(err) });
     }
-  }, [stageRoot, graphicParams, placementHeader, placementEntries, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, promptDeleteConfirm]);
+  }, [stageRoot, graphicParams, placementHeader, placementEntries, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, promptDeleteConfirm, promptSaveConfirm]);
 
   const handleGraphicParamValueChange = useCallback(
     (index: number, value: string) => {
@@ -2231,6 +2296,13 @@ export default function SceneEdit() {
       });
       setImportedDaeObjects((prev) => [...prev, ...created]);
       created.forEach((c) => useSceneDirtyStore.getState().markObjectAdded(c.name));
+      // Register each imported object as a scene asset
+      created.forEach((c) => {
+        useSceneAssetStore.getState().registerAsset(c.id, {
+          sourceType: "imported-dae",
+          sourcePath: c.sourcePath,
+        });
+      });
       useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       handleSelectNode(created[0]?.id ?? null);
       useSceneEditorStore.getState().recordCommand({
@@ -2305,43 +2377,57 @@ export default function SceneEdit() {
     }
   }, []);
 
-  const processSessionImports = useCallback(
-    async (sid: string, entries: DaeImportEntry[]) => {
+  const processDirectSsbhConvert = useCallback(
+    async (entries: DaeImportEntry[]) => {
+      const { ssbhConvertDaeToSsbh } = await import(
+        "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService"
+      );
+      const { useDaeSsbhSessionStore } = await import(
+        "@/page/TestEditor/components/ssbh-model-preview/store/daeSsbhSessionStore"
+      );
+      const sessionState = useDaeSsbhSessionStore.getState();
+
       let successCount = 0;
       let failCount = 0;
       for (const entry of entries) {
         try {
-          const daeBytes = await invoke<number[]>("read_file", { path: entry.filePath });
-          const importId = await sceneImportDae(sid, daeBytes, entry.fileName.replace(/\.dae$/i, ""));
-          await sceneConfigureImport(sid, importId, mapDaeImportConfigToBackend(entry.config));
-
-          if (entry.config.convertToSsbh || entry.config.generateHkt) {
-            const result = await sceneExecuteImport(sid, importId);
-            if (result.ssbhGenerated) successCount++;
-            if (result.hktGenerated) successCount++;
-          }
-
-          if (entry.config.loadToScene) {
-            const loaded = await loadDAEFromPath(entry.filePath);
-            const created: ImportedDaeObject = {
-              id: `dae_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-              name: loaded.fileName.replace(/\.dae$/i, ""),
-              sourcePath: loaded.filePath,
-              scene: loaded.scene,
-              transform: { ...DEFAULT_TRANSFORM },
-            };
-            setImportedDaeObjects((prev) => [...prev, created]);
-            useSceneDirtyStore.getState().markObjectAdded(created.name);
-            useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
-          }
+          const params = {
+            daePath: entry.filePath,
+            outputDir: sessionState.outputDir!,
+            baseFilename: sessionState.outputBaseName.trim(),
+            scaleFactor: Number(sessionState.scaleFactorText),
+            flipUv: sessionState.flipUv,
+            upAxis: sessionState.upAxis,
+            includeGeometryNames: sessionState.includeGeometryNames,
+            writeLog: sessionState.writeLog,
+            writeNumdlb: sessionState.writeNumdlb,
+            writeNumshb: sessionState.writeNumshb,
+            writeNusktb: sessionState.writeNusktb,
+            writeNumatb: sessionState.writeNumatb,
+            writeMayaProfile: sessionState.writeMayaProfile,
+            numdlbEntries: sessionState.numdlbEntries,
+            mayaFile: sessionState.writeNumatb ? sessionState.mayaFile : null,
+            nustFile: sessionState.writeNumatb ? sessionState.nustFile : null,
+          };
+          const result = await ssbhConvertDaeToSsbh(params);
+          const lines = [
+            result.files.numdlbPath ? `numdlb: ${result.files.numdlbPath}` : null,
+            result.files.numshbPath ? `numshb: ${result.files.numshbPath}` : null,
+            result.files.nusktbPath ? `nusktb: ${result.files.nusktbPath}` : null,
+            result.files.numatbPath ? `numatb: ${result.files.numatbPath}` : null,
+            result.files.mayaNumatbPath ? `maya numatb: ${result.files.mayaNumatbPath}` : null,
+          ].filter(Boolean);
+          toast.success(`Converted ${entry.fileName} to SSBH`, { description: lines.join("\n") });
           successCount++;
         } catch (err) {
           failCount++;
-          toast.error(`Import failed for ${entry.fileName}: ${err instanceof Error ? err.message : String(err)}`);
+          toast.error(`Convert failed for ${entry.fileName}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
-      if (successCount > 0) {
-        toast.success(`Session import: ${successCount} succeeded, ${failCount} failed`);
+      if (successCount > 0 && failCount === 0) {
+        toast.success(`All ${successCount} file(s) converted successfully`);
+      } else if (failCount > 0) {
+        toast.warning(`Converted ${successCount}, failed ${failCount}`);
       }
     },
     [],
@@ -2447,6 +2533,8 @@ export default function SceneEdit() {
       if (daeIds.length > 0) {
         const deleted = importedDaeObjects.filter((obj) => daeIds.includes(obj.id));
         setImportedDaeObjects((prev) => prev.filter((obj) => !daeIds.includes(obj.id)));
+        // Remove asset configs
+        daeIds.forEach((id) => useSceneAssetStore.getState().removeAsset(id));
         useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         handleClearSelection();
         useSceneEditorStore.getState().recordCommand({
@@ -2882,19 +2970,25 @@ export default function SceneEdit() {
                   <ResetIconButton onClick={handleResetSession} label="Reset all changes" disabled={!initialSnapshotRef.current} />
                 </span>
               </div>
-              <Tabs defaultValue="inspect" className="flex min-h-0 flex-1 flex-col">
-                <TabsList className="mx-2 mt-2 grid h-8 grid-cols-3 rounded-md">
+              <Tabs defaultValue="inspect" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <TabsList className="mx-2 mt-2 grid h-8 shrink-0 grid-cols-3 rounded-md">
                   <TabsTrigger value="inspect" className="text-[10px]">Inspect</TabsTrigger>
                   <TabsTrigger value="graphic" className="text-[10px]">Graphic</TabsTrigger>
                   <TabsTrigger value="placement" className="text-[10px]">Placement</TabsTrigger>
                 </TabsList>
                 <ScrollArea className="min-h-0 flex-1">
-                  <TabsContent value="inspect" className="m-0 pb-3">
+                  <div className="min-w-0 w-full overflow-x-hidden">
+                  <TabsContent value="inspect" className="m-0 mt-0 pb-3 focus-visible:outline-none">
                     {selectedTransform && (
                       <MayaSection
-                        title={`Transform${selectedNode ? ` — ${selectedNode.label}` : ""}`}
+                        title="Transform"
                         actions={<ResetIconButton onClick={handleResetTransform} label="Reset transform" disabled={!initialSnapshotRef.current} />}
                       >
+                        {selectedNode && (
+                          <p className="mb-1.5 truncate text-[10px] text-muted-foreground" title={selectedNode.label}>
+                            {selectedNode.label}
+                          </p>
+                        )}
                         <StagePropertyEditor transform={selectedTransform} onTransformChange={handleTransformChange} />
                       </MayaSection>
                     )}
@@ -2914,6 +3008,12 @@ export default function SceneEdit() {
                     {selectedPlacementIdx !== null && placementEntries[selectedPlacementIdx] && (
                       <MayaSection title="Object Config" defaultOpen>
                         <PlacementConfigPanel entry={placementEntries[selectedPlacementIdx]} placementHeader={placementHeader} />
+                      </MayaSection>
+                    )}
+
+                    {selectedNodeId && (
+                      <MayaSection title="Asset Config" defaultOpen>
+                        <SceneAssetConfigPanel assetId={selectedNodeId} />
                       </MayaSection>
                     )}
 
@@ -3001,6 +3101,7 @@ export default function SceneEdit() {
                       />
                     </MayaSection>
                   </TabsContent>
+                  </div>
                 </ScrollArea>
               </Tabs>
             </div>
@@ -3034,7 +3135,15 @@ export default function SceneEdit() {
           title={saveProgressState.title}
           steps={saveProgressState.steps}
           canClose={saveProgressState.canClose}
+          completionSummary={saveProgressState.completionSummary}
           onClose={() => setSaveProgressState({ open: false, title: "", steps: [], canClose: false })}
+        />
+        <SaveConfirmDialog
+          open={saveConfirmState.open}
+          preview={saveConfirmState.preview}
+          stageRoot={stageRoot}
+          onConfirm={handleSaveConfirmAccept}
+          onCancel={handleSaveConfirmCancel}
         />
         <DeleteConfirmDialog
           open={deleteConfirmState.open}
@@ -3098,10 +3207,8 @@ export default function SceneEdit() {
               if (!sceneSessionId) {
                 const sid = await sceneSessionCreate({ type: "new" });
                 setSceneSessionId(sid);
-                await processSessionImports(sid, entriesToProcess);
-              } else {
-                await processSessionImports(sceneSessionId, entriesToProcess);
               }
+              await processDirectSsbhConvert(entriesToProcess);
             }}
             onCancel={() => {
               setShowDaeImportModal(false);

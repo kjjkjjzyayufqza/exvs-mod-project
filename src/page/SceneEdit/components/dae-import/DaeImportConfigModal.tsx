@@ -1,16 +1,17 @@
+import { useMemo } from "react";
 import { FileCode2, X } from "lucide-react";
 import { useDraggableModal } from "@/hooks/useDraggableModal";
 import { DaeImportAnalysisPanel } from "./DaeImportAnalysisPanel";
-import { DaeImportSsbhConfigPanel } from "./DaeImportSsbhConfigPanel";
+import { DaeImportSsbhFullPanel } from "./DaeImportSsbhFullPanel";
 import { DaeImportHktConfigPanel } from "./DaeImportHktConfigPanel";
-import { TextureFormatSelect, type DdsFormat } from "../TextureFormatSelect";
 import type {
   DaeImportEntry,
   DaeImportConfig,
   HavokInstallInfo,
-  SsbhImportConfig,
 } from "./daeImportTypes";
 import { isHktGenerationAvailable } from "./daeImportDefaults";
+import { useDaeSsbhSessionStore } from "@/page/TestEditor/components/ssbh-model-preview/store/daeSsbhSessionStore";
+import { collectMissingTexturePathsForExportSession } from "@/page/TestEditor/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
 import {
   UnrealDetailsSection,
   UnrealModeToggle,
@@ -20,7 +21,6 @@ import {
   unrealPanelClass,
   unrealPrimaryButtonClass,
   unrealSecondaryButtonClass,
-  unrealSelectTriggerClass,
   unrealTitleBarClass,
 } from "./daeImportUnrealUi";
 
@@ -66,22 +66,39 @@ export function DaeImportConfigModal({
     });
   };
 
-  const updateSsbhConfig = (next: SsbhImportConfig) => {
-    updateConfig({ ssbhConfig: next });
-  };
-
   const hktAvailable = isHktGenerationAvailable(havokInfo);
+
+  // For SSBH mode, check readiness from the daeSsbhSessionStore
+  const sessionState = useDaeSsbhSessionStore();
+  const ssbhReady = useMemo(() => {
+    if (primaryMode !== "ssbh") return true;
+    if (!sessionState.outputDir?.trim() || !sessionState.outputBaseName.trim()) return false;
+    if (sessionState.includeGeometryNames.length === 0) return false;
+    if (!sessionState.numdlbEntries.every((r) => r.materialLabel.trim())) return false;
+    const missing = collectMissingTexturePathsForExportSession(
+      sessionState.mayaFile, sessionState.nustFile, {
+        writeNumatb: sessionState.writeNumatb,
+        writeMayaProfile: sessionState.writeMayaProfile,
+        materialLabels: sessionState.numdlbEntries.map((r) => r.materialLabel),
+      });
+    return missing.length === 0;
+  }, [primaryMode, sessionState]);
 
   const canImport =
     !entry.analyzing &&
-    (primaryMode === "preview" || (entry.analysis?.canConvert ?? false));
+    (primaryMode === "preview"
+      ? true
+      : (entry.analysis?.canConvert ?? false) && ssbhReady);
+
+  // Wider width for SSBH mode to accommodate editors
+  const modalWidth = primaryMode === "ssbh" ? 680 : 420;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-50">
       <div
         ref={nodeRef}
         className="pointer-events-auto absolute"
-        style={{ width: 420 }}
+        style={{ width: modalWidth }}
       >
         <div className={unrealPanelClass}>
           <div {...handleProps} className={unrealTitleBarClass}>
@@ -107,7 +124,7 @@ export function DaeImportConfigModal({
             </button>
           </div>
 
-          <div className="max-h-[70vh] overflow-y-auto">
+          <div className="max-h-[80vh] overflow-y-auto">
             <DaeImportAnalysisPanel
               analysis={entry.analysis}
               analyzing={entry.analyzing}
@@ -130,39 +147,31 @@ export function DaeImportConfigModal({
                 />
               </UnrealPropertyRow>
 
-              <UnrealPropertyBool
-                label="Generate HKT Collision"
-                hint={
-                  hktAvailable
-                    ? "Uses Havok tools with automatic profile selection"
-                    : "Havok tools are not available on this machine"
-                }
-                checked={config.generateHkt}
-                disabled={!hktAvailable}
-                onCheckedChange={(checked) => updateConfig({ generateHkt: checked })}
-              />
-
-              {primaryMode === "ssbh" && (
-                <UnrealPropertyRow label="Texture Format" hint="DDS format for imported PNG textures">
-                  <div className="flex justify-end">
-                    <TextureFormatSelect
-                      value={config.defaultDdsFormat as DdsFormat}
-                      onChange={(fmt) => updateConfig({ defaultDdsFormat: fmt })}
-                      triggerClassName={`${unrealSelectTriggerClass} w-full max-w-[180px]`}
-                    />
-                  </div>
-                </UnrealPropertyRow>
+              {primaryMode === "preview" && (
+                <UnrealPropertyBool
+                  label="Generate HKT Collision"
+                  hint={
+                    hktAvailable
+                      ? "Uses Havok tools with automatic profile selection"
+                      : "Havok tools are not available on this machine"
+                  }
+                  checked={config.generateHkt}
+                  disabled={!hktAvailable}
+                  onCheckedChange={(checked) => updateConfig({ generateHkt: checked })}
+                />
               )}
             </UnrealDetailsSection>
 
             {primaryMode === "ssbh" && (
-              <DaeImportSsbhConfigPanel
-                config={config.ssbhConfig}
-                onChange={updateSsbhConfig}
+              <DaeImportSsbhFullPanel
+                analysis={entry.analysis}
+                sourcePath={entry.filePath}
               />
             )}
 
-            {config.generateHkt && <DaeImportHktConfigPanel havokInfo={havokInfo} />}
+            {primaryMode === "preview" && config.generateHkt && (
+              <DaeImportHktConfigPanel havokInfo={havokInfo} />
+            )}
           </div>
 
           <div className={unrealFooterClass}>
@@ -175,7 +184,7 @@ export function DaeImportConfigModal({
               onClick={onImport}
               disabled={!canImport}
             >
-              Import
+              {primaryMode === "ssbh" ? "Convert to SSBH" : "Import"}
             </button>
           </div>
         </div>

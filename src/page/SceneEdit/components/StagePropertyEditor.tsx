@@ -1,5 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
+import {
+  PROP_AXIS_GRID,
+  PROP_INPUT,
+  PROP_LABEL,
+  PROP_PANEL,
+} from "./propertyPanelStyles";
 
 export interface TransformData {
   posX: number;
@@ -23,7 +29,7 @@ export function StagePropertyEditor({
   onTransformChange,
 }: StagePropertyEditorProps) {
   return (
-    <div className="space-y-1.5">
+    <div className={`space-y-2 ${PROP_PANEL}`}>
       <TransformRow
         label="Position"
         values={[transform.posX, transform.posY, transform.posZ]}
@@ -61,15 +67,13 @@ function TransformRow({
   const axisLabels = ["X", "Y", "Z"];
 
   return (
-    <div>
-      <div className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider mb-0.5">
-        {label}
-      </div>
-      <div className="grid grid-cols-3 gap-1">
+    <div className="min-w-0">
+      <div className={`${PROP_LABEL} mb-1`}>{label}</div>
+      <div className={PROP_AXIS_GRID}>
         {axisLabels.map((axis, i) => (
-          <div key={axis} className="flex items-center gap-0.5">
+          <div key={axis} className="flex min-w-0 items-center gap-1">
             <span
-              className={`text-[9px] font-bold ${axisColors[i]} w-2.5 shrink-0`}
+              className={`w-3 shrink-0 text-center text-[10px] font-bold ${axisColors[i]}`}
             >
               {axis}
             </span>
@@ -102,7 +106,7 @@ function NumericInput({
     <Input
       type="number"
       step="0.1"
-      className="h-5 text-[10px] font-mono px-1 bg-background/60"
+      className={PROP_INPUT}
       value={text}
       onChange={(e) => setText(e.target.value)}
       onFocus={() => {

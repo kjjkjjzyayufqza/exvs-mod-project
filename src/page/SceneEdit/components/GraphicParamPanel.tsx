@@ -10,6 +10,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import {
+  PROP_BTN,
+  PROP_BTN_ICON,
+  PROP_INPUT,
+  PROP_PANEL,
+} from "./propertyPanelStyles";
 
 export interface GraphicParam {
   key: string;
@@ -88,28 +94,28 @@ export function GraphicParamPanel({
   }
 
   return (
-    <div data-testid="graphic-param-panel" className="flex min-h-0 flex-col gap-1.5">
-      <div className="flex items-center gap-1">
-        <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={onApplyAll}>
+    <div data-testid="graphic-param-panel" className={`flex min-h-0 flex-col gap-2 ${PROP_PANEL}`}>
+      <div className="flex min-w-0 items-center gap-1">
+        <Button type="button" size="sm" variant="outline" className={PROP_BTN} onClick={onApplyAll}>
           Apply all
         </Button>
-        <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={onClearApplied}>
+        <Button type="button" size="sm" variant="outline" className={PROP_BTN} onClick={onClearApplied}>
           Clear
         </Button>
-        <Button type="button" size="sm" variant="outline" className="h-6 w-6 p-0 ml-auto" onClick={onAdd}>
-          <Plus className="h-3 w-3" />
+        <Button type="button" size="sm" variant="outline" className={`${PROP_BTN_ICON} ml-auto`} onClick={onAdd}>
+          <Plus className="h-3.5 w-3.5" />
         </Button>
       </div>
       {params.length > 6 && (
         <Input
           placeholder="Filter..."
-          className="h-5 text-[10px]"
+          className={PROP_INPUT}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
       )}
 
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         {filteredParams.map((p) => {
           const applied = appliedKeys.has(p.key);
           const slider = numericConfig(p.key, p.value);
@@ -119,19 +125,19 @@ export function GraphicParamPanel({
             <div
               key={`${p.key}-${p.originalIndex}`}
               className={cn(
-                "space-y-1 rounded-sm border border-transparent px-1 py-1 hover:bg-muted/40 group",
+                "min-w-0 space-y-1.5 rounded-sm border border-transparent px-1 py-1.5 hover:bg-muted/40 group",
                 applied && "border-primary/30 bg-primary/5",
                 valueModified && "bg-yellow-500/10",
               )}
             >
-              <div className="flex items-center gap-1.5">
+              <div className="flex min-w-0 items-center gap-1.5">
                 <Checkbox
                   checked={applied}
                   onCheckedChange={(checked) => onToggleApplied(p.key, !!checked)}
-                  className="h-3.5 w-3.5"
+                  className="h-4 w-4 shrink-0"
                 />
                 <Input
-                  className="h-6 min-w-0 flex-1 text-[10px] font-mono bg-background/60"
+                  className={`${PROP_INPUT} flex-1`}
                   value={p.key}
                   onChange={(e) => onKeyChange(p.originalIndex, e.target.value)}
                 />
@@ -140,10 +146,10 @@ export function GraphicParamPanel({
                     <TooltipTrigger asChild>
                       <button
                         type="button"
-                        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground"
+                        className={`inline-flex ${PROP_BTN_ICON} items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground`}
                         onClick={() => onResetValue(p.originalIndex)}
                       >
-                        <RotateCcw className="h-2.5 w-2.5" />
+                        <RotateCcw className="h-3 w-3" />
                       </button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="text-[10px]">Reset to: {originalValue}</TooltipContent>
@@ -153,20 +159,21 @@ export function GraphicParamPanel({
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                  className={`${PROP_BTN_ICON} text-muted-foreground hover:text-destructive`}
                   onClick={() => onDelete(p.originalIndex)}
                 >
-                  <Trash2 className="h-3 w-3" />
+                  <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="min-w-0 space-y-1.5">
                 <Input
-                  className="h-6 w-24 text-[10px] font-mono bg-background/60"
+                  className={PROP_INPUT}
                   value={p.value}
                   onChange={(e) => onValueChange(p.originalIndex, e.target.value)}
                 />
                 {slider && (
                   <Slider
+                    className="w-full"
                     value={[slider.value]}
                     min={slider.min}
                     max={slider.max}

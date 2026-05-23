@@ -4,6 +4,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
 import {
+  PROP_LABEL,
+  PROP_PANEL,
+  PROP_ROW,
+} from "./propertyPanelStyles";
+import {
   TEXTURE_PREVIEW_SLOT_META,
   type TexturePreviewSlotKey,
 } from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
@@ -114,8 +119,8 @@ export function TextureQualityPanel({
   }, [stats.resolutionBuckets]);
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-col gap-1">
+    <div className={`space-y-2 ${PROP_PANEL}`}>
+      <div className="flex flex-col gap-0.5">
         {TEXTURE_QUALITY_PRESETS.map((preset) => {
           const active = quality === preset.key;
           return (
@@ -124,19 +129,19 @@ export function TextureQualityPanel({
               type="button"
               onClick={() => onQualityChange(preset.key)}
               className={cn(
-                "flex items-center justify-between rounded-sm px-2 py-1 text-left transition-colors",
+                "flex min-w-0 items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-left transition-colors",
                 "hover:bg-accent/50",
                 active
                   ? "bg-primary/10 text-foreground"
                   : "text-muted-foreground",
               )}
             >
-              <span className={cn("text-[10px] font-medium", active && "text-foreground")}>
+              <span className={cn("truncate text-[11px] font-medium", active && "text-foreground")}>
                 {preset.label}
               </span>
               <span
                 className={cn(
-                  "text-[9px] font-mono px-1 py-0.5 rounded",
+                  "shrink-0 text-[10px] font-mono px-1.5 py-0.5 rounded",
                   active ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground",
                 )}
               >
@@ -153,10 +158,8 @@ export function TextureQualityPanel({
         </div>
       )}
 
-      <div className="border-t border-border/30 pt-1.5 space-y-1">
-        <div className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
-          Texture slots
-        </div>
+      <div className="space-y-1.5 border-t border-border/30 pt-1.5">
+        <div className={PROP_LABEL}>Texture slots</div>
         <ToggleGroup
           type="single"
           value={slotPreset}
@@ -165,15 +168,13 @@ export function TextureQualityPanel({
           }}
           variant="default"
           size="sm"
-          className={cn(
-            "inline-flex h-8 w-full items-stretch rounded-lg border border-input bg-muted p-0.5 shadow-sm",
-          )}
+          className="inline-flex h-7 w-full min-w-0 items-stretch rounded-md border border-input bg-muted p-0.5 shadow-sm"
         >
           <ToggleGroupItem
             value="all"
             aria-label="Load all texture slots"
             className={cn(
-              "min-h-0 flex-1 rounded-md px-2 text-[10px] font-medium",
+              "min-h-0 flex-1 rounded-sm px-2 text-[11px] font-medium",
               "min-w-0! border-0! shadow-none! bg-transparent text-muted-foreground",
               "hover:bg-muted-foreground/15 hover:text-foreground",
               "data-[state=on]:bg-background! data-[state=on]:text-foreground! data-[state=on]:shadow-sm",
@@ -186,7 +187,7 @@ export function TextureQualityPanel({
             value="none"
             aria-label="Load no texture slots"
             className={cn(
-              "min-h-0 flex-1 rounded-md border-y-0 border-r-0 border-l border-border/60 bg-transparent px-2 text-[10px] font-medium",
+              "min-h-0 flex-1 rounded-sm border-y-0 border-r-0 border-l border-border/60 bg-transparent px-2 text-[11px] font-medium",
               "min-w-0! shadow-none! text-muted-foreground",
               "hover:bg-muted-foreground/15 hover:text-foreground",
               "data-[state=on]:bg-background! data-[state=on]:text-foreground! data-[state=on]:shadow-sm",
@@ -197,31 +198,31 @@ export function TextureQualityPanel({
           </ToggleGroupItem>
         </ToggleGroup>
 
-        <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-0.5 mt-1.5">
-          <div className="text-[9px] text-muted-foreground/80 leading-snug">
+        <div className="mt-1.5 space-y-1">
+          <div className="text-[10px] text-muted-foreground/80 leading-snug">
             Per-channel overrides (decode + viewport). Presets above set all on or off at once.
           </div>
           {TEXTURE_PREVIEW_SLOT_META.map(({ key, label, short }) => {
             const warning = SLOT_WARNINGS[key];
             const checked = textureSlotLoadEnabled[key];
             return (
-              <div key={key} className="space-y-0.5">
+              <div key={key} className="min-w-0 space-y-0.5">
                 <label
-                  className="flex items-start gap-2 rounded-sm px-1 py-0.5 hover:bg-accent/40 cursor-pointer"
+                  className="flex min-w-0 cursor-pointer items-start gap-2 rounded-sm px-1 py-0.5 hover:bg-accent/40"
                 >
                   <Checkbox
-                    className="mt-0.5"
+                    className="mt-0.5 h-4 w-4 shrink-0"
                     checked={checked}
                     onCheckedChange={(v) => onTextureSlotToggle(key, v === true)}
                     aria-label={label}
                   />
-                  <span className="flex flex-col min-w-0">
-                    <span className="text-[10px] leading-tight text-foreground">
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate text-[11px] leading-tight text-foreground">
                       <span className="font-medium">{short}</span>
-                      <span className="text-muted-foreground font-normal"> — {label}</span>
+                      <span className="font-normal text-muted-foreground"> — {label}</span>
                     </span>
                     {warning ? (
-                      <span className="text-[8px] text-amber-600/90 leading-snug mt-0.5">
+                      <span className="text-[10px] leading-snug text-amber-600/90 mt-0.5">
                         {warning}
                       </span>
                     ) : null}
@@ -233,29 +234,29 @@ export function TextureQualityPanel({
         </div>
       </div>
 
-      <div className="border-t border-border/30 pt-1.5 space-y-1">
-        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-          <span>Unique textures</span>
-          <span className="font-mono">{stats.uniqueCount}</span>
+      <div className="space-y-1 border-t border-border/30 pt-1.5">
+        <div className={PROP_ROW}>
+          <span className="text-[11px] text-muted-foreground">Unique textures</span>
+          <span className="font-mono text-[11px]">{stats.uniqueCount}</span>
         </div>
-        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-          <span>RGBA total</span>
-          <span className="font-mono">{formatBytes(stats.totalRgbaBytes)}</span>
+        <div className={PROP_ROW}>
+          <span className="text-[11px] text-muted-foreground">RGBA total</span>
+          <span className="font-mono text-[11px]">{formatBytes(stats.totalRgbaBytes)}</span>
         </div>
         {stats.maxWidth > 0 && (
-          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-            <span>Largest</span>
-            <span className="font-mono">{stats.maxWidth}&times;{stats.maxHeight}</span>
+          <div className={PROP_ROW}>
+            <span className="text-[11px] text-muted-foreground">Largest</span>
+            <span className="font-mono text-[11px]">{stats.maxWidth}&times;{stats.maxHeight}</span>
           </div>
         )}
 
         {sortedBuckets.length > 0 && (
           <div className="mt-1 space-y-0.5">
-            <div className="text-[9px] text-muted-foreground/60 mb-0.5">Distribution</div>
+            <div className="text-[10px] text-muted-foreground/60 mb-0.5">Distribution</div>
             {sortedBuckets.map(([res, count]) => (
-              <div key={res} className="flex items-center justify-between text-[9px] text-muted-foreground">
-                <span className="font-mono">{res}</span>
-                <span className="font-mono">{count}</span>
+              <div key={res} className={PROP_ROW}>
+                <span className="font-mono text-[10px] text-muted-foreground">{res}</span>
+                <span className="font-mono text-[10px] text-muted-foreground">{count}</span>
               </div>
             ))}
           </div>

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import type { PlacementRow } from "../types/placement";
 import { extractVdkConfig, type VdkConfigEntry } from "../utils/extractPlacementVdkConfig";
+import { PROP_PANEL, PROP_ROW } from "./propertyPanelStyles";
 
 interface PlacementConfigPanelProps {
   entry: PlacementRow;
@@ -23,7 +24,7 @@ export function PlacementConfigPanel({ entry, placementHeader }: PlacementConfig
   }
 
   return (
-    <div className="space-y-0.5">
+    <div className={`space-y-0.5 ${PROP_PANEL}`}>
       {configs.map((c, i) => (
         <ConfigRow key={`${i}-${c.key}`} config={c} />
       ))}
@@ -36,16 +37,17 @@ function ConfigRow({ config }: { config: VdkConfigEntry }) {
     config.key.toUpperCase() === "VDK_PROGRAMID";
 
   return (
-    <div className="flex items-center justify-between gap-2 px-1 py-0.5 rounded-sm hover:bg-muted/30">
+    <div className={cn(PROP_ROW, "rounded-sm px-1 py-0.5 hover:bg-muted/30")}>
       <span
         className={cn(
-          "text-[9px] font-mono truncate",
-          isHighlight ? "text-foreground font-medium" : "text-muted-foreground",
+          "min-w-0 truncate text-[11px] font-mono",
+          isHighlight ? "font-medium text-foreground" : "text-muted-foreground",
         )}
+        title={config.key}
       >
         {config.key}
       </span>
-      <span className="text-[9px] font-mono text-right shrink-0 tabular-nums">
+      <span className="min-w-0 truncate text-right text-[11px] font-mono tabular-nums" title={config.value}>
         {config.value}
       </span>
     </div>

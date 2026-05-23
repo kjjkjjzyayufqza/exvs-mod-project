@@ -121,6 +121,10 @@ impl SceneMemorySession {
         }
     }
 
+    pub fn session_id(&self) -> &str {
+        &self.session_id
+    }
+
     pub fn add_import(&mut self, name: String, dae_bytes: Vec<u8>) -> String {
         let id = uuid::Uuid::new_v4().to_string();
         self.pending_imports.push(PendingImport {
@@ -308,6 +312,9 @@ impl SceneSessionState {
         let session = sessions
             .get(session_id)
             .ok_or_else(|| format!("Session '{session_id}' not found"))?;
+        if session.session_id() != session_id {
+            return Err(format!("Session id mismatch for '{session_id}'"));
+        }
         f(session)
     }
 
@@ -319,6 +326,9 @@ impl SceneSessionState {
         let session = sessions
             .get_mut(session_id)
             .ok_or_else(|| format!("Session '{session_id}' not found"))?;
+        if session.session_id() != session_id {
+            return Err(format!("Session id mismatch for '{session_id}'"));
+        }
         f(session)
     }
 }
@@ -529,7 +539,7 @@ mod tests {
     fn session_state_create_and_destroy() {
         let state = SceneSessionState::default();
         let id = state.create_session(SceneSource::New);
-        assert!(state.with_session(&id, |s| Ok(s.session_id.clone())).is_ok());
+        assert!(state.with_session(&id, |s| Ok(s.session_id().to_string())).is_ok());
         state.destroy_session(&id).unwrap();
         assert!(state.with_session(&id, |_| Ok(())).is_err());
     }

@@ -17,6 +17,12 @@ import {
 import { cn } from "@/lib/utils";
 import { Plus, Trash2, Box, Sparkles, Cloud, RotateCcw } from "lucide-react";
 import type { PlacementRow } from "../types/placement";
+import {
+  PROP_BTN,
+  PROP_BTN_ICON,
+  PROP_INPUT,
+  PROP_PANEL,
+} from "./propertyPanelStyles";
 
 interface PlacementCsvEditorPanelProps {
   entries: PlacementRow[];
@@ -86,12 +92,12 @@ export function PlacementCsvEditorPanel({
   }
 
   return (
-    <div data-testid="placement-csv-editor-panel" className="flex min-h-0 flex-col gap-2">
+    <div data-testid="placement-csv-editor-panel" className={`flex min-h-0 flex-col gap-2 ${PROP_PANEL}`}>
       <div className="flex items-center gap-1">
         <AddTypedButton onAddTyped={onAddTyped} />
       </div>
       <Input
-        className="h-6 text-[10px]"
+        className={PROP_INPUT}
         placeholder="Filter placement rows..."
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
@@ -123,7 +129,7 @@ function AddTypedButton({ onAddTyped }: { onAddTyped: (vdkType: string) => void 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-[10px]">
+        <Button type="button" size="sm" variant="outline" className={PROP_BTN}>
           <Plus className="h-3 w-3 mr-1" />
           Add
         </Button>
@@ -171,27 +177,27 @@ function PlacementRowItem({
   const isNewRow = initialEntry === null;
 
   return (
-    <div className={cn("rounded-sm border px-1.5 py-1", selected ? "border-primary/50 bg-primary/5" : "border-border/50")}>
-      <button type="button" className="flex w-full items-center gap-1.5 text-left" onClick={() => onSelectEntry(index)}>
-        <Badge variant={entry.vdkType === "EFFECT" ? "destructive" : entry.vdkType === "SKY" ? "outline" : "secondary"} className="h-4 px-1 text-[8px]">
+    <div className={cn("min-w-0 rounded-sm border px-1.5 py-1", selected ? "border-primary/50 bg-primary/5" : "border-border/50")}>
+      <button type="button" className="flex w-full min-w-0 items-center gap-1.5 overflow-hidden text-left" onClick={() => onSelectEntry(index)}>
+        <Badge variant={entry.vdkType === "EFFECT" ? "destructive" : entry.vdkType === "SKY" ? "outline" : "secondary"} className="h-5 shrink-0 px-1.5 text-[9px]">
           {entry.vdkType || "ROW"}
         </Badge>
-        <span className="text-[9px] font-mono text-muted-foreground">#{index}</span>
-        {entry.objectNumber !== null && <span className="text-[9px] font-mono">obj {entry.objectNumber}</span>}
-        {isNewRow && <span className="text-[8px] text-green-500 font-medium">NEW</span>}
-        {rowModified && !isNewRow && <span className="text-[8px] text-yellow-500 font-medium">MOD</span>}
+        <span className="shrink-0 text-[10px] font-mono text-muted-foreground">#{index}</span>
+        {entry.objectNumber !== null && <span className="shrink-0 text-[10px] font-mono">obj {entry.objectNumber}</span>}
+        {isNewRow && <span className="shrink-0 text-[9px] font-medium text-green-500">NEW</span>}
+        {rowModified && !isNewRow && <span className="shrink-0 text-[9px] font-medium text-yellow-500">MOD</span>}
       </button>
       {selected && (
-        <div className="mt-2 space-y-1">
+        <div className="mt-2 space-y-1.5">
           <div className="flex items-center gap-1">
             <Button
               type="button"
               size="sm"
               variant="outline"
-              className="h-6 px-2 text-[10px]"
+              className={PROP_BTN}
               onClick={() => onAddFieldPair(index)}
             >
-              <Plus className="h-3 w-3 mr-1" />
+              <Plus className="mr-1 h-3.5 w-3.5" />
               Field
             </Button>
             {rowModified && !isNewRow && (
@@ -201,10 +207,10 @@ function PlacementRowItem({
                     type="button"
                     size="sm"
                     variant="ghost"
-                    className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                    className={`${PROP_BTN_ICON} text-muted-foreground hover:text-foreground`}
                     onClick={() => onResetRow(index)}
                   >
-                    <RotateCcw className="h-3 w-3" />
+                    <RotateCcw className="h-3.5 w-3.5" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="text-[10px]">Reset row to loaded state</TooltipContent>
@@ -214,10 +220,10 @@ function PlacementRowItem({
               type="button"
               size="sm"
               variant="ghost"
-              className="h-6 w-6 p-0 ml-auto text-muted-foreground hover:text-destructive"
+              className={`${PROP_BTN_ICON} ml-auto text-muted-foreground hover:text-destructive`}
               onClick={() => onDeleteRow(index)}
             >
-              <Trash2 className="h-3 w-3" />
+              <Trash2 className="h-3.5 w-3.5" />
             </Button>
           </div>
           {entry.rawFields.map((field, fieldIndex) => {
@@ -237,13 +243,19 @@ function PlacementRowItem({
                   ? { min: -10000, max: 10000, step: 0.1 }
                   : null;
             return (
-              <div key={`${fieldIndex}-${field}`} className={cn("space-y-1 rounded-sm px-1 py-1", fieldModified ? "bg-yellow-500/10" : "bg-muted/20")}>
-                <div className="flex items-center gap-1.5">
-                  <span className={cn("w-28 shrink-0 truncate text-[9px] font-mono", TRANSFORM_KEYS.has(key) ? "text-foreground" : "text-muted-foreground")} title={field}>
+              <div key={`${fieldIndex}-${field}`} className={cn("min-w-0 space-y-1.5 rounded-sm px-1 py-1", fieldModified ? "bg-yellow-500/10" : "bg-muted/20")}>
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span
+                    className={cn(
+                      "min-w-0 max-w-[42%] shrink truncate text-[10px] font-mono",
+                      TRANSFORM_KEYS.has(key) ? "text-foreground" : "text-muted-foreground",
+                    )}
+                    title={field}
+                  >
                     {field}
                   </span>
                   <Input
-                    className="h-6 min-w-0 flex-1 text-[10px] font-mono"
+                    className={`${PROP_INPUT} min-w-0 flex-1`}
                     value={value}
                     onChange={(event) => onFieldPreview(index, valueIndex, event.target.value)}
                     onBlur={(event) => onFieldCommit(index, valueIndex, event.target.value)}
@@ -253,10 +265,10 @@ function PlacementRowItem({
                       <TooltipTrigger asChild>
                         <button
                           type="button"
-                          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground"
+                          className={`inline-flex ${PROP_BTN_ICON} items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground`}
                           onClick={() => onResetField(index, valueIndex)}
                         >
-                          <RotateCcw className="h-2.5 w-2.5" />
+                          <RotateCcw className="h-3 w-3" />
                         </button>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" className="text-[10px]">Reset to: {originalValue}</TooltipContent>
@@ -266,14 +278,15 @@ function PlacementRowItem({
                     type="button"
                     size="sm"
                     variant="ghost"
-                    className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                    className={`${PROP_BTN_ICON} text-muted-foreground hover:text-destructive`}
                     onClick={() => onRemoveFieldPair(index, fieldIndex)}
                   >
-                    <Trash2 className="h-3 w-3" />
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
                 {numeric && sliderRange && (
                   <Slider
+                    className="w-full"
                     value={[numericValue]}
                     min={sliderRange.min}
                     max={sliderRange.max}

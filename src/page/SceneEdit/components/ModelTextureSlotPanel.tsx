@@ -12,6 +12,7 @@ import {
   type ObjectTextureInventory,
   type ObjectTextureLoadState,
 } from "../utils/sceneTextureInventory";
+import { PROP_PANEL } from "./propertyPanelStyles";
 
 interface ModelTextureSlotPanelProps {
   objectId: string;
@@ -52,27 +53,27 @@ export function ModelTextureSlotPanel({
   }
 
   return (
-    <div className="space-y-1.5">
+    <div className={`space-y-1.5 ${PROP_PANEL}`}>
       {modelLabel && (
-        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+        <div className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground" title={modelLabel}>
           {modelLabel}
         </div>
       )}
       {textures.map((tex) => {
         const slotLabel = tex.slots.map(textureSlotShortLabel).join(", ");
         return (
-          <div key={tex.pathKey} className="space-y-0.5 rounded-sm px-1 py-1 hover:bg-muted/30">
-            <div className="flex items-center gap-2">
+          <div key={tex.pathKey} className="min-w-0 space-y-0.5 rounded-sm px-1 py-1 hover:bg-muted/30">
+            <div className="flex min-w-0 items-center gap-2">
               <Checkbox
                 id={`model-texture-${objectId}-${tex.pathKey}`}
                 checked={tex.enabled}
                 onCheckedChange={(checked) => onTexturePathToggle(objectId, tex.path, !!checked)}
-                className="h-3.5 w-3.5"
+                className="h-4 w-4 shrink-0"
               />
               <label
                 htmlFor={`model-texture-${objectId}-${tex.pathKey}`}
                 className={cn(
-                  "text-[11px] font-medium cursor-pointer flex-1 truncate font-mono",
+                  "min-w-0 flex-1 cursor-pointer truncate font-mono text-[11px] font-medium",
                   !tex.enabled && "text-muted-foreground line-through",
                 )}
                 title={tex.internalName}

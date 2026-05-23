@@ -1,6 +1,7 @@
 import type { StageTreeNode } from "./StageHierarchyTree";
 import type { PlacementRow } from "../types/placement";
 import type { SceneDrawStats } from "./SceneViewportOverlay";
+import { PROP_AXIS_GRID, PROP_LABEL, PROP_PANEL, PROP_ROW } from "./propertyPanelStyles";
 
 interface SceneInfoContentProps {
   stageName: string | null;
@@ -30,7 +31,7 @@ export function SceneInfoContent({
   }
 
   return (
-    <div className="space-y-2">
+    <div className={`space-y-2 ${PROP_PANEL}`}>
       <div className="space-y-1">
         <Row label="Name" value={stageName} mono />
         <Row
@@ -43,10 +44,8 @@ export function SceneInfoContent({
       </div>
 
       {selectedNode && (
-        <div className="border-t border-border/30 pt-1.5 space-y-1">
-          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-0.5">
-            Selected
-          </div>
+        <div className="space-y-1 border-t border-border/30 pt-1.5">
+          <div className={`${PROP_LABEL} mb-0.5`}>Selected</div>
           <Row label="Name" value={selectedNode.label} accent="primary" />
           <Row label="Type" value={selectedNode.role} />
           {selectedNode.objectIndex !== undefined && (
@@ -59,11 +58,9 @@ export function SceneInfoContent({
       )}
 
       {placementEntry && (
-        <div className="border-t border-border/30 pt-1.5 space-y-1">
-          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-0.5">
-            Placement #{selectedPlacementIdx}
-          </div>
-          <div className="grid grid-cols-3 gap-1 font-mono text-[10px]">
+        <div className="space-y-1 border-t border-border/30 pt-1.5">
+          <div className={`${PROP_LABEL} mb-0.5`}>Placement #{selectedPlacementIdx}</div>
+          <div className={PROP_AXIS_GRID}>
             <ValueCell
               label="X"
               value={placementEntry.posX.toFixed(1)}
@@ -114,7 +111,7 @@ export function SceneStatsContent({
   };
 
   return (
-    <div className="space-y-1">
+    <div className={`space-y-1 ${PROP_PANEL}`}>
       <Row label="Draw Calls" value={String(drawStats.drawCount)} accent="blue" />
       <Row
         label="Triangles"
@@ -164,10 +161,10 @@ function Row({
     : "";
 
   return (
-    <div className="flex items-center justify-between text-[10px]">
-      <span className="text-muted-foreground">{label}</span>
+    <div className={PROP_ROW}>
+      <span className="truncate text-[11px] text-muted-foreground">{label}</span>
       <span
-        className={`truncate max-w-[60%] text-right ${mono ? "font-mono" : ""} ${dim ? "text-muted-foreground/60 text-[9px]" : ""} ${colorClass}`}
+        className={`min-w-0 truncate text-right text-[11px] ${mono ? "font-mono" : ""} ${dim ? "text-muted-foreground/60 text-[10px]" : ""} ${colorClass}`}
         title={value}
       >
         {value}
@@ -186,9 +183,11 @@ function ValueCell({
   color: string;
 }) {
   return (
-    <div className="flex flex-col items-center bg-muted/30 rounded px-1 py-0.5">
-      <span className="text-[8px] text-muted-foreground/50">{label}</span>
-      <span className={color}>{value}</span>
+    <div className="flex min-w-0 flex-col items-center rounded bg-muted/30 px-1 py-1">
+      <span className="text-[9px] text-muted-foreground/60">{label}</span>
+      <span className={`truncate w-full text-center text-[11px] font-mono tabular-nums ${color}`}>
+        {value}
+      </span>
     </div>
   );
 }

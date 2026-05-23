@@ -27,6 +27,7 @@ interface SaveProgressDialogProps {
   steps: SaveStepInfo[];
   onClose: () => void;
   canClose: boolean;
+  completionSummary?: string[];
 }
 
 function StepIcon({ status }: { status: SaveStepStatus }) {
@@ -91,16 +92,27 @@ export function SaveProgressDialog({
   steps,
   onClose,
   canClose,
+  completionSummary,
 }: SaveProgressDialogProps) {
   const hasError = steps.some((s) => s.status === "error");
   const allDone = steps.length > 0 && steps.every((s) => s.status === "done");
   const activeStep = steps.find((s) => s.status === "running");
+  const hasCompletionSummary = allDone && completionSummary && completionSummary.length > 0;
 
   const displayTitle = allDone
     ? `${title} — Complete`
     : hasError
       ? `${title} — Failed`
       : title;
+
+  const description = activeStep?.label
+    ?? (hasCompletionSummary
+      ? "The following changes were written to disk:"
+      : allDone
+        ? "All steps completed successfully."
+        : hasError
+          ? "One or more steps failed."
+          : "Preparing...");
 
   return (
     <Dialog open={open}>
@@ -111,10 +123,20 @@ export function SaveProgressDialog({
       >
         <DialogHeader>
           <DialogTitle>{displayTitle}</DialogTitle>
-          <DialogDescription>
-            {activeStep?.label ?? (allDone ? "All steps completed successfully." : hasError ? "One or more steps failed." : "Preparing...")}
-          </DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
+
+        {hasCompletionSummary && (
+          <div className="rounded border bg-muted/30 p-3 max-h-40 overflow-y-auto">
+            <ul className="space-y-1 text-sm text-muted-foreground list-disc ml-4">
+              {completionSummary.map((line) => (
+                <li key={line} className="break-words">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="space-y-0.5 mt-2">
           {steps.map((step) => (

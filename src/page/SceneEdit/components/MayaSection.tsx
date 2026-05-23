@@ -30,7 +30,7 @@ export function MayaSection({
       >
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden text-left"
           onClick={() => setOpen((v) => !v)}
         >
           <ChevronRight
@@ -39,9 +39,9 @@ export function MayaSection({
               open && "rotate-90",
             )}
           />
-          <span>{title}</span>
+          <span className="truncate">{title}</span>
           {badge !== undefined && (
-            <span className="ml-auto text-[9px] font-mono opacity-60">
+            <span className="ml-auto shrink-0 text-[9px] font-mono opacity-60">
               {badge}
             </span>
           )}
@@ -50,7 +50,9 @@ export function MayaSection({
           <span className="flex shrink-0 items-center gap-0.5">{actions}</span>
         )}
       </div>
-      {open && <div className="px-2 pb-2 pt-1">{children}</div>}
+      {open && (
+        <div className="min-w-0 max-w-full overflow-hidden px-2 pb-2 pt-1">{children}</div>
+      )}
     </div>
   );
 }
