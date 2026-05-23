@@ -153,8 +153,8 @@ pub async fn scene_open_folder(
 ) -> Result<SceneOpenResult, String> {
     eprintln!("[scene_open_folder] path={}", path);
     let path_clone = path.clone();
-    let bundle = tauri::async_runtime::spawn_blocking(move || {
-        fhm2d_stage::load_stage_bundle_impl(&path_clone)
+    let skeleton = tauri::async_runtime::spawn_blocking(move || {
+        fhm2d_stage::load_stage_skeleton_impl(&path_clone)
     })
     .await
     .map_err(|e| {
@@ -162,16 +162,15 @@ pub async fn scene_open_folder(
         e.to_string()
     })?
     .map_err(|e| {
-        eprintln!("[scene_open_folder] load_stage_bundle_impl failed: {}", e);
+        eprintln!("[scene_open_folder] load_stage_skeleton_impl failed: {}", e);
         e
     })?;
 
-    let warnings = bundle.warnings;
-    let placement_header = bundle.placement_header;
-    let placement_entries = bundle.placement_entries;
-    let graphic_params = bundle.graphic_params;
+    let warnings = skeleton.warnings;
+    let placement_header = skeleton.placement_header;
+    let placement_entries = skeleton.placement_entries;
+    let graphic_params = skeleton.graphic_params;
 
-    // Scan all .hkt files and convert to XML in memory
     let stage_path = path.clone();
     let havok_data_list = tauri::async_runtime::spawn_blocking(move || {
         collect_hkt_as_xml(&stage_path)

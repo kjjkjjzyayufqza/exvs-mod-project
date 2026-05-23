@@ -1,8 +1,4 @@
-import type {
-  DaeImportConfig,
-  SsbhImportConfig,
-  HktImportConfig,
-} from "./daeImportTypes";
+import type { DaeImportConfig, SsbhImportConfig } from "./daeImportTypes";
 
 export function createDefaultSsbhConfig(
   baseFilename: string,
@@ -21,13 +17,6 @@ export function createDefaultSsbhConfig(
   };
 }
 
-export function createDefaultHktConfig(): HktImportConfig {
-  return {
-    havokToolPath: "",
-    configProfile: "",
-  };
-}
-
 export function createDefaultDaeImportConfig(
   baseFilename: string,
 ): DaeImportConfig {
@@ -36,7 +25,6 @@ export function createDefaultDaeImportConfig(
     convertToSsbh: false,
     generateHkt: false,
     ssbhConfig: createDefaultSsbhConfig(baseFilename),
-    hktConfig: createDefaultHktConfig(),
     defaultDdsFormat: "BC7_UNORM",
   };
 }
@@ -49,4 +37,10 @@ export function sanitizeBaseFilename(fileName: string): string {
       .replace(/_+/g, "_")
       .replace(/^_+|_+$/g, "") || "imported_model"
   );
+}
+
+export function isHktGenerationAvailable(
+  havokInfo: { filterManagerAvailable: boolean } | null,
+): boolean {
+  return Boolean(havokInfo?.filterManagerAvailable);
 }

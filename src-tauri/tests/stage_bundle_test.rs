@@ -1,6 +1,10 @@
-use app_lib::format::fhm2d_stage::{load_stage_bundle_impl, PlacementEntry};
+use app_lib::format::fhm2d_stage::{
+    load_stage_bundle_impl, load_stage_skeleton_impl, load_model_in_subfolder_pub, PlacementEntry,
+};
+use app_lib::nutexb_lib;
 use std::collections::HashSet;
 use std::path::Path;
+use std::time::Instant;
 
 const TEST_DATA_ROOT: &str = r"E:\XB\解包\com\test";
 
@@ -919,4 +923,774 @@ fn all_stages_have_placement_entries() {
             .any(|e| e.vdk_type == "SKY");
         assert!(has_sky, "Stage {hash} should have at least one SKY entry");
     }
+}
+
+// ─── Performance Benchmark: Progressive Hydration vs Monolithic ────────
+
+fn run_benchmark(hash: &str, label: &str) {
+    let path = stage_path(hash);
+    if !Path::new(&path).is_dir() {
+        eprintln!("[BENCH] {label}: SKIPPED (path not found: {path})");
+        return;
+    }
+
+    eprintln!("\n{}", "=".repeat(70));
+    eprintln!("[BENCH] {label} — {path}");
+    eprintln!("{}", "=".repeat(70));
+
+    // --- Monolithic: load_stage_bundle_impl ---
+    let t0 = Instant::now();
+    let bundle = load_stage_bundle_impl(&path).expect("monolithic load failed");
+    let monolithic_ms = t0.elapsed().as_millis();
+    let model_count = bundle.sub_models.len() + if bundle.base_model.is_some() { 1 } else { 0 };
+    eprintln!(
+        "[BENCH] MONOLITHIC  load_stage_bundle_impl: {monolithic_ms}ms  ({model_count} models, {} placements, {} graphic_params)",
+        bundle.placement_entries.len(),
+        bundle.graphic_params.len(),
+    );
+
+    // --- Phase 1: load_stage_skeleton_impl ---
+    let t1 = Instant::now();
+    let skeleton = load_stage_skeleton_impl(&path).expect("skeleton load failed");
+    let skeleton_ms = t1.elapsed().as_millis();
+    eprintln!(
+        "[BENCH] SKELETON    load_stage_skeleton_impl: {skeleton_ms}ms  ({} manifest entries, has_base={}, {} placements)",
+        skeleton.sub_model_manifest.len(),
+        skeleton.has_base_model,
+        skeleton.placement_entries.len(),
+    );
+
+    // --- Phase 2: Sequential model loading (simulating stream) ---
+    let t2 = Instant::now();
+    let root = Path::new(&path);
+    let mut stream_loaded = 0usize;
+    let mut per_model_times: Vec<(String, u128)> = Vec::new();
+
+    if skeleton.has_base_model {
+        let tm = Instant::now();
+        let mut warnings = Vec::new();
+        let base = load_model_in_subfolder_pub(root, "base", &mut warnings);
+        let base_ms = tm.elapsed().as_millis();
+        if base.is_some() {
+            stream_loaded += 1;
+        }
+        per_model_times.push(("base".to_string(), base_ms));
+    }
+
+    for entry in &skeleton.sub_model_manifest {
+        let tm = Instant::now();
+        let mut warnings = Vec::new();
+        let _model = load_model_in_subfolder_pub(root, &entry.folder_name, &mut warnings);
+        let model_ms = tm.elapsed().as_millis();
+        if _model.is_some() {
+            stream_loaded += 1;
+        }
+        per_model_times.push((entry.folder_name.clone(), model_ms));
+    }
+
+    let stream_total_ms = t2.elapsed().as_millis();
+    let progressive_total_ms = skeleton_ms + stream_total_ms;
+
+    eprintln!(
+        "[BENCH] STREAM      models sequential: {stream_total_ms}ms  ({stream_loaded} loaded)"
+    );
+    eprintln!(
+        "[BENCH] PROGRESSIVE total (skeleton + stream): {progressive_total_ms}ms"
+    );
+
+    // --- Summary ---
+    eprintln!("\n[BENCH] ─── SUMMARY ───");
+    eprintln!("[BENCH]   Monolithic (old):   {monolithic_ms}ms");
+    eprintln!("[BENCH]   Skeleton (new P1):  {skeleton_ms}ms  ← time-to-first-UI");
+    eprintln!("[BENCH]   Stream (new P2):    {stream_total_ms}ms");
+    eprintln!("[BENCH]   Progressive total:  {progressive_total_ms}ms");
+    let speedup = if progressive_total_ms > 0 {
+        monolithic_ms as f64 / progressive_total_ms as f64
+    } else {
+        f64::INFINITY
+    };
+    let first_ui_speedup = if skeleton_ms > 0 {
+        monolithic_ms as f64 / skeleton_ms as f64
+    } else {
+        f64::INFINITY
+    };
+    eprintln!("[BENCH]   First-UI speedup:   {first_ui_speedup:.1}x faster");
+    eprintln!("[BENCH]   Total speedup:      {speedup:.2}x");
+
+    if per_model_times.len() <= 30 {
+        eprintln!("\n[BENCH] ─── Per-model breakdown ───");
+        for (name, ms) in &per_model_times {
+            eprintln!("[BENCH]   {name}: {ms}ms");
+        }
+    } else {
+        eprintln!("\n[BENCH] ─── Top 10 slowest models ───");
+        let mut sorted = per_model_times.clone();
+        sorted.sort_by(|a, b| b.1.cmp(&a.1));
+        for (name, ms) in sorted.iter().take(10) {
+            eprintln!("[BENCH]   {name}: {ms}ms");
+        }
+    }
+
+    eprintln!();
+
+    // Verify data consistency
+    assert_eq!(
+        skeleton.placement_entries.len(),
+        bundle.placement_entries.len(),
+        "Skeleton and bundle should produce same placement count"
+    );
+    assert_eq!(
+        skeleton.graphic_params.len(),
+        bundle.graphic_params.len(),
+        "Skeleton and bundle should produce same graphic_param count"
+    );
+    assert_eq!(
+        skeleton.sub_model_manifest.len(),
+        bundle.sub_models.len(),
+        "Skeleton manifest and bundle sub_models should have same count"
+    );
+}
+
+#[test]
+#[ignore]
+fn bench_stage001_progressive_vs_monolithic() {
+    if skip_if_no_test_data() {
+        return;
+    }
+    run_benchmark("16F73C97", "Stage 001 (small)");
+}
+
+#[test]
+#[ignore]
+fn bench_stage100_progressive_vs_monolithic() {
+    if skip_if_no_test_data() {
+        return;
+    }
+    run_benchmark("84F085E5", "Stage 100 (menu)");
+}
+
+#[test]
+#[ignore]
+fn bench_stage018_progressive_vs_monolithic() {
+    if skip_if_no_test_data() {
+        return;
+    }
+    run_benchmark("35516817", "Stage 018 (large forest, 22 sub-models)");
+}
+
+#[test]
+#[ignore]
+fn bench_stage211_progressive_vs_monolithic() {
+    if skip_if_no_test_data() {
+        return;
+    }
+    let path = format!(r"{}\0xBBC60B47\0\0", TEST_DATA_ROOT);
+    if !Path::new(&path).is_dir() {
+        eprintln!("[BENCH] Stage 211: SKIPPED (path not found)");
+        return;
+    }
+    run_benchmark_path(&path, "Stage 211 (large)");
+}
+
+fn run_benchmark_path(path: &str, label: &str) {
+    if !Path::new(path).is_dir() {
+        eprintln!("[BENCH] {label}: SKIPPED (path not found: {path})");
+        return;
+    }
+
+    eprintln!("\n======================================================================");
+    eprintln!("[BENCH] {label} — {path}");
+    eprintln!("======================================================================");
+
+    let t0 = Instant::now();
+    let bundle = load_stage_bundle_impl(path).expect("monolithic load failed");
+    let monolithic_ms = t0.elapsed().as_millis();
+    let model_count = bundle.sub_models.len() + if bundle.base_model.is_some() { 1 } else { 0 };
+    eprintln!(
+        "[BENCH] MONOLITHIC  load_stage_bundle_impl: {monolithic_ms}ms  ({model_count} models)",
+    );
+
+    let t1 = Instant::now();
+    let skeleton = load_stage_skeleton_impl(path).expect("skeleton load failed");
+    let skeleton_ms = t1.elapsed().as_millis();
+    eprintln!(
+        "[BENCH] SKELETON    load_stage_skeleton_impl: {skeleton_ms}ms",
+    );
+
+    let t2 = Instant::now();
+    let root = Path::new(path);
+    let mut stream_loaded = 0usize;
+    if skeleton.has_base_model {
+        let mut w = Vec::new();
+        if load_model_in_subfolder_pub(root, "base", &mut w).is_some() {
+            stream_loaded += 1;
+        }
+    }
+    for entry in &skeleton.sub_model_manifest {
+        let mut w = Vec::new();
+        if load_model_in_subfolder_pub(root, &entry.folder_name, &mut w).is_some() {
+            stream_loaded += 1;
+        }
+    }
+    let stream_total_ms = t2.elapsed().as_millis();
+    let progressive_total_ms = skeleton_ms + stream_total_ms;
+
+    eprintln!("[BENCH] STREAM      models: {stream_total_ms}ms  ({stream_loaded} loaded)");
+    eprintln!("[BENCH] ─── SUMMARY ───");
+    eprintln!("[BENCH]   Monolithic:  {monolithic_ms}ms");
+    eprintln!("[BENCH]   Skeleton:    {skeleton_ms}ms  ← time-to-first-UI");
+    eprintln!("[BENCH]   Progressive: {progressive_total_ms}ms");
+    let first_ui_speedup = if skeleton_ms > 0 {
+        monolithic_ms as f64 / skeleton_ms as f64
+    } else {
+        f64::INFINITY
+    };
+    eprintln!("[BENCH]   First-UI speedup: {first_ui_speedup:.1}x faster");
+    eprintln!();
+}
+
+// ─── Detailed Multi-Iteration Benchmark ──────────────────────────────
+
+#[test]
+#[ignore]
+fn bench_stage211_detailed() {
+    let path = r"E:\XB\解包\com\test\0xBBC60B47\0\0";
+    if !Path::new(path).is_dir() {
+        eprintln!("[BENCH] SKIPPED — path not found: {path}");
+        return;
+    }
+
+    const ROUNDS: usize = 5;
+    let root = Path::new(path);
+
+    eprintln!("\n{}", "=".repeat(76));
+    eprintln!("[BENCH]  Stage 211 (0xBBC60B47) — {ROUNDS}-round detailed benchmark");
+    eprintln!("[BENCH]  Path: {path}");
+    eprintln!("{}", "=".repeat(76));
+
+    // ── Warmup (1 round, discarded) ──
+    eprintln!("\n[BENCH] Warmup round...");
+    let _ = load_stage_bundle_impl(path);
+    let _ = load_stage_skeleton_impl(path);
+
+    // ── Collect timings ──
+    let mut monolithic_times = Vec::with_capacity(ROUNDS);
+    let mut skeleton_times = Vec::with_capacity(ROUNDS);
+    let mut stream_times = Vec::with_capacity(ROUNDS);
+    let mut first_model_times = Vec::with_capacity(ROUNDS);
+    let mut per_model_all: Vec<Vec<(String, u128)>> = Vec::with_capacity(ROUNDS);
+
+    let mut monolithic_json_size: usize = 0;
+    let mut skeleton_json_size: usize = 0;
+    let mut per_model_json_sizes: Vec<(String, usize)> = Vec::new();
+
+    for round in 0..ROUNDS {
+        eprintln!("\n[BENCH] ── Round {}/{ROUNDS} ──", round + 1);
+
+        // Monolithic
+        let t = Instant::now();
+        let bundle = load_stage_bundle_impl(path).expect("monolithic failed");
+        let ms = t.elapsed().as_millis();
+        monolithic_times.push(ms);
+        eprintln!("[BENCH]   monolithic: {ms}ms");
+
+        if round == 0 {
+            monolithic_json_size = serde_json::to_vec(&bundle)
+                .map(|v| v.len())
+                .unwrap_or(0);
+        }
+        drop(bundle);
+
+        // Skeleton
+        let t = Instant::now();
+        let skeleton = load_stage_skeleton_impl(path).expect("skeleton failed");
+        let ms = t.elapsed().as_millis();
+        skeleton_times.push(ms);
+        eprintln!("[BENCH]   skeleton: {ms}ms");
+
+        if round == 0 {
+            skeleton_json_size = serde_json::to_vec(&skeleton)
+                .map(|v| v.len())
+                .unwrap_or(0);
+        }
+
+        // Stream (sequential, simulating Channel delivery)
+        let t_stream = Instant::now();
+        let mut per_model: Vec<(String, u128)> = Vec::new();
+        let mut first_model_ms: Option<u128> = None;
+
+        if skeleton.has_base_model {
+            let t = Instant::now();
+            let mut w = Vec::new();
+            let result = load_model_in_subfolder_pub(root, "base", &mut w);
+            let ms = t.elapsed().as_millis();
+            per_model.push(("base".to_string(), ms));
+            if first_model_ms.is_none() {
+                first_model_ms = Some(t_stream.elapsed().as_millis());
+            }
+            if round == 0 {
+                if let Some(ref b) = result {
+                    let sz = serde_json::to_vec(b).map(|v| v.len()).unwrap_or(0);
+                    per_model_json_sizes.push(("base".to_string(), sz));
+                }
+            }
+        }
+
+        for entry in &skeleton.sub_model_manifest {
+            let t = Instant::now();
+            let mut w = Vec::new();
+            let result = load_model_in_subfolder_pub(root, &entry.folder_name, &mut w);
+            let ms = t.elapsed().as_millis();
+            per_model.push((entry.folder_name.clone(), ms));
+            if first_model_ms.is_none() {
+                first_model_ms = Some(t_stream.elapsed().as_millis());
+            }
+            if round == 0 {
+                if let Some(ref b) = result {
+                    let sz = serde_json::to_vec(b).map(|v| v.len()).unwrap_or(0);
+                    per_model_json_sizes.push((entry.folder_name.clone(), sz));
+                }
+            }
+        }
+
+        let stream_ms = t_stream.elapsed().as_millis();
+        stream_times.push(stream_ms);
+        first_model_times.push(first_model_ms.unwrap_or(0));
+        per_model_all.push(per_model);
+        eprintln!("[BENCH]   stream: {stream_ms}ms  (first model at {}ms)", first_model_ms.unwrap_or(0));
+    }
+
+    // ── Statistics ──
+    fn median(v: &mut Vec<u128>) -> u128 {
+        v.sort();
+        v[v.len() / 2]
+    }
+    fn mean(v: &[u128]) -> f64 {
+        v.iter().sum::<u128>() as f64 / v.len() as f64
+    }
+
+    let mono_median = median(&mut monolithic_times.clone());
+    let skel_median = median(&mut skeleton_times.clone());
+    let stream_median = median(&mut stream_times.clone());
+    let first_model_median = median(&mut first_model_times.clone());
+
+    eprintln!("\n{}", "=".repeat(76));
+    eprintln!("[BENCH]  RESULTS (median of {ROUNDS} rounds, 1 warmup discarded)");
+    eprintln!("{}", "=".repeat(76));
+
+    eprintln!("\n[BENCH]  ┌─────────────────────────┬──────────┬──────────┬──────────┐");
+    eprintln!("[BENCH]  │ Phase                   │ Median   │ Mean     │ All runs │");
+    eprintln!("[BENCH]  ├─────────────────────────┼──────────┼──────────┼──────────┤");
+    eprintln!(
+        "[BENCH]  │ OLD: Monolithic          │ {:>5}ms  │ {:>5.0}ms  │ {:?} │",
+        mono_median, mean(&monolithic_times), monolithic_times
+    );
+    eprintln!(
+        "[BENCH]  │ NEW: Skeleton (P1)       │ {:>5}ms  │ {:>5.1}ms  │ {:?} │",
+        skel_median, mean(&skeleton_times), skeleton_times
+    );
+    eprintln!(
+        "[BENCH]  │ NEW: First model visible │ {:>5}ms  │ {:>5.0}ms  │ {:?} │",
+        first_model_median, mean(&first_model_times), first_model_times
+    );
+    eprintln!(
+        "[BENCH]  │ NEW: All models (P2)     │ {:>5}ms  │ {:>5.0}ms  │ {:?} │",
+        stream_median, mean(&stream_times), stream_times
+    );
+    eprintln!("[BENCH]  └─────────────────────────┴──────────┴──────────┴──────────┘");
+
+    // Speedups
+    let first_ui_speedup = mono_median as f64 / (skel_median.max(1)) as f64;
+    let first_model_speedup = mono_median as f64 / ((skel_median + first_model_median).max(1)) as f64;
+    eprintln!("\n[BENCH]  Speedups vs Monolithic ({mono_median}ms):");
+    eprintln!("[BENCH]    Time-to-first-UI (skeleton):  {skel_median}ms → {first_ui_speedup:.0}x faster");
+    eprintln!(
+        "[BENCH]    Time-to-first-model:           {}ms → {first_model_speedup:.1}x faster",
+        skel_median + first_model_median
+    );
+    eprintln!(
+        "[BENCH]    Total progressive:              {}ms → {:.2}x",
+        skel_median + stream_median,
+        mono_median as f64 / ((skel_median + stream_median).max(1)) as f64
+    );
+
+    // IPC payload sizes
+    eprintln!("\n[BENCH]  IPC Payload Sizes (JSON serialized):");
+    eprintln!("[BENCH]    OLD monolithic bundle:  {:.2} MB", monolithic_json_size as f64 / 1_048_576.0);
+    eprintln!("[BENCH]    NEW skeleton:           {:.2} KB", skeleton_json_size as f64 / 1024.0);
+    let total_chunk_size: usize = per_model_json_sizes.iter().map(|(_, s)| *s).sum();
+    eprintln!("[BENCH]    NEW total chunks:       {:.2} MB ({} chunks)", total_chunk_size as f64 / 1_048_576.0, per_model_json_sizes.len());
+    eprintln!("[BENCH]    Largest single chunk:   {:.2} MB",
+        per_model_json_sizes.iter().map(|(_, s)| *s).max().unwrap_or(0) as f64 / 1_048_576.0
+    );
+
+    eprintln!("\n[BENCH]  Per-model breakdown (Round 1):");
+    if let Some(models) = per_model_all.first() {
+        for (i, ((name, ms), (_name2, json_sz))) in models.iter().zip(per_model_json_sizes.iter()).enumerate() {
+            eprintln!(
+                "[BENCH]    [{:>2}] {:<50} {:>5}ms  {:.2} MB",
+                i, name, ms, *json_sz as f64 / 1_048_576.0
+            );
+        }
+    }
+
+    // Duplicate load elimination
+    eprintln!("\n[BENCH]  Duplicate Load Elimination:");
+    eprintln!("[BENCH]    OLD scene_open_folder called load_stage_bundle_impl AGAIN: +{mono_median}ms wasted");
+    eprintln!("[BENCH]    NEW scene_open_folder uses skeleton: +{skel_median}ms (saved {}ms)", mono_median.saturating_sub(skel_median));
+
+    eprintln!("\n{}", "=".repeat(76));
+    eprintln!("[BENCH]  END");
+    eprintln!("{}", "=".repeat(76));
+}
+
+// ─── Texture Decode Benchmark ───────────────────────────────────────────
+
+fn collect_nutexb_paths(dir: &Path) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    collect_nutexb_paths_inner(dir, &mut out);
+    out
+}
+
+fn collect_nutexb_paths_inner(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_nutexb_paths_inner(&path, out);
+        } else if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("nutexb")) {
+            out.push(path);
+        }
+    }
+}
+
+#[derive(Debug)]
+struct TextureDecodeResult {
+    path: String,
+    file_size: u64,
+    width: u32,
+    height: u32,
+    format: String,
+    read_ms: f64,
+    decode_rgba_ms: f64,
+    rgba_size: usize,
+    decode_compressed_ms: f64,
+    compressed_size: usize,
+    compressed_format_id: u8,
+}
+
+#[test]
+#[ignore]
+fn bench_stage211_texture_decode() {
+    let hash_root = r"E:\XB\解包\com\test\0xBBC60B47";
+    if !Path::new(hash_root).is_dir() {
+        eprintln!("[BENCH-TEX] SKIPPED — path not found: {hash_root}");
+        return;
+    }
+
+    let all_nutexb = collect_nutexb_paths(Path::new(hash_root));
+    if all_nutexb.is_empty() {
+        eprintln!("[BENCH-TEX] SKIPPED — no .nutexb files found");
+        return;
+    }
+
+    eprintln!("\n{}", "=".repeat(80));
+    eprintln!("[BENCH-TEX]  Stage 211 FULL Texture Decode Benchmark");
+    eprintln!("[BENCH-TEX]  Root: {hash_root}");
+    eprintln!("[BENCH-TEX]  Total .nutexb files: {}", all_nutexb.len());
+    eprintln!("{}", "=".repeat(80));
+
+    // Warmup: decode first texture
+    if let Some(first) = all_nutexb.first() {
+        let bytes = std::fs::read(first).unwrap_or_default();
+        let _ = nutexb_lib::nutexb_to_rgba_from_bytes(&bytes, None);
+        let _ = nutexb_lib::nutexb_compressed_data_from_bytes(&bytes);
+    }
+
+    let mut results: Vec<TextureDecodeResult> = Vec::with_capacity(all_nutexb.len());
+    let mut total_read_ms = 0.0f64;
+    let mut total_rgba_ms = 0.0f64;
+    let mut total_compressed_ms = 0.0f64;
+    let mut total_file_bytes: u64 = 0;
+    let mut total_rgba_bytes: usize = 0;
+    let mut total_compressed_bytes: usize = 0;
+    let mut decode_errors = 0usize;
+
+    for nutexb_path in &all_nutexb {
+        let path_str = nutexb_path.to_string_lossy().to_string();
+        let rel = nutexb_path
+            .strip_prefix(hash_root)
+            .unwrap_or(nutexb_path)
+            .to_string_lossy()
+            .to_string();
+
+        // Phase 1: File read
+        let t = Instant::now();
+        let bytes = match std::fs::read(nutexb_path) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("[BENCH-TEX] ERROR reading {rel}: {e}");
+                decode_errors += 1;
+                continue;
+            }
+        };
+        let read_ms = t.elapsed().as_secs_f64() * 1000.0;
+        let file_size = bytes.len() as u64;
+
+        // Phase 2: Read info (format, dimensions)
+        let info = match nutexb_lib::read_nutexb_info(&path_str) {
+            Ok(i) => i,
+            Err(e) => {
+                eprintln!("[BENCH-TEX] ERROR reading info {rel}: {e}");
+                decode_errors += 1;
+                continue;
+            }
+        };
+
+        // Phase 3: RGBA decode (full CPU decompress)
+        let t = Instant::now();
+        let rgba_result = nutexb_lib::nutexb_to_rgba_from_bytes(&bytes, None);
+        let decode_rgba_ms = t.elapsed().as_secs_f64() * 1000.0;
+
+        let (rgba_size, width, height) = match &rgba_result {
+            Ok((w, h, data)) => (data.len(), *w, *h),
+            Err(e) => {
+                eprintln!("[BENCH-TEX] RGBA decode failed {rel}: {e}");
+                decode_errors += 1;
+                continue;
+            }
+        };
+
+        // Phase 4: Compressed data extract (GPU-ready, no CPU decompress)
+        let t = Instant::now();
+        let comp_result = nutexb_lib::nutexb_compressed_data_from_bytes(&bytes);
+        let decode_compressed_ms = t.elapsed().as_secs_f64() * 1000.0;
+
+        let (compressed_size, compressed_format_id) = match &comp_result {
+            Ok((_, _, fmt, data)) => (data.len(), *fmt),
+            Err(e) => {
+                eprintln!("[BENCH-TEX] Compressed extract failed {rel}: {e}");
+                (0, 0)
+            }
+        };
+
+        total_read_ms += read_ms;
+        total_rgba_ms += decode_rgba_ms;
+        total_compressed_ms += decode_compressed_ms;
+        total_file_bytes += file_size;
+        total_rgba_bytes += rgba_size;
+        total_compressed_bytes += compressed_size;
+
+        results.push(TextureDecodeResult {
+            path: rel,
+            file_size,
+            width,
+            height,
+            format: info.image_format.clone(),
+            read_ms,
+            decode_rgba_ms,
+            rgba_size,
+            decode_compressed_ms,
+            compressed_size,
+            compressed_format_id,
+        });
+    }
+
+    // ── Summary ──
+    let count = results.len();
+    eprintln!("\n{}", "-".repeat(80));
+    eprintln!("[BENCH-TEX]  RESULTS — {} textures decoded ({} errors)", count, decode_errors);
+    eprintln!("{}", "-".repeat(80));
+
+    eprintln!("\n[BENCH-TEX]  Sequential Totals:");
+    eprintln!("[BENCH-TEX]    File I/O:              {:.1}ms", total_read_ms);
+    eprintln!("[BENCH-TEX]    RGBA decode (CPU):     {:.1}ms", total_rgba_ms);
+    eprintln!("[BENCH-TEX]    Compressed extract:    {:.1}ms", total_compressed_ms);
+    eprintln!("[BENCH-TEX]    Total RGBA pipeline:   {:.1}ms", total_read_ms + total_rgba_ms);
+    eprintln!("[BENCH-TEX]    Total Compressed pipe: {:.1}ms", total_read_ms + total_compressed_ms);
+
+    eprintln!("\n[BENCH-TEX]  Data Sizes:");
+    eprintln!("[BENCH-TEX]    .nutexb on disk:  {:.2} MB ({} files)",
+        total_file_bytes as f64 / 1_048_576.0, count);
+    eprintln!("[BENCH-TEX]    RGBA decoded:     {:.2} MB (IPC payload if sent raw)",
+        total_rgba_bytes as f64 / 1_048_576.0);
+    eprintln!("[BENCH-TEX]    Compressed GPU:   {:.2} MB (IPC payload if sent compressed)",
+        total_compressed_bytes as f64 / 1_048_576.0);
+
+    let rgba_inflation = if total_file_bytes > 0 {
+        total_rgba_bytes as f64 / total_file_bytes as f64
+    } else {
+        0.0
+    };
+    let compressed_ratio = if total_file_bytes > 0 {
+        total_compressed_bytes as f64 / total_file_bytes as f64
+    } else {
+        0.0
+    };
+    eprintln!("[BENCH-TEX]    RGBA vs disk:     {:.2}x inflation", rgba_inflation);
+    eprintln!("[BENCH-TEX]    Compressed vs disk: {:.2}x ratio", compressed_ratio);
+
+    // Format distribution
+    let mut format_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut format_sizes: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
+    for r in &results {
+        *format_counts.entry(r.format.clone()).or_default() += 1;
+        *format_sizes.entry(r.format.clone()).or_default() += r.file_size;
+    }
+    eprintln!("\n[BENCH-TEX]  Format Distribution:");
+    let mut fmts: Vec<_> = format_counts.iter().collect();
+    fmts.sort_by(|a, b| b.1.cmp(a.1));
+    for (fmt, count) in &fmts {
+        let sz = format_sizes.get(*fmt).copied().unwrap_or(0);
+        eprintln!("[BENCH-TEX]    {:<20} {:>4} files  {:.2} MB",
+            fmt, count, sz as f64 / 1_048_576.0);
+    }
+
+    // Top 10 slowest RGBA decodes
+    let mut by_rgba_time: Vec<&TextureDecodeResult> = results.iter().collect();
+    by_rgba_time.sort_by(|a, b| b.decode_rgba_ms.partial_cmp(&a.decode_rgba_ms).unwrap());
+    eprintln!("\n[BENCH-TEX]  Top 10 Slowest RGBA Decodes:");
+    eprintln!("[BENCH-TEX]  {:>6} {:>6} {:>12} {:>8} {:>10}  {}",
+        "RGBA", "Read", "Dimensions", "Format", "FileSize", "Path");
+    for r in by_rgba_time.iter().take(10) {
+        eprintln!("[BENCH-TEX]  {:>5.1}ms {:>5.1}ms {:>5}x{:<5}  {:>8} {:>9.1}KB  {}",
+            r.decode_rgba_ms, r.read_ms, r.width, r.height,
+            &r.format[..r.format.len().min(8)],
+            r.file_size as f64 / 1024.0, r.path);
+    }
+
+    // Top 10 largest textures by RGBA size
+    let mut by_rgba_size: Vec<&TextureDecodeResult> = results.iter().collect();
+    by_rgba_size.sort_by(|a, b| b.rgba_size.cmp(&a.rgba_size));
+    eprintln!("\n[BENCH-TEX]  Top 10 Largest Textures (RGBA decoded):");
+    eprintln!("[BENCH-TEX]  {:>10} {:>10} {:>12} {:>8}  {}",
+        "RGBA MB", "Disk KB", "Dimensions", "Format", "Path");
+    for r in by_rgba_size.iter().take(10) {
+        eprintln!("[BENCH-TEX]  {:>9.2}MB {:>9.1}KB {:>5}x{:<5}  {:>8}  {}",
+            r.rgba_size as f64 / 1_048_576.0,
+            r.file_size as f64 / 1024.0,
+            r.width, r.height,
+            &r.format[..r.format.len().min(8)],
+            r.path);
+    }
+
+    // RGBA vs Compressed comparison for IPC
+    eprintln!("\n[BENCH-TEX]  IPC Strategy Comparison:");
+    eprintln!("[BENCH-TEX]    Strategy A (RGBA → ArrayBuffer):    {:.2} MB, {:.1}ms decode",
+        total_rgba_bytes as f64 / 1_048_576.0, total_rgba_ms);
+    eprintln!("[BENCH-TEX]    Strategy B (Compressed → GPU):      {:.2} MB, {:.1}ms extract",
+        total_compressed_bytes as f64 / 1_048_576.0, total_compressed_ms);
+    let rgba_saved = total_rgba_bytes as f64 - total_compressed_bytes as f64;
+    let time_saved = total_rgba_ms - total_compressed_ms;
+    eprintln!("[BENCH-TEX]    B saves: {:.2} MB IPC payload, {:.1}ms CPU time",
+        rgba_saved / 1_048_576.0, time_saved);
+
+    // Downsampled decode comparison (simulates maxDimension=512)
+    eprintln!("\n[BENCH-TEX]  Downsampled Decode (maxDimension=512):");
+    let max_dim = 512u32;
+    let mut total_ds_ms = 0.0f64;
+    let mut total_ds_bytes: usize = 0;
+    let mut ds_count = 0usize;
+    for nutexb_path in all_nutexb.iter().take(50) {
+        if let Ok(bytes) = std::fs::read(nutexb_path) {
+            let t = Instant::now();
+            if let Ok((_, _, data)) = nutexb_lib::nutexb_to_rgba_from_bytes(&bytes, Some(max_dim)) {
+                let ms = t.elapsed().as_secs_f64() * 1000.0;
+                total_ds_ms += ms;
+                total_ds_bytes += data.len();
+                ds_count += 1;
+            }
+        }
+    }
+    if ds_count > 0 {
+        eprintln!("[BENCH-TEX]    Decoded {} textures at max {}px", ds_count, max_dim);
+        eprintln!("[BENCH-TEX]    Total decode time:  {:.1}ms (avg {:.1}ms/tex)",
+            total_ds_ms, total_ds_ms / ds_count as f64);
+        eprintln!("[BENCH-TEX]    Total RGBA size:    {:.2} MB (avg {:.1}KB/tex)",
+            total_ds_bytes as f64 / 1_048_576.0,
+            total_ds_bytes as f64 / ds_count as f64 / 1024.0);
+    }
+
+    // Parallel decode simulation using std::thread
+    eprintln!("\n[BENCH-TEX]  Parallel Decode Simulation (std::thread, 8 workers):");
+    let paths_for_par: Vec<_> = all_nutexb.iter().cloned().collect();
+    let num_workers = 8usize;
+
+    let t_par = Instant::now();
+    let chunk_size = (paths_for_par.len() + num_workers - 1) / num_workers;
+    let handles: Vec<_> = paths_for_par
+        .chunks(chunk_size)
+        .map(|chunk| {
+            let chunk = chunk.to_vec();
+            std::thread::spawn(move || {
+                let mut decoded = 0usize;
+                let mut total_bytes = 0usize;
+                for p in &chunk {
+                    if let Ok(bytes) = std::fs::read(p) {
+                        if let Ok((_, _, data)) = nutexb_lib::nutexb_to_rgba_from_bytes(&bytes, None) {
+                            decoded += 1;
+                            total_bytes += data.len();
+                        }
+                    }
+                }
+                (decoded, total_bytes)
+            })
+        })
+        .collect();
+    let mut par_decoded = 0usize;
+    for h in handles {
+        let (d, _) = h.join().unwrap();
+        par_decoded += d;
+    }
+    let par_rgba_ms = t_par.elapsed().as_secs_f64() * 1000.0;
+    eprintln!("[BENCH-TEX]    Parallel RGBA ({} textures):  {:.1}ms (vs {:.1}ms sequential)",
+        par_decoded, par_rgba_ms, total_read_ms + total_rgba_ms);
+    eprintln!("[BENCH-TEX]    Parallel speedup: {:.2}x",
+        (total_read_ms + total_rgba_ms) / par_rgba_ms.max(0.001));
+
+    let t_par_comp = Instant::now();
+    let paths_for_comp: Vec<_> = all_nutexb.iter().cloned().collect();
+    let handles_comp: Vec<_> = paths_for_comp
+        .chunks(chunk_size)
+        .map(|chunk| {
+            let chunk = chunk.to_vec();
+            std::thread::spawn(move || {
+                let mut decoded = 0usize;
+                for p in &chunk {
+                    if let Ok(bytes) = std::fs::read(p) {
+                        if nutexb_lib::nutexb_compressed_data_from_bytes(&bytes).is_ok() {
+                            decoded += 1;
+                        }
+                    }
+                }
+                decoded
+            })
+        })
+        .collect();
+    let mut par_comp_decoded = 0usize;
+    for h in handles_comp {
+        par_comp_decoded += h.join().unwrap();
+    }
+    let par_comp_ms = t_par_comp.elapsed().as_secs_f64() * 1000.0;
+    eprintln!("[BENCH-TEX]    Parallel Compressed ({} textures):  {:.1}ms (vs {:.1}ms sequential)",
+        par_comp_decoded, par_comp_ms, total_read_ms + total_compressed_ms);
+    eprintln!("[BENCH-TEX]    Parallel speedup: {:.2}x",
+        (total_read_ms + total_compressed_ms) / par_comp_ms.max(0.001));
+
+    // Frontend decode concurrency simulation (8 concurrent IPC calls)
+    eprintln!("\n[BENCH-TEX]  Frontend IPC Simulation (DECODE_CONCURRENCY=8):");
+    eprintln!("[BENCH-TEX]    Total textures:        {}", count);
+    let avg_rgba_ms = if count > 0 { (total_read_ms + total_rgba_ms) / count as f64 } else { 0.0 };
+    let avg_comp_ms = if count > 0 { (total_read_ms + total_compressed_ms) / count as f64 } else { 0.0 };
+    let batches = (count + 7) / 8;
+    eprintln!("[BENCH-TEX]    Avg RGBA per texture:  {:.1}ms", avg_rgba_ms);
+    eprintln!("[BENCH-TEX]    Avg Compressed per tex: {:.1}ms", avg_comp_ms);
+    eprintln!("[BENCH-TEX]    Est. wall time (8x RGBA):       {:.0}ms ({} batches)",
+        avg_rgba_ms * batches as f64, batches);
+    eprintln!("[BENCH-TEX]    Est. wall time (8x Compressed): {:.0}ms ({} batches)",
+        avg_comp_ms * batches as f64, batches);
+
+    eprintln!("\n{}", "=".repeat(80));
+    eprintln!("[BENCH-TEX]  END");
+    eprintln!("{}", "=".repeat(80));
 }

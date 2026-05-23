@@ -49,3 +49,4 @@ ufbx = "0.10"
 flate2 = "1"
 tempfile = "3"
 uuid = { version = "1", features = ["v4"] }
+rayon = "1.10"

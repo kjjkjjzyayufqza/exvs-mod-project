@@ -48,7 +48,7 @@ function computeTextureStats(textureDataMap: NutexbTextureDataMap): TextureStats
     if (seen.has(key)) continue;
     seen.add(key);
 
-    totalRgbaBytes += data.rgba.byteLength;
+    totalRgbaBytes += data.kind === "rgba" ? data.rgba.byteLength : data.data.byteLength;
     maxWidth = Math.max(maxWidth, data.width);
     maxHeight = Math.max(maxHeight, data.height);
 

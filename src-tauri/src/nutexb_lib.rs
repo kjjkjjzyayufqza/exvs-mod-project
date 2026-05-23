@@ -118,26 +118,38 @@ pub fn nutexb_to_rgba_from_bytes(
     let mut cursor = Cursor::new(nutexb_bytes.to_vec());
     let nutexb = NutexbFile::read(&mut cursor).map_err(|e| e.to_string())?;
     let dds = nutexb.to_dds().map_err(|e| e.to_string())?;
-    let image: RgbaImage = image_dds::image_from_dds(&dds, 0).map_err(|e| e.to_string())?;
 
+    let base_w = nutexb.footer.width;
+    let base_h = nutexb.footer.height;
+    let mip_count = nutexb.footer.mipmap_count;
+
+    // B3: Select appropriate mip level directly instead of decode+resize
+    let mip_level = if let Some(max_dim) = max_dimension {
+        if base_w > max_dim || base_h > max_dim {
+            select_mip_level(base_w, base_h, max_dim, mip_count)
+        } else {
+            0
+        }
+    } else {
+        0
+    };
+
+    let image: RgbaImage = image_dds::image_from_dds(&dds, mip_level).map_err(|e| e.to_string())?;
     let (w, h) = (image.width(), image.height());
+    Ok((w, h, image.into_raw()))
+}
 
-    if let Some(max_dim) = max_dimension {
-        if w > max_dim || h > max_dim {
-            let scale = max_dim as f64 / (w.max(h) as f64);
-            let new_w = ((w as f64 * scale) as u32).max(1);
-            let new_h = ((h as f64 * scale) as u32).max(1);
-            let resized = image::imageops::resize(
-                &image,
-                new_w,
-                new_h,
-                image::imageops::FilterType::Lanczos3,
-            );
-            return Ok((new_w, new_h, resized.into_raw()));
+/// Select the lowest mip level whose dimensions still meet the max_dimension target.
+fn select_mip_level(base_w: u32, base_h: u32, max_dim: u32, mip_count: u32) -> u32 {
+    for mip in 0..mip_count {
+        let mip_w = (base_w >> mip).max(1);
+        let mip_h = (base_h >> mip).max(1);
+        if mip_w <= max_dim && mip_h <= max_dim {
+            return mip;
         }
     }
-
-    Ok((w, h, image.into_raw()))
+    // All mips still exceed max_dim — use the smallest available
+    mip_count.saturating_sub(1)
 }
 
 /// Decodes nutexb file to raw RGBA pixels, optionally downsampling.
@@ -419,6 +431,16 @@ fn format_series_ms_index(icon_file_index: i32) -> Result<String, String> {
 pub fn nutexb_compressed_data_from_path(input_path: &str) -> Result<(u32, u32, u8, Vec<u8>), String> {
     let bytes = fs::read(input_path).map_err(|e| e.to_string())?;
     nutexb_compressed_data_from_bytes(&bytes)
+}
+
+/// Single-read: computes CRC32 identity AND extracts compressed texture data from one file read.
+/// Returns (nutexb_size, crc32, width, height, format_id, data).
+pub fn nutexb_identity_and_compressed_from_path(input_path: &str) -> Result<(u64, u32, u32, u32, u8, Vec<u8>), String> {
+    let bytes = fs::read(input_path).map_err(|e| e.to_string())?;
+    let nutexb_size = bytes.len() as u64;
+    let crc32 = nutexb_file_crc32(&bytes);
+    let (w, h, fmt, data) = nutexb_compressed_data_from_bytes(&bytes)?;
+    Ok((nutexb_size, crc32, w, h, fmt, data))
 }
 
 pub fn nutexb_compressed_data_from_bytes(nutexb_bytes: &[u8]) -> Result<(u32, u32, u8, Vec<u8>), String> {

@@ -84,9 +84,9 @@ describe("DaeImportAnalysisPanel", () => {
         analyzeError={null}
       />,
     );
-    expect(screen.getByText(/Meshes: 3/)).toBeInTheDocument();
-    expect(screen.getByText(/10,000/)).toBeInTheDocument();
-    expect(screen.getByText(/Bones:\s*5/)).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("10,000")).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
   });
 
   it("displays single mesh correctly", () => {
@@ -101,9 +101,9 @@ describe("DaeImportAnalysisPanel", () => {
         analyzeError={null}
       />,
     );
-    expect(screen.getByText(/Meshes: 1/)).toBeInTheDocument();
-    expect(screen.getByText(/42/)).toBeInTheDocument();
-    expect(screen.getByText(/Bones:\s*0/)).toBeInTheDocument();
+    expect(screen.getByText("1")).toBeInTheDocument();
+    expect(screen.getByText("42")).toBeInTheDocument();
+    expect(screen.getByText("0")).toBeInTheDocument();
   });
 
   it("displays warnings from analysis", () => {
@@ -145,8 +145,8 @@ describe("DaeImportAnalysisPanel", () => {
         analyzeError={null}
       />,
     );
-    expect(screen.getByText(/Meshes: 0/)).toBeInTheDocument();
-    expect(screen.getByText(/Bones:\s*0/)).toBeInTheDocument();
+    expect(screen.getByText("Source Analysis")).toBeInTheDocument();
+    expect(screen.getAllByText("0")).toHaveLength(3);
   });
 
   it("matches real zabanya backpack_up.dae analysis shape", () => {
@@ -182,8 +182,7 @@ describe("DaeImportAnalysisPanel", () => {
         analyzeError={null}
       />,
     );
-    expect(screen.getByText(/Meshes: 1/)).toBeInTheDocument();
-    expect(screen.getByText(/846/)).toBeInTheDocument();
-    expect(screen.getByText(/Bones:\s*7/)).toBeInTheDocument();
+    expect(screen.getByText("846")).toBeInTheDocument();
+    expect(screen.getByText("7")).toBeInTheDocument();
   });
 });

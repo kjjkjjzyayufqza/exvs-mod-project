@@ -15,7 +15,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tauri::{
-    ipc::{InvokeBody, Response},
+    ipc::{Channel, InvokeBody, Response},
     AppHandle, Emitter, State,
 };
 use crate::format::param_bin_format::{
@@ -195,6 +195,117 @@ pub async fn nutexb_compressed_bytes(input_path: String) -> Result<Response, Str
     Ok(Response::new(InvokeBody::Raw(
         crate::nutexb_lib::pack_compressed_response(w, h, fmt, data),
     )))
+}
+
+/// Single file read: returns identity (size+CRC32) in header + compressed texture data.
+/// Response format: [u64_LE nutexb_size][u32_LE crc32][u32_LE width][u32_LE height][u8 format_id][data...]
+#[tauri::command]
+pub async fn nutexb_identity_and_compressed(input_path: String) -> Result<Response, String> {
+    let (nutexb_size, crc32, w, h, fmt, data) = tauri::async_runtime::spawn_blocking(move || {
+        crate::nutexb_lib::nutexb_identity_and_compressed_from_path(&input_path)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
+    let mut result = Vec::with_capacity(17 + data.len());
+    result.extend_from_slice(&nutexb_size.to_le_bytes());
+    result.extend_from_slice(&crc32.to_le_bytes());
+    result.extend_from_slice(&w.to_le_bytes());
+    result.extend_from_slice(&h.to_le_bytes());
+    result.push(fmt);
+    result.extend_from_slice(&data);
+    Ok(Response::new(InvokeBody::Raw(result)))
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum NutexbStreamChunk {
+    #[serde(rename = "identity")]
+    Identity {
+        path: String,
+        nutexb_size: u64,
+        crc32: u32,
+    },
+    #[serde(rename = "identityError")]
+    IdentityError {
+        path: String,
+        message: String,
+    },
+    #[serde(rename = "progress")]
+    Progress {
+        done: usize,
+        total: usize,
+        phase: String,
+    },
+    #[serde(rename = "complete")]
+    Complete {
+        total_resolved: usize,
+        elapsed_ms: u64,
+    },
+}
+
+#[tauri::command]
+pub async fn nutexb_stream_identities(
+    paths: Vec<String>,
+    on_chunk: Channel<NutexbStreamChunk>,
+) -> Result<(), String> {
+    let t = Instant::now();
+    let total = paths.len();
+    let concurrency = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .min(16)
+        .max(2);
+
+    let mut resolved = 0usize;
+
+    for batch_start in (0..total).step_by(concurrency) {
+        let batch_end = (batch_start + concurrency).min(total);
+        let batch: Vec<String> = paths[batch_start..batch_end].to_vec();
+
+        let mut handles = Vec::with_capacity(batch.len());
+        for path in batch {
+            let handle = tauri::async_runtime::spawn_blocking(move || {
+                let identity = crate::nutexb_lib::nutexb_preview_file_identity(&path);
+                (path, identity)
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            let (path, result) = handle.await.map_err(|e| e.to_string())?;
+            match result {
+                Ok(identity) => {
+                    resolved += 1;
+                    let _ = on_chunk.send(NutexbStreamChunk::Identity {
+                        path,
+                        nutexb_size: identity.nutexb_size,
+                        crc32: identity.crc32,
+                    });
+                }
+                Err(e) => {
+                    let _ = on_chunk.send(NutexbStreamChunk::IdentityError {
+                        path,
+                        message: e,
+                    });
+                }
+            }
+        }
+
+        let _ = on_chunk.send(NutexbStreamChunk::Progress {
+            done: (batch_end).min(total),
+            total,
+            phase: "identity".into(),
+        });
+    }
+
+    let elapsed_ms = t.elapsed().as_millis() as u64;
+    let _ = on_chunk.send(NutexbStreamChunk::Complete {
+        total_resolved: resolved,
+        elapsed_ms,
+    });
+
+    Ok(())
 }
 
 #[tauri::command]

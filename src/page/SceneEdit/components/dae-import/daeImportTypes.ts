@@ -13,11 +13,6 @@ export interface SsbhImportConfig {
   materialTemplate: string;
 }
 
-export interface HktImportConfig {
-  havokToolPath: string;
-  configProfile: string;
-}
-
 export interface TextureImportEntry {
   slot: string;
   source:
@@ -30,7 +25,6 @@ export interface DaeImportConfig {
   convertToSsbh: boolean;
   generateHkt: boolean;
   ssbhConfig: SsbhImportConfig;
-  hktConfig: HktImportConfig;
   textureEntries?: TextureImportEntry[];
   defaultDdsFormat: string;
 }

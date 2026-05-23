@@ -1673,6 +1673,110 @@ fn url_to_filename(file_url: &str) -> String {
     parts.last().unwrap_or(&"unknown").to_string()
 }
 
+// ── Stage skeleton (lightweight metadata for instant UI) ───────────────────
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StageSkeleton {
+    pub root_path: String,
+    pub placement_header: Vec<String>,
+    pub placement_entries: Vec<PlacementEntry>,
+    pub graphic_params: Vec<GraphicParamEntry>,
+    pub sub_model_manifest: Vec<SubModelManifestEntry>,
+    pub has_base_model: bool,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubModelManifestEntry {
+    pub folder_name: String,
+    pub object_index: usize,
+}
+
+pub fn load_stage_skeleton_impl(stage_root: &str) -> Result<StageSkeleton, String> {
+    let root = Path::new(stage_root);
+    if !root.is_dir() {
+        return Err(format!("Stage root directory not found: {stage_root}"));
+    }
+
+    let mut warnings = Vec::new();
+
+    let has_base_model = {
+        let base_dir = root.join(STAGE_BASE_NAME);
+        base_dir.is_dir() && find_numdlb_in_dir(&base_dir).is_some()
+    };
+
+    let mut entries: Vec<_> = fs::read_dir(root)
+        .map_err(|e| format!("Failed to read stage root: {e}"))?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+        .collect();
+    entries.sort_by_key(|e| e.file_name());
+
+    let mut sub_model_manifest = Vec::new();
+    let mut object_index = 0usize;
+    for entry in &entries {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name == STAGE_BASE_NAME || name == STAGE_INFO_NAME || name == STAGE_TEXTURES_NAME {
+            continue;
+        }
+        let folder = root.join(&name);
+        if folder.is_dir() && find_numdlb_in_dir(&folder).is_some() {
+            sub_model_manifest.push(SubModelManifestEntry {
+                folder_name: name,
+                object_index,
+            });
+        }
+        object_index += 1;
+    }
+
+    let graphic_params = parse_graphic_param_csv(root, &mut warnings);
+    let (placement_header, placement_entries) = parse_placement_csv(root, &mut warnings);
+
+    Ok(StageSkeleton {
+        root_path: stage_root.to_string(),
+        placement_header,
+        placement_entries,
+        graphic_params,
+        sub_model_manifest,
+        has_base_model,
+        warnings,
+    })
+}
+
+// ── Stage stream chunks (progressive model delivery) ──────────────────────
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum StageStreamChunk {
+    #[serde(rename = "baseModel")]
+    BaseModel {
+        bundle: SsbhModelPreviewBundle,
+    },
+    #[serde(rename = "subModel")]
+    SubModel {
+        folder_name: String,
+        object_index: usize,
+        bundle: SsbhModelPreviewBundle,
+    },
+    #[serde(rename = "progress")]
+    Progress {
+        loaded: usize,
+        total: usize,
+    },
+    #[serde(rename = "complete")]
+    Complete {
+        total_models: usize,
+        elapsed_ms: u64,
+    },
+    #[serde(rename = "error")]
+    Error {
+        message: String,
+        folder_name: Option<String>,
+    },
+}
+
 // ── Stage bundle loading ────────────────────────────────────────────────────
 
 #[derive(Clone, Serialize)]
@@ -1774,6 +1878,14 @@ pub fn load_stage_bundle_impl(stage_root: &str) -> Result<StageBundle, String> {
         placement_entries,
         warnings,
     })
+}
+
+pub fn load_model_in_subfolder_pub(
+    root: &Path,
+    subfolder: &str,
+    warnings: &mut Vec<String>,
+) -> Option<SsbhModelPreviewBundle> {
+    load_model_in_subfolder(root, subfolder, warnings)
 }
 
 fn load_model_in_subfolder(

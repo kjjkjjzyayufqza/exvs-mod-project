@@ -6,13 +6,13 @@ import * as THREE from "three";
  * eliminating per-placement VRAM duplication.
  */
 export class SceneTexturePool {
-  private pool = new Map<string, THREE.DataTexture>();
+  private pool = new Map<string, THREE.Texture>();
 
   has(key: string): boolean {
     return this.pool.has(key);
   }
 
-  acquire(key: string, factory: () => THREE.DataTexture): THREE.DataTexture {
+  acquire(key: string, factory: () => THREE.Texture): THREE.Texture {
     const existing = this.pool.get(key);
     if (existing) return existing;
     const tex = factory();

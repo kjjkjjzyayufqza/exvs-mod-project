@@ -1,6 +1,4 @@
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -9,6 +7,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { SsbhImportConfig, SsbhDaeUpAxis } from "./daeImportTypes";
+import {
+  UnrealDetailsSection,
+  UnrealPropertyBool,
+  UnrealPropertyRow,
+  unrealInputClass,
+  unrealSelectTriggerClass,
+} from "./daeImportUnrealUi";
 
 interface DaeImportSsbhConfigPanelProps {
   config: SsbhImportConfig;
@@ -27,52 +32,46 @@ export function DaeImportSsbhConfigPanel({
   };
 
   return (
-    <div className="space-y-3 rounded-md border border-border/50 p-3 ml-5">
-      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-        SSBH Configuration
-      </p>
-
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <Label className="text-xs">Base filename</Label>
+    <>
+      <UnrealDetailsSection title="SSBH Output">
+        <UnrealPropertyRow label="Base Filename">
           <Input
-            className="h-7 text-xs"
+            className={unrealInputClass}
             value={config.baseFilename}
             onChange={(e) => update("baseFilename", e.target.value)}
           />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Scale factor</Label>
+        </UnrealPropertyRow>
+        <UnrealPropertyRow label="Scale Factor">
           <Input
-            className="h-7 text-xs"
+            className={unrealInputClass}
             type="number"
             step="0.1"
             min="0.01"
             value={config.scaleFactor}
-            onChange={(e) =>
-              update("scaleFactor", parseFloat(e.target.value) || 1)
-            }
+            onChange={(e) => update("scaleFactor", parseFloat(e.target.value) || 1)}
           />
-        </div>
-      </div>
+        </UnrealPropertyRow>
+        <UnrealPropertyRow label="Up Axis">
+          <Select
+            value={config.upAxis}
+            onValueChange={(v) => update("upAxis", v as SsbhDaeUpAxis)}
+          >
+            <SelectTrigger className={unrealSelectTriggerClass}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="rounded-none border-[#3a3a3a] bg-[#151515] text-[#e8e8e8]">
+              <SelectItem value="y_up" className="text-[11px] focus:bg-[#2a2a2a] focus:text-white">
+                Y-Up
+              </SelectItem>
+              <SelectItem value="z_up" className="text-[11px] focus:bg-[#2a2a2a] focus:text-white">
+                Z-Up
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </UnrealPropertyRow>
+      </UnrealDetailsSection>
 
-      <div className="space-y-1">
-        <Label className="text-xs">Up axis</Label>
-        <Select
-          value={config.upAxis}
-          onValueChange={(v) => update("upAxis", v as SsbhDaeUpAxis)}
-        >
-          <SelectTrigger className="h-7 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="y_up">Y-Up</SelectItem>
-            <SelectItem value="z_up">Z-Up</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="grid grid-cols-3 gap-x-4 gap-y-1">
+      <UnrealDetailsSection title="Write Targets">
         {(
           [
             ["writeNumdlb", "numdlb"],
@@ -80,22 +79,17 @@ export function DaeImportSsbhConfigPanel({
             ["writeNusktb", "nusktb"],
             ["writeNumatb", "numatb"],
             ["writeJnttbl", "jnttbl"],
-            ["writeMayaProfile", "Maya profile"],
+            ["writeMayaProfile", "Maya Profile"],
           ] as const
         ).map(([key, label]) => (
-          <label
+          <UnrealPropertyBool
             key={key}
-            className="flex items-center gap-1.5 text-xs cursor-pointer"
-          >
-            <Checkbox
-              checked={config[key]}
-              onCheckedChange={(checked) => update(key, checked === true)}
-              className="h-3.5 w-3.5"
-            />
-            {label}
-          </label>
+            label={label}
+            checked={config[key]}
+            onCheckedChange={(checked) => update(key, checked)}
+          />
         ))}
-      </div>
-    </div>
+      </UnrealDetailsSection>
+    </>
   );
 }

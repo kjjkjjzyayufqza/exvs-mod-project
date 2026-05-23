@@ -19,10 +19,6 @@ function makeDefaultDaeImportConfig(): DaeImportConfig {
       writeMayaProfile: false,
       materialTemplate: "",
     },
-    hktConfig: {
-      havokToolPath: "",
-      configProfile: "",
-    },
     defaultDdsFormat: "BC7_UNORM",
   };
 }

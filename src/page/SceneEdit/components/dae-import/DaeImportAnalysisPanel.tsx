@@ -1,5 +1,6 @@
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import type { DaeAnalysisResult } from "./daeImportTypes";
+import { UnrealDetailsSection, UnrealPropertyRow, UnrealStatusBanner } from "./daeImportUnrealUi";
 
 interface DaeImportAnalysisPanelProps {
   analysis: DaeAnalysisResult | null;
@@ -14,51 +15,64 @@ export function DaeImportAnalysisPanel({
 }: DaeImportAnalysisPanelProps) {
   if (analyzing) {
     return (
-      <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-        <Loader2 className="h-3 w-3 animate-spin" />
-        Analyzing DAE...
-      </div>
+      <UnrealStatusBanner tone="info">
+        <span className="inline-flex items-center gap-1.5">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Analyzing DAE...
+        </span>
+      </UnrealStatusBanner>
     );
   }
 
   if (analyzeError) {
-    return (
-      <div className="flex items-center gap-2 text-xs text-destructive py-2">
-        <AlertCircle className="h-3 w-3" />
-        {analyzeError}
-      </div>
-    );
+    return <UnrealStatusBanner tone="error">{analyzeError}</UnrealStatusBanner>;
   }
 
   if (!analysis) return null;
 
   const meshCount = analysis.meshRows.length;
-  const vertexCount = analysis.meshRows.reduce((sum, r) => sum + r.vertexCount, 0);
+  const vertexCount = analysis.meshRows.reduce((sum, row) => sum + row.vertexCount, 0);
 
   return (
-    <div className="space-y-1 py-2">
-      <div className="flex items-center gap-2 text-xs">
-        {analysis.canConvert ? (
-          <CheckCircle2 className="h-3 w-3 text-green-500" />
-        ) : (
-          <AlertCircle className="h-3 w-3 text-destructive" />
-        )}
-        <span className="text-muted-foreground">
-          Meshes: {meshCount} | Vertices:{" "}
-          {vertexCount.toLocaleString()} | Bones:{" "}
+    <UnrealDetailsSection title="Source Analysis">
+      <UnrealPropertyRow label="Convertible">
+        <span className="flex items-center justify-end gap-1 text-[11px]">
+          {analysis.canConvert ? (
+            <>
+              <CheckCircle2 className="h-3 w-3 text-[#6ecf6e]" />
+              <span className="text-[#6ecf6e]">Yes</span>
+            </>
+          ) : (
+            <>
+              <AlertCircle className="h-3 w-3 text-[#ff8a8a]" />
+              <span className="text-[#ff8a8a]">No</span>
+            </>
+          )}
+        </span>
+      </UnrealPropertyRow>
+      <UnrealPropertyRow label="Meshes">
+        <span className="block text-right text-[11px] font-mono text-[#e8e8e8]">{meshCount}</span>
+      </UnrealPropertyRow>
+      <UnrealPropertyRow label="Vertices">
+        <span className="block text-right text-[11px] font-mono text-[#e8e8e8]">
+          {vertexCount.toLocaleString()}
+        </span>
+      </UnrealPropertyRow>
+      <UnrealPropertyRow label="Bones">
+        <span className="block text-right text-[11px] font-mono text-[#e8e8e8]">
           {analysis.boneCount}
         </span>
-      </div>
-      {analysis.warnings.map((w, i) => (
-        <p key={i} className="text-xs text-yellow-500 pl-5">
-          {w}
-        </p>
+      </UnrealPropertyRow>
+      {analysis.warnings.map((warning, index) => (
+        <UnrealStatusBanner key={`warn-${index}`} tone="warning">
+          {warning}
+        </UnrealStatusBanner>
       ))}
-      {analysis.blockingErrors.map((e, i) => (
-        <p key={i} className="text-xs text-destructive pl-5">
-          {e}
-        </p>
+      {analysis.blockingErrors.map((error, index) => (
+        <UnrealStatusBanner key={`err-${index}`} tone="error">
+          {error}
+        </UnrealStatusBanner>
       ))}
-    </div>
+    </UnrealDetailsSection>
   );
 }

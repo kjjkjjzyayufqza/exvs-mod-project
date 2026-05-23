@@ -411,3 +411,103 @@ export function clearNutexbRgbaCache(): void {
   rgbaInflight.clear();
   rgbaTotalBytes = 0;
 }
+
+// ── Compressed texture support (B2: GPU upload path) ────────────────────────
+
+/**
+ * WebGL compressed internal format constants.
+ * format_id from Rust: 1=BC1, 2=BC2, 3=BC3, 4=BC4, 5=BC5, 6=BC6H, 7=BC7, 0=RGBA fallback
+ */
+export const COMPRESSED_FORMAT_MAP: Record<number, { ext: string; internalFormat: number; srgbInternalFormat?: number }> = {
+  1: { ext: "WEBGL_compressed_texture_s3tc", internalFormat: 0x83F1, srgbInternalFormat: 0x8C4C }, // BC1 RGBA
+  2: { ext: "WEBGL_compressed_texture_s3tc", internalFormat: 0x83F2, srgbInternalFormat: 0x8C4E }, // BC2
+  3: { ext: "WEBGL_compressed_texture_s3tc", internalFormat: 0x83F3, srgbInternalFormat: 0x8C4F }, // BC3
+  4: { ext: "EXT_texture_compression_rgtc", internalFormat: 0x8DBB },  // BC4 UNSIGNED
+  5: { ext: "EXT_texture_compression_rgtc", internalFormat: 0x8DBD },  // BC5 UNSIGNED
+  6: { ext: "EXT_texture_compression_bptc", internalFormat: 0x8E8F },  // BC6H UNSIGNED FLOAT
+  7: { ext: "EXT_texture_compression_bptc", internalFormat: 0x8E8C, srgbInternalFormat: 0x8E8D }, // BC7
+};
+
+export interface NutexbCompressedData {
+  width: number;
+  height: number;
+  formatId: number; // 1-7 for BCn, 0 for RGBA fallback
+  data: Uint8Array;
+}
+
+export function parseCompressedResponse(raw: ArrayBuffer | Uint8Array): NutexbCompressedData {
+  const u8 = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
+  const view = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  const width = view.getUint32(0, true);
+  const height = view.getUint32(4, true);
+  const formatId = u8[8];
+  const data = u8.slice(9);
+  return { width, height, formatId, data };
+}
+
+const compressedLru = new Map<string, NutexbCompressedData>();
+const compressedInflight = new Map<string, Promise<NutexbCompressedData>>();
+let compressedTotalBytes = 0;
+const COMPRESSED_MAX_BYTES = 128 * 1024 * 1024;
+
+function setCompressedLru(versionId: string, data: NutexbCompressedData) {
+  if (compressedLru.has(versionId)) {
+    compressedTotalBytes -= compressedLru.get(versionId)!.data.byteLength;
+    compressedLru.delete(versionId);
+  }
+  const dataBytes = data.data.byteLength;
+  while (compressedTotalBytes + dataBytes > COMPRESSED_MAX_BYTES && compressedLru.size > 0) {
+    const first = compressedLru.keys().next().value as string | undefined;
+    if (first === undefined) break;
+    compressedTotalBytes -= compressedLru.get(first)!.data.byteLength;
+    compressedLru.delete(first);
+  }
+  compressedLru.set(versionId, data);
+  compressedTotalBytes += dataBytes;
+}
+
+export async function getOrDecodeNutexbCompressed(
+  versionId: string,
+  decode: () => Promise<ArrayBuffer | Uint8Array>,
+): Promise<NutexbCompressedData> {
+  const cached = compressedLru.get(versionId);
+  if (cached) {
+    compressedLru.delete(versionId);
+    compressedLru.set(versionId, cached);
+    return cached;
+  }
+  const pending = compressedInflight.get(versionId);
+  if (pending) return pending;
+
+  const p = (async () => {
+    const raw = await decode();
+    const data = parseCompressedResponse(raw);
+    setCompressedLru(versionId, data);
+    return data;
+  })().finally(() => {
+    compressedInflight.delete(versionId);
+  });
+
+  compressedInflight.set(versionId, p);
+  return p;
+}
+
+/** Combined identity + compressed response from nutexb_identity_and_compressed command. */
+export interface NutexbIdentityAndCompressed {
+  nutexbSize: number;
+  crc32: number;
+  compressed: NutexbCompressedData;
+}
+
+export function parseIdentityAndCompressedResponse(raw: ArrayBuffer | Uint8Array): NutexbIdentityAndCompressed {
+  const u8 = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
+  const view = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  // [u64_LE nutexb_size][u32_LE crc32][u32_LE width][u32_LE height][u8 format_id][data...]
+  const nutexbSize = Number(view.getBigUint64(0, true));
+  const crc32 = view.getUint32(8, true);
+  const width = view.getUint32(12, true);
+  const height = view.getUint32(16, true);
+  const formatId = u8[20];
+  const data = u8.slice(21);
+  return { nutexbSize, crc32, compressed: { width, height, formatId, data } };
+}

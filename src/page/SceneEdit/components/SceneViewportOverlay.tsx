@@ -2,6 +2,7 @@ import { memo } from "react";
 
 interface SceneViewportOverlayProps {
   isLoading?: boolean;
+  modelLoadProgress: { loaded: number; total: number } | null;
   textureProgress: { done: number; total: number; currentLabel?: string } | null;
 }
 
@@ -14,6 +15,7 @@ export interface SceneDrawStats {
 
 export const SceneViewportOverlay = memo(function SceneViewportOverlay({
   isLoading,
+  modelLoadProgress,
   textureProgress,
 }: SceneViewportOverlayProps) {
   return (
@@ -22,7 +24,19 @@ export const SceneViewportOverlay = memo(function SceneViewportOverlay({
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm pointer-events-none">
           <div className="flex flex-col items-center gap-3">
             <div className="w-10 h-10 border-[3px] border-muted-foreground/30 border-t-primary rounded-full animate-spin" />
-            <span className="text-sm text-muted-foreground font-medium">Loading stage bundle...</span>
+            <span className="text-sm text-muted-foreground font-medium">
+              {modelLoadProgress
+                ? `Streaming models (${modelLoadProgress.loaded}/${modelLoadProgress.total})...`
+                : "Loading stage..."}
+            </span>
+            {modelLoadProgress && modelLoadProgress.total > 0 && (
+              <div className="w-48 h-1.5 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary rounded-full transition-all duration-300"
+                  style={{ width: `${(modelLoadProgress.loaded / modelLoadProgress.total) * 100}%` }}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}

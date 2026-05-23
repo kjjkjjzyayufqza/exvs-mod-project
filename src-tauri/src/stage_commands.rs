@@ -3,6 +3,7 @@
 use serde::Serialize;
 use std::sync::Mutex;
 use std::time::Instant;
+use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::fhm2d_memory_preview::Fhm2dMemorySessionState;
@@ -185,6 +186,135 @@ pub async fn load_stage_bundle(stage_root: String) -> Result<fhm2d_stage::StageB
         ),
     }
     result
+}
+
+#[tauri::command]
+pub async fn stage_load_skeleton(
+    stage_root: String,
+) -> Result<fhm2d_stage::StageSkeleton, String> {
+    eprintln!("[stage_load_skeleton] Loading skeleton: {stage_root}");
+    let t = Instant::now();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        fhm2d_stage::load_stage_skeleton_impl(&stage_root)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    match &result {
+        Ok(s) => eprintln!(
+            "[stage_load_skeleton] Done in {}ms — {} sub-models in manifest, has_base={}",
+            t.elapsed().as_millis(),
+            s.sub_model_manifest.len(),
+            s.has_base_model,
+        ),
+        Err(e) => eprintln!(
+            "[stage_load_skeleton] Failed in {}ms — {e}",
+            t.elapsed().as_millis()
+        ),
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn stage_stream_bundles(
+    stage_root: String,
+    on_chunk: Channel<fhm2d_stage::StageStreamChunk>,
+) -> Result<(), String> {
+    eprintln!("[stage_stream_bundles] Starting stream: {stage_root}");
+    let t = Instant::now();
+
+    let root = std::path::Path::new(&stage_root);
+    if !root.is_dir() {
+        return Err(format!("Stage root directory not found: {stage_root}"));
+    }
+
+    let skeleton = fhm2d_stage::load_stage_skeleton_impl(&stage_root)?;
+    let total = skeleton.sub_model_manifest.len() + if skeleton.has_base_model { 1 } else { 0 };
+    let mut loaded = 0usize;
+
+    // Phase 1: Base model first (priority — viewport needs it immediately)
+    if skeleton.has_base_model {
+        let base_root = stage_root.clone();
+        let base_result = tauri::async_runtime::spawn_blocking(move || {
+            let root = std::path::Path::new(&base_root);
+            let mut warnings = Vec::new();
+            fhm2d_stage::load_model_in_subfolder_pub(root, "base", &mut warnings)
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+
+        match base_result {
+            Some(bundle) => {
+                loaded += 1;
+                let _ = on_chunk.send(fhm2d_stage::StageStreamChunk::BaseModel { bundle });
+                let _ = on_chunk.send(fhm2d_stage::StageStreamChunk::Progress { loaded, total });
+                eprintln!("[stage_stream_bundles] Base model sent ({loaded}/{total})");
+            }
+            None => {
+                let _ = on_chunk.send(fhm2d_stage::StageStreamChunk::Error {
+                    message: "Base model folder exists but failed to load".into(),
+                    folder_name: Some("base".into()),
+                });
+            }
+        }
+    }
+
+    // Phase 2: Sub-models parsed in parallel via rayon, results sent as they complete
+    let manifest = skeleton.sub_model_manifest.clone();
+    eprintln!(
+        "[stage_stream_bundles] Parsing {} sub-models with rayon",
+        manifest.len(),
+    );
+
+    let stage_root_for_rayon = stage_root.clone();
+    let results = tauri::async_runtime::spawn_blocking(move || {
+        use rayon::prelude::*;
+        manifest
+            .par_iter()
+            .map(|entry| {
+                let root = std::path::Path::new(&stage_root_for_rayon);
+                let mut warnings = Vec::new();
+                let bundle = fhm2d_stage::load_model_in_subfolder_pub(
+                    root,
+                    &entry.folder_name,
+                    &mut warnings,
+                );
+                (entry.folder_name.clone(), entry.object_index, bundle)
+            })
+            .collect::<Vec<_>>()
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    // Send results in manifest order (deterministic) with progress updates
+    for (folder_name, object_index, result) in results {
+        match result {
+            Some(bundle) => {
+                loaded += 1;
+                let _ = on_chunk.send(fhm2d_stage::StageStreamChunk::SubModel {
+                    folder_name: folder_name.clone(),
+                    object_index,
+                    bundle,
+                });
+                let _ = on_chunk.send(fhm2d_stage::StageStreamChunk::Progress { loaded, total });
+            }
+            None => {
+                let _ = on_chunk.send(fhm2d_stage::StageStreamChunk::Error {
+                    message: format!("Failed to load sub-model '{folder_name}'"),
+                    folder_name: Some(folder_name),
+                });
+            }
+        }
+    }
+
+    let elapsed_ms = t.elapsed().as_millis() as u64;
+    let _ = on_chunk.send(fhm2d_stage::StageStreamChunk::Complete {
+        total_models: loaded,
+        elapsed_ms,
+    });
+    eprintln!(
+        "[stage_stream_bundles] Complete — {loaded} models in {elapsed_ms}ms"
+    );
+    Ok(())
 }
 
 #[tauri::command]

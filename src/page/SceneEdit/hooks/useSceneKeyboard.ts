@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useSceneEditorStore } from "../store/sceneEditorStore";
+import { shouldHandleSceneCopy, shouldHandleScenePaste } from "../utils/sceneKeyboardGuards";
 
 interface SceneKeyboardOptions {
   onDelete?: () => void;
@@ -55,9 +56,10 @@ export function useSceneKeyboard({
       }
 
       if (ctrl && e.key === "c") {
-        e.preventDefault();
         const store = useSceneEditorStore.getState();
         const ids = store.getSelectedIds();
+        if (!shouldHandleSceneCopy(ids.length, e.target)) return;
+        e.preventDefault();
         const entries = ids.map((id) => ({
           nodeId: id,
           placementIdx: null,
@@ -68,6 +70,8 @@ export function useSceneKeyboard({
       }
 
       if (ctrl && e.key === "v") {
+        const store = useSceneEditorStore.getState();
+        if (!shouldHandleScenePaste(store.clipboard.length, e.target)) return;
         e.preventDefault();
         onPaste?.();
         return;

@@ -159,12 +159,15 @@ import {
   sceneImportDae,
   sceneConfigureImport,
   sceneExecuteImport,
-  sceneGenerateHkt,
   sceneSaveAsFolder,
   sceneRepackInPlace,
   mapDaeImportConfigToBackend,
   sceneOpenFolder,
   sceneListHavokData,
+  stageLoadSkeleton,
+  stageStreamBundles,
+  type StageSkeleton,
+  type StageStreamChunk,
 } from "./utils/sceneSessionService";
 
 import type { PreviewRenderStyle } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
@@ -279,6 +282,7 @@ export default function SceneEdit() {
   const [stageName, setStageName] = useState<string | null>(null);
   const [stageRoot, setStageRoot] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [modelLoadProgress, setModelLoadProgress] = useState<{ loaded: number; total: number } | null>(null);
   const hasUnsavedChanges = useSceneDirtyStore(
     (s) => Object.keys(s.objects).length > 0 || s.global.graphicParams || s.global.placementOrder,
   );
@@ -796,6 +800,75 @@ export default function SceneEdit() {
     []
   );
 
+  const applySkeleton = useCallback(
+    (path: string, skeleton: StageSkeleton) => {
+      startTransition(() => {
+        const folderName =
+          path.split(/[/\\]/).filter(Boolean).pop() ?? "stage";
+        setStageName(folderName);
+        setStageRoot(path);
+        setBaseModel(null);
+        setSubModels([]);
+        setGraphicParams(
+          skeleton.graphicParams.map((p) => ({ key: p.key, value: p.value }))
+        );
+        setAppliedGraphicParamKeys(new Set());
+        setPlacementHeader(skeleton.placementHeader);
+        const colMap: Record<string, number> = {};
+        skeleton.placementHeader.forEach((h, i) => {
+          colMap[h.toUpperCase()] = i;
+        });
+        setPlacementColMap(colMap);
+        const mappedPlacements = skeleton.placementEntries.map((e) => ({
+          vdkType: e.vdkType,
+          objectNumber: e.objectNumber,
+          posX: e.posX,
+          posY: e.posY,
+          posZ: e.posZ,
+          rotX: e.rotX,
+          rotY: e.rotY,
+          rotZ: e.rotZ,
+          scaleX: e.scaleX,
+          scaleY: e.scaleY,
+          scaleZ: e.scaleZ,
+          rawFields: e.rawFields,
+        }));
+        const orderedPlacements = reorderPlacementEntriesBySubModels(mappedPlacements, skeleton.subModelManifest);
+        setPlacementEntries(orderedPlacements);
+        initialSnapshotRef.current = {
+          graphicParams: skeleton.graphicParams.map((p) => ({ key: p.key, value: p.value })),
+          placementEntries: orderedPlacements.map((e) => ({ ...e, rawFields: [...e.rawFields] })),
+        };
+        setObjectTextureLoadState({});
+
+        const children: StageTreeNode[] = [];
+        if (skeleton.hasBaseModel) {
+          children.push({ id: "base", label: "base", role: "base" });
+        }
+        for (const entry of skeleton.subModelManifest) {
+          children.push({
+            id: entry.folderName,
+            label: entry.folderName,
+            role: "sub_model",
+            objectIndex: entry.objectIndex,
+          });
+        }
+        setTreeRoot({ id: "root", label: folderName, role: "root", children });
+        setSelectedNodeIdRaw(null);
+        setSelectedPlacementIdxRaw(null);
+        useSceneEditorStore.getState().deselectAll();
+      });
+
+      if (skeleton.warnings.length > 0) {
+        toast.warning(
+          `Skeleton loaded with ${skeleton.warnings.length} warning(s)`,
+          { description: skeleton.warnings.slice(0, 3).join("\n") }
+        );
+      }
+    },
+    []
+  );
+
   const resetState = useCallback(() => {
     if (sessionId) {
       disposeFhm2dMemorySession(sessionId).catch(() => {});
@@ -863,13 +936,10 @@ export default function SceneEdit() {
       });
       applyBundle(stageRoot, bundle);
 
-      // Create scene session and load HKT collision data in background
       sceneOpenFolder(stageRoot).then(async (result) => {
         setSceneSessionId(result.sessionId);
-        console.log("[Havok] sceneOpenFolder done, sessionId:", result.sessionId);
         try {
           const havokList = await sceneListHavokData(result.sessionId);
-          console.log(`[Havok] sceneListHavokData returned ${havokList.length} entries`);
           if (havokList.length > 0) {
             const map = new Map<string, HavokMeshData>();
             for (const item of havokList) {
@@ -880,21 +950,18 @@ export default function SceneEdit() {
                 console.warn(`[Havok] Failed to parse ${item.sourceId}:`, e);
               }
             }
-            console.log(`[Havok] Setting havokMeshDataMap with ${map.size} entries`);
             setHavokMeshDataMap(map);
             toast.success(`Loaded ${map.size} collision mesh(es)`);
           } else {
             toast.info("No HKT collision files found");
           }
         } catch (e) {
-          console.error("[Havok] Failed to load collision data:", e);
           toast.error("Failed to load collision data", { description: String(e) });
         }
       }).catch((e) => {
-        console.error("[Havok] scene_open_folder failed:", e);
         toast.error("Havok scene session failed", { description: String(e) });
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error("Failed to load stage", { description: String(err) });
     } finally {
       setIsLoading(false);
@@ -2202,9 +2269,7 @@ export default function SceneEdit() {
           if (entry.config.convertToSsbh || entry.config.generateHkt) {
             const result = await sceneExecuteImport(sid, importId);
             if (result.ssbhGenerated) successCount++;
-            if (entry.config.generateHkt && entry.config.hktConfig.configProfile) {
-              await sceneGenerateHkt(sid, importId, entry.config.hktConfig.configProfile);
-            }
+            if (result.hktGenerated) successCount++;
           }
 
           if (entry.config.loadToScene) {
@@ -2737,7 +2802,7 @@ export default function SceneEdit() {
                 showCollisionMesh={showCollisionMesh}
                 collisionVisibility={collisionVisibility}
               />
-              <SceneViewportOverlay isLoading={isLoading} textureProgress={textureProgress} />
+              <SceneViewportOverlay isLoading={isLoading} modelLoadProgress={modelLoadProgress} textureProgress={textureProgress} />
             </div>
             </ViewportContextMenu>
           </ResizablePanel>

@@ -7,7 +7,10 @@ import {
 } from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
 import {
   getOrDecodeNutexbRgba,
+  parseIdentityAndCompressedResponse,
+  COMPRESSED_FORMAT_MAP,
   type NutexbRgbaData,
+  type NutexbCompressedData,
 } from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
 import {
   getMemoryNutexbPreviewIdentity,
@@ -26,9 +29,44 @@ export interface TextureDecodeProgress {
   currentLabel: string;
 }
 
-export type NutexbTextureDataMap = Map<string, NutexbRgbaData>;
+export type NutexbTextureData = 
+  | (NutexbRgbaData & { kind: "rgba" })
+  | (NutexbCompressedData & { kind: "compressed" });
+
+export type NutexbTextureDataMap = Map<string, NutexbTextureData>;
 
 const DECODE_CONCURRENCY = 8;
+
+/** Detect which compressed texture WebGL extensions are available (cached). */
+let _gpuExtensions: Set<string> | null = null;
+function getGpuCompressedExtensions(): Set<string> {
+  if (_gpuExtensions) return _gpuExtensions;
+  _gpuExtensions = new Set<string>();
+  try {
+    const canvas = document.createElement("canvas");
+    const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+    if (gl) {
+      for (const ext of [
+        "WEBGL_compressed_texture_s3tc",
+        "EXT_texture_compression_rgtc",
+        "EXT_texture_compression_bptc",
+      ]) {
+        if (gl.getExtension(ext)) _gpuExtensions.add(ext);
+      }
+      // SRGB variants
+      if (gl.getExtension("WEBGL_compressed_texture_s3tc_srgb")) _gpuExtensions.add("WEBGL_compressed_texture_s3tc_srgb");
+      if (gl.getExtension("EXT_texture_compression_bptc")) _gpuExtensions.add("EXT_texture_compression_bptc");
+    }
+    canvas.remove();
+  } catch { /* fallback to empty set */ }
+  return _gpuExtensions;
+}
+
+function canUseCompressedFormat(formatId: number): boolean {
+  const entry = COMPRESSED_FORMAT_MAP[formatId];
+  if (!entry) return false;
+  return getGpuCompressedExtensions().has(entry.ext);
+}
 
 function collectUniqueNutexbPaths(
   baseModel: SsbhModelPreviewBundle | null,
@@ -140,10 +178,16 @@ export function useSceneTextureLoader(
     let pendingFlush: ReturnType<typeof requestAnimationFrame> | null = null;
 
     (async () => {
-    const nextMap = new Map<string, NutexbRgbaData>();
+    const nextMap = new Map<string, NutexbTextureData>();
     const nextWarnings: string[] = [];
     const batchT0 = performance.now();
     let errors = 0;
+
+    // Detect GPU compressed texture support once
+    // NOTE: Compressed GPU upload (B2) is disabled pending Three.js CompressedTexture
+    // integration with @react-three/fiber's WebGL context. The B4 single-read identity
+    // optimization is still active below.
+    const useCompressed = false;
 
     setProgress({ done: 0, total: uniquePaths.length, currentLabel: "Resolving identities..." });
 
@@ -152,7 +196,32 @@ export function useSceneTextureLoader(
     const identities: PathIdentity[] = [];
     const identityConcurrency = 16;
 
-    {
+    // For compressed path: combined identity+data in one file read (B4 optimization)
+    const preloadedCompressed = new Map<string, NutexbCompressedData>();
+
+    if (useCompressed) {
+      // Single-read path: identity + compressed data together
+      const idQueue = [...uniquePaths];
+      let idIdx = 0;
+      const resolveWorker = async () => {
+        while (idIdx < idQueue.length) {
+          if (cancelledRef.current || currentRunId !== runIdRef.current) return;
+          const path = idQueue[idIdx++];
+          try {
+            const raw = await invoke<ArrayBuffer | Uint8Array>("nutexb_identity_and_compressed", { inputPath: path });
+            const { nutexbSize, crc32, compressed } = parseIdentityAndCompressedResponse(raw);
+            const versionId = `nutexb|${nutexbSize}|${(crc32 >>> 0).toString(16).padStart(8, "0")}@full`;
+            identities.push({ path, versionId });
+            preloadedCompressed.set(versionId, compressed);
+          } catch (err) {
+            errors++;
+            nextWarnings.push(`${basenameOf(path)}: identity failed: ${err}`);
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(identityConcurrency, uniquePaths.length) }, () => resolveWorker()));
+    } else {
+      // Original path: identity only (memory source or downsampled)
       const idQueue = [...uniquePaths];
       let idIdx = 0;
       const resolveWorker = async () => {
@@ -228,22 +297,40 @@ export function useSceneTextureLoader(
         const label = basenameOf(path);
 
         try {
-          const decodeFn = sourceKind === "memory" && sessionId
-            ? () => invoke<ArrayBuffer | Uint8Array>("fhm2d_memory_nutexb_rgba_bytes", {
-                sessionId, virtualPath: path, maxDimension: maxDimension ?? undefined,
-              })
-            : () => invoke<ArrayBuffer | Uint8Array>("nutexb_rgba_bytes", {
-                inputPath: path, maxDimension: maxDimension ?? undefined,
-              });
+          let texData: NutexbTextureData;
 
-          const rgbaData = await getOrDecodeNutexbRgba(versionId, decodeFn);
+          const preloaded = preloadedCompressed.get(versionId);
+          if (preloaded) {
+            // B4: data already loaded in identity phase — zero additional I/O
+            if (preloaded.formatId !== 0 && canUseCompressedFormat(preloaded.formatId)) {
+              texData = { ...preloaded, kind: "compressed" };
+            } else if (preloaded.formatId === 0) {
+              texData = { width: preloaded.width, height: preloaded.height, rgba: preloaded.data, kind: "rgba" };
+            } else {
+              // GPU doesn't support this BCn — fall back to CPU RGBA decode
+              const rgbaFn = () => invoke<ArrayBuffer | Uint8Array>("nutexb_rgba_bytes", { inputPath: path, maxDimension: maxDimension ?? undefined });
+              const rgbaData = await getOrDecodeNutexbRgba(versionId, rgbaFn);
+              texData = { ...rgbaData, kind: "rgba" };
+            }
+          } else {
+            // Memory source or downsampled: use RGBA path
+            const decodeFn = sourceKind === "memory" && sessionId
+              ? () => invoke<ArrayBuffer | Uint8Array>("fhm2d_memory_nutexb_rgba_bytes", {
+                  sessionId, virtualPath: path, maxDimension: maxDimension ?? undefined,
+                })
+              : () => invoke<ArrayBuffer | Uint8Array>("nutexb_rgba_bytes", {
+                  inputPath: path, maxDimension: maxDimension ?? undefined,
+                });
+            const rgbaData = await getOrDecodeNutexbRgba(versionId, decodeFn);
+            texData = { ...rgbaData, kind: "rgba" };
+          }
 
           if (cancelledRef.current || currentRunId !== runIdRef.current) return;
 
           const allPaths = versionToPaths.get(versionId) ?? [path];
           for (const p of allPaths) {
-            nextMap.set(p, rgbaData);
-            nextMap.set(p.toLowerCase(), rgbaData);
+            nextMap.set(p, texData);
+            nextMap.set(p.toLowerCase(), texData);
           }
         } catch (err) {
           errors++;

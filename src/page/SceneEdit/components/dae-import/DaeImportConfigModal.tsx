@@ -1,9 +1,4 @@
 import { FileCode2, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useDraggableModal } from "@/hooks/useDraggableModal";
 import { DaeImportAnalysisPanel } from "./DaeImportAnalysisPanel";
 import { DaeImportSsbhConfigPanel } from "./DaeImportSsbhConfigPanel";
@@ -14,8 +9,20 @@ import type {
   DaeImportConfig,
   HavokInstallInfo,
   SsbhImportConfig,
-  HktImportConfig,
 } from "./daeImportTypes";
+import { isHktGenerationAvailable } from "./daeImportDefaults";
+import {
+  UnrealDetailsSection,
+  UnrealModeToggle,
+  UnrealPropertyBool,
+  UnrealPropertyRow,
+  unrealFooterClass,
+  unrealPanelClass,
+  unrealPrimaryButtonClass,
+  unrealSecondaryButtonClass,
+  unrealSelectTriggerClass,
+  unrealTitleBarClass,
+} from "./daeImportUnrealUi";
 
 export type DaeImportPrimaryMode = "preview" | "ssbh";
 
@@ -63,9 +70,7 @@ export function DaeImportConfigModal({
     updateConfig({ ssbhConfig: next });
   };
 
-  const updateHktConfig = (next: HktImportConfig) => {
-    updateConfig({ hktConfig: next });
-  };
+  const hktAvailable = isHktGenerationAvailable(havokInfo);
 
   const canImport =
     !entry.analyzing &&
@@ -76,132 +81,104 @@ export function DaeImportConfigModal({
       <div
         ref={nodeRef}
         className="pointer-events-auto absolute"
-        style={{ width: 480 }}
+        style={{ width: 420 }}
       >
-        <Card className="shadow-xl border-border">
-          <div
-            {...handleProps}
-            className="flex items-center justify-between border-b border-border/50 px-4 py-2"
-          >
-            <div className="flex items-center gap-2">
-              <FileCode2 className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium truncate max-w-[340px]">
-                Import DAE: {entry.fileName}
+        <div className={unrealPanelClass}>
+          <div {...handleProps} className={unrealTitleBarClass}>
+            <div className="flex min-w-0 items-center gap-2">
+              <FileCode2 className="h-3.5 w-3.5 shrink-0 text-orange-400" />
+              <span className="truncate text-[11px] font-medium text-[#e8e8e8]">
+                Import Static Mesh
               </span>
+              <span className="truncate text-[10px] text-[#888]">/ {entry.fileName}</span>
               {entries.length > 1 && (
-                <span className="text-xs text-muted-foreground">
-                  (+{entries.length - 1} more)
+                <span className="shrink-0 text-[10px] text-[#707070]">
+                  +{entries.length - 1}
                 </span>
               )}
             </div>
             <button
               type="button"
               onClick={onCancel}
-              className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
+              className="rounded-sm p-0.5 text-[#888] hover:bg-[#3a3a3a] hover:text-white"
+              aria-label="Close import dialog"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
 
-          <CardContent className="p-4 space-y-3">
+          <div className="max-h-[70vh] overflow-y-auto">
             <DaeImportAnalysisPanel
               analysis={entry.analysis}
               analyzing={entry.analyzing}
               analyzeError={entry.analyzeError}
             />
 
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Import mode</Label>
-                <ToggleGroup
-                  type="single"
+            <UnrealDetailsSection title="Import Options">
+              <UnrealPropertyRow label="Import Mode">
+                <UnrealModeToggle
                   value={primaryMode}
+                  options={[
+                    { value: "preview", label: "Preview" },
+                    { value: "ssbh", label: "Convert SSBH" },
+                  ]}
                   onValueChange={(value) => {
                     if (value === "preview" || value === "ssbh") {
                       setPrimaryMode(value);
                     }
                   }}
-                  className="flex w-full"
-                >
-                  <ToggleGroupItem
-                    value="preview"
-                    className="h-8 flex-1 text-[11px] px-2"
-                    aria-label="Load to scene preview only"
-                  >
-                    Load to scene (preview only)
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
-                    value="ssbh"
-                    className="h-8 flex-1 text-[11px] px-2"
-                    aria-label="Convert to SSBH"
-                  >
-                    Convert to SSBH
-                  </ToggleGroupItem>
-                </ToggleGroup>
-              </div>
+                />
+              </UnrealPropertyRow>
+
+              <UnrealPropertyBool
+                label="Generate HKT Collision"
+                hint={
+                  hktAvailable
+                    ? "Uses Havok tools with automatic profile selection"
+                    : "Havok tools are not available on this machine"
+                }
+                checked={config.generateHkt}
+                disabled={!hktAvailable}
+                onCheckedChange={(checked) => updateConfig({ generateHkt: checked })}
+              />
 
               {primaryMode === "ssbh" && (
-                <DaeImportSsbhConfigPanel
-                  config={config.ssbhConfig}
-                  onChange={updateSsbhConfig}
-                />
-              )}
-
-              <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2">
-                <div className="space-y-0.5">
-                  <Label htmlFor="dae-import-generate-hkt" className="text-sm">
-                    Generate HKT collision
-                  </Label>
-                  {!havokInfo?.fileConvertAvailable && (
-                    <p className="text-[10px] text-muted-foreground">
-                      Havok tools are not available on this machine
-                    </p>
-                  )}
-                </div>
-                <Switch
-                  id="dae-import-generate-hkt"
-                  checked={config.generateHkt}
-                  onCheckedChange={(checked) =>
-                    updateConfig({ generateHkt: checked === true })
-                  }
-                  disabled={!havokInfo?.fileConvertAvailable}
-                />
-              </div>
-
-              {config.generateHkt && (
-                <DaeImportHktConfigPanel
-                  config={config.hktConfig}
-                  havokInfo={havokInfo}
-                  onChange={updateHktConfig}
-                />
-              )}
-
-              {primaryMode === "ssbh" && (
-                <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2">
-                  <div className="space-y-0.5">
-                    <Label className="text-sm">Texture format</Label>
-                    <p className="text-[10px] text-muted-foreground">
-                      DDS format for imported PNG textures
-                    </p>
+                <UnrealPropertyRow label="Texture Format" hint="DDS format for imported PNG textures">
+                  <div className="flex justify-end">
+                    <TextureFormatSelect
+                      value={config.defaultDdsFormat as DdsFormat}
+                      onChange={(fmt) => updateConfig({ defaultDdsFormat: fmt })}
+                      triggerClassName={`${unrealSelectTriggerClass} w-full max-w-[180px]`}
+                    />
                   </div>
-                  <TextureFormatSelect
-                    value={config.defaultDdsFormat as DdsFormat}
-                    onChange={(fmt) => updateConfig({ defaultDdsFormat: fmt })}
-                  />
-                </div>
+                </UnrealPropertyRow>
               )}
-            </div>
+            </UnrealDetailsSection>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-border/50">
-              <Button variant="outline" size="sm" onClick={onCancel}>
-                Cancel
-              </Button>
-              <Button size="sm" onClick={onImport} disabled={!canImport}>
-                Import
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            {primaryMode === "ssbh" && (
+              <DaeImportSsbhConfigPanel
+                config={config.ssbhConfig}
+                onChange={updateSsbhConfig}
+              />
+            )}
+
+            {config.generateHkt && <DaeImportHktConfigPanel havokInfo={havokInfo} />}
+          </div>
+
+          <div className={unrealFooterClass}>
+            <button type="button" className={unrealSecondaryButtonClass} onClick={onCancel}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className={unrealPrimaryButtonClass}
+              onClick={onImport}
+              disabled={!canImport}
+            >
+              Import
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

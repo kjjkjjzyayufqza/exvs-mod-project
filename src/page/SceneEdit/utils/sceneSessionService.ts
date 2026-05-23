@@ -1,5 +1,6 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, Channel } from "@tauri-apps/api/core";
 import type { DaeImportConfig } from "../components/dae-import/daeImportTypes";
+import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
 
 export type SceneSource =
   | { type: "fhm2d"; path: string }
@@ -132,6 +133,54 @@ export function sceneListImports(sessionId: string): Promise<ImportResult[]> {
 
 export function sceneOpenFolder(path: string): Promise<SceneOpenResult> {
   return invoke<SceneOpenResult>("scene_open_folder", { path });
+}
+
+export interface SubModelManifestEntry {
+  folderName: string;
+  objectIndex: number;
+}
+
+export interface StageSkeleton {
+  rootPath: string;
+  placementHeader: string[];
+  placementEntries: Array<{
+    vdkType: string;
+    objectNumber: number | null;
+    posX: number;
+    posY: number;
+    posZ: number;
+    rotX: number;
+    rotY: number;
+    rotZ: number;
+    scaleX: number;
+    scaleY: number;
+    scaleZ: number;
+    rawFields: string[];
+  }>;
+  graphicParams: Array<{ key: string; value: string }>;
+  subModelManifest: SubModelManifestEntry[];
+  hasBaseModel: boolean;
+  warnings: string[];
+}
+
+export type StageStreamChunk =
+  | { kind: "baseModel"; bundle: SsbhModelPreviewBundle }
+  | { kind: "subModel"; folderName: string; objectIndex: number; bundle: SsbhModelPreviewBundle }
+  | { kind: "progress"; loaded: number; total: number }
+  | { kind: "complete"; totalModels: number; elapsedMs: number }
+  | { kind: "error"; message: string; folderName: string | null };
+
+export function stageLoadSkeleton(stageRoot: string): Promise<StageSkeleton> {
+  return invoke<StageSkeleton>("stage_load_skeleton", { stageRoot });
+}
+
+export function stageStreamBundles(
+  stageRoot: string,
+  onChunk: (chunk: StageStreamChunk) => void,
+): Promise<void> {
+  const channel = new Channel<StageStreamChunk>();
+  channel.onmessage = onChunk;
+  return invoke<void>("stage_stream_bundles", { stageRoot, onChunk: channel });
 }
 
 export function mapDaeImportConfigToBackend(config: DaeImportConfig): ImportConfig {

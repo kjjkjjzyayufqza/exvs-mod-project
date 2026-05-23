@@ -39,8 +39,8 @@ import {
   type ResolvedTextureSampling,
   type TexturePreviewSlotKey,
 } from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
-import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
-import type { NutexbRgbaData } from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
+import type { NutexbTextureDataMap, NutexbTextureData } from "../hooks/useSceneTextureLoader";
+import { COMPRESSED_FORMAT_MAP, type NutexbCompressedData } from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
 import type { PlacementRow } from "../types/placement";
 import type { GraphicParam } from "./GraphicParamPanel";
 import { deriveSceneLightingFromGraphicParams } from "../utils/graphicParamSceneLighting";
@@ -1195,16 +1195,20 @@ function buildTexturePoolKey(
 function lookupTextureData(
   textureDataMap: NutexbTextureDataMap,
   path: string | null,
-): NutexbRgbaData | null {
+): NutexbTextureData | null {
   if (!path) return null;
   return textureDataMap.get(path) ?? textureDataMap.get(path.toLowerCase()) ?? null;
 }
 
 function createDataTexture(
-  data: NutexbRgbaData,
+  data: NutexbTextureData,
   slot: PbrSlotKind,
   binding: ResolvedMaterialBinding,
-): THREE.DataTexture {
+): THREE.Texture {
+  if (data.kind === "compressed") {
+    return createCompressedTexture(data, slot, binding);
+  }
+
   const tex = new THREE.DataTexture(
     data.rgba,
     data.width,
@@ -1220,6 +1224,50 @@ function createDataTexture(
   tex.minFilter = SCENE_EDIT_TEXTURE_MIPS
     ? THREE.LinearMipmapLinearFilter
     : THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+
+  if (slot === "cubeMap") {
+    tex.mapping = THREE.EquirectangularReflectionMapping;
+  } else {
+    const sampling = samplingForSlot(binding, slot);
+    tex.wrapS = toThreeWrapping(sampling?.wrapS ?? "ClampToEdge");
+    tex.wrapT = toThreeWrapping(sampling?.wrapT ?? "ClampToEdge");
+    tex.center.set(0, 0);
+    tex.repeat.set(
+      sampling?.uvTransform?.scale_u ?? 1,
+      sampling?.uvTransform?.scale_v ?? 1,
+    );
+    tex.offset.set(
+      sampling?.uvTransform?.translate_u ?? 0,
+      sampling?.uvTransform?.translate_v ?? 0,
+    );
+    tex.rotation = sampling?.uvTransform?.rotation ?? 0;
+  }
+
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function createCompressedTexture(
+  data: NutexbCompressedData,
+  slot: PbrSlotKind,
+  binding: ResolvedMaterialBinding,
+): THREE.CompressedTexture {
+  const entry = COMPRESSED_FORMAT_MAP[data.formatId]!;
+  const isSrgb = SRGB_SLOTS.has(slot);
+  const internalFormat = (isSrgb && entry.srgbInternalFormat) ? entry.srgbInternalFormat : entry.internalFormat;
+
+  const mipmaps = [{ data: data.data, width: data.width, height: data.height }];
+  const tex = new THREE.CompressedTexture(
+    mipmaps as unknown as ImageData[],
+    data.width,
+    data.height,
+    internalFormat as unknown as THREE.CompressedPixelFormat,
+  );
+  tex.colorSpace = isSrgb ? THREE.SRGBColorSpace : THREE.LinearSRGBColorSpace;
+  tex.flipY = false;
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
 
   if (slot === "cubeMap") {
@@ -1297,7 +1345,7 @@ const TexturedMesh = memo(function TexturedMesh({
     .join("\0");
 
   const textures = useMemo(() => {
-    const result: Partial<Record<PbrSlotKind, THREE.DataTexture>> = {};
+    const result: Partial<Record<PbrSlotKind, THREE.Texture>> = {};
 
     for (const [slot, data] of slotDataEntries) {
       if (!data) continue;
@@ -1742,7 +1790,7 @@ const InstancedTexturedMesh = memo(function InstancedTexturedMesh({
   const dataKey = slotDataEntries.map(([, d]) => (d ? `${d.width}x${d.height}` : "")).join("\0");
 
   const textures = useMemo(() => {
-    const result: Partial<Record<PbrSlotKind, THREE.DataTexture>> = {};
+    const result: Partial<Record<PbrSlotKind, THREE.Texture>> = {};
     for (const [slot, data] of slotDataEntries) {
       if (!data) continue;
       const path = pathForSlot(binding, slot);

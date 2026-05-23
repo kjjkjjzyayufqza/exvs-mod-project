@@ -114,7 +114,7 @@ describe("scene texture inventory", () => {
   });
 
   test("global loaded inventory deduplicates lowercase cache aliases", () => {
-    const rgba = { width: 4, height: 8, rgba: new Uint8Array(4 * 8 * 4) };
+    const rgba = { width: 4, height: 8, rgba: new Uint8Array(4 * 8 * 4), kind: "rgba" as const };
     const textureDataMap: NutexbTextureDataMap = new Map([
       ["memory://stage/textures/stage_wall_alb.nutexb", rgba],
       ["memory://stage/textures/STAGE_WALL_ALB.nutexb".toLowerCase(), rgba],
