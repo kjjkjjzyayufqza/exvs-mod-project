@@ -1,6 +1,5 @@
 import { Canvas, useThree } from "@react-three/fiber";
 import {
-  OrbitControls,
   GizmoHelper,
   GizmoViewport,
   Grid,
@@ -25,7 +24,19 @@ import {
 } from "react";
 import * as THREE from "three";
 import { mergeBufferGeometries } from "three-stdlib";
+import { StageOrbitControls } from "./StageOrbitControls";
+import { ViewportMarqueeOverlay } from "./ViewportMarqueeOverlay";
+import {
+  ViewportSelectionController,
+  type SelectableNodeRegistry,
+} from "./ViewportSelectionController";
 import type { OrbitControls as OrbitControlsType } from "three-stdlib";
+import {
+  performViewportObjectPick,
+  type ScreenRect,
+  type ViewportMultiSelectHandler,
+  type ViewportSelectHandler,
+} from "../utils/viewportInteraction";
 import type {
   SsbhModelPreviewBundle,
   BuiltMeshDraw,
@@ -82,6 +93,48 @@ import { HavokCollisionOverlay } from "./havok/HavokCollisionOverlay";
 import type { HavokMeshData } from "@/utils/havokXmlParser";
 
 const DEG2RAD = Math.PI / 180;
+
+type ViewportPickRefs = {
+  clickGestureRef?: React.RefObject<{ x: number; y: number } | null>;
+  marqueeActiveRef?: React.RefObject<boolean>;
+  gizmoDraggingRef?: React.RefObject<boolean>;
+  orbitActiveRef?: React.RefObject<boolean>;
+  selectableNodesRef?: React.RefObject<SelectableNodeRegistry>;
+};
+
+function useRegisterSelectableNode(
+  nodeId: string,
+  object: THREE.Object3D | null,
+  registryRef?: React.RefObject<SelectableNodeRegistry>,
+) {
+  useEffect(() => {
+    if (!object || !registryRef) return;
+    registryRef.current.set(nodeId, object);
+    return () => {
+      registryRef.current.delete(nodeId);
+    };
+  }, [nodeId, object, registryRef]);
+}
+
+function runViewportObjectPick(
+  nativeEvent: MouseEvent,
+  nodeId: string,
+  onSelect: ViewportSelectHandler,
+  options: {
+    clickPickSelectionEnabled: boolean;
+    isLocked?: boolean;
+    refs: ViewportPickRefs;
+  },
+) {
+  performViewportObjectPick(nativeEvent, nodeId, onSelect, {
+    clickPickSelectionEnabled: options.clickPickSelectionEnabled,
+    clickGesture: options.refs.clickGestureRef?.current ?? null,
+    gizmoDragging: options.refs.gizmoDraggingRef?.current,
+    orbitActive: options.refs.orbitActiveRef?.current,
+    marqueeActive: options.refs.marqueeActiveRef?.current,
+    isLocked: options.isLocked,
+  });
+}
 
 type SelectedGroupMap = Map<string, THREE.Group>;
 const EMPTY_NODE_VISIBILITY: SceneNodeVisibilityMap = {};
@@ -247,7 +300,8 @@ export interface MapViewportProps {
   nodeVisibility?: SceneNodeVisibilityMap;
   objectLocks?: SceneNodeLockMap;
   selectedPlacementIdx: number | null;
-  onSelectNode: (id: string | null) => void;
+  onSelectNode: ViewportSelectHandler;
+  onSelectNodes: ViewportMultiSelectHandler;
   textureDataMap: NutexbTextureDataMap;
   /** Global PBR slot toggles (decode + render). */
   textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>;
@@ -285,48 +339,6 @@ export interface MapViewportHandle {
   disposeTextures: () => void;
 }
 
-function StageOrbitControls({
-  controlsRef,
-  orbitActiveRef,
-}: {
-  controlsRef: RefObject<OrbitControlsType | null>;
-  orbitActiveRef?: React.RefObject<boolean>;
-}) {
-  const regress = useThree((s) => s.performance.regress);
-  const invalidate = useThree((s) => s.invalidate);
-  const onGestureStart = useCallback(() => {
-    if (orbitActiveRef) orbitActiveRef.current = true;
-    regress();
-    invalidate();
-  }, [regress, invalidate, orbitActiveRef]);
-  const onGestureEnd = useCallback(() => {
-    setTimeout(() => {
-      if (orbitActiveRef) orbitActiveRef.current = false;
-    }, 80);
-  }, [orbitActiveRef]);
-  const onDemandFrame = useCallback(() => {
-    invalidate();
-  }, [invalidate]);
-  return (
-    <OrbitControls
-      ref={controlsRef}
-      makeDefault
-      minDistance={0.08}
-      maxDistance={5e6}
-      enableDamping
-      dampingFactor={0.06}
-      screenSpacePanning
-      zoomSpeed={0.85}
-      rotateSpeed={0.65}
-      panSpeed={0.65}
-      minPolarAngle={0.05}
-      maxPolarAngle={Math.PI - 0.05}
-      onStart={onGestureStart}
-      onEnd={onGestureEnd}
-      onChange={onDemandFrame}
-    />
-  );
-}
 
 export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
   function MapViewport(
@@ -345,6 +357,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       objectLocks = EMPTY_NODE_LOCKS,
       selectedPlacementIdx,
       onSelectNode,
+      onSelectNodes,
       textureDataMap,
       textureSlotLoadEnabled,
       objectTextureLoadState = {},
@@ -376,8 +389,12 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
     useEffect(() => () => texturePool.disposeAll(), [texturePool]);
     const gizmoDraggingRef = useRef(false);
     const selectedGroupsRef = useRef<SelectedGroupMap>(new Map());
+    const selectableNodesRef = useRef<SelectableNodeRegistry>(new Map());
     const orbitActiveRef = useRef(false);
-    const pointerDownTimeRef = useRef(0);
+    const rightMouseDownRef = useRef(false);
+    const clickGestureRef = useRef<{ x: number; y: number } | null>(null);
+    const marqueeActiveRef = useRef(false);
+    const [marqueeRect, setMarqueeRect] = useState<ScreenRect | null>(null);
 
     useImperativeHandle(ref, () => ({
       resetCamera: () => {
@@ -447,12 +464,8 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
     );
 
     const handlePointerMissed = useCallback(() => {
-      if (!clickPickSelectionEnabled || gizmoDraggingRef.current) return;
-      if (orbitActiveRef.current) return;
-      const elapsed = performance.now() - pointerDownTimeRef.current;
-      if (elapsed > 250) return;
-      onSelectNode(null);
-    }, [clickPickSelectionEnabled, onSelectNode]);
+      // Empty-click deselect is handled by ViewportSelectionController.
+    }, []);
 
     const effectEntries = useMemo(
       () =>
@@ -607,7 +620,9 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
     }, [baseModel, subModels, onDrawStatsChange]);
 
     return (
-      <Canvas
+      <div className="relative h-full w-full min-h-0 min-w-0">
+        <ViewportMarqueeOverlay rect={marqueeRect} />
+        <Canvas
         className="h-full w-full touch-none"
         frameloop="demand"
         camera={{
@@ -627,9 +642,21 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
         dpr={sceneRasterProfile.dpr}
         style={{ touchAction: "none", background: DEFAULT_PREVIEW_3D_BACKGROUND }}
         onPointerMissed={handlePointerMissed}
-        onPointerDown={() => { pointerDownTimeRef.current = performance.now(); orbitActiveRef.current = false; }}
         onCreated={handleCreated}
       >
+        {clickPickSelectionEnabled ? (
+          <ViewportSelectionController
+            enabled={clickPickSelectionEnabled}
+            selectableNodesRef={selectableNodesRef}
+            orbitActiveRef={orbitActiveRef}
+            gizmoDraggingRef={gizmoDraggingRef}
+            onSelectNode={onSelectNode}
+            onSelectNodes={onSelectNodes}
+            onMarqueeRectChange={setMarqueeRect}
+            clickGestureRef={clickGestureRef}
+            marqueeActiveRef={marqueeActiveRef}
+          />
+        ) : null}
         <SceneCanvasPerformanceHud showStats={showStats} />
         <InvalidateGraphicLightingSync canvasSyncKey={canvasSyncKey} />
         <SceneAnimePostFxGate previewRenderStyle={previewRenderStyle} />
@@ -707,7 +734,9 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             }
             gizmoDraggingRef={gizmoDraggingRef}
             orbitActiveRef={orbitActiveRef}
-            pointerDownTimeRef={pointerDownTimeRef}
+            clickGestureRef={clickGestureRef}
+            marqueeActiveRef={marqueeActiveRef}
+            selectableNodesRef={selectableNodesRef}
             selectedGroupsRef={selectedGroupsRef}
           />
         )}
@@ -743,7 +772,9 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                 animeKeyLightDir={animeKeyLightDir}
                 gizmoDraggingRef={gizmoDraggingRef}
                 orbitActiveRef={orbitActiveRef}
-                pointerDownTimeRef={pointerDownTimeRef}
+                clickGestureRef={clickGestureRef}
+                marqueeActiveRef={marqueeActiveRef}
+                selectableNodesRef={selectableNodesRef}
                 position={st ? [st.posX, st.posY, st.posZ] : undefined}
                 rotation={st ? [st.rotX, st.rotY, st.rotZ] : undefined}
                 scale={st ? placementScaleForViewport(st.scaleX, st.scaleY, st.scaleZ) : undefined}
@@ -798,7 +829,9 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                 onPlacementGizmoCommit={onPlacementGizmoCommit}
                 gizmoDraggingRef={gizmoDraggingRef}
                 orbitActiveRef={orbitActiveRef}
-                pointerDownTimeRef={pointerDownTimeRef}
+                clickGestureRef={clickGestureRef}
+                marqueeActiveRef={marqueeActiveRef}
+                selectableNodesRef={selectableNodesRef}
                 selectedGroupsRef={selectedGroupsRef}
               />
             )];
@@ -834,7 +867,9 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
               onPlacementGizmoCommit={onPlacementGizmoCommit}
               gizmoDraggingRef={gizmoDraggingRef}
               orbitActiveRef={orbitActiveRef}
-              pointerDownTimeRef={pointerDownTimeRef}
+              clickGestureRef={clickGestureRef}
+              marqueeActiveRef={marqueeActiveRef}
+              selectableNodesRef={selectableNodesRef}
               selectedGroupsRef={selectedGroupsRef}
             />
           )];
@@ -866,7 +901,9 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             onPlacementGizmoCommit={onPlacementGizmoCommit}
             gizmoDraggingRef={gizmoDraggingRef}
             orbitActiveRef={orbitActiveRef}
-            pointerDownTimeRef={pointerDownTimeRef}
+            clickGestureRef={clickGestureRef}
+            marqueeActiveRef={marqueeActiveRef}
+            selectableNodesRef={selectableNodesRef}
           />
           )];
         })}
@@ -888,7 +925,9 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             onTransformCommit={onImportedDaeTransformChange}
             gizmoDraggingRef={gizmoDraggingRef}
             orbitActiveRef={orbitActiveRef}
-            pointerDownTimeRef={pointerDownTimeRef}
+            clickGestureRef={clickGestureRef}
+            marqueeActiveRef={marqueeActiveRef}
+            selectableNodesRef={selectableNodesRef}
             selectedGroupsRef={selectedGroupsRef}
           />
           )];
@@ -927,8 +966,13 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           </GizmoHelper>
         )}
 
-        <StageOrbitControls controlsRef={controlsRef} orbitActiveRef={orbitActiveRef} />
+        <StageOrbitControls
+          controlsRef={controlsRef}
+          orbitActiveRef={orbitActiveRef}
+          rightMouseDownRef={rightMouseDownRef}
+        />
       </Canvas>
+      </div>
     );
   }
 );
@@ -946,13 +990,15 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
   onTransformCommit,
   gizmoDraggingRef,
   orbitActiveRef,
-  pointerDownTimeRef,
+  clickGestureRef,
+  marqueeActiveRef,
+  selectableNodesRef,
   selectedGroupsRef,
 }: {
   object: ImportedDaeObject;
   isSelected: boolean;
   isLocked?: boolean;
-  onClick: (id: string | null) => void;
+  onClick: ViewportSelectHandler;
   clickPickSelectionEnabled: boolean;
   showGizmo: boolean;
   placementGizmoMode?: PlacementGizmoMode;
@@ -961,7 +1007,9 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
   onTransformCommit?: (nodeId: string, t: TransformData) => void;
   gizmoDraggingRef?: React.RefObject<boolean>;
   orbitActiveRef?: React.RefObject<boolean>;
-  pointerDownTimeRef?: React.RefObject<number>;
+  clickGestureRef?: React.RefObject<{ x: number; y: number } | null>;
+  marqueeActiveRef?: React.RefObject<boolean>;
+  selectableNodesRef?: React.RefObject<SelectableNodeRegistry>;
   selectedGroupsRef?: React.RefObject<SelectedGroupMap>;
 }) {
   const wrapperRef = useRef<THREE.Group | null>(null);
@@ -1041,18 +1089,27 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
     };
   }, [isSelected, object.id, selectedGroupsRef]);
 
+  useRegisterSelectableNode(object.id, gizmoTarget, selectableNodesRef);
+
   const handleClick = useCallback(
-    (e: any) => {
+    (e: { stopPropagation: () => void; nativeEvent: MouseEvent }) => {
       e.stopPropagation();
-      if (isLocked) return;
-      if (!clickPickSelectionEnabled) return;
-      if (gizmoDraggingRef?.current) return;
-      if (orbitActiveRef?.current) return;
-      const elapsed = performance.now() - (pointerDownTimeRef?.current ?? 0);
-      if (elapsed > 250) return;
-      onClick(object.id);
+      runViewportObjectPick(e.nativeEvent, object.id, onClick, {
+        clickPickSelectionEnabled,
+        isLocked,
+        refs: { clickGestureRef, gizmoDraggingRef, orbitActiveRef, marqueeActiveRef },
+      });
     },
-    [clickPickSelectionEnabled, gizmoDraggingRef, isLocked, object.id, onClick, orbitActiveRef, pointerDownTimeRef],
+    [
+      clickPickSelectionEnabled,
+      clickGestureRef,
+      gizmoDraggingRef,
+      isLocked,
+      marqueeActiveRef,
+      object.id,
+      onClick,
+      orbitActiveRef,
+    ],
   );
 
   const gizmoReady = shouldRenderGizmoControls({
@@ -1516,7 +1573,9 @@ const InstancedStageModel = memo(function InstancedStageModel({
   onPlacementGizmoCommit,
   gizmoDraggingRef,
   orbitActiveRef,
-  pointerDownTimeRef,
+  clickGestureRef,
+  marqueeActiveRef,
+  selectableNodesRef,
   selectedGroupsRef,
 }: {
   bundle: SsbhModelPreviewBundle;
@@ -1526,7 +1585,7 @@ const InstancedStageModel = memo(function InstancedStageModel({
   selectedNodeIds?: ReadonlySet<string>;
   nodeVisibility: SceneNodeVisibilityMap;
   objectLocks: SceneNodeLockMap;
-  onSelectNode: (id: string | null) => void;
+  onSelectNode: ViewportSelectHandler;
   clickPickSelectionEnabled: boolean;
   textureDataMap: NutexbTextureDataMap;
   textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>;
@@ -1540,7 +1599,9 @@ const InstancedStageModel = memo(function InstancedStageModel({
   onPlacementGizmoCommit?: (placementIdx: number, t: TransformData) => void;
   gizmoDraggingRef: React.RefObject<boolean>;
   orbitActiveRef: React.RefObject<boolean>;
-  pointerDownTimeRef: React.RefObject<number>;
+  clickGestureRef: React.RefObject<{ x: number; y: number } | null>;
+  marqueeActiveRef: React.RefObject<boolean>;
+  selectableNodesRef: React.RefObject<SelectableNodeRegistry>;
   selectedGroupsRef: React.RefObject<SelectedGroupMap>;
 }) {
   const draws = useMemo((): BuiltMeshDraw[] => {
@@ -1645,7 +1706,9 @@ const InstancedStageModel = memo(function InstancedStageModel({
             onPlacementGizmoCommit={onPlacementGizmoCommit}
             gizmoDraggingRef={gizmoDraggingRef}
             orbitActiveRef={orbitActiveRef}
-            pointerDownTimeRef={pointerDownTimeRef}
+            clickGestureRef={clickGestureRef}
+            marqueeActiveRef={marqueeActiveRef}
+            selectableNodesRef={selectableNodesRef}
             selectedGroupsRef={selectedGroupsRef}
           />
         ))}
@@ -1692,7 +1755,8 @@ const InstancedStageModel = memo(function InstancedStageModel({
           onSelectNode={onSelectNode}
           gizmoDraggingRef={gizmoDraggingRef}
           orbitActiveRef={orbitActiveRef}
-          pointerDownTimeRef={pointerDownTimeRef}
+          clickGestureRef={clickGestureRef}
+          marqueeActiveRef={marqueeActiveRef}
         />
       ))}
 
@@ -1723,7 +1787,9 @@ const InstancedStageModel = memo(function InstancedStageModel({
           onPlacementGizmoCommit={onPlacementGizmoCommit}
           gizmoDraggingRef={gizmoDraggingRef}
           orbitActiveRef={orbitActiveRef}
-          pointerDownTimeRef={pointerDownTimeRef}
+          clickGestureRef={clickGestureRef}
+          marqueeActiveRef={marqueeActiveRef}
+          selectableNodesRef={selectableNodesRef}
           selectedGroupsRef={selectedGroupsRef}
         />
       ))}
@@ -1746,7 +1812,8 @@ const InstancedTexturedMesh = memo(function InstancedTexturedMesh({
   onSelectNode,
   gizmoDraggingRef,
   orbitActiveRef,
-  pointerDownTimeRef,
+  clickGestureRef,
+  marqueeActiveRef,
 }: {
   drawBinding: DrawBinding;
   instanceMatrices: Float32Array;
@@ -1759,10 +1826,11 @@ const InstancedTexturedMesh = memo(function InstancedTexturedMesh({
   animeKeyLightDir: THREE.Vector3;
   clickPickSelectionEnabled: boolean;
   instances: PlacementInstance[];
-  onSelectNode: (id: string | null) => void;
+  onSelectNode: ViewportSelectHandler;
   gizmoDraggingRef: React.RefObject<boolean>;
   orbitActiveRef: React.RefObject<boolean>;
-  pointerDownTimeRef: React.RefObject<number>;
+  clickGestureRef: React.RefObject<{ x: number; y: number } | null>;
+  marqueeActiveRef: React.RefObject<boolean>;
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const { draw, binding } = drawBinding;
@@ -1837,17 +1905,15 @@ const InstancedTexturedMesh = memo(function InstancedTexturedMesh({
     : metalnessValue;
   const baseColor = hasAnyTexture ? "#ffffff" : "#cccccc";
 
-  const handleClick = useCallback((e: any) => {
-    if (!clickPickSelectionEnabled) return;
-    if (gizmoDraggingRef?.current || orbitActiveRef?.current) return;
-    const elapsed = performance.now() - (pointerDownTimeRef?.current ?? 0);
-    if (elapsed > 250) return;
+  const handleClick = useCallback((e: { stopPropagation: () => void; nativeEvent: MouseEvent; instanceId?: number }) => {
     e.stopPropagation();
     const instanceId = e.instanceId;
-    if (instanceId != null && instanceId < instances.length) {
-      onSelectNode(instances[instanceId].nodeId);
-    }
-  }, [clickPickSelectionEnabled, gizmoDraggingRef, instances, onSelectNode, orbitActiveRef, pointerDownTimeRef]);
+    if (instanceId == null || instanceId >= instances.length) return;
+    runViewportObjectPick(e.nativeEvent, instances[instanceId].nodeId, onSelectNode, {
+      clickPickSelectionEnabled,
+      refs: { clickGestureRef, gizmoDraggingRef, orbitActiveRef, marqueeActiveRef },
+    });
+  }, [clickPickSelectionEnabled, clickGestureRef, gizmoDraggingRef, instances, marqueeActiveRef, onSelectNode, orbitActiveRef]);
 
   if (instanceCount === 0) return null;
 
@@ -1908,7 +1974,9 @@ const StageModelGroup = memo(function StageModelGroup({
   onPlacementGizmoCommit,
   gizmoDraggingRef,
   orbitActiveRef,
-  pointerDownTimeRef,
+  clickGestureRef,
+  marqueeActiveRef,
+  selectableNodesRef,
   selectedGroupsRef,
 }: {
   nodeId: string;
@@ -1916,7 +1984,7 @@ const StageModelGroup = memo(function StageModelGroup({
   wireframe: boolean;
   isSelected: boolean;
   isLocked?: boolean;
-  onClick: (id: string) => void;
+  onClick: ViewportSelectHandler;
   clickPickSelectionEnabled: boolean;
   position?: [number, number, number];
   rotation?: [number, number, number];
@@ -1935,7 +2003,9 @@ const StageModelGroup = memo(function StageModelGroup({
   onPlacementGizmoCommit?: (placementIdx: number, t: TransformData) => void;
   gizmoDraggingRef?: React.RefObject<boolean>;
   orbitActiveRef?: React.RefObject<boolean>;
-  pointerDownTimeRef?: React.RefObject<number>;
+  clickGestureRef?: React.RefObject<{ x: number; y: number } | null>;
+  marqueeActiveRef?: React.RefObject<boolean>;
+  selectableNodesRef?: React.RefObject<SelectableNodeRegistry>;
   selectedGroupsRef?: React.RefObject<SelectedGroupMap>;
 }) {
   const groupRef = useRef<THREE.Group | null>(null);
@@ -1958,6 +2028,8 @@ const StageModelGroup = memo(function StageModelGroup({
     }
     return () => { selectedGroupsRef.current.delete(nodeId); };
   }, [isSelected, nodeId, selectedGroupsRef]);
+
+  useRegisterSelectableNode(nodeId, gizmoTarget, selectableNodesRef);
 
   const draws = useMemo((): BuiltMeshDraw[] => {
     try {
@@ -2016,17 +2088,24 @@ const StageModelGroup = memo(function StageModelGroup({
   }, [draws, matlLookup, refToPathMap]);
 
   const handleClick = useCallback(
-    (e: any) => {
+    (e: { stopPropagation: () => void; nativeEvent: MouseEvent }) => {
       e.stopPropagation();
-      if (isLocked) return;
-      if (!clickPickSelectionEnabled) return;
-      if (gizmoDraggingRef?.current) return;
-      if (orbitActiveRef?.current) return;
-      const elapsed = performance.now() - (pointerDownTimeRef?.current ?? 0);
-      if (elapsed > 250) return;
-      onClick(nodeId);
+      runViewportObjectPick(e.nativeEvent, nodeId, onClick, {
+        clickPickSelectionEnabled,
+        isLocked,
+        refs: { clickGestureRef, gizmoDraggingRef, orbitActiveRef, marqueeActiveRef },
+      });
     },
-    [clickPickSelectionEnabled, isLocked, nodeId, onClick, gizmoDraggingRef, orbitActiveRef, pointerDownTimeRef]
+    [
+      clickPickSelectionEnabled,
+      clickGestureRef,
+      gizmoDraggingRef,
+      isLocked,
+      marqueeActiveRef,
+      nodeId,
+      onClick,
+      orbitActiveRef,
+    ],
   );
 
   const euler = useMemo(
@@ -2146,13 +2225,15 @@ const EffectMarker = memo(function EffectMarker({
   onPlacementGizmoCommit,
   gizmoDraggingRef,
   orbitActiveRef,
-  pointerDownTimeRef,
+  clickGestureRef,
+  marqueeActiveRef,
+  selectableNodesRef,
 }: {
   entry: PlacementRow;
   globalIdx: number;
   isSelected: boolean;
   isLocked?: boolean;
-  onClick: (id: string | null) => void;
+  onClick: ViewportSelectHandler;
   clickPickSelectionEnabled: boolean;
   showGizmo: boolean;
   placementGizmoMode?: PlacementGizmoMode;
@@ -2161,7 +2242,9 @@ const EffectMarker = memo(function EffectMarker({
   onPlacementGizmoCommit?: (idx: number, t: TransformData) => void;
   gizmoDraggingRef?: React.RefObject<boolean>;
   orbitActiveRef?: React.RefObject<boolean>;
-  pointerDownTimeRef?: React.RefObject<number>;
+  clickGestureRef?: React.RefObject<{ x: number; y: number } | null>;
+  marqueeActiveRef?: React.RefObject<boolean>;
+  selectableNodesRef?: React.RefObject<SelectableNodeRegistry>;
 }) {
   const groupRef = useRef<THREE.Group | null>(null);
   const [gizmoTarget, setGizmoTarget] = useState<THREE.Group | null>(null);
@@ -2169,23 +2252,32 @@ const EffectMarker = memo(function EffectMarker({
   const regress = useThree((s) => s.performance.regress);
   const nodeId = `__effect__${globalIdx}`;
 
+  useRegisterSelectableNode(nodeId, gizmoTarget, selectableNodesRef);
+
   const assignGroupRef = useCallback((node: THREE.Group | null) => {
     groupRef.current = node;
     setGizmoTarget(node);
   }, []);
 
   const handleClick = useCallback(
-    (e: any) => {
-      if (isLocked) return;
-      if (!clickPickSelectionEnabled) return;
-      if (gizmoDraggingRef?.current) return;
-      if (orbitActiveRef?.current) return;
-      const elapsed = performance.now() - (pointerDownTimeRef?.current ?? 0);
-      if (elapsed > 250) return;
+    (e: { stopPropagation: () => void; nativeEvent: MouseEvent }) => {
       e.stopPropagation();
-      onClick(nodeId);
+      runViewportObjectPick(e.nativeEvent, nodeId, onClick, {
+        clickPickSelectionEnabled,
+        isLocked,
+        refs: { clickGestureRef, gizmoDraggingRef, orbitActiveRef, marqueeActiveRef },
+      });
     },
-    [clickPickSelectionEnabled, isLocked, onClick, nodeId, gizmoDraggingRef, orbitActiveRef, pointerDownTimeRef],
+    [
+      clickPickSelectionEnabled,
+      clickGestureRef,
+      gizmoDraggingRef,
+      isLocked,
+      marqueeActiveRef,
+      nodeId,
+      onClick,
+      orbitActiveRef,
+    ],
   );
 
   const handleGizmoChange = useCallback(() => {

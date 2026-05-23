@@ -266,6 +266,7 @@ function ResetIconButton({ onClick, label, disabled }: { onClick: () => void; la
 
 export default function SceneEdit() {
   const viewportRef = useRef<MapViewportHandle>(null);
+  const allNodeIdsRef = useRef<string[]>([]);
   const [, startTransition] = useTransition();
 
   const { defaultLayout: persistedLayout, onLayoutChanged } = useDefaultLayout({
@@ -550,11 +551,55 @@ export default function SceneEdit() {
   }, [applyPrimarySelectionState]);
 
   const handleSelectNode = useCallback(
-    (id: string | null) => {
-      applyPrimarySelectionState(id);
+    (id: string | null, opts?: { ctrl?: boolean; shift?: boolean }) => {
       const store = useSceneEditorStore.getState();
-      if (id) store.select(id);
-      else store.deselectAll();
+      if (id) {
+        store.select(id, {
+          ctrl: opts?.ctrl,
+          shift: opts?.shift,
+          allIds: allNodeIdsRef.current,
+        });
+        applyPrimarySelectionState(useSceneEditorStore.getState().getPrimaryId());
+      } else {
+        applyPrimarySelectionState(null);
+        store.deselectAll();
+      }
+    },
+    [applyPrimarySelectionState],
+  );
+
+  const handleSelectNodes = useCallback(
+    (ids: string[], opts?: { ctrl?: boolean; shift?: boolean }) => {
+      const store = useSceneEditorStore.getState();
+      if (ids.length === 0) {
+        if (!opts?.ctrl) {
+          applyPrimarySelectionState(null);
+          store.deselectAll();
+        }
+        return;
+      }
+
+      const primaryId = ids[ids.length - 1] ?? null;
+
+      if (opts?.ctrl) {
+        const next = new Set(store.getSelectedIds());
+        for (const id of ids) {
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+        }
+        store.selectAll([...next]);
+        applyPrimarySelectionState(useSceneEditorStore.getState().getPrimaryId());
+        return;
+      }
+
+      if (opts?.shift) {
+        store.selectAll([...new Set([...store.getSelectedIds(), ...ids])]);
+        applyPrimarySelectionState(useSceneEditorStore.getState().getPrimaryId());
+        return;
+      }
+
+      store.selectAll(ids);
+      applyPrimarySelectionState(primaryId);
     },
     [applyPrimarySelectionState],
   );
@@ -2072,6 +2117,10 @@ export default function SceneEdit() {
     return ids;
   }, [outlinerRoot]);
 
+  useEffect(() => {
+    allNodeIdsRef.current = allNodeIds;
+  }, [allNodeIds]);
+
   const handleFocusSelected = useCallback(() => {
     viewportRef.current?.focusSelected();
   }, []);
@@ -2763,7 +2812,12 @@ export default function SceneEdit() {
               onDeleteSelected={handleDeleteSelected}
               hasSelection={hasSceneSelection}
             >
-            <div className="relative h-full min-h-0 min-w-0 overflow-hidden">
+            <div
+              className="relative h-full min-h-0 min-w-0 overflow-hidden"
+              onContextMenu={(e) => {
+                if (!e.shiftKey) e.preventDefault();
+              }}
+            >
               <MapViewport
                 ref={viewportRef}
                 baseModel={baseModel}
@@ -2780,6 +2834,7 @@ export default function SceneEdit() {
                 objectLocks={objectLocks}
                 selectedPlacementIdx={selectedPlacementIdx}
                 onSelectNode={handleSelectNode}
+                onSelectNodes={handleSelectNodes}
                 textureDataMap={textureDataMap}
                 textureSlotLoadEnabled={textureSlotLoadEnabled}
                 onDrawStatsChange={handleDrawStatsChange}
