@@ -1,20 +1,20 @@
 use tauri::Manager;
 
-mod commands;
 mod character_id_preview;
+mod commands;
 mod fhm2d_memory_preview;
 pub mod format;
+mod havok_cli;
 mod jnttbl_cmd;
 mod jnttbl_format;
 pub mod nutexb_lib;
 mod preview_collection_state;
-mod ssbh_dae;
-mod ssbh_dae_cmd;
-pub mod ssbh_preview;
-mod ssbh_motion;
 mod scene_memory_session;
 mod scene_session_commands;
-mod havok_cli;
+mod ssbh_dae;
+mod ssbh_dae_cmd;
+mod ssbh_motion;
+pub mod ssbh_preview;
 mod stage_commands;
 
 pub use ssbh_motion::smoke_decode_and_sample_nuanmb;
@@ -122,6 +122,8 @@ pub fn run() {
             stage_commands::repack_fhm2d,
             stage_commands::redistribute_stage_textures,
             stage_commands::restore_shared_textures,
+            stage_commands::rebuild_stage_structure_json,
+            stage_commands::rebuild_stage_structure_json_with_shared_textures,
             scene_session_commands::scene_session_create,
             scene_session_commands::scene_session_destroy,
             scene_session_commands::scene_session_is_dirty,

@@ -21,12 +21,9 @@ import {
   createImportedDaePlacementRow,
 } from "./sceneDaeSsbhSave";
 import {
-  buildStageStructureJsonFromFiles,
   resolveStagePackStructureTarget,
-  type StagePackFileEntry,
 } from "./sceneStageStructure";
 import { buildDeletePreview, executeDelete } from "./sceneDeleteConfirm";
-import { detectOldTextureFormat, migrateTexturesToSharedFolder } from "./sceneTextureMigration";
 import { sceneSaveAsFolder } from "./sceneSessionService";
 import { ssbhAnalyzeDae, ssbhConvertDaeToSsbh } from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
 import { writeObjectAsDAE } from "./daeExportImport";
@@ -46,34 +43,6 @@ function joinTauriPath(...parts: string[]): string {
 function fileExtension(name: string): string {
   const index = name.lastIndexOf(".");
   return index >= 0 ? name.slice(index).toLowerCase() : "";
-}
-
-async function collectStagePackFiles(root: string, relativeDir = ""): Promise<StagePackFileEntry[]> {
-  const dirPath = relativeDir ? joinTauriPath(root, relativeDir) : root;
-  const entries = await readDir(dirPath);
-  const collected: StagePackFileEntry[] = [];
-  for (const entry of entries) {
-    const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
-    if (entry.isDirectory) {
-      collected.push(...(await collectStagePackFiles(root, relativePath)));
-    } else if (entry.isFile) {
-      collected.push({ relativePath, fileType: fileExtension(entry.name) });
-    }
-  }
-  return collected.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
-}
-
-export async function writeStagePackStructureJson(
-  root: string,
-): Promise<{ structurePath: string; packRoot: string }> {
-  const target = resolveStagePackStructureTarget(root);
-  const files = await collectStagePackFiles(target.packRoot);
-  const structureJson = buildStageStructureJsonFromFiles({
-    packFolderName: target.packFolderName,
-    files,
-  });
-  await writeTextFile(target.structurePath, JSON.stringify(structureJson, null, 2));
-  return { structurePath: target.structurePath, packRoot: target.packRoot };
 }
 
 function allocateAllFolderPlans(
@@ -229,19 +198,20 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
     emitStep(onProgress, "delete", "Checking for deletions...", "done", "None");
   }
 
-  // Phase 2: Texture migration
-  emitStep(onProgress, "migrate", "Migrating textures...", "running");
+  // Phase 2: Restore shared textures (move nutexb from model subdirs to textures/)
+  emitStep(onProgress, "migrate", "Restoring shared textures...", "running");
   try {
-    const isOldFormat = await detectOldTextureFormat(stageRoot);
-    if (isOldFormat) {
-      const migResult = await migrateTexturesToSharedFolder(stageRoot);
-      migratedTextures = migResult.migratedCount;
-      emitStep(onProgress, "migrate", "Migrating textures...", "done", `${migratedTextures} migrated`);
-    } else {
-      emitStep(onProgress, "migrate", "Migrating textures...", "done", "Not needed");
-    }
+    const restoreResult = await invoke<{ texturesCollected: number; subdirsRemoved: number; warnings: string[] }>(
+      "restore_shared_textures",
+      { stageRoot },
+    );
+    const detail = restoreResult.texturesCollected > 0
+      ? `${restoreResult.texturesCollected} textures collected`
+      : "Not needed";
+    emitStep(onProgress, "migrate", "Restoring shared textures...", "done", detail);
+    migratedTextures = restoreResult.texturesCollected;
   } catch (err) {
-    emitStep(onProgress, "migrate", "Migrating textures...", "error", undefined, err instanceof Error ? err.message : String(err));
+    emitStep(onProgress, "migrate", "Restoring shared textures...", "error", undefined, err instanceof Error ? err.message : String(err));
   }
 
   // Phase 3: Convert new objects (DAE → SSBH)
@@ -358,11 +328,12 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
     emitStep(onProgress, "csv", "Writing CSV files...", "error", undefined, err instanceof Error ? err.message : String(err));
   }
 
-  // Phase 8: Rebuild structure JSON (skip when saving as FHM2D — Rust manages it)
+  // Phase 8: Rebuild structure JSON (skip when saving as FHM2D — handled separately)
   if (!params.skipStructureRebuild) {
     emitStep(onProgress, "structure", "Rebuilding structure JSON...", "running");
     try {
-      await writeStagePackStructureJson(stageRoot);
+      const packTarget = resolveStagePackStructureTarget(stageRoot);
+      await invoke("rebuild_stage_structure_json", { stageRoot: packTarget.packRoot });
       emitStep(onProgress, "structure", "Rebuilding structure JSON...", "done");
     } catch (err) {
       emitStep(onProgress, "structure", "Rebuilding structure JSON...", "error", undefined, err instanceof Error ? err.message : String(err));

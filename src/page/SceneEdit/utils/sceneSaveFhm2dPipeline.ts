@@ -20,13 +20,6 @@ export type SaveFhm2dResult = SaveFolderResult & {
   fhm2dSizeBytes: number;
 };
 
-type RedistributeResult = {
-  modelsProcessed: number;
-  texturesCopied: number;
-  texturesFolderRemoved: boolean;
-  warnings: string[];
-};
-
 function fhm2dLog(msg: string) {
   console.log(`[SaveFHM2D] ${msg}`);
 }
@@ -50,33 +43,31 @@ export async function executeSaveFhm2dPipeline(params: SaveFhm2dParams): Promise
     };
   }
 
-  fhm2dLog("Redistributing textures from shared folder to model subdirs...");
-  onProgress({ id: "redistribute", label: "Redistributing textures...", status: "running" });
+  const packTarget = resolveStagePackStructureTarget(params.stageRoot);
+  const packRoot = packTarget.packRoot;
+  fhm2dLog(`Resolved pack root: ${packRoot}`);
+
+  // Rebuild structure JSON with textures/ paths — no physical file movement needed.
+  fhm2dLog("Rebuilding structure JSON (textures stay in textures/)...");
+  onProgress({ id: "rebuild-structure", label: "Rebuilding structure JSON...", status: "running" });
 
   try {
-    const redistResult = await invoke<RedistributeResult>(
-      "redistribute_stage_textures",
-      { stageRoot: params.stageRoot },
+    const structurePath = await invoke<string>(
+      "rebuild_stage_structure_json_with_shared_textures",
+      { stageRoot: packRoot },
     );
-    const redistDetail = redistResult.texturesCopied > 0
-      ? `${redistResult.modelsProcessed} models, ${redistResult.texturesCopied} textures`
-      : "Not needed";
-    fhm2dLog(`Redistribute done — ${redistDetail}`);
-    if (redistResult.warnings.length > 0) {
-      console.warn("[SaveFHM2D] Redistribute warnings:", redistResult.warnings);
-    }
+    fhm2dLog(`Structure JSON rebuilt: ${structurePath}`);
     onProgress({
-      id: "redistribute",
-      label: "Redistributing textures...",
+      id: "rebuild-structure",
+      label: "Rebuilding structure JSON...",
       status: "done",
-      detail: redistDetail,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[SaveFHM2D] Redistribute failed:", msg);
+    console.error("[SaveFHM2D] Structure rebuild failed:", msg);
     onProgress({
-      id: "redistribute",
-      label: "Redistributing textures...",
+      id: "rebuild-structure",
+      label: "Rebuilding structure JSON...",
       status: "error",
       error: msg,
     });
@@ -92,11 +83,10 @@ export async function executeSaveFhm2dPipeline(params: SaveFhm2dParams): Promise
   onProgress({ id: "fhm2d", label: "Packing FHM2D...", status: "running" });
 
   try {
-    const target = resolveStagePackStructureTarget(params.stageRoot);
-    fhm2dLog(`Pack root: ${target.packRoot}, structure: ${target.structurePath}`);
+    fhm2dLog(`Pack root: ${packTarget.packRoot}, structure: ${packTarget.structurePath}`);
     await repackFolderToFhm2dFile({
-      structurePath: target.structurePath,
-      inputFolderPath: target.packRoot,
+      structurePath: packTarget.structurePath,
+      inputFolderPath: packTarget.packRoot,
       outputFilePath: outputFhm2dPath,
     });
 
@@ -110,27 +100,6 @@ export async function executeSaveFhm2dPipeline(params: SaveFhm2dParams): Promise
       detail: `${sizeMb} MB`,
     });
 
-    fhm2dLog("Restoring shared textures...");
-    onProgress({ id: "restore-textures", label: "Restoring shared textures...", status: "running" });
-    try {
-      await invoke("restore_shared_textures", { stageRoot: params.stageRoot });
-      fhm2dLog("Shared textures restored");
-      onProgress({
-        id: "restore-textures",
-        label: "Restoring shared textures...",
-        status: "done",
-      });
-    } catch (restoreErr) {
-      const msg = restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
-      console.error("[SaveFHM2D] Texture restore failed:", msg);
-      onProgress({
-        id: "restore-textures",
-        label: "Restoring shared textures...",
-        status: "error",
-        error: msg,
-      });
-    }
-
     fhm2dLog("Pipeline complete");
     return {
       ...folderResult,
@@ -140,13 +109,6 @@ export async function executeSaveFhm2dPipeline(params: SaveFhm2dParams): Promise
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[SaveFHM2D] Pack failed:", msg);
-    try {
-      fhm2dLog("Attempting best-effort texture restore after failure...");
-      await invoke("restore_shared_textures", { stageRoot: params.stageRoot });
-    } catch {
-      console.warn("[SaveFHM2D] Best-effort texture restore also failed");
-    }
-
     onProgress({
       id: "fhm2d",
       label: "Packing FHM2D...",

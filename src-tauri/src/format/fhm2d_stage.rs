@@ -179,15 +179,22 @@ fn tokenize_structure(entries: &[SubFileStructureEntry]) -> Vec<StageToken> {
     let mut tokens = Vec::new();
     for entry in entries {
         match entry {
-            SubFileStructureEntry::Folder { .. } => {
+            SubFileStructureEntry::Folder { unk3, .. } => {
                 let idx = folder_counter.len() - 1;
-                let name = folder_counter[idx].to_string();
+                // unk3=64 marks the shared textures/ folder
+                let name = if *unk3 == 64 {
+                    STAGE_TEXTURES_NAME.to_string()
+                } else {
+                    folder_counter[idx].to_string()
+                };
                 folder_counter[idx] += 1;
                 folder_counter.push(0);
                 tokens.push(StageToken::FolderOpen { name });
             }
             SubFileStructureEntry::Item { file_index, .. } => {
-                tokens.push(StageToken::Leaf { file_index: *file_index });
+                tokens.push(StageToken::Leaf {
+                    file_index: *file_index,
+                });
             }
             SubFileStructureEntry::EndMark { end_mark_count } => {
                 let count = (*end_mark_count).max(0) as usize;
@@ -264,7 +271,11 @@ fn convert_to_virtual_tree(
 
     for child in &node.children {
         if !child.children.is_empty() {
-            children.push(convert_to_virtual_tree(child, file_index_map, nutexb_name_map));
+            children.push(convert_to_virtual_tree(
+                child,
+                file_index_map,
+                nutexb_name_map,
+            ));
         } else if !child.item_file_indices.is_empty() {
             for fi in &child.item_file_indices {
                 if let Some(f) = file_index_map.get(fi) {
@@ -410,10 +421,7 @@ fn placement_row_looks_kv_pairs(fields: &[String]) -> bool {
         return false;
     }
     let cat = fields[1].to_ascii_uppercase();
-    matches!(
-        cat.as_str(),
-        "OBJECT" | "EFFECT" | "SKY" | "PROP"
-    )
+    matches!(cat.as_str(), "OBJECT" | "EFFECT" | "SKY" | "PROP")
 }
 
 fn kv_pairs_upper_map(fields: &[String]) -> HashMap<String, String> {
@@ -488,7 +496,10 @@ fn parse_placement_kv_record(fields: Vec<String>) -> PlacementEntry {
     }
 }
 
-fn parse_placement_table(content: &str, warnings: &mut Vec<String>) -> (Vec<String>, Vec<PlacementEntry>) {
+fn parse_placement_table(
+    content: &str,
+    warnings: &mut Vec<String>,
+) -> (Vec<String>, Vec<PlacementEntry>) {
     let lines: Vec<&str> = content.lines().collect();
     if lines.is_empty() {
         return (Vec::new(), Vec::new());
@@ -513,7 +524,10 @@ fn parse_placement_table(content: &str, warnings: &mut Vec<String>) -> (Vec<Stri
     let header_strings = first_fields;
     let find_col_any = |names: &[&str]| -> Option<usize> {
         for &n in names {
-            if let Some(i) = header_strings.iter().position(|h| h.eq_ignore_ascii_case(n)) {
+            if let Some(i) = header_strings
+                .iter()
+                .position(|h| h.eq_ignore_ascii_case(n))
+            {
                 return Some(i);
             }
         }
@@ -614,8 +628,7 @@ fn collect_placement_csv_from_virtual_tree(
         }
     }
     for child in &folder.children {
-        if let Some(hit) =
-            collect_placement_csv_from_virtual_tree(child, file_index_map, warnings)
+        if let Some(hit) = collect_placement_csv_from_virtual_tree(child, file_index_map, warnings)
         {
             return Some(hit);
         }
@@ -667,7 +680,13 @@ fn parse_nutexb_internal_name(bytes: &[u8]) -> Option<String> {
         .replace(['/', '\\'], "_")
         .trim()
         .chars()
-        .map(|ch| if ch.is_control() || "<>:\"|?*".contains(ch) { '_' } else { ch })
+        .map(|ch| {
+            if ch.is_control() || "<>:\"|?*".contains(ch) {
+                '_'
+            } else {
+                ch
+            }
+        })
         .collect::<String>();
     if cleaned.is_empty() {
         return None;
@@ -779,10 +798,7 @@ fn basename_no_ext(path: &str) -> String {
 
 // ── Folder-level bin rename (map_hit.hkt) ───────────────────────────────────
 
-fn rename_folder_level_bins(
-    folder: &mut StageVirtualTreeFolder,
-    warnings: &mut Vec<String>,
-) {
+fn rename_folder_level_bins(folder: &mut StageVirtualTreeFolder, warnings: &mut Vec<String>) {
     let bin_indices: Vec<usize> = folder
         .files
         .iter()
@@ -866,10 +882,7 @@ fn rename_model_subfolder_files(
         .collect();
 
     if bin_indices.len() == 1 {
-        let jnttbl_name = model_name
-            .as_deref()
-            .unwrap_or("unknown")
-            .to_string();
+        let jnttbl_name = model_name.as_deref().unwrap_or("unknown").to_string();
         subfolder.files[bin_indices[0]].file_name = format!("{jnttbl_name}.jnttbl");
     }
 }
@@ -942,16 +955,13 @@ fn rename_numatb_with_maya_nust(
         return;
     }
 
-    let prefix =
-        &nust_template_stripped[..nust_template_stripped.len() - NUST_NUMATB_SUFFIX.len()];
+    let prefix = &nust_template_stripped[..nust_template_stripped.len() - NUST_NUMATB_SUFFIX.len()];
     for e in 0..extra_count {
         let target = numatb_indices[declared_count + e];
         let m_part = format!("_m{:03}", e + 1);
-        subfolder.files[target].file_name =
-            format!("{prefix}{m_part}{NUST_NUMATB_SUFFIX}.numatb");
+        subfolder.files[target].file_name = format!("{prefix}{m_part}{NUST_NUMATB_SUFFIX}.numatb");
     }
 }
-
 
 // ── Main rename dispatcher ──────────────────────────────────────────────────
 
@@ -963,6 +973,11 @@ fn rename_stage_content_folder(
     file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
     warnings: &mut Vec<String>,
 ) {
+    // textures/ is a shared folder — never rename it
+    if folder.name.to_ascii_lowercase() == STAGE_TEXTURES_NAME {
+        return;
+    }
+
     let is_last = position == total_children - 1;
 
     match position {
@@ -1090,8 +1105,13 @@ fn apply_semantic_rename(
     let content_folder = content_folder.unwrap();
 
     let child_count = content_folder.children.len();
+    // Exclude textures/ from position-based rename count so sky is still "last"
+    let non_textures_count = content_folder.children.iter()
+        .filter(|c| c.name.to_ascii_lowercase() != STAGE_TEXTURES_NAME)
+        .count();
     let node_children: Vec<&InternalTreeNode> = content_node.children.iter().collect();
 
+    let mut non_tex_pos = 0usize;
     for i in 0..child_count {
         let node_ref = if i < node_children.len() {
             node_children[i]
@@ -1101,12 +1121,15 @@ fn apply_semantic_rename(
 
         rename_stage_content_folder(
             &mut content_folder.children[i],
-            i,
-            child_count,
+            non_tex_pos,
+            non_textures_count,
             node_ref,
             file_index_map,
             warnings,
         );
+        if content_folder.children[i].name.to_ascii_lowercase() != STAGE_TEXTURES_NAME {
+            non_tex_pos += 1;
+        }
     }
 }
 
@@ -1136,10 +1159,8 @@ pub fn stage_rename_in_memory(
     files: &[InMemoryFhm2dFile],
     sub_file_structure: &[SubFileStructureEntry],
 ) -> Result<(StageVirtualTreeFolder, Vec<String>), String> {
-    let file_index_map: HashMap<i32, &InMemoryFhm2dFile> = files
-        .iter()
-        .map(|f| (f.file_index, f))
-        .collect();
+    let file_index_map: HashMap<i32, &InMemoryFhm2dFile> =
+        files.iter().map(|f| (f.file_index, f)).collect();
 
     let tree = build_stage_tree(sub_file_structure);
     let mut warnings = Vec::new();
@@ -1170,10 +1191,8 @@ fn write_virtual_tree_to_disk(
     files: &[InMemoryFhm2dFile],
     dest: &Path,
 ) -> Result<(usize, u64), String> {
-    let file_map: HashMap<i32, &InMemoryFhm2dFile> = files
-        .iter()
-        .map(|f| (f.file_index, f))
-        .collect();
+    let file_map: HashMap<i32, &InMemoryFhm2dFile> =
+        files.iter().map(|f| (f.file_index, f)).collect();
 
     let mut count = 0usize;
     let mut bytes = 0u64;
@@ -1226,8 +1245,7 @@ pub fn extract_stage_fhm2d_to_folder_impl(
     source_path: &str,
     output_dir: &str,
 ) -> Result<StageExtractResult, String> {
-    let bytes = fs::read(source_path)
-        .map_err(|e| format!("Failed to read FHM2D file: {e}"))?;
+    let bytes = fs::read(source_path).map_err(|e| format!("Failed to read FHM2D file: {e}"))?;
 
     let source_name = Path::new(source_path)
         .file_stem()
@@ -1235,20 +1253,18 @@ pub fn extract_stage_fhm2d_to_folder_impl(
         .unwrap_or("stage")
         .to_string();
 
-    let extraction = crate::format::fhm2d::extract_fhm2d_to_memory_impl(&bytes, &source_name, None)?;
+    let extraction =
+        crate::format::fhm2d::extract_fhm2d_to_memory_impl(&bytes, &source_name, None)?;
 
-    let (tree, warnings) = stage_rename_in_memory(
-        &extraction.files,
-        &extraction.sub_file_structure,
-    )?;
+    let (tree, warnings) =
+        stage_rename_in_memory(&extraction.files, &extraction.sub_file_structure)?;
 
     let dest = Path::new(output_dir).join(&source_name);
     if dest.exists() {
         fs::remove_dir_all(&dest)
             .map_err(|e| format!("Failed to clean existing output dir: {e}"))?;
     }
-    fs::create_dir_all(&dest)
-        .map_err(|e| format!("Failed to create output dir: {e}"))?;
+    fs::create_dir_all(&dest).map_err(|e| format!("Failed to create output dir: {e}"))?;
 
     let (total_files, total_bytes) = write_virtual_tree_to_disk(&tree, &extraction.files, &dest)?;
 
@@ -1319,10 +1335,7 @@ fn write_stage_structure_json(
         file_base_name: String,
     }
 
-    let dest_name = dest
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("stage");
+    let dest_name = dest.file_name().and_then(|n| n.to_str()).unwrap_or("stage");
 
     let sub_file_data: Vec<StageSubFileDataOutput> = extraction
         .files
@@ -1368,8 +1381,12 @@ fn write_stage_structure_json(
 
     let json = serde_json::to_string_pretty(&output)
         .map_err(|e| format!("Failed to serialize structure JSON: {e}"))?;
-    fs::write(&structure_path, json)
-        .map_err(|e| format!("Failed to write structure JSON at {}: {e}", structure_path.display()))?;
+    fs::write(&structure_path, json).map_err(|e| {
+        format!(
+            "Failed to write structure JSON at {}: {e}",
+            structure_path.display()
+        )
+    })?;
 
     Ok(())
 }
@@ -1431,15 +1448,16 @@ pub struct StageRenamePreviewResult {
 
 // ── Core: stage_apply_rename_impl ───────────────────────────────────────────
 
-pub fn stage_apply_rename_impl(
-    extracted_dir: &str,
-) -> Result<StageApplyRenameResult, String> {
+pub fn stage_apply_rename_impl(extracted_dir: &str) -> Result<StageApplyRenameResult, String> {
     let base_dir = Path::new(extracted_dir);
     if !base_dir.is_dir() {
         return Err(format!("Extracted directory not found: {extracted_dir}"));
     }
 
-    let structure_path = format!("{}_structure.json", extracted_dir.trim_end_matches(['/', '\\']));
+    let structure_path = format!(
+        "{}_structure.json",
+        extracted_dir.trim_end_matches(['/', '\\'])
+    );
     let structure_json = fs::read_to_string(&structure_path)
         .map_err(|e| format!("Failed to read structure JSON at {structure_path}: {e}"))?;
     let structure: StructureJson = serde_json::from_str(&structure_json)
@@ -1463,23 +1481,19 @@ pub fn stage_apply_rename_impl(
     let mut folder_map = Vec::new();
     let total_folders = folder_groups.len();
 
-    let renamed_root = base_dir
-        .parent()
-        .unwrap_or(base_dir)
-        .join(format!(
-            "{}_renamed",
-            base_dir
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("stage")
-        ));
+    let renamed_root = base_dir.parent().unwrap_or(base_dir).join(format!(
+        "{}_renamed",
+        base_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("stage")
+    ));
 
     if renamed_root.exists() {
         fs::remove_dir_all(&renamed_root)
             .map_err(|e| format!("Failed to clean existing renamed dir: {e}"))?;
     }
-    fs::create_dir_all(&renamed_root)
-        .map_err(|e| format!("Failed to create renamed root: {e}"))?;
+    fs::create_dir_all(&renamed_root).map_err(|e| format!("Failed to create renamed root: {e}"))?;
 
     for (group_pos, group) in folder_groups.iter().enumerate() {
         let (folder_name, role) = determine_folder_name(
@@ -1523,8 +1537,7 @@ pub fn stage_apply_rename_impl(
                             )
                         })?;
                         if entry.file_type.eq_ignore_ascii_case(".numdlb") {
-                            numdlb_path_out =
-                                Some(dest_file.to_string_lossy().replace('\\', "/"));
+                            numdlb_path_out = Some(dest_file.to_string_lossy().replace('\\', "/"));
                         }
                     } else {
                         warnings.push(format!(
@@ -1736,10 +1749,7 @@ pub fn load_stage_bundle_impl(stage_root: &str) -> Result<StageBundle, String> {
     let mut object_index = 0usize;
     for entry in &entries {
         let name = entry.file_name().to_string_lossy().to_string();
-        if name == STAGE_BASE_NAME
-            || name == STAGE_INFO_NAME
-            || name == STAGE_TEXTURES_NAME
-        {
+        if name == STAGE_BASE_NAME || name == STAGE_INFO_NAME || name == STAGE_TEXTURES_NAME {
             continue;
         }
         if let Some(bundle) = load_model_in_subfolder(root, &name, &mut warnings) {
@@ -1911,7 +1921,8 @@ pub fn parse_placement_csv_from_bytes(
 ) -> (Vec<String>, Vec<PlacementEntry>) {
     if std::str::from_utf8(data).is_err() {
         warnings.push(
-            "placement.csv contains invalid UTF-8; decoding with replacement characters".to_string(),
+            "placement.csv contains invalid UTF-8; decoding with replacement characters"
+                .to_string(),
         );
     }
     let text = String::from_utf8_lossy(data);
@@ -1938,10 +1949,8 @@ pub fn build_stage_bundle_from_memory(
     session_id: Option<&str>,
     mut on_model_progress: impl FnMut(usize, usize, &str),
 ) -> Result<StageBundle, String> {
-    let file_index_map: HashMap<i32, &InMemoryFhm2dFile> = files
-        .iter()
-        .map(|f| (f.file_index, f))
-        .collect();
+    let file_index_map: HashMap<i32, &InMemoryFhm2dFile> =
+        files.iter().map(|f| (f.file_index, f)).collect();
 
     let path = find_stage_content_level(tree);
     let content = if path.is_empty() {
@@ -1998,8 +2007,7 @@ pub fn build_stage_bundle_from_memory(
                     }
                 } else if file.file_name == "placement.csv" {
                     if let Some(f) = file_index_map.get(&file.file_index) {
-                        let (h, e) =
-                            parse_placement_csv_from_bytes(&f.data, &mut bundle_warnings);
+                        let (h, e) = parse_placement_csv_from_bytes(&f.data, &mut bundle_warnings);
                         placement_header = h;
                         placement_entries = e;
                     }
@@ -2015,7 +2023,6 @@ pub fn build_stage_bundle_from_memory(
         on_model_progress(model_done, model_total, &child.name);
 
         if is_base {
-
             for sub_folder in &child.children {
                 if let Some(bundle) = build_model_bundle_from_virtual_folder(
                     sub_folder,
@@ -2084,7 +2091,8 @@ pub fn build_stage_bundle_from_memory(
                 placement_header = h;
                 placement_entries = e;
                 bundle_warnings.push(
-                    "placement.csv loaded via tree scan (info slot did not attach rows)".to_string(),
+                    "placement.csv loaded via tree scan (info slot did not attach rows)"
+                        .to_string(),
                 );
             }
         }
@@ -2123,7 +2131,10 @@ fn collect_nutexb_entries_with_virtual_paths(
         })
         .collect();
     for child in &folder.children {
-        out.extend(collect_nutexb_entries_with_virtual_paths(child, file_index_map));
+        out.extend(collect_nutexb_entries_with_virtual_paths(
+            child,
+            file_index_map,
+        ));
     }
     out
 }
@@ -2167,7 +2178,10 @@ fn build_model_bundle_from_virtual_folder(
     let mesh = match mesh {
         Some(m) => m,
         None => {
-            warnings.push(format!("No valid numshb in '{}', skipping model", folder.name));
+            warnings.push(format!(
+                "No valid numshb in '{}', skipping model",
+                folder.name
+            ));
             return None;
         }
     };
@@ -2251,9 +2265,7 @@ fn build_model_bundle_from_virtual_folder(
 
     let modl_json = serde_json::to_value(&modl).ok()?;
     let mesh_json = serde_json::to_value(&mesh).ok()?;
-    let skel_json = skel
-        .as_ref()
-        .and_then(|s| serde_json::to_value(s).ok());
+    let skel_json = skel.as_ref().and_then(|s| serde_json::to_value(s).ok());
     let matl_json = matl_combined
         .as_ref()
         .and_then(|m| serde_json::to_value(m).ok());
@@ -2321,7 +2333,11 @@ fn find_structure_json_path(stage_root: &Path) -> Option<PathBuf> {
     } else {
         let hex = format!("0x{}", folder_name.to_uppercase());
         let alt = parent.join(format!("{hex}_structure.json"));
-        if alt.is_file() { Some(alt) } else { None }
+        if alt.is_file() {
+            Some(alt)
+        } else {
+            None
+        }
     }
 }
 
@@ -2359,6 +2375,624 @@ fn patch_structure_json_urls(
     Ok(())
 }
 
+// ── Rebuild structure JSON from disk ──────────────────────────────────────
+
+const STAGE_PACK_EXTENSIONS: &[&str] = &[
+    ".bin",
+    ".csv",
+    ".hkt",
+    ".jnttbl",
+    ".numatb",
+    ".numdlb",
+    ".numshb",
+    ".nuanmb",
+    ".nudnbb",
+    ".nufxlb",
+    ".nuhlpb",
+    ".nurpdb",
+    ".nushdb",
+    ".nus3bank",
+    ".nusktb",
+    ".nutexb",
+    ".spbin",
+];
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RebuildStructureOutput {
+    #[serde(rename = "Magic")]
+    magic: i32,
+    #[serde(rename = "Fhm2dTotalCount")]
+    fhm2d_total_count: usize,
+    #[serde(rename = "UnkCount")]
+    unk_count: u32,
+    #[serde(rename = "SubFileData")]
+    sub_file_data: Vec<RebuildSubFileData>,
+    #[serde(rename = "SubFileStructure")]
+    sub_file_structure: Vec<SubFileStructureEntry>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RebuildSubFileData {
+    index: usize,
+    file_type: String,
+    file_index: i32,
+    file_url: String,
+    file_base_name: String,
+}
+
+fn is_packable_extension(ext: &str) -> bool {
+    let lower = ext.to_ascii_lowercase();
+    STAGE_PACK_EXTENSIONS.iter().any(|e| *e == lower)
+}
+
+fn ext_of(name: &str) -> String {
+    match name.rfind('.') {
+        Some(idx) if idx > 0 => name[idx..].to_ascii_lowercase(),
+        _ => String::new(),
+    }
+}
+
+fn dir_is_empty_recursive(dir: &Path) -> bool {
+    if let Ok(entries) = fs::read_dir(dir) {
+        for e in entries.flatten() {
+            let path = e.path();
+            if path.is_file() {
+                let name = e.file_name().to_string_lossy().to_string();
+                if !name.starts_with('_') && !name.starts_with('.') {
+                    let ext = ext_of(&name);
+                    if is_packable_extension(&ext) {
+                        return false;
+                    }
+                }
+            } else if path.is_dir() {
+                let name = e.file_name().to_string_lossy().to_string();
+                if !name.starts_with('_')
+                    && !name.starts_with('.')
+                    && !dir_is_empty_recursive(&path)
+                {
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+
+fn is_texture_container_dir(dir: &Path) -> bool {
+    let name = dir
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    if !name.chars().all(|c| c.is_ascii_digit()) {
+        return false;
+    }
+    if let Ok(entries) = fs::read_dir(dir) {
+        let mut any_file = false;
+        for e in entries.flatten() {
+            if e.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                return false;
+            }
+            let n = e.file_name().to_string_lossy().to_ascii_lowercase();
+            if !n.ends_with(".nutexb") {
+                return false;
+            }
+            any_file = true;
+        }
+        any_file
+    } else {
+        false
+    }
+}
+
+fn unk2_for_ext(_ext: &str) -> &'static str {
+    "00000000"
+}
+
+fn collect_packable_files_recursive(dir: &Path, out: &mut Vec<PathBuf>) {
+    if let Ok(entries) = fs::read_dir(dir) {
+        for e in entries.flatten() {
+            let path = e.path();
+            let name = e.file_name().to_string_lossy().to_string();
+            if name.starts_with('_') || name.starts_with('.') {
+                continue;
+            }
+            if path.is_dir() {
+                collect_packable_files_recursive(&path, out);
+            } else {
+                let ext = ext_of(&name);
+                if is_packable_extension(&ext) {
+                    out.push(path);
+                }
+            }
+        }
+    }
+}
+
+fn normalized_path_key(path: &Path) -> String {
+    fs::canonicalize(path)
+        .unwrap_or_else(|_| path.to_path_buf())
+        .to_string_lossy()
+        .replace('\\', "/")
+        .to_ascii_lowercase()
+}
+
+fn file_content_signature(path: &Path) -> Result<(String, u64, u32), String> {
+    let data = fs::read(path)
+        .map_err(|e| format!("Failed to read {} for link detection: {e}", path.display()))?;
+    let ext = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(ext_of)
+        .unwrap_or_default();
+    Ok((ext, data.len() as u64, crc32fast::hash(&data)))
+}
+
+fn extra_files_are_link_materializations(
+    extra_files: &[PathBuf],
+    referenced_paths: &[PathBuf],
+) -> Result<bool, String> {
+    if extra_files.is_empty() {
+        return Ok(true);
+    }
+
+    let mut referenced_signatures = HashSet::new();
+    for path in referenced_paths {
+        referenced_signatures.insert(file_content_signature(path)?);
+    }
+
+    for path in extra_files {
+        let signature = file_content_signature(path)?;
+        if !referenced_signatures.contains(&signature) {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
+
+fn resolve_structure_file_url(json_dir: &Path, file_url: &str) -> PathBuf {
+    let cleaned = file_url.replace('\\', "/");
+    let cleaned = cleaned.trim_start_matches("./");
+    json_dir.join(cleaned)
+}
+
+fn try_preserve_original_structure(
+    root: &Path,
+    original_path: &Path,
+    output_path: &Path,
+) -> Result<String, String> {
+    let content = fs::read_to_string(original_path)
+        .map_err(|e| format!("Cannot read original structure: {e}"))?;
+    let original: StructureJson = serde_json::from_str(&content)
+        .map_err(|e| format!("Cannot parse original structure: {e}"))?;
+
+    let json_dir = original_path
+        .parent()
+        .ok_or_else(|| "Cannot determine JSON parent directory".to_string())?;
+
+    let ref_count = original.sub_file_data.len();
+    let mut referenced_paths = Vec::with_capacity(ref_count);
+    for entry in &original.sub_file_data {
+        let resolved = resolve_structure_file_url(json_dir, &entry.file_url);
+        if !resolved.is_file() {
+            return Err(format!(
+                "Referenced file missing: {} (resolved: {})",
+                entry.file_url,
+                resolved.display()
+            ));
+        }
+        referenced_paths.push(resolved);
+    }
+
+    let mut disk_files = Vec::new();
+    collect_packable_files_recursive(root, &mut disk_files);
+    let disk_count = disk_files.len();
+    if disk_count != ref_count {
+        if disk_count < ref_count {
+            return Err(format!(
+                "File count mismatch: {} referenced vs {} on disk",
+                ref_count, disk_count
+            ));
+        }
+
+        let referenced_keys: HashSet<String> = referenced_paths
+            .iter()
+            .map(|p| normalized_path_key(p))
+            .collect();
+        let extra_files: Vec<PathBuf> = disk_files
+            .iter()
+            .filter(|p| !referenced_keys.contains(&normalized_path_key(p)))
+            .cloned()
+            .collect();
+
+        if !extra_files_are_link_materializations(&extra_files, &referenced_paths)? {
+            return Err(format!(
+                "File count mismatch: {} referenced vs {} on disk ({} extra non-linked file(s))",
+                ref_count,
+                disk_count,
+                extra_files.len()
+            ));
+        }
+
+        eprintln!(
+            "[rebuild_structure] Preserving original structure with {} materialized linked file path(s)",
+            extra_files.len()
+        );
+    }
+
+    if original_path == output_path {
+        eprintln!(
+            "[rebuild_structure] Preserved original structure in-place ({ref_count} files) at {}",
+            output_path.display()
+        );
+    } else {
+        fs::write(output_path, &content)
+            .map_err(|e| format!("Failed to write preserved structure: {e}"))?;
+        eprintln!(
+            "[rebuild_structure] Preserved original structure ({ref_count} files) -> {}",
+            output_path.display()
+        );
+    }
+
+    Ok(output_path.to_string_lossy().to_string())
+}
+
+struct RebuildCollector {
+    files: Vec<(String, String)>,
+    structure: Vec<SubFileStructureEntry>,
+}
+
+impl RebuildCollector {
+    fn new() -> Self {
+        Self {
+            files: Vec::new(),
+            structure: Vec::new(),
+        }
+    }
+
+    fn add_file(&mut self, rel_path: String, ext: String) -> i32 {
+        let idx = self.files.len() as i32;
+        self.files.push((rel_path, ext));
+        idx
+    }
+
+    fn push_item(&mut self, file_index: i32, unk2: &str) {
+        self.structure.push(SubFileStructureEntry::Item {
+            unk1: "00000000".to_string(),
+            file_index,
+            unk2: unk2.to_string(),
+            unk2_1: 0,
+            unk3: 0,
+            unk4: 0,
+            original_file_index: file_index,
+            display_name: None,
+        });
+    }
+
+    fn push_folder(&mut self, child_count: i32, unk3: i32) {
+        self.structure.push(SubFileStructureEntry::Folder {
+            unk1: "00000000".to_string(),
+            folder_count: child_count,
+            unk2: "00000000".to_string(),
+            unk2_1: 0,
+            unk3,
+            unk4: 0,
+            unk5: 0,
+            unk6: 0,
+        });
+    }
+
+    fn push_end(&mut self, count: i32) {
+        self.structure.push(SubFileStructureEntry::EndMark {
+            end_mark_count: count,
+        });
+    }
+}
+
+fn collect_sorted_entries(dir: &Path) -> (Vec<PathBuf>, Vec<PathBuf>) {
+    let mut dirs = Vec::new();
+    let mut files = Vec::new();
+    if let Ok(entries) = fs::read_dir(dir) {
+        for e in entries.flatten() {
+            let path = e.path();
+            let name = e.file_name().to_string_lossy().to_string();
+            if name.starts_with('_') || name.starts_with('.') {
+                continue;
+            }
+            if path.is_dir() {
+                dirs.push(path);
+            } else {
+                let ext = ext_of(&name);
+                if is_packable_extension(&ext) {
+                    files.push(path);
+                }
+            }
+        }
+    }
+    dirs.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+    files.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+    (dirs, files)
+}
+
+/// Recursively walk a directory and emit SubFileStructure entries.
+/// Texture container dirs (all-digit name, only nutexb children) get unk3=32.
+/// All other dirs get unk3=0.
+fn emit_dir_recursive(
+    c: &mut RebuildCollector,
+    dir: &Path,
+    root: &Path,
+    folder_name: &str,
+    skip_names: &[&str],
+    depth: usize,
+) {
+    if depth > 20 {
+        return;
+    }
+
+    let (subdirs, files) = collect_sorted_entries(dir);
+    let relevant_dirs: Vec<&PathBuf> = subdirs
+        .iter()
+        .filter(|d| {
+            let n = d.file_name().unwrap().to_string_lossy().to_string();
+            !skip_names.contains(&n.as_str())
+        })
+        .collect();
+
+    let relevant_dirs: Vec<&PathBuf> = relevant_dirs
+        .into_iter()
+        .filter(|d| !dir_is_empty_recursive(d))
+        .collect();
+    let child_count = relevant_dirs.len() + files.len();
+    if child_count == 0 && depth > 0 {
+        return;
+    }
+    if depth > 0 {
+        // Mark shared textures/ folder with unk3=64 so stage_rename_in_memory can identify it
+        let dir_name = dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let unk3 = if dir_name.to_ascii_lowercase() == STAGE_TEXTURES_NAME { 64 } else { 0 };
+        c.push_folder(child_count as i32, unk3);
+    }
+
+    for d in &relevant_dirs {
+        if is_texture_container_dir(d) {
+            let tex_files = collect_sorted_entries(d).1;
+            c.push_folder(tex_files.len() as i32, 32);
+            for tf in &tex_files {
+                let rel = tf
+                    .strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                let idx = c.add_file(
+                    format!(".\\{}\\{}", folder_name, rel.replace('/', "\\")),
+                    ".nutexb".into(),
+                );
+                c.push_item(idx, "00000000");
+            }
+            c.push_end(1);
+        } else {
+            emit_dir_recursive(c, d, root, folder_name, &[], depth + 1);
+        }
+    }
+
+    for f in &files {
+        let ext = ext_of(&f.file_name().unwrap().to_string_lossy());
+        let rel = f
+            .strip_prefix(root)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
+        let idx = c.add_file(
+            format!(".\\{}\\{}", folder_name, rel.replace('/', "\\")),
+            ext.clone(),
+        );
+        c.push_item(idx, unk2_for_ext(&ext));
+    }
+
+    if depth > 0 {
+        c.push_end(1);
+    }
+}
+
+/// Rebuild `_structure.json` from disk, producing correct SubFileStructure.
+///
+/// Strategy:
+/// 1. If the original `_structure.json` exists AND all referenced files exist
+///    on disk AND no extra packable files are present, **preserve the original**
+///    structure verbatim (keeping fileIndex ordering, unk2 values, and tree
+///    topology intact).
+/// 2. Otherwise, fall back to a full rebuild from disk (alphabetical ordering).
+///
+/// This must be called AFTER `redistribute_stage_textures` so that textures
+/// are in their per-model numbered subdirs (the format FHM2D expects).
+pub fn rebuild_structure_json_for_stage(stage_root: &str) -> Result<String, String> {
+    let root = Path::new(stage_root);
+    let folder_name = root.file_name().and_then(|n| n.to_str()).unwrap_or("stage");
+
+    let output_path = root
+        .parent()
+        .unwrap_or(root)
+        .join(format!("{folder_name}_structure.json"));
+
+    if let Some(original_path) = find_structure_json_path(root) {
+        match try_preserve_original_structure(root, &original_path, &output_path) {
+            Ok(result) => return Ok(result),
+            Err(reason) => {
+                eprintln!(
+                    "[rebuild_structure] Cannot preserve original ({}). Falling back to full rebuild.",
+                    reason
+                );
+            }
+        }
+    }
+
+    rebuild_structure_from_scratch(root, folder_name, &output_path)
+}
+
+fn rebuild_structure_from_scratch(
+    root: &Path,
+    folder_name: &str,
+    output_path: &Path,
+) -> Result<String, String> {
+    let existing_magic = find_structure_json_path(root)
+        .and_then(|p| fs::read_to_string(&p).ok())
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|v| v.get("Magic").and_then(|m| m.as_i64()))
+        .map(|m| m as i32)
+        .unwrap_or(-843925575i32);
+
+    let existing_unk_count = find_structure_json_path(root)
+        .and_then(|p| fs::read_to_string(&p).ok())
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|v| v.get("UnkCount").and_then(|m| m.as_u64()))
+        .map(|u| u as u32)
+        .unwrap_or(0);
+
+    let mut collector = RebuildCollector::new();
+
+    emit_dir_recursive(&mut collector, root, root, folder_name, &[], 0);
+
+    let sub_file_data: Vec<RebuildSubFileData> = collector
+        .files
+        .iter()
+        .enumerate()
+        .map(|(i, (url, ext))| {
+            let base = url
+                .replace('\\', "/")
+                .split('/')
+                .last()
+                .unwrap_or("")
+                .to_string();
+            RebuildSubFileData {
+                index: i,
+                file_type: ext.clone(),
+                file_index: i as i32,
+                file_url: url.clone(),
+                file_base_name: basename_no_ext(&base),
+            }
+        })
+        .collect();
+
+    let output = RebuildStructureOutput {
+        magic: existing_magic,
+        fhm2d_total_count: sub_file_data.len(),
+        unk_count: existing_unk_count,
+        sub_file_data,
+        sub_file_structure: collector.structure,
+    };
+
+    let json = serde_json::to_string_pretty(&output)
+        .map_err(|e| format!("Failed to serialize rebuilt structure JSON: {e}"))?;
+    fs::write(output_path, &json)
+        .map_err(|e| format!("Failed to write rebuilt structure JSON: {e}"))?;
+
+    eprintln!(
+        "[rebuild_structure] Full rebuild: {} files, {} structure entries -> {}",
+        output.fhm2d_total_count,
+        output.sub_file_structure.len(),
+        output_path.display()
+    );
+
+    Ok(output_path.to_string_lossy().to_string())
+}
+
+/// Rebuild `_structure.json` while keeping nutexb files in the shared `textures/` folder.
+///
+/// Unlike `rebuild_structure_json_for_stage` (which requires textures to be in per-model
+/// numbered subdirs), this variant rewrites every `.nutexb` `fileUrl` in the output JSON
+/// to point at `textures/<filename>.nutexb` — without physically moving any files.
+///
+/// Workflow: extract → restore_shared_textures → **this function** → repack
+/// No redistribute/restore cycle needed.
+pub fn rebuild_structure_json_for_stage_with_shared_textures(
+    stage_root: &str,
+) -> Result<String, String> {
+    let root = Path::new(stage_root);
+    let content_root = resolve_content_root(root);
+    let textures_dir = content_root.join(STAGE_TEXTURES_NAME);
+    let folder_name = root.file_name().and_then(|n| n.to_str()).unwrap_or("stage");
+
+    // Build filename → textures/-relative URL map from the shared textures/ folder.
+    // URL path uses the relative path from pack root to textures/
+    let textures_rel = if content_root != *root {
+        format!("0\\0\\{}", STAGE_TEXTURES_NAME)
+    } else {
+        STAGE_TEXTURES_NAME.to_string()
+    };
+    let mut texture_url_map: HashMap<String, String> = HashMap::new();
+    if textures_dir.is_dir() {
+        if let Ok(entries) = fs::read_dir(&textures_dir) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let fname = entry.file_name().to_string_lossy().to_string();
+                if fname.to_ascii_lowercase().ends_with(".nutexb")
+                    && !entry.file_type().map(|t| t.is_dir()).unwrap_or(true)
+                {
+                    let url = format!(".\\{}\\{}\\{}", folder_name, textures_rel, fname);
+                    texture_url_map.insert(fname.to_ascii_lowercase(), url);
+                }
+            }
+        }
+    }
+
+    // First do a normal rebuild (which may reference model/0/ paths if those dirs exist,
+    // or textures/ paths if textures/ is the only location).
+    let structure_path = rebuild_structure_json_for_stage(stage_root)?;
+
+    if texture_url_map.is_empty() {
+        // No shared textures folder — nothing to rewrite.
+        return Ok(structure_path);
+    }
+
+    // Patch every .nutexb fileUrl to point at textures/.
+    let content = fs::read_to_string(&structure_path)
+        .map_err(|e| format!("Failed to read rebuilt structure JSON: {e}"))?;
+    let mut doc: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse rebuilt structure JSON: {e}"))?;
+
+    let mut patched = 0usize;
+    if let Some(arr) = doc.get_mut("SubFileData").and_then(|v| v.as_array_mut()) {
+        for entry in arr.iter_mut() {
+            let is_nutexb = entry
+                .get("fileType")
+                .and_then(|v| v.as_str())
+                .map(|t| t.eq_ignore_ascii_case(".nutexb"))
+                .unwrap_or(false);
+            if !is_nutexb {
+                continue;
+            }
+            if let Some(url_val) = entry.get_mut("fileUrl") {
+                if let Some(url_str) = url_val.as_str() {
+                    // Extract just the filename from the current URL.
+                    let fname = url_str
+                        .replace('\\', "/")
+                        .split('/')
+                        .last()
+                        .unwrap_or("")
+                        .to_ascii_lowercase();
+                    if let Some(new_url) = texture_url_map.get(&fname) {
+                        *url_val = serde_json::Value::String(new_url.clone());
+                        patched += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    let json = serde_json::to_string_pretty(&doc)
+        .map_err(|e| format!("Failed to serialize patched structure JSON: {e}"))?;
+    fs::write(&structure_path, &json)
+        .map_err(|e| format!("Failed to write patched structure JSON: {e}"))?;
+
+    eprintln!(
+        "[rebuild_structure_shared] Patched {patched} nutexb URLs to textures/ -> {}",
+        structure_path
+    );
+
+    Ok(structure_path)
+}
+
 /// Redistribute nutexb files from a shared `textures/` folder back into
 /// per-numatb numbered subdirectories under each model's SSBH folder.
 pub fn redistribute_stage_textures(stage_root: &str) -> Result<RedistributeResult, String> {
@@ -2388,11 +3022,10 @@ pub fn redistribute_stage_textures(stage_root: &str) -> Result<RedistributeResul
     let mut textures_copied = 0usize;
     let mut url_remap: HashMap<String, String> = HashMap::new();
 
-    let folder_name = root.file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("stage");
+    let folder_name = root.file_name().and_then(|n| n.to_str()).unwrap_or("stage");
 
     let ssbh_folders = find_ssbh_folders(root, &mut warnings)?;
+
     for ssbh_folder in &ssbh_folders {
         let numatb_refs = parse_numatb_texture_refs(ssbh_folder, &mut warnings);
         if numatb_refs.is_empty() {
@@ -2402,8 +3035,9 @@ pub fn redistribute_stage_textures(stage_root: &str) -> Result<RedistributeResul
 
         for (subdir_index, refs) in numatb_refs.iter().enumerate() {
             let subdir = ssbh_folder.join(subdir_index.to_string());
-            fs::create_dir_all(&subdir)
-                .map_err(|e| format!("Failed to create texture subdir {}: {e}", subdir.display()))?;
+            fs::create_dir_all(&subdir).map_err(|e| {
+                format!("Failed to create texture subdir {}: {e}", subdir.display())
+            })?;
 
             for ref_name in refs {
                 let ref_lower = ref_name.to_ascii_lowercase();
@@ -2412,23 +3046,34 @@ pub fn redistribute_stage_textures(stage_root: &str) -> Result<RedistributeResul
                     let dest_path = subdir.join(fname);
                     if !dest_path.exists() {
                         fs::copy(src_path, &dest_path).map_err(|e| {
-                            format!("Failed to copy {} → {}: {e}",
-                                src_path.display(), dest_path.display())
+                            format!(
+                                "Failed to copy {} → {}: {e}",
+                                src_path.display(),
+                                dest_path.display()
+                            )
                         })?;
                         textures_copied += 1;
                     }
-                    if let (Ok(old_rel), Ok(new_rel)) = (
-                        src_path.strip_prefix(root),
-                        dest_path.strip_prefix(root),
-                    ) {
-                        let old_url = format!(".\\{}\\{}", folder_name, old_rel.to_string_lossy().replace('/', "\\"));
-                        let new_url = format!(".\\{}\\{}", folder_name, new_rel.to_string_lossy().replace('/', "\\"));
+                    if let (Ok(old_rel), Ok(new_rel)) =
+                        (src_path.strip_prefix(root), dest_path.strip_prefix(root))
+                    {
+                        let old_url = format!(
+                            ".\\{}\\{}",
+                            folder_name,
+                            old_rel.to_string_lossy().replace('/', "\\")
+                        );
+                        let new_url = format!(
+                            ".\\{}\\{}",
+                            folder_name,
+                            new_rel.to_string_lossy().replace('/', "\\")
+                        );
                         url_remap.insert(old_url, new_url);
                     }
                 } else {
                     warnings.push(format!(
                         "Texture '{}' referenced by numatb in {} not found in textures/",
-                        ref_name, ssbh_folder.display()
+                        ref_name,
+                        ssbh_folder.display()
                     ));
                 }
             }
@@ -2436,9 +3081,8 @@ pub fn redistribute_stage_textures(stage_root: &str) -> Result<RedistributeResul
     }
 
     let textures_folder_removed = if textures_copied > 0 {
-        fs::remove_dir_all(&textures_dir).map_err(|e| {
-            format!("Failed to remove textures/ after redistribution: {e}")
-        })?;
+        fs::remove_dir_all(&textures_dir)
+            .map_err(|e| format!("Failed to remove textures/ after redistribution: {e}"))?;
         true
     } else {
         false
@@ -2447,7 +3091,9 @@ pub fn redistribute_stage_textures(stage_root: &str) -> Result<RedistributeResul
     if !url_remap.is_empty() {
         if let Some(sj_path) = find_structure_json_path(root) {
             if let Err(e) = patch_structure_json_urls(&sj_path, &url_remap) {
-                warnings.push(format!("Failed to patch structure JSON after redistribution: {e}"));
+                warnings.push(format!(
+                    "Failed to patch structure JSON after redistribution: {e}"
+                ));
             }
         }
     }
@@ -2460,6 +3106,18 @@ pub fn redistribute_stage_textures(stage_root: &str) -> Result<RedistributeResul
     })
 }
 
+/// Resolve the content root from a stage root.
+/// If `stage_root/0/0/` exists (pack root layout), returns `stage_root/0/0/`.
+/// Otherwise returns `stage_root` itself (already at content root).
+fn resolve_content_root(stage_root: &Path) -> PathBuf {
+    let candidate = stage_root.join("0").join("0");
+    if candidate.is_dir() {
+        candidate
+    } else {
+        stage_root.to_path_buf()
+    }
+}
+
 /// Reverse operation: collect nutexb files from per-model numbered subdirs
 /// back into a shared `textures/` folder, deduplicating by filename.
 pub fn restore_shared_textures(stage_root: &str) -> Result<RestoreSharedResult, String> {
@@ -2468,9 +3126,7 @@ pub fn restore_shared_textures(stage_root: &str) -> Result<RestoreSharedResult, 
     fs::create_dir_all(&textures_dir)
         .map_err(|e| format!("Failed to create textures/ folder: {e}"))?;
 
-    let folder_name = root.file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("stage");
+    let folder_name = root.file_name().and_then(|n| n.to_str()).unwrap_or("stage");
 
     let mut warnings = Vec::new();
     let mut collected = 0usize;
@@ -2479,6 +3135,7 @@ pub fn restore_shared_textures(stage_root: &str) -> Result<RestoreSharedResult, 
     let mut url_remap: HashMap<String, String> = HashMap::new();
 
     let ssbh_folders = find_ssbh_folders(root, &mut warnings)?;
+
     let mut all_texture_subdirs: Vec<PathBuf> = Vec::new();
 
     for ssbh_folder in &ssbh_folders {
@@ -2486,32 +3143,50 @@ pub fn restore_shared_textures(stage_root: &str) -> Result<RestoreSharedResult, 
             .map_err(|e| format!("Failed to read {}: {e}", ssbh_folder.display()))?;
         for entry in entries.filter_map(|e| e.ok()) {
             let name = entry.file_name().to_string_lossy().to_string();
-            if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) { continue; }
-            if !name.chars().all(|c| c.is_ascii_digit()) { continue; }
+            if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                continue;
+            }
+            if !name.chars().all(|c| c.is_ascii_digit()) {
+                continue;
+            }
 
             let subdir_path = entry.path();
             let has_only_nutexb = dir_contains_only_nutexb(&subdir_path);
-            if !has_only_nutexb { continue; }
+            if !has_only_nutexb {
+                continue;
+            }
 
-            for nutexb_entry in fs::read_dir(&subdir_path).into_iter().flatten().filter_map(|e| e.ok()) {
+            for nutexb_entry in fs::read_dir(&subdir_path)
+                .into_iter()
+                .flatten()
+                .filter_map(|e| e.ok())
+            {
                 let fname = nutexb_entry.file_name().to_string_lossy().to_string();
-                if fname.to_ascii_lowercase().ends_with(".nutexb") && !nutexb_entry.file_type().map(|t| t.is_dir()).unwrap_or(true) {
+                if fname.to_ascii_lowercase().ends_with(".nutexb")
+                    && !nutexb_entry.file_type().map(|t| t.is_dir()).unwrap_or(true)
+                {
                     let lower = fname.to_ascii_lowercase();
                     let src = nutexb_entry.path();
                     let dest = textures_dir.join(&fname);
                     if seen_names.insert(lower) {
                         fs::copy(&src, &dest).map_err(|e| {
-                            format!("Failed to copy {} → {}: {e}",
-                                src.display(), dest.display())
+                            format!("Failed to copy {} → {}: {e}", src.display(), dest.display())
                         })?;
                         collected += 1;
                     }
-                    if let (Ok(old_rel), Ok(new_rel)) = (
-                        src.strip_prefix(root),
-                        dest.strip_prefix(root),
-                    ) {
-                        let old_url = format!(".\\{}\\{}", folder_name, old_rel.to_string_lossy().replace('/', "\\"));
-                        let new_url = format!(".\\{}\\{}", folder_name, new_rel.to_string_lossy().replace('/', "\\"));
+                    if let (Ok(old_rel), Ok(new_rel)) =
+                        (src.strip_prefix(root), dest.strip_prefix(root))
+                    {
+                        let old_url = format!(
+                            ".\\{}\\{}",
+                            folder_name,
+                            old_rel.to_string_lossy().replace('/', "\\")
+                        );
+                        let new_url = format!(
+                            ".\\{}\\{}",
+                            folder_name,
+                            new_rel.to_string_lossy().replace('/', "\\")
+                        );
                         url_remap.insert(old_url, new_url);
                     }
                 }
@@ -2546,8 +3221,8 @@ pub fn restore_shared_textures(stage_root: &str) -> Result<RestoreSharedResult, 
 
 fn index_nutexb_folder(textures_dir: &Path) -> Result<BTreeMap<String, PathBuf>, String> {
     let mut map = BTreeMap::new();
-    let entries = fs::read_dir(textures_dir)
-        .map_err(|e| format!("Failed to read textures dir: {e}"))?;
+    let entries =
+        fs::read_dir(textures_dir).map_err(|e| format!("Failed to read textures dir: {e}"))?;
     for entry in entries.filter_map(|e| e.ok()) {
         let fname = entry.file_name().to_string_lossy().to_string();
         if fname.to_ascii_lowercase().ends_with(".nutexb")
@@ -2576,7 +3251,9 @@ fn find_ssbh_folders_recurse(
     warnings: &mut Vec<String>,
     depth: usize,
 ) -> Result<(), String> {
-    if depth > 8 { return Ok(()); }
+    if depth > 8 {
+        return Ok(());
+    }
 
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
@@ -2594,8 +3271,12 @@ fn find_ssbh_folders_recurse(
         let name = entry.file_name().to_string_lossy().to_string();
 
         if is_dir {
-            if dir == root && skip_names.contains(name.as_str()) { continue; }
-            if name.starts_with('.') || name.starts_with('_') { continue; }
+            if dir == root && skip_names.contains(name.as_str()) {
+                continue;
+            }
+            if name.starts_with('.') || name.starts_with('_') {
+                continue;
+            }
             subdirs.push(entry.path());
         } else if name.to_ascii_lowercase().ends_with(".numatb") {
             has_numatb = true;
@@ -2663,7 +3344,9 @@ fn extract_nutexb_names_from_matl(matl: &ssbh_data::prelude::MatlData) -> Vec<St
     for entry in &matl.entries {
         for tex in &entry.textures {
             let raw = tex.data.trim();
-            if raw.is_empty() { continue; }
+            if raw.is_empty() {
+                continue;
+            }
             let base = raw
                 .replace('\\', "/")
                 .split('/')
@@ -2681,7 +3364,9 @@ fn extract_nutexb_names_from_matl(matl: &ssbh_data::prelude::MatlData) -> Vec<St
         }
         for tex in &entry.textures2 {
             let raw = tex.data.trim();
-            if raw.is_empty() { continue; }
+            if raw.is_empty() {
+                continue;
+            }
             let base = raw
                 .replace('\\', "/")
                 .split('/')
@@ -2720,1224 +3405,6 @@ fn dir_contains_only_nutexb(dir: &Path) -> bool {
     has_any
 }
 
-// ── Tests ───────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io;
-
-    const TEST_DATA_ROOT: &str = r"E:\XB\解包\com\test";
-
-    fn test_stage_root(stage_name: &str) -> PathBuf {
-        Path::new(TEST_DATA_ROOT).join(stage_name).join("0").join("0")
-    }
-
-    fn copy_dir_recursive(src: &Path, dst: &Path) -> io::Result<()> {
-        fs::create_dir_all(dst)?;
-        for entry in fs::read_dir(src)? {
-            let entry = entry?;
-            let ft = entry.file_type()?;
-            let dest_path = dst.join(entry.file_name());
-            if ft.is_dir() {
-                copy_dir_recursive(&entry.path(), &dest_path)?;
-            } else {
-                fs::copy(entry.path(), &dest_path)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn copy_stage_to_temp(stage_name: &str) -> (tempfile::TempDir, PathBuf) {
-        let src = test_stage_root(stage_name);
-        assert!(src.is_dir(), "Test data not found at {}", src.display());
-        let tmp = tempfile::tempdir().expect("create temp dir");
-        let dst = tmp.path().join("0").join("0");
-        copy_dir_recursive(&src, &dst).expect("copy stage data");
-        (tmp, dst)
-    }
-
-    fn skip_if_test_data_missing() -> bool {
-        !Path::new(TEST_DATA_ROOT).is_dir()
-    }
-
-    // ── load_stage_bundle_impl ──────────────────────────────────────────
-
-    #[test]
-    fn test_load_stage_84f085e5_basic_structure() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let root = test_stage_root("84F085E5");
-        let bundle = load_stage_bundle_impl(&root.to_string_lossy()).unwrap();
-
-        assert!(bundle.base_model.is_some(), "should have base model");
-        assert!(!bundle.sub_models.is_empty(), "should have sub models");
-        assert!(!bundle.graphic_params.is_empty(), "should have graphic params");
-        assert!(!bundle.placement_entries.is_empty(), "should have placement entries");
-
-        let sky_entry = bundle.placement_entries.iter().find(|e| e.vdk_type == "SKY");
-        assert!(sky_entry.is_some(), "should have a SKY placement entry");
-
-        // Stage 84F085E5 is a menu stage — it has only SKY in placement, no OBJECT rows
-        assert_eq!(bundle.placement_entries.len(), 1,
-            "menu stage should have exactly 1 placement entry (SKY only)");
-    }
-
-    #[test]
-    fn test_load_stage_16f73c97_object_box01() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let root = test_stage_root("16F73C97");
-        let bundle = load_stage_bundle_impl(&root.to_string_lossy()).unwrap();
-
-        assert!(bundle.base_model.is_some(), "should have base model");
-
-        let box_model = bundle.sub_models.iter()
-            .find(|m| m.folder_name.contains("object_box01"));
-        assert!(box_model.is_some(), "should find 001stage001_object_box01 sub model");
-
-        let sky_model = bundle.sub_models.iter()
-            .find(|m| m.folder_name == "sky");
-        assert!(sky_model.is_some(), "should find sky sub model");
-
-        let sky_placement = bundle.placement_entries.iter()
-            .find(|e| e.vdk_type == "SKY");
-        assert!(sky_placement.is_some(), "should have SKY placement");
-        assert_eq!(sky_placement.unwrap().object_number, Some(1), "SKY objectNumber=1");
-
-        let obj_placements: Vec<_> = bundle.placement_entries.iter()
-            .filter(|e| e.vdk_type == "OBJECT")
-            .collect();
-        assert_eq!(obj_placements.len(), 4, "should have 4 OBJECT placement entries");
-        for p in &obj_placements {
-            assert_eq!(p.object_number, Some(0), "all OBJECTs reference objectNumber=0");
-        }
-    }
-
-    #[test]
-    fn test_load_stage_35516817_effect_entries() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let root = test_stage_root("35516817");
-        let bundle = load_stage_bundle_impl(&root.to_string_lossy()).unwrap();
-
-        let effect_count = bundle.placement_entries.iter()
-            .filter(|e| e.vdk_type == "EFFECT")
-            .count();
-        assert!(effect_count > 10, "stage 018 should have many EFFECT entries, got {effect_count}");
-
-        let sky_count = bundle.placement_entries.iter()
-            .filter(|e| e.vdk_type == "SKY")
-            .count();
-        assert_eq!(sky_count, 1, "should have exactly 1 SKY entry");
-
-        assert!(bundle.sub_models.len() >= 10, "stage 018 should have many sub models, got {}", bundle.sub_models.len());
-    }
-
-    #[test]
-    fn test_load_stage_nonexistent_dir() {
-        let result = load_stage_bundle_impl(r"E:\nonexistent\path");
-        assert!(result.is_err(), "should fail for nonexistent dir");
-    }
-
-    // ── Placement CSV parsing (KV format) ───────────────────────────────
-
-    #[test]
-    fn test_parse_placement_kv_format_basic() {
-        let csv = "VDK_TYPE,SKY,VDK_POSITION_X,10.0,VDK_POSITION_Y,20.0,VDK_POSITION_Z,30.0,VDK_OBJECTNUMBER,1\n\
-                   VDK_TYPE,OBJECT,VDK_POSITION_X,100.0,VDK_POSITION_Y,0.0,VDK_POSITION_Z,-50.0,VDK_OBJECTNUMBER,0";
-        let mut warnings = Vec::new();
-        let (header, entries) = parse_placement_table(csv, &mut warnings);
-
-        assert!(header.is_empty(), "KV format has no header row");
-        assert_eq!(entries.len(), 2);
-
-        assert_eq!(entries[0].vdk_type, "SKY");
-        assert_eq!(entries[0].object_number, Some(1));
-        assert!((entries[0].pos_x - 10.0).abs() < f64::EPSILON);
-        assert!((entries[0].pos_y - 20.0).abs() < f64::EPSILON);
-        assert!((entries[0].pos_z - 30.0).abs() < f64::EPSILON);
-
-        assert_eq!(entries[1].vdk_type, "OBJECT");
-        assert_eq!(entries[1].object_number, Some(0));
-        assert!((entries[1].pos_x - 100.0).abs() < f64::EPSILON);
-    }
-
-    #[test]
-    fn test_parse_placement_kv_effect_entries() {
-        let csv = "VDK_TYPE,EFFECT,VDK_POSITION_X,1046.77,VDK_POSITION_Y,-65.75,VDK_POSITION_Z,-242.80,VDK_EFFECT_ID,EFF_018STAGE018_MIST_001,VDK_SCALE_X,1.0,VDK_SCALE_Y,1.0,VDK_SCALE_Z,1.0\n\
-                   VDK_TYPE,OBJECT,VDK_POSITION_X,0.0,VDK_POSITION_Y,0.0,VDK_POSITION_Z,0.0,VDK_OBJECTNUMBER,0";
-        let mut warnings = Vec::new();
-        let (_, entries) = parse_placement_table(csv, &mut warnings);
-
-        assert_eq!(entries.len(), 2);
-        assert_eq!(entries[0].vdk_type, "EFFECT");
-        assert!(entries[0].object_number.is_none(), "EFFECT entries have no objectNumber");
-        assert!((entries[0].pos_x - 1046.77).abs() < 0.01);
-        assert!((entries[0].scale_x - 1.0).abs() < f64::EPSILON);
-    }
-
-    #[test]
-    fn test_parse_placement_kv_scale_defaults() {
-        let csv = "VDK_TYPE,OBJECT,VDK_POSITION_X,0.0,VDK_POSITION_Y,0.0,VDK_POSITION_Z,0.0,VDK_OBJECTNUMBER,0";
-        let mut warnings = Vec::new();
-        let (_, entries) = parse_placement_table(csv, &mut warnings);
-
-        assert_eq!(entries.len(), 1);
-        assert!((entries[0].scale_x - 1.0).abs() < f64::EPSILON, "missing scale_x defaults to 1.0");
-        assert!((entries[0].scale_y - 1.0).abs() < f64::EPSILON, "missing scale_y defaults to 1.0");
-        assert!((entries[0].scale_z - 1.0).abs() < f64::EPSILON, "missing scale_z defaults to 1.0");
-    }
-
-    #[test]
-    fn test_parse_placement_kv_zero_scale_defaults_to_one() {
-        let csv = "VDK_TYPE,OBJECT,VDK_POSITION_X,0.0,VDK_POSITION_Y,0.0,VDK_POSITION_Z,0.0,VDK_OBJECTNUMBER,0,VDK_SCALE_X,0,VDK_SCALE_Y,0,VDK_SCALE_Z,0";
-        let mut warnings = Vec::new();
-        let (_, entries) = parse_placement_table(csv, &mut warnings);
-
-        assert_eq!(entries.len(), 1);
-        assert!((entries[0].scale_x - 1.0).abs() < f64::EPSILON, "explicit 0 scale_x -> 1.0");
-        assert!((entries[0].scale_y - 1.0).abs() < f64::EPSILON, "explicit 0 scale_y -> 1.0");
-        assert!((entries[0].scale_z - 1.0).abs() < f64::EPSILON, "explicit 0 scale_z -> 1.0");
-    }
-
-    #[test]
-    fn test_parse_placement_empty_content() {
-        let mut warnings = Vec::new();
-        let (header, entries) = parse_placement_table("", &mut warnings);
-        assert!(header.is_empty());
-        assert!(entries.is_empty());
-    }
-
-    #[test]
-    fn test_parse_placement_preserves_raw_fields() {
-        let csv = "VDK_TYPE,OBJECT,VDK_INITIAL_SPAWN,TRUE,VDK_POSITION_X,250.0,VDK_POSITION_Y,-2.0,VDK_POSITION_Z,-250.0,VDK_ROTATION_X,0.0,VDK_ROTATION_Y,0.0,VDK_ROTATION_Z,0.0,VDK_OBJECTNUMBER,0,VDK_HITPOINT,UNBREAKABLE";
-        let mut warnings = Vec::new();
-        let (_, entries) = parse_placement_table(csv, &mut warnings);
-
-        assert_eq!(entries.len(), 1);
-        assert!(entries[0].raw_fields.len() > 10, "raw_fields should preserve all fields");
-        assert!(entries[0].raw_fields.contains(&"UNBREAKABLE".to_string()),
-            "raw_fields should contain UNBREAKABLE");
-    }
-
-    // ── Graphic param CSV parsing ───────────────────────────────────────
-
-    #[test]
-    fn test_parse_graphic_param_csv_from_bytes_basic() {
-        let csv = b"directional_lighting_rot_x,-45\ndirectional_lighting_rot_y,45\nibl_lighting_intensity,1";
-        let mut warnings = Vec::new();
-        let params = parse_graphic_param_csv_from_bytes(csv, &mut warnings);
-
-        assert_eq!(params.len(), 3);
-        assert_eq!(params[0].key, "directional_lighting_rot_x");
-        assert_eq!(params[0].value, "-45");
-        assert_eq!(params[2].key, "ibl_lighting_intensity");
-        assert_eq!(params[2].value, "1");
-        assert!(warnings.is_empty());
-    }
-
-    #[test]
-    fn test_parse_graphic_param_csv_empty_lines() {
-        let csv = b"key1,value1\n\nkey2,value2\n";
-        let mut warnings = Vec::new();
-        let params = parse_graphic_param_csv_from_bytes(csv, &mut warnings);
-        assert_eq!(params.len(), 2, "empty lines should be skipped");
-    }
-
-    // ── Graphic param CSV roundtrip ─────────────────────────────────────
-
-    #[test]
-    fn test_graphic_param_csv_write_read_roundtrip() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let (_tmp, stage_copy) = copy_stage_to_temp("84F085E5");
-        let bundle = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
-        let original_params = bundle.graphic_params.clone();
-        assert!(!original_params.is_empty());
-
-        let csv_content: String = original_params.iter()
-            .map(|p| format!("{},{}", p.key, p.value))
-            .collect::<Vec<_>>()
-            .join("\n");
-        let csv_path = stage_copy.join("info").join("graphic_param.csv");
-        fs::write(&csv_path, &csv_content).unwrap();
-
-        let reloaded = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
-        assert_eq!(reloaded.graphic_params.len(), original_params.len(),
-            "roundtrip should preserve param count");
-        for (orig, reload) in original_params.iter().zip(reloaded.graphic_params.iter()) {
-            assert_eq!(orig.key, reload.key, "roundtrip should preserve key");
-            assert_eq!(orig.value, reload.value, "roundtrip should preserve value");
-        }
-    }
-
-    #[test]
-    fn test_graphic_param_csv_modify_and_reload() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let (_tmp, stage_copy) = copy_stage_to_temp("84F085E5");
-        let bundle = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
-
-        let mut params = bundle.graphic_params.clone();
-        let original_first_value = params[0].value.clone();
-        params[0].value = "999.5".to_string();
-
-        let csv_content: String = params.iter()
-            .map(|p| format!("{},{}", p.key, p.value))
-            .collect::<Vec<_>>()
-            .join("\n");
-        let csv_path = stage_copy.join("info").join("graphic_param.csv");
-        fs::write(&csv_path, &csv_content).unwrap();
-
-        let reloaded = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
-        assert_eq!(reloaded.graphic_params[0].value, "999.5", "modified value should persist");
-        assert_ne!(reloaded.graphic_params[0].value, original_first_value);
-    }
-
-    // ── Placement CSV roundtrip ─────────────────────────────────────────
-
-    #[test]
-    fn test_placement_csv_write_read_roundtrip_kv_format() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let (_tmp, stage_copy) = copy_stage_to_temp("16F73C97");
-        let bundle = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
-        let original_entries = bundle.placement_entries.clone();
-        let original_header = bundle.placement_header.clone();
-        assert!(!original_entries.is_empty());
-
-        let csv_content = if original_header.is_empty() {
-            original_entries.iter()
-                .map(|e| e.raw_fields.join(","))
-                .collect::<Vec<_>>()
-                .join("\n")
-        } else {
-            let header_line = original_header.join(",");
-            let data_lines: Vec<String> = original_entries.iter()
-                .map(|e| e.raw_fields.join(","))
-                .collect();
-            std::iter::once(header_line).chain(data_lines).collect::<Vec<_>>().join("\n")
-        };
-
-        let csv_path = stage_copy.join("info").join("placement.csv");
-        fs::write(&csv_path, &csv_content).unwrap();
-
-        let reloaded = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
-        assert_eq!(reloaded.placement_entries.len(), original_entries.len(),
-            "roundtrip should preserve entry count");
-
-        for (i, (orig, reload)) in original_entries.iter().zip(reloaded.placement_entries.iter()).enumerate() {
-            assert_eq!(orig.vdk_type, reload.vdk_type, "entry {i}: vdk_type mismatch");
-            assert_eq!(orig.object_number, reload.object_number, "entry {i}: objectNumber mismatch");
-            assert!((orig.pos_x - reload.pos_x).abs() < 0.001, "entry {i}: pos_x mismatch");
-            assert!((orig.pos_y - reload.pos_y).abs() < 0.001, "entry {i}: pos_y mismatch");
-            assert!((orig.pos_z - reload.pos_z).abs() < 0.001, "entry {i}: pos_z mismatch");
-        }
-    }
-
-    #[test]
-    fn test_placement_csv_effect_preservation_on_rewrite() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let (_tmp, stage_copy) = copy_stage_to_temp("35516817");
-        let bundle = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
-        let original_entries = bundle.placement_entries.clone();
-
-        let effect_entries: Vec<_> = original_entries.iter()
-            .filter(|e| e.vdk_type == "EFFECT")
-            .collect();
-        let original_effect_count = effect_entries.len();
-        assert!(original_effect_count > 0, "stage 018 must have EFFECT entries");
-
-        let csv_content = original_entries.iter()
-            .map(|e| e.raw_fields.join(","))
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        let csv_path = stage_copy.join("info").join("placement.csv");
-        fs::write(&csv_path, &csv_content).unwrap();
-
-        let reloaded = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
-        let reloaded_effects: Vec<_> = reloaded.placement_entries.iter()
-            .filter(|e| e.vdk_type == "EFFECT")
-            .collect();
-        assert_eq!(reloaded_effects.len(), original_effect_count,
-            "EFFECT entries must be preserved through write-reload cycle");
-
-        for (orig, reload) in effect_entries.iter().zip(reloaded_effects.iter()) {
-            assert_eq!(orig.raw_fields.len(), reload.raw_fields.len(),
-                "EFFECT raw_fields length must match");
-        }
-    }
-
-    // ── ObjectNumber re-indexing after delete ────────────────────────────
-
-    #[test]
-    fn test_object_index_after_folder_deletion() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let (_tmp, stage_copy) = copy_stage_to_temp("16F73C97");
-        let bundle_before = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
-
-        let original_sub_count = bundle_before.sub_models.len();
-        assert!(original_sub_count >= 1, "need at least 1 sub model for delete test");
-
-        let deleted_folder = &bundle_before.sub_models[0].folder_name;
-        let deleted_path = stage_copy.join(deleted_folder);
-        assert!(deleted_path.is_dir(), "folder to delete should exist: {}", deleted_path.display());
-
-        fs::remove_dir_all(&deleted_path).expect("delete sub model folder");
-
-        let bundle_after = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
-        assert_eq!(bundle_after.sub_models.len(), original_sub_count - 1,
-            "sub_models count should decrease by 1 after deletion");
-
-        for (i, sub) in bundle_after.sub_models.iter().enumerate() {
-            assert_eq!(sub.object_index, i,
-                "objectIndex should be re-indexed: expected {i}, got {}", sub.object_index);
-        }
-    }
-
-    #[test]
-    fn test_sky_folder_not_counted_as_sub_model() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let root = test_stage_root("16F73C97");
-        let bundle = load_stage_bundle_impl(&root.to_string_lossy()).unwrap();
-
-        let sky_as_sub = bundle.sub_models.iter().find(|m| m.folder_name == "sky");
-        assert!(sky_as_sub.is_some(), "sky should appear as a sub model entry");
-
-        let base_as_sub = bundle.sub_models.iter().find(|m| m.folder_name == "base");
-        assert!(base_as_sub.is_none(), "base should NOT appear as a sub model entry");
-    }
-
-    // ── Old texture format detection ────────────────────────────────────
-
-    #[test]
-    fn test_old_texture_format_has_numbered_subdirs_with_nutexb() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let root = test_stage_root("16F73C97");
-
-        let object_dir = root.join("001stage001_object_box01").join("0");
-        assert!(object_dir.is_dir(), "model SSBH dir should exist");
-
-        let subdir_0 = object_dir.join("0");
-        let subdir_1 = object_dir.join("1");
-        assert!(subdir_0.is_dir(), "numbered subdir 0/ should exist (old format)");
-        assert!(subdir_1.is_dir(), "numbered subdir 1/ should exist (old format)");
-
-        let has_nutexb_in_0 = fs::read_dir(&subdir_0).unwrap()
-            .filter_map(|e| e.ok())
-            .any(|e| {
-                e.path().extension()
-                    .map(|ext| ext.eq_ignore_ascii_case("nutexb"))
-                    .unwrap_or(false)
-            });
-        assert!(has_nutexb_in_0, "subdir 0/ should contain .nutexb files");
-    }
-
-    #[test]
-    fn test_detect_old_texture_format_in_stage() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let root = test_stage_root("16F73C97");
-        let reserved = ["base", "info", "textures", "sky"];
-
-        // Old texture format: model_folder/SSBH_NUM/TEX_NUM/*.nutexb
-        // e.g., 001stage001_object_box01/0/0/*.nutexb, .../0/1/*.nutexb
-        let mut found_old_format = false;
-        for entry in fs::read_dir(&root).unwrap().filter_map(|e| e.ok()) {
-            if !entry.file_type().unwrap().is_dir() {
-                continue;
-            }
-            let name = entry.file_name().to_string_lossy().to_string();
-            if reserved.contains(&name.as_str()) {
-                continue;
-            }
-            // Walk into model_folder looking for numbered SSBH subdirs
-            for ssbh_dir in fs::read_dir(entry.path()).unwrap().filter_map(|e| e.ok()) {
-                if !ssbh_dir.file_type().unwrap().is_dir() {
-                    continue;
-                }
-                let ssbh_name = ssbh_dir.file_name().to_string_lossy().to_string();
-                if !ssbh_name.chars().all(|c| c.is_ascii_digit()) {
-                    continue;
-                }
-                // Inside SSBH dir (e.g. 0/), look for numbered texture variant dirs
-                for tex_dir in fs::read_dir(ssbh_dir.path()).unwrap().filter_map(|e| e.ok()) {
-                    if !tex_dir.file_type().unwrap().is_dir() {
-                        continue;
-                    }
-                    let tex_name = tex_dir.file_name().to_string_lossy().to_string();
-                    if !tex_name.chars().all(|c| c.is_ascii_digit()) {
-                        continue;
-                    }
-                    // Check if this numbered dir contains .nutexb files
-                    for file in fs::read_dir(tex_dir.path()).unwrap().filter_map(|e| e.ok()) {
-                        if let Some(ext) = file.path().extension() {
-                            if ext.eq_ignore_ascii_case("nutexb") {
-                                found_old_format = true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        assert!(found_old_format, "stage 16F73C97 should have old texture format");
-    }
-
-    #[test]
-    fn test_no_shared_textures_folder_in_stage_16f73c97() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let root = test_stage_root("16F73C97");
-        let textures_dir = root.join("textures");
-        assert!(!textures_dir.exists(),
-            "stage 16F73C97 should NOT have a textures/ folder (old format, pre-migration)");
-    }
-
-    // ── Texture migration simulation (copy to temp, create textures/) ───
-
-    #[test]
-    fn test_texture_migration_creates_textures_folder() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let (_tmp, stage_copy) = copy_stage_to_temp("16F73C97");
-
-        let reserved = ["base", "info", "textures", "sky"];
-        let textures_dir = stage_copy.join("textures");
-        fs::create_dir_all(&textures_dir).unwrap();
-
-        // Migrate: model_folder/SSBH_NUM/TEX_NUM/*.nutexb → textures/
-        let mut migrated_count = 0usize;
-        for entry in fs::read_dir(&stage_copy).unwrap().filter_map(|e| e.ok()) {
-            if !entry.file_type().unwrap().is_dir() { continue; }
-            let name = entry.file_name().to_string_lossy().to_string();
-            if reserved.contains(&name.as_str()) { continue; }
-
-            for ssbh_dir in fs::read_dir(entry.path()).unwrap().filter_map(|e| e.ok()) {
-                if !ssbh_dir.file_type().unwrap().is_dir() { continue; }
-                let ssbh_name = ssbh_dir.file_name().to_string_lossy().to_string();
-                if !ssbh_name.chars().all(|c| c.is_ascii_digit()) { continue; }
-
-                for tex_dir in fs::read_dir(ssbh_dir.path()).unwrap().filter_map(|e| e.ok()) {
-                    if !tex_dir.file_type().unwrap().is_dir() { continue; }
-                    let tex_name = tex_dir.file_name().to_string_lossy().to_string();
-                    if !tex_name.chars().all(|c| c.is_ascii_digit()) { continue; }
-
-                    for file in fs::read_dir(tex_dir.path()).unwrap().filter_map(|e| e.ok()) {
-                        let path = file.path();
-                        if let Some(ext) = path.extension() {
-                            if ext.eq_ignore_ascii_case("nutexb") {
-                                let dest = textures_dir.join(path.file_name().unwrap());
-                                if !dest.exists() {
-                                    fs::copy(&path, &dest).unwrap();
-                                    migrated_count += 1;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        assert!(migrated_count > 0, "should have migrated some nutexb files");
-        assert!(textures_dir.is_dir(), "textures/ should exist after migration");
-
-        let tex_files: Vec<_> = fs::read_dir(&textures_dir).unwrap()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map(|ext| ext.eq_ignore_ascii_case("nutexb")).unwrap_or(false))
-            .collect();
-        assert!(!tex_files.is_empty(), "textures/ should contain nutexb files after migration");
-    }
-
-    // ── Bundle still loads after simulated save modifications ────────────
-
-    #[test]
-    fn test_bundle_loads_after_csv_rewrite() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let (_tmp, stage_copy) = copy_stage_to_temp("84F085E5");
-
-        let bundle = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
-
-        let gp_csv: String = bundle.graphic_params.iter()
-            .map(|p| format!("{},{}", p.key, p.value))
-            .collect::<Vec<_>>()
-            .join("\n");
-        fs::write(stage_copy.join("info").join("graphic_param.csv"), &gp_csv).unwrap();
-
-        let pl_csv: String = bundle.placement_entries.iter()
-            .map(|e| e.raw_fields.join(","))
-            .collect::<Vec<_>>()
-            .join("\n");
-        fs::write(stage_copy.join("info").join("placement.csv"), &pl_csv).unwrap();
-
-        let reloaded = load_stage_bundle_impl(&stage_copy.to_string_lossy());
-        assert!(reloaded.is_ok(), "bundle should load after CSV rewrite: {:?}", reloaded.err());
-        let reloaded = reloaded.unwrap();
-        assert_eq!(reloaded.graphic_params.len(), bundle.graphic_params.len());
-        assert_eq!(reloaded.placement_entries.len(), bundle.placement_entries.len());
-    }
-
-    // ── Placement modification + save ───────────────────────────────────
-
-    #[test]
-    fn test_placement_position_modification_persists() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let (_tmp, stage_copy) = copy_stage_to_temp("16F73C97");
-        let bundle = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
-
-        let mut entries = bundle.placement_entries.clone();
-        let obj_idx = entries.iter().position(|e| e.vdk_type == "OBJECT").unwrap();
-        let mut raw = entries[obj_idx].raw_fields.clone();
-        let px_idx = raw.iter().position(|f| f.eq_ignore_ascii_case("VDK_POSITION_X")).unwrap();
-        raw[px_idx + 1] = "12345.0".to_string();
-        entries[obj_idx].raw_fields = raw;
-
-        let csv_content = entries.iter()
-            .map(|e| e.raw_fields.join(","))
-            .collect::<Vec<_>>()
-            .join("\n");
-        fs::write(stage_copy.join("info").join("placement.csv"), &csv_content).unwrap();
-
-        let reloaded = load_stage_bundle_impl(&stage_copy.to_string_lossy()).unwrap();
-        let modified_obj = &reloaded.placement_entries[obj_idx];
-        assert!((modified_obj.pos_x - 12345.0).abs() < 0.01,
-            "modified position should persist, got {}", modified_obj.pos_x);
-    }
-
-    // ── CSV field identification ────────────────────────────────────────
-
-    #[test]
-    fn test_identify_info_file_placement_csv() {
-        let sample = b"VDK_TYPE,OBJECT,VDK_POSITION_X,0";
-        assert_eq!(identify_info_file(sample), "placement.csv");
-    }
-
-    #[test]
-    fn test_identify_info_file_graphic_param_csv() {
-        let sample = b"directional_lighting_rot_x,-45\npfx_bloom_intensity,0.5";
-        assert_eq!(identify_info_file(sample), "graphic_param.csv");
-    }
-
-    #[test]
-    fn test_identify_info_file_hkt() {
-        let mut data = vec![0u8; 20];
-        data[0x0C..0x10].copy_from_slice(b"SDKV");
-        assert_eq!(identify_info_file(&data), "border_hit.hkt");
-    }
-
-    // ── Numdlb name extraction ──────────────────────────────────────────
-
-    #[test]
-    fn test_numdlb_name_from_real_file() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let numdlb_path = test_stage_root("16F73C97")
-            .join("001stage001_object_box01")
-            .join("0")
-            .join("001stage001_object_box01.numdlb");
-        if !numdlb_path.exists() {
-            eprintln!("SKIP: numdlb file not found");
-            return;
-        }
-        let data = fs::read(&numdlb_path).unwrap();
-        let name = read_numdlb_model_name(&data);
-        assert!(name.is_some(), "should extract name from real numdlb");
-        let name = name.unwrap();
-        assert!(name.contains("001stage001"), "name should contain stage identifier, got: {name}");
-    }
-
-    #[test]
-    fn test_numdlb_name_too_short() {
-        let data = vec![0u8; 10];
-        assert!(read_numdlb_model_name(&data).is_none());
-    }
-
-    #[test]
-    fn test_numdlb_name_wrong_magic() {
-        let mut data = vec![0u8; 0x40];
-        data[0..4].copy_from_slice(b"NOPE");
-        assert!(read_numdlb_model_name(&data).is_none());
-    }
-
-    // ── Split CSV record ────────────────────────────────────────────────
-
-    #[test]
-    fn test_split_csv_simple() {
-        let fields = split_csv_record("a,b,c");
-        assert_eq!(fields, vec!["a", "b", "c"]);
-    }
-
-    #[test]
-    fn test_split_csv_quoted() {
-        let fields = split_csv_record("\"hello, world\",b,c");
-        assert_eq!(fields[0], "hello, world");
-        assert_eq!(fields.len(), 3);
-    }
-
-    #[test]
-    fn test_split_csv_escaped_quotes() {
-        let fields = split_csv_record("\"he said \"\"hi\"\"\",b");
-        assert_eq!(fields[0], "he said \"hi\"");
-    }
-
-    // ── Normalize model name ────────────────────────────────────────────
-
-    #[test]
-    fn test_normalize_model_name_basic() {
-        assert_eq!(normalize_model_name("Model01.numdlb"), "model01");
-    }
-
-    #[test]
-    fn test_normalize_model_name_slashes() {
-        assert_eq!(normalize_model_name("/path/to/Model.ext"), "path_to_model");
-    }
-
-    #[test]
-    fn test_normalize_model_name_spaces() {
-        assert_eq!(normalize_model_name("My Model"), "my_model");
-    }
-
-    // ── Stage root with missing info dir ────────────────────────────────
-
-    #[test]
-    fn test_bundle_with_missing_info_dir() {
-        let tmp = tempfile::tempdir().unwrap();
-        let stage = tmp.path().join("stage");
-        fs::create_dir_all(stage.join("base")).unwrap();
-        let bundle = load_stage_bundle_impl(&stage.to_string_lossy()).unwrap();
-        assert!(bundle.graphic_params.is_empty());
-        assert!(bundle.placement_entries.is_empty());
-    }
-
-    // ── Nutexb internal name parsing ────────────────────────────────────
-
-    #[test]
-    fn test_parse_nutexb_name_from_real_file() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let root = test_stage_root("16F73C97");
-        let nutexb_dir = root.join("001stage001_object_box01").join("0").join("0");
-        if !nutexb_dir.is_dir() {
-            eprintln!("SKIP: nutexb dir not found");
-            return;
-        }
-        let mut tested = 0;
-        for entry in fs::read_dir(&nutexb_dir).unwrap().filter_map(|e| e.ok()) {
-            if entry.path().extension().map(|e| e.eq_ignore_ascii_case("nutexb")).unwrap_or(false) {
-                let data = fs::read(entry.path()).unwrap();
-                let name = parse_nutexb_internal_name(&data);
-                assert!(name.is_some(), "should parse nutexb internal name from {}", entry.path().display());
-                tested += 1;
-            }
-        }
-        assert!(tested > 0, "should have tested at least one nutexb file");
-    }
-
-    #[test]
-    fn test_parse_nutexb_name_too_short() {
-        assert!(parse_nutexb_internal_name(&[0; 4]).is_none());
-    }
-
-    #[test]
-    fn test_parse_nutexb_name_wrong_magic() {
-        let mut data = vec![0u8; 100];
-        let len = data.len();
-        data[len - 8..len - 4].copy_from_slice(b"NOPE");
-        assert!(parse_nutexb_internal_name(&data).is_none());
-    }
-
-    // ── Texture redistribution tests ──────────────────────────────────
-
-    #[test]
-    fn test_redistribute_no_textures_folder() {
-        let tmp = tempfile::tempdir().unwrap();
-        let stage = tmp.path().join("stage");
-        fs::create_dir_all(stage.join("base")).unwrap();
-        let result = redistribute_stage_textures(&stage.to_string_lossy()).unwrap();
-        assert_eq!(result.models_processed, 0);
-        assert_eq!(result.textures_copied, 0);
-        assert!(!result.textures_folder_removed);
-    }
-
-    #[test]
-    fn test_redistribute_and_restore_roundtrip() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let (_tmp, stage_copy) = copy_stage_to_temp("16F73C97");
-
-        let before_nutexb = count_nutexb_recursive(&stage_copy);
-        assert!(before_nutexb > 0, "stage should have nutexb files");
-
-        let ssbh_folders_before = find_ssbh_folders(&stage_copy, &mut Vec::new()).unwrap();
-        let mut orig_texture_subdirs: Vec<PathBuf> = Vec::new();
-        let mut orig_texture_files: HashMap<String, Vec<String>> = HashMap::new();
-        for ssbh in &ssbh_folders_before {
-            for entry in fs::read_dir(ssbh).unwrap().filter_map(|e| e.ok()) {
-                let name = entry.file_name().to_string_lossy().to_string();
-                if entry.file_type().unwrap().is_dir() && name.chars().all(|c| c.is_ascii_digit()) {
-                    if dir_contains_only_nutexb(&entry.path()) {
-                        let mut files: Vec<String> = fs::read_dir(entry.path())
-                            .unwrap()
-                            .filter_map(|e| e.ok())
-                            .map(|e| e.file_name().to_string_lossy().to_string())
-                            .collect();
-                        files.sort();
-                        let key = format!("{}:{}", ssbh.strip_prefix(&stage_copy).unwrap().display(), name);
-                        orig_texture_files.insert(key, files);
-                        orig_texture_subdirs.push(entry.path());
-                    }
-                }
-            }
-        }
-        assert!(!orig_texture_subdirs.is_empty(), "should find original texture subdirs");
-        eprintln!("Original texture subdirs: {}", orig_texture_subdirs.len());
-        eprintln!("Original total nutexb: {before_nutexb}");
-
-        let collect_result = restore_shared_textures(&stage_copy.to_string_lossy()).unwrap();
-        eprintln!("Collected {} textures, removed {} subdirs", collect_result.textures_collected, collect_result.subdirs_removed);
-        assert!(collect_result.textures_collected > 0, "should collect textures");
-
-        let textures_dir = stage_copy.join("textures");
-        assert!(textures_dir.is_dir(), "textures/ folder should exist after restore");
-        let shared_count = fs::read_dir(&textures_dir).unwrap()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.file_name().to_string_lossy().to_ascii_lowercase().ends_with(".nutexb"))
-            .count();
-        assert!(shared_count > 0, "shared textures/ should have nutexb files");
-        eprintln!("Shared textures: {shared_count}");
-
-        let redist_result = redistribute_stage_textures(&stage_copy.to_string_lossy()).unwrap();
-        eprintln!("Redistribute: {} models, {} copies, removed={}",
-            redist_result.models_processed, redist_result.textures_copied,
-            redist_result.textures_folder_removed);
-        for w in &redist_result.warnings {
-            eprintln!("  WARN: {w}");
-        }
-        assert!(redist_result.models_processed > 0, "should process at least one model");
-        assert!(redist_result.textures_copied > 0, "should copy textures");
-        assert!(redist_result.textures_folder_removed, "textures/ folder should be removed");
-        assert!(!textures_dir.exists(), "textures/ folder should no longer exist");
-
-        let ssbh_folders_after = find_ssbh_folders(&stage_copy, &mut Vec::new()).unwrap();
-        for ssbh in &ssbh_folders_after {
-            for entry in fs::read_dir(ssbh).unwrap().filter_map(|e| e.ok()) {
-                let name = entry.file_name().to_string_lossy().to_string();
-                if entry.file_type().unwrap().is_dir() && name.chars().all(|c| c.is_ascii_digit()) {
-                    if dir_contains_only_nutexb(&entry.path()) {
-                        let key = format!("{}:{}", ssbh.strip_prefix(&stage_copy).unwrap().display(), name);
-                        let mut files: Vec<String> = fs::read_dir(entry.path())
-                            .unwrap()
-                            .filter_map(|e| e.ok())
-                            .map(|e| e.file_name().to_string_lossy().to_string())
-                            .collect();
-                        files.sort();
-                        if let Some(orig) = orig_texture_files.get(&key) {
-                            assert_eq!(&files, orig,
-                                "Texture files in {key} should match original after redistribute");
-                        }
-                    }
-                }
-            }
-        }
-
-        let after_nutexb = count_nutexb_recursive(&stage_copy);
-        assert_eq!(after_nutexb, before_nutexb,
-            "total nutexb count should be same after redistribute (before={before_nutexb}, after={after_nutexb})");
-    }
-
-    #[test]
-    fn test_full_shared_texture_repack_roundtrip() {
-        if skip_if_test_data_missing() {
-            eprintln!("SKIP: test data not found at {TEST_DATA_ROOT}");
-            return;
-        }
-        let fhm2d_path = Path::new(TEST_DATA_ROOT).join("16F73C97.fhm2d");
-        if !fhm2d_path.exists() {
-            eprintln!("SKIP: 16F73C97.fhm2d not found");
-            return;
-        }
-
-        let tmp = tempfile::tempdir().unwrap();
-        let extract_dir = tmp.path().join("extract");
-        fs::create_dir_all(&extract_dir).unwrap();
-
-        let extract_result = extract_stage_fhm2d_to_folder_impl(
-            &fhm2d_path.to_string_lossy(),
-            &extract_dir.to_string_lossy(),
-        ).unwrap();
-        eprintln!("Extracted: {} files, {} bytes", extract_result.total_files, extract_result.total_bytes);
-
-        let stage_root = PathBuf::from(&extract_result.output_dir);
-        let original_file_count = extract_result.total_files;
-
-        let restore_result = restore_shared_textures(&stage_root.to_string_lossy()).unwrap();
-        eprintln!("Restored shared: {} textures, {} subdirs removed",
-            restore_result.textures_collected, restore_result.subdirs_removed);
-
-        let textures_dir = stage_root.join("textures");
-        assert!(textures_dir.is_dir(), "textures/ should exist after restore");
-
-        let redist_result = redistribute_stage_textures(&stage_root.to_string_lossy()).unwrap();
-        eprintln!("Redistributed: {} models, {} copies, warnings={}",
-            redist_result.models_processed, redist_result.textures_copied,
-            redist_result.warnings.len());
-        for w in &redist_result.warnings {
-            eprintln!("  WARN: {w}");
-        }
-        assert!(redist_result.textures_folder_removed, "textures/ should be removed");
-
-        let pack_files = collect_pack_files_recursive(&stage_root);
-        let structure_json = build_test_structure_json(&stage_root, &pack_files);
-        let structure_path = stage_root.parent().unwrap().join("pack_structure.json");
-        fs::write(&structure_path, &structure_json).unwrap();
-
-        let repack_output = tmp.path().join("repacked.fhm2d");
-        let repack_result = crate::format::fhm2d_pack::repack_fhm2d_from_structure(
-            &structure_path.to_string_lossy(),
-            &repack_output.to_string_lossy(),
-            false,
-            None,
-        ).unwrap();
-        eprintln!("Repacked: {} files, {} bytes", repack_result.total_files, repack_result.output_size);
-
-        let re_extract_dir = tmp.path().join("re_extract");
-        fs::create_dir_all(&re_extract_dir).unwrap();
-        let re_extract = extract_stage_fhm2d_to_folder_impl(
-            &repack_output.to_string_lossy(),
-            &re_extract_dir.to_string_lossy(),
-        ).unwrap();
-        eprintln!("Re-extracted: {} files, {} bytes", re_extract.total_files, re_extract.total_bytes);
-
-        assert_eq!(re_extract.total_files, original_file_count,
-            "re-extracted file count should match original (orig={original_file_count}, got={})",
-            re_extract.total_files);
-    }
-
-    fn count_nutexb_recursive(dir: &Path) -> usize {
-        let mut count = 0;
-        if let Ok(entries) = fs::read_dir(dir) {
-            for entry in entries.filter_map(|e| e.ok()) {
-                if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                    count += count_nutexb_recursive(&entry.path());
-                } else {
-                    let name = entry.file_name().to_string_lossy().to_string();
-                    if name.to_ascii_lowercase().ends_with(".nutexb") {
-                        count += 1;
-                    }
-                }
-            }
-        }
-        count
-    }
-
-    fn collect_pack_files_recursive(root: &Path) -> Vec<(String, String)> {
-        let mut files = Vec::new();
-        collect_recursive(root, root, &mut files);
-        files.sort_by(|a, b| a.0.cmp(&b.0));
-        files
-    }
-
-    fn collect_recursive(base: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
-        if let Ok(entries) = fs::read_dir(dir) {
-            for entry in entries.filter_map(|e| e.ok()) {
-                let path = entry.path();
-                if path.is_dir() {
-                    let name = entry.file_name().to_string_lossy().to_string();
-                    if name.starts_with('_') || name.starts_with('.') { continue; }
-                    collect_recursive(base, &path, out);
-                } else {
-                    let ext = path.extension()
-                        .map(|e| format!(".{}", e.to_string_lossy().to_ascii_lowercase()))
-                        .unwrap_or_default();
-                    if ext == ".json" { continue; }
-                    let rel = path.strip_prefix(base)
-                        .unwrap()
-                        .to_string_lossy()
-                        .replace('\\', "/");
-                    out.push((rel, ext));
-                }
-            }
-        }
-    }
-
-    fn build_test_structure_json(stage_root: &Path, files: &[(String, String)]) -> String {
-        let folder_name = stage_root.file_name().unwrap().to_string_lossy().to_string();
-
-        #[derive(serde::Serialize)]
-        struct SubFileData {
-            index: usize,
-            #[serde(rename = "fileType")]
-            file_type: String,
-            #[serde(rename = "fileIndex")]
-            file_index: usize,
-            #[serde(rename = "fileUrl")]
-            file_url: String,
-            #[serde(rename = "fileBaseName")]
-            file_base_name: String,
-        }
-
-        let sub_file_data: Vec<SubFileData> = files.iter().enumerate().map(|(i, (rel, ext))| {
-            let base_name = rel.split('/').last().unwrap_or(rel);
-            let base_no_ext = match base_name.rfind('.') {
-                Some(idx) if idx > 0 => base_name[..idx].to_string(),
-                _ => base_name.to_string(),
-            };
-            SubFileData {
-                index: i,
-                file_type: ext.clone(),
-                file_index: i,
-                file_url: format!("{folder_name}/{rel}"),
-                file_base_name: base_no_ext,
-            }
-        }).collect();
-
-        struct TreeNode {
-            folders: std::collections::BTreeMap<String, TreeNode>,
-            files: Vec<(String, usize)>,
-        }
-
-        fn insert(node: &mut TreeNode, parts: &[&str], file_index: usize) {
-            if parts.len() == 1 {
-                node.files.push((parts[0].to_string(), file_index));
-            } else {
-                let child = node.folders.entry(parts[0].to_string())
-                    .or_insert_with(|| TreeNode {
-                        folders: std::collections::BTreeMap::new(),
-                        files: Vec::new(),
-                    });
-                insert(child, &parts[1..], file_index);
-            }
-        }
-
-        let mut tree = TreeNode { folders: std::collections::BTreeMap::new(), files: Vec::new() };
-        for (i, (rel, _)) in files.iter().enumerate() {
-            let parts: Vec<&str> = rel.split('/').collect();
-            insert(&mut tree, &parts, i);
-        }
-
-        fn emit_structure(node: &TreeNode, out: &mut Vec<serde_json::Value>) {
-            let child_count = node.folders.len() + node.files.len();
-            out.push(serde_json::json!({
-                "type": "Folder",
-                "unk1": "00000000",
-                "folderCount": child_count,
-                "unk2": "00000000",
-                "unk2_1": 0,
-                "unk3": 0, "unk4": 0, "unk5": 0, "unk6": 0
-            }));
-            let mut sorted_files = node.files.clone();
-            sorted_files.sort_by(|a, b| a.0.cmp(&b.0));
-            for (name, fi) in &sorted_files {
-                out.push(serde_json::json!({
-                    "type": "Item",
-                    "unk1": "00000000",
-                    "fileIndex": fi,
-                    "unk2": "00000000",
-                    "unk2_1": 0,
-                    "unk3": 0, "unk4": 0,
-                    "originalFileIndex": fi,
-                    "Name": name
-                }));
-            }
-            for (_name, child) in &node.folders {
-                emit_structure(child, out);
-            }
-            out.push(serde_json::json!({"type": "EndMark", "endMarkCount": 1}));
-        }
-
-        let mut structure = Vec::new();
-        for (_name, child) in &tree.folders {
-            emit_structure(child, &mut structure);
-        }
-        let mut sorted_root_files = tree.files.clone();
-        sorted_root_files.sort_by(|a, b| a.0.cmp(&b.0));
-        for (name, fi) in &sorted_root_files {
-            structure.push(serde_json::json!({
-                "type": "Item",
-                "unk1": "00000000",
-                "fileIndex": fi,
-                "unk2": "00000000",
-                "unk2_1": 0,
-                "unk3": 0, "unk4": 0,
-                "originalFileIndex": fi,
-                "Name": name
-            }));
-        }
-
-        let output = serde_json::json!({
-            "Magic": -843925575i32,
-            "Fhm2dTotalCount": files.len(),
-            "UnkCount": 0,
-            "SubFileData": sub_file_data,
-            "SubFileStructure": structure,
-        });
-        serde_json::to_string_pretty(&output).unwrap()
-    }
-
-    #[test]
-    fn test_structure_json_uses_disk_paths_after_extract() {
-        if skip_if_test_data_missing() { return; }
-        let fhm2d_path = Path::new(TEST_DATA_ROOT).join("test.fhm2d");
-        if !fhm2d_path.exists() {
-            eprintln!("SKIP: test.fhm2d not found");
-            return;
-        }
-
-        let tmp = tempfile::tempdir().unwrap();
-        let extract_dir = tmp.path().join("extract");
-        fs::create_dir_all(&extract_dir).unwrap();
-
-        let result = extract_stage_fhm2d_to_folder_impl(
-            &fhm2d_path.to_string_lossy(),
-            &extract_dir.to_string_lossy(),
-        ).unwrap();
-
-        let stage_root = PathBuf::from(&result.output_dir);
-        let sj = find_structure_json_path(&stage_root)
-            .expect("structure JSON should exist after extraction");
-        let content = fs::read_to_string(&sj).unwrap();
-        let doc: serde_json::Value = serde_json::from_str(&content).unwrap();
-
-        let sub_file_data = doc["SubFileData"].as_array().unwrap();
-        for entry in sub_file_data {
-            let url = entry["fileUrl"].as_str().unwrap();
-            assert!(!url.ends_with(".nutexb") || !url.matches('\\').count().eq(&2),
-                "Structure fileUrl should not be flat numbered: {url}");
-            let relative = url.trim_start_matches(".\\");
-            let file_path = sj.parent().unwrap().join(relative.replace('\\', "/"));
-            assert!(file_path.exists(),
-                "File in structure JSON must exist on disk: {} (resolved: {})",
-                url, file_path.display());
-        }
-        eprintln!("All {} structure fileUrl entries point to actual files on disk", sub_file_data.len());
-
-        let unk_count = doc["UnkCount"].as_u64().unwrap_or(0);
-        eprintln!("UnkCount preserved from original FHM2D: {unk_count}");
-    }
-
-    #[test]
-    fn test_repack_with_original_structure_json_roundtrip() {
-        if skip_if_test_data_missing() { return; }
-        let fhm2d_path = Path::new(TEST_DATA_ROOT).join("test.fhm2d");
-        if !fhm2d_path.exists() {
-            eprintln!("SKIP: test.fhm2d not found");
-            return;
-        }
-        let original_bytes = fs::read(&fhm2d_path).unwrap();
-
-        let tmp = tempfile::tempdir().unwrap();
-        let extract_dir = tmp.path().join("extract");
-        fs::create_dir_all(&extract_dir).unwrap();
-
-        eprintln!("Step 1: Extract FHM2D");
-        let result = extract_stage_fhm2d_to_folder_impl(
-            &fhm2d_path.to_string_lossy(),
-            &extract_dir.to_string_lossy(),
-        ).unwrap();
-        let stage_root = PathBuf::from(&result.output_dir);
-        let original_file_count = result.total_files;
-        eprintln!("  Extracted {} files", original_file_count);
-
-        eprintln!("Step 2: Restore shared textures");
-        let restore = restore_shared_textures(&stage_root.to_string_lossy()).unwrap();
-        eprintln!("  Collected {} textures, removed {} subdirs",
-            restore.textures_collected, restore.subdirs_removed);
-
-        eprintln!("Step 3: Redistribute textures");
-        let redist = redistribute_stage_textures(&stage_root.to_string_lossy()).unwrap();
-        eprintln!("  {} models, {} copies", redist.models_processed, redist.textures_copied);
-        for w in &redist.warnings {
-            eprintln!("  WARN: {w}");
-        }
-
-        eprintln!("Step 4: Verify structure JSON URLs match disk");
-        let sj_path = find_structure_json_path(&stage_root)
-            .expect("structure JSON should exist");
-        let sj_content = fs::read_to_string(&sj_path).unwrap();
-        let doc: serde_json::Value = serde_json::from_str(&sj_content).unwrap();
-        let sub_file_data = doc["SubFileData"].as_array().unwrap();
-        for entry in sub_file_data {
-            let url = entry["fileUrl"].as_str().unwrap();
-            let relative = url.trim_start_matches(".\\");
-            let file_path = sj_path.parent().unwrap().join(relative.replace('\\', "/"));
-            assert!(file_path.exists(),
-                "After redist, file must exist: {} (resolved: {})",
-                url, file_path.display());
-        }
-        eprintln!("  All {} URLs valid", sub_file_data.len());
-
-        eprintln!("Step 5: Repack using original structure JSON");
-        let repack_output = tmp.path().join("repacked.fhm2d");
-        let repack_result = crate::format::fhm2d_pack::repack_fhm2d_from_structure(
-            &sj_path.to_string_lossy(),
-            &repack_output.to_string_lossy(),
-            false,
-            None,
-        ).unwrap();
-        eprintln!("  Repacked: {} files, {} bytes", repack_result.total_files, repack_result.output_size);
-
-        eprintln!("Step 6: Re-extract and verify file count");
-        let re_extract_dir = tmp.path().join("re_extract");
-        fs::create_dir_all(&re_extract_dir).unwrap();
-        let re_extract = extract_stage_fhm2d_to_folder_impl(
-            &repack_output.to_string_lossy(),
-            &re_extract_dir.to_string_lossy(),
-        ).unwrap();
-        eprintln!("  Re-extracted {} files", re_extract.total_files);
-        assert_eq!(re_extract.total_files, original_file_count,
-            "File count mismatch (expected {original_file_count}, got {})", re_extract.total_files);
-
-        eprintln!("Step 7: Verify original vs repacked binary similarity");
-        let repacked_bytes = fs::read(&repack_output).unwrap();
-        let size_diff = (original_bytes.len() as i64 - repacked_bytes.len() as i64).abs();
-        let size_pct = (size_diff as f64 / original_bytes.len() as f64) * 100.0;
-        eprintln!("  Original: {} bytes, Repacked: {} bytes (diff: {size_diff}, {size_pct:.1}%)",
-            original_bytes.len(), repacked_bytes.len());
-        assert!(size_pct < 5.0,
-            "Binary size difference too large: {size_pct:.1}%");
-        eprintln!("PASS: Full roundtrip with original SubFileStructure");
-    }
-}
+#[path = "fhm2d_stage_test.rs"]
+mod tests;
