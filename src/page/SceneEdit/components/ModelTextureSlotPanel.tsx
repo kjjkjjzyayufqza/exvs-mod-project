@@ -1,7 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Pencil } from "lucide-react";
+import { TexturePathPicker } from "./TexturePathPicker";
 import { type TexturePreviewSlotKey } from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
 import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
 import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
@@ -21,6 +24,7 @@ interface ModelTextureSlotPanelProps {
   textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>;
   objectTextureLoadState: ObjectTextureLoadState;
   onTexturePathToggle: (objectId: string, path: string, enabled: boolean) => void;
+  onTexturePathChange?: (objectId: string, oldPath: string, newBasename: string) => void;
   modelLabel?: string;
 }
 
@@ -31,8 +35,10 @@ export function ModelTextureSlotPanel({
   textureSlotLoadEnabled,
   objectTextureLoadState,
   onTexturePathToggle,
+  onTexturePathChange,
   modelLabel,
 }: ModelTextureSlotPanelProps) {
+  const [editingPath, setEditingPath] = useState<string | null>(null);
   const textures = useMemo(
     () => collectBundleTextureInventory(
       bundle,
@@ -83,7 +89,30 @@ export function ModelTextureSlotPanel({
               <Badge variant="outline" className="text-[9px] h-4 px-1">
                 {tex.loaded ? "loaded" : "idle"}
               </Badge>
+              {onTexturePathChange && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-4 w-4 shrink-0"
+                  onClick={() => setEditingPath(editingPath === tex.pathKey ? null : tex.pathKey)}
+                >
+                  <Pencil className="h-3 w-3" />
+                </Button>
+              )}
             </div>
+            {editingPath === tex.pathKey && (
+              <div className="ml-5 mt-1">
+                <TexturePathPicker
+                  value={tex.internalName}
+                  paramId={tex.slots[0] ?? ""}
+                  onChange={(newBasename) => {
+                    onTexturePathChange?.(objectId, tex.path, newBasename);
+                    setEditingPath(null);
+                  }}
+                  className="max-w-[220px]"
+                />
+              </div>
+            )}
             <div className="ml-5 flex items-center gap-1.5 text-[9px] text-muted-foreground">
               <span
                 className={cn(

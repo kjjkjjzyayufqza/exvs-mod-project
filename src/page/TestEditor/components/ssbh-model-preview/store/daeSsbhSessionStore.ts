@@ -122,11 +122,30 @@ function buildInitialState(): DaeSsbhSessionState {
 
 const DEFAULT_MESH_MATERIAL_LABEL = "pbr1Mtl";
 
-function createRowsFromAnalysis(analysis: SsbhDaeAnalysisReport): NumdlbMappingRow[] {
+function getMostCommonLabel(rows: NumdlbMappingRow[]): string {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    counts.set(row.materialLabel, (counts.get(row.materialLabel) ?? 0) + 1);
+  }
+  let maxLabel = DEFAULT_MESH_MATERIAL_LABEL;
+  let maxCount = 0;
+  for (const [label, count] of counts) {
+    if (count > maxCount) {
+      maxCount = count;
+      maxLabel = label;
+    }
+  }
+  return maxLabel;
+}
+
+function createRowsFromAnalysis(analysis: SsbhDaeAnalysisReport, previousRows?: NumdlbMappingRow[]): NumdlbMappingRow[] {
+  const lastLabel = previousRows && previousRows.length > 0
+    ? getMostCommonLabel(previousRows)
+    : DEFAULT_MESH_MATERIAL_LABEL;
   return analysis.geometryNames.map((name) => ({
     meshObjectName: name,
     meshObjectSubindex: 0,
-    materialLabel: DEFAULT_MESH_MATERIAL_LABEL,
+    materialLabel: lastLabel,
   }));
 }
 
@@ -183,15 +202,16 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
       setMirrorTexturePathsAcrossProfiles: (mirrorTexturePathsAcrossProfiles) => set({ mirrorTexturePathsAcrossProfiles }),
 
       loadAnalysis: (analysis) => {
-        const rows = createRowsFromAnalysis(analysis);
-        const mayaFile = getExvsDefaultMayaProfileTemplate();
-        const nustFile = getExvsDefaultNustProfileTemplate();
-        const ensured = ensureMissingMappingLabelsInProfiles(mayaFile, nustFile, rows);
+        const state = get();
+        const rows = createRowsFromAnalysis(analysis, state.numdlbEntries);
+        // Preserve existing profiles if non-empty, otherwise use defaults
+        const baseMaya = state.mayaFile.entries.length > 0 ? state.mayaFile : getExvsDefaultMayaProfileTemplate();
+        const baseNust = state.nustFile.entries.length > 0 ? state.nustFile : getExvsDefaultNustProfileTemplate();
+        const ensured = ensureMissingMappingLabelsInProfiles(baseMaya, baseNust, rows);
         set({
           analysis,
           includeGeometryNames: [...analysis.geometryNames],
           numdlbEntries: rows,
-          outputBaseName: "model",
           mayaFile: ensured.mayaFile,
           nustFile: ensured.nustFile,
           lastResult: null,

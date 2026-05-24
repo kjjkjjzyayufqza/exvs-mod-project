@@ -13,7 +13,8 @@ import {
   type NumatbAttributeDataKind,
 } from "../daeSsbhTypes";
 import type { MatlEntryJson } from "../types";
-import { COMMON_NUMATB_PARAM_IDS, createDefaultAttributeData } from "../store/numatbTemplateStoreHelpers";
+import { COMMON_NUMATB_PARAM_IDS, createDefaultAttributeData, isTexturePathParamId } from "../store/numatbTemplateStoreHelpers";
+import { TexturePathPicker } from "@/page/SceneEdit/components/TexturePathPicker";
 import { flattenEntryToAttributes } from "../store/matlEntryFlat";
 import {
   ssbhEditorPortalThemeClass,
@@ -107,9 +108,11 @@ function JsonAttributeEditor({
 
 function AttributeValueEditor({
   attribute,
+  paramId,
   onChange,
 }: {
   attribute: NumatbAttribute;
+  paramId: string;
   onChange: (nextData: NumatbAttributeData) => void;
 }) {
   const kind = getNumatbAttributeKind(attribute.param.data);
@@ -144,6 +147,15 @@ function AttributeValueEditor({
         />
       );
     case "String":
+      if (isTexturePathParamId(paramId)) {
+        return (
+          <TexturePathPicker
+            value={data.String ?? ""}
+            paramId={paramId}
+            onChange={(basename) => onChange({ String: basename })}
+          />
+        );
+      }
       return (
         <CommitInput
           value={data.String ?? ""}
@@ -152,6 +164,15 @@ function AttributeValueEditor({
         />
       );
     case "String1":
+      if (isTexturePathParamId(paramId)) {
+        return (
+          <TexturePathPicker
+            value={data.String1 ?? ""}
+            paramId={paramId}
+            onChange={(basename) => onChange({ String1: basename })}
+          />
+        );
+      }
       return (
         <CommitInput
           value={data.String1 ?? ""}
@@ -333,6 +354,7 @@ export function NumatbMaterialEntryEditor({
                   <div className="min-w-0">
                     <AttributeValueEditor
                       attribute={attribute}
+                      paramId={attribute.param_id}
                       onChange={(nextData) => onUpdateAttribute(attributeIndex, nextData)}
                     />
                   </div>

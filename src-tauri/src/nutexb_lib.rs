@@ -208,6 +208,26 @@ pub fn nutexb_to_png_base64(input_path: &str) -> Result<String, String> {
     Ok(STANDARD.encode(bytes))
 }
 
+/// Decodes nutexb to a small PNG thumbnail (max 64px) and returns as base64.
+pub fn nutexb_thumbnail_base64(input_path: &str) -> Result<String, String> {
+    let (w, h, rgba) = nutexb_to_rgba_from_path(input_path, Some(64))?;
+    let img = RgbaImage::from_raw(w, h, rgba)
+        .ok_or_else(|| "Failed to create image from RGBA data".to_string())?;
+    let mut buf = Vec::new();
+    {
+        let mut cursor = Cursor::new(&mut buf);
+        let encoder = PngEncoder::new_with_quality(
+            &mut cursor,
+            CompressionType::Fast,
+            FilterType::NoFilter,
+        );
+        encoder
+            .write_image(img.as_raw(), w, h, ExtendedColorType::Rgba8)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(STANDARD.encode(&buf))
+}
+
 pub fn ensure_parent_dir(output_path: &str) -> Result<(), String> {
     let path = Path::new(output_path);
     if let Some(parent) = path.parent() {
@@ -920,4 +940,265 @@ pub fn card_icon_batch_replace_with_dds_format(
     }
 
     Ok(CardIconBatchReplaceSummary { converted, failed })
+}
+
+#[cfg(test)]
+mod nutexb_read_stage_tests {
+    use super::*;
+    use std::path::Path;
+
+    const STAGE_TEXTURES: &str = r"E:\XB\解包\com\test\0x16F73C97\textures";
+    const STAGE_FOG: &str = r"E:\XB\解包\com\test\0x16F73C97\0\0\info\fog";
+
+    fn skip_if_missing(path: &str) -> bool {
+        if !Path::new(path).exists() {
+            eprintln!("SKIP: {path} not found");
+            true
+        } else {
+            false
+        }
+    }
+
+    #[test]
+    fn test_read_stage_diffuse_info() {
+        let path = format!(r"{STAGE_TEXTURES}\stage001_panel_01_diffuse.nutexb");
+        if skip_if_missing(&path) { return; }
+        let info = read_nutexb_info(&path).unwrap();
+        assert!(info.width > 0);
+        assert!(info.height > 0);
+        assert!(!info.name.is_empty());
+        eprintln!("stage diffuse: {}x{} fmt={} mips={} name={}", info.width, info.height, info.image_format, info.mipmap_count, info.name);
+    }
+
+    #[test]
+    fn test_read_stage_normal_info() {
+        let path = format!(r"{STAGE_TEXTURES}\stage001_panel_01_normal.nutexb");
+        if skip_if_missing(&path) { return; }
+        let info = read_nutexb_info(&path).unwrap();
+        assert!(info.width > 0);
+        assert!(info.height > 0);
+        // Normal maps typically use BC5 or BC7
+        eprintln!("stage normal: {}x{} fmt={}", info.width, info.height, info.image_format);
+    }
+
+    #[test]
+    fn test_read_stage_roughness_info() {
+        let path = format!(r"{STAGE_TEXTURES}\stage001_panel_01_roughness.nutexb");
+        if skip_if_missing(&path) { return; }
+        let info = read_nutexb_info(&path).unwrap();
+        assert!(info.width > 0);
+        eprintln!("stage roughness: {}x{} fmt={}", info.width, info.height, info.image_format);
+    }
+
+    #[test]
+    fn test_read_ibl_specular_info() {
+        let path = format!(r"{STAGE_FOG}\900default_ibl_specular.nutexb");
+        if skip_if_missing(&path) { return; }
+        let info = read_nutexb_info(&path).unwrap();
+        assert!(info.width > 0);
+        // IBL cubemaps may have layer_count > 1
+        eprintln!("ibl specular: {}x{} fmt={} layers={} depth={}", info.width, info.height, info.image_format, info.layer_count, info.depth);
+    }
+
+    #[test]
+    fn test_decode_stage_diffuse_to_rgba() {
+        let path = format!(r"{STAGE_TEXTURES}\stage001_panel_01_diffuse.nutexb");
+        if skip_if_missing(&path) { return; }
+        let (w, h, rgba) = nutexb_to_rgba_from_path(&path, None).unwrap();
+        assert!(w > 0);
+        assert!(h > 0);
+        assert_eq!(rgba.len(), (w * h * 4) as usize);
+        eprintln!("decoded diffuse: {}x{} = {} bytes", w, h, rgba.len());
+    }
+
+    #[test]
+    fn test_decode_stage_diffuse_downsampled() {
+        let path = format!(r"{STAGE_TEXTURES}\stage001_panel_01_diffuse.nutexb");
+        if skip_if_missing(&path) { return; }
+        let (w, h, rgba) = nutexb_to_rgba_from_path(&path, Some(64)).unwrap();
+        assert!(w <= 64);
+        assert!(h <= 64);
+        assert_eq!(rgba.len(), (w * h * 4) as usize);
+        eprintln!("downsampled diffuse: {}x{}", w, h);
+    }
+
+    #[test]
+    fn test_file_identity_crc32() {
+        let path = format!(r"{STAGE_TEXTURES}\stage001_panel_01_diffuse.nutexb");
+        if skip_if_missing(&path) { return; }
+        let id1 = nutexb_preview_file_identity(&path).unwrap();
+        let id2 = nutexb_preview_file_identity(&path).unwrap();
+        assert_eq!(id1.crc32, id2.crc32);
+        assert_eq!(id1.nutexb_size, id2.nutexb_size);
+        assert!(id1.nutexb_size > 0);
+        eprintln!("identity: size={} crc32=0x{:08X}", id1.nutexb_size, id1.crc32);
+    }
+
+    #[test]
+    fn test_batch_read_all_stage_textures() {
+        if !Path::new(STAGE_TEXTURES).exists() {
+            eprintln!("SKIP: stage textures dir not found");
+            return;
+        }
+        let entries: Vec<_> = std::fs::read_dir(STAGE_TEXTURES)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("nutexb"))
+            .collect();
+        assert!(!entries.is_empty(), "Should find nutexb files in stage textures");
+        let mut success = 0;
+        let mut fail = 0;
+        for entry in &entries {
+            let path_str = entry.path().to_string_lossy().to_string();
+            match read_nutexb_info(&path_str) {
+                Ok(info) => {
+                    assert!(info.width > 0);
+                    success += 1;
+                }
+                Err(e) => {
+                    eprintln!("WARN: failed to read {}: {e}", entry.path().display());
+                    fail += 1;
+                }
+            }
+        }
+        eprintln!("Batch read: {} success, {} failed out of {} files", success, fail, entries.len());
+        assert!(success > 0);
+    }
+}
+
+
+#[cfg(test)]
+mod nutexb_conversion_tests {
+    use super::*;
+    use std::path::Path;
+    use tempfile::tempdir;
+
+    const TEST_PNG_DIFFUSE: &str = r"D:\output\exvs2\full armor unicorn gundam\015gndmuc_008faunig_001_pbr1_basecolor.png";
+    const TEST_PNG_NORMAL: &str = r"D:\output\christmas-hat-with-bones\standardSurface1_Normal_OpenGL.png";
+    const TEST_PNG_SMALL: &str = r"D:\output\christmas-hat-with-bones\standardSurface1_Base_color.png";
+
+    fn skip_if_missing(path: &str) -> bool {
+        if !Path::new(path).exists() {
+            eprintln!("SKIP: test file not found: {path}");
+            true
+        } else {
+            false
+        }
+    }
+
+    #[test]
+    fn test_png_to_nutexb_bc7_unorm() {
+        if skip_if_missing(TEST_PNG_DIFFUSE) { return; }
+        let tmp = tempdir().unwrap();
+        let out_path = tmp.path().join("output.nutexb");
+        let result = card_icon_replace_from_png_with_dds_format(
+            out_path.to_str().unwrap(),
+            tmp.path().to_str().unwrap(),
+            TEST_PNG_DIFFUSE,
+            "BC7RgbaUnorm",
+        );
+        assert!(result.is_ok(), "Conversion failed: {:?}", result.err());
+        let summary = result.unwrap();
+        assert!(Path::new(&summary.output_nutexb_path).exists());
+        assert!(Path::new(&summary.preview_png_path).exists());
+        assert!(!summary.nutexb_name.is_empty());
+    }
+
+    #[test]
+    fn test_png_to_nutexb_bc7_srgb() {
+        if skip_if_missing(TEST_PNG_DIFFUSE) { return; }
+        let tmp = tempdir().unwrap();
+        let out_path = tmp.path().join("diffuse.nutexb");
+        let result = card_icon_replace_from_png_with_dds_format(
+            out_path.to_str().unwrap(),
+            tmp.path().to_str().unwrap(),
+            TEST_PNG_DIFFUSE,
+            "BC7RgbaUnormSrgb",
+        );
+        assert!(result.is_ok(), "BC7 sRGB conversion failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_png_to_nutexb_bc5_normal() {
+        if skip_if_missing(TEST_PNG_NORMAL) { return; }
+        let tmp = tempdir().unwrap();
+        let out_path = tmp.path().join("normal.nutexb");
+        let result = card_icon_replace_from_png_with_dds_format(
+            out_path.to_str().unwrap(),
+            tmp.path().to_str().unwrap(),
+            TEST_PNG_NORMAL,
+            "BC5RgUnorm",
+        );
+        assert!(result.is_ok(), "BC5 conversion failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_png_to_nutexb_bc1() {
+        if skip_if_missing(TEST_PNG_SMALL) { return; }
+        let tmp = tempdir().unwrap();
+        let out_path = tmp.path().join("small.nutexb");
+        let result = card_icon_replace_from_png_with_dds_format(
+            out_path.to_str().unwrap(),
+            tmp.path().to_str().unwrap(),
+            TEST_PNG_SMALL,
+            "BC1RgbaUnorm",
+        );
+        assert!(result.is_ok(), "BC1 conversion failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_roundtrip_png_to_nutexb_to_png() {
+        if skip_if_missing(TEST_PNG_DIFFUSE) { return; }
+        let tmp = tempdir().unwrap();
+        let nutexb_path = tmp.path().join("roundtrip.nutexb");
+        let result = card_icon_replace_from_png_with_dds_format(
+            nutexb_path.to_str().unwrap(),
+            tmp.path().to_str().unwrap(),
+            TEST_PNG_DIFFUSE,
+            "BC7RgbaUnorm",
+        );
+        assert!(result.is_ok());
+
+        // Read back info
+        let info = read_nutexb_info(nutexb_path.to_str().unwrap());
+        assert!(info.is_ok());
+        let info = info.unwrap();
+        assert!(info.width > 0);
+        assert!(info.height > 0);
+        let fmt_lower = info.image_format.to_lowercase();
+        assert!(fmt_lower.contains("bc7") || fmt_lower.contains("rgba"), "Expected BC7 format, got: {}", info.image_format);
+        eprintln!("Roundtrip nutexb: {}x{} format={}", info.width, info.height, info.image_format);
+
+        // Export back to PNG
+        let re_exported_png = tmp.path().join("re_exported.png");
+        let export_result = export_nutexb_to_png(
+            nutexb_path.to_str().unwrap(),
+            re_exported_png.to_str().unwrap(),
+        );
+        assert!(export_result.is_ok());
+        assert!(re_exported_png.exists());
+        let re_size = std::fs::metadata(&re_exported_png).unwrap().len();
+        assert!(re_size > 0, "Re-exported PNG should not be empty");
+    }
+
+    #[test]
+    fn test_nutexb_to_rgba_decode() {
+        if skip_if_missing(TEST_PNG_DIFFUSE) { return; }
+        let tmp = tempdir().unwrap();
+        let nutexb_path = tmp.path().join("decode_test.nutexb");
+        card_icon_replace_from_png_with_dds_format(
+            nutexb_path.to_str().unwrap(),
+            tmp.path().to_str().unwrap(),
+            TEST_PNG_DIFFUSE,
+            "BC7RgbaUnorm",
+        ).unwrap();
+
+        let (w, h, rgba) = nutexb_to_rgba_from_path(
+            nutexb_path.to_str().unwrap(),
+            Some(256),
+        ).unwrap();
+        assert!(w <= 256);
+        assert!(h <= 256);
+        assert_eq!(rgba.len(), (w * h * 4) as usize);
+    }
 }

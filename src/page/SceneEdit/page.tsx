@@ -36,6 +36,8 @@ import {
 } from "./components/StageHierarchyTree";
 import { SceneOutliner } from "./components/SceneOutliner";
 import { GlobalLoadedTexturePanel, ModelTextureSlotPanel } from "./components/ModelTextureSlotPanel";
+import { SceneTextureManager } from "./components/SceneTextureManager";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ViewportContextMenu } from "./components/ViewportContextMenu";
 import { useSceneKeyboard } from "./hooks/useSceneKeyboard";
 import { useSceneEditorStore } from "./store/sceneEditorStore";
@@ -147,6 +149,7 @@ import {
   SCENE_SAVE_FHM2D_DIALOG_PATH_KEY,
 } from "./utils/sceneEditorSettings";
 import { useSceneDirtyStore } from "./store/sceneDirtyStore";
+import { useSceneTextureManagerStore, type TextureManagerEntry } from "./store/sceneTextureManagerStore";
 import { executeSaveFolderPipeline } from "./utils/sceneSaveFolderPipeline";
 import { executeSaveFhm2dPipeline } from "./utils/sceneSaveFhm2dPipeline";
 import { SaveProgressDialog, type SaveStepInfo } from "./components/SaveProgressDialog";
@@ -271,6 +274,44 @@ function ResetIconButton({ onClick, label, disabled }: { onClick: () => void; la
       <TooltipContent side="bottom" className="text-[10px]">{label}</TooltipContent>
     </Tooltip>
   );
+}
+
+function collectExistingNutexbEntries(
+  baseModel: SsbhModelPreviewBundle | null,
+  subModels: Array<{ folderName: string; bundle: SsbhModelPreviewBundle }>,
+): TextureManagerEntry[] {
+  const seen = new Map<string, TextureManagerEntry>();
+  const processBundle = (bundle: SsbhModelPreviewBundle, objectLabel: string) => {
+    for (const path of bundle.resolvedNutexbPaths) {
+      const filename = path.split(/[/\\]/).pop() ?? path;
+      const key = filename.toLowerCase();
+      if (seen.has(key)) {
+        const existing = seen.get(key)!;
+        if (!existing.referencedBy.includes(objectLabel)) {
+          existing.referencedBy.push(objectLabel);
+        }
+      } else {
+        seen.set(key, {
+          id: `existing_${key}`,
+          filename,
+          status: "existing",
+          format: "unknown",
+          width: 0,
+          height: 0,
+          sizeBytes: 0,
+          referencedBy: [objectLabel],
+          thumbnailDataUrl: null,
+          nutexbPath: path,
+          sourceImagePath: null,
+        });
+      }
+    }
+  };
+  if (baseModel) processBundle(baseModel, "base");
+  for (const sub of subModels) {
+    processBundle(sub.bundle, sub.folderName);
+  }
+  return Array.from(seen.values());
 }
 
 export default function SceneEdit() {
@@ -847,6 +888,9 @@ export default function SceneEdit() {
         setSelectedNodeIdRaw(null);
         setSelectedPlacementIdxRaw(null);
         useSceneEditorStore.getState().deselectAll();
+        // Populate Texture Manager with existing stage nutexb entries
+        const texEntries = collectExistingNutexbEntries(bundle.baseModel, bundle.subModels);
+        useSceneTextureManagerStore.getState().setEntries(texEntries);
       });
 
       const showToast = options.showToast ?? true;
@@ -962,6 +1006,7 @@ export default function SceneEdit() {
     setSelectedPlacementIdxRaw(null);
     useSceneEditorStore.getState().resetAll();
     useSceneDirtyStore.getState().reset();
+    useSceneTextureManagerStore.getState().clear();
     setRenamePreview(null);
     setImportProgress((prev) => ({ ...prev, open: false }));
     setHavokMeshDataMap(new Map());
@@ -2287,56 +2332,6 @@ export default function SceneEdit() {
   }, [handleClearSelection, handleSelectNode, importedDaeObjects, placementEntries, placementIndexForNodeId, selectedPlacementIdx, subModels]);
 
   const handleImportDae = useCallback(async () => {
-    try {
-      const results = await importDAEFiles(true);
-      if (results.length === 0) return;
-      let offsetX = 0;
-      const SPACING = 2;
-      const created: ImportedDaeObject[] = results.map((result, index) => {
-        const posX = offsetX;
-        offsetX += result.boundingSize.x + SPACING;
-        return {
-          id: `dae_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${index}`,
-          name: result.fileName.replace(/\.dae$/i, ""),
-          sourcePath: result.filePath,
-          scene: result.scene,
-          transform: { ...DEFAULT_TRANSFORM, posX: posX },
-        };
-      });
-      setImportedDaeObjects((prev) => [...prev, ...created]);
-      created.forEach((c) => useSceneDirtyStore.getState().markObjectAdded(c.name));
-      // Register each imported object as a scene asset
-      created.forEach((c) => {
-        useSceneAssetStore.getState().registerAsset(c.id, {
-          sourceType: "imported-dae",
-          sourcePath: c.sourcePath,
-        });
-      });
-      useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
-      handleSelectNode(created[0]?.id ?? null);
-      useSceneEditorStore.getState().recordCommand({
-        type: "import-dae",
-        description: "Import DAE object",
-        undo: () => {
-          setImportedDaeObjects((prev) => prev.filter((obj) => !created.some((c) => c.id === obj.id)));
-          created.forEach((c) => useSceneDirtyStore.getState().resetObject(c.name));
-          handleClearSelection();
-          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
-        },
-        redo: () => {
-          setImportedDaeObjects((prev) => [...prev, ...created]);
-          created.forEach((c) => useSceneDirtyStore.getState().markObjectAdded(c.name));
-          handleSelectNode(created[0]?.id ?? null);
-          useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
-        },
-      });
-      toast.success(`Imported ${created.length} DAE object(s)`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to import DAE");
-    }
-  }, [handleClearSelection, handleSelectNode]);
-
-  const handleImportDaeWithConfig = useCallback(async () => {
     const selected = await open({
       multiple: true,
       filters: [{ name: "Collada DAE", extensions: ["dae"] }],
@@ -2420,6 +2415,21 @@ export default function SceneEdit() {
             result.files.numatbPath ? `numatb: ${result.files.numatbPath}` : null,
             result.files.mayaNumatbPath ? `maya numatb: ${result.files.mayaNumatbPath}` : null,
           ].filter(Boolean);
+
+          if (entry.config.generateHkt) {
+            try {
+              const hktOutputPath = `${sessionState.outputDir!}/${sessionState.outputBaseName.trim()}.hkt`;
+              await invoke<string>("scene_generate_hkt_from_dae_path", {
+                daePath: entry.filePath,
+                outputPath: hktOutputPath,
+                configProfile: "auto",
+              });
+              lines.push(`hkt: ${hktOutputPath}`);
+            } catch (hktErr) {
+              toast.warning(`HKT generation failed for ${entry.fileName}: ${hktErr instanceof Error ? hktErr.message : String(hktErr)}`);
+            }
+          }
+
           toast.success(`Converted ${entry.fileName} to SSBH`, { description: lines.join("\n") });
           successCount++;
         } catch (err) {
@@ -2755,8 +2765,7 @@ export default function SceneEdit() {
           onExtractFhm2d={handleExtractFhm2d}
           onSaveFolder={handleSaveFolder}
           onSaveFhm2d={handleSaveFhm2d}
-          onImportDae={handleImportDae}
-          onImportDaeWithConfig={handleImportDaeWithConfig}
+          onImportDaeWithConfig={handleImportDae}
           onExportSelectedDae={handleExportSelectedDae}
           canSave={!!stageName && !isMemoryImport}
           canExportDae={canExportSelectedDae}
@@ -2848,28 +2857,38 @@ export default function SceneEdit() {
             className="min-w-0"
           >
             <div className="flex h-full min-w-0 flex-col overflow-hidden border-r">
-              <div className="shrink-0 text-[10px] font-semibold px-3 py-1 border-b bg-muted/20 text-muted-foreground uppercase tracking-widest select-none whitespace-nowrap">
-                Outliner
-              </div>
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <SceneOutliner
-                  root={outlinerRoot}
-                  onSelect={handleOutlinerSelectNode}
-                  onDuplicate={handleDuplicateSelected}
-                  onDelete={handleDeleteSelected}
-                  onPaste={handlePasteAsNew}
-                  onFocusSelected={handleFocusSelected}
-                  onClearSelection={handleClearSelection}
-                  onSelectAll={(ids) => {
-                    if (ids.length > 0) applyPrimarySelectionState(ids[ids.length - 1]);
-                  }}
-                />
-                {havokMeshDataMap.size > 0 && (
-                  <MayaSection title="Collision" badge={havokMeshDataMap.size}>
-                    <CollisionListPanel sourceIds={Array.from(havokMeshDataMap.keys())} />
-                  </MayaSection>
-                )}
-              </div>
+              <Tabs defaultValue="outliner" className="flex h-full flex-col">
+                <TabsList className="shrink-0 h-7 w-full justify-start rounded-none border-b bg-muted/20 px-1">
+                  <TabsTrigger value="outliner" className="h-5 px-2 text-[10px] data-[state=active]:bg-background">
+                    Outliner
+                  </TabsTrigger>
+                  <TabsTrigger value="textures" className="h-5 px-2 text-[10px] data-[state=active]:bg-background">
+                    Textures
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="outliner" className="mt-0 min-h-0 flex-1 overflow-hidden">
+                  <SceneOutliner
+                    root={outlinerRoot}
+                    onSelect={handleOutlinerSelectNode}
+                    onDuplicate={handleDuplicateSelected}
+                    onDelete={handleDeleteSelected}
+                    onPaste={handlePasteAsNew}
+                    onFocusSelected={handleFocusSelected}
+                    onClearSelection={handleClearSelection}
+                    onSelectAll={(ids) => {
+                      if (ids.length > 0) applyPrimarySelectionState(ids[ids.length - 1]);
+                    }}
+                  />
+                  {havokMeshDataMap.size > 0 && (
+                    <MayaSection title="Collision" badge={havokMeshDataMap.size}>
+                      <CollisionListPanel sourceIds={Array.from(havokMeshDataMap.keys())} />
+                    </MayaSection>
+                  )}
+                </TabsContent>
+                <TabsContent value="textures" className="mt-0 min-h-0 flex-1 overflow-hidden">
+                  <SceneTextureManager />
+                </TabsContent>
+              </Tabs>
             </div>
           </ResizablePanel>
 
@@ -3256,6 +3275,7 @@ export default function SceneEdit() {
           <DaeImportConfigModal
             entries={daeImportEntries}
             havokInfo={havokInfo}
+            stageRoot={stageRoot}
             onConfigChange={(importId, config) => {
               setDaeImportEntries((prev) =>
                 prev.map((e) =>

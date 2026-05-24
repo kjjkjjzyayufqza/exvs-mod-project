@@ -302,3 +302,56 @@ pub fn detect_havok_installation() -> Option<HavokInstallInfo> {
         }
     })
 }
+
+#[tauri::command]
+pub async fn scene_generate_hkt_from_dae_path(
+    dae_path: String,
+    output_path: String,
+    config_profile: String,
+) -> Result<String, String> {
+    let config = HavokCliConfig::detect()
+        .ok_or("Havok Content Tools not found")?;
+
+    if !Path::new(&config.filter_manager_path).exists() {
+        return Err("hctStandAloneFilterManager.exe not found".to_string());
+    }
+
+    let input = PathBuf::from(&dae_path);
+    if !input.exists() {
+        return Err(format!("DAE file not found: {dae_path}"));
+    }
+
+    let hko_path = if config_profile == "auto" {
+        // Use first available .hko profile from config dir
+        let profiles = list_hko_configs(&config.config_dir);
+        profiles.first().map(|p| PathBuf::from(&config.config_dir).join(p))
+    } else {
+        Some(PathBuf::from(&config.config_dir).join(&config_profile))
+    };
+
+    let hko_path = hko_path.ok_or_else(|| {
+        "No Havok configuration profile (.hko) found. \
+         Place a filter configuration in the Havok Content Tools configurations directory."
+            .to_string()
+    })?;
+
+    if !hko_path.exists() {
+        return Err(format!(
+            "Havok config profile not found: {}",
+            hko_path.display()
+        ));
+    }
+
+    let hko_content = std::fs::read_to_string(&hko_path)
+        .map_err(|e| format!("Failed to read .hko config: {e}"))?;
+
+    let output = PathBuf::from(&output_path);
+    let filter_exe = config.filter_manager_path.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        run_filter_manager(&filter_exe, &hko_content, &input, &output)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+
+    Ok(output_path)
+}

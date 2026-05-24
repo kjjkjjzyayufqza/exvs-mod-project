@@ -17,9 +17,10 @@ import { DaeImportPanelSection } from "./daeImportUi";
 interface DaeImportSsbhFullPanelProps {
   analysis: DaeAnalysisResult | null;
   sourcePath: string;
+  stageRoot: string | null;
 }
 
-export function DaeImportSsbhFullPanel({ analysis, sourcePath }: DaeImportSsbhFullPanelProps) {
+export function DaeImportSsbhFullPanel({ analysis, sourcePath, stageRoot }: DaeImportSsbhFullPanelProps) {
   const session = useDaeSsbhSessionStore();
   const loadTemplateLibrary = useDaeSsbhSessionStore((s) => s.loadTemplateLibrary);
 
@@ -31,6 +32,11 @@ export function DaeImportSsbhFullPanel({ analysis, sourcePath }: DaeImportSsbhFu
     if (analysis && analysis.canConvert) {
       session.setSourcePath(sourcePath);
       session.loadAnalysis(analysis as unknown as SsbhDaeAnalysisReport);
+      // Auto-fill outputDir with stageRoot + baseName if currently empty
+      if (!session.outputDir && stageRoot) {
+        const baseName = sourcePath.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, "") ?? "model";
+        session.setOutputDir(`${stageRoot.replace(/[\\/]+$/, "")}/${baseName}`);
+      }
     }
   }, [analysis, sourcePath]);
 

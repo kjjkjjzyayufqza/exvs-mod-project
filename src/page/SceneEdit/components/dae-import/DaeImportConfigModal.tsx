@@ -105,6 +105,7 @@ function clampModalPosition(
 interface DaeImportConfigModalProps {
   entries: DaeImportEntry[];
   havokInfo: HavokInstallInfo | null;
+  stageRoot: string | null;
   onConfigChange: (importId: string, config: DaeImportConfig) => void;
   onImport: () => void;
   onCancel: () => void;
@@ -117,6 +118,7 @@ function getPrimaryMode(config: DaeImportConfig): DaeImportPrimaryMode {
 export function DaeImportConfigModal({
   entries,
   havokInfo,
+  stageRoot,
   onConfigChange,
   onImport,
   onCancel,
@@ -308,30 +310,29 @@ export function DaeImportConfigModal({
                   </Tabs>
                 </DaeImportFieldRow>
 
-                {primaryMode === "preview" && (
-                  <DaeImportBoolField
-                    label="Generate HKT Collision"
-                    hint={
-                      hktAvailable
-                        ? "Uses Havok tools with automatic profile selection"
-                        : "Havok tools are not available on this machine"
-                    }
-                    checked={config.generateHkt}
-                    disabled={!hktAvailable}
-                    onCheckedChange={(checked) => updateConfig({ generateHkt: checked })}
-                  />
-                )}
+                <DaeImportBoolField
+                  label="Generate HKT Collision"
+                  hint={
+                    hktAvailable
+                      ? "Uses Havok tools with automatic profile selection"
+                      : "Havok tools are not available on this machine"
+                  }
+                  checked={config.generateHkt}
+                  disabled={!hktAvailable}
+                  onCheckedChange={(checked) => updateConfig({ generateHkt: checked })}
+                />
               </DaeImportSection>
+
+              {config.generateHkt && (
+                <DaeImportHktConfigPanel havokInfo={havokInfo} />
+              )}
 
               {primaryMode === "ssbh" && (
                 <DaeImportSsbhFullPanel
                   analysis={entry.analysis}
                   sourcePath={entry.filePath}
+                  stageRoot={stageRoot}
                 />
-              )}
-
-              {primaryMode === "preview" && config.generateHkt && (
-                <DaeImportHktConfigPanel havokInfo={havokInfo} />
               )}
             </div>
 

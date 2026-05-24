@@ -49,6 +49,7 @@ pub fn run() {
             commands::nutexb_export_png_uncompressed,
             commands::nutexb_export_png,
             commands::nutexb_png_base64,
+            commands::nutexb_thumbnail_base64,
             commands::nutexb_png_bytes,
             commands::nutexb_rgba_bytes,
             commands::nutexb_compressed_bytes,
@@ -144,7 +145,8 @@ pub fn run() {
             scene_session_commands::scene_list_imports,
             havok_cli::detect_havok_installation,
             havok_cli::convert_hkt_to_xml,
-            havok_cli::convert_xml_to_hkt
+            havok_cli::convert_xml_to_hkt,
+            havok_cli::scene_generate_hkt_from_dae_path
         ]);
 
     #[cfg(debug_assertions)]
