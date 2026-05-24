@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import type { NumdlbMappingRow } from "../daeSsbhTypes";
+import { SsbhEditorThemeScope, type SsbhEditorThemeVariant } from "./ssbhEditorTheme";
 
 type NumdlbMaterialMappingEditorProps = {
   rows: NumdlbMappingRow[];
@@ -13,6 +14,7 @@ type NumdlbMaterialMappingEditorProps = {
   onReplaceAll: (nextLabel: string, rowIndices: number[]) => void;
   /** When true, table body is not in a nested ScrollArea (parent provides scroll). */
   embedTableWithoutInnerScroll?: boolean;
+  themeVariant?: SsbhEditorThemeVariant;
 };
 
 export function NumdlbMaterialMappingEditor({
@@ -20,6 +22,7 @@ export function NumdlbMaterialMappingEditor({
   onChangeMaterialLabel,
   onReplaceAll,
   embedTableWithoutInnerScroll = false,
+  themeVariant = "default",
 }: NumdlbMaterialMappingEditorProps) {
   const [filter, setFilter] = useState("");
   const [replaceAllValue, setReplaceAllValue] = useState("");
@@ -79,7 +82,8 @@ export function NumdlbMaterialMappingEditor({
   );
 
   return (
-    <div className="space-y-3">
+    <SsbhEditorThemeScope variant={themeVariant}>
+      <div className="space-y-3">
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
         <div className="space-y-1">
           <Label className="text-[11px] text-muted-foreground">Filter mesh or material</Label>
@@ -150,6 +154,7 @@ export function NumdlbMaterialMappingEditor({
         </div>
         {embedTableWithoutInnerScroll ? tableBody : <ScrollArea className="h-[280px]">{tableBody}</ScrollArea>}
       </div>
-    </div>
+      </div>
+    </SsbhEditorThemeScope>
   );
 }

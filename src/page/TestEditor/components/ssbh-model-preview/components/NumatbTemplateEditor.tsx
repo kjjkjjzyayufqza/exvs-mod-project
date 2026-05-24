@@ -13,8 +13,13 @@ import { useDaeSsbhSessionStore } from "../store/daeSsbhSessionStore";
 import type { NumatbProfileKind } from "../daeSsbhTypes";
 import { NumatbMaterialEntryEditor } from "./NumatbMaterialEntryEditor";
 import { ssbhTemplateReadNumatb } from "../ssbhDaeIoService";
+import { SsbhEditorThemeScope, type SsbhEditorThemeVariant } from "./ssbhEditorTheme";
 
-export function NumatbTemplateEditor() {
+interface NumatbTemplateEditorProps {
+  themeVariant?: SsbhEditorThemeVariant;
+}
+
+export function NumatbTemplateEditor({ themeVariant = "default" }: NumatbTemplateEditorProps) {
   const {
     mayaFile,
     nustFile,
@@ -98,7 +103,8 @@ export function NumatbTemplateEditor() {
   };
 
   return (
-    <div className="space-y-3">
+    <SsbhEditorThemeScope variant={themeVariant}>
+      <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-[180px] flex-1 space-y-1">
           <Label className="text-[11px] text-muted-foreground">Template</Label>
@@ -303,6 +309,7 @@ export function NumatbTemplateEditor() {
           />
         </div>
       </div>
-    </div>
+      </div>
+    </SsbhEditorThemeScope>
   );
 }

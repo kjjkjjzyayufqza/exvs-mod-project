@@ -15,6 +15,10 @@ import {
 import type { MatlEntryJson } from "../types";
 import { COMMON_NUMATB_PARAM_IDS, createDefaultAttributeData } from "../store/numatbTemplateStoreHelpers";
 import { flattenEntryToAttributes } from "../store/matlEntryFlat";
+import {
+  ssbhEditorPortalThemeClass,
+  useSsbhEditorTheme,
+} from "./ssbhEditorTheme";
 
 type NumatbMaterialEntryEditorProps = {
   entry: MatlEntryJson | null;
@@ -215,6 +219,8 @@ export function NumatbMaterialEntryEditor({
   onAddAttribute,
   onRemoveAttribute,
 }: NumatbMaterialEntryEditorProps) {
+  const themeVariant = useSsbhEditorTheme();
+  const selectContentClass = ssbhEditorPortalThemeClass(themeVariant);
   const [newParamId, setNewParamId] = useState("");
   const [newParamKind, setNewParamKind] = useState<NumatbAttributeDataKind>("String");
 
@@ -258,7 +264,7 @@ export function NumatbMaterialEntryEditor({
             <SelectTrigger className="h-8 text-[11px]">
               <SelectValue placeholder="Type" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className={selectContentClass}>
               {[
                 "Boolean",
                 "Float",

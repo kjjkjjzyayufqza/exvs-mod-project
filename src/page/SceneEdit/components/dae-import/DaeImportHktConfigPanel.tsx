@@ -40,7 +40,7 @@ export function DaeImportHktConfigPanel({ havokInfo }: DaeImportHktConfigPanelPr
         label="Conversion Profile"
         hint="Auto-selected from installed Havok configs"
       >
-        <span className="block truncate text-right text-[11px] text-[#9a9a9a]">
+        <span className="block truncate text-right text-[11px] text-[#c8c8c8]">
           Automatic
           {profileCount > 0
             ? ` · ${profileCount} profile${profileCount === 1 ? "" : "s"}`
