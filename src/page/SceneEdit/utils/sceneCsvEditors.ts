@@ -143,9 +143,12 @@ const BASE_TRANSFORM_FIELDS = [
 
 export function createPlacementRowForType(vdkType: string): PlacementRow {
   const upper = vdkType.toUpperCase();
-  const rawFields = upper === "OBJECT"
-    ? ["VDK_TYPE", upper, "VDK_OBJECTNUMBER", "", "VDK_PROGRAMID", "0", ...BASE_TRANSFORM_FIELDS]
-    : ["VDK_TYPE", upper, ...BASE_TRANSFORM_FIELDS];
+  const rawFields =
+    upper === "OBJECT"
+      ? ["VDK_TYPE", upper, "VDK_OBJECTNUMBER", "", "VDK_PROGRAMID", "0", ...BASE_TRANSFORM_FIELDS]
+      : upper === "PROP"
+        ? ["VDK_TYPE", upper, "VDK_PROP_LIFE_MAX", "100", ...BASE_TRANSFORM_FIELDS]
+        : ["VDK_TYPE", upper, ...BASE_TRANSFORM_FIELDS];
 
   return {
     vdkType: upper,

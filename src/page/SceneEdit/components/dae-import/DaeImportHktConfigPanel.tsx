@@ -1,9 +1,5 @@
 import type { HavokInstallInfo } from "./daeImportTypes";
-import {
-  UnrealDetailsSection,
-  UnrealPropertyRow,
-  UnrealStatusBanner,
-} from "./daeImportUnrealUi";
+import { DaeImportFieldRow, DaeImportSection, DaeImportStatusAlert } from "./daeImportUi";
 
 interface DaeImportHktConfigPanelProps {
   havokInfo: HavokInstallInfo | null;
@@ -12,41 +8,39 @@ interface DaeImportHktConfigPanelProps {
 export function DaeImportHktConfigPanel({ havokInfo }: DaeImportHktConfigPanelProps) {
   if (!havokInfo) {
     return (
-      <UnrealStatusBanner tone="error">
+      <DaeImportStatusAlert tone="error">
         Havok Content Tools not detected. Install to C:\Program Files\Havok\HavokContentTools
         to enable HKT generation.
-      </UnrealStatusBanner>
+      </DaeImportStatusAlert>
     );
   }
 
   if (!havokInfo.filterManagerAvailable) {
     return (
-      <UnrealStatusBanner tone="error">
+      <DaeImportStatusAlert tone="error">
         hctStandAloneFilterManager.exe not found in the Havok installation.
-      </UnrealStatusBanner>
+      </DaeImportStatusAlert>
     );
   }
 
   const profileCount = havokInfo.configProfiles.length;
 
   return (
-    <UnrealDetailsSection title="Collision (HKT)">
-      <UnrealPropertyRow label="Havok Version">
-        <span className="block truncate text-right text-[11px] font-mono text-[#e8e8e8]">
-          {havokInfo.version}
-        </span>
-      </UnrealPropertyRow>
-      <UnrealPropertyRow
+    <DaeImportSection title="Collision (HKT)">
+      <DaeImportFieldRow label="Havok Version">
+        <span className="block truncate text-right font-mono text-[11px]">{havokInfo.version}</span>
+      </DaeImportFieldRow>
+      <DaeImportFieldRow
         label="Conversion Profile"
         hint="Auto-selected from installed Havok configs"
       >
-        <span className="block truncate text-right text-[11px] text-[#c8c8c8]">
+        <span className="block truncate text-right text-[11px] text-muted-foreground">
           Automatic
           {profileCount > 0
             ? ` · ${profileCount} profile${profileCount === 1 ? "" : "s"}`
             : ""}
         </span>
-      </UnrealPropertyRow>
-    </UnrealDetailsSection>
+      </DaeImportFieldRow>
+    </DaeImportSection>
   );
 }

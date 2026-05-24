@@ -10,3 +10,13 @@ export const PROP_LABEL =
 export const PROP_ROW =
   "grid grid-cols-[minmax(4.5rem,auto)_minmax(0,1fr)] items-center gap-x-2 gap-y-0 min-w-0";
 export const PROP_AXIS_GRID = "grid min-w-0 grid-cols-3 gap-1";
+
+/** Maya channel-box style transform table: row label + X/Y/Z columns. */
+export const MAYA_TRANSFORM_GRID =
+  "grid min-w-0 w-full grid-cols-[2.25rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-x-1 gap-y-1 items-center [&>*]:min-w-0";
+export const MAYA_AXIS_HEADER =
+  "truncate text-center text-[9px] font-bold uppercase tracking-wide";
+export const MAYA_AXIS_INPUT =
+  "h-6 min-h-6 w-full min-w-0 rounded-sm border bg-muted/25 px-1 text-right text-[10px] font-mono tabular-nums outline-none transition-colors focus:bg-background focus:ring-1";
+export const MAYA_ROW_LABEL =
+  "truncate text-[10px] font-medium text-muted-foreground";

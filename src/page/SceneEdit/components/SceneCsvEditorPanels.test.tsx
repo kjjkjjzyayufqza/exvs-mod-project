@@ -44,7 +44,7 @@ describe("Scene CSV editor panels", () => {
     expect(screen.queryByTestId("graphic-param-fixed-scroll")).not.toBeInTheDocument();
   });
 
-  it("renders full placement key-value fields inside a flexible panel", () => {
+  it("renders grouped placement fields inside a flexible panel", () => {
     const row: PlacementRow = {
       vdkType: "EFFECT",
       objectNumber: 7,
@@ -62,8 +62,8 @@ describe("Scene CSV editor panels", () => {
         "EFFECT",
         "VDK_POSITION_X",
         "10",
-        "VDK_LENS_FLARE_ENABLE",
-        "TRUE",
+        "VDK_EFFECT_ID",
+        "42",
       ],
     };
 
@@ -71,11 +71,12 @@ describe("Scene CSV editor panels", () => {
       <PlacementCsvEditorPanel
         entries={[row]}
         initialEntries={null}
+        placementHeader={[]}
         selectedIndex={0}
         onSelectEntry={vi.fn()}
         onFieldPreview={vi.fn()}
         onFieldCommit={vi.fn()}
-        onAddFieldPair={vi.fn()}
+        onAddField={vi.fn()}
         onRemoveFieldPair={vi.fn()}
         onAddTyped={vi.fn()}
         onDeleteRow={vi.fn()}
@@ -84,8 +85,9 @@ describe("Scene CSV editor panels", () => {
       />,
     );
 
-    expect(screen.getByText("VDK_LENS_FLARE_ENABLE")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("TRUE")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("VDK_EFFECT_ID")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("42")).toBeInTheDocument();
+    expect(screen.getByText("53 known fields")).toBeInTheDocument();
     expect(screen.getByTestId("placement-csv-editor-panel")).toHaveClass("flex", "min-h-0");
   });
 });

@@ -18,8 +18,7 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScenePropertiesPanel } from "./components/ScenePropertiesPanel";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -94,6 +93,8 @@ import { SceneInfoContent, SceneStatsContent } from "./components/SceneStatusPan
 import { useSceneTextureLoader } from "./hooks/useSceneTextureLoader";
 import { TextureQualityPanel, getMaxDimensionForQuality } from "./components/TextureQualityPanel";
 import { disposeFhm2dMemorySession } from "@/page/TestEditor/components/ssbh-model-preview/fhm2dMemoryPreviewService";
+import { ssbhConvertDaeToSsbh } from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
+import { useDaeSsbhSessionStore } from "@/page/TestEditor/components/ssbh-model-preview/store/daeSsbhSessionStore";
 import {
   clearNutexbPreviewCacheAsync,
   clearNutexbRgbaCache,
@@ -1994,11 +1995,13 @@ export default function SceneEdit() {
     [placementEntries],
   );
 
-  const handleAddPlacementFieldPair = useCallback(
-    (index: number) => {
+  const handleAddPlacementField = useCallback(
+    (index: number, key: string, value: string) => {
       const previous = placementEntries[index];
       if (!previous) return;
-      const rawFields = [...previous.rawFields, "VDK_NEW_FIELD", "0"];
+      const normalizedKey = key.trim().toUpperCase();
+      if (!normalizedKey) return;
+      const rawFields = [...previous.rawFields, normalizedKey, value];
       const nextEntry = syncParsedFieldsFromRaw({ ...previous, rawFields });
       setPlacementEntries((prev) => {
         const next = [...prev];
@@ -2008,7 +2011,7 @@ export default function SceneEdit() {
       useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       useSceneEditorStore.getState().recordCommand({
         type: "add-placement-field",
-        description: "Add placement field pair",
+        description: "Add placement field",
         undo: () => {
           setPlacementEntries((prev) => {
             const next = [...prev];
@@ -2379,12 +2382,6 @@ export default function SceneEdit() {
 
   const processDirectSsbhConvert = useCallback(
     async (entries: DaeImportEntry[]) => {
-      const { ssbhConvertDaeToSsbh } = await import(
-        "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService"
-      );
-      const { useDaeSsbhSessionStore } = await import(
-        "@/page/TestEditor/components/ssbh-model-preview/store/daeSsbhSessionStore"
-      );
       const sessionState = useDaeSsbhSessionStore.getState();
 
       let successCount = 0;
@@ -2963,148 +2960,245 @@ export default function SceneEdit() {
             maxSize="50%"
             className="min-w-0"
           >
-            <div className="flex h-full min-w-0 flex-col overflow-hidden border-l">
-              <div className="flex shrink-0 items-center px-3 py-1 border-b bg-muted/20 select-none whitespace-nowrap">
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Properties</span>
-                <span className="ml-auto">
-                  <ResetIconButton onClick={handleResetSession} label="Reset all changes" disabled={!initialSnapshotRef.current} />
-                </span>
-              </div>
-              <Tabs defaultValue="inspect" className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <TabsList className="mx-2 mt-2 grid h-8 shrink-0 grid-cols-3 rounded-md">
-                  <TabsTrigger value="inspect" className="text-[10px]">Inspect</TabsTrigger>
-                  <TabsTrigger value="graphic" className="text-[10px]">Graphic</TabsTrigger>
-                  <TabsTrigger value="placement" className="text-[10px]">Placement</TabsTrigger>
-                </TabsList>
-                <ScrollArea className="min-h-0 flex-1">
-                  <div className="min-w-0 w-full overflow-x-hidden">
-                  <TabsContent value="inspect" className="m-0 mt-0 pb-3 focus-visible:outline-none">
-                    {selectedTransform && (
-                      <MayaSection
-                        title="Transform"
-                        actions={<ResetIconButton onClick={handleResetTransform} label="Reset transform" disabled={!initialSnapshotRef.current} />}
-                      >
-                        {selectedNode && (
-                          <p className="mb-1.5 truncate text-[10px] text-muted-foreground" title={selectedNode.label}>
-                            {selectedNode.label}
-                          </p>
-                        )}
-                        <StagePropertyEditor transform={selectedTransform} onTransformChange={handleTransformChange} />
-                      </MayaSection>
-                    )}
-
-                    <MayaSection title="Scene">
-                      <SceneInfoContent
-                        stageName={stageName}
-                        stageRoot={stageRoot}
-                        selectedNode={selectedNode}
-                        selectedPlacementIdx={selectedPlacementIdx}
-                        placementEntry={selectedPlacementIdx !== null ? placementEntries[selectedPlacementIdx] : null}
-                        subModelCount={subModels.length}
-                        textureCount={textureDataMap.size}
-                      />
-                    </MayaSection>
-
-                    {selectedPlacementIdx !== null && placementEntries[selectedPlacementIdx] && (
-                      <MayaSection title="Object Config" defaultOpen>
-                        <PlacementConfigPanel entry={placementEntries[selectedPlacementIdx]} placementHeader={placementHeader} />
-                      </MayaSection>
-                    )}
-
-                    {selectedNodeId && (
-                      <MayaSection title="Asset Config" defaultOpen>
-                        <SceneAssetConfigPanel assetId={selectedNodeId} />
-                      </MayaSection>
-                    )}
-
-                    <MayaSection title="Texture">
-                      <TextureQualityPanel
-                        quality={textureQuality}
-                        onQualityChange={handleTextureQualityChange}
-                        textureSlotLoadEnabled={textureSlotLoadEnabled}
-                        onTextureSlotMode={handleTextureSlotMode}
-                        onTextureSlotToggle={handleTextureSlotToggle}
-                        textureDataMap={textureDataMap}
-                        isDecoding={textureProgress !== null}
-                      />
-                    </MayaSection>
-
-                    {selectedTextureObject && (
-                      <MayaSection title="Object Nutexb" defaultOpen>
-                        <ModelTextureSlotPanel
-                          objectId={selectedTextureObject.objectId}
-                          bundle={selectedTextureObject.bundle}
-                          textureDataMap={textureDataMap}
-                          textureSlotLoadEnabled={textureSlotLoadEnabled}
-                          objectTextureLoadState={objectTextureLoadState}
-                          onTexturePathToggle={handleObjectTexturePathToggle}
-                          modelLabel={selectedTextureObject.label}
+            <ScenePropertiesPanel
+              headerActions={
+                <ResetIconButton
+                  onClick={handleResetSession}
+                  label="Reset all changes"
+                  disabled={!initialSnapshotRef.current}
+                />
+              }
+              inspectContent={
+                <>
+                  {selectedTransform && (
+                    <MayaSection
+                      title="Transform"
+                      actions={
+                        <ResetIconButton
+                          onClick={handleResetTransform}
+                          label="Reset transform"
+                          disabled={!initialSnapshotRef.current}
                         />
-                      </MayaSection>
-                    )}
-
-                    <MayaSection title="Loaded Nutexb" badge={textureInventories.length || undefined} defaultOpen={false}>
-                      <GlobalLoadedTexturePanel objects={textureInventories} />
-                    </MayaSection>
-
-                    <MayaSection title="Stats" defaultOpen={false}>
-                      <SceneStatsContent drawStats={drawStats} subModelCount={subModels.length} textureCount={textureDataMap.size} stageName={stageName} />
-                    </MayaSection>
-                  </TabsContent>
-
-                  <TabsContent value="graphic" className="m-0 pb-3">
-                    <MayaSection
-                      title="Graphic Param"
-                      badge={`${appliedGraphicParamKeys.size}/${graphicParams.length}`}
-                      defaultOpen
-                      actions={<ResetIconButton onClick={handleResetGraphicParams} label="Reset all graphic params" disabled={!initialSnapshotRef.current} />}
+                      }
                     >
-                      <GraphicParamPanel
-                        params={graphicParams}
-                        initialParams={initialSnapshotRef.current?.graphicParams ?? null}
-                        appliedKeys={appliedGraphicParamKeys}
-                        onValueChange={handleGraphicParamValueChange}
-                        onKeyChange={handleGraphicParamKeyChange}
-                        onAdd={handleAddGraphicParam}
-                        onDelete={handleDeleteGraphicParam}
-                        onToggleApplied={handleToggleGraphicParamApplied}
-                        onApplyAll={() => setAppliedGraphicParamKeys(new Set(graphicParams.map((p) => p.key)))}
-                        onClearApplied={() => setAppliedGraphicParamKeys(new Set())}
-                        onResetValue={handleResetGraphicParamValue}
+                      {selectedNode && (
+                        <p
+                          className="mb-1.5 truncate text-[10px] text-muted-foreground"
+                          title={selectedNode.label}
+                        >
+                          {selectedNode.label}
+                        </p>
+                      )}
+                      <StagePropertyEditor
+                        transform={selectedTransform}
+                        onTransformChange={handleTransformChange}
+                        placementEntry={
+                          selectedPlacementIdx !== null
+                            ? placementEntries[selectedPlacementIdx] ?? null
+                            : null
+                        }
+                        placementHeader={placementHeader}
+                        initialPlacementRawFields={
+                          selectedPlacementIdx !== null
+                            ? initialSnapshotRef.current?.placementEntries[selectedPlacementIdx]
+                                ?.rawFields ?? null
+                            : null
+                        }
+                        onPlacementFieldPreview={
+                          selectedPlacementIdx !== null
+                            ? (fieldIndex, value) =>
+                                handlePlacementFieldPreview(selectedPlacementIdx, fieldIndex, value)
+                            : undefined
+                        }
+                        onPlacementFieldCommit={
+                          selectedPlacementIdx !== null
+                            ? (fieldIndex, value) =>
+                                handlePlacementFieldCommit(selectedPlacementIdx, fieldIndex, value)
+                            : undefined
+                        }
+                        onAddPlacementField={
+                          selectedPlacementIdx !== null
+                            ? (key, value) =>
+                                handleAddPlacementField(selectedPlacementIdx, key, value)
+                            : undefined
+                        }
+                        onRemovePlacementField={
+                          selectedPlacementIdx !== null
+                            ? (keyIndex) =>
+                                handleRemovePlacementFieldPair(selectedPlacementIdx, keyIndex)
+                            : undefined
+                        }
+                        onResetPlacementField={
+                          selectedPlacementIdx !== null
+                            ? (fieldIndex) =>
+                                handleResetPlacementField(selectedPlacementIdx, fieldIndex)
+                            : undefined
+                        }
                       />
                     </MayaSection>
-                  </TabsContent>
+                  )}
 
-                  <TabsContent value="placement" className="m-0 pb-3">
-                    <MayaSection
-                      title="Placement"
-                      badge={placementEntries.length || undefined}
-                      defaultOpen
-                      actions={<ResetIconButton onClick={handleResetPlacement} label="Reset all placements" disabled={!initialSnapshotRef.current} />}
-                    >
-                      <PlacementCsvEditorPanel
-                        entries={placementEntries}
-                        initialEntries={initialSnapshotRef.current?.placementEntries ?? null}
-                        selectedIndex={selectedPlacementIdx}
-                        onSelectEntry={handleSelectPlacement}
-                        onFieldPreview={handlePlacementFieldPreview}
-                        onFieldCommit={handlePlacementFieldCommit}
-                        onAddFieldPair={handleAddPlacementFieldPair}
-                        onRemoveFieldPair={handleRemovePlacementFieldPair}
-                        onAddTyped={handleAddTypedPlacement}
-                        onDeleteRow={(index) => {
-                          const nodeId = resolveNodeIdForPlacementIndex(index, placementEntries, subModels);
-                          handleDeleteSelected(nodeId ? [nodeId] : undefined);
-                        }}
-                        onResetRow={handleResetPlacementRow}
-                        onResetField={handleResetPlacementField}
+                  <MayaSection title="Scene">
+                    <SceneInfoContent
+                      stageName={stageName}
+                      stageRoot={stageRoot}
+                      selectedNode={selectedNode}
+                      selectedPlacementIdx={selectedPlacementIdx}
+                      placementEntry={
+                        selectedPlacementIdx !== null
+                          ? placementEntries[selectedPlacementIdx]
+                          : null
+                      }
+                      subModelCount={subModels.length}
+                      textureCount={textureDataMap.size}
+                    />
+                  </MayaSection>
+
+                  {selectedPlacementIdx !== null && placementEntries[selectedPlacementIdx] && (
+                    <MayaSection title="Object Config" defaultOpen>
+                      <PlacementConfigPanel
+                        entry={placementEntries[selectedPlacementIdx]}
+                        initialEntry={
+                          initialSnapshotRef.current?.placementEntries[selectedPlacementIdx] ?? null
+                        }
+                        placementHeader={placementHeader}
+                        onFieldPreview={(fieldIndex, value) =>
+                          handlePlacementFieldPreview(selectedPlacementIdx, fieldIndex, value)
+                        }
+                        onFieldCommit={(fieldIndex, value) =>
+                          handlePlacementFieldCommit(selectedPlacementIdx, fieldIndex, value)
+                        }
+                        onAddField={(key, value) =>
+                          handleAddPlacementField(selectedPlacementIdx, key, value)
+                        }
+                        onRemoveField={(keyIndex) =>
+                          handleRemovePlacementFieldPair(selectedPlacementIdx, keyIndex)
+                        }
+                        onResetField={(fieldIndex) =>
+                          handleResetPlacementField(selectedPlacementIdx, fieldIndex)
+                        }
                       />
                     </MayaSection>
-                  </TabsContent>
-                  </div>
-                </ScrollArea>
-              </Tabs>
-            </div>
+                  )}
+
+                  {selectedNodeId && (
+                    <MayaSection title="Asset Config" defaultOpen>
+                      <SceneAssetConfigPanel assetId={selectedNodeId} />
+                    </MayaSection>
+                  )}
+
+                  <MayaSection title="Texture">
+                    <TextureQualityPanel
+                      quality={textureQuality}
+                      onQualityChange={handleTextureQualityChange}
+                      textureSlotLoadEnabled={textureSlotLoadEnabled}
+                      onTextureSlotMode={handleTextureSlotMode}
+                      onTextureSlotToggle={handleTextureSlotToggle}
+                      textureDataMap={textureDataMap}
+                      isDecoding={textureProgress !== null}
+                    />
+                  </MayaSection>
+
+                  {selectedTextureObject && (
+                    <MayaSection title="Object Nutexb" defaultOpen>
+                      <ModelTextureSlotPanel
+                        objectId={selectedTextureObject.objectId}
+                        bundle={selectedTextureObject.bundle}
+                        textureDataMap={textureDataMap}
+                        textureSlotLoadEnabled={textureSlotLoadEnabled}
+                        objectTextureLoadState={objectTextureLoadState}
+                        onTexturePathToggle={handleObjectTexturePathToggle}
+                        modelLabel={selectedTextureObject.label}
+                      />
+                    </MayaSection>
+                  )}
+
+                  <MayaSection
+                    title="Loaded Nutexb"
+                    badge={textureInventories.length || undefined}
+                    defaultOpen={false}
+                  >
+                    <GlobalLoadedTexturePanel objects={textureInventories} />
+                  </MayaSection>
+
+                  <MayaSection title="Stats" defaultOpen={false}>
+                    <SceneStatsContent
+                      drawStats={drawStats}
+                      subModelCount={subModels.length}
+                      textureCount={textureDataMap.size}
+                      stageName={stageName}
+                    />
+                  </MayaSection>
+                </>
+              }
+              graphicContent={
+                <MayaSection
+                  title="Graphic Param"
+                  badge={`${appliedGraphicParamKeys.size}/${graphicParams.length}`}
+                  defaultOpen
+                  actions={
+                    <ResetIconButton
+                      onClick={handleResetGraphicParams}
+                      label="Reset all graphic params"
+                      disabled={!initialSnapshotRef.current}
+                    />
+                  }
+                >
+                  <GraphicParamPanel
+                    params={graphicParams}
+                    initialParams={initialSnapshotRef.current?.graphicParams ?? null}
+                    appliedKeys={appliedGraphicParamKeys}
+                    onValueChange={handleGraphicParamValueChange}
+                    onKeyChange={handleGraphicParamKeyChange}
+                    onAdd={handleAddGraphicParam}
+                    onDelete={handleDeleteGraphicParam}
+                    onToggleApplied={handleToggleGraphicParamApplied}
+                    onApplyAll={() =>
+                      setAppliedGraphicParamKeys(new Set(graphicParams.map((p) => p.key)))
+                    }
+                    onClearApplied={() => setAppliedGraphicParamKeys(new Set())}
+                    onResetValue={handleResetGraphicParamValue}
+                  />
+                </MayaSection>
+              }
+              placementContent={
+                <MayaSection
+                  title="Placement"
+                  badge={placementEntries.length || undefined}
+                  defaultOpen
+                  actions={
+                    <ResetIconButton
+                      onClick={handleResetPlacement}
+                      label="Reset all placements"
+                      disabled={!initialSnapshotRef.current}
+                    />
+                  }
+                >
+                  <PlacementCsvEditorPanel
+                    entries={placementEntries}
+                    initialEntries={initialSnapshotRef.current?.placementEntries ?? null}
+                    placementHeader={placementHeader}
+                    selectedIndex={selectedPlacementIdx}
+                    onSelectEntry={handleSelectPlacement}
+                    onFieldPreview={handlePlacementFieldPreview}
+                    onFieldCommit={handlePlacementFieldCommit}
+                    onAddField={handleAddPlacementField}
+                    onRemoveFieldPair={handleRemovePlacementFieldPair}
+                    onAddTyped={handleAddTypedPlacement}
+                    onDeleteRow={(index) => {
+                      const nodeId = resolveNodeIdForPlacementIndex(
+                        index,
+                        placementEntries,
+                        subModels,
+                      );
+                      handleDeleteSelected(nodeId ? [nodeId] : undefined);
+                    }}
+                    onResetRow={handleResetPlacementRow}
+                    onResetField={handleResetPlacementField}
+                  />
+                </MayaSection>
+              }
+            />
           </ResizablePanel>
         </ResizablePanelGroup>
 

@@ -16,6 +16,7 @@ import {
   PROP_INPUT,
   PROP_PANEL,
 } from "./propertyPanelStyles";
+import { commitDecimalInput, sanitizeDecimalInput } from "../utils/numericFieldInput";
 
 export interface GraphicParam {
   key: string;
@@ -169,7 +170,21 @@ export function GraphicParamPanel({
                 <Input
                   className={PROP_INPUT}
                   value={p.value}
-                  onChange={(e) => onValueChange(p.originalIndex, e.target.value)}
+                  inputMode={slider ? "decimal" : "text"}
+                  onChange={(e) => {
+                    const next = slider
+                      ? sanitizeDecimalInput(e.target.value)
+                      : e.target.value;
+                    onValueChange(p.originalIndex, next);
+                  }}
+                  onBlur={(e) => {
+                    if (!slider) return;
+                    const next = commitDecimalInput(
+                      e.target.value,
+                      originalValue ?? p.value,
+                    );
+                    if (next !== p.value) onValueChange(p.originalIndex, next);
+                  }}
                 />
                 {slider && (
                   <Slider

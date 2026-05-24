@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { exists, readFile, writeFile } from "@tauri-apps/plugin-fs";
+import { save } from "@tauri-apps/plugin-dialog";
+import { exists, readFile, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { dirname, join } from "@tauri-apps/api/path";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
@@ -413,8 +414,6 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
 
     setIsExporting(true);
     try {
-      const { save } = await import("@tauri-apps/plugin-dialog");
-      const { writeTextFile } = await import("@tauri-apps/plugin-fs");
       const filePath = await save({
         filters: [{ name: "Chara JSON", extensions: ["json"] }],
         defaultPath: "character_list.json",

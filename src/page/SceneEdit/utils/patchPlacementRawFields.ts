@@ -28,17 +28,25 @@ const FIELD_TO_HEADER_ALIASES: Record<
 };
 
 function setKvPairValue(rawFields: string[], keyCandidates: string[], valueStr: string): string[] {
-  const next = [...rawFields];
-  for (let j = 0; j + 1 < next.length; j += 2) {
-    const k = next[j].trim().toUpperCase();
+  for (let j = 0; j + 1 < rawFields.length; j += 2) {
+    const k = rawFields[j].trim().toUpperCase();
     for (const cand of keyCandidates) {
       if (k === cand.toUpperCase()) {
+        const next = [...rawFields];
         next[j + 1] = valueStr;
         return next;
       }
     }
   }
-  return next;
+  return rawFields;
+}
+
+function upsertKvPairValue(rawFields: string[], keyCandidates: string[], valueStr: string): string[] {
+  const updated = setKvPairValue(rawFields, keyCandidates, valueStr);
+  if (updated !== rawFields) return updated;
+  const key = keyCandidates[0];
+  if (!key) return rawFields;
+  return [...rawFields, key, valueStr];
 }
 
 export function patchPlacementRawFieldsForNumericField(
@@ -59,7 +67,7 @@ export function patchPlacementRawFieldsForNumericField(
     }
   }
 
-  const rawFieldsKv = setKvPairValue(entry.rawFields, aliases, valueStr);
+  const rawFieldsKv = upsertKvPairValue(entry.rawFields, aliases, valueStr);
   if (rawFieldsKv !== entry.rawFields) {
     return { ...entry, rawFields: rawFieldsKv, [field]: value };
   }

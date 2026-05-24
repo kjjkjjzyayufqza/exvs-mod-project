@@ -1,11 +1,8 @@
-import { useState, useEffect, useRef } from "react";
-import { Input } from "@/components/ui/input";
-import {
-  PROP_AXIS_GRID,
-  PROP_INPUT,
-  PROP_LABEL,
-  PROP_PANEL,
-} from "./propertyPanelStyles";
+import { useMemo } from "react";
+import type { PlacementRow } from "../types/placement";
+import { isHeaderFormatRow, listPlacementFields } from "../utils/placementFieldModel";
+import { resolveTransformAxisBindings } from "../utils/placementTransformAxes";
+import { TransformAxisGrid } from "./TransformAxisGrid";
 
 export interface TransformData {
   posX: number;
@@ -22,105 +19,87 @@ export interface TransformData {
 interface StagePropertyEditorProps {
   transform: TransformData;
   onTransformChange: (field: keyof TransformData, value: number) => void;
+  placementEntry?: PlacementRow | null;
+  placementHeader?: string[];
+  initialPlacementRawFields?: string[] | null;
+  onPlacementFieldPreview?: (fieldIndex: number, value: string) => void;
+  onPlacementFieldCommit?: (fieldIndex: number, value: string) => void;
+  onAddPlacementField?: (key: string, value: string) => void;
+  onRemovePlacementField?: (keyIndex: number) => void;
+  onResetPlacementField?: (fieldIndex: number) => void;
 }
 
 export function StagePropertyEditor({
   transform,
   onTransformChange,
+  placementEntry = null,
+  placementHeader = [],
+  initialPlacementRawFields = null,
+  onPlacementFieldPreview,
+  onPlacementFieldCommit,
+  onAddPlacementField,
+  onRemovePlacementField,
+  onResetPlacementField,
 }: StagePropertyEditorProps) {
-  return (
-    <div className={`space-y-2 ${PROP_PANEL}`}>
-      <TransformRow
-        label="Position"
-        values={[transform.posX, transform.posY, transform.posZ]}
-        fields={["posX", "posY", "posZ"]}
-        onChange={onTransformChange}
-      />
-      <TransformRow
-        label="Rotation"
-        values={[transform.rotX, transform.rotY, transform.rotZ]}
-        fields={["rotX", "rotY", "rotZ"]}
-        onChange={onTransformChange}
-      />
-      <TransformRow
-        label="Scale"
-        values={[transform.scaleX, transform.scaleY, transform.scaleZ]}
-        fields={["scaleX", "scaleY", "scaleZ"]}
-        onChange={onTransformChange}
-      />
-    </div>
-  );
-}
+  const placementMode =
+    placementEntry !== null &&
+    onPlacementFieldPreview !== undefined &&
+    onPlacementFieldCommit !== undefined &&
+    onAddPlacementField !== undefined &&
+    onRemovePlacementField !== undefined;
 
-function TransformRow({
-  label,
-  values,
-  fields,
-  onChange,
-}: {
-  label: string;
-  values: [number, number, number];
-  fields: (keyof TransformData)[];
-  onChange: (field: keyof TransformData, value: number) => void;
-}) {
-  const axisColors = ["text-red-400", "text-green-400", "text-blue-400"];
-  const axisLabels = ["X", "Y", "Z"];
+  const bindings = useMemo(() => {
+    if (placementMode && placementEntry) {
+      return resolveTransformAxisBindings(
+        listPlacementFields(placementEntry, placementHeader),
+        transform,
+      );
+    }
+    return resolveTransformAxisBindings([], transform, { virtualPresent: true });
+  }, [placementEntry, placementHeader, placementMode, transform]);
+
+  const headerFormat =
+    placementEntry !== null && isHeaderFormatRow(placementEntry, placementHeader);
 
   return (
-    <div className="min-w-0">
-      <div className={`${PROP_LABEL} mb-1`}>{label}</div>
-      <div className={PROP_AXIS_GRID}>
-        {axisLabels.map((axis, i) => (
-          <div key={axis} className="flex min-w-0 items-center gap-1">
-            <span
-              className={`w-3 shrink-0 text-center text-[10px] font-bold ${axisColors[i]}`}
-            >
-              {axis}
-            </span>
-            <NumericInput
-              value={values[i]}
-              onCommit={(v) => onChange(fields[i], v)}
-            />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function NumericInput({
-  value,
-  onCommit,
-}: {
-  value: number;
-  onCommit: (v: number) => void;
-}) {
-  const [text, setText] = useState(value.toFixed(3));
-  const focusedRef = useRef(false);
-
-  useEffect(() => {
-    if (!focusedRef.current) setText(value.toFixed(3));
-  }, [value]);
-
-  return (
-    <Input
-      type="number"
-      step="0.1"
-      className={PROP_INPUT}
-      value={text}
-      onChange={(e) => setText(e.target.value)}
-      onFocus={() => {
-        focusedRef.current = true;
+    <TransformAxisGrid
+      bindings={bindings}
+      headerFormat={headerFormat}
+      initialRawFields={initialPlacementRawFields}
+      onValuePreview={(binding, value) => {
+        if (placementMode) {
+          if (binding.present && binding.valueIndex !== null) {
+            onPlacementFieldPreview!(binding.valueIndex, value);
+          }
+          return;
+        }
+        if (binding.def.parsedField) {
+          const parsed = Number.parseFloat(value);
+          if (Number.isFinite(parsed)) onTransformChange(binding.def.parsedField, parsed);
+        }
       }}
-      onBlur={() => {
-        focusedRef.current = false;
-        const v = parseFloat(text);
-        if (!isNaN(v)) onCommit(v);
-        setText((isNaN(v) ? value : v).toFixed(3));
+      onValueCommit={(binding, value) => {
+        if (placementMode) {
+          if (binding.present && binding.valueIndex !== null) {
+            onPlacementFieldCommit!(binding.valueIndex, value);
+          } else if (binding.def.parsedField) {
+            const parsed = Number.parseFloat(value);
+            if (Number.isFinite(parsed)) onTransformChange(binding.def.parsedField, parsed);
+          }
+          return;
+        }
+        if (binding.def.parsedField) {
+          const parsed = Number.parseFloat(value);
+          if (Number.isFinite(parsed)) onTransformChange(binding.def.parsedField, parsed);
+        }
       }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+      onAddAxis={(binding) => {
+        onAddPlacementField?.(binding.def.key, binding.value || binding.def.defaultValue);
       }}
+      onRemoveAxis={(binding) => {
+        if (binding.keyIndex !== null) onRemovePlacementField?.(binding.keyIndex);
+      }}
+      onResetField={onResetPlacementField}
     />
   );
 }
