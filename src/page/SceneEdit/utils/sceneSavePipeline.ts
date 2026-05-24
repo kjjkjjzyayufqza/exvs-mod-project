@@ -357,16 +357,16 @@ export async function executeStageSave(params: {
   onProgress?.({ phase: "placement", current: 1, total: 1 });
 
   // Phase 3: write CSV files
-  const gpCsv = graphicParams.map((p) => `${p.key},${p.value}`).join("\n");
+  const gpCsv = graphicParams.map((p) => `${p.key},${p.value}`).join("\r\n") + "\r\n";
   await writeTextFile(`${stageRoot}/info/graphic_param.csv`, gpCsv);
 
   if (placementHeader.length > 0 && placementRowsToSave.length > 0) {
     const headerLine = placementHeader.join(",");
     const dataLines = placementRowsToSave.map((e) => e.rawFields.join(","));
-    const placementCsv = [headerLine, ...dataLines].join("\n");
+    const placementCsv = [headerLine, ...dataLines].join("\r\n") + "\r\n";
     await writeTextFile(`${stageRoot}/info/placement.csv`, placementCsv);
   } else if (placementRowsToSave.length > 0) {
-    const placementCsv = placementRowsToSave.map((e) => e.rawFields.join(",")).join("\n");
+    const placementCsv = placementRowsToSave.map((e) => e.rawFields.join(",")).join("\r\n") + "\r\n";
     await writeTextFile(`${stageRoot}/info/placement.csv`, placementCsv);
   }
 

@@ -15,10 +15,6 @@ export const DialogLastPathKey = {
   ssbhDaeImportSourceDae: "ssbhDae.importSource.dae",
   ssbhDaeImportSourceFbx: "ssbhDae.importSource.fbx",
   ssbhDaeConvertOutputFolder: "ssbhDae.convertOutputFolder",
-  sceneEditOpenFolder: "sceneEdit.openFolder",
-  sceneEditImportFhm2d: "sceneEdit.importFhm2d",
-  sceneEditExtractFhm2dSource: "sceneEdit.extractFhm2dSource",
-  sceneEditExtractFhm2dOutput: "sceneEdit.extractFhm2dOutput",
 } as const;
 
 export type DialogLastPathKeyType = (typeof DialogLastPathKey)[keyof typeof DialogLastPathKey];

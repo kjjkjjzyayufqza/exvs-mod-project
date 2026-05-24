@@ -4,7 +4,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import * as THREE from "three";
-import { DialogLastPathKey, getDialogDefaultPath, rememberDialogSelection } from "@/utils/dialogLastPath";
 import {
   getStoredDialogDefaultPath,
   rememberStoredDialogSelection,
@@ -140,7 +139,12 @@ import { useConfigStore } from "@/store/configStore";
 import {
   DEFAULT_SCENE_GIZMO_SIZE,
   normalizeSceneGizmoSize,
-  SCENE_IMPORT_DAE_DIALOG_PATH_KEY,
+  SCENE_EXTRACT_FHM2D_OUTPUT_DIALOG_PATH_KEY,
+  SCENE_EXTRACT_FHM2D_SOURCE_DIALOG_PATH_KEY,
+  SCENE_IMPORT_DAE_CONFIG_DIALOG_PATH_KEY,
+  SCENE_IMPORT_FHM2D_DIALOG_PATH_KEY,
+  SCENE_OPEN_FOLDER_DIALOG_PATH_KEY,
+  SCENE_SAVE_FHM2D_DIALOG_PATH_KEY,
 } from "./utils/sceneEditorSettings";
 import { useSceneDirtyStore } from "./store/sceneDirtyStore";
 import { executeSaveFolderPipeline } from "./utils/sceneSaveFolderPipeline";
@@ -981,10 +985,10 @@ export default function SceneEdit() {
     try {
       const selected = await open({
         directory: true,
-        defaultPath: getDialogDefaultPath(DialogLastPathKey.sceneEditOpenFolder),
+        defaultPath: await getStoredDialogDefaultPath(SCENE_OPEN_FOLDER_DIALOG_PATH_KEY),
       });
       if (!selected || typeof selected !== "string") return;
-      rememberDialogSelection(DialogLastPathKey.sceneEditOpenFolder, selected, "directory");
+      await rememberStoredDialogSelection(SCENE_OPEN_FOLDER_DIALOG_PATH_KEY, selected, "directory");
 
       const stageRoot = `${selected}\\0\\0`;
 
@@ -1033,10 +1037,10 @@ export default function SceneEdit() {
       const selected = await open({
         multiple: false,
         filters: [{ name: "FHM2D Stage Files", extensions: ["fhm2d"] }],
-        defaultPath: getDialogDefaultPath(DialogLastPathKey.sceneEditImportFhm2d),
+        defaultPath: await getStoredDialogDefaultPath(SCENE_IMPORT_FHM2D_DIALOG_PATH_KEY),
       });
       if (!selected || typeof selected !== "string") return;
-      rememberDialogSelection(DialogLastPathKey.sceneEditImportFhm2d, selected, "file");
+      await rememberStoredDialogSelection(SCENE_IMPORT_FHM2D_DIALOG_PATH_KEY, selected, "file");
 
       setIsLoading(true);
       setImportProgress({
@@ -1075,18 +1079,18 @@ export default function SceneEdit() {
       const sourcePath = await open({
         multiple: false,
         filters: [{ name: "FHM2D Stage Files", extensions: ["fhm2d"] }],
-        defaultPath: getDialogDefaultPath(DialogLastPathKey.sceneEditExtractFhm2dSource),
+        defaultPath: await getStoredDialogDefaultPath(SCENE_EXTRACT_FHM2D_SOURCE_DIALOG_PATH_KEY),
       });
       if (!sourcePath || typeof sourcePath !== "string") return;
-      rememberDialogSelection(DialogLastPathKey.sceneEditExtractFhm2dSource, sourcePath, "file");
+      await rememberStoredDialogSelection(SCENE_EXTRACT_FHM2D_SOURCE_DIALOG_PATH_KEY, sourcePath, "file");
 
       const outputDir = await open({
         directory: true,
         title: "Select output folder",
-        defaultPath: getDialogDefaultPath(DialogLastPathKey.sceneEditExtractFhm2dOutput),
+        defaultPath: await getStoredDialogDefaultPath(SCENE_EXTRACT_FHM2D_OUTPUT_DIALOG_PATH_KEY),
       });
       if (!outputDir || typeof outputDir !== "string") return;
-      rememberDialogSelection(DialogLastPathKey.sceneEditExtractFhm2dOutput, outputDir, "directory");
+      await rememberStoredDialogSelection(SCENE_EXTRACT_FHM2D_OUTPUT_DIALOG_PATH_KEY, outputDir, "directory");
 
       const extractSteps: SaveStepInfo[] = [
         { id: "extract", label: "Extract FHM2D binary", status: "running" },
@@ -1346,8 +1350,10 @@ export default function SceneEdit() {
 
     const outputPath = await save({
       filters: [{ name: "FHM2D File", extensions: ["fhm2d"] }],
+      defaultPath: await getStoredDialogDefaultPath(SCENE_SAVE_FHM2D_DIALOG_PATH_KEY),
     });
     if (!outputPath) return;
+    await rememberStoredDialogSelection(SCENE_SAVE_FHM2D_DIALOG_PATH_KEY, outputPath, "file");
 
     setSaveProgressState({
       open: true,
@@ -2334,13 +2340,13 @@ export default function SceneEdit() {
     const selected = await open({
       multiple: true,
       filters: [{ name: "Collada DAE", extensions: ["dae"] }],
-      defaultPath: await getStoredDialogDefaultPath(SCENE_IMPORT_DAE_DIALOG_PATH_KEY),
+      defaultPath: await getStoredDialogDefaultPath(SCENE_IMPORT_DAE_CONFIG_DIALOG_PATH_KEY),
     });
     if (!selected) return;
     const paths = Array.isArray(selected) ? selected : [selected];
     const lastPath = paths[paths.length - 1];
     if (lastPath) {
-      await rememberStoredDialogSelection(SCENE_IMPORT_DAE_DIALOG_PATH_KEY, lastPath, "file");
+      await rememberStoredDialogSelection(SCENE_IMPORT_DAE_CONFIG_DIALOG_PATH_KEY, lastPath, "file");
     }
 
     const entries: DaeImportEntry[] = paths.map((filePath) => {

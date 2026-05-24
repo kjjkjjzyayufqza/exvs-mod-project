@@ -378,8 +378,17 @@ fn build_meta_blob(
     let mut meta = Vec::new();
 
     // ── Meta Header (0x24 bytes) ──
+    // Offset 0x00: magic
+    // Offset 0x04-0x0F: reserved zeros
+    // Offset 0x10: SubFileStructure offset (patched below)
+    // Offset 0x14: reserved zero
+    // Offset 0x18: file_type_count
+    // Offset 0x1C: file_count
+    // Offset 0x20: unk_count
     push_u32_le(&mut meta, magic);
-    meta.extend_from_slice(&[0u8; 20]);
+    meta.extend_from_slice(&[0u8; 12]); // offset 0x04..0x0F
+    push_u32_le(&mut meta, 0);          // offset 0x10: placeholder for structure offset
+    push_u32_le(&mut meta, 0);          // offset 0x14
     push_u32_le(&mut meta, file_type_count);
     push_u32_le(&mut meta, file_count);
     push_u32_le(&mut meta, unk_count);
@@ -399,6 +408,10 @@ fn build_meta_blob(
     for &file_idx in sorted_order {
         write_sub_entry_header(&mut meta, &files[file_idx], start_offsets[file_idx]);
     }
+
+    // ── Patch SubFileStructure offset at meta[0x10] ──
+    let structure_offset = meta.len() as u32;
+    meta[0x10..0x14].copy_from_slice(&structure_offset.to_le_bytes());
 
     // ── SubFileStructure binary ──
     meta.extend_from_slice(structure_bytes);
@@ -1176,5 +1189,61 @@ mod tests {
             eprintln!("  [{name}] PASS: {} files, orig {} bytes → repacked {} bytes",
                 repack_result.total_files, orig_bytes.len(), repacked_bytes.len());
         }
+    }
+
+    #[test]
+    fn test_16f73c97_repack_meta_matches_original() {
+        let structure_path = r"E:\XB\解包\com\test\16F73C97_structure.json";
+        if !Path::new(structure_path).exists() {
+            eprintln!("SKIP: test file not present");
+            return;
+        }
+        let output_path = r"E:\XB\解包\com\test\16F73C97_repacked_test.fhm2d";
+        let original_path = r"E:\XB\解包\com\test\16F73C97.fhm2d";
+
+        let result = repack_fhm2d_from_structure(structure_path, output_path, false, None);
+        assert!(result.is_ok(), "Repack failed: {:?}", result.err());
+        let info = result.unwrap();
+        eprintln!("Repacked: {} bytes", info.output_size);
+
+        let orig_bytes = fs::read(original_path).unwrap();
+        let repack_bytes = fs::read(output_path).unwrap();
+
+        fn read_u32(b: &[u8], off: usize) -> u32 {
+            u32::from_le_bytes(b[off..off+4].try_into().unwrap())
+        }
+
+        let orig_meta_comp_size = read_u32(&orig_bytes, 0x20) as usize;
+        let repack_meta_comp_size = read_u32(&repack_bytes, 0x20) as usize;
+
+        use flate2::read::DeflateDecoder;
+        use std::io::Read;
+        fn decompress(data: &[u8]) -> Vec<u8> {
+            let mut decoder = DeflateDecoder::new(data);
+            let mut out = Vec::new();
+            decoder.read_to_end(&mut out).unwrap();
+            out
+        }
+
+        let orig_meta = decompress(&orig_bytes[0x30..0x30+orig_meta_comp_size]);
+        let repack_meta = decompress(&repack_bytes[0x30..0x30+repack_meta_comp_size]);
+
+        assert_eq!(orig_meta.len(), repack_meta.len(), "Meta sizes differ: orig={} repack={}", orig_meta.len(), repack_meta.len());
+
+        let mut diffs = Vec::new();
+        for i in 0..orig_meta.len() {
+            if orig_meta[i] != repack_meta[i] {
+                diffs.push((i, orig_meta[i], repack_meta[i]));
+            }
+        }
+        if !diffs.is_empty() {
+            eprintln!("Found {} byte differences in meta:", diffs.len());
+            for (off, o, r) in diffs.iter().take(30) {
+                eprintln!("  offset 0x{:04X}: orig=0x{:02X} repack=0x{:02X}", off, o, r);
+            }
+        }
+        assert_eq!(diffs.len(), 0, "Meta blobs differ at {} positions", diffs.len());
+
+        let _ = fs::remove_file(output_path);
     }
 }

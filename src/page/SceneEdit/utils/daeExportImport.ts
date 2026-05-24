@@ -9,7 +9,11 @@ import {
   getStoredDialogDefaultPath,
   rememberStoredDialogSelection,
 } from "@/utils/dialogDefaultPathStore";
-import { SCENE_IMPORT_DAE_DIALOG_PATH_KEY } from "./sceneEditorSettings";
+import {
+  SCENE_EXPORT_DAE_FILE_DIALOG_PATH_KEY,
+  SCENE_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY,
+  SCENE_IMPORT_DAE_QUICK_DIALOG_PATH_KEY,
+} from "./sceneEditorSettings";
 
 export interface DAEImportResult {
   fileName: string;
@@ -59,7 +63,7 @@ export async function importDAEFiles(multiple = false): Promise<DAEImportResult[
   const selected = await open({
     multiple,
     filters: [{ name: "Collada DAE", extensions: ["dae"] }],
-    defaultPath: await getStoredDialogDefaultPath(SCENE_IMPORT_DAE_DIALOG_PATH_KEY),
+    defaultPath: await getStoredDialogDefaultPath(SCENE_IMPORT_DAE_QUICK_DIALOG_PATH_KEY),
   });
 
   if (!selected) return [];
@@ -67,7 +71,7 @@ export async function importDAEFiles(multiple = false): Promise<DAEImportResult[
   const paths = Array.isArray(selected) ? selected : [selected];
   const lastPath = paths[paths.length - 1];
   if (lastPath) {
-    await rememberStoredDialogSelection(SCENE_IMPORT_DAE_DIALOG_PATH_KEY, lastPath, "file");
+    await rememberStoredDialogSelection(SCENE_IMPORT_DAE_QUICK_DIALOG_PATH_KEY, lastPath, "file");
   }
 
   return loadDAEFromPaths(paths);
@@ -103,11 +107,16 @@ export async function exportObjectAsDAE(
   object: THREE.Object3D,
   defaultName = "export",
 ): Promise<string | null> {
+  const storedDir = await getStoredDialogDefaultPath(SCENE_EXPORT_DAE_FILE_DIALOG_PATH_KEY);
+  const defaultPath = storedDir
+    ? `${storedDir.replace(/[/\\]+$/, "")}\\${defaultName}.dae`
+    : `${defaultName}.dae`;
   const filePath = await save({
     filters: [{ name: "Collada DAE", extensions: ["dae"] }],
-    defaultPath: `${defaultName}.dae`,
+    defaultPath,
   });
   if (!filePath) return null;
+  await rememberStoredDialogSelection(SCENE_EXPORT_DAE_FILE_DIALOG_PATH_KEY, filePath, "file");
 
   const exporter = new ColladaExporter();
   const content = parseDAE(exporter, object);
@@ -122,8 +131,10 @@ export async function exportMultipleObjectsAsDAE(
   const outputDir = await open({
     directory: true,
     title: "Select output folder for DAE export",
+    defaultPath: await getStoredDialogDefaultPath(SCENE_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY),
   });
   if (!outputDir) return [];
+  await rememberStoredDialogSelection(SCENE_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY, outputDir, "directory");
 
   const exporter = new ColladaExporter();
   const exported: string[] = [];
@@ -171,8 +182,10 @@ export async function batchExportStageDae(
   const outputDir = await open({
     directory: true,
     title: "Select output folder for batch DAE export",
+    defaultPath: await getStoredDialogDefaultPath(SCENE_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY),
   });
   if (!outputDir) return null;
+  await rememberStoredDialogSelection(SCENE_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY, outputDir, "directory");
 
   const result = await invoke<BatchDaeExportResult>("stage_batch_export_dae", {
     outputDir,
@@ -201,11 +214,17 @@ export async function exportSingleStageDae(
     exportTextures?: boolean;
   },
 ): Promise<{ path: string; meshCount: number; vertexCount: number } | null> {
+  const baseName = rootPath.split(/[/\\]/).pop() ?? "export";
+  const storedDir = await getStoredDialogDefaultPath(SCENE_EXPORT_DAE_FILE_DIALOG_PATH_KEY);
+  const defaultPath = storedDir
+    ? `${storedDir.replace(/[/\\]+$/, "")}\\${baseName}.dae`
+    : `${baseName}.dae`;
   const outputPath = await save({
     filters: [{ name: "Collada DAE", extensions: ["dae"] }],
-    defaultPath: `${rootPath.split(/[/\\]/).pop() ?? "export"}.dae`,
+    defaultPath,
   });
   if (!outputPath) return null;
+  await rememberStoredDialogSelection(SCENE_EXPORT_DAE_FILE_DIALOG_PATH_KEY, outputPath, "file");
 
   const result = await invoke<{ path: string; meshCount: number; vertexCount: number }>(
     "stage_export_single_dae",

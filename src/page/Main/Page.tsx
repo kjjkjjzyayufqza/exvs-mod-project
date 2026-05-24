@@ -1,70 +1,47 @@
-import { Button } from "@/components/ui/button"
-import { useEffect, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
-import { readFile, writeFile } from "@tauri-apps/plugin-fs";
-import { Resource, invoke } from '@tauri-apps/api/core';
-import { useConfigStore } from "../../store/configStore";
-import JsonView from "@uiw/react-json-view";
+import { useMemo } from "react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useConfigStore } from "@/store/configStore";
+import { HomePageHero } from "./components/HomePageHero";
+import { ModuleLauncherGrid } from "./components/ModuleLauncherGrid";
+import { SetupStatusCard, type SetupPathItem } from "./components/SetupStatusCard";
+import { WorkflowStepsCard } from "./components/WorkflowStepsCard";
+
+const SETUP_PATH_KEYS: Omit<SetupPathItem, "path">[] = [
+  { key: "obDplCachePath", label: "OB DPL Cache" },
+  { key: "obModPath", label: "Mod Folder" },
+  { key: "extractOutputPath", label: "Extract Output" },
+];
 
 export default function MainPage() {
-  const { store } = useConfigStore();
-  const get = async () => {
-    const selected = await open({ multiple: false, directory: false });
-    let timeList = []
-    for (let i = 0; i < 1; i++) {
-      console.log(`Test ${i + 1}`); // 输出测试次数
-      const startTime = performance.now();
-      const byte = await readFile(selected as any);
-      const endTime = performance.now();
-      const duration = endTime - startTime; // 计算持续时间
-      timeList.push(duration)
-    }
-    // 计算平均时间
-    const average = timeList.reduce((a, b) => a + b) / timeList.length;
-    console.log(`Average time: ${average.toFixed(2)} ms`); // 输出平均时间
-  };
+  const { obDplCachePath, obModPath, extractOutputPath } = useConfigStore();
 
-  const invokeTest = async () => {
-    const selected = await open({ multiple: false, directory: false });
-    let timeList = []
-    for (let i = 0; i < 1; i++) {
-      console.log(`Test ${i + 1}`); // 输出测试次数
-      const startTime = performance.now();
-      const content = await invoke("read_file", { path: selected });
-      const endTime = performance.now();
-      const duration = endTime - startTime; // 计算持续时间
-      timeList.push(duration)
-    }
-    // 计算平均时间
-    const average = timeList.reduce((a, b) => a + b) / timeList.length;
-    console.log(`Average time: ${average.toFixed(2)} ms`); // 输出平均时间
-  }
+  const setupItems = useMemo<SetupPathItem[]>(
+    () =>
+      SETUP_PATH_KEYS.map((item, index) => {
+        const paths = [obDplCachePath, obModPath, extractOutputPath];
+        return { ...item, path: paths[index] ?? "" };
+      }),
+    [obDplCachePath, obModPath, extractOutputPath],
+  );
 
-  const [savedConfig, setSavedConfig] = useState<any>({});
-  const getConfig = async () => {
-    const data = await store?.entries();
-    setSavedConfig(data ?? {})
-  }
-
-
-  useEffect(() => {
-    getConfig()
-  }, []);
+  const configuredCount = setupItems.filter((item) => item.path.trim().length > 0).length;
 
   return (
-    <div className="h-full">
-      Hello World
-      <div>
-        <JsonView
-          value={savedConfig}
-          displayDataTypes={false}
+    <ScrollArea className="h-full custom-scrollbar-thin">
+      <div className="mx-auto flex max-w-6xl flex-col gap-8 pb-8">
+        <HomePageHero
+          configuredCount={configuredCount}
+          totalSetupItems={setupItems.length}
         />
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
+          <ModuleLauncherGrid />
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-0 lg:self-start">
+            <SetupStatusCard items={setupItems} />
+            <WorkflowStepsCard />
+          </aside>
+        </div>
       </div>
-      <Button>
-        Save Test
-      </Button>
-      <Button onClick={get}>Read file test</Button>
-      <Button onClick={invokeTest}>Invoke Test</Button>
-    </div>
+    </ScrollArea>
   );
 }
