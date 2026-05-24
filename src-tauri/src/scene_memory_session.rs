@@ -228,38 +228,55 @@ impl SceneMemorySession {
                     .as_ref()
                     .map(|c| c.base_filename.as_str())
                     .unwrap_or(&import.name);
+                // Model files go inside {base}/0/ subfolder
+                let model_dir = format!("{base}/0");
                 artifacts.push(SaveArtifact {
-                    relative_path: format!("{base}/model.numdlb"),
+                    relative_path: format!("{model_dir}/model.numdlb"),
                     data: ssbh.numdlb.clone(),
                 });
                 artifacts.push(SaveArtifact {
-                    relative_path: format!("{base}/model.numshb"),
+                    relative_path: format!("{model_dir}/model.numshb"),
                     data: ssbh.numshb.clone(),
                 });
                 if let Some(ref nusktb) = ssbh.nusktb {
                     artifacts.push(SaveArtifact {
-                        relative_path: format!("{base}/model.nusktb"),
+                        relative_path: format!("{model_dir}/model.nusktb"),
                         data: nusktb.clone(),
                     });
                 }
                 artifacts.push(SaveArtifact {
-                    relative_path: format!("{base}/model.numatb"),
+                    relative_path: format!("{model_dir}/model__nust__.numatb"),
                     data: ssbh.numatb.clone(),
                 });
                 if let Some(ref maya) = ssbh.maya_numatb {
                     artifacts.push(SaveArtifact {
-                        relative_path: format!("{base}/model_maya.numatb"),
+                        relative_path: format!("{model_dir}/model__maya__.numatb"),
                         data: maya.clone(),
                     });
                 }
-                artifacts.push(SaveArtifact {
-                    relative_path: format!("{base}/model.jnttbl"),
-                    data: ssbh.jnttbl.clone(),
-                });
+                let write_jnttbl = import
+                    .config
+                    .ssbh_config
+                    .as_ref()
+                    .map(|c| c.write_jnttbl)
+                    .unwrap_or(true);
+                if write_jnttbl && !ssbh.jnttbl.is_empty() {
+                    artifacts.push(SaveArtifact {
+                        relative_path: format!("{model_dir}/model.jnttbl"),
+                        data: ssbh.jnttbl.clone(),
+                    });
+                }
             }
+            // HKT goes at {base}/{name}.hkt (model folder level, not inside /0)
             if let Some(ref hkt) = import.hkt_bytes {
+                let base = import
+                    .config
+                    .ssbh_config
+                    .as_ref()
+                    .map(|c| c.base_filename.as_str())
+                    .unwrap_or(&import.name);
                 artifacts.push(SaveArtifact {
-                    relative_path: format!("{}.hkt", import.name),
+                    relative_path: format!("{base}/{}.hkt", import.name),
                     data: hkt.clone(),
                 });
             }
@@ -503,13 +520,13 @@ mod tests {
 
         let artifacts = s.collect_save_artifacts();
         let paths: Vec<&str> = artifacts.iter().map(|a| a.relative_path.as_str()).collect();
-        assert!(paths.contains(&"mymodel/model.numdlb"));
-        assert!(paths.contains(&"mymodel/model.numshb"));
-        assert!(paths.contains(&"mymodel/model.nusktb"));
-        assert!(paths.contains(&"mymodel/model.numatb"));
-        assert!(paths.contains(&"mymodel/model.jnttbl"));
-        assert!(paths.contains(&"test_model.hkt"));
-        assert!(!paths.contains(&"mymodel/model_maya.numatb"));
+        assert!(paths.contains(&"mymodel/0/model.numdlb"));
+        assert!(paths.contains(&"mymodel/0/model.numshb"));
+        assert!(paths.contains(&"mymodel/0/model.nusktb"));
+        assert!(paths.contains(&"mymodel/0/model__nust__.numatb"));
+        assert!(paths.contains(&"mymodel/0/model.jnttbl"));
+        assert!(paths.contains(&"mymodel/test_model.hkt"));
+        assert!(!paths.contains(&"mymodel/0/model__maya__.numatb"));
     }
 
     #[test]
@@ -566,6 +583,96 @@ mod tests {
             .with_session(&id, |s| Ok(s.pending_imports.len()))
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn collect_save_artifacts_with_maya_profile() {
+        let mut s = new_session();
+        let id = s.add_import("test_model".into(), vec![]);
+        {
+            let import = s.find_import_mut(&id).unwrap();
+            import.config.convert_to_ssbh = true;
+            import.config.ssbh_config = Some(SsbhConvertConfig {
+                base_filename: "obj_a".into(),
+                scale_factor: 1.0,
+                up_axis: "y_up".into(),
+                write_numdlb: true,
+                write_numshb: true,
+                write_nusktb: false,
+                write_numatb: true,
+                write_jnttbl: false,
+                write_maya_profile: true,
+                material_template: None,
+            });
+        }
+        s.store_ssbh_artifacts(
+            &id,
+            SsbhArtifacts {
+                numdlb: vec![1],
+                numshb: vec![2],
+                nusktb: None,
+                numatb: vec![4],
+                maya_numatb: Some(vec![99]),
+                jnttbl: vec![],
+            },
+        )
+        .unwrap();
+
+        let artifacts = s.collect_save_artifacts();
+        let paths: Vec<&str> = artifacts.iter().map(|a| a.relative_path.as_str()).collect();
+        assert!(paths.contains(&"obj_a/0/model.numdlb"));
+        assert!(paths.contains(&"obj_a/0/model.numshb"));
+        assert!(!paths.iter().any(|p| p.contains("nusktb")));
+        assert!(paths.contains(&"obj_a/0/model__nust__.numatb"));
+        assert!(paths.contains(&"obj_a/0/model__maya__.numatb"));
+        assert!(!paths.iter().any(|p| p.contains("jnttbl")));
+    }
+
+    #[test]
+    fn hkt_placed_at_model_root_not_inside_zero() {
+        let mut s = new_session();
+        let id = s.add_import("collision_obj".into(), vec![]);
+        {
+            let import = s.find_import_mut(&id).unwrap();
+            import.config.convert_to_ssbh = true;
+            import.config.ssbh_config = Some(SsbhConvertConfig {
+                base_filename: "wall".into(),
+                scale_factor: 1.0,
+                up_axis: "y_up".into(),
+                write_numdlb: true,
+                write_numshb: true,
+                write_nusktb: false,
+                write_numatb: false,
+                write_jnttbl: false,
+                write_maya_profile: false,
+                material_template: None,
+            });
+        }
+        s.store_ssbh_artifacts(
+            &id,
+            SsbhArtifacts {
+                numdlb: vec![1],
+                numshb: vec![2],
+                nusktb: None,
+                numatb: vec![],
+                maya_numatb: None,
+                jnttbl: vec![],
+            },
+        )
+        .unwrap();
+        s.store_hkt_bytes(&id, vec![0xAA, 0xBB]).unwrap();
+
+        let artifacts = s.collect_save_artifacts();
+        let paths: Vec<&str> = artifacts.iter().map(|a| a.relative_path.as_str()).collect();
+        assert!(
+            paths.contains(&"wall/collision_obj.hkt"),
+            "HKT should be at model folder root, not inside /0. Got: {:?}",
+            paths
+        );
+        assert!(
+            !paths.iter().any(|p| p.contains("/0/") && p.ends_with(".hkt")),
+            "HKT must NOT be inside /0 subfolder"
+        );
     }
 
     #[test]

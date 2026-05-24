@@ -50,6 +50,7 @@ pub fn run() {
             commands::nutexb_export_png,
             commands::nutexb_png_base64,
             commands::nutexb_thumbnail_base64,
+            commands::nutexb_preview_base64,
             commands::nutexb_png_bytes,
             commands::nutexb_rgba_bytes,
             commands::nutexb_compressed_bytes,

@@ -94,6 +94,11 @@ export function serializeObjectAsDAE(object: THREE.Object3D): string {
   return parseDAE(exporter, object);
 }
 
+export function serializeDaeToBytes(object: THREE.Object3D): number[] {
+  const content = serializeObjectAsDAE(object);
+  return Array.from(new TextEncoder().encode(content));
+}
+
 export async function writeObjectAsDAE(
   object: THREE.Object3D,
   filePath: string,

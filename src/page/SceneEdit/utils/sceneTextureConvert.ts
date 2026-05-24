@@ -10,17 +10,24 @@ export interface TextureConvertResult {
   nutexbName: string;
 }
 
-/**
- * Convert a PNG file to nutexb using the Rust backend.
- * Uses `card_icon_replace_from_png_with_dds_format` which handles:
- *   PNG → DDS (with specified format) → nutexb file
- */
+const DDS_FORMAT_TO_RUST: Record<DdsFormat, string> = {
+  BC7_UNORM: "BC7RgbaUnorm",
+  BC7_UNORM_SRGB: "BC7RgbaUnormSrgb",
+  BC5_UNORM: "BC5RgUnorm",
+  BC4_UNORM: "BC4RUnorm",
+  BC1_UNORM: "BC1RgbaUnorm",
+  BC3_UNORM: "BC3RgbaUnorm",
+};
+
+export function ddsFormatToRust(format: DdsFormat): string {
+  return DDS_FORMAT_TO_RUST[format];
+}
+
 export async function convertPngToNutexb(params: {
   pngPath: string;
   outputNutexbPath: string;
   ddsFormat: DdsFormat;
 }): Promise<TextureConvertResult> {
-  // Use a temp convert dir for intermediate DDS files
   const localData = await appLocalDataDir();
   const convertDir = `${localData}/scene_texture_convert`;
 
@@ -32,23 +39,41 @@ export async function convertPngToNutexb(params: {
     nutexbPath: params.outputNutexbPath,
     convertDir,
     pngPath: params.pngPath,
-    ddsFormat: params.ddsFormat,
+    ddsFormat: ddsFormatToRust(params.ddsFormat),
   });
 }
 
-/**
- * Open file picker for PNG, convert to nutexb at target path.
- * Returns null if user cancels.
- */
+export async function convertImageToNutexb(params: {
+  sourcePath: string;
+  ddsFormat: DdsFormat;
+}): Promise<TextureConvertResult> {
+  const localData = await appLocalDataDir();
+  const convertDir = `${localData}/scene_texture_convert`;
+  const filename = params.sourcePath.split(/[/\\]/).pop() ?? "texture";
+  const nutexbFilename = filename.replace(/\.[^.]+$/, ".nutexb");
+  const outputNutexbPath = `${convertDir}/${nutexbFilename}`;
+
+  if (!(await exists(convertDir))) {
+    await mkdir(convertDir, { recursive: true });
+  }
+
+  return invoke<TextureConvertResult>("card_icon_replace_from_png_with_dds_format", {
+    nutexbPath: outputNutexbPath,
+    convertDir,
+    pngPath: params.sourcePath,
+    ddsFormat: ddsFormatToRust(params.ddsFormat),
+  });
+}
+
 export async function importPngAsNutexb(params: {
   outputDir: string;
   textureName: string;
   ddsFormat: DdsFormat;
 }): Promise<TextureConvertResult | null> {
   const selected = await open({
-    title: "Select PNG texture",
+    title: "Select texture image",
     multiple: false,
-    filters: [{ name: "PNG Image", extensions: ["png"] }],
+    filters: [{ name: "Images", extensions: ["png", "dds", "tga"] }],
   });
 
   if (typeof selected !== "string" || !selected.trim()) return null;

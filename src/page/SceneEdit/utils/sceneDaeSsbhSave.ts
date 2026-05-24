@@ -39,7 +39,7 @@ function joinTauriPath(...parts: string[]): string {
 }
 
 export function buildImportedDaeOutputDir(stageRoot: string, baseName: string): string {
-  return joinTauriPath(stageRoot, baseName);
+  return joinTauriPath(stageRoot, baseName, "0");
 }
 
 function hasFolderName(existingFolderNames: readonly string[], folderName: string): boolean {

@@ -16,18 +16,19 @@ import {
 } from "./sceneSavePipeline";
 import {
   buildImportedDaeStageRegistrationPlan,
-  buildImportedDaeSsbhConvertParams,
-  createImportedDaeJnttblBytes,
   createImportedDaePlacementRow,
 } from "./sceneDaeSsbhSave";
 import {
   resolveStagePackStructureTarget,
 } from "./sceneStageStructure";
 import { buildDeletePreview, executeDelete } from "./sceneDeleteConfirm";
-import { sceneSaveAsFolder } from "./sceneSessionService";
-import { ssbhAnalyzeDae, ssbhConvertDaeToSsbh } from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
-import { writeObjectAsDAE } from "./daeExportImport";
-import { mkdir, writeFile } from "@tauri-apps/plugin-fs";
+import {
+  sceneSaveAsFolder,
+  sceneImportDae,
+  sceneConfigureImport,
+  sceneExecuteImport,
+} from "./sceneSessionService";
+import { serializeDaeToBytes } from "./daeExportImport";
 
 function joinTauriPath(...parts: string[]): string {
   return parts
@@ -38,11 +39,6 @@ function joinTauriPath(...parts: string[]): string {
     })
     .filter(Boolean)
     .join("/");
-}
-
-function fileExtension(name: string): string {
-  const index = name.lastIndexOf(".");
-  return index >= 0 ? name.slice(index).toLowerCase() : "";
 }
 
 function allocateAllFolderPlans(
@@ -67,37 +63,34 @@ function allocateAllFolderPlans(
   });
 }
 
-async function convertSingleDae(plan: DaeConversionPlan): Promise<DaeConversionOutcome> {
+async function convertSingleDaeViaSession(
+  plan: DaeConversionPlan,
+  sessionId: string,
+): Promise<DaeConversionOutcome> {
   try {
-    await mkdir(plan.outputDir, { recursive: true });
-    const transformedDaePath = `${plan.outputDir}/${plan.baseFilename}.dae`;
     const exportObject = createBakedImportedDaeExportObject(plan.object, {
       includeActorTransform: false,
     });
-    await writeObjectAsDAE(exportObject, transformedDaePath);
-    const analysis = await ssbhAnalyzeDae(transformedDaePath);
-    if (!analysis.canConvert) {
-      return {
-        status: "error",
-        objectName: plan.object.name,
-        error: `Cannot convert: ${analysis.blockingErrors.join("; ")}`,
-      };
-    }
-    const convertParams = buildImportedDaeSsbhConvertParams({
-      stageRoot: plan.outputDir.replace(/\/[^/]+$/, ""),
-      objectName: plan.baseFilename,
-      geometryNames: analysis.geometryNames,
-      scaleFactor: 1,
-      upAxis: "y_up",
+    const daeBytes = serializeDaeToBytes(exportObject);
+    const importId = await sceneImportDae(sessionId, daeBytes, plan.baseFilename);
+    await sceneConfigureImport(sessionId, importId, {
+      loadToScene: true,
+      convertToSsbh: true,
+      generateHkt: false,
+      ssbhConfig: {
+        baseFilename: plan.baseFilename,
+        scaleFactor: 1,
+        upAxis: "y_up",
+        writeNumdlb: true,
+        writeNumshb: true,
+        writeNusktb: true,
+        writeNumatb: true,
+        writeJnttbl: true,
+        writeMayaProfile: true,
+        materialTemplate: null,
+      },
     });
-    const convertResult = await ssbhConvertDaeToSsbh({
-      daePath: transformedDaePath,
-      ...convertParams,
-    });
-    await writeFile(
-      `${plan.outputDir}/${plan.baseFilename}.jnttbl`,
-      createImportedDaeJnttblBytes(convertResult.stats.bones),
-    );
+    await sceneExecuteImport(sessionId, importId);
     return {
       status: "ok",
       result: { folderName: plan.folderName, transform: plan.object.transform },
@@ -230,7 +223,7 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
     let completed = 0;
     const outcomes = await Promise.all(
       plans.map(async (plan) => {
-        const outcome = await convertSingleDae(plan);
+        const outcome = await convertSingleDaeViaSession(plan, sceneSessionId ?? "");
         completed++;
         emitStep(onProgress, "convert", `Converting new objects (${completed}/${plans.length})...`, "running");
         return outcome;

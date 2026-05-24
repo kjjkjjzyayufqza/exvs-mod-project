@@ -14,7 +14,7 @@ import {
 } from "../daeSsbhTypes";
 import type { MatlEntryJson } from "../types";
 import { COMMON_NUMATB_PARAM_IDS, createDefaultAttributeData, isTexturePathParamId } from "../store/numatbTemplateStoreHelpers";
-import { TexturePathPicker } from "@/page/SceneEdit/components/TexturePathPicker";
+import { SceneTextureSelectPicker } from "@/page/SceneEdit/components/SceneTextureSelectPicker";
 import { flattenEntryToAttributes } from "../store/matlEntryFlat";
 import {
   ssbhEditorPortalThemeClass,
@@ -149,7 +149,7 @@ function AttributeValueEditor({
     case "String":
       if (isTexturePathParamId(paramId)) {
         return (
-          <TexturePathPicker
+          <SceneTextureSelectPicker
             value={data.String ?? ""}
             paramId={paramId}
             onChange={(basename) => onChange({ String: basename })}
@@ -166,7 +166,7 @@ function AttributeValueEditor({
     case "String1":
       if (isTexturePathParamId(paramId)) {
         return (
-          <TexturePathPicker
+          <SceneTextureSelectPicker
             value={data.String1 ?? ""}
             paramId={paramId}
             onChange={(basename) => onChange({ String1: basename })}

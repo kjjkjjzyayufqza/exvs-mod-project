@@ -210,7 +210,16 @@ pub fn nutexb_to_png_base64(input_path: &str) -> Result<String, String> {
 
 /// Decodes nutexb to a small PNG thumbnail (max 64px) and returns as base64.
 pub fn nutexb_thumbnail_base64(input_path: &str) -> Result<String, String> {
-    let (w, h, rgba) = nutexb_to_rgba_from_path(input_path, Some(64))?;
+    nutexb_to_png_base64_at_max_dim(input_path, 64)
+}
+
+/// Decodes nutexb to a medium PNG preview (max 512px) and returns as base64.
+pub fn nutexb_preview_base64(input_path: &str) -> Result<String, String> {
+    nutexb_to_png_base64_at_max_dim(input_path, 512)
+}
+
+fn nutexb_to_png_base64_at_max_dim(input_path: &str, max_dim: u32) -> Result<String, String> {
+    let (w, h, rgba) = nutexb_to_rgba_from_path(input_path, Some(max_dim))?;
     let img = RgbaImage::from_raw(w, h, rgba)
         .ok_or_else(|| "Failed to create image from RGBA data".to_string())?;
     let mut buf = Vec::new();

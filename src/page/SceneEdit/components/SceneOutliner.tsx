@@ -18,6 +18,7 @@ import {
   Ungroup,
   Sparkles,
   Component,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -44,6 +45,7 @@ interface SceneOutlinerProps {
   onFocusSelected?: () => void;
   onClearSelection?: () => void;
   onSelectAll?: (ids: string[]) => void;
+  onGenerateHkt?: (ids: string[]) => void;
 }
 
 export function SceneOutliner({
@@ -55,6 +57,7 @@ export function SceneOutliner({
   onFocusSelected,
   onClearSelection,
   onSelectAll,
+  onGenerateHkt,
 }: SceneOutlinerProps) {
   const {
     selectedIds,
@@ -159,6 +162,7 @@ export function SceneOutliner({
                 toggleLock={toggleLock}
                 onDuplicate={onDuplicate}
                 onDelete={onDelete}
+                onGenerateHkt={onGenerateHkt}
               />
             ))}
             <OutlinerNode
@@ -173,6 +177,7 @@ export function SceneOutliner({
               toggleLock={toggleLock}
               onDuplicate={onDuplicate}
               onDelete={onDelete}
+              onGenerateHkt={onGenerateHkt}
             />
           </div>
         </ScrollArea>
@@ -253,6 +258,7 @@ function GroupNode({
   toggleLock,
   onDuplicate,
   onDelete,
+  onGenerateHkt,
 }: {
   group: OutlinerGroup;
   root: StageTreeNode;
@@ -266,6 +272,7 @@ function GroupNode({
   toggleLock: (id: string) => void;
   onDuplicate?: (ids: string[]) => void;
   onDelete?: (ids: string[]) => void;
+  onGenerateHkt?: (ids: string[]) => void;
 }) {
   const childNodes = useMemo(() => {
     const findNode = (node: StageTreeNode, id: string): StageTreeNode | null => {
@@ -322,6 +329,7 @@ function GroupNode({
                   toggleLock={toggleLock}
                   onDuplicate={onDuplicate}
                   onDelete={onDelete}
+                  onGenerateHkt={onGenerateHkt}
                 />
               ))}
             </div>
@@ -350,6 +358,7 @@ function OutlinerNode({
   toggleLock,
   onDuplicate,
   onDelete,
+  onGenerateHkt,
 }: {
   node: StageTreeNode;
   depth: number;
@@ -362,6 +371,7 @@ function OutlinerNode({
   toggleLock: (id: string) => void;
   onDuplicate?: (ids: string[]) => void;
   onDelete?: (ids: string[]) => void;
+  onGenerateHkt?: (ids: string[]) => void;
 }) {
   const [expanded, setExpanded] = useState(depth < 2);
   const hasChildren = node.children && node.children.length > 0;
@@ -395,6 +405,7 @@ function OutlinerNode({
           toggleLock={toggleLock}
           onDuplicate={onDuplicate}
           onDelete={onDelete}
+          onGenerateHkt={onGenerateHkt}
           hasChildren={hasChildren}
           expanded={expanded}
           onToggle={() => setExpanded((v) => !v)}
@@ -430,6 +441,7 @@ function OutlinerNode({
           toggleLock={toggleLock}
           onDuplicate={onDuplicate}
           onDelete={onDelete}
+          onGenerateHkt={onGenerateHkt}
         />
       ))}
     </div>
@@ -447,6 +459,7 @@ function OutlinerNodeRow({
   toggleLock,
   onDuplicate,
   onDelete,
+  onGenerateHkt,
   hasChildren,
   expanded,
   onToggle,
@@ -461,6 +474,7 @@ function OutlinerNodeRow({
   toggleLock: (id: string) => void;
   onDuplicate?: (ids: string[]) => void;
   onDelete?: (ids: string[]) => void;
+  onGenerateHkt?: (ids: string[]) => void;
   hasChildren?: boolean;
   expanded?: boolean;
   onToggle?: () => void;
@@ -553,6 +567,15 @@ function OutlinerNodeRow({
           {locked ? <Unlock className="mr-2 h-3.5 w-3.5" /> : <Lock className="mr-2 h-3.5 w-3.5" />}
           {locked ? "Unlock" : "Lock"}
         </ContextMenuItem>
+        {node.role === "imported_dae" && onGenerateHkt && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem onClick={() => onGenerateHkt([node.id])}>
+              <Shield className="mr-2 h-3.5 w-3.5" />
+              Generate HKT
+            </ContextMenuItem>
+          </>
+        )}
         <ContextMenuSeparator />
         <ContextMenuItem onClick={() => onDelete?.([node.id])} className="text-destructive">
           <Trash2 className="mr-2 h-3.5 w-3.5" />

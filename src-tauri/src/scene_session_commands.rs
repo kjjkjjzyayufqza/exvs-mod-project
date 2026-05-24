@@ -580,11 +580,30 @@ pub async fn scene_generate_hkt(
     })?;
 
     eprintln!("[scene_generate_hkt] generated {} bytes", hkt_bytes.len());
+
+    let filter_path = havok_cli::HavokCliConfig::detect()
+        .map(|c| c.filter_manager_path.clone())
+        .unwrap_or_default();
+    let hkt_xml = if !filter_path.is_empty() {
+        let bytes_for_xml = hkt_bytes.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            havok_cli::convert_hkt_bytes_to_xml(&filter_path, &bytes_for_xml)
+        })
+        .await
+        .map_err(|e| format!("XML conversion join error: {e}"))?
+        .unwrap_or_else(|e| {
+            eprintln!("[scene_generate_hkt] HKT→XML conversion failed: {e}");
+            String::new()
+        })
+    } else {
+        String::new()
+    };
+
     state.with_session_mut(&options.session_id, |s| {
         s.store_hkt_bytes(&options.import_id, hkt_bytes.clone())?;
         s.add_havok_data(HavokCollisionData {
             source_id: options.import_id.clone(),
-            hkt_xml: String::new(),
+            hkt_xml,
             raw_bytes: hkt_bytes,
         });
         Ok(())

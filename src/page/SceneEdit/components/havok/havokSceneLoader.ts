@@ -21,13 +21,10 @@ export async function generateHavokCollision(
   sessionId: string,
   importId: string,
   configProfile: string,
-): Promise<HavokMeshData> {
-  const payload = await invoke<HavokMeshDataPayload>("scene_generate_hkt", {
-    sessionId,
-    importId,
-    configProfile,
+): Promise<boolean> {
+  return invoke<boolean>("scene_generate_hkt", {
+    options: { sessionId, importId, configProfile },
   });
-  return parseHavokXML(payload.hktXml);
 }
 
 export function parseHktXmlToMeshData(hktXml: string): HavokMeshData {

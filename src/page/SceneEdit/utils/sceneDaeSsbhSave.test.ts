@@ -22,7 +22,7 @@ describe("sceneDaeSsbhSave", () => {
       upAxis: "y_up",
     });
 
-    expect(params.outputDir).toBe("E:/stage/root/Boss_Sword");
+    expect(params.outputDir).toBe("E:/stage/root/Boss_Sword/0");
     expect(params.baseFilename).toBe("Boss_Sword");
     expect(params.includeGeometryNames).toEqual(["mesh_a", "mesh_b"]);
     expect(params.numdlbEntries).toEqual([
@@ -45,7 +45,7 @@ describe("sceneDaeSsbhSave", () => {
 
     expect(plan.baseFilename).toBe("Boss_Sword_2");
     expect(plan.folderName).toBe("Boss_Sword_2");
-    expect(plan.outputDir).toBe("E:/stage/root/Boss_Sword_2");
+    expect(plan.outputDir).toBe("E:/stage/root/Boss_Sword_2/0");
   });
 
   it("allocates imported DAE folders after existing stage object folders to preserve object numbers", () => {
@@ -56,7 +56,7 @@ describe("sceneDaeSsbhSave", () => {
     });
 
     expect(plan.folderName).toBe("zzzz_import_fullout");
-    expect(plan.outputDir).toBe("E:/stage/root/zzzz_import_fullout");
+    expect(plan.outputDir).toBe("E:/stage/root/zzzz_import_fullout/0");
   });
 
   it("creates an OBJECT placement row that references the converted stage object index", () => {

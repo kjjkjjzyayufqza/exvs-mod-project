@@ -2,6 +2,14 @@ import {
   useSceneTextureManagerStore,
   type TextureManagerEntry,
 } from "../store/sceneTextureManagerStore";
+import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
+import type { SceneTextureDecodeContext } from "../utils/sceneTextureDecode";
+import {
+  ensureSceneTextureThumbnailDataUrl,
+  getSceneTextureThumbnailDataUrl,
+  lookupSceneTextureData,
+  tryCacheThumbnailFromMap,
+} from "../utils/sceneTextureThumbnail";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,10 +23,22 @@ import {
 import { cn } from "@/lib/utils";
 import { Plus, Search, Image as ImageIcon } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { invoke } from "@tauri-apps/api/core";
-import { useMemo, useCallback, useEffect, useRef } from "react";
+import { useMemo, useCallback, useEffect, useReducer, useState } from "react";
+import { TexturePreviewModal } from "./TexturePreviewModal";
+import { TextureReplaceModal } from "./TextureReplaceModal";
+import { convertImageToNutexb } from "../utils/sceneTextureConvert";
 
-export function SceneTextureManager() {
+const ASYNC_THUMB_CONCURRENCY = 4;
+
+interface SceneTextureManagerProps {
+  textureDataMap: NutexbTextureDataMap;
+  decodeContext: SceneTextureDecodeContext;
+}
+
+export function SceneTextureManager({
+  textureDataMap,
+  decodeContext,
+}: SceneTextureManagerProps) {
   const {
     entries,
     selectedId,
@@ -28,27 +48,74 @@ export function SceneTextureManager() {
     addEntry,
     removeEntry,
     replaceEntry,
-    setThumbnail,
   } = useSceneTextureManagerStore();
-  const loadingRef = useRef(new Set<string>());
+  const [previewEntry, setPreviewEntry] = useState<TextureManagerEntry | null>(null);
+  const [replaceTarget, setReplaceTarget] = useState<TextureManagerEntry | null>(null);
+  const [, bumpThumbnailCache] = useReducer((value: number) => value + 1, 0);
 
-  // Lazy thumbnail loading for entries that have nutexbPath but no thumbnail
   useEffect(() => {
-    for (const entry of entries) {
-      if (entry.thumbnailDataUrl || !entry.nutexbPath || loadingRef.current.has(entry.id)) continue;
-      loadingRef.current.add(entry.id);
-      invoke<string>("nutexb_thumbnail_base64", { inputPath: entry.nutexbPath })
-        .then((base64) => {
-          setThumbnail(entry.id, `data:image/png;base64,${base64}`);
-        })
-        .catch(() => {
-          // Silently fail — keep placeholder icon
-        })
-        .finally(() => {
-          loadingRef.current.delete(entry.id);
-        });
-    }
-  }, [entries, setThumbnail]);
+    let cancelled = false;
+    let frameId = 0;
+    let entryIndex = 0;
+    const asyncPaths = new Set<string>();
+
+    const finishAsync = async () => {
+      const paths = Array.from(asyncPaths);
+      if (paths.length === 0 || cancelled) return;
+
+      let cursor = 0;
+      const worker = async () => {
+        while (!cancelled) {
+          const index = cursor++;
+          if (index >= paths.length) return;
+          await ensureSceneTextureThumbnailDataUrl(
+            paths[index],
+            textureDataMap,
+            decodeContext,
+          );
+        }
+      };
+
+      await Promise.all(
+        Array.from(
+          { length: Math.min(ASYNC_THUMB_CONCURRENCY, paths.length) },
+          () => worker(),
+        ),
+      );
+
+      if (!cancelled) {
+        bumpThumbnailCache();
+      }
+    };
+
+    const processBatch = () => {
+      if (cancelled) return;
+      const batchEnd = Math.min(entryIndex + 32, entries.length);
+      for (; entryIndex < batchEnd; entryIndex += 1) {
+        const path = entries[entryIndex]?.nutexbPath;
+        if (!path) continue;
+        const cached = tryCacheThumbnailFromMap(path, textureDataMap);
+        if (!cached) {
+          asyncPaths.add(path);
+        }
+      }
+
+      if (entryIndex < entries.length) {
+        frameId = requestAnimationFrame(processBatch);
+        return;
+      }
+
+      bumpThumbnailCache();
+      void finishAsync();
+    };
+
+    frameId = requestAnimationFrame(processBatch);
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frameId);
+    };
+  }, [entries, textureDataMap, decodeContext]);
 
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return entries;
@@ -66,43 +133,60 @@ export function SceneTextureManager() {
     });
     if (!selected) return;
     const paths = Array.isArray(selected) ? selected : [selected];
-    for (const path of paths) {
-      const filename = path.split(/[/\\]/).pop() ?? "unknown";
+    for (const filePath of paths) {
+      const filename = filePath.split(/[/\\]/).pop() ?? "unknown";
       const isNutexb = filename.toLowerCase().endsWith(".nutexb");
-      addEntry({
-        id: `tex_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        filename,
-        status: "added",
-        format: isNutexb ? "unknown" : "pending",
-        width: 0,
-        height: 0,
-        sizeBytes: 0,
-        referencedBy: [],
-        thumbnailDataUrl: null,
-        nutexbPath: isNutexb ? path : null,
-        sourceImagePath: isNutexb ? null : path,
-      });
+      const entryId = `tex_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+      if (isNutexb) {
+        addEntry({
+          id: entryId,
+          filename,
+          status: "added",
+          format: "unknown",
+          width: 0,
+          height: 0,
+          sizeBytes: 0,
+          referencedBy: [],
+          thumbnailDataUrl: null,
+          nutexbPath: filePath,
+          sourceImagePath: null,
+        });
+      } else {
+        const nutexbFilename = filename.replace(/\.[^.]+$/, ".nutexb");
+        addEntry({
+          id: entryId,
+          filename: nutexbFilename,
+          status: "added",
+          format: "converting",
+          width: 0,
+          height: 0,
+          sizeBytes: 0,
+          referencedBy: [],
+          thumbnailDataUrl: null,
+          nutexbPath: null,
+          sourceImagePath: filePath,
+        });
+        convertImageToNutexb({ sourcePath: filePath, ddsFormat: "BC7_UNORM" })
+          .then((result) => {
+            replaceEntry(entryId, {
+              nutexbPath: result.outputNutexbPath,
+              format: "BC7_UNORM",
+              thumbnailDataUrl: null,
+            });
+          })
+          .catch(() => {
+            replaceEntry(entryId, { format: "error" });
+          });
+      }
     }
-  }, [addEntry]);
+  }, [addEntry, replaceEntry]);
 
   const handleReplace = useCallback(
-    async (entry: TextureManagerEntry) => {
-      const selected = await open({
-        title: `Replace ${entry.filename}`,
-        multiple: false,
-        filters: [
-          { name: "Textures", extensions: ["nutexb", "png", "dds", "tga"] },
-        ],
-      });
-      if (typeof selected !== "string" || !selected.trim()) return;
-      replaceEntry(entry.id, {
-        sourceImagePath: selected.trim(),
-        nutexbPath: selected.toLowerCase().endsWith(".nutexb")
-          ? selected.trim()
-          : entry.nutexbPath,
-      });
+    (entry: TextureManagerEntry) => {
+      setReplaceTarget(entry);
     },
-    [replaceEntry]
+    []
   );
 
   const handleDelete = useCallback(
@@ -118,9 +202,14 @@ export function SceneTextureManager() {
     await navigator.clipboard.writeText(path);
   }, []);
 
+  const handlePreview = useCallback((entry: TextureManagerEntry) => {
+    if (entry.nutexbPath) {
+      setPreviewEntry(entry);
+    }
+  }, []);
+
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="flex items-center gap-1 px-2 py-1.5 bg-muted/20 border-b">
         <div className="relative flex-1">
           <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
@@ -142,7 +231,6 @@ export function SceneTextureManager() {
         </Button>
       </div>
 
-      {/* List */}
       <ScrollArea className="flex-1">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-muted-foreground gap-1">
@@ -155,8 +243,10 @@ export function SceneTextureManager() {
               <TextureRow
                 key={entry.id}
                 entry={entry}
+                textureDataMap={textureDataMap}
                 isSelected={entry.id === selectedId}
                 onSelect={() => setSelectedId(entry.id)}
+                onPreview={() => handlePreview(entry)}
                 onReplace={() => handleReplace(entry)}
                 onDelete={() => handleDelete(entry)}
                 onCopyPath={() => handleCopyPath(entry)}
@@ -165,14 +255,71 @@ export function SceneTextureManager() {
           </div>
         )}
       </ScrollArea>
+
+      {previewEntry && (
+        <TexturePreviewModal
+          entry={previewEntry}
+          textureDataMap={textureDataMap}
+          decodeContext={decodeContext}
+          onClose={() => setPreviewEntry(null)}
+        />
+      )}
+
+      {replaceTarget && (
+        <TextureReplaceModal
+          entry={replaceTarget}
+          onClose={() => setReplaceTarget(null)}
+          onConfirm={(ddsFormat) => {
+            const entry = replaceTarget;
+            setReplaceTarget(null);
+            open({
+              title: `Replace ${entry.filename}`,
+              multiple: false,
+              filters: [
+                { name: "Textures", extensions: ["nutexb", "png", "dds", "tga"] },
+              ],
+            }).then((selected) => {
+              if (typeof selected !== "string" || !selected.trim()) return;
+              const filePath = selected.trim();
+              const isNutexb = filePath.toLowerCase().endsWith(".nutexb");
+              if (isNutexb) {
+                replaceEntry(entry.id, {
+                  nutexbPath: filePath,
+                  sourceImagePath: null,
+                  thumbnailDataUrl: null,
+                });
+              } else {
+                replaceEntry(entry.id, {
+                  sourceImagePath: filePath,
+                  format: "converting",
+                  thumbnailDataUrl: null,
+                });
+                convertImageToNutexb({ sourcePath: filePath, ddsFormat })
+                  .then((result) => {
+                    replaceEntry(entry.id, {
+                      nutexbPath: result.outputNutexbPath,
+                      format: ddsFormat,
+                      thumbnailDataUrl: null,
+                    });
+                  })
+                  .catch(() => {
+                    replaceEntry(entry.id, { format: "error" });
+                  });
+              }
+            });
+          }}
+        />
+      )}
     </div>
   );
 }
 
 interface TextureRowProps {
   entry: TextureManagerEntry;
+  textureDataMap: NutexbTextureDataMap;
   isSelected: boolean;
   onSelect: () => void;
+  onPreview: () => void;
   onReplace: () => void;
   onDelete: () => void;
   onCopyPath: () => void;
@@ -180,16 +327,28 @@ interface TextureRowProps {
 
 function TextureRow({
   entry,
+  textureDataMap,
   isSelected,
   onSelect,
+  onPreview,
   onReplace,
   onDelete,
   onCopyPath,
 }: TextureRowProps) {
+  const thumbnailDataUrl = entry.nutexbPath
+    ? getSceneTextureThumbnailDataUrl(entry.nutexbPath, textureDataMap)
+    : null;
+
+  const loadedData = entry.nutexbPath
+    ? lookupSceneTextureData(textureDataMap, entry.nutexbPath)
+    : null;
+
   const dims =
-    entry.width > 0 && entry.height > 0
-      ? `${entry.width}x${entry.height}`
-      : null;
+    loadedData && loadedData.width > 0 && loadedData.height > 0
+      ? `${loadedData.width}x${loadedData.height}`
+      : entry.width > 0 && entry.height > 0
+        ? `${entry.width}x${entry.height}`
+        : null;
 
   return (
     <ContextMenu>
@@ -202,13 +361,17 @@ function TextureRow({
               : "hover:bg-muted/40"
           )}
           style={{ height: 40 }}
-          onClick={onSelect}
+          onClick={() => {
+            onSelect();
+          }}
+          onDoubleClick={() => {
+            onPreview();
+          }}
         >
-          {/* Thumbnail */}
           <div className="w-8 h-8 shrink-0 rounded bg-muted/50 flex items-center justify-center overflow-hidden">
-            {entry.thumbnailDataUrl ? (
+            {thumbnailDataUrl ? (
               <img
-                src={entry.thumbnailDataUrl}
+                src={thumbnailDataUrl}
                 alt={entry.filename}
                 className="w-full h-full object-cover"
               />
@@ -217,7 +380,6 @@ function TextureRow({
             )}
           </div>
 
-          {/* Center info */}
           <div className="flex flex-col min-w-0 flex-1">
             <span className="text-[11px] truncate leading-tight">
               {entry.filename}
@@ -230,7 +392,6 @@ function TextureRow({
             </span>
           </div>
 
-          {/* Right badges */}
           <div className="flex flex-col items-end gap-0.5 shrink-0">
             <Badge
               variant={entry.status === "added" ? "default" : "secondary"}
@@ -248,6 +409,7 @@ function TextureRow({
       </ContextMenuTrigger>
 
       <ContextMenuContent>
+        <ContextMenuItem onClick={onPreview}>Preview</ContextMenuItem>
         <ContextMenuItem onClick={onReplace}>Replace</ContextMenuItem>
         <ContextMenuItem onClick={onCopyPath}>Copy Path</ContextMenuItem>
         {entry.status === "added" && (

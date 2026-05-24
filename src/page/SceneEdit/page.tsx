@@ -100,6 +100,8 @@ import {
   clearNutexbPreviewCacheAsync,
   clearNutexbRgbaCache,
 } from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
+import { clearSceneTextureThumbnailCache } from "./utils/sceneTextureThumbnail";
+import type { SceneTextureDecodeContext } from "./utils/sceneTextureDecode";
 import { reorderPlacementEntriesBySubModels } from "./utils/reorderPlacementBySubModels";
 import { MayaSection } from "./components/MayaSection";
 import { PlacementConfigPanel } from "./components/PlacementConfigPanel";
@@ -176,6 +178,8 @@ import {
   sceneRepackInPlace,
   sceneOpenFolder,
   sceneListHavokData,
+  sceneGenerateHkt,
+  sceneGetHavokData,
   stageLoadSkeleton,
   stageStreamBundles,
   type StageSkeleton,
@@ -522,6 +526,18 @@ export default function SceneEdit() {
     () => applyGraphicParamSelection(graphicParams, appliedGraphicParamKeys),
     [graphicParams, appliedGraphicParamKeys],
   );
+  const sceneTextureSourceKind =
+    baseModel?.sourceKind ?? subModels[0]?.bundle.sourceKind ?? "disk";
+
+  const sceneTextureDecodeContext = useMemo<SceneTextureDecodeContext>(
+    () => ({
+      sessionId,
+      sourceKind: sceneTextureSourceKind,
+      maxDimension: textureMaxDimension,
+    }),
+    [sessionId, sceneTextureSourceKind, textureMaxDimension],
+  );
+
   const {
     textureDataMap,
     progress: textureProgress,
@@ -1017,6 +1033,7 @@ export default function SceneEdit() {
     resetState();
     viewportRef.current?.disposeTextures();
     clearNutexbRgbaCache();
+    clearSceneTextureThumbnailCache();
     try {
       await clearNutexbPreviewCacheAsync();
     } catch (err) {
@@ -1960,10 +1977,12 @@ export default function SceneEdit() {
   const handleTextureQualityChange = useCallback((quality: string) => {
     setTextureQuality(quality);
     clearNutexbRgbaCache();
+    clearSceneTextureThumbnailCache();
   }, []);
 
   const handleTextureSlotMode = useCallback((mode: "all" | "none") => {
     clearNutexbRgbaCache();
+    clearSceneTextureThumbnailCache();
     setTextureSlotLoadEnabled(
       mode === "all"
         ? createDefaultTextureSlotLoadEnabled()
@@ -1974,6 +1993,7 @@ export default function SceneEdit() {
   const handleTextureSlotToggle = useCallback(
     (key: TexturePreviewSlotKey, enabled: boolean) => {
       clearNutexbRgbaCache();
+      clearSceneTextureThumbnailCache();
       setTextureSlotLoadEnabled((prev) => ({ ...prev, [key]: enabled }));
     },
     [],
@@ -2633,6 +2653,36 @@ export default function SceneEdit() {
     ],
   );
 
+  const handleGenerateHkt = useCallback(
+    async (ids: string[]) => {
+      if (!sceneSessionId) {
+        toast.error("No scene session — open a stage first");
+        return;
+      }
+      for (const id of ids) {
+        const obj = importedDaeObjects.find((o) => o.id === id);
+        if (!obj) continue;
+        try {
+          toast.loading(`Generating HKT for ${obj.name}...`, { id: `hkt-${id}` });
+          await sceneGenerateHkt(sceneSessionId, id, "auto");
+          const havokResult = await sceneGetHavokData(sceneSessionId, id);
+          if (havokResult) {
+            const meshData = parseHavokXML(havokResult.hktXml);
+            setHavokMeshDataMap((prev) => {
+              const next = new Map(prev);
+              next.set(havokResult.sourceId, meshData);
+              return next;
+            });
+          }
+          toast.success(`HKT generated for ${obj.name}`, { id: `hkt-${id}` });
+        } catch (err) {
+          toast.error(`HKT failed for ${obj.name}: ${err instanceof Error ? err.message : String(err)}`, { id: `hkt-${id}` });
+        }
+      }
+    },
+    [sceneSessionId, importedDaeObjects],
+  );
+
   useSceneKeyboard({
     onDelete: handleDeleteSelected,
     onDuplicate: () => handleDuplicateSelected(),
@@ -2878,6 +2928,7 @@ export default function SceneEdit() {
                     onSelectAll={(ids) => {
                       if (ids.length > 0) applyPrimarySelectionState(ids[ids.length - 1]);
                     }}
+                    onGenerateHkt={handleGenerateHkt}
                   />
                   {havokMeshDataMap.size > 0 && (
                     <MayaSection title="Collision" badge={havokMeshDataMap.size}>
@@ -2886,7 +2937,10 @@ export default function SceneEdit() {
                   )}
                 </TabsContent>
                 <TabsContent value="textures" className="mt-0 min-h-0 flex-1 overflow-hidden">
-                  <SceneTextureManager />
+                  <SceneTextureManager
+                    textureDataMap={textureDataMap}
+                    decodeContext={sceneTextureDecodeContext}
+                  />
                 </TabsContent>
               </Tabs>
             </div>

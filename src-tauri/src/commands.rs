@@ -166,6 +166,12 @@ pub fn nutexb_thumbnail_base64(input_path: String) -> Result<String, String> {
     crate::nutexb_lib::nutexb_thumbnail_base64(&input_path)
 }
 
+/// Returns a medium PNG preview (max 512px) as base64 for the preview modal.
+#[tauri::command]
+pub fn nutexb_preview_base64(input_path: String) -> Result<String, String> {
+    crate::nutexb_lib::nutexb_preview_base64(&input_path)
+}
+
 /// Returns raw PNG bytes via IPC [`InvokeBody::Raw`] (no base64); prefer for large textures vs [`nutexb_png_base64`].
 #[tauri::command]
 pub fn nutexb_png_bytes(input_path: String) -> Result<Response, String> {

@@ -3,16 +3,10 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 vi.mock("@tauri-apps/plugin-fs", () => ({
   readDir: vi.fn(),
   writeTextFile: vi.fn(),
-  mkdir: vi.fn(),
-  writeFile: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
-}));
-
-vi.mock("@tauri-apps/api/path", () => ({
-  join: vi.fn((...parts: string[]) => Promise.resolve(parts.join("/"))),
 }));
 
 vi.mock("./sceneDeleteConfirm", () => ({
@@ -20,22 +14,11 @@ vi.mock("./sceneDeleteConfirm", () => ({
   executeDelete: vi.fn(),
 }));
 
-vi.mock("./sceneTextureMigration", () => ({
-  detectOldTextureFormat: vi.fn(),
-  migrateTexturesToSharedFolder: vi.fn(),
-}));
-
 vi.mock("./sceneSessionService", () => ({
   sceneSaveAsFolder: vi.fn(),
-}));
-
-vi.mock("@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService", () => ({
-  ssbhAnalyzeDae: vi.fn(),
-  ssbhConvertDaeToSsbh: vi.fn(),
-}));
-
-vi.mock("./daeExportImport", () => ({
-  writeObjectAsDAE: vi.fn(),
+  sceneImportDae: vi.fn(),
+  sceneConfigureImport: vi.fn(),
+  sceneExecuteImport: vi.fn(),
 }));
 
 vi.mock("./sceneSavePipeline", () => ({
@@ -44,8 +27,6 @@ vi.mock("./sceneSavePipeline", () => ({
 
 vi.mock("./sceneDaeSsbhSave", () => ({
   buildImportedDaeStageRegistrationPlan: vi.fn(),
-  buildImportedDaeSsbhConvertParams: vi.fn(),
-  createImportedDaeJnttblBytes: vi.fn(),
   createImportedDaePlacementRow: vi.fn(),
 }));
 
@@ -56,13 +37,15 @@ vi.mock("./sceneStageStructure", () => ({
     packFolderName: "12345678",
     hashHex: "0x12345678",
   })),
-  buildStageStructureJsonFromFiles: vi.fn(() => ({ Magic: 0, Fhm2dTotalCount: 0, UnkCount: 0, SubFileData: [], SubFileStructure: [] })),
+}));
+
+vi.mock("./daeExportImport", () => ({
+  serializeDaeToBytes: vi.fn(() => [60, 67, 79, 76]),
 }));
 
 import { writeTextFile, readDir } from "@tauri-apps/plugin-fs";
 import { invoke } from "@tauri-apps/api/core";
 import { buildDeletePreview, executeDelete } from "./sceneDeleteConfirm";
-import { detectOldTextureFormat, migrateTexturesToSharedFolder } from "./sceneTextureMigration";
 import { executeSaveFolderPipeline, type SaveFolderParams } from "./sceneSaveFolderPipeline";
 import { useSceneDirtyStore } from "../store/sceneDirtyStore";
 import type { SaveStepInfo } from "../components/SaveProgressDialog";
@@ -70,8 +53,6 @@ import type { SaveStepInfo } from "../components/SaveProgressDialog";
 const mockWriteTextFile = vi.mocked(writeTextFile);
 const mockReadDir = vi.mocked(readDir);
 const mockInvoke = vi.mocked(invoke);
-const mockDetect = vi.mocked(detectOldTextureFormat);
-const mockMigrate = vi.mocked(migrateTexturesToSharedFolder);
 const mockBuildDeletePreview = vi.mocked(buildDeletePreview);
 const mockExecuteDelete = vi.mocked(executeDelete);
 
@@ -94,17 +75,27 @@ describe("sceneSaveFolderPipeline", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useSceneDirtyStore.getState().reset();
-    mockDetect.mockResolvedValue(false);
     mockReadDir.mockResolvedValue([]);
     mockWriteTextFile.mockResolvedValue(undefined);
-    mockInvoke.mockResolvedValue({
-      rootPath: "E:/stage",
-      baseModel: null,
-      subModels: [],
-      graphicParams: [],
-      placementHeader: [],
-      placementEntries: [],
-      warnings: [],
+    mockInvoke.mockImplementation(async (cmd: string, _args?: unknown) => {
+      if (cmd === "restore_shared_textures") {
+        return { texturesCollected: 0, subdirsRemoved: 0, warnings: [] };
+      }
+      if (cmd === "load_stage_bundle") {
+        return {
+          rootPath: "E:/stage",
+          baseModel: null,
+          subModels: [],
+          graphicParams: [],
+          placementHeader: [],
+          placementEntries: [],
+          warnings: [],
+        };
+      }
+      if (cmd === "rebuild_stage_structure_json") {
+        return null;
+      }
+      return null;
     });
   });
 
@@ -114,7 +105,7 @@ describe("sceneSaveFolderPipeline", () => {
     expect(result.success).toBe(true);
     expect(mockWriteTextFile).toHaveBeenCalledWith(
       "E:/stage/16F73C97/0/0/info/graphic_param.csv",
-      "fog_density,0.5",
+      "fog_density,0.5\r\n",
     );
   });
 
@@ -159,21 +150,27 @@ describe("sceneSaveFolderPipeline", () => {
     expect(mockExecuteDelete).not.toHaveBeenCalled();
   });
 
-  it("runs texture migration when old format detected", async () => {
-    mockDetect.mockResolvedValue(true);
-    mockMigrate.mockResolvedValue({ migratedCount: 5, deduplicatedCount: 1, conflicts: [] });
+  it("calls restore_shared_textures invoke", async () => {
+    const params = makeParams();
+    const result = await executeSaveFolderPipeline(params);
+    expect(result.success).toBe(true);
+    expect(mockInvoke).toHaveBeenCalledWith("restore_shared_textures", {
+      stageRoot: "E:/stage/16F73C97/0/0",
+    });
+  });
+
+  it("records migrated texture count from restore result", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "restore_shared_textures") {
+        return { texturesCollected: 7, subdirsRemoved: 2, warnings: [] };
+      }
+      if (cmd === "rebuild_stage_structure_json") return null;
+      return { rootPath: "E:/stage", baseModel: null, subModels: [], graphicParams: [], placementHeader: [], placementEntries: [], warnings: [] };
+    });
 
     const params = makeParams();
     const result = await executeSaveFolderPipeline(params);
-    expect(result.migratedTextures).toBe(5);
-    expect(mockMigrate).toHaveBeenCalledWith("E:/stage/16F73C97/0/0");
-  });
-
-  it("skips migration when new format detected", async () => {
-    mockDetect.mockResolvedValue(false);
-    const params = makeParams();
-    await executeSaveFolderPipeline(params);
-    expect(mockMigrate).not.toHaveBeenCalled();
+    expect(result.migratedTextures).toBe(7);
   });
 
   it("reports progress for all phases", async () => {
@@ -187,5 +184,27 @@ describe("sceneSaveFolderPipeline", () => {
     expect(stepIds).toContain("convert");
     expect(stepIds).toContain("csv");
     expect(stepIds).toContain("structure");
+  });
+
+  it("skips structure rebuild when skipStructureRebuild is true", async () => {
+    const onProgress = vi.fn();
+    const params = makeParams({ onProgress, skipStructureRebuild: true });
+    await executeSaveFolderPipeline(params);
+
+    const stepIds = onProgress.mock.calls.map((c) => (c[0] as SaveStepInfo).id);
+    expect(stepIds).not.toContain("structure");
+    expect(mockInvoke).not.toHaveBeenCalledWith(
+      "rebuild_stage_structure_json",
+      expect.anything(),
+    );
+  });
+
+  it("reloads bundle after save", async () => {
+    const params = makeParams();
+    const result = await executeSaveFolderPipeline(params);
+    expect(result.reloadedBundle).toBeDefined();
+    expect(mockInvoke).toHaveBeenCalledWith("load_stage_bundle", {
+      stageRoot: "E:/stage/16F73C97/0/0",
+    });
   });
 });
