@@ -963,25 +963,93 @@ fn rename_numatb_with_maya_nust(
     }
 }
 
+// ── Content-aware folder classification ─────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq)]
+enum FolderRole {
+    Base,
+    Info,
+    Sky,
+    Model(String),
+    Textures,
+}
+
+fn classify_content_folders(
+    nodes: &[&InternalTreeNode],
+    file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
+) -> Vec<FolderRole> {
+    let mut roles: Vec<Option<FolderRole>> = vec![None; nodes.len()];
+
+    for (i, node) in nodes.iter().enumerate() {
+        if node.name.to_ascii_lowercase() == STAGE_TEXTURES_NAME {
+            roles[i] = Some(FolderRole::Textures);
+        }
+    }
+
+    for (i, node) in nodes.iter().enumerate() {
+        if roles[i].is_some() {
+            continue;
+        }
+        if infer_numdlb_name_from_tree(node, file_index_map).is_none() {
+            roles[i] = Some(FolderRole::Info);
+            break;
+        }
+    }
+
+    let mut sky_found = false;
+    for (i, node) in nodes.iter().enumerate() {
+        if roles[i].is_some() {
+            continue;
+        }
+        if let Some(name) = infer_numdlb_name_from_tree(node, file_index_map) {
+            let lower = name.to_ascii_lowercase();
+            if lower.contains("sky") {
+                roles[i] = Some(FolderRole::Sky);
+                sky_found = true;
+                break;
+            }
+        }
+    }
+
+    if !sky_found {
+        let model_indices: Vec<usize> = (0..nodes.len())
+            .filter(|i| roles[*i].is_none())
+            .collect();
+        if let Some(&last) = model_indices.last() {
+            roles[last] = Some(FolderRole::Sky);
+        }
+    }
+
+    let mut base_assigned = false;
+    for i in 0..nodes.len() {
+        if roles[i].is_some() {
+            continue;
+        }
+        if !base_assigned {
+            roles[i] = Some(FolderRole::Base);
+            base_assigned = true;
+        } else if let Some(name) = infer_numdlb_name_from_tree(nodes[i], file_index_map) {
+            roles[i] = Some(FolderRole::Model(name));
+        } else {
+            roles[i] = Some(FolderRole::Model(format!("sub_{i}")));
+        }
+    }
+
+    roles.into_iter().map(|r| r.unwrap()).collect()
+}
+
 // ── Main rename dispatcher ──────────────────────────────────────────────────
 
 fn rename_stage_content_folder(
     folder: &mut StageVirtualTreeFolder,
-    position: usize,
-    total_children: usize,
+    role: &FolderRole,
     node: &InternalTreeNode,
     file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
     warnings: &mut Vec<String>,
 ) {
-    // textures/ is a shared folder — never rename it
-    if folder.name.to_ascii_lowercase() == STAGE_TEXTURES_NAME {
-        return;
-    }
-
-    let is_last = position == total_children - 1;
-
-    match position {
-        0 => {
+    match role {
+        FolderRole::Textures => {}
+        FolderRole::Base => {
             folder.name = STAGE_BASE_NAME.to_string();
             rename_folder_level_bins(folder, warnings);
             for sub in &mut folder.children {
@@ -995,7 +1063,7 @@ fn rename_stage_content_folder(
                 }
             }
         }
-        1 => {
+        FolderRole::Info => {
             folder.name = STAGE_INFO_NAME.to_string();
             for (i, sub) in folder.children.iter_mut().enumerate() {
                 if i < INFO_SUBFOLDER_NAMES.len() {
@@ -1016,7 +1084,7 @@ fn rename_stage_content_folder(
                 folder.files[i].file_name = name;
             }
         }
-        _ if is_last => {
+        FolderRole::Sky => {
             folder.name = STAGE_SKY_NAME.to_string();
             rename_folder_level_bins(folder, warnings);
             for sub in &mut folder.children {
@@ -1025,16 +1093,8 @@ fn rename_stage_content_folder(
                 }
             }
         }
-        _ => {
-            if let Some(model_name) = infer_numdlb_name_from_tree(node, file_index_map) {
-                folder.name = model_name;
-            } else {
-                let fallback = format!("sub_{position}");
-                warnings.push(format!(
-                    "Could not infer name for folder at position {position}, using '{fallback}'"
-                ));
-                folder.name = fallback;
-            }
+        FolderRole::Model(name) => {
+            folder.name = name.clone();
             rename_folder_level_bins(folder, warnings);
             for sub in &mut folder.children {
                 if let Some(child_node) = find_child_node_by_name(node, &sub.name) {
@@ -1105,13 +1165,10 @@ fn apply_semantic_rename(
     let content_folder = content_folder.unwrap();
 
     let child_count = content_folder.children.len();
-    // Exclude textures/ from position-based rename count so sky is still "last"
-    let non_textures_count = content_folder.children.iter()
-        .filter(|c| c.name.to_ascii_lowercase() != STAGE_TEXTURES_NAME)
-        .count();
     let node_children: Vec<&InternalTreeNode> = content_node.children.iter().collect();
 
-    let mut non_tex_pos = 0usize;
+    let roles = classify_content_folders(&node_children, file_index_map);
+
     for i in 0..child_count {
         let node_ref = if i < node_children.len() {
             node_children[i]
@@ -1121,15 +1178,11 @@ fn apply_semantic_rename(
 
         rename_stage_content_folder(
             &mut content_folder.children[i],
-            non_tex_pos,
-            non_textures_count,
+            &roles[i],
             node_ref,
             file_index_map,
             warnings,
         );
-        if content_folder.children[i].name.to_ascii_lowercase() != STAGE_TEXTURES_NAME {
-            non_tex_pos += 1;
-        }
     }
 }
 

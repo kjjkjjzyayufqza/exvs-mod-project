@@ -5,7 +5,7 @@ use crate::format::fhm2d::SubFileStructureEntry;
 use flate2::write::DeflateEncoder;
 use flate2::Compression;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -62,7 +62,9 @@ pub fn repack_fhm2d_from_structure(
 
     let (body_data, start_offsets) = build_body_data(&files, &sorted_order);
 
-    let structure_bytes = serialize_structure_binary(&input.sub_file_structure)?;
+    let old_to_new = build_file_index_remap(&files, &sorted_order);
+    let remapped_structure = remap_structure_file_indices(&input.sub_file_structure, &old_to_new);
+    let structure_bytes = serialize_structure_binary(&remapped_structure)?;
     let meta_uncompressed = build_meta_blob(
         input.magic,
         input.unk_count,
@@ -348,6 +350,51 @@ fn flatten_sorted_order(type_groups: &[TypeGroup]) -> Vec<usize> {
         .collect()
 }
 
+fn build_file_index_remap(
+    files: &[ProcessedFile],
+    sorted_order: &[usize],
+) -> HashMap<i32, i32> {
+    let mut map = HashMap::new();
+    for (packed_idx, &array_idx) in sorted_order.iter().enumerate() {
+        map.insert(files[array_idx].file_index, packed_idx as i32);
+    }
+    map
+}
+
+fn remap_structure_file_indices(
+    entries: &[SubFileStructureEntry],
+    old_to_new: &HashMap<i32, i32>,
+) -> Vec<SubFileStructureEntry> {
+    entries
+        .iter()
+        .map(|entry| match entry {
+            SubFileStructureEntry::Item {
+                unk1,
+                file_index,
+                unk2,
+                unk2_1,
+                unk3,
+                unk4,
+                original_file_index,
+                display_name,
+            } => {
+                let new_index = old_to_new.get(file_index).copied().unwrap_or(*file_index);
+                SubFileStructureEntry::Item {
+                    unk1: unk1.clone(),
+                    file_index: new_index,
+                    unk2: unk2.clone(),
+                    unk2_1: *unk2_1,
+                    unk3: *unk3,
+                    unk4: *unk4,
+                    original_file_index: *original_file_index,
+                    display_name: display_name.clone(),
+                }
+            }
+            other => other.clone(),
+        })
+        .collect()
+}
+
 // ── Body Data ───────────────────────────────────────────────────────────────
 
 fn build_body_data(files: &[ProcessedFile], sorted_order: &[usize]) -> (Vec<u8>, Vec<u32>) {
@@ -405,8 +452,8 @@ fn build_meta_blob(
     }
 
     // ── SubEntryHeader[] ──
-    for &file_idx in sorted_order {
-        write_sub_entry_header(&mut meta, &files[file_idx], start_offsets[file_idx]);
+    for (packed_idx, &file_idx) in sorted_order.iter().enumerate() {
+        write_sub_entry_header(&mut meta, &files[file_idx], start_offsets[file_idx], packed_idx as u32);
     }
 
     // ── Patch SubFileStructure offset at meta[0x10] ──
@@ -478,7 +525,7 @@ fn write_per_file_index_entries(
     }
 }
 
-fn write_sub_entry_header(meta: &mut Vec<u8>, file: &ProcessedFile, start_offset: u32) {
+fn write_sub_entry_header(meta: &mut Vec<u8>, file: &ProcessedFile, start_offset: u32, packed_index: u32) {
     let body = &file.body;
 
     push_u32_le(meta, 0);
@@ -491,7 +538,7 @@ fn write_sub_entry_header(meta: &mut Vec<u8>, file: &ProcessedFile, start_offset
     push_u32_le(meta, body.chunk_count);
     push_u32_le(meta, start_offset);
     push_u32_le(meta, 0);
-    push_u32_le(meta, file.file_index as u32);
+    push_u32_le(meta, packed_index);
 
     if body.chunk_count > 0 {
         meta.extend_from_slice(&body.bitmap);

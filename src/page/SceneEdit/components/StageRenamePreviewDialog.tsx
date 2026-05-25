@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,7 +10,21 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, ChevronDown, Folder, File, AlertTriangle, XCircle } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  ChevronRight,
+  ChevronDown,
+  Folder,
+  File,
+  AlertTriangle,
+  XCircle,
+  Copy,
+} from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export interface VirtualTreeFile {
@@ -58,6 +72,46 @@ function countAllSize(folder: VirtualTreeFolder): number {
     size += countAllSize(child);
   }
   return size;
+}
+
+async function copyTextToClipboard(text: string, successMessage: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast.success(successMessage);
+  } catch {
+    toast.error("Failed to copy to clipboard");
+  }
+}
+
+function formatWarningsText(warnings: string[]): string {
+  return warnings.join("\n");
+}
+
+function formatTreeFolderLines(folder: VirtualTreeFolder, indent: number): string[] {
+  const prefix = "  ".repeat(indent);
+  const lines: string[] = [];
+  const fileCount = countAllFiles(folder);
+  const totalSize = countAllSize(folder);
+  const statsParts: string[] = [];
+  if (folder.children.length > 0) {
+    statsParts.push(`${folder.children.length} folders`);
+  }
+  statsParts.push(`${fileCount} files`);
+  statsParts.push(formatSize(totalSize));
+  lines.push(`${prefix}${folder.name}/  (${statsParts.join(", ")})`);
+
+  for (const child of folder.children) {
+    lines.push(...formatTreeFolderLines(child, indent + 1));
+  }
+  for (const file of folder.files) {
+    const filePrefix = "  ".repeat(indent + 1);
+    lines.push(`${filePrefix}${file.fileName}  ${file.fileType}  ${formatSize(file.sizeBytes)}`);
+  }
+  return lines;
+}
+
+function formatTreeText(tree: VirtualTreeFolder): string {
+  return formatTreeFolderLines(tree, 0).join("\n");
 }
 
 function FolderNode({ folder, depth }: { folder: VirtualTreeFolder; depth: number }) {
@@ -116,6 +170,15 @@ function FolderNode({ folder, depth }: { folder: VirtualTreeFolder; depth: numbe
 
 function WarningsBlock({ warnings }: { warnings: string[] }) {
   const [expanded, setExpanded] = useState(false);
+
+  const handleCopy = useCallback(
+    (event: React.MouseEvent) => {
+      event.stopPropagation();
+      void copyTextToClipboard(formatWarningsText(warnings), "Copied warnings to clipboard");
+    },
+    [warnings],
+  );
+
   if (warnings.length === 0) return null;
 
   const errors = warnings.filter((w) => w.startsWith("[ERROR]"));
@@ -141,11 +204,28 @@ function WarningsBlock({ warnings }: { warnings: string[] }) {
             <span className="text-yellow-500">{warns.length} warning(s)</span>
           )}
         </span>
-        {expanded ? (
-          <ChevronDown className="h-3.5 w-3.5 ml-auto text-muted-foreground" />
-        ) : (
-          <ChevronRight className="h-3.5 w-3.5 ml-auto text-muted-foreground" />
-        )}
+        <div className="ml-auto flex items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0"
+                onClick={handleCopy}
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              Copy all warnings
+            </TooltipContent>
+          </Tooltip>
+          {expanded ? (
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
+        </div>
       </div>
       {expanded && (
         <ScrollArea className="max-h-[20vh] px-3 pb-2">
@@ -178,6 +258,11 @@ export function StageRenamePreviewDialog({
 }: StageRenamePreviewDialogProps) {
   const folderCount = tree?.children.length ?? 0;
 
+  const handleCopyTree = useCallback(() => {
+    if (!tree) return;
+    void copyTextToClipboard(formatTreeText(tree), "Copied folder tree to clipboard");
+  }, [tree]);
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v && !isLoadingBundle) onClose(); }}>
       <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
@@ -205,8 +290,29 @@ export function StageRenamePreviewDialog({
 
         <WarningsBlock warnings={warnings} />
 
-        <div className="flex-1 min-h-0 max-h-[55vh] overflow-y-auto rounded-md border bg-background/50 p-2">
-          {tree && <FolderNode folder={tree} depth={0} />}
+        <div className="flex-1 min-h-0 flex flex-col gap-1.5">
+          <div className="flex items-center justify-between px-0.5">
+            <span className="text-xs font-medium text-muted-foreground">Folder Tree</span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={handleCopyTree}
+                  disabled={!tree}
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                Copy entire tree
+              </TooltipContent>
+            </Tooltip>
+          </div>
+          <div className="flex-1 min-h-0 max-h-[55vh] overflow-y-auto rounded-md border bg-background/50 p-2">
+            {tree && <FolderNode folder={tree} depth={0} />}
+          </div>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">

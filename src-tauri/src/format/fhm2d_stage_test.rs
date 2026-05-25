@@ -2679,7 +2679,7 @@ fn test_disk_scene_editor_add_delete_repack_verify() {
     // restore shared textures in verify dir too (for fair comparison)
     restore_shared_textures(&verify_root.to_string_lossy()).unwrap();
 
-    let verify_content = verify_root.join("0").join("0");
+    let _verify_content = verify_root.join("0").join("0");
 
     // ── Step 6: Verify ────────────────────────────────────────────────────────
     eprintln!("=== Step 6: Verify ===");
@@ -2718,4 +2718,85 @@ fn test_disk_scene_editor_add_delete_repack_verify() {
     eprintln!("  FHM2D:       {}", edit_fhm2d.display());
     eprintln!("  Verify dir:  {}", verify_root.display());
     eprintln!("PASS: scene editor add/delete → repack → re-extract → verify");
+}
+
+/// Repack from structure JSON → extract → verify folder tree structure.
+///
+/// Validates that the repacked fhm2d, when extracted through the stage
+/// rename pipeline, produces the correct folder layout:
+///   0/0/base/...         (position 0 = first model folder)
+///   0/0/info/...         (position 1 = metadata folder)
+///   0/0/<model_name>/... (middle positions = additional models)
+///   0/0/sky/...          (last position = sky model)
+///   textures/...         (shared texture folder)
+#[test]
+fn repack_then_extract_folder_tree_is_correct() {
+    let test_dir = Path::new(TEST_DATA_ROOT);
+    let structure_path = test_dir.join("0x16F73C97_structure.json");
+    if !structure_path.exists() {
+        eprintln!("SKIP: structure JSON missing");
+        return;
+    }
+
+    let tmp = tempfile::tempdir().unwrap();
+    let repacked = tmp.path().join("repacked.fhm2d");
+    crate::format::fhm2d_pack::repack_fhm2d_from_structure(
+        &structure_path.to_string_lossy(),
+        &repacked.to_string_lossy(),
+        false,
+        None,
+    )
+    .unwrap();
+
+    let bytes = fs::read(&repacked).unwrap();
+    let extraction = crate::format::fhm2d::extract_fhm2d_to_memory_impl(&bytes, "test", None)
+        .unwrap();
+
+    let (tree, warnings) = stage_rename_in_memory(
+        &extraction.files,
+        &extraction.sub_file_structure,
+    )
+    .unwrap();
+
+    eprintln!("warnings ({}):", warnings.len());
+    for w in &warnings {
+        eprintln!("  {w}");
+    }
+
+    fn dump_tree(node: &StageVirtualTreeFolder, indent: usize) {
+        let pad = "  ".repeat(indent);
+        eprintln!("{pad}{}/", node.name);
+        for f in &node.files {
+            eprintln!("{pad}  {} (idx={}, {}b)", f.file_name, f.file_index, f.size_bytes);
+        }
+        for c in &node.children {
+            dump_tree(c, indent + 1);
+        }
+    }
+    dump_tree(&tree, 0);
+
+    let content = &tree.children[0].children[0];
+    eprintln!("\ncontent-level children:");
+    for (i, c) in content.children.iter().enumerate() {
+        eprintln!("  [{}] name={}", i, c.name);
+    }
+
+    let names: Vec<&str> = content.children.iter().map(|c| c.name.as_str()).collect();
+
+    assert!(names.contains(&"base"), "must have 'base' folder, got: {:?}", names);
+    assert!(names.contains(&"info"), "must have 'info' folder, got: {:?}", names);
+    assert!(names.contains(&"sky"), "must have 'sky' folder, got: {:?}", names);
+
+    let bad_subs: Vec<_> = names.iter().filter(|n| n.starts_with("sub_")).collect();
+    assert!(bad_subs.is_empty(), "no folders should fall back to sub_N naming: {:?}", bad_subs);
+
+    let no_infer_warnings: Vec<_> = warnings
+        .iter()
+        .filter(|w| w.contains("Could not infer name"))
+        .collect();
+    assert!(
+        no_infer_warnings.is_empty(),
+        "should not have folder inference failures: {:?}",
+        no_infer_warnings
+    );
 }
