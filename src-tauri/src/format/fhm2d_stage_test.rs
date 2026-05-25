@@ -4,6 +4,9 @@ use std::io;
 
 const TEST_DATA_ROOT: &str = r"E:\XB\解包\com\test";
 
+// stage_example.md
+const _STAGE_16F73C97_REFERENCE: &str = "see doc comment above";
+
 // ── Test infrastructure ─────────────────────────────────────────────
 
 fn test_pack_root(stage_name: &str) -> PathBuf {
@@ -2916,4 +2919,40 @@ fn find_ssbh_folders_in_dir(root: &Path) -> Vec<PathBuf> {
     let mut warnings = Vec::new();
     let _ = super::find_ssbh_folders(root, &mut warnings).map(|f| result = f);
     result
+}
+
+
+#[test]
+fn test_dump_user_fhm2d_tree() {
+    let path = r"E:\XB\解包\com\test\0x16F73C97.fhm2d";
+    if !Path::new(path).exists() {
+        eprintln!("SKIP: file not found: {path}");
+        return;
+    }
+    let bytes = fs::read(path).unwrap();
+    let source_name = "0x16F73C97";
+    let extraction =
+        crate::format::fhm2d::extract_fhm2d_to_memory_impl(&bytes, source_name, None).unwrap();
+    let (tree, warnings) =
+        stage_rename_in_memory(&extraction.files, &extraction.sub_file_structure).unwrap();
+
+    fn dump(node: &StageVirtualTreeFolder, indent: usize) {
+        let pad = "  ".repeat(indent);
+        eprintln!("{pad}{}/  ({} folders, {} files)", node.name, node.children.len(), node.files.len());
+        for f in &node.files {
+            let size = f.size_bytes;
+            let kb = size as f64 / 1024.0;
+            eprintln!("{pad}  {}  {}  {:.1} KB", f.file_name, f.file_type, kb);
+        }
+        for c in &node.children {
+            dump(c, indent + 1);
+        }
+    }
+    dump(&tree, 0);
+    if !warnings.is_empty() {
+        eprintln!("\nWarnings:");
+        for w in &warnings {
+            eprintln!("  {w}");
+        }
+    }
 }

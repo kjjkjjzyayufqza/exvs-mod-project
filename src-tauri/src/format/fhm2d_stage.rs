@@ -1226,6 +1226,84 @@ fn navigate_virtual_tree_mut<'a>(
     Some(current)
 }
 
+/// After semantic rename, consolidate nutexb files from per-model numbered
+/// subdirs (0/, 1/) into a shared `textures/` virtual folder at the content level.
+/// This matches what `restore_shared_textures` does on disk after extraction.
+fn consolidate_virtual_textures(root: &mut StageVirtualTreeFolder) {
+    let path = find_stage_content_level(root);
+    let Some(content) = navigate_virtual_tree_mut(root, &path) else {
+        return;
+    };
+
+    // Already has a textures/ folder — skip
+    if content
+        .children
+        .iter()
+        .any(|c| c.name.eq_ignore_ascii_case(STAGE_TEXTURES_NAME))
+    {
+        return;
+    }
+
+    let mut collected: Vec<StageVirtualTreeFile> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+
+    for model_folder in &mut content.children {
+        collect_nutexb_from_children(&mut model_folder.children, &mut collected, &mut seen);
+    }
+
+    if collected.is_empty() {
+        return;
+    }
+
+    content.children.push(StageVirtualTreeFolder {
+        name: STAGE_TEXTURES_NAME.to_string(),
+        children: Vec::new(),
+        files: collected,
+    });
+}
+
+/// Recursively collect nutexb files from numbered subdirs and remove those subdirs.
+fn collect_nutexb_from_children(
+    children: &mut Vec<StageVirtualTreeFolder>,
+    collected: &mut Vec<StageVirtualTreeFile>,
+    seen: &mut HashSet<String>,
+) {
+    // Recurse into all children that are NOT pure-nutexb numbered dirs
+    for child in children.iter_mut() {
+        let is_numeric = child.name.chars().all(|c| c.is_ascii_digit());
+        let is_pure_nutexb = is_numeric
+            && !child.files.is_empty()
+            && child.children.is_empty()
+            && child.files.iter().all(|f| f.file_type.eq_ignore_ascii_case(".nutexb"));
+        if !is_pure_nutexb {
+            collect_nutexb_from_children(&mut child.children, collected, seen);
+        }
+    }
+
+    // Extract nutexb from pure-nutexb numeric subdirs
+    let mut to_remove = Vec::new();
+    for (i, child) in children.iter().enumerate() {
+        let is_numeric = child.name.chars().all(|c| c.is_ascii_digit());
+        let is_pure_nutexb = is_numeric
+            && !child.files.is_empty()
+            && child.children.is_empty()
+            && child.files.iter().all(|f| f.file_type.eq_ignore_ascii_case(".nutexb"));
+        if is_pure_nutexb {
+            for f in &child.files {
+                let key = f.file_name.to_ascii_lowercase();
+                if seen.insert(key) {
+                    collected.push(f.clone());
+                }
+            }
+            to_remove.push(i);
+        }
+    }
+
+    for i in to_remove.into_iter().rev() {
+        children.remove(i);
+    }
+}
+
 pub fn stage_rename_in_memory(
     files: &[InMemoryFhm2dFile],
     sub_file_structure: &[SubFileStructureEntry],
@@ -1242,6 +1320,7 @@ pub fn stage_rename_in_memory(
     let mut virtual_tree = convert_to_virtual_tree(&tree, &file_index_map, &nutexb_name_map);
 
     apply_semantic_rename(&mut virtual_tree, &tree, &file_index_map, &mut warnings);
+    consolidate_virtual_textures(&mut virtual_tree);
 
     Ok((virtual_tree, warnings))
 }
