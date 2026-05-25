@@ -1,15 +1,14 @@
-import { useCallback, useEffect, useRef } from "react";
-import { Box, Loader2, Settings, Sparkles, X } from "lucide-react";
-import { toast } from "sonner";
+import type { ReactNode } from "react";
+import { Loader2, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { useDraggableModal } from "@/hooks/useDraggableModal";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SceneEditRndModalShell } from "../SceneEditRndModalShell";
+import { getDetailViewModalDimensions } from "../sceneEditRndModalUtils";
 import { NumdlbMappingEditorBody } from "@/page/TestEditor/components/ssbh-model-preview/NumdlbMappingEditorBody";
 import { NuhlpbEditorBody } from "@/page/TestEditor/components/ssbh-model-preview/NuhlpbEditorBody";
 import { NumatbTemplateEditorModalBody } from "@/page/TestEditor/components/ssbh-model-preview/NumatbTemplateEditorModalBody";
 import type { NumatbModalBundle } from "@/page/TestEditor/components/ssbh-model-preview/numatbEditorUtils";
+import { shouldMountDetailTab } from "../../utils/sceneDetailViewTabPolicy";
 import type {
   DetailViewSession,
   DetailViewModelTab,
@@ -22,6 +21,7 @@ import { TexturesReadonlyTab } from "./TexturesReadonlyTab";
 type SceneDetailViewWindowProps = {
   session: DetailViewSession;
   cascadeIndex: number;
+  skipActivate?: boolean;
   onActivate: () => void;
   onClose: () => void;
   onTabChange: (tab: DetailViewModelTab) => void;
@@ -36,6 +36,7 @@ type SceneDetailViewWindowProps = {
 export function SceneDetailViewWindow({
   session,
   cascadeIndex,
+  skipActivate,
   onActivate,
   onClose,
   onTabChange,
@@ -46,159 +47,142 @@ export function SceneDetailViewWindow({
   onNuhlpbDraftChange,
   onNuhlpbSave,
 }: SceneDetailViewWindowProps) {
-  const { nodeRef, handleProps } = useDraggableModal({
-    defaultPosition: { x: 80 + cascadeIndex * 28, y: 60 + cascadeIndex * 28 },
-  });
-
   const data = session.modelData;
   if (!data) return null;
 
   const numdlbDirty = data.numdlb.draft !== null && data.numdlb.draft !== data.numdlb.base;
   const numatbDirty = data.numatb.draft !== null && data.numatb.draft !== data.numatb.base;
   const nuhlpbDirty = data.nuhlpb.draft !== null && data.nuhlpb.draft !== data.nuhlpb.base;
+  const activeTab = session.activeTab as DetailViewModelTab;
 
   return (
-    <div
-      className="pointer-events-none absolute inset-0"
-      style={{ zIndex: session.zIndex }}
+    <SceneEditRndModalShell
+      cascadeIndex={cascadeIndex}
+      zIndex={session.zIndex}
+      titleId={`detail-view-title-${session.id}`}
+      title={`Properties — ${session.nodeLabel}`}
+      subtitle="SSBH Model Detail View"
+      headerIcon={<Settings className="h-4 w-4 text-primary" />}
+      skipActivate={skipActivate}
+      onActivate={onActivate}
+      onClose={onClose}
+      getDimensions={getDetailViewModalDimensions}
     >
-      <div
-        ref={nodeRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={`detail-view-title-${session.id}`}
-        tabIndex={-1}
-        className="pointer-events-auto w-[760px] max-w-[95vw]"
-        style={{ position: "absolute" }}
-        onClick={(e) => { e.stopPropagation(); onActivate(); }}
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => onTabChange(v as DetailViewModelTab)}
+        className="flex min-h-0 flex-1 flex-col"
       >
-        <Card className="flex max-h-[min(85vh,720px)] min-h-0 flex-col overflow-hidden border shadow-2xl">
-          {/* Header */}
-          <div
-            {...handleProps}
-            onPointerDown={(e) => { onActivate(); handleProps.onPointerDown(e); }}
-            className="flex shrink-0 items-center justify-between border-b bg-linear-to-r from-muted/80 to-muted/40 px-4 py-3"
-          >
-            <div className="flex min-w-0 flex-1 items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                <Settings className="h-4 w-4 text-primary" />
-              </div>
-              <div className="min-w-0">
-                <h2
-                  id={`detail-view-title-${session.id}`}
-                  className="truncate text-sm font-semibold"
-                >
-                  Properties — {session.nodeLabel}
-                </h2>
-                <p className="text-xs text-muted-foreground">SSBH Model Detail View</p>
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0 rounded-full hover:bg-destructive/10 hover:text-destructive"
-              onClick={onClose}
-              aria-label="Close"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+        <TabsList className="shrink-0 border-b px-2" data-no-drag>
+          <TabsTrigger value="model">{numdlbDirty && "• "}Model</TabsTrigger>
+          <TabsTrigger value="material">{numatbDirty && "• "}Material</TabsTrigger>
+          <TabsTrigger value="skeleton">Skeleton</TabsTrigger>
+          <TabsTrigger value="mesh">Mesh</TabsTrigger>
+          <TabsTrigger value="helper">{nuhlpbDirty && "• "}Helper</TabsTrigger>
+          <TabsTrigger value="textures">Textures</TabsTrigger>
+        </TabsList>
 
-          {/* Tabs body */}
-          <Tabs
-            value={session.activeTab}
-            onValueChange={(v) => onTabChange(v as DetailViewModelTab)}
-            className="flex min-h-0 flex-1 flex-col"
-          >
-            <TabsList className="shrink-0 border-b px-2" data-no-drag>
-              <TabsTrigger value="model">
-                {numdlbDirty && "• "}Model
-              </TabsTrigger>
-              <TabsTrigger value="material">
-                {numatbDirty && "• "}Material
-              </TabsTrigger>
-              <TabsTrigger value="skeleton">Skeleton</TabsTrigger>
-              <TabsTrigger value="mesh">Mesh</TabsTrigger>
-              <TabsTrigger value="helper">
-                {nuhlpbDirty && "• "}Helper
-              </TabsTrigger>
-              <TabsTrigger value="textures">Textures</TabsTrigger>
-            </TabsList>
+        <div className="min-h-0 flex-1 overflow-hidden" style={{ contain: "strict" }}>
+          {shouldMountDetailTab(activeTab, "model") && (
+            <DetailTabPanel tab="model">
+              {data.numdlb.loading ? (
+                <LoadingState label="Loading .numdlb..." />
+              ) : data.numdlb.error ? (
+                <ErrorState error={data.numdlb.error} />
+              ) : data.numdlb.draft ? (
+                <div className="space-y-3">
+                  <TabSaveBar dirty={numdlbDirty} onSave={onNumdlbSave} />
+                  <NumdlbMappingEditorBody
+                    data={data.numdlb.draft}
+                    onChange={onNumdlbDraftChange}
+                  />
+                </div>
+              ) : (
+                <EmptyState label="No .numdlb data available" />
+              )}
+            </DetailTabPanel>
+          )}
 
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <TabsContent value="model" className="h-full m-0 p-3 overflow-auto">
-                {data.numdlb.loading ? (
-                  <LoadingState label="Loading .numdlb..." />
-                ) : data.numdlb.error ? (
-                  <ErrorState error={data.numdlb.error} />
-                ) : data.numdlb.draft ? (
-                  <div className="space-y-3">
-                    <TabSaveBar dirty={numdlbDirty} onSave={onNumdlbSave} />
-                    <NumdlbMappingEditorBody
-                      data={data.numdlb.draft}
-                      onChange={onNumdlbDraftChange}
-                    />
-                  </div>
-                ) : (
-                  <EmptyState label="No .numdlb data available" />
-                )}
-              </TabsContent>
+          {shouldMountDetailTab(activeTab, "material") && (
+            <DetailTabPanel tab="material">
+              {data.numatb.loading ? (
+                <LoadingState label="Loading .numatb..." />
+              ) : data.numatb.error ? (
+                <ErrorState error={data.numatb.error} />
+              ) : data.numatb.draft ? (
+                <div className="space-y-3">
+                  <TabSaveBar dirty={numatbDirty} onSave={onNumatbSave} />
+                  <NumatbTemplateEditorModalBody
+                    bundle={data.numatb.draft}
+                    onChange={onNumatbDraftChange}
+                  />
+                </div>
+              ) : (
+                <EmptyState label="No .numatb data available" />
+              )}
+            </DetailTabPanel>
+          )}
 
-              <TabsContent value="material" className="h-full m-0 p-3 overflow-auto">
-                {data.numatb.loading ? (
-                  <LoadingState label="Loading .numatb..." />
-                ) : data.numatb.error ? (
-                  <ErrorState error={data.numatb.error} />
-                ) : data.numatb.draft ? (
-                  <div className="space-y-3">
-                    <TabSaveBar dirty={numatbDirty} onSave={onNumatbSave} />
-                    <NumatbTemplateEditorModalBody
-                      bundle={data.numatb.draft}
-                      onChange={onNumatbDraftChange}
-                    />
-                  </div>
-                ) : (
-                  <EmptyState label="No .numatb data available" />
-                )}
-              </TabsContent>
+          {shouldMountDetailTab(activeTab, "skeleton") && (
+            <DetailTabPanel tab="skeleton">
+              <SkeletonReadonlyTab skel={data.bundle.skel} />
+            </DetailTabPanel>
+          )}
 
-              <TabsContent value="skeleton" className="h-full m-0 overflow-auto">
-                <SkeletonReadonlyTab skel={data.bundle.skel} />
-              </TabsContent>
+          {shouldMountDetailTab(activeTab, "mesh") && (
+            <DetailTabPanel tab="mesh">
+              <MeshReadonlyTab mesh={data.bundle.mesh} />
+            </DetailTabPanel>
+          )}
 
-              <TabsContent value="mesh" className="h-full m-0 overflow-auto">
-                <MeshReadonlyTab mesh={data.bundle.mesh} />
-              </TabsContent>
+          {shouldMountDetailTab(activeTab, "helper") && (
+            <DetailTabPanel tab="helper">
+              {data.nuhlpb.loading ? (
+                <LoadingState label="Loading .nuhlpb..." />
+              ) : data.nuhlpb.error ? (
+                <ErrorState error={data.nuhlpb.error} />
+              ) : data.nuhlpb.draft ? (
+                <div className="space-y-3">
+                  <TabSaveBar dirty={nuhlpbDirty} onSave={onNuhlpbSave} />
+                  <NuhlpbEditorBody
+                    data={data.nuhlpb.draft}
+                    onChange={onNuhlpbDraftChange}
+                  />
+                </div>
+              ) : (
+                <EmptyState label="No .nuhlpb data available" />
+              )}
+            </DetailTabPanel>
+          )}
 
-              <TabsContent value="helper" className="h-full m-0 p-3 overflow-auto">
-                {data.nuhlpb.loading ? (
-                  <LoadingState label="Loading .nuhlpb..." />
-                ) : data.nuhlpb.error ? (
-                  <ErrorState error={data.nuhlpb.error} />
-                ) : data.nuhlpb.draft ? (
-                  <div className="space-y-3">
-                    <TabSaveBar dirty={nuhlpbDirty} onSave={onNuhlpbSave} />
-                    <NuhlpbEditorBody
-                      data={data.nuhlpb.draft}
-                      onChange={onNuhlpbDraftChange}
-                    />
-                  </div>
-                ) : (
-                  <EmptyState label="No .nuhlpb data available" />
-                )}
-              </TabsContent>
+          {shouldMountDetailTab(activeTab, "textures") && (
+            <DetailTabPanel tab="textures">
+              <TexturesReadonlyTab
+                textureResolve={data.bundle.textureResolve}
+                resolvedPaths={data.bundle.resolvedNutexbPaths}
+              />
+            </DetailTabPanel>
+          )}
+        </div>
+      </Tabs>
+    </SceneEditRndModalShell>
+  );
+}
 
-              <TabsContent value="textures" className="h-full m-0 overflow-auto">
-                <TexturesReadonlyTab
-                  textureResolve={data.bundle.textureResolve}
-                  resolvedPaths={data.bundle.resolvedNutexbPaths}
-                />
-              </TabsContent>
-            </div>
-          </Tabs>
-        </Card>
-      </div>
+function DetailTabPanel({
+  tab,
+  children,
+}: {
+  tab: DetailViewModelTab;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      role="tabpanel"
+      id={`detail-tab-${tab}`}
+      className="h-full overflow-auto p-3 m-0"
+    >
+      {children}
     </div>
   );
 }

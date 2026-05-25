@@ -254,6 +254,84 @@ export function areNumatbTexturePathsComplete(file: MatlDataJson): boolean {
   return collectMissingTexturePathSlots(file).length === 0;
 }
 
+export interface MissingTexturePathSlotRef {
+  profile: NumatbProfileKind;
+  materialLabel: string;
+  paramId: string;
+  materialIndex: number;
+  attributeIndex: number;
+  value: string;
+  textureDataKind: "String" | "String1";
+}
+
+function collectMissingTexturePathSlotRefsImpl(
+  profile: NumatbProfileKind,
+  file: MatlDataJson,
+  materialLabelFilter: Set<string> | null,
+): MissingTexturePathSlotRef[] {
+  const missing: MissingTexturePathSlotRef[] = [];
+  const entries = getNumatbEntries(file);
+  for (let materialIndex = 0; materialIndex < entries.length; materialIndex += 1) {
+    const entry = entries[materialIndex];
+    if (materialLabelFilter !== null && !materialLabelFilter.has(entry.material_label)) {
+      continue;
+    }
+    const flatAttributes = flattenEntryToAttributes(entry);
+    for (let attributeIndex = 0; attributeIndex < flatAttributes.length; attributeIndex += 1) {
+      const attribute = flatAttributes[attributeIndex];
+      const paramId = attribute.param_id;
+      if (!isTexturePathParamId(paramId) || paramId.startsWith("Use")) {
+        continue;
+      }
+      const data = attribute.param.data;
+      let path = "";
+      let textureDataKind: "String" | "String1" = "String";
+      if (data.String !== undefined) {
+        path = String(data.String ?? "").trim();
+        textureDataKind = "String";
+      } else if (data.String1 !== undefined) {
+        path = String(data.String1 ?? "").trim();
+        textureDataKind = "String1";
+      }
+      if (!path) {
+        missing.push({
+          profile,
+          materialLabel: entry.material_label,
+          paramId,
+          materialIndex,
+          attributeIndex,
+          value: "",
+          textureDataKind,
+        });
+      }
+    }
+  }
+  return missing;
+}
+
+export function collectMissingTexturePathSlotRefsForExportSession(
+  mayaFile: MatlDataJson,
+  nustFile: MatlDataJson,
+  options: {
+    writeNumatb: boolean;
+    writeMayaProfile: boolean;
+    /** Only validate materials referenced by NUMDLB mapping (trimmed labels). */
+    materialLabels?: readonly string[];
+  },
+): MissingTexturePathSlotRef[] {
+  const trimmed = (options.materialLabels ?? []).map((label) => label.trim()).filter(Boolean);
+  const labelFilter = trimmed.length > 0 ? new Set(trimmed) : null;
+
+  const missing: MissingTexturePathSlotRef[] = [];
+  if (options.writeMayaProfile) {
+    missing.push(...collectMissingTexturePathSlotRefsImpl("maya", mayaFile, labelFilter));
+  }
+  if (options.writeNumatb) {
+    missing.push(...collectMissingTexturePathSlotRefsImpl("nust", nustFile, labelFilter));
+  }
+  return missing;
+}
+
 export function collectMissingTexturePathsForExportSession(
   mayaFile: MatlDataJson,
   nustFile: MatlDataJson,
@@ -264,21 +342,11 @@ export function collectMissingTexturePathsForExportSession(
     materialLabels?: readonly string[];
   },
 ): string[] {
-  const trimmed = (options.materialLabels ?? []).map((label) => label.trim()).filter(Boolean);
-  const labelFilter = trimmed.length > 0 ? new Set(trimmed) : null;
-
-  const missing: string[] = [];
-  if (options.writeMayaProfile) {
-    for (const line of collectMissingTexturePathSlotsImpl(mayaFile, labelFilter)) {
-      missing.push(`Maya profile: ${line}`);
-    }
-  }
-  if (options.writeNumatb) {
-    for (const line of collectMissingTexturePathSlotsImpl(nustFile, labelFilter)) {
-      missing.push(`Nust profile: ${line}`);
-    }
-  }
-  return missing;
+  return collectMissingTexturePathSlotRefsForExportSession(mayaFile, nustFile, options).map((slot) => {
+    const profileLabel = slot.profile === "maya" ? "Maya profile" : "Nust profile";
+    const textures2Suffix = slot.textureDataKind === "String1" ? " (textures2)" : "";
+    return `${profileLabel}: ${slot.materialLabel} → ${slot.paramId}${textures2Suffix}`;
+  });
 }
 
 export function stripTextureUrlStringsFromNumatbFile(file: MatlDataJson): MatlDataJson {

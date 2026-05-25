@@ -46,6 +46,33 @@ export function buildImportConfigForHktPreview(
   };
 }
 
+/** Stable key for HKT preview effect deps (ignores object identity). */
+export function serializeHktPreviewConfigKey(
+  importConfig: Pick<ImportConfig, "generateHkt" | "convertToSsbh" | "ssbhConfig">,
+  hktSimplify: HktSimplifyConfig,
+): string {
+  const ssbh = importConfig.ssbhConfig;
+  return JSON.stringify({
+    generateHkt: importConfig.generateHkt,
+    convertToSsbh: importConfig.convertToSsbh,
+    hktSimplify,
+    ssbh: ssbh
+      ? {
+          baseFilename: ssbh.baseFilename,
+          scaleFactor: ssbh.scaleFactor,
+          upAxis: ssbh.upAxis,
+          writeNumdlb: ssbh.writeNumdlb,
+          writeNumshb: ssbh.writeNumshb,
+          writeNusktb: ssbh.writeNusktb,
+          writeNumatb: ssbh.writeNumatb,
+          writeJnttbl: ssbh.writeJnttbl,
+          writeMayaProfile: ssbh.writeMayaProfile,
+          materialTemplate: ssbh.materialTemplate,
+        }
+      : null,
+  });
+}
+
 export function reductionPercent(before: number, after: number): number | null {
   if (before <= 0) return null;
   return Math.max(0, Math.round((1 - after / before) * 100));

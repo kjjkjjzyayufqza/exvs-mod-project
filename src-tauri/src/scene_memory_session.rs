@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+
+use crate::ssbh_dae::ModlEntryConfig;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -55,6 +57,12 @@ pub struct SsbhConvertConfig {
     pub write_jnttbl: bool,
     pub write_maya_profile: bool,
     pub material_template: Option<String>,
+    #[serde(default)]
+    pub maya_file: Option<serde_json::Value>,
+    #[serde(default)]
+    pub nust_file: Option<serde_json::Value>,
+    #[serde(default)]
+    pub numdlb_entries: Vec<ModlEntryConfig>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -279,29 +287,31 @@ impl SceneMemorySession {
                     .as_ref()
                     .map(|c| c.base_filename.as_str())
                     .unwrap_or(&import.name);
-                // Model files go inside {base}/0/ subfolder
+                // Model files go inside {base}/0/ subfolder and must match numdlb references.
                 let model_dir = format!("{base}/0");
                 artifacts.push(SaveArtifact {
-                    relative_path: format!("{model_dir}/model.numdlb"),
+                    relative_path: format!("{model_dir}/{base}.numdlb"),
                     data: ssbh.numdlb.clone(),
                 });
                 artifacts.push(SaveArtifact {
-                    relative_path: format!("{model_dir}/model.numshb"),
+                    relative_path: format!("{model_dir}/{base}.numshb"),
                     data: ssbh.numshb.clone(),
                 });
                 if let Some(ref nusktb) = ssbh.nusktb {
                     artifacts.push(SaveArtifact {
-                        relative_path: format!("{model_dir}/model.nusktb"),
+                        relative_path: format!("{model_dir}/{base}.nusktb"),
                         data: nusktb.clone(),
                     });
                 }
-                artifacts.push(SaveArtifact {
-                    relative_path: format!("{model_dir}/model__nust__.numatb"),
-                    data: ssbh.numatb.clone(),
-                });
+                if !ssbh.numatb.is_empty() {
+                    artifacts.push(SaveArtifact {
+                        relative_path: format!("{model_dir}/{base}__nust__.numatb"),
+                        data: ssbh.numatb.clone(),
+                    });
+                }
                 if let Some(ref maya) = ssbh.maya_numatb {
                     artifacts.push(SaveArtifact {
-                        relative_path: format!("{model_dir}/model__maya__.numatb"),
+                        relative_path: format!("{model_dir}/{base}__maya__.numatb"),
                         data: maya.clone(),
                     });
                 }
@@ -313,7 +323,7 @@ impl SceneMemorySession {
                     .unwrap_or(true);
                 if write_jnttbl && !ssbh.jnttbl.is_empty() {
                     artifacts.push(SaveArtifact {
-                        relative_path: format!("{model_dir}/model.jnttbl"),
+                        relative_path: format!("{model_dir}/{base}.jnttbl"),
                         data: ssbh.jnttbl.clone(),
                     });
                 }
@@ -481,6 +491,9 @@ mod tests {
                 write_jnttbl: true,
                 write_maya_profile: false,
                 material_template: None,
+                maya_file: None,
+                nust_file: None,
+                numdlb_entries: Vec::new(),
             }),
             hkt_simplify: HktSimplifyConfig::default(),
         };
@@ -556,6 +569,9 @@ mod tests {
                 write_jnttbl: true,
                 write_maya_profile: false,
                 material_template: None,
+                maya_file: None,
+                nust_file: None,
+                numdlb_entries: Vec::new(),
             });
         }
         s.store_ssbh_artifacts(
@@ -574,11 +590,11 @@ mod tests {
 
         let artifacts = s.collect_save_artifacts();
         let paths: Vec<&str> = artifacts.iter().map(|a| a.relative_path.as_str()).collect();
-        assert!(paths.contains(&"mymodel/0/model.numdlb"));
-        assert!(paths.contains(&"mymodel/0/model.numshb"));
-        assert!(paths.contains(&"mymodel/0/model.nusktb"));
-        assert!(paths.contains(&"mymodel/0/model__nust__.numatb"));
-        assert!(paths.contains(&"mymodel/0/model.jnttbl"));
+        assert!(paths.contains(&"mymodel/0/mymodel.numdlb"));
+        assert!(paths.contains(&"mymodel/0/mymodel.numshb"));
+        assert!(paths.contains(&"mymodel/0/mymodel.nusktb"));
+        assert!(paths.contains(&"mymodel/0/mymodel__nust__.numatb"));
+        assert!(paths.contains(&"mymodel/0/mymodel.jnttbl"));
         assert!(paths.contains(&"mymodel/test_model.hkt"));
         assert!(!paths.contains(&"mymodel/0/model__maya__.numatb"));
     }
@@ -657,6 +673,9 @@ mod tests {
                 write_jnttbl: false,
                 write_maya_profile: true,
                 material_template: None,
+                maya_file: None,
+                nust_file: None,
+                numdlb_entries: Vec::new(),
             });
         }
         s.store_ssbh_artifacts(
@@ -674,11 +693,11 @@ mod tests {
 
         let artifacts = s.collect_save_artifacts();
         let paths: Vec<&str> = artifacts.iter().map(|a| a.relative_path.as_str()).collect();
-        assert!(paths.contains(&"obj_a/0/model.numdlb"));
-        assert!(paths.contains(&"obj_a/0/model.numshb"));
+        assert!(paths.contains(&"obj_a/0/obj_a.numdlb"));
+        assert!(paths.contains(&"obj_a/0/obj_a.numshb"));
         assert!(!paths.iter().any(|p| p.contains("nusktb")));
-        assert!(paths.contains(&"obj_a/0/model__nust__.numatb"));
-        assert!(paths.contains(&"obj_a/0/model__maya__.numatb"));
+        assert!(paths.contains(&"obj_a/0/obj_a__nust__.numatb"));
+        assert!(paths.contains(&"obj_a/0/obj_a__maya__.numatb"));
         assert!(!paths.iter().any(|p| p.contains("jnttbl")));
     }
 
@@ -700,6 +719,9 @@ mod tests {
                 write_jnttbl: false,
                 write_maya_profile: false,
                 material_template: None,
+                maya_file: None,
+                nust_file: None,
+                numdlb_entries: Vec::new(),
             });
         }
         s.store_ssbh_artifacts(

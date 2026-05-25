@@ -234,6 +234,8 @@ describe("sceneSessionService", () => {
           writeJnttbl: true,
           writeMayaProfile: false,
           materialTemplate: null,
+          mayaFile: null,
+          nustFile: null,
         },
       });
     });

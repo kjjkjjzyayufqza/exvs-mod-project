@@ -40,6 +40,7 @@ import { SceneTextureManager } from "./components/SceneTextureManager";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ViewportContextMenu } from "./components/ViewportContextMenu";
 import { useSceneKeyboard } from "./hooks/useSceneKeyboard";
+import { useSceneDetailView } from "./hooks/useSceneDetailView";
 import { useSceneEditorStore } from "./store/sceneEditorStore";
 import {
   MapViewport,
@@ -198,6 +199,8 @@ import {
   importDaeThroughSceneSession,
 } from "./utils/sceneDaeSessionImport";
 import { applyOutlinerOrder } from "./utils/sceneOutlinerOrder";
+import { buildSubModelOutlinerNode } from "./utils/sceneOutlinerTree";
+import { SceneDetailViewHost } from "./components/detail-view/SceneDetailViewHost";
 
 import type { PreviewRenderStyle } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
 
@@ -379,6 +382,20 @@ export default function SceneEdit() {
   const [subModels, setSubModels] = useState<
     StageBundleResponse["subModels"]
   >([]);
+
+  const {
+    sessions: detailViewSessions,
+    openSession: openDetailViewSession,
+    closeSession: closeDetailViewSession,
+    activateSession: activateDetailViewSession,
+    setActiveTab: setDetailViewActiveTab,
+    setNumdlbDraft: setDetailViewNumdlbDraft,
+    saveNumdlb: saveDetailViewNumdlb,
+    setNumatbDraft: setDetailViewNumatbDraft,
+    saveNumatb: saveDetailViewNumatb,
+    setNuhlpbDraft: setDetailViewNuhlpbDraft,
+    saveNuhlpb: saveDetailViewNuhlpb,
+  } = useSceneDetailView({ baseModel, subModels });
   const [graphicParams, setGraphicParams] = useState<GraphicParam[]>([]);
   const [appliedGraphicParamKeys, setAppliedGraphicParamKeys] = useState<Set<string>>(() => new Set());
   const [placementHeader, setPlacementHeader] = useState<string[]>([]);
@@ -1394,6 +1411,11 @@ export default function SceneEdit() {
         applyBundle(stageRoot, result.reloadedBundle as any, { showToast: false });
       }
 
+      if (result.convertedDaeObjectIds.length > 0) {
+        const convertedIds = new Set(result.convertedDaeObjectIds);
+        setImportedDaeObjects((prev) => prev.filter((obj) => !convertedIds.has(obj.id)));
+      }
+
       useSceneDirtyStore.getState().reset();
       const completionSummary = buildSaveResultSummary(changePreview, result);
       setSaveProgressState((prev) => ({ ...prev, canClose: true, completionSummary }));
@@ -1465,6 +1487,11 @@ export default function SceneEdit() {
 
       if (result.reloadedBundle) {
         applyBundle(stageRoot, result.reloadedBundle as any, { showToast: false });
+      }
+
+      if (result.convertedDaeObjectIds.length > 0) {
+        const convertedIds = new Set(result.convertedDaeObjectIds);
+        setImportedDaeObjects((prev) => prev.filter((obj) => !convertedIds.has(obj.id)));
       }
 
       useSceneDirtyStore.getState().reset();
@@ -2233,26 +2260,7 @@ export default function SceneEdit() {
           continue;
         }
         if (child.role === "sub_model" && child.objectIndex != null) {
-          const instances = placementEntries
-            .map((entry, idx) => ({ entry, idx }))
-            .filter(
-              ({ entry }) =>
-                entry.vdkType.toUpperCase() === "OBJECT" &&
-                entry.objectNumber === child.objectIndex,
-            );
-          if (instances.length === 0) {
-            children.push(child);
-          } else {
-            for (const { entry, idx } of instances) {
-              const suffix = instances.length > 1 ? ` (${idx})` : "";
-              children.push({
-                id: formatPlacementViewportNodeId(child.id, idx),
-                label: `${child.label}${suffix}`,
-                role: "placement",
-                objectIndex: child.objectIndex,
-              });
-            }
-          }
+          children.push(buildSubModelOutlinerNode(child, placementEntries));
           continue;
         }
         children.push(child);
@@ -2319,6 +2327,18 @@ export default function SceneEdit() {
     }
     return { ...treeRoot, children };
   }, [treeRoot, outlinerChildren, outlinerOrder]);
+
+  const handleOpenProperties = useCallback(
+    (nodeId: string) => {
+      const node = findNode(outlinerRoot, nodeId);
+      if (!node) {
+        toast.error("Cannot find outliner node");
+        return;
+      }
+      openDetailViewSession(node);
+    },
+    [outlinerRoot, openDetailViewSession],
+  );
 
   const allNodeIds = useMemo(() => {
     if (!outlinerRoot) return [];
@@ -3222,6 +3242,7 @@ export default function SceneEdit() {
                     }}
                     onGenerateHkt={handleGenerateHkt}
                     onReorderRootChild={handleReorderOutlinerNode}
+                    onOpenProperties={handleOpenProperties}
                   />
                   {havokMeshDataMap.size > 0 && (
                     <MayaSection title="Collision" badge={havokMeshDataMap.size}>
@@ -3706,6 +3727,18 @@ export default function SceneEdit() {
             }}
           />
         )}
+        <SceneDetailViewHost
+          sessions={detailViewSessions}
+          onActivateSession={activateDetailViewSession}
+          onCloseSession={closeDetailViewSession}
+          onTabChange={setDetailViewActiveTab}
+          onNumdlbDraftChange={setDetailViewNumdlbDraft}
+          onNumdlbSave={saveDetailViewNumdlb}
+          onNumatbDraftChange={setDetailViewNumatbDraft}
+          onNumatbSave={saveDetailViewNumatb}
+          onNuhlpbDraftChange={setDetailViewNuhlpbDraft}
+          onNuhlpbSave={saveDetailViewNuhlpb}
+        />
       </div>
     </TooltipProvider>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -7,7 +7,10 @@ import { useDaeSsbhSessionStore } from "@/page/TestEditor/components/ssbh-model-
 import type { SsbhDaeAnalysisReport } from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
 import { NumdlbMaterialMappingEditor } from "@/page/TestEditor/components/ssbh-model-preview/components/NumdlbMaterialMappingEditor";
 import { NumatbTemplateEditor } from "@/page/TestEditor/components/ssbh-model-preview/components/NumatbTemplateEditor";
-import { collectMissingTexturePathsForExportSession } from "@/page/TestEditor/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
+import { MissingTexturePathFillPanel } from "@/page/TestEditor/components/ssbh-model-preview/components/MissingTexturePathFillPanel";
+import {
+  collectMissingTexturePathSlotRefsForExportSession,
+} from "@/page/TestEditor/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
 import type { DaeAnalysisResult } from "./daeImportTypes";
 import { DaeImportPanelSection } from "./daeImportUi";
 
@@ -18,25 +21,40 @@ interface DaeImportSsbhFullPanelProps {
 }
 
 export function DaeImportSsbhFullPanel({ analysis, sourcePath, stageRoot }: DaeImportSsbhFullPanelProps) {
+  const setSourcePath = useDaeSsbhSessionStore((state) => state.setSourcePath);
+  const loadAnalysis = useDaeSsbhSessionStore((state) => state.loadAnalysis);
+  const loadTemplateLibrary = useDaeSsbhSessionStore((state) => state.loadTemplateLibrary);
   const session = useDaeSsbhSessionStore();
-  const loadTemplateLibrary = useDaeSsbhSessionStore((s) => s.loadTemplateLibrary);
+
+  const loadedAnalysisKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     void loadTemplateLibrary();
   }, [loadTemplateLibrary]);
 
   useEffect(() => {
-    if (analysis && analysis.canConvert) {
-      session.setSourcePath(sourcePath);
-      session.loadAnalysis(analysis as unknown as SsbhDaeAnalysisReport);
+    if (!analysis?.canConvert) {
+      loadedAnalysisKeyRef.current = null;
+      return;
     }
-  }, [analysis, sourcePath]);
+
+    const analysisKey = `${sourcePath}\0${analysis.geometryNames.join("\u0001")}`;
+    if (loadedAnalysisKeyRef.current === analysisKey) {
+      return;
+    }
+
+    loadedAnalysisKeyRef.current = analysisKey;
+    setSourcePath(sourcePath);
+    loadAnalysis(analysis as unknown as SsbhDaeAnalysisReport, { resetMaterialProfiles: true });
+  }, [analysis, sourcePath, loadAnalysis, setSourcePath]);
 
   const selectedGeometrySet = useMemo(() => new Set(session.includeGeometryNames), [session.includeGeometryNames]);
 
-  const missingTexturePaths = useMemo(
+  const updateProfileAttribute = useDaeSsbhSessionStore((state) => state.updateProfileAttribute);
+
+  const missingTextureSlots = useMemo(
     () =>
-      collectMissingTexturePathsForExportSession(session.mayaFile, session.nustFile, {
+      collectMissingTexturePathSlotRefsForExportSession(session.mayaFile, session.nustFile, {
         writeNumatb: session.writeNumatb,
         writeMayaProfile: session.writeMayaProfile,
         materialLabels: session.numdlbEntries.map((r) => r.materialLabel),
@@ -153,18 +171,14 @@ export function DaeImportSsbhFullPanel({ analysis, sourcePath, stageRoot }: DaeI
         <NumatbTemplateEditor />
       </DaeImportPanelSection>
 
-      {missingTexturePaths.length > 0 && (
-        <div className="space-y-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
-          <p className="text-[11px] text-destructive">
-            Fill every texture path parameter for profiles you export:
-          </p>
-          <ul className="max-h-24 list-inside list-disc overflow-y-auto font-mono text-[10px] text-muted-foreground">
-            {missingTexturePaths.slice(0, 12).map((line, i) => (
-              <li key={i} className="break-all">{line}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <MissingTexturePathFillPanel
+        slots={missingTextureSlots}
+        onFillSlot={(slot, basename) => {
+          const data =
+            slot.textureDataKind === "String1" ? { String1: basename } : { String: basename };
+          updateProfileAttribute(slot.profile, slot.materialIndex, slot.attributeIndex, data);
+        }}
+      />
     </div>
   );
 }

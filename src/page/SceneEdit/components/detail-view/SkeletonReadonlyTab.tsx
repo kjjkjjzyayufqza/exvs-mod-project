@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Bone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SkelDataJson, BoneJson } from "@/page/TestEditor/components/ssbh-model-preview/types";
@@ -29,7 +29,7 @@ function buildBoneTree(bones: BoneJson[]): BoneTreeNode[] {
 }
 
 function BoneTreeItem({ node, depth }: { node: BoneTreeNode; depth: number }) {
-  const [expanded, setExpanded] = useState(depth < 2);
+  const [expanded, setExpanded] = useState(depth < 1);
   const hasChildren = node.children.length > 0;
 
   return (
@@ -71,6 +71,10 @@ function BoneTreeItem({ node, depth }: { node: BoneTreeNode; depth: number }) {
 }
 
 export function SkeletonReadonlyTab({ skel }: SkeletonReadonlyTabProps) {
+  const skelData = skel as SkelDataJson | null;
+  const bones = skelData?.bones ?? [];
+  const tree = useMemo(() => buildBoneTree(bones), [bones]);
+
   if (!skel) {
     return (
       <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
@@ -78,10 +82,6 @@ export function SkeletonReadonlyTab({ skel }: SkeletonReadonlyTabProps) {
       </div>
     );
   }
-
-  const skelData = skel as SkelDataJson;
-  const bones = skelData.bones ?? [];
-  const tree = buildBoneTree(bones);
 
   return (
     <div className="p-3 space-y-2">

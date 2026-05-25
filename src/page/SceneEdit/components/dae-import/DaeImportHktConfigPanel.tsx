@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { HavokInstallInfo, DaeImportConfig } from "./daeImportTypes";
 import { DaeImportFieldRow, DaeImportSection, DaeImportStatusAlert } from "./daeImportUi";
 import { DaeImportHktSimplifyFields } from "./DaeImportHktSimplifyFields";
@@ -36,7 +37,7 @@ export function DaeImportHktConfigPanel({
   }
 
   const profileCount = havokInfo.configProfiles.length;
-  const backendConfig = mapDaeImportConfigToBackend(config);
+  const backendConfig = useMemo(() => mapDaeImportConfigToBackend(config), [config]);
 
   return (
     <>

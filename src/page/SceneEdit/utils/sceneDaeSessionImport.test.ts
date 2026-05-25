@@ -1,39 +1,49 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@tauri-apps/plugin-fs", () => ({
-  readFile: vi.fn(),
-}));
-
 vi.mock("./sceneSessionService", () => ({
-  sceneImportDae: vi.fn(),
+  sceneImportDaeFromPath: vi.fn(),
   sceneConfigureImport: vi.fn(),
   sceneExecuteImport: vi.fn(),
+  sceneGetImportConfig: vi.fn(),
 }));
 
-import { readFile } from "@tauri-apps/plugin-fs";
 import { createDefaultDaeImportConfig } from "../components/dae-import/daeImportDefaults";
+import { createEmptyNumatbFile } from "@/page/TestEditor/components/ssbh-model-preview/daeSsbhTypes";
+import { createImportedDaeMaterialProfile } from "./sceneDaeSsbhSave";
 import {
   buildSsbhSessionImportConfig,
   ensureImportedDaeSessionImport,
   importDaeThroughSceneSession,
+  resolveSessionImportConfigForSave,
+  retargetAndReconvertSessionImport,
   retargetSessionImportFolderName,
 } from "./sceneDaeSessionImport";
 import {
   sceneConfigureImport,
   sceneExecuteImport,
-  sceneImportDae,
+  sceneGetImportConfig,
+  sceneImportDaeFromPath,
   type ImportConfig,
 } from "./sceneSessionService";
 
-const mockReadFile = vi.mocked(readFile);
-const mockSceneImportDae = vi.mocked(sceneImportDae);
+const mockSceneImportDaeFromPath = vi.mocked(sceneImportDaeFromPath);
 const mockSceneConfigureImport = vi.mocked(sceneConfigureImport);
 const mockSceneExecuteImport = vi.mocked(sceneExecuteImport);
+const mockSceneGetImportConfig = vi.mocked(sceneGetImportConfig);
 
 describe("buildSsbhSessionImportConfig", () => {
   it("maps session store settings into a memory-session import config", () => {
     const daeConfig = createDefaultDaeImportConfig("sample_mesh");
     daeConfig.generateHkt = true;
+
+    const materialProfile = createImportedDaeMaterialProfile();
+    const numdlbEntries = [
+      {
+        meshObjectName: "body_geo",
+        meshObjectSubindex: 0,
+        materialLabel: "pbr1Mtl",
+      },
+    ];
 
     const importConfig = buildSsbhSessionImportConfig(
       daeConfig,
@@ -45,7 +55,10 @@ describe("buildSsbhSessionImportConfig", () => {
         writeNumshb: true,
         writeNusktb: false,
         writeNumatb: true,
-        writeMayaProfile: false,
+        writeMayaProfile: true,
+        mayaFile: materialProfile,
+        nustFile: materialProfile,
+        numdlbEntries,
       },
       "sample_mesh",
     );
@@ -63,9 +76,40 @@ describe("buildSsbhSessionImportConfig", () => {
       writeNusktb: false,
       writeNumatb: true,
       writeJnttbl: true,
-      writeMayaProfile: false,
+      writeMayaProfile: true,
       materialTemplate: "default",
+      mayaFile: materialProfile,
+      nustFile: materialProfile,
+      numdlbEntries,
     });
+  });
+
+  it("includes numdlb mesh material mappings in session import config", () => {
+    const daeConfig = createDefaultDaeImportConfig("sample_mesh");
+    const numdlbEntries = [
+      { meshObjectName: "mesh_a", meshObjectSubindex: 0, materialLabel: "pbr1Mtl" },
+      { meshObjectName: "mesh_b", meshObjectSubindex: 0, materialLabel: "pbr2Mtl" },
+    ];
+
+    const importConfig = buildSsbhSessionImportConfig(
+      daeConfig,
+      {
+        outputBaseName: "sample_mesh",
+        scaleFactorText: "1",
+        upAxis: "y_up",
+        writeNumdlb: true,
+        writeNumshb: true,
+        writeNusktb: true,
+        writeNumatb: true,
+        writeMayaProfile: false,
+        mayaFile: createEmptyNumatbFile(),
+        nustFile: createEmptyNumatbFile(),
+        numdlbEntries,
+      },
+      "sample_mesh",
+    );
+
+    expect(importConfig.ssbhConfig?.numdlbEntries).toEqual(numdlbEntries);
   });
 
   it("falls back to scale factor 1 when scale text is invalid", () => {
@@ -81,6 +125,9 @@ describe("buildSsbhSessionImportConfig", () => {
         writeNusktb: true,
         writeNumatb: true,
         writeMayaProfile: false,
+        mayaFile: createEmptyNumatbFile(),
+        nustFile: createEmptyNumatbFile(),
+        numdlbEntries: [],
       },
       "sample_mesh",
     );
@@ -89,11 +136,93 @@ describe("buildSsbhSessionImportConfig", () => {
   });
 });
 
+describe("resolveSessionImportConfigForSave", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("preserves existing material profiles and disables loadToScene", async () => {
+    const materialProfile = createImportedDaeMaterialProfile();
+    mockSceneGetImportConfig.mockResolvedValue({
+      loadToScene: true,
+      convertToSsbh: true,
+      generateHkt: true,
+      hktSimplify: {
+        enabled: true,
+        planarityAngleDeg: 8,
+        minTriangleArea: 1e-8,
+        weldEpsilon: 1e-5,
+      },
+      ssbhConfig: {
+        baseFilename: "modelsss",
+        scaleFactor: 2,
+        upAxis: "z_up",
+        writeNumdlb: true,
+        writeNumshb: true,
+        writeNusktb: true,
+        writeNumatb: true,
+        writeJnttbl: true,
+        writeMayaProfile: true,
+        materialTemplate: "default",
+        mayaFile: materialProfile,
+        nustFile: materialProfile,
+        numdlbEntries: [
+          {
+            meshObjectName: "body_geo",
+            meshObjectSubindex: 0,
+            materialLabel: "pbr1Mtl",
+          },
+        ],
+      },
+    });
+
+    const importConfig = await resolveSessionImportConfigForSave(
+      "session-1",
+      "import-1",
+      "sssssccccc",
+    );
+
+    expect(mockSceneGetImportConfig).toHaveBeenCalledWith("session-1", "import-1");
+    expect(importConfig.loadToScene).toBe(false);
+    expect(importConfig.convertToSsbh).toBe(true);
+    expect(importConfig.generateHkt).toBe(false);
+    expect(importConfig.ssbhConfig?.baseFilename).toBe("sssssccccc");
+    expect(importConfig.ssbhConfig?.mayaFile).toEqual(materialProfile);
+    expect(importConfig.ssbhConfig?.nustFile).toEqual(materialProfile);
+    expect(importConfig.ssbhConfig?.numdlbEntries).toEqual([
+      {
+        meshObjectName: "body_geo",
+        meshObjectSubindex: 0,
+        materialLabel: "pbr1Mtl",
+      },
+    ]);
+    expect(importConfig.ssbhConfig?.scaleFactor).toBe(2);
+  });
+
+  it("throws when the session import has no SSBH config", async () => {
+    mockSceneGetImportConfig.mockResolvedValue({
+      loadToScene: true,
+      convertToSsbh: false,
+      generateHkt: false,
+      hktSimplify: {
+        enabled: true,
+        planarityAngleDeg: 8,
+        minTriangleArea: 1e-8,
+        weldEpsilon: 1e-5,
+      },
+      ssbhConfig: null,
+    });
+
+    await expect(
+      resolveSessionImportConfigForSave("session-1", "import-1", "sssssccccc"),
+    ).rejects.toThrow("Session import is missing SSBH configuration");
+  });
+});
+
 describe("importDaeThroughSceneSession", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFile.mockResolvedValue(new Uint8Array([60, 67, 79, 76]));
-    mockSceneImportDae.mockResolvedValue("import-1");
+    mockSceneImportDaeFromPath.mockResolvedValue("import-1");
     mockSceneConfigureImport.mockResolvedValue(undefined);
     mockSceneExecuteImport.mockResolvedValue({
       importId: "import-1",
@@ -105,7 +234,7 @@ describe("importDaeThroughSceneSession", () => {
     });
   });
 
-  it("reads DAE bytes and runs the scene session import pipeline", async () => {
+  it("runs the scene session import pipeline from a DAE path", async () => {
     const importConfig: ImportConfig = {
       loadToScene: false,
       convertToSsbh: true,
@@ -137,10 +266,9 @@ describe("importDaeThroughSceneSession", () => {
       importConfig,
     });
 
-    expect(mockReadFile).toHaveBeenCalledWith("E:/models/sample.dae");
-    expect(mockSceneImportDae).toHaveBeenCalledWith(
+    expect(mockSceneImportDaeFromPath).toHaveBeenCalledWith(
       "session-1",
-      [60, 67, 79, 76],
+      "E:/models/sample.dae",
       "sample_mesh",
     );
     expect(mockSceneConfigureImport).toHaveBeenCalledWith(
@@ -150,6 +278,99 @@ describe("importDaeThroughSceneSession", () => {
     );
     expect(mockSceneExecuteImport).toHaveBeenCalledWith("session-1", "import-1");
     expect(result.ssbhGenerated).toBe(true);
+  });
+});
+
+describe("retargetAndReconvertSessionImport", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSceneConfigureImport.mockResolvedValue(undefined);
+    mockSceneExecuteImport.mockResolvedValue({
+      importId: "import-1",
+      name: "sample_mesh",
+      ssbhGenerated: true,
+      hktGenerated: false,
+      hktDetail: null,
+      warnings: [],
+    });
+  });
+
+  it("retargets base filename and re-converts SSBH artifacts for save", async () => {
+    const importConfig: ImportConfig = {
+      loadToScene: true,
+      convertToSsbh: true,
+      generateHkt: false,
+      hktSimplify: {
+        enabled: true,
+        planarityAngleDeg: 8,
+        minTriangleArea: 1e-8,
+        weldEpsilon: 1e-5,
+      },
+      ssbhConfig: {
+        baseFilename: "modelsss",
+        scaleFactor: 1,
+        upAxis: "y_up",
+        writeNumdlb: true,
+        writeNumshb: true,
+        writeNusktb: true,
+        writeNumatb: true,
+        writeJnttbl: true,
+        writeMayaProfile: false,
+        materialTemplate: null,
+      },
+    };
+
+    await retargetAndReconvertSessionImport(
+      "session-1",
+      "import-1",
+      importConfig,
+      "zzzz_import_modelsss",
+    );
+
+    expect(mockSceneConfigureImport).toHaveBeenCalledWith("session-1", "import-1", {
+      ...importConfig,
+      ssbhConfig: {
+        ...importConfig.ssbhConfig!,
+        baseFilename: "zzzz_import_modelsss",
+      },
+    });
+    expect(mockSceneExecuteImport).toHaveBeenCalledWith("session-1", "import-1");
+  });
+
+  it("skips re-conversion when SSBH conversion is disabled", async () => {
+    const importConfig: ImportConfig = {
+      loadToScene: true,
+      convertToSsbh: false,
+      generateHkt: false,
+      hktSimplify: {
+        enabled: true,
+        planarityAngleDeg: 8,
+        minTriangleArea: 1e-8,
+        weldEpsilon: 1e-5,
+      },
+      ssbhConfig: {
+        baseFilename: "modelsss",
+        scaleFactor: 1,
+        upAxis: "y_up",
+        writeNumdlb: true,
+        writeNumshb: true,
+        writeNusktb: true,
+        writeNumatb: true,
+        writeJnttbl: true,
+        writeMayaProfile: false,
+        materialTemplate: null,
+      },
+    };
+
+    await retargetAndReconvertSessionImport(
+      "session-1",
+      "import-1",
+      importConfig,
+      "zzzz_import_modelsss",
+    );
+
+    expect(mockSceneConfigureImport).toHaveBeenCalled();
+    expect(mockSceneExecuteImport).not.toHaveBeenCalled();
   });
 });
 
@@ -215,8 +436,7 @@ describe("retargetSessionImportFolderName", () => {
 describe("ensureImportedDaeSessionImport", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReadFile.mockResolvedValue(new Uint8Array([60, 67, 79, 76]));
-    mockSceneImportDae.mockResolvedValue("import-lazy");
+    mockSceneImportDaeFromPath.mockResolvedValue("import-lazy");
     mockSceneConfigureImport.mockResolvedValue(undefined);
     mockSceneExecuteImport.mockResolvedValue({
       importId: "import-lazy",
@@ -239,8 +459,7 @@ describe("ensureImportedDaeSessionImport", () => {
     });
 
     expect(importId).toBe("import-existing");
-    expect(mockReadFile).not.toHaveBeenCalled();
-    expect(mockSceneImportDae).not.toHaveBeenCalled();
+    expect(mockSceneImportDaeFromPath).not.toHaveBeenCalled();
   });
 
   it("registers preview-only DAE objects in the session before HKT generation", async () => {
@@ -253,9 +472,9 @@ describe("ensureImportedDaeSessionImport", () => {
     });
 
     expect(importId).toBe("import-lazy");
-    expect(mockSceneImportDae).toHaveBeenCalledWith(
+    expect(mockSceneImportDaeFromPath).toHaveBeenCalledWith(
       "session-1",
-      [60, 67, 79, 76],
+      "E:/models/sample.dae",
       "sample_mesh",
     );
     expect(mockSceneConfigureImport).toHaveBeenCalledWith(

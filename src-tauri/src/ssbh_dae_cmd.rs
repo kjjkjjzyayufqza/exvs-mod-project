@@ -101,7 +101,10 @@ fn ensure_parent_dir(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn write_numatb_from_json_value(json_value: &serde_json::Value, output_path: &Path) -> Result<(), String> {
+pub(crate) fn write_numatb_from_json_value(
+    json_value: &serde_json::Value,
+    output_path: &Path,
+) -> Result<(), String> {
     ensure_parent_dir(output_path)?;
     let matl: MatlData = serde_json::from_value(json_value.clone()).map_err(|e| {
         format!(
@@ -120,11 +123,48 @@ fn read_numatb_to_json_value(file_path: &Path) -> Result<serde_json::Value, Stri
     serde_json::to_value(&matl).map_err(|e| format!("Failed to serialize numatb to JSON: {e}"))
 }
 
-fn variant_numatb_paths(base: &str, output_dir: &Path) -> (PathBuf, PathBuf) {
+pub(crate) fn variant_numatb_paths(base: &str, output_dir: &Path) -> (PathBuf, PathBuf) {
     (
         output_dir.join(format!("{base}__maya__.numatb")),
         output_dir.join(format!("{base}__nust__.numatb")),
     )
+}
+
+pub(crate) fn serialize_numatb_from_json_value(
+    json_value: &serde_json::Value,
+) -> Result<Vec<u8>, String> {
+    let temp_dir = tempfile::tempdir()
+        .map_err(|e| format!("Failed to create temp dir for numatb serialization: {e}"))?;
+    let path = temp_dir.path().join("session.numatb");
+    write_numatb_from_json_value(json_value, &path)?;
+    std::fs::read(&path).map_err(|e| format!("Failed to read serialized numatb bytes: {e}"))
+}
+
+pub(crate) fn build_session_numatb_artifacts(
+    base: &str,
+    write_numatb: bool,
+    write_maya_profile: bool,
+    nust_file: Option<&serde_json::Value>,
+    maya_file: Option<&serde_json::Value>,
+) -> Result<(Vec<u8>, Option<Vec<u8>>), String> {
+    if !write_numatb {
+        return Ok((Vec::new(), None));
+    }
+    let nust_payload = nust_file.ok_or_else(|| {
+        format!("write_numatb is true but no nust profile was provided for base '{base}'")
+    })?;
+    let numatb = serialize_numatb_from_json_value(nust_payload)?;
+    let maya_numatb = if write_maya_profile {
+        let maya_payload = maya_file.ok_or_else(|| {
+            format!(
+                "write_maya_profile is true but no maya profile was provided for base '{base}'"
+            )
+        })?;
+        Some(serialize_numatb_from_json_value(maya_payload)?)
+    } else {
+        None
+    };
+    Ok((numatb, maya_numatb))
 }
 
 /// Preflight a `.dae` file: per-geometry metrics, bone list, blocking errors vs `validate_dae_scene`.

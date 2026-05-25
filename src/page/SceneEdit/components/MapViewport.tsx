@@ -25,6 +25,7 @@ import {
 import * as THREE from "three";
 import { mergeBufferGeometries } from "three-stdlib";
 import { StageOrbitControls } from "./StageOrbitControls";
+import { ViewportFrameLoopGate } from "./ViewportFrameLoopGate";
 import { ViewportMarqueeOverlay } from "./ViewportMarqueeOverlay";
 import {
   ViewportSelectionController,
@@ -685,6 +686,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           />
         ) : null}
         <SceneCanvasPerformanceHud showStats={showStats} />
+        <ViewportFrameLoopGate />
         <InvalidateGraphicLightingSync canvasSyncKey={canvasSyncKey} />
         <SceneAnimePostFxGate previewRenderStyle={previewRenderStyle} />
 

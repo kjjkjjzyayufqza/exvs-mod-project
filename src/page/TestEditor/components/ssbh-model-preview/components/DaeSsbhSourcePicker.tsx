@@ -73,7 +73,7 @@ export function DaeSsbhSourcePicker() {
                   try {
                     const analysis =
                       importKind === "dae" ? await ssbhAnalyzeDae(nextPath) : await ssbhAnalyzeFbx(nextPath);
-                    loadAnalysis(analysis);
+                    loadAnalysis(analysis, { resetMaterialProfiles: true });
                     toast.success(`Analyzed ${importKind.toUpperCase()} source`);
                   } catch (error) {
                     toast.error(String(error));

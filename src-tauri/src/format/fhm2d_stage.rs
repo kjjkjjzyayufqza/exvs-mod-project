@@ -3230,15 +3230,61 @@ fn resolve_content_root(stage_root: &Path) -> PathBuf {
     }
 }
 
+fn is_zero_zero_content_root(path: &Path) -> bool {
+    path.file_name().map(|n| n == "0").unwrap_or(false)
+        && path
+            .parent()
+            .and_then(|p| p.file_name())
+            .map(|n| n == "0")
+            .unwrap_or(false)
+}
+
+/// Pack root is the hash-named folder that owns `0/0/` content and `textures/`.
+fn resolve_pack_root(stage_root: &Path) -> PathBuf {
+    if is_zero_zero_content_root(stage_root) {
+        return stage_root
+            .parent()
+            .and_then(|p| p.parent())
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| stage_root.to_path_buf());
+    }
+    if stage_root.join("0").join("0").is_dir() {
+        return stage_root.to_path_buf();
+    }
+    stage_root.to_path_buf()
+}
+
+fn resolve_stage_roots(stage_root: &Path) -> (PathBuf, PathBuf) {
+    let pack_root = resolve_pack_root(stage_root);
+    let content_root = resolve_content_root(&pack_root);
+    (pack_root, content_root)
+}
+
+fn remove_empty_dir_if_exists(path: &Path) {
+    if !path.is_dir() {
+        return;
+    }
+    let is_empty = fs::read_dir(path)
+        .map(|mut entries| entries.next().is_none())
+        .unwrap_or(false);
+    if is_empty {
+        let _ = fs::remove_dir(path);
+    }
+}
+
 /// Reverse operation: collect nutexb files from per-model numbered subdirs
 /// back into a shared `textures/` folder, deduplicating by filename.
 pub fn restore_shared_textures(stage_root: &str) -> Result<RestoreSharedResult, String> {
-    let root = Path::new(stage_root);
-    let textures_dir = root.join(STAGE_TEXTURES_NAME);
-    fs::create_dir_all(&textures_dir)
-        .map_err(|e| format!("Failed to create textures/ folder: {e}"))?;
+    let stage_root_path = Path::new(stage_root);
+    let (pack_root, content_root) = resolve_stage_roots(stage_root_path);
+    let textures_dir = pack_root.join(STAGE_TEXTURES_NAME);
 
-    let folder_name = root.file_name().and_then(|n| n.to_str()).unwrap_or("stage");
+    remove_empty_dir_if_exists(&content_root.join(STAGE_TEXTURES_NAME));
+
+    let folder_name = pack_root
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("stage");
 
     let mut warnings = Vec::new();
     let mut collected = 0usize;
@@ -3246,7 +3292,7 @@ pub fn restore_shared_textures(stage_root: &str) -> Result<RestoreSharedResult, 
     let mut seen_names: HashSet<String> = HashSet::new();
     let mut url_remap: HashMap<String, String> = HashMap::new();
 
-    let ssbh_folders = find_ssbh_folders(root, &mut warnings)?;
+    let ssbh_folders = find_ssbh_folders(&content_root, &mut warnings)?;
 
     let mut all_texture_subdirs: Vec<PathBuf> = Vec::new();
 
@@ -3281,13 +3327,18 @@ pub fn restore_shared_textures(stage_root: &str) -> Result<RestoreSharedResult, 
                     let src = nutexb_entry.path();
                     let dest = textures_dir.join(&fname);
                     if seen_names.insert(lower) {
+                        if !textures_dir.is_dir() {
+                            fs::create_dir_all(&textures_dir).map_err(|e| {
+                                format!("Failed to create textures/ folder: {e}")
+                            })?;
+                        }
                         fs::copy(&src, &dest).map_err(|e| {
                             format!("Failed to copy {} → {}: {e}", src.display(), dest.display())
                         })?;
                         collected += 1;
                     }
                     if let (Ok(old_rel), Ok(new_rel)) =
-                        (src.strip_prefix(root), dest.strip_prefix(root))
+                        (src.strip_prefix(&pack_root), dest.strip_prefix(&pack_root))
                     {
                         let old_url = format!(
                             ".\\{}\\{}",
@@ -3317,7 +3368,7 @@ pub fn restore_shared_textures(stage_root: &str) -> Result<RestoreSharedResult, 
     }
 
     if !url_remap.is_empty() {
-        if let Some(sj_path) = find_structure_json_path(root) {
+        if let Some(sj_path) = find_structure_json_path(&pack_root) {
             if let Err(e) = patch_structure_json_urls(&sj_path, &url_remap) {
                 warnings.push(format!("Failed to patch structure JSON after restore: {e}"));
             }

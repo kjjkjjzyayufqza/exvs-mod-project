@@ -3,6 +3,7 @@ import { createEmptyNumatbFile, type NumdlbMappingRow } from "./daeSsbhTypes";
 import { EXVS_MAYA_TEMPLATE_FIXTURE, EXVS_NUST_TEMPLATE_FIXTURE } from "./exvsNumatbFixtures";
 import { flattenEntryToAttributes } from "./store/matlEntryFlat";
 import {
+  collectMissingTexturePathSlotRefsForExportSession,
   collectMissingTexturePathSlots,
   collectMissingTexturePathsForExportSession,
   mirrorTexturePathOntoOtherProfile,
@@ -107,6 +108,47 @@ describe("numatb template helpers", () => {
       textures: [{ param_id: "Texture1", data: "path/to/tex" }],
     });
     expect(collectMissingTexturePathSlots(file)).toEqual([]);
+  });
+
+  it("collectMissingTexturePathSlotRefsForExportSession returns structured slot refs", () => {
+    const maya = createEmptyNumatbFile();
+    maya.entries.push({
+      material_label: "m1",
+      shader_label: "",
+      textures: [{ param_id: "DiffuseMap", data: "" }],
+    });
+    const nust = createEmptyNumatbFile();
+    nust.entries.push({
+      material_label: "m2",
+      shader_label: "",
+      textures2: [{ param_id: "BaseColorMap", data: "" }],
+    });
+
+    const refs = collectMissingTexturePathSlotRefsForExportSession(maya, nust, {
+      writeNumatb: true,
+      writeMayaProfile: true,
+    });
+
+    expect(refs).toEqual([
+      {
+        profile: "maya",
+        materialLabel: "m1",
+        paramId: "DiffuseMap",
+        materialIndex: 0,
+        attributeIndex: 0,
+        value: "",
+        textureDataKind: "String",
+      },
+      {
+        profile: "nust",
+        materialLabel: "m2",
+        paramId: "BaseColorMap",
+        materialIndex: 0,
+        attributeIndex: 0,
+        value: "",
+        textureDataKind: "String1",
+      },
+    ]);
   });
 
   it("collectMissingTexturePathsForExportSession only checks profiles that will be written", () => {

@@ -11,9 +11,13 @@ import { useDaeSsbhSessionStore } from "../store/daeSsbhSessionStore";
 import { DialogLastPathKey, getDialogDefaultPath, rememberDialogSelection } from "@/utils/dialogLastPath";
 import { useSsbhModelPreview } from "../SsbhModelPreviewContext";
 import { ssbhAnalyzeDae, ssbhAnalyzeFbx, ssbhConvertDaeToSsbh, ssbhConvertFbxToSsbh } from "../ssbhDaeIoService";
-import { collectMissingTexturePathsForExportSession } from "../store/numatbTemplateStoreHelpers";
+import {
+  collectMissingTexturePathSlotRefsForExportSession,
+  collectMissingTexturePathsForExportSession,
+} from "../store/numatbTemplateStoreHelpers";
 import { NumdlbMaterialMappingEditor } from "./NumdlbMaterialMappingEditor";
 import { NumatbTemplateEditor } from "./NumatbTemplateEditor";
+import { MissingTexturePathFillPanel } from "./MissingTexturePathFillPanel";
 
 export function DaeSsbhSessionLayout() {
   const preview = useSsbhModelPreview();
@@ -27,13 +31,24 @@ export function DaeSsbhSessionLayout() {
 
   const selectedGeometrySet = useMemo(() => new Set(session.includeGeometryNames), [session.includeGeometryNames]);
 
-  const missingTexturePaths = useMemo(
+  const updateProfileAttribute = useDaeSsbhSessionStore((state) => state.updateProfileAttribute);
+
+  const missingTextureSlots = useMemo(
     () =>
-      collectMissingTexturePathsForExportSession(session.mayaFile, session.nustFile, {
+      collectMissingTexturePathSlotRefsForExportSession(session.mayaFile, session.nustFile, {
         writeNumatb: session.writeNumatb,
         writeMayaProfile: session.writeMayaProfile,
         materialLabels: session.numdlbEntries.map((row) => row.materialLabel),
       }),
+    [session.mayaFile, session.nustFile, session.writeNumatb, session.writeMayaProfile, session.numdlbEntries],
+  );
+
+  const missingTexturePaths = useMemo(
+    () => collectMissingTexturePathsForExportSession(session.mayaFile, session.nustFile, {
+      writeNumatb: session.writeNumatb,
+      writeMayaProfile: session.writeMayaProfile,
+      materialLabels: session.numdlbEntries.map((row) => row.materialLabel),
+    }),
     [session.mayaFile, session.nustFile, session.writeNumatb, session.writeMayaProfile, session.numdlbEntries],
   );
 
@@ -268,24 +283,18 @@ export function DaeSsbhSessionLayout() {
             Output directory, base filename, geometry selection, and non-empty material labels are required.
           </p>
         ) : null}
-        {missingTexturePaths.length > 0 ? (
-          <div className="space-y-2">
-            <p className="text-[11px] text-destructive">
-              {
-                "Every texture path parameter must be filled for the Maya/Nust profiles you are exporting (parameters such as Texture1, RoughnessMap, AmbientOcclusionMap, BaseColorMap, DiffuseCubeMap, etc.)."
-              }
-            </p>
-            <ul className="max-h-36 list-inside list-disc overflow-y-auto rounded-md border border-destructive/30 bg-destructive/5 p-2 font-mono text-[10px] text-muted-foreground">
-              {missingTexturePaths.slice(0, 24).map((line, index) => (
-                <li key={`${index}:${line}`} className="break-all">
-                  {line}
-                </li>
-              ))}
-            </ul>
-            {missingTexturePaths.length > 24 ? (
-              <p className="text-[10px] text-muted-foreground">{"…and more (fix listed items first)."}</p>
-            ) : null}
-          </div>
+        {missingTextureSlots.length > 0 ? (
+          <MissingTexturePathFillPanel
+            slots={missingTextureSlots}
+            title={
+              "Every texture path parameter must be filled for the Maya/Nust profiles you are exporting (parameters such as Texture1, RoughnessMap, AmbientOcclusionMap, BaseColorMap, DiffuseCubeMap, etc.)."
+            }
+            onFillSlot={(slot, basename) => {
+              const data =
+                slot.textureDataKind === "String1" ? { String1: basename } : { String: basename };
+              updateProfileAttribute(slot.profile, slot.materialIndex, slot.attributeIndex, data);
+            }}
+          />
         ) : null}
       </div>
     </div>

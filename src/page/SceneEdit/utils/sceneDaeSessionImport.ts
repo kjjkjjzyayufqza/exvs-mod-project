@@ -5,10 +5,45 @@ import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
 import {
   sceneConfigureImport,
   sceneExecuteImport,
+  sceneGetImportConfig,
   sceneImportDaeFromPath,
   type ImportConfig,
   type ImportResult,
 } from "./sceneSessionService";
+
+export async function resolveSessionImportConfigForSave(
+  sessionId: string,
+  importId: string,
+  folderName: string,
+): Promise<ImportConfig> {
+  const existing = await sceneGetImportConfig(sessionId, importId);
+  if (!existing.ssbhConfig) {
+    throw new Error("Session import is missing SSBH configuration");
+  }
+
+  return {
+    ...existing,
+    loadToScene: false,
+    convertToSsbh: true,
+    generateHkt: false,
+    ssbhConfig: {
+      ...existing.ssbhConfig,
+      baseFilename: folderName,
+    },
+  };
+}
+
+export async function retargetAndReconvertSessionImport(
+  sessionId: string,
+  importId: string,
+  importConfig: ImportConfig,
+  folderName: string,
+): Promise<void> {
+  await retargetSessionImportFolderName(sessionId, importId, importConfig, folderName);
+  if (importConfig.convertToSsbh) {
+    await sceneExecuteImport(sessionId, importId);
+  }
+}
 
 export function buildSsbhSessionImportConfig(
   daeConfig: DaeImportConfig,
@@ -22,6 +57,9 @@ export function buildSsbhSessionImportConfig(
     | "writeNusktb"
     | "writeNumatb"
     | "writeMayaProfile"
+    | "mayaFile"
+    | "nustFile"
+    | "numdlbEntries"
   >,
   baseFilename: string,
 ): ImportConfig {
@@ -42,6 +80,9 @@ export function buildSsbhSessionImportConfig(
       writeJnttbl: daeConfig.ssbhConfig.writeJnttbl,
       writeMayaProfile: sessionState.writeMayaProfile,
       materialTemplate: daeConfig.ssbhConfig.materialTemplate || null,
+      mayaFile: sessionState.writeMayaProfile ? sessionState.mayaFile : null,
+      nustFile: sessionState.writeNumatb ? sessionState.nustFile : null,
+      numdlbEntries: sessionState.numdlbEntries,
     },
   };
 }

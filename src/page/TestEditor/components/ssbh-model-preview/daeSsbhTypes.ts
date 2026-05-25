@@ -149,6 +149,8 @@ export type DaeSsbhSessionState = {
   sessionVersion: number;
   importKind: DaeImportKind;
   sourcePath: string | null;
+  /** Tracks which source+geometry set the current material profiles belong to. */
+  loadedAnalysisKey: string | null;
   analysis: SsbhDaeAnalysisReport | null;
   includeGeometryNames: string[];
   outputDir: string | null;

@@ -44,6 +44,8 @@ interface SceneEditorState {
   collisionVisibility: Record<string, boolean>;
   sessionId: string | null;
   outlinerOrder: string[];
+  /** Ref-count: while > 0, MapViewport pauses R3F rendering during modal drag/resize. */
+  modalViewportSuspendCount: number;
 }
 
 interface SceneEditorActions {
@@ -89,6 +91,9 @@ interface SceneEditorActions {
   setSessionId: (id: string | null) => void;
   syncOutlinerOrder: (nodeIds: string[]) => void;
   reorderOutlinerNode: (activeId: string, overId: string) => void;
+  beginModalViewportSuspend: () => void;
+  endModalViewportSuspend: () => void;
+  isModalViewportSuspended: () => boolean;
   resetAll: () => void;
 }
 
@@ -112,6 +117,7 @@ export const useSceneEditorStore = create<SceneEditorState & SceneEditorActions>
     collisionVisibility: {},
     sessionId: null,
     outlinerOrder: [],
+    modalViewportSuspendCount: 0,
 
     select: (id, opts) => {
       set((state) => {
@@ -382,6 +388,20 @@ export const useSceneEditorStore = create<SceneEditorState & SceneEditorActions>
       });
     },
 
+    beginModalViewportSuspend: () => {
+      set((state) => {
+        state.modalViewportSuspendCount += 1;
+      });
+    },
+
+    endModalViewportSuspend: () => {
+      set((state) => {
+        state.modalViewportSuspendCount = Math.max(0, state.modalViewportSuspendCount - 1);
+      });
+    },
+
+    isModalViewportSuspended: () => get().modalViewportSuspendCount > 0,
+
     resetAll: () => {
       set((state) => {
         state.selectedIds = new Set();
@@ -397,6 +417,7 @@ export const useSceneEditorStore = create<SceneEditorState & SceneEditorActions>
         state.collisionVisibility = {};
         state.sessionId = null;
         state.outlinerOrder = [];
+        state.modalViewportSuspendCount = 0;
       });
     },
   })),

@@ -16,6 +16,7 @@ import {
 } from "./sceneSavePipeline";
 import {
   buildImportedDaeStageRegistrationPlan,
+  createImportedDaeMaterialProfile,
   createImportedDaePlacementRow,
 } from "./sceneDaeSsbhSave";
 import {
@@ -28,7 +29,10 @@ import {
   sceneConfigureImport,
   sceneExecuteImport,
 } from "./sceneSessionService";
-import { retargetSessionImportFolderName } from "./sceneDaeSessionImport";
+import {
+  resolveSessionImportConfigForSave,
+  retargetAndReconvertSessionImport,
+} from "./sceneDaeSessionImport";
 import { serializeDaeToBytes } from "./daeExportImport";
 import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
 
@@ -65,59 +69,60 @@ function allocateAllFolderPlans(
   });
 }
 
+function buildPreviewOnlySaveImportConfig(plan: DaeConversionPlan): ImportConfig {
+  const materialProfile = createImportedDaeMaterialProfile();
+  return {
+    loadToScene: false,
+    convertToSsbh: true,
+    generateHkt: false,
+    ssbhConfig: {
+      baseFilename: plan.baseFilename,
+      scaleFactor: 1,
+      upAxis: "y_up",
+      writeNumdlb: true,
+      writeNumshb: true,
+      writeNusktb: true,
+      writeNumatb: true,
+      writeJnttbl: true,
+      writeMayaProfile: true,
+      materialTemplate: null,
+      mayaFile: materialProfile,
+      nustFile: materialProfile,
+    },
+    hktSimplify: DEFAULT_HKT_SIMPLIFY,
+  };
+}
+
 async function convertSingleDaeViaSession(
   plan: DaeConversionPlan,
   sessionId: string,
 ): Promise<DaeConversionOutcome> {
   try {
     if (plan.object.sessionImportId) {
-      await retargetSessionImportFolderName(sessionId, plan.object.sessionImportId, {
-        loadToScene: true,
-        convertToSsbh: true,
-        generateHkt: false,
-        ssbhConfig: {
-          baseFilename: plan.baseFilename,
-          scaleFactor: 1,
-          upAxis: "y_up",
-          writeNumdlb: true,
-          writeNumshb: true,
-          writeNusktb: true,
-          writeNumatb: true,
-          writeJnttbl: true,
-          writeMayaProfile: false,
-          materialTemplate: null,
-        },
-        hktSimplify: DEFAULT_HKT_SIMPLIFY,
-      }, plan.folderName);
+      const importConfig = await resolveSessionImportConfigForSave(
+        sessionId,
+        plan.object.sessionImportId,
+        plan.folderName,
+      );
+      await retargetAndReconvertSessionImport(
+        sessionId,
+        plan.object.sessionImportId,
+        importConfig,
+        plan.folderName,
+      );
       return {
         status: "ok",
         result: { folderName: plan.folderName, transform: plan.object.transform },
       };
     }
 
+    const previewImportConfig = buildPreviewOnlySaveImportConfig(plan);
     const exportObject = createBakedImportedDaeExportObject(plan.object, {
       includeActorTransform: false,
     });
     const daeBytes = serializeDaeToBytes(exportObject);
     const importId = await sceneImportDae(sessionId, daeBytes, plan.baseFilename);
-    await sceneConfigureImport(sessionId, importId, {
-      loadToScene: true,
-      convertToSsbh: true,
-      generateHkt: false,
-      ssbhConfig: {
-        baseFilename: plan.baseFilename,
-        scaleFactor: 1,
-        upAxis: "y_up",
-        writeNumdlb: true,
-        writeNumshb: true,
-        writeNusktb: true,
-        writeNumatb: true,
-        writeJnttbl: true,
-        writeMayaProfile: true,
-        materialTemplate: null,
-      },
-      hktSimplify: DEFAULT_HKT_SIMPLIFY,
-    });
+    await sceneConfigureImport(sessionId, importId, previewImportConfig);
     await sceneExecuteImport(sessionId, importId);
     return {
       status: "ok",
@@ -150,6 +155,7 @@ export type SaveFolderResult = {
   convertedCount: number;
   failedCount: number;
   failedNames: string[];
+  convertedDaeObjectIds: string[];
   deletedCount: number;
   migratedTextures: number;
   reloadedBundle: StageBundleResponse | null;
@@ -192,6 +198,7 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
   let convertedCount = 0;
   let failedCount = 0;
   let failedNames: string[] = [];
+  let convertedDaeObjectIds: string[] = [];
   let reloadedBundle: StageBundleResponse | null = null;
 
   // Phase 1: Delete
@@ -211,6 +218,7 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
           convertedCount: 0,
           failedCount: 0,
           failedNames: [],
+          convertedDaeObjectIds: [],
           deletedCount: 0,
           migratedTextures: 0,
           reloadedBundle: null,
@@ -230,9 +238,10 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
   // Phase 2: Restore shared textures (move nutexb from model subdirs to textures/)
   emitStep(onProgress, "migrate", "Restoring shared textures...", "running");
   try {
+    const packTarget = resolveStagePackStructureTarget(stageRoot);
     const restoreResult = await invoke<{ texturesCollected: number; subdirsRemoved: number; warnings: string[] }>(
       "restore_shared_textures",
-      { stageRoot },
+      { stageRoot: packTarget.packRoot },
     );
     const detail = restoreResult.texturesCollected > 0
       ? `${restoreResult.texturesCollected} textures collected`
@@ -275,6 +284,9 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
     convertedCount = okResults.length;
     failedCount = errorResults.length;
     failedNames = errorResults.map((o) => o.objectName);
+    convertedDaeObjectIds = daeObjectsToConvert
+      .filter((obj) => !failedNames.includes(obj.name))
+      .map((obj) => obj.id);
 
     emitStep(
       onProgress,
@@ -381,6 +393,7 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
     convertedCount,
     failedCount,
     failedNames,
+    convertedDaeObjectIds,
     deletedCount,
     migratedTextures,
     reloadedBundle,

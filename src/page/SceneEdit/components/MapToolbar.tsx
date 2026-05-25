@@ -185,6 +185,22 @@ export function MapToolbar({
         <TooltipContent side="bottom">Save changes to folder</TooltipContent>
       </Tooltip>
 
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={onSaveFhm2d}
+            disabled={!canSave || isLoading}
+            aria-label="Save as FHM2D"
+          >
+            <HardDriveDownload className="h-3.5 w-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Repack and save as .fhm2d</TooltipContent>
+      </Tooltip>
+
       <Separator orientation="vertical" className="h-4 mx-0.5" />
 
       {/* ─── Import / Export Group ─── */}
@@ -398,11 +414,6 @@ export function MapToolbar({
           <TooltipContent side="bottom">More actions</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end" className="text-xs">
-          <DropdownMenuItem onClick={onSaveFhm2d} disabled={!canSave || isLoading}>
-            <HardDriveDownload className="mr-2 h-3.5 w-3.5" />
-            Repack as .fhm2d
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
           <DropdownMenuItem onClick={onResetCamera}>
             <RotateCcw className="mr-2 h-3.5 w-3.5" />
             Reset Camera

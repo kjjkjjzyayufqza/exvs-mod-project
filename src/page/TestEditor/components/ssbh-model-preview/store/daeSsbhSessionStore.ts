@@ -41,7 +41,7 @@ type DaeSsbhSessionActions = {
   resetSession: () => void;
   setImportKind: (kind: DaeImportKind) => void;
   setSourcePath: (path: string | null) => void;
-  loadAnalysis: (analysis: SsbhDaeAnalysisReport) => void;
+  loadAnalysis: (analysis: SsbhDaeAnalysisReport, options?: { resetMaterialProfiles?: boolean }) => void;
   setGeometryEnabled: (name: string, enabled: boolean) => void;
   setOutputDir: (outputDir: string | null) => void;
   setOutputBaseName: (value: string) => void;
@@ -91,13 +91,37 @@ type DaeSsbhTemplateState = {
 export type DaeSsbhSessionStoreState = DaeSsbhSessionState & DaeSsbhTemplateState & DaeSsbhSessionActions;
 
 const SESSION_STORAGE_KEY = "ssbh-dae-session-v2";
-const SESSION_VERSION = 5;
+const SESSION_VERSION = 6;
+
+export function buildAnalysisLoadKey(
+  sourcePath: string | null,
+  geometryNames: readonly string[],
+): string | null {
+  if (!sourcePath) {
+    return null;
+  }
+  return `${sourcePath}\0${geometryNames.join("\u0001")}`;
+}
+
+export function shouldPreserveMaterialProfilesOnAnalysisLoad(
+  state: Pick<DaeSsbhSessionState, "loadedAnalysisKey" | "mayaFile">,
+  analysisKey: string | null,
+  resetMaterialProfiles?: boolean,
+): boolean {
+  return (
+    !resetMaterialProfiles &&
+    analysisKey !== null &&
+    state.loadedAnalysisKey === analysisKey &&
+    state.mayaFile.entries.length > 0
+  );
+}
 
 function buildInitialState(): DaeSsbhSessionState {
   return {
     sessionVersion: SESSION_VERSION,
     importKind: "dae",
     sourcePath: null,
+    loadedAnalysisKey: null,
     analysis: null,
     includeGeometryNames: [],
     outputDir: null,
@@ -234,19 +258,29 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
       setWriteMayaProfile: (writeMayaProfile) => set({ writeMayaProfile }),
       setMirrorTexturePathsAcrossProfiles: (mirrorTexturePathsAcrossProfiles) => set({ mirrorTexturePathsAcrossProfiles }),
 
-      loadAnalysis: (analysis) => {
+      loadAnalysis: (analysis, options) => {
         const state = get();
-        const rows = createRowsFromAnalysis(analysis, state.numdlbEntries);
-        // Preserve existing profiles if non-empty, otherwise use defaults
-        const baseMaya = state.mayaFile.entries.length > 0 ? state.mayaFile : getExvsDefaultMayaProfileTemplate();
-        const baseNust = state.nustFile.entries.length > 0 ? state.nustFile : getExvsDefaultNustProfileTemplate();
+        const analysisKey = buildAnalysisLoadKey(state.sourcePath, analysis.geometryNames);
+        const preserveProfiles = shouldPreserveMaterialProfilesOnAnalysisLoad(
+          state,
+          analysisKey,
+          options?.resetMaterialProfiles,
+        );
+        const rows = createRowsFromAnalysis(
+          analysis,
+          preserveProfiles ? state.numdlbEntries : undefined,
+        );
+        const baseMaya = preserveProfiles ? state.mayaFile : getExvsDefaultMayaProfileTemplate();
+        const baseNust = preserveProfiles ? state.nustFile : getExvsDefaultNustProfileTemplate();
         const ensured = ensureMissingMappingLabelsInProfiles(baseMaya, baseNust, rows);
         set({
           analysis,
+          loadedAnalysisKey: analysisKey,
           includeGeometryNames: [...analysis.geometryNames],
           numdlbEntries: rows,
           mayaFile: ensured.mayaFile,
           nustFile: ensured.nustFile,
+          selectedTemplateId: preserveProfiles ? state.selectedTemplateId : null,
           lastResult: null,
         });
       },
@@ -450,9 +484,6 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
       partialize: (state) => ({
         sessionVersion: state.sessionVersion,
         importKind: state.importKind,
-        sourcePath: state.sourcePath,
-        analysis: state.analysis,
-        includeGeometryNames: state.includeGeometryNames,
         outputDir: state.outputDir,
         outputBaseName: state.outputBaseName,
         scaleFactorText: state.scaleFactorText,
@@ -465,21 +496,26 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
         writeNumatb: state.writeNumatb,
         writeMayaProfile: state.writeMayaProfile,
         mirrorTexturePathsAcrossProfiles: state.mirrorTexturePathsAcrossProfiles,
-        numdlbEntries: state.numdlbEntries,
-        selectedTemplateId: state.selectedTemplateId,
-        mayaFile: state.mayaFile,
-        nustFile: state.nustFile,
-        lastResult: state.lastResult,
       }),
       migrate: (persistedState) => {
         const next = persistedState as Partial<DaeSsbhSessionState> & Record<string, unknown> | undefined;
+        const base = buildInitialState();
         return {
-          ...buildInitialState(),
-          ...next,
-          sessionVersion: SESSION_VERSION,
+          ...base,
+          importKind: next?.importKind ?? base.importKind,
+          outputDir: next?.outputDir ?? base.outputDir,
+          outputBaseName: next?.outputBaseName ?? base.outputBaseName,
+          scaleFactorText: next?.scaleFactorText ?? base.scaleFactorText,
+          upAxis: next?.upAxis ?? base.upAxis,
+          flipUv: next?.flipUv ?? base.flipUv,
+          writeLog: next?.writeLog ?? base.writeLog,
+          writeNumdlb: next?.writeNumdlb ?? base.writeNumdlb,
+          writeNumshb: next?.writeNumshb ?? base.writeNumshb,
+          writeNusktb: next?.writeNusktb ?? base.writeNusktb,
+          writeNumatb: next?.writeNumatb ?? base.writeNumatb,
+          writeMayaProfile: next?.writeMayaProfile ?? base.writeMayaProfile,
           mirrorTexturePathsAcrossProfiles: next?.mirrorTexturePathsAcrossProfiles ?? true,
-          mayaFile: normalizeMatlDataJson(next?.mayaFile ?? createEmptyNumatbFile()),
-          nustFile: normalizeMatlDataJson(next?.nustFile ?? createEmptyNumatbFile()),
+          sessionVersion: SESSION_VERSION,
         };
       },
     },

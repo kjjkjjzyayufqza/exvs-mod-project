@@ -9,6 +9,7 @@ use crate::scene_memory_session::{
     SceneSessionState, SceneSource, SsbhArtifacts,
 };
 use crate::ssbh_dae::{convert_dae_file, DaeConvertConfig};
+use crate::ssbh_dae_cmd::build_session_numatb_artifacts;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -410,8 +411,11 @@ pub async fn scene_execute_import(
                 write_nusktb: true,
                 write_numatb: true,
                 write_jnttbl: true,
-                write_maya_profile: false,
+                write_maya_profile: true,
                 material_template: None,
+                maya_file: None,
+                nust_file: None,
+                numdlb_entries: Vec::new(),
             }
         });
 
@@ -559,6 +563,74 @@ pub async fn scene_execute_import(
     })
 }
 
+fn default_session_nust_matl_json() -> serde_json::Value {
+    serde_json::json!({
+        "major_version": 1,
+        "minor_version": 6,
+        "entries": [{
+            "material_label": "pbr1Mtl",
+            "shader_label": "vsngCharaBasic",
+            "blend_states": [],
+            "floats": [],
+            "float1s": [],
+            "booleans": [],
+            "vectors": [],
+            "colors": [],
+            "rasterizer_states": [],
+            "samplers": [],
+            "textures": [],
+            "textures2": [],
+            "type4_v16": [],
+            "type4_v15": [],
+            "uv_transforms": []
+        }]
+    })
+}
+
+fn default_session_maya_matl_json() -> serde_json::Value {
+    serde_json::json!({
+        "major_version": 1,
+        "minor_version": 6,
+        "entries": [{
+            "material_label": "pbr1Mtl",
+            "shader_label": "",
+            "blend_states": [],
+            "floats": [],
+            "float1s": [],
+            "booleans": [],
+            "vectors": [],
+            "colors": [],
+            "rasterizer_states": [],
+            "samplers": [],
+            "textures": [],
+            "textures2": [],
+            "type4_v16": [],
+            "type4_v15": [],
+            "uv_transforms": []
+        }]
+    })
+}
+
+fn resolve_session_numatb_profiles(
+    ssbh_config: &crate::scene_memory_session::SsbhConvertConfig,
+) -> (serde_json::Value, Option<serde_json::Value>) {
+    let nust = ssbh_config
+        .nust_file
+        .clone()
+        .unwrap_or_else(default_session_nust_matl_json);
+    let maya = if ssbh_config.write_maya_profile {
+        Some(
+            ssbh_config
+                .maya_file
+                .clone()
+                .unwrap_or_else(default_session_maya_matl_json),
+        )
+    } else {
+        None
+    };
+    (nust, maya)
+}
+
 fn convert_dae_bytes_to_ssbh_artifacts(
     dae_bytes: &[u8],
     ssbh_config: &crate::scene_memory_session::SsbhConvertConfig,
@@ -599,7 +671,7 @@ fn convert_dae_bytes_to_ssbh_artifacts(
         write_numdlb: ssbh_config.write_numdlb,
         write_numshb: ssbh_config.write_numshb,
         write_nusktb: ssbh_config.write_nusktb,
-        modl_entries: Vec::new(),
+        modl_entries: ssbh_config.numdlb_entries.clone(),
     };
 
     eprintln!(
@@ -641,6 +713,25 @@ fn convert_dae_bytes_to_ssbh_artifacts(
         }
     };
 
+    let (nust_payload, maya_payload) = resolve_session_numatb_profiles(ssbh_config);
+    let (numatb, maya_numatb) = build_session_numatb_artifacts(
+        &ssbh_config.base_filename,
+        ssbh_config.write_numatb,
+        ssbh_config.write_maya_profile,
+        Some(&nust_payload),
+        maya_payload.as_ref(),
+    )
+    .map_err(|e| {
+        eprintln!("[convert_dae_bytes_to_ssbh] numatb generation failed: {}", e);
+        e
+    })?;
+
+    eprintln!(
+        "[convert_dae_bytes_to_ssbh] numatb artifacts: nust={} bytes, maya={:?} bytes",
+        numatb.len(),
+        maya_numatb.as_ref().map(|v| v.len())
+    );
+
     let artifacts = SsbhArtifacts {
         numdlb: read_opt("numdlb", &converted_files.numdlb_path)?,
         numshb: read_opt("numshb", &converted_files.numshb_path)?,
@@ -654,8 +745,8 @@ fn convert_dae_bytes_to_ssbh_artifacts(
                 })
             })
             .transpose()?,
-        numatb: read_opt("numatb", &converted_files.numatb_path)?,
-        maya_numatb: None,
+        numatb,
+        maya_numatb,
         jnttbl: Vec::new(),
     };
     eprintln!("[convert_dae_bytes_to_ssbh] done, artifacts ready");
@@ -1052,8 +1143,11 @@ mod tests {
                 write_nusktb: true,
                 write_numatb: true,
                 write_jnttbl: true,
-                write_maya_profile: false,
+                write_maya_profile: true,
                 material_template: None,
+                maya_file: None,
+                nust_file: None,
+                numdlb_entries: Vec::new(),
             }),
             hkt_simplify: HktSimplifyConfig::default(),
         };
@@ -1070,6 +1164,36 @@ mod tests {
         };
         let defaults = hkt_collision_options_from_import(&default_cfg);
         assert_eq!(defaults, CollisionMeshOptions::default());
+    }
+
+    #[test]
+    fn session_numatb_artifacts_respect_write_flags() {
+        use crate::ssbh_dae_cmd::build_session_numatb_artifacts;
+
+        let nust = default_session_nust_matl_json();
+        let maya = default_session_maya_matl_json();
+
+        let (nust_bytes, maya_none) = build_session_numatb_artifacts(
+            "hero",
+            true,
+            false,
+            Some(&nust),
+            Some(&maya),
+        )
+        .expect("nust-only generation should succeed");
+        assert!(!nust_bytes.is_empty());
+        assert!(maya_none.is_none());
+
+        let (both_nust, both_maya) = build_session_numatb_artifacts(
+            "hero",
+            true,
+            true,
+            Some(&nust),
+            Some(&maya),
+        )
+        .expect("dual-profile generation should succeed");
+        assert!(!both_nust.is_empty());
+        assert!(both_maya.as_ref().is_some_and(|bytes| !bytes.is_empty()));
     }
 
     #[test]
@@ -1180,6 +1304,9 @@ mod tests {
             write_jnttbl: true,
             write_maya_profile: false,
             material_template: None,
+            maya_file: None,
+            nust_file: None,
+            numdlb_entries: Vec::new(),
         };
 
         state
@@ -1231,6 +1358,84 @@ mod tests {
     }
 
     #[test]
+    fn convert_dae_bytes_applies_session_numdlb_entries() {
+        use crate::ssbh_dae::{analyze_dae_path, ModlEntryConfig};
+        use ssbh_data::modl_data::ModlData;
+
+        let dae_path = format!(r"{DAE_DIR}\backpack_up.dae");
+        if skip_if_missing(&dae_path) {
+            return;
+        }
+
+        let dae_bytes = std::fs::read(&dae_path).expect("Failed to read backpack_up.dae");
+        let analysis = analyze_dae_path(std::path::Path::new(&dae_path))
+            .expect("DAE analysis should succeed");
+        assert!(
+            !analysis.geometry_names.is_empty(),
+            "backpack_up.dae should expose at least one geometry"
+        );
+
+        let numdlb_entries: Vec<ModlEntryConfig> = analysis
+            .geometry_names
+            .iter()
+            .map(|name| ModlEntryConfig {
+                mesh_object_name: name.clone(),
+                mesh_object_subindex: 0,
+                material_label: "pbr1Mtl".into(),
+            })
+            .collect();
+
+        let ssbh_config = crate::scene_memory_session::SsbhConvertConfig {
+            base_filename: "backpack_up".into(),
+            scale_factor: 1.0,
+            up_axis: "y_up".into(),
+            write_numdlb: true,
+            write_numshb: true,
+            write_nusktb: true,
+            write_numatb: false,
+            write_jnttbl: false,
+            write_maya_profile: false,
+            material_template: None,
+            maya_file: None,
+            nust_file: None,
+            numdlb_entries,
+        };
+
+        let artifacts = convert_dae_bytes_to_ssbh_artifacts(&dae_bytes, &ssbh_config)
+            .expect("SSBH conversion with numdlb entries should succeed");
+        assert!(
+            !artifacts.numdlb.is_empty(),
+            "numdlb should be generated when mappings are provided"
+        );
+
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let modl_path = temp_dir.path().join("backpack_up.numdlb");
+        std::fs::write(&modl_path, &artifacts.numdlb).expect("write numdlb");
+        let modl = ModlData::from_file(&modl_path).expect("read numdlb");
+        assert!(
+            !modl.entries.is_empty(),
+            "numdlb should contain mesh entries"
+        );
+        assert!(
+            modl.entries
+                .iter()
+                .all(|entry| entry.material_label == "pbr1Mtl"),
+            "expected custom material labels, got: {:?}",
+            modl
+                .entries
+                .iter()
+                .map(|entry| entry.material_label.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            modl.entries
+                .iter()
+                .all(|entry| entry.material_label != "DefaultMaterial"),
+            "session import must not fall back to DefaultMaterial when mappings are provided"
+        );
+    }
+
+    #[test]
     fn full_pipeline_import_convert_save() {
         let dae_path = format!(r"{DAE_DIR}\backpack_up.dae");
         if skip_if_missing(&dae_path) {
@@ -1257,6 +1462,9 @@ mod tests {
             write_jnttbl: true,
             write_maya_profile: false,
             material_template: None,
+            maya_file: None,
+            nust_file: None,
+            numdlb_entries: Vec::new(),
         };
 
         state
@@ -1382,6 +1590,9 @@ mod tests {
             write_jnttbl: true,
             write_maya_profile: false,
             material_template: None,
+            maya_file: None,
+            nust_file: None,
+            numdlb_entries: Vec::new(),
         };
 
         let artifacts = convert_dae_bytes_to_ssbh_artifacts(&dae_bytes, &ssbh_config)
@@ -1469,6 +1680,9 @@ mod tests {
             write_jnttbl: true,
             write_maya_profile: false,
             material_template: None,
+            maya_file: None,
+            nust_file: None,
+            numdlb_entries: Vec::new(),
         };
 
         let mut convert_ok = 0;
@@ -1735,6 +1949,9 @@ mod tests {
             write_jnttbl: true,
             write_maya_profile: false,
             material_template: None,
+            maya_file: None,
+            nust_file: None,
+            numdlb_entries: Vec::new(),
         };
 
         state

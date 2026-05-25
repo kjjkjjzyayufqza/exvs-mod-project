@@ -1,4 +1,9 @@
+import { useCallback, useMemo, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { MeshDataJson, MeshObjectJson } from "@/page/TestEditor/components/ssbh-model-preview/types";
+
+const VIRTUALIZE_ROW_THRESHOLD = 40;
+const ROW_HEIGHT = 28;
 
 type MeshReadonlyTabProps = {
   mesh: unknown | null;
@@ -21,7 +26,59 @@ function getVectorDataCount(data: unknown): number {
   return key ? (obj[key]?.length ?? 0) : 0;
 }
 
+function MeshObjectRow({ obj }: { obj: MeshObjectJson }) {
+  const stats = getMeshObjectStats(obj);
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_48px_72px_72px_48px_48px] items-center border-b border-border/50 px-2 py-1 hover:bg-muted/30">
+      <span className="font-mono truncate">{obj.name}</span>
+      <span className="text-right">{obj.subindex}</span>
+      <span className="text-right">{stats.vertexCount.toLocaleString()}</span>
+      <span className="text-right">{stats.triangleCount.toLocaleString()}</span>
+      <span className="text-right">{stats.uvChannels}</span>
+      <span className="text-right">{stats.boneInfluences}</span>
+    </div>
+  );
+}
+
+function MeshTableHeader() {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_48px_72px_72px_48px_48px] border-b px-2 py-1.5 text-xs text-muted-foreground">
+      <span className="font-medium">Name</span>
+      <span className="text-right font-medium">Sub</span>
+      <span className="text-right font-medium">Vertices</span>
+      <span className="text-right font-medium">Triangles</span>
+      <span className="text-right font-medium">UVs</span>
+      <span className="text-right font-medium">Bones</span>
+    </div>
+  );
+}
+
 export function MeshReadonlyTab({ mesh }: MeshReadonlyTabProps) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  const meshData = mesh as MeshDataJson | null;
+  const objects = meshData?.objects ?? [];
+
+  const totals = useMemo(() => {
+    const totalVertices = objects.reduce(
+      (sum, obj) => sum + getMeshObjectStats(obj).vertexCount,
+      0,
+    );
+    const totalTriangles = objects.reduce(
+      (sum, obj) => sum + getMeshObjectStats(obj).triangleCount,
+      0,
+    );
+    return { totalVertices, totalTriangles };
+  }, [objects]);
+
+  const getScrollElement = useCallback(() => scrollRef.current, []);
+  const rowVirtualizer = useVirtualizer({
+    count: objects.length,
+    getScrollElement,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 8,
+  });
+
   if (!mesh) {
     return (
       <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
@@ -30,46 +87,42 @@ export function MeshReadonlyTab({ mesh }: MeshReadonlyTabProps) {
     );
   }
 
-  const meshData = mesh as MeshDataJson;
-  const objects = meshData.objects ?? [];
-  const totalVertices = objects.reduce((sum, o) => sum + getMeshObjectStats(o).vertexCount, 0);
-  const totalTriangles = objects.reduce((sum, o) => sum + getMeshObjectStats(o).triangleCount, 0);
+  const useVirtualRows = objects.length > VIRTUALIZE_ROW_THRESHOLD;
+  const virtualRows = rowVirtualizer.getVirtualItems();
 
   return (
     <div className="p-3 space-y-3">
       <div className="flex items-center gap-4 text-xs text-muted-foreground border-b pb-2">
         <span>Objects: {objects.length}</span>
-        <span>Total Vertices: {totalVertices.toLocaleString()}</span>
-        <span>Total Triangles: {totalTriangles.toLocaleString()}</span>
+        <span>Total Vertices: {totals.totalVertices.toLocaleString()}</span>
+        <span>Total Triangles: {totals.totalTriangles.toLocaleString()}</span>
       </div>
-      <div className="overflow-auto max-h-[500px]">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b text-left text-muted-foreground">
-              <th className="py-1.5 px-2 font-medium">Name</th>
-              <th className="py-1.5 px-2 font-medium text-right">Sub</th>
-              <th className="py-1.5 px-2 font-medium text-right">Vertices</th>
-              <th className="py-1.5 px-2 font-medium text-right">Triangles</th>
-              <th className="py-1.5 px-2 font-medium text-right">UVs</th>
-              <th className="py-1.5 px-2 font-medium text-right">Bones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {objects.map((obj, i) => {
-              const stats = getMeshObjectStats(obj);
+      <div ref={scrollRef} className="overflow-auto max-h-[500px] text-xs">
+        <MeshTableHeader />
+        {useVirtualRows ? (
+          <div
+            style={{
+              height: rowVirtualizer.getTotalSize(),
+              width: "100%",
+              position: "relative",
+            }}
+          >
+            {virtualRows.map((virtualRow) => {
+              const obj = objects[virtualRow.index];
               return (
-                <tr key={i} className="border-b border-border/50 hover:bg-muted/30">
-                  <td className="py-1 px-2 font-mono truncate max-w-[200px]">{obj.name}</td>
-                  <td className="py-1 px-2 text-right">{obj.subindex}</td>
-                  <td className="py-1 px-2 text-right">{stats.vertexCount.toLocaleString()}</td>
-                  <td className="py-1 px-2 text-right">{stats.triangleCount.toLocaleString()}</td>
-                  <td className="py-1 px-2 text-right">{stats.uvChannels}</td>
-                  <td className="py-1 px-2 text-right">{stats.boneInfluences}</td>
-                </tr>
+                <div
+                  key={virtualRow.key}
+                  className="absolute left-0 top-0 w-full"
+                  style={{ transform: `translateY(${virtualRow.start}px)` }}
+                >
+                  <MeshObjectRow obj={obj} />
+                </div>
               );
             })}
-          </tbody>
-        </table>
+          </div>
+        ) : (
+          objects.map((obj, i) => <MeshObjectRow key={i} obj={obj} />)
+        )}
       </div>
     </div>
   );

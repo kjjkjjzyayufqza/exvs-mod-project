@@ -66,37 +66,32 @@ export function useDraggableModal(options: UseDraggableModalOptions = {}): UseDr
       // not rely on an outdated closure scope.
       const initialPosition = { x: positionRef.current.x, y: positionRef.current.y };
 
-      // Calculate limits once on drag start to avoid layout thrashing and desyncs
+      // Defer viewport bounds until the first move to avoid forced reflow on pointerdown.
       let minX = -Infinity;
       let minY = -Infinity;
       let maxX = Infinity;
       let maxY = Infinity;
+      let boundsReady = !boundToViewport;
 
-      if (boundToViewport && nodeRef.current) {
+      const ensureBounds = () => {
+        if (boundsReady || !nodeRef.current) return;
         const rect = nodeRef.current.getBoundingClientRect();
         const vw = document.documentElement.clientWidth || window.innerWidth;
         const vh = document.documentElement.clientHeight || window.innerHeight;
 
-        // Clamp translate so the modal stays in the viewport (position uses left/top).
-        // Example: minX = currentX - rect.left moves the left edge to 0.
         minX = initialPosition.x - rect.left;
         minY = initialPosition.y - rect.top;
-        
-        // To move right, we can move until rect.right reaches vw.
-        // The space we have on the right is (vw - rect.right).
-        // So maxX = currentX + (vw - rect.right)
-        maxX = initialPosition.x + (vw - rect.right);
-        maxY = initialPosition.y + (vh - rect.bottom);
-
-        // However, if the modal itself is larger than the screen, max will be less than min.
-        // We ensure min is always less than max by clamping max to min if necessary,
-        // preferring to stick to the top-left edge if it doesn't fit.
-        maxX = Math.max(minX, maxX);
-        maxY = Math.max(minY, maxY);
-      }
+        maxX = Math.max(minX, initialPosition.x + (vw - rect.right));
+        maxY = Math.max(minY, initialPosition.y + (vh - rect.bottom));
+        boundsReady = true;
+      };
 
       const onPointerMove = (ev: globalThis.PointerEvent) => {
         if (!dragging.current) return;
+
+        if (boundToViewport) {
+          ensureBounds();
+        }
         
         // Calculate delta from initial pointer position
         const dx = ev.clientX - initialPointer.x;
@@ -106,7 +101,7 @@ export function useDraggableModal(options: UseDraggableModalOptions = {}): UseDr
         let nextX = initialPosition.x + dx;
         let nextY = initialPosition.y + dy;
 
-        if (boundToViewport) {
+        if (boundToViewport && boundsReady) {
           nextX = Math.min(Math.max(nextX, minX), maxX);
           nextY = Math.min(Math.max(nextY, minY), maxY);
         }

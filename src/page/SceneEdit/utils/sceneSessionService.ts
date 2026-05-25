@@ -2,6 +2,10 @@ import { invoke, Channel } from "@tauri-apps/api/core";
 import type { DaeImportConfig, HktSimplifyConfig } from "../components/dae-import/daeImportTypes";
 import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
 import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
+import type {
+  MatlDataJson,
+  NumdlbMappingRow,
+} from "@/page/TestEditor/components/ssbh-model-preview/daeSsbhTypes";
 
 export type SceneSource =
   | { type: "fhm2d"; path: string }
@@ -40,6 +44,9 @@ export interface SsbhConvertConfig {
   writeJnttbl: boolean;
   writeMayaProfile: boolean;
   materialTemplate: string | null;
+  mayaFile?: MatlDataJson | null;
+  nustFile?: MatlDataJson | null;
+  numdlbEntries?: NumdlbMappingRow[];
 }
 
 export interface ImportResult {
@@ -276,6 +283,14 @@ export function mapDaeImportConfigToBackend(config: DaeImportConfig): ImportConf
           materialTemplate: config.convertToSsbh
             ? config.ssbhConfig.materialTemplate || null
             : null,
+          mayaFile:
+            config.convertToSsbh && config.ssbhConfig.writeMayaProfile
+              ? config.ssbhConfig.mayaFile ?? null
+              : null,
+          nustFile:
+            config.convertToSsbh && config.ssbhConfig.writeNumatb
+              ? config.ssbhConfig.nustFile ?? null
+              : null,
         }
       : null,
   };

@@ -12,6 +12,7 @@ import {
   buildImportConfigForHktPreview,
   formatTriangleCount,
   reductionPercent,
+  serializeHktPreviewConfigKey,
 } from "../../utils/hktSimplifyUtils";
 import {
   scenePreviewHktCollisionPath,
@@ -52,6 +53,29 @@ export function DaeImportHktSimplifyFields({
     onChange({ ...value, [key]: nextValue });
   };
 
+  const ssbhConfig = importConfig.ssbhConfig;
+  const previewConfigKey = useMemo(
+    () => serializeHktPreviewConfigKey(importConfig, value),
+    [
+      importConfig.generateHkt,
+      importConfig.convertToSsbh,
+      ssbhConfig?.baseFilename,
+      ssbhConfig?.scaleFactor,
+      ssbhConfig?.upAxis,
+      ssbhConfig?.writeNumdlb,
+      ssbhConfig?.writeNumshb,
+      ssbhConfig?.writeNusktb,
+      ssbhConfig?.writeNumatb,
+      ssbhConfig?.writeJnttbl,
+      ssbhConfig?.writeMayaProfile,
+      ssbhConfig?.materialTemplate,
+      value.enabled,
+      value.planarityAngleDeg,
+      value.minTriangleArea,
+      value.weldEpsilon,
+    ],
+  );
+
   const previewConfig = useMemo(
     () =>
       buildImportConfigForHktPreview({
@@ -60,7 +84,7 @@ export function DaeImportHktSimplifyFields({
         ssbhConfig: importConfig.ssbhConfig,
         hktSimplify: value,
       }),
-    [importConfig.convertToSsbh, importConfig.generateHkt, importConfig.ssbhConfig, value],
+    [previewConfigKey],
   );
 
   useEffect(() => {
@@ -123,7 +147,7 @@ export function DaeImportHktSimplifyFields({
     sourceName,
     sessionId,
     sessionImportId,
-    previewConfig,
+    previewConfigKey,
     importConfig.generateHkt,
   ]);
 

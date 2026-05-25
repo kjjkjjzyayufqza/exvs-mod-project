@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { toast } from "sonner";
 import type {
   DetailViewSession,
@@ -8,8 +8,6 @@ import type {
 } from "../components/detail-view/sceneDetailViewTypes";
 import { SSBH_MODEL_ROLES } from "../components/detail-view/sceneDetailViewTypes";
 import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
-import type { MatlDataJson } from "@/page/TestEditor/components/ssbh-model-preview/types";
-import type { NumdlbReadResult, NuhlpbReadResult } from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
 import type { NumatbModalBundle } from "@/page/TestEditor/components/ssbh-model-preview/numatbEditorUtils";
 import { createEmptyNumatbFile } from "@/page/TestEditor/components/ssbh-model-preview/daeSsbhTypes";
 import {
@@ -20,179 +18,302 @@ import {
   ssbhReadNuhlpb,
   ssbhWriteNuhlpb,
 } from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
+import type { NumdlbReadResult, NuhlpbReadResult } from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
 import type { StageTreeNode } from "../components/StageHierarchyTree";
-
-type BundleLookup = {
-  baseModel: SsbhModelPreviewBundle | null;
-  subModels: Array<{ folderName: string; objectIndex: number; bundle: SsbhModelPreviewBundle }>;
-};
+import {
+  findBundleForDetailViewNode,
+  type DetailViewBundleLookup,
+} from "../utils/sceneDetailViewBundleLookup";
+import {
+  modelTabLoadingField,
+  shouldLoadModelTab,
+} from "../utils/sceneDetailViewTabPolicy";
 
 let sessionCounter = 0;
 
-function findBundleForNode(
-  node: StageTreeNode,
-  lookup: BundleLookup,
-): SsbhModelPreviewBundle | null {
-  if (node.role === "base") return lookup.baseModel;
-  if (node.role === "sub_model" || node.role === "imported_dae") {
-    const match = lookup.subModels.find((s) => s.objectIndex === node.objectIndex);
-    return match?.bundle ?? null;
-  }
-  return null;
+function markTabLoading(
+  data: DetailViewModelData,
+  tab: DetailViewModelTab,
+): DetailViewModelData {
+  const field = modelTabLoadingField(tab);
+  if (!field) return data;
+  return {
+    ...data,
+    [field]: { ...data[field], loading: true, error: null },
+  };
 }
 
-export function useSceneDetailView(bundleLookup: BundleLookup) {
+export function useSceneDetailView(bundleLookup: DetailViewBundleLookup) {
   const [sessions, setSessions] = useState<DetailViewSession[]>([]);
+  const [, startTransition] = useTransition();
 
-  const openSession = useCallback(
-    (node: StageTreeNode) => {
-      // Don't open duplicate session for same node
-      const existing = sessions.find((s) => s.nodeId === node.id);
-      if (existing) {
-        setSessions((prev) =>
-          prev.map((s) =>
-            s.id === existing.id ? { ...s, zIndex: Date.now() } : s,
-          ),
-        );
+  const loadModelTabData = useCallback(
+    async (
+      sessionId: string,
+      tab: DetailViewModelTab,
+      bundle: SsbhModelPreviewBundle,
+    ) => {
+      if (tab === "model") {
+        try {
+          const numdlb = await ssbhReadNumdlbMapping(bundle.modlPath);
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === sessionId && s.modelData
+                ? {
+                    ...s,
+                    modelData: {
+                      ...s.modelData,
+                      numdlb: { base: numdlb, draft: numdlb, loading: false, error: null },
+                    },
+                  }
+                : s,
+            ),
+          );
+        } catch (e) {
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === sessionId && s.modelData
+                ? {
+                    ...s,
+                    modelData: {
+                      ...s.modelData,
+                      numdlb: { base: null, draft: null, loading: false, error: String(e) },
+                    },
+                  }
+                : s,
+            ),
+          );
+        }
         return;
       }
 
+      if (tab === "material") {
+        const matlPath = bundle.matlPaths?.[0];
+        if (!matlPath) {
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === sessionId && s.modelData
+                ? {
+                    ...s,
+                    modelData: {
+                      ...s.modelData,
+                      numatb: { base: null, draft: null, loading: false, error: null },
+                    },
+                  }
+                : s,
+            ),
+          );
+          return;
+        }
+
+        try {
+          const numatbFile = await ssbhTemplateReadNumatb(matlPath);
+          const numatbBundle: NumatbModalBundle = {
+            mayaFile: numatbFile,
+            nustFile: createEmptyNumatbFile(),
+            mirrorTexturePathsAcrossProfiles: false,
+          };
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === sessionId && s.modelData
+                ? {
+                    ...s,
+                    modelData: {
+                      ...s.modelData,
+                      numatb: { base: numatbBundle, draft: numatbBundle, loading: false, error: null },
+                    },
+                  }
+                : s,
+            ),
+          );
+        } catch (e) {
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === sessionId && s.modelData
+                ? {
+                    ...s,
+                    modelData: {
+                      ...s.modelData,
+                      numatb: { base: null, draft: null, loading: false, error: String(e) },
+                    },
+                  }
+                : s,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (tab === "helper") {
+        const hlpbPath = bundle.rootFolder ? `${bundle.rootFolder}/model.nuhlpb` : null;
+        if (!hlpbPath) return;
+
+        try {
+          const nuhlpb = await ssbhReadNuhlpb(hlpbPath);
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === sessionId && s.modelData
+                ? {
+                    ...s,
+                    modelData: {
+                      ...s.modelData,
+                      nuhlpb: { base: nuhlpb, draft: nuhlpb, loading: false, error: null },
+                    },
+                  }
+                : s,
+            ),
+          );
+        } catch {
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === sessionId && s.modelData
+                ? {
+                    ...s,
+                    modelData: {
+                      ...s.modelData,
+                      nuhlpb: { base: null, draft: null, loading: false, error: null },
+                    },
+                  }
+                : s,
+            ),
+          );
+        }
+      }
+    },
+    [],
+  );
+
+  const requestModelTabLoad = useCallback(
+    (sessionId: string, tab: DetailViewModelTab, bundle: SsbhModelPreviewBundle) => {
+      setSessions((prev) => {
+        const session = prev.find((s) => s.id === sessionId);
+        if (!session?.modelData || !shouldLoadModelTab(tab, session.modelData)) {
+          return prev;
+        }
+
+        void loadModelTabData(sessionId, tab, bundle);
+        return prev.map((s) =>
+          s.id === sessionId && s.modelData
+            ? { ...s, modelData: markTabLoading(s.modelData, tab) }
+            : s,
+        );
+      });
+    },
+    [loadModelTabData],
+  );
+
+  const openSession = useCallback(
+    (node: StageTreeNode) => {
       const kind: DetailViewNodeKind = (SSBH_MODEL_ROLES as readonly string[]).includes(node.role)
         ? "ssbh-model"
         : "effect";
 
-      const id = `detail-${++sessionCounter}-${node.id}`;
-      const newSession: DetailViewSession = {
-        id,
-        nodeId: node.id,
-        nodeLabel: node.label,
-        kind,
-        activeTab: kind === "effect" ? "effect" : "model",
-        zIndex: Date.now(),
-        modelData: null,
-        effectData: null,
-      };
+      startTransition(() => {
+        setSessions((prev) => {
+          const existing = prev.find((s) => s.nodeId === node.id);
+          if (existing) {
+            return prev.map((s) =>
+              s.id === existing.id ? { ...s, zIndex: Date.now() } : s,
+            );
+          }
 
-      if (kind === "ssbh-model") {
-        const bundle = findBundleForNode(node, bundleLookup);
-        if (bundle) {
-          newSession.modelData = {
-            bundle,
-            numdlb: { base: null, draft: null, loading: true, error: null },
-            numatb: { base: null, draft: null, loading: true, error: null },
-            nuhlpb: { base: null, draft: null, loading: false, error: null },
+          const id = `detail-${++sessionCounter}-${node.id}`;
+          const newSession: DetailViewSession = {
+            id,
+            nodeId: node.id,
+            nodeLabel: node.label,
+            kind,
+            activeTab: kind === "effect" ? "effect" : "model",
+            zIndex: Date.now(),
+            modelData: null,
+            effectData: null,
           };
-          setSessions((prev) => [...prev, newSession]);
-          loadModelData(id, bundle);
-        } else {
-          toast.error("Cannot find SSBH bundle for this node");
-        }
-      } else {
-        // Effect: set loading state, will be loaded externally
-        newSession.effectData = { document: null, auxiliary: { status: "idle", rootDir: null, scannedDirectories: 0, scannedFiles: 0, jnttblDiscovered: 0, nusktbDiscovered: 0, jnttblReady: 0, nusktbReady: 0, failureCount: 0, errors: [], jnttblData: [], nusktbData: [] }, loading: true, error: null };
-        setSessions((prev) => [...prev, newSession]);
-      }
+
+          if (kind === "ssbh-model") {
+            const bundle = findBundleForDetailViewNode(node, bundleLookup);
+            if (!bundle) {
+              if (node.role === "imported_dae") {
+                toast.error("Imported DAE objects have no on-disk SSBH bundle yet");
+              } else {
+                toast.error("Cannot find SSBH bundle for this node");
+              }
+              return prev;
+            }
+
+            newSession.modelData = {
+              bundle,
+              numdlb: { base: null, draft: null, loading: false, error: null },
+              numatb: { base: null, draft: null, loading: false, error: null },
+              nuhlpb: { base: null, draft: null, loading: false, error: null },
+            };
+
+            queueMicrotask(() => requestModelTabLoad(id, "model", bundle));
+            return [...prev, newSession];
+          }
+
+          newSession.effectData = {
+            document: null,
+            auxiliary: {
+              status: "idle",
+              rootDir: null,
+              scannedDirectories: 0,
+              scannedFiles: 0,
+              jnttblDiscovered: 0,
+              nusktbDiscovered: 0,
+              jnttblReady: 0,
+              nusktbReady: 0,
+              failureCount: 0,
+              errors: [],
+              jnttblData: [],
+              nusktbData: [],
+            },
+            loading: true,
+            error: null,
+          };
+          return [...prev, newSession];
+        });
+      });
     },
-    [sessions, bundleLookup],
+    [bundleLookup, requestModelTabLoad, startTransition],
   );
-
-  const loadModelData = useCallback(async (sessionId: string, bundle: SsbhModelPreviewBundle) => {
-    // Load numdlb
-    try {
-      const numdlb = await ssbhReadNumdlbMapping(bundle.modlPath);
-      setSessions((prev) =>
-        prev.map((s) =>
-          s.id === sessionId && s.modelData
-            ? { ...s, modelData: { ...s.modelData, numdlb: { base: numdlb, draft: numdlb, loading: false, error: null } } }
-            : s,
-        ),
-      );
-    } catch (e) {
-      setSessions((prev) =>
-        prev.map((s) =>
-          s.id === sessionId && s.modelData
-            ? { ...s, modelData: { ...s.modelData, numdlb: { base: null, draft: null, loading: false, error: String(e) } } }
-            : s,
-        ),
-      );
-    }
-
-    // Load numatb
-    const matlPath = bundle.matlPaths?.[0];
-    if (matlPath) {
-      try {
-        const numatbFile = await ssbhTemplateReadNumatb(matlPath);
-        const numatbBundle: NumatbModalBundle = {
-          mayaFile: numatbFile,
-          nustFile: createEmptyNumatbFile(),
-          mirrorTexturePathsAcrossProfiles: false,
-        };
-        setSessions((prev) =>
-          prev.map((s) =>
-            s.id === sessionId && s.modelData
-              ? { ...s, modelData: { ...s.modelData, numatb: { base: numatbBundle, draft: numatbBundle, loading: false, error: null } } }
-              : s,
-          ),
-        );
-      } catch (e) {
-        setSessions((prev) =>
-          prev.map((s) =>
-            s.id === sessionId && s.modelData
-              ? { ...s, modelData: { ...s.modelData, numatb: { base: null, draft: null, loading: false, error: String(e) } } }
-              : s,
-          ),
-        );
-      }
-    } else {
-      setSessions((prev) =>
-        prev.map((s) =>
-          s.id === sessionId && s.modelData
-            ? { ...s, modelData: { ...s.modelData, numatb: { base: null, draft: null, loading: false, error: null } } }
-            : s,
-        ),
-      );
-    }
-
-    // Load nuhlpb - derive path from rootFolder
-    const hlpbPath = bundle.rootFolder ? `${bundle.rootFolder}/model.nuhlpb` : null;
-    if (hlpbPath) {
-      try {
-        const nuhlpb = await ssbhReadNuhlpb(hlpbPath);
-        setSessions((prev) =>
-          prev.map((s) =>
-            s.id === sessionId && s.modelData
-              ? { ...s, modelData: { ...s.modelData, nuhlpb: { base: nuhlpb, draft: nuhlpb, loading: false, error: null } } }
-              : s,
-          ),
-        );
-      } catch {
-        // nuhlpb is optional — not all models have it
-        setSessions((prev) =>
-          prev.map((s) =>
-            s.id === sessionId && s.modelData
-              ? { ...s, modelData: { ...s.modelData, nuhlpb: { base: null, draft: null, loading: false, error: null } } }
-              : s,
-          ),
-        );
-      }
-    }
-  }, []);
 
   const closeSession = useCallback((sessionId: string) => {
     setSessions((prev) => prev.filter((s) => s.id !== sessionId));
   }, []);
 
-  const activateSession = useCallback((sessionId: string) => {
-    setSessions((prev) =>
-      prev.map((s) => (s.id === sessionId ? { ...s, zIndex: Date.now() } : s)),
-    );
-  }, []);
+  const activateSession = useCallback(
+    (sessionId: string) => {
+      startTransition(() => {
+        setSessions((prev) => {
+          const target = prev.find((s) => s.id === sessionId);
+          if (!target) return prev;
+          const topZ = prev.reduce((max, s) => Math.max(max, s.zIndex), 0);
+          if (target.zIndex >= topZ) return prev;
+          return prev.map((s) =>
+            s.id === sessionId ? { ...s, zIndex: Date.now() } : s,
+          );
+        });
+      });
+    },
+    [startTransition],
+  );
 
-  const setActiveTab = useCallback((sessionId: string, tab: DetailViewModelTab) => {
-    setSessions((prev) =>
-      prev.map((s) => (s.id === sessionId ? { ...s, activeTab: tab } : s)),
-    );
-  }, []);
+  const setActiveTab = useCallback(
+    (sessionId: string, tab: DetailViewModelTab) => {
+      startTransition(() => {
+        setSessions((prev) => {
+          const session = prev.find((s) => s.id === sessionId);
+          if (session?.modelData && shouldLoadModelTab(tab, session.modelData)) {
+            queueMicrotask(() =>
+              requestModelTabLoad(sessionId, tab, session.modelData!.bundle),
+            );
+          }
+          return prev.map((s) => (s.id === sessionId ? { ...s, activeTab: tab } : s));
+        });
+      });
+    },
+    [requestModelTabLoad, startTransition],
+  );
 
   const setNumdlbDraft = useCallback((sessionId: string, draft: NumdlbReadResult) => {
     setSessions((prev) =>

@@ -19,10 +19,12 @@ vi.mock("./sceneSessionService", () => ({
   sceneImportDae: vi.fn(),
   sceneConfigureImport: vi.fn(),
   sceneExecuteImport: vi.fn(),
+  sceneGetImportConfig: vi.fn(),
 }));
 
 vi.mock("./sceneDaeSessionImport", () => ({
-  retargetSessionImportFolderName: vi.fn(),
+  retargetAndReconvertSessionImport: vi.fn(),
+  resolveSessionImportConfigForSave: vi.fn(),
 }));
 
 vi.mock("./sceneSavePipeline", () => ({
@@ -31,15 +33,20 @@ vi.mock("./sceneSavePipeline", () => ({
 
 vi.mock("./sceneDaeSsbhSave", () => ({
   buildImportedDaeStageRegistrationPlan: vi.fn(),
+  createImportedDaeMaterialProfile: vi.fn(() => ({
+    major_version: 1,
+    minor_version: 6,
+    entries: [{ material_label: "pbr1Mtl", shader_label: "vsngCharaBasic", textures: [] }],
+  })),
   createImportedDaePlacementRow: vi.fn(),
 }));
 
 vi.mock("./sceneStageStructure", () => ({
   resolveStagePackStructureTarget: vi.fn(() => ({
-    packRoot: "E:/stage",
-    structurePath: "E:/0x12345678_structure.json",
-    packFolderName: "12345678",
-    hashHex: "0x12345678",
+    packRoot: "E:/stage/16F73C97",
+    structurePath: "E:/stage/0x16F73C97_structure.json",
+    packFolderName: "16F73C97",
+    hashHex: "0x16F73C97",
   })),
 }));
 
@@ -55,13 +62,19 @@ import { useSceneDirtyStore } from "../store/sceneDirtyStore";
 import type { SaveStepInfo } from "../components/SaveProgressDialog";
 import type { ImportedDaeObject } from "../components/MapViewport";
 import {
+  sceneConfigureImport,
   sceneExecuteImport,
+  sceneGetImportConfig,
   sceneImportDae,
   sceneSaveAsFolder,
 } from "./sceneSessionService";
-import { retargetSessionImportFolderName } from "./sceneDaeSessionImport";
+import {
+  resolveSessionImportConfigForSave,
+  retargetAndReconvertSessionImport,
+} from "./sceneDaeSessionImport";
 import { buildImportedDaeStageRegistrationPlan } from "./sceneDaeSsbhSave";
 import { createBakedImportedDaeExportObject } from "./sceneSavePipeline";
+import { resolveStagePackStructureTarget } from "./sceneStageStructure";
 
 const mockWriteTextFile = vi.mocked(writeTextFile);
 const mockReadDir = vi.mocked(readDir);
@@ -70,10 +83,14 @@ const mockBuildDeletePreview = vi.mocked(buildDeletePreview);
 const mockExecuteDelete = vi.mocked(executeDelete);
 const mockSceneSaveAsFolder = vi.mocked(sceneSaveAsFolder);
 const mockSceneImportDae = vi.mocked(sceneImportDae);
+const mockSceneConfigureImport = vi.mocked(sceneConfigureImport);
 const mockSceneExecuteImport = vi.mocked(sceneExecuteImport);
-const mockRetargetSessionImportFolderName = vi.mocked(retargetSessionImportFolderName);
+const mockSceneGetImportConfig = vi.mocked(sceneGetImportConfig);
+const mockRetargetAndReconvertSessionImport = vi.mocked(retargetAndReconvertSessionImport);
+const mockResolveSessionImportConfigForSave = vi.mocked(resolveSessionImportConfigForSave);
 const mockBuildImportedDaeStageRegistrationPlan = vi.mocked(buildImportedDaeStageRegistrationPlan);
 const mockCreateBakedImportedDaeExportObject = vi.mocked(createBakedImportedDaeExportObject);
+const mockResolveStagePackStructureTarget = vi.mocked(resolveStagePackStructureTarget);
 
 const DEFAULT_TRANSFORM = {
   posX: 0,
@@ -129,7 +146,40 @@ describe("sceneSaveFolderPipeline", () => {
       hktDetail: null,
       warnings: [],
     });
-    mockRetargetSessionImportFolderName.mockResolvedValue(undefined);
+    mockRetargetAndReconvertSessionImport.mockResolvedValue(undefined);
+    mockResolveSessionImportConfigForSave.mockResolvedValue({
+      loadToScene: false,
+      convertToSsbh: true,
+      generateHkt: false,
+      hktSimplify: {
+        enabled: true,
+        planarityAngleDeg: 8,
+        minTriangleArea: 1e-8,
+        weldEpsilon: 1e-5,
+      },
+      ssbhConfig: {
+        baseFilename: "sample_mesh",
+        scaleFactor: 1,
+        upAxis: "y_up",
+        writeNumdlb: true,
+        writeNumshb: true,
+        writeNusktb: true,
+        writeNumatb: true,
+        writeJnttbl: true,
+        writeMayaProfile: true,
+        materialTemplate: null,
+        mayaFile: {
+          major_version: 1,
+          minor_version: 6,
+          entries: [{ material_label: "pbr1Mtl", shader_label: "vsngCharaBasic", textures: [] }],
+        },
+        nustFile: {
+          major_version: 1,
+          minor_version: 6,
+          entries: [{ material_label: "pbr1Mtl", shader_label: "vsngCharaBasic", textures: [] }],
+        },
+      },
+    });
     mockBuildImportedDaeStageRegistrationPlan.mockReturnValue({
       baseFilename: "sample_mesh",
       folderName: "sample_mesh",
@@ -209,12 +259,13 @@ describe("sceneSaveFolderPipeline", () => {
     expect(mockExecuteDelete).not.toHaveBeenCalled();
   });
 
-  it("calls restore_shared_textures invoke", async () => {
+  it("calls restore_shared_textures with pack root for nested stageRoot", async () => {
     const params = makeParams();
     const result = await executeSaveFolderPipeline(params);
     expect(result.success).toBe(true);
+    expect(mockResolveStagePackStructureTarget).toHaveBeenCalledWith("E:/stage/16F73C97/0/0");
     expect(mockInvoke).toHaveBeenCalledWith("restore_shared_textures", {
-      stageRoot: "E:/stage/16F73C97/0/0",
+      stageRoot: "E:/stage/16F73C97",
     });
   });
 
@@ -267,27 +318,41 @@ describe("sceneSaveFolderPipeline", () => {
     });
   });
 
-  it("retargets pre-converted session imports instead of re-importing DAE bytes", async () => {
+  it("retargets and re-converts pre-converted session imports before save", async () => {
     const store = useSceneDirtyStore.getState();
     store.markObjectAdded("sample_mesh");
 
+    const importedObject = makeImportedDaeObject({ sessionImportId: "import-existing" });
     const params = makeParams({
       sceneSessionId: "session-1",
-      importedDaeObjects: [
-        makeImportedDaeObject({ sessionImportId: "import-existing" }),
-      ],
+      importedDaeObjects: [importedObject],
     });
 
     const result = await executeSaveFolderPipeline(params);
 
     expect(result.success).toBe(true);
     expect(result.convertedCount).toBe(1);
-    expect(mockRetargetSessionImportFolderName).toHaveBeenCalledWith(
+    expect(result.convertedDaeObjectIds).toEqual([importedObject.id]);
+    expect(mockResolveSessionImportConfigForSave).toHaveBeenCalledWith(
       "session-1",
       "import-existing",
-      expect.objectContaining({ convertToSsbh: true }),
       "sample_mesh",
     );
+    expect(mockRetargetAndReconvertSessionImport).toHaveBeenCalledWith(
+      "session-1",
+      "import-existing",
+      expect.objectContaining({
+        loadToScene: false,
+        convertToSsbh: true,
+        ssbhConfig: expect.objectContaining({
+          writeMayaProfile: true,
+          mayaFile: expect.any(Object),
+          nustFile: expect.any(Object),
+        }),
+      }),
+      "sample_mesh",
+    );
+    expect(mockSceneGetImportConfig).not.toHaveBeenCalled();
     expect(mockSceneImportDae).not.toHaveBeenCalled();
     expect(mockSceneExecuteImport).not.toHaveBeenCalled();
     expect(mockSceneSaveAsFolder).toHaveBeenCalledWith(
@@ -300,17 +365,28 @@ describe("sceneSaveFolderPipeline", () => {
     const store = useSceneDirtyStore.getState();
     store.markObjectAdded("sample_mesh");
 
+    const importedObject = makeImportedDaeObject();
     const params = makeParams({
       sceneSessionId: "session-1",
-      importedDaeObjects: [makeImportedDaeObject()],
+      importedDaeObjects: [importedObject],
     });
 
     const result = await executeSaveFolderPipeline(params);
 
     expect(result.success).toBe(true);
     expect(result.convertedCount).toBe(1);
-    expect(mockRetargetSessionImportFolderName).not.toHaveBeenCalled();
+    expect(result.convertedDaeObjectIds).toEqual([importedObject.id]);
+    expect(mockResolveSessionImportConfigForSave).not.toHaveBeenCalled();
+    expect(mockRetargetAndReconvertSessionImport).not.toHaveBeenCalled();
     expect(mockSceneImportDae).toHaveBeenCalled();
+    expect(mockSceneConfigureImport).toHaveBeenCalledWith(
+      "session-1",
+      "import-new",
+      expect.objectContaining({
+        loadToScene: false,
+        convertToSsbh: true,
+      }),
+    );
     expect(mockSceneExecuteImport).toHaveBeenCalled();
     expect(mockSceneSaveAsFolder).toHaveBeenCalledWith(
       "session-1",

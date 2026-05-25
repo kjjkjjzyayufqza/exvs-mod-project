@@ -34,6 +34,10 @@ export function SceneDetailViewHost({
     () => [...sessions].sort((a, b) => a.zIndex - b.zIndex),
     [sessions],
   );
+  const topZIndex = useMemo(
+    () => sessions.reduce((max, session) => Math.max(max, session.zIndex), 0),
+    [sessions],
+  );
 
   if (sessions.length === 0) return null;
 
@@ -46,6 +50,7 @@ export function SceneDetailViewHost({
               key={session.id}
               session={session}
               cascadeIndex={cascadeIndex}
+              skipActivate={session.zIndex >= topZIndex}
               onActivate={() => onActivateSession(session.id)}
               onClose={() => onCloseSession(session.id)}
             />
@@ -56,6 +61,7 @@ export function SceneDetailViewHost({
             key={session.id}
             session={session}
             cascadeIndex={cascadeIndex}
+            skipActivate={session.zIndex >= topZIndex}
             onActivate={() => onActivateSession(session.id)}
             onClose={() => onCloseSession(session.id)}
             onTabChange={(tab) => onTabChange(session.id, tab)}
