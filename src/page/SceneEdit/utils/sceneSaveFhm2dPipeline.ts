@@ -47,28 +47,28 @@ export async function executeSaveFhm2dPipeline(params: SaveFhm2dParams): Promise
   const packRoot = packTarget.packRoot;
   fhm2dLog(`Resolved pack root: ${packRoot}`);
 
-  // Redistribute textures from shared textures/ back to per-model subdirs (0/=maya, 1/=nust)
-  fhm2dLog("Redistributing textures to per-model subdirs...");
-  onProgress({ id: "redistribute", label: "Redistributing textures...", status: "running" });
+  // Populate model textures: read numatb refs, copy nutexb from textures/ to per-model subdirs
+  fhm2dLog("Populating model textures from numatb refs...");
+  onProgress({ id: "redistribute", label: "Populating model textures...", status: "running" });
 
   try {
     const redistResult = await invoke<{ modelsProcessed: number; texturesCopied: number; texturesFolderRemoved: boolean; warnings: string[] }>(
       "redistribute_stage_textures",
       { stageRoot: packRoot },
     );
-    fhm2dLog(`Redistributed: ${redistResult.texturesCopied} textures to ${redistResult.modelsProcessed} models`);
+    fhm2dLog(`Populated: ${redistResult.texturesCopied} textures to ${redistResult.modelsProcessed} models`);
     onProgress({
       id: "redistribute",
-      label: "Redistributing textures...",
+      label: "Populating model textures...",
       status: "done",
       detail: `${redistResult.texturesCopied} textures → ${redistResult.modelsProcessed} models`,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[SaveFHM2D] Redistribute failed:", msg);
+    console.error("[SaveFHM2D] Populate model textures failed:", msg);
     onProgress({
       id: "redistribute",
-      label: "Redistributing textures...",
+      label: "Populating model textures...",
       status: "error",
       error: msg,
     });
@@ -86,7 +86,7 @@ export async function executeSaveFhm2dPipeline(params: SaveFhm2dParams): Promise
 
   try {
     const structurePath = await invoke<string>(
-      "rebuild_stage_structure_json",
+      "rebuild_stage_structure_json_forced",
       { stageRoot: packRoot },
     );
     fhm2dLog(`Structure JSON rebuilt: ${structurePath}`);

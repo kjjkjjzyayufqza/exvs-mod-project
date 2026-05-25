@@ -236,24 +236,7 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
     emitStep(onProgress, "delete", "Checking for deletions...", "done", "None");
   }
 
-  // Phase 2: Restore shared textures (move nutexb from model subdirs to textures/)
-  emitStep(onProgress, "migrate", "Restoring shared textures...", "running");
-  try {
-    const packTarget = resolveStagePackStructureTarget(stageRoot);
-    const restoreResult = await invoke<{ texturesCollected: number; subdirsRemoved: number; warnings: string[] }>(
-      "restore_shared_textures",
-      { stageRoot: packTarget.packRoot },
-    );
-    const detail = restoreResult.texturesCollected > 0
-      ? `${restoreResult.texturesCollected} textures collected`
-      : "Not needed";
-    emitStep(onProgress, "migrate", "Restoring shared textures...", "done", detail);
-    migratedTextures = restoreResult.texturesCollected;
-  } catch (err) {
-    emitStep(onProgress, "migrate", "Restoring shared textures...", "error", undefined, err instanceof Error ? err.message : String(err));
-  }
-
-  // Phase 3: Convert new objects (DAE → SSBH)
+  // Phase 2: Convert new objects (DAE → SSBH)
   const addedObjects = dirtyStore.getAddedObjects();
   const daeObjectsToConvert = importedDaeObjects.filter((obj) =>
     addedObjects.includes(obj.name),

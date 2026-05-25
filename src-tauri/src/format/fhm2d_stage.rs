@@ -3253,6 +3253,18 @@ fn collect_sorted_entries(dir: &Path) -> (Vec<PathBuf>, Vec<PathBuf>) {
 /// Recursively walk a directory and emit SubFileStructure entries.
 /// Texture container dirs (all-digit name, only nutexb children) get unk3=32.
 /// All other dirs get unk3=0.
+/// Returns a sort key for content-level directories.
+/// Order: base=0, info=1, sky=3, textures=4 (excluded), everything else=2 (models, alphabetical).
+fn stage_content_dir_order(name: &str) -> (u8, String) {
+    match name {
+        n if n == STAGE_BASE_NAME => (0, String::new()),
+        n if n == STAGE_INFO_NAME => (1, String::new()),
+        n if n == STAGE_SKY_NAME => (3, String::new()),
+        n if n == STAGE_TEXTURES_NAME => (4, String::new()),
+        other => (2, other.to_string()),
+    }
+}
+
 fn emit_dir_recursive(
     c: &mut RebuildCollector,
     dir: &Path,
@@ -3279,24 +3291,26 @@ fn emit_dir_recursive(
         .filter(|d| !dir_is_empty_recursive(d))
         .collect();
 
-    // Ensure base/ is emitted first at the content level so that
-    // classify_content_folders correctly identifies it as FolderRole::Base
-    // when the fhm2d is re-extracted.
+    // At the content level (where base/, info/, sky/ exist), enforce
+    // the canonical FHM2D ordering: base → info → {models sorted} → sky.
+    // Also skip textures/ as textures are now embedded in each model folder.
     let has_base = relevant_dirs
         .iter()
         .any(|d| d.file_name().unwrap().to_string_lossy().eq_ignore_ascii_case(STAGE_BASE_NAME));
     let relevant_dirs = if has_base {
-        let mut sorted = relevant_dirs;
+        let mut sorted: Vec<&PathBuf> = relevant_dirs
+            .into_iter()
+            .filter(|d| {
+                !d.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .eq_ignore_ascii_case(STAGE_TEXTURES_NAME)
+            })
+            .collect();
         sorted.sort_by(|a, b| {
             let an = a.file_name().unwrap().to_string_lossy().to_ascii_lowercase();
             let bn = b.file_name().unwrap().to_string_lossy().to_ascii_lowercase();
-            let a_is_base = an == STAGE_BASE_NAME;
-            let b_is_base = bn == STAGE_BASE_NAME;
-            match (a_is_base, b_is_base) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => an.cmp(&bn),
-            }
+            stage_content_dir_order(&an).cmp(&stage_content_dir_order(&bn))
         });
         sorted
     } else {
@@ -3385,6 +3399,22 @@ pub fn rebuild_structure_json_for_stage(stage_root: &str) -> Result<String, Stri
             }
         }
     }
+
+    rebuild_structure_from_scratch(root, folder_name, &output_path)
+}
+
+/// Like `rebuild_structure_json_for_stage` but always performs a full rebuild
+/// from disk, never preserving the original structure JSON. Use this when the
+/// structure must reflect the current canonical layout (base/info/models/sky
+/// with per-model texture subdirs, no shared textures/ folder).
+pub fn rebuild_structure_json_for_stage_forced(stage_root: &str) -> Result<String, String> {
+    let root = Path::new(stage_root);
+    let folder_name = root.file_name().and_then(|n| n.to_str()).unwrap_or("stage");
+
+    let output_path = root
+        .parent()
+        .unwrap_or(root)
+        .join(format!("{folder_name}_structure.json"));
 
     rebuild_structure_from_scratch(root, folder_name, &output_path)
 }

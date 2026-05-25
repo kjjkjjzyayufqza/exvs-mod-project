@@ -529,6 +529,28 @@ pub async fn rebuild_stage_structure_json(stage_root: String) -> Result<String, 
 }
 
 #[tauri::command]
+pub async fn rebuild_stage_structure_json_forced(stage_root: String) -> Result<String, String> {
+    eprintln!("[rebuild_structure_forced] Starting for: {stage_root}");
+    let t = Instant::now();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        fhm2d_stage::rebuild_structure_json_for_stage_forced(&stage_root)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?;
+    match &result {
+        Ok(p) => eprintln!(
+            "[rebuild_structure_forced] Done in {}ms — wrote {p}",
+            t.elapsed().as_millis()
+        ),
+        Err(e) => eprintln!(
+            "[rebuild_structure_forced] Failed in {}ms — {e}",
+            t.elapsed().as_millis()
+        ),
+    }
+    result
+}
+
+#[tauri::command]
 pub async fn rebuild_stage_structure_json_with_shared_textures(
     stage_root: String,
 ) -> Result<String, String> {
