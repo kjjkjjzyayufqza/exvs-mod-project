@@ -374,7 +374,7 @@ pub async fn preview_stage_fhm2d_rename(
             );
             let t2 = Instant::now();
 
-            let (tree, warnings) = fhm2d_stage::stage_rename_in_memory(
+            let (tree, warnings) = fhm2d_stage::stage_rename_in_memory_numatb_based(
                 &extraction.files,
                 &extraction.sub_file_structure,
             )?;

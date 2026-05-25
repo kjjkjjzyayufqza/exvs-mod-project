@@ -1,0 +1,63 @@
+Root/  (1 folders, 47 files, 34.9 MB)
+  0/  (1 folders, 47 files, 34.9 MB)
+    0/  (6 folders, 47 files, 34.9 MB)
+      base/  (1 folders, 7 files, 1.1 MB)
+        001stage001_object_box01/  (6 files, 1.1 MB)
+          001stage001_object_box01.jnttbl  .bin  0 B
+          001stage001_object_box01.numdlb  .numdlb  711 B
+          001stage001_object_box01__maya__.numatb  .numatb  2.3 KB
+          001stage001_object_box01__maya__.numshb  .numshb  1.1 MB
+          001stage001_object_box01__maya__.nusktb  .nusktb  104 B
+          001stage001_object_box01__nust__.numatb  .numatb  1.8 KB
+        map_hit.hkt  .bin  16.7 KB
+      001stage001_base/  (1 folders, 7 files, 420.1 KB)
+        0/  (6 files, 397.1 KB)
+          001stage001_base.jnttbl  .bin  0 B
+          001stage001_base.numdlb  .numdlb  455 B
+          001stage001_base__maya__.numatb  .numatb  1.1 KB
+          001stage001_base__maya__.numshb  .numshb  394.5 KB
+          001stage001_base__maya__.nusktb  .nusktb  104 B
+          001stage001_base__nust__.numatb  .numatb  918 B
+        map_hit.hkt  .bin  23.0 KB
+      info/  (3 folders, 8 files, 4.1 MB)
+        fog/  (2 files, 4.0 MB)
+          900default_ibl_irradiance.nutexb  .nutexb  2.0 MB
+          900default_ibl_specular.nutexb  .nutexb  2.0 MB
+        light/  (1 files, 64.2 KB)
+          001stage001_rampfog.nutexb  .nutexb  64.2 KB
+        post_effect/  (1 files, 18.1 KB)
+          lut_none.nutexb  .nutexb  18.1 KB
+        border_hit.hkt  .bin  17.6 KB
+        graphic_param.csv  .bin  4.7 KB
+        placement.csv  .bin  1.2 KB
+        plan_param.spbin  .bin  456 B
+      sky/  (1 folders, 6 files, 29.4 KB)
+        0/  (6 files, 29.4 KB)
+          001stage001_sky.jnttbl  .bin  0 B
+          001stage001_sky.numdlb  .numdlb  382 B
+          001stage001_sky__maya__.numatb  .numatb  440 B
+          001stage001_sky__maya__.numshb  .numshb  28.4 KB
+          001stage001_sky__maya__.nusktb  .nusktb  104 B
+          001stage001_sky__nust__.numatb  .numatb  92 B
+      sssssccccc/  (1 folders, 6 files, 931.2 KB)
+        0/  (5 files, 852.8 KB)
+          sssssccccc.numdlb  .numdlb  284 B
+          sssssccccc.numshb  .numshb  825.8 KB
+          sssssccccc.nusktb  .nusktb  21.7 KB
+          sssssccccc__nust__.numatb  .numatb  2.3 KB
+          sssssccccc__maya__.numatb  .numatb  2.8 KB
+        map_hit.hkt  .bin  78.4 KB
+      textures/  (13 files, 28.3 MB)
+        stage001_panel_01_ambientocclusion.nutexb  .nutexb  682.9 KB
+        stage001_panel_01_diffuse.nutexb  .nutexb  1.3 MB
+        stage001_panel_01_emissive.nutexb  .nutexb  1.3 MB
+        stage001_panel_01_normal.nutexb  .nutexb  1.3 MB
+        stage001_panel_01_roughness.nutexb  .nutexb  682.9 KB
+        stage001_panel_01_specular.nutexb  .nutexb  1.3 MB
+        stage001_panel_02_ambientocclusion.nutexb  .nutexb  682.9 KB
+        stage001_panel_02_diffuse.nutexb  .nutexb  2.7 MB
+        stage001_panel_02_emissive.nutexb  .nutexb  682.9 KB
+        stage001_panel_02_normal.nutexb  .nutexb  682.9 KB
+        stage001_panel_02_roughness.nutexb  .nutexb  341.5 KB
+        stage001_panel_02_specular.nutexb  .nutexb  682.9 KB
+        stage001_skydome_sky.nutexb  .nutexb  16.0 MB

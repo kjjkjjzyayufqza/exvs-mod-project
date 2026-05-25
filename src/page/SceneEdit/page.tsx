@@ -302,8 +302,18 @@ function collectExistingNutexbEntries(
 ): TextureManagerEntry[] {
   const seen = new Map<string, TextureManagerEntry>();
   const processBundle = (bundle: SsbhModelPreviewBundle, objectLabel: string) => {
+    // Build a map from nutexbPath → display name using textureResolve
+    const pathToName = new Map<string, string>();
+    for (const tr of bundle.textureResolve ?? []) {
+      if (tr.nutexbPath) {
+        const ref = tr.reference?.trim().replace(/\\/g, "/").split("/").pop() ?? "";
+        const name = ref ? (ref.toLowerCase().endsWith(".nutexb") ? ref : `${ref}.nutexb`) : "";
+        if (name) pathToName.set(tr.nutexbPath, name);
+      }
+    }
+
     for (const path of bundle.resolvedNutexbPaths) {
-      const filename = path.split(/[/\\]/).pop() ?? path;
+      const filename = pathToName.get(path) ?? path.split(/[/\\]/).pop() ?? path;
       const key = filename.toLowerCase();
       if (seen.has(key)) {
         const existing = seen.get(key)!;
@@ -2448,6 +2458,12 @@ export default function SceneEdit() {
   }, [handleClearSelection, handleSelectNode, importedDaeObjects, placementEntries, placementIndexForNodeId, selectedPlacementIdx, subModels]);
 
   const handleImportDae = useCallback(async () => {
+    if (isMemoryImport) {
+      toast.error("Cannot import DAE in memory mode", {
+        description: "Please save to folder first (Save Folder / Save FHM2D), then re-open the stage before importing DAE.",
+      });
+      return;
+    }
     const selected = await open({
       multiple: true,
       filters: [{ name: "Collada DAE", extensions: ["dae"] }],
@@ -2495,7 +2511,7 @@ export default function SceneEdit() {
         );
       }
     }
-  }, []);
+  }, [isMemoryImport]);
 
   const processSsbhSessionImport = useCallback(
     async (entries: DaeImportEntry[]) => {

@@ -1325,6 +1325,211 @@ pub fn stage_rename_in_memory(
     Ok((virtual_tree, warnings))
 }
 
+/// Like `stage_rename_in_memory` but collects textures into `textures/` based on
+/// numatb material references (reads texture paths from numatb entries, strips
+/// leading path components, finds matching nutexb by internal name).
+/// Does NOT do `consolidate_virtual_textures` (numbered-subdir based collection).
+pub fn stage_rename_in_memory_numatb_based(
+    files: &[InMemoryFhm2dFile],
+    sub_file_structure: &[SubFileStructureEntry],
+) -> Result<(StageVirtualTreeFolder, Vec<String>), String> {
+    let file_index_map: HashMap<i32, &InMemoryFhm2dFile> =
+        files.iter().map(|f| (f.file_index, f)).collect();
+
+    let tree = build_stage_tree(sub_file_structure);
+    let mut warnings = Vec::new();
+
+    let (nutexb_name_map, nutexb_warnings) = precompute_nutexb_names(&file_index_map);
+    warnings.extend(nutexb_warnings);
+
+    let mut virtual_tree = convert_to_virtual_tree(&tree, &file_index_map, &nutexb_name_map);
+
+    apply_semantic_rename(&mut virtual_tree, &tree, &file_index_map, &mut warnings);
+    consolidate_textures_by_numatb_refs(&mut virtual_tree, &file_index_map, &mut warnings);
+
+    Ok((virtual_tree, warnings))
+}
+
+/// Collect nutexb files into a shared `textures/` folder based on numatb material
+/// texture references. The textures/ folder is placed at the pack root level (Root/0/),
+/// NOT at the content level (Root/0/0/).
+/// Steps:
+/// 1. Find all numatb files in the virtual tree
+/// 2. Parse each numatb to extract texture reference paths
+/// 3. Strip path prefixes, keep only the texture stem name
+/// 4. Find matching nutexb files (by internal name) from numbered subdirs
+/// 5. Move them into a new `textures/` folder at pack root level
+fn consolidate_textures_by_numatb_refs(
+    root: &mut StageVirtualTreeFolder,
+    file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
+    warnings: &mut Vec<String>,
+) {
+    let content_path = find_stage_content_level(root);
+    let Some(content) = navigate_virtual_tree_ref(root, &content_path) else {
+        return;
+    };
+
+    // Step 1: Collect all texture references from numatb files
+    let mut referenced_names: HashSet<String> = HashSet::new();
+    collect_numatb_texture_refs_from_tree(content, file_index_map, &mut referenced_names, warnings);
+
+    if referenced_names.is_empty() {
+        return;
+    }
+
+    // Step 2: Find matching nutexb files in numbered subdirs at the content level
+    let Some(content_mut) = navigate_virtual_tree_mut(root, &content_path) else {
+        return;
+    };
+
+    let mut collected: Vec<StageVirtualTreeFile> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+
+    for model_folder in &mut content_mut.children {
+        collect_nutexb_matching_refs(
+            &mut model_folder.children,
+            &referenced_names,
+            &mut collected,
+            &mut seen,
+        );
+    }
+
+    if collected.is_empty() {
+        return;
+    }
+
+    // Step 3: Place textures/ at content level (same level as base/, info/, sky/)
+    let Some(content_folder) = navigate_virtual_tree_mut(root, &content_path) else {
+        return;
+    };
+
+    if !content_folder
+        .children
+        .iter()
+        .any(|c| c.name.eq_ignore_ascii_case(STAGE_TEXTURES_NAME))
+    {
+        content_folder.children.push(StageVirtualTreeFolder {
+            name: STAGE_TEXTURES_NAME.to_string(),
+            children: Vec::new(),
+            files: collected,
+        });
+    }
+}
+
+/// Recursively find all numatb files in the tree and extract their texture references.
+fn collect_numatb_texture_refs_from_tree(
+    folder: &StageVirtualTreeFolder,
+    file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
+    refs: &mut HashSet<String>,
+    warnings: &mut Vec<String>,
+) {
+    for f in &folder.files {
+        if !f.file_type.eq_ignore_ascii_case(".numatb") {
+            continue;
+        }
+        let Some(mem_file) = file_index_map.get(&f.file_index) else {
+            continue;
+        };
+        let mut cursor = Cursor::new(&mem_file.data);
+        match ssbh_data::prelude::MatlData::read(&mut cursor) {
+            Ok(matl) => {
+                for entry in &matl.entries {
+                    for tex in &entry.textures {
+                        let stem = extract_texture_stem(&tex.data);
+                        if !stem.is_empty() {
+                            refs.insert(stem.to_ascii_lowercase());
+                        }
+                    }
+                    for tex in &entry.textures2 {
+                        let stem = extract_texture_stem(&tex.data);
+                        if !stem.is_empty() {
+                            refs.insert(stem.to_ascii_lowercase());
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                warnings.push(format!(
+                    "Failed to parse numatb '{}' for texture refs: {e}",
+                    f.file_name
+                ));
+            }
+        }
+    }
+    for child in &folder.children {
+        collect_numatb_texture_refs_from_tree(child, file_index_map, refs, warnings);
+    }
+}
+
+/// Extract texture stem from a numatb texture path like `../../textures/stage001_skydome_sky`.
+/// Returns just the final component without extension (e.g. `stage001_skydome_sky`).
+fn extract_texture_stem(raw_path: &str) -> String {
+    let trimmed = raw_path.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    let normalized = trimmed.replace('\\', "/");
+    let stem = normalized.split('/').last().unwrap_or("");
+    // Strip .nutexb extension if present
+    let stem = stem
+        .strip_suffix(".nutexb")
+        .or_else(|| stem.strip_suffix(".NUTEXB"))
+        .unwrap_or(stem);
+    stem.to_string()
+}
+
+/// Collect nutexb files from numbered subdirs that match the referenced texture names.
+/// Removes those subdirs after collection.
+fn collect_nutexb_matching_refs(
+    children: &mut Vec<StageVirtualTreeFolder>,
+    referenced_names: &HashSet<String>,
+    collected: &mut Vec<StageVirtualTreeFile>,
+    seen: &mut HashSet<String>,
+) {
+    // Recurse into non-nutexb children
+    for child in children.iter_mut() {
+        let is_numeric = child.name.chars().all(|c| c.is_ascii_digit());
+        let is_pure_nutexb = is_numeric
+            && !child.files.is_empty()
+            && child.children.is_empty()
+            && child.files.iter().all(|f| f.file_type.eq_ignore_ascii_case(".nutexb"));
+        if !is_pure_nutexb {
+            collect_nutexb_matching_refs(&mut child.children, referenced_names, collected, seen);
+        }
+    }
+
+    // Extract matching nutexb from pure-nutexb numeric subdirs
+    let mut to_remove = Vec::new();
+    for (i, child) in children.iter().enumerate() {
+        let is_numeric = child.name.chars().all(|c| c.is_ascii_digit());
+        let is_pure_nutexb = is_numeric
+            && !child.files.is_empty()
+            && child.children.is_empty()
+            && child.files.iter().all(|f| f.file_type.eq_ignore_ascii_case(".nutexb"));
+        if is_pure_nutexb {
+            for f in &child.files {
+                // Match by stripping .nutexb from file_name
+                let stem = f
+                    .file_name
+                    .strip_suffix(".nutexb")
+                    .unwrap_or(&f.file_name)
+                    .to_ascii_lowercase();
+                if referenced_names.contains(&stem) {
+                    let key = f.file_name.to_ascii_lowercase();
+                    if seen.insert(key) {
+                        collected.push(f.clone());
+                    }
+                }
+            }
+            to_remove.push(i);
+        }
+    }
+
+    for i in to_remove.into_iter().rev() {
+        children.remove(i);
+    }
+}
+
 // ── Extract stage FHM2D to folder (in-memory rename → disk) ────────────────
 
 #[derive(Clone, Serialize)]
@@ -1407,7 +1612,7 @@ pub fn extract_stage_fhm2d_to_folder_impl(
         crate::format::fhm2d::extract_fhm2d_to_memory_impl(&bytes, &source_name, None)?;
 
     let (tree, warnings) =
-        stage_rename_in_memory(&extraction.files, &extraction.sub_file_structure)?;
+        stage_rename_in_memory_numatb_based(&extraction.files, &extraction.sub_file_structure)?;
 
     let dest = Path::new(output_dir).join(&source_name);
     if dest.exists() {
@@ -3073,6 +3278,30 @@ fn emit_dir_recursive(
         .into_iter()
         .filter(|d| !dir_is_empty_recursive(d))
         .collect();
+
+    // Ensure base/ is emitted first at the content level so that
+    // classify_content_folders correctly identifies it as FolderRole::Base
+    // when the fhm2d is re-extracted.
+    let has_base = relevant_dirs
+        .iter()
+        .any(|d| d.file_name().unwrap().to_string_lossy().eq_ignore_ascii_case(STAGE_BASE_NAME));
+    let relevant_dirs = if has_base {
+        let mut sorted = relevant_dirs;
+        sorted.sort_by(|a, b| {
+            let an = a.file_name().unwrap().to_string_lossy().to_ascii_lowercase();
+            let bn = b.file_name().unwrap().to_string_lossy().to_ascii_lowercase();
+            let a_is_base = an == STAGE_BASE_NAME;
+            let b_is_base = bn == STAGE_BASE_NAME;
+            match (a_is_base, b_is_base) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => an.cmp(&bn),
+            }
+        });
+        sorted
+    } else {
+        relevant_dirs
+    };
     let child_count = relevant_dirs.len() + files.len();
     if child_count == 0 && depth > 0 {
         return;
