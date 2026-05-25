@@ -241,13 +241,15 @@ pub fn havok_xml_to_obj(xml_content: &str, output_path: &Path) -> Result<String,
         let pv_end = (pv_start + section.num_packed_vertices as usize).min(packed_vertices.len());
         for i in pv_start..pv_end {
             let packed = packed_vertices[i];
-            let xi = ((packed >> 21) & 0x7FF) as f64;
-            let yi = ((packed >> 10) & 0x7FF) as f64;
-            let zi = (packed & 0x3FF) as f64;
+            // Havok bit layout: Z[31:22] Y[21:11] X[10:0]
+            let xi = (packed & 0x7FF) as f64;
+            let yi = ((packed >> 11) & 0x7FF) as f64;
+            let zi = ((packed >> 22) & 0x3FF) as f64;
+            // codecParms = [offX, offY, offZ, sX, sY, sZ]
             obj_verts.push([
-                section.codec_parms[0] + xi * section.codec_parms[1],
-                section.codec_parms[2] + yi * section.codec_parms[3],
-                section.codec_parms[4] + zi * section.codec_parms[5],
+                section.codec_parms[0] + xi * section.codec_parms[3],
+                section.codec_parms[1] + yi * section.codec_parms[4],
+                section.codec_parms[2] + zi * section.codec_parms[5],
             ]);
         }
 

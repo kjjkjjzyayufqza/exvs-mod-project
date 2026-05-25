@@ -93,7 +93,7 @@ import {
   previewSelectionOnBeforeCompile,
 } from "@/page/TestEditor/components/ssbh-model-preview/previewSelectionMaterial";
 import { DEFAULT_SCENE_GIZMO_SIZE } from "../utils/sceneEditorSettings";
-import { HavokCollisionOverlay } from "./havok/HavokCollisionOverlay";
+import { HavokCollisionOverlay, type ObjectTransform } from "./havok/HavokCollisionOverlay";
 import type { HavokMeshData } from "@/utils/havokXmlParser";
 
 const DEG2RAD = Math.PI / 180;
@@ -191,12 +191,18 @@ export type SceneMapSubModelEntry = {
   bundle: SsbhModelPreviewBundle;
 };
 
+import type { HktSimplifyConfig } from "./dae-import/daeImportTypes";
+
 export type ImportedDaeObject = {
   id: string;
   name: string;
   sourcePath: string;
   scene: THREE.Group;
   transform: TransformData;
+  /** Set when SSBH was converted into the scene memory session (written on save only). */
+  sessionImportId?: string;
+  /** Last HKT simplification settings used for this object. */
+  hktSimplify?: HktSimplifyConfig;
 };
 
 export type SceneExportObject = {
@@ -334,6 +340,7 @@ export interface MapViewportProps {
   showAabb?: boolean;
   showCollisionMesh?: boolean;
   collisionVisibility?: Record<string, boolean>;
+  selectedCollisionSourceId?: string | null;
 }
 
 export interface MapViewportHandle {
@@ -384,6 +391,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       showAabb = true,
       showCollisionMesh = true,
       collisionVisibility,
+      selectedCollisionSourceId,
     },
     ref
   ) {
@@ -391,6 +399,19 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
     const cameraRef = useRef<THREE.Camera | null>(null);
     const texturePool = useMemo(() => new SceneTexturePool(), []);
     useEffect(() => () => texturePool.disposeAll(), [texturePool]);
+
+    const importedDaeObjectTransforms = useMemo(() => {
+      const map = new Map<string, ObjectTransform>();
+      for (const obj of importedDaeObjects) {
+        if (obj.sessionImportId) {
+          map.set(obj.sessionImportId, {
+            position: [obj.transform.posX, obj.transform.posY, obj.transform.posZ],
+            rotation: [obj.transform.rotX, obj.transform.rotY, obj.transform.rotZ],
+          });
+        }
+      }
+      return map;
+    }, [importedDaeObjects]);
     const gizmoDraggingRef = useRef(false);
     const selectedGroupsRef = useRef<SelectedGroupMap>(new Map());
     const selectableNodesRef = useRef<SelectableNodeRegistry>(new Map());
@@ -573,6 +594,8 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
     const handleCreated = useCallback(({ gl, camera }: { gl: THREE.WebGLRenderer; camera: THREE.Camera }) => {
       cameraRef.current = camera;
       const canvas = gl.domElement;
+      canvas.style.position = "relative";
+      canvas.style.zIndex = "0";
       canvas.addEventListener("webglcontextlost", (e) => {
         e.preventDefault();
         console.warn("[SceneEdit] WebGL context lost — waiting for restore");
@@ -946,6 +969,8 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             subModels={subModels}
             placementEntries={placementEntries}
             collisionVisibility={collisionVisibility}
+            objectTransforms={importedDaeObjectTransforms}
+            selectedSourceId={selectedCollisionSourceId}
           />
         )}
 

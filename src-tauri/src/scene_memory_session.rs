@@ -10,6 +10,27 @@ pub enum SceneSource {
     New,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HktSimplifyConfig {
+    pub enabled: bool,
+    /// Maximum angle (degrees) between mergeable face normals.
+    pub planarity_angle_deg: f64,
+    pub min_triangle_area: f64,
+    pub weld_epsilon: f64,
+}
+
+impl Default for HktSimplifyConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            planarity_angle_deg: 8.0,
+            min_triangle_area: 1e-8,
+            weld_epsilon: 1e-5,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportConfig {
@@ -17,6 +38,8 @@ pub struct ImportConfig {
     pub convert_to_ssbh: bool,
     pub generate_hkt: bool,
     pub ssbh_config: Option<SsbhConvertConfig>,
+    #[serde(default)]
+    pub hkt_simplify: HktSimplifyConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,6 +72,8 @@ pub struct SsbhArtifacts {
 #[serde(rename_all = "camelCase")]
 pub struct HavokCollisionData {
     pub source_id: String,
+    pub display_name: String,
+    pub object_node_id: Option<String>,
     pub hkt_xml: String,
     pub raw_bytes: Vec<u8>,
 }
@@ -136,12 +161,19 @@ impl SceneMemorySession {
                 convert_to_ssbh: false,
                 generate_hkt: false,
                 ssbh_config: None,
+                hkt_simplify: HktSimplifyConfig::default(),
             },
             ssbh_artifacts: None,
             hkt_bytes: None,
         });
         self.dirty = true;
         id
+    }
+
+    pub fn add_import_from_path(&mut self, name: String, path: &std::path::Path) -> Result<String, String> {
+        let dae_bytes = std::fs::read(path)
+            .map_err(|e| format!("Failed to read '{}': {}", path.display(), e))?;
+        Ok(self.add_import(name, dae_bytes))
     }
 
     pub fn find_import_mut(&mut self, import_id: &str) -> Result<&mut PendingImport, String> {
@@ -191,8 +223,16 @@ impl SceneMemorySession {
         Ok(())
     }
 
-    pub fn add_havok_data(&mut self, data: HavokCollisionData) {
-        self.havok_data.push(data);
+    pub fn upsert_havok_data(&mut self, data: HavokCollisionData) {
+        if let Some(existing) = self
+            .havok_data
+            .iter_mut()
+            .find(|d| d.source_id == data.source_id)
+        {
+            *existing = data;
+        } else {
+            self.havok_data.push(data);
+        }
         self.dirty = true;
     }
 
@@ -431,6 +471,7 @@ mod tests {
                 write_maya_profile: false,
                 material_template: None,
             }),
+            hkt_simplify: HktSimplifyConfig::default(),
         };
         let import = s.find_import_mut(&id).unwrap();
         import.config = config;
@@ -473,8 +514,10 @@ mod tests {
     #[test]
     fn add_and_get_havok_data() {
         let mut s = new_session();
-        s.add_havok_data(HavokCollisionData {
+        s.upsert_havok_data(HavokCollisionData {
             source_id: "col_1".into(),
+            display_name: "col_1".into(),
+            object_node_id: None,
             hkt_xml: "<hkt/>".into(),
             raw_bytes: vec![1, 2],
         });

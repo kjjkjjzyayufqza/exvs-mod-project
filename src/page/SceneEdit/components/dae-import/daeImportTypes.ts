@@ -20,10 +20,19 @@ export interface TextureImportEntry {
     | { type: "new"; pngPath: string; ddsFormat: string };
 }
 
+export interface HktSimplifyConfig {
+  enabled: boolean;
+  /** Max angle (degrees) between coplanar mergeable face normals. */
+  planarityAngleDeg: number;
+  minTriangleArea: number;
+  weldEpsilon: number;
+}
+
 export interface DaeImportConfig {
   loadToScene: boolean;
   convertToSsbh: boolean;
   generateHkt: boolean;
+  hktSimplify: HktSimplifyConfig;
   ssbhConfig: SsbhImportConfig;
   textureEntries?: TextureImportEntry[];
   defaultDdsFormat: string;

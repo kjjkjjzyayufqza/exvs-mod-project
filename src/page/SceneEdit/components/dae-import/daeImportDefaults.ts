@@ -1,4 +1,5 @@
 import type { DaeImportConfig, SsbhImportConfig } from "./daeImportTypes";
+import { DEFAULT_HKT_SIMPLIFY } from "../../utils/hktSimplifyUtils";
 
 export function createDefaultSsbhConfig(
   baseFilename: string,
@@ -24,6 +25,7 @@ export function createDefaultDaeImportConfig(
     loadToScene: true,
     convertToSsbh: false,
     generateHkt: false,
+    hktSimplify: { ...DEFAULT_HKT_SIMPLIFY },
     ssbhConfig: createDefaultSsbhConfig(baseFilename),
     defaultDdsFormat: "BC7_UNORM",
   };

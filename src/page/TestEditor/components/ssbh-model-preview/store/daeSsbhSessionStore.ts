@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import { toast } from "sonner";
 import {
   createEmptyNumatbFile,
@@ -163,6 +163,39 @@ function createTemplateFromState(
     nustFile: cloneProfile(state.nustFile),
   };
 }
+
+function createDebouncedStorage(base: StateStorage, delayMs: number): StateStorage {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let pending: string | null = null;
+  let pendingKey: string | null = null;
+  return {
+    getItem: (name) => base.getItem(name),
+    setItem: (name, value) => {
+      pending = value;
+      pendingKey = name;
+      if (timer !== null) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        if (pending !== null && pendingKey !== null) {
+          base.setItem(pendingKey, pending);
+          pending = null;
+          pendingKey = null;
+        }
+      }, delayMs);
+    },
+    removeItem: (name) => {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+        pending = null;
+        pendingKey = null;
+      }
+      base.removeItem(name);
+    },
+  };
+}
+
+const debouncedLocalStorage = createDebouncedStorage(localStorage, 500);
 
 export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
   persist(
@@ -413,7 +446,7 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
     {
       name: SESSION_STORAGE_KEY,
       version: SESSION_VERSION,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => debouncedLocalStorage),
       partialize: (state) => ({
         sessionVersion: state.sessionVersion,
         importKind: state.importKind,

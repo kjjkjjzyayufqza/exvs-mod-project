@@ -94,7 +94,6 @@ import { SceneInfoContent, SceneStatsContent } from "./components/SceneStatusPan
 import { useSceneTextureLoader } from "./hooks/useSceneTextureLoader";
 import { TextureQualityPanel, getMaxDimensionForQuality } from "./components/TextureQualityPanel";
 import { disposeFhm2dMemorySession } from "@/page/TestEditor/components/ssbh-model-preview/fhm2dMemoryPreviewService";
-import { ssbhConvertDaeToSsbh } from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
 import { useDaeSsbhSessionStore } from "@/page/TestEditor/components/ssbh-model-preview/store/daeSsbhSessionStore";
 import {
   clearNutexbPreviewCacheAsync,
@@ -171,6 +170,9 @@ import { useSceneAssetStore } from "./store/sceneAssetStore";
 import type { HavokMeshData } from "@/utils/havokXmlParser";
 import { parseHavokXML } from "@/utils/havokXmlParser";
 import { CollisionListPanel } from "./components/havok/CollisionListPanel";
+import { HavokCollisionEditorPanel } from "./components/havok/HavokCollisionEditorPanel";
+import type { HktSimplifyConfig } from "./components/dae-import/daeImportTypes";
+import { DEFAULT_HKT_SIMPLIFY } from "./utils/hktSimplifyUtils";
 import {
   sceneSessionCreate,
   sceneSessionDestroy,
@@ -178,13 +180,21 @@ import {
   sceneRepackInPlace,
   sceneOpenFolder,
   sceneListHavokData,
+  sceneConfigureImport,
   sceneGenerateHkt,
   sceneGetHavokData,
+  sceneGetImportConfig,
   stageLoadSkeleton,
   stageStreamBundles,
   type StageSkeleton,
   type StageStreamChunk,
 } from "./utils/sceneSessionService";
+import {
+  buildSsbhSessionImportConfig,
+  ensureImportedDaeSessionImport,
+  importDaeThroughSceneSession,
+} from "./utils/sceneDaeSessionImport";
+import { applyOutlinerOrder } from "./utils/sceneOutlinerOrder";
 
 import type { PreviewRenderStyle } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
 
@@ -413,6 +423,7 @@ export default function SceneEdit() {
   const [showDaeImportModal, setShowDaeImportModal] = useState(false);
   const [havokInfo, setHavokInfo] = useState<HavokInstallInfo | null>(null);
   const [havokMeshDataMap, setHavokMeshDataMap] = useState(() => new Map<string, HavokMeshData>());
+  const [havokMetaMap, setHavokMetaMap] = useState(() => new Map<string, { displayName: string; objectNodeId: string | null }>());
   const [sceneSessionId, setSceneSessionId] = useState<string | null>(null);
 
   const viewMode = useSceneEditorStore((s) => s.viewMode);
@@ -755,6 +766,7 @@ export default function SceneEdit() {
           ...obj,
           id: `dae_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${index}`,
           name: `${obj.name} Copy`,
+          sessionImportId: undefined,
           transform: {
             ...obj.transform,
             posX: obj.transform.posX + 1,
@@ -1068,15 +1080,18 @@ export default function SceneEdit() {
           const havokList = await sceneListHavokData(result.sessionId);
           if (havokList.length > 0) {
             const map = new Map<string, HavokMeshData>();
+            const meta = new Map<string, { displayName: string; objectNodeId: string | null }>();
             for (const item of havokList) {
               try {
                 const meshData = parseHavokXML(item.hktXml);
                 map.set(item.sourceId, meshData);
+                meta.set(item.sourceId, { displayName: item.displayName, objectNodeId: item.objectNodeId });
               } catch (e) {
                 console.warn(`[Havok] Failed to parse ${item.sourceId}:`, e);
               }
             }
             setHavokMeshDataMap(map);
+            setHavokMetaMap(meta);
             toast.success(`Loaded ${map.size} collision mesh(es)`);
           } else {
             toast.info("No HKT collision files found");
@@ -2178,20 +2193,34 @@ export default function SceneEdit() {
     [handleClearSelection, placementEntries, selectedPlacementIdx, subModels],
   );
 
-  const outlinerRoot = useMemo((): StageTreeNode | null => {
+  const outlinerChildren = useMemo((): StageTreeNode[] => {
     if (!treeRoot) {
-      if (importedDaeObjects.length === 0) return null;
-      return {
-        id: "root",
-        label: "Scene",
-        role: "root",
-        children: importedDaeObjects.map((obj) => ({
-          id: obj.id,
-          label: obj.name,
-          role: "imported_dae",
-        })),
-      };
+      const nodes: StageTreeNode[] = importedDaeObjects.map((obj) => ({
+        id: obj.id,
+        label: obj.name,
+        role: "imported_dae" as const,
+      }));
+
+      if (havokMetaMap.size > 0) {
+        const colChildren: StageTreeNode[] = [];
+        for (const [sourceId, meta] of havokMetaMap) {
+          colChildren.push({
+            id: `__col__${sourceId}`,
+            label: meta.objectNodeId ? `${meta.objectNodeId}/${meta.displayName}` : meta.displayName,
+            role: "collision",
+          });
+        }
+        nodes.push({
+          id: "__collision_group__",
+          label: `Collision (${colChildren.length})`,
+          role: "collision",
+          children: colChildren,
+        });
+      }
+
+      return nodes;
     }
+
     const children: StageTreeNode[] = [];
     if (treeRoot.children) {
       for (const child of treeRoot.children) {
@@ -2225,6 +2254,7 @@ export default function SceneEdit() {
         children.push(child);
       }
     }
+
     const effects = placementEntries
       .map((entry, idx) => ({ entry, idx }))
       .filter(({ entry }) => entry.vdkType.toUpperCase() !== "OBJECT");
@@ -2235,6 +2265,7 @@ export default function SceneEdit() {
         role: "effect",
       });
     }
+
     for (const obj of importedDaeObjects) {
       children.push({
         id: obj.id,
@@ -2242,8 +2273,48 @@ export default function SceneEdit() {
         role: "imported_dae",
       });
     }
+
+    if (havokMetaMap.size > 0) {
+      const colChildren: StageTreeNode[] = [];
+      for (const [sourceId, meta] of havokMetaMap) {
+        const prefix = meta.objectNodeId ? `${meta.objectNodeId}/` : "";
+        colChildren.push({
+          id: `__col__${sourceId}`,
+          label: `${prefix}${meta.displayName}`,
+          role: "collision",
+        });
+      }
+      children.push({
+        id: "__collision_group__",
+        label: `Collision (${colChildren.length})`,
+        role: "collision",
+        children: colChildren,
+      });
+    }
+
+    return children;
+  }, [treeRoot, placementEntries, importedDaeObjects, havokMetaMap]);
+
+  const outlinerOrder = useSceneEditorStore((state) => state.outlinerOrder);
+
+  useEffect(() => {
+    if (outlinerChildren.length === 0) return;
+    useSceneEditorStore.getState().syncOutlinerOrder(outlinerChildren.map((child) => child.id));
+  }, [outlinerChildren]);
+
+  const outlinerRoot = useMemo((): StageTreeNode | null => {
+    if (!treeRoot && outlinerChildren.length === 0) return null;
+    const children = applyOutlinerOrder(outlinerChildren, outlinerOrder);
+    if (!treeRoot) {
+      return {
+        id: "root",
+        label: "Scene",
+        role: "root",
+        children,
+      };
+    }
     return { ...treeRoot, children };
-  }, [treeRoot, placementEntries, importedDaeObjects]);
+  }, [treeRoot, outlinerChildren, outlinerOrder]);
 
   const allNodeIds = useMemo(() => {
     if (!outlinerRoot) return [];
@@ -2275,6 +2346,7 @@ export default function SceneEdit() {
         ...obj,
         id: `dae_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${index}`,
         name: `${obj.name} Copy`,
+        sessionImportId: undefined,
         transform: {
           ...obj.transform,
           posX: obj.transform.posX + 1,
@@ -2401,69 +2473,121 @@ export default function SceneEdit() {
     }
   }, []);
 
-  const processDirectSsbhConvert = useCallback(
+  const processSsbhSessionImport = useCallback(
     async (entries: DaeImportEntry[]) => {
-      const sessionState = useDaeSsbhSessionStore.getState();
+      let activeSessionId = sceneSessionId;
+      if (!activeSessionId) {
+        if (stageRoot) {
+          const opened = await sceneOpenFolder(stageRoot);
+          activeSessionId = opened.sessionId;
+          setSceneSessionId(opened.sessionId);
+        } else {
+          activeSessionId = await sceneSessionCreate({ type: "new" });
+          setSceneSessionId(activeSessionId);
+        }
+      }
 
+      const sessionState = useDaeSsbhSessionStore.getState();
       let successCount = 0;
       let failCount = 0;
+      let offsetX = 0;
+      const spacing = 2;
+      const created: ImportedDaeObject[] = [];
+
       for (const entry of entries) {
         try {
-          const params = {
-            daePath: entry.filePath,
-            outputDir: sessionState.outputDir!,
-            baseFilename: sessionState.outputBaseName.trim(),
-            scaleFactor: Number(sessionState.scaleFactorText),
-            flipUv: sessionState.flipUv,
-            upAxis: sessionState.upAxis,
-            includeGeometryNames: sessionState.includeGeometryNames,
-            writeLog: sessionState.writeLog,
-            writeNumdlb: sessionState.writeNumdlb,
-            writeNumshb: sessionState.writeNumshb,
-            writeNusktb: sessionState.writeNusktb,
-            writeNumatb: sessionState.writeNumatb,
-            writeMayaProfile: sessionState.writeMayaProfile,
-            numdlbEntries: sessionState.numdlbEntries,
-            mayaFile: sessionState.writeNumatb ? sessionState.mayaFile : null,
-            nustFile: sessionState.writeNumatb ? sessionState.nustFile : null,
-          };
-          const result = await ssbhConvertDaeToSsbh(params);
-          const lines = [
-            result.files.numdlbPath ? `numdlb: ${result.files.numdlbPath}` : null,
-            result.files.numshbPath ? `numshb: ${result.files.numshbPath}` : null,
-            result.files.nusktbPath ? `nusktb: ${result.files.nusktbPath}` : null,
-            result.files.numatbPath ? `numatb: ${result.files.numatbPath}` : null,
-            result.files.mayaNumatbPath ? `maya numatb: ${result.files.mayaNumatbPath}` : null,
-          ].filter(Boolean);
+          const baseFilename =
+            sessionState.outputBaseName.trim() || sanitizeBaseFilename(entry.fileName);
+          const importConfig = buildSsbhSessionImportConfig(
+            entry.config,
+            sessionState,
+            baseFilename,
+          );
+          const result = await importDaeThroughSceneSession({
+            sessionId: activeSessionId,
+            filePath: entry.filePath,
+            name: baseFilename,
+            importConfig,
+          });
+          if (!result.ssbhGenerated) {
+            throw new Error("SSBH conversion did not produce in-memory artifacts");
+          }
 
           if (entry.config.generateHkt) {
-            try {
-              const hktOutputPath = `${sessionState.outputDir!}/${sessionState.outputBaseName.trim()}.hkt`;
-              await invoke<string>("scene_generate_hkt_from_dae_path", {
-                daePath: entry.filePath,
-                outputPath: hktOutputPath,
-                configProfile: "auto",
+            if (result.hktGenerated) {
+              toast.success(`HKT collision generated for ${entry.fileName}`, {
+                description:
+                  result.hktDetail ??
+                  "Mesh collision stored in session memory.",
               });
-              lines.push(`hkt: ${hktOutputPath}`);
-            } catch (hktErr) {
-              toast.warning(`HKT generation failed for ${entry.fileName}: ${hktErr instanceof Error ? hktErr.message : String(hktErr)}`);
+              const havokResult = await sceneGetHavokData(activeSessionId, result.importId);
+              if (havokResult) {
+                const meshData = parseHavokXML(havokResult.hktXml);
+                setHavokMeshDataMap((prev) => {
+                  const next = new Map(prev);
+                  next.set(havokResult.sourceId, meshData);
+                  return next;
+                });
+                setHavokMetaMap((prev) => {
+                  const next = new Map(prev);
+                  next.set(havokResult.sourceId, { displayName: havokResult.displayName, objectNodeId: havokResult.objectNodeId });
+                  return next;
+                });
+              }
+            } else {
+              const hktWarning =
+                result.warnings.find((w) => w.toLowerCase().includes("hkt")) ??
+                "HKT generation did not produce collision data.";
+              toast.warning(`HKT not generated for ${entry.fileName}`, {
+                description: hktWarning,
+              });
             }
           }
 
-          toast.success(`Converted ${entry.fileName} to SSBH`, { description: lines.join("\n") });
+          for (const warning of result.warnings) {
+            if (warning.toLowerCase().includes("hkt")) {
+              continue;
+            }
+            toast.warning(warning);
+          }
+
+          const loaded = await loadDAEFromPath(entry.filePath);
+          const posX = offsetX;
+          offsetX += loaded.boundingSize.x + spacing;
+          created.push({
+            id: `dae_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${created.length}`,
+            name: baseFilename,
+            sourcePath: loaded.filePath,
+            scene: loaded.scene,
+            transform: { ...DEFAULT_TRANSFORM, posX },
+            sessionImportId: result.importId,
+            hktSimplify: { ...entry.config.hktSimplify },
+          });
           successCount++;
         } catch (err) {
           failCount++;
-          toast.error(`Convert failed for ${entry.fileName}: ${err instanceof Error ? err.message : String(err)}`);
+          toast.error(
+            `Convert failed for ${entry.fileName}: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
       }
+
+      if (created.length > 0) {
+        setImportedDaeObjects((prev) => [...prev, ...created]);
+        created.forEach((object) => useSceneDirtyStore.getState().markObjectAdded(object.name));
+        useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
+        handleSelectNode(created[0]?.id ?? null);
+      }
+
       if (successCount > 0 && failCount === 0) {
-        toast.success(`All ${successCount} file(s) converted successfully`);
-      } else if (failCount > 0) {
+        toast.success(
+          `Converted ${successCount} file(s) to SSBH in memory. Save the stage folder to write files.`,
+        );
+      } else if (successCount > 0 && failCount > 0) {
         toast.warning(`Converted ${successCount}, failed ${failCount}`);
       }
     },
-    [],
+    [sceneSessionId, stageRoot, handleSelectNode],
   );
 
   const handleExportSelectedDae = useCallback(() => {
@@ -2653,6 +2777,23 @@ export default function SceneEdit() {
     ],
   );
 
+  const handleHavokDataUpdated = useCallback((sourceId: string, meshData: HavokMeshData) => {
+    setHavokMeshDataMap((prev) => {
+      const next = new Map(prev);
+      next.set(sourceId, meshData);
+      return next;
+    });
+  }, []);
+
+  const handleImportedDaeHktSimplifyChange = useCallback(
+    (nodeId: string, next: HktSimplifyConfig) => {
+      setImportedDaeObjects((prev) =>
+        prev.map((entry) => (entry.id === nodeId ? { ...entry, hktSimplify: next } : entry)),
+      );
+    },
+    [],
+  );
+
   const handleGenerateHkt = useCallback(
     async (ids: string[]) => {
       if (!sceneSessionId) {
@@ -2662,15 +2803,42 @@ export default function SceneEdit() {
       for (const id of ids) {
         const obj = importedDaeObjects.find((o) => o.id === id);
         if (!obj) continue;
+        const hktSimplify = obj.hktSimplify ?? { ...DEFAULT_HKT_SIMPLIFY };
         try {
           toast.loading(`Generating HKT for ${obj.name}...`, { id: `hkt-${id}` });
-          await sceneGenerateHkt(sceneSessionId, id, "auto");
-          const havokResult = await sceneGetHavokData(sceneSessionId, id);
+          const sessionImportId = await ensureImportedDaeSessionImport({
+            sessionId: sceneSessionId,
+            object: { ...obj, hktSimplify },
+          });
+          const baseConfig = await sceneGetImportConfig(sceneSessionId, sessionImportId).catch(
+            () => null,
+          );
+          await sceneConfigureImport(sceneSessionId, sessionImportId, {
+            loadToScene: baseConfig?.loadToScene ?? false,
+            convertToSsbh: baseConfig?.convertToSsbh ?? false,
+            generateHkt: true,
+            ssbhConfig: baseConfig?.ssbhConfig ?? null,
+            hktSimplify,
+          });
+          setImportedDaeObjects((prev) =>
+            prev.map((entry) =>
+              entry.id === obj.id
+                ? { ...entry, sessionImportId, hktSimplify }
+                : entry,
+            ),
+          );
+          await sceneGenerateHkt(sceneSessionId, sessionImportId, "auto");
+          const havokResult = await sceneGetHavokData(sceneSessionId, sessionImportId);
           if (havokResult) {
             const meshData = parseHavokXML(havokResult.hktXml);
             setHavokMeshDataMap((prev) => {
               const next = new Map(prev);
               next.set(havokResult.sourceId, meshData);
+              return next;
+            });
+            setHavokMetaMap((prev) => {
+              const next = new Map(prev);
+              next.set(havokResult.sourceId, { displayName: havokResult.displayName, objectNodeId: havokResult.objectNodeId });
               return next;
             });
           }
@@ -2682,6 +2850,11 @@ export default function SceneEdit() {
     },
     [sceneSessionId, importedDaeObjects],
   );
+
+  const handleReorderOutlinerNode = useCallback((activeId: string, overId: string) => {
+    useSceneEditorStore.getState().reorderOutlinerNode(activeId, overId);
+    useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
+  }, []);
 
   useSceneKeyboard({
     onDelete: handleDeleteSelected,
@@ -2717,9 +2890,32 @@ export default function SceneEdit() {
     selectedPlacementIdx === null &&
     subModels.some((s) => s.folderName === selectedNodeId);
 
-  const selectedImportedDae = selectedNodeId
-    ? importedDaeObjects.find((obj) => obj.id === selectedNodeId) ?? null
-    : null;
+  const selectedImportedDae = useMemo(() => {
+    if (!selectedNodeId) return null;
+    const direct = importedDaeObjects.find((obj) => obj.id === selectedNodeId);
+    if (direct) return direct;
+    if (selectedNodeId.startsWith("__col__")) {
+      const sourceId = selectedNodeId.slice("__col__".length);
+      const meta = havokMetaMap.get(sourceId);
+      if (meta?.objectNodeId) {
+        return importedDaeObjects.find((obj) => obj.id === meta.objectNodeId) ?? null;
+      }
+    }
+    return null;
+  }, [selectedNodeId, importedDaeObjects, havokMetaMap]);
+
+  const selectedCollisionSourceId = useMemo(() => {
+    if (!selectedNodeId?.startsWith("__col__")) return null;
+    return selectedNodeId.slice("__col__".length);
+  }, [selectedNodeId]);
+
+  const selectedImportedDaeMeshData = useMemo(() => {
+    if (selectedCollisionSourceId) {
+      return havokMeshDataMap.get(selectedCollisionSourceId) ?? null;
+    }
+    if (!selectedImportedDae?.sessionImportId) return null;
+    return havokMeshDataMap.get(selectedImportedDae.sessionImportId) ?? null;
+  }, [selectedImportedDae, selectedCollisionSourceId, havokMeshDataMap]);
 
   const selectedTransform: TransformData | null = isBaseSelected
     ? baseTransform
@@ -2929,10 +3125,15 @@ export default function SceneEdit() {
                       if (ids.length > 0) applyPrimarySelectionState(ids[ids.length - 1]);
                     }}
                     onGenerateHkt={handleGenerateHkt}
+                    onReorderRootChild={handleReorderOutlinerNode}
                   />
                   {havokMeshDataMap.size > 0 && (
                     <MayaSection title="Collision" badge={havokMeshDataMap.size}>
-                      <CollisionListPanel sourceIds={Array.from(havokMeshDataMap.keys())} />
+                      <CollisionListPanel
+                        sourceIds={Array.from(havokMeshDataMap.keys())}
+                        meshDataMap={havokMeshDataMap}
+                        metaMap={havokMetaMap}
+                      />
                     </MayaSection>
                   )}
                 </TabsContent>
@@ -2957,7 +3158,7 @@ export default function SceneEdit() {
             defaultSize="60%"
             minSize="35%"
             maxSize="80%"
-            className="min-w-0"
+            className="relative z-0 min-w-0"
           >
             <ViewportContextMenu
               showGrid={showGrid}
@@ -3020,6 +3221,7 @@ export default function SceneEdit() {
                 showAabb={showAabb}
                 showCollisionMesh={showCollisionMesh}
                 collisionVisibility={collisionVisibility}
+                selectedCollisionSourceId={selectedCollisionSourceId}
               />
               <SceneViewportOverlay isLoading={isLoading} modelLoadProgress={modelLoadProgress} textureProgress={textureProgress} />
             </div>
@@ -3037,7 +3239,7 @@ export default function SceneEdit() {
             defaultSize="20%"
             minSize="10%"
             maxSize="50%"
-            className="min-w-0"
+            className="relative z-20 min-w-0"
           >
             <ScenePropertiesPanel
               headerActions={
@@ -3163,6 +3365,23 @@ export default function SceneEdit() {
                   {selectedNodeId && (
                     <MayaSection title="Asset Config" defaultOpen>
                       <SceneAssetConfigPanel assetId={selectedNodeId} />
+                    </MayaSection>
+                  )}
+
+                  {selectedImportedDae && (
+                    <MayaSection title="HKT Collision" defaultOpen>
+                      <HavokCollisionEditorPanel
+                        sessionId={sceneSessionId}
+                        sessionImportId={selectedImportedDae.sessionImportId}
+                        sourcePath={selectedImportedDae.sourcePath}
+                        sourceName={selectedImportedDae.name}
+                        hktSimplify={selectedImportedDae.hktSimplify}
+                        onHktSimplifyChange={(next) =>
+                          handleImportedDaeHktSimplifyChange(selectedImportedDae.id, next)
+                        }
+                        onHavokDataUpdated={handleHavokDataUpdated}
+                        activeMeshData={selectedImportedDaeMeshData}
+                      />
                     </MayaSection>
                   )}
 
@@ -3378,11 +3597,11 @@ export default function SceneEdit() {
                 return;
               }
 
-              if (!sceneSessionId) {
+              if (!sceneSessionId && !stageRoot) {
                 const sid = await sceneSessionCreate({ type: "new" });
                 setSceneSessionId(sid);
               }
-              await processDirectSsbhConvert(entriesToProcess);
+              await processSsbhSessionImport(entriesToProcess);
             }}
             onCancel={() => {
               setShowDaeImportModal(false);

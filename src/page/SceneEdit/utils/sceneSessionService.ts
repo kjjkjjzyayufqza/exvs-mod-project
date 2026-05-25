@@ -1,5 +1,6 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
-import type { DaeImportConfig } from "../components/dae-import/daeImportTypes";
+import type { DaeImportConfig, HktSimplifyConfig } from "../components/dae-import/daeImportTypes";
+import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
 import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
 
 export type SceneSource =
@@ -18,6 +19,14 @@ export interface ImportConfig {
   convertToSsbh: boolean;
   generateHkt: boolean;
   ssbhConfig: SsbhConvertConfig | null;
+  hktSimplify: HktSimplifyConfig;
+}
+
+export interface HktCollisionPreview {
+  renderTriangleCount: number;
+  mergedTriangleCount: number;
+  simplifiedTriangleCount: number;
+  vertexCount: number;
 }
 
 export interface SsbhConvertConfig {
@@ -38,6 +47,8 @@ export interface ImportResult {
   name: string;
   ssbhGenerated: boolean;
   hktGenerated: boolean;
+  hktDetail: string | null;
+  warnings: string[];
 }
 
 export interface SaveResult {
@@ -48,6 +59,8 @@ export interface SaveResult {
 
 export interface HavokDataResult {
   sourceId: string;
+  displayName: string;
+  objectNodeId: string | null;
   hktXml: string;
   rawBytes: number[];
 }
@@ -70,6 +83,14 @@ export function sceneImportDae(
   name: string,
 ): Promise<string> {
   return invoke<string>("scene_import_dae", { sessionId, daeBytes, name });
+}
+
+export function sceneImportDaeFromPath(
+  sessionId: string,
+  filePath: string,
+  name: string,
+): Promise<string> {
+  return invoke<string>("scene_import_dae_from_path", { sessionId, filePath, name });
 }
 
 export function sceneConfigureImport(
@@ -97,6 +118,47 @@ export function sceneGenerateHkt(
 ): Promise<boolean> {
   return invoke<boolean>("scene_generate_hkt", {
     options: { sessionId, importId, configProfile },
+  });
+}
+
+export function scenePreviewHktCollisionBytes(
+  daeBytes: number[],
+  sourceName: string,
+  config: ImportConfig,
+): Promise<HktCollisionPreview> {
+  return invoke<HktCollisionPreview>("scene_preview_hkt_collision_bytes", {
+    args: { daeBytes, sourceName, config },
+  });
+}
+
+export function scenePreviewHktCollisionPath(
+  filePath: string,
+  sourceName: string,
+  config: ImportConfig,
+): Promise<HktCollisionPreview> {
+  return invoke<HktCollisionPreview>("scene_preview_hkt_collision_path", {
+    filePath,
+    sourceName,
+    config,
+  });
+}
+
+export function scenePreviewHktCollisionSession(
+  sessionId: string,
+  importId: string,
+  config: ImportConfig,
+): Promise<HktCollisionPreview> {
+  return invoke<HktCollisionPreview>("scene_preview_hkt_collision_session", {
+    args: { sessionId, importId, config },
+  });
+}
+
+export function sceneGetImportConfig(
+  sessionId: string,
+  importId: string,
+): Promise<ImportConfig> {
+  return invoke<ImportConfig>("scene_get_import_config", {
+    options: { sessionId, importId },
   });
 }
 
@@ -184,22 +246,26 @@ export function stageStreamBundles(
 }
 
 export function mapDaeImportConfigToBackend(config: DaeImportConfig): ImportConfig {
+  const needsAxis = config.convertToSsbh || config.generateHkt;
   return {
     loadToScene: config.loadToScene,
     convertToSsbh: config.convertToSsbh,
     generateHkt: config.generateHkt,
-    ssbhConfig: config.convertToSsbh
+    hktSimplify: config.hktSimplify ?? { ...DEFAULT_HKT_SIMPLIFY },
+    ssbhConfig: needsAxis
       ? {
           baseFilename: config.ssbhConfig.baseFilename,
           scaleFactor: config.ssbhConfig.scaleFactor,
           upAxis: config.ssbhConfig.upAxis,
-          writeNumdlb: config.ssbhConfig.writeNumdlb,
-          writeNumshb: config.ssbhConfig.writeNumshb,
-          writeNusktb: config.ssbhConfig.writeNusktb,
-          writeNumatb: config.ssbhConfig.writeNumatb,
-          writeJnttbl: config.ssbhConfig.writeJnttbl,
-          writeMayaProfile: config.ssbhConfig.writeMayaProfile,
-          materialTemplate: config.ssbhConfig.materialTemplate || null,
+          writeNumdlb: config.convertToSsbh && config.ssbhConfig.writeNumdlb,
+          writeNumshb: config.convertToSsbh && config.ssbhConfig.writeNumshb,
+          writeNusktb: config.convertToSsbh && config.ssbhConfig.writeNusktb,
+          writeNumatb: config.convertToSsbh && config.ssbhConfig.writeNumatb,
+          writeJnttbl: config.convertToSsbh && config.ssbhConfig.writeJnttbl,
+          writeMayaProfile: config.convertToSsbh && config.ssbhConfig.writeMayaProfile,
+          materialTemplate: config.convertToSsbh
+            ? config.ssbhConfig.materialTemplate || null
+            : null,
         }
       : null,
   };

@@ -122,9 +122,16 @@ pub fn parse_dae_file(file_path: &Path) -> Result<ImportScene> {
         eprintln!("[dae_parse] no library_geometries found");
     }
 
+    let mut bind_poses: HashMap<String, [[f32; 4]; 4]> = HashMap::new();
     if let Some(lib_controllers) = find_child(&root, "library_controllers") {
         eprintln!("[dae_parse] parsing controllers (skinning)...");
-        parse_controllers_and_apply_to_meshes(lib_controllers, &mut scene.meshes, &geometry_id_to_index_map)?;
+        parse_controllers_and_apply_to_meshes(
+            lib_controllers,
+            &mut scene.meshes,
+            &geometry_id_to_index_map,
+            &mut bind_poses,
+        )?;
+        apply_bind_poses_to_bones(&mut scene.bones, &bind_poses);
         for (i, m) in scene.meshes.iter().enumerate() {
             if !m.bone_influences.is_empty() {
                 let total_weights: usize = m.bone_influences.iter().map(|bi| bi.vertex_weights.len()).sum();
@@ -141,12 +148,19 @@ pub fn parse_dae_file(file_path: &Path) -> Result<ImportScene> {
     if let Some(lib_visual_scenes) = find_child(&root, "library_visual_scenes") {
         scene.bones = parse_bone_hierarchy_from_visual_scenes(lib_visual_scenes)?;
         eprintln!("[dae_parse] parsed {} bones from visual_scenes", scene.bones.len());
+        // Re-apply bind poses since parse_bone_hierarchy_from_visual_scenes creates fresh bones without IBM
+        if !bind_poses.is_empty() {
+            apply_bind_poses_to_bones(&mut scene.bones, &bind_poses);
+        }
     }
 
     if scene.bones.is_empty() {
         if let Some(lib_nodes) = find_child(&root, "library_nodes") {
             scene.bones = parse_bone_hierarchy_from_nodes(lib_nodes)?;
             eprintln!("[dae_parse] parsed {} bones from library_nodes", scene.bones.len());
+            if !bind_poses.is_empty() {
+                apply_bind_poses_to_bones(&mut scene.bones, &bind_poses);
+            }
         }
     }
 
@@ -322,7 +336,12 @@ fn parse_geometries_from_xml(lib_geometries: &Element, geometry_id_to_index_map:
 }
 
 /// Parse controllers from DAE and apply bone influences to meshes
-fn parse_controllers_and_apply_to_meshes(lib_controllers: &Element, meshes: &mut [DaeMesh], geometry_id_to_index_map: &HashMap<String, usize>) -> Result<()> {
+fn parse_controllers_and_apply_to_meshes(
+    lib_controllers: &Element,
+    meshes: &mut [DaeMesh],
+    geometry_id_to_index_map: &HashMap<String, usize>,
+    bind_poses: &mut HashMap<String, [[f32; 4]; 4]>,
+) -> Result<()> {
     let controllers = find_all_children(lib_controllers, "controller");
     eprintln!("[dae_parse] processing {} controllers", controllers.len());
 
@@ -339,7 +358,7 @@ fn parse_controllers_and_apply_to_meshes(lib_controllers: &Element, meshes: &mut
                             "[dae_parse] applying skinning: controller='{}' -> mesh[{}] name='{}'",
                             ctrl_id, mesh_idx, mesh.name
                         );
-                        parse_skin_data_to_mesh(skin_elem, mesh)?;
+                        parse_skin_data_to_mesh(skin_elem, mesh, bind_poses)?;
                     } else {
                         eprintln!("[dae_parse] mesh_idx={} out of bounds for controller '{}'", mesh_idx, ctrl_id);
                     }
@@ -355,10 +374,54 @@ fn parse_controllers_and_apply_to_meshes(lib_controllers: &Element, meshes: &mut
     Ok(())
 }
 
+fn apply_bind_poses_to_bones(bones: &mut [ImportBone], bind_poses: &HashMap<String, [[f32; 4]; 4]>) {
+    for bone in bones.iter_mut() {
+        if bone.inverse_bind_matrix.is_none() {
+            if let Some(ibm) = bind_poses.get(&bone.name) {
+                bone.inverse_bind_matrix = Some(*ibm);
+            }
+        }
+    }
+}
+
+fn merge_bind_poses(
+    out: &mut HashMap<String, [[f32; 4]; 4]>,
+    joint_names: &[String],
+    matrices: &[[[f32; 4]; 4]],
+) {
+    for (i, name) in joint_names.iter().enumerate() {
+        if let Some(m) = matrices.get(i) {
+            out.insert(name.clone(), *m);
+        }
+    }
+}
+
+fn parse_bind_pose_matrices(values: &[f32]) -> Vec<[[f32; 4]; 4]> {
+    values
+        .chunks(16)
+        .filter(|chunk| chunk.len() == 16)
+        .map(row_major_16_to_col_major_4x4)
+        .collect()
+}
+
+fn row_major_16_to_col_major_4x4(values: &[f32]) -> [[f32; 4]; 4] {
+    [
+        [values[0], values[4], values[8], values[12]],
+        [values[1], values[5], values[9], values[13]],
+        [values[2], values[6], values[10], values[14]],
+        [values[3], values[7], values[11], values[15]],
+    ]
+}
+
 /// Parse skin data from DAE and convert to mesh bone influences
-fn parse_skin_data_to_mesh(skin_elem: &Element, mesh: &mut DaeMesh) -> Result<()> {
+fn parse_skin_data_to_mesh(
+    skin_elem: &Element,
+    mesh: &mut DaeMesh,
+    bind_poses: &mut HashMap<String, [[f32; 4]; 4]>,
+) -> Result<()> {
     let mut joint_names = Vec::new();
     let mut weights = Vec::new();
+    let mut bind_pose_matrices: Vec<[[f32; 4]; 4]> = Vec::new();
 
     for source_elem in find_all_children(skin_elem, "source") {
         if let Some(source_id) = source_elem.attributes.get("id") {
@@ -366,6 +429,16 @@ fn parse_skin_data_to_mesh(skin_elem: &Element, mesh: &mut DaeMesh) -> Result<()
                 if let Some(name_array) = find_child(source_elem, "Name_array") {
                     if let Some(names_text) = get_element_text(name_array) {
                         joint_names = names_text.split_whitespace().map(|s| s.to_string()).collect();
+                    }
+                }
+            } else if source_id.contains("bind_poses") || source_id.contains("Bind") {
+                if let Some(float_array) = find_child(source_elem, "float_array") {
+                    if let Some(values_text) = get_element_text(float_array) {
+                        let values: Vec<f32> = values_text
+                            .split_whitespace()
+                            .filter_map(|s| s.parse::<f32>().ok())
+                            .collect();
+                        bind_pose_matrices = parse_bind_pose_matrices(&values);
                     }
                 }
             } else if source_id.contains("weights") || source_id.contains("Weight") {
@@ -390,6 +463,8 @@ fn parse_skin_data_to_mesh(skin_elem: &Element, mesh: &mut DaeMesh) -> Result<()
         eprintln!("[dae_parse] skipping skinning for mesh '{}': empty joints or weights", mesh.name);
         return Ok(());
     }
+
+    merge_bind_poses(bind_poses, &joint_names, &bind_pose_matrices);
 
     if let Some(vertex_weights_elem) = find_child(skin_elem, "vertex_weights") {
         if let Some(count_attr) = vertex_weights_elem.attributes.get("count") {

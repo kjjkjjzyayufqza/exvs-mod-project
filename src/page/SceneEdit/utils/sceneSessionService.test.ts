@@ -1,12 +1,14 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { mapDaeImportConfigToBackend, type ImportConfig, type ImportResult, type SaveResult, type SceneOpenResult, type HavokDataResult } from "./sceneSessionService";
 import type { DaeImportConfig } from "../components/dae-import/daeImportTypes";
+import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
 
 function makeDefaultDaeImportConfig(): DaeImportConfig {
   return {
     loadToScene: true,
     convertToSsbh: false,
     generateHkt: false,
+    hktSimplify: { ...DEFAULT_HKT_SIMPLIFY },
     ssbhConfig: {
       baseFilename: "model",
       scaleFactor: 1.0,
@@ -80,6 +82,20 @@ describe("sceneSessionService", () => {
       expect(result.ssbhConfig!.materialTemplate).toBe("default_template");
     });
 
+    it("maps hktSimplify settings when generateHkt is enabled", () => {
+      const config = makeDefaultDaeImportConfig();
+      config.generateHkt = true;
+      config.hktSimplify = {
+        enabled: false,
+        planarityAngleDeg: 12,
+        minTriangleArea: 0.001,
+        weldEpsilon: 0.0001,
+      };
+
+      const result = mapDaeImportConfigToBackend(config);
+      expect(result.hktSimplify).toEqual(config.hktSimplify);
+    });
+
     it("maps all ssbh write flags correctly", () => {
       const config = makeDefaultDaeImportConfig();
       config.convertToSsbh = true;
@@ -117,6 +133,8 @@ describe("sceneSessionService", () => {
       name: "backpack_up",
       ssbhGenerated: true,
       hktGenerated: false,
+      hktDetail: null,
+      warnings: ["HKT generation failed for \"backpack_up\": example"],
     };
 
     const saveResult: SaveResult = {
@@ -127,6 +145,8 @@ describe("sceneSessionService", () => {
 
     const havokDataResult: HavokDataResult = {
       sourceId: IMPORT_ID,
+      displayName: "backpack_up",
+      objectNodeId: IMPORT_ID,
       hktXml: "<hkpackfile><hksection name=\"__data__\"></hksection></hkpackfile>",
       rawBytes: [0x57, 0xe0, 0xe0, 0x57],
     };
@@ -153,6 +173,21 @@ describe("sceneSessionService", () => {
       expect(importResultBackpackSsbh.name).toBe("backpack_up");
       expect(importResultBackpackSsbh.ssbhGenerated).toBe(true);
       expect(importResultBackpackSsbh.hktGenerated).toBe(false);
+      expect(importResultBackpackSsbh.hktDetail).toBeNull();
+    });
+
+    it("uses hktDetail for successful HKT generation, not warnings", () => {
+      const successResult: ImportResult = {
+        importId: IMPORT_ID,
+        name: "backpack_up",
+        ssbhGenerated: true,
+        hktGenerated: true,
+        hktDetail:
+          'HKT mesh collision generated for "backpack_up" (4096 bytes, 1200 triangles, skin-baked merge). Mesh-accurate Havok compressed shape.',
+        warnings: [],
+      };
+      expect(successResult.hktDetail).toContain("mesh collision");
+      expect(successResult.warnings).toHaveLength(0);
     });
 
     it("has correct SaveResult shape", () => {
@@ -163,6 +198,8 @@ describe("sceneSessionService", () => {
 
     it("has correct HavokDataResult shape", () => {
       expect(havokDataResult.sourceId).toBe(IMPORT_ID);
+      expect(havokDataResult.displayName).toBe("backpack_up");
+      expect(havokDataResult.objectNodeId).toBe(IMPORT_ID);
       expect(havokDataResult.hktXml).toContain("hkpackfile");
       expect(havokDataResult.rawBytes.length).toBeGreaterThan(0);
     });
@@ -182,6 +219,12 @@ describe("sceneSessionService", () => {
         loadToScene: false,
         convertToSsbh: true,
         generateHkt: true,
+        hktSimplify: {
+          enabled: true,
+          planarityAngleDeg: 8,
+          minTriangleArea: 1e-8,
+          weldEpsilon: 1e-5,
+        },
         ssbhConfig: {
           baseFilename: "backpack_up",
           scaleFactor: 1.0,
@@ -224,9 +267,9 @@ describe("sceneSessionService", () => {
 
     it("multi-DAE import produces correct result list", () => {
       const results: ImportResult[] = [
-        { importId: "imp-1", name: "backpack_up", ssbhGenerated: true, hktGenerated: false },
-        { importId: "imp-2", name: "backpack_bottom", ssbhGenerated: true, hktGenerated: false },
-        { importId: "imp-3", name: "body", ssbhGenerated: false, hktGenerated: false },
+        { importId: "imp-1", name: "backpack_up", ssbhGenerated: true, hktGenerated: false, hktDetail: null, warnings: [] },
+        { importId: "imp-2", name: "backpack_bottom", ssbhGenerated: true, hktGenerated: false, hktDetail: null, warnings: [] },
+        { importId: "imp-3", name: "body", ssbhGenerated: false, hktGenerated: false, hktDetail: null, warnings: [] },
       ];
 
       const successfulConversions = results.filter((r) => r.ssbhGenerated);

@@ -169,7 +169,7 @@ export function DaeImportConfigModal({
   const sessionState = useDaeSsbhSessionStore();
   const ssbhReady = useMemo(() => {
     if (!entry || primaryMode !== "ssbh") return true;
-    if (!sessionState.outputDir?.trim() || !sessionState.outputBaseName.trim()) return false;
+    if (!sessionState.outputBaseName.trim()) return false;
     if (sessionState.includeGeometryNames.length === 0) return false;
     if (!sessionState.numdlbEntries.every((r) => r.materialLabel.trim())) return false;
     const missing = collectMissingTexturePathsForExportSession(
@@ -324,7 +324,13 @@ export function DaeImportConfigModal({
               </DaeImportSection>
 
               {config.generateHkt && (
-                <DaeImportHktConfigPanel havokInfo={havokInfo} />
+                <DaeImportHktConfigPanel
+                  havokInfo={havokInfo}
+                  config={config}
+                  onConfigChange={updateConfig}
+                  sourcePath={entry.filePath}
+                  sourceName={entry.fileName}
+                />
               )}
 
               {primaryMode === "ssbh" && (

@@ -28,7 +28,9 @@ import {
   sceneConfigureImport,
   sceneExecuteImport,
 } from "./sceneSessionService";
+import { retargetSessionImportFolderName } from "./sceneDaeSessionImport";
 import { serializeDaeToBytes } from "./daeExportImport";
+import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
 
 function joinTauriPath(...parts: string[]): string {
   return parts
@@ -68,6 +70,31 @@ async function convertSingleDaeViaSession(
   sessionId: string,
 ): Promise<DaeConversionOutcome> {
   try {
+    if (plan.object.sessionImportId) {
+      await retargetSessionImportFolderName(sessionId, plan.object.sessionImportId, {
+        loadToScene: true,
+        convertToSsbh: true,
+        generateHkt: false,
+        ssbhConfig: {
+          baseFilename: plan.baseFilename,
+          scaleFactor: 1,
+          upAxis: "y_up",
+          writeNumdlb: true,
+          writeNumshb: true,
+          writeNusktb: true,
+          writeNumatb: true,
+          writeJnttbl: true,
+          writeMayaProfile: false,
+          materialTemplate: null,
+        },
+        hktSimplify: DEFAULT_HKT_SIMPLIFY,
+      }, plan.folderName);
+      return {
+        status: "ok",
+        result: { folderName: plan.folderName, transform: plan.object.transform },
+      };
+    }
+
     const exportObject = createBakedImportedDaeExportObject(plan.object, {
       includeActorTransform: false,
     });
@@ -89,6 +116,7 @@ async function convertSingleDaeViaSession(
         writeMayaProfile: true,
         materialTemplate: null,
       },
+      hktSimplify: DEFAULT_HKT_SIMPLIFY,
     });
     await sceneExecuteImport(sessionId, importId);
     return {

@@ -55,9 +55,10 @@ export function patchPlacementRawFieldsForNumericField(
   value: number,
   placementColMap: Record<string, number>,
 ): PlacementRow {
-  const valueStr = Number.isFinite(value) && value === Math.trunc(value)
-    ? value.toFixed(1)
-    : String(value);
+  const valueStr =
+    Number.isFinite(value) && value === Math.trunc(value)
+      ? String(Math.trunc(value))
+      : String(value);
   const aliases = FIELD_TO_HEADER_ALIASES[field];
 
   for (const col of aliases) {

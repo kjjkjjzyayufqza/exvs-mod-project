@@ -5,6 +5,7 @@ import { generateHavokMesh } from "@/utils/havokMeshGenerator";
 import type { PlacementRow } from "../../types/placement";
 
 const COLLISION_WIREFRAME_COLOR = 0x00ff00;
+const COLLISION_SELECTED_COLOR = 0x00ffff;
 const AABB_COLOR = 0xff8800;
 
 function HavokAabbBox({ aabb }: { aabb: HavokAabb }) {
@@ -39,20 +40,20 @@ function HavokAabbBox({ aabb }: { aabb: HavokAabb }) {
   return <mesh geometry={geometry} material={material} position={position} />;
 }
 
-function HavokCollisionMesh({ data }: { data: HavokMeshData }) {
+function HavokCollisionMesh({ data, selected = false }: { data: HavokMeshData; selected?: boolean }) {
   const geometry = useMemo(() => generateHavokMesh(data), [data]);
 
   const wireframeMaterial = useMemo(
     () =>
       new THREE.MeshBasicMaterial({
-        color: COLLISION_WIREFRAME_COLOR,
+        color: selected ? COLLISION_SELECTED_COLOR : COLLISION_WIREFRAME_COLOR,
         wireframe: true,
         transparent: true,
         opacity: 1.0,
         side: THREE.DoubleSide,
         depthWrite: false,
       }),
-    [],
+    [selected],
   );
 
   if (!geometry || geometry.getAttribute("position")?.count === 0) return null;
@@ -77,6 +78,11 @@ export interface SubModelEntry {
   objectIndex: number;
 }
 
+export interface ObjectTransform {
+  position: [number, number, number];
+  rotation: [number, number, number];
+}
+
 interface HavokCollisionOverlayProps {
   meshDataMap: Map<string, HavokMeshData>;
   viewMode: "normal" | "collision" | "both";
@@ -85,6 +91,8 @@ interface HavokCollisionOverlayProps {
   subModels?: SubModelEntry[];
   placementEntries?: PlacementRow[];
   collisionVisibility?: Record<string, boolean>;
+  objectTransforms?: Map<string, ObjectTransform>;
+  selectedSourceId?: string | null;
 }
 
 export function HavokCollisionOverlay({
@@ -95,6 +103,8 @@ export function HavokCollisionOverlay({
   subModels,
   placementEntries,
   collisionVisibility,
+  objectTransforms,
+  selectedSourceId,
 }: HavokCollisionOverlayProps) {
   if (viewMode === "normal" || meshDataMap.size === 0) return null;
 
@@ -110,14 +120,29 @@ export function HavokCollisionOverlay({
     return map;
   }, [meshDataMap]);
 
+  const folderToSourceId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const [sourceId] of meshDataMap) {
+      const folder = folderFromSourceId(sourceId);
+      if (folder) map.set(folder, sourceId);
+    }
+    return map;
+  }, [meshDataMap]);
+
   // Build placement positions for each sub-model
   const instances = useMemo(() => {
-    const result: { key: string; data: HavokMeshData; position: [number, number, number]; rotation: [number, number, number] }[] = [];
+    const result: { key: string; sourceId: string; data: HavokMeshData; position: [number, number, number]; rotation: [number, number, number] }[] = [];
 
     if (!subModels || !placementEntries) {
-      // No placement info — render all at origin
       for (const [id, data] of meshDataMap) {
-        result.push({ key: id, data, position: [0, 0, 0], rotation: [0, 0, 0] });
+        const t = objectTransforms?.get(id);
+        result.push({
+          key: id,
+          sourceId: id,
+          data,
+          position: t?.position ?? [0, 0, 0],
+          rotation: t?.rotation ?? [0, 0, 0],
+        });
       }
       return result;
     }
@@ -125,6 +150,8 @@ export function HavokCollisionOverlay({
     for (const sub of subModels) {
       const meshData = folderToMesh.get(sub.folderName);
       if (!meshData) continue;
+
+      const origSourceId = folderToSourceId.get(sub.folderName) ?? sub.folderName;
 
       const rows = placementEntries
         .map((entry, idx) => ({ entry, idx }))
@@ -134,18 +161,18 @@ export function HavokCollisionOverlay({
         );
 
       if (rows.length === 0) {
-        // Standalone (no placement) — render at origin
         result.push({
           key: `${sub.folderName}_standalone`,
+          sourceId: origSourceId,
           data: meshData,
           position: [0, 0, 0],
           rotation: [0, 0, 0],
         });
       } else {
-        // Render at each placement position
         for (const { entry, idx } of rows) {
           result.push({
             key: `${sub.folderName}_pl${idx}`,
+            sourceId: origSourceId,
             data: meshData,
             position: [entry.posX, entry.posY, entry.posZ],
             rotation: [entry.rotX, entry.rotY, entry.rotZ],
@@ -154,18 +181,31 @@ export function HavokCollisionOverlay({
       }
     }
 
-    // Also render any HKT not matched to a sub-model (e.g., info/border_hit.hkt, base/map_hit.hkt)
     for (const [sourceId, data] of meshDataMap) {
       const folder = folderFromSourceId(sourceId);
       if (!folder || folder === "info" || folder === "base") {
-        result.push({ key: sourceId, data, position: [0, 0, 0], rotation: [0, 0, 0] });
+        const t = objectTransforms?.get(sourceId);
+        result.push({
+          key: sourceId,
+          sourceId,
+          data,
+          position: t?.position ?? [0, 0, 0],
+          rotation: t?.rotation ?? [0, 0, 0],
+        });
       } else if (!subModels.some(s => s.folderName === folder)) {
-        result.push({ key: sourceId, data, position: [0, 0, 0], rotation: [0, 0, 0] });
+        const t = objectTransforms?.get(sourceId);
+        result.push({
+          key: sourceId,
+          sourceId,
+          data,
+          position: t?.position ?? [0, 0, 0],
+          rotation: t?.rotation ?? [0, 0, 0],
+        });
       }
     }
 
     return result;
-  }, [meshDataMap, folderToMesh, subModels, placementEntries]);
+  }, [meshDataMap, folderToMesh, folderToSourceId, subModels, placementEntries, objectTransforms]);
 
   // Filter instances by collisionVisibility
   const visibleInstances = useMemo(() => {
@@ -179,7 +219,7 @@ export function HavokCollisionOverlay({
 
   return (
     <group name="havok-collision-overlay">
-      {visibleInstances.map(({ key, data, position, rotation }) => (
+      {visibleInstances.map(({ key, sourceId, data, position, rotation }) => (
         <group
           key={key}
           position={position}
@@ -190,7 +230,12 @@ export function HavokCollisionOverlay({
           ]}
         >
           {showAabb && data.aabb && <HavokAabbBox aabb={data.aabb} />}
-          {showMesh && <HavokCollisionMesh data={data} />}
+          {showMesh && (
+            <HavokCollisionMesh
+              data={data}
+              selected={selectedSourceId != null && sourceId === selectedSourceId}
+            />
+          )}
         </group>
       ))}
     </group>

@@ -313,14 +313,10 @@ fn build_bones_preorder(
 
 /// ufbx `VertexVec2` / `VertexVec3` use **corner indices** (`0..num_indices`), not logical vertex indices.
 /// Logical vertex `v` is stored in `mesh.vertices[v]`; attributes use one corner that references `v`.
-fn corner_for_logical_vertex(mesh: &Mesh, logical_vertex: usize) -> Result<usize> {
+/// Returns `None` when no polygon corner references the logical vertex (orphan / unused slot).
+fn try_corner_for_logical_vertex(mesh: &Mesh, logical_vertex: usize) -> Option<usize> {
     if logical_vertex >= mesh.num_vertices {
-        return Err(anyhow!(
-            "Mesh '{}': logical vertex {} out of range (num_vertices={})",
-            mesh.element.name,
-            logical_vertex,
-            mesh.num_vertices
-        ));
+        return None;
     }
     let want = logical_vertex as u32;
     let corners = mesh.vertex_indices.as_ref();
@@ -330,20 +326,16 @@ fn corner_for_logical_vertex(mesh: &Mesh, logical_vertex: usize) -> Result<usize
         if ix != u32::MAX {
             let ci = ix as usize;
             if ci < corners.len() && corners[ci] == want {
-                return Ok(ci);
+                return Some(ci);
             }
         }
     }
     for (ci, &v) in corners.iter().enumerate() {
         if v == want {
-            return Ok(ci);
+            return Some(ci);
         }
     }
-    Err(anyhow!(
-        "Mesh '{}': no corner references logical vertex {}",
-        mesh.element.name,
-        logical_vertex
-    ))
+    None
 }
 
 fn mesh_vertex_position(mesh: &Mesh, vi: usize) -> Result<[f32; 3]> {
@@ -523,38 +515,23 @@ fn import_one_mesh(mesh: &Mesh, name: String) -> Result<ImportMesh> {
     }
 
     let has_uv = mesh.vertex_uv.exists || !mesh.uv_sets.is_empty();
-    let corner_per_vertex: Vec<usize> = if mesh.vertex_normal.exists || has_uv {
-        (0..mesh.num_vertices)
-            .map(|vi| corner_for_logical_vertex(mesh, vi))
-            .collect::<Result<_>>()?
-    } else {
-        Vec::new()
-    };
+    const ORPHAN_NORMAL: [f32; 3] = [0.0, 0.0, 1.0];
+    const ORPHAN_UV: [f32; 2] = [0.0, 0.0];
 
     if mesh.vertex_normal.exists {
-        for (vi, &corner) in corner_per_vertex.iter().enumerate() {
-            let n = mesh_normal_at_corner(mesh, corner).ok_or_else(|| {
-                anyhow!(
-                    "Mesh '{}': missing normal for logical vertex {} (corner {})",
-                    mesh.element.name,
-                    vi,
-                    corner
-                )
-            })?;
+        for vi in 0..mesh.num_vertices {
+            let n = try_corner_for_logical_vertex(mesh, vi)
+                .and_then(|corner| mesh_normal_at_corner(mesh, corner))
+                .unwrap_or(ORPHAN_NORMAL);
             normals.push(n);
         }
     }
 
     if has_uv {
-        for (vi, &corner) in corner_per_vertex.iter().enumerate() {
-            let uv = mesh_uv_at_corner(mesh, corner).ok_or_else(|| {
-                anyhow!(
-                    "Mesh '{}': missing UV for logical vertex {} (corner {})",
-                    mesh.element.name,
-                    vi,
-                    corner
-                )
-            })?;
+        for vi in 0..mesh.num_vertices {
+            let uv = try_corner_for_logical_vertex(mesh, vi)
+                .and_then(|corner| mesh_uv_at_corner(mesh, corner))
+                .unwrap_or(ORPHAN_UV);
             uvs.push(uv);
         }
     }
@@ -646,4 +623,41 @@ pub fn convert_fbx_file(
 ) -> Result<(ConvertedFiles, SsbhConvertStats)> {
     let scene = parse_fbx_file(fbx_file_path)?;
     convert_import_scene_file(scene, config)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    const BIGZAM_AKENO: &str = r"D:\output\bigzam\Akeno.fbx";
+    const BIGZAM_AKENO_BODY: &str = r"D:\output\bigzam\Akeno_body.fbx";
+
+    #[test]
+    fn parse_fbx_with_orphan_logical_vertices_succeeds() {
+        let path = Path::new(BIGZAM_AKENO);
+        if !path.is_file() {
+            eprintln!("SKIP: {BIGZAM_AKENO} not found");
+            return;
+        }
+        let scene = parse_fbx_file(path)
+            .expect("orphan logical vertices must not block FBX import");
+        assert_eq!(scene.meshes.len(), 1);
+        let mesh = &scene.meshes[0];
+        assert!(!mesh.vertices.is_empty());
+        assert!(mesh.indices.len() >= 3);
+        assert_eq!(mesh.indices.len() % 3, 0);
+    }
+
+    #[test]
+    fn parse_fbx_body_export_without_skin_succeeds() {
+        let path = Path::new(BIGZAM_AKENO_BODY);
+        if !path.is_file() {
+            eprintln!("SKIP: {BIGZAM_AKENO_BODY} not found");
+            return;
+        }
+        let scene = parse_fbx_file(path).expect("body FBX export must parse");
+        assert_eq!(scene.meshes.len(), 1);
+        assert!(scene.meshes[0].indices.len() >= 3);
+    }
 }

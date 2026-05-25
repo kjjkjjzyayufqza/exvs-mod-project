@@ -2,10 +2,19 @@ import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import type { HavokMeshData } from "@/utils/havokXmlParser";
 import { useSceneEditorStore } from "../../store/sceneEditorStore";
+import { countHavokCollisionTriangles, formatTriangleCount } from "../../utils/hktSimplifyUtils";
+
+interface CollisionMeta {
+  displayName: string;
+  objectNodeId: string | null;
+}
 
 interface CollisionListPanelProps {
   sourceIds: string[];
+  meshDataMap?: Map<string, HavokMeshData>;
+  metaMap?: Map<string, CollisionMeta>;
 }
 
 function folderLabel(sourceId: string): string {
@@ -14,7 +23,17 @@ function folderLabel(sourceId: string): string {
   return parts[0] || sourceId;
 }
 
-export function CollisionListPanel({ sourceIds }: CollisionListPanelProps) {
+function labelForSource(sourceId: string, meta?: CollisionMeta): string {
+  if (meta?.displayName) return meta.displayName;
+  const normalized = sourceId.replace(/\\/g, "/");
+  const parts = normalized.split("/");
+  if (parts.length >= 2) {
+    return parts[parts.length - 1]?.replace(/\.hkt$/i, "") ?? folderLabel(sourceId);
+  }
+  return sourceId;
+}
+
+export function CollisionListPanel({ sourceIds, meshDataMap, metaMap }: CollisionListPanelProps) {
   const collisionVisibility = useSceneEditorStore((s) => s.collisionVisibility);
   const toggleCollisionVisibility = useSceneEditorStore((s) => s.toggleCollisionVisibility);
   const setAllCollisionVisibility = useSceneEditorStore((s) => s.setAllCollisionVisibility);
@@ -44,6 +63,8 @@ export function CollisionListPanel({ sourceIds }: CollisionListPanelProps) {
           {sourceIds.map((sourceId) => {
             const folder = folderLabel(sourceId);
             const visible = collisionVisibility[folder] !== false;
+            const meshData = meshDataMap?.get(sourceId);
+            const triCount = meshData ? countHavokCollisionTriangles(meshData) : null;
             return (
               <button
                 key={sourceId}
@@ -59,7 +80,12 @@ export function CollisionListPanel({ sourceIds }: CollisionListPanelProps) {
                 ) : (
                   <EyeOff className="h-3 w-3 shrink-0 text-muted-foreground" />
                 )}
-                <span className="truncate">{folder}</span>
+                <span className="min-w-0 flex-1 truncate">{labelForSource(sourceId, metaMap?.get(sourceId))}</span>
+                {triCount != null ? (
+                  <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                    {formatTriangleCount(triCount)}
+                  </span>
+                ) : null}
               </button>
             );
           })}

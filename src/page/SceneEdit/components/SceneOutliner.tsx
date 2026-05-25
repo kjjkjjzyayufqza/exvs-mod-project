@@ -19,6 +19,7 @@ import {
   Sparkles,
   Component,
   Shield,
+  GripVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -46,6 +47,7 @@ interface SceneOutlinerProps {
   onClearSelection?: () => void;
   onSelectAll?: (ids: string[]) => void;
   onGenerateHkt?: (ids: string[]) => void;
+  onReorderRootChild?: (activeId: string, overId: string) => void;
 }
 
 export function SceneOutliner({
@@ -58,6 +60,7 @@ export function SceneOutliner({
   onClearSelection,
   onSelectAll,
   onGenerateHkt,
+  onReorderRootChild,
 }: SceneOutlinerProps) {
   const {
     selectedIds,
@@ -178,6 +181,7 @@ export function SceneOutliner({
               onDuplicate={onDuplicate}
               onDelete={onDelete}
               onGenerateHkt={onGenerateHkt}
+              onReorderRootChild={onReorderRootChild}
             />
           </div>
         </ScrollArea>
@@ -259,6 +263,7 @@ function GroupNode({
   onDuplicate,
   onDelete,
   onGenerateHkt,
+  onReorderRootChild,
 }: {
   group: OutlinerGroup;
   root: StageTreeNode;
@@ -273,6 +278,7 @@ function GroupNode({
   onDuplicate?: (ids: string[]) => void;
   onDelete?: (ids: string[]) => void;
   onGenerateHkt?: (ids: string[]) => void;
+  onReorderRootChild?: (activeId: string, overId: string) => void;
 }) {
   const childNodes = useMemo(() => {
     const findNode = (node: StageTreeNode, id: string): StageTreeNode | null => {
@@ -330,16 +336,22 @@ function GroupNode({
                   onDuplicate={onDuplicate}
                   onDelete={onDelete}
                   onGenerateHkt={onGenerateHkt}
+                  onReorderRootChild={onReorderRootChild}
                 />
               ))}
             </div>
           )}
         </div>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-48">
+      <ContextMenuContent className="w-52">
         <ContextMenuItem onClick={() => removeGroup(group.id)}>
           <Ungroup className="mr-2 h-3.5 w-3.5" />
           Ungroup
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onClick={() => onDelete?.(group.children)}>
+          <Trash2 className="mr-2 h-3.5 w-3.5" />
+          Delete All in Group
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
@@ -359,6 +371,7 @@ function OutlinerNode({
   onDuplicate,
   onDelete,
   onGenerateHkt,
+  onReorderRootChild,
 }: {
   node: StageTreeNode;
   depth: number;
@@ -372,6 +385,7 @@ function OutlinerNode({
   onDuplicate?: (ids: string[]) => void;
   onDelete?: (ids: string[]) => void;
   onGenerateHkt?: (ids: string[]) => void;
+  onReorderRootChild?: (activeId: string, overId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(depth < 2);
   const hasChildren = node.children && node.children.length > 0;
@@ -406,6 +420,7 @@ function OutlinerNode({
           onDuplicate={onDuplicate}
           onDelete={onDelete}
           onGenerateHkt={onGenerateHkt}
+          onReorderRootChild={onReorderRootChild}
           hasChildren={hasChildren}
           expanded={expanded}
           onToggle={() => setExpanded((v) => !v)}
@@ -442,6 +457,7 @@ function OutlinerNode({
           onDuplicate={onDuplicate}
           onDelete={onDelete}
           onGenerateHkt={onGenerateHkt}
+          onReorderRootChild={onReorderRootChild}
         />
       ))}
     </div>
@@ -460,6 +476,7 @@ function OutlinerNodeRow({
   onDuplicate,
   onDelete,
   onGenerateHkt,
+  onReorderRootChild,
   hasChildren,
   expanded,
   onToggle,
@@ -475,6 +492,7 @@ function OutlinerNodeRow({
   onDuplicate?: (ids: string[]) => void;
   onDelete?: (ids: string[]) => void;
   onGenerateHkt?: (ids: string[]) => void;
+  onReorderRootChild?: (activeId: string, overId: string) => void;
   hasChildren?: boolean;
   expanded?: boolean;
   onToggle?: () => void;
@@ -483,6 +501,7 @@ function OutlinerNodeRow({
   const visible = isVisible(node.id);
   const locked = isLocked(node.id);
   const RoleIcon = getRoleIcon(node.role);
+  const canReorder = depth === 1 && Boolean(onReorderRootChild);
 
   return (
     <ContextMenu>
@@ -496,8 +515,36 @@ function OutlinerNodeRow({
           )}
           style={{ paddingLeft: `${depth * 14 + 4}px` }}
           onClick={(e) => onNodeClick(node.id, e)}
+          draggable={canReorder}
+          onDragStart={(event) => {
+            if (!canReorder) return;
+            event.dataTransfer.setData("text/plain", node.id);
+            event.dataTransfer.effectAllowed = "move";
+          }}
+          onDragOver={(event) => {
+            if (!canReorder) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+          }}
+          onDrop={(event) => {
+            if (!canReorder || !onReorderRootChild) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const activeId = event.dataTransfer.getData("text/plain");
+            if (activeId && activeId !== node.id) {
+              onReorderRootChild(activeId, node.id);
+            }
+          }}
         >
-          {hasChildren ? (
+          {canReorder ? (
+            <span
+              className="flex h-4 w-4 shrink-0 cursor-grab items-center justify-center text-muted-foreground/70 active:cursor-grabbing"
+              title="Drag to reorder"
+              aria-hidden
+            >
+              <GripVertical className="h-3 w-3" />
+            </span>
+          ) : hasChildren ? (
             <button
               className="h-4 w-4 flex items-center justify-center shrink-0 hover:bg-accent rounded-sm"
               onClick={(e) => { e.stopPropagation(); onToggle?.(); }}
@@ -539,51 +586,91 @@ function OutlinerNodeRow({
           )}
         </div>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-52">
-        <ContextMenuItem onClick={(e: any) => { onNodeClick(node.id, e); }}>
-          Select
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem onClick={() => {
-          const entries = [{ nodeId: node.id, placementIdx: null, transform: { posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, scaleX: 1, scaleY: 1, scaleZ: 1 } }];
-          useSceneEditorStore.getState().copyToClipboard(entries);
-        }}>
-          <Copy className="mr-2 h-3.5 w-3.5" />
-          Copy
-          <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => onDuplicate?.([node.id])}>
-          <Clipboard className="mr-2 h-3.5 w-3.5" />
-          Duplicate as New
-          <ContextMenuShortcut>Ctrl+D</ContextMenuShortcut>
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem onClick={() => toggleVisibility(node.id)}>
-          {visible ? <EyeOff className="mr-2 h-3.5 w-3.5" /> : <Eye className="mr-2 h-3.5 w-3.5" />}
-          {visible ? "Hide" : "Show"}
-          <ContextMenuShortcut>H</ContextMenuShortcut>
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => toggleLock(node.id)}>
-          {locked ? <Unlock className="mr-2 h-3.5 w-3.5" /> : <Lock className="mr-2 h-3.5 w-3.5" />}
-          {locked ? "Unlock" : "Lock"}
-        </ContextMenuItem>
-        {node.role === "imported_dae" && onGenerateHkt && (
-          <>
-            <ContextMenuSeparator />
-            <ContextMenuItem onClick={() => onGenerateHkt([node.id])}>
-              <Shield className="mr-2 h-3.5 w-3.5" />
-              Generate HKT
-            </ContextMenuItem>
-          </>
-        )}
-        <ContextMenuSeparator />
-        <ContextMenuItem onClick={() => onDelete?.([node.id])} className="text-destructive">
-          <Trash2 className="mr-2 h-3.5 w-3.5" />
-          Delete
-          <ContextMenuShortcut>Del</ContextMenuShortcut>
-        </ContextMenuItem>
-      </ContextMenuContent>
+      <NodeContextMenuContent
+        node={node}
+        visible={visible}
+        locked={locked}
+        onNodeClick={onNodeClick}
+        toggleVisibility={toggleVisibility}
+        toggleLock={toggleLock}
+        onDuplicate={onDuplicate}
+        onDelete={onDelete}
+        onGenerateHkt={onGenerateHkt}
+      />
     </ContextMenu>
+  );
+}
+
+function NodeContextMenuContent({
+  node,
+  visible,
+  locked,
+  onNodeClick,
+  toggleVisibility,
+  toggleLock,
+  onDuplicate,
+  onDelete,
+  onGenerateHkt,
+}: {
+  node: StageTreeNode;
+  visible: boolean;
+  locked: boolean;
+  onNodeClick: (id: string, e: React.MouseEvent) => void;
+  toggleVisibility: (id: string) => void;
+  toggleLock: (id: string) => void;
+  onDuplicate?: (ids: string[]) => void;
+  onDelete?: (ids: string[]) => void;
+  onGenerateHkt?: (ids: string[]) => void;
+}) {
+  const supportsHkt = (node.role === "imported_dae" || node.role === "collision") && Boolean(onGenerateHkt);
+  const isCollisionNode = node.role === "collision" && node.id.startsWith("__col__");
+  const hktTargetId = isCollisionNode ? node.id.slice("__col__".length) : node.id;
+
+  return (
+    <ContextMenuContent className="w-52">
+      <ContextMenuItem onClick={(e: React.MouseEvent) => onNodeClick(node.id, e)}>
+        Select
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem onClick={() => {
+        const entries = [{ nodeId: node.id, placementIdx: null, transform: { posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, scaleX: 1, scaleY: 1, scaleZ: 1 } }];
+        useSceneEditorStore.getState().copyToClipboard(entries);
+      }}>
+        <Copy className="mr-2 h-3.5 w-3.5" />
+        Copy
+        <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
+      </ContextMenuItem>
+      <ContextMenuItem onClick={() => onDuplicate?.([node.id])}>
+        <Clipboard className="mr-2 h-3.5 w-3.5" />
+        Duplicate as New
+        <ContextMenuShortcut>Ctrl+D</ContextMenuShortcut>
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem onClick={() => toggleVisibility(node.id)}>
+        {visible ? <EyeOff className="mr-2 h-3.5 w-3.5" /> : <Eye className="mr-2 h-3.5 w-3.5" />}
+        {visible ? "Hide" : "Show"}
+        <ContextMenuShortcut>H</ContextMenuShortcut>
+      </ContextMenuItem>
+      <ContextMenuItem onClick={() => toggleLock(node.id)}>
+        {locked ? <Unlock className="mr-2 h-3.5 w-3.5" /> : <Lock className="mr-2 h-3.5 w-3.5" />}
+        {locked ? "Unlock" : "Lock"}
+      </ContextMenuItem>
+      {supportsHkt && (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem onClick={() => onGenerateHkt!([hktTargetId])}>
+            <Shield className="mr-2 h-3.5 w-3.5" />
+            {isCollisionNode ? "Regenerate HKT" : "Generate HKT"}
+          </ContextMenuItem>
+        </>
+      )}
+      <ContextMenuSeparator />
+      <ContextMenuItem onClick={() => onDelete?.([node.id])} className="text-destructive">
+        <Trash2 className="mr-2 h-3.5 w-3.5" />
+        Delete
+        <ContextMenuShortcut>Del</ContextMenuShortcut>
+      </ContextMenuItem>
+    </ContextMenuContent>
   );
 }
 
@@ -599,6 +686,8 @@ function getRoleIcon(role: StageTreeNode["role"]) {
       return Sparkles;
     case "imported_dae":
       return Box;
+    case "collision":
+      return Shield;
     case "root":
       return Layers;
     default:

@@ -75,7 +75,7 @@ describe("importedDaeSceneNormalize", () => {
     expect(worldAfter.x - worldBefore.x).toBeCloseTo(-46.308, 3);
   });
 
-  it("centers baked DAE geometry on the actor pivot", () => {
+  it("normalizes baked DAE geometry to ground plane (min Y = 0, XZ centered)", () => {
     const root = new THREE.Group();
     const offset = new THREE.Group();
     offset.matrixAutoUpdate = false;
@@ -88,8 +88,11 @@ describe("importedDaeSceneNormalize", () => {
     root.add(offset);
 
     const display = buildImportedDaeDisplayRoot(root);
+    const box = new THREE.Box3().setFromObject(display);
+    expect(box.min.y).toBeCloseTo(0, 3);
     const initialCenter = sceneCenter(display);
     expect(initialCenter.x).toBeCloseTo(0, 3);
+    expect(initialCenter.y).toBeCloseTo(1, 3);
 
     display.position.set(-36.308, 5, 10);
     display.rotation.y = Math.PI / 4;
@@ -98,7 +101,7 @@ describe("importedDaeSceneNormalize", () => {
 
     const movedCenter = sceneCenter(display);
     expect(movedCenter.x).toBeCloseTo(-36.308, 3);
-    expect(movedCenter.y).toBeCloseTo(5, 3);
+    expect(movedCenter.y).toBeCloseTo(7, 3);
     expect(movedCenter.z).toBeCloseTo(10, 3);
   });
 });

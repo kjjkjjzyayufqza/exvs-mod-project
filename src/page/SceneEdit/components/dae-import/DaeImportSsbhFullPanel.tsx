@@ -1,10 +1,7 @@
 import { useEffect, useMemo } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
-import { FolderOpen } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDaeSsbhSessionStore } from "@/page/TestEditor/components/ssbh-model-preview/store/daeSsbhSessionStore";
 import type { SsbhDaeAnalysisReport } from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
@@ -32,11 +29,6 @@ export function DaeImportSsbhFullPanel({ analysis, sourcePath, stageRoot }: DaeI
     if (analysis && analysis.canConvert) {
       session.setSourcePath(sourcePath);
       session.loadAnalysis(analysis as unknown as SsbhDaeAnalysisReport);
-      // Auto-fill outputDir with stageRoot + baseName if currently empty
-      if (!session.outputDir && stageRoot) {
-        const baseName = sourcePath.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, "") ?? "model";
-        session.setOutputDir(`${stageRoot.replace(/[\\/]+$/, "")}/${baseName}`);
-      }
     }
   }, [analysis, sourcePath]);
 
@@ -63,36 +55,13 @@ export function DaeImportSsbhFullPanel({ analysis, sourcePath, stageRoot }: DaeI
   return (
     <div className="space-y-3 p-4">
       <DaeImportPanelSection title="Output">
+        <p className="text-[11px] text-muted-foreground">
+          SSBH files are kept in memory until you save the stage folder
+          {stageRoot ? ` (${stageRoot})` : ""}.
+        </p>
         <div className="grid gap-2 md:grid-cols-2">
           <div className="space-y-1 md:col-span-2">
-            <Label className="text-[11px] text-muted-foreground">Output directory</Label>
-            <div className="flex gap-2">
-              <Input
-                value={session.outputDir ?? ""}
-                onChange={(e) => session.setOutputDir(e.target.value)}
-                className="h-8 text-[11px]"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 shrink-0 text-[10px]"
-                onClick={() => {
-                  void (async () => {
-                    const selected = await open({ directory: true, title: "Pick output directory" });
-                    if (typeof selected === "string" && selected.trim()) {
-                      session.setOutputDir(selected.trim());
-                    }
-                  })();
-                }}
-              >
-                <FolderOpen className="mr-1 h-3 w-3" />
-                Browse
-              </Button>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-[11px] text-muted-foreground">Base filename</Label>
+            <Label className="text-[11px] text-muted-foreground">Model folder name</Label>
             <Input
               value={session.outputBaseName}
               onChange={(e) => session.setOutputBaseName(e.target.value)}

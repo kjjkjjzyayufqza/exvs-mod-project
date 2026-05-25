@@ -4,14 +4,18 @@ mod character_id_preview;
 mod commands;
 mod fhm2d_memory_preview;
 pub mod format;
-mod havok_cli;
+pub mod havok_cli;
+pub mod collision_mesh;
+pub mod havok_collision_encode;
+pub mod havok_mesh_encode;
+pub mod havok_mesh_export;
 mod jnttbl_cmd;
 mod jnttbl_format;
 pub mod nutexb_lib;
 mod preview_collection_state;
 mod scene_memory_session;
 mod scene_session_commands;
-mod ssbh_dae;
+pub mod ssbh_dae;
 mod ssbh_dae_cmd;
 mod ssbh_motion;
 pub mod ssbh_preview;
@@ -134,11 +138,16 @@ pub fn run() {
             scene_session_commands::scene_session_destroy,
             scene_session_commands::scene_session_is_dirty,
             scene_session_commands::scene_import_dae,
+            scene_session_commands::scene_import_dae_from_path,
+            scene_session_commands::scene_preview_hkt_collision_path,
             scene_session_commands::scene_configure_import,
             scene_session_commands::scene_remove_import,
             scene_session_commands::scene_open_folder,
             scene_session_commands::scene_execute_import,
             scene_session_commands::scene_generate_hkt,
+            scene_session_commands::scene_preview_hkt_collision_bytes,
+            scene_session_commands::scene_preview_hkt_collision_session,
+            scene_session_commands::scene_get_import_config,
             scene_session_commands::scene_get_havok_data,
             scene_session_commands::scene_list_havok_data,
             scene_session_commands::scene_save_as_folder,

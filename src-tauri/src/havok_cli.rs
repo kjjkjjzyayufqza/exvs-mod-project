@@ -60,17 +60,30 @@ fn collect_hko_files(base: &Path, dir: &Path, out: &mut Vec<String>) {
     }
 }
 
+pub fn generate_hkt_from_import(
+    bytes: &[u8],
+    source_name: &str,
+    havok_config: &HavokCliConfig,
+    options: crate::collision_mesh::CollisionMeshOptions,
+) -> Result<crate::havok_collision_encode::HktGenerationResult, String> {
+    if !Path::new(&havok_config.filter_manager_path).exists() {
+        return Err("hctStandAloneFilterManager.exe not found".into());
+    }
+    crate::havok_collision_encode::generate_hkt_from_import_bytes(
+        bytes,
+        source_name,
+        &havok_config.filter_manager_path,
+        options,
+    )
+}
+
 pub fn generate_hkt_from_dae(
-    _dae_bytes: &[u8],
-    _config_profile: &str,
-    _havok_config: &HavokCliConfig,
-) -> Result<Vec<u8>, String> {
-    // Havok Content Tools (FileConvert.exe, hctStandAloneFilterManager.exe) cannot
-    // load DAE files directly. They only support Havok-native formats (.hkx, .hkt,
-    // XML tagfile/packfile). DAE→HKT conversion requires the Havok 3ds Max/Maya
-    // exporter plugin, which is not available as a CLI tool.
-    Err("HKT generation from DAE is not supported: Havok Content Tools cannot load DAE files directly. \
-         Use a DCC tool (3ds Max/Maya) with the Havok exporter plugin to produce HKT files.".to_string())
+    dae_bytes: &[u8],
+    source_name: &str,
+    havok_config: &HavokCliConfig,
+    options: crate::collision_mesh::CollisionMeshOptions,
+) -> Result<crate::havok_collision_encode::HktGenerationResult, String> {
+    generate_hkt_from_import(dae_bytes, source_name, havok_config, options)
 }
 
 const HKO_WRITE_XML: &str = r#"<?xml version="1.0" encoding="utf-8"?>
@@ -102,7 +115,7 @@ const HKO_WRITE_XML: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 	</hkobject>
 </hkoptions>"#;
 
-const HKO_WRITE_HKT: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+pub const HKO_WRITE_HKT: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <hkoptions>
 	<hkobject class="hctConfigurationSetData">
 		<hkparam name="filterManagerVersion">65537</hkparam>
@@ -131,7 +144,7 @@ const HKO_WRITE_HKT: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 	</hkobject>
 </hkoptions>"#;
 
-fn run_filter_manager(
+pub fn run_filter_manager_with_hko(
     filter_manager_exe: &str,
     hko_content: &str,
     input_path: &Path,
@@ -212,7 +225,7 @@ pub fn convert_hkt_bytes_to_xml(
         .map_err(|e| format!("Failed to write temp HKT: {e}"))?;
 
     let output_path = temp_dir.join("output.xml");
-    let result = run_filter_manager(filter_manager_exe, HKO_WRITE_XML, &input_path, &output_path);
+    let result = run_filter_manager_with_hko(filter_manager_exe, HKO_WRITE_XML, &input_path, &output_path);
 
     let cleanup = || {
         let _ = std::fs::remove_dir_all(&temp_dir);
@@ -248,7 +261,7 @@ pub async fn convert_hkt_to_xml(input_path: String, output_path: String) -> Resu
 
     let output = PathBuf::from(&output_path);
     tauri::async_runtime::spawn_blocking(move || {
-        run_filter_manager(
+        run_filter_manager_with_hko(
             &config.filter_manager_path,
             HKO_WRITE_XML,
             &input,
@@ -277,7 +290,7 @@ pub async fn convert_xml_to_hkt(input_path: String, output_path: String) -> Resu
 
     let output = PathBuf::from(&output_path);
     tauri::async_runtime::spawn_blocking(move || {
-        run_filter_manager(
+        run_filter_manager_with_hko(
             &config.filter_manager_path,
             HKO_WRITE_HKT,
             &input,
@@ -348,7 +361,7 @@ pub async fn scene_generate_hkt_from_dae_path(
     let output = PathBuf::from(&output_path);
     let filter_exe = config.filter_manager_path.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        run_filter_manager(&filter_exe, &hko_content, &input, &output)
+        run_filter_manager_with_hko(&filter_exe, &hko_content, &input, &output)
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))??;

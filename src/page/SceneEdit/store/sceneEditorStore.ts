@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
+import { mergeOutlinerOrder, reorderOutlinerIds } from "../utils/sceneOutlinerOrder";
 
 export interface OutlinerGroup {
   id: string;
@@ -42,6 +43,7 @@ interface SceneEditorState {
   showCollisionMesh: boolean;
   collisionVisibility: Record<string, boolean>;
   sessionId: string | null;
+  outlinerOrder: string[];
 }
 
 interface SceneEditorActions {
@@ -85,6 +87,8 @@ interface SceneEditorActions {
   setCollisionVisibility: (sourceId: string, visible: boolean) => void;
   setAllCollisionVisibility: (visible: boolean) => void;
   setSessionId: (id: string | null) => void;
+  syncOutlinerOrder: (nodeIds: string[]) => void;
+  reorderOutlinerNode: (activeId: string, overId: string) => void;
   resetAll: () => void;
 }
 
@@ -107,6 +111,7 @@ export const useSceneEditorStore = create<SceneEditorState & SceneEditorActions>
     showCollisionMesh: true,
     collisionVisibility: {},
     sessionId: null,
+    outlinerOrder: [],
 
     select: (id, opts) => {
       set((state) => {
@@ -365,6 +370,18 @@ export const useSceneEditorStore = create<SceneEditorState & SceneEditorActions>
       });
     },
 
+    syncOutlinerOrder: (nodeIds) => {
+      set((state) => {
+        state.outlinerOrder = mergeOutlinerOrder(state.outlinerOrder, nodeIds);
+      });
+    },
+
+    reorderOutlinerNode: (activeId, overId) => {
+      set((state) => {
+        state.outlinerOrder = reorderOutlinerIds(state.outlinerOrder, activeId, overId);
+      });
+    },
+
     resetAll: () => {
       set((state) => {
         state.selectedIds = new Set();
@@ -379,6 +396,7 @@ export const useSceneEditorStore = create<SceneEditorState & SceneEditorActions>
         state.objectLocks = {};
         state.collisionVisibility = {};
         state.sessionId = null;
+        state.outlinerOrder = [];
       });
     },
   })),

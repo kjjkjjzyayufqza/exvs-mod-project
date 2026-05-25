@@ -1,11 +1,23 @@
-import type { HavokInstallInfo } from "./daeImportTypes";
+import type { HavokInstallInfo, DaeImportConfig } from "./daeImportTypes";
 import { DaeImportFieldRow, DaeImportSection, DaeImportStatusAlert } from "./daeImportUi";
+import { DaeImportHktSimplifyFields } from "./DaeImportHktSimplifyFields";
+import { mapDaeImportConfigToBackend } from "../../utils/sceneSessionService";
 
 interface DaeImportHktConfigPanelProps {
   havokInfo: HavokInstallInfo | null;
+  config: DaeImportConfig;
+  onConfigChange: (partial: Partial<DaeImportConfig>) => void;
+  sourcePath?: string;
+  sourceName?: string;
 }
 
-export function DaeImportHktConfigPanel({ havokInfo }: DaeImportHktConfigPanelProps) {
+export function DaeImportHktConfigPanel({
+  havokInfo,
+  config,
+  onConfigChange,
+  sourcePath,
+  sourceName,
+}: DaeImportHktConfigPanelProps) {
   if (!havokInfo) {
     return (
       <DaeImportStatusAlert tone="error">
@@ -24,23 +36,38 @@ export function DaeImportHktConfigPanel({ havokInfo }: DaeImportHktConfigPanelPr
   }
 
   const profileCount = havokInfo.configProfiles.length;
+  const backendConfig = mapDaeImportConfigToBackend(config);
 
   return (
-    <DaeImportSection title="Collision (HKT)">
-      <DaeImportFieldRow label="Havok Version">
-        <span className="block truncate text-right font-mono text-[11px]">{havokInfo.version}</span>
-      </DaeImportFieldRow>
-      <DaeImportFieldRow
-        label="Conversion Profile"
-        hint="Auto-selected from installed Havok configs"
-      >
-        <span className="block truncate text-right text-[11px] text-muted-foreground">
-          Automatic
-          {profileCount > 0
-            ? ` · ${profileCount} profile${profileCount === 1 ? "" : "s"}`
-            : ""}
-        </span>
-      </DaeImportFieldRow>
-    </DaeImportSection>
+    <>
+      <DaeImportSection title="Collision (HKT)">
+        <DaeImportStatusAlert tone="info">
+          Builds simplified collision from DAE/FBX geometry (skin-baked when rigged), then converts
+          to HKT via Havok Content Tools.
+        </DaeImportStatusAlert>
+        <DaeImportFieldRow label="Havok Version">
+          <span className="block truncate text-right font-mono text-[11px]">{havokInfo.version}</span>
+        </DaeImportFieldRow>
+        <DaeImportFieldRow
+          label="Conversion Profile"
+          hint="Auto-selected from installed Havok configs"
+        >
+          <span className="block truncate text-right text-[11px] text-muted-foreground">
+            Automatic
+            {profileCount > 0
+              ? ` · ${profileCount} profile${profileCount === 1 ? "" : "s"}`
+              : ""}
+          </span>
+        </DaeImportFieldRow>
+      </DaeImportSection>
+
+      <DaeImportHktSimplifyFields
+        value={config.hktSimplify}
+        onChange={(hktSimplify) => onConfigChange({ hktSimplify })}
+        importConfig={backendConfig}
+        sourcePath={sourcePath}
+        sourceName={sourceName}
+      />
+    </>
   );
 }

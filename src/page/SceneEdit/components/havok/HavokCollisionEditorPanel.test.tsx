@@ -1,0 +1,109 @@
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { HavokMeshData } from "@/utils/havokXmlParser";
+import { HavokCollisionEditorPanel } from "./HavokCollisionEditorPanel";
+
+const mockMeshData: HavokMeshData = {
+  vertices: [
+    [0, 0, 0],
+    [1, 0, 0],
+    [1, 1, 0],
+    [0, 1, 0],
+  ],
+  quads: [[0, 1, 2, 3]],
+  aabb: { min: [0, 0, 0], max: [1, 1, 0] },
+  bodies: [],
+};
+
+vi.mock("@/utils/havokXmlParser", () => ({
+  parseHavokXML: vi.fn(() => mockMeshData),
+}));
+
+vi.mock("../../utils/sceneSessionService", () => ({
+  sceneConfigureImport: vi.fn().mockResolvedValue(undefined),
+  sceneGenerateHkt: vi.fn().mockResolvedValue(true),
+  sceneGetHavokData: vi.fn().mockResolvedValue({
+    sourceId: "import-1",
+    hktXml: "<hkpackfile/>",
+    rawBytes: [1, 2, 3],
+  }),
+  sceneGetImportConfig: vi.fn().mockResolvedValue({
+    loadToScene: false,
+    convertToSsbh: true,
+    generateHkt: true,
+    ssbhConfig: null,
+    hktSimplify: {
+      enabled: true,
+      planarityAngleDeg: 8,
+      minTriangleArea: 1e-8,
+      weldEpsilon: 1e-5,
+    },
+  }),
+  scenePreviewHktCollisionBytes: vi.fn(),
+  scenePreviewHktCollisionSession: vi.fn().mockResolvedValue({
+    renderTriangleCount: 4,
+    mergedTriangleCount: 4,
+    simplifiedTriangleCount: 2,
+    vertexCount: 4,
+  }),
+}));
+
+import { parseHavokXML } from "@/utils/havokXmlParser";
+import {
+  sceneConfigureImport,
+  sceneGenerateHkt,
+  sceneGetHavokData,
+} from "../../utils/sceneSessionService";
+
+const defaultHktSimplify = {
+  enabled: true,
+  planarityAngleDeg: 8,
+  minTriangleArea: 1e-8,
+  weldEpsilon: 1e-5,
+};
+
+describe("HavokCollisionEditorPanel", () => {
+  beforeAll(() => {
+    class ResizeObserverMock {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    }
+
+    globalThis.ResizeObserver = ResizeObserverMock;
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("notifies parent with parsed collision mesh after Regenerate HKT", async () => {
+    const user = userEvent.setup();
+    const onHavokDataUpdated = vi.fn();
+
+    render(
+      <HavokCollisionEditorPanel
+        sessionId="session-1"
+        sessionImportId="import-1"
+        sourceName="sample_mesh"
+        hktSimplify={defaultHktSimplify}
+        onHavokDataUpdated={onHavokDataUpdated}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /regenerate hkt/i }));
+
+    await waitFor(() => {
+      expect(sceneConfigureImport).toHaveBeenCalledWith(
+        "session-1",
+        "import-1",
+        expect.objectContaining({ generateHkt: true }),
+      );
+      expect(sceneGenerateHkt).toHaveBeenCalledWith("session-1", "import-1", "auto");
+      expect(sceneGetHavokData).toHaveBeenCalledWith("session-1", "import-1");
+      expect(parseHavokXML).toHaveBeenCalledWith("<hkpackfile/>");
+      expect(onHavokDataUpdated).toHaveBeenCalledWith("import-1", mockMeshData);
+    });
+  });
+});

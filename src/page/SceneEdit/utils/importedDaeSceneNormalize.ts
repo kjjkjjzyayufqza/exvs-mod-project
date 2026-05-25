@@ -13,16 +13,19 @@ function cloneMaterial(material: THREE.Material | THREE.Material[]): THREE.Mater
   return material.clone();
 }
 
-function recenterRigidDisplayGeometry(display: THREE.Object3D): void {
+function normalizeToGroundPlane(display: THREE.Object3D): void {
   _bbox.setFromObject(display);
   if (_bbox.isEmpty()) return;
 
   _bbox.getCenter(_center);
-  if (_center.lengthSq() < 1e-12) return;
+  const xShift = -_center.x;
+  const yShift = -_bbox.min.y;
+  const zShift = -_center.z;
+  if (xShift * xShift + yShift * yShift + zShift * zShift < 1e-12) return;
 
   display.traverse((node) => {
     if (node instanceof THREE.Mesh && !(node instanceof THREE.SkinnedMesh)) {
-      node.geometry.translate(-_center.x, -_center.y, -_center.z);
+      node.geometry.translate(xShift, yShift, zShift);
       node.geometry.computeBoundingBox();
       node.geometry.computeBoundingSphere();
     }
@@ -119,6 +122,6 @@ export function buildImportedDaeDisplayRoot(source: THREE.Object3D): THREE.Group
   });
 
   display.updateMatrixWorld(true);
-  recenterRigidDisplayGeometry(display);
+  normalizeToGroundPlane(display);
   return display;
 }

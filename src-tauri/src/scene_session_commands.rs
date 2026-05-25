@@ -5,8 +5,8 @@ use tauri::State;
 use crate::format::fhm2d_stage;
 use crate::havok_cli;
 use crate::scene_memory_session::{
-    GraphicParam, HavokCollisionData, ImportConfig, PlacementEntry, SceneSessionState,
-    SceneSource, SsbhArtifacts,
+    GraphicParam, HavokCollisionData, ImportConfig, PlacementEntry,
+    SceneSessionState, SceneSource, SsbhArtifacts,
 };
 use crate::ssbh_dae::{convert_dae_file, DaeConvertConfig};
 
@@ -25,6 +25,41 @@ pub struct ImportResult {
     pub name: String,
     pub ssbh_generated: bool,
     pub hkt_generated: bool,
+    pub hkt_detail: Option<String>,
+    pub warnings: Vec<String>,
+}
+
+pub fn hkt_success_detail(name: &str, byte_len: usize, triangle_count: usize) -> String {
+    format!(
+        "HKT mesh collision generated for \"{name}\" ({byte_len} bytes, {triangle_count} triangles, skin-baked merge). \
+         Mesh-accurate Havok compressed shape."
+    )
+}
+
+pub fn hkt_simplify_to_options(cfg: &crate::scene_memory_session::HktSimplifyConfig) -> crate::collision_mesh::CollisionSimplifyOptions {
+    crate::collision_mesh::CollisionSimplifyOptions {
+        enabled: cfg.enabled,
+        cos_planarity_threshold: crate::collision_mesh::cos_planarity_from_angle_deg(
+            cfg.planarity_angle_deg,
+        ),
+        min_triangle_area: cfg.min_triangle_area,
+        weld_epsilon: cfg.weld_epsilon,
+    }
+}
+
+pub fn hkt_collision_options_from_import(config: &ImportConfig) -> crate::collision_mesh::CollisionMeshOptions {
+    let mut options = config
+        .ssbh_config
+        .as_ref()
+        .map(|ssbh| {
+            crate::collision_mesh::CollisionMeshOptions::from_ssbh_axis(
+                &ssbh.up_axis,
+                ssbh.scale_factor,
+            )
+        })
+        .unwrap_or_default();
+    options.simplify = hkt_simplify_to_options(&config.hkt_simplify);
+    options
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -39,6 +74,8 @@ pub struct SaveResult {
 #[serde(rename_all = "camelCase")]
 pub struct HavokDataResult {
     pub source_id: String,
+    pub display_name: String,
+    pub object_node_id: Option<String>,
     pub hkt_xml: String,
     pub raw_bytes: Vec<u8>,
 }
@@ -107,6 +144,42 @@ pub fn scene_import_dae(
         Err(e) => eprintln!("[scene_import_dae] failed: {}", e),
     }
     result
+}
+
+#[tauri::command]
+pub fn scene_import_dae_from_path(
+    state: State<'_, SceneSessionState>,
+    session_id: String,
+    file_path: String,
+    name: String,
+) -> Result<String, String> {
+    eprintln!(
+        "[scene_import_dae_from_path] session_id={} name={} path={}",
+        session_id, name, file_path
+    );
+    let path = std::path::Path::new(&file_path);
+    let result = state.with_session_mut(&session_id, |s| s.add_import_from_path(name, path));
+    match &result {
+        Ok(import_id) => eprintln!("[scene_import_dae_from_path] success import_id={}", import_id),
+        Err(e) => eprintln!("[scene_import_dae_from_path] failed: {}", e),
+    }
+    result
+}
+
+#[tauri::command]
+pub fn scene_preview_hkt_collision_path(
+    file_path: String,
+    source_name: String,
+    config: ImportConfig,
+) -> Result<crate::havok_collision_encode::HktCollisionPreview, String> {
+    let dae_bytes = std::fs::read(&file_path)
+        .map_err(|e| format!("Failed to read '{}': {}", file_path, e))?;
+    let options = hkt_collision_options_from_import(&config);
+    crate::havok_collision_encode::preview_hkt_collision_from_import_bytes(
+        &dae_bytes,
+        &source_name,
+        options,
+    )
 }
 
 #[tauri::command]
@@ -262,8 +335,20 @@ fn collect_hkt_as_xml(stage_root: &str) -> Vec<HavokCollisionData> {
         match havok_cli::convert_hkt_bytes_to_xml(&config.filter_manager_path, &raw_bytes) {
             Ok(xml) => {
                 eprintln!("[collect_hkt_as_xml] converted: {}", source_id);
+                let display_name = Path::new(&source_id)
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_else(|| source_id.clone());
+                let object_node_id = Path::new(&source_id)
+                    .parent()
+                    .and_then(|p| {
+                        let s = p.to_string_lossy().to_string();
+                        if s.is_empty() { None } else { Some(s) }
+                    });
                 results.push(HavokCollisionData {
                     source_id,
+                    display_name,
+                    object_node_id,
                     hkt_xml: xml,
                     raw_bytes,
                 });
@@ -308,6 +393,8 @@ pub async fn scene_execute_import(
 
     let mut ssbh_generated = false;
     let mut hkt_generated = false;
+    let mut hkt_detail: Option<String> = None;
+    let mut warnings: Vec<String> = Vec::new();
 
     if config.convert_to_ssbh {
         let ssbh_config = config.ssbh_config.clone().unwrap_or_else(|| {
@@ -361,40 +448,98 @@ pub async fn scene_execute_import(
 
     if config.generate_hkt {
         eprintln!("[scene_execute_import] starting HKT generation");
+        let hkt_options = hkt_collision_options_from_import(&config);
         if let Some(havok_config) = havok_cli::HavokCliConfig::detect() {
-            let profiles = havok_cli::list_hko_configs(&havok_config.config_dir);
-            eprintln!("[scene_execute_import] havok profiles found: {:?}", profiles);
-            let profile = pick_best_hkt_profile(&profiles);
-            if let Some(profile) = profile {
-                eprintln!("[scene_execute_import] using havok profile: {}", profile);
+            if !std::path::Path::new(&havok_config.filter_manager_path).exists() {
+                eprintln!("[scene_execute_import] hctStandAloneFilterManager.exe not found");
+                warnings.push(format!(
+                    "HKT generation skipped for \"{name}\": hctStandAloneFilterManager.exe not found"
+                ));
+            } else {
+                eprintln!(
+                    "[scene_execute_import] using Havok filter manager for mesh collision HKT"
+                );
                 let dae_bytes_clone = dae_bytes.clone();
+                let import_name = name.clone();
+                let filter_path = havok_config.filter_manager_path.clone();
                 match tauri::async_runtime::spawn_blocking(move || {
-                    havok_cli::generate_hkt_from_dae(&dae_bytes_clone, &profile, &havok_config)
+                    havok_cli::generate_hkt_from_dae(
+                        &dae_bytes_clone,
+                        &import_name,
+                        &havok_config,
+                        hkt_options,
+                    )
                 })
                 .await
                 {
-                    Ok(Ok(hkt_bytes)) => {
+                    Ok(Ok(result)) => {
+                        let hkt_bytes = result.bytes;
+                        let hkt_size = hkt_bytes.len();
                         eprintln!(
-                            "[scene_execute_import] HKT generated: {} bytes",
-                            hkt_bytes.len()
+                            "[scene_execute_import] HKT generated: {} bytes, {} triangles",
+                            hkt_size, result.triangle_count
                         );
+                        let hkt_xml = if !filter_path.is_empty() {
+                            let bytes_for_xml = hkt_bytes.clone();
+                            match tauri::async_runtime::spawn_blocking(move || {
+                                havok_cli::convert_hkt_bytes_to_xml(&filter_path, &bytes_for_xml)
+                            })
+                            .await
+                            {
+                                Ok(Ok(xml)) => xml,
+                                Ok(Err(e)) => {
+                                    eprintln!(
+                                        "[scene_execute_import] HKT→XML conversion failed: {e}"
+                                    );
+                                    String::new()
+                                }
+                                Err(e) => {
+                                    eprintln!(
+                                        "[scene_execute_import] HKT→XML join error: {e}"
+                                    );
+                                    String::new()
+                                }
+                            }
+                        } else {
+                            String::new()
+                        };
+                        let import_display_name = name.clone();
+                        let import_id_for_node = options.import_id.clone();
                         state.with_session_mut(&options.session_id, |s| {
-                            s.store_hkt_bytes(&options.import_id, hkt_bytes)
+                            s.store_hkt_bytes(&options.import_id, hkt_bytes.clone())?;
+                            if !hkt_xml.is_empty() {
+                                s.upsert_havok_data(HavokCollisionData {
+                                    source_id: options.import_id.clone(),
+                                    display_name: import_display_name,
+                                    object_node_id: Some(import_id_for_node),
+                                    hkt_xml,
+                                    raw_bytes: hkt_bytes,
+                                });
+                            }
+                            Ok(())
                         })?;
                         hkt_generated = true;
+                        hkt_detail = Some(hkt_success_detail(
+                            &name,
+                            hkt_size,
+                            result.triangle_count,
+                        ));
                     }
                     Ok(Err(e)) => {
                         eprintln!("[scene_execute_import] HKT generation failed (non-fatal): {}", e);
+                        warnings.push(format!("HKT generation failed for \"{name}\": {e}"));
                     }
                     Err(e) => {
                         eprintln!("[scene_execute_import] HKT spawn_blocking join error (non-fatal): {}", e);
+                        warnings.push(format!("HKT generation task failed for \"{name}\": {e}"));
                     }
                 }
-            } else {
-                eprintln!("[scene_execute_import] no suitable havok profile found, skipping HKT");
             }
         } else {
             eprintln!("[scene_execute_import] Havok SDK not detected, skipping HKT");
+            warnings.push(format!(
+                "HKT generation skipped for \"{name}\": Havok Content Tools not installed"
+            ));
         }
     }
 
@@ -407,35 +552,9 @@ pub async fn scene_execute_import(
         name,
         ssbh_generated,
         hkt_generated,
+        hkt_detail,
+        warnings,
     })
-}
-
-/// Pick the best .hko profile for mesh-to-HKT conversion.
-/// Prefers `Destruction` profiles over `Animation`/`Behavior` since we are
-/// converting geometry (not skeletal animations).
-fn pick_best_hkt_profile(profiles: &[String]) -> Option<String> {
-    static PREFERRED_ORDER: &[&str] = &[
-        "Destruction2012\\simpleExport",
-        "Destruction2012\\fullExport",
-        "Destruction\\simpleExport",
-        "Destruction\\fullExport",
-        "Behavior\\terrain",
-    ];
-
-    for needle in PREFERRED_ORDER {
-        if let Some(p) = profiles.iter().find(|p| p.starts_with(needle)) {
-            return Some(p.clone());
-        }
-    }
-
-    if let Some(p) = profiles.iter().find(|p| {
-        let lower = p.to_ascii_lowercase();
-        !lower.starts_with("animation") && !lower.starts_with("behavior")
-    }) {
-        return Some(p.clone());
-    }
-
-    profiles.first().cloned()
 }
 
 fn convert_dae_bytes_to_ssbh_artifacts(
@@ -550,10 +669,14 @@ pub async fn scene_generate_hkt(
         "[scene_generate_hkt] session_id={} import_id={} profile={}",
         options.session_id, options.import_id, options.config_profile
     );
-    let dae_bytes = state.with_session(&options.session_id, |s| {
+    let (dae_bytes, import_name, hkt_options) = state.with_session(&options.session_id, |s| {
         let import = s.find_import(&options.import_id)?;
         eprintln!("[scene_generate_hkt] dae_bytes_len={}", import.dae_bytes.len());
-        Ok(import.dae_bytes.clone())
+        Ok((
+            import.dae_bytes.clone(),
+            import.name.clone(),
+            hkt_collision_options_from_import(&import.config),
+        ))
     }).map_err(|e| {
         eprintln!("[scene_generate_hkt] find_import failed: {}", e);
         e
@@ -564,10 +687,16 @@ pub async fn scene_generate_hkt(
         "Havok SDK not found".to_string()
     })?;
 
-    let profile = options.config_profile.clone();
-    eprintln!("[scene_generate_hkt] calling generate_hkt_from_dae with profile={}", profile);
-    let hkt_bytes = tauri::async_runtime::spawn_blocking(move || {
-        havok_cli::generate_hkt_from_dae(&dae_bytes, &profile, &havok_config)
+    let _profile = &options.config_profile;
+    let regen_display_name = import_name.clone();
+    eprintln!("[scene_generate_hkt] calling generate_hkt_from_dae (mesh collision)");
+    let hkt_result = tauri::async_runtime::spawn_blocking(move || {
+        havok_cli::generate_hkt_from_dae(
+            &dae_bytes,
+            &import_name,
+            &havok_config,
+            hkt_options,
+        )
     })
     .await
     .map_err(|e| {
@@ -579,7 +708,12 @@ pub async fn scene_generate_hkt(
         e
     })?;
 
-    eprintln!("[scene_generate_hkt] generated {} bytes", hkt_bytes.len());
+    let hkt_bytes = hkt_result.bytes;
+    eprintln!(
+        "[scene_generate_hkt] generated {} bytes ({} triangles)",
+        hkt_bytes.len(),
+        hkt_result.triangle_count
+    );
 
     let filter_path = havok_cli::HavokCliConfig::detect()
         .map(|c| c.filter_manager_path.clone())
@@ -599,10 +733,13 @@ pub async fn scene_generate_hkt(
         String::new()
     };
 
+    let regen_node_id = options.import_id.clone();
     state.with_session_mut(&options.session_id, |s| {
         s.store_hkt_bytes(&options.import_id, hkt_bytes.clone())?;
-        s.add_havok_data(HavokCollisionData {
+        s.upsert_havok_data(HavokCollisionData {
             source_id: options.import_id.clone(),
+            display_name: regen_display_name,
+            object_node_id: Some(regen_node_id),
             hkt_xml,
             raw_bytes: hkt_bytes,
         });
@@ -611,6 +748,74 @@ pub async fn scene_generate_hkt(
 
     eprintln!("[scene_generate_hkt] done");
     Ok(true)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewHktCollisionSessionArgs {
+    pub session_id: String,
+    pub import_id: String,
+    pub config: ImportConfig,
+}
+
+#[tauri::command]
+pub fn scene_preview_hkt_collision_session(
+    state: State<'_, SceneSessionState>,
+    args: PreviewHktCollisionSessionArgs,
+) -> Result<crate::havok_collision_encode::HktCollisionPreview, String> {
+    state.with_session(&args.session_id, |s| {
+        let import = s.find_import(&args.import_id)?;
+        let options = hkt_collision_options_from_import(&args.config);
+        let lower = import.name.to_ascii_lowercase();
+        let source_name = if lower.ends_with(".dae") || lower.ends_with(".fbx") {
+            import.name.clone()
+        } else {
+            format!("{}.dae", import.name)
+        };
+        crate::havok_collision_encode::preview_hkt_collision_from_import_bytes(
+            &import.dae_bytes,
+            &source_name,
+            options,
+        )
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewHktCollisionBytesArgs {
+    pub dae_bytes: Vec<u8>,
+    pub source_name: String,
+    pub config: ImportConfig,
+}
+
+#[tauri::command]
+pub fn scene_preview_hkt_collision_bytes(
+    args: PreviewHktCollisionBytesArgs,
+) -> Result<crate::havok_collision_encode::HktCollisionPreview, String> {
+    let options = hkt_collision_options_from_import(&args.config);
+    crate::havok_collision_encode::preview_hkt_collision_from_import_bytes(
+        &args.dae_bytes,
+        &args.source_name,
+        options,
+    )
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetImportConfigOptions {
+    pub session_id: String,
+    pub import_id: String,
+}
+
+#[tauri::command]
+pub fn scene_get_import_config(
+    state: State<'_, SceneSessionState>,
+    options: GetImportConfigOptions,
+) -> Result<ImportConfig, String> {
+    state.with_session(&options.session_id, |s| {
+        let import = s.find_import(&options.import_id)?;
+        Ok(import.config.clone())
+    })
 }
 
 #[tauri::command]
@@ -622,6 +827,8 @@ pub fn scene_get_havok_data(
     state.with_session(&session_id, |s| {
         Ok(s.get_havok_data(&source_id).map(|d| HavokDataResult {
             source_id: d.source_id.clone(),
+            display_name: d.display_name.clone(),
+            object_node_id: d.object_node_id.clone(),
             hkt_xml: d.hkt_xml.clone(),
             raw_bytes: d.raw_bytes.clone(),
         }))
@@ -638,6 +845,8 @@ pub fn scene_list_havok_data(
             .iter()
             .map(|d| HavokDataResult {
                 source_id: d.source_id.clone(),
+                display_name: d.display_name.clone(),
+                object_node_id: d.object_node_id.clone(),
                 hkt_xml: d.hkt_xml.clone(),
                 raw_bytes: d.raw_bytes.clone(),
             })
@@ -754,6 +963,8 @@ pub fn scene_list_imports(
                 name: i.name.clone(),
                 ssbh_generated: i.ssbh_artifacts.is_some(),
                 hkt_generated: i.hkt_bytes.is_some(),
+                hkt_detail: None,
+                warnings: Vec::new(),
             })
             .collect())
     })
@@ -763,7 +974,7 @@ pub fn scene_list_imports(
 mod tests {
     use super::*;
     use crate::scene_memory_session::{
-        ImportConfig, SceneSessionState, SceneSource, StageBundleMemory,
+        HktSimplifyConfig, ImportConfig, SceneSessionState, SceneSource, StageBundleMemory,
     };
     use std::collections::HashMap;
 
@@ -776,6 +987,72 @@ mod tests {
             return true;
         }
         false
+    }
+
+    #[test]
+    fn hkt_simplify_to_options_converts_planarity_angle_deg() {
+        use crate::collision_mesh::{cos_planarity_from_angle_deg, CollisionSimplifyOptions};
+
+        let cfg = HktSimplifyConfig {
+            enabled: true,
+            planarity_angle_deg: 8.0,
+            min_triangle_area: 1e-8,
+            weld_epsilon: 1e-5,
+        };
+        let opts = hkt_simplify_to_options(&cfg);
+        assert_eq!(
+            opts.cos_planarity_threshold,
+            cos_planarity_from_angle_deg(8.0),
+        );
+        assert_eq!(opts, CollisionSimplifyOptions::default());
+    }
+
+    #[test]
+    fn hkt_collision_options_follow_import_ssbh_config() {
+        use crate::collision_mesh::CollisionMeshOptions;
+        use crate::scene_memory_session::SsbhConvertConfig;
+        use crate::ssbh_dae::UpAxisConversion;
+
+        let config = ImportConfig {
+            load_to_scene: false,
+            convert_to_ssbh: true,
+            generate_hkt: true,
+            ssbh_config: Some(SsbhConvertConfig {
+                base_filename: "bodyout".into(),
+                scale_factor: 0.01,
+                up_axis: "z_up".into(),
+                write_numdlb: true,
+                write_numshb: true,
+                write_nusktb: true,
+                write_numatb: true,
+                write_jnttbl: true,
+                write_maya_profile: false,
+                material_template: None,
+            }),
+            hkt_simplify: HktSimplifyConfig::default(),
+        };
+        let opts = hkt_collision_options_from_import(&config);
+        assert_eq!(opts.scale_factor, 0.01);
+        assert_eq!(opts.up_axis, UpAxisConversion::ZUp);
+
+        let default_cfg = ImportConfig {
+            load_to_scene: false,
+            convert_to_ssbh: false,
+            generate_hkt: true,
+            ssbh_config: None,
+            hkt_simplify: HktSimplifyConfig::default(),
+        };
+        let defaults = hkt_collision_options_from_import(&default_cfg);
+        assert_eq!(defaults, CollisionMeshOptions::default());
+    }
+
+    #[test]
+    fn hkt_success_detail_describes_mesh_collision() {
+        let detail = hkt_success_detail("backpack_up", 4096, 1200);
+        assert!(detail.contains("backpack_up"));
+        assert!(detail.contains("4096"));
+        assert!(detail.contains("1200"));
+        assert!(detail.contains("mesh collision"));
     }
 
     #[test]
@@ -887,6 +1164,7 @@ mod tests {
                     convert_to_ssbh: true,
                     generate_hkt: false,
                     ssbh_config: Some(ssbh_config.clone()),
+                    hkt_simplify: HktSimplifyConfig::default(),
                 };
                 Ok(())
             })
@@ -963,6 +1241,7 @@ mod tests {
                     convert_to_ssbh: true,
                     generate_hkt: false,
                     ssbh_config: Some(ssbh_config.clone()),
+                    hkt_simplify: HktSimplifyConfig::default(),
                 };
                 Ok(())
             })
@@ -1089,6 +1368,7 @@ mod tests {
                     convert_to_ssbh: true,
                     generate_hkt: false,
                     ssbh_config: Some(ssbh_config),
+                    hkt_simplify: HktSimplifyConfig::default(),
                 };
                 s.store_ssbh_artifacts(&import_id, artifacts)?;
                 Ok(())
@@ -1439,6 +1719,7 @@ mod tests {
                     convert_to_ssbh: true,
                     generate_hkt: false,
                     ssbh_config: Some(ssbh_config.clone()),
+                    hkt_simplify: HktSimplifyConfig::default(),
                 };
                 Ok(())
             })

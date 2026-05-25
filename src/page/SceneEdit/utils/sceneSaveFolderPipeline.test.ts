@@ -21,6 +21,10 @@ vi.mock("./sceneSessionService", () => ({
   sceneExecuteImport: vi.fn(),
 }));
 
+vi.mock("./sceneDaeSessionImport", () => ({
+  retargetSessionImportFolderName: vi.fn(),
+}));
+
 vi.mock("./sceneSavePipeline", () => ({
   createBakedImportedDaeExportObject: vi.fn(),
 }));
@@ -49,12 +53,50 @@ import { buildDeletePreview, executeDelete } from "./sceneDeleteConfirm";
 import { executeSaveFolderPipeline, type SaveFolderParams } from "./sceneSaveFolderPipeline";
 import { useSceneDirtyStore } from "../store/sceneDirtyStore";
 import type { SaveStepInfo } from "../components/SaveProgressDialog";
+import type { ImportedDaeObject } from "../components/MapViewport";
+import {
+  sceneExecuteImport,
+  sceneImportDae,
+  sceneSaveAsFolder,
+} from "./sceneSessionService";
+import { retargetSessionImportFolderName } from "./sceneDaeSessionImport";
+import { buildImportedDaeStageRegistrationPlan } from "./sceneDaeSsbhSave";
+import { createBakedImportedDaeExportObject } from "./sceneSavePipeline";
 
 const mockWriteTextFile = vi.mocked(writeTextFile);
 const mockReadDir = vi.mocked(readDir);
 const mockInvoke = vi.mocked(invoke);
 const mockBuildDeletePreview = vi.mocked(buildDeletePreview);
 const mockExecuteDelete = vi.mocked(executeDelete);
+const mockSceneSaveAsFolder = vi.mocked(sceneSaveAsFolder);
+const mockSceneImportDae = vi.mocked(sceneImportDae);
+const mockSceneExecuteImport = vi.mocked(sceneExecuteImport);
+const mockRetargetSessionImportFolderName = vi.mocked(retargetSessionImportFolderName);
+const mockBuildImportedDaeStageRegistrationPlan = vi.mocked(buildImportedDaeStageRegistrationPlan);
+const mockCreateBakedImportedDaeExportObject = vi.mocked(createBakedImportedDaeExportObject);
+
+const DEFAULT_TRANSFORM = {
+  posX: 0,
+  posY: 0,
+  posZ: 0,
+  rotX: 0,
+  rotY: 0,
+  rotZ: 0,
+  scaleX: 1,
+  scaleY: 1,
+  scaleZ: 1,
+};
+
+function makeImportedDaeObject(overrides?: Partial<ImportedDaeObject>): ImportedDaeObject {
+  return {
+    id: "dae_obj_1",
+    name: "sample_mesh",
+    sourcePath: "E:/models/sample.dae",
+    scene: {} as ImportedDaeObject["scene"],
+    transform: { ...DEFAULT_TRANSFORM },
+    ...overrides,
+  };
+}
 
 function makeParams(overrides?: Partial<SaveFolderParams>): SaveFolderParams {
   return {
@@ -77,6 +119,23 @@ describe("sceneSaveFolderPipeline", () => {
     useSceneDirtyStore.getState().reset();
     mockReadDir.mockResolvedValue([]);
     mockWriteTextFile.mockResolvedValue(undefined);
+    mockSceneSaveAsFolder.mockResolvedValue({ success: true, filesWritten: 4, warnings: [] });
+    mockSceneImportDae.mockResolvedValue("import-new");
+    mockSceneExecuteImport.mockResolvedValue({
+      importId: "import-new",
+      name: "sample_mesh",
+      ssbhGenerated: true,
+      hktGenerated: false,
+      hktDetail: null,
+      warnings: [],
+    });
+    mockRetargetSessionImportFolderName.mockResolvedValue(undefined);
+    mockBuildImportedDaeStageRegistrationPlan.mockReturnValue({
+      baseFilename: "sample_mesh",
+      folderName: "sample_mesh",
+      outputDir: "E:/stage/16F73C97/0/0/sample_mesh/0",
+    });
+    mockCreateBakedImportedDaeExportObject.mockReturnValue({} as ReturnType<typeof createBakedImportedDaeExportObject>);
     mockInvoke.mockImplementation(async (cmd: string, _args?: unknown) => {
       if (cmd === "restore_shared_textures") {
         return { texturesCollected: 0, subdirsRemoved: 0, warnings: [] };
@@ -206,5 +265,56 @@ describe("sceneSaveFolderPipeline", () => {
     expect(mockInvoke).toHaveBeenCalledWith("load_stage_bundle", {
       stageRoot: "E:/stage/16F73C97/0/0",
     });
+  });
+
+  it("retargets pre-converted session imports instead of re-importing DAE bytes", async () => {
+    const store = useSceneDirtyStore.getState();
+    store.markObjectAdded("sample_mesh");
+
+    const params = makeParams({
+      sceneSessionId: "session-1",
+      importedDaeObjects: [
+        makeImportedDaeObject({ sessionImportId: "import-existing" }),
+      ],
+    });
+
+    const result = await executeSaveFolderPipeline(params);
+
+    expect(result.success).toBe(true);
+    expect(result.convertedCount).toBe(1);
+    expect(mockRetargetSessionImportFolderName).toHaveBeenCalledWith(
+      "session-1",
+      "import-existing",
+      expect.objectContaining({ convertToSsbh: true }),
+      "sample_mesh",
+    );
+    expect(mockSceneImportDae).not.toHaveBeenCalled();
+    expect(mockSceneExecuteImport).not.toHaveBeenCalled();
+    expect(mockSceneSaveAsFolder).toHaveBeenCalledWith(
+      "session-1",
+      "E:/stage/16F73C97/0/0",
+    );
+  });
+
+  it("converts preview-only imported DAE through the session pipeline on save", async () => {
+    const store = useSceneDirtyStore.getState();
+    store.markObjectAdded("sample_mesh");
+
+    const params = makeParams({
+      sceneSessionId: "session-1",
+      importedDaeObjects: [makeImportedDaeObject()],
+    });
+
+    const result = await executeSaveFolderPipeline(params);
+
+    expect(result.success).toBe(true);
+    expect(result.convertedCount).toBe(1);
+    expect(mockRetargetSessionImportFolderName).not.toHaveBeenCalled();
+    expect(mockSceneImportDae).toHaveBeenCalled();
+    expect(mockSceneExecuteImport).toHaveBeenCalled();
+    expect(mockSceneSaveAsFolder).toHaveBeenCalledWith(
+      "session-1",
+      "E:/stage/16F73C97/0/0",
+    );
   });
 });
