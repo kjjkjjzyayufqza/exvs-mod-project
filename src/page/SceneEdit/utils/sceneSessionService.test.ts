@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { mapDaeImportConfigToBackend, type ImportConfig, type ImportResult, type SaveResult, type SceneOpenResult, type HavokDataResult } from "./sceneSessionService";
+import { mapDaeImportConfigToBackend, type ImportConfig, type ImportResult, type SaveResult, type SceneOpenResult, type HavokDataMeta } from "./sceneSessionService";
 import type { DaeImportConfig } from "../components/dae-import/daeImportTypes";
 import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
 
@@ -143,12 +143,11 @@ describe("sceneSessionService", () => {
       warnings: [],
     };
 
-    const havokDataResult: HavokDataResult = {
+    const havokDataMeta: HavokDataMeta = {
       sourceId: IMPORT_ID,
       displayName: "backpack_up",
       objectNodeId: IMPORT_ID,
       hktXml: "<hkpackfile><hksection name=\"__data__\"></hksection></hkpackfile>",
-      rawBytes: [0x57, 0xe0, 0xe0, 0x57],
     };
 
     beforeEach(() => {
@@ -196,12 +195,11 @@ describe("sceneSessionService", () => {
       expect(saveResult.warnings).toHaveLength(0);
     });
 
-    it("has correct HavokDataResult shape", () => {
-      expect(havokDataResult.sourceId).toBe(IMPORT_ID);
-      expect(havokDataResult.displayName).toBe("backpack_up");
-      expect(havokDataResult.objectNodeId).toBe(IMPORT_ID);
-      expect(havokDataResult.hktXml).toContain("hkpackfile");
-      expect(havokDataResult.rawBytes.length).toBeGreaterThan(0);
+    it("has correct HavokDataMeta shape", () => {
+      expect(havokDataMeta.sourceId).toBe(IMPORT_ID);
+      expect(havokDataMeta.displayName).toBe("backpack_up");
+      expect(havokDataMeta.objectNodeId).toBe(IMPORT_ID);
+      expect(havokDataMeta.hktXml).toContain("hkpackfile");
     });
 
     it("builds correct ImportConfig for full SSBH conversion pipeline", () => {

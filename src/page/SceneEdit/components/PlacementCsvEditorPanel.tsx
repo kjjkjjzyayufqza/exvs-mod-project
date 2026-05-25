@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -212,41 +212,37 @@ function PlacementRowChip({
     JSON.stringify(entry.rawFields) !== JSON.stringify(initialEntry.rawFields);
   const isNewRow = initialEntry === null;
   const nameField = getPlacementDisplayName(entry);
+  const vdkKey = (entry.vdkType?.toUpperCase() ?? "") as PlacementVdkType;
+  const Icon = VDK_TYPE_ICONS[vdkKey] ?? Box;
+  const label = VDK_TYPE_LABELS[vdkKey] ?? entry.vdkType ?? "Row";
 
   return (
     <button
       type="button"
       className={cn(
         "flex w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-sm border px-1.5 py-1 text-left transition-colors",
-        selected ? "border-primary/50 bg-primary/5" : "border-border/40 hover:bg-muted/20",
+        selected ? "border-primary/50 bg-primary/10" : "border-border/40 hover:bg-muted/20",
+        isNewRow && "border-l-2 border-l-green-500/60",
+        rowModified && !isNewRow && "border-l-2 border-l-yellow-500/60",
       )}
       onClick={() => onSelectEntry(index)}
     >
-      <Badge
-        variant={
-          entry.vdkType === "EFFECT"
-            ? "destructive"
-            : entry.vdkType === "SKY"
-              ? "outline"
-              : entry.vdkType === "PROP"
-                ? "default"
-                : "secondary"
-        }
-        className="h-5 shrink-0 px-1.5 text-[9px]"
-      >
-        {entry.vdkType || "ROW"}
-      </Badge>
+      <Icon className={cn(
+        "h-3.5 w-3.5 shrink-0",
+        vdkKey === "EFFECT" ? "text-amber-400" :
+        vdkKey === "SKY" ? "text-sky-400" :
+        vdkKey === "PROP" ? "text-purple-400" :
+        "text-muted-foreground",
+      )} />
       <span className="shrink-0 text-[10px] font-mono text-muted-foreground">#{index}</span>
-      {entry.objectNumber !== null && (
-        <span className="shrink-0 text-[10px] font-mono text-muted-foreground">obj {entry.objectNumber}</span>
-      )}
-      {nameField && (
-        <span className="min-w-0 truncate text-[10px] text-foreground/80" title={nameField}>
-          {nameField}
+      <span className="min-w-0 truncate text-[10px] text-foreground/80" title={nameField ?? label}>
+        {nameField ?? (entry.objectNumber !== null ? `${label} #${entry.objectNumber}` : label)}
+      </span>
+      {entry.objectNumber !== null && !nameField && entry.vdkType.toUpperCase() !== "OBJECT" && (
+        <span className="shrink-0 text-[9px] font-mono text-muted-foreground/60">
+          ({entry.posX.toFixed(0)}, {entry.posY.toFixed(0)}, {entry.posZ.toFixed(0)})
         </span>
       )}
-      {isNewRow && <span className="shrink-0 text-[9px] font-medium text-green-500">NEW</span>}
-      {rowModified && !isNewRow && <span className="shrink-0 text-[9px] font-medium text-yellow-500">MOD</span>}
     </button>
   );
 }

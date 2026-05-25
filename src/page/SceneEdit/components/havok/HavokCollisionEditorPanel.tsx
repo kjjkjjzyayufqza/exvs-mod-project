@@ -14,7 +14,7 @@ import {
 import {
   sceneConfigureImport,
   sceneGenerateHkt,
-  sceneGetHavokData,
+  sceneGetHavokMeta,
   sceneGetImportConfig,
   type ImportConfig,
 } from "../../utils/sceneSessionService";
@@ -113,7 +113,7 @@ export function HavokCollisionEditorPanel({
       };
       await sceneConfigureImport(sessionId, sessionImportId, nextConfig);
       await sceneGenerateHkt(sessionId, sessionImportId, "auto");
-      const havok = await sceneGetHavokData(sessionId, sessionImportId);
+      const havok = await sceneGetHavokMeta(sessionId, sessionImportId);
       if (havok && onHavokDataUpdated) {
         onHavokDataUpdated(havok.sourceId, parseHavokXML(havok.hktXml));
       }

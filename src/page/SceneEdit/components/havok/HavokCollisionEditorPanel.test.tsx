@@ -23,10 +23,9 @@ vi.mock("@/utils/havokXmlParser", () => ({
 vi.mock("../../utils/sceneSessionService", () => ({
   sceneConfigureImport: vi.fn().mockResolvedValue(undefined),
   sceneGenerateHkt: vi.fn().mockResolvedValue(true),
-  sceneGetHavokData: vi.fn().mockResolvedValue({
+  sceneGetHavokMeta: vi.fn().mockResolvedValue({
     sourceId: "import-1",
     hktXml: "<hkpackfile/>",
-    rawBytes: [1, 2, 3],
   }),
   sceneGetImportConfig: vi.fn().mockResolvedValue({
     loadToScene: false,
@@ -53,7 +52,7 @@ import { parseHavokXML } from "@/utils/havokXmlParser";
 import {
   sceneConfigureImport,
   sceneGenerateHkt,
-  sceneGetHavokData,
+  sceneGetHavokMeta,
 } from "../../utils/sceneSessionService";
 
 const defaultHktSimplify = {
@@ -101,7 +100,7 @@ describe("HavokCollisionEditorPanel", () => {
         expect.objectContaining({ generateHkt: true }),
       );
       expect(sceneGenerateHkt).toHaveBeenCalledWith("session-1", "import-1", "auto");
-      expect(sceneGetHavokData).toHaveBeenCalledWith("session-1", "import-1");
+      expect(sceneGetHavokMeta).toHaveBeenCalledWith("session-1", "import-1");
       expect(parseHavokXML).toHaveBeenCalledWith("<hkpackfile/>");
       expect(onHavokDataUpdated).toHaveBeenCalledWith("import-1", mockMeshData);
     });

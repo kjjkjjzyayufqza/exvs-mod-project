@@ -155,8 +155,9 @@ import { executeSaveFolderPipeline } from "./utils/sceneSaveFolderPipeline";
 import { executeSaveFhm2dPipeline } from "./utils/sceneSaveFhm2dPipeline";
 import { SaveProgressDialog, type SaveStepInfo } from "./components/SaveProgressDialog";
 import { SaveConfirmDialog } from "./components/SaveConfirmDialog";
-import { DeleteConfirmDialog } from "./components/DeleteConfirmDialog";
+import { DeleteConfirmDialog, type DeleteConfirmMeta } from "./components/DeleteConfirmDialog";
 import type { DeleteConfirmation } from "./utils/sceneDeleteConfirm";
+import { buildDeletePreview, buildBaseDeletePreview } from "./utils/sceneDeleteConfirm";
 import {
   buildSaveChangePreview,
   buildSaveResultSummary,
@@ -179,11 +180,13 @@ import {
   sceneSaveAsFolder,
   sceneRepackInPlace,
   sceneOpenFolder,
-  sceneListHavokData,
+  sceneListHavokMeta,
   sceneConfigureImport,
   sceneGenerateHkt,
-  sceneGetHavokData,
+  sceneGetHavokMeta,
   sceneGetImportConfig,
+  sceneRemoveImport,
+  sceneRemoveHavokData,
   stageLoadSkeleton,
   stageStreamBundles,
   type StageSkeleton,
@@ -366,6 +369,7 @@ export default function SceneEdit() {
   const [deleteConfirmState, setDeleteConfirmState] = useState<{
     open: boolean;
     preview: DeleteConfirmation | null;
+    meta?: DeleteConfirmMeta;
     resolve: ((confirmed: boolean) => void) | null;
   }>({ open: false, preview: null, resolve: null });
 
@@ -1077,7 +1081,7 @@ export default function SceneEdit() {
       sceneOpenFolder(stageRoot).then(async (result) => {
         setSceneSessionId(result.sessionId);
         try {
-          const havokList = await sceneListHavokData(result.sessionId);
+          const havokList = await sceneListHavokMeta(result.sessionId);
           if (havokList.length > 0) {
             const map = new Map<string, HavokMeshData>();
             const meta = new Map<string, { displayName: string; objectNodeId: string | null }>();
@@ -1086,8 +1090,8 @@ export default function SceneEdit() {
                 const meshData = parseHavokXML(item.hktXml);
                 map.set(item.sourceId, meshData);
                 meta.set(item.sourceId, { displayName: item.displayName, objectNodeId: item.objectNodeId });
-              } catch (e) {
-                console.warn(`[Havok] Failed to parse ${item.sourceId}:`, e);
+              } catch {
+                // skip unparseable collision mesh
               }
             }
             setHavokMeshDataMap(map);
@@ -2520,7 +2524,7 @@ export default function SceneEdit() {
                   result.hktDetail ??
                   "Mesh collision stored in session memory.",
               });
-              const havokResult = await sceneGetHavokData(activeSessionId, result.importId);
+              const havokResult = await sceneGetHavokMeta(activeSessionId, result.importId);
               if (havokResult) {
                 const meshData = parseHavokXML(havokResult.hktXml);
                 setHavokMeshDataMap((prev) => {
@@ -2672,7 +2676,7 @@ export default function SceneEdit() {
   }, [daeExportDialog]);
 
   const handleDeleteSelected = useCallback(
-    (ids?: string[]) => {
+    async (ids?: string[]) => {
       const requestedIds = getRequestedSceneNodeIds({
         explicitIds: ids,
         storeSelectedIds: useSceneEditorStore.getState().getSelectedIds(),
@@ -2686,32 +2690,123 @@ export default function SceneEdit() {
         return;
       }
 
+      // Branch 1: Imported DAE objects
       const daeIds = requestedIds.filter((id) => importedDaeObjects.some((obj) => obj.id === id));
       if (daeIds.length > 0) {
         const deleted = importedDaeObjects.filter((obj) => daeIds.includes(obj.id));
         setImportedDaeObjects((prev) => prev.filter((obj) => !daeIds.includes(obj.id)));
-        // Remove asset configs
         daeIds.forEach((id) => useSceneAssetStore.getState().removeAsset(id));
+        // Backend cleanup: remove import + havok data
+        if (sceneSessionId) {
+          for (const obj of deleted) {
+            if (obj.sessionImportId) {
+              sceneRemoveImport(sceneSessionId, obj.sessionImportId).catch(() => {});
+              sceneRemoveHavokData(sceneSessionId, obj.sessionImportId).catch(() => {});
+            }
+          }
+        }
+        // Remove havok state
+        setHavokMeshDataMap((prev) => {
+          const next = new Map(prev);
+          for (const obj of deleted) {
+            if (obj.sessionImportId) next.delete(obj.sessionImportId);
+          }
+          return next;
+        });
+        setHavokMetaMap((prev) => {
+          const next = new Map(prev);
+          for (const obj of deleted) {
+            if (obj.sessionImportId) next.delete(obj.sessionImportId);
+          }
+          return next;
+        });
         useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         handleClearSelection();
-        useSceneEditorStore.getState().recordCommand({
-          type: "delete-dae",
-          description: "Delete imported DAE actor",
-          undo: () => {
-            setImportedDaeObjects((prev) => [...prev, ...deleted]);
-            handleSelectNode(deleted[0]?.id ?? null);
-            useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
-          },
-          redo: () => {
-            setImportedDaeObjects((prev) => prev.filter((obj) => !daeIds.includes(obj.id)));
-            handleClearSelection();
-            useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
-          },
-        });
         toast.success(`Deleted ${deleted.length} DAE object(s)`);
         return;
       }
 
+      // Branch 2: Sub-model deletion
+      const subModelIds = requestedIds.filter((id) =>
+        subModels.some((s) => s.folderName === id),
+      );
+      if (subModelIds.length > 0 && stageRoot) {
+        const preview = await buildDeletePreview(stageRoot, subModelIds);
+        // Count affected placements
+        let placementCount = 0;
+        for (const folderId of subModelIds) {
+          const sub = subModels.find((s) => s.folderName === folderId);
+          if (sub) {
+            placementCount += placementEntries.filter(
+              (e) => e.vdkType.toUpperCase() === "OBJECT" && e.objectNumber === sub.objectIndex,
+            ).length;
+          }
+        }
+        const confirmed = await new Promise<boolean>((resolve) => {
+          setDeleteConfirmState({
+            open: true,
+            preview,
+            meta: { placementCount },
+            resolve,
+          });
+        });
+        if (!confirmed) return;
+
+        // Mark for Phase 1 deletion at save time
+        for (const folderId of subModelIds) {
+          useSceneDirtyStore.getState().markObjectDeleted(folderId);
+        }
+        // Remove placement entries matching deleted sub-models
+        const deletedObjectIndices = new Set(
+          subModelIds
+            .map((id) => subModels.find((s) => s.folderName === id)?.objectIndex)
+            .filter((v): v is number => v != null),
+        );
+        setPlacementEntries((prev) =>
+          prev.filter(
+            (e) => !(e.vdkType.toUpperCase() === "OBJECT" && deletedObjectIndices.has(e.objectNumber ?? -1)),
+          ),
+        );
+        // Remove from tree
+        setTreeRoot((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            children: prev.children?.filter((c) => !subModelIds.includes(c.id)),
+          };
+        });
+        // Remove from subModels state
+        setSubModels((prev) => prev.filter((s) => !subModelIds.includes(s.folderName)));
+        useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
+        handleClearSelection();
+        toast.success(`Deleted ${subModelIds.length} sub-model(s)`);
+        return;
+      }
+
+      // Branch 3: Base model deletion
+      const hasBase = requestedIds.includes("base");
+      if (hasBase && stageRoot) {
+        const preview = await buildBaseDeletePreview(stageRoot);
+        const confirmed = await new Promise<boolean>((resolve) => {
+          setDeleteConfirmState({ open: true, preview, resolve });
+        });
+        if (!confirmed) return;
+
+        useSceneDirtyStore.getState().markObjectDeleted("base");
+        setBaseModel(null);
+        setTreeRoot((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            children: prev.children?.filter((c) => c.role !== "base"),
+          };
+        });
+        handleClearSelection();
+        toast.success("Base model marked for deletion");
+        return;
+      }
+
+      // Branch 4: Placement rows (existing behavior)
       const placementIndices = requestedIds
         .map(placementIndexForNodeId)
         .filter((value): value is number => value !== null);
@@ -2766,13 +2861,14 @@ export default function SceneEdit() {
     [
       handleClearSelection,
       hasLockedOrHiddenNode,
-      handleSelectNode,
       importedDaeObjects,
       nodeIdForPlacementIndex,
       placementEntries,
       placementIndexForNodeId,
+      sceneSessionId,
       selectedNodeId,
       selectedPlacementIdx,
+      stageRoot,
       subModels,
     ],
   );
@@ -2828,7 +2924,7 @@ export default function SceneEdit() {
             ),
           );
           await sceneGenerateHkt(sceneSessionId, sessionImportId, "auto");
-          const havokResult = await sceneGetHavokData(sceneSessionId, sessionImportId);
+          const havokResult = await sceneGetHavokMeta(sceneSessionId, sessionImportId);
           if (havokResult) {
             const meshData = parseHavokXML(havokResult.hktXml);
             setHavokMeshDataMap((prev) => {
@@ -3540,6 +3636,7 @@ export default function SceneEdit() {
         <DeleteConfirmDialog
           open={deleteConfirmState.open}
           preview={deleteConfirmState.preview}
+          meta={deleteConfirmState.meta}
           onConfirm={handleDeleteConfirmAccept}
           onCancel={handleDeleteConfirmCancel}
         />

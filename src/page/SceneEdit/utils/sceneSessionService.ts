@@ -57,14 +57,6 @@ export interface SaveResult {
   warnings: string[];
 }
 
-export interface HavokDataResult {
-  sourceId: string;
-  displayName: string;
-  objectNodeId: string | null;
-  hktXml: string;
-  rawBytes: number[];
-}
-
 export function sceneSessionCreate(source: SceneSource): Promise<string> {
   return invoke<string>("scene_session_create", { source });
 }
@@ -103,6 +95,10 @@ export function sceneConfigureImport(
 
 export function sceneRemoveImport(sessionId: string, importId: string): Promise<void> {
   return invoke<void>("scene_remove_import", { sessionId, importId });
+}
+
+export function sceneRemoveHavokData(sessionId: string, sourceId: string): Promise<void> {
+  return invoke<void>("scene_remove_havok_data", { sessionId, sourceId });
 }
 
 export function sceneExecuteImport(sessionId: string, importId: string): Promise<ImportResult> {
@@ -162,15 +158,29 @@ export function sceneGetImportConfig(
   });
 }
 
-export function sceneGetHavokData(
-  sessionId: string,
-  sourceId: string,
-): Promise<HavokDataResult | null> {
-  return invoke<HavokDataResult | null>("scene_get_havok_data", { sessionId, sourceId });
+export interface HavokDataMeta {
+  sourceId: string;
+  displayName: string;
+  objectNodeId: string | null;
+  hktXml: string;
 }
 
-export function sceneListHavokData(sessionId: string): Promise<HavokDataResult[]> {
-  return invoke<HavokDataResult[]>("scene_list_havok_data", { sessionId });
+export function sceneGetHavokMeta(
+  sessionId: string,
+  sourceId: string,
+): Promise<HavokDataMeta | null> {
+  return invoke<HavokDataMeta | null>("scene_get_havok_meta", { sessionId, sourceId });
+}
+
+export function sceneListHavokMeta(sessionId: string): Promise<HavokDataMeta[]> {
+  return invoke<HavokDataMeta[]>("scene_list_havok_meta", { sessionId });
+}
+
+export function sceneGetHavokRawBytes(
+  sessionId: string,
+  sourceId: string,
+): Promise<ArrayBuffer> {
+  return invoke<ArrayBuffer>("scene_get_havok_raw_bytes", { sessionId, sourceId });
 }
 
 export function sceneSaveAsFolder(sessionId: string, outputPath: string): Promise<SaveResult> {

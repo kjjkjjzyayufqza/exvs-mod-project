@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
-import { Plus, Trash2, RotateCcw } from "lucide-react";
+import { Plus, Trash2, RotateCcw, ChevronRight } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -37,6 +37,45 @@ interface GraphicParamPanelProps {
   onResetValue: (index: number) => void;
 }
 
+// ─── Auto-categorization by key prefix ───
+
+interface CategoryDef {
+  id: string;
+  label: string;
+  match: (key: string) => boolean;
+}
+
+const CATEGORIES: CategoryDef[] = [
+  {
+    id: "lighting",
+    label: "Lighting",
+    match: (k) => /^(light_|sun_|shadow_|ambient_)/.test(k),
+  },
+  {
+    id: "postprocess",
+    label: "Post Process",
+    match: (k) => /^(bloom_|dof_|fog_|tonemap_|exposure_|vignette_)/.test(k),
+  },
+  {
+    id: "color",
+    label: "Color Grading",
+    match: (k) => /^(color_|curveedit_|saturation_|contrast_)/.test(k),
+  },
+  {
+    id: "misc",
+    label: "Misc",
+    match: () => true,
+  },
+];
+
+function categorizeParam(key: string): string {
+  const lower = key.toLowerCase();
+  for (const cat of CATEGORIES) {
+    if (cat.id !== "misc" && cat.match(lower)) return cat.id;
+  }
+  return "misc";
+}
+
 function numericConfig(key: string, value: string): { value: number; min: number; max: number; step: number } | null {
   const n = Number.parseFloat(value);
   if (!Number.isFinite(n)) return null;
@@ -56,6 +95,10 @@ function numericConfig(key: string, value: string): { value: number; min: number
   return { value: n, min: Math.min(-10000, n), max: Math.max(10000, n), step: 0.1 };
 }
 
+interface IndexedParam extends GraphicParam {
+  originalIndex: number;
+}
+
 export function GraphicParamPanel({
   params,
   initialParams,
@@ -70,6 +113,7 @@ export function GraphicParamPanel({
   onResetValue,
 }: GraphicParamPanelProps) {
   const [filter, setFilter] = useState("");
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(() => new Set());
 
   const initialMap = useMemo(() => {
     if (!initialParams) return null;
@@ -78,13 +122,30 @@ export function GraphicParamPanel({
     return m;
   }, [initialParams]);
 
-  const filteredParams = useMemo(() => {
-    if (!filter) return params.map((p, i) => ({ ...p, originalIndex: i }));
+  const grouped = useMemo(() => {
     const lower = filter.toLowerCase();
-    return params
+    const indexed: IndexedParam[] = params
       .map((p, i) => ({ ...p, originalIndex: i }))
-      .filter((p) => p.key.toLowerCase().includes(lower));
+      .filter((p) => !lower || p.key.toLowerCase().includes(lower));
+
+    const groups = new Map<string, IndexedParam[]>();
+    for (const p of indexed) {
+      const catId = categorizeParam(p.key);
+      const arr = groups.get(catId) ?? [];
+      arr.push(p);
+      groups.set(catId, arr);
+    }
+    return groups;
   }, [params, filter]);
+
+  const toggleCategory = (id: string) => {
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   if (params.length === 0) {
     return (
@@ -116,90 +177,145 @@ export function GraphicParamPanel({
         />
       )}
 
-      <div className="space-y-1.5">
-        {filteredParams.map((p) => {
-          const applied = appliedKeys.has(p.key);
-          const slider = numericConfig(p.key, p.value);
-          const originalValue = initialMap?.get(p.key);
-          const valueModified = originalValue !== undefined && p.value !== originalValue;
+      <div className="space-y-1">
+        {CATEGORIES.map((cat) => {
+          const items = grouped.get(cat.id);
+          if (!items || items.length === 0) return null;
+          const collapsed = collapsedCategories.has(cat.id);
           return (
-            <div
-              key={`${p.key}-${p.originalIndex}`}
-              className={cn(
-                "min-w-0 space-y-1.5 rounded-sm border border-transparent px-1 py-1.5 hover:bg-muted/40 group",
-                applied && "border-primary/30 bg-primary/5",
-                valueModified && "bg-yellow-500/10",
+            <div key={cat.id}>
+              <button
+                type="button"
+                className="flex w-full items-center gap-1 rounded-sm px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/40"
+                onClick={() => toggleCategory(cat.id)}
+              >
+                <ChevronRight
+                  className={cn("h-3 w-3 transition-transform", !collapsed && "rotate-90")}
+                />
+                {cat.label}
+                <span className="ml-auto font-mono text-[9px] opacity-60">{items.length}</span>
+              </button>
+              {!collapsed && (
+                <div className="ml-1 space-y-1 border-l border-border/30 pl-2 pt-1">
+                  {items.map((p) => (
+                    <ParamRow
+                      key={`${p.key}-${p.originalIndex}`}
+                      param={p}
+                      applied={appliedKeys.has(p.key)}
+                      initialMap={initialMap}
+                      onValueChange={onValueChange}
+                      onKeyChange={onKeyChange}
+                      onDelete={onDelete}
+                      onToggleApplied={onToggleApplied}
+                      onResetValue={onResetValue}
+                    />
+                  ))}
+                </div>
               )}
-            >
-              <div className="flex min-w-0 items-center gap-1.5">
-                <Checkbox
-                  checked={applied}
-                  onCheckedChange={(checked) => onToggleApplied(p.key, !!checked)}
-                  className="h-4 w-4 shrink-0"
-                />
-                <Input
-                  className={`${PROP_INPUT} flex-1`}
-                  value={p.key}
-                  onChange={(e) => onKeyChange(p.originalIndex, e.target.value)}
-                />
-                {valueModified && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        className={`inline-flex ${PROP_BTN_ICON} items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground`}
-                        onClick={() => onResetValue(p.originalIndex)}
-                      >
-                        <RotateCcw className="h-3 w-3" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-[10px]">Reset to: {originalValue}</TooltipContent>
-                  </Tooltip>
-                )}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className={`${PROP_BTN_ICON} text-muted-foreground hover:text-destructive`}
-                  onClick={() => onDelete(p.originalIndex)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-              <div className="min-w-0 space-y-1.5">
-                <Input
-                  className={PROP_INPUT}
-                  value={p.value}
-                  inputMode={slider ? "decimal" : "text"}
-                  onChange={(e) => {
-                    const next = slider
-                      ? sanitizeDecimalInput(e.target.value)
-                      : e.target.value;
-                    onValueChange(p.originalIndex, next);
-                  }}
-                  onBlur={(e) => {
-                    if (!slider) return;
-                    const next = commitDecimalInput(
-                      e.target.value,
-                      originalValue ?? p.value,
-                    );
-                    if (next !== p.value) onValueChange(p.originalIndex, next);
-                  }}
-                />
-                {slider && (
-                  <Slider
-                    className="w-full"
-                    value={[slider.value]}
-                    min={slider.min}
-                    max={slider.max}
-                    step={slider.step}
-                    onValueChange={(values) => onValueChange(p.originalIndex, String(values[0] ?? slider.value))}
-                  />
-                )}
-              </div>
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function ParamRow({
+  param: p,
+  applied,
+  initialMap,
+  onValueChange,
+  onKeyChange,
+  onDelete,
+  onToggleApplied,
+  onResetValue,
+}: {
+  param: IndexedParam;
+  applied: boolean;
+  initialMap: Map<string, string> | null;
+  onValueChange: (index: number, value: string) => void;
+  onKeyChange: (index: number, key: string) => void;
+  onDelete: (index: number) => void;
+  onToggleApplied: (key: string, applied: boolean) => void;
+  onResetValue: (index: number) => void;
+}) {
+  const slider = numericConfig(p.key, p.value);
+  const originalValue = initialMap?.get(p.key);
+  const valueModified = originalValue !== undefined && p.value !== originalValue;
+
+  return (
+    <div
+      className={cn(
+        "min-w-0 space-y-1.5 rounded-sm border border-transparent px-1 py-1.5 hover:bg-muted/40 group",
+        applied && "border-primary/30 bg-primary/5",
+        valueModified && "bg-yellow-500/10",
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-1.5">
+        <Checkbox
+          checked={applied}
+          onCheckedChange={(checked) => onToggleApplied(p.key, !!checked)}
+          className="h-4 w-4 shrink-0"
+        />
+        <Input
+          className={`${PROP_INPUT} flex-1`}
+          value={p.key}
+          onChange={(e) => onKeyChange(p.originalIndex, e.target.value)}
+        />
+        {valueModified && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className={`inline-flex ${PROP_BTN_ICON} items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground`}
+                onClick={() => onResetValue(p.originalIndex)}
+              >
+                <RotateCcw className="h-3 w-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-[10px]">Reset to: {originalValue}</TooltipContent>
+          </Tooltip>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className={`${PROP_BTN_ICON} text-muted-foreground hover:text-destructive`}
+          onClick={() => onDelete(p.originalIndex)}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+      <div className="min-w-0 space-y-1.5">
+        <Input
+          className={PROP_INPUT}
+          value={p.value}
+          inputMode={slider ? "decimal" : "text"}
+          onChange={(e) => {
+            const next = slider
+              ? sanitizeDecimalInput(e.target.value)
+              : e.target.value;
+            onValueChange(p.originalIndex, next);
+          }}
+          onBlur={(e) => {
+            if (!slider) return;
+            const next = commitDecimalInput(
+              e.target.value,
+              originalValue ?? p.value,
+            );
+            if (next !== p.value) onValueChange(p.originalIndex, next);
+          }}
+        />
+        {slider && (
+          <Slider
+            className="w-full"
+            value={[slider.value]}
+            min={slider.min}
+            max={slider.max}
+            step={slider.step}
+            onValueChange={(values) => onValueChange(p.originalIndex, String(values[0] ?? slider.value))}
+          />
+        )}
       </div>
     </div>
   );

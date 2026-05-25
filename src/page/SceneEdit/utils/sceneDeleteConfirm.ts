@@ -70,3 +70,51 @@ export async function executeDelete(
     await remove(folderPath, { recursive: true });
   }
 }
+
+const BASE_SSBH_EXTENSIONS = ["numdlb", "numshb", "numshexb", "nusktb", "numatb"];
+
+export async function buildBaseDeletePreview(
+  stageRoot: string,
+): Promise<DeleteConfirmation> {
+  const previews: DeletePreview[] = [];
+  let totalFiles = 0;
+  let totalSizeBytes = 0;
+
+  const entries = await readDir(stageRoot);
+  const rootFiles: { name: string; size: number }[] = [];
+  for (const entry of entries) {
+    if (entry.isDirectory) continue;
+    const ext = entry.name.split(".").pop()?.toLowerCase() ?? "";
+    if (BASE_SSBH_EXTENSIONS.includes(ext)) {
+      const fullPath = await join(stageRoot, entry.name);
+      const info = await stat(fullPath);
+      rootFiles.push({ name: entry.name, size: info.size });
+    }
+  }
+
+  if (rootFiles.length > 0) {
+    const folderSize = rootFiles.reduce((sum, f) => sum + f.size, 0);
+    previews.push({
+      folderName: "(base model)",
+      folderPath: stageRoot,
+      files: rootFiles.map((f) => f.name),
+      totalSizeBytes: folderSize,
+    });
+    totalFiles += rootFiles.length;
+    totalSizeBytes += folderSize;
+  }
+
+  return { previews, totalFiles, totalSizeBytes };
+}
+
+export async function executeBaseDelete(stageRoot: string): Promise<void> {
+  const entries = await readDir(stageRoot);
+  for (const entry of entries) {
+    if (entry.isDirectory) continue;
+    const ext = entry.name.split(".").pop()?.toLowerCase() ?? "";
+    if (BASE_SSBH_EXTENSIONS.includes(ext)) {
+      const fullPath = await join(stageRoot, entry.name);
+      await remove(fullPath);
+    }
+  }
+}

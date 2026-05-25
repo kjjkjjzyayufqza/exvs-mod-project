@@ -21,7 +21,7 @@ import {
 import {
   resolveStagePackStructureTarget,
 } from "./sceneStageStructure";
-import { buildDeletePreview, executeDelete } from "./sceneDeleteConfirm";
+import { buildDeletePreview, executeDelete, executeBaseDelete } from "./sceneDeleteConfirm";
 import {
   sceneSaveAsFolder,
   sceneImportDae,
@@ -198,21 +198,29 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
   const deletedObjects = dirtyStore.getDeletedObjects();
   if (deletedObjects.length > 0) {
     emitStep(onProgress, "delete", "Checking for deletions...", "running");
-    const preview = await buildDeletePreview(stageRoot, deletedObjects);
-    const confirmed = await onDeleteConfirm(preview);
-    if (!confirmed) {
-      emitStep(onProgress, "delete", "Checking for deletions...", "error", undefined, "Delete cancelled by user");
-      return {
-        success: false,
-        convertedCount: 0,
-        failedCount: 0,
-        failedNames: [],
-        deletedCount: 0,
-        migratedTextures: 0,
-        reloadedBundle: null,
-      };
+    const hasBase = deletedObjects.includes("base");
+    const folderDeletions = deletedObjects.filter((name) => name !== "base");
+
+    if (folderDeletions.length > 0) {
+      const preview = await buildDeletePreview(stageRoot, folderDeletions);
+      const confirmed = await onDeleteConfirm(preview);
+      if (!confirmed) {
+        emitStep(onProgress, "delete", "Checking for deletions...", "error", undefined, "Delete cancelled by user");
+        return {
+          success: false,
+          convertedCount: 0,
+          failedCount: 0,
+          failedNames: [],
+          deletedCount: 0,
+          migratedTextures: 0,
+          reloadedBundle: null,
+        };
+      }
+      await executeDelete(stageRoot, folderDeletions);
     }
-    await executeDelete(stageRoot, deletedObjects);
+    if (hasBase) {
+      await executeBaseDelete(stageRoot);
+    }
     deletedCount = deletedObjects.length;
     emitStep(onProgress, "delete", "Checking for deletions...", "done", `${deletedCount} deleted`);
   } else {

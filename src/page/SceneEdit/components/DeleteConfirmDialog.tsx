@@ -18,9 +18,15 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+export interface DeleteConfirmMeta {
+  placementCount?: number;
+  hasHktData?: boolean;
+}
+
 interface DeleteConfirmDialogProps {
   open: boolean;
   preview: DeleteConfirmation | null;
+  meta?: DeleteConfirmMeta;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -28,6 +34,7 @@ interface DeleteConfirmDialogProps {
 export function DeleteConfirmDialog({
   open,
   preview,
+  meta,
   onConfirm,
   onCancel,
 }: DeleteConfirmDialogProps) {
@@ -62,6 +69,17 @@ export function DeleteConfirmDialog({
             ))}
           </div>
         </ScrollArea>
+
+        {(meta?.placementCount != null && meta.placementCount > 0 || meta?.hasHktData) && (
+          <div className="text-xs text-muted-foreground space-y-1 px-1">
+            {meta?.placementCount != null && meta.placementCount > 0 && (
+              <p>{meta.placementCount} placement entry(ies) will also be removed.</p>
+            )}
+            {meta?.hasHktData && (
+              <p>Associated HKT collision data will also be removed.</p>
+            )}
+          </div>
+        )}
 
         <AlertDialogFooter>
           <AlertDialogCancel type="button" onClick={onCancel}>

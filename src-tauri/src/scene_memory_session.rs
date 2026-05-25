@@ -240,6 +240,17 @@ impl SceneMemorySession {
         self.havok_data.iter().find(|d| d.source_id == source_id)
     }
 
+    pub fn remove_havok_data(&mut self, source_id: &str) -> Result<(), String> {
+        let idx = self
+            .havok_data
+            .iter()
+            .position(|d| d.source_id == source_id)
+            .ok_or_else(|| format!("HavokData '{source_id}' not found in session"))?;
+        self.havok_data.remove(idx);
+        self.dirty = true;
+        Ok(())
+    }
+
     pub fn collect_save_artifacts(&self) -> Vec<SaveArtifact> {
         let mut artifacts = Vec::new();
 

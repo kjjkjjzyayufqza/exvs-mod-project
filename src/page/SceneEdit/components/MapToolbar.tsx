@@ -17,6 +17,7 @@ import {
   Maximize,
   Sparkles,
   SlidersHorizontal,
+  MoreHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +29,13 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 import type { PlacementGizmoMode } from "./MapViewport";
@@ -119,54 +127,42 @@ export function MapToolbar({
 }: MapToolbarProps) {
   return (
     <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b bg-muted/20 px-1.5 py-0.5">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={onImportFhm2d}
-            disabled={isLoading}
-            aria-label="Import FHM2D"
-          >
-            <FileArchive className="h-3.5 w-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">Import .fhm2d (load into editor)</TooltipContent>
-      </Tooltip>
+      {/* ─── File Operations Group ─── */}
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 gap-1 px-2 text-[10px]"
+                disabled={isLoading}
+              >
+                <FolderOpen className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">File</span>
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Open / Import stage</TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent align="start" className="text-xs">
+          <DropdownMenuItem onClick={onOpenFolder}>
+            <FolderOpen className="mr-2 h-3.5 w-3.5" />
+            Open Stage Folder
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onImportFhm2d}>
+            <FileArchive className="mr-2 h-3.5 w-3.5" />
+            Import .fhm2d
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onExtractFhm2d}>
+            <PackageOpen className="mr-2 h-3.5 w-3.5" />
+            Extract .fhm2d to folder
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={onExtractFhm2d}
-            disabled={isLoading}
-            aria-label="Extract FHM2D to folder"
-          >
-            <PackageOpen className="h-3.5 w-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">Extract .fhm2d to editable folder</TooltipContent>
-      </Tooltip>
-
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={onOpenFolder}
-            disabled={isLoading}
-            aria-label="Open stage folder"
-          >
-            <FolderOpen className="h-3.5 w-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">Open extracted stage folder</TooltipContent>
-      </Tooltip>
-
+      {/* Save button — always visible with unsaved indicator */}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -189,24 +185,9 @@ export function MapToolbar({
         <TooltipContent side="bottom">Save changes to folder</TooltipContent>
       </Tooltip>
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={onSaveFhm2d}
-            disabled={!canSave || isLoading}
-            aria-label="Save as FHM2D"
-          >
-            <HardDriveDownload className="h-3.5 w-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">Repack and save as .fhm2d</TooltipContent>
-      </Tooltip>
-
       <Separator orientation="vertical" className="h-4 mx-0.5" />
 
+      {/* ─── Import / Export Group ─── */}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -220,7 +201,7 @@ export function MapToolbar({
             <Upload className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Import DAE object(s)</TooltipContent>
+        <TooltipContent side="bottom">Import DAE</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -236,11 +217,12 @@ export function MapToolbar({
             <Download className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Export selected DAE object(s)</TooltipContent>
+        <TooltipContent side="bottom">Export selected DAE</TooltipContent>
       </Tooltip>
 
       <Separator orientation="vertical" className="h-4 mx-0.5" />
 
+      {/* ─── Transform Gizmo Group ─── */}
       <div className="flex items-center rounded-sm overflow-hidden border border-border/60">
         {GIZMO_MODES.map(({ key, mode, label, icon: Icon }) => (
           <Tooltip key={mode}>
@@ -269,8 +251,6 @@ export function MapToolbar({
           </Tooltip>
         ))}
       </div>
-
-      <Separator orientation="vertical" className="h-4 mx-0.5" />
 
       <Popover>
         <Tooltip>
@@ -310,6 +290,7 @@ export function MapToolbar({
 
       <Separator orientation="vertical" className="h-4 mx-0.5" />
 
+      {/* ─── Viewport Display Group ─── */}
       <div className="flex items-center gap-0.5">
         <Tooltip>
           <TooltipTrigger asChild>
@@ -370,10 +351,26 @@ export function MapToolbar({
           </TooltipTrigger>
           <TooltipContent side="bottom">Stats</TooltipContent>
         </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={animeRenderEnabled ? "secondary" : "ghost"}
+              size="icon"
+              className={cn("h-6 w-6", animeRenderEnabled && "text-pink-400")}
+              onClick={() => onToggleAnimeRender(!animeRenderEnabled)}
+              aria-label={animeRenderEnabled ? "Disable anime render" : "Enable anime render"}
+            >
+              <Sparkles className="h-3 w-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Anime render</TooltipContent>
+        </Tooltip>
       </div>
 
       <Separator orientation="vertical" className="h-4 mx-0.5" />
 
+      {/* ─── View Mode / Collision Group ─── */}
       <HavokViewModeToggle
         value={viewMode}
         onChange={onViewModeChange}
@@ -388,53 +385,34 @@ export function MapToolbar({
 
       <Separator orientation="vertical" className="h-4 mx-0.5" />
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant={animeRenderEnabled ? "secondary" : "ghost"}
-            size="icon"
-            className={cn("h-6 w-6", animeRenderEnabled && "text-pink-400")}
-            onClick={() => onToggleAnimeRender(!animeRenderEnabled)}
-            aria-label={animeRenderEnabled ? "Disable anime render" : "Enable anime render"}
-          >
-            <Sparkles className="h-3 w-3" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">Anime render</TooltipContent>
-      </Tooltip>
-
-      <Separator orientation="vertical" className="h-4 mx-0.5" />
-
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={onResetCamera}
-            aria-label="Reset camera"
-          >
-            <RotateCcw className="h-3 w-3" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">Reset Camera</TooltipContent>
-      </Tooltip>
-
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={onClearCache}
-            disabled={clearCacheDisabled}
-            aria-label="Clear scene memory and caches"
-          >
-            <Eraser className="h-3 w-3" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">Clear cache</TooltipContent>
-      </Tooltip>
+      {/* ─── Overflow Menu (low-frequency actions) ─── */}
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-6 w-6">
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">More actions</TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent align="end" className="text-xs">
+          <DropdownMenuItem onClick={onSaveFhm2d} disabled={!canSave || isLoading}>
+            <HardDriveDownload className="mr-2 h-3.5 w-3.5" />
+            Repack as .fhm2d
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onResetCamera}>
+            <RotateCcw className="mr-2 h-3.5 w-3.5" />
+            Reset Camera
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onClearCache} disabled={clearCacheDisabled}>
+            <Eraser className="mr-2 h-3.5 w-3.5" />
+            Clear Cache
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <div className="flex-1" />
 

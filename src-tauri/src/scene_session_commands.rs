@@ -70,16 +70,6 @@ pub struct SaveResult {
     pub warnings: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HavokDataResult {
-    pub source_id: String,
-    pub display_name: String,
-    pub object_node_id: Option<String>,
-    pub hkt_xml: String,
-    pub raw_bytes: Vec<u8>,
-}
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecuteImportOptions {
@@ -217,6 +207,18 @@ pub fn scene_remove_import(
     state
         .with_session_mut(&session_id, |s| s.remove_import(&import_id))
         .inspect_err(|e| eprintln!("[scene_remove_import] failed: {}", e))
+}
+
+#[tauri::command]
+pub fn scene_remove_havok_data(
+    state: State<'_, SceneSessionState>,
+    session_id: String,
+    source_id: String,
+) -> Result<(), String> {
+    eprintln!("[scene_remove_havok_data] session_id={} source_id={}", session_id, source_id);
+    state
+        .with_session_mut(&session_id, |s| s.remove_havok_data(&source_id))
+        .inspect_err(|e| eprintln!("[scene_remove_havok_data] failed: {}", e))
 }
 
 #[tauri::command]
@@ -750,6 +752,66 @@ pub async fn scene_generate_hkt(
     Ok(true)
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HavokDataMeta {
+    pub source_id: String,
+    pub display_name: String,
+    pub object_node_id: Option<String>,
+    pub hkt_xml: String,
+}
+
+impl From<&HavokCollisionData> for HavokDataMeta {
+    fn from(d: &HavokCollisionData) -> Self {
+        Self {
+            source_id: d.source_id.clone(),
+            display_name: d.display_name.clone(),
+            object_node_id: d.object_node_id.clone(),
+            hkt_xml: d.hkt_xml.clone(),
+        }
+    }
+}
+
+#[tauri::command]
+pub fn scene_get_havok_meta(
+    state: State<'_, SceneSessionState>,
+    session_id: String,
+    source_id: String,
+) -> Result<Option<HavokDataMeta>, String> {
+    state.with_session(&session_id, |s| {
+        Ok(s.get_havok_data(&source_id).map(HavokDataMeta::from))
+    })
+}
+
+#[tauri::command]
+pub fn scene_list_havok_meta(
+    state: State<'_, SceneSessionState>,
+    session_id: String,
+) -> Result<Vec<HavokDataMeta>, String> {
+    state.with_session(&session_id, |s| {
+        Ok(s.havok_data.iter().map(HavokDataMeta::from).collect())
+    })
+}
+
+#[tauri::command]
+pub fn scene_get_havok_raw_bytes(
+    state: State<'_, SceneSessionState>,
+    session_id: String,
+    source_id: String,
+) -> Result<tauri::ipc::Response, String> {
+    state.with_session(&session_id, |s| {
+        match s.get_havok_data(&source_id) {
+            Some(d) => Ok(tauri::ipc::Response::new(
+                tauri::ipc::InvokeBody::Raw(d.raw_bytes.clone()),
+            )),
+            None => Err(format!(
+                "HavokData '{}' not found in session '{}'",
+                source_id, session_id
+            )),
+        }
+    })
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewHktCollisionSessionArgs {
@@ -815,42 +877,6 @@ pub fn scene_get_import_config(
     state.with_session(&options.session_id, |s| {
         let import = s.find_import(&options.import_id)?;
         Ok(import.config.clone())
-    })
-}
-
-#[tauri::command]
-pub fn scene_get_havok_data(
-    state: State<'_, SceneSessionState>,
-    session_id: String,
-    source_id: String,
-) -> Result<Option<HavokDataResult>, String> {
-    state.with_session(&session_id, |s| {
-        Ok(s.get_havok_data(&source_id).map(|d| HavokDataResult {
-            source_id: d.source_id.clone(),
-            display_name: d.display_name.clone(),
-            object_node_id: d.object_node_id.clone(),
-            hkt_xml: d.hkt_xml.clone(),
-            raw_bytes: d.raw_bytes.clone(),
-        }))
-    })
-}
-
-#[tauri::command]
-pub fn scene_list_havok_data(
-    state: State<'_, SceneSessionState>,
-    session_id: String,
-) -> Result<Vec<HavokDataResult>, String> {
-    state.with_session(&session_id, |s| {
-        Ok(s.havok_data
-            .iter()
-            .map(|d| HavokDataResult {
-                source_id: d.source_id.clone(),
-                display_name: d.display_name.clone(),
-                object_node_id: d.object_node_id.clone(),
-                hkt_xml: d.hkt_xml.clone(),
-                raw_bytes: d.raw_bytes.clone(),
-            })
-            .collect())
     })
 }
 

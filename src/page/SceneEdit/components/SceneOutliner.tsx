@@ -20,6 +20,7 @@ import {
   Component,
   Shield,
   GripVertical,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -36,6 +37,7 @@ import {
 } from "@/components/ui/context-menu";
 import { useSceneEditorStore, type OutlinerGroup } from "../store/sceneEditorStore";
 import type { StageTreeNode } from "./StageHierarchyTree";
+import { canOpenDetailView } from "./detail-view/sceneDetailViewTypes";
 
 interface SceneOutlinerProps {
   root: StageTreeNode | null;
@@ -48,6 +50,7 @@ interface SceneOutlinerProps {
   onSelectAll?: (ids: string[]) => void;
   onGenerateHkt?: (ids: string[]) => void;
   onReorderRootChild?: (activeId: string, overId: string) => void;
+  onOpenProperties?: (nodeId: string) => void;
 }
 
 export function SceneOutliner({
@@ -61,6 +64,7 @@ export function SceneOutliner({
   onSelectAll,
   onGenerateHkt,
   onReorderRootChild,
+  onOpenProperties,
 }: SceneOutlinerProps) {
   const {
     selectedIds,
@@ -166,6 +170,7 @@ export function SceneOutliner({
                 onDuplicate={onDuplicate}
                 onDelete={onDelete}
                 onGenerateHkt={onGenerateHkt}
+                onOpenProperties={onOpenProperties}
               />
             ))}
             <OutlinerNode
@@ -182,6 +187,7 @@ export function SceneOutliner({
               onDelete={onDelete}
               onGenerateHkt={onGenerateHkt}
               onReorderRootChild={onReorderRootChild}
+              onOpenProperties={onOpenProperties}
             />
           </div>
         </ScrollArea>
@@ -264,6 +270,7 @@ function GroupNode({
   onDelete,
   onGenerateHkt,
   onReorderRootChild,
+  onOpenProperties,
 }: {
   group: OutlinerGroup;
   root: StageTreeNode;
@@ -279,6 +286,7 @@ function GroupNode({
   onDelete?: (ids: string[]) => void;
   onGenerateHkt?: (ids: string[]) => void;
   onReorderRootChild?: (activeId: string, overId: string) => void;
+  onOpenProperties?: (nodeId: string) => void;
 }) {
   const childNodes = useMemo(() => {
     const findNode = (node: StageTreeNode, id: string): StageTreeNode | null => {
@@ -337,6 +345,7 @@ function GroupNode({
                   onDelete={onDelete}
                   onGenerateHkt={onGenerateHkt}
                   onReorderRootChild={onReorderRootChild}
+                  onOpenProperties={onOpenProperties}
                 />
               ))}
             </div>
@@ -372,6 +381,7 @@ function OutlinerNode({
   onDelete,
   onGenerateHkt,
   onReorderRootChild,
+  onOpenProperties,
 }: {
   node: StageTreeNode;
   depth: number;
@@ -386,6 +396,7 @@ function OutlinerNode({
   onDelete?: (ids: string[]) => void;
   onGenerateHkt?: (ids: string[]) => void;
   onReorderRootChild?: (activeId: string, overId: string) => void;
+  onOpenProperties?: (nodeId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(depth < 2);
   const hasChildren = node.children && node.children.length > 0;
@@ -421,6 +432,7 @@ function OutlinerNode({
           onDelete={onDelete}
           onGenerateHkt={onGenerateHkt}
           onReorderRootChild={onReorderRootChild}
+          onOpenProperties={onOpenProperties}
           hasChildren={hasChildren}
           expanded={expanded}
           onToggle={() => setExpanded((v) => !v)}
@@ -458,6 +470,7 @@ function OutlinerNode({
           onDelete={onDelete}
           onGenerateHkt={onGenerateHkt}
           onReorderRootChild={onReorderRootChild}
+          onOpenProperties={onOpenProperties}
         />
       ))}
     </div>
@@ -477,6 +490,7 @@ function OutlinerNodeRow({
   onDelete,
   onGenerateHkt,
   onReorderRootChild,
+  onOpenProperties,
   hasChildren,
   expanded,
   onToggle,
@@ -493,6 +507,7 @@ function OutlinerNodeRow({
   onDelete?: (ids: string[]) => void;
   onGenerateHkt?: (ids: string[]) => void;
   onReorderRootChild?: (activeId: string, overId: string) => void;
+  onOpenProperties?: (nodeId: string) => void;
   hasChildren?: boolean;
   expanded?: boolean;
   onToggle?: () => void;
@@ -596,6 +611,7 @@ function OutlinerNodeRow({
         onDuplicate={onDuplicate}
         onDelete={onDelete}
         onGenerateHkt={onGenerateHkt}
+        onOpenProperties={onOpenProperties}
       />
     </ContextMenu>
   );
@@ -611,6 +627,7 @@ function NodeContextMenuContent({
   onDuplicate,
   onDelete,
   onGenerateHkt,
+  onOpenProperties,
 }: {
   node: StageTreeNode;
   visible: boolean;
@@ -621,16 +638,27 @@ function NodeContextMenuContent({
   onDuplicate?: (ids: string[]) => void;
   onDelete?: (ids: string[]) => void;
   onGenerateHkt?: (ids: string[]) => void;
+  onOpenProperties?: (nodeId: string) => void;
 }) {
   const supportsHkt = (node.role === "imported_dae" || node.role === "collision") && Boolean(onGenerateHkt);
   const isCollisionNode = node.role === "collision" && node.id.startsWith("__col__");
   const hktTargetId = isCollisionNode ? node.id.slice("__col__".length) : node.id;
+  const supportsProperties = canOpenDetailView(node.role);
 
   return (
     <ContextMenuContent className="w-52">
       <ContextMenuItem onClick={(e: React.MouseEvent) => onNodeClick(node.id, e)}>
         Select
       </ContextMenuItem>
+      {supportsProperties && (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem onClick={() => onOpenProperties?.(node.id)}>
+            <Settings className="mr-2 h-3.5 w-3.5" />
+            Properties
+          </ContextMenuItem>
+        </>
+      )}
       <ContextMenuSeparator />
       <ContextMenuItem onClick={() => {
         const entries = [{ nodeId: node.id, placementIdx: null, transform: { posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, scaleX: 1, scaleY: 1, scaleZ: 1 } }];
