@@ -13,6 +13,10 @@ vi.mock("@tauri-apps/api/path", () => ({
   join: vi.fn((...parts: string[]) => Promise.resolve(parts.join("/"))),
 }));
 
+vi.mock("./sceneInfoFolder", () => ({
+  resolveInfoFolderPath: vi.fn((stageRoot: string) => Promise.resolve(`${stageRoot}/info`)),
+}));
+
 import { readDir, exists } from "@tauri-apps/plugin-fs";
 import { detectOldTextureFormat, migrateTexturesToSharedFolder } from "./sceneTextureMigration";
 

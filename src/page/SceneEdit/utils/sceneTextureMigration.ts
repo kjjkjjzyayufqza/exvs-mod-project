@@ -1,8 +1,15 @@
 import { readDir, exists, copyFile, remove, mkdir } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
 import { compareNutexbContent } from "./sceneTextureDedup";
+import { resolveInfoFolderPath } from "./sceneInfoFolder";
 
-const RESERVED_STAGE_FOLDERS = new Set(["base", "info", "textures"]);
+const FIXED_RESERVED_FOLDERS = new Set(["base", "textures"]);
+
+async function buildReservedFolderSet(stageRoot: string): Promise<Set<string>> {
+  const infoPath = await resolveInfoFolderPath(stageRoot);
+  const infoName = infoPath.replace(/\\/g, "/").split("/").pop() ?? "";
+  return new Set([...FIXED_RESERVED_FOLDERS, infoName]);
+}
 
 export type MigrationConflict = {
   filename: string;
@@ -17,9 +24,11 @@ export type MigrationResult = {
 };
 
 export async function detectOldTextureFormat(stageRoot: string): Promise<boolean> {
+  const reserved = await buildReservedFolderSet(stageRoot);
+
   const rootEntries = await readDir(stageRoot);
   const modelFolders = rootEntries.filter(
-    (e) => e.isDirectory && !RESERVED_STAGE_FOLDERS.has(e.name),
+    (e) => e.isDirectory && !reserved.has(e.name),
   );
 
   for (const folder of modelFolders) {
@@ -90,9 +99,11 @@ export async function migrateTexturesToSharedFolder(stageRoot: string): Promise<
     await mkdir(texturesDir, { recursive: true });
   }
 
+  const reserved = await buildReservedFolderSet(stageRoot);
+
   const rootEntries = await readDir(stageRoot);
   const modelFolders = rootEntries.filter(
-    (e) => e.isDirectory && !RESERVED_STAGE_FOLDERS.has(e.name),
+    (e) => e.isDirectory && !reserved.has(e.name),
   );
 
   let migratedCount = 0;

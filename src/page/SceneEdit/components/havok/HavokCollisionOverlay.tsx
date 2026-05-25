@@ -183,7 +183,7 @@ export function HavokCollisionOverlay({
 
     for (const [sourceId, data] of meshDataMap) {
       const folder = folderFromSourceId(sourceId);
-      if (!folder || folder === "info" || folder === "base") {
+      if (!folder || folder === "base") {
         const t = objectTransforms?.get(sourceId);
         result.push({
           key: sourceId,

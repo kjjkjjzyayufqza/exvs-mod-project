@@ -23,6 +23,7 @@ import {
   type StagePackFileEntry,
 } from "./sceneStageStructure";
 import { repackFolderUsingStructure } from "@/utils/repackRunner";
+import { resolveOrCreateInfoFolder } from "./sceneInfoFolder";
 
 function joinTauriPath(...parts: string[]): string {
   return parts
@@ -357,17 +358,18 @@ export async function executeStageSave(params: {
   onProgress?.({ phase: "placement", current: 1, total: 1 });
 
   // Phase 3: write CSV files
+  const infoFolder = await resolveOrCreateInfoFolder(stageRoot);
   const gpCsv = graphicParams.map((p) => `${p.key},${p.value}`).join("\r\n") + "\r\n";
-  await writeTextFile(`${stageRoot}/info/graphic_param.csv`, gpCsv);
+  await writeTextFile(`${infoFolder}/graphic_param.csv`, gpCsv);
 
   if (placementHeader.length > 0 && placementRowsToSave.length > 0) {
     const headerLine = placementHeader.join(",");
     const dataLines = placementRowsToSave.map((e) => e.rawFields.join(","));
     const placementCsv = [headerLine, ...dataLines].join("\r\n") + "\r\n";
-    await writeTextFile(`${stageRoot}/info/placement.csv`, placementCsv);
+    await writeTextFile(`${infoFolder}/placement.csv`, placementCsv);
   } else if (placementRowsToSave.length > 0) {
     const placementCsv = placementRowsToSave.map((e) => e.rawFields.join(",")).join("\r\n") + "\r\n";
-    await writeTextFile(`${stageRoot}/info/placement.csv`, placementCsv);
+    await writeTextFile(`${infoFolder}/placement.csv`, placementCsv);
   }
 
   // Phase 4: repack + reload

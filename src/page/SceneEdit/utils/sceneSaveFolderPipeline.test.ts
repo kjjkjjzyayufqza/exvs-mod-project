@@ -54,6 +54,10 @@ vi.mock("./daeExportImport", () => ({
   serializeDaeToBytes: vi.fn(() => [60, 67, 79, 76]),
 }));
 
+vi.mock("./sceneInfoFolder", () => ({
+  resolveOrCreateInfoFolder: vi.fn((stageRoot: string) => Promise.resolve(`${stageRoot}/info`)),
+}));
+
 import { writeTextFile, readDir } from "@tauri-apps/plugin-fs";
 import { invoke } from "@tauri-apps/api/core";
 import { buildDeletePreview, executeDelete } from "./sceneDeleteConfirm";

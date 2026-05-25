@@ -47,13 +47,46 @@ export async function executeSaveFhm2dPipeline(params: SaveFhm2dParams): Promise
   const packRoot = packTarget.packRoot;
   fhm2dLog(`Resolved pack root: ${packRoot}`);
 
-  // Rebuild structure JSON with textures/ paths — no physical file movement needed.
-  fhm2dLog("Rebuilding structure JSON (textures stay in textures/)...");
+  // Redistribute textures from shared textures/ back to per-model subdirs (0/=maya, 1/=nust)
+  fhm2dLog("Redistributing textures to per-model subdirs...");
+  onProgress({ id: "redistribute", label: "Redistributing textures...", status: "running" });
+
+  try {
+    const redistResult = await invoke<{ modelsProcessed: number; texturesCopied: number; texturesFolderRemoved: boolean; warnings: string[] }>(
+      "redistribute_stage_textures",
+      { stageRoot: packRoot },
+    );
+    fhm2dLog(`Redistributed: ${redistResult.texturesCopied} textures to ${redistResult.modelsProcessed} models`);
+    onProgress({
+      id: "redistribute",
+      label: "Redistributing textures...",
+      status: "done",
+      detail: `${redistResult.texturesCopied} textures → ${redistResult.modelsProcessed} models`,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[SaveFHM2D] Redistribute failed:", msg);
+    onProgress({
+      id: "redistribute",
+      label: "Redistributing textures...",
+      status: "error",
+      error: msg,
+    });
+    return {
+      ...folderResult,
+      success: false,
+      fhm2dPath: outputFhm2dPath,
+      fhm2dSizeBytes: 0,
+    };
+  }
+
+  // Rebuild structure JSON from the now-correct disk layout (per-model texture subdirs)
+  fhm2dLog("Rebuilding structure JSON...");
   onProgress({ id: "rebuild-structure", label: "Rebuilding structure JSON...", status: "running" });
 
   try {
     const structurePath = await invoke<string>(
-      "rebuild_stage_structure_json_with_shared_textures",
+      "rebuild_stage_structure_json",
       { stageRoot: packRoot },
     );
     fhm2dLog(`Structure JSON rebuilt: ${structurePath}`);

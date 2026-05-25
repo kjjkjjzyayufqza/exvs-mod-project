@@ -35,6 +35,7 @@ import {
 } from "./sceneDaeSessionImport";
 import { serializeDaeToBytes } from "./daeExportImport";
 import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
+import { resolveOrCreateInfoFolder } from "./sceneInfoFolder";
 
 function joinTauriPath(...parts: string[]): string {
   return parts
@@ -312,8 +313,9 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
   // Phase 7: Write CSV files
   emitStep(onProgress, "csv", "Writing CSV files...", "running");
   try {
+    const infoFolder = await resolveOrCreateInfoFolder(stageRoot);
     const gpCsv = graphicParams.map((p) => `${p.key},${p.value}`).join("\r\n") + "\r\n";
-    await writeTextFile(`${stageRoot}/info/graphic_param.csv`, gpCsv);
+    await writeTextFile(`${infoFolder}/graphic_param.csv`, gpCsv);
 
     let placementRowsToSave: readonly PlacementRow[] = placementEntries;
 
@@ -354,10 +356,10 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
       const headerLine = placementHeader.join(",");
       const dataLines = placementRowsToSave.map((e) => e.rawFields.join(","));
       const placementCsv = [headerLine, ...dataLines].join("\r\n") + "\r\n";
-      await writeTextFile(`${stageRoot}/info/placement.csv`, placementCsv);
+      await writeTextFile(`${infoFolder}/placement.csv`, placementCsv);
     } else if (placementRowsToSave.length > 0) {
       const placementCsv = placementRowsToSave.map((e) => e.rawFields.join(",")).join("\r\n") + "\r\n";
-      await writeTextFile(`${stageRoot}/info/placement.csv`, placementCsv);
+      await writeTextFile(`${infoFolder}/placement.csv`, placementCsv);
     }
 
     if (sceneSessionId) {

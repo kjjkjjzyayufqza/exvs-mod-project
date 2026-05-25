@@ -195,6 +195,16 @@ export function createImportedDaeJnttblBytes(boneCount: number): Uint8Array {
   return bytes;
 }
 
+/**
+ * Create a default material profile for imported DAE models.
+ *
+ * EXVS2 game runtime loads numatb files directly from the model's folder
+ * structure (the 2 numatb files packed alongside the numdlb), NOT by reading
+ * the material_file_names in numdlb. It auto-detects maya vs nust by their
+ * __maya__ / __nust__ filename suffix convention. Both files are written to
+ * disk with the correct suffixes during SSBH conversion, so the game loads
+ * them regardless of how many paths numdlb declares.
+ */
 export function createImportedDaeMaterialProfile(materialLabel = DEFAULT_IMPORTED_DAE_MATERIAL_LABEL): MatlDataJson {
   return {
     major_version: 1,

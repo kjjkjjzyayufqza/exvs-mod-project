@@ -892,6 +892,12 @@ fn rename_model_subfolder_files(
 /// Sorted by file_index: first N match material_file_names[0..N] (maya first,
 /// nust template second). Extra numatb beyond declared count get variant names
 /// derived from the __nust__ template (material_file_names[1]).
+///
+/// NOTE: EXVS2 game runtime loads numatb files directly from the model's folder
+/// structure (the 2 numatb files packed alongside the numdlb), NOT by reading
+/// the material_file_names array in numdlb. It auto-detects maya vs nust by
+/// their `__maya__` / `__nust__` filename suffix convention.
+/// This rename logic is purely for human-friendly display in the editor.
 fn rename_numatb_with_maya_nust(
     subfolder: &mut StageVirtualTreeFolder,
     modl: &StageModlInfo,
@@ -937,11 +943,23 @@ fn rename_numatb_with_maya_nust(
     }
 
     if declared_count < 2 {
-        warnings.push(format!(
-            "Model '{}': {} extra numatb file(s) but only {} material path(s) in numdlb, \
-             cannot derive nust variant names",
-            modl.model_name, extra_count, declared_count
-        ));
+        // EXVS2 auto-detects numatb by __maya__/__nust__ suffix, independent of
+        // numdlb material_file_names. When numdlb only declares 1 path (typically
+        // nust), infer the other numatb name using the model_name + __maya__ convention.
+        let first_is_nust = material_names
+            .first()
+            .map(|n| basename_no_ext(n).ends_with(NUST_NUMATB_SUFFIX))
+            .unwrap_or(false);
+        for e in 0..extra_count {
+            let target = numatb_indices[declared_count + e];
+            if first_is_nust && extra_count == 1 {
+                subfolder.files[target].file_name =
+                    format!("{}__maya__.numatb", modl.model_name);
+            } else {
+                subfolder.files[target].file_name =
+                    format!("{}_{}.numatb", modl.model_name, declared_count + e);
+            }
+        }
         return;
     }
 
@@ -1625,28 +1643,60 @@ fn determine_folder_name(
     base_dir: &Path,
     warnings: &mut Vec<String>,
 ) -> (String, &'static str) {
-    if position == 0 {
-        return (STAGE_BASE_NAME.to_string(), "base");
-    }
-    if position == 1 {
-        return (STAGE_INFO_NAME.to_string(), "info");
-    }
-    if position == total - 1 {
-        return (STAGE_TEXTURES_NAME.to_string(), "textures");
-    }
+    let mut has_numdlb = false;
+    let mut has_info_file = false;
+    let mut nutexb_count = 0usize;
 
     for &fi in item_file_indices {
         if let Some(entry) = file_index_to_data.get(&fi) {
             if entry.file_type.eq_ignore_ascii_case(".numdlb") {
-                let src_name = url_to_filename(&entry.file_url);
-                let src_path = base_dir.join(&src_name);
-                if let Ok(data) = fs::read(&src_path) {
-                    if let Some(name) = read_numdlb_model_name(&data) {
-                        return (name, "sub_model");
+                has_numdlb = true;
+            }
+            if entry.file_type.eq_ignore_ascii_case(".nutexb") {
+                nutexb_count += 1;
+            }
+            let src_name = url_to_filename(&entry.file_url);
+            if matches!(
+                src_name.to_ascii_lowercase().as_str(),
+                "placement.csv"
+                    | "graphic_param.csv"
+                    | "plan_param.spbin"
+                    | "border_hit.hkt"
+                    | "stage_boundary.csv"
+            ) {
+                has_info_file = true;
+            }
+        }
+    }
+
+    if position == 0 {
+        return (STAGE_BASE_NAME.to_string(), "base");
+    }
+    if has_info_file || position == 1 {
+        return (STAGE_INFO_NAME.to_string(), "info");
+    }
+    if nutexb_count > 0 && !has_numdlb && position == total - 1 {
+        return (STAGE_TEXTURES_NAME.to_string(), "textures");
+    }
+
+    if has_numdlb {
+        for &fi in item_file_indices {
+            if let Some(entry) = file_index_to_data.get(&fi) {
+                if entry.file_type.eq_ignore_ascii_case(".numdlb") {
+                    let src_name = url_to_filename(&entry.file_url);
+                    let src_path = base_dir.join(&src_name);
+                    if let Ok(data) = fs::read(&src_path) {
+                        if let Some(name) = read_numdlb_model_name(&data) {
+                            return (name, "sub_model");
+                        }
                     }
                 }
             }
         }
+    }
+
+    if position == total - 1 {
+        return (STAGE_TEXTURES_NAME.to_string(), "textures");
     }
 
     let fallback = format!("sub_{position}");
@@ -1895,6 +1945,10 @@ pub fn load_stage_bundle_impl(stage_root: &str) -> Result<StageBundle, String> {
         }
     }
 
+    // Resolve the info folder dynamically so we can skip it from sub_models.
+    let info_dir_name = find_info_dir(root)
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()));
+
     let mut sub_models = Vec::new();
     let mut entries: Vec<_> = fs::read_dir(root)
         .map_err(|e| format!("Failed to read stage root: {e}"))?
@@ -1906,8 +1960,13 @@ pub fn load_stage_bundle_impl(stage_root: &str) -> Result<StageBundle, String> {
     let mut object_index = 0usize;
     for entry in &entries {
         let name = entry.file_name().to_string_lossy().to_string();
-        if name == STAGE_BASE_NAME || name == STAGE_INFO_NAME || name == STAGE_TEXTURES_NAME {
+        if name == STAGE_BASE_NAME || name == STAGE_TEXTURES_NAME {
             continue;
+        }
+        if let Some(ref info_name) = info_dir_name {
+            if name == *info_name {
+                continue;
+            }
         }
         if let Some(bundle) = load_model_in_subfolder(root, &name, &mut warnings) {
             sub_models.push(StageSubModelEntry {
@@ -1991,11 +2050,37 @@ fn find_numdlb_in_dir(dir: &Path) -> Option<PathBuf> {
     None
 }
 
-fn parse_graphic_param_csv(root: &Path, warnings: &mut Vec<String>) -> Vec<GraphicParamEntry> {
-    let info_dir = root.join(STAGE_INFO_NAME);
-    if !info_dir.is_dir() {
-        return Vec::new();
+/// Dynamically find the info directory under `root` by content detection.
+///
+/// A folder is considered the "info" folder if it contains any of the known
+/// info files (graphic_param.csv, placement.csv, border_hit.hkt, plan_param.spbin).
+/// This avoids hardcoding the folder name "info" since FHM2D does not record
+/// folder names and the extracted name may differ.
+fn find_info_dir(root: &Path) -> Option<PathBuf> {
+    let entries = fs::read_dir(root).ok()?;
+    for entry in entries.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name == STAGE_BASE_NAME || name == STAGE_TEXTURES_NAME {
+            continue;
+        }
+        for known in INFO_FILE_NAMES {
+            if path.join(known).exists() {
+                return Some(path);
+            }
+        }
     }
+    None
+}
+
+fn parse_graphic_param_csv(root: &Path, warnings: &mut Vec<String>) -> Vec<GraphicParamEntry> {
+    let info_dir = match find_info_dir(root) {
+        Some(d) => d,
+        None => return Vec::new(),
+    };
     let csv_path = info_dir.join("graphic_param.csv");
     if !csv_path.exists() {
         warnings.push("graphic_param.csv not found".to_string());
@@ -2028,10 +2113,10 @@ fn parse_placement_csv(
     root: &Path,
     warnings: &mut Vec<String>,
 ) -> (Vec<String>, Vec<PlacementEntry>) {
-    let info_dir = root.join(STAGE_INFO_NAME);
-    if !info_dir.is_dir() {
-        return (Vec::new(), Vec::new());
-    }
+    let info_dir = match find_info_dir(root) {
+        Some(d) => d,
+        None => return (Vec::new(), Vec::new()),
+    };
     let csv_path = info_dir.join("placement.csv");
     if !csv_path.exists() {
         warnings.push("placement.csv not found".to_string());
@@ -3162,7 +3247,8 @@ pub fn rebuild_structure_json_for_stage_with_shared_textures(
 /// per-numatb numbered subdirectories under each model's SSBH folder.
 pub fn redistribute_stage_textures(stage_root: &str) -> Result<RedistributeResult, String> {
     let root = Path::new(stage_root);
-    let textures_dir = root.join(STAGE_TEXTURES_NAME);
+    let content_root = resolve_content_root(root);
+    let textures_dir = content_root.join(STAGE_TEXTURES_NAME);
     if !textures_dir.is_dir() {
         return Ok(RedistributeResult {
             models_processed: 0,
@@ -3192,12 +3278,13 @@ pub fn redistribute_stage_textures(stage_root: &str) -> Result<RedistributeResul
     let ssbh_folders = find_ssbh_folders(root, &mut warnings)?;
 
     for ssbh_folder in &ssbh_folders {
-        let numatb_refs = parse_numatb_texture_refs(ssbh_folder, &mut warnings);
+        let numatb_refs = parse_numatb_texture_refs_by_role(ssbh_folder, &mut warnings);
         if numatb_refs.is_empty() {
             continue;
         }
         models_processed += 1;
 
+        // maya → 0/, nust → 1/ (matches EXVS2 game runtime expectation)
         for (subdir_index, refs) in numatb_refs.iter().enumerate() {
             let subdir = ssbh_folder.join(subdir_index.to_string());
             fs::create_dir_all(&subdir).map_err(|e| {
@@ -3600,6 +3687,63 @@ fn extract_nutexb_names_from_matl(matl: &ssbh_data::prelude::MatlData) -> Vec<St
         }
     }
     out
+}
+
+/// Parse numatb texture refs ordered by role: [0] = maya refs, [1] = nust refs.
+///
+/// Identifies maya/nust by `__maya__` / `__nust__` filename suffix.
+/// Returns exactly 2 entries (maya first, nust second) matching EXVS2 game
+/// folder structure: subdir 0/ = maya textures, subdir 1/ = nust textures.
+fn parse_numatb_texture_refs_by_role(
+    ssbh_folder: &Path,
+    warnings: &mut Vec<String>,
+) -> Vec<Vec<String>> {
+    let mut maya_path: Option<PathBuf> = None;
+    let mut nust_path: Option<PathBuf> = None;
+
+    if let Ok(entries) = fs::read_dir(ssbh_folder) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            if entry.file_type().map(|t| t.is_dir()).unwrap_or(true) {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().to_string();
+            let lower = name.to_ascii_lowercase();
+            if !lower.ends_with(".numatb") {
+                continue;
+            }
+            if lower.contains("__nust__") {
+                nust_path = Some(entry.path());
+            } else if lower.contains("__maya__") {
+                maya_path = Some(entry.path());
+            }
+        }
+    }
+
+    if maya_path.is_none() && nust_path.is_none() {
+        return Vec::new();
+    }
+
+    let mut maya_refs = Vec::new();
+    let mut nust_refs = Vec::new();
+
+    for (path, refs) in [(&maya_path, &mut maya_refs), (&nust_path, &mut nust_refs)] {
+        if let Some(p) = path {
+            match fs::read(p) {
+                Ok(data) => {
+                    let mut cursor = Cursor::new(&data);
+                    match ssbh_data::prelude::MatlData::read(&mut cursor) {
+                        Ok(matl) => *refs = extract_nutexb_names_from_matl(&matl),
+                        Err(e) => warnings.push(format!(
+                            "Failed to parse numatb '{}': {e}", p.display()
+                        )),
+                    }
+                }
+                Err(e) => warnings.push(format!("Failed to read numatb '{}': {e}", p.display())),
+            }
+        }
+    }
+
+    vec![maya_refs, nust_refs]
 }
 
 fn dir_contains_only_nutexb(dir: &Path) -> bool {

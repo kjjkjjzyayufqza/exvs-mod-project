@@ -2800,3 +2800,120 @@ fn repack_then_extract_folder_tree_is_correct() {
         no_infer_warnings
     );
 }
+
+#[test]
+fn repacked_stage_preserves_named_subfolders() {
+    if skip_if_fhm2d_missing("16F73C97") {
+        return;
+    }
+
+    let (_tmp, pack_root, _content_root) = extract_to_temp("16F73C97");
+    let structure_path = rebuild_structure_json_for_stage(&pack_root.to_string_lossy()).unwrap();
+
+    let repacked = pack_root.parent().unwrap().join("repacked-stage.fhm2d");
+    crate::format::fhm2d_pack::repack_fhm2d_from_structure(
+        &structure_path,
+        &repacked.to_string_lossy(),
+        false,
+        None,
+    )
+    .unwrap();
+
+    let re_extract_dir = tempfile::tempdir().unwrap();
+    let re_result = extract_stage_fhm2d_to_folder_impl(
+        &repacked.to_string_lossy(),
+        &re_extract_dir.path().to_string_lossy(),
+    )
+    .unwrap();
+
+    let re_content = PathBuf::from(&re_result.output_dir).join("0").join("0");
+    let bundle = load_stage_bundle_impl(&re_content.to_string_lossy()).unwrap();
+    let names: Vec<String> = bundle.sub_models.iter().map(|m| m.folder_name.clone()).collect();
+
+    assert!(
+        names.iter().any(|n| n == "sky"),
+        "repacked stage should still extract a sky folder, got: {:?}",
+        names
+    );
+    assert!(
+        names.iter().any(|n| n.contains("object_box01")),
+        "repacked stage should still extract object_box01, got: {:?}",
+        names
+    );
+}
+
+#[test]
+fn test_redistribute_creates_maya_0_nust_1_subdirs() {
+    if skip_if_fhm2d_missing("16F73C97") {
+        return;
+    }
+    let (_tmp, pack_root, _content) = extract_to_temp("16F73C97");
+
+    // First restore shared textures (simulates what Scene Editor export does)
+    let restore = restore_shared_textures(&pack_root.to_string_lossy()).unwrap();
+    assert!(restore.textures_collected > 0, "should collect textures");
+    let textures_dir = pack_root.join("textures");
+    assert!(textures_dir.is_dir(), "textures/ should exist after restore");
+
+    // Now redistribute back to per-model subdirs
+    let redist = redistribute_stage_textures(&pack_root.to_string_lossy()).unwrap();
+    assert!(redist.models_processed > 0, "should process at least 1 model");
+    assert!(redist.textures_copied > 0, "should copy textures");
+    assert!(redist.textures_folder_removed, "textures/ should be removed");
+
+    // Verify the original extract_tools structure: each SSBH folder should have 0/ and 1/
+    // matching the original game layout (maya→0/, nust→1/)
+    let ref_root = Path::new(r"E:\XB\extract_tools\0x16F73C97\0\0\0\0");
+    if !ref_root.is_dir() {
+        eprintln!("Skipping reference comparison — extract_tools not available");
+        return;
+    }
+
+    // Check base model folder has 0/ and 1/ with nutexb
+    let ssbh_folders = find_ssbh_folders_in_dir(&pack_root);
+    assert!(!ssbh_folders.is_empty(), "should find SSBH model folders");
+
+    for folder in &ssbh_folders {
+        let subdir_0 = folder.join("0");
+        let subdir_1 = folder.join("1");
+        assert!(
+            subdir_0.is_dir(),
+            "model '{}' should have subdir 0/ (maya textures)",
+            folder.display()
+        );
+        assert!(
+            subdir_1.is_dir(),
+            "model '{}' should have subdir 1/ (nust textures)",
+            folder.display()
+        );
+
+        // Verify 0/ contains only nutexb files
+        let nutexb_in_0: Vec<_> = fs::read_dir(&subdir_0)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .to_ascii_lowercase()
+                    .ends_with(".nutexb")
+            })
+            .collect();
+        assert!(
+            !nutexb_in_0.is_empty(),
+            "model '{}' subdir 0/ should have nutexb files",
+            folder.display()
+        );
+    }
+
+    eprintln!(
+        "PASS: redistribute creates correct 0/(maya) 1/(nust) subdirs for {} models",
+        ssbh_folders.len()
+    );
+}
+
+fn find_ssbh_folders_in_dir(root: &Path) -> Vec<PathBuf> {
+    let mut result = Vec::new();
+    let mut warnings = Vec::new();
+    let _ = super::find_ssbh_folders(root, &mut warnings).map(|f| result = f);
+    result
+}
