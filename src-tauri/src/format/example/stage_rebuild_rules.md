@@ -168,8 +168,8 @@ behavior where empty containers are not emitted.
 
 In origin data, `lut_none.nutexb` inside `info/post_effect/` has
 `Item.unk2 = "01010000"` instead of the usual `"00000000"` for textures.
-This may be a folder-context-dependent rule. **Current code uses `"00000000"`
-for all `.nutexb`.** If more samples confirm the pattern, add a special case.
+**FIXED**: `unk2_for_file()` detects `.nutexb` files whose parent directory is
+`post_effect` and emits `"01010000"`. See `exvs2-effect-special-unk2.md`.
 
 ### 5.2 Sky Model with Empty __nust__ Container
 

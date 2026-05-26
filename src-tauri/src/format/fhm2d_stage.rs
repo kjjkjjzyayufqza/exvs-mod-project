@@ -3332,6 +3332,21 @@ fn emit_texture_container_items(
     c.push_end(1);
 }
 
+fn unk2_for_file(file: &Path, ext: &str) -> &'static str {
+    if ext == ".nutexb" {
+        if let Some(parent) = file.parent() {
+            let parent_name = parent
+                .file_name()
+                .map(|n| n.to_string_lossy().to_ascii_lowercase())
+                .unwrap_or_default();
+            if parent_name == "post_effect" {
+                return "01010000";
+            }
+        }
+    }
+    unk2_for_ext(ext)
+}
+
 fn emit_file_item(
     c: &mut RebuildCollector,
     file: &Path,
@@ -3348,7 +3363,7 @@ fn emit_file_item(
         format!(".\\{}\\{}", folder_name, rel.replace('/', "\\")),
         ext.clone(),
     );
-    c.push_item(idx, unk2_for_ext(&ext));
+    c.push_item(idx, unk2_for_file(file, &ext));
 }
 
 fn emit_dir_recursive(
