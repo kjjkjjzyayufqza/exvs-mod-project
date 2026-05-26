@@ -3003,7 +3003,6 @@ fn is_texture_container_dir(dir: &Path) -> bool {
         return false;
     }
     if let Ok(entries) = fs::read_dir(dir) {
-        let mut any_file = false;
         for e in entries.flatten() {
             if e.file_type().map(|t| t.is_dir()).unwrap_or(false) {
                 return false;
@@ -3012,9 +3011,9 @@ fn is_texture_container_dir(dir: &Path) -> bool {
             if !n.ends_with(".nutexb") {
                 return false;
             }
-            any_file = true;
         }
-        any_file
+        // EXVS allows empty texture containers (e.g. sky __nust__ with 0 textures)
+        true
     } else {
         false
     }
@@ -3333,6 +3332,16 @@ fn build_exvs_structure_tree(
     opts: &ExvsBuildOpts,
 ) {
     build_exvs_directory(c, root, root, folder_name, &[], 0, opts);
+
+    // EXVS game-original archives have a trailing empty Folder(count=0) at root level.
+    // This increments the first emitted Folder node count by 1.
+    // Without this, the game may reject the archive.
+    c.push_folder(0, 0);
+    c.push_end(1);
+    // Patch the first Folder in the structure to increment its child count.
+    if let Some(SubFileStructureEntry::Folder { folder_count, .. }) = c.structure.first_mut() {
+        *folder_count += 1;
+    }
 }
 
 /// Push a single file as an Item node with the correct EXVS unk2 type tag.
@@ -3419,7 +3428,12 @@ fn build_exvs_model_folder(
         push_exvs_file_item(c, f, root, folder_name);
     }
 
-    // ② + ③ Texture containers interleaved with paired numatb
+    // ② + ③ Texture containers interleaved with paired numatb.
+    // EXVS requires exactly 2 material texture folders per model:
+    //   container 0 (__maya__) and container 1 (__nust__).
+    // Even if __nust__ has 0 textures, an empty Folder(0, unk3=32, unk5=1)
+    // MUST be emitted followed by its paired numatb. Without this, the game
+    // fails to locate materials correctly.
     let mut sorted_containers: Vec<&&PathBuf> = tex_container_dirs.iter().collect();
     sorted_containers.sort_by_key(|d| d.file_name().unwrap().to_string_lossy().to_string());
 
@@ -3442,14 +3456,32 @@ fn build_exvs_model_folder(
         .copied()
         .collect();
 
-    for (i, tc) in sorted_containers.iter().enumerate() {
+    // Emit container 0 (__maya__)
+    if let Some(tc0) = sorted_containers.first() {
+        build_exvs_texture_container(c, tc0, root, folder_name);
+    } else {
+        c.push_folder(0, 32);
+        c.push_end(1);
+    }
+    for f in &numatb_maya {
+        push_exvs_file_item(c, f, root, folder_name);
+    }
+
+    // Emit container 1 (__nust__) - EXVS mandates this even when empty (0 textures)
+    if let Some(tc1) = sorted_containers.get(1) {
+        build_exvs_texture_container(c, tc1, root, folder_name);
+    } else {
+        c.push_folder(0, 32);
+        c.push_end(1);
+    }
+    for f in &numatb_nust {
+        push_exvs_file_item(c, f, root, folder_name);
+    }
+
+    // Additional containers beyond 0/1 (rare)
+    for tc in sorted_containers.iter().skip(2) {
         build_exvs_texture_container(c, tc, root, folder_name);
-        let paired = match i {
-            0 => &numatb_maya,
-            1 => &numatb_nust,
-            _ => &numatb_other,
-        };
-        for f in paired {
+        for f in &numatb_other {
             push_exvs_file_item(c, f, root, folder_name);
         }
     }
@@ -3503,7 +3535,15 @@ fn build_exvs_directory(
             let n = d.file_name().unwrap().to_string_lossy().to_string();
             !skip_names.contains(&n.as_str())
         })
-        .filter(|d| !dir_is_empty_recursive(d))
+        .filter(|d| {
+            // Keep digit-named dirs (potential texture containers) even if empty.
+            // EXVS requires empty __nust__ containers to be preserved.
+            let name = d.file_name().unwrap().to_string_lossy().to_string();
+            if name.chars().all(|c| c.is_ascii_digit()) {
+                return true;
+            }
+            !dir_is_empty_recursive(d)
+        })
         .collect();
 
     // At the content level (where base/, info/, sky/ exist), enforce
@@ -3552,22 +3592,53 @@ fn build_exvs_directory(
     let has_nusktb = files
         .iter()
         .any(|f| ext_of(&f.file_name().unwrap().to_string_lossy()) == ".nusktb");
-    let is_ssbh_folder = has_nusktb && !tex_container_dirs.is_empty();
+    // EXVS SSBH model detection: has nusktb AND (has texture containers OR has numatb).
+    // Sky models may have no texture container dirs on disk (textures are in shared folder)
+    // but still have numatb files and need SSBH canonical ordering.
+    let has_numatb = files
+        .iter()
+        .any(|f| ext_of(&f.file_name().unwrap().to_string_lossy()) == ".numatb");
+    let is_ssbh_folder = has_nusktb && (!tex_container_dirs.is_empty() || has_numatb);
 
     if is_ssbh_folder {
         // SSBH model folder — use canonical EXVS ordering
         build_exvs_model_folder(c, &files, &tex_container_dirs, &relevant_dirs, root, folder_name, depth, opts);
     } else {
-        // Generic directory — recurse subdirs, then files
-        for d in &relevant_dirs {
+        // Generic directory.
+        // EXVS info/ has a special layout: sub-folders (fog, light) first,
+        // then loose files (hkt, csv, spbin), then post_effect/ LAST.
+        // The game runtime loads post_effect at the end and uses EndMark(2)
+        // to close both post_effect/ and info/ simultaneously.
+        let dir_name_lower = dir
+            .file_name()
+            .map(|n| n.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_default();
+        let is_info_dir = dir_name_lower == STAGE_INFO_NAME
+            || INFO_SUBFOLDER_NAMES.contains(&dir_name_lower.as_str());
+
+        // Separate post_effect from other subdirs (only matters for info/)
+        let (normal_dirs, post_effect_dirs): (Vec<&PathBuf>, Vec<&PathBuf>) = relevant_dirs
+            .iter()
+            .partition(|d| {
+                let n = d.file_name().unwrap().to_string_lossy().to_ascii_lowercase();
+                !(is_info_dir && n == "post_effect")
+            });
+
+        // Emit normal sub-dirs first
+        for d in &normal_dirs {
             if is_texture_container_dir(d) {
                 build_exvs_texture_container(c, d, root, folder_name);
             } else {
                 build_exvs_directory(c, d, root, folder_name, &[], depth + 1, opts);
             }
         }
+        // Emit loose files
         for f in &files {
             push_exvs_file_item(c, f, root, folder_name);
+        }
+        // Emit post_effect/ LAST (EXVS info/ layout requirement)
+        for d in &post_effect_dirs {
+            build_exvs_directory(c, d, root, folder_name, &[], depth + 1, opts);
         }
     }
 
