@@ -37,6 +37,7 @@ import {
 import { SceneOutliner } from "./components/SceneOutliner";
 import { GlobalLoadedTexturePanel, ModelTextureSlotPanel } from "./components/ModelTextureSlotPanel";
 import { SceneTextureManager } from "./components/SceneTextureManager";
+import { StructureInspectorPanel } from "./components/StructureInspectorPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ViewportContextMenu } from "./components/ViewportContextMenu";
 import { useSceneKeyboard } from "./hooks/useSceneKeyboard";
@@ -3243,6 +3244,9 @@ export default function SceneEdit() {
                   <TabsTrigger value="textures" className="h-5 px-2 text-[10px] data-[state=active]:bg-background">
                     Textures
                   </TabsTrigger>
+                  <TabsTrigger value="structure" className="h-5 px-2 text-[10px] data-[state=active]:bg-background">
+                    Structure
+                  </TabsTrigger>
                 </TabsList>
                 <TabsContent value="outliner" className="mt-0 min-h-0 flex-1 overflow-hidden">
                   <SceneOutliner
@@ -3275,6 +3279,9 @@ export default function SceneEdit() {
                     textureDataMap={textureDataMap}
                     decodeContext={sceneTextureDecodeContext}
                   />
+                </TabsContent>
+                <TabsContent value="structure" className="mt-0 min-h-0 flex-1 overflow-hidden">
+                  <StructureInspectorPanel stageRoot={stageRoot} />
                 </TabsContent>
               </Tabs>
             </div>

@@ -107,12 +107,18 @@ function createFolderEntry(childCount: number): Record<string, unknown> {
   };
 }
 
-function createItemEntry(fileIndex: number, name: string): Record<string, unknown> {
+function unk2ForItem(name: string, parentFolder: string): string {
+  const ext = name.lastIndexOf(".") >= 0 ? name.slice(name.lastIndexOf(".")).toLowerCase() : "";
+  if (ext === ".nutexb" && parentFolder === "post_effect") return "01010000";
+  return "00000000";
+}
+
+function createItemEntry(fileIndex: number, name: string, parentFolder: string): Record<string, unknown> {
   return {
     type: "Item",
     unk1: "00000000",
     fileIndex,
-    unk2: "00000000",
+    unk2: unk2ForItem(name, parentFolder),
     unk2_1: 0,
     unk3: 0,
     unk4: 0,
@@ -140,15 +146,15 @@ function insertFile(root: FileTreeNode, relativePath: string, fileIndex: number)
   cursor.files.push({ name: fileName, fileIndex });
 }
 
-function appendStructureForFolder(node: FileTreeNode, out: Array<Record<string, unknown>>): void {
+function appendStructureForFolder(node: FileTreeNode, out: Array<Record<string, unknown>>, folderName: string): void {
   const folders = [...node.folders.entries()].sort(([a], [b]) => a.localeCompare(b));
   const files = [...node.files].sort((a, b) => a.name.localeCompare(b.name));
   out.push(createFolderEntry(folders.length + files.length));
   for (const file of files) {
-    out.push(createItemEntry(file.fileIndex, file.name));
+    out.push(createItemEntry(file.fileIndex, file.name, folderName));
   }
-  for (const [, child] of folders) {
-    appendStructureForFolder(child, out);
+  for (const [name, child] of folders) {
+    appendStructureForFolder(child, out, name);
   }
   out.push({ type: "EndMark", endMarkCount: 1 });
 }
@@ -177,11 +183,11 @@ export function buildStageStructureJsonFromFiles(params: {
   });
 
   const subFileStructure: Array<Record<string, unknown>> = [];
-  for (const [, child] of [...tree.folders.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-    appendStructureForFolder(child, subFileStructure);
+  for (const [name, child] of [...tree.folders.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    appendStructureForFolder(child, subFileStructure, name);
   }
   for (const file of [...tree.files].sort((a, b) => a.name.localeCompare(b.name))) {
-    subFileStructure.push(createItemEntry(file.fileIndex, file.name));
+    subFileStructure.push(createItemEntry(file.fileIndex, file.name, ""));
   }
 
   return {

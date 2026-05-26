@@ -3304,7 +3304,59 @@ fn stage_content_dir_order(name: &str) -> (u8, String) {
     }
 }
 
-fn emit_texture_container_items(
+// ── EXVS Structure Tree Builder ──────────────────────────────────────────────
+
+struct ExvsBuildOpts {
+    include_shared_textures: bool,
+}
+
+fn unk2_for_file(file: &Path, ext: &str) -> &'static str {
+    if ext == ".nutexb" {
+        if let Some(parent) = file.parent() {
+            let parent_name = parent
+                .file_name()
+                .map(|n| n.to_string_lossy().to_ascii_lowercase())
+                .unwrap_or_default();
+            if parent_name == "post_effect" {
+                return "01010000";
+            }
+        }
+    }
+    unk2_for_ext(ext)
+}
+
+/// Entry point: build the full EXVS SubFileStructure tree from a stage root directory.
+fn build_exvs_structure_tree(
+    c: &mut RebuildCollector,
+    root: &Path,
+    folder_name: &str,
+    opts: &ExvsBuildOpts,
+) {
+    build_exvs_directory(c, root, root, folder_name, &[], 0, opts);
+}
+
+/// Push a single file as an Item node with the correct EXVS unk2 type tag.
+fn push_exvs_file_item(
+    c: &mut RebuildCollector,
+    file: &Path,
+    root: &Path,
+    folder_name: &str,
+) {
+    let ext = ext_of(&file.file_name().unwrap().to_string_lossy());
+    let rel = file
+        .strip_prefix(root)
+        .unwrap()
+        .to_string_lossy()
+        .replace('\\', "/");
+    let idx = c.add_file(
+        format!(".\\{}\\{}", folder_name, rel.replace('/', "\\")),
+        ext.clone(),
+    );
+    c.push_item(idx, unk2_for_file(file, &ext));
+}
+
+/// Build a texture container folder (unk3=32, unk5=1) with deduplicated nutexb items.
+fn build_exvs_texture_container(
     c: &mut RebuildCollector,
     tex_dir: &Path,
     root: &Path,
@@ -3332,70 +3384,113 @@ fn emit_texture_container_items(
     c.push_end(1);
 }
 
-fn unk2_for_file(file: &Path, ext: &str) -> &'static str {
-    if ext == ".nutexb" {
-        if let Some(parent) = file.parent() {
-            let parent_name = parent
-                .file_name()
-                .map(|n| n.to_string_lossy().to_ascii_lowercase())
-                .unwrap_or_default();
-            if parent_name == "post_effect" {
-                return "01010000";
-            }
+/// Build an SSBH model folder with canonical EXVS item ordering:
+/// nusktb → (texture_container + numatb) pairs → numshb → numdlb → jnttbl
+fn build_exvs_model_folder(
+    c: &mut RebuildCollector,
+    files: &[PathBuf],
+    tex_container_dirs: &[&PathBuf],
+    relevant_dirs: &[&PathBuf],
+    root: &Path,
+    folder_name: &str,
+    depth: usize,
+    opts: &ExvsBuildOpts,
+) {
+    let mut nusktb_files: Vec<&PathBuf> = Vec::new();
+    let mut numatb_files: Vec<&PathBuf> = Vec::new();
+    let mut numshb_files: Vec<&PathBuf> = Vec::new();
+    let mut numdlb_files: Vec<&PathBuf> = Vec::new();
+    let mut jnttbl_files: Vec<&PathBuf> = Vec::new();
+    let mut other_files: Vec<&PathBuf> = Vec::new();
+
+    for f in files {
+        match ext_of(&f.file_name().unwrap().to_string_lossy()).as_str() {
+            ".nusktb" => nusktb_files.push(f),
+            ".numatb" => numatb_files.push(f),
+            ".numshb" => numshb_files.push(f),
+            ".numdlb" => numdlb_files.push(f),
+            ".jnttbl" => jnttbl_files.push(f),
+            _ => other_files.push(f),
         }
     }
-    unk2_for_ext(ext)
+
+    // ① Skeleton — always first
+    for f in &nusktb_files {
+        push_exvs_file_item(c, f, root, folder_name);
+    }
+
+    // ② + ③ Texture containers interleaved with paired numatb
+    let mut sorted_containers: Vec<&&PathBuf> = tex_container_dirs.iter().collect();
+    sorted_containers.sort_by_key(|d| d.file_name().unwrap().to_string_lossy().to_string());
+
+    let numatb_maya: Vec<&PathBuf> = numatb_files
+        .iter()
+        .filter(|f| f.file_name().unwrap().to_string_lossy().to_ascii_lowercase().contains("__maya__"))
+        .copied()
+        .collect();
+    let numatb_nust: Vec<&PathBuf> = numatb_files
+        .iter()
+        .filter(|f| f.file_name().unwrap().to_string_lossy().to_ascii_lowercase().contains("__nust__"))
+        .copied()
+        .collect();
+    let numatb_other: Vec<&PathBuf> = numatb_files
+        .iter()
+        .filter(|f| {
+            let n = f.file_name().unwrap().to_string_lossy().to_ascii_lowercase();
+            !n.contains("__maya__") && !n.contains("__nust__")
+        })
+        .copied()
+        .collect();
+
+    for (i, tc) in sorted_containers.iter().enumerate() {
+        build_exvs_texture_container(c, tc, root, folder_name);
+        let paired = match i {
+            0 => &numatb_maya,
+            1 => &numatb_nust,
+            _ => &numatb_other,
+        };
+        for f in paired {
+            push_exvs_file_item(c, f, root, folder_name);
+        }
+    }
+
+    // ⑥ ⑦ ⑧ Mesh → Model → Joint table
+    for f in &numshb_files {
+        push_exvs_file_item(c, f, root, folder_name);
+    }
+    for f in &numdlb_files {
+        push_exvs_file_item(c, f, root, folder_name);
+    }
+    for f in &jnttbl_files {
+        push_exvs_file_item(c, f, root, folder_name);
+    }
+
+    // Other files (e.g., .hkt at model dir level)
+    for f in &other_files {
+        push_exvs_file_item(c, f, root, folder_name);
+    }
+
+    // Non-texture subdirs (recurse)
+    let other_subdirs: Vec<&PathBuf> = relevant_dirs
+        .iter()
+        .filter(|d| !is_texture_container_dir(d))
+        .copied()
+        .collect();
+    for d in &other_subdirs {
+        build_exvs_directory(c, d, root, folder_name, &[], depth + 1, opts);
+    }
 }
 
-fn emit_file_item(
-    c: &mut RebuildCollector,
-    file: &Path,
-    root: &Path,
-    folder_name: &str,
-) {
-    let ext = ext_of(&file.file_name().unwrap().to_string_lossy());
-    let rel = file
-        .strip_prefix(root)
-        .unwrap()
-        .to_string_lossy()
-        .replace('\\', "/");
-    let idx = c.add_file(
-        format!(".\\{}\\{}", folder_name, rel.replace('/', "\\")),
-        ext.clone(),
-    );
-    c.push_item(idx, unk2_for_file(file, &ext));
-}
-
-fn emit_dir_recursive(
+/// Recursively build the EXVS structure for a directory.
+/// Detects directory type and dispatches to the appropriate handler.
+fn build_exvs_directory(
     c: &mut RebuildCollector,
     dir: &Path,
     root: &Path,
     folder_name: &str,
     skip_names: &[&str],
     depth: usize,
-) {
-    emit_dir_recursive_inner(c, dir, root, folder_name, skip_names, depth, false);
-}
-
-fn emit_dir_recursive_with_shared_textures(
-    c: &mut RebuildCollector,
-    dir: &Path,
-    root: &Path,
-    folder_name: &str,
-    skip_names: &[&str],
-    depth: usize,
-) {
-    emit_dir_recursive_inner(c, dir, root, folder_name, skip_names, depth, true);
-}
-
-fn emit_dir_recursive_inner(
-    c: &mut RebuildCollector,
-    dir: &Path,
-    root: &Path,
-    folder_name: &str,
-    skip_names: &[&str],
-    depth: usize,
-    include_shared_textures: bool,
+    opts: &ExvsBuildOpts,
 ) {
     if depth > 20 {
         return;
@@ -3408,16 +3503,11 @@ fn emit_dir_recursive_inner(
             let n = d.file_name().unwrap().to_string_lossy().to_string();
             !skip_names.contains(&n.as_str())
         })
-        .collect();
-
-    let relevant_dirs: Vec<&PathBuf> = relevant_dirs
-        .into_iter()
         .filter(|d| !dir_is_empty_recursive(d))
         .collect();
 
     // At the content level (where base/, info/, sky/ exist), enforce
     // the canonical FHM2D ordering: base → info → {models sorted} → sky → textures.
-    // Skip textures/ unless include_shared_textures is true (shared textures mode).
     let has_base = relevant_dirs
         .iter()
         .any(|d| d.file_name().unwrap().to_string_lossy().eq_ignore_ascii_case(STAGE_BASE_NAME));
@@ -3427,7 +3517,7 @@ fn emit_dir_recursive_inner(
             .filter(|d| {
                 let name = d.file_name().unwrap().to_string_lossy().to_ascii_lowercase();
                 if name == STAGE_TEXTURES_NAME {
-                    return include_shared_textures;
+                    return opts.include_shared_textures;
                 }
                 true
             })
@@ -3441,17 +3531,19 @@ fn emit_dir_recursive_inner(
     } else {
         relevant_dirs
     };
+
     let child_count = relevant_dirs.len() + files.len();
     if child_count == 0 && depth > 0 {
         return;
     }
+
     if depth > 0 {
-        // Mark shared textures/ folder with unk3=64 so stage_rename_in_memory can identify it
         let dir_name = dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
         let unk3 = if dir_name.to_ascii_lowercase() == STAGE_TEXTURES_NAME { 64 } else { 0 };
         c.push_folder(child_count as i32, unk3);
     }
 
+    // Detect directory type
     let tex_container_dirs: Vec<&PathBuf> = relevant_dirs
         .iter()
         .filter(|d| is_texture_container_dir(d))
@@ -3463,111 +3555,19 @@ fn emit_dir_recursive_inner(
     let is_ssbh_folder = has_nusktb && !tex_container_dirs.is_empty();
 
     if is_ssbh_folder {
-        let mut nusktb_files: Vec<&PathBuf> = Vec::new();
-        let mut numatb_files: Vec<&PathBuf> = Vec::new();
-        let mut numshb_files: Vec<&PathBuf> = Vec::new();
-        let mut numdlb_files: Vec<&PathBuf> = Vec::new();
-        let mut jnttbl_files: Vec<&PathBuf> = Vec::new();
-        let mut other_files: Vec<&PathBuf> = Vec::new();
-        for f in &files {
-            let ext = ext_of(&f.file_name().unwrap().to_string_lossy());
-            match ext.as_str() {
-                ".nusktb" => nusktb_files.push(f),
-                ".numatb" => numatb_files.push(f),
-                ".numshb" => numshb_files.push(f),
-                ".numdlb" => numdlb_files.push(f),
-                ".jnttbl" => jnttbl_files.push(f),
-                _ => other_files.push(f),
-            }
-        }
-        let other_subdirs: Vec<&PathBuf> = relevant_dirs
-            .iter()
-            .filter(|d| !is_texture_container_dir(d))
-            .copied()
-            .collect();
-
-        for f in &nusktb_files {
-            emit_file_item(c, f, root, folder_name);
-        }
-
-        let mut sorted_tex_containers = tex_container_dirs.clone();
-        sorted_tex_containers.sort_by(|a, b| {
-            let an = a.file_name().unwrap().to_string_lossy();
-            let bn = b.file_name().unwrap().to_string_lossy();
-            an.cmp(&bn)
-        });
-
-        let numatb_maya: Vec<&PathBuf> = numatb_files
-            .iter()
-            .filter(|f| {
-                f.file_name()
-                    .unwrap()
-                    .to_string_lossy()
-                    .to_ascii_lowercase()
-                    .contains("__maya__")
-            })
-            .copied()
-            .collect();
-        let numatb_nust: Vec<&PathBuf> = numatb_files
-            .iter()
-            .filter(|f| {
-                f.file_name()
-                    .unwrap()
-                    .to_string_lossy()
-                    .to_ascii_lowercase()
-                    .contains("__nust__")
-            })
-            .copied()
-            .collect();
-        let numatb_other: Vec<&PathBuf> = numatb_files
-            .iter()
-            .filter(|f| {
-                let n = f.file_name().unwrap().to_string_lossy().to_ascii_lowercase();
-                !n.contains("__maya__") && !n.contains("__nust__")
-            })
-            .copied()
-            .collect();
-
-        for (i, tc) in sorted_tex_containers.iter().enumerate() {
-            emit_texture_container_items(c, tc, root, folder_name);
-            let paired = if i == 0 {
-                &numatb_maya
-            } else if i == 1 {
-                &numatb_nust
-            } else {
-                &numatb_other
-            };
-            for f in paired {
-                emit_file_item(c, f, root, folder_name);
-            }
-        }
-
-        for f in &numshb_files {
-            emit_file_item(c, f, root, folder_name);
-        }
-        for f in &numdlb_files {
-            emit_file_item(c, f, root, folder_name);
-        }
-        for f in &jnttbl_files {
-            emit_file_item(c, f, root, folder_name);
-        }
-        for f in &other_files {
-            emit_file_item(c, f, root, folder_name);
-        }
-        for d in &other_subdirs {
-            emit_dir_recursive_inner(c, d, root, folder_name, &[], depth + 1, include_shared_textures);
-        }
+        // SSBH model folder — use canonical EXVS ordering
+        build_exvs_model_folder(c, &files, &tex_container_dirs, &relevant_dirs, root, folder_name, depth, opts);
     } else {
+        // Generic directory — recurse subdirs, then files
         for d in &relevant_dirs {
             if is_texture_container_dir(d) {
-                emit_texture_container_items(c, d, root, folder_name);
+                build_exvs_texture_container(c, d, root, folder_name);
             } else {
-                emit_dir_recursive_inner(c, d, root, folder_name, &[], depth + 1, include_shared_textures);
+                build_exvs_directory(c, d, root, folder_name, &[], depth + 1, opts);
             }
         }
-
         for f in &files {
-            emit_file_item(c, f, root, folder_name);
+            push_exvs_file_item(c, f, root, folder_name);
         }
     }
 
@@ -3648,7 +3648,7 @@ fn rebuild_structure_from_scratch(
 
     let mut collector = RebuildCollector::new();
 
-    emit_dir_recursive(&mut collector, root, root, folder_name, &[], 0);
+    build_exvs_structure_tree(&mut collector, root, folder_name, &ExvsBuildOpts { include_shared_textures: false });
 
     let sub_file_data: Vec<RebuildSubFileData> = collector
         .files
@@ -3724,7 +3724,7 @@ fn rebuild_structure_from_scratch_with_shared_textures(
 
     let mut collector = RebuildCollector::new();
 
-    emit_dir_recursive_with_shared_textures(&mut collector, root, root, folder_name, &[], 0);
+    build_exvs_structure_tree(&mut collector, root, folder_name, &ExvsBuildOpts { include_shared_textures: true });
 
     let sub_file_data: Vec<RebuildSubFileData> = collector
         .files
