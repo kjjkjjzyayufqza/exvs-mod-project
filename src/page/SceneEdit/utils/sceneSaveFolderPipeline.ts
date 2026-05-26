@@ -297,7 +297,7 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
   emitStep(onProgress, "csv", "Writing CSV files...", "running");
   try {
     const infoFolder = await resolveOrCreateInfoFolder(stageRoot);
-    const gpCsv = graphicParams.map((p) => `${p.key},${p.value}`).join("\r\n") + "\r\n";
+    const gpCsv = graphicParams.map((p) => p.key === "" && p.value === "" ? "" : `${p.key},${p.value}`).join("\r\n") + "\r\n";
     await writeTextFile(`${infoFolder}/graphic_param.csv`, gpCsv);
 
     let placementRowsToSave: readonly PlacementRow[] = placementEntries;

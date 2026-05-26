@@ -359,7 +359,7 @@ export async function executeStageSave(params: {
 
   // Phase 3: write CSV files
   const infoFolder = await resolveOrCreateInfoFolder(stageRoot);
-  const gpCsv = graphicParams.map((p) => `${p.key},${p.value}`).join("\r\n") + "\r\n";
+  const gpCsv = graphicParams.map((p) => p.key === "" && p.value === "" ? "" : `${p.key},${p.value}`).join("\r\n") + "\r\n";
   await writeTextFile(`${infoFolder}/graphic_param.csv`, gpCsv);
 
   if (placementHeader.length > 0 && placementRowsToSave.length > 0) {

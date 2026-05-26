@@ -2373,16 +2373,23 @@ fn parse_graphic_param_csv(root: &Path, warnings: &mut Vec<String>) -> Vec<Graph
     match fs::read_to_string(&csv_path) {
         Ok(content) => content
             .lines()
-            .filter(|line| !line.trim().is_empty())
             .filter_map(|line| {
-                let parts: Vec<&str> = line.splitn(2, ',').collect();
-                if parts.len() == 2 {
+                if line.trim().is_empty() {
+                    // Preserve empty lines — EXVS uses them as section separators
                     Some(GraphicParamEntry {
-                        key: parts[0].trim().to_string(),
-                        value: parts[1].trim().to_string(),
+                        key: String::new(),
+                        value: String::new(),
                     })
                 } else {
-                    None
+                    let parts: Vec<&str> = line.splitn(2, ',').collect();
+                    if parts.len() == 2 {
+                        Some(GraphicParamEntry {
+                            key: parts[0].trim().to_string(),
+                            value: parts[1].trim().to_string(),
+                        })
+                    } else {
+                        None
+                    }
                 }
             })
             .collect(),
@@ -3291,6 +3298,20 @@ fn collect_sorted_entries(dir: &Path) -> (Vec<PathBuf>, Vec<PathBuf>) {
 /// Recursively walk a directory and emit SubFileStructure entries.
 /// Texture container dirs (all-digit name, only nutexb children) get unk3=32.
 /// All other dirs get unk3=0.
+/// Returns a sort key for loose files inside info/ directory.
+/// EXVS fixed order: border_hit.hkt(0), placement.csv(1), graphic_param.csv(2), plan_param.spbin(3).
+/// Files not in the known list sort alphabetically after the known ones.
+fn info_file_order(name: &str) -> (u8, String) {
+    let lower = name.to_ascii_lowercase();
+    match lower.as_str() {
+        n if n.contains("border_hit") => (0, String::new()),
+        n if n.contains("placement") => (1, String::new()),
+        n if n.contains("graphic_param") => (2, String::new()),
+        n if n.contains("plan_param") => (3, String::new()),
+        _ => (4, lower),
+    }
+}
+
 /// Returns a sort key for content-level directories.
 /// Order: base=0, info=1, sky=3, textures=4 (excluded), everything else=2 (models, alphabetical).
 fn stage_content_dir_order(name: &str) -> (u8, String) {
@@ -3333,12 +3354,32 @@ fn build_exvs_structure_tree(
 ) {
     build_exvs_directory(c, root, root, folder_name, &[], 0, opts);
 
-    // EXVS game-original archives have a trailing empty Folder(count=0) at root level.
-    // This increments the first emitted Folder node count by 1.
-    // Without this, the game may reject the archive.
-    c.push_folder(0, 0);
-    c.push_end(1);
-    // Patch the first Folder in the structure to increment its child count.
+    // EXVS game-original archives have a trailing empty Folder(count=0) INSIDE
+    // the first wrapper Folder (the "0/" level). In origin data the structure is:
+    //   Folder(count=2) -> [content Folder, empty Folder(0)]
+    // The empty Folder must be inserted before the wrapper's closing EndMark,
+    // not appended after it.
+    // Find the last EndMark (which closes the depth=1 wrapper Folder) and insert before it.
+    let insert_pos = c.structure.len().saturating_sub(1);
+    c.structure.insert(
+        insert_pos,
+        SubFileStructureEntry::Folder {
+            unk1: "00000000".to_string(),
+            folder_count: 0,
+            unk2: "00000000".to_string(),
+            unk2_1: 0,
+            unk3: 0,
+            unk4: 0,
+            unk5: 0,
+            unk6: 0,
+        },
+    );
+    // Insert EndMark(1) to close the empty Folder, right after it
+    c.structure.insert(
+        insert_pos + 1,
+        SubFileStructureEntry::EndMark { end_mark_count: 1 },
+    );
+    // Patch the first Folder to reflect the added child.
     if let Some(SubFileStructureEntry::Folder { folder_count, .. }) = c.structure.first_mut() {
         *folder_count += 1;
     }
@@ -3632,8 +3673,17 @@ fn build_exvs_directory(
                 build_exvs_directory(c, d, root, folder_name, &[], depth + 1, opts);
             }
         }
-        // Emit loose files
-        for f in &files {
+        // Emit loose files.
+        // EXVS info/ has a fixed file order: border_hit.hkt, placement.csv,
+        // graphic_param.csv, plan_param.spbin (NOT alphabetical).
+        let sorted_files: Vec<&PathBuf> = if is_info_dir {
+            let mut f: Vec<&PathBuf> = files.iter().collect();
+            f.sort_by_key(|p| info_file_order(&p.file_name().unwrap().to_string_lossy()));
+            f
+        } else {
+            files.iter().collect()
+        };
+        for f in &sorted_files {
             push_exvs_file_item(c, f, root, folder_name);
         }
         // Emit post_effect/ LAST (EXVS info/ layout requirement)

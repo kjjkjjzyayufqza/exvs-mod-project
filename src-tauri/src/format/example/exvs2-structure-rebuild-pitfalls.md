@@ -118,10 +118,88 @@ After any rebuild code change, compare the output metadata binary against
 a known-good origin:
 
 1. **Size must match exactly** — even 1 byte difference = crash
-2. **Structure tail pattern**: `...0B 0B 0B 0A [33 zero bytes] 0B 0B` (3 EndMarks
-   before empty Folder, then Folder(0) 33 bytes, then 2... wait no, the exact
-   count depends on nesting depth)
-3. **Extract and diff**: Use `zlib.decompressobj(-15)` on the metadata region
+2. **Extract and diff**: Use `zlib.decompressobj(-15)` on the metadata region
    (offset 0x30, length from offset 0x20) and compare byte-for-byte
-4. **Remaining diffs should only be**: fileIndex values inside texture containers
-   (ordering from SubFileData pool, acceptable)
+3. **Remaining diffs should only be**: fileIndex values inside texture containers
+   (ordering from SubFileData pool, acceptable — game reads by fileIndex not position)
+4. **Re-extract the repacked fhm2d** and verify file contents match originals
+
+
+---
+
+## Pitfall 7: Trailing Empty Folder Position (Inside vs Outside)
+
+**Symptom**: info/ folder contents not loaded by game.
+
+**Root cause**: The trailing `Folder(count=0)` was appended at the **root level**
+(as a sibling of the outer wrapper Folder), but in the game-original format it
+must be **inside** the outer wrapper (as its second child).
+
+Origin structure:
+```
+0x16F73C97/
+  └─ 0/              ← outer wrapper Folder(count=2)
+      ├─ 0/          ← content Folder(count=4) with base/info/models/sky
+      └─ 1/          ← empty trailing Folder(count=0) — INSIDE wrapper
+```
+
+Wrong (our initial impl):
+```
+0x16F73C97/
+  ├─ 0/              ← outer wrapper Folder(count=1)
+  │   └─ 0/          ← content
+  └─ 1/              ← empty Folder — OUTSIDE wrapper (wrong!)
+```
+
+**Fix**: Insert `Folder(0) + EndMark(1)` at `c.structure.len() - 1` (before the
+wrapper's closing EndMark), not at the end. Then patch the wrapper's folderCount += 1.
+
+**Rule**: The trailing empty Folder is always a child of the outermost wrapper,
+not a root-level sibling.
+
+---
+
+## Pitfall 8: info/ Loose File Order (placement before graphic_param)
+
+**Symptom**: Game reads wrong CSV data for graphic parameters (gets placement
+data instead, or vice versa).
+
+**Root cause**: `collect_sorted_entries` sorts files alphabetically, producing
+`border_hit → graphic_param → placement → plan_param`. But EXVS expects the
+fixed order: `border_hit → placement → graphic_param → plan_param`.
+
+**Fix**: Added `info_file_order()` sort function that assigns explicit priority:
+```
+border_hit = 0
+placement = 1
+graphic_param = 2
+plan_param = 3
+everything else = 4 (alphabetical)
+```
+
+Applied only when the current directory is detected as `info/`.
+
+**Rule**: EXVS info/ file order is hardcoded in the game runtime. The game reads
+files positionally (file at position 1 = placement, position 2 = graphic_param).
+Alphabetical ordering will swap these and break stage loading.
+
+---
+
+## Pitfall 9: graphic_param.csv Empty Line Preservation
+
+**Symptom**: Repacked graphic_param.csv is 2 bytes shorter than original.
+Game may misparse parameters after the missing separator.
+
+**Root cause**: `parse_graphic_param_csv` filtered out empty lines with
+`.filter(|line| !line.trim().is_empty())`. The original CSV has an empty line
+at row 86 used as a section separator. When saving, only key-value pairs were
+written back, losing the empty line.
+
+**Fix**:
+- Rust parser: Preserve empty lines as `GraphicParamEntry { key: "", value: "" }`
+- TS save: Output empty string (not `","`) for entries where both key and value
+  are empty
+
+**Rule**: Preserve CSV files byte-for-byte when possible. Empty lines and
+trailing whitespace may have meaning in the game's parser. Never filter or
+trim content from configuration files without explicit justification.
