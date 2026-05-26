@@ -3176,6 +3176,11 @@ fn try_preserve_original_structure(
 struct RebuildCollector {
     files: Vec<(String, String)>,
     structure: Vec<SubFileStructureEntry>,
+    /// Deduplication map for nutexb files in texture container dirs.
+    /// Key: lowercase filename (e.g. "stage001_panel_01_diffuse.nutexb")
+    /// Value: the first fileIndex assigned to this texture.
+    /// Same-named nutexb across different model folders share one SubFileData entry.
+    nutexb_dedup: HashMap<String, i32>,
 }
 
 impl RebuildCollector {
@@ -3183,6 +3188,7 @@ impl RebuildCollector {
         Self {
             files: Vec::new(),
             structure: Vec::new(),
+            nutexb_dedup: HashMap::new(),
         }
     }
 
@@ -3192,13 +3198,30 @@ impl RebuildCollector {
         idx
     }
 
+    /// Add a nutexb file with deduplication by lowercase filename.
+    /// If the same filename was already added, returns the existing fileIndex
+    /// and `is_link=true`. Otherwise creates a new SubFileData entry.
+    fn add_nutexb_dedup(&mut self, rel_path: String, filename_lower: &str) -> (i32, bool) {
+        if let Some(&existing_idx) = self.nutexb_dedup.get(filename_lower) {
+            return (existing_idx, true);
+        }
+        let idx = self.files.len() as i32;
+        self.files.push((rel_path, ".nutexb".to_string()));
+        self.nutexb_dedup.insert(filename_lower.to_string(), idx);
+        (idx, false)
+    }
+
     fn push_item(&mut self, file_index: i32, unk2: &str) {
+        self.push_item_ex(file_index, unk2, 0);
+    }
+
+    fn push_item_ex(&mut self, file_index: i32, unk2: &str, unk3: i32) {
         self.structure.push(SubFileStructureEntry::Item {
             unk1: "00000000".to_string(),
             file_index,
             unk2: unk2.to_string(),
             unk2_1: 0,
-            unk3: 0,
+            unk3,
             unk4: 0,
             original_file_index: file_index,
             display_name: None,
@@ -3273,6 +3296,29 @@ fn emit_dir_recursive(
     skip_names: &[&str],
     depth: usize,
 ) {
+    emit_dir_recursive_inner(c, dir, root, folder_name, skip_names, depth, false);
+}
+
+fn emit_dir_recursive_with_shared_textures(
+    c: &mut RebuildCollector,
+    dir: &Path,
+    root: &Path,
+    folder_name: &str,
+    skip_names: &[&str],
+    depth: usize,
+) {
+    emit_dir_recursive_inner(c, dir, root, folder_name, skip_names, depth, true);
+}
+
+fn emit_dir_recursive_inner(
+    c: &mut RebuildCollector,
+    dir: &Path,
+    root: &Path,
+    folder_name: &str,
+    skip_names: &[&str],
+    depth: usize,
+    include_shared_textures: bool,
+) {
     if depth > 20 {
         return;
     }
@@ -3292,8 +3338,8 @@ fn emit_dir_recursive(
         .collect();
 
     // At the content level (where base/, info/, sky/ exist), enforce
-    // the canonical FHM2D ordering: base → info → {models sorted} → sky.
-    // Also skip textures/ as textures are now embedded in each model folder.
+    // the canonical FHM2D ordering: base → info → {models sorted} → sky → textures.
+    // Skip textures/ unless include_shared_textures is true (shared textures mode).
     let has_base = relevant_dirs
         .iter()
         .any(|d| d.file_name().unwrap().to_string_lossy().eq_ignore_ascii_case(STAGE_BASE_NAME));
@@ -3301,10 +3347,11 @@ fn emit_dir_recursive(
         let mut sorted: Vec<&PathBuf> = relevant_dirs
             .into_iter()
             .filter(|d| {
-                !d.file_name()
-                    .unwrap()
-                    .to_string_lossy()
-                    .eq_ignore_ascii_case(STAGE_TEXTURES_NAME)
+                let name = d.file_name().unwrap().to_string_lossy().to_ascii_lowercase();
+                if name == STAGE_TEXTURES_NAME {
+                    return include_shared_textures;
+                }
+                true
             })
             .collect();
         sorted.sort_by(|a, b| {
@@ -3337,15 +3384,21 @@ fn emit_dir_recursive(
                     .unwrap()
                     .to_string_lossy()
                     .replace('\\', "/");
-                let idx = c.add_file(
+                let filename_lower = tf
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_ascii_lowercase();
+                let (idx, is_link) = c.add_nutexb_dedup(
                     format!(".\\{}\\{}", folder_name, rel.replace('/', "\\")),
-                    ".nutexb".into(),
+                    &filename_lower,
                 );
-                c.push_item(idx, "00000000");
+                let unk3 = if is_link { 1 } else { 0 };
+                c.push_item_ex(idx, "00000000", unk3);
             }
             c.push_end(1);
         } else {
-            emit_dir_recursive(c, d, root, folder_name, &[], depth + 1);
+            emit_dir_recursive_inner(c, d, root, folder_name, &[], depth + 1, include_shared_textures);
         }
     }
 
@@ -3463,6 +3516,13 @@ fn rebuild_structure_from_scratch(
         })
         .collect();
 
+    let dedup_count = collector.nutexb_dedup.len();
+    let item_refs = collector
+        .structure
+        .iter()
+        .filter(|e| matches!(e, SubFileStructureEntry::Item { .. }))
+        .count();
+
     let output = RebuildStructureOutput {
         magic: existing_magic,
         fhm2d_total_count: sub_file_data.len(),
@@ -3477,20 +3537,150 @@ fn rebuild_structure_from_scratch(
         .map_err(|e| format!("Failed to write rebuilt structure JSON: {e}"))?;
 
     eprintln!(
-        "[rebuild_structure] Full rebuild: {} files, {} structure entries -> {}",
+        "[rebuild_structure] Full rebuild: {} unique files ({} nutexb deduped), {} structure entries ({} item refs) -> {}",
         output.fhm2d_total_count,
+        dedup_count,
         output.sub_file_structure.len(),
+        item_refs,
         output_path.display()
     );
 
     Ok(output_path.to_string_lossy().to_string())
 }
 
+fn rebuild_structure_from_scratch_with_shared_textures(
+    root: &Path,
+    folder_name: &str,
+    output_path: &Path,
+) -> Result<String, String> {
+    let existing_magic = find_structure_json_path(root)
+        .and_then(|p| fs::read_to_string(&p).ok())
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|v| v.get("Magic").and_then(|m| m.as_i64()))
+        .map(|m| m as i32)
+        .unwrap_or(-843925575i32);
+
+    let existing_unk_count = find_structure_json_path(root)
+        .and_then(|p| fs::read_to_string(&p).ok())
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|v| v.get("UnkCount").and_then(|m| m.as_u64()))
+        .map(|u| u as u32)
+        .unwrap_or(0);
+
+    let mut collector = RebuildCollector::new();
+
+    emit_dir_recursive_with_shared_textures(&mut collector, root, root, folder_name, &[], 0);
+
+    let sub_file_data: Vec<RebuildSubFileData> = collector
+        .files
+        .iter()
+        .enumerate()
+        .map(|(i, (url, ext))| {
+            let base = url
+                .replace('\\', "/")
+                .split('/')
+                .last()
+                .unwrap_or("")
+                .to_string();
+            RebuildSubFileData {
+                index: i,
+                file_type: ext.clone(),
+                file_index: i as i32,
+                file_url: url.clone(),
+                file_base_name: basename_no_ext(&base),
+            }
+        })
+        .collect();
+
+    let dedup_count = collector.nutexb_dedup.len();
+    let item_refs = collector
+        .structure
+        .iter()
+        .filter(|e| matches!(e, SubFileStructureEntry::Item { .. }))
+        .count();
+
+    let output = RebuildStructureOutput {
+        magic: existing_magic,
+        fhm2d_total_count: sub_file_data.len(),
+        unk_count: existing_unk_count,
+        sub_file_data,
+        sub_file_structure: collector.structure,
+    };
+
+    let json = serde_json::to_string_pretty(&output)
+        .map_err(|e| format!("Failed to serialize rebuilt structure JSON: {e}"))?;
+    fs::write(output_path, &json)
+        .map_err(|e| format!("Failed to write rebuilt structure JSON: {e}"))?;
+
+    eprintln!(
+        "[rebuild_structure_shared] Full rebuild with textures/: {} unique files ({} nutexb deduped), {} structure entries ({} item refs) -> {}",
+        output.fhm2d_total_count,
+        dedup_count,
+        output.sub_file_structure.len(),
+        item_refs,
+        output_path.display()
+    );
+
+    Ok(output_path.to_string_lossy().to_string())
+}
+
+fn patch_nutexb_urls_in_structure(
+    structure_path: &Path,
+    texture_url_map: &HashMap<String, String>,
+) -> Result<(), String> {
+    let content = fs::read_to_string(structure_path)
+        .map_err(|e| format!("Failed to read structure for URL patching: {e}"))?;
+    let mut doc: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse structure JSON for URL patching: {e}"))?;
+
+    let mut patched = 0usize;
+    if let Some(arr) = doc.get_mut("SubFileData").and_then(|v| v.as_array_mut()) {
+        for entry in arr.iter_mut() {
+            let is_nutexb = entry
+                .get("fileType")
+                .and_then(|v| v.as_str())
+                .map(|s| s.eq_ignore_ascii_case(".nutexb"))
+                .unwrap_or(false);
+            if !is_nutexb {
+                continue;
+            }
+            let current_url = entry
+                .get("fileUrl")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let filename_lower = current_url
+                .replace('\\', "/")
+                .split('/')
+                .last()
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            if let Some(new_url) = texture_url_map.get(&filename_lower) {
+                entry["fileUrl"] = serde_json::Value::String(new_url.clone());
+                patched += 1;
+            }
+        }
+    }
+
+    if patched > 0 {
+        let json = serde_json::to_string_pretty(&doc)
+            .map_err(|e| format!("Failed to serialize patched structure: {e}"))?;
+        fs::write(structure_path, &json)
+            .map_err(|e| format!("Failed to write patched structure: {e}"))?;
+        eprintln!(
+            "[patch_nutexb_urls] Patched {} nutexb URL(s) to textures/ paths in {}",
+            patched,
+            structure_path.display()
+        );
+    }
+
+    Ok(())
+}
+
 /// Rebuild `_structure.json` while keeping nutexb files in the shared `textures/` folder.
 ///
 /// Unlike `rebuild_structure_json_for_stage` (which requires textures to be in per-model
-/// numbered subdirs), this variant rewrites every `.nutexb` `fileUrl` in the output JSON
-/// to point at `textures/<filename>.nutexb` — without physically moving any files.
+/// numbered subdirs), this variant includes the `textures/` folder in the structure tree
+/// (marked with `unk3=64`) and rewrites `.nutexb` `fileUrl` entries to point there.
 ///
 /// Workflow: extract → restore_shared_textures → **this function** → repack
 /// No redistribute/restore cycle needed.
@@ -3502,79 +3692,61 @@ pub fn rebuild_structure_json_for_stage_with_shared_textures(
     let textures_dir = content_root.join(STAGE_TEXTURES_NAME);
     let folder_name = root.file_name().and_then(|n| n.to_str()).unwrap_or("stage");
 
-    // Build filename → textures/-relative URL map from the shared textures/ folder.
-    // URL path uses the relative path from pack root to textures/
+    if !textures_dir.is_dir() {
+        return rebuild_structure_json_for_stage(stage_root);
+    }
+
     let textures_rel = if content_root != *root {
         format!("0\\0\\{}", STAGE_TEXTURES_NAME)
     } else {
         STAGE_TEXTURES_NAME.to_string()
     };
     let mut texture_url_map: HashMap<String, String> = HashMap::new();
-    if textures_dir.is_dir() {
-        if let Ok(entries) = fs::read_dir(&textures_dir) {
-            for entry in entries.filter_map(|e| e.ok()) {
-                let fname = entry.file_name().to_string_lossy().to_string();
-                if fname.to_ascii_lowercase().ends_with(".nutexb")
-                    && !entry.file_type().map(|t| t.is_dir()).unwrap_or(true)
-                {
-                    let url = format!(".\\{}\\{}\\{}", folder_name, textures_rel, fname);
-                    texture_url_map.insert(fname.to_ascii_lowercase(), url);
-                }
+    if let Ok(entries) = fs::read_dir(&textures_dir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let fname = entry.file_name().to_string_lossy().to_string();
+            if fname.to_ascii_lowercase().ends_with(".nutexb")
+                && !entry.file_type().map(|t| t.is_dir()).unwrap_or(true)
+            {
+                let url = format!(".\\{}\\{}\\{}", folder_name, textures_rel, fname);
+                texture_url_map.insert(fname.to_ascii_lowercase(), url);
             }
         }
     }
-
-    // First do a normal rebuild (which may reference model/0/ paths if those dirs exist,
-    // or textures/ paths if textures/ is the only location).
-    let structure_path = rebuild_structure_json_for_stage(stage_root)?;
 
     if texture_url_map.is_empty() {
-        // No shared textures folder — nothing to rewrite.
-        return Ok(structure_path);
+        return rebuild_structure_json_for_stage(stage_root);
     }
 
-    // Patch every .nutexb fileUrl to point at textures/.
-    let content = fs::read_to_string(&structure_path)
-        .map_err(|e| format!("Failed to read rebuilt structure JSON: {e}"))?;
-    let mut doc: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse rebuilt structure JSON: {e}"))?;
+    let output_path = root
+        .parent()
+        .unwrap_or(root)
+        .join(format!("{folder_name}_structure.json"));
 
-    let mut patched = 0usize;
-    if let Some(arr) = doc.get_mut("SubFileData").and_then(|v| v.as_array_mut()) {
-        for entry in arr.iter_mut() {
-            let is_nutexb = entry
-                .get("fileType")
-                .and_then(|v| v.as_str())
-                .map(|t| t.eq_ignore_ascii_case(".nutexb"))
-                .unwrap_or(false);
-            if !is_nutexb {
-                continue;
+    // Try to preserve the original structure first.
+    if let Some(original_path) = find_structure_json_path(root) {
+        match try_preserve_original_structure(root, &original_path, &output_path) {
+            Ok(result) => {
+                patch_nutexb_urls_in_structure(&output_path, &texture_url_map)?;
+                return Ok(result);
             }
-            if let Some(url_val) = entry.get_mut("fileUrl") {
-                if let Some(url_str) = url_val.as_str() {
-                    // Extract just the filename from the current URL.
-                    let fname = url_str
-                        .replace('\\', "/")
-                        .split('/')
-                        .last()
-                        .unwrap_or("")
-                        .to_ascii_lowercase();
-                    if let Some(new_url) = texture_url_map.get(&fname) {
-                        *url_val = serde_json::Value::String(new_url.clone());
-                        patched += 1;
-                    }
-                }
+            Err(reason) => {
+                eprintln!(
+                    "[rebuild_structure_shared] Cannot preserve original ({}). Falling back to rebuild with shared textures.",
+                    reason
+                );
             }
         }
     }
 
-    let json = serde_json::to_string_pretty(&doc)
-        .map_err(|e| format!("Failed to serialize patched structure JSON: {e}"))?;
-    fs::write(&structure_path, &json)
-        .map_err(|e| format!("Failed to write patched structure JSON: {e}"))?;
+    // Rebuild from scratch, but INCLUDE the textures/ folder (unk3=64).
+    let structure_path =
+        rebuild_structure_from_scratch_with_shared_textures(root, folder_name, &output_path)?;
+
+    patch_nutexb_urls_in_structure(Path::new(&structure_path), &texture_url_map)?;
 
     eprintln!(
-        "[rebuild_structure_shared] Patched {patched} nutexb URLs to textures/ -> {}",
+        "[rebuild_structure_shared] Rebuilt with shared textures/ -> {}",
         structure_path
     );
 
