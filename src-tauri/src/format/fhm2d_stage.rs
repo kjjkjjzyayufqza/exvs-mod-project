@@ -3020,8 +3020,23 @@ fn is_texture_container_dir(dir: &Path) -> bool {
     }
 }
 
-fn unk2_for_ext(_ext: &str) -> &'static str {
-    "00000000"
+fn file_type_for_ext(ext: &str) -> String {
+    match ext.to_ascii_lowercase().as_str() {
+        ".nutexb" | ".nusktb" | ".numatb" | ".numshb" | ".numdlb" | ".nuanmb" | ".nurpdb"
+        | ".nushdb" | ".nufxlb" | ".nuhlpb" | ".nudnbb" | ".nus3bank" => ext.to_ascii_lowercase(),
+        _ => ".bin".to_string(),
+    }
+}
+
+fn unk2_for_ext(ext: &str) -> &'static str {
+    match ext.to_ascii_lowercase().as_str() {
+        ".nusktb" => "10000000",
+        ".numatb" => "21000000",
+        ".numshb" => "30000000",
+        ".numdlb" => "40000000",
+        ".jnttbl" => "50000000",
+        _ => "00000000",
+    }
 }
 
 fn collect_packable_files_recursive(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -3229,6 +3244,7 @@ impl RebuildCollector {
     }
 
     fn push_folder(&mut self, child_count: i32, unk3: i32) {
+        let unk5 = if unk3 == 32 { 1 } else { 0 };
         self.structure.push(SubFileStructureEntry::Folder {
             unk1: "00000000".to_string(),
             folder_count: child_count,
@@ -3236,7 +3252,7 @@ impl RebuildCollector {
             unk2_1: 0,
             unk3,
             unk4: 0,
-            unk5: 0,
+            unk5,
             unk6: 0,
         });
     }
@@ -3286,6 +3302,53 @@ fn stage_content_dir_order(name: &str) -> (u8, String) {
         n if n == STAGE_TEXTURES_NAME => (4, String::new()),
         other => (2, other.to_string()),
     }
+}
+
+fn emit_texture_container_items(
+    c: &mut RebuildCollector,
+    tex_dir: &Path,
+    root: &Path,
+    folder_name: &str,
+) {
+    let tex_files = collect_sorted_entries(tex_dir).1;
+    c.push_folder(tex_files.len() as i32, 32);
+    for tf in &tex_files {
+        let rel = tf
+            .strip_prefix(root)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
+        let filename_lower = tf
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .to_ascii_lowercase();
+        let (idx, _) = c.add_nutexb_dedup(
+            format!(".\\{}\\{}", folder_name, rel.replace('/', "\\")),
+            &filename_lower,
+        );
+        c.push_item_ex(idx, "00000000", 0);
+    }
+    c.push_end(1);
+}
+
+fn emit_file_item(
+    c: &mut RebuildCollector,
+    file: &Path,
+    root: &Path,
+    folder_name: &str,
+) {
+    let ext = ext_of(&file.file_name().unwrap().to_string_lossy());
+    let rel = file
+        .strip_prefix(root)
+        .unwrap()
+        .to_string_lossy()
+        .replace('\\', "/");
+    let idx = c.add_file(
+        format!(".\\{}\\{}", folder_name, rel.replace('/', "\\")),
+        ext.clone(),
+    );
+    c.push_item(idx, unk2_for_ext(&ext));
 }
 
 fn emit_dir_recursive(
@@ -3374,46 +3437,123 @@ fn emit_dir_recursive_inner(
         c.push_folder(child_count as i32, unk3);
     }
 
-    for d in &relevant_dirs {
-        if is_texture_container_dir(d) {
-            let tex_files = collect_sorted_entries(d).1;
-            c.push_folder(tex_files.len() as i32, 32);
-            for tf in &tex_files {
-                let rel = tf
-                    .strip_prefix(root)
-                    .unwrap()
-                    .to_string_lossy()
-                    .replace('\\', "/");
-                let filename_lower = tf
-                    .file_name()
-                    .unwrap()
-                    .to_string_lossy()
-                    .to_ascii_lowercase();
-                let (idx, is_link) = c.add_nutexb_dedup(
-                    format!(".\\{}\\{}", folder_name, rel.replace('/', "\\")),
-                    &filename_lower,
-                );
-                let unk3 = if is_link { 1 } else { 0 };
-                c.push_item_ex(idx, "00000000", unk3);
+    let tex_container_dirs: Vec<&PathBuf> = relevant_dirs
+        .iter()
+        .filter(|d| is_texture_container_dir(d))
+        .copied()
+        .collect();
+    let has_nusktb = files
+        .iter()
+        .any(|f| ext_of(&f.file_name().unwrap().to_string_lossy()) == ".nusktb");
+    let is_ssbh_folder = has_nusktb && !tex_container_dirs.is_empty();
+
+    if is_ssbh_folder {
+        let mut nusktb_files: Vec<&PathBuf> = Vec::new();
+        let mut numatb_files: Vec<&PathBuf> = Vec::new();
+        let mut numshb_files: Vec<&PathBuf> = Vec::new();
+        let mut numdlb_files: Vec<&PathBuf> = Vec::new();
+        let mut jnttbl_files: Vec<&PathBuf> = Vec::new();
+        let mut other_files: Vec<&PathBuf> = Vec::new();
+        for f in &files {
+            let ext = ext_of(&f.file_name().unwrap().to_string_lossy());
+            match ext.as_str() {
+                ".nusktb" => nusktb_files.push(f),
+                ".numatb" => numatb_files.push(f),
+                ".numshb" => numshb_files.push(f),
+                ".numdlb" => numdlb_files.push(f),
+                ".jnttbl" => jnttbl_files.push(f),
+                _ => other_files.push(f),
             }
-            c.push_end(1);
-        } else {
+        }
+        let other_subdirs: Vec<&PathBuf> = relevant_dirs
+            .iter()
+            .filter(|d| !is_texture_container_dir(d))
+            .copied()
+            .collect();
+
+        for f in &nusktb_files {
+            emit_file_item(c, f, root, folder_name);
+        }
+
+        let mut sorted_tex_containers = tex_container_dirs.clone();
+        sorted_tex_containers.sort_by(|a, b| {
+            let an = a.file_name().unwrap().to_string_lossy();
+            let bn = b.file_name().unwrap().to_string_lossy();
+            an.cmp(&bn)
+        });
+
+        let numatb_maya: Vec<&PathBuf> = numatb_files
+            .iter()
+            .filter(|f| {
+                f.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_ascii_lowercase()
+                    .contains("__maya__")
+            })
+            .copied()
+            .collect();
+        let numatb_nust: Vec<&PathBuf> = numatb_files
+            .iter()
+            .filter(|f| {
+                f.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_ascii_lowercase()
+                    .contains("__nust__")
+            })
+            .copied()
+            .collect();
+        let numatb_other: Vec<&PathBuf> = numatb_files
+            .iter()
+            .filter(|f| {
+                let n = f.file_name().unwrap().to_string_lossy().to_ascii_lowercase();
+                !n.contains("__maya__") && !n.contains("__nust__")
+            })
+            .copied()
+            .collect();
+
+        for (i, tc) in sorted_tex_containers.iter().enumerate() {
+            emit_texture_container_items(c, tc, root, folder_name);
+            let paired = if i == 0 {
+                &numatb_maya
+            } else if i == 1 {
+                &numatb_nust
+            } else {
+                &numatb_other
+            };
+            for f in paired {
+                emit_file_item(c, f, root, folder_name);
+            }
+        }
+
+        for f in &numshb_files {
+            emit_file_item(c, f, root, folder_name);
+        }
+        for f in &numdlb_files {
+            emit_file_item(c, f, root, folder_name);
+        }
+        for f in &jnttbl_files {
+            emit_file_item(c, f, root, folder_name);
+        }
+        for f in &other_files {
+            emit_file_item(c, f, root, folder_name);
+        }
+        for d in &other_subdirs {
             emit_dir_recursive_inner(c, d, root, folder_name, &[], depth + 1, include_shared_textures);
         }
-    }
+    } else {
+        for d in &relevant_dirs {
+            if is_texture_container_dir(d) {
+                emit_texture_container_items(c, d, root, folder_name);
+            } else {
+                emit_dir_recursive_inner(c, d, root, folder_name, &[], depth + 1, include_shared_textures);
+            }
+        }
 
-    for f in &files {
-        let ext = ext_of(&f.file_name().unwrap().to_string_lossy());
-        let rel = f
-            .strip_prefix(root)
-            .unwrap()
-            .to_string_lossy()
-            .replace('\\', "/");
-        let idx = c.add_file(
-            format!(".\\{}\\{}", folder_name, rel.replace('/', "\\")),
-            ext.clone(),
-        );
-        c.push_item(idx, unk2_for_ext(&ext));
+        for f in &files {
+            emit_file_item(c, f, root, folder_name);
+        }
     }
 
     if depth > 0 {
@@ -3508,7 +3648,7 @@ fn rebuild_structure_from_scratch(
                 .to_string();
             RebuildSubFileData {
                 index: i,
-                file_type: ext.clone(),
+                file_type: file_type_for_ext(&ext),
                 file_index: i as i32,
                 file_url: url.clone(),
                 file_base_name: basename_no_ext(&base),
@@ -3584,7 +3724,7 @@ fn rebuild_structure_from_scratch_with_shared_textures(
                 .to_string();
             RebuildSubFileData {
                 index: i,
-                file_type: ext.clone(),
+                file_type: file_type_for_ext(&ext),
                 file_index: i as i32,
                 file_url: url.clone(),
                 file_base_name: basename_no_ext(&base),
