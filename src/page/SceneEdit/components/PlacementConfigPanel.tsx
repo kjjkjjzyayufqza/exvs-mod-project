@@ -7,6 +7,7 @@ interface PlacementConfigPanelProps {
   entry: PlacementRow;
   initialEntry?: PlacementRow | null;
   placementHeader: string[];
+  subModels?: Array<{ folderName: string; objectIndex: number }>;
   onFieldPreview?: (fieldIndex: number, value: string) => void;
   onFieldCommit?: (fieldIndex: number, value: string) => void;
   onAddField?: (key: string, value: string) => void;
@@ -18,6 +19,7 @@ export function PlacementConfigPanel({
   entry,
   initialEntry = null,
   placementHeader,
+  subModels = [],
   onFieldPreview,
   onFieldCommit,
   onAddField,
@@ -39,6 +41,7 @@ export function PlacementConfigPanel({
           entry={entry}
           initialEntry={initialEntry}
           placementHeader={placementHeader}
+          subModels={subModels}
           onFieldPreview={noopPreview}
           onFieldCommit={noopCommit}
           onAddField={noopAdd}
@@ -54,6 +57,7 @@ export function PlacementConfigPanel({
       entry={entry}
       initialEntry={initialEntry}
       placementHeader={placementHeader}
+      subModels={subModels}
       onFieldPreview={onFieldPreview}
       onFieldCommit={onFieldCommit}
       onAddField={onAddField ?? noopAdd}

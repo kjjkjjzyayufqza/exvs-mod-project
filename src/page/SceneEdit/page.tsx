@@ -3617,6 +3617,7 @@ export default function SceneEdit() {
                     initialEntries={initialSnapshotRef.current?.placementEntries ?? null}
                     placementHeader={placementHeader}
                     selectedIndex={selectedPlacementIdx}
+                    subModels={subModels}
                     onSelectEntry={handleSelectPlacement}
                     onFieldPreview={handlePlacementFieldPreview}
                     onFieldCommit={handlePlacementFieldCommit}

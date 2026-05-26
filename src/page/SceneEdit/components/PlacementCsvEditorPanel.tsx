@@ -26,6 +26,7 @@ interface PlacementCsvEditorPanelProps {
   initialEntries: PlacementRow[] | null;
   placementHeader: string[];
   selectedIndex: number | null;
+  subModels: Array<{ folderName: string; objectIndex: number }>;
   onSelectEntry: (index: number) => void;
   onFieldPreview: (index: number, fieldIndex: number, value: string) => void;
   onFieldCommit: (index: number, fieldIndex: number, value: string) => void;
@@ -56,6 +57,7 @@ export function PlacementCsvEditorPanel({
   initialEntries,
   placementHeader,
   selectedIndex,
+  subModels,
   onSelectEntry,
   onFieldPreview,
   onFieldCommit,
@@ -158,6 +160,7 @@ export function PlacementCsvEditorPanel({
             entry={selectedEntry}
             initialEntry={selectedInitial}
             placementHeader={placementHeader}
+            subModels={subModels}
             onFieldPreview={(fieldIndex, value) => onFieldPreview(selectedIndex, fieldIndex, value)}
             onFieldCommit={(fieldIndex, value) => onFieldCommit(selectedIndex, fieldIndex, value)}
             onAddField={(key, value) => onAddField(selectedIndex, key, value)}

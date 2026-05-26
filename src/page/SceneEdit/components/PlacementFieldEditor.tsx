@@ -40,6 +40,7 @@ interface PlacementFieldEditorProps {
   entry: PlacementRow;
   initialEntry: PlacementRow | null;
   placementHeader: string[];
+  subModels: Array<{ folderName: string; objectIndex: number }>;
   onFieldPreview: (fieldIndex: number, value: string) => void;
   onFieldCommit: (fieldIndex: number, value: string) => void;
   onAddField: (key: string, value: string) => void;
@@ -51,6 +52,7 @@ export function PlacementFieldEditor({
   entry,
   initialEntry,
   placementHeader,
+  subModels,
   onFieldPreview,
   onFieldCommit,
   onAddField,
@@ -119,6 +121,7 @@ export function PlacementFieldEditor({
           label={group.label}
           fields={group.fields}
           initialEntry={initialEntry}
+          subModels={subModels}
           onFieldPreview={onFieldPreview}
           onFieldCommit={onFieldCommit}
           onRemoveField={onRemoveField}
@@ -135,6 +138,7 @@ function FieldGroupSection({
   label,
   fields,
   initialEntry,
+  subModels,
   onFieldPreview,
   onFieldCommit,
   onRemoveField,
@@ -143,6 +147,7 @@ function FieldGroupSection({
   label: string;
   fields: PlacementFieldRef[];
   initialEntry: PlacementRow | null;
+  subModels: Array<{ folderName: string; objectIndex: number }>;
   onFieldPreview: (fieldIndex: number, value: string) => void;
   onFieldCommit: (fieldIndex: number, value: string) => void;
   onRemoveField: (keyIndex: number) => void;
@@ -168,6 +173,7 @@ function FieldGroupSection({
               key={`${field.keyIndex}-${field.key}`}
               field={field}
               initialEntry={initialEntry}
+              subModels={subModels}
               onFieldPreview={onFieldPreview}
               onFieldCommit={onFieldCommit}
               onRemoveField={onRemoveField}
@@ -183,6 +189,7 @@ function FieldGroupSection({
 function FieldRow({
   field,
   initialEntry,
+  subModels,
   onFieldPreview,
   onFieldCommit,
   onRemoveField,
@@ -190,6 +197,7 @@ function FieldRow({
 }: {
   field: PlacementFieldRef;
   initialEntry: PlacementRow | null;
+  subModels: Array<{ folderName: string; objectIndex: number }>;
   onFieldPreview: (fieldIndex: number, value: string) => void;
   onFieldCommit: (fieldIndex: number, value: string) => void;
   onRemoveField: (keyIndex: number) => void;
@@ -220,6 +228,7 @@ function FieldRow({
       <FieldValueInput
         field={field}
         commitFallback={originalValue ?? field.value}
+        subModels={subModels}
         onFieldPreview={onFieldPreview}
         onFieldCommit={onFieldCommit}
       />
@@ -250,11 +259,13 @@ function FieldRow({
 function FieldValueInput({
   field,
   commitFallback,
+  subModels,
   onFieldPreview,
   onFieldCommit,
 }: {
   field: PlacementFieldRef;
   commitFallback: string;
+  subModels: Array<{ folderName: string; objectIndex: number }>;
   onFieldPreview: (fieldIndex: number, value: string) => void;
   onFieldCommit: (fieldIndex: number, value: string) => void;
 }) {
@@ -273,6 +284,31 @@ function FieldValueInput({
         <SelectContent>
           <SelectItem value="TRUE">TRUE</SelectItem>
           <SelectItem value="FALSE">FALSE</SelectItem>
+        </SelectContent>
+      </Select>
+    );
+  }
+
+  // VDK_OBJECTNUMBER — render as Select with scene object list
+  if (field.key.toUpperCase() === "VDK_OBJECTNUMBER" && subModels.length > 0) {
+    return (
+      <Select
+        value={field.value}
+        onValueChange={(value) => {
+          onFieldPreview(field.valueIndex, value);
+          onFieldCommit(field.valueIndex, value);
+        }}
+      >
+        <SelectTrigger className="h-6 min-w-0 px-1.5 text-[10px] font-mono">
+          <SelectValue placeholder="Select object..." />
+        </SelectTrigger>
+        <SelectContent>
+          {subModels.map((sm) => (
+            <SelectItem key={sm.objectIndex} value={String(sm.objectIndex)}>
+              <span className="font-mono text-muted-foreground">{sm.objectIndex}:</span>{" "}
+              <span>{sm.folderName}</span>
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
     );

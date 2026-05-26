@@ -145,15 +145,31 @@ export function createPlacementRowForType(vdkType: string): PlacementRow {
   const upper = vdkType.toUpperCase();
   const rawFields =
     upper === "OBJECT"
-      ? ["VDK_TYPE", upper, "VDK_OBJECTNUMBER", "", "VDK_PROGRAMID", "0", ...BASE_TRANSFORM_FIELDS]
+      ? [
+          "VDK_TYPE", upper,
+          "VDK_INITIAL_SPAWN", "TRUE",
+          "VDK_POSITION_X", "0",
+          "VDK_POSITION_Y", "0",
+          "VDK_POSITION_Z", "0",
+          "VDK_ROTATION_X", "0",
+          "VDK_ROTATION_Y", "0",
+          "VDK_ROTATION_Z", "0",
+          "VDK_PLACEMENT_NAME", "",
+          "VDK_OBJECTNUMBER", "0",
+          "VDK_PROGRAMID", "0",
+          "VDK_HITPOINT", "UNBREAKABLE",
+          "VDK_SHADOW_CAST", "TRUE",
+        ]
       : upper === "PROP"
         ? ["VDK_TYPE", upper, "VDK_PROP_LIFE_MAX", "100", ...BASE_TRANSFORM_FIELDS]
         : ["VDK_TYPE", upper, ...BASE_TRANSFORM_FIELDS];
 
   return {
     vdkType: upper,
-    objectNumber: null,
-    posX: 0, posY: 0, posZ: 0,
+    objectNumber: upper === "OBJECT" ? 0 : null,
+    posX: 0,
+    posY: 0,
+    posZ: 0,
     rotX: 0, rotY: 0, rotZ: 0,
     scaleX: 1, scaleY: 1, scaleZ: 1,
     rawFields,

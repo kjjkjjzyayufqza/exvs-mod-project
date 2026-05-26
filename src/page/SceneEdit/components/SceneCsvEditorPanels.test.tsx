@@ -73,6 +73,7 @@ describe("Scene CSV editor panels", () => {
         initialEntries={null}
         placementHeader={[]}
         selectedIndex={0}
+        subModels={[]}
         onSelectEntry={vi.fn()}
         onFieldPreview={vi.fn()}
         onFieldCommit={vi.fn()}
