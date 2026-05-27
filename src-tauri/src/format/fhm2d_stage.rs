@@ -2103,19 +2103,32 @@ pub fn load_stage_skeleton_impl(stage_root: &str) -> Result<StageSkeleton, Strin
 
     let mut sub_model_manifest = Vec::new();
     let mut object_index = 0usize;
+
+    // Count non-special, non-sky model folders to determine sky's forced index.
+    let skel_model_folder_count = entries.iter().filter(|e| {
+        let n = e.file_name().to_string_lossy().to_string();
+        n != STAGE_BASE_NAME && n != STAGE_INFO_NAME && n != STAGE_TEXTURES_NAME && n != STAGE_SKY_NAME
+    }).count();
+
     for entry in &entries {
         let name = entry.file_name().to_string_lossy().to_string();
         if name == STAGE_BASE_NAME || name == STAGE_INFO_NAME || name == STAGE_TEXTURES_NAME {
             continue;
         }
+        let current_index = if name == STAGE_SKY_NAME {
+            skel_model_folder_count
+        } else {
+            let idx = object_index;
+            object_index += 1;
+            idx
+        };
         let folder = root.join(&name);
         if folder.is_dir() && find_numdlb_in_dir(&folder).is_some() {
             sub_model_manifest.push(SubModelManifestEntry {
                 folder_name: name,
-                object_index,
+                object_index: current_index,
             });
         }
-        object_index += 1;
     }
 
     let graphic_params = parse_graphic_param_csv(root, &mut warnings);
@@ -2241,6 +2254,15 @@ pub fn load_stage_bundle_impl(stage_root: &str) -> Result<StageBundle, String> {
         .collect();
     entries.sort_by_key(|e| e.file_name());
 
+    // Count non-special model folders to determine sky's forced index.
+    let model_folder_count = entries.iter().filter(|e| {
+        let n = e.file_name().to_string_lossy().to_string();
+        n != STAGE_BASE_NAME
+            && n != STAGE_TEXTURES_NAME
+            && Some(n.as_str()) != info_dir_name.as_deref()
+            && n != STAGE_SKY_NAME
+    }).count();
+
     let mut object_index = 0usize;
     for entry in &entries {
         let name = entry.file_name().to_string_lossy().to_string();
@@ -2252,14 +2274,22 @@ pub fn load_stage_bundle_impl(stage_root: &str) -> Result<StageBundle, String> {
                 continue;
             }
         }
+        // Sky is forced to the last objectIndex (= model_folder_count),
+        // matching the FHM2D in-memory loader and repack ordering (R8).
+        let current_index = if name == STAGE_SKY_NAME {
+            model_folder_count
+        } else {
+            let idx = object_index;
+            object_index += 1;
+            idx
+        };
         if let Some(bundle) = load_model_in_subfolder(root, &name, &mut warnings) {
             sub_models.push(StageSubModelEntry {
                 folder_name: name,
-                object_index,
+                object_index: current_index,
                 bundle,
             });
         }
-        object_index += 1;
     }
 
     let graphic_params = parse_graphic_param_csv(root, &mut warnings);

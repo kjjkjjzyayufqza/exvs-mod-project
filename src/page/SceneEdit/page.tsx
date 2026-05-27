@@ -422,6 +422,21 @@ export default function SceneEdit() {
     placementEntries: PlacementRow[];
   } | null>(null);
 
+  // Merge disk-loaded subModels with imported DAE objects so the placement panel
+  // can reference newly imported models before saving to disk.
+  const effectiveSubModels = useMemo(() => {
+    if (importedDaeObjects.length === 0) return subModels;
+    const existing = new Set(subModels.map((s) => s.folderName));
+    const nextIndex = subModels.length;
+    const extras = importedDaeObjects
+      .filter((obj) => !existing.has(obj.name))
+      .map((obj, i) => ({
+        folderName: obj.name,
+        objectIndex: nextIndex + i,
+      }));
+    return extras.length > 0 ? [...subModels, ...extras] : subModels;
+  }, [subModels, importedDaeObjects]);
+
   const [resetDialogState, setResetDialogState] = useState<{
     open: boolean;
     title: string;
@@ -3391,6 +3406,9 @@ export default function SceneEdit() {
                   disabled={!initialSnapshotRef.current}
                 />
               }
+              textureBadge={textureDataMap.size}
+              graphicBadge={`${appliedGraphicParamKeys.size}/${graphicParams.length}`}
+              placementBadge={placementEntries.length}
               inspectContent={
                 <>
                   {selectedTransform && (
@@ -3472,7 +3490,7 @@ export default function SceneEdit() {
                           ? placementEntries[selectedPlacementIdx]
                           : null
                       }
-                      subModelCount={subModels.length}
+                      subModelCount={effectiveSubModels.length}
                       textureCount={textureDataMap.size}
                     />
                   </MayaSection>
@@ -3485,6 +3503,7 @@ export default function SceneEdit() {
                           initialSnapshotRef.current?.placementEntries[selectedPlacementIdx] ?? null
                         }
                         placementHeader={placementHeader}
+                        subModels={effectiveSubModels}
                         onFieldPreview={(fieldIndex, value) =>
                           handlePlacementFieldPreview(selectedPlacementIdx, fieldIndex, value)
                         }
@@ -3527,7 +3546,19 @@ export default function SceneEdit() {
                     </MayaSection>
                   )}
 
-                  <MayaSection title="Texture">
+                  <MayaSection title="Stats" defaultOpen={false}>
+                    <SceneStatsContent
+                      drawStats={drawStats}
+                      subModelCount={effectiveSubModels.length}
+                      textureCount={textureDataMap.size}
+                      stageName={stageName}
+                    />
+                  </MayaSection>
+                </>
+              }
+              textureContent={
+                <>
+                  <MayaSection title="Texture Quality" defaultOpen>
                     <TextureQualityPanel
                       quality={textureQuality}
                       onQualityChange={handleTextureQualityChange}
@@ -3559,15 +3590,6 @@ export default function SceneEdit() {
                     defaultOpen={false}
                   >
                     <GlobalLoadedTexturePanel objects={textureInventories} />
-                  </MayaSection>
-
-                  <MayaSection title="Stats" defaultOpen={false}>
-                    <SceneStatsContent
-                      drawStats={drawStats}
-                      subModelCount={subModels.length}
-                      textureCount={textureDataMap.size}
-                      stageName={stageName}
-                    />
                   </MayaSection>
                 </>
               }
@@ -3619,7 +3641,7 @@ export default function SceneEdit() {
                     initialEntries={initialSnapshotRef.current?.placementEntries ?? null}
                     placementHeader={placementHeader}
                     selectedIndex={selectedPlacementIdx}
-                    subModels={subModels}
+                    subModels={effectiveSubModels}
                     onSelectEntry={handleSelectPlacement}
                     onFieldPreview={handlePlacementFieldPreview}
                     onFieldCommit={handlePlacementFieldCommit}
@@ -3630,7 +3652,7 @@ export default function SceneEdit() {
                       const nodeId = resolveNodeIdForPlacementIndex(
                         index,
                         placementEntries,
-                        subModels,
+                        effectiveSubModels,
                       );
                       handleDeleteSelected(nodeId ? [nodeId] : undefined);
                     }}
