@@ -124,6 +124,16 @@ export function sceneGenerateHkt(
   });
 }
 
+export function sceneReplaceHkt(
+  sessionId: string,
+  importId: string,
+  hktPath: string,
+): Promise<boolean> {
+  return invoke<boolean>("scene_replace_hkt", {
+    options: { sessionId, importId, hktPath },
+  });
+}
+
 export function scenePreviewHktCollisionBytes(
   daeBytes: number[],
   sourceName: string,

@@ -49,6 +49,7 @@ interface SceneOutlinerProps {
   onClearSelection?: () => void;
   onSelectAll?: (ids: string[]) => void;
   onGenerateHkt?: (ids: string[]) => void;
+  onReplaceHkt?: (id: string) => void;
   onReorderRootChild?: (activeId: string, overId: string) => void;
   onOpenProperties?: (nodeId: string) => void;
 }
@@ -63,6 +64,7 @@ export function SceneOutliner({
   onClearSelection,
   onSelectAll,
   onGenerateHkt,
+  onReplaceHkt,
   onReorderRootChild,
   onOpenProperties,
 }: SceneOutlinerProps) {
@@ -170,6 +172,7 @@ export function SceneOutliner({
                 onDuplicate={onDuplicate}
                 onDelete={onDelete}
                 onGenerateHkt={onGenerateHkt}
+                onReplaceHkt={onReplaceHkt}
                 onOpenProperties={onOpenProperties}
               />
             ))}
@@ -186,6 +189,7 @@ export function SceneOutliner({
               onDuplicate={onDuplicate}
               onDelete={onDelete}
               onGenerateHkt={onGenerateHkt}
+              onReplaceHkt={onReplaceHkt}
               onReorderRootChild={onReorderRootChild}
               onOpenProperties={onOpenProperties}
             />
@@ -269,6 +273,7 @@ function GroupNode({
   onDuplicate,
   onDelete,
   onGenerateHkt,
+  onReplaceHkt,
   onReorderRootChild,
   onOpenProperties,
 }: {
@@ -285,6 +290,7 @@ function GroupNode({
   onDuplicate?: (ids: string[]) => void;
   onDelete?: (ids: string[]) => void;
   onGenerateHkt?: (ids: string[]) => void;
+  onReplaceHkt?: (id: string) => void;
   onReorderRootChild?: (activeId: string, overId: string) => void;
   onOpenProperties?: (nodeId: string) => void;
 }) {
@@ -344,6 +350,7 @@ function GroupNode({
                   onDuplicate={onDuplicate}
                   onDelete={onDelete}
                   onGenerateHkt={onGenerateHkt}
+                  onReplaceHkt={onReplaceHkt}
                   onReorderRootChild={onReorderRootChild}
                   onOpenProperties={onOpenProperties}
                 />
@@ -380,6 +387,7 @@ function OutlinerNode({
   onDuplicate,
   onDelete,
   onGenerateHkt,
+  onReplaceHkt,
   onReorderRootChild,
   onOpenProperties,
 }: {
@@ -395,6 +403,7 @@ function OutlinerNode({
   onDuplicate?: (ids: string[]) => void;
   onDelete?: (ids: string[]) => void;
   onGenerateHkt?: (ids: string[]) => void;
+  onReplaceHkt?: (id: string) => void;
   onReorderRootChild?: (activeId: string, overId: string) => void;
   onOpenProperties?: (nodeId: string) => void;
 }) {
@@ -431,6 +440,7 @@ function OutlinerNode({
           onDuplicate={onDuplicate}
           onDelete={onDelete}
           onGenerateHkt={onGenerateHkt}
+          onReplaceHkt={onReplaceHkt}
           onReorderRootChild={onReorderRootChild}
           onOpenProperties={onOpenProperties}
           hasChildren={hasChildren}
@@ -469,6 +479,7 @@ function OutlinerNode({
           onDuplicate={onDuplicate}
           onDelete={onDelete}
           onGenerateHkt={onGenerateHkt}
+          onReplaceHkt={onReplaceHkt}
           onReorderRootChild={onReorderRootChild}
           onOpenProperties={onOpenProperties}
         />
@@ -489,6 +500,7 @@ function OutlinerNodeRow({
   onDuplicate,
   onDelete,
   onGenerateHkt,
+  onReplaceHkt,
   onReorderRootChild,
   onOpenProperties,
   hasChildren,
@@ -506,6 +518,7 @@ function OutlinerNodeRow({
   onDuplicate?: (ids: string[]) => void;
   onDelete?: (ids: string[]) => void;
   onGenerateHkt?: (ids: string[]) => void;
+  onReplaceHkt?: (id: string) => void;
   onReorderRootChild?: (activeId: string, overId: string) => void;
   onOpenProperties?: (nodeId: string) => void;
   hasChildren?: boolean;
@@ -611,6 +624,7 @@ function OutlinerNodeRow({
         onDuplicate={onDuplicate}
         onDelete={onDelete}
         onGenerateHkt={onGenerateHkt}
+        onReplaceHkt={onReplaceHkt}
         onOpenProperties={onOpenProperties}
       />
     </ContextMenu>
@@ -627,6 +641,7 @@ function NodeContextMenuContent({
   onDuplicate,
   onDelete,
   onGenerateHkt,
+  onReplaceHkt,
   onOpenProperties,
 }: {
   node: StageTreeNode;
@@ -638,9 +653,11 @@ function NodeContextMenuContent({
   onDuplicate?: (ids: string[]) => void;
   onDelete?: (ids: string[]) => void;
   onGenerateHkt?: (ids: string[]) => void;
+  onReplaceHkt?: (id: string) => void;
   onOpenProperties?: (nodeId: string) => void;
 }) {
   const supportsHkt = (node.role === "imported_dae" || node.role === "collision") && Boolean(onGenerateHkt);
+  const supportsReplaceHkt = (node.role === "imported_dae" || node.role === "collision" || node.role === "sub_model") && Boolean(onReplaceHkt);
   const isCollisionNode = node.role === "collision" && node.id.startsWith("__col__");
   const hktTargetId = isCollisionNode ? node.id.slice("__col__".length) : node.id;
   const supportsProperties = canOpenDetailView(node.role);
@@ -689,6 +706,15 @@ function NodeContextMenuContent({
           <ContextMenuItem onClick={() => onGenerateHkt!([hktTargetId])}>
             <Shield className="mr-2 h-3.5 w-3.5" />
             {isCollisionNode ? "Regenerate HKT" : "Generate HKT"}
+          </ContextMenuItem>
+        </>
+      )}
+      {supportsReplaceHkt && (
+        <>
+          {!supportsHkt && <ContextMenuSeparator />}
+          <ContextMenuItem onClick={() => onReplaceHkt!(hktTargetId)}>
+            <Shield className="mr-2 h-3.5 w-3.5" />
+            Replace HKT...
           </ContextMenuItem>
         </>
       )}

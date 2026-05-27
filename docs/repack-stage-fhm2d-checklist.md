@@ -182,6 +182,20 @@ Our rebuild uses separate `EndMark(1)` entries. This is correct and binary-equiv
 - Trailing whitespace may have meaning.
 - Empty entries (both key and value empty) output as empty string, NOT as `","`.
 
+### R13: Missing jnttbl MUST Be Auto-Created
+
+Every SSBH model folder that contains a `.numdlb` file MUST also have a `.jnttbl`
+file. If one does not exist on disk at rebuild time, the rebuild pipeline
+auto-creates a **0-byte** file named `{numdlb_stem}.jnttbl` in the same directory.
+
+- The auto-created file is 0 bytes (empty). This is the standard format for stage
+  models that do not need joint table data.
+- If a `.jnttbl` file already exists (any size, including 0), it is used as-is.
+- The Item is emitted with `unk2="50000000"` as the last entry in the SSBH model folder.
+- Without this file, the game crashes on stage load.
+
+**Source**: `build_exvs_model_folder()` in `fhm2d_stage.rs`.
+
 ---
 
 ## SSBH Model Folder Detection
@@ -294,6 +308,7 @@ Before repacking, `redistribute_stage_textures` moves textures back from
 | P13 | Filtering empty lines from CSV                | Byte count mismatch            | R12  |
 | P14 | post_effect nutexb unk2 = "00000000"          | LUT texture not found          | R1a  |
 | P15 | SSBH not detected (no tex containers on disk) | Wrong item order for sky model | R6   |
+| P16 | Missing jnttbl for SSBH model                  | Game crash on stage load       | R13  |
 
 ---
 
@@ -311,6 +326,7 @@ Before repacking, `redistribute_stage_textures` moves textures back from
 | `emit_texture_container_items`               | `fhm2d_stage.rs`     | Emit tex container folder + items + EndMark |
 | `emit_file_item`                             | `fhm2d_stage.rs`     | Emit single file Item with correct unk2    |
 | `emit_dir_recursive_inner`                   | `fhm2d_stage.rs`     | Main tree walker (SSBH detection + ordering) |
+| `build_exvs_model_folder`                    | `fhm2d_stage.rs`     | SSBH model folder builder (R6 ordering + R13 auto-jnttbl) |
 | `stage_content_dir_order`                    | `fhm2d_stage.rs`     | Content-level directory sort order         |
 | `info_file_order`                            | `fhm2d_stage.rs`     | info/ loose file sort order                |
 | `rebuild_structure_from_scratch`             | `fhm2d_stage.rs`     | Entry point (per-model textures mode)      |

@@ -843,6 +843,111 @@ pub async fn scene_generate_hkt(
     Ok(true)
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceHktOptions {
+    pub session_id: String,
+    pub import_id: String,
+    pub hkt_path: String,
+}
+
+#[tauri::command]
+pub async fn scene_replace_hkt(
+    state: State<'_, SceneSessionState>,
+    options: ReplaceHktOptions,
+) -> Result<bool, String> {
+    let hkt_bytes = std::fs::read(&options.hkt_path)
+        .map_err(|e| format!("Failed to read HKT file {}: {e}", options.hkt_path))?;
+
+    let display_name = std::path::Path::new(&options.hkt_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("replaced.hkt")
+        .to_string();
+
+    let filter_path = havok_cli::HavokCliConfig::detect()
+        .map(|c| c.filter_manager_path.clone())
+        .unwrap_or_default();
+    let hkt_xml = if !filter_path.is_empty() {
+        let bytes_for_xml = hkt_bytes.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            havok_cli::convert_hkt_bytes_to_xml(&filter_path, &bytes_for_xml)
+        })
+        .await
+        .map_err(|e| format!("XML conversion join error: {e}"))?
+        .unwrap_or_else(|e| {
+            eprintln!("[scene_replace_hkt] HKT→XML failed: {e}");
+            String::new()
+        })
+    } else {
+        String::new()
+    };
+
+    let node_id = options.import_id.clone();
+    state.with_session_mut(&options.session_id, |s| {
+        eprintln!("[scene_replace_hkt] import_id={:?} pending_imports={} has_base_bundle={} source={:?}",
+            options.import_id,
+            s.pending_imports.len(),
+            s.base_bundle.is_some(),
+            s.source);
+        // Try pending_imports first (DAE-imported models)
+        if s.find_import(&options.import_id).is_ok() {
+            eprintln!("[scene_replace_hkt] found in pending_imports");
+            s.store_hkt_bytes(&options.import_id, hkt_bytes.clone())?;
+        } else if let Some(bundle) = s.base_bundle.as_mut() {
+            // FHM2D in-memory model: extract folder name from sourceId
+            let folder = options.import_id
+                .replace('/', "\\")
+                .split('\\')
+                .next()
+                .unwrap_or(&options.import_id)
+                .to_string();
+            eprintln!("[scene_replace_hkt] trying base_bundle folder={:?} available_folders={:?}",
+                folder, bundle.sub_model_files.keys().collect::<Vec<_>>());
+            let files = bundle.sub_model_files.entry(folder.clone()).or_default();
+            let old_hkt_keys: Vec<String> = files.keys()
+                .filter(|k| k.to_ascii_lowercase().ends_with(".hkt"))
+                .cloned()
+                .collect();
+            eprintln!("[scene_replace_hkt] old_hkt_keys={:?}", old_hkt_keys);
+            for k in old_hkt_keys {
+                files.remove(&k);
+            }
+            let hkt_name = options.import_id
+                .replace('/', "\\")
+                .split('\\')
+                .last()
+                .unwrap_or(&format!("{folder}.hkt"))
+                .to_string();
+            files.insert(hkt_name, hkt_bytes.clone());
+        } else if let SceneSource::Folder { ref path } = s.source {
+            // Folder-based session: write HKT directly to disk
+            let hkt_disk_path = std::path::Path::new(path).join(
+                options.import_id.replace('/', std::path::MAIN_SEPARATOR_STR)
+            );
+            eprintln!("[scene_replace_hkt] writing to disk: {:?}", hkt_disk_path);
+            if let Some(parent) = hkt_disk_path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            std::fs::write(&hkt_disk_path, &hkt_bytes)
+                .map_err(|e| format!("Failed to write HKT to {}: {e}", hkt_disk_path.display()))?;
+        } else {
+            return Err(format!("Import '{}' not found in session", options.import_id));
+        }
+        s.upsert_havok_data(HavokCollisionData {
+            source_id: options.import_id.clone(),
+            display_name,
+            object_node_id: Some(node_id),
+            hkt_xml,
+            raw_bytes: hkt_bytes,
+        });
+        s.dirty = true;
+        Ok(())
+    })?;
+
+    Ok(true)
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HavokDataMeta {

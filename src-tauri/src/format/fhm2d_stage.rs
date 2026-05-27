@@ -3564,8 +3564,23 @@ fn build_exvs_model_folder(
     for f in &numdlb_files {
         push_exvs_file_item(c, f, root, folder_name);
     }
-    for f in &jnttbl_files {
-        push_exvs_file_item(c, f, root, folder_name);
+    if !jnttbl_files.is_empty() {
+        for f in &jnttbl_files {
+            push_exvs_file_item(c, f, root, folder_name);
+        }
+    } else if !numdlb_files.is_empty() {
+        // R6/R7: EXVS requires a jnttbl for every SSBH model. Auto-create 0-byte file.
+        let numdlb_stem = numdlb_files[0]
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown");
+        let jnttbl_path = numdlb_files[0].with_file_name(format!("{numdlb_stem}.jnttbl"));
+        if !jnttbl_path.exists() {
+            if let Err(e) = fs::write(&jnttbl_path, b"") {
+                eprintln!("[build_exvs_model_folder] Failed to auto-create jnttbl {}: {e}", jnttbl_path.display());
+            }
+        }
+        push_exvs_file_item(c, &jnttbl_path, root, folder_name);
     }
 
     // Other files (e.g., .hkt at model dir level)

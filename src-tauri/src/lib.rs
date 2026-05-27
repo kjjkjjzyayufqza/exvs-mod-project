@@ -147,6 +147,7 @@ pub fn run() {
             scene_session_commands::scene_open_folder,
             scene_session_commands::scene_execute_import,
             scene_session_commands::scene_generate_hkt,
+            scene_session_commands::scene_replace_hkt,
             scene_session_commands::scene_preview_hkt_collision_bytes,
             scene_session_commands::scene_preview_hkt_collision_session,
             scene_session_commands::scene_get_import_config,

@@ -187,6 +187,7 @@ import {
   sceneGenerateHkt,
   sceneGetHavokMeta,
   sceneGetImportConfig,
+  sceneReplaceHkt,
   sceneRemoveImport,
   sceneRemoveHavokData,
   stageLoadSkeleton,
@@ -3001,6 +3002,42 @@ export default function SceneEdit() {
     [sceneSessionId, importedDaeObjects],
   );
 
+  const handleReplaceHkt = useCallback(
+    async (importId: string) => {
+      if (!sceneSessionId) return;
+      const selected = await open({
+        title: "Select HKT file",
+        filters: [{ name: "Havok", extensions: ["hkt"] }],
+        multiple: false,
+      });
+      if (!selected) return;
+      const hktPath = typeof selected === "string" ? selected : selected[0];
+      if (!hktPath) return;
+      try {
+        toast.loading("Replacing HKT...", { id: `replace-hkt-${importId}` });
+        await sceneReplaceHkt(sceneSessionId, importId, hktPath);
+        const havokResult = await sceneGetHavokMeta(sceneSessionId, importId);
+        if (havokResult) {
+          const meshData = parseHavokXML(havokResult.hktXml);
+          setHavokMeshDataMap((prev) => {
+            const next = new Map(prev);
+            next.set(havokResult.sourceId, meshData);
+            return next;
+          });
+          setHavokMetaMap((prev) => {
+            const next = new Map(prev);
+            next.set(havokResult.sourceId, { displayName: havokResult.displayName, objectNodeId: havokResult.objectNodeId });
+            return next;
+          });
+        }
+        toast.success("HKT replaced", { id: `replace-hkt-${importId}` });
+      } catch (err) {
+        toast.error(`Replace HKT failed: ${err instanceof Error ? err.message : String(err)}`, { id: `replace-hkt-${importId}` });
+      }
+    },
+    [sceneSessionId],
+  );
+
   const handleReorderOutlinerNode = useCallback((activeId: string, overId: string) => {
     useSceneEditorStore.getState().reorderOutlinerNode(activeId, overId);
     useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
@@ -3278,6 +3315,7 @@ export default function SceneEdit() {
                       if (ids.length > 0) applyPrimarySelectionState(ids[ids.length - 1]);
                     }}
                     onGenerateHkt={handleGenerateHkt}
+                    onReplaceHkt={handleReplaceHkt}
                     onReorderRootChild={handleReorderOutlinerNode}
                     onOpenProperties={handleOpenProperties}
                   />

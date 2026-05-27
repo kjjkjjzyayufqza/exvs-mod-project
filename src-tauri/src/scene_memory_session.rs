@@ -321,7 +321,7 @@ impl SceneMemorySession {
                     .as_ref()
                     .map(|c| c.write_jnttbl)
                     .unwrap_or(true);
-                if write_jnttbl && !ssbh.jnttbl.is_empty() {
+                if write_jnttbl {
                     artifacts.push(SaveArtifact {
                         relative_path: format!("{model_dir}/{base}.jnttbl"),
                         data: ssbh.jnttbl.clone(),
