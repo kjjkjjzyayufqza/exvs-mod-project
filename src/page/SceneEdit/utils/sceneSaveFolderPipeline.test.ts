@@ -126,6 +126,7 @@ function makeParams(overrides?: Partial<SaveFolderParams>): SaveFolderParams {
     graphicParams: [{ key: "fog_density", value: "0.5" }],
     placementHeader: ["VDK_TYPE", "VDK_OBJECTNUMBER", "VDK_POSITION_X"],
     placementEntries: [],
+    subModels: [],
     importedDaeObjects: [],
     sceneSessionId: null,
     onProgress: vi.fn(),

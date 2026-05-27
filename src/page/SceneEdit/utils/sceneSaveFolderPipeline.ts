@@ -36,6 +36,8 @@ import {
 import { serializeDaeToBytes } from "./daeExportImport";
 import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
 import { resolveOrCreateInfoFolder } from "./sceneInfoFolder";
+import { ensureSkyPlacementObjectNumber } from "./ensureSkyPlacementObjectNumber";
+import { remapPlacementObjectNumbers } from "./remapPlacementObjectNumbers";
 
 function joinTauriPath(...parts: string[]): string {
   return parts
@@ -144,6 +146,7 @@ export type SaveFolderParams = {
   graphicParams: Array<{ key: string; value: string }>;
   placementHeader: readonly string[];
   placementEntries: readonly PlacementRow[];
+  subModels: ReadonlyArray<{ folderName: string; objectIndex: number }>;
   importedDaeObjects: readonly ImportedDaeObject[];
   sceneSessionId: string | null;
   onProgress: (step: SaveStepInfo) => void;
@@ -188,6 +191,7 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
     graphicParams,
     placementHeader,
     placementEntries,
+    subModels,
     importedDaeObjects,
     sceneSessionId,
     onProgress,
@@ -301,9 +305,17 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
     await writeTextFile(`${infoFolder}/graphic_param.csv`, gpCsv);
 
     let placementRowsToSave: readonly PlacementRow[] = placementEntries;
+    let effectiveSubModels: ReadonlyArray<{ folderName: string; objectIndex: number }> = subModels;
 
     if (convertedCount > 0 || deletedCount > 0) {
       const bundleAfterChanges = await invoke<StageBundleResponse>("load_stage_bundle", { stageRoot });
+      effectiveSubModels = bundleAfterChanges.subModels;
+
+      placementRowsToSave = remapPlacementObjectNumbers(
+        placementRowsToSave,
+        subModels,
+        bundleAfterChanges.subModels,
+      );
 
       if (convertedCount > 0) {
         const newPlacementRows = daeObjectsToConvert
@@ -319,21 +331,17 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
             });
           })
           .filter((r): r is PlacementRow => r !== null);
-        placementRowsToSave = [...placementEntries, ...newPlacementRows];
-      }
-
-      if (deletedCount > 0) {
-        const survivingFolders = new Set(bundleAfterChanges.subModels.map((sm) => sm.folderName));
-        placementRowsToSave = placementRowsToSave.filter((row) => {
-          if (row.vdkType !== "OBJECT") return true;
-          if (row.objectNumber === null) return true;
-          const matchingModel = bundleAfterChanges.subModels.find(
-            (sm) => sm.objectIndex === row.objectNumber,
-          );
-          return matchingModel !== undefined && survivingFolders.has(matchingModel.folderName);
-        });
+        placementRowsToSave = [...placementRowsToSave, ...newPlacementRows];
       }
     }
+
+    const modelFolderCount = effectiveSubModels.filter(
+      (s) => s.folderName.toLowerCase() !== "sky",
+    ).length;
+    placementRowsToSave = ensureSkyPlacementObjectNumber(
+      [...placementRowsToSave],
+      modelFolderCount,
+    );
 
     if (placementHeader.length > 0 && placementRowsToSave.length > 0) {
       const headerLine = placementHeader.join(",");
