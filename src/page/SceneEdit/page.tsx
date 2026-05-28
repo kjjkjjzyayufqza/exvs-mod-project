@@ -1473,7 +1473,7 @@ export default function SceneEdit() {
       setSaveProgressState((prev) => ({ ...prev, canClose: true }));
       toast.error("Save failed", { description: String(err) });
     }
-  }, [stageRoot, graphicParams, placementHeader, placementEntries, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, promptDeleteConfirm, promptSaveConfirm]);
+  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, promptDeleteConfirm, promptSaveConfirm]);
 
   const handleSaveFhm2d = useCallback(async () => {
     if (!stageRoot) return;
@@ -1546,7 +1546,7 @@ export default function SceneEdit() {
       setSaveProgressState((prev) => ({ ...prev, canClose: true }));
       toast.error("FHM2D save failed", { description: String(err) });
     }
-  }, [stageRoot, graphicParams, placementHeader, placementEntries, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, promptDeleteConfirm, promptSaveConfirm]);
+  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, promptDeleteConfirm, promptSaveConfirm]);
 
   const handleGraphicParamValueChange = useCallback(
     (index: number, value: string) => {
@@ -3024,10 +3024,18 @@ export default function SceneEdit() {
       if (!selected) return;
       const hktPath = typeof selected === "string" ? selected : selected[0];
       if (!hktPath) return;
+
+      // For sub_model/base nodes, resolve to disk-relative HKT path (folderName/map_hit.hkt)
+      let resolvedImportId = importId;
+      const isSubModelOrBase = subModels.some((s) => s.folderName === importId) || importId === "base";
+      if (isSubModelOrBase) {
+        resolvedImportId = `${importId}/map_hit.hkt`;
+      }
+
       try {
         toast.loading("Replacing HKT...", { id: `replace-hkt-${importId}` });
-        await sceneReplaceHkt(sceneSessionId, importId, hktPath);
-        const havokResult = await sceneGetHavokMeta(sceneSessionId, importId);
+        await sceneReplaceHkt(sceneSessionId, resolvedImportId, hktPath);
+        const havokResult = await sceneGetHavokMeta(sceneSessionId, resolvedImportId);
         if (havokResult) {
           const meshData = parseHavokXML(havokResult.hktXml);
           setHavokMeshDataMap((prev) => {
@@ -3046,7 +3054,7 @@ export default function SceneEdit() {
         toast.error(`Replace HKT failed: ${err instanceof Error ? err.message : String(err)}`, { id: `replace-hkt-${importId}` });
       }
     },
-    [sceneSessionId],
+    [sceneSessionId, subModels],
   );
 
   const handleReorderOutlinerNode = useCallback((activeId: string, overId: string) => {

@@ -657,7 +657,7 @@ function NodeContextMenuContent({
   onOpenProperties?: (nodeId: string) => void;
 }) {
   const supportsHkt = (node.role === "imported_dae" || node.role === "collision") && Boolean(onGenerateHkt);
-  const supportsReplaceHkt = (node.role === "imported_dae" || node.role === "collision" || node.role === "sub_model") && Boolean(onReplaceHkt);
+  const supportsReplaceHkt = (node.role === "imported_dae" || node.role === "collision" || node.role === "sub_model" || node.role === "base") && Boolean(onReplaceHkt);
   const isCollisionNode = node.role === "collision" && node.id.startsWith("__col__");
   const hktTargetId = isCollisionNode ? node.id.slice("__col__".length) : node.id;
   const supportsProperties = canOpenDetailView(node.role);

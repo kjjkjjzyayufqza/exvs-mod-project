@@ -9,6 +9,7 @@ use tauri::{AppHandle, Emitter, State};
 use crate::fhm2d_memory_preview::Fhm2dMemorySessionState;
 use crate::format::fhm2d::{extract_fhm2d_to_memory_impl, InMemoryFhm2dExtraction};
 use crate::format::fhm2d_stage;
+use crate::format::fhm2d_stage_validate;
 
 // ── Pending import state ────────────────────────────────────────────────────
 
@@ -663,4 +664,16 @@ pub async fn load_stage_from_preview(
         warnings: warnings_for_result,
         session_id: Some(session_id),
     })
+}
+
+#[tauri::command]
+pub async fn exvs_stage_validate_for_repack(
+    stage_root: String,
+) -> Result<fhm2d_stage_validate::ExvsStageValidationResult, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        fhm2d_stage_validate::exvs_stage_validate_for_repack(&stage_root)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?;
+    Ok(result)
 }

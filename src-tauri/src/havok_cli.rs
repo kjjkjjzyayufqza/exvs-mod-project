@@ -110,7 +110,7 @@ const HKO_WRITE_XML: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 		<hkparam name="emptyBaseClassOptimized">false</hkparam>
 		<hkparam name="removeMetadata">false</hkparam>
 		<hkparam name="userTag">0</hkparam>
-		<hkparam name="saveEnvironmentData">true</hkparam>
+		<hkparam name="saveEnvironmentData">false</hkparam>
 		<hkparam name="xmlFormat">true</hkparam>
 	</hkobject>
 </hkoptions>"#;
@@ -139,7 +139,7 @@ pub const HKO_WRITE_HKT: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 		<hkparam name="emptyBaseClassOptimized">false</hkparam>
 		<hkparam name="removeMetadata">false</hkparam>
 		<hkparam name="userTag">0</hkparam>
-		<hkparam name="saveEnvironmentData">true</hkparam>
+		<hkparam name="saveEnvironmentData">false</hkparam>
 		<hkparam name="xmlFormat">false</hkparam>
 	</hkobject>
 </hkoptions>"#;

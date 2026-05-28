@@ -135,6 +135,7 @@ pub fn run() {
             stage_commands::rebuild_stage_structure_json,
             stage_commands::rebuild_stage_structure_json_forced,
             stage_commands::rebuild_stage_structure_json_with_shared_textures,
+            stage_commands::exvs_stage_validate_for_repack,
             scene_session_commands::scene_session_create,
             scene_session_commands::scene_session_destroy,
             scene_session_commands::scene_session_is_dirty,

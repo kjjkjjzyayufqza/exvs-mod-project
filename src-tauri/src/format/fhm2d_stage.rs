@@ -22,13 +22,13 @@ const NUMDLB_MODL_TAG: &[u8; 4] = b"LDOM";
 
 // ── Stage directory role constants ──────────────────────────────────────────
 
-const STAGE_BASE_NAME: &str = "base";
-const STAGE_INFO_NAME: &str = "info";
+pub(crate) const STAGE_BASE_NAME: &str = "base";
+pub(crate) const STAGE_INFO_NAME: &str = "info";
 const STAGE_TEXTURES_NAME: &str = "textures";
 
-const INFO_SUBFOLDER_NAMES: &[&str] = &["fog", "light", "post_effect"];
+pub(crate) const INFO_SUBFOLDER_NAMES: &[&str] = &["fog", "light", "post_effect"];
 
-const INFO_FILE_NAMES: &[&str] = &[
+pub(crate) const INFO_FILE_NAMES: &[&str] = &[
     "border_hit.hkt",
     "graphic_param.csv",
     "placement.csv",
@@ -321,7 +321,7 @@ fn convert_to_virtual_tree(
 
 const SDKV_MAGIC: &[u8; 4] = b"SDKV";
 const SDKV_MAGIC_OFFSET: usize = 0x0C;
-const STAGE_SKY_NAME: &str = "sky";
+pub(crate) const STAGE_SKY_NAME: &str = "sky";
 const NUST_NUMATB_SUFFIX: &str = "__nust__";
 
 fn infer_numdlb_name_from_tree(
@@ -4276,7 +4276,7 @@ fn index_all_nutexb_in_model_folders(ssbh_folders: &[PathBuf]) -> BTreeMap<Strin
 /// Resolve the content root from a stage root.
 /// If `stage_root/0/0/` exists (pack root layout), returns `stage_root/0/0/`.
 /// Otherwise returns `stage_root` itself (already at content root).
-fn resolve_content_root(stage_root: &Path) -> PathBuf {
+pub(crate) fn resolve_content_root(stage_root: &Path) -> PathBuf {
     let candidate = stage_root.join("0").join("0");
     if candidate.is_dir() {
         candidate
@@ -4454,7 +4454,7 @@ fn index_nutexb_folder(textures_dir: &Path) -> Result<BTreeMap<String, PathBuf>,
 
 /// Find all directories that contain `.numatb` files — these are SSBH folders.
 /// Skips `info/`, `textures/`, and hidden directories.
-fn find_ssbh_folders(root: &Path, warnings: &mut Vec<String>) -> Result<Vec<PathBuf>, String> {
+pub(crate) fn find_ssbh_folders(root: &Path, warnings: &mut Vec<String>) -> Result<Vec<PathBuf>, String> {
     let skip_names: HashSet<&str> = [STAGE_INFO_NAME, STAGE_TEXTURES_NAME].into_iter().collect();
     let mut result = Vec::new();
     find_ssbh_folders_recurse(root, root, &skip_names, &mut result, warnings, 0)?;
@@ -4609,7 +4609,7 @@ fn extract_nutexb_names_from_matl(matl: &ssbh_data::prelude::MatlData) -> Vec<St
 /// Identifies maya/nust by `__maya__` / `__nust__` filename suffix.
 /// Returns exactly 2 entries (maya first, nust second) matching EXVS2 game
 /// folder structure: subdir 0/ = maya textures, subdir 1/ = nust textures.
-fn parse_numatb_texture_refs_by_role(
+pub(crate) fn parse_numatb_texture_refs_by_role(
     ssbh_folder: &Path,
     warnings: &mut Vec<String>,
 ) -> Vec<Vec<String>> {
