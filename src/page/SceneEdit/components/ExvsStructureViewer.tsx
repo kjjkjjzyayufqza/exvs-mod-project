@@ -13,12 +13,20 @@ import {
   Sparkles,
   Search,
   Layers,
-  CornerDownRight,
+  Copy,
 } from "lucide-react";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,8 +79,8 @@ export type ExvsStructureData = {
 // ── Tree conversion ──────────────────────────────────────────────────────────
 
 type TreeNode = {
-  kind: "folder" | "item" | "endmark";
-  entry: StructureEntry;
+  kind: "folder" | "item";
+  entry: StructureFolder | StructureItem;
   children: TreeNode[];
   resolvedFile?: SubFileDataEntry;
   semanticRole: string;
@@ -105,14 +113,6 @@ function buildTreeFromFlat(entries: StructureEntry[], filePool: SubFileDataEntry
         depth: stack.length - 1,
       });
     } else if (entry.type === "EndMark") {
-      // Show EndMark as a visual node before closing
-      stack[stack.length - 1].children.push({
-        kind: "endmark",
-        entry,
-        children: [],
-        semanticRole: "end",
-        depth: stack.length - 1,
-      });
       for (let i = 0; i < entry.endMarkCount; i++) {
         if (stack.length > 1) stack.pop();
       }
@@ -152,7 +152,6 @@ const ROLE_META: Record<string, { icon: typeof File; accent: string; tag: string
   tex: { icon: Image, accent: "text-yellow-600 dark:text-yellow-400", tag: "TEX" },
   shared: { icon: Image, accent: "text-yellow-500 dark:text-yellow-400", tag: "SHARED" },
   dir: { icon: Folder, accent: "text-muted-foreground", tag: "" },
-  end: { icon: CornerDownRight, accent: "text-muted-foreground/40", tag: "" },
 };
 
 const TAG_COLORS: Record<string, string> = {
@@ -166,6 +165,51 @@ const TAG_COLORS: Record<string, string> = {
   shared: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
 };
 
+function folderDisplayName(role: string): string {
+  if (role === "tex") return "textures";
+  if (role === "shared") return "textures/";
+  return "folder";
+}
+
+function formatStructureTreeText(nodes: TreeNode[]): string {
+  const lines: string[] = [];
+
+  const walk = (node: TreeNode) => {
+    const prefix = "  ".repeat(node.depth);
+    if (node.kind === "folder") {
+      const entry = node.entry;
+      lines.push(
+        `${prefix}${folderDisplayName(node.semanticRole)}/  x${entry.folderCount}  u1=${entry.unk1} u2=${entry.unk2} u2_1=${entry.unk2_1} u3=${entry.unk3} u4=${entry.unk4} u5=${entry.unk5} u6=${entry.unk6}`,
+      );
+    } else {
+      const entry = node.entry;
+      const file = node.resolvedFile;
+      const meta = ROLE_META[node.semanticRole] ?? ROLE_META.file;
+      const tag = meta.tag ? ` [${meta.tag}]` : "";
+      lines.push(
+        `${prefix}${file?.fileBaseName ?? "???"}  ${file?.fileType ?? ""}${tag}  u1=${entry.unk1} u2=${entry.unk2} u2_1=${entry.unk2_1} u3=${entry.unk3} u4=${entry.unk4}  [${entry.fileIndex}]`,
+      );
+    }
+    for (const child of node.children) {
+      walk(child);
+    }
+  };
+
+  for (const node of nodes) {
+    walk(node);
+  }
+  return lines.join("\n");
+}
+
+async function copyStructureTreeToClipboard(nodes: TreeNode[]): Promise<void> {
+  try {
+    await writeText(formatStructureTreeText(nodes));
+    toast.success("Copied structure tree to clipboard");
+  } catch {
+    toast.error("Failed to copy to clipboard");
+  }
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export interface ExvsStructureViewerProps {
@@ -174,8 +218,11 @@ export interface ExvsStructureViewerProps {
 
 export const ExvsStructureViewer = memo(function ExvsStructureViewer({ data }: ExvsStructureViewerProps) {
   const [filter, setFilter] = useState("");
-  const [showEndMarks, setShowEndMarks] = useState(true);
   const tree = useMemo(() => buildTreeFromFlat(data.SubFileStructure, data.SubFileData), [data]);
+
+  const handleCopyTree = useCallback(() => {
+    void copyStructureTreeToClipboard(tree);
+  }, [tree]);
 
   return (
     <div className="flex h-full flex-col text-xs">
@@ -186,6 +233,22 @@ export const ExvsStructureViewer = memo(function ExvsStructureViewer({ data }: E
           FHM2D Structure
         </span>
         <div className="ml-auto flex items-center gap-1.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={handleCopyTree}
+                aria-label="Copy structure tree"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              Copy entire tree
+            </TooltipContent>
+          </Tooltip>
           <Badge variant="secondary" className="h-5 px-2 text-[10px] font-mono">
             {data.Fhm2dTotalCount} files
           </Badge>
@@ -195,7 +258,7 @@ export const ExvsStructureViewer = memo(function ExvsStructureViewer({ data }: E
         </div>
       </div>
 
-      {/* Search + toggle */}
+      {/* Search */}
       <div className="flex items-center gap-1.5 border-b px-2 py-2">
         <div className="relative flex-1">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -206,17 +269,6 @@ export const ExvsStructureViewer = memo(function ExvsStructureViewer({ data }: E
             className="h-7 pl-8 text-xs placeholder:text-muted-foreground/50"
           />
         </div>
-        <button
-          onClick={() => setShowEndMarks((v) => !v)}
-          className={cn(
-            "h-7 px-2 rounded text-[10px] border transition-colors",
-            showEndMarks
-              ? "bg-accent text-accent-foreground border-border"
-              : "text-muted-foreground/60 border-transparent hover:border-border hover:text-muted-foreground",
-          )}
-        >
-          End
-        </button>
       </div>
 
       {/* Legend */}
@@ -237,7 +289,7 @@ export const ExvsStructureViewer = memo(function ExvsStructureViewer({ data }: E
       <ScrollArea className="flex-1">
         <div className="p-1">
           {tree.map((node, i) => (
-            <NodeRow key={i} node={node} filter={filter} showEndMarks={showEndMarks} />
+            <NodeRow key={i} node={node} filter={filter} />
           ))}
         </div>
       </ScrollArea>
@@ -250,18 +302,15 @@ export const ExvsStructureViewer = memo(function ExvsStructureViewer({ data }: E
 const NodeRow = memo(function NodeRow({
   node,
   filter,
-  showEndMarks,
 }: {
   node: TreeNode;
   filter: string;
-  showEndMarks: boolean;
 }) {
   const [expanded, setExpanded] = useState(node.depth < 2);
   const hasChildren = node.children.length > 0;
   const handleToggle = useCallback(() => setExpanded((v) => !v), []);
 
   const visible = useMemo(() => {
-    if (node.kind === "endmark") return showEndMarks;
     if (!filter) return true;
     const lower = filter.toLowerCase();
     const check = (n: TreeNode): boolean => {
@@ -269,22 +318,9 @@ const NodeRow = memo(function NodeRow({
       return n.children.some(check);
     };
     return check(node);
-  }, [node, filter, showEndMarks]);
+  }, [node, filter]);
 
   if (!visible) return null;
-
-  if (node.kind === "endmark") {
-    const entry = node.entry as StructureEndMark;
-    return (
-      <div
-        className="flex items-center gap-1.5 px-2 py-0.5 text-muted-foreground/40 text-[10px] italic"
-        style={{ paddingLeft: `${node.depth * 16 + 6}px` }}
-      >
-        <CornerDownRight className="h-3 w-3" />
-        <span>EndMark({entry.endMarkCount})</span>
-      </div>
-    );
-  }
 
   const meta = ROLE_META[node.semanticRole] ?? ROLE_META.file;
   const Icon = meta.icon;
@@ -320,7 +356,7 @@ const NodeRow = memo(function NodeRow({
       </div>
 
       {expanded && hasChildren && node.children.map((child, i) => (
-        <NodeRow key={i} node={child} filter={filter} showEndMarks={showEndMarks} />
+        <NodeRow key={i} node={child} filter={filter} />
       ))}
     </div>
   );
@@ -334,7 +370,7 @@ function FolderLabel({ entry, role }: { entry: StructureFolder; role: string }) 
   return (
     <div className="flex items-center gap-1 min-w-0 flex-1">
       <span className="truncate font-medium text-foreground/80">
-        {role === "tex" ? "textures" : role === "shared" ? "textures/" : "folder"}
+        {folderDisplayName(role)}
       </span>
       <span className="text-muted-foreground/50 font-mono text-[9px]">×{entry.folderCount}</span>
 

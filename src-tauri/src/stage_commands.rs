@@ -170,6 +170,10 @@ pub async fn load_stage_bundle(stage_root: String) -> Result<fhm2d_stage::StageB
     eprintln!("[load_bundle] Loading: {stage_root}");
     let t = Instant::now();
     let result = tauri::async_runtime::spawn_blocking(move || {
+        // Auto-populate missing model textures before loading
+        if let Err(e) = fhm2d_stage::redistribute_stage_textures(&stage_root) {
+            eprintln!("[load_bundle] Texture auto-populate warning: {e}");
+        }
         fhm2d_stage::load_stage_bundle_impl(&stage_root)
     })
     .await

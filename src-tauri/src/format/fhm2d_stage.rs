@@ -4076,46 +4076,94 @@ pub fn rebuild_structure_json_for_stage_with_shared_textures(
 
 /// Redistribute nutexb files from a shared `textures/` folder back into
 /// per-numatb numbered subdirectories under each model's SSBH folder.
+/// Then, cross-populate: for any model whose numatb references a texture
+/// that is missing from its 0/ or 1/ subdir, copy it from other model folders.
 pub fn redistribute_stage_textures(stage_root: &str) -> Result<RedistributeResult, String> {
     let root = Path::new(stage_root);
     let content_root = resolve_content_root(root);
     let textures_dir = content_root.join(STAGE_TEXTURES_NAME);
-    if !textures_dir.is_dir() {
-        return Ok(RedistributeResult {
-            models_processed: 0,
-            textures_copied: 0,
-            textures_folder_removed: false,
-            warnings: vec!["No textures/ folder found, skipping redistribution".into()],
-        });
-    }
-
-    let available_textures = index_nutexb_folder(&textures_dir)?;
-    if available_textures.is_empty() {
-        return Ok(RedistributeResult {
-            models_processed: 0,
-            textures_copied: 0,
-            textures_folder_removed: false,
-            warnings: vec!["textures/ folder is empty, skipping redistribution".into()],
-        });
-    }
 
     let mut warnings = Vec::new();
     let mut models_processed = 0usize;
     let mut textures_copied = 0usize;
+    let mut textures_folder_removed = false;
     let mut url_remap: HashMap<String, String> = HashMap::new();
 
     let folder_name = root.file_name().and_then(|n| n.to_str()).unwrap_or("stage");
+    let ssbh_folders = find_ssbh_folders(&content_root, &mut warnings)?;
 
-    let ssbh_folders = find_ssbh_folders(root, &mut warnings)?;
+    // Phase 1: Shared textures/ folder redistribution (original behavior)
+    if textures_dir.is_dir() {
+        let available_textures = index_nutexb_folder(&textures_dir)?;
+        if !available_textures.is_empty() {
+            for ssbh_folder in &ssbh_folders {
+                let numatb_refs = parse_numatb_texture_refs_by_role(ssbh_folder, &mut warnings);
+                if numatb_refs.is_empty() {
+                    continue;
+                }
+                models_processed += 1;
+
+                for (subdir_index, refs) in numatb_refs.iter().enumerate() {
+                    let subdir = ssbh_folder.join(subdir_index.to_string());
+                    fs::create_dir_all(&subdir).map_err(|e| {
+                        format!("Failed to create texture subdir {}: {e}", subdir.display())
+                    })?;
+
+                    for ref_name in refs {
+                        let ref_lower = ref_name.to_ascii_lowercase();
+                        if let Some(src_path) = available_textures.get(&ref_lower) {
+                            let fname = src_path.file_name().unwrap();
+                            let dest_path = subdir.join(fname);
+                            if !dest_path.exists() {
+                                fs::copy(src_path, &dest_path).map_err(|e| {
+                                    format!(
+                                        "Failed to copy {} → {}: {e}",
+                                        src_path.display(),
+                                        dest_path.display()
+                                    )
+                                })?;
+                                textures_copied += 1;
+                            }
+                            if let (Ok(old_rel), Ok(new_rel)) =
+                                (src_path.strip_prefix(root), dest_path.strip_prefix(root))
+                            {
+                                let old_url = format!(
+                                    ".\\{}\\{}",
+                                    folder_name,
+                                    old_rel.to_string_lossy().replace('/', "\\")
+                                );
+                                let new_url = format!(
+                                    ".\\{}\\{}",
+                                    folder_name,
+                                    new_rel.to_string_lossy().replace('/', "\\")
+                                );
+                                url_remap.insert(old_url, new_url);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if textures_copied > 0 {
+                fs::remove_dir_all(&textures_dir)
+                    .map_err(|e| format!("Failed to remove textures/ after redistribution: {e}"))?;
+                textures_folder_removed = true;
+            }
+        }
+    }
+
+    // Phase 2: Cross-populate — build global nutexb index from all model subdirs,
+    // then fill any missing textures referenced by numatb.
+    let global_nutexb = index_all_nutexb_in_model_folders(&ssbh_folders);
 
     for ssbh_folder in &ssbh_folders {
         let numatb_refs = parse_numatb_texture_refs_by_role(ssbh_folder, &mut warnings);
         if numatb_refs.is_empty() {
             continue;
         }
-        models_processed += 1;
 
-        // maya → 0/, nust → 1/ (matches EXVS2 game runtime expectation)
+        let mut model_had_copy = false;
+
         for (subdir_index, refs) in numatb_refs.iter().enumerate() {
             let subdir = ssbh_folder.join(subdir_index.to_string());
             fs::create_dir_all(&subdir).map_err(|e| {
@@ -4124,52 +4172,54 @@ pub fn redistribute_stage_textures(stage_root: &str) -> Result<RedistributeResul
 
             for ref_name in refs {
                 let ref_lower = ref_name.to_ascii_lowercase();
-                if let Some(src_path) = available_textures.get(&ref_lower) {
+                let dest_path = subdir.join(ref_name);
+                let dest_lower = subdir.join(&ref_lower);
+                // Skip if already present (case-insensitive check)
+                if dest_path.exists() || dest_lower.exists() {
+                    continue;
+                }
+                // Also check with original casing from disk
+                let already_has = fs::read_dir(&subdir)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|e| e.ok())
+                    .any(|e| e.file_name().to_string_lossy().to_ascii_lowercase() == ref_lower);
+                if already_has {
+                    continue;
+                }
+
+                if let Some(src_path) = global_nutexb.get(&ref_lower) {
+                    // Don't copy from self
+                    if src_path.parent() == Some(&subdir) {
+                        continue;
+                    }
                     let fname = src_path.file_name().unwrap();
-                    let dest_path = subdir.join(fname);
-                    if !dest_path.exists() {
-                        fs::copy(src_path, &dest_path).map_err(|e| {
+                    let final_dest = subdir.join(fname);
+                    if !final_dest.exists() {
+                        fs::copy(src_path, &final_dest).map_err(|e| {
                             format!(
                                 "Failed to copy {} → {}: {e}",
                                 src_path.display(),
-                                dest_path.display()
+                                final_dest.display()
                             )
                         })?;
                         textures_copied += 1;
-                    }
-                    if let (Ok(old_rel), Ok(new_rel)) =
-                        (src_path.strip_prefix(root), dest_path.strip_prefix(root))
-                    {
-                        let old_url = format!(
-                            ".\\{}\\{}",
-                            folder_name,
-                            old_rel.to_string_lossy().replace('/', "\\")
-                        );
-                        let new_url = format!(
-                            ".\\{}\\{}",
-                            folder_name,
-                            new_rel.to_string_lossy().replace('/', "\\")
-                        );
-                        url_remap.insert(old_url, new_url);
+                        model_had_copy = true;
                     }
                 } else {
                     warnings.push(format!(
-                        "Texture '{}' referenced by numatb in {} not found in textures/",
+                        "Texture '{}' referenced by numatb in {} not found anywhere in stage",
                         ref_name,
                         ssbh_folder.display()
                     ));
                 }
             }
         }
-    }
 
-    let textures_folder_removed = if textures_copied > 0 {
-        fs::remove_dir_all(&textures_dir)
-            .map_err(|e| format!("Failed to remove textures/ after redistribution: {e}"))?;
-        true
-    } else {
-        false
-    };
+        if model_had_copy {
+            models_processed += 1;
+        }
+    }
 
     if !url_remap.is_empty() {
         if let Some(sj_path) = find_structure_json_path(root) {
@@ -4187,6 +4237,40 @@ pub fn redistribute_stage_textures(stage_root: &str) -> Result<RedistributeResul
         textures_folder_removed,
         warnings,
     })
+}
+
+/// Build a global index of all .nutexb files found in numbered subdirs (0/, 1/, etc.)
+/// of all SSBH model folders. Returns lowercase filename → path.
+fn index_all_nutexb_in_model_folders(ssbh_folders: &[PathBuf]) -> BTreeMap<String, PathBuf> {
+    let mut map = BTreeMap::new();
+    for folder in ssbh_folders {
+        let entries = match fs::read_dir(folder) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.filter_map(|e| e.ok()) {
+            if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !name.chars().all(|c| c.is_ascii_digit()) {
+                continue;
+            }
+            let subdir = entry.path();
+            if let Ok(sub_entries) = fs::read_dir(&subdir) {
+                for sub_entry in sub_entries.filter_map(|e| e.ok()) {
+                    let fname = sub_entry.file_name().to_string_lossy().to_string();
+                    if fname.to_ascii_lowercase().ends_with(".nutexb")
+                        && !sub_entry.file_type().map(|t| t.is_dir()).unwrap_or(true)
+                    {
+                        map.entry(fname.to_ascii_lowercase())
+                            .or_insert_with(|| sub_entry.path());
+                    }
+                }
+            }
+        }
+    }
+    map
 }
 
 /// Resolve the content root from a stage root.

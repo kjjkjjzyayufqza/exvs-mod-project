@@ -163,6 +163,7 @@ export type SaveFolderResult = {
   deletedCount: number;
   migratedTextures: number;
   reloadedBundle: StageBundleResponse | null;
+  hasStructuralChanges: boolean;
 };
 
 function emitStep(
@@ -227,6 +228,7 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
           deletedCount: 0,
           migratedTextures: 0,
           reloadedBundle: null,
+          hasStructuralChanges: false,
         };
       }
       await executeDelete(stageRoot, folderDeletions);
@@ -362,23 +364,42 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
     emitStep(onProgress, "csv", "Writing CSV files...", "error", undefined, err instanceof Error ? err.message : String(err));
   }
 
-  // Phase 8: Rebuild structure JSON (skip when saving as FHM2D — handled separately)
+  // Phase 8: Redistribute textures (copy nutexb from textures/ to per-model subdirs based on numatb refs)
+  if (!params.skipStructureRebuild) {
+    emitStep(onProgress, "redistribute", "Populating model textures...", "running");
+    try {
+      const packTarget = resolveStagePackStructureTarget(stageRoot);
+      const redistResult = await invoke<{ modelsProcessed: number; texturesCopied: number; texturesFolderRemoved: boolean; warnings: string[] }>(
+        "redistribute_stage_textures",
+        { stageRoot: packTarget.packRoot },
+      );
+      migratedTextures = redistResult.texturesCopied;
+      emitStep(onProgress, "redistribute", "Populating model textures...", "done", `${redistResult.texturesCopied} textures → ${redistResult.modelsProcessed} models`);
+    } catch (err) {
+      emitStep(onProgress, "redistribute", "Populating model textures...", "error", undefined, err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  // Phase 9: Rebuild structure JSON (skip when saving as FHM2D — handled separately)
   if (!params.skipStructureRebuild) {
     emitStep(onProgress, "structure", "Rebuilding structure JSON...", "running");
     try {
       const packTarget = resolveStagePackStructureTarget(stageRoot);
-      await invoke("rebuild_stage_structure_json", { stageRoot: packTarget.packRoot });
+      await invoke("rebuild_stage_structure_json_forced", { stageRoot: packTarget.packRoot });
       emitStep(onProgress, "structure", "Rebuilding structure JSON...", "done");
     } catch (err) {
       emitStep(onProgress, "structure", "Rebuilding structure JSON...", "error", undefined, err instanceof Error ? err.message : String(err));
     }
   }
 
-  // Phase 9: Reload
-  try {
-    reloadedBundle = await invoke<StageBundleResponse>("load_stage_bundle", { stageRoot });
-  } catch {
-    // non-critical — UI can continue without reload
+  // Phase 10: Reload (only when structural changes happened)
+  const hasStructuralChanges = convertedCount > 0 || deletedCount > 0;
+  if (hasStructuralChanges) {
+    try {
+      reloadedBundle = await invoke<StageBundleResponse>("load_stage_bundle", { stageRoot });
+    } catch {
+      // non-critical — UI can continue without reload
+    }
   }
 
   return {
@@ -390,5 +411,6 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
     deletedCount,
     migratedTextures,
     reloadedBundle,
+    hasStructuralChanges,
   };
 }

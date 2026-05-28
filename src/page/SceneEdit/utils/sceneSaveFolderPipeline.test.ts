@@ -314,9 +314,22 @@ describe("sceneSaveFolderPipeline", () => {
     );
   });
 
-  it("reloads bundle after save", async () => {
+  it("skips bundle reload when no structural changes", async () => {
     const params = makeParams();
     const result = await executeSaveFolderPipeline(params);
+    expect(result.reloadedBundle).toBeNull();
+    expect(result.hasStructuralChanges).toBe(false);
+    expect(mockInvoke).not.toHaveBeenCalledWith("load_stage_bundle", expect.anything());
+  });
+
+  it("reloads bundle after structural changes", async () => {
+    const store = useSceneDirtyStore.getState();
+    store.markObjectAdded("sample_mesh");
+
+    const importedObject = makeImportedDaeObject();
+    const params = makeParams({ importedDaeObjects: [importedObject] });
+    const result = await executeSaveFolderPipeline(params);
+    expect(result.hasStructuralChanges).toBe(true);
     expect(result.reloadedBundle).toBeDefined();
     expect(mockInvoke).toHaveBeenCalledWith("load_stage_bundle", {
       stageRoot: "E:/stage/16F73C97/0/0",

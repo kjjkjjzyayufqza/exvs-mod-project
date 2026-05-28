@@ -1,89 +1,97 @@
-[validate] mesh[1] 'SHAPE_ROOTShape1': verts=5383 indices=11667 normals=5383 uvs=5383 bone_groups=17
-[validate] skinning check mesh[1] 'SHAPE_ROOTShape1': vertex_count=5383 bone_groups=17
-[validate] skinning OK for mesh[1] 'SHAPE_ROOTShape1'
-[validate] validation passed: 2 valid meshes
-[dae_to_ssbh] scene validation passed
-[dae_to_ssbh] converting scene: 2 meshes, 78 bones, base_filename=sssssccccc
-[dae_to_ssbh] checking unique geometry names...
-[dae_to_ssbh] all 2 geometry names are unique
-[dae_to_ssbh] converting skeleton...
-[dae_to_ssbh] skeleton: 78 bones
-[dae_to_ssbh] converting meshes...
-[dae_to_ssbh] converting mesh 'SHAPE_ROOTShape': 13 verts, 36 indices, 1 bone_influences
-[dae_to_ssbh] converting mesh 'SHAPE_ROOTShape1': 5383 verts, 11667 indices, 17 bone_influences
-[dae_to_ssbh] mesh stats: 2 objects, 5396 vertices, 11703 triangle_indices
-[dae_to_ssbh] converting model entries...
-[dae_to_ssbh] modl entries: 2
-[dae_to_ssbh] validating output files...
-[dae_to_ssbh] convert_dae_file done successfully
-[convert_dae_bytes_to_ssbh] convert_dae_file success: mesh_objects=2 total_vertices=5396 total_indices=11703 bones=78       
-[convert_dae_bytes_to_ssbh] output files: numdlb=C:\Users\kjjkjj\AppData\Local\Temp\.tmp0ynoxO\sssssccccc.numdlb numshb=C:\Users\kjjkjj\AppData\Local\Temp\.tmp0ynoxO\sssssccccc.numshb nusktb=C:\Users\kjjkjj\AppData\Local\Temp\.tmp0ynoxO\sssssccccc.nusktb numatb=none
-[convert_dae_bytes_to_ssbh] numatb artifacts: nust=2771 bytes, maya=Some(2288) bytes
-[convert_dae_bytes_to_ssbh] read numdlb: 284 bytes
-[convert_dae_bytes_to_ssbh] read numshb: 845568 bytes
-[convert_dae_bytes_to_ssbh] done, artifacts ready
-[scene_execute_import] SSBH artifacts generated: numdlb=284 numshb=845568 nusktb=22248 numatb=2771
-[scene_execute_import] done: name=sssssccccc ssbh_generated=true hkt_generated=false
-[load_bundle] Loading: E:\XB\解包\com\test\0x16F73C97\0\0
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x16F73C97/0/0/base/001stage001_base/001stage001_base.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x16F73C97/0/0/base/001stage001_base/001stage001_base.numdlb root=E:/XB/解包/com/test/0x16F73C97/0/0/base/001stage001_base
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x16F73C97/0/0/base/001stage001_base/001stage001_base__maya__.numshb      
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x16F73C97/0/0/base/001stage001_base/001stage001_base.numdlb matl_files=1 textures_ref=6 textures_resolved=6 warnings=0 elapsed_ms=17
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x16F73C97/0/0/001stage001_object_box01/0/001stage001_object_box01.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x16F73C97/0/0/001stage001_object_box01/0/001stage001_object_box01.numdlb root=E:/XB/解包/com/test/0x16F73C97/0/0/001stage001_object_box01/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x16F73C97/0/0/001stage001_object_box01/0/001stage001_object_box01__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x16F73C97/0/0/001stage001_object_box01/0/001stage001_object_box01.numdlb matl_files=1 textures_ref=12 textures_resolved=12 warnings=0 elapsed_ms=46
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x16F73C97/0/0/sky/0/001stage001_sky.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x16F73C97/0/0/sky/0/001stage001_sky.numdlb root=E:/XB/解包/com/test/0x16F73C97/0/0/sky/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x16F73C97/0/0/sky/0/001stage001_sky__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x16F73C97/0/0/sky/0/001stage001_sky.numdlb matl_files=2 textures_ref=1 textures_resolved=1 warnings=0 elapsed_ms=2
-[load_bundle] Done in 68ms — 2 sub-models
-[rebuild_structure] Starting for: E:/XB/解包/com/test/0x16F73C97
-[rebuild_structure] Cannot preserve original (File count mismatch: 41 referenced vs 72 on disk (31 extra non-linked file(s))). Falling back to full rebuild.
-[rebuild_structure] Full rebuild: 48 unique files (13 nutexb deduped), 118 structure entries (72 item refs) -> E:/XB/解包/com/test\0x16F73C97_structure.json
-[rebuild_structure] Done in 181ms — wrote E:/XB/解包/com/test\0x16F73C97_structure.json
-[load_bundle] Loading: E:\XB\解包\com\test\0x16F73C97\0\0
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x16F73C97/0/0/base/001stage001_base/001stage001_base.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x16F73C97/0/0/base/001stage001_base/001stage001_base.numdlb root=E:/XB/解包/com/test/0x16F73C97/0/0/base/001stage001_base
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x16F73C97/0/0/base/001stage001_base/001stage001_base__maya__.numshb      
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x16F73C97/0/0/base/001stage001_base/001stage001_base.numdlb matl_files=1 textures_ref=6 textures_resolved=6 warnings=0 elapsed_ms=19
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x16F73C97/0/0/001stage001_object_box01/0/001stage001_object_box01.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x16F73C97/0/0/001stage001_object_box01/0/001stage001_object_box01.numdlb root=E:/XB/解包/com/test/0x16F73C97/0/0/001stage001_object_box01/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x16F73C97/0/0/001stage001_object_box01/0/001stage001_object_box01__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x16F73C97/0/0/001stage001_object_box01/0/001stage001_object_box01.numdlb matl_files=1 textures_ref=12 textures_resolved=12 warnings=0 elapsed_ms=49
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x16F73C97/0/0/sky/0/001stage001_sky.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x16F73C97/0/0/sky/0/001stage001_sky.numdlb root=E:/XB/解包/com/test/0x16F73C97/0/0/sky/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x16F73C97/0/0/sky/0/001stage001_sky__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x16F73C97/0/0/sky/0/001stage001_sky.numdlb matl_files=2 textures_ref=1 textures_resolved=1 warnings=0 elapsed_ms=2
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x16F73C97/0/0/sssssccccc/0/sssssccccc.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x16F73C97/0/0/sssssccccc/0/sssssccccc.numdlb root=E:/XB/解包/com/test/0x16F73C97/0/0/sssssccccc/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x16F73C97/0/0/sssssccccc/0/sssssccccc.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x16F73C97/0/0/sssssccccc/0/sssssccccc.numdlb matl_files=1 textures_ref=1 textures_resolved=0 warnings=1 elapsed_ms=64
-[load_bundle] Done in 138ms — 3 sub-models
-[scene_session_destroy] session_id=93c5ccc1-78a0-4a03-9d5a-057c26b2f399
-[load_bundle] Loading: E:\XB\解包\com\test\0x16F73C97\0\0
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x16F73C97/0/0/base/001stage001_base/001stage001_base.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x16F73C97/0/0/base/001stage001_base/001stage001_base.numdlb root=E:/XB/解包/com/test/0x16F73C97/0/0/base/001stage001_base
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x16F73C97/0/0/base/001stage001_base/001stage001_base__maya__.numshb      
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x16F73C97/0/0/base/001stage001_base/001stage001_base.numdlb matl_files=1 textures_ref=6 textures_resolved=6 warnings=0 elapsed_ms=18
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x16F73C97/0/0/001stage001_object_box01/0/001stage001_object_box01.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x16F73C97/0/0/001stage001_object_box01/0/001stage001_object_box01.numdlb root=E:/XB/解包/com/test/0x16F73C97/0/0/001stage001_object_box01/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x16F73C97/0/0/001stage001_object_box01/0/001stage001_object_box01__maya__.numshb
-[scene_session_destroy] session_id=93c5ccc1-78a0-4a03-9d5a-057c26b2f399
-[scene_session_destroy] failed: Session '93c5ccc1-78a0-4a03-9d5a-057c26b2f399' not found
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x16F73C97/0/0/001stage001_object_box01/0/001stage001_object_box01.numdlb matl_files=1 textures_ref=12 textures_resolved=12 warnings=0 elapsed_ms=49
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x16F73C97/0/0/sky/0/001stage001_sky.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x16F73C97/0/0/sky/0/001stage001_sky.numdlb root=E:/XB/解包/com/test/0x16F73C97/0/0/sky/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x16F73C97/0/0/sky/0/001stage001_sky__maya__.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x16F73C97/0/0/sky/0/001stage001_sky.numdlb matl_files=2 textures_ref=1 textures_resolved=1 warnings=0 elapsed_ms=2
-[ssbh_preview] load start: input=E:/XB/解包/com/test/0x16F73C97/0/0/sssssccccc/0/sssssccccc.numdlb
-[ssbh_preview] resolved entry: modl=E:/XB/解包/com/test/0x16F73C97/0/0/sssssccccc/0/sssssccccc.numdlb root=E:/XB/解包/com/test/0x16F73C97/0/0/sssssccccc/0
-[ssbh_preview] mesh resolved: E:/XB/解包/com/test/0x16F73C97/0/0/sssssccccc/0/sssssccccc.numshb
-[ssbh_preview] load done: modl=E:/XB/解包/com/test/0x16F73C97/0/0/sssssccccc/0/sssssccccc.numdlb matl_files=1 textures_ref=1 textures_resolved=0 warnings=1 elapsed_ms=58
-[load_bundle] Done in 131ms — 3 sub-models
-[scene_open_folder] path=E:\XB\解包\com\test\0x16F73C97\0\0
-[collect_hkt_as_xml] converted: 001stage001_object_box01\map_hit.hkt
-[collect_hkt_as_xml] converted: base\map_hit.hkt
-[collect_hkt_as_xml] converted: info\border_hit.hkt
-[collect_hkt_as_xml] converted: sssssccccc\sssssccccc.hkt
-[scene_open_folder] success session_id=b611f97d-755e-441d-8fb8-3d5081dfefe9 warnings=0
+folder/  x2  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
+  folder/  x5  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
+    folder/  x2  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
+      folder/  x8  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
+        001stage001_base__maya__  .nusktb [SKEL]  u1=00000000 u2=10000000 u2_1=0 u3=0 u4=0  [0]
+        textures/  x6  u1=00000000 u2=00000000 u2_1=0 u3=32 u4=0 u5=1 u6=0
+          stage001_panel_01_ambientocclusion  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [1]
+          stage001_panel_01_diffuse  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [2]
+          stage001_panel_01_emissive  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [3]
+          stage001_panel_01_normal  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [4]
+          stage001_panel_01_roughness  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [5]
+          stage001_panel_01_specular  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [6]
+        001stage001_base__maya__  .numatb [MAT]  u1=00000000 u2=21000000 u2_1=0 u3=0 u4=0  [7]
+        textures/  x6  u1=00000000 u2=00000000 u2_1=0 u3=32 u4=0 u5=1 u6=0
+          stage001_panel_01_ambientocclusion  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [1]
+          stage001_panel_01_diffuse  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [2]
+          stage001_panel_01_emissive  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [3]
+          stage001_panel_01_normal  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [4]
+          stage001_panel_01_roughness  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [5]
+          stage001_panel_01_specular  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [6]
+        001stage001_base__nust__  .numatb [MAT]  u1=00000000 u2=21000000 u2_1=0 u3=0 u4=0  [8]
+        001stage001_base__maya__  .numshb [MESH]  u1=00000000 u2=30000000 u2_1=0 u3=0 u4=0  [9]
+        001stage001_base  .numdlb [MDL]  u1=00000000 u2=40000000 u2_1=0 u3=0 u4=0  [10]
+        001stage001_base  .bin [JNT]  u1=00000000 u2=50000000 u2_1=0 u3=0 u4=0  [11]
+      map_hit  .bin  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [12]
+    folder/  x7  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
+      folder/  x2  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
+        900default_ibl_irradiance  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [13]
+        900default_ibl_specular  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [14]
+      folder/  x1  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
+        001stage001_rampfog  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [15]
+      border_hit  .bin  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [16]
+      placement  .bin  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [17]
+      graphic_param  .bin  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [18]
+      plan_param  .bin  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [19]
+      folder/  x1  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
+        lut_none  .nutexb [FX]  u1=00000000 u2=01010000 u2_1=0 u3=0 u4=0  [20]
+    folder/  x2  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
+      folder/  x8  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
+        001stage001_object_box01__maya__  .nusktb [SKEL]  u1=00000000 u2=10000000 u2_1=0 u3=0 u4=0  [21]
+        textures/  x12  u1=00000000 u2=00000000 u2_1=0 u3=32 u4=0 u5=1 u6=0
+          stage001_panel_01_ambientocclusion  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [1]
+          stage001_panel_01_diffuse  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [2]
+          stage001_panel_01_emissive  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [3]
+          stage001_panel_01_normal  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [4]
+          stage001_panel_01_roughness  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [5]
+          stage001_panel_01_specular  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [6]
+          stage001_panel_02_ambientocclusion  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [22]
+          stage001_panel_02_diffuse  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [23]
+          stage001_panel_02_emissive  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [24]
+          stage001_panel_02_normal  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [25]
+          stage001_panel_02_roughness  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [26]
+          stage001_panel_02_specular  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [27]
+        001stage001_object_box01__maya__  .numatb [MAT]  u1=00000000 u2=21000000 u2_1=0 u3=0 u4=0  [28]
+        textures/  x12  u1=00000000 u2=00000000 u2_1=0 u3=32 u4=0 u5=1 u6=0
+          stage001_panel_01_ambientocclusion  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [1]
+          stage001_panel_01_diffuse  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [2]
+          stage001_panel_01_emissive  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [3]
+          stage001_panel_01_normal  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [4]
+          stage001_panel_01_roughness  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [5]
+          stage001_panel_01_specular  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [6]
+          stage001_panel_02_ambientocclusion  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [22]
+          stage001_panel_02_diffuse  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [23]
+          stage001_panel_02_emissive  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [24]
+          stage001_panel_02_normal  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [25]
+          stage001_panel_02_roughness  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [26]
+          stage001_panel_02_specular  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [27]
+        001stage001_object_box01__nust__  .numatb [MAT]  u1=00000000 u2=21000000 u2_1=0 u3=0 u4=0  [29]
+        001stage001_object_box01__maya__  .numshb [MESH]  u1=00000000 u2=30000000 u2_1=0 u3=0 u4=0  [30]
+        001stage001_object_box01  .numdlb [MDL]  u1=00000000 u2=40000000 u2_1=0 u3=0 u4=0  [31]
+        001stage001_object_box01  .bin [JNT]  u1=00000000 u2=50000000 u2_1=0 u3=0 u4=0  [32]
+      map_hit  .bin  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [33]
+    folder/  x2  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
+      folder/  x8  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
+        sssssccccc  .nusktb [SKEL]  u1=00000000 u2=10000000 u2_1=0 u3=0 u4=0  [34]
+        textures/  x1  u1=00000000 u2=00000000 u2_1=0 u3=32 u4=0 u5=1 u6=0
+          stage001_panel_01_diffuse  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [2]
+        sssssccccc__maya__  .numatb [MAT]  u1=00000000 u2=21000000 u2_1=0 u3=0 u4=0  [35]
+        textures/  x1  u1=00000000 u2=00000000 u2_1=0 u3=32 u4=0 u5=1 u6=0
+          stage001_panel_01_diffuse  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [2]
+        sssssccccc__nust__  .numatb [MAT]  u1=00000000 u2=21000000 u2_1=0 u3=0 u4=0  [36]
+        sssssccccc  .numshb [MESH]  u1=00000000 u2=30000000 u2_1=0 u3=0 u4=0  [37]
+        sssssccccc  .numdlb [MDL]  u1=00000000 u2=40000000 u2_1=0 u3=0 u4=0  [38]
+        sssssccccc  .bin [JNT]  u1=00000000 u2=50000000 u2_1=0 u3=0 u4=0  [39]
+      sssssccccc  .bin  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [40]
+    folder/  x1  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
+      folder/  x8  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
+        001stage001_sky__maya__  .nusktb [SKEL]  u1=00000000 u2=10000000 u2_1=0 u3=0 u4=0  [41]
+        textures/  x1  u1=00000000 u2=00000000 u2_1=0 u3=32 u4=0 u5=1 u6=0
+          stage001_skydome_sky  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [42]
+        001stage001_sky__maya__  .numatb [MAT]  u1=00000000 u2=21000000 u2_1=0 u3=0 u4=0  [43]
+        textures/  x0  u1=00000000 u2=00000000 u2_1=0 u3=32 u4=0 u5=1 u6=0
+        001stage001_sky__nust__  .numatb [MAT]  u1=00000000 u2=21000000 u2_1=0 u3=0 u4=0  [44]
+        001stage001_sky__maya__  .numshb [MESH]  u1=00000000 u2=30000000 u2_1=0 u3=0 u4=0  [45]
+        001stage001_sky  .numdlb [MDL]  u1=00000000 u2=40000000 u2_1=0 u3=0 u4=0  [46]
+        001stage001_sky  .bin [JNT]  u1=00000000 u2=50000000 u2_1=0 u3=0 u4=0  [47]
+  folder/  x0  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0

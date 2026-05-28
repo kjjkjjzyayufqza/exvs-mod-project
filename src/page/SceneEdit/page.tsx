@@ -1435,8 +1435,14 @@ export default function SceneEdit() {
         return;
       }
 
-      if (result.reloadedBundle) {
+      if (result.hasStructuralChanges && result.reloadedBundle) {
         applyBundle(stageRoot, result.reloadedBundle as any, { showToast: false });
+      } else if (!result.hasStructuralChanges) {
+        // Non-structural save: in-memory state is already correct, just update baseline snapshot
+        initialSnapshotRef.current = {
+          graphicParams: graphicParams.map((p) => ({ ...p })),
+          placementEntries: placementEntries.map((e) => ({ ...e, rawFields: [...e.rawFields] })),
+        };
       }
 
       if (result.convertedDaeObjectIds.length > 0) {
@@ -1514,8 +1520,13 @@ export default function SceneEdit() {
         return;
       }
 
-      if (result.reloadedBundle) {
+      if (result.hasStructuralChanges && result.reloadedBundle) {
         applyBundle(stageRoot, result.reloadedBundle as any, { showToast: false });
+      } else if (!result.hasStructuralChanges) {
+        initialSnapshotRef.current = {
+          graphicParams: graphicParams.map((p) => ({ ...p })),
+          placementEntries: placementEntries.map((e) => ({ ...e, rawFields: [...e.rawFields] })),
+        };
       }
 
       if (result.convertedDaeObjectIds.length > 0) {
