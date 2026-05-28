@@ -9,7 +9,12 @@ import type {
 import { SSBH_MODEL_ROLES } from "../components/detail-view/sceneDetailViewTypes";
 import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
 import type { NumatbModalBundle } from "@/page/TestEditor/components/ssbh-model-preview/numatbEditorUtils";
+import {
+  detectNumatbProfileFromPath,
+  deriveNumatbSisterPath,
+} from "@/page/TestEditor/components/ssbh-model-preview/numatbEditorUtils";
 import { createEmptyNumatbFile } from "@/page/TestEditor/components/ssbh-model-preview/daeSsbhTypes";
+import type { NumatbPathsByProfile } from "../components/detail-view/sceneDetailViewTypes";
 import {
   ssbhReadNumdlbMapping,
   ssbhWriteNumdlbMapping,
@@ -28,6 +33,19 @@ import {
   modelTabLoadingField,
   shouldLoadModelTab,
 } from "../utils/sceneDetailViewTabPolicy";
+
+function resolveNumatbProfilePaths(matlPaths: string[]): NumatbPathsByProfile {
+  let maya: string | null = null;
+  let nust: string | null = null;
+  for (const p of matlPaths) {
+    const profile = detectNumatbProfileFromPath(p);
+    if (profile === "maya" && !maya) maya = p;
+    if (profile === "nust" && !nust) nust = p;
+  }
+  if (nust && !maya) maya = deriveNumatbSisterPath(nust, "maya");
+  if (maya && !nust) nust = deriveNumatbSisterPath(maya, "nust");
+  return { maya, nust };
+}
 
 let sessionCounter = 0;
 
@@ -88,8 +106,8 @@ export function useSceneDetailView(bundleLookup: DetailViewBundleLookup) {
       }
 
       if (tab === "material") {
-        const matlPath = bundle.matlPaths?.[0];
-        if (!matlPath) {
+        const paths = bundle.matlPaths ?? [];
+        if (paths.length === 0) {
           setSessions((prev) =>
             prev.map((s) =>
               s.id === sessionId && s.modelData
@@ -98,6 +116,7 @@ export function useSceneDetailView(bundleLookup: DetailViewBundleLookup) {
                     modelData: {
                       ...s.modelData,
                       numatb: { base: null, draft: null, loading: false, error: null },
+                      numatbPaths: { maya: null, nust: null },
                     },
                   }
                 : s,
@@ -107,11 +126,21 @@ export function useSceneDetailView(bundleLookup: DetailViewBundleLookup) {
         }
 
         try {
-          const numatbFile = await ssbhTemplateReadNumatb(matlPath);
+          const resolvedPaths = resolveNumatbProfilePaths(paths);
+          let mayaFile = createEmptyNumatbFile();
+          let nustFile = createEmptyNumatbFile();
+
+          if (resolvedPaths.nust) {
+            try { nustFile = await ssbhTemplateReadNumatb(resolvedPaths.nust); } catch { /* file may not exist */ }
+          }
+          if (resolvedPaths.maya) {
+            try { mayaFile = await ssbhTemplateReadNumatb(resolvedPaths.maya); } catch { /* file may not exist */ }
+          }
+
           const numatbBundle: NumatbModalBundle = {
-            mayaFile: numatbFile,
-            nustFile: createEmptyNumatbFile(),
-            mirrorTexturePathsAcrossProfiles: false,
+            mayaFile,
+            nustFile,
+            mirrorTexturePathsAcrossProfiles: true,
           };
           setSessions((prev) =>
             prev.map((s) =>
@@ -121,6 +150,7 @@ export function useSceneDetailView(bundleLookup: DetailViewBundleLookup) {
                     modelData: {
                       ...s.modelData,
                       numatb: { base: numatbBundle, draft: numatbBundle, loading: false, error: null },
+                      numatbPaths: resolvedPaths,
                     },
                   }
                 : s,
@@ -135,6 +165,7 @@ export function useSceneDetailView(bundleLookup: DetailViewBundleLookup) {
                     modelData: {
                       ...s.modelData,
                       numatb: { base: null, draft: null, loading: false, error: String(e) },
+                      numatbPaths: { maya: null, nust: null },
                     },
                   }
                 : s,
@@ -244,6 +275,7 @@ export function useSceneDetailView(bundleLookup: DetailViewBundleLookup) {
               bundle,
               numdlb: { base: null, draft: null, loading: false, error: null },
               numatb: { base: null, draft: null, loading: false, error: null },
+              numatbPaths: { maya: null, nust: null },
               nuhlpb: { base: null, draft: null, loading: false, error: null },
             };
 
@@ -366,10 +398,18 @@ export function useSceneDetailView(bundleLookup: DetailViewBundleLookup) {
   const saveNumatb = useCallback(async (sessionId: string) => {
     const session = sessions.find((s) => s.id === sessionId);
     if (!session?.modelData?.numatb.draft || !session.modelData.bundle) return;
-    const matlPath = session.modelData.bundle.matlPaths?.[0];
-    if (!matlPath) return;
+    const draft = session.modelData.numatb.draft;
+    const paths = session.modelData.numatbPaths;
+    if (!paths.maya && !paths.nust) return;
     try {
-      await ssbhTemplateWriteNumatb(matlPath, session.modelData.numatb.draft.mayaFile);
+      const writes: Promise<void>[] = [];
+      if (paths.nust && draft.nustFile.entries.length > 0) {
+        writes.push(ssbhTemplateWriteNumatb(paths.nust, draft.nustFile));
+      }
+      if (paths.maya && draft.mayaFile.entries.length > 0) {
+        writes.push(ssbhTemplateWriteNumatb(paths.maya, draft.mayaFile));
+      }
+      await Promise.all(writes);
       setSessions((prev) =>
         prev.map((s) =>
           s.id === sessionId && s.modelData

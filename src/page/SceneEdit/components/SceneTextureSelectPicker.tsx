@@ -99,7 +99,7 @@ export function SceneTextureSelectPicker({
   }, [open, inputValue]);
 
   const textureOptions = useMemo(
-    () => entries.map((entry) => entry.filename),
+    () => entries.map((entry) => entry.filename.replace(/\.nutexb$/i, "")),
     [entries],
   );
 
@@ -133,8 +133,9 @@ export function SceneTextureSelectPicker({
   }, [textureOptions, queryTrim]);
 
   const commitValue = (next: string) => {
-    setInputValue(next);
-    onChange(next);
+    const stripped = next.replace(/\.nutexb$/i, "");
+    setInputValue(stripped);
+    onChange(stripped);
   };
 
   const setInputOnly = (next: string) => {

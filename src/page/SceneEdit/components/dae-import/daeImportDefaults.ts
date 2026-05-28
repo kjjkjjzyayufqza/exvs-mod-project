@@ -23,8 +23,8 @@ export function createDefaultDaeImportConfig(
 ): DaeImportConfig {
   return {
     loadToScene: true,
-    convertToSsbh: false,
-    generateHkt: false,
+    convertToSsbh: true,
+    generateHkt: true,
     hktSimplify: { ...DEFAULT_HKT_SIMPLIFY },
     ssbhConfig: createDefaultSsbhConfig(baseFilename),
     defaultDdsFormat: "BC7_UNORM",

@@ -19,10 +19,16 @@ export type DetailViewTab = DetailViewModelTab | DetailViewEffectTab;
 
 export type DetailViewNodeKind = "ssbh-model" | "effect";
 
+export interface NumatbPathsByProfile {
+  maya: string | null;
+  nust: string | null;
+}
+
 export interface DetailViewModelData {
   bundle: SsbhModelPreviewBundle;
   numdlb: { base: NumdlbReadResult | null; draft: NumdlbReadResult | null; loading: boolean; error: string | null };
   numatb: { base: NumatbModalBundle | null; draft: NumatbModalBundle | null; loading: boolean; error: string | null };
+  numatbPaths: NumatbPathsByProfile;
   nuhlpb: { base: NuhlpbReadResult | null; draft: NuhlpbReadResult | null; loading: boolean; error: string | null };
 }
 

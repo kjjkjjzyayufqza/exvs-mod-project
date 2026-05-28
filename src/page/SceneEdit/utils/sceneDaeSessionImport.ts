@@ -1,4 +1,5 @@
 import type { DaeSsbhSessionState } from "@/page/TestEditor/components/ssbh-model-preview/daeSsbhTypes";
+import type { MatlDataJson } from "@/page/TestEditor/components/ssbh-model-preview/types";
 import type { ImportedDaeObject } from "../components/MapViewport";
 import type { DaeImportConfig } from "../components/dae-import/daeImportTypes";
 import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
@@ -10,6 +11,30 @@ import {
   type ImportConfig,
   type ImportResult,
 } from "./sceneSessionService";
+
+/**
+ * Strip `.nutexb` suffix from all texture data paths in a MatlDataJson.
+ * EXVS game runtime expects texture references WITHOUT file extension.
+ */
+function stripNutexbFromMatl(matl: MatlDataJson | null | undefined): MatlDataJson | null {
+  if (!matl) return null;
+  return {
+    ...matl,
+    entries: matl.entries.map((entry) => ({
+      ...entry,
+      textures: entry.textures.map((tex) => ({
+        ...tex,
+        data: tex.data.replace(/\.nutexb$/i, ""),
+      })),
+      ...(entry.textures2 ? {
+        textures2: entry.textures2.map((tex) => ({
+          ...tex,
+          data: tex.data.replace(/\.nutexb$/i, ""),
+        })),
+      } : {}),
+    })),
+  };
+}
 
 export async function resolveSessionImportConfigForSave(
   sessionId: string,
@@ -80,8 +105,8 @@ export function buildSsbhSessionImportConfig(
       writeJnttbl: daeConfig.ssbhConfig.writeJnttbl,
       writeMayaProfile: sessionState.writeMayaProfile,
       materialTemplate: daeConfig.ssbhConfig.materialTemplate || null,
-      mayaFile: sessionState.writeMayaProfile ? sessionState.mayaFile : null,
-      nustFile: sessionState.writeNumatb ? sessionState.nustFile : null,
+      mayaFile: sessionState.writeMayaProfile ? stripNutexbFromMatl(sessionState.mayaFile) : null,
+      nustFile: sessionState.writeNumatb ? stripNutexbFromMatl(sessionState.nustFile) : null,
       numdlbEntries: sessionState.numdlbEntries,
     },
   };

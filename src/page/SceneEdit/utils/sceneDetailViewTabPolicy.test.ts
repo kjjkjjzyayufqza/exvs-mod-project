@@ -28,6 +28,7 @@ function makeModelData(
     },
     numdlb: { base: null, draft: null, loading: false, error: null },
     numatb: { base: null, draft: null, loading: false, error: null },
+    numatbPaths: { maya: null, nust: null },
     nuhlpb: { base: null, draft: null, loading: false, error: null },
     ...overrides,
   };

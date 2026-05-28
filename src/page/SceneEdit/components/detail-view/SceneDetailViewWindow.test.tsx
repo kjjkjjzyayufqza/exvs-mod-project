@@ -83,6 +83,7 @@ function createSession(activeTab: DetailViewSession["activeTab"]): DetailViewSes
         error: null,
       },
       numatb: { base: null, draft: null, loading: false, error: null },
+      numatbPaths: { maya: null, nust: null },
       nuhlpb: { base: null, draft: null, loading: false, error: null },
     },
   };

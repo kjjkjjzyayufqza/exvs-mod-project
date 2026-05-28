@@ -54,6 +54,24 @@ export function detectNumatbProfileFromPath(filePath: string): NumatbProfileKind
   return "nust";
 }
 
+/**
+ * Derive the sister numatb path by swapping __maya__ ↔ __nust__ in the filename.
+ * Returns null when the path doesn't follow the naming convention.
+ */
+export function deriveNumatbSisterPath(
+  filePath: string,
+  targetProfile: NumatbProfileKind,
+): string | null {
+  const normalized = filePath.replace(/\\/g, "/");
+  const currentProfile = detectNumatbProfileFromPath(normalized);
+  if (currentProfile === targetProfile) return normalized;
+  const marker = currentProfile === "maya" ? "__maya__" : "__nust__";
+  const replacement = targetProfile === "maya" ? "__maya__" : "__nust__";
+  const idx = normalized.toLowerCase().lastIndexOf(marker);
+  if (idx < 0) return null;
+  return normalized.slice(0, idx) + replacement + normalized.slice(idx + marker.length);
+}
+
 export function buildNumatbModalBundleFromLoadedFile(
   matl: MatlDataJson,
   primaryProfile: NumatbProfileKind,
