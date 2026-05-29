@@ -4355,13 +4355,18 @@ fn remove_empty_dir_if_exists(path: &Path) {
 }
 
 /// Reverse operation: collect nutexb files from per-model numbered subdirs
-/// back into a shared `textures/` folder, deduplicating by filename.
+/// back into a single shared `textures/` folder at the content level
+/// (`<pack>/0/0/textures`), deduplicating by filename. The content level
+/// matches what `extract`, `rebuild_structure_json_for_stage_with_shared_textures`
+/// and `redistribute_stage_textures` all use, so the shared folder produced here
+/// is found by every consumer. Empty numbered subdirs are removed as well, so
+/// model folders are left with no leftover texture subdirs.
 pub fn restore_shared_textures(stage_root: &str) -> Result<RestoreSharedResult, String> {
     let stage_root_path = Path::new(stage_root);
     let (pack_root, content_root) = resolve_stage_roots(stage_root_path);
-    let textures_dir = pack_root.join(STAGE_TEXTURES_NAME);
+    let textures_dir = content_root.join(STAGE_TEXTURES_NAME);
 
-    remove_empty_dir_if_exists(&content_root.join(STAGE_TEXTURES_NAME));
+    remove_empty_dir_if_exists(&textures_dir);
 
     let folder_name = pack_root
         .file_name()
@@ -4391,6 +4396,16 @@ pub fn restore_shared_textures(stage_root: &str) -> Result<RestoreSharedResult, 
             }
 
             let subdir_path = entry.path();
+            // An empty numbered subdir (e.g. an unused texture role like sky's
+            // nust slot) holds no textures — schedule it for removal so the model
+            // folder is left with no leftover texture subdirs after consolidation.
+            let is_empty = fs::read_dir(&subdir_path)
+                .map(|mut entries| entries.next().is_none())
+                .unwrap_or(false);
+            if is_empty {
+                all_texture_subdirs.push(subdir_path);
+                continue;
+            }
             let has_only_nutexb = dir_contains_only_nutexb(&subdir_path);
             if !has_only_nutexb {
                 continue;

@@ -364,28 +364,33 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
     emitStep(onProgress, "csv", "Writing CSV files...", "error", undefined, err instanceof Error ? err.message : String(err));
   }
 
-  // Phase 8: Redistribute textures (copy nutexb from textures/ to per-model subdirs based on numatb refs)
+  // Phase 8: Consolidate textures into a single shared textures/ folder.
+  // The folder layout keeps one shared textures/ (no per-model texture subdirs);
+  // per-model subdirs are only restored when repacking to .fhm2d, which runs
+  // redistribute_stage_textures in sceneSaveFhm2dPipeline (skipStructureRebuild).
   if (!params.skipStructureRebuild) {
-    emitStep(onProgress, "redistribute", "Populating model textures...", "running");
+    emitStep(onProgress, "migrate", "Consolidating textures to shared folder...", "running");
     try {
       const packTarget = resolveStagePackStructureTarget(stageRoot);
-      const redistResult = await invoke<{ modelsProcessed: number; texturesCopied: number; texturesFolderRemoved: boolean; warnings: string[] }>(
-        "redistribute_stage_textures",
+      const restoreResult = await invoke<{ texturesCollected: number; subdirsRemoved: number; warnings: string[] }>(
+        "restore_shared_textures",
         { stageRoot: packTarget.packRoot },
       );
-      migratedTextures = redistResult.texturesCopied;
-      emitStep(onProgress, "redistribute", "Populating model textures...", "done", `${redistResult.texturesCopied} textures → ${redistResult.modelsProcessed} models`);
+      migratedTextures = restoreResult.texturesCollected;
+      emitStep(onProgress, "migrate", "Consolidating textures to shared folder...", "done", `${restoreResult.texturesCollected} textures, ${restoreResult.subdirsRemoved} subdirs cleaned`);
     } catch (err) {
-      emitStep(onProgress, "redistribute", "Populating model textures...", "error", undefined, err instanceof Error ? err.message : String(err));
+      emitStep(onProgress, "migrate", "Consolidating textures to shared folder...", "error", undefined, err instanceof Error ? err.message : String(err));
     }
   }
 
-  // Phase 9: Rebuild structure JSON (skip when saving as FHM2D — handled separately)
+  // Phase 9: Rebuild structure JSON referencing the shared textures/ layout.
+  // (Skipped when saving as FHM2D — that pipeline redistributes to per-model
+  // subdirs and rebuilds the structure JSON forced for the packable layout.)
   if (!params.skipStructureRebuild) {
     emitStep(onProgress, "structure", "Rebuilding structure JSON...", "running");
     try {
       const packTarget = resolveStagePackStructureTarget(stageRoot);
-      await invoke("rebuild_stage_structure_json_forced", { stageRoot: packTarget.packRoot });
+      await invoke("rebuild_stage_structure_json_with_shared_textures", { stageRoot: packTarget.packRoot });
       emitStep(onProgress, "structure", "Rebuilding structure JSON...", "done");
     } catch (err) {
       emitStep(onProgress, "structure", "Rebuilding structure JSON...", "error", undefined, err instanceof Error ? err.message : String(err));

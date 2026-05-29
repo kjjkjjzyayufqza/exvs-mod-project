@@ -171,9 +171,14 @@ pub async fn load_stage_bundle(stage_root: String) -> Result<fhm2d_stage::StageB
     eprintln!("[load_bundle] Loading: {stage_root}");
     let t = Instant::now();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        // Auto-populate missing model textures before loading
-        if let Err(e) = fhm2d_stage::redistribute_stage_textures(&stage_root) {
-            eprintln!("[load_bundle] Texture auto-populate warning: {e}");
+        // Consolidate textures into a single shared textures/ folder before loading.
+        // This keeps the editing layout consistent with extract and Save-to-folder
+        // (one shared textures/, no per-model subdirs); the model loader resolves
+        // textures from textures/ via ancestor walk, so per-model subdirs are not
+        // required for display. Per-model subdirs are only restored when repacking
+        // to .fhm2d (sceneSaveFhm2dPipeline runs redistribute_stage_textures).
+        if let Err(e) = fhm2d_stage::restore_shared_textures(&stage_root) {
+            eprintln!("[load_bundle] Texture consolidation warning: {e}");
         }
         fhm2d_stage::load_stage_bundle_impl(&stage_root)
     })
