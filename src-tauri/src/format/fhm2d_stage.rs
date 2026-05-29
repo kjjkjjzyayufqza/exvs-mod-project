@@ -2364,6 +2364,33 @@ fn find_numdlb_in_dir(dir: &Path) -> Option<PathBuf> {
     None
 }
 
+/// First file directly inside `dir` whose extension matches `ext` (case-insensitive).
+fn first_file_with_ext(dir: &Path, ext: &str) -> Option<PathBuf> {
+    fs::read_dir(dir)
+        .ok()?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .find(|p| {
+            p.is_file()
+                && p.extension()
+                    .map(|e| e.eq_ignore_ascii_case(ext))
+                    .unwrap_or(false)
+        })
+}
+
+/// Locate the mesh (`.numshb`) for a model `folder`, mirroring [`find_numdlb_in_dir`]:
+/// the mesh is the sibling of the `.numdlb`, which is either directly inside `folder`
+/// or one level down in a numbered model sub-directory (e.g. `<folder>/0/<name>.numshb`).
+/// Keeps mesh-collision generation consistent with the model the stage loader displays.
+pub fn find_model_numshb(folder: &Path) -> Option<PathBuf> {
+    if !folder.is_dir() {
+        return None;
+    }
+    let numdlb = find_numdlb_in_dir(folder)?;
+    let model_dir = numdlb.parent()?;
+    first_file_with_ext(model_dir, "numshb")
+}
+
 /// Dynamically find the info directory under `root` by content detection.
 ///
 /// A folder is considered the "info" folder if it contains any of the known

@@ -15,6 +15,7 @@ pub mod nutexb_lib;
 mod preview_collection_state;
 mod scene_memory_session;
 mod scene_session_commands;
+mod numshb_collision;
 pub mod ssbh_dae;
 mod ssbh_dae_cmd;
 mod ssbh_motion;
@@ -148,6 +149,7 @@ pub fn run() {
             scene_session_commands::scene_open_folder,
             scene_session_commands::scene_execute_import,
             scene_session_commands::scene_generate_hkt,
+            scene_session_commands::scene_generate_hkt_from_mesh,
             scene_session_commands::scene_replace_hkt,
             scene_session_commands::scene_preview_hkt_collision_bytes,
             scene_session_commands::scene_preview_hkt_collision_session,

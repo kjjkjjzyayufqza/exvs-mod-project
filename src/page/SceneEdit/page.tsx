@@ -185,6 +185,7 @@ import {
   sceneListHavokMeta,
   sceneConfigureImport,
   sceneGenerateHkt,
+  sceneGenerateHktFromMesh,
   sceneGetHavokMeta,
   sceneGetImportConfig,
   sceneReplaceHkt,
@@ -2963,54 +2964,98 @@ export default function SceneEdit() {
         return;
       }
       for (const id of ids) {
+        // Try as imported DAE object first
         const obj = importedDaeObjects.find((o) => o.id === id);
-        if (!obj) continue;
-        const hktSimplify = obj.hktSimplify ?? { ...DEFAULT_HKT_SIMPLIFY };
-        try {
-          toast.loading(`Generating HKT for ${obj.name}...`, { id: `hkt-${id}` });
-          const sessionImportId = await ensureImportedDaeSessionImport({
-            sessionId: sceneSessionId,
-            object: { ...obj, hktSimplify },
-          });
-          const baseConfig = await sceneGetImportConfig(sceneSessionId, sessionImportId).catch(
-            () => null,
-          );
-          await sceneConfigureImport(sceneSessionId, sessionImportId, {
-            loadToScene: baseConfig?.loadToScene ?? false,
-            convertToSsbh: baseConfig?.convertToSsbh ?? false,
-            generateHkt: true,
-            ssbhConfig: baseConfig?.ssbhConfig ?? null,
-            hktSimplify,
-          });
-          setImportedDaeObjects((prev) =>
-            prev.map((entry) =>
-              entry.id === obj.id
-                ? { ...entry, sessionImportId, hktSimplify }
-                : entry,
-            ),
-          );
-          await sceneGenerateHkt(sceneSessionId, sessionImportId, "auto");
-          const havokResult = await sceneGetHavokMeta(sceneSessionId, sessionImportId);
-          if (havokResult) {
-            const meshData = parseHavokXML(havokResult.hktXml);
-            setHavokMeshDataMap((prev) => {
-              const next = new Map(prev);
-              next.set(havokResult.sourceId, meshData);
-              return next;
+        if (obj) {
+          const hktSimplify = obj.hktSimplify ?? { ...DEFAULT_HKT_SIMPLIFY };
+          try {
+            toast.loading(`Generating HKT for ${obj.name}...`, { id: `hkt-${id}` });
+            const sessionImportId = await ensureImportedDaeSessionImport({
+              sessionId: sceneSessionId,
+              object: { ...obj, hktSimplify },
             });
-            setHavokMetaMap((prev) => {
-              const next = new Map(prev);
-              next.set(havokResult.sourceId, { displayName: havokResult.displayName, objectNodeId: havokResult.objectNodeId });
-              return next;
+            const baseConfig = await sceneGetImportConfig(sceneSessionId, sessionImportId).catch(
+              () => null,
+            );
+            await sceneConfigureImport(sceneSessionId, sessionImportId, {
+              loadToScene: baseConfig?.loadToScene ?? false,
+              convertToSsbh: baseConfig?.convertToSsbh ?? false,
+              generateHkt: true,
+              ssbhConfig: baseConfig?.ssbhConfig ?? null,
+              hktSimplify,
             });
+            setImportedDaeObjects((prev) =>
+              prev.map((entry) =>
+                entry.id === obj.id
+                  ? { ...entry, sessionImportId, hktSimplify }
+                  : entry,
+              ),
+            );
+            await sceneGenerateHkt(sceneSessionId, sessionImportId, "auto");
+            const havokResult = await sceneGetHavokMeta(sceneSessionId, sessionImportId);
+            if (havokResult) {
+              const meshData = parseHavokXML(havokResult.hktXml);
+              setHavokMeshDataMap((prev) => {
+                const next = new Map(prev);
+                next.set(havokResult.sourceId, meshData);
+                return next;
+              });
+              setHavokMetaMap((prev) => {
+                const next = new Map(prev);
+                next.set(havokResult.sourceId, { displayName: havokResult.displayName, objectNodeId: havokResult.objectNodeId });
+                return next;
+              });
+            }
+            toast.success(`HKT generated for ${obj.name}`, { id: `hkt-${id}` });
+          } catch (err) {
+            toast.error(`HKT failed for ${obj.name}: ${err instanceof Error ? err.message : String(err)}`, { id: `hkt-${id}` });
           }
-          toast.success(`HKT generated for ${obj.name}`, { id: `hkt-${id}` });
-        } catch (err) {
-          toast.error(`HKT failed for ${obj.name}: ${err instanceof Error ? err.message : String(err)}`, { id: `hkt-${id}` });
+          continue;
+        }
+
+        // Resolve collision sourceId to folder name:
+        // - disk-loaded HKT: "folderName\file.hkt" or "folderName/file.hkt" → "folderName"
+        // - mesh-generated HKT: "mesh-hkt-folderName" → "folderName"
+        let resolvedId = id;
+        if (resolvedId.startsWith("mesh-hkt-")) {
+          resolvedId = resolvedId.slice("mesh-hkt-".length);
+        } else if (/[/\\]/.test(resolvedId)) {
+          resolvedId = resolvedId.split(/[/\\]/)[0];
+        }
+
+        // Try as sub_model node (or any folder-based node with numshb)
+        const subModel = subModels.find((s) => s.folderName === resolvedId);
+        if (subModel || resolvedId === "base") {
+          const folderName = resolvedId;
+          const hktSimplify = { ...DEFAULT_HKT_SIMPLIFY };
+          try {
+            toast.loading(`Generating HKT for ${folderName}...`, { id: `hkt-${id}` });
+            await sceneGenerateHktFromMesh(sceneSessionId, folderName, hktSimplify);
+            const havokResult = await sceneGetHavokMeta(sceneSessionId, `mesh-hkt-${folderName}`);
+            if (havokResult) {
+              const meshData = parseHavokXML(havokResult.hktXml);
+              setHavokMeshDataMap((prev) => {
+                const next = new Map(prev);
+                if (id !== resolvedId) next.delete(id);
+                next.set(havokResult.sourceId, meshData);
+                return next;
+              });
+              setHavokMetaMap((prev) => {
+                const next = new Map(prev);
+                if (id !== resolvedId) next.delete(id);
+                next.set(havokResult.sourceId, { displayName: havokResult.displayName, objectNodeId: havokResult.objectNodeId });
+                return next;
+              });
+            }
+            toast.success(`HKT generated for ${folderName}`, { id: `hkt-${id}` });
+          } catch (err) {
+            toast.error(`HKT failed for ${folderName}: ${err instanceof Error ? err.message : String(err)}`, { id: `hkt-${id}` });
+          }
+          continue;
         }
       }
     },
-    [sceneSessionId, importedDaeObjects],
+    [sceneSessionId, importedDaeObjects, subModels],
   );
 
   const handleReplaceHkt = useCallback(

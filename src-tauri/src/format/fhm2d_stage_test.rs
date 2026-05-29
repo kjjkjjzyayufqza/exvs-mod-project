@@ -2956,3 +2956,53 @@ fn test_dump_user_fhm2d_tree() {
         }
     }
 }
+
+// ── find_model_numshb ───────────────────────────────────────────────
+
+/// Reproduces the `sssssccccc` HKT failure: the mesh lives in a numbered model
+/// sub-directory (`<folder>/0/<name>.numshb`), while only a `.hkt` sits at the
+/// folder top level. A flat top-level scan misses the mesh; the helper must
+/// follow the same 2-level search the stage loader uses for the `.numdlb`.
+#[test]
+fn find_model_numshb_resolves_mesh_in_model_subfolder() {
+    let tmp = tempfile::tempdir().expect("create temp dir");
+    let folder = tmp.path().join("sssssccccc");
+    let model_dir = folder.join("0");
+    fs::create_dir_all(&model_dir).unwrap();
+
+    // Top-level decoy: an existing collision file but no mesh.
+    fs::write(folder.join("sssssccccc.hkt"), b"hkt").unwrap();
+    // Real model files one level down, mesh beside the model definition.
+    fs::write(model_dir.join("sssssccccc.numdlb"), b"modl").unwrap();
+    let expected_numshb = model_dir.join("sssssccccc.numshb");
+    fs::write(&expected_numshb, b"mesh").unwrap();
+
+    let found = find_model_numshb(&folder).expect("numshb must be found in model subfolder");
+    assert_eq!(found, expected_numshb);
+}
+
+/// The mesh sitting directly beside the `.numdlb` at the folder top level is
+/// still resolved (no model-index sub-directory).
+#[test]
+fn find_model_numshb_resolves_mesh_at_folder_top_level() {
+    let tmp = tempfile::tempdir().expect("create temp dir");
+    let folder = tmp.path().join("box01");
+    fs::create_dir_all(&folder).unwrap();
+    fs::write(folder.join("box01.numdlb"), b"modl").unwrap();
+    let expected_numshb = folder.join("box01.numshb");
+    fs::write(&expected_numshb, b"mesh").unwrap();
+
+    let found = find_model_numshb(&folder).expect("numshb must be found beside numdlb");
+    assert_eq!(found, expected_numshb);
+}
+
+/// A folder without a model definition has no resolvable mesh.
+#[test]
+fn find_model_numshb_returns_none_without_numdlb() {
+    let tmp = tempfile::tempdir().expect("create temp dir");
+    let folder = tmp.path().join("empty");
+    fs::create_dir_all(folder.join("0")).unwrap();
+    fs::write(folder.join("empty.hkt"), b"hkt").unwrap();
+
+    assert!(find_model_numshb(&folder).is_none());
+}

@@ -124,6 +124,16 @@ export function sceneGenerateHkt(
   });
 }
 
+export function sceneGenerateHktFromMesh(
+  sessionId: string,
+  folderName: string,
+  hktSimplify: HktSimplifyConfig,
+): Promise<boolean> {
+  return invoke<boolean>("scene_generate_hkt_from_mesh", {
+    options: { sessionId, folderName, hktSimplify },
+  });
+}
+
 export function sceneReplaceHkt(
   sessionId: string,
   importId: string,

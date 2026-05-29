@@ -845,6 +845,158 @@ pub async fn scene_generate_hkt(
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GenerateHktFromMeshOptions {
+    pub session_id: String,
+    pub folder_name: String,
+    pub hkt_simplify: crate::scene_memory_session::HktSimplifyConfig,
+}
+
+#[tauri::command]
+pub async fn scene_generate_hkt_from_mesh(
+    state: State<'_, SceneSessionState>,
+    options: GenerateHktFromMeshOptions,
+) -> Result<bool, String> {
+    eprintln!(
+        "[scene_generate_hkt_from_mesh] session_id={} folder_name={}",
+        options.session_id, options.folder_name
+    );
+
+    let numshb_bytes = state.with_session(&options.session_id, |s| {
+        // Try from in-memory bundle first
+        if let Some(bundle) = s.base_bundle.as_ref() {
+            let files = if options.folder_name == "base" {
+                &bundle.root_files
+            } else {
+                bundle
+                    .sub_model_files
+                    .get(&options.folder_name)
+                    .ok_or_else(|| format!("Folder '{}' not found", options.folder_name))?
+            };
+            let (_, bytes) = files
+                .iter()
+                .find(|(k, _)| k.ends_with(".numshb"))
+                .ok_or_else(|| {
+                    format!("No .numshb file in folder '{}'", options.folder_name)
+                })?;
+            return Ok(bytes.clone());
+        }
+        // Fallback: read numshb from disk using session source path
+        let base_path = match &s.source {
+            SceneSource::Folder { path } => path.clone(),
+            SceneSource::Fhm2d { path } => {
+                std::path::Path::new(path)
+                    .parent()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default()
+            }
+            SceneSource::New => return Err("No base bundle loaded and no stage path available".to_string()),
+        };
+        let folder_dir = if options.folder_name == "base" {
+            std::path::PathBuf::from(&base_path)
+        } else {
+            std::path::PathBuf::from(&base_path).join(&options.folder_name)
+        };
+        // The mesh (.numshb) is the sibling of the model's .numdlb, which may sit one
+        // level below `folder_dir` (e.g. `<folder>/0/<name>.numshb`). Mirror the stage
+        // loader's discovery so HKT generation uses the same mesh that is displayed.
+        let numshb_path = crate::format::fhm2d_stage::find_model_numshb(&folder_dir)
+            .ok_or_else(|| format!("No .numshb file in folder '{}'", folder_dir.display()))?;
+        std::fs::read(&numshb_path)
+            .map_err(|e| format!("Failed to read '{}': {}", numshb_path.display(), e))
+    })?;
+
+    eprintln!(
+        "[scene_generate_hkt_from_mesh] numshb_bytes_len={}",
+        numshb_bytes.len()
+    );
+
+    let havok_config = havok_cli::HavokCliConfig::detect().ok_or_else(|| {
+        eprintln!("[scene_generate_hkt_from_mesh] Havok SDK not found");
+        "Havok SDK not found".to_string()
+    })?;
+
+    let simplify_opts = hkt_simplify_to_options(&options.hkt_simplify);
+    let filter_path = havok_config.filter_manager_path.clone();
+
+    let hkt_bytes = tauri::async_runtime::spawn_blocking(move || {
+        let mesh = crate::numshb_collision::numshb_bytes_to_collision_trimesh(&numshb_bytes)?;
+        eprintln!(
+            "[scene_generate_hkt_from_mesh] mesh verts={} tris={}",
+            mesh.vertices.len(),
+            mesh.triangle_count()
+        );
+        let mesh = crate::collision_mesh::simplify_collision_mesh(&mesh, &simplify_opts);
+        eprintln!(
+            "[scene_generate_hkt_from_mesh] after simplify tris={}",
+            mesh.triangle_count()
+        );
+        let xml = crate::havok_mesh_encode::build_mesh_collision_xml(&mesh)?;
+        crate::havok_collision_encode::convert_xml_string_to_hkt(&filter_path, &xml)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+    .map_err(|e| {
+        eprintln!("[scene_generate_hkt_from_mesh] HKT generation failed: {e}");
+        e
+    })?;
+
+    eprintln!(
+        "[scene_generate_hkt_from_mesh] generated {} bytes",
+        hkt_bytes.len()
+    );
+
+    let filter_path2 = havok_cli::HavokCliConfig::detect()
+        .map(|c| c.filter_manager_path.clone())
+        .unwrap_or_default();
+    let hkt_xml = if !filter_path2.is_empty() {
+        let bytes_for_xml = hkt_bytes.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            havok_cli::convert_hkt_bytes_to_xml(&filter_path2, &bytes_for_xml)
+        })
+        .await
+        .map_err(|e| format!("XML conversion join error: {e}"))?
+        .unwrap_or_else(|e| {
+            eprintln!("[scene_generate_hkt_from_mesh] HKT→XML conversion failed: {e}");
+            String::new()
+        })
+    } else {
+        String::new()
+    };
+
+    let folder_name = options.folder_name.clone();
+    let source_id = format!("mesh-hkt-{}", folder_name);
+    let display_name = format!("{}/map_hit.hkt", folder_name);
+
+    state.with_session_mut(&options.session_id, |s| {
+        if let Some(bundle) = s.base_bundle.as_mut() {
+            if folder_name == "base" {
+                bundle
+                    .root_files
+                    .insert("map_hit.hkt".to_string(), hkt_bytes.clone());
+            } else {
+                bundle
+                    .sub_model_files
+                    .entry(folder_name.clone())
+                    .or_default()
+                    .insert("map_hit.hkt".to_string(), hkt_bytes.clone());
+            }
+        }
+        s.upsert_havok_data(HavokCollisionData {
+            source_id,
+            display_name,
+            object_node_id: None,
+            hkt_xml,
+            raw_bytes: hkt_bytes,
+        });
+        Ok(())
+    })?;
+
+    eprintln!("[scene_generate_hkt_from_mesh] done");
+    Ok(true)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReplaceHktOptions {
     pub session_id: String,
     pub import_id: String,

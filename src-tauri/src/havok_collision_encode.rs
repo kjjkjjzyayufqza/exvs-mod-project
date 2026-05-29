@@ -83,7 +83,7 @@ pub fn generate_hkt_from_dae_bytes(
     .map(|r| r.bytes)
 }
 
-fn convert_xml_string_to_hkt(filter_manager_exe: &str, xml: &str) -> Result<Vec<u8>, String> {
+pub(crate) fn convert_xml_string_to_hkt(filter_manager_exe: &str, xml: &str) -> Result<Vec<u8>, String> {
     let temp_dir = std::env::temp_dir().join(format!("havok_hkt_gen_{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&temp_dir)
         .map_err(|e| format!("Failed to create temp dir: {e}"))?;
