@@ -3006,6 +3006,7 @@ export default function SceneEdit() {
                 return next;
               });
             }
+            useSceneDirtyStore.getState().markObjectModified(obj.name, "hkt");
             toast.success(`HKT generated for ${obj.name}`, { id: `hkt-${id}` });
           } catch (err) {
             toast.error(`HKT failed for ${obj.name}: ${err instanceof Error ? err.message : String(err)}`, { id: `hkt-${id}` });
@@ -3047,6 +3048,7 @@ export default function SceneEdit() {
                 return next;
               });
             }
+            useSceneDirtyStore.getState().markObjectModified(folderName, "hkt");
             toast.success(`HKT generated for ${folderName}`, { id: `hkt-${id}` });
           } catch (err) {
             toast.error(`HKT failed for ${folderName}: ${err instanceof Error ? err.message : String(err)}`, { id: `hkt-${id}` });
@@ -3094,12 +3096,14 @@ export default function SceneEdit() {
             return next;
           });
         }
+        const daeObj = importedDaeObjects.find((o) => o.id === importId);
+        useSceneDirtyStore.getState().markObjectModified(daeObj ? daeObj.name : importId, "hkt");
         toast.success("HKT replaced", { id: `replace-hkt-${importId}` });
       } catch (err) {
         toast.error(`Replace HKT failed: ${err instanceof Error ? err.message : String(err)}`, { id: `replace-hkt-${importId}` });
       }
     },
-    [sceneSessionId, subModels],
+    [sceneSessionId, subModels, importedDaeObjects],
   );
 
   const handleReorderOutlinerNode = useCallback((activeId: string, overId: string) => {
@@ -3642,7 +3646,10 @@ export default function SceneEdit() {
                         onHktSimplifyChange={(next) =>
                           handleImportedDaeHktSimplifyChange(selectedImportedDae.id, next)
                         }
-                        onHavokDataUpdated={handleHavokDataUpdated}
+                        onHavokDataUpdated={(sourceId, meshData) => {
+                          handleHavokDataUpdated(sourceId, meshData);
+                          useSceneDirtyStore.getState().markObjectModified(selectedImportedDae.name, "hkt");
+                        }}
                         activeMeshData={selectedImportedDaeMeshData}
                       />
                     </MayaSection>

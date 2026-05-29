@@ -29,6 +29,7 @@ import {
   ContextMenuTrigger,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuLabel,
   ContextMenuSeparator,
   ContextMenuShortcut,
   ContextMenuSub,
@@ -38,6 +39,7 @@ import {
 import { useSceneEditorStore, type OutlinerGroup } from "../store/sceneEditorStore";
 import type { StageTreeNode } from "./StageHierarchyTree";
 import { canOpenDetailView } from "./detail-view/sceneDetailViewTypes";
+import { getNodeTypeInfo } from "../utils/sceneNodeTypeInfo";
 
 interface SceneOutlinerProps {
   root: StageTreeNode | null;
@@ -618,7 +620,6 @@ function OutlinerNodeRow({
         node={node}
         visible={visible}
         locked={locked}
-        onNodeClick={onNodeClick}
         toggleVisibility={toggleVisibility}
         toggleLock={toggleLock}
         onDuplicate={onDuplicate}
@@ -635,7 +636,6 @@ function NodeContextMenuContent({
   node,
   visible,
   locked,
-  onNodeClick,
   toggleVisibility,
   toggleLock,
   onDuplicate,
@@ -647,7 +647,6 @@ function NodeContextMenuContent({
   node: StageTreeNode;
   visible: boolean;
   locked: boolean;
-  onNodeClick: (id: string, e: React.MouseEvent) => void;
   toggleVisibility: (id: string) => void;
   toggleLock: (id: string) => void;
   onDuplicate?: (ids: string[]) => void;
@@ -661,22 +660,19 @@ function NodeContextMenuContent({
   const isCollisionNode = node.role === "collision" && node.id.startsWith("__col__");
   const hktTargetId = isCollisionNode ? node.id.slice("__col__".length) : node.id;
   const supportsProperties = canOpenDetailView(node.role);
+  const { label: typeLabel, Icon: TypeIcon } = getNodeTypeInfo(node.role);
 
   return (
     <ContextMenuContent className="w-52">
-      <ContextMenuItem onClick={(e: React.MouseEvent) => onNodeClick(node.id, e)}>
-        Select
-      </ContextMenuItem>
       {supportsProperties && (
         <>
-          <ContextMenuSeparator />
           <ContextMenuItem onClick={() => onOpenProperties?.(node.id)}>
             <Settings className="mr-2 h-3.5 w-3.5" />
             Properties
           </ContextMenuItem>
+          <ContextMenuSeparator />
         </>
       )}
-      <ContextMenuSeparator />
       <ContextMenuItem onClick={() => {
         const entries = [{ nodeId: node.id, placementIdx: null, transform: { posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, scaleX: 1, scaleY: 1, scaleZ: 1 } }];
         useSceneEditorStore.getState().copyToClipboard(entries);
@@ -724,6 +720,11 @@ function NodeContextMenuContent({
         Delete
         <ContextMenuShortcut>Del</ContextMenuShortcut>
       </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuLabel className="flex items-center text-[11px] font-normal text-muted-foreground">
+        <TypeIcon className="mr-2 h-3.5 w-3.5" />
+        {typeLabel}
+      </ContextMenuLabel>
     </ContextMenuContent>
   );
 }
