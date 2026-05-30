@@ -3,7 +3,10 @@ import type { HktSimplifyConfig } from "../components/dae-import/daeImportTypes"
 import type { ImportConfig } from "./sceneSessionService";
 
 export const DEFAULT_HKT_SIMPLIFY: HktSimplifyConfig = {
-  enabled: true,
+  // Off by default: the user opts in per import. When disabled, every render triangle is
+  // exported as collision. The simplify algorithm and its UI controls remain available, and
+  // enabling it is what keeps dense meshes within Havok's per-section triangle limits.
+  enabled: false,
   planarityAngleDeg: 8,
   minTriangleArea: 1e-8,
   weldEpsilon: 1e-5,

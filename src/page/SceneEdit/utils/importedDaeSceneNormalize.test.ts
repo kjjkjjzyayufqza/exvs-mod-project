@@ -75,6 +75,24 @@ describe("importedDaeSceneNormalize", () => {
     expect(worldAfter.x - worldBefore.x).toBeCloseTo(-46.308, 3);
   });
 
+  it("buildImportedDaeDisplayRoot bakes source root scale into display geometry", () => {
+    // Mirrors loadDAEFromPath applying the SSBH import scaleFactor onto the loaded scene
+    // root: the scaled preview must match the scaled numshb/HKT the backend produces.
+    const root = new THREE.Group();
+    const geometry = new THREE.BoxGeometry(2, 2, 2);
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
+    root.add(mesh);
+    root.scale.setScalar(3);
+
+    const display = buildImportedDaeDisplayRoot(root);
+    const size = new THREE.Vector3();
+    new THREE.Box3().setFromObject(display).getSize(size);
+
+    expect(size.x).toBeCloseTo(6, 3);
+    expect(size.y).toBeCloseTo(6, 3);
+    expect(size.z).toBeCloseTo(6, 3);
+  });
+
   it("normalizes baked DAE geometry to ground plane (min Y = 0, XZ centered)", () => {
     const root = new THREE.Group();
     const offset = new THREE.Group();

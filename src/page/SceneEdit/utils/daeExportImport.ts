@@ -23,7 +23,10 @@ export interface DAEImportResult {
   boundingSize: THREE.Vector3;
 }
 
-export async function loadDAEFromPath(filePath: string): Promise<DAEImportResult> {
+export async function loadDAEFromPath(
+  filePath: string,
+  scaleFactor = 1,
+): Promise<DAEImportResult> {
   const loader = new ColladaLoader();
   const content = await readFile(filePath);
   const text = new TextDecoder().decode(content);
@@ -35,6 +38,16 @@ export async function loadDAEFromPath(filePath: string): Promise<DAEImportResult
   });
 
   const fileName = filePath.split(/[/\\]/).pop() ?? "model.dae";
+
+  // Bake the SSBH import scale into the preview scene root so the rendered mesh
+  // matches the scaled numshb geometry and HKT collision the backend produces from
+  // the same scale factor. buildImportedDaeDisplayRoot bakes this root scale into the
+  // display geometry, so the viewport, the converted model, and the collision stay aligned.
+  if (Number.isFinite(scaleFactor) && scaleFactor > 0 && scaleFactor !== 1) {
+    collada.scene.scale.multiplyScalar(scaleFactor);
+    collada.scene.updateMatrixWorld(true);
+  }
+
   const bbox = new THREE.Box3().setFromObject(collada.scene);
   const size = new THREE.Vector3();
   bbox.getSize(size);

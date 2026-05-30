@@ -150,9 +150,6 @@ export function isTexturePathParamId(paramId: string): boolean {
   return false;
 }
 
-/** Texture1 is always validated; other maps follow Use* toggles (see numatbStore PARAM_TYPE_MAPPING). */
-export const ALWAYS_REQUIRED_TEXTURE_PATH_PARAM_IDS = ["Texture1"] as const;
-
 /** Map param_id -> boolean param_id that enables sampling (aligned with numatbStore COMMON_ATTRIBUTES). */
 export const TEXTURE_MAP_USE_TOGGLES: Readonly<Record<string, string>> = {
   MetallicMap: "UseMetallicMap",
@@ -215,11 +212,12 @@ function isBaseColorMapPathRequired(entry: MatlEntryJson): boolean {
 
 /**
  * Whether a texture path must be non-empty for export validation.
- * Texture1 is always required; PBR maps require their Use* flag; base color follows UseBaseColorMap / implicit slot rules.
+ * Texture1 is required only when the entry actually declares it; PBR maps require their Use* flag;
+ * base color follows UseBaseColorMap / implicit slot rules.
  */
 export function isTextureMapPathRequired(entry: MatlEntryJson, mapParamId: string): boolean {
   if (mapParamId === "Texture1") {
-    return true;
+    return entryHasTextureParam(entry, "Texture1");
   }
   const useToggle = TEXTURE_MAP_USE_TOGGLES[mapParamId];
   if (useToggle) {
@@ -249,7 +247,13 @@ function defaultTextureDataKindForParam(paramId: string): "String" | "String1" {
 }
 
 function collectRequiredTextureMapParamIds(entry: MatlEntryJson): string[] {
-  const required = new Set<string>(ALWAYS_REQUIRED_TEXTURE_PATH_PARAM_IDS);
+  const required = new Set<string>();
+
+  // Texture1 is validated only when the entry actually declares it (textures or textures2),
+  // never forced onto materials that never had a Texture1 param.
+  if (entryHasTextureParam(entry, "Texture1")) {
+    required.add("Texture1");
+  }
 
   for (const [mapId, useId] of Object.entries(TEXTURE_MAP_USE_TOGGLES)) {
     if (readEntryBoolean(entry, useId) === true) {
@@ -584,6 +588,45 @@ export function collectMissingTexturePathsForExportSession(
     const profileLabel = slot.profile === "maya" ? "Maya profile" : "Nust profile";
     const textures2Suffix = slot.textureDataKind === "String1" ? " (textures2)" : "";
     return `${profileLabel}: ${slot.materialLabel} → ${slot.paramId}${textures2Suffix}`;
+  });
+}
+
+export interface NumatbEmptyTexturePathError {
+  profile: NumatbProfileKind;
+  materialLabel: string;
+  paramId: string;
+  isTextures2: boolean;
+  numatbName: string | null;
+  message: string;
+}
+
+/**
+ * Empty texture path errors for a single model's numatb profiles, formatted to match the
+ * backend save/repack pre-flight gate (`exvs_stage_validate_numatb_empty_params`). A profile
+ * is only validated when its numatb file is present, mirroring the gate that reads the files
+ * actually on disk. Reuses the same required-param logic as the export gate so the live Material
+ * view and the save/repack block stay in lockstep.
+ */
+export function collectNumatbEmptyTexturePathErrors(
+  files: { mayaFile: MatlDataJson; nustFile: MatlDataJson },
+  context: { modelName: string; mayaNumatbName: string | null; nustNumatbName: string | null },
+): NumatbEmptyTexturePathError[] {
+  const slots = collectMissingTexturePathSlotRefsForExportSession(files.mayaFile, files.nustFile, {
+    writeMayaProfile: Boolean(context.mayaNumatbName),
+    writeNumatb: Boolean(context.nustNumatbName),
+  });
+  return slots.map((slot) => {
+    const isTextures2 = slot.textureDataKind === "String1";
+    const suffix = isTextures2 ? " (textures2)" : "";
+    const numatbName = slot.profile === "maya" ? context.mayaNumatbName : context.nustNumatbName;
+    return {
+      profile: slot.profile,
+      materialLabel: slot.materialLabel,
+      paramId: slot.paramId,
+      isTextures2,
+      numatbName,
+      message: `Model '${context.modelName}': material '${slot.materialLabel}' texture parameter '${slot.paramId}'${suffix} has an empty path (${numatbName}).`,
+    };
   });
 }
 

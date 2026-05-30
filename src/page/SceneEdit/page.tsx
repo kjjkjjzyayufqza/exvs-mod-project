@@ -2670,7 +2670,10 @@ export default function SceneEdit() {
             toast.warning(warning);
           }
 
-          const loaded = await loadDAEFromPath(entry.filePath);
+          const loaded = await loadDAEFromPath(
+            entry.filePath,
+            importConfig.ssbhConfig?.scaleFactor ?? 1,
+          );
           const posX = offsetX;
           offsetX += loaded.boundingSize.x + spacing;
           created.push({

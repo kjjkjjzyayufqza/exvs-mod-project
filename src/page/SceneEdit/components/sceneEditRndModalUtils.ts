@@ -1,6 +1,9 @@
 export const SCENE_EDIT_RND_VIEWPORT_MARGIN = 48;
 export const SCENE_EDIT_RND_DRAG_HANDLE = "scene-edit-rnd-modal-handle";
 
+/** Initial width of the SSBH model detail view (viewport-capped). */
+export const SSBH_MAX_WIDTH = 1080;
+
 export interface SceneEditRndModalDimensions {
   width: number;
   height: number;
@@ -45,7 +48,7 @@ export function getDetailViewModalDimensions(): SceneEditRndModalDimensions {
   const { width: vw, height: vh } = getSceneEditViewportSize();
   const maxWidth = Math.max(320, vw - SCENE_EDIT_RND_VIEWPORT_MARGIN);
   const maxHeight = Math.max(280, vh - SCENE_EDIT_RND_VIEWPORT_MARGIN);
-  const width = Math.min(maxWidth, 760, Math.max(520, Math.round(vw * 0.55)));
+  const width = Math.min(maxWidth, SSBH_MAX_WIDTH, Math.max(560, Math.round(vw * 0.68)));
   const height = Math.min(maxHeight, 720, Math.max(400, Math.round(vh * 0.78)));
 
   return {

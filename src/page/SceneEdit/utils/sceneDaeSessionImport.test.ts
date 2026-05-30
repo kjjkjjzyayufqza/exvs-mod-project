@@ -66,7 +66,7 @@ describe("buildSsbhSessionImportConfig", () => {
     expect(importConfig.loadToScene).toBe(false);
     expect(importConfig.convertToSsbh).toBe(true);
     expect(importConfig.generateHkt).toBe(true);
-    expect(importConfig.hktSimplify.enabled).toBe(true);
+    expect(importConfig.hktSimplify.enabled).toBe(false);
     expect(importConfig.ssbhConfig).toEqual({
       baseFilename: "sample_mesh",
       scaleFactor: 2,

@@ -1,7 +1,5 @@
 use ssbh_data::matl_data::{MatlData, MatlEntryData, ParamId};
 
-pub const ALWAYS_REQUIRED_TEXTURE_PATHS: &[ParamId] = &[ParamId::Texture1];
-
 pub const TEXTURE_MAP_USE_TOGGLES: &[(ParamId, ParamId)] = &[
     (ParamId::MetallicMap, ParamId::UseMetallicMap),
     (ParamId::RoughnessMap, ParamId::UseRoughnessMap),
@@ -66,8 +64,10 @@ pub fn is_base_color_map_path_required(entry: &MatlEntryData) -> bool {
 pub fn collect_required_texture_map_param_ids(entry: &MatlEntryData) -> Vec<ParamId> {
     let mut required = Vec::new();
 
-    for &param_id in ALWAYS_REQUIRED_TEXTURE_PATHS {
-        push_unique(&mut required, param_id);
+    // Texture1 is validated only when the entry actually declares it (textures or textures2),
+    // never forced onto materials that never had a Texture1 param.
+    if entry_has_texture_param(entry, ParamId::Texture1) {
+        push_unique(&mut required, ParamId::Texture1);
     }
 
     for &(map_id, use_id) in TEXTURE_MAP_USE_TOGGLES {
@@ -230,8 +230,16 @@ mod tests {
     }
 
     #[test]
-    fn texture1_is_required_even_without_a_texture_row() {
+    fn texture1_not_required_without_a_texture_row() {
         let entry = empty_entry("m1");
+
+        assert!(collect_missing_texture_paths_for_entry(&entry).is_empty());
+    }
+
+    #[test]
+    fn texture1_required_only_when_present_and_empty() {
+        let mut entry = empty_entry("m1");
+        entry.textures2.push(texture2(ParamId::Texture1, ""));
 
         let missing = collect_missing_texture_paths_for_entry(&entry);
 
@@ -248,15 +256,12 @@ mod tests {
             .booleans
             .push(boolean(ParamId::UseRoughnessMap, false));
 
-        assert_eq!(missing_ids(&entry), vec![ParamId::Texture1]);
+        assert!(missing_ids(&entry).is_empty());
 
         entry.booleans.clear();
         entry.booleans.push(boolean(ParamId::UseRoughnessMap, true));
 
-        assert_eq!(
-            missing_ids(&entry),
-            vec![ParamId::Texture1, ParamId::RoughnessMap]
-        );
+        assert_eq!(missing_ids(&entry), vec![ParamId::RoughnessMap]);
     }
 
     #[test]
@@ -264,10 +269,7 @@ mod tests {
         let mut entry = empty_entry("m1");
         entry.textures2.push(texture2(ParamId::BaseColorMap, ""));
 
-        assert_eq!(
-            missing_ids(&entry),
-            vec![ParamId::Texture1, ParamId::BaseColorMap]
-        );
+        assert_eq!(missing_ids(&entry), vec![ParamId::BaseColorMap]);
     }
 
     #[test]
@@ -278,7 +280,7 @@ mod tests {
             .booleans
             .push(boolean(ParamId::UseBaseColorMap, false));
 
-        assert_eq!(missing_ids(&entry), vec![ParamId::Texture1]);
+        assert!(missing_ids(&entry).is_empty());
     }
 
     #[test]
@@ -290,9 +292,9 @@ mod tests {
 
         assert_eq!(
             missing.iter().map(|item| item.param_id).collect::<Vec<_>>(),
-            vec![ParamId::Texture1, ParamId::BaseColorMap]
+            vec![ParamId::BaseColorMap]
         );
-        assert!(missing[1].is_textures2_bucket);
+        assert!(missing[0].is_textures2_bucket);
     }
 
     #[test]
@@ -300,11 +302,11 @@ mod tests {
         let mut entry = empty_entry("m1");
         entry.textures2.push(texture2(ParamId::NormalMap, ""));
 
-        assert_eq!(missing_ids(&entry), vec![ParamId::Texture1]);
+        assert!(missing_ids(&entry).is_empty());
     }
 
     #[test]
-    fn all_enabled_pbr_maps_are_required_with_texture1() {
+    fn all_enabled_pbr_maps_are_required() {
         let mut entry = empty_entry("emiMtl");
         entry.booleans.extend([
             boolean(ParamId::UseMetallicMap, true),
@@ -326,7 +328,6 @@ mod tests {
         assert_eq!(
             missing_ids(&entry),
             vec![
-                ParamId::Texture1,
                 ParamId::MetallicMap,
                 ParamId::RoughnessMap,
                 ParamId::AmbientOcclusionMap,
@@ -364,15 +365,14 @@ mod tests {
 
         let missing = collect_missing_texture_paths_for_matl(&matl);
 
+        // mappedMtl has a filled DiffuseMap and no Texture1 row -> complete.
+        // extraMtl declares an empty Texture1 -> flagged.
         assert_eq!(
             missing
                 .iter()
                 .map(|item| (item.material_label.as_str(), item.param_id))
                 .collect::<Vec<_>>(),
-            vec![
-                ("mappedMtl", ParamId::Texture1),
-                ("extraMtl", ParamId::Texture1),
-            ]
+            vec![("extraMtl", ParamId::Texture1)]
         );
     }
 }

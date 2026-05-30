@@ -218,7 +218,7 @@ describe("sceneSessionService", () => {
         convertToSsbh: true,
         generateHkt: true,
         hktSimplify: {
-          enabled: true,
+          enabled: false,
           planarityAngleDeg: 8,
           minTriangleArea: 1e-8,
           weldEpsilon: 1e-5,

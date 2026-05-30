@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Loader2, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -7,7 +7,9 @@ import { getDetailViewModalDimensions } from "../sceneEditRndModalUtils";
 import { NumdlbMappingEditorBody } from "@/page/TestEditor/components/ssbh-model-preview/NumdlbMappingEditorBody";
 import { NuhlpbEditorBody } from "@/page/TestEditor/components/ssbh-model-preview/NuhlpbEditorBody";
 import { NumatbTemplateEditorModalBody } from "@/page/TestEditor/components/ssbh-model-preview/NumatbTemplateEditorModalBody";
+import { collectNumatbEmptyTexturePathErrors } from "@/page/TestEditor/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
 import type { NumatbModalBundle } from "@/page/TestEditor/components/ssbh-model-preview/numatbEditorUtils";
+import { NumatbValidationErrorsPanel } from "./NumatbValidationErrorsPanel";
 import { shouldMountDetailTab } from "../../utils/sceneDetailViewTabPolicy";
 import type {
   DetailViewSession,
@@ -48,6 +50,17 @@ export function SceneDetailViewWindow({
   onNuhlpbSave,
 }: SceneDetailViewWindowProps) {
   const data = session.modelData;
+  const numatbDraft = data?.numatb.draft ?? null;
+  const numatbPaths = data?.numatbPaths ?? null;
+  const numatbErrors = useMemo(() => {
+    if (!numatbDraft || !numatbPaths) return [];
+    return collectNumatbEmptyTexturePathErrors(numatbDraft, {
+      modelName: session.nodeLabel,
+      mayaNumatbName: basenameOrNull(numatbPaths.maya),
+      nustNumatbName: basenameOrNull(numatbPaths.nust),
+    });
+  }, [numatbDraft, numatbPaths, session.nodeLabel]);
+
   if (!data) return null;
 
   const numdlbDirty = data.numdlb.draft !== null && data.numdlb.draft !== data.numdlb.base;
@@ -112,6 +125,7 @@ export function SceneDetailViewWindow({
               ) : data.numatb.draft ? (
                 <div className="space-y-3">
                   <TabSaveBar dirty={numatbDirty} onSave={onNumatbSave} />
+                  <NumatbValidationErrorsPanel errors={numatbErrors} />
                   <NumatbTemplateEditorModalBody
                     bundle={data.numatb.draft}
                     onChange={onNumatbDraftChange}
@@ -167,6 +181,11 @@ export function SceneDetailViewWindow({
       </Tabs>
     </SceneEditRndModalShell>
   );
+}
+
+function basenameOrNull(path: string | null): string | null {
+  if (!path) return null;
+  return path.split(/[/\\]/).pop() ?? path;
 }
 
 function DetailTabPanel({
