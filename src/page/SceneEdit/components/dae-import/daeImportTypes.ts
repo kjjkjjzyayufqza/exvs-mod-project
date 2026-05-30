@@ -1,3 +1,8 @@
+import type {
+  MatlDataJson,
+  NumdlbMappingRow,
+} from "@/page/TestEditor/components/ssbh-model-preview/daeSsbhTypes";
+
 export type SsbhDaeUpAxis = "y_up" | "z_up";
 
 export interface SsbhImportConfig {
@@ -11,6 +16,9 @@ export interface SsbhImportConfig {
   writeJnttbl: boolean;
   writeMayaProfile: boolean;
   materialTemplate: string;
+  mayaFile?: MatlDataJson | null;
+  nustFile?: MatlDataJson | null;
+  numdlbEntries?: NumdlbMappingRow[];
 }
 
 export interface TextureImportEntry {
