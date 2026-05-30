@@ -56,11 +56,6 @@ export const PLACEMENT_TRANSFORM_ROWS: TransformAxisRowDef[] = [
       { key: "VDK_SCALE_Z", axisLabel: "Z", defaultValue: "1", parsedField: "scaleZ", decimals: 3 },
     ],
   },
-  {
-    label: "Scl",
-    title: "Uniform scale (VDK_SCALE)",
-    axes: [{ key: "VDK_SCALE", axisLabel: "All", defaultValue: "1", decimals: 3 }],
-  },
 ];
 
 export const PLACEMENT_TRANSFORM_AXIS_KEYS = new Set(

@@ -22,7 +22,6 @@ export const TRANSFORM_FIELD_KEYS = new Set([
   "VDK_ROTATION_X",
   "VDK_ROTATION_Y",
   "VDK_ROTATION_Z",
-  "VDK_SCALE",
   "VDK_SCALE_X",
   "VDK_SCALE_Y",
   "VDK_SCALE_Z",

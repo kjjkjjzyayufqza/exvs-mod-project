@@ -31,6 +31,7 @@ import {
   INSPECTOR_ROW_COLOR,
   INSPECTOR_SECTION,
   INSPECTOR_SECTION_HEADER,
+  INSPECTOR_SELECT_TRIGGER,
   INSPECTOR_VALUE,
   PROP_BTN_ICON,
   PROP_INPUT,
@@ -303,10 +304,10 @@ const ScalarInspectorRow = memo(function ScalarInspectorRow({
       )}
     >
       <ApplyPin checked={applied} onCheckedChange={(checked) => onToggleApplied(p.key, checked)} />
-      <div className="min-w-0">
+      <div className="min-w-0 self-center">
         {editKeys ? (
           <Input
-            className="h-6 min-w-0 px-1 text-[9px] font-mono"
+            className="h-6 min-w-0 px-1 text-left text-[9px] font-mono"
             value={p.key}
             title={p.key}
             onChange={(e) => onKeyChange(p.originalIndex, e.target.value)}
@@ -316,9 +317,18 @@ const ScalarInspectorRow = memo(function ScalarInspectorRow({
             {label}
           </span>
         )}
+      </div>
+      <div className="min-w-0 justify-self-stretch space-y-0.5">
+        <ScalarValueControl
+          param={p}
+          slider={slider}
+          isBool={isBool}
+          originalValue={originalValue}
+          onValueChange={onValueChange}
+        />
         {slider && !isBool && (
           <Slider
-            className="mt-0.5 h-1 w-full opacity-80 group-hover:opacity-100"
+            className="h-1 w-full opacity-80 group-hover:opacity-100"
             value={[slider.value]}
             min={slider.min}
             max={slider.max}
@@ -329,13 +339,6 @@ const ScalarInspectorRow = memo(function ScalarInspectorRow({
           />
         )}
       </div>
-      <ScalarValueControl
-        param={p}
-        slider={slider}
-        isBool={isBool}
-        originalValue={originalValue}
-        onValueChange={onValueChange}
-      />
       <RowActions
         valueModified={valueModified}
         originalValue={originalValue}
@@ -506,7 +509,7 @@ function ScalarValueControl({
         value={on ? "1" : "0"}
         onValueChange={(value) => onValueChange(param.originalIndex, value)}
       >
-        <SelectTrigger className="h-6 min-w-0 border-border/50 bg-muted/20 px-1.5 text-[10px]">
+        <SelectTrigger className={INSPECTOR_SELECT_TRIGGER}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -594,7 +597,7 @@ function RowActions({
   onDelete: () => void;
 }) {
   return (
-    <div className="flex w-14 shrink-0 items-center justify-end gap-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+    <div className="flex shrink-0 items-center justify-end gap-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
       {valueModified && (
         <Tooltip>
           <TooltipTrigger asChild>

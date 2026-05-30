@@ -9,7 +9,6 @@ const TRANSFORM_KEYS = new Set([
   "VDK_ROT_X", "VDK_ROT_Y", "VDK_ROT_Z",
   "VDK_ROTATION_X", "VDK_ROTATION_Y", "VDK_ROTATION_Z",
   "VDK_SCALE_X", "VDK_SCALE_Y", "VDK_SCALE_Z",
-  "VDK_SCALE",
 ]);
 
 export interface VdkConfigEntry {

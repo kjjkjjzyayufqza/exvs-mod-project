@@ -20,15 +20,24 @@ export const MAYA_AXIS_INPUT =
 export const MAYA_ROW_LABEL =
   "truncate text-[10px] font-medium text-muted-foreground";
 
-/** Unreal/Unity-style inspector row: pin, label, value, trailing actions. */
+/** UE/Unity property row: label (left) | value (right, grows left) | hover actions. */
+export const INSPECTOR_PROP_ROW =
+  "group grid min-w-0 grid-cols-[minmax(0,42%)_minmax(0,1fr)_auto] items-center gap-x-2 rounded-sm px-1.5 py-0.5 transition-colors hover:bg-muted/20";
+/** Same as INSPECTOR_PROP_ROW with apply pin column (graphic params). */
 export const INSPECTOR_ROW =
-  "group grid min-w-0 grid-cols-[1.125rem_minmax(0,1fr)_minmax(4.25rem,5.75rem)_auto] items-center gap-x-1.5 rounded-sm px-1 py-px transition-colors hover:bg-muted/25";
+  "group grid min-w-0 grid-cols-[1.125rem_minmax(0,38%)_minmax(0,1fr)_auto] items-center gap-x-2 rounded-sm px-1 py-px transition-colors hover:bg-muted/25";
 export const INSPECTOR_ROW_COLOR =
   "group grid min-w-0 grid-cols-[1.125rem_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-x-1.5 rounded-sm px-1 py-px transition-colors hover:bg-muted/25";
+export const INSPECTOR_PROP_LABEL =
+  "block min-w-0 truncate text-left text-[10px] leading-snug text-muted-foreground";
 export const INSPECTOR_LABEL =
-  "truncate text-[10px] text-foreground/90 leading-tight";
+  "block min-w-0 truncate text-left text-[10px] leading-snug text-foreground/90";
+export const INSPECTOR_PROP_VALUE =
+  "h-6 w-full min-w-0 rounded-sm border border-border/50 bg-muted/20 px-1.5 text-right text-[10px] outline-none transition-colors focus:border-primary/40 focus:bg-background focus:ring-1 focus:ring-primary/20";
 export const INSPECTOR_VALUE =
-  "h-6 min-h-6 w-full min-w-0 rounded-sm border border-border/50 bg-muted/20 px-1.5 text-right text-[10px] font-mono tabular-nums outline-none transition-colors focus:border-primary/40 focus:bg-background focus:ring-1 focus:ring-primary/20";
+  "h-6 w-full min-w-0 rounded-sm border border-border/50 bg-muted/20 px-1.5 text-right text-[10px] font-mono tabular-nums outline-none transition-colors focus:border-primary/40 focus:bg-background focus:ring-1 focus:ring-primary/20";
+export const INSPECTOR_SELECT_TRIGGER =
+  "h-6 w-full min-w-0 border border-border/50 bg-muted/20 px-1.5 text-[10px] shadow-none focus:ring-1 focus:ring-primary/30 [&>span]:line-clamp-none [&>span]:min-w-0 [&>span]:flex-1 [&>span]:truncate [&>span]:text-right";
 export const INSPECTOR_SECTION =
   "min-w-0 overflow-hidden rounded-sm border border-border/45 bg-muted/10";
 export const INSPECTOR_SECTION_HEADER =

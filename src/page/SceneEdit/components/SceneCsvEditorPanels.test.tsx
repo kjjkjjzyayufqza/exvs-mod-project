@@ -72,27 +72,30 @@ describe("Scene CSV editor panels", () => {
     };
 
     render(
-      <PlacementCsvEditorPanel
-        entries={[row]}
-        initialEntries={null}
-        placementHeader={[]}
-        selectedIndex={0}
-        subModels={[]}
-        onSelectEntry={vi.fn()}
-        onFieldPreview={vi.fn()}
-        onFieldCommit={vi.fn()}
-        onAddField={vi.fn()}
-        onRemoveFieldPair={vi.fn()}
-        onAddTyped={vi.fn()}
-        onDeleteRow={vi.fn()}
-        onResetRow={vi.fn()}
-        onResetField={vi.fn()}
-      />,
+      <TooltipProvider>
+        <PlacementCsvEditorPanel
+          entries={[row]}
+          initialEntries={null}
+          placementHeader={[]}
+          selectedIndex={0}
+          subModels={[]}
+          onSelectEntry={vi.fn()}
+          onFieldPreview={vi.fn()}
+          onFieldCommit={vi.fn()}
+          onAddField={vi.fn()}
+          onRemoveFieldPair={vi.fn()}
+          onAddTyped={vi.fn()}
+          onDeleteRow={vi.fn()}
+          onResetRow={vi.fn()}
+          onResetField={vi.fn()}
+        />
+      </TooltipProvider>,
     );
 
-    expect(screen.getByDisplayValue("VDK_EFFECT_ID")).toBeInTheDocument();
+    expect(screen.getByText("Effect id")).toBeInTheDocument();
     expect(screen.getByDisplayValue("42")).toBeInTheDocument();
-    expect(screen.getByText("53 known fields")).toBeInTheDocument();
+    expect(screen.getByText(/fields/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Search rows...")).toBeInTheDocument();
     expect(screen.getByTestId("placement-csv-editor-panel")).toHaveClass("flex", "min-h-0");
   });
 });

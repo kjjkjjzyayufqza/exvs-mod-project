@@ -20,6 +20,7 @@ const AXIS_COLORS = [
 
 interface TransformAxisGridProps {
   bindings: Map<string, TransformAxisBinding>;
+  showTitle?: boolean;
   headerFormat?: boolean;
   initialRawFields?: string[] | null;
   onValuePreview: (binding: TransformAxisBinding, value: string) => void;
@@ -31,6 +32,7 @@ interface TransformAxisGridProps {
 
 export function TransformAxisGrid({
   bindings,
+  showTitle = true,
   headerFormat = false,
   initialRawFields = null,
   onValuePreview,
@@ -41,9 +43,11 @@ export function TransformAxisGrid({
 }: TransformAxisGridProps) {
   return (
     <div className="space-y-1">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        Transform
-      </div>
+      {showTitle && (
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Transform
+        </div>
+      )}
       <div className={MAYA_TRANSFORM_GRID}>
         <span className="h-6" aria-hidden />
         {["X", "Y", "Z"].map((axis, index) => (

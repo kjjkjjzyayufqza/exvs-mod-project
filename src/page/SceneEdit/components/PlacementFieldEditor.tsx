@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Plus, RotateCcw, Trash2 } from "lucide-react";
+import { memo, useMemo, useState } from "react";
+import { Plus, RotateCcw, Search, Trash2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,6 +14,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { PlacementRow } from "../types/placement";
 import {
@@ -28,16 +33,23 @@ import {
   isPlacementTransformAxisKey,
   resolveTransformAxisBindingsForEntry,
 } from "../utils/placementTransformAxes";
+import { formatPlacementFieldLabel } from "../utils/placementInspector";
 import { commitDecimalInput, sanitizeDecimalInput } from "../utils/numericFieldInput";
 import {
+  INSPECTOR_PROP_LABEL,
+  INSPECTOR_PROP_ROW,
+  INSPECTOR_PROP_VALUE,
+  INSPECTOR_SECTION,
+  INSPECTOR_SECTION_HEADER,
+  INSPECTOR_SELECT_TRIGGER,
   PROP_BTN,
   PROP_BTN_ICON,
+  PROP_INPUT,
   PROP_PANEL,
 } from "./propertyPanelStyles";
 import { TransformAxisGrid } from "./TransformAxisGrid";
 import { VirtualizedList } from "./VirtualizedList";
 
-/** px-1.5 py-1 + text-[10px] candidate button in the add-field popover. */
 const VDK_KEY_CANDIDATE_ROW_HEIGHT = 24;
 
 interface PlacementFieldEditorProps {
@@ -63,6 +75,9 @@ export function PlacementFieldEditor({
   onRemoveField,
   onResetField,
 }: PlacementFieldEditorProps) {
+  const [editKeys, setEditKeys] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
+
   const fields = useMemo(
     () => listPlacementFields(entry, placementHeader),
     [entry, placementHeader],
@@ -77,13 +92,24 @@ export function PlacementFieldEditor({
   );
   const customCount = fields.filter((field) => !field.known).length;
   const headerFormat = isHeaderFormatRow(entry, placementHeader);
+  const missingKeys = useMemo(
+    () => listCatalogKeysNotInRow(entry, placementHeader),
+    [entry, placementHeader],
+  );
+
+  const toggleGroup = (category: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
+      return next;
+    });
+  };
 
   return (
-    <div className={`space-y-2 ${PROP_PANEL}`}>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] text-muted-foreground">
-        <span>53 known fields</span>
-        <span>·</span>
-        <span>{fields.length} set</span>
+    <div className={`flex min-h-0 flex-col gap-2 ${PROP_PANEL}`}>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-0.5 text-[9px] text-muted-foreground tabular-nums">
+        <span>{fields.length} fields</span>
         {customCount > 0 && (
           <>
             <span>·</span>
@@ -96,171 +122,237 @@ export function PlacementFieldEditor({
             <span className="text-sky-500">header csv</span>
           </>
         )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              size="sm"
+              variant={editKeys ? "secondary" : "ghost"}
+              className={`${PROP_BTN_ICON} ml-auto`}
+              onClick={() => setEditKeys((v) => !v)}
+              aria-pressed={editKeys}
+            >
+              <span className="text-[9px] font-bold tracking-tight">KEY</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="text-[10px]">
+            {editKeys ? "Hide raw VDK keys" : "Edit raw VDK keys"}
+          </TooltipContent>
+        </Tooltip>
       </div>
 
-      <TransformAxisGrid
-        bindings={axisBindings}
-        headerFormat={headerFormat}
-        initialRawFields={initialEntry?.rawFields ?? null}
-        onValuePreview={(binding, value) => {
-          if (binding.present && binding.valueIndex !== null) {
-            onFieldPreview(binding.valueIndex, value);
-          }
-        }}
-        onValueCommit={(binding, value) => {
-          if (binding.present && binding.valueIndex !== null) {
-            onFieldCommit(binding.valueIndex, value);
-          }
-        }}
-        onAddAxis={(binding) => onAddField(binding.def.key, binding.def.defaultValue)}
-        onRemoveAxis={(binding) => {
-          if (binding.keyIndex !== null) onRemoveField(binding.keyIndex);
-        }}
-        onResetField={onResetField}
-      />
-
-      {groups.map((group) => (
-        <FieldGroupSection
-          key={group.category}
-          label={group.label}
-          fields={group.fields}
-          initialEntry={initialEntry}
-          subModels={subModels}
-          onFieldPreview={onFieldPreview}
-          onFieldCommit={onFieldCommit}
-          onRemoveField={onRemoveField}
-          onResetField={onResetField}
-        />
-      ))}
-
-      <AddFieldControl missingKeys={listCatalogKeysNotInRow(entry, placementHeader)} onAddField={onAddField} />
-    </div>
-  );
-}
-
-function FieldGroupSection({
-  label,
-  fields,
-  initialEntry,
-  subModels,
-  onFieldPreview,
-  onFieldCommit,
-  onRemoveField,
-  onResetField,
-}: {
-  label: string;
-  fields: PlacementFieldRef[];
-  initialEntry: PlacementRow | null;
-  subModels: Array<{ folderName: string; objectIndex: number }>;
-  onFieldPreview: (fieldIndex: number, value: string) => void;
-  onFieldCommit: (fieldIndex: number, value: string) => void;
-  onRemoveField: (keyIndex: number) => void;
-  onResetField: (fieldIndex: number) => void;
-}) {
-  const [open, setOpen] = useState(true);
-  if (fields.length === 0) return null;
-
-  return (
-    <div className="min-w-0 rounded-sm border border-border/40">
-      <button
-        type="button"
-        className="flex w-full items-center gap-1.5 px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/30"
-        onClick={() => setOpen((value) => !value)}
-      >
-        <span className="truncate">{label}</span>
-        <span className="ml-auto font-mono text-[9px] opacity-60">{fields.length}</span>
-      </button>
-      {open && (
-        <div className="space-y-0.5 border-t border-border/30 px-1.5 py-1">
-          {fields.map((field) => (
-            <FieldRow
-              key={`${field.keyIndex}-${field.key}`}
-              field={field}
-              initialEntry={initialEntry}
-              subModels={subModels}
-              onFieldPreview={onFieldPreview}
-              onFieldCommit={onFieldCommit}
-              onRemoveField={onRemoveField}
-              onResetField={onResetField}
-            />
-          ))}
+      <section className={INSPECTOR_SECTION}>
+        <div className={cn(INSPECTOR_SECTION_HEADER, "cursor-default")}>
+          <span className="truncate">Transform</span>
         </div>
-      )}
+        <div className="px-1.5 py-1.5">
+          <TransformAxisGrid
+            bindings={axisBindings}
+            showTitle={false}
+            headerFormat={headerFormat}
+            initialRawFields={initialEntry?.rawFields ?? null}
+            onValuePreview={(binding, value) => {
+              if (binding.present && binding.valueIndex !== null) {
+                onFieldPreview(binding.valueIndex, value);
+              }
+            }}
+            onValueCommit={(binding, value) => {
+              if (binding.present && binding.valueIndex !== null) {
+                onFieldCommit(binding.valueIndex, value);
+              }
+            }}
+            onAddAxis={(binding) => onAddField(binding.def.key, binding.def.defaultValue)}
+            onRemoveAxis={(binding) => {
+              if (binding.keyIndex !== null) onRemoveField(binding.keyIndex);
+            }}
+            onResetField={onResetField}
+          />
+        </div>
+      </section>
+
+      {groups.map((group) => {
+        const collapsed = collapsedGroups.has(group.category);
+        return (
+          <section key={group.category} className={INSPECTOR_SECTION}>
+            <button
+              type="button"
+              className={INSPECTOR_SECTION_HEADER}
+              onClick={() => toggleGroup(group.category)}
+            >
+              <ChevronRight
+                className={cn("h-3 w-3 shrink-0 transition-transform", !collapsed && "rotate-90")}
+              />
+              <span className="truncate">{group.label}</span>
+              <span className="ml-auto font-mono text-[9px] opacity-60">{group.fields.length}</span>
+            </button>
+            {!collapsed && (
+              <div className="divide-y divide-border/25 py-0.5">
+                {group.fields.map((field) => (
+                  <PlacementFieldRow
+                    key={`${field.keyIndex}-${field.key}`}
+                    field={field}
+                    editKeys={editKeys}
+                    initialEntry={initialEntry}
+                    subModels={subModels}
+                    onFieldPreview={onFieldPreview}
+                    onFieldCommit={onFieldCommit}
+                    onRemoveField={onRemoveField}
+                    onResetField={onResetField}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}
+
+      <AddFieldControl missingKeys={missingKeys} onAddField={onAddField} />
     </div>
   );
 }
 
-function FieldRow({
-  field,
-  initialEntry,
-  subModels,
-  onFieldPreview,
-  onFieldCommit,
-  onRemoveField,
-  onResetField,
-}: {
+interface PlacementFieldRowProps {
   field: PlacementFieldRef;
+  editKeys: boolean;
   initialEntry: PlacementRow | null;
   subModels: Array<{ folderName: string; objectIndex: number }>;
   onFieldPreview: (fieldIndex: number, value: string) => void;
   onFieldCommit: (fieldIndex: number, value: string) => void;
   onRemoveField: (keyIndex: number) => void;
   onResetField: (fieldIndex: number) => void;
-}) {
+}
+
+const PlacementFieldRow = memo(function PlacementFieldRow({
+  field,
+  editKeys,
+  initialEntry,
+  subModels,
+  onFieldPreview,
+  onFieldCommit,
+  onRemoveField,
+  onResetField,
+}: PlacementFieldRowProps) {
   const originalKey = initialEntry?.rawFields[field.keyIndex];
   const originalValue = initialEntry?.rawFields[field.valueIndex];
-  const keyModified = originalKey !== undefined && field.key !== originalKey;
   const valueModified = originalValue !== undefined && field.value !== originalValue;
-  const modified = keyModified || valueModified;
+  const label = formatPlacementFieldLabel(field.key);
 
   return (
     <div
       className={cn(
-        "grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_auto_auto] items-center gap-1 rounded-sm px-0.5 py-0.5",
-        modified ? "bg-yellow-500/10" : "hover:bg-muted/20",
-        !field.known && "ring-1 ring-amber-500/20",
+        INSPECTOR_PROP_ROW,
+        valueModified && "bg-amber-500/8",
+        !field.known && "ring-1 ring-inset ring-amber-500/25",
       )}
     >
-      <Input
-        className="h-6 min-w-0 px-1.5 text-[10px] font-mono"
-        value={field.key}
-        readOnly={!field.editableKey}
-        title={field.key}
-        onChange={(event) => onFieldPreview(field.keyIndex, event.target.value)}
-        onBlur={(event) => onFieldCommit(field.keyIndex, event.target.value)}
+      <div className="min-w-0 self-center">
+        {editKeys && field.editableKey ? (
+          <Input
+            className="h-6 min-w-0 px-1 text-left text-[9px] font-mono uppercase"
+            value={field.key}
+            title={field.key}
+            onChange={(event) => onFieldPreview(field.keyIndex, event.target.value)}
+            onBlur={(event) => onFieldCommit(field.keyIndex, event.target.value)}
+          />
+        ) : (
+          <span className={INSPECTOR_PROP_LABEL} title={field.key}>
+            {!field.known && (
+              <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-amber-500 align-middle" />
+            )}
+            {label}
+          </span>
+        )}
+      </div>
+      <div className="min-w-0 justify-self-stretch">
+        <FieldValueControl
+          field={field}
+          commitFallback={originalValue ?? field.value}
+          subModels={subModels}
+          onFieldPreview={onFieldPreview}
+          onFieldCommit={onFieldCommit}
+        />
+      </div>
+      <RowActions
+        valueModified={valueModified}
+        originalValue={originalValue}
+        canRemove={field.editableKey}
+        onReset={() => onResetField(field.valueIndex)}
+        onDelete={() => onRemoveField(field.keyIndex)}
       />
-      <FieldValueInput
-        field={field}
-        commitFallback={originalValue ?? field.value}
-        subModels={subModels}
-        onFieldPreview={onFieldPreview}
-        onFieldCommit={onFieldCommit}
-      />
-      {valueModified && (
-        <button
-          type="button"
-          className={`inline-flex ${PROP_BTN_ICON} items-center justify-center rounded-sm text-muted-foreground hover:text-foreground`}
-          onClick={() => onResetField(field.valueIndex)}
-          aria-label="Reset value"
-        >
-          <RotateCcw className="h-3 w-3" />
-        </button>
-      )}
-      {field.editableKey && (
-        <button
-          type="button"
-          className={`inline-flex ${PROP_BTN_ICON} items-center justify-center rounded-sm text-muted-foreground hover:text-destructive`}
-          onClick={() => onRemoveField(field.keyIndex)}
-          aria-label="Remove field"
-        >
-          <Trash2 className="h-3 w-3" />
-        </button>
-      )}
     </div>
+  );
+}, placementFieldRowPropsAreEqual);
+
+function placementFieldRowPropsAreEqual(
+  prev: PlacementFieldRowProps,
+  next: PlacementFieldRowProps,
+): boolean {
+  return (
+    prev.editKeys === next.editKeys &&
+    prev.initialEntry === next.initialEntry &&
+    prev.field.key === next.field.key &&
+    prev.field.value === next.field.value &&
+    prev.field.keyIndex === next.field.keyIndex
   );
 }
 
-function FieldValueInput({
+function formatObjectNumberLabel(
+  value: string,
+  subModels: Array<{ folderName: string; objectIndex: number }>,
+): string {
+  const selected = subModels.find((sm) => String(sm.objectIndex) === value.trim());
+  if (selected) return `${selected.objectIndex} · ${selected.folderName}`;
+  if (value.trim()) return value;
+  return "Select object...";
+}
+
+function PlacementObjectNumberSelect({
+  value,
+  subModels,
+  onPreview,
+  onCommit,
+}: {
+  value: string;
+  subModels: Array<{ folderName: string; objectIndex: number }>;
+  onPreview: (value: string) => void;
+  onCommit: (value: string) => void;
+}) {
+  const displayLabel = formatObjectNumberLabel(value, subModels);
+
+  return (
+    <Select
+      value={value}
+      onValueChange={(next) => {
+        onPreview(next);
+        onCommit(next);
+      }}
+    >
+      <SelectTrigger title={displayLabel} className={INSPECTOR_SELECT_TRIGGER}>
+        <SelectValue placeholder="Select object...">{displayLabel}</SelectValue>
+      </SelectTrigger>
+      <SelectContent
+        position="popper"
+        className="max-h-72 min-w-56 max-w-[min(32rem,calc(100vw-2rem))]"
+      >
+        {subModels.map((sm) => (
+          <SelectItem
+            key={sm.objectIndex}
+            value={String(sm.objectIndex)}
+            className="items-start py-1.5 pl-8 pr-2 text-left text-[10px]"
+            title={`${sm.objectIndex} · ${sm.folderName}`}
+          >
+            <span className="font-mono tabular-nums text-muted-foreground">{sm.objectIndex}</span>
+            <span className="ml-1.5 min-w-0 whitespace-normal break-all leading-snug">
+              {sm.folderName}
+            </span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function FieldValueControl({
   field,
   commitFallback,
   subModels,
@@ -274,68 +366,115 @@ function FieldValueInput({
   onFieldCommit: (fieldIndex: number, value: string) => void;
 }) {
   if (field.kind === "bool") {
+    const on = field.value.toUpperCase() !== "FALSE";
     return (
       <Select
-        value={field.value.toUpperCase() === "FALSE" ? "FALSE" : "TRUE"}
+        value={on ? "TRUE" : "FALSE"}
         onValueChange={(value) => {
           onFieldPreview(field.valueIndex, value);
           onFieldCommit(field.valueIndex, value);
         }}
       >
-        <SelectTrigger className="h-6 min-w-0 px-1.5 text-[10px]">
+        <SelectTrigger className={INSPECTOR_SELECT_TRIGGER}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="TRUE">TRUE</SelectItem>
-          <SelectItem value="FALSE">FALSE</SelectItem>
+          <SelectItem value="TRUE">On</SelectItem>
+          <SelectItem value="FALSE">Off</SelectItem>
         </SelectContent>
       </Select>
     );
   }
 
-  // VDK_OBJECTNUMBER — render as Select with scene object list
   if (field.key.toUpperCase() === "VDK_OBJECTNUMBER" && subModels.length > 0) {
     return (
-      <Select
+      <PlacementObjectNumberSelect
         value={field.value}
-        onValueChange={(value) => {
-          onFieldPreview(field.valueIndex, value);
-          onFieldCommit(field.valueIndex, value);
-        }}
-      >
-        <SelectTrigger className="h-6 min-w-0 px-1.5 text-[10px] font-mono">
-          <SelectValue placeholder="Select object..." />
-        </SelectTrigger>
-        <SelectContent>
-          {subModels.map((sm) => (
-            <SelectItem key={sm.objectIndex} value={String(sm.objectIndex)}>
-              <span className="font-mono text-muted-foreground">{sm.objectIndex}:</span>{" "}
-              <span>{sm.folderName}</span>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        subModels={subModels}
+        onPreview={(value) => onFieldPreview(field.valueIndex, value)}
+        onCommit={(value) => onFieldCommit(field.valueIndex, value)}
+      />
     );
   }
 
+  const isNumber = field.kind === "number";
   return (
-    <Input
-      className="h-6 min-w-0 px-1.5 text-[10px] font-mono tabular-nums"
+    <input
+      className={cn(
+        INSPECTOR_PROP_VALUE,
+        isNumber ? "font-mono tabular-nums" : "font-sans",
+      )}
       value={field.value}
-      inputMode="decimal"
+      inputMode={isNumber ? "decimal" : "text"}
+      title={field.value}
       onChange={(event) =>
-        onFieldPreview(field.valueIndex, sanitizeDecimalInput(event.target.value))
+        onFieldPreview(
+          field.valueIndex,
+          isNumber ? sanitizeDecimalInput(event.target.value) : event.target.value,
+        )
       }
-      onBlur={(event) =>
+      onBlur={(event) => {
+        if (!isNumber) {
+          onFieldCommit(field.valueIndex, event.target.value);
+          return;
+        }
         onFieldCommit(
           field.valueIndex,
           commitDecimalInput(event.target.value, commitFallback),
-        )
-      }
+        );
+      }}
       onKeyDown={(event) => {
         if (event.key === "Enter") event.currentTarget.blur();
       }}
     />
+  );
+}
+
+function RowActions({
+  valueModified,
+  originalValue,
+  canRemove,
+  onReset,
+  onDelete,
+}: {
+  valueModified: boolean;
+  originalValue?: string;
+  canRemove: boolean;
+  onReset: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex shrink-0 items-center justify-end gap-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+      {valueModified && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className={`inline-flex ${PROP_BTN_ICON} items-center justify-center rounded-sm text-muted-foreground hover:text-foreground`}
+              onClick={onReset}
+              aria-label="Reset value"
+            >
+              <RotateCcw className="h-3 w-3" />
+            </button>
+          </TooltipTrigger>
+          {originalValue !== undefined && (
+            <TooltipContent side="bottom" className="text-[10px]">
+              Reset to {originalValue}
+            </TooltipContent>
+          )}
+        </Tooltip>
+      )}
+      {canRemove && (
+        <button
+          type="button"
+          className={`inline-flex ${PROP_BTN_ICON} items-center justify-center rounded-sm text-muted-foreground hover:text-destructive`}
+          onClick={onDelete}
+          aria-label="Remove field"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -371,7 +510,7 @@ function AddFieldControl({
   };
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1 border-t border-border/30 pt-1.5">
+    <div className="flex min-w-0 items-center gap-1 border-t border-border/30 pt-1.5">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button type="button" size="sm" variant="outline" className={PROP_BTN}>
@@ -380,29 +519,33 @@ function AddFieldControl({
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72 p-2">
-          <Input
-            className="mb-2 h-7 text-[11px]"
-            placeholder="Search known VDK fields..."
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
+          <div className="relative mb-2">
+            <Search className="pointer-events-none absolute left-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground/70" />
+            <Input
+              className="h-7 pl-6 text-[11px]"
+              placeholder="Search catalog..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
           <VirtualizedList
             items={filteredKeys}
             rowHeight={VDK_KEY_CANDIDATE_ROW_HEIGHT}
             getItemKey={(key) => key}
             className="max-h-60 overflow-auto"
             emptyState={
-              <div className="px-1 py-2 text-[10px] text-muted-foreground">
-                No matching keys
-              </div>
+              <div className="px-1 py-2 text-[10px] text-muted-foreground">No matching keys</div>
             }
             renderRow={(key) => (
               <button
                 type="button"
-                className="flex h-full w-full items-center rounded-sm px-1.5 text-left font-mono text-[10px] hover:bg-muted/40"
+                className="flex h-full w-full flex-col justify-center rounded-sm px-1.5 text-left hover:bg-muted/40"
                 onClick={() => addKnown(key)}
               >
-                {key}
+                <span className="truncate text-[10px] text-foreground/90">
+                  {formatPlacementFieldLabel(key)}
+                </span>
+                <span className="truncate font-mono text-[9px] text-muted-foreground">{key}</span>
               </button>
             )}
           />
@@ -418,7 +561,7 @@ function AddFieldControl({
         }}
       />
       <Button type="button" size="sm" variant="secondary" className={PROP_BTN} onClick={addCustom}>
-        Add custom
+        Add
       </Button>
     </div>
   );
