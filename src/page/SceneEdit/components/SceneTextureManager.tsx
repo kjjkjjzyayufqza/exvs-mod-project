@@ -21,9 +21,10 @@ import {
   ContextMenuItem,
 } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
-import { Plus, Search, Image as ImageIcon } from "lucide-react";
+import { Plus, Search, Image as ImageIcon, Download } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useMemo, useCallback, useEffect, useReducer, useState } from "react";
+import { toast } from "sonner";
 import { TexturePreviewModal } from "./TexturePreviewModal";
 import { TextureReplaceModal } from "./TextureReplaceModal";
 import {
@@ -33,6 +34,7 @@ import {
 import { VirtualizedList } from "./VirtualizedList";
 import {
   convertImageToNutexb,
+  exportNutexbToPng,
   reencodeNutexbWithFormat,
 } from "../utils/sceneTextureConvert";
 import type { DdsFormat } from "./TextureFormatSelect";
@@ -69,7 +71,13 @@ export function SceneTextureManager({
   );
   const [isAddConverting, setIsAddConverting] = useState(false);
   const [isPreviewReencoding, setIsPreviewReencoding] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [, bumpThumbnailCache] = useReducer((value: number) => value + 1, 0);
+
+  const selectedEntry = useMemo(
+    () => entries.find((entry) => entry.id === selectedId) ?? null,
+    [entries, selectedId],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -275,6 +283,27 @@ export function SceneTextureManager({
     }
   }, []);
 
+  const handleExport = useCallback(async (entry: TextureManagerEntry) => {
+    if (!entry.nutexbPath || isExporting) return;
+    setIsExporting(true);
+    try {
+      const outputPath = await exportNutexbToPng({
+        nutexbPath: entry.nutexbPath,
+        suggestedFilename: entry.filename.replace(/\.nutexb$/i, ".png"),
+      });
+      if (outputPath) {
+        toast.success(`Exported PNG: ${outputPath.split(/[/\\]/).pop()}`);
+      }
+    } catch (error) {
+      console.error(error);
+      const message =
+        error instanceof Error ? error.message : "Failed to export nutexb to PNG";
+      toast.error(message);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [isExporting]);
+
   const handlePreviewFormatApply = useCallback(
     async (ddsFormat: DdsFormat) => {
       if (!previewEntry?.nutexbPath) return;
@@ -323,6 +352,18 @@ export function SceneTextureManager({
         >
           <Plus className="h-3.5 w-3.5" />
         </Button>
+        {selectedEntry?.nutexbPath && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 shrink-0"
+            onClick={() => void handleExport(selectedEntry)}
+            disabled={isExporting}
+            title="Export selected nutexb to PNG"
+          >
+            <Download className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
 
       <VirtualizedList
@@ -353,6 +394,8 @@ export function SceneTextureManager({
             onReplace={() => handleReplace(entry)}
             onDelete={() => handleDelete(entry)}
             onCopyPath={() => handleCopyPath(entry)}
+            onExport={() => handleExport(entry)}
+            canExport={Boolean(entry.nutexbPath) && !isExporting}
           />
         )}
       />
@@ -440,6 +483,8 @@ interface TextureRowProps {
   onReplace: () => void;
   onDelete: () => void;
   onCopyPath: () => void;
+  onExport: () => void;
+  canExport: boolean;
 }
 
 function TextureRow({
@@ -451,6 +496,8 @@ function TextureRow({
   onReplace,
   onDelete,
   onCopyPath,
+  onExport,
+  canExport,
 }: TextureRowProps) {
   const thumbnailDataUrl = entry.nutexbPath
     ? getSceneTextureThumbnailDataUrl(entry.nutexbPath, textureDataMap)
@@ -525,6 +572,9 @@ function TextureRow({
 
       <ContextMenuContent>
         <ContextMenuItem onClick={onPreview}>Preview</ContextMenuItem>
+        {canExport && (
+          <ContextMenuItem onClick={onExport}>Export to PNG</ContextMenuItem>
+        )}
         <ContextMenuItem onClick={onReplace}>Replace</ContextMenuItem>
         <ContextMenuItem onClick={onCopyPath}>Copy Path</ContextMenuItem>
         {entry.status === "added" && (

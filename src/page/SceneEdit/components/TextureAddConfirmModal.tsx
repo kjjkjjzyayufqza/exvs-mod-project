@@ -5,6 +5,7 @@ import { Rnd } from "react-rnd";
 import { ImageIcon, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TextureFormatSelect, type DdsFormat } from "./TextureFormatSelect";
+import { DEFAULT_DDS_FORMAT } from "../utils/sceneTextureDdsFormat";
 import { isImageFile } from "@/page/TestEditor/components/ImagePreview";
 
 const VIEWPORT_MARGIN = 32;
@@ -33,7 +34,7 @@ export function TextureAddConfirmModal({
   onConfirm,
   isConverting = false,
 }: TextureAddConfirmModalProps) {
-  const [ddsFormat, setDdsFormat] = useState<DdsFormat>("BC7_UNORM");
+  const [ddsFormat, setDdsFormat] = useState<DdsFormat>(DEFAULT_DDS_FORMAT);
   const [previewError, setPreviewError] = useState(false);
 
   const previewSrc = useMemo(() => {
@@ -62,7 +63,6 @@ export function TextureAddConfirmModal({
         cancel="button, input, textarea, select, label, a, [data-no-drag]"
         bounds="window"
         className="pointer-events-auto"
-        enableResizing={false}
         style={{ zIndex: 60 }}
       >
         <div className="flex flex-col h-full bg-background border border-border rounded-lg shadow-xl overflow-hidden">

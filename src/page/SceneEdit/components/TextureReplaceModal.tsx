@@ -4,6 +4,7 @@ import { Rnd } from "react-rnd";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TextureFormatSelect, type DdsFormat } from "./TextureFormatSelect";
+import { DEFAULT_DDS_FORMAT } from "../utils/sceneTextureDdsFormat";
 import type { TextureManagerEntry } from "../store/sceneTextureManagerStore";
 
 const VIEWPORT_MARGIN = 32;
@@ -20,7 +21,7 @@ interface TextureReplaceModalProps {
 }
 
 export function TextureReplaceModal({ entry, onClose, onConfirm }: TextureReplaceModalProps) {
-  const [ddsFormat, setDdsFormat] = useState<DdsFormat>("BC7_UNORM");
+  const [ddsFormat, setDdsFormat] = useState<DdsFormat>(DEFAULT_DDS_FORMAT);
 
   const { width: vw, height: vh } = getViewportSize();
   const modalWidth = Math.min(380, vw - VIEWPORT_MARGIN * 2);

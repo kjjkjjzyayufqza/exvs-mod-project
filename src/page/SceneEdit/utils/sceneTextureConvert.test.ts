@@ -6,6 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(),
+  save: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
@@ -15,22 +16,16 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
 
 vi.mock("@tauri-apps/api/path", () => ({
   appLocalDataDir: vi.fn(() => Promise.resolve("C:/AppData/Local/app")),
+  dirname: vi.fn(() => Promise.resolve("C:/AppData/Local/app/__convert")),
+  join: vi.fn((...parts: string[]) => parts.join("/")),
 }));
 
 import { ddsFormatToRust } from "./sceneTextureConvert";
-import type { DdsFormat } from "../components/TextureFormatSelect";
 
 describe("ddsFormatToRust", () => {
-  const cases: [DdsFormat, string][] = [
-    ["BC7_UNORM", "BC7RgbaUnorm"],
-    ["BC7_UNORM_SRGB", "BC7RgbaUnormSrgb"],
-    ["BC5_UNORM", "BC5RgUnorm"],
-    ["BC4_UNORM", "BC4RUnorm"],
-    ["BC1_UNORM", "BC1RgbaUnorm"],
-    ["BC3_UNORM", "BC3RgbaUnorm"],
-  ];
-
-  it.each(cases)("maps %s to %s", (input, expected) => {
-    expect(ddsFormatToRust(input)).toBe(expected);
+  it("passes through rust DDS format strings unchanged", () => {
+    expect(ddsFormatToRust("BC7RgbaUnormSrgb")).toBe("BC7RgbaUnormSrgb");
+    expect(ddsFormatToRust("Rgba8Unorm")).toBe("Rgba8Unorm");
+    expect(ddsFormatToRust("BC6hRgbUfloat")).toBe("BC6hRgbUfloat");
   });
 });

@@ -1,11 +1,24 @@
-import type { DdsFormat } from "../components/TextureFormatSelect";
+import type { DdsFormat } from "@/lib/ddsFormats";
 
 export function recommendDdsFormat(paramId: string): DdsFormat {
   const id = paramId.toLowerCase();
-  if (id.includes("normal")) return "BC5_UNORM";
-  if (id.includes("roughness") || id.includes("metalness") || id.includes("ao") || id.includes("ambient")) return "BC4_UNORM";
-  if (id.includes("diffuse") || id.includes("basecolor") || id.includes("emissive")) return "BC7_UNORM_SRGB";
-  return "BC7_UNORM";
+  if (id.includes("normal")) return "BC5RgUnorm";
+  if (
+    id.includes("roughness") ||
+    id.includes("metalness") ||
+    id.includes("ao") ||
+    id.includes("ambient")
+  ) {
+    return "BC4RUnorm";
+  }
+  if (
+    id.includes("diffuse") ||
+    id.includes("basecolor") ||
+    id.includes("emissive")
+  ) {
+    return "BC7RgbaUnormSrgb";
+  }
+  return "BC7RgbaUnorm";
 }
 
 export function textureBasename(filePath: string): string {

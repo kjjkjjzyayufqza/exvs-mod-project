@@ -1,42 +1,47 @@
-import type { DdsFormat } from "../components/TextureFormatSelect";
-import { ddsFormatToRust } from "./sceneTextureConvert";
+import { DDS_FORMATS, type DdsFormat } from "@/lib/ddsFormats";
 
-const RUST_TO_SCENE_DDS: Record<string, DdsFormat> = {
-  BC7RgbaUnorm: "BC7_UNORM",
-  BC7RgbaUnormSrgb: "BC7_UNORM_SRGB",
-  BC5RgUnorm: "BC5_UNORM",
-  BC5RgSnorm: "BC5_UNORM",
-  BC4RUnorm: "BC4_UNORM",
-  BC4RSnorm: "BC4_UNORM",
-  BC1RgbaUnorm: "BC1_UNORM",
-  BC1RgbaUnormSrgb: "BC1_UNORM",
-  BC3RgbaUnorm: "BC3_UNORM",
-  BC3RgbaUnormSrgb: "BC3_UNORM",
+export type { DdsFormat };
+
+const LEGACY_SCENE_TO_RUST: Record<string, DdsFormat> = {
+  BC7_UNORM: "BC7RgbaUnorm",
+  BC7_UNORM_SRGB: "BC7RgbaUnormSrgb",
+  BC5_UNORM: "BC5RgUnorm",
+  BC4_UNORM: "BC4RUnorm",
+  BC1_UNORM: "BC1RgbaUnorm",
+  BC3_UNORM: "BC3RgbaUnorm",
 };
 
-export function rustDdsFormatToSceneFormat(rustFormat: string): DdsFormat | null {
-  const trimmed = rustFormat.trim();
-  return RUST_TO_SCENE_DDS[trimmed] ?? null;
+const KNOWN_VALUES = new Set<string>(DDS_FORMATS.map((opt) => opt.value));
+
+export const DEFAULT_DDS_FORMAT: DdsFormat = "BC7RgbaUnormSrgb";
+
+export function isKnownDdsFormat(value: string): value is DdsFormat {
+  return KNOWN_VALUES.has(value.trim());
 }
 
-export function sceneFormatFromEntryFormat(entryFormat: string): DdsFormat | null {
-  const known: DdsFormat[] = [
-    "BC7_UNORM",
-    "BC7_UNORM_SRGB",
-    "BC5_UNORM",
-    "BC4_UNORM",
-    "BC1_UNORM",
-    "BC3_UNORM",
-  ];
-  if (known.includes(entryFormat as DdsFormat)) {
-    return entryFormat as DdsFormat;
+export function normalizeDdsFormat(value: string | null | undefined): DdsFormat {
+  const trimmed = value?.trim() ?? "";
+  if (isKnownDdsFormat(trimmed)) {
+    return trimmed;
   }
-  return rustDdsFormatToSceneFormat(entryFormat);
+  const legacy = LEGACY_SCENE_TO_RUST[trimmed];
+  if (legacy) {
+    return legacy;
+  }
+  return DEFAULT_DDS_FORMAT;
 }
 
-export function sceneFormatMatchesRust(
-  sceneFormat: DdsFormat,
-  rustFormat: string,
+export function resolveDetectedDdsFormat(detected: string): DdsFormat | null {
+  const trimmed = detected.trim();
+  if (isKnownDdsFormat(trimmed)) {
+    return trimmed;
+  }
+  return null;
+}
+
+export function formatMatchesDetected(
+  selected: DdsFormat,
+  detected: string,
 ): boolean {
-  return ddsFormatToRust(sceneFormat) === rustFormat.trim();
+  return selected === detected.trim();
 }

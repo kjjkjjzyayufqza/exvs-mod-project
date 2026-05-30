@@ -14,9 +14,10 @@ import {
 } from "../utils/sceneTextureThumbnail";
 import { TextureFormatSelect, type DdsFormat } from "./TextureFormatSelect";
 import {
-  rustDdsFormatToSceneFormat,
-  sceneFormatFromEntryFormat,
-  sceneFormatMatchesRust,
+  DEFAULT_DDS_FORMAT,
+  formatMatchesDetected,
+  normalizeDdsFormat,
+  resolveDetectedDdsFormat,
 } from "../utils/sceneTextureDdsFormat";
 
 const VIEWPORT_MARGIN = 32;
@@ -47,8 +48,8 @@ export function TexturePreviewModal({
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [ddsFormat, setDdsFormat] = useState<DdsFormat>("BC7_UNORM");
-  const [detectedRustFormat, setDetectedRustFormat] = useState<string | null>(null);
+  const [ddsFormat, setDdsFormat] = useState<DdsFormat>(DEFAULT_DDS_FORMAT);
+  const [detectedFormat, setDetectedFormat] = useState<string | null>(null);
   const [formatLoading, setFormatLoading] = useState(false);
 
   const loadedData = entry.nutexbPath
@@ -104,15 +105,14 @@ export function TexturePreviewModal({
     invoke<string>("card_icon_detect_dds_format", { nutexbPath: entry.nutexbPath })
       .then((rustFormat) => {
         if (cancelled) return;
-        setDetectedRustFormat(rustFormat);
-        const fromEntry = sceneFormatFromEntryFormat(entry.format);
-        const fromRust = rustDdsFormatToSceneFormat(rustFormat);
-        setDdsFormat(fromEntry ?? fromRust ?? "BC7_UNORM");
+        setDetectedFormat(rustFormat);
+        const fromEntry = normalizeDdsFormat(entry.format);
+        const fromRust = resolveDetectedDdsFormat(rustFormat);
+        setDdsFormat(fromRust ?? fromEntry);
       })
       .catch(() => {
         if (cancelled) return;
-        const fromEntry = sceneFormatFromEntryFormat(entry.format);
-        setDdsFormat(fromEntry ?? "BC7_UNORM");
+        setDdsFormat(normalizeDdsFormat(entry.format));
       })
       .finally(() => {
         if (!cancelled) {
@@ -126,8 +126,8 @@ export function TexturePreviewModal({
   }, [entry.nutexbPath, entry.format]);
 
   const formatDirty =
-    detectedRustFormat !== null &&
-    !sceneFormatMatchesRust(ddsFormat, detectedRustFormat);
+    detectedFormat !== null &&
+    !formatMatchesDetected(ddsFormat, detectedFormat);
 
   const handleApplyFormat = useCallback(() => {
     if (!formatDirty || !onFormatApply) return;
@@ -213,7 +213,7 @@ export function TexturePreviewModal({
           >
             <div className="flex flex-col gap-1">
               <label className="text-[10px] text-muted-foreground">
-                DDS format
+                DDS Format
               </label>
               <TextureFormatSelect
                 value={ddsFormat}
@@ -221,6 +221,11 @@ export function TexturePreviewModal({
                 disabled={formatLoading || isReencoding}
                 triggerClassName="h-7 text-xs w-full"
               />
+              <div className="text-[10px] text-muted-foreground min-h-4 leading-snug">
+                {formatLoading
+                  ? "Detecting original format from target nutexb..."
+                  : "Default is the original format from the target nutexb file."}
+              </div>
             </div>
             {formatDirty && onFormatApply && (
               <Button

@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSceneAssetStore } from "../store/sceneAssetStore";
 import { importPngAsNutexb } from "../utils/sceneTextureConvert";
 import { TextureFormatSelect, type DdsFormat } from "./TextureFormatSelect";
+import { DEFAULT_DDS_FORMAT } from "../utils/sceneTextureDdsFormat";
 import {
   PROP_BTN,
   PROP_BTN_ICON,
@@ -39,7 +40,7 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
   const propagateFromParent = useSceneAssetStore((s) => s.propagateFromParent);
   const getChildren = useSceneAssetStore((s) => s.getChildren);
 
-  const [ddsFormat, setDdsFormat] = useState<DdsFormat>("BC7_UNORM");
+  const [ddsFormat, setDdsFormat] = useState<DdsFormat>(DEFAULT_DDS_FORMAT);
   const [textureName, setTextureName] = useState("");
   const [selectedProfile, setSelectedProfile] = useState<"maya" | "nust">("nust");
   const [selectedEntryIdx, setSelectedEntryIdx] = useState(0);

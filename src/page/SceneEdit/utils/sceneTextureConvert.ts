@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { exists, mkdir } from "@tauri-apps/plugin-fs";
 import { appLocalDataDir, dirname, join } from "@tauri-apps/api/path";
-import type { DdsFormat } from "../components/TextureFormatSelect";
+import type { DdsFormat } from "@/lib/ddsFormats";
 
 /** Mirrors Rust sanitize_file_name for __convert PNG export paths. */
 function sanitizeFileName(input: string): string {
@@ -17,17 +17,8 @@ export interface TextureConvertResult {
   nutexbName: string;
 }
 
-const DDS_FORMAT_TO_RUST: Record<DdsFormat, string> = {
-  BC7_UNORM: "BC7RgbaUnorm",
-  BC7_UNORM_SRGB: "BC7RgbaUnormSrgb",
-  BC5_UNORM: "BC5RgUnorm",
-  BC4_UNORM: "BC4RUnorm",
-  BC1_UNORM: "BC1RgbaUnorm",
-  BC3_UNORM: "BC3RgbaUnorm",
-};
-
 export function ddsFormatToRust(format: DdsFormat): string {
-  return DDS_FORMAT_TO_RUST[format];
+  return format;
 }
 
 export async function convertPngToNutexb(params: {
@@ -110,6 +101,37 @@ async function exportNutexbPreviewPng(
   }
   await invoke("nutexb_export_png", { inputPath: nutexbPath, outputPath });
   return outputPath;
+}
+
+function defaultPngExportName(nutexbPath: string): string {
+  const filename = nutexbPath.split(/[/\\]/).pop() ?? "texture.nutexb";
+  return filename.replace(/\.nutexb$/i, ".png");
+}
+
+export async function exportNutexbToPng(params: {
+  nutexbPath: string;
+  suggestedFilename?: string;
+}): Promise<string | null> {
+  const suggested =
+    params.suggestedFilename?.trim() ||
+    defaultPngExportName(params.nutexbPath);
+
+  const outputPath = await save({
+    title: "Export nutexb to PNG",
+    defaultPath: suggested,
+    filters: [{ name: "PNG", extensions: ["png"] }],
+  });
+
+  if (typeof outputPath !== "string" || !outputPath.trim()) {
+    return null;
+  }
+
+  await invoke("nutexb_export_png", {
+    inputPath: params.nutexbPath,
+    outputPath: outputPath.trim(),
+  });
+
+  return outputPath.trim();
 }
 
 export async function importPngAsNutexb(params: {

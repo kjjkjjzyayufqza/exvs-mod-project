@@ -4,25 +4,25 @@ import { recommendDdsFormat, textureBasename, isNutexbFile } from "./texturePath
 describe("texturePathPickerUtils", () => {
   describe("recommendDdsFormat", () => {
     it("recommends BC5 for normal maps", () => {
-      expect(recommendDdsFormat("NormalMap")).toBe("BC5_UNORM");
-      expect(recommendDdsFormat("normalMap")).toBe("BC5_UNORM");
+      expect(recommendDdsFormat("NormalMap")).toBe("BC5RgUnorm");
+      expect(recommendDdsFormat("normalMap")).toBe("BC5RgUnorm");
     });
 
     it("recommends BC4 for roughness/metalness/AO", () => {
-      expect(recommendDdsFormat("RoughnessMap")).toBe("BC4_UNORM");
-      expect(recommendDdsFormat("MetalnessMap")).toBe("BC4_UNORM");
-      expect(recommendDdsFormat("AmbientOcclusionMap")).toBe("BC4_UNORM");
+      expect(recommendDdsFormat("RoughnessMap")).toBe("BC4RUnorm");
+      expect(recommendDdsFormat("MetalnessMap")).toBe("BC4RUnorm");
+      expect(recommendDdsFormat("AmbientOcclusionMap")).toBe("BC4RUnorm");
     });
 
-    it("recommends BC7_SRGB for diffuse/basecolor/emissive", () => {
-      expect(recommendDdsFormat("DiffuseMap")).toBe("BC7_UNORM_SRGB");
-      expect(recommendDdsFormat("BaseColorMap")).toBe("BC7_UNORM_SRGB");
-      expect(recommendDdsFormat("EmissiveMap")).toBe("BC7_UNORM_SRGB");
+    it("recommends BC7 sRGB for diffuse/basecolor/emissive", () => {
+      expect(recommendDdsFormat("DiffuseMap")).toBe("BC7RgbaUnormSrgb");
+      expect(recommendDdsFormat("BaseColorMap")).toBe("BC7RgbaUnormSrgb");
+      expect(recommendDdsFormat("EmissiveMap")).toBe("BC7RgbaUnormSrgb");
     });
 
-    it("defaults to BC7_UNORM for unknown params", () => {
-      expect(recommendDdsFormat("UnknownParam")).toBe("BC7_UNORM");
-      expect(recommendDdsFormat("Texture1")).toBe("BC7_UNORM");
+    it("defaults to BC7RgbaUnorm for unknown params", () => {
+      expect(recommendDdsFormat("UnknownParam")).toBe("BC7RgbaUnorm");
+      expect(recommendDdsFormat("Texture1")).toBe("BC7RgbaUnorm");
     });
   });
 
