@@ -42,7 +42,7 @@ export function DeleteConfirmDialog({
 
   return (
     <AlertDialog open={open}>
-      <AlertDialogContent className="max-w-lg">
+      <AlertDialogContent className="max-w-lg" showCloseButton onCloseClick={onCancel}>
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2 text-destructive">
             <Trash2 className="h-5 w-5" />

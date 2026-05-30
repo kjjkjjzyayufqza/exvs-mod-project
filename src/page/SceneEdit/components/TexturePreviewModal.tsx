@@ -105,6 +105,7 @@ export function TexturePreviewModal({
         maxWidth={vw - VIEWPORT_MARGIN}
         maxHeight={vh - VIEWPORT_MARGIN}
         dragHandleClassName="texture-preview-drag-handle"
+        cancel="button, input, textarea, select, label, a, [data-no-drag]"
         bounds="window"
         className="pointer-events-auto"
         style={{ zIndex: 60 }}
@@ -129,6 +130,7 @@ export function TexturePreviewModal({
                 variant="ghost"
                 size="icon"
                 className="h-5 w-5"
+                data-no-drag
                 onClick={onClose}
               >
                 <X className="h-3 w-3" />

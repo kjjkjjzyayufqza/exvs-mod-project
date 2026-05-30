@@ -197,6 +197,7 @@ export function SceneEditRndModalShell({
               variant="ghost"
               size="icon"
               className="h-7 w-7 shrink-0 rounded-full hover:bg-destructive/10 hover:text-destructive"
+              data-no-drag
               onClick={onClose}
               aria-label="Close"
             >

@@ -68,7 +68,7 @@ export function SaveConfirmDialog({
 
   return (
     <AlertDialog open={open}>
-      <AlertDialogContent className="max-w-lg">
+      <AlertDialogContent className="max-w-lg" showCloseButton onCloseClick={onCancel}>
         <AlertDialogHeader>
           <AlertDialogTitle>Save changes to folder?</AlertDialogTitle>
           <AlertDialogDescription>

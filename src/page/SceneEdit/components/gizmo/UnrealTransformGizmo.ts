@@ -3,6 +3,7 @@ import {
   type GizmoMode,
   type GizmoSpace,
   type AxisId,
+  AXIS_VECTORS,
   PICKER_LAYER,
   GIZMO_RENDER_ORDER,
 } from "./gizmoConstants";
@@ -44,6 +45,14 @@ const _raycaster = new THREE.Raycaster();
 const _pointer = new THREE.Vector2();
 const _worldPos = new THREE.Vector3();
 const _camDir = new THREE.Vector3();
+const _ringNormal = new THREE.Vector3();
+const _invParentQuat = new THREE.Quaternion();
+const _cameraQuat = new THREE.Quaternion();
+
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
 
 export class UnrealTransformGizmo extends THREE.Object3D {
   readonly isTransformControls = true;
@@ -167,6 +176,73 @@ export class UnrealTransformGizmo extends THREE.Object3D {
 
     super.updateMatrixWorld(force);
     this._updateAxisVisibility();
+    this._updateRotateRingPresentation();
+  }
+
+  private _updateRotateRingPresentation(): void {
+    if (this._mode !== "rotate" || !this._currentGeometry) return;
+
+    this._camera.getWorldDirection(_camDir);
+    _cameraQuat.copy(this._camera.quaternion);
+
+    for (const el of this._currentGeometry.elements) {
+      if (el.axisId === "screen") {
+        if (this._space === "local") {
+          _invParentQuat.copy(this.quaternion).invert();
+          el.visual.quaternion.copy(_invParentQuat).multiply(_cameraQuat);
+        } else {
+          el.visual.quaternion.copy(_cameraQuat);
+        }
+        el.picker.quaternion.copy(el.visual.quaternion);
+
+        const screenHighlighted =
+          this._activeAxis === "screen" || this._hoveredAxis === "screen";
+        const screenOpacity =
+          this._dragging && this._activeAxis && this._activeAxis !== "screen"
+            ? 0.08
+            : screenHighlighted
+              ? 0.85
+              : 0.55;
+        this._setRingVisualOpacity(el.visual, screenOpacity);
+        continue;
+      }
+
+      if (el.axisId !== "X" && el.axisId !== "Y" && el.axisId !== "Z") continue;
+
+      const isHighlighted =
+        this._activeAxis === el.axisId || this._hoveredAxis === el.axisId;
+
+      if (this._dragging && this._activeAxis && this._activeAxis !== el.axisId) {
+        this._setRingVisualOpacity(el.visual, 0.06);
+        continue;
+      }
+
+      _ringNormal.copy(AXIS_VECTORS[el.axisId]);
+      if (this._space === "local") {
+        _ringNormal.applyQuaternion(this.quaternion);
+      }
+
+      const edgeOn = Math.abs(_ringNormal.dot(_camDir));
+      const facingOpacity = THREE.MathUtils.lerp(
+        1,
+        0.06,
+        smoothstep(0.42, 0.8, edgeOn),
+      );
+      const opacity = isHighlighted ? 1 : facingOpacity;
+      this._setRingVisualOpacity(el.visual, opacity);
+    }
+  }
+
+  private _setRingVisualOpacity(visual: THREE.Object3D, opacity: number): void {
+    visual.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        const mat = child.material;
+        if (mat instanceof THREE.MeshBasicMaterial) {
+          mat.transparent = opacity < 1;
+          mat.opacity = opacity;
+        }
+      }
+    });
   }
 
   override addEventListener(type: string, listener: (event: any) => void): void {

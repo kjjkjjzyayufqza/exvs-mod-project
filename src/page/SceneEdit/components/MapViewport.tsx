@@ -1,7 +1,5 @@
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import {
-  GizmoHelper,
-  GizmoViewport,
   Grid,
   Sphere,
   Html,
@@ -25,6 +23,7 @@ import {
 import * as THREE from "three";
 import { mergeBufferGeometries } from "three-stdlib";
 import { StageOrbitControls } from "./StageOrbitControls";
+import { StageViewportGizmo } from "./StageViewportGizmo";
 import { ViewportFrameLoopGate } from "./ViewportFrameLoopGate";
 import { ViewportMarqueeOverlay } from "./ViewportMarqueeOverlay";
 import {
@@ -991,11 +990,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           />
         )}
 
-        {showAxes && (
-          <GizmoHelper alignment="bottom-right" margin={[72, 72]}>
-            <GizmoViewport axisColors={["#f87171", "#4ade80", "#60a5fa"]} labelColor="white" />
-          </GizmoHelper>
-        )}
+        <StageViewportGizmo controlsRef={controlsRef} enabled={showAxes} />
 
         <StageOrbitControls
           controlsRef={controlsRef}

@@ -9,6 +9,7 @@ import {
   CENTER_SPHERE_RADIUS,
   RING_RADIUS,
   RING_TUBE,
+  RING_RADIAL_SEGMENTS,
   RING_SEGMENTS,
   SCREEN_RING_RADIUS,
   SCREEN_RING_TUBE,
@@ -150,13 +151,23 @@ function createRotationRing(
 ): GizmoElement {
   const visual = new THREE.Group();
   visual.name = `ring-${axis}`;
-  const geo = new THREE.TorusGeometry(RING_RADIUS, RING_TUBE, 8, RING_SEGMENTS);
+  const geo = new THREE.TorusGeometry(
+    RING_RADIUS,
+    RING_TUBE,
+    RING_RADIAL_SEGMENTS,
+    RING_SEGMENTS,
+  );
   visual.add(new THREE.Mesh(geo, material));
   orientRingGroup(visual, axis);
 
   const picker = new THREE.Group();
   picker.name = `picker-ring-${axis}`;
-  const pickerGeo = new THREE.TorusGeometry(RING_RADIUS, PICKER_RING_TUBE, 8, RING_SEGMENTS);
+  const pickerGeo = new THREE.TorusGeometry(
+    RING_RADIUS,
+    PICKER_RING_TUBE,
+    RING_RADIAL_SEGMENTS,
+    RING_SEGMENTS,
+  );
   picker.add(new THREE.Mesh(pickerGeo, pickerMaterial));
   orientRingGroup(picker, axis);
   setPickerLayer(picker);
@@ -178,12 +189,22 @@ function createScreenRing(
 ): GizmoElement {
   const visual = new THREE.Group();
   visual.name = "screen-ring";
-  const geo = new THREE.TorusGeometry(SCREEN_RING_RADIUS, SCREEN_RING_TUBE, 8, RING_SEGMENTS);
+  const geo = new THREE.TorusGeometry(
+    SCREEN_RING_RADIUS,
+    SCREEN_RING_TUBE,
+    RING_RADIAL_SEGMENTS,
+    RING_SEGMENTS,
+  );
   visual.add(new THREE.Mesh(geo, material));
 
   const picker = new THREE.Group();
   picker.name = "picker-screen-ring";
-  const pickerGeo = new THREE.TorusGeometry(SCREEN_RING_RADIUS, PICKER_RING_TUBE, 8, RING_SEGMENTS);
+  const pickerGeo = new THREE.TorusGeometry(
+    SCREEN_RING_RADIUS,
+    PICKER_RING_TUBE,
+    RING_RADIAL_SEGMENTS,
+    RING_SEGMENTS,
+  );
   picker.add(new THREE.Mesh(pickerGeo, pickerMaterial));
   setPickerLayer(picker);
 
@@ -279,11 +300,11 @@ export function buildTranslateGeometry(materials: GizmoMaterials): ModeGeometry 
 
 export function buildRotateGeometry(materials: GizmoMaterials): ModeGeometry {
   const screenMat = new THREE.MeshBasicMaterial({
-    color: 0x888888,
+    color: 0xb8b8b8,
     depthTest: false,
     depthWrite: false,
     transparent: true,
-    opacity: 0.6,
+    opacity: 0.55,
     side: THREE.DoubleSide,
   });
   return {

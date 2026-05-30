@@ -223,6 +223,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
           variant="ghost"
           size="icon"
           className="h-8 w-8 shrink-0 rounded-full hover:bg-destructive/10 hover:text-destructive"
+          data-no-drag
           onClick={onCancel}
           aria-label="Close import dialog"
         >

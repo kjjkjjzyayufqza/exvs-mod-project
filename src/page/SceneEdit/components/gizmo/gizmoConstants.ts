@@ -46,10 +46,11 @@ export const PLANE_HANDLE_OPACITY = 0.3;
 export const CENTER_SPHERE_RADIUS = 8;
 
 export const RING_RADIUS = 75;
-export const RING_TUBE = 1.5;
+export const RING_TUBE = 3.5;
+export const RING_RADIAL_SEGMENTS = 12;
 export const RING_SEGMENTS = 64;
 export const SCREEN_RING_RADIUS = 90;
-export const SCREEN_RING_TUBE = 1;
+export const SCREEN_RING_TUBE = 1.25;
 
 export const SCALE_CUBE_SIZE = 8;
 export const SCALE_CENTER_CUBE_SIZE = 10;

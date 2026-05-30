@@ -202,4 +202,26 @@ describe("SceneEditRndModalShell", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(onActivate).not.toHaveBeenCalled();
   });
+
+  it("calls onClose when the header close button is clicked", () => {
+    const onClose = vi.fn();
+    render(
+      <SceneEditRndModalShell
+        cascadeIndex={0}
+        zIndex={100}
+        titleId="test-title"
+        title="Properties — node"
+        subtitle="SSBH Model Detail View"
+        onActivate={() => {}}
+        onClose={onClose}
+        getDimensions={getEffectDetailViewModalDimensions}
+        headerIcon={<span />}
+      >
+        <div>Body content</div>
+      </SceneEditRndModalShell>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

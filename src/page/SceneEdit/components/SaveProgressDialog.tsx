@@ -115,9 +115,15 @@ export function SaveProgressDialog({
           : "Preparing...");
 
   return (
-    <Dialog open={open}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && canClose) onClose();
+      }}
+    >
       <DialogContent
         className="max-w-md"
+        hideCloseButton={!canClose}
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >

@@ -40,6 +40,7 @@ export function TextureReplaceModal({ entry, onClose, onConfirm }: TextureReplac
         maxWidth={vw - VIEWPORT_MARGIN}
         maxHeight={vh - VIEWPORT_MARGIN}
         dragHandleClassName="texture-replace-drag-handle"
+        cancel="button, input, textarea, select, label, a, [data-no-drag]"
         bounds="window"
         className="pointer-events-auto"
         enableResizing={false}
@@ -50,7 +51,7 @@ export function TextureReplaceModal({ entry, onClose, onConfirm }: TextureReplac
             <span className="text-xs font-medium truncate mr-2">
               Replace: {entry.filename}
             </span>
-            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onClose}>
+            <Button variant="ghost" size="icon" className="h-5 w-5" data-no-drag onClick={onClose}>
               <X className="h-3 w-3" />
             </Button>
           </div>

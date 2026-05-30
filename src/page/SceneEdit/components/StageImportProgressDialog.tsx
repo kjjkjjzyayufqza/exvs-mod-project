@@ -20,6 +20,7 @@ interface StageImportProgressDialogProps {
   open: boolean;
   progress: number;
   steps: ImportStep[];
+  onClose?: () => void;
 }
 
 function formatElapsed(ms: number): string {
@@ -62,13 +63,21 @@ export function StageImportProgressDialog({
   open,
   progress,
   steps,
+  onClose,
 }: StageImportProgressDialogProps) {
   const activeStep = steps.find((s) => s.status === "active");
+  const isBusy = steps.some((step) => step.status === "active");
 
   return (
-    <Dialog open={open}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && !isBusy) onClose?.();
+      }}
+    >
       <DialogContent
         className="max-w-md"
+        hideCloseButton={isBusy}
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >

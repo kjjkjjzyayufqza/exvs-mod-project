@@ -3348,7 +3348,7 @@ export default function SceneEdit() {
         />
 
         <AlertDialog open={clearCacheDialogOpen} onOpenChange={setClearCacheDialogOpen}>
-          <AlertDialogContent>
+          <AlertDialogContent showCloseButton>
             <AlertDialogHeader>
               <AlertDialogTitle>Clear scene memory and caches?</AlertDialogTitle>
               <AlertDialogDescription>
@@ -3371,7 +3371,7 @@ export default function SceneEdit() {
         </AlertDialog>
 
         <AlertDialog open={resetDialogState.open} onOpenChange={(open) => { if (!open) setResetDialogState((prev) => ({ ...prev, open: false })); }}>
-          <AlertDialogContent>
+          <AlertDialogContent showCloseButton>
             <AlertDialogHeader>
               <AlertDialogTitle>{resetDialogState.title}</AlertDialogTitle>
               <AlertDialogDescription>{resetDialogState.description}</AlertDialogDescription>
@@ -3827,6 +3827,7 @@ export default function SceneEdit() {
           open={importProgress.open}
           progress={importProgress.progress}
           steps={importProgress.steps}
+          onClose={() => setImportProgress((prev) => ({ ...prev, open: false }))}
         />
         <StageRenamePreviewDialog
           open={renamePreview !== null}
