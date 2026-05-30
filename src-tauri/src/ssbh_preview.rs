@@ -15,6 +15,13 @@ pub struct TextureRefResolve {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MatlProfilePreviewValues {
+    pub maya: Option<Value>,
+    pub nust: Option<Value>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SsbhModelPreviewBundle {
     pub root_folder: String,
     pub modl_path: String,
@@ -25,6 +32,7 @@ pub struct SsbhModelPreviewBundle {
     pub mesh: Value,
     pub skel: Option<Value>,
     pub matl: Option<Value>,
+    pub matl_profiles: Option<MatlProfilePreviewValues>,
     pub texture_refs: Vec<String>,
     pub resolved_nutexb_paths: Vec<String>,
     pub texture_resolve: Vec<TextureRefResolve>,
@@ -1073,6 +1081,7 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
         mesh: mesh_json,
         skel,
         matl: matl_value,
+        matl_profiles: None,
         texture_refs,
         resolved_nutexb_paths,
         texture_resolve,

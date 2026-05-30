@@ -198,6 +198,7 @@ export type ImportedDaeObject = {
   name: string;
   sourcePath: string;
   scene: THREE.Group;
+  ssbhBundle?: SsbhModelPreviewBundle | null;
   transform: TransformData;
   /** Set when SSBH was converted into the scene memory session (written on save only). */
   sessionImportId?: string;
@@ -938,6 +939,43 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
 
         {viewMode !== "collision" && importedDaeObjects.flatMap((obj) => {
           if (!isNodeVisible(obj.id)) return [];
+          if (obj.ssbhBundle) {
+            return [(
+              <StageModelGroup
+                key={obj.id}
+                nodeId={obj.id}
+                bundle={obj.ssbhBundle}
+                wireframe={wireframe}
+                isSelected={isNodeSelected(obj.id)}
+                isLocked={!isNodeEditable(obj.id)}
+                onClick={onSelectNode}
+                clickPickSelectionEnabled={clickPickSelectionEnabled}
+                textureDataMap={textureDataMap}
+                textureSlotLoadEnabled={textureSlotLoadEnabled}
+                objectTextureLoadState={objectTextureLoadState}
+                texturePool={texturePool}
+                previewRenderStyle={previewRenderStyle}
+                animeKeyLightDir={animeKeyLightDir}
+                position={[obj.transform.posX, obj.transform.posY, obj.transform.posZ]}
+                rotation={[obj.transform.rotX, obj.transform.rotY, obj.transform.rotZ]}
+                scale={placementScaleForViewport(obj.transform.scaleX, obj.transform.scaleY, obj.transform.scaleZ)}
+                showPlacementTransformGizmo={selectedNodeId === obj.id && isNodeEditable(obj.id)}
+                placementGizmoMode={placementGizmoMode}
+                transformGizmoSize={transformGizmoSize}
+                onPlacementGizmoCommit={
+                  onImportedDaeTransformChange
+                    ? (_idx: number, t: TransformData) => onImportedDaeTransformChange(obj.id, t)
+                    : undefined
+                }
+                gizmoDraggingRef={gizmoDraggingRef}
+                orbitActiveRef={orbitActiveRef}
+                clickGestureRef={clickGestureRef}
+                marqueeActiveRef={marqueeActiveRef}
+                selectableNodesRef={selectableNodesRef}
+                selectedGroupsRef={selectedGroupsRef}
+              />
+            )];
+          }
           return [(
           <ImportedDaeGroup
             key={obj.id}

@@ -81,6 +81,7 @@ describe("numatb template helpers", () => {
     file.entries.push({
       material_label: "m1",
       shader_label: "",
+      textures: [],
       textures2: [{ param_id: "RoughnessMap", data: "" }],
       booleans: [{ param_id: "UseRoughnessMap", data: false }],
     });
@@ -97,11 +98,13 @@ describe("numatb template helpers", () => {
     file.entries.push({
       material_label: "m1",
       shader_label: "",
+      textures: [],
       textures2: [{ param_id: "BaseColorMap", data: undefined as unknown as string }],
     });
     file.entries.push({
       material_label: "m2",
       shader_label: "",
+      textures: [],
       textures2: [{ param_id: "NormalMap", data: null as unknown as string }],
       booleans: [{ param_id: "UseNormalMap", data: true }],
     });
@@ -116,6 +119,7 @@ describe("numatb template helpers", () => {
     file.entries.push({
       material_label: "m1",
       shader_label: "",
+      textures: [],
       textures2: [{ param_id: "BaseColorMap", data: "path/to/base" }],
     });
     // No Texture1 row -> Texture1 is not forced.
@@ -197,6 +201,7 @@ describe("numatb template helpers", () => {
     nust.entries.push({
       material_label: "m2",
       shader_label: "",
+      textures: [],
       textures2: [{ param_id: "BaseColorMap", data: "" }],
     });
 

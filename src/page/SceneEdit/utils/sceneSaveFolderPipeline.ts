@@ -28,6 +28,7 @@ import {
   sceneImportDae,
   sceneConfigureImport,
   sceneExecuteImport,
+  type ImportConfig,
 } from "./sceneSessionService";
 import {
   resolveSessionImportConfigForSave,

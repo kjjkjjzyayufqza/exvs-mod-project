@@ -10,6 +10,7 @@ use crate::scene_memory_session::{
 };
 use crate::ssbh_dae::{convert_dae_file, DaeConvertConfig};
 use crate::ssbh_dae_cmd::build_session_numatb_artifacts;
+use crate::ssbh_preview::{MatlProfilePreviewValues, SsbhModelPreviewBundle, TextureRefResolve};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -232,6 +233,264 @@ pub fn scene_remove_havok_data(
     state
         .with_session_mut(&session_id, |s| s.remove_havok_data(&source_id))
         .inspect_err(|e| eprintln!("[scene_remove_havok_data] failed: {}", e))
+}
+
+fn scene_memory_virtual_path(session_id: &str, relative_path: &str) -> String {
+    format!("memory://{session_id}/{}", relative_path.replace('\\', "/"))
+}
+
+fn with_nutexb_extension(path: &Path) -> std::path::PathBuf {
+    if path
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|e| e.eq_ignore_ascii_case("nutexb"))
+        .unwrap_or(false)
+    {
+        path.to_path_buf()
+    } else {
+        path.with_extension("nutexb")
+    }
+}
+
+fn frontend_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+fn resolve_scene_import_texture_ref(
+    stage_root: Option<&str>,
+    source_path: Option<&str>,
+    reference: &str,
+) -> Option<String> {
+    let trimmed = reference.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let ref_path = Path::new(trimmed);
+    if ref_path.is_absolute() {
+        let candidate = with_nutexb_extension(ref_path);
+        if candidate.is_file() {
+            return Some(frontend_path(&candidate));
+        }
+    }
+
+    let mut roots = Vec::new();
+    if let Some(source) = source_path {
+        if let Some(parent) = Path::new(source).parent() {
+            roots.push(parent.to_path_buf());
+        }
+    }
+    if let Some(root) = stage_root {
+        let root_path = Path::new(root);
+        roots.push(root_path.to_path_buf());
+        roots.push(root_path.join("textures"));
+    }
+
+    let normalized = trimmed.replace('\\', "/");
+    let basename = normalized
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .next_back()
+        .unwrap_or(trimmed);
+    let candidates = if basename.eq_ignore_ascii_case(trimmed) {
+        vec![trimmed.to_string()]
+    } else {
+        vec![normalized.clone(), basename.to_string()]
+    };
+
+    for root in roots {
+        for candidate in &candidates {
+            let joined = with_nutexb_extension(&root.join(candidate));
+            if joined.is_file() {
+                return Some(frontend_path(&joined));
+            }
+        }
+    }
+
+    None
+}
+
+fn build_scene_import_preview_bundle_from_artifacts(
+    session_id: &str,
+    import_id: &str,
+    config: &ImportConfig,
+    artifacts: &SsbhArtifacts,
+    stage_root: Option<&str>,
+    source_path: Option<&str>,
+) -> Result<SsbhModelPreviewBundle, String> {
+    let ssbh_config = config
+        .ssbh_config
+        .as_ref()
+        .ok_or_else(|| format!("Import '{import_id}' has no SSBH config"))?;
+    let base = ssbh_config.base_filename.trim();
+    if base.is_empty() {
+        return Err(format!(
+            "Import '{import_id}' has an empty SSBH base filename"
+        ));
+    }
+    if artifacts.numdlb.is_empty() || artifacts.numshb.is_empty() {
+        return Err(format!(
+            "Import '{import_id}' has incomplete SSBH artifacts"
+        ));
+    }
+
+    let modl = crate::fhm2d_memory_preview::load_modl_data(&artifacts.numdlb)?;
+    let mesh = crate::fhm2d_memory_preview::load_mesh_data(&artifacts.numshb)?;
+    let skel = artifacts
+        .nusktb
+        .as_ref()
+        .map(|bytes| crate::fhm2d_memory_preview::load_skel_data(bytes))
+        .transpose()?;
+
+    let mut matl_paths = Vec::new();
+    let mut nust_matl = None;
+    let mut maya_matl = None;
+    if !artifacts.numatb.is_empty() {
+        let path =
+            scene_memory_virtual_path(session_id, &format!("{base}/0/{base}__nust__.numatb"));
+        matl_paths.push(path);
+        nust_matl = Some(crate::fhm2d_memory_preview::load_matl_data(
+            &artifacts.numatb,
+        )?);
+    }
+    if let Some(maya_bytes) = artifacts.maya_numatb.as_ref() {
+        if !maya_bytes.is_empty() {
+            let path =
+                scene_memory_virtual_path(session_id, &format!("{base}/0/{base}__maya__.numatb"));
+            matl_paths.push(path);
+            maya_matl = Some(crate::fhm2d_memory_preview::load_matl_data(maya_bytes)?);
+        }
+    }
+
+    let mut warnings = Vec::new();
+    let mut matl_combined = None;
+    for matl in [&nust_matl, &maya_matl].into_iter().flatten() {
+        match matl_combined.as_mut() {
+            None => matl_combined = Some(matl.clone()),
+            Some(existing) => existing.entries.extend(matl.entries.clone()),
+        }
+    }
+
+    let texture_refs = matl_combined
+        .as_ref()
+        .map(crate::fhm2d_memory_preview::collect_texture_refs)
+        .unwrap_or_default();
+    let mut resolved_nutexb_paths = Vec::new();
+    let mut texture_resolve = Vec::new();
+    for reference in &texture_refs {
+        let nutexb_path =
+            resolve_scene_import_texture_ref(stage_root, source_path, reference.as_str());
+        if let Some(path) = nutexb_path.as_ref() {
+            if !resolved_nutexb_paths
+                .iter()
+                .any(|existing| existing == path)
+            {
+                resolved_nutexb_paths.push(path.clone());
+            }
+        } else {
+            warnings.push(format!(
+                "Texture reference could not be resolved before save: {reference}"
+            ));
+        }
+        texture_resolve.push(TextureRefResolve {
+            reference: reference.clone(),
+            nutexb_path,
+        });
+    }
+
+    let root_folder = scene_memory_virtual_path(session_id, base);
+    let modl_path = scene_memory_virtual_path(session_id, &format!("{base}/0/{base}.numdlb"));
+    Ok(SsbhModelPreviewBundle {
+        root_folder,
+        modl_path: modl_path.clone(),
+        mesh_path: scene_memory_virtual_path(session_id, &format!("{base}/0/{base}.numshb")),
+        skel_path: artifacts
+            .nusktb
+            .as_ref()
+            .map(|_| scene_memory_virtual_path(session_id, &format!("{base}/0/{base}.nusktb"))),
+        matl_paths,
+        modl: serde_json::to_value(&modl)
+            .map_err(|e| format!("Failed to serialize in-memory Modl: {e}"))?,
+        mesh: serde_json::to_value(&mesh)
+            .map_err(|e| format!("Failed to serialize in-memory Mesh: {e}"))?,
+        skel: skel
+            .map(|value| serde_json::to_value(&value))
+            .transpose()
+            .map_err(|e| format!("Failed to serialize in-memory Skel: {e}"))?,
+        matl: matl_combined
+            .map(|value| serde_json::to_value(&value))
+            .transpose()
+            .map_err(|e| format!("Failed to serialize in-memory Matl: {e}"))?,
+        matl_profiles: Some(MatlProfilePreviewValues {
+            maya: maya_matl
+                .map(|value| serde_json::to_value(&value))
+                .transpose()
+                .map_err(|e| format!("Failed to serialize in-memory Maya Matl: {e}"))?,
+            nust: nust_matl
+                .map(|value| serde_json::to_value(&value))
+                .transpose()
+                .map_err(|e| format!("Failed to serialize in-memory Nust Matl: {e}"))?,
+        }),
+        texture_refs,
+        resolved_nutexb_paths,
+        texture_resolve,
+        warnings,
+        source_kind: "memory".to_string(),
+        source_session_id: Some(session_id.to_string()),
+        virtual_modl_path: Some(modl_path),
+    })
+}
+
+#[tauri::command]
+pub fn scene_build_import_preview_bundle(
+    state: State<'_, SceneSessionState>,
+    session_id: String,
+    import_id: String,
+    stage_root: Option<String>,
+    source_path: Option<String>,
+) -> Result<SsbhModelPreviewBundle, String> {
+    state.with_session(&session_id, |s| {
+        let import = s.find_import(&import_id)?;
+        let artifacts = import
+            .ssbh_artifacts
+            .as_ref()
+            .ok_or_else(|| format!("Import '{import_id}' has no SSBH artifacts"))?;
+        build_scene_import_preview_bundle_from_artifacts(
+            &session_id,
+            &import_id,
+            &import.config,
+            artifacts,
+            stage_root.as_deref(),
+            source_path.as_deref(),
+        )
+    })
+}
+
+/// Forget a sub-model from the in-memory session by its on-disk folder name so
+/// the next save commits its deletion instead of re-materializing it from a
+/// lingering converted import. Memory-only — disk is untouched until save.
+#[tauri::command]
+pub fn scene_forget_model(
+    state: State<'_, SceneSessionState>,
+    session_id: String,
+    folder_name: String,
+) -> Result<bool, String> {
+    eprintln!(
+        "[scene_forget_model] session_id={} folder_name={}",
+        session_id, folder_name
+    );
+    state.with_session_mut(&session_id, |s| Ok(s.forget_model(&folder_name)))
+}
+
+/// Forget the in-memory base model (root SSBH files) so the next save commits
+/// its deletion. Memory-only — disk is untouched until save.
+#[tauri::command]
+pub fn scene_forget_base_model(
+    state: State<'_, SceneSessionState>,
+    session_id: String,
+) -> Result<bool, String> {
+    eprintln!("[scene_forget_base_model] session_id={}", session_id);
+    state.with_session_mut(&session_id, |s| Ok(s.forget_base_model()))
 }
 
 #[tauri::command]
@@ -1442,6 +1701,32 @@ mod tests {
         false
     }
 
+    fn relative_file_list(root: &std::path::Path) -> Vec<String> {
+        fn visit(root: &std::path::Path, dir: &std::path::Path, out: &mut Vec<String>) {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    visit(root, &path, out);
+                } else if path.is_file() {
+                    let rel = path
+                        .strip_prefix(root)
+                        .unwrap_or(path.as_path())
+                        .to_string_lossy()
+                        .replace('\\', "/");
+                    out.push(rel);
+                }
+            }
+        }
+
+        let mut out = Vec::new();
+        visit(root, root, &mut out);
+        out.sort();
+        out
+    }
+
     #[test]
     fn hkt_simplify_to_options_converts_planarity_angle_deg() {
         use crate::collision_mesh::{cos_planarity_from_angle_deg, CollisionSimplifyOptions};
@@ -1529,6 +1814,63 @@ mod tests {
         assert!(detail.contains("4096"));
         assert!(detail.contains("1200"));
         assert!(detail.contains("mesh collision"));
+    }
+
+    #[test]
+    fn scene_import_texture_ref_resolution_checks_source_and_stage_roots() {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let source_dir = temp_dir.path().join("source");
+        let stage_dir = temp_dir.path().join("stage");
+        let stage_texture_dir = stage_dir.join("textures");
+        std::fs::create_dir_all(&source_dir).expect("source dir");
+        std::fs::create_dir_all(&stage_texture_dir).expect("stage texture dir");
+
+        let dae_path = source_dir.join("preview.dae");
+        std::fs::write(&dae_path, b"dae").expect("dae");
+
+        let absolute_texture = temp_dir.path().join("absolute_tex.nutexb");
+        let source_texture = source_dir.join("source_tex.nutexb");
+        let stage_texture = stage_texture_dir.join("stage_tex.nutexb");
+        std::fs::write(&absolute_texture, b"absolute").expect("absolute texture");
+        std::fs::write(&source_texture, b"source").expect("source texture");
+        std::fs::write(&stage_texture, b"stage").expect("stage texture");
+
+        let absolute = resolve_scene_import_texture_ref(
+            Some(stage_dir.to_string_lossy().as_ref()),
+            Some(dae_path.to_string_lossy().as_ref()),
+            absolute_texture
+                .with_extension("")
+                .to_string_lossy()
+                .as_ref(),
+        )
+        .expect("absolute texture should resolve");
+        assert_eq!(absolute, frontend_path(&absolute_texture));
+
+        let source_relative = resolve_scene_import_texture_ref(
+            Some(stage_dir.to_string_lossy().as_ref()),
+            Some(dae_path.to_string_lossy().as_ref()),
+            "nested/source_tex",
+        )
+        .expect("source basename should resolve");
+        assert_eq!(source_relative, frontend_path(&source_texture));
+
+        let stage_relative = resolve_scene_import_texture_ref(
+            Some(stage_dir.to_string_lossy().as_ref()),
+            Some(dae_path.to_string_lossy().as_ref()),
+            "stage_tex",
+        )
+        .expect("stage texture basename should resolve");
+        assert_eq!(stage_relative, frontend_path(&stage_texture));
+
+        assert!(
+            resolve_scene_import_texture_ref(
+                Some(stage_dir.to_string_lossy().as_ref()),
+                Some(dae_path.to_string_lossy().as_ref()),
+                "missing_texture",
+            )
+            .is_none(),
+            "missing texture refs should stay unresolved"
+        );
     }
 
     #[test]
@@ -1686,6 +2028,192 @@ mod tests {
             "import should have SSBH artifacts after conversion"
         );
         println!("[OK] SSBH artifacts stored in session");
+    }
+
+    #[test]
+    fn real_dae_conversion_builds_memory_preview_bundle() {
+        let dae_path = format!(r"{DAE_DIR}\backpack_up.dae");
+        if skip_if_missing(&dae_path) {
+            return;
+        }
+
+        let dae_bytes = std::fs::read(&dae_path).expect("Failed to read backpack_up.dae");
+        let ssbh_config = crate::scene_memory_session::SsbhConvertConfig {
+            base_filename: "backpack_up".into(),
+            scale_factor: 1.0,
+            up_axis: "y_up".into(),
+            write_numdlb: true,
+            write_numshb: true,
+            write_nusktb: true,
+            write_numatb: true,
+            write_jnttbl: true,
+            write_maya_profile: true,
+            material_template: None,
+            maya_file: None,
+            nust_file: None,
+            numdlb_entries: Vec::new(),
+        };
+        let config = ImportConfig {
+            load_to_scene: true,
+            convert_to_ssbh: true,
+            generate_hkt: false,
+            ssbh_config: Some(ssbh_config.clone()),
+            hkt_simplify: HktSimplifyConfig::default(),
+        };
+
+        let artifacts = convert_dae_bytes_to_ssbh_artifacts(&dae_bytes, &ssbh_config)
+            .expect("SSBH conversion failed");
+        let bundle = build_scene_import_preview_bundle_from_artifacts(
+            "session-preview",
+            "import-preview",
+            &config,
+            &artifacts,
+            None,
+            Some(&dae_path),
+        )
+        .expect("memory preview bundle should build from converted artifacts");
+
+        assert_eq!(bundle.source_kind, "memory");
+        assert_eq!(bundle.source_session_id.as_deref(), Some("session-preview"));
+        assert!(bundle.root_folder.starts_with("memory://session-preview/"));
+        assert!(bundle
+            .modl_path
+            .ends_with("/backpack_up/0/backpack_up.numdlb"));
+        assert!(bundle
+            .mesh_path
+            .ends_with("/backpack_up/0/backpack_up.numshb"));
+        assert!(
+            bundle
+                .virtual_modl_path
+                .as_deref()
+                .is_some_and(|path| path.starts_with("memory://session-preview/")),
+            "memory bundles should expose a virtual model path for detail view lookup"
+        );
+        assert!(
+            bundle.modl.is_object(),
+            "modl JSON should populate Properties"
+        );
+        assert!(
+            bundle.mesh.is_object(),
+            "mesh JSON should populate scene rendering"
+        );
+        assert!(
+            bundle.matl.as_ref().is_some_and(|value| value.is_object()),
+            "matl JSON should populate material Properties before save"
+        );
+        assert!(
+            bundle
+                .matl_paths
+                .iter()
+                .all(|path| path.starts_with("memory://session-preview/")),
+            "material paths should remain memory virtual paths before save"
+        );
+        let profiles = bundle
+            .matl_profiles
+            .as_ref()
+            .expect("memory import bundles should preserve per-profile material JSON");
+        assert!(
+            profiles
+                .nust
+                .as_ref()
+                .is_some_and(|value| value.is_object()),
+            "nust material profile should be available independently"
+        );
+        assert!(
+            profiles
+                .maya
+                .as_ref()
+                .is_some_and(|value| value.is_object()),
+            "maya material profile should be available independently"
+        );
+    }
+
+    #[test]
+    fn real_dae_memory_preview_bundle_resolves_textures_without_pre_save_disk_writes() {
+        let dae_path = format!(r"{DAE_DIR}\backpack_up.dae");
+        if skip_if_missing(&dae_path) {
+            return;
+        }
+
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let stage_root = temp_dir.path().join("stage");
+        let source_dir = temp_dir.path().join("source");
+        let texture_dir = stage_root.join("textures");
+        std::fs::create_dir_all(&texture_dir).expect("texture dir");
+        std::fs::create_dir_all(&source_dir).expect("source dir");
+        let source_dae = source_dir.join("backpack_up.dae");
+        std::fs::copy(&dae_path, &source_dae).expect("copy dae");
+        let texture_path = texture_dir.join("stage_wall_alb.nutexb");
+        std::fs::write(&texture_path, b"placeholder nutexb bytes").expect("write texture");
+
+        let mut nust = default_session_nust_matl_json();
+        let mut maya = default_session_maya_matl_json();
+        for profile in [&mut nust, &mut maya] {
+            profile["entries"][0]["textures"] = serde_json::json!([
+                { "param_id": "Texture0", "data": "stage_wall_alb" }
+            ]);
+        }
+
+        let ssbh_config = crate::scene_memory_session::SsbhConvertConfig {
+            base_filename: "backpack_up".into(),
+            scale_factor: 1.0,
+            up_axis: "y_up".into(),
+            write_numdlb: true,
+            write_numshb: true,
+            write_nusktb: true,
+            write_numatb: true,
+            write_jnttbl: true,
+            write_maya_profile: true,
+            material_template: None,
+            maya_file: Some(maya),
+            nust_file: Some(nust),
+            numdlb_entries: Vec::new(),
+        };
+        let config = ImportConfig {
+            load_to_scene: true,
+            convert_to_ssbh: true,
+            generate_hkt: false,
+            ssbh_config: Some(ssbh_config.clone()),
+            hkt_simplify: HktSimplifyConfig::default(),
+        };
+        let dae_bytes = std::fs::read(&dae_path).expect("read dae");
+        let artifacts = convert_dae_bytes_to_ssbh_artifacts(&dae_bytes, &ssbh_config)
+            .expect("SSBH conversion failed");
+
+        let stage_before = relative_file_list(&stage_root);
+        let source_before = relative_file_list(&source_dir);
+        let bundle = build_scene_import_preview_bundle_from_artifacts(
+            "session-preview",
+            "import-preview",
+            &config,
+            &artifacts,
+            Some(stage_root.to_string_lossy().as_ref()),
+            Some(source_dae.to_string_lossy().as_ref()),
+        )
+        .expect("memory preview bundle should build");
+        let stage_after = relative_file_list(&stage_root);
+        let source_after = relative_file_list(&source_dir);
+
+        assert_eq!(
+            stage_after, stage_before,
+            "building an unsaved memory preview bundle must not materialize SSBH files on disk"
+        );
+        assert_eq!(
+            source_after, source_before,
+            "building an unsaved memory preview bundle must not write next to the source DAE"
+        );
+        assert_eq!(
+            bundle.resolved_nutexb_paths,
+            vec![frontend_path(&texture_path)]
+        );
+        assert!(
+            bundle
+                .texture_resolve
+                .iter()
+                .all(|row| row.nutexb_path.as_deref()
+                    == Some(frontend_path(&texture_path).as_str())),
+            "texture references should resolve to the existing disk nutexb without writing artifacts"
+        );
     }
 
     #[test]

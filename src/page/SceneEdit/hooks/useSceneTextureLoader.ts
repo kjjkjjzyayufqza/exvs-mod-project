@@ -71,12 +71,20 @@ function canUseCompressedFormat(formatId: number): boolean {
 function collectUniqueNutexbPaths(
   baseModel: SsbhModelPreviewBundle | null,
   subModels: Array<{ folderName: string; objectIndex: number; bundle: SsbhModelPreviewBundle }>,
+  importedSsbhBundles: SsbhModelPreviewBundle[],
   placementEntries: PlacementRow[],
   textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>,
   objectTextureLoadState: ObjectTextureLoadState,
 ): string[] {
   if (Object.keys(objectTextureLoadState).length === 0) {
-    return collectUniqueTexturePathsForSceneBundles(baseModel, subModels, textureSlotLoadEnabled);
+    return collectUniqueTexturePathsForSceneBundles(
+      baseModel,
+      [
+        ...subModels,
+        ...importedSsbhBundles.map((bundle) => ({ bundle })),
+      ],
+      textureSlotLoadEnabled,
+    );
   }
 
   const seen = new Set<string>();
@@ -108,6 +116,13 @@ function collectUniqueNutexbPaths(
     }
   }
 
+  for (const bundle of importedSsbhBundles) {
+    const objectId = bundle.virtualModlPath ?? bundle.modlPath;
+    for (const path of collectEnabledTexturePathsForBundle(bundle, textureSlotLoadEnabled, objectTextureLoadState, objectId)) {
+      pushPath(path);
+    }
+  }
+
   return out;
 }
 
@@ -119,6 +134,7 @@ function basenameOf(path: string): string {
 export function useSceneTextureLoader(
   baseModel: SsbhModelPreviewBundle | null,
   subModels: Array<{ folderName: string; objectIndex: number; bundle: SsbhModelPreviewBundle }>,
+  importedSsbhBundles: SsbhModelPreviewBundle[],
   placementEntries: PlacementRow[],
   sessionId: string | null,
   maxDimension: number | null,
@@ -137,7 +153,11 @@ export function useSceneTextureLoader(
   const textureDataMapRef = useRef(textureDataMap);
   textureDataMapRef.current = textureDataMap;
 
-  const sourceKind = baseModel?.sourceKind ?? subModels[0]?.bundle.sourceKind ?? "disk";
+  const sourceKind =
+    baseModel?.sourceKind ??
+    subModels[0]?.bundle.sourceKind ??
+    importedSsbhBundles[0]?.sourceKind ??
+    "disk";
 
   const stablePlacementIdentity = useMemo(
     () => placementEntries.map((e, i) => `${i}:${e.vdkType}:${e.objectNumber ?? ""}`).join("|"),
@@ -153,6 +173,7 @@ export function useSceneTextureLoader(
     const uniquePaths = collectUniqueNutexbPaths(
       baseModel,
       subModels,
+      importedSsbhBundles,
       stablePlacementEntries.current,
       textureSlotLoadEnabled,
       objectTextureLoadState,
@@ -164,7 +185,7 @@ export function useSceneTextureLoader(
       return;
     }
 
-    if (sourceKind === "memory" && !sessionId) {
+    if (uniquePaths.some((path) => path.startsWith("memory://")) && !sessionId) {
       return;
     }
 
@@ -230,7 +251,7 @@ export function useSceneTextureLoader(
           const path = idQueue[idIdx++];
           try {
             let versionId: string;
-            if (sourceKind === "memory" && sessionId) {
+            if (path.startsWith("memory://") && sessionId) {
               const identity = await getMemoryNutexbPreviewIdentity({ sessionId, virtualPath: path });
               versionId = `nutexb|${identity.nutexbSize}|${(identity.crc32 >>> 0).toString(16).padStart(8, "0")}@${maxDimension ?? "full"}`;
             } else {
@@ -314,7 +335,7 @@ export function useSceneTextureLoader(
             }
           } else {
             // Memory source or downsampled: use RGBA path
-            const decodeFn = sourceKind === "memory" && sessionId
+            const decodeFn = path.startsWith("memory://") && sessionId
               ? () => invoke<ArrayBuffer | Uint8Array>("fhm2d_memory_nutexb_rgba_bytes", {
                   sessionId, virtualPath: path, maxDimension: maxDimension ?? undefined,
                 })
@@ -372,7 +393,7 @@ export function useSceneTextureLoader(
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- stablePlacementIdentity replaces placementEntries to avoid re-decode on coordinate-only changes
-  }, [baseModel, subModels, stablePlacementIdentity, sessionId, sourceKind, maxDimension, textureSlotLoadEnabled, objectTextureLoadState]);
+  }, [baseModel, subModels, importedSsbhBundles, stablePlacementIdentity, sessionId, sourceKind, maxDimension, textureSlotLoadEnabled, objectTextureLoadState]);
 
   return { textureDataMap, progress, warnings };
 }

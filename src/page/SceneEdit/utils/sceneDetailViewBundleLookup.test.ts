@@ -12,11 +12,15 @@ function makeBundle(rootFolder: string): SsbhModelPreviewBundle {
     matlPaths: [],
     textureRefs: [],
     resolvedNutexbPaths: [],
+    textureResolve: [],
+    warnings: [],
     sourceKind: "disk",
+    sourceSessionId: null,
+    virtualModlPath: null,
     modl: null,
     mesh: null,
     skel: null,
-    matl: [],
+    matl: null,
   };
 }
 
@@ -43,8 +47,18 @@ describe("findBundleForDetailViewNode", () => {
     expect(findBundleForDetailViewNode(node, lookup)?.rootFolder).toBe("C:/stage/box01");
   });
 
-  it("returns null for imported_dae", () => {
+  it("resolves imported_dae when an in-memory SSBH bundle is attached", () => {
+    const bundle = makeBundle("memory://scene/prop");
+    const importedLookup = {
+      ...lookup,
+      importedDaeObjects: [{ id: "dae-1", name: "prop", sessionImportId: "import-1", ssbhBundle: bundle }],
+    };
     const node: StageTreeNode = { id: "dae-1", label: "prop", role: "imported_dae" };
-    expect(findBundleForDetailViewNode(node, lookup)).toBeNull();
+    expect(findBundleForDetailViewNode(node, importedLookup)).toBe(bundle);
+  });
+
+  it("returns null for imported_dae without an SSBH bundle", () => {
+    const node: StageTreeNode = { id: "dae-1", label: "prop", role: "imported_dae" };
+    expect(findBundleForDetailViewNode(node, { ...lookup, importedDaeObjects: [{ id: "dae-1", name: "prop" }] })).toBeNull();
   });
 });

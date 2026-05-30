@@ -259,6 +259,54 @@ impl SceneMemorySession {
         Ok(())
     }
 
+    /// Forget an in-memory model identified by its on-disk folder name.
+    ///
+    /// A model imported as DAE and converted to SSBH stays in `pending_imports`
+    /// (so it can be re-edited before disk parity exists). `collect_save_artifacts`
+    /// re-emits it on every save, which means a folder deleted on disk during a
+    /// save is immediately re-materialized from the lingering import. Forgetting
+    /// the model drops both its pending import and any base-bundle sub-model files
+    /// so the next save commits the deletion. Memory-only — disk is untouched.
+    /// Returns true when something was removed.
+    pub fn forget_model(&mut self, folder_name: &str) -> bool {
+        let before = self.pending_imports.len();
+        self.pending_imports.retain(|import| {
+            let import_folder = import
+                .config
+                .ssbh_config
+                .as_ref()
+                .map(|c| c.base_filename.as_str())
+                .unwrap_or(import.name.as_str());
+            import_folder != folder_name
+        });
+        let mut removed = before != self.pending_imports.len();
+
+        if let Some(bundle) = self.base_bundle.as_mut() {
+            if bundle.sub_model_files.remove(folder_name).is_some() {
+                removed = true;
+            }
+        }
+
+        if removed {
+            self.dirty = true;
+        }
+        removed
+    }
+
+    /// Forget the in-memory base model (root SSBH files) so a save commits its
+    /// deletion instead of re-writing the cached root files. Memory-only.
+    /// Returns true when base-bundle root files were present and cleared.
+    pub fn forget_base_model(&mut self) -> bool {
+        if let Some(bundle) = self.base_bundle.as_mut() {
+            if !bundle.root_files.is_empty() {
+                bundle.root_files.clear();
+                self.dirty = true;
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn collect_save_artifacts(&self) -> Vec<SaveArtifact> {
         let mut artifacts = Vec::new();
 
@@ -598,6 +646,95 @@ mod tests {
         assert!(paths.contains(&"mymodel/map_hit.hkt"));
         assert!(!paths.contains(&"mymodel/test_model.hkt"));
         assert!(!paths.contains(&"mymodel/0/model__maya__.numatb"));
+    }
+
+    #[test]
+    fn forget_model_drops_converted_import_so_save_commits_deletion() {
+        let mut s = new_session();
+        let id = s.add_import("test_model".into(), vec![]);
+        {
+            let import = s.find_import_mut(&id).unwrap();
+            import.config.convert_to_ssbh = true;
+            import.config.ssbh_config = Some(SsbhConvertConfig {
+                base_filename: "mymodel".into(),
+                scale_factor: 1.0,
+                up_axis: "y_up".into(),
+                write_numdlb: true,
+                write_numshb: true,
+                write_nusktb: true,
+                write_numatb: true,
+                write_jnttbl: true,
+                write_maya_profile: false,
+                material_template: None,
+                maya_file: None,
+                nust_file: None,
+                numdlb_entries: Vec::new(),
+            });
+        }
+        s.store_ssbh_artifacts(
+            &id,
+            SsbhArtifacts {
+                numdlb: vec![1],
+                numshb: vec![2],
+                nusktb: Some(vec![3]),
+                numatb: vec![4],
+                maya_numatb: None,
+                jnttbl: vec![5],
+            },
+        )
+        .unwrap();
+
+        // Before: the converted import is re-emitted on every save.
+        assert!(s
+            .collect_save_artifacts()
+            .iter()
+            .any(|a| a.relative_path.starts_with("mymodel/")));
+
+        // Forgetting it by its on-disk folder name removes it from the session.
+        assert!(s.forget_model("mymodel"));
+        assert!(s.pending_imports.is_empty());
+        assert!(s
+            .collect_save_artifacts()
+            .iter()
+            .all(|a| !a.relative_path.starts_with("mymodel/")));
+
+        // Forgetting an unknown folder is a no-op.
+        assert!(!s.forget_model("mymodel"));
+    }
+
+    #[test]
+    fn forget_model_drops_base_bundle_sub_model_files() {
+        let mut s = new_session();
+        let mut sub_files = HashMap::new();
+        let mut sky_files = HashMap::new();
+        sky_files.insert("0/sky.numdlb".into(), vec![1, 2]);
+        sub_files.insert("sky".to_string(), sky_files);
+        s.base_bundle = Some(StageBundleMemory {
+            root_files: HashMap::new(),
+            sub_model_files: sub_files,
+        });
+
+        assert!(s.forget_model("sky"));
+        assert!(s
+            .collect_save_artifacts()
+            .iter()
+            .all(|a| !a.relative_path.starts_with("sky/")));
+        assert!(!s.forget_model("sky"));
+    }
+
+    #[test]
+    fn forget_base_model_clears_root_files() {
+        let mut s = new_session();
+        let mut root_files = HashMap::new();
+        root_files.insert("stage.numdlb".into(), vec![1, 2]);
+        s.base_bundle = Some(StageBundleMemory {
+            root_files,
+            sub_model_files: HashMap::new(),
+        });
+
+        assert!(s.forget_base_model());
+        assert!(s.collect_save_artifacts().is_empty());
+        assert!(!s.forget_base_model());
     }
 
     #[test]

@@ -20,12 +20,15 @@ function readTexturePath(file: MatlDataJson, paramId: string): string | undefine
 }
 
 const sampleAnalysis: SsbhDaeAnalysisReport = {
+  daePath: "C:/models/body.dae",
   canConvert: true,
+  meshRows: [],
   geometryNames: ["bodyShape"],
   boneCount: 12,
+  boneNames: [],
   upAxis: "y_up",
   warnings: [],
-  errors: [],
+  blockingErrors: [],
 };
 
 describe("daeSsbhSessionStore loadAnalysis material profiles", () => {

@@ -139,9 +139,41 @@ export function sceneRemoveHavokData(sessionId: string, sourceId: string): Promi
   return invoke<void>("scene_remove_havok_data", { sessionId, sourceId });
 }
 
+/**
+ * Forget a sub-model from the in-memory session by its on-disk folder name.
+ * Drops a lingering converted import so a later save commits the deletion
+ * instead of re-materializing the folder. Memory-only; disk is untouched.
+ * Resolves to whether the session held anything for that folder.
+ */
+export function sceneForgetModel(sessionId: string, folderName: string): Promise<boolean> {
+  return invoke<boolean>("scene_forget_model", { sessionId, folderName });
+}
+
+/**
+ * Forget the in-memory base model (root SSBH files) so a later save commits its
+ * deletion. Memory-only; disk is untouched.
+ */
+export function sceneForgetBaseModel(sessionId: string): Promise<boolean> {
+  return invoke<boolean>("scene_forget_base_model", { sessionId });
+}
+
 export function sceneExecuteImport(sessionId: string, importId: string): Promise<ImportResult> {
   return invoke<ImportResult>("scene_execute_import", {
     options: { sessionId, importId },
+  });
+}
+
+export function sceneBuildImportPreviewBundle(params: {
+  sessionId: string;
+  importId: string;
+  stageRoot?: string | null;
+  sourcePath?: string | null;
+}): Promise<SsbhModelPreviewBundle> {
+  return invoke<SsbhModelPreviewBundle>("scene_build_import_preview_bundle", {
+    sessionId: params.sessionId,
+    importId: params.importId,
+    stageRoot: params.stageRoot ?? null,
+    sourcePath: params.sourcePath ?? null,
   });
 }
 

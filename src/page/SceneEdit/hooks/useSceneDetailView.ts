@@ -24,6 +24,7 @@ import {
   ssbhWriteNuhlpb,
 } from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
 import type { NumdlbReadResult, NuhlpbReadResult } from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
+import type { MatlDataJson } from "@/page/TestEditor/components/ssbh-model-preview/types";
 import type { StageTreeNode } from "../components/StageHierarchyTree";
 import {
   findBundleForDetailViewNode,
@@ -45,6 +46,43 @@ function resolveNumatbProfilePaths(matlPaths: string[]): NumatbPathsByProfile {
   if (nust && !maya) maya = deriveNumatbSisterPath(nust, "maya");
   if (maya && !nust) nust = deriveNumatbSisterPath(maya, "nust");
   return { maya, nust };
+}
+
+function numdlbFromPreviewBundle(bundle: SsbhModelPreviewBundle): NumdlbReadResult {
+  const modl = bundle.modl as {
+    model_name?: string;
+    skeleton_file_name?: string;
+    material_file_names?: string[];
+    mesh_file_name?: string;
+    animation_file_name?: string | null;
+    entries?: Array<{
+      mesh_object_name: string;
+      mesh_object_subindex: number;
+      material_label: string;
+    }>;
+  };
+  return {
+    modelName: modl.model_name ?? "",
+    skeletonFileName: modl.skeleton_file_name ?? "",
+    materialFileNames: modl.material_file_names ?? [],
+    meshFileName: modl.mesh_file_name ?? "",
+    animationFileName: modl.animation_file_name ?? null,
+    entries: (modl.entries ?? []).map((entry) => ({
+      meshObjectName: entry.mesh_object_name,
+      meshObjectSubindex: entry.mesh_object_subindex,
+      materialLabel: entry.material_label,
+    })),
+  };
+}
+
+function numatbFromPreviewBundle(bundle: SsbhModelPreviewBundle): NumatbModalBundle {
+  const profiles = bundle.matlProfiles;
+  const matl = (bundle.matl as MatlDataJson | null) ?? createEmptyNumatbFile();
+  return {
+    mayaFile: (profiles?.maya as MatlDataJson | null) ?? matl,
+    nustFile: (profiles?.nust as MatlDataJson | null) ?? matl,
+    mirrorTexturePathsAcrossProfiles: true,
+  };
 }
 
 let sessionCounter = 0;
@@ -72,6 +110,23 @@ export function useSceneDetailView(bundleLookup: DetailViewBundleLookup) {
       bundle: SsbhModelPreviewBundle,
     ) => {
       if (tab === "model") {
+        if (bundle.sourceKind === "memory") {
+          const numdlb = numdlbFromPreviewBundle(bundle);
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === sessionId && s.modelData
+                ? {
+                    ...s,
+                    modelData: {
+                      ...s.modelData,
+                      numdlb: { base: numdlb, draft: numdlb, loading: false, error: null },
+                    },
+                  }
+                : s,
+            ),
+          );
+          return;
+        }
         try {
           const numdlb = await ssbhReadNumdlbMapping(bundle.modlPath);
           setSessions((prev) =>
@@ -127,6 +182,24 @@ export function useSceneDetailView(bundleLookup: DetailViewBundleLookup) {
 
         try {
           const resolvedPaths = resolveNumatbProfilePaths(paths);
+          if (bundle.sourceKind === "memory") {
+            const numatbBundle = numatbFromPreviewBundle(bundle);
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === sessionId && s.modelData
+                  ? {
+                      ...s,
+                      modelData: {
+                        ...s.modelData,
+                        numatb: { base: numatbBundle, draft: numatbBundle, loading: false, error: null },
+                        numatbPaths: resolvedPaths,
+                      },
+                    }
+                  : s,
+              ),
+            );
+            return;
+          }
           let mayaFile = createEmptyNumatbFile();
           let nustFile = createEmptyNumatbFile();
 
@@ -264,7 +337,7 @@ export function useSceneDetailView(bundleLookup: DetailViewBundleLookup) {
             const bundle = findBundleForDetailViewNode(node, bundleLookup);
             if (!bundle) {
               if (node.role === "imported_dae") {
-                toast.error("Imported DAE objects have no on-disk SSBH bundle yet");
+                toast.error("Imported object has no in-memory SSBH bundle yet");
               } else {
                 toast.error("Cannot find SSBH bundle for this node");
               }
@@ -362,6 +435,17 @@ export function useSceneDetailView(bundleLookup: DetailViewBundleLookup) {
     if (!session?.modelData?.numdlb.draft || !session.modelData.bundle) return;
     const bundle = session.modelData.bundle;
     const draft = session.modelData.numdlb.draft;
+    if (bundle.sourceKind === "memory") {
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionId && s.modelData
+            ? { ...s, modelData: { ...s.modelData, numdlb: { ...s.modelData.numdlb, base: draft } } }
+            : s,
+        ),
+      );
+      toast.success("Updated in-memory .numdlb draft");
+      return;
+    }
     try {
       await ssbhWriteNumdlbMapping({
         filePath: bundle.modlPath,
@@ -401,6 +485,17 @@ export function useSceneDetailView(bundleLookup: DetailViewBundleLookup) {
     const draft = session.modelData.numatb.draft;
     const paths = session.modelData.numatbPaths;
     if (!paths.maya && !paths.nust) return;
+    if (session.modelData.bundle.sourceKind === "memory") {
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionId && s.modelData
+            ? { ...s, modelData: { ...s.modelData, numatb: { ...s.modelData.numatb, base: s.modelData.numatb.draft } } }
+            : s,
+        ),
+      );
+      toast.success("Updated in-memory .numatb draft");
+      return;
+    }
     try {
       const writes: Promise<void>[] = [];
       if (paths.nust && draft.nustFile.entries.length > 0) {

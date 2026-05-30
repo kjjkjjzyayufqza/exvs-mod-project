@@ -974,6 +974,7 @@ fn build_preview_bundle_from_snapshot(
         matl: matl_combined
             .map(|matl| serde_json::to_value(&matl).map_err(|e| format!("Failed to serialize in-memory Matl: {e}")))
             .transpose()?,
+        matl_profiles: None,
         texture_refs,
         resolved_nutexb_paths,
         texture_resolve,

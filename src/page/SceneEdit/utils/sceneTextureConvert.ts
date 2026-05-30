@@ -1,8 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { exists, mkdir } from "@tauri-apps/plugin-fs";
-import { appLocalDataDir } from "@tauri-apps/api/path";
+import { appLocalDataDir, dirname, join } from "@tauri-apps/api/path";
 import type { DdsFormat } from "../components/TextureFormatSelect";
+
+/** Mirrors Rust sanitize_file_name for __convert PNG export paths. */
+function sanitizeFileName(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return "texture";
+  return trimmed.replace(/[\\/:*?"<>|]/g, "_");
+}
 
 export interface TextureConvertResult {
   outputNutexbPath: string;
@@ -63,6 +70,46 @@ export async function convertImageToNutexb(params: {
     pngPath: params.sourcePath,
     ddsFormat: ddsFormatToRust(params.ddsFormat),
   });
+}
+
+export async function reencodeNutexbWithFormat(params: {
+  nutexbPath: string;
+  ddsFormat: DdsFormat;
+  sourceImagePath?: string | null;
+}): Promise<TextureConvertResult> {
+  const localData = await appLocalDataDir();
+  const convertDir = `${localData}/scene_texture_convert`;
+  if (!(await exists(convertDir))) {
+    await mkdir(convertDir, { recursive: true });
+  }
+
+  const pngPath =
+    params.sourceImagePath?.trim() ||
+    (await exportNutexbPreviewPng(params.nutexbPath, convertDir));
+
+  return invoke<TextureConvertResult>("card_icon_replace_from_png_with_dds_format", {
+    nutexbPath: params.nutexbPath,
+    convertDir,
+    pngPath,
+    ddsFormat: ddsFormatToRust(params.ddsFormat),
+  });
+}
+
+async function exportNutexbPreviewPng(
+  nutexbPath: string,
+  convertDir: string,
+): Promise<string> {
+  const info = await invoke<{ name: string }>("nutexb_read_info", {
+    inputPath: nutexbPath,
+  });
+  const safeName = sanitizeFileName(info.name);
+  const outputPath = await join(convertDir, "__convert", `${safeName}.png`);
+  const outputDir = await dirname(outputPath);
+  if (!(await exists(outputDir))) {
+    await mkdir(outputDir, { recursive: true });
+  }
+  await invoke("nutexb_export_png", { inputPath: nutexbPath, outputPath });
+  return outputPath;
 }
 
 export async function importPngAsNutexb(params: {

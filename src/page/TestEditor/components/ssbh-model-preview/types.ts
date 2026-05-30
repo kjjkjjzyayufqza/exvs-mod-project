@@ -17,6 +17,10 @@ export type SsbhModelPreviewBundle = {
   mesh: unknown;
   skel: unknown | null;
   matl: unknown | null;
+  matlProfiles?: {
+    maya?: unknown | null;
+    nust?: unknown | null;
+  } | null;
   textureRefs: string[];
   resolvedNutexbPaths: string[];
   textureResolve: TextureRefResolve[];

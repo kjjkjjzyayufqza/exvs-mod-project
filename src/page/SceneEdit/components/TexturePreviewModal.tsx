@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { invoke } from "@tauri-apps/api/core";
 import { Rnd } from "react-rnd";
-import { X, Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { TextureManagerEntry } from "../store/sceneTextureManagerStore";
 import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
@@ -11,6 +12,12 @@ import {
   lookupSceneTextureData,
   resolveSceneTexturePreviewDataUrl,
 } from "../utils/sceneTextureThumbnail";
+import { TextureFormatSelect, type DdsFormat } from "./TextureFormatSelect";
+import {
+  rustDdsFormatToSceneFormat,
+  sceneFormatFromEntryFormat,
+  sceneFormatMatchesRust,
+} from "../utils/sceneTextureDdsFormat";
 
 const VIEWPORT_MARGIN = 32;
 const PREVIEW_MODAL_ID = "texture-preview-modal-layer";
@@ -25,6 +32,8 @@ interface TexturePreviewModalProps {
   textureDataMap: NutexbTextureDataMap;
   decodeContext: SceneTextureDecodeContext;
   onClose: () => void;
+  onFormatApply?: (ddsFormat: DdsFormat) => void;
+  isReencoding?: boolean;
 }
 
 export function TexturePreviewModal({
@@ -32,10 +41,15 @@ export function TexturePreviewModal({
   textureDataMap,
   decodeContext,
   onClose,
+  onFormatApply,
+  isReencoding = false,
 }: TexturePreviewModalProps) {
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ddsFormat, setDdsFormat] = useState<DdsFormat>("BC7_UNORM");
+  const [detectedRustFormat, setDetectedRustFormat] = useState<string | null>(null);
+  const [formatLoading, setFormatLoading] = useState(false);
 
   const loadedData = entry.nutexbPath
     ? lookupSceneTextureData(textureDataMap, entry.nutexbPath)
@@ -81,9 +95,48 @@ export function TexturePreviewModal({
     };
   }, [entry.nutexbPath, textureDataMap, decodeContext]);
 
+  useEffect(() => {
+    if (!entry.nutexbPath) return;
+
+    let cancelled = false;
+    setFormatLoading(true);
+
+    invoke<string>("card_icon_detect_dds_format", { nutexbPath: entry.nutexbPath })
+      .then((rustFormat) => {
+        if (cancelled) return;
+        setDetectedRustFormat(rustFormat);
+        const fromEntry = sceneFormatFromEntryFormat(entry.format);
+        const fromRust = rustDdsFormatToSceneFormat(rustFormat);
+        setDdsFormat(fromEntry ?? fromRust ?? "BC7_UNORM");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        const fromEntry = sceneFormatFromEntryFormat(entry.format);
+        setDdsFormat(fromEntry ?? "BC7_UNORM");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setFormatLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [entry.nutexbPath, entry.format]);
+
+  const formatDirty =
+    detectedRustFormat !== null &&
+    !sceneFormatMatchesRust(ddsFormat, detectedRustFormat);
+
+  const handleApplyFormat = useCallback(() => {
+    if (!formatDirty || !onFormatApply) return;
+    onFormatApply(ddsFormat);
+  }, [ddsFormat, formatDirty, onFormatApply]);
+
   const { width: vw, height: vh } = getViewportSize();
   const modalWidth = Math.min(560, vw - VIEWPORT_MARGIN * 2);
-  const modalHeight = Math.min(480, vh - VIEWPORT_MARGIN * 2);
+  const modalHeight = Math.min(520, vh - VIEWPORT_MARGIN * 2);
 
   const previewWidth = loadedRgba?.width ?? entry.width;
   const previewHeight = loadedRgba?.height ?? entry.height;
@@ -101,7 +154,7 @@ export function TexturePreviewModal({
           height: modalHeight,
         }}
         minWidth={280}
-        minHeight={220}
+        minHeight={260}
         maxWidth={vw - VIEWPORT_MARGIN}
         maxHeight={vh - VIEWPORT_MARGIN}
         dragHandleClassName="texture-preview-drag-handle"
@@ -121,24 +174,20 @@ export function TexturePreviewModal({
                   {previewWidth}×{previewHeight}
                 </span>
               )}
-              {entry.format !== "unknown" && entry.format !== "pending" && (
-                <span className="text-[10px] text-muted-foreground font-mono">
-                  {entry.format}
-                </span>
-              )}
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-5 w-5"
                 data-no-drag
                 onClick={onClose}
+                disabled={isReencoding}
               >
                 <X className="h-3 w-3" />
               </Button>
             </div>
           </div>
 
-          <div className="flex flex-1 items-center justify-center bg-[repeating-conic-gradient(#80808020_0%_25%,transparent_0%_50%)] bg-[length:16px_16px] overflow-auto p-2">
+          <div className="flex flex-1 items-center justify-center bg-[repeating-conic-gradient(#80808020_0%_25%,transparent_0%_50%)] bg-[length:16px_16px] overflow-auto p-2 min-h-0">
             {loading && (
               <div className="flex flex-col items-center gap-2 text-muted-foreground">
                 <Loader2 className="h-6 w-6 animate-spin" />
@@ -148,13 +197,47 @@ export function TexturePreviewModal({
             {error && (
               <span className="text-xs text-destructive">{error}</span>
             )}
-            {previewDataUrl && (
+            {previewDataUrl && !loading && (
               <img
                 src={previewDataUrl}
                 alt={entry.filename}
                 className="max-w-full max-h-full object-contain"
                 draggable={false}
               />
+            )}
+          </div>
+
+          <div
+            className="flex flex-col gap-2 px-3 py-2 border-t shrink-0"
+            data-no-drag
+          >
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-muted-foreground">
+                DDS format
+              </label>
+              <TextureFormatSelect
+                value={ddsFormat}
+                onChange={setDdsFormat}
+                disabled={formatLoading || isReencoding}
+                triggerClassName="h-7 text-xs w-full"
+              />
+            </div>
+            {formatDirty && onFormatApply && (
+              <Button
+                size="sm"
+                className="w-full text-xs h-7"
+                onClick={handleApplyFormat}
+                disabled={isReencoding}
+              >
+                {isReencoding ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    Re-encoding...
+                  </>
+                ) : (
+                  "Apply format to nutexb"
+                )}
+              </Button>
             )}
           </div>
         </div>

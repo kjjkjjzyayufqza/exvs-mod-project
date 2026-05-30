@@ -157,6 +157,7 @@ import { SaveConfirmDialog } from "./components/SaveConfirmDialog";
 import { DeleteConfirmDialog, type DeleteConfirmMeta } from "./components/DeleteConfirmDialog";
 import type { DeleteConfirmation } from "./utils/sceneDeleteConfirm";
 import { buildDeletePreview, buildBaseDeletePreview } from "./utils/sceneDeleteConfirm";
+import { collectHavokSourceIdsForFolders } from "./utils/havokOverlayCleanup";
 import {
   buildSaveChangePreview,
   buildSaveResultSummary,
@@ -188,6 +189,9 @@ import {
   sceneReplaceHkt,
   sceneRemoveImport,
   sceneRemoveHavokData,
+  sceneForgetModel,
+  sceneForgetBaseModel,
+  sceneBuildImportPreviewBundle,
   stageLoadSkeleton,
   stageStreamBundles,
   validateNumatbEmptyParams,
@@ -402,6 +406,11 @@ export default function SceneEdit() {
   const [subModels, setSubModels] = useState<
     StageBundleResponse["subModels"]
   >([]);
+  const [importedDaeObjects, setImportedDaeObjects] = useState<ImportedDaeObject[]>([]);
+  const importedSsbhBundles = useMemo(
+    () => importedDaeObjects.map((obj) => obj.ssbhBundle).filter(Boolean) as SsbhModelPreviewBundle[],
+    [importedDaeObjects],
+  );
 
   const {
     sessions: detailViewSessions,
@@ -415,7 +424,7 @@ export default function SceneEdit() {
     saveNumatb: saveDetailViewNumatb,
     setNuhlpbDraft: setDetailViewNuhlpbDraft,
     saveNuhlpb: saveDetailViewNuhlpb,
-  } = useSceneDetailView({ baseModel, subModels });
+  } = useSceneDetailView({ baseModel, subModels, importedDaeObjects });
   const [graphicParams, setGraphicParams] = useState<GraphicParam[]>([]);
   const [appliedGraphicParamKeys, setAppliedGraphicParamKeys] = useState<Set<string>>(() => new Set());
   const [placementHeader, setPlacementHeader] = useState<string[]>([]);
@@ -423,7 +432,6 @@ export default function SceneEdit() {
     Record<string, number>
   >({});
   const [placementEntries, setPlacementEntries] = useState<PlacementRow[]>([]);
-  const [importedDaeObjects, setImportedDaeObjects] = useState<ImportedDaeObject[]>([]);
   const [treeRoot, setTreeRoot] = useState<StageTreeNode | null>(null);
 
   const initialSnapshotRef = useRef<{
@@ -612,6 +620,7 @@ export default function SceneEdit() {
   } = useSceneTextureLoader(
     baseModel,
     subModels,
+    importedSsbhBundles,
     placementEntries,
     sessionId,
     textureMaxDimension,
@@ -1370,13 +1379,10 @@ export default function SceneEdit() {
     });
   }, []);
 
-  const promptDeleteConfirm = useCallback(
-    (preview: DeleteConfirmation) =>
-      new Promise<boolean>((resolve) => {
-        setDeleteConfirmState({ open: true, preview, resolve });
-      }),
-    [],
-  );
+  // Deletion is confirmed once at delete time (the disk-file preview is shown
+  // there). The save pipeline must not prompt a second delete-confirm, so its
+  // delete gate is auto-approved — the save-change summary remains the save gate.
+  const autoApproveSaveDelete = useCallback(() => Promise.resolve(true), []);
 
   const promptSaveConfirm = useCallback(
     (preview: SaveChangePreview) =>
@@ -1471,7 +1477,7 @@ export default function SceneEdit() {
         importedDaeObjects,
         sceneSessionId,
         onProgress: updateSaveProgress,
-        onDeleteConfirm: promptDeleteConfirm,
+        onDeleteConfirm: autoApproveSaveDelete,
       });
 
       if (!result.success) {
@@ -1517,7 +1523,7 @@ export default function SceneEdit() {
       setSaveProgressState((prev) => ({ ...prev, canClose: true }));
       toast.error("Save failed", { description: String(err) });
     }
-  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, promptDeleteConfirm, promptSaveConfirm, runNumatbPreflight, surfaceValidationErrors]);
+  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, autoApproveSaveDelete, promptSaveConfirm, runNumatbPreflight, surfaceValidationErrors]);
 
   const handleSaveFhm2d = useCallback(async () => {
     if (!stageRoot) return;
@@ -1558,7 +1564,7 @@ export default function SceneEdit() {
         sceneSessionId,
         outputFhm2dPath: outputPath,
         onProgress: updateSaveProgress,
-        onDeleteConfirm: promptDeleteConfirm,
+        onDeleteConfirm: autoApproveSaveDelete,
       });
 
       if (!result.success) {
@@ -1595,7 +1601,7 @@ export default function SceneEdit() {
       setSaveProgressState((prev) => ({ ...prev, canClose: true }));
       toast.error("FHM2D save failed", { description: String(err) });
     }
-  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, promptDeleteConfirm, promptSaveConfirm, runNumatbPreflight, surfaceValidationErrors]);
+  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, autoApproveSaveDelete, promptSaveConfirm, runNumatbPreflight, surfaceValidationErrors]);
 
   const handleGraphicParamValueChange = useCallback(
     (index: number, value: string) => {
@@ -2632,6 +2638,16 @@ export default function SceneEdit() {
             throw new Error("SSBH conversion did not produce in-memory artifacts");
           }
 
+          const ssbhBundle = await sceneBuildImportPreviewBundle({
+            sessionId: activeSessionId,
+            importId: result.importId,
+            stageRoot,
+            sourcePath: entry.filePath,
+          });
+          for (const warning of ssbhBundle.warnings) {
+            toast.warning(warning);
+          }
+
           if (entry.config.generateHkt) {
             if (result.hktGenerated) {
               toast.success(`HKT collision generated for ${entry.fileName}`, {
@@ -2681,6 +2697,7 @@ export default function SceneEdit() {
             name: baseFilename,
             sourcePath: loaded.filePath,
             scene: loaded.scene,
+            ssbhBundle,
             transform: { ...DEFAULT_TRANSFORM, posX },
             sessionImportId: result.importId,
             hktSimplify: { ...entry.config.hktSimplify },
@@ -2804,6 +2821,38 @@ export default function SceneEdit() {
     }
   }, [daeExportDialog]);
 
+  // Tear down the in-memory HKT collision overlay for deleted folder-based models
+  // (sub-models / base). Imported-DAE objects clean their own overlay by sessionImportId.
+  const removeHavokOverlayForFolders = useCallback(
+    (folderNames: string[]) => {
+      if (folderNames.length === 0) return;
+      const folderSet = new Set(folderNames);
+      const candidateIds = new Set<string>([
+        ...havokMeshDataMap.keys(),
+        ...havokMetaMap.keys(),
+      ]);
+      const sourceIds = collectHavokSourceIdsForFolders(candidateIds, folderSet);
+      if (sourceIds.length === 0) return;
+      const idSet = new Set(sourceIds);
+      setHavokMeshDataMap((prev) => {
+        const next = new Map(prev);
+        idSet.forEach((id) => next.delete(id));
+        return next;
+      });
+      setHavokMetaMap((prev) => {
+        const next = new Map(prev);
+        idSet.forEach((id) => next.delete(id));
+        return next;
+      });
+      if (sceneSessionId) {
+        idSet.forEach((id) => {
+          sceneRemoveHavokData(sceneSessionId, id).catch(() => {});
+        });
+      }
+    },
+    [havokMeshDataMap, havokMetaMap, sceneSessionId],
+  );
+
   const handleDeleteSelected = useCallback(
     async (ids?: string[]) => {
       const requestedIds = getRequestedSceneNodeIds({
@@ -2885,6 +2934,14 @@ export default function SceneEdit() {
         for (const folderId of subModelIds) {
           useSceneDirtyStore.getState().markObjectDeleted(folderId);
         }
+        // Forget the model in the in-memory session so a save commits the
+        // deletion instead of re-materializing the folder from a lingering
+        // converted import (memory-only; disk is untouched until save).
+        if (sceneSessionId) {
+          for (const folderId of subModelIds) {
+            sceneForgetModel(sceneSessionId, folderId).catch(() => {});
+          }
+        }
         // Remove placement entries matching deleted sub-models
         const deletedObjectIndices = new Set(
           subModelIds
@@ -2906,6 +2963,8 @@ export default function SceneEdit() {
         });
         // Remove from subModels state
         setSubModels((prev) => prev.filter((s) => !subModelIds.includes(s.folderName)));
+        // Tear down their collision overlay so the viewport matches the deletion
+        removeHavokOverlayForFolders(subModelIds);
         useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         handleClearSelection();
         toast.success(`Deleted ${subModelIds.length} sub-model(s)`);
@@ -2922,6 +2981,11 @@ export default function SceneEdit() {
         if (!confirmed) return;
 
         useSceneDirtyStore.getState().markObjectDeleted("base");
+        // Forget the base model in the in-memory session so a save commits the
+        // deletion instead of re-writing the cached root files (memory-only).
+        if (sceneSessionId) {
+          sceneForgetBaseModel(sceneSessionId).catch(() => {});
+        }
         setBaseModel(null);
         setTreeRoot((prev) => {
           if (!prev) return prev;
@@ -2930,6 +2994,8 @@ export default function SceneEdit() {
             children: prev.children?.filter((c) => c.role !== "base"),
           };
         });
+        // Tear down the base model's collision overlay so the viewport matches the deletion
+        removeHavokOverlayForFolders(["base"]);
         handleClearSelection();
         toast.success("Base model marked for deletion");
         return;
@@ -2994,6 +3060,7 @@ export default function SceneEdit() {
       nodeIdForPlacementIndex,
       placementEntries,
       placementIndexForNodeId,
+      removeHavokOverlayForFolders,
       sceneSessionId,
       selectedNodeId,
       selectedPlacementIdx,

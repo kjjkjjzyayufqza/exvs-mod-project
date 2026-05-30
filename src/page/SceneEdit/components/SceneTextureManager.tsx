@@ -26,8 +26,16 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useMemo, useCallback, useEffect, useReducer, useState } from "react";
 import { TexturePreviewModal } from "./TexturePreviewModal";
 import { TextureReplaceModal } from "./TextureReplaceModal";
+import {
+  TextureAddConfirmModal,
+  type TextureAddConfirmPayload,
+} from "./TextureAddConfirmModal";
 import { VirtualizedList } from "./VirtualizedList";
-import { convertImageToNutexb } from "../utils/sceneTextureConvert";
+import {
+  convertImageToNutexb,
+  reencodeNutexbWithFormat,
+} from "../utils/sceneTextureConvert";
+import type { DdsFormat } from "./TextureFormatSelect";
 
 const ASYNC_THUMB_CONCURRENCY = 4;
 const TEXTURE_ROW_HEIGHT = 40;
@@ -53,6 +61,14 @@ export function SceneTextureManager({
   } = useSceneTextureManagerStore();
   const [previewEntry, setPreviewEntry] = useState<TextureManagerEntry | null>(null);
   const [replaceTarget, setReplaceTarget] = useState<TextureManagerEntry | null>(null);
+  const [addConfirm, setAddConfirm] = useState<TextureAddConfirmPayload | null>(
+    null,
+  );
+  const [pendingAddQueue, setPendingAddQueue] = useState<TextureAddConfirmPayload[]>(
+    [],
+  );
+  const [isAddConverting, setIsAddConverting] = useState(false);
+  const [isPreviewReencoding, setIsPreviewReencoding] = useState(false);
   const [, bumpThumbnailCache] = useReducer((value: number) => value + 1, 0);
 
   useEffect(() => {
@@ -125,6 +141,65 @@ export function SceneTextureManager({
     return entries.filter((e) => e.filename.toLowerCase().includes(q));
   }, [entries, searchQuery]);
 
+  const commitImageAdd = useCallback(
+    async (filePath: string, ddsFormat: DdsFormat) => {
+      const filename = filePath.split(/[/\\]/).pop() ?? "unknown";
+      const nutexbFilename = filename.replace(/\.[^.]+$/, ".nutexb");
+      const entryId = `tex_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+      addEntry({
+        id: entryId,
+        filename: nutexbFilename,
+        status: "added",
+        format: "converting",
+        width: 0,
+        height: 0,
+        sizeBytes: 0,
+        referencedBy: [],
+        thumbnailDataUrl: null,
+        nutexbPath: null,
+        sourceImagePath: filePath,
+      });
+
+      try {
+        const result = await convertImageToNutexb({
+          sourcePath: filePath,
+          ddsFormat,
+        });
+        replaceEntry(entryId, {
+          nutexbPath: result.outputNutexbPath,
+          format: ddsFormat,
+          thumbnailDataUrl: null,
+        });
+      } catch {
+        replaceEntry(entryId, { format: "error" });
+      }
+    },
+    [addEntry, replaceEntry],
+  );
+
+  const advanceAddQueue = useCallback(() => {
+    setPendingAddQueue((queue) => {
+      const [next, ...rest] = queue;
+      setAddConfirm(next ?? null);
+      return rest;
+    });
+  }, []);
+
+  const handleAddConfirm = useCallback(
+    async (ddsFormat: DdsFormat) => {
+      if (!addConfirm) return;
+      setIsAddConverting(true);
+      try {
+        await commitImageAdd(addConfirm.sourcePath, ddsFormat);
+        advanceAddQueue();
+      } finally {
+        setIsAddConverting(false);
+      }
+    },
+    [addConfirm, advanceAddQueue, commitImageAdd],
+  );
+
   const handleAddTexture = useCallback(async () => {
     const selected = await open({
       title: "Add Texture to Scene",
@@ -135,12 +210,15 @@ export function SceneTextureManager({
     });
     if (!selected) return;
     const paths = Array.isArray(selected) ? selected : [selected];
+
+    const imagePayloads: TextureAddConfirmPayload[] = [];
+
     for (const filePath of paths) {
       const filename = filePath.split(/[/\\]/).pop() ?? "unknown";
       const isNutexb = filename.toLowerCase().endsWith(".nutexb");
-      const entryId = `tex_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
       if (isNutexb) {
+        const entryId = `tex_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         addEntry({
           id: entryId,
           filename,
@@ -154,35 +232,22 @@ export function SceneTextureManager({
           nutexbPath: filePath,
           sourceImagePath: null,
         });
-      } else {
-        const nutexbFilename = filename.replace(/\.[^.]+$/, ".nutexb");
-        addEntry({
-          id: entryId,
-          filename: nutexbFilename,
-          status: "added",
-          format: "converting",
-          width: 0,
-          height: 0,
-          sizeBytes: 0,
-          referencedBy: [],
-          thumbnailDataUrl: null,
-          nutexbPath: null,
-          sourceImagePath: filePath,
-        });
-        convertImageToNutexb({ sourcePath: filePath, ddsFormat: "BC7_UNORM" })
-          .then((result) => {
-            replaceEntry(entryId, {
-              nutexbPath: result.outputNutexbPath,
-              format: "BC7_UNORM",
-              thumbnailDataUrl: null,
-            });
-          })
-          .catch(() => {
-            replaceEntry(entryId, { format: "error" });
-          });
+        continue;
       }
+
+      imagePayloads.push({
+        sourcePath: filePath,
+        filename,
+        nutexbFilename: filename.replace(/\.[^.]+$/, ".nutexb"),
+      });
     }
-  }, [addEntry, replaceEntry]);
+
+    if (imagePayloads.length === 0) return;
+
+    const [first, ...rest] = imagePayloads;
+    setAddConfirm(first);
+    setPendingAddQueue(rest);
+  }, [addEntry]);
 
   const handleReplace = useCallback(
     (entry: TextureManagerEntry) => {
@@ -209,6 +274,33 @@ export function SceneTextureManager({
       setPreviewEntry(entry);
     }
   }, []);
+
+  const handlePreviewFormatApply = useCallback(
+    async (ddsFormat: DdsFormat) => {
+      if (!previewEntry?.nutexbPath) return;
+      setIsPreviewReencoding(true);
+      try {
+        await reencodeNutexbWithFormat({
+          nutexbPath: previewEntry.nutexbPath,
+          ddsFormat,
+          sourceImagePath: previewEntry.sourceImagePath,
+        });
+        replaceEntry(previewEntry.id, {
+          format: ddsFormat,
+          thumbnailDataUrl: null,
+        });
+        setPreviewEntry((prev) =>
+          prev ? { ...prev, format: ddsFormat, thumbnailDataUrl: null } : prev,
+        );
+        bumpThumbnailCache();
+      } catch {
+        replaceEntry(previewEntry.id, { format: "error" });
+      } finally {
+        setIsPreviewReencoding(false);
+      }
+    },
+    [previewEntry, replaceEntry],
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -251,7 +343,12 @@ export function SceneTextureManager({
             entry={entry}
             textureDataMap={textureDataMap}
             isSelected={entry.id === selectedId}
-            onSelect={() => setSelectedId(entry.id)}
+            onSelect={() => {
+              setSelectedId(entry.id);
+              if (entry.nutexbPath) {
+                handlePreview(entry);
+              }
+            }}
             onPreview={() => handlePreview(entry)}
             onReplace={() => handleReplace(entry)}
             onDelete={() => handleDelete(entry)}
@@ -266,6 +363,22 @@ export function SceneTextureManager({
           textureDataMap={textureDataMap}
           decodeContext={decodeContext}
           onClose={() => setPreviewEntry(null)}
+          onFormatApply={handlePreviewFormatApply}
+          isReencoding={isPreviewReencoding}
+        />
+      )}
+
+      {addConfirm && (
+        <TextureAddConfirmModal
+          payload={addConfirm}
+          onClose={() => {
+            if (!isAddConverting) {
+              setAddConfirm(null);
+              setPendingAddQueue([]);
+            }
+          }}
+          onConfirm={handleAddConfirm}
+          isConverting={isAddConverting}
         />
       )}
 
@@ -366,12 +479,7 @@ function TextureRow({
               ? "bg-accent text-accent-foreground"
               : "hover:bg-muted/40"
           )}
-          onClick={() => {
-            onSelect();
-          }}
-          onDoubleClick={() => {
-            onPreview();
-          }}
+          onClick={onSelect}
         >
           <div className="w-8 h-8 shrink-0 rounded bg-muted/50 flex items-center justify-center overflow-hidden">
             {thumbnailDataUrl ? (
