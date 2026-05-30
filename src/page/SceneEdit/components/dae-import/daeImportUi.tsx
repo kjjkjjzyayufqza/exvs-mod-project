@@ -108,16 +108,22 @@ export function DaeImportStatusAlert({
 
 export function DaeImportPanelSection({
   title,
+  headerEnd,
   children,
   className,
 }: {
   title: string;
+  /** Optional control rendered on the right side of the section title row. */
+  headerEnd?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
   return (
     <div className={cn("space-y-3 rounded-md border p-3", className)}>
-      <p className={daeImportSectionTitleClass}>{title}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className={daeImportSectionTitleClass}>{title}</p>
+        {headerEnd ?? null}
+      </div>
       {children}
     </div>
   );

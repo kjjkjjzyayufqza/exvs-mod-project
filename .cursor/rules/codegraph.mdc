@@ -24,6 +24,37 @@ Use codegraph for **structural** questions — what calls what, what would break
 | "What files exist under path/" | `codegraph_files` |
 | "Is the index healthy?" | `codegraph_status` |
 
+### Required arguments (do not mix parameter names)
+
+Each tool has **different** required JSON fields. Using the wrong name silently fails or returns
+`Error: task must be a non-empty string` when `codegraph_context` is called without `task`.
+
+| Tool | Required argument | Example value | Do NOT use |
+|---|---|---|---|
+| `codegraph_context` | **`task`** | `"how outliner export DAE works"` | `query` (that is for `codegraph_search` / `codegraph_explore`) |
+| `codegraph_search` | **`query`** | `"handleExportSelectedDae"` | `task` |
+| `codegraph_explore` | **`query`** | `"SceneOutliner NodeContextMenuContent"` (symbol/file terms) | `task`; avoid long natural-language sentences |
+| `codegraph_node` | **`symbol`** | `"handleExportSelectedDae"` | `query`, `task` |
+| `codegraph_trace` | **`from`**, **`to`** | `"handleExportSelectedDae"` → `"exportSingleStageDae"` | `query`, `task` |
+| `codegraph_callers` | **`symbol`** | `"handleExportSelectedDae"` | `query` |
+| `codegraph_callees` | **`symbol`** | `"handleExportSelectedDae"` | `query` |
+| `codegraph_impact` | **`symbol`** | `"handleExportSelectedDae"` | `query` |
+
+Before calling any `codegraph_*` tool, read its MCP descriptor under
+`mcps/user-codegraph/tools/<tool>.json` if unsure.
+
+**Correct `codegraph_context` call:**
+
+```json
+{ "task": "outliner context menu export dae for model nodes" }
+```
+
+**Wrong (causes `task must be a non-empty string`):**
+
+```json
+{ "query": "outliner context menu export dae" }
+```
+
 ### Rules of thumb
 
 - **Answer directly — don't delegate exploration.** For "how does X work" / architecture questions, answer with 2-3 codegraph calls: `codegraph_context` first, then ONE `codegraph_explore` for the source of the symbols it surfaces. For a specific **flow** ("how does X reach Y") start with `codegraph_trace` from→to — one call returns the whole path with dynamic hops bridged — then ONE `codegraph_explore` for the bodies; don't rebuild the path with `codegraph_search` + `codegraph_callers`. Codegraph IS the pre-built index, so spawning a separate file-reading sub-task/agent — or running a grep + read loop — repeats work codegraph already did and costs more for the same answer.

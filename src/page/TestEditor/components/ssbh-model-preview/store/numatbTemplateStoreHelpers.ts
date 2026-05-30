@@ -150,6 +150,268 @@ export function isTexturePathParamId(paramId: string): boolean {
   return false;
 }
 
+/** Texture1 is always validated; other maps follow Use* toggles (see numatbStore PARAM_TYPE_MAPPING). */
+export const ALWAYS_REQUIRED_TEXTURE_PATH_PARAM_IDS = ["Texture1"] as const;
+
+/** Map param_id -> boolean param_id that enables sampling (aligned with numatbStore COMMON_ATTRIBUTES). */
+export const TEXTURE_MAP_USE_TOGGLES: Readonly<Record<string, string>> = {
+  MetallicMap: "UseMetallicMap",
+  RoughnessMap: "UseRoughnessMap",
+  AmbientOcclusionMap: "UseAmbientOcclusionMap",
+  NormalMap: "UseNormalMap",
+  EmissiveMap: "UseEmissiveMap",
+  SpecularMap: "UseSpecularMap",
+};
+
+const BASE_COLOR_MAP_PARAM_IDS = [
+  "BaseColorMap",
+  "BaseColorMapLayer1",
+  "DiffuseMap",
+  "DiffuseMapLayer1",
+] as const;
+
+function readEntryBoolean(entry: MatlEntryJson, paramId: string): boolean | undefined {
+  for (const row of entry.booleans ?? []) {
+    if (String(row.param_id) !== paramId) {
+      continue;
+    }
+    const data = row.data;
+    if (typeof data === "boolean") {
+      return data;
+    }
+    if (typeof data === "number") {
+      return data !== 0;
+    }
+    return Boolean(data);
+  }
+  return undefined;
+}
+
+function entryHasTextureParam(entry: MatlEntryJson, paramId: string): boolean {
+  for (const row of entry.textures ?? []) {
+    if (String(row.param_id) === paramId) {
+      return true;
+    }
+  }
+  for (const row of entry.textures2 ?? []) {
+    if (String(row.param_id) === paramId) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isBaseColorMapPathRequired(entry: MatlEntryJson): boolean {
+  const useBase = readEntryBoolean(entry, "UseBaseColorMap");
+  const useDiffuse = readEntryBoolean(entry, "UseDiffuseMap");
+  if (useBase === true || useDiffuse === true) {
+    return true;
+  }
+  if (useBase === false || useDiffuse === false) {
+    return false;
+  }
+  return BASE_COLOR_MAP_PARAM_IDS.some((id) => entryHasTextureParam(entry, id));
+}
+
+/**
+ * Whether a texture path must be non-empty for export validation.
+ * Texture1 is always required; PBR maps require their Use* flag; base color follows UseBaseColorMap / implicit slot rules.
+ */
+export function isTextureMapPathRequired(entry: MatlEntryJson, mapParamId: string): boolean {
+  if (mapParamId === "Texture1") {
+    return true;
+  }
+  const useToggle = TEXTURE_MAP_USE_TOGGLES[mapParamId];
+  if (useToggle) {
+    return readEntryBoolean(entry, useToggle) === true;
+  }
+  if ((BASE_COLOR_MAP_PARAM_IDS as readonly string[]).includes(mapParamId)) {
+    return isBaseColorMapPathRequired(entry);
+  }
+  return false;
+}
+
+function defaultTextureDataKindForParam(paramId: string): "String" | "String1" {
+  if (
+    paramId === "Texture1" ||
+    paramId === "BaseColorMap" ||
+    paramId === "BaseColorMapLayer1" ||
+    paramId === "EmissiveMap" ||
+    paramId === "NormalMap" ||
+    paramId === "AmbientOcclusionMap" ||
+    paramId === "RoughnessMap" ||
+    paramId === "MetallicMap" ||
+    paramId === "DiffuseCubeMap"
+  ) {
+    return "String1";
+  }
+  return "String";
+}
+
+function collectRequiredTextureMapParamIds(entry: MatlEntryJson): string[] {
+  const required = new Set<string>(ALWAYS_REQUIRED_TEXTURE_PATH_PARAM_IDS);
+
+  for (const [mapId, useId] of Object.entries(TEXTURE_MAP_USE_TOGGLES)) {
+    if (readEntryBoolean(entry, useId) === true) {
+      required.add(mapId);
+    }
+  }
+
+  if (isBaseColorMapPathRequired(entry)) {
+    const useExplicit =
+      readEntryBoolean(entry, "UseBaseColorMap") === true || readEntryBoolean(entry, "UseDiffuseMap") === true;
+    if (useExplicit) {
+      const present = BASE_COLOR_MAP_PARAM_IDS.filter((id) => entryHasTextureParam(entry, id));
+      if (present.length > 0) {
+        for (const id of present) {
+          required.add(id);
+        }
+      } else {
+        required.add("BaseColorMap");
+      }
+    } else {
+      for (const id of BASE_COLOR_MAP_PARAM_IDS) {
+        if (entryHasTextureParam(entry, id)) {
+          required.add(id);
+        }
+      }
+    }
+  }
+
+  return Array.from(required);
+}
+
+type TexturePathSlotLookup = {
+  path: string;
+  attributeIndex: number;
+  textureDataKind: "String" | "String1";
+};
+
+export function missingTexturePathSlotKey(slot: MissingTexturePathSlotRef): string {
+  return `${slot.profile}:${slot.materialLabel}:${slot.paramId}:${slot.materialIndex}:${slot.attributeIndex}`;
+}
+
+export function resolveTexturePathValueForSlot(
+  mayaFile: MatlDataJson,
+  nustFile: MatlDataJson,
+  slot: MissingTexturePathSlotRef,
+): string {
+  const file = slot.profile === "maya" ? mayaFile : nustFile;
+  const entry = file.entries[slot.materialIndex];
+  if (!entry) {
+    return "";
+  }
+  return lookupTexturePathSlot(entry, slot.paramId)?.path ?? "";
+}
+
+/** Re-resolve attribute index / bucket after the param row is created or edited. */
+export function refreshTexturePathSlotRef(
+  mayaFile: MatlDataJson,
+  nustFile: MatlDataJson,
+  slot: MissingTexturePathSlotRef,
+): MissingTexturePathSlotRef {
+  const file = slot.profile === "maya" ? mayaFile : nustFile;
+  const entry = file.entries[slot.materialIndex];
+  if (!entry) {
+    return slot;
+  }
+  const lookup = lookupTexturePathSlot(entry, slot.paramId);
+  if (!lookup) {
+    return slot;
+  }
+  return {
+    ...slot,
+    attributeIndex: lookup.attributeIndex,
+    textureDataKind: lookup.textureDataKind,
+    value: lookup.path,
+  };
+}
+
+export type TexturePathProfileFiles = {
+  mayaFile: MatlDataJson;
+  nustFile: MatlDataJson;
+};
+
+export function applyTexturePathFillToProfiles(
+  updateProfileAttribute: (
+    profile: NumatbProfileKind,
+    materialIndex: number,
+    attributeIndex: number,
+    data: NumatbAttributeData,
+  ) => void,
+  addProfileAttribute: (
+    profile: NumatbProfileKind,
+    materialIndex: number,
+    paramId: string,
+    kind: NumatbAttributeDataKind,
+  ) => void,
+  readProfileFiles: () => TexturePathProfileFiles,
+  slot: MissingTexturePathSlotRef,
+  basename: string,
+): void {
+  const dataKindForSlot = (resolved: MissingTexturePathSlotRef): NumatbAttributeData =>
+    resolved.textureDataKind === "String1" ? { String1: basename } : { String: basename };
+
+  let files = readProfileFiles();
+  let resolved = refreshTexturePathSlotRef(files.mayaFile, files.nustFile, slot);
+  const data = dataKindForSlot(resolved);
+
+  if (resolved.attributeIndex < 0) {
+    addProfileAttribute(resolved.profile, resolved.materialIndex, resolved.paramId, resolved.textureDataKind);
+    files = readProfileFiles();
+    resolved = refreshTexturePathSlotRef(files.mayaFile, files.nustFile, slot);
+    if (resolved.attributeIndex < 0) {
+      return;
+    }
+    updateProfileAttribute(resolved.profile, resolved.materialIndex, resolved.attributeIndex, dataKindForSlot(resolved));
+    return;
+  }
+
+  updateProfileAttribute(resolved.profile, resolved.materialIndex, resolved.attributeIndex, data);
+}
+
+function lookupTexturePathSlot(entry: MatlEntryJson, paramId: string): TexturePathSlotLookup | null {
+  const flatAttributes = flattenEntryToAttributes(entry);
+  const attributeIndex = flatAttributes.findIndex((attribute) => attribute.param_id === paramId);
+  if (attributeIndex < 0) {
+    return null;
+  }
+  const data = flatAttributes[attributeIndex].param.data;
+  if (data.String !== undefined) {
+    return {
+      path: String(data.String ?? "").trim(),
+      attributeIndex,
+      textureDataKind: "String",
+    };
+  }
+  if (data.String1 !== undefined) {
+    return {
+      path: String(data.String1 ?? "").trim(),
+      attributeIndex,
+      textureDataKind: "String1",
+    };
+  }
+  return {
+    path: "",
+    attributeIndex,
+    textureDataKind: defaultTextureDataKindForParam(paramId),
+  };
+}
+
+function collectMissingTexturePathsForEntry(
+  entry: MatlEntryJson,
+  formatMissing: (paramId: string, textureDataKind: "String" | "String1") => string,
+): string[] {
+  const missing: string[] = [];
+  for (const paramId of collectRequiredTextureMapParamIds(entry)) {
+    const slot = lookupTexturePathSlot(entry, paramId);
+    if (slot === null || !slot.path) {
+      missing.push(formatMissing(paramId, slot?.textureDataKind ?? defaultTextureDataKindForParam(paramId)));
+    }
+  }
+  return missing;
+}
+
 function texturePathStringFromData(data: NumatbAttributeData): string | undefined {
   if (data.String !== undefined) {
     return data.String;
@@ -220,28 +482,12 @@ function collectMissingTexturePathSlotsImpl(
     if (materialLabelFilter !== null && !materialLabelFilter.has(entry.material_label)) {
       continue;
     }
-    for (const row of entry.textures ?? []) {
-      const paramId = String(row.param_id);
-      if (!isTexturePathParamId(paramId) || paramId.startsWith("Use")) {
-        continue;
-      }
-      const raw = row.data;
-      const path = raw == null ? "" : String(raw).trim();
-      if (!path) {
-        missing.push(`${entry.material_label} → ${paramId}`);
-      }
-    }
-    for (const row of entry.textures2 ?? []) {
-      const paramId = String(row.param_id);
-      if (!isTexturePathParamId(paramId) || paramId.startsWith("Use")) {
-        continue;
-      }
-      const raw = row.data;
-      const path = raw == null ? "" : String(raw).trim();
-      if (!path) {
-        missing.push(`${entry.material_label} → ${paramId} (textures2)`);
-      }
-    }
+    missing.push(
+      ...collectMissingTexturePathsForEntry(entry, (paramId, textureDataKind) => {
+        const textures2Suffix = textureDataKind === "String1" ? " (textures2)" : "";
+        return `${entry.material_label} → ${paramId}${textures2Suffix}`;
+      }),
+    );
   }
   return missing;
 }
@@ -276,34 +522,20 @@ function collectMissingTexturePathSlotRefsImpl(
     if (materialLabelFilter !== null && !materialLabelFilter.has(entry.material_label)) {
       continue;
     }
-    const flatAttributes = flattenEntryToAttributes(entry);
-    for (let attributeIndex = 0; attributeIndex < flatAttributes.length; attributeIndex += 1) {
-      const attribute = flatAttributes[attributeIndex];
-      const paramId = attribute.param_id;
-      if (!isTexturePathParamId(paramId) || paramId.startsWith("Use")) {
+    for (const paramId of collectRequiredTextureMapParamIds(entry)) {
+      const slot = lookupTexturePathSlot(entry, paramId);
+      if (slot !== null && slot.path) {
         continue;
       }
-      const data = attribute.param.data;
-      let path = "";
-      let textureDataKind: "String" | "String1" = "String";
-      if (data.String !== undefined) {
-        path = String(data.String ?? "").trim();
-        textureDataKind = "String";
-      } else if (data.String1 !== undefined) {
-        path = String(data.String1 ?? "").trim();
-        textureDataKind = "String1";
-      }
-      if (!path) {
-        missing.push({
-          profile,
-          materialLabel: entry.material_label,
-          paramId,
-          materialIndex,
-          attributeIndex,
-          value: "",
-          textureDataKind,
-        });
-      }
+      missing.push({
+        profile,
+        materialLabel: entry.material_label,
+        paramId,
+        materialIndex,
+        attributeIndex: slot?.attributeIndex ?? -1,
+        value: "",
+        textureDataKind: slot?.textureDataKind ?? defaultTextureDataKindForParam(paramId),
+      });
     }
   }
   return missing;
@@ -315,7 +547,10 @@ export function collectMissingTexturePathSlotRefsForExportSession(
   options: {
     writeNumatb: boolean;
     writeMayaProfile: boolean;
-    /** Only validate materials referenced by NUMDLB mapping (trimmed labels). */
+    /**
+     * Optional subset of material_label values to validate.
+     * When omitted, every entry in each profile file that will be exported is checked.
+     */
     materialLabels?: readonly string[];
   },
 ): MissingTexturePathSlotRef[] {
@@ -338,7 +573,10 @@ export function collectMissingTexturePathsForExportSession(
   options: {
     writeNumatb: boolean;
     writeMayaProfile: boolean;
-    /** Only validate materials referenced by NUMDLB mapping (trimmed labels). */
+    /**
+     * Optional subset of material_label values to validate.
+     * When omitted, every entry in each profile file that will be exported is checked.
+     */
     materialLabels?: readonly string[];
   },
 ): string[] {

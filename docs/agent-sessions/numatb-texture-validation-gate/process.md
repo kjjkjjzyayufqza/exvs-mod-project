@@ -90,3 +90,41 @@ Frontend (`src/page/SceneEdit/`):
 - `scene_repack_in_place` is imported into `page.tsx` but not yet wired to a UI
   button; its gate is defensive (string error) for when it gets wired.
 - Pre-existing WIP has tsc errors unrelated to this feature; resolve separately.
+
+## 2026-05-30 — Coordinator: revert inline Rust patch, design module, delegate
+
+- Reverted uncommitted changes in `fhm2d_stage_validate.rs` (`git checkout --`).
+- Frontend Use*-gated validation lives in `numatbTemplateStoreHelpers.ts` (all profile entries).
+- New design: `design-numatb-format-module.md` — extract `format/numatb_format.rs`, wire validator only.
+- Subagent brief: `agent-handoff-gpt55.md` (implement + test; do not re-embed rules in validator file).
+
+## 2026-05-30 — GPT-5.5 implementation: reusable Rust numatb rules
+
+- Added `src-tauri/src/format/numatb_format.rs` as the reusable Rust source for empty texture-path rules.
+- Registered the module in `src-tauri/src/format/mod.rs`.
+- Refactored `exvs_stage_check_numatb_empty_params` in `src-tauri/src/format/fhm2d_stage_validate.rs` to call `numatb_format::collect_missing_texture_paths_for_matl`.
+- Kept `exvs_stage_check_numatb_textures` unchanged.
+
+### Rule parity implemented
+
+- `Texture1` is always required, including when the row is missing.
+- `MetallicMap`, `RoughnessMap`, `NormalMap`, `EmissiveMap`, `AmbientOcclusionMap`, and `SpecularMap` are required only when their matching `Use*` boolean is true.
+- `BaseColorMap`, `BaseColorMapLayer1`, `DiffuseMap`, and `DiffuseMapLayer1` follow the frontend explicit/implicit base color rules:
+  - `UseBaseColorMap` or `UseDiffuseMap` true requires present base slots, or `BaseColorMap` if none exist.
+  - Either toggle false disables the implicit slot-present requirement.
+  - With no toggle, existing base color slots are required.
+- `DiffuseCubeMap` remains non-required because there is no EXVS `Use*` rule for it.
+- The stage pre-flight validates every material entry in every scanned `.numatb`, with no NUMDLB label filtering.
+
+### Verification
+
+- `cargo fmt --manifest-path "e:\TAURI_PROJECT\src-tauri\Cargo.toml"`: PASS.
+- `cargo test numatb_format --manifest-path "e:\TAURI_PROJECT\src-tauri\Cargo.toml"`: PASS, 9 `format::numatb_format` tests passed.
+- `cargo check --manifest-path "e:\TAURI_PROJECT\src-tauri\Cargo.toml"`: PASS.
+- `ReadLints` on edited Rust files: PASS, no linter errors.
+
+Warnings observed during Rust commands are pre-existing repository warnings:
+
+- `parse_numatb_texture_refs` dead code in `src-tauri/src/format/fhm2d_stage.rs`.
+- `collect_u64_integers` dead code in `src-tauri/src/havok_mesh_export.rs`.
+- `debug_hkt_to_obj` unused import / unused variable warnings.

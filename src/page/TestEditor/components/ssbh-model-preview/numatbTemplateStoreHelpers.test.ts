@@ -75,38 +75,54 @@ describe("numatb template helpers", () => {
     expect(reduced.nustFile.entries.map((entry) => entry.material_label)).toEqual(["bodyMaterial"]);
   });
 
-  it("collectMissingTexturePathSlots flags empty String on texture param ids", () => {
+  it("collectMissingTexturePathSlots flags RoughnessMap only when UseRoughnessMap is true", () => {
     const file = createEmptyNumatbFile();
     file.entries.push({
       material_label: "m1",
       shader_label: "",
-      textures: [{ param_id: "RoughnessMap", data: "" }],
+      textures2: [{ param_id: "RoughnessMap", data: "" }],
+      booleans: [{ param_id: "UseRoughnessMap", data: false }],
     });
-    expect(collectMissingTexturePathSlots(file)).toEqual(["m1 → RoughnessMap"]);
+    expect(collectMissingTexturePathSlots(file)).toEqual(["m1 → Texture1 (textures2)"]);
+
+    file.entries[0].booleans = [{ param_id: "UseRoughnessMap", data: true }];
+    expect(collectMissingTexturePathSlots(file)).toEqual([
+      "m1 → Texture1 (textures2)",
+      "m1 → RoughnessMap (textures2)",
+    ]);
   });
 
-  it("collectMissingTexturePathSlots flags undefined or null texture data", () => {
+  it("collectMissingTexturePathSlots flags base color when slot exists and NormalMap only when UseNormalMap is true", () => {
     const file = createEmptyNumatbFile();
     file.entries.push({
       material_label: "m1",
       shader_label: "",
-      textures: [{ param_id: "BaseColorMap", data: undefined as unknown as string }],
+      textures2: [{ param_id: "BaseColorMap", data: undefined as unknown as string }],
     });
     file.entries.push({
       material_label: "m2",
       shader_label: "",
-      textures: [{ param_id: "NormalMap", data: null as unknown as string }],
+      textures2: [{ param_id: "NormalMap", data: null as unknown as string }],
+      booleans: [{ param_id: "UseNormalMap", data: true }],
     });
-    expect(collectMissingTexturePathSlots(file)).toEqual(["m1 → BaseColorMap", "m2 → NormalMap"]);
+    expect(collectMissingTexturePathSlots(file)).toEqual([
+      "m1 → Texture1 (textures2)",
+      "m1 → BaseColorMap (textures2)",
+      "m2 → Texture1 (textures2)",
+      "m2 → NormalMap (textures2)",
+    ]);
   });
 
-  it("collectMissingTexturePathSlots accepts non-empty texture paths", () => {
+  it("collectMissingTexturePathSlots always requires Texture1", () => {
     const file = createEmptyNumatbFile();
     file.entries.push({
       material_label: "m1",
       shader_label: "",
-      textures: [{ param_id: "Texture1", data: "path/to/tex" }],
+      textures2: [{ param_id: "BaseColorMap", data: "path/to/base" }],
     });
+    expect(collectMissingTexturePathSlots(file)).toEqual(["m1 → Texture1 (textures2)"]);
+
+    file.entries[0].textures2?.push({ param_id: "Texture1", data: "path/to/tex" });
     expect(collectMissingTexturePathSlots(file)).toEqual([]);
   });
 
@@ -133,11 +149,29 @@ describe("numatb template helpers", () => {
       {
         profile: "maya",
         materialLabel: "m1",
+        paramId: "Texture1",
+        materialIndex: 0,
+        attributeIndex: -1,
+        value: "",
+        textureDataKind: "String1",
+      },
+      {
+        profile: "maya",
+        materialLabel: "m1",
         paramId: "DiffuseMap",
         materialIndex: 0,
         attributeIndex: 0,
         value: "",
         textureDataKind: "String",
+      },
+      {
+        profile: "nust",
+        materialLabel: "m2",
+        paramId: "Texture1",
+        materialIndex: 0,
+        attributeIndex: -1,
+        value: "",
+        textureDataKind: "String1",
       },
       {
         profile: "nust",
@@ -168,27 +202,55 @@ describe("numatb template helpers", () => {
       writeNumatb: true,
       writeMayaProfile: false,
     });
-    expect(onlyNustBase).toEqual(["Nust profile: b → BaseColorMap"]);
+    expect(onlyNustBase).toEqual([
+      "Nust profile: b → Texture1 (textures2)",
+      "Nust profile: b → BaseColorMap",
+    ]);
   });
 
-  it("collectMissingTexturePathsForExportSession respects materialLabels filter", () => {
+  it("collectMissingTexturePathsForExportSession validates every material entry by default", () => {
+    const maya = createEmptyNumatbFile();
+    maya.entries.push({
+      material_label: "mappedMtl",
+      shader_label: "",
+      textures: [{ param_id: "DiffuseMap", data: "filled" }],
+    });
+    maya.entries.push({
+      material_label: "extraMtl",
+      shader_label: "",
+      textures: [{ param_id: "Texture1", data: "" }],
+    });
+    const out = collectMissingTexturePathsForExportSession(maya, createEmptyNumatbFile(), {
+      writeNumatb: false,
+      writeMayaProfile: true,
+    });
+    expect(out).toEqual([
+      "Maya profile: mappedMtl → Texture1 (textures2)",
+      "Maya profile: extraMtl → Texture1",
+    ]);
+  });
+
+  it("collectMissingTexturePathsForExportSession can narrow checks with materialLabels", () => {
     const maya = createEmptyNumatbFile();
     maya.entries.push({
       material_label: "onlyMapped",
       shader_label: "",
-      textures: [{ param_id: "BaseColorMap", data: "" }],
+      textures: [{ param_id: "DiffuseMap", data: "" }],
     });
     maya.entries.push({
       material_label: "extraUnused",
       shader_label: "",
-      textures: [{ param_id: "RoughnessMap", data: "" }],
+      textures: [{ param_id: "Texture1", data: "" }],
     });
     const out = collectMissingTexturePathsForExportSession(maya, createEmptyNumatbFile(), {
       writeNumatb: false,
       writeMayaProfile: true,
       materialLabels: ["onlyMapped"],
     });
-    expect(out).toEqual(["Maya profile: onlyMapped → BaseColorMap"]);
+    expect(out).toEqual([
+      "Maya profile: onlyMapped → Texture1 (textures2)",
+      "Maya profile: onlyMapped → DiffuseMap",
+    ]);
   });
 
   it("mirrorTexturePathOntoOtherProfile copies path to the same material label and param id", () => {

@@ -11,6 +11,7 @@ pub mod fhm2d_stage_validate;
 pub mod grapparam;
 pub mod hitgroupiddef;
 pub mod interactionid;
+pub mod numatb_format;
 pub mod obf_string;
 pub mod param_bin_format;
 pub mod param_entry_schema;

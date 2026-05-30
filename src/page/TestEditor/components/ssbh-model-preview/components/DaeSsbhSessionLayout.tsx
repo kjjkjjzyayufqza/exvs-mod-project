@@ -11,7 +11,9 @@ import { useDaeSsbhSessionStore } from "../store/daeSsbhSessionStore";
 import { DialogLastPathKey, getDialogDefaultPath, rememberDialogSelection } from "@/utils/dialogLastPath";
 import { useSsbhModelPreview } from "../SsbhModelPreviewContext";
 import { ssbhAnalyzeDae, ssbhAnalyzeFbx, ssbhConvertDaeToSsbh, ssbhConvertFbxToSsbh } from "../ssbhDaeIoService";
+import { useStableMissingTextureFillSlots } from "../hooks/useStableMissingTextureFillSlots";
 import {
+  applyTexturePathFillToProfiles,
   collectMissingTexturePathSlotRefsForExportSession,
   collectMissingTexturePathsForExportSession,
 } from "../store/numatbTemplateStoreHelpers";
@@ -32,22 +34,28 @@ export function DaeSsbhSessionLayout() {
   const selectedGeometrySet = useMemo(() => new Set(session.includeGeometryNames), [session.includeGeometryNames]);
 
   const updateProfileAttribute = useDaeSsbhSessionStore((state) => state.updateProfileAttribute);
+  const addProfileAttribute = useDaeSsbhSessionStore((state) => state.addProfileAttribute);
 
-  const missingTextureSlots = useMemo(
+  const liveMissingTextureSlots = useMemo(
     () =>
       collectMissingTexturePathSlotRefsForExportSession(session.mayaFile, session.nustFile, {
         writeNumatb: session.writeNumatb,
         writeMayaProfile: session.writeMayaProfile,
-        materialLabels: session.numdlbEntries.map((row) => row.materialLabel),
       }),
-    [session.mayaFile, session.nustFile, session.writeNumatb, session.writeMayaProfile, session.numdlbEntries],
+    [session.mayaFile, session.nustFile, session.writeNumatb, session.writeMayaProfile],
+  );
+
+  const fillTextureSlots = useStableMissingTextureFillSlots(
+    session.sourcePath ?? "",
+    session.mayaFile,
+    session.nustFile,
+    liveMissingTextureSlots,
   );
 
   const missingTexturePaths = useMemo(
     () => collectMissingTexturePathsForExportSession(session.mayaFile, session.nustFile, {
       writeNumatb: session.writeNumatb,
       writeMayaProfile: session.writeMayaProfile,
-      materialLabels: session.numdlbEntries.map((row) => row.materialLabel),
     }),
     [session.mayaFile, session.nustFile, session.writeNumatb, session.writeMayaProfile, session.numdlbEntries],
   );
@@ -283,16 +291,23 @@ export function DaeSsbhSessionLayout() {
             Output directory, base filename, geometry selection, and non-empty material labels are required.
           </p>
         ) : null}
-        {missingTextureSlots.length > 0 ? (
+        {fillTextureSlots.length > 0 ? (
           <MissingTexturePathFillPanel
-            slots={missingTextureSlots}
+            slots={fillTextureSlots}
             title={
-              "Every texture path parameter must be filled for the Maya/Nust profiles you are exporting (parameters such as Texture1, RoughnessMap, AmbientOcclusionMap, BaseColorMap, DiffuseCubeMap, etc.)."
+              "Texture1 is always required. Other maps (RoughnessMap, MetallicMap, NormalMap, etc.) are required only when their Use* toggle is enabled in the material entry."
             }
             onFillSlot={(slot, basename) => {
-              const data =
-                slot.textureDataKind === "String1" ? { String1: basename } : { String: basename };
-              updateProfileAttribute(slot.profile, slot.materialIndex, slot.attributeIndex, data);
+              applyTexturePathFillToProfiles(
+                updateProfileAttribute,
+                addProfileAttribute,
+                () => {
+                  const state = useDaeSsbhSessionStore.getState();
+                  return { mayaFile: state.mayaFile, nustFile: state.nustFile };
+                },
+                slot,
+                basename,
+              );
             }}
           />
         ) : null}

@@ -1,4 +1,8 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { Copy } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -8,7 +12,9 @@ import type { SsbhDaeAnalysisReport } from "@/page/TestEditor/components/ssbh-mo
 import { NumdlbMaterialMappingEditor } from "@/page/TestEditor/components/ssbh-model-preview/components/NumdlbMaterialMappingEditor";
 import { NumatbTemplateEditor } from "@/page/TestEditor/components/ssbh-model-preview/components/NumatbTemplateEditor";
 import { MissingTexturePathFillPanel } from "@/page/TestEditor/components/ssbh-model-preview/components/MissingTexturePathFillPanel";
+import { useStableMissingTextureFillSlots } from "@/page/TestEditor/components/ssbh-model-preview/hooks/useStableMissingTextureFillSlots";
 import {
+  applyTexturePathFillToProfiles,
   collectMissingTexturePathSlotRefsForExportSession,
 } from "@/page/TestEditor/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
 import type { DaeAnalysisResult } from "./daeImportTypes";
@@ -51,16 +57,56 @@ export function DaeImportSsbhFullPanel({ analysis, sourcePath, stageRoot }: DaeI
   const selectedGeometrySet = useMemo(() => new Set(session.includeGeometryNames), [session.includeGeometryNames]);
 
   const updateProfileAttribute = useDaeSsbhSessionStore((state) => state.updateProfileAttribute);
+  const addProfileAttribute = useDaeSsbhSessionStore((state) => state.addProfileAttribute);
 
-  const missingTextureSlots = useMemo(
+  const liveMissingTextureSlots = useMemo(
     () =>
       collectMissingTexturePathSlotRefsForExportSession(session.mayaFile, session.nustFile, {
         writeNumatb: session.writeNumatb,
         writeMayaProfile: session.writeMayaProfile,
-        materialLabels: session.numdlbEntries.map((r) => r.materialLabel),
       }),
-    [session.mayaFile, session.nustFile, session.writeNumatb, session.writeMayaProfile, session.numdlbEntries],
+    [session.mayaFile, session.nustFile, session.writeNumatb, session.writeMayaProfile],
   );
+
+  const fillTextureResetKey = useMemo(
+    () => `${sourcePath}\0${analysis?.geometryNames?.join("\u0001") ?? ""}`,
+    [sourcePath, analysis],
+  );
+
+  const fillTextureSlots = useStableMissingTextureFillSlots(
+    fillTextureResetKey,
+    session.mayaFile,
+    session.nustFile,
+    liveMissingTextureSlots,
+  );
+
+  /**
+   * Serializes the in-memory Maya/Nust numatb profile JSON for clipboard export.
+   * Intended for pasting into an AI assistant for material/texture troubleshooting (not for game export).
+   */
+  const handleCopyNumatbProfilesJson = useCallback(async () => {
+    const payload = {
+      mayaProfile: session.mayaFile,
+      nustProfile: session.nustFile,
+      numdlbMaterialMappings: session.numdlbEntries,
+      exportOptions: {
+        writeMayaProfile: session.writeMayaProfile,
+        writeNumatb: session.writeNumatb,
+      },
+    };
+    try {
+      await writeText(JSON.stringify(payload, null, 2));
+      toast.success("Copied NUMATB profiles JSON to clipboard");
+    } catch {
+      toast.error("Failed to copy NUMATB profiles to clipboard");
+    }
+  }, [
+    session.mayaFile,
+    session.nustFile,
+    session.numdlbEntries,
+    session.writeMayaProfile,
+    session.writeNumatb,
+  ]);
 
   if (!analysis || !analysis.canConvert) {
     return (
@@ -167,16 +213,38 @@ export function DaeImportSsbhFullPanel({ analysis, sourcePath, stageRoot }: DaeI
         />
       </DaeImportPanelSection>
 
-      <DaeImportPanelSection title="NUMATB Profiles (Texture Data)">
+      <DaeImportPanelSection
+        title="NUMATB Profiles (Texture Data)"
+        headerEnd={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0"
+            title="Copy full NUMATB profile data as JSON (for AI analysis)"
+            aria-label="Copy NUMATB profiles as JSON"
+            onClick={() => void handleCopyNumatbProfilesJson()}
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </Button>
+        }
+      >
         <NumatbTemplateEditor />
       </DaeImportPanelSection>
 
       <MissingTexturePathFillPanel
-        slots={missingTextureSlots}
+        slots={fillTextureSlots}
         onFillSlot={(slot, basename) => {
-          const data =
-            slot.textureDataKind === "String1" ? { String1: basename } : { String: basename };
-          updateProfileAttribute(slot.profile, slot.materialIndex, slot.attributeIndex, data);
+          applyTexturePathFillToProfiles(
+            updateProfileAttribute,
+            addProfileAttribute,
+            () => {
+              const state = useDaeSsbhSessionStore.getState();
+              return { mayaFile: state.mayaFile, nustFile: state.nustFile };
+            },
+            slot,
+            basename,
+          );
         }}
       />
     </div>

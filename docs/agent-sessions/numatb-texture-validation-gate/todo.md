@@ -1,39 +1,20 @@
 # numatb-texture-validation-gate — TODO
 
-Feature: block Save changes / Repack FHM2D in the Scene Editor when a model's
-numatb references invalid textures, and surface the errors clearly (toast +
-dedicated dialog + outliner marking).
+## Current phase: Rust `numatb_format` module (delegated)
 
-## Resolved design decisions (from grill session)
+- [x] Revert inline rules patch in `fhm2d_stage_validate.rs` (coordinator)
+- [x] Write `design-numatb-format-module.md` + `agent-handoff-gpt55.md`
+- [x] **Subagent:** Implement `src-tauri/src/format/numatb_format.rs`
+- [x] **Subagent:** Wire `exvs_stage_check_numatb_empty_params` to module
+- [x] **Subagent:** Rust unit tests + `cargo check`
+- [x] **Subagent:** Update `process.md`
 
-1. Invalid = BOTH (case A) empty texture-path param AND (case B) referenced
-   `.nutexb` missing on disk.
-2. Gate all three entry points, hard block: `handleSaveFolder`,
-   `handleSaveFhm2d`, `scene_repack_in_place`.
-3. Validation logic lives in Rust, reusing the `EXVS_STAGE_VALIDATION_FLOW`
-   step factory.
-4. Case A = NEW step `exvs_stage_check_numatb_empty_params`. Do NOT modify the
-   existing `exvs_stage_check_numatb_textures`.
-5. Case B = reuse existing `exvs_stage_validate_for_repack` UNCHANGED, run only
-   in the FHM2D pipeline after `redistribute_stage_textures` (per-model 0//1/
-   layout exists there).
-6. UI: toast (aggregate) + dedicated grouped error dialog (object -> material ->
-   param) + outliner red marking. Pre-flight failure must not mutate any file.
+## Prior work (unchanged)
 
-## Tasks
-
-- [ ] Rust: add `exvs_stage_check_numatb_empty_params` step + optional `object`
-      field on `ExvsStageValidationError`.
-- [ ] Rust: add `exvs_stage_validate_numatb_empty_params` entry + Tauri command
-      `scene_validate_numatb_empty_params`, register in `lib.rs`.
-- [ ] TS: `validateNumatbEmptyParams` + `validateStageForRepack` in
-      `sceneSessionService.ts`.
-- [ ] TS: `sceneValidationStore` (keyed by folderName) + `StageValidationErrorDialog`.
-- [ ] TS: pre-flight gate in 3 entry points + FHM2D post-redistribute gate.
-- [ ] TS: SceneOutliner red marking from validation store.
-- [ ] Verify: `cargo check` + frontend typecheck/lint.
+- [x] Frontend: Use*-gated missing texture paths + validate all profile entries
+- [x] `exvs_stage_validate_numatb_empty_params` Tauri command exists
+- [x] Frontend/Rust parity on empty-path rules
 
 ## Next agent starts at
 
-Begin with the Rust step (`fhm2d_stage_validate.rs`), then the command, then
-frontend wiring. See process.md for code-level findings.
+Review the final diff and continue with any coordinator-level integration or PR preparation.

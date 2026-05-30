@@ -28,7 +28,7 @@ import { useSceneModalViewportSuspendInteraction } from "../../hooks/useSceneMod
 export type DaeImportPrimaryMode = "preview" | "ssbh";
 
 const VIEWPORT_MARGIN = 48;
-const SSBH_MAX_WIDTH = 820;
+const SSBH_MAX_WIDTH = 1080;
 const DAE_IMPORT_MODAL_HANDLE = "dae-import-modal-handle";
 const DAE_IMPORT_MODAL_LAYER_ID = "dae-import-modal-layer";
 
@@ -166,7 +166,6 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
       {
         writeNumatb: ssbhSession.writeNumatb,
         writeMayaProfile: ssbhSession.writeMayaProfile,
-        materialLabels: ssbhSession.numdlbEntries.map((r) => r.materialLabel),
       },
     );
     return missing.length === 0;

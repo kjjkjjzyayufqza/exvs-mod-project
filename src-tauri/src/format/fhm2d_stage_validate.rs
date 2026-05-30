@@ -8,6 +8,7 @@ use super::fhm2d_stage::{
     find_ssbh_folders, parse_numatb_texture_refs_by_role, resolve_content_root,
     INFO_SUBFOLDER_NAMES, STAGE_BASE_NAME, STAGE_INFO_NAME,
 };
+use super::numatb_format;
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -403,12 +404,7 @@ fn exvs_stage_check_numatb_textures(
 
 // ── Pre-flight step: numatb texture parameters must not have empty paths ─────
 
-/// Flag every numatb material texture parameter whose path string is empty.
-///
-/// `MatlEntryData.textures` / `.textures2` contain only texture-path parameters,
-/// so an empty `data` string means a slot was declared (e.g. DiffuseMap,
-/// NormalMap, …) but never assigned a texture. A material that legitimately uses
-/// no textures has an empty `textures` vector, so it produces no false positives.
+/// Flag required numatb material texture parameters whose path string is empty.
 fn exvs_stage_check_numatb_empty_params(
     content_root: &Path,
     errors: &mut Vec<ExvsStageValidationError>,
@@ -448,31 +444,15 @@ fn exvs_stage_check_numatb_empty_params(
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default();
 
-            for entry in &matl.entries {
-                for tex in &entry.textures {
-                    if tex.data.trim().is_empty() {
-                        errors.push(empty_param_error(
-                            &model_name,
-                            &entry.material_label,
-                            &tex.param_id,
-                            &numatb_name,
-                            &numatb_path,
-                            false,
-                        ));
-                    }
-                }
-                for tex in &entry.textures2 {
-                    if tex.data.trim().is_empty() {
-                        errors.push(empty_param_error(
-                            &model_name,
-                            &entry.material_label,
-                            &tex.param_id,
-                            &numatb_name,
-                            &numatb_path,
-                            true,
-                        ));
-                    }
-                }
+            for missing in numatb_format::collect_missing_texture_paths_for_matl(&matl) {
+                errors.push(empty_param_error(
+                    &model_name,
+                    &missing.material_label,
+                    &missing.param_id,
+                    &numatb_name,
+                    &numatb_path,
+                    missing.is_textures2_bucket,
+                ));
             }
         }
     }

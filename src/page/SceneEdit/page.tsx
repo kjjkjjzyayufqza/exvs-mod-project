@@ -116,6 +116,7 @@ import {
   loadDAEFromPath,
   type BatchDaeExportEntry,
 } from "./utils/daeExportImport";
+import { buildDaeExportDialogState } from "./utils/daeExportDialogState";
 import {
   DaeExportDialog,
   type DaeExportConfig,
@@ -2708,42 +2709,53 @@ export default function SceneEdit() {
     [sceneSessionId, stageRoot, handleSelectNode],
   );
 
+  const importedDaeIdSet = useMemo(
+    () => new Set(importedDaeObjects.map((obj) => obj.id)),
+    [importedDaeObjects],
+  );
+
+  const openDaeExportDialogForNodeIds = useCallback(
+    (nodeIds: string[]) => {
+      const payload = buildDaeExportDialogState({
+        nodeIds,
+        baseModel,
+        subModels,
+        importedDaeIds: importedDaeIdSet,
+        exportObjects: viewportRef.current?.getSelectedExportObjects() ?? [],
+      });
+      if (!payload) {
+        toast.error("This object cannot be exported as DAE");
+        return false;
+      }
+      setDaeExportDialog({ open: true, ...payload });
+      return true;
+    },
+    [baseModel, importedDaeIdSet, subModels],
+  );
+
   const handleExportSelectedDae = useCallback(() => {
     const objects = viewportRef.current?.getSelectedExportObjects() ?? [];
     if (objects.length === 0) {
       toast.error("Select one or more scene objects before exporting DAE");
       return;
     }
+    openDaeExportDialogForNodeIds(objects.map((entry) => entry.name));
+  }, [openDaeExportDialogForNodeIds]);
 
-    const targets: DaeExportTarget[] = objects.map((entry) => {
-      const safeName = entry.name.replace(/[\/\\:*?"<>|]/g, "_");
-      const sub = subModels.find((s) => s.folderName === entry.name);
-      if (sub) {
-        return {
-          nodeId: entry.name,
-          name: safeName,
-          rootPath: sub.bundle.rootFolder,
-          type: "ssbh" as const,
-        };
+  const handleExportDaeFromOutliner = useCallback(
+    (nodeId: string) => {
+      if (!(nodeVisibility[nodeId] ?? true)) {
+        toast.error("Cannot export a hidden object");
+        return;
       }
-      if (entry.name === "base" && baseModel) {
-        return {
-          nodeId: "base",
-          name: safeName,
-          rootPath: baseModel.rootFolder,
-          type: "ssbh" as const,
-        };
-      }
-      return {
-        nodeId: entry.name,
-        name: safeName,
-        rootPath: null,
-        type: "imported-dae" as const,
-      };
-    });
-
-    setDaeExportDialog({ open: true, targets, threeObjects: objects });
-  }, [baseModel, subModels]);
+      useSceneEditorStore.getState().select(nodeId);
+      applyPrimarySelectionState(nodeId);
+      requestAnimationFrame(() => {
+        openDaeExportDialogForNodeIds([nodeId]);
+      });
+    },
+    [applyPrimarySelectionState, nodeVisibility, openDaeExportDialogForNodeIds],
+  );
 
   const handleDaeExportConfirm = useCallback(async (config: DaeExportConfig) => {
     const { targets, threeObjects } = daeExportDialog;
@@ -3434,6 +3446,7 @@ export default function SceneEdit() {
                     onReplaceHkt={handleReplaceHkt}
                     onReorderRootChild={handleReorderOutlinerNode}
                     onOpenProperties={handleOpenProperties}
+                    onExportDae={handleExportDaeFromOutliner}
                   />
                   {havokMeshDataMap.size > 0 && (
                     <MayaSection title="Collision" badge={havokMeshDataMap.size}>
