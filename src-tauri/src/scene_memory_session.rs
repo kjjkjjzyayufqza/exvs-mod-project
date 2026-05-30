@@ -178,7 +178,11 @@ impl SceneMemorySession {
         id
     }
 
-    pub fn add_import_from_path(&mut self, name: String, path: &std::path::Path) -> Result<String, String> {
+    pub fn add_import_from_path(
+        &mut self,
+        name: String,
+        path: &std::path::Path,
+    ) -> Result<String, String> {
         let dae_bytes = std::fs::read(path)
             .map_err(|e| format!("Failed to read '{}': {}", path.display(), e))?;
         Ok(self.add_import(name, dae_bytes))
@@ -220,11 +224,7 @@ impl SceneMemorySession {
         Ok(())
     }
 
-    pub fn store_hkt_bytes(
-        &mut self,
-        import_id: &str,
-        hkt_bytes: Vec<u8>,
-    ) -> Result<(), String> {
+    pub fn store_hkt_bytes(&mut self, import_id: &str, hkt_bytes: Vec<u8>) -> Result<(), String> {
         let import = self.find_import_mut(import_id)?;
         import.hkt_bytes = Some(hkt_bytes);
         self.dirty = true;
@@ -328,7 +328,7 @@ impl SceneMemorySession {
                     });
                 }
             }
-            // HKT goes at {base}/{name}.hkt (model folder level, not inside /0)
+            // EXVS stage model collision is stored at the model folder root.
             if let Some(ref hkt) = import.hkt_bytes {
                 let base = import
                     .config
@@ -337,7 +337,7 @@ impl SceneMemorySession {
                     .map(|c| c.base_filename.as_str())
                     .unwrap_or(&import.name);
                 artifacts.push(SaveArtifact {
-                    relative_path: format!("{base}/{}.hkt", import.name),
+                    relative_path: format!("{base}/map_hit.hkt"),
                     data: hkt.clone(),
                 });
             }
@@ -595,7 +595,8 @@ mod tests {
         assert!(paths.contains(&"mymodel/0/mymodel.nusktb"));
         assert!(paths.contains(&"mymodel/0/mymodel__nust__.numatb"));
         assert!(paths.contains(&"mymodel/0/mymodel.jnttbl"));
-        assert!(paths.contains(&"mymodel/test_model.hkt"));
+        assert!(paths.contains(&"mymodel/map_hit.hkt"));
+        assert!(!paths.contains(&"mymodel/test_model.hkt"));
         assert!(!paths.contains(&"mymodel/0/model__maya__.numatb"));
     }
 
@@ -626,7 +627,9 @@ mod tests {
     fn session_state_create_and_destroy() {
         let state = SceneSessionState::default();
         let id = state.create_session(SceneSource::New);
-        assert!(state.with_session(&id, |s| Ok(s.session_id().to_string())).is_ok());
+        assert!(state
+            .with_session(&id, |s| Ok(s.session_id().to_string()))
+            .is_ok());
         state.destroy_session(&id).unwrap();
         assert!(state.with_session(&id, |_| Ok(())).is_err());
     }
@@ -741,12 +744,18 @@ mod tests {
         let artifacts = s.collect_save_artifacts();
         let paths: Vec<&str> = artifacts.iter().map(|a| a.relative_path.as_str()).collect();
         assert!(
-            paths.contains(&"wall/collision_obj.hkt"),
-            "HKT should be at model folder root, not inside /0. Got: {:?}",
+            paths.contains(&"wall/map_hit.hkt"),
+            "HKT should be saved as map_hit.hkt at model folder root. Got: {:?}",
             paths
         );
         assert!(
-            !paths.iter().any(|p| p.contains("/0/") && p.ends_with(".hkt")),
+            !paths.contains(&"wall/collision_obj.hkt"),
+            "HKT must not use the imported object name as the filename"
+        );
+        assert!(
+            !paths
+                .iter()
+                .any(|p| p.contains("/0/") && p.ends_with(".hkt")),
             "HKT must NOT be inside /0 subfolder"
         );
     }

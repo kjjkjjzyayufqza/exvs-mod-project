@@ -1,21 +1,21 @@
 use tauri::Manager;
 
 mod character_id_preview;
+pub mod collision_mesh;
 mod commands;
 mod fhm2d_memory_preview;
 pub mod format;
 pub mod havok_cli;
-pub mod collision_mesh;
 pub mod havok_collision_encode;
 pub mod havok_mesh_encode;
 pub mod havok_mesh_export;
 mod jnttbl_cmd;
 mod jnttbl_format;
+pub mod numshb_collision;
 pub mod nutexb_lib;
 mod preview_collection_state;
 mod scene_memory_session;
 mod scene_session_commands;
-mod numshb_collision;
 pub mod ssbh_dae;
 mod ssbh_dae_cmd;
 mod ssbh_motion;

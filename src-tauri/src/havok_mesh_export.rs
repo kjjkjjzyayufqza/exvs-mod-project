@@ -22,9 +22,8 @@ fn child_elements<'a>(el: &'a xmltree::Element) -> impl Iterator<Item = &'a xmlt
 }
 
 fn find_field<'a>(parent: &'a xmltree::Element, name: &str) -> Option<&'a xmltree::Element> {
-    child_elements(parent).find(|e| {
-        e.name == "field" && e.attributes.get("name").map(|n| n.as_str()) == Some(name)
-    })
+    child_elements(parent)
+        .find(|e| e.name == "field" && e.attributes.get("name").map(|n| n.as_str()) == Some(name))
 }
 
 fn first_record(el: &xmltree::Element) -> Option<&xmltree::Element> {
@@ -135,15 +134,12 @@ fn extract_sections(mesh_tree: &xmltree::Element) -> Result<Vec<Section>, String
         )
         .ok_or("Bad firstPrimitiveIndex")? as u32;
 
-        let npv = integer_value(
-            find_field(sec_rec, "numPackedVertices").ok_or("No numPackedVertices")?,
-        )
-        .ok_or("Bad numPackedVertices")? as u32;
+        let npv =
+            integer_value(find_field(sec_rec, "numPackedVertices").ok_or("No numPackedVertices")?)
+                .ok_or("Bad numPackedVertices")? as u32;
 
-        let np = integer_value(
-            find_field(sec_rec, "numPrimitives").ok_or("No numPrimitives")?,
-        )
-        .ok_or("Bad numPrimitives")? as u32;
+        let np = integer_value(find_field(sec_rec, "numPrimitives").ok_or("No numPrimitives")?)
+            .ok_or("Bad numPrimitives")? as u32;
 
         sections.push(Section {
             codec_parms: [parms[0], parms[1], parms[2], parms[3], parms[4], parms[5]],
@@ -204,16 +200,16 @@ fn extract_primitives(mesh_tree: &xmltree::Element) -> Result<Vec<[u8; 4]>, Stri
 }
 
 fn decode_shared_vertex(sv: u64, domain: &DomainAabb) -> [f64; 3] {
-    let xi = ((sv >> 43) & 0x1F_FFFF) as f64;
-    let yi = ((sv >> 22) & 0x1F_FFFF) as f64;
-    let zi = ((sv >> 1) & 0x1F_FFFF) as f64;
+    let xi = (sv & 0x1F_FFFF) as f64;
+    let yi = ((sv >> 21) & 0x1F_FFFF) as f64;
+    let zi = ((sv >> 42) & 0x3F_FFFF) as f64;
     let dx = domain.max[0] - domain.min[0];
     let dy = domain.max[1] - domain.min[1];
     let dz = domain.max[2] - domain.min[2];
     [
         domain.min[0] + (xi / 2097151.0) * dx,
         domain.min[1] + (yi / 2097151.0) * dy,
-        domain.min[2] + (zi / 2097151.0) * dz,
+        domain.min[2] + (zi / 4194303.0) * dz,
     ]
 }
 
@@ -275,10 +271,7 @@ pub fn havok_xml_to_obj(xml_content: &str, output_path: &Path) -> Result<String,
                 if svi_idx < shared_vertices_index.len() {
                     let global_idx = shared_vertices_index[svi_idx] as usize;
                     if global_idx < shared_vertices.len() {
-                        obj_verts.push(decode_shared_vertex(
-                            shared_vertices[global_idx],
-                            &domain,
-                        ));
+                        obj_verts.push(decode_shared_vertex(shared_vertices[global_idx], &domain));
                     } else {
                         obj_verts.push([0.0, 0.0, 0.0]);
                     }
@@ -348,8 +341,8 @@ pub fn havok_xml_to_obj(xml_content: &str, output_path: &Path) -> Result<String,
 
 #[tauri::command]
 pub async fn convert_hkt_to_obj(input_path: String, output_path: String) -> Result<String, String> {
-    let config = crate::havok_cli::HavokCliConfig::detect()
-        .ok_or("Havok Content Tools not found")?;
+    let config =
+        crate::havok_cli::HavokCliConfig::detect().ok_or("Havok Content Tools not found")?;
 
     if !Path::new(&config.filter_manager_path).exists() {
         return Err("hctStandAloneFilterManager.exe not found".into());
@@ -363,8 +356,10 @@ pub async fn convert_hkt_to_obj(input_path: String, output_path: String) -> Resu
     let out = std::path::PathBuf::from(&output_path);
 
     tauri::async_runtime::spawn_blocking(move || {
-        let xml =
-            crate::havok_cli::convert_hkt_bytes_to_xml(&config.filter_manager_path, &std::fs::read(&inp).map_err(|e| format!("Read HKT failed: {e}"))?)?;
+        let xml = crate::havok_cli::convert_hkt_bytes_to_xml(
+            &config.filter_manager_path,
+            &std::fs::read(&inp).map_err(|e| format!("Read HKT failed: {e}"))?,
+        )?;
         havok_xml_to_obj(&xml, &out)
     })
     .await
