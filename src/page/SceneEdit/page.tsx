@@ -102,7 +102,6 @@ import { clearSceneTextureThumbnailCache } from "./utils/sceneTextureThumbnail";
 import type { SceneTextureDecodeContext } from "./utils/sceneTextureDecode";
 import { reorderPlacementEntriesBySubModels } from "./utils/reorderPlacementBySubModels";
 import { MayaSection } from "./components/MayaSection";
-import { PlacementConfigPanel } from "./components/PlacementConfigPanel";
 import {
   createDefaultTextureSlotLoadEnabled,
   createUniformTextureSlotLoadEnabled,
@@ -3588,48 +3587,6 @@ export default function SceneEdit() {
                       <StagePropertyEditor
                         transform={selectedTransform}
                         onTransformChange={handleTransformChange}
-                        placementEntry={
-                          selectedPlacementIdx !== null
-                            ? placementEntries[selectedPlacementIdx] ?? null
-                            : null
-                        }
-                        placementHeader={placementHeader}
-                        initialPlacementRawFields={
-                          selectedPlacementIdx !== null
-                            ? initialSnapshotRef.current?.placementEntries[selectedPlacementIdx]
-                                ?.rawFields ?? null
-                            : null
-                        }
-                        onPlacementFieldPreview={
-                          selectedPlacementIdx !== null
-                            ? (fieldIndex, value) =>
-                                handlePlacementFieldPreview(selectedPlacementIdx, fieldIndex, value)
-                            : undefined
-                        }
-                        onPlacementFieldCommit={
-                          selectedPlacementIdx !== null
-                            ? (fieldIndex, value) =>
-                                handlePlacementFieldCommit(selectedPlacementIdx, fieldIndex, value)
-                            : undefined
-                        }
-                        onAddPlacementField={
-                          selectedPlacementIdx !== null
-                            ? (key, value) =>
-                                handleAddPlacementField(selectedPlacementIdx, key, value)
-                            : undefined
-                        }
-                        onRemovePlacementField={
-                          selectedPlacementIdx !== null
-                            ? (keyIndex) =>
-                                handleRemovePlacementFieldPair(selectedPlacementIdx, keyIndex)
-                            : undefined
-                        }
-                        onResetPlacementField={
-                          selectedPlacementIdx !== null
-                            ? (fieldIndex) =>
-                                handleResetPlacementField(selectedPlacementIdx, fieldIndex)
-                            : undefined
-                        }
                       />
                     </MayaSection>
                   )}
@@ -3639,44 +3596,10 @@ export default function SceneEdit() {
                       stageName={stageName}
                       stageRoot={stageRoot}
                       selectedNode={selectedNode}
-                      selectedPlacementIdx={selectedPlacementIdx}
-                      placementEntry={
-                        selectedPlacementIdx !== null
-                          ? placementEntries[selectedPlacementIdx]
-                          : null
-                      }
                       subModelCount={effectiveSubModels.length}
                       textureCount={textureDataMap.size}
                     />
                   </MayaSection>
-
-                  {selectedPlacementIdx !== null && placementEntries[selectedPlacementIdx] && (
-                    <MayaSection title="Object Config" defaultOpen>
-                      <PlacementConfigPanel
-                        entry={placementEntries[selectedPlacementIdx]}
-                        initialEntry={
-                          initialSnapshotRef.current?.placementEntries[selectedPlacementIdx] ?? null
-                        }
-                        placementHeader={placementHeader}
-                        subModels={effectiveSubModels}
-                        onFieldPreview={(fieldIndex, value) =>
-                          handlePlacementFieldPreview(selectedPlacementIdx, fieldIndex, value)
-                        }
-                        onFieldCommit={(fieldIndex, value) =>
-                          handlePlacementFieldCommit(selectedPlacementIdx, fieldIndex, value)
-                        }
-                        onAddField={(key, value) =>
-                          handleAddPlacementField(selectedPlacementIdx, key, value)
-                        }
-                        onRemoveField={(keyIndex) =>
-                          handleRemovePlacementFieldPair(selectedPlacementIdx, keyIndex)
-                        }
-                        onResetField={(fieldIndex) =>
-                          handleResetPlacementField(selectedPlacementIdx, fieldIndex)
-                        }
-                      />
-                    </MayaSection>
-                  )}
 
                   {selectedNodeId && (
                     <MayaSection title="Asset Config" defaultOpen>

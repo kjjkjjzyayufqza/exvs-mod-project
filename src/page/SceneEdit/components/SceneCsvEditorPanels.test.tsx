@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { GraphicParamPanel, type GraphicParam } from "./GraphicParamPanel";
 import { PlacementCsvEditorPanel } from "./PlacementCsvEditorPanel";
 import type { PlacementRow } from "../types/placement";
@@ -23,23 +24,26 @@ describe("Scene CSV editor panels", () => {
     ];
 
     render(
-      <GraphicParamPanel
-        params={params}
-        initialParams={null}
-        appliedKeys={new Set(["directional_lighting_intensity"])}
-        onValueChange={vi.fn()}
-        onKeyChange={vi.fn()}
-        onAdd={vi.fn()}
-        onDelete={vi.fn()}
-        onToggleApplied={vi.fn()}
-        onApplyAll={vi.fn()}
-        onClearApplied={vi.fn()}
-        onResetValue={vi.fn()}
-      />,
+      <TooltipProvider>
+        <GraphicParamPanel
+          params={params}
+          initialParams={null}
+          appliedKeys={new Set(["directional_lighting_intensity"])}
+          onValueChange={vi.fn()}
+          onKeyChange={vi.fn()}
+          onAdd={vi.fn()}
+          onDelete={vi.fn()}
+          onToggleApplied={vi.fn()}
+          onApplyAll={vi.fn()}
+          onClearApplied={vi.fn()}
+          onResetValue={vi.fn()}
+        />
+      </TooltipProvider>,
     );
 
-    expect(screen.getByDisplayValue("stage_only_non_three_value")).toBeInTheDocument();
+    expect(screen.getByText("Stage Only Non Three Value")).toBeInTheDocument();
     expect(screen.getByDisplayValue("abc")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Search parameters...")).toBeInTheDocument();
     expect(screen.getByTestId("graphic-param-panel")).toHaveClass("flex", "min-h-0");
     expect(screen.queryByTestId("graphic-param-fixed-scroll")).not.toBeInTheDocument();
   });

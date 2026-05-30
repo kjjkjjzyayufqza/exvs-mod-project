@@ -1,14 +1,11 @@
 import type { StageTreeNode } from "./StageHierarchyTree";
-import type { PlacementRow } from "../types/placement";
 import type { SceneDrawStats } from "./SceneViewportOverlay";
-import { PROP_AXIS_GRID, PROP_LABEL, PROP_PANEL, PROP_ROW } from "./propertyPanelStyles";
+import { PROP_LABEL, PROP_PANEL, PROP_ROW } from "./propertyPanelStyles";
 
 interface SceneInfoContentProps {
   stageName: string | null;
   stageRoot: string | null;
   selectedNode: StageTreeNode | null;
-  selectedPlacementIdx: number | null;
-  placementEntry: PlacementRow | null;
   subModelCount: number;
   textureCount: number;
 }
@@ -17,8 +14,6 @@ export function SceneInfoContent({
   stageName,
   stageRoot,
   selectedNode,
-  selectedPlacementIdx,
-  placementEntry,
   subModelCount,
   textureCount,
 }: SceneInfoContentProps) {
@@ -54,29 +49,6 @@ export function SceneInfoContent({
               value={String(selectedNode.objectIndex)}
             />
           )}
-        </div>
-      )}
-
-      {placementEntry && (
-        <div className="space-y-1 border-t border-border/30 pt-1.5">
-          <div className={`${PROP_LABEL} mb-0.5`}>Placement #{selectedPlacementIdx}</div>
-          <div className={PROP_AXIS_GRID}>
-            <ValueCell
-              label="X"
-              value={placementEntry.posX.toFixed(1)}
-              color="text-red-400"
-            />
-            <ValueCell
-              label="Y"
-              value={placementEntry.posY.toFixed(1)}
-              color="text-green-400"
-            />
-            <ValueCell
-              label="Z"
-              value={placementEntry.posZ.toFixed(1)}
-              color="text-blue-400"
-            />
-          </div>
         </div>
       )}
     </div>
@@ -173,21 +145,3 @@ function Row({
   );
 }
 
-function ValueCell({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string;
-  color: string;
-}) {
-  return (
-    <div className="flex min-w-0 flex-col items-center rounded bg-muted/30 px-1 py-1">
-      <span className="text-[9px] text-muted-foreground/60">{label}</span>
-      <span className={`truncate w-full text-center text-[11px] font-mono tabular-nums ${color}`}>
-        {value}
-      </span>
-    </div>
-  );
-}
