@@ -13,7 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -26,9 +26,11 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useMemo, useCallback, useEffect, useReducer, useState } from "react";
 import { TexturePreviewModal } from "./TexturePreviewModal";
 import { TextureReplaceModal } from "./TextureReplaceModal";
+import { VirtualizedList } from "./VirtualizedList";
 import { convertImageToNutexb } from "../utils/sceneTextureConvert";
 
 const ASYNC_THUMB_CONCURRENCY = 4;
+const TEXTURE_ROW_HEIGHT = 40;
 
 interface SceneTextureManagerProps {
   textureDataMap: NutexbTextureDataMap;
@@ -231,30 +233,32 @@ export function SceneTextureManager({
         </Button>
       </div>
 
-      <ScrollArea className="flex-1">
-        {filtered.length === 0 ? (
+      <VirtualizedList
+        items={filtered}
+        rowHeight={TEXTURE_ROW_HEIGHT}
+        getItemKey={(entry) => entry.id}
+        className="flex-1 min-h-0 overflow-auto"
+        emptyState={
           <div className="flex flex-col items-center justify-center h-32 text-muted-foreground gap-1">
             <ImageIcon className="h-6 w-6 opacity-40" />
-            <p className="text-[10px] opacity-60">No textures</p>
+            <p className="text-[10px] opacity-60">
+              {searchQuery.trim() ? `No textures match "${searchQuery.trim()}"` : "No textures"}
+            </p>
           </div>
-        ) : (
-          <div className="flex flex-col">
-            {filtered.map((entry) => (
-              <TextureRow
-                key={entry.id}
-                entry={entry}
-                textureDataMap={textureDataMap}
-                isSelected={entry.id === selectedId}
-                onSelect={() => setSelectedId(entry.id)}
-                onPreview={() => handlePreview(entry)}
-                onReplace={() => handleReplace(entry)}
-                onDelete={() => handleDelete(entry)}
-                onCopyPath={() => handleCopyPath(entry)}
-              />
-            ))}
-          </div>
+        }
+        renderRow={(entry) => (
+          <TextureRow
+            entry={entry}
+            textureDataMap={textureDataMap}
+            isSelected={entry.id === selectedId}
+            onSelect={() => setSelectedId(entry.id)}
+            onPreview={() => handlePreview(entry)}
+            onReplace={() => handleReplace(entry)}
+            onDelete={() => handleDelete(entry)}
+            onCopyPath={() => handleCopyPath(entry)}
+          />
         )}
-      </ScrollArea>
+      />
 
       {previewEntry && (
         <TexturePreviewModal
@@ -350,17 +354,18 @@ function TextureRow({
         ? `${entry.width}x${entry.height}`
         : null;
 
+  const isConverting = entry.format === "converting";
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
           className={cn(
-            "flex items-center gap-2 px-2 py-1 cursor-pointer select-none border-b border-border/30",
+            "flex h-full items-center gap-2 px-2 py-1 cursor-pointer select-none border-b border-border/30",
             isSelected
               ? "bg-accent text-accent-foreground"
               : "hover:bg-muted/40"
           )}
-          style={{ height: 40 }}
           onClick={() => {
             onSelect();
           }}
@@ -375,6 +380,8 @@ function TextureRow({
                 alt={entry.filename}
                 className="w-full h-full object-cover"
               />
+            ) : isConverting ? (
+              <Skeleton className="h-full w-full rounded" />
             ) : (
               <ImageIcon className="h-4 w-4 text-muted-foreground/50" />
             )}

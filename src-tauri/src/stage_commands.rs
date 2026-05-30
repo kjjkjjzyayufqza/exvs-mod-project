@@ -682,3 +682,17 @@ pub async fn exvs_stage_validate_for_repack(
     .map_err(|e| format!("Task join error: {e}"))?;
     Ok(result)
 }
+
+/// Pre-flight gate: detect numatb material texture parameters with empty paths.
+/// Layout-independent, so it is safe to run before any save/repack mutation.
+#[tauri::command]
+pub async fn scene_validate_numatb_empty_params(
+    stage_root: String,
+) -> Result<fhm2d_stage_validate::ExvsStageValidationResult, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        fhm2d_stage_validate::exvs_stage_validate_numatb_empty_params(&stage_root)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?;
+    Ok(result)
+}

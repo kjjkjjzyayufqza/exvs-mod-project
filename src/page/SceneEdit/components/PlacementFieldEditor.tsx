@@ -35,6 +35,10 @@ import {
   PROP_PANEL,
 } from "./propertyPanelStyles";
 import { TransformAxisGrid } from "./TransformAxisGrid";
+import { VirtualizedList } from "./VirtualizedList";
+
+/** px-1.5 py-1 + text-[10px] candidate button in the add-field popover. */
+const VDK_KEY_CANDIDATE_ROW_HEIGHT = 24;
 
 interface PlacementFieldEditorProps {
   entry: PlacementRow;
@@ -382,22 +386,26 @@ function AddFieldControl({
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
-          <div className="max-h-48 space-y-0.5 overflow-y-auto">
-            {filteredKeys.length === 0 ? (
-              <div className="px-1 py-2 text-[10px] text-muted-foreground">No known field</div>
-            ) : (
-              filteredKeys.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  className="flex w-full rounded-sm px-1.5 py-1 text-left font-mono text-[10px] hover:bg-muted/40"
-                  onClick={() => addKnown(key)}
-                >
-                  {key}
-                </button>
-              ))
+          <VirtualizedList
+            items={filteredKeys}
+            rowHeight={VDK_KEY_CANDIDATE_ROW_HEIGHT}
+            getItemKey={(key) => key}
+            className="max-h-60 overflow-auto"
+            emptyState={
+              <div className="px-1 py-2 text-[10px] text-muted-foreground">
+                No matching keys
+              </div>
+            }
+            renderRow={(key) => (
+              <button
+                type="button"
+                className="flex h-full w-full items-center rounded-sm px-1.5 text-left font-mono text-[10px] hover:bg-muted/40"
+                onClick={() => addKnown(key)}
+              >
+                {key}
+              </button>
             )}
-          </div>
+          />
         </PopoverContent>
       </Popover>
       <Input

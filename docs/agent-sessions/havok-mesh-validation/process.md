@@ -434,3 +434,95 @@ Determine whether the current EXVS stage Havok mesh generation path can correctl
   - `5` quads
   - `0` triangles
 - This sample is intentionally simple and useful as a low-complexity inspection/template reference, but it does not exercise the multi-section failure path because it is a single-section mesh.
+
+## Simple Single-Section Template + Game-Format Migration (2026-05-30)
+
+- Implemented the `simple-hkt-template` plan in `src-tauri/src/havok_mesh_encode.rs`:
+  - `fit_to_single_section()`: reuses `simplify_collision_mesh`, then keeps the leading
+    triangle run within `MAX_SECTION_TRIS=127` / `MAX_SECTION_VERTS=255` and compacts
+    vertices, so the encoder emits exactly one section with empty shared-vertex arrays.
+  - `build_mesh_collision_xml_sample_template()`: `All`-mode regeneration of
+    `numShapeKeyBits` / `triangleIsInterior` / `meshTree` over the simple sample export,
+    then `neutralize_acceleration_payload()` empties `simdTree`, empties `connectivity`,
+    and sets `hasSimdTree=false` (element type ids read back from the template).
+  - New bin `src-tauri/src/bin/gen_simple_hkt.rs` (numshb + sample XML -> patched XML +
+    OBJ + HKT). `HKT_FIT=full` keeps the whole mesh (multi-section); default is the
+    single-section experiment.
+- Black-box result:
+  - Single-section file (`map_hit_sssssccccc.hkt`, 127 tris): opens in PreviewTool.
+  - Full file (`map_hit_sssssccccc_full.hkt`, 31 sections, 3901 tris): **the game loads
+    and recognizes it correctly**; PreviewTool still hangs.
+- Decision: stop targeting PreviewTool and migrate to the game-native format.
+- Shape-key migration applied in `mesh_key_info()`:
+  - Was: section-key space for multi-section meshes (`bitsPerKey=5`, `maxKeyValue=30`
+    while declaring `numPrimitiveKeys=7802`) — internally inconsistent, tolerated only by
+    the game runtime.
+  - Now: primitive-key space for all meshes (`maxKeyValue = numPrimitiveKeys - 1`,
+    `bitsPerKey`/`numShapeKeyBits` cover every key), matching both game samples
+    (simple `4/10/9`, complex `13/.../5043`).
+  - Verified full output: `numShapeKeyBits=13`, `numPrimitiveKeys=7802`, `bitsPerKey=13`,
+    `maxKeyValue=7801`; sections=31, sharedVertices=97 unchanged.
+- `simdTree` / `connectivity` are left empty with `hasSimdTree=false`: a valid,
+  game-accepted configuration. Authoring real ones byte-faithfully requires porting
+  Havok's official `hknpCollisionMeshBuilder` and is deferred rather than guessed.
+- Verification: `cargo test --lib havok_mesh_encode` passed (8 tests).
+- Comparison reference: `docs/hkt-collision-format-comparison.md`.
+
+## DSMapStudio Reference Cross-Check (2026-05-30)
+
+- User requested a faithful migration to the game format by referencing DSMapStudio.
+- Fetched the authoritative source (`soulsmods/DSMapStudio`,
+  `src/HKX2/HKX2/Builders/hknpCollisionMeshBuilder.cs` + `BVH.cs`) and compared
+  line-by-line with `src-tauri/src/havok_mesh_encode.rs`.
+- Result: our full multi-section encoder is already **byte-identical** to the reference
+  for every correctness-bearing piece — `CompressDim` (226/extent, sqrt, nibble pack),
+  `BuildAxis4Tree` (leaf `prim*2`, internal `offset|0x1`), `BuildAxis5Tree` (leaf
+  section idx, internal `offset/2`, hi `|0x80`, root xyz=0), 11/11/10 packed vertices,
+  21/21/22 shared vertices, and the `>127 || >255` section split.
+- Key reframing finding: the reference itself **dummies** the acceleration structures —
+  `simdTree` is a 2-node inverted-bounds stub, `connectivity` is never built, and
+  `triangleIsInterior` is `numBits=0`. There is no real `simdTree`/`connectivity`
+  builder to port; a populated one only exists in Havok-SDK-exported assets.
+  DSMapStudio also hardcodes `bitsPerKey=5 / maxKeyValue=30` with literal `// ?`
+  comments — a FromSoftware guess that does not match this game; our primitive-key
+  sizing is correct for this game.
+- Actions applied:
+  - `gen_simple_hkt` now defaults to the full game-faithful encode; single-section fit
+    is opt-in analysis-only via `HKT_FIT=single`.
+  - Doc-commented `havok_mesh_encode.rs` to cite DSMapStudio as the reference and mark
+    `fit_to_single_section` analysis-only.
+  - Regenerated production HKT `e:\XB\解包\com\test\map_hit_sssssccccc.hkt` (93112 bytes,
+    3901 tris, 31 sections, primitive-key shape space).
+- Conclusion: the faithful migration is complete; the encoder matches the reference and
+  the game-native shape-key space. PreviewTool is out of scope by user decision.
+
+## Resume-Session Verification (2026-05-30)
+
+- Re-entered the task to verify and finalize the uncommitted faithful-migration work.
+- Reviewed the in-progress diff:
+  - `build_mesh_collision_xml_faithful()` is the single production entry point. It injects
+    the mesh into the embedded real-game shell
+    `src-tauri/assets/havok_collision_sample_template.xml` (new, ~214 KB) and neutralizes
+    the acceleration payload.
+  - Both production callers are migrated:
+    - `havok_collision_encode.rs::generate_hkt_from_import_bytes` (DAE import path)
+    - `scene_session_commands.rs::scene_generate_hkt_from_mesh` (existing-SSBH path)
+  - `mesh_key_info()` is now single-arg primitive-key sizing; all call sites updated.
+  - `gen_simple_hkt` defaults to full game-faithful; `HKT_FIT=single` is opt-in analysis.
+  - The legacy `build_mesh_collision_xml` (box template) and the multi-arg helpers remain
+    only for the diagnostic `bin/` tools (`gen_hkt_variants`, `debug_hkt_to_obj`) and tests.
+- Verification commands and outcomes:
+  - `cargo test --lib havok_mesh_encode` -> 9 passed (incl. new
+    `faithful_builder_uses_game_shell_and_neutralizes_acceleration`).
+  - `cargo test --lib collect_save_artifacts` -> 3 passed.
+  - `cargo check --all-targets` -> success (lib + all bins + examples + tests); only
+    pre-existing dead-code/unused warnings remain.
+  - `rustfmt --check` on the four task-modified `.rs` files: clean after formatting them
+    (fix applied only to those files; unrelated `examples/` fmt drift left untouched).
+- Build dependency note: `havok_mesh_encode.rs` now `include_str!`s
+  `assets/havok_collision_sample_template.xml`. That file is currently **untracked** (`??`)
+  and not gitignored, so it MUST be committed alongside the code or the build will fail for
+  anyone else.
+- Status: the game-functional faithful migration is verified and build/test green. No code
+  logic was changed in this resume session beyond `rustfmt`; awaiting explicit user
+  confirmation before committing.

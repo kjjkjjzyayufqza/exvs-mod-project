@@ -1,8 +1,25 @@
 //! Build hknpCompressedMeshShape meshTree XML from a merged triangle mesh.
+//!
+//! The multi-section encoder here is the game-faithful production path. Its BVH section
+//! split, Axis4/Axis5 codec, compressed-AABB nibble packing, 11/11/10 packed vertices,
+//! and 21/21/22 shared vertices are byte-identical to the authoritative community
+//! reference, DSMapStudio's `HKX2.Builders.hknpCollisionMeshBuilder` / `BVH.cs`
+//! (`soulsmods/DSMapStudio`, `src/HKX2/HKX2/Builders/`). The shape-key width fields
+//! (`mesh_key_info`) intentionally follow this game's own primitive-key sizing rather
+//! than DSMapStudio's hardcoded `bitsPerKey=5 / maxKeyValue=30` (which targets
+//! FromSoftware titles and is marked `// ?` in that source). The reference itself ships a
+//! dummy `simdTree` and omits `connectivity` / `triangleIsInterior`, so neutralizing
+//! those (see `neutralize_acceleration_payload`) is consistent with it.
 
 use crate::collision_mesh::{simplify_collision_mesh, CollisionSimplifyOptions, CollisionTriMesh};
 
 const COLLISION_TEMPLATE_XML: &str = include_str!("../assets/havok_box_collision_template.xml");
+
+/// Real game collision shell (a neutral single-object `map_hit` export: origin body,
+/// identity orientation, empty render scene). Used as the production template so generated
+/// HKTs inherit authentic game scene/physics metadata instead of the synthetic box shell.
+const COLLISION_SAMPLE_TEMPLATE_XML: &str =
+    include_str!("../assets/havok_collision_sample_template.xml");
 
 const MAX_SECTION_VERTS: usize = 255;
 const MAX_SECTION_TRIS: usize = 127;
@@ -101,7 +118,7 @@ pub fn build_mesh_collision_xml_with_template_mode(
         .map(|s| s.primitives.len() as u32)
         .sum();
     let total_primitive_keys = total_prims.saturating_mul(2);
-    let (shape_key_bits, _, _) = mesh_key_info(build.sections.len(), total_primitive_keys);
+    let (shape_key_bits, _, _) = mesh_key_info(total_primitive_keys);
     let mesh_tree = format_mesh_tree_xml(&build, global_min, global_max)?;
     inject_mesh_tree_into_template(
         template_xml,
@@ -112,6 +129,14 @@ pub fn build_mesh_collision_xml_with_template_mode(
         shape_key_bits,
         replace_mode,
     )
+}
+
+/// Production HKT builder. Faithful, game-native multi-section encode of `mesh` injected
+/// into the embedded real-game collision shell, with the stale acceleration payload
+/// neutralized. This is the single entry point used by both DAE-import and existing-SSBH
+/// HKT generation — confirmed to load correctly in-game.
+pub fn build_mesh_collision_xml_faithful(mesh: &CollisionTriMesh) -> Result<String, String> {
+    build_mesh_collision_xml_sample_template(mesh, COLLISION_SAMPLE_TEMPLATE_XML)
 }
 
 /// Replace only the shape/data chain of an exported sample template (e.g. the
@@ -126,12 +151,18 @@ pub fn build_mesh_collision_xml_sample_template(
     mesh: &CollisionTriMesh,
     template_xml: &str,
 ) -> Result<String, String> {
-    let xml = build_mesh_collision_xml_with_template_mode(mesh, template_xml, TemplateReplaceMode::All)?;
+    let xml =
+        build_mesh_collision_xml_with_template_mode(mesh, template_xml, TemplateReplaceMode::All)?;
     neutralize_acceleration_payload(&xml)
 }
 
-/// Reduce a collision mesh so it fits into exactly one Havok section:
-/// `<= MAX_SECTION_TRIS` primitives and `<= MAX_SECTION_VERTS` referenced vertices.
+/// ANALYSIS ONLY — not the shipping path. Reduce a collision mesh so it fits into exactly
+/// one Havok section: `<= MAX_SECTION_TRIS` primitives and `<= MAX_SECTION_VERTS`
+/// referenced vertices.
+///
+/// This was the single-section isolation experiment used to prove the template shell was
+/// not the PreviewTool blocker. It discards most of the geometry, so it is retained only
+/// for diagnostics; production uses the full multi-section encoder.
 ///
 /// Reduction is lightest-first and reuses what already exists in-repo:
 /// 1. coplanar-merge simplify ([`simplify_collision_mesh`]) sheds redundant triangles;
@@ -335,12 +366,18 @@ fn key_bits_for_max_key(max_key: u32) -> u32 {
     (32 - max_key.max(1).leading_zeros()).max(4)
 }
 
-fn mesh_key_info(section_count: usize, total_prims: u32) -> (u32, u32, u32) {
-    let max_key = if section_count <= 1 {
-        total_prims.saturating_sub(1).max(1)
-    } else {
-        (section_count as u32).saturating_sub(1).max(1)
-    };
+/// Shape-key width fields, sized to the primitive-key space exactly as the game's own
+/// `hknpCompressedMeshShape` assets are. Verified against real game samples:
+/// the simple sample uses `numPrimitiveKeys=10 / bitsPerKey=4 / maxKeyValue=9`, the
+/// complex sample uses `bitsPerKey=13 / maxKeyValue=5043`.
+///
+/// `numShapeKeyBits`, `bitsPerKey`, and `maxKeyValue` all follow `numPrimitiveKeys`
+/// regardless of how many sections the mesh is split into — the Axis5 mesh-tree leaves
+/// still address section indices separately. The previous section-key sizing produced a
+/// file that was internally inconsistent (e.g. `bitsPerKey=5` declaring 7802 keys); the
+/// game tolerated it but it diverged from every authentic asset.
+fn mesh_key_info(total_primitive_keys: u32) -> (u32, u32, u32) {
+    let max_key = total_primitive_keys.saturating_sub(1).max(1);
     let bits_per_key = key_bits_for_max_key(max_key);
     (bits_per_key, max_key, bits_per_key)
 }
@@ -1012,7 +1049,7 @@ fn format_mesh_tree_xml(
         ));
     }
 
-    let (bits_per_key, max_key, _) = mesh_key_info(sections.len(), total_primitive_keys);
+    let (bits_per_key, max_key, _) = mesh_key_info(total_primitive_keys);
 
     Ok(format!(
         r#"<record>
@@ -1135,7 +1172,8 @@ fn inject_mesh_tree_into_template(
 /// so they stay valid for that export's type table.
 fn neutralize_acceleration_payload(xml: &str) -> Result<String, String> {
     let simd_nodes_type = first_array_elem_typeid_after_field(xml, "simdTree")?;
-    let mut out = replace_all_named_field_bodies(xml, "simdTree", &empty_simd_tree_body(&simd_nodes_type))?;
+    let mut out =
+        replace_all_named_field_bodies(xml, "simdTree", &empty_simd_tree_body(&simd_nodes_type))?;
 
     let conn_start = out
         .find(r#"<field name="connectivity">"#)
@@ -1543,25 +1581,17 @@ mod tests {
     }
 
     #[test]
-    fn many_section_mesh_expands_shape_key_bits() {
-        let mut vertices = Vec::new();
-        let mut indices = Vec::new();
-        for i in 0..3901usize {
-            let x = i as f64;
-            let base = vertices.len() as u32;
-            vertices.push([x, 0.0, 0.0]);
-            vertices.push([x + 0.1, 0.0, 0.0]);
-            vertices.push([x, 0.1, 0.0]);
-            indices.extend_from_slice(&[base, base + 1, base + 2]);
-        }
-
-        let mesh = CollisionTriMesh { vertices, indices };
+    fn multi_section_mesh_uses_primitive_key_shape_bits() {
+        // 3901 primitives -> 7802 primitive keys -> 13 bits. The shape-key width follows
+        // the primitive-key space (matching the game's own assets), not the section count.
+        let mesh = separate_triangles_mesh(3901);
         let xml = build_mesh_collision_xml(&mesh).unwrap();
 
-        assert_eq!(mesh_key_info(31, 3901), (5, 30, 5));
-        assert!(!xml.contains(r#"<field name="numShapeKeyBits"><integer value="4"/></field>"#));
-        assert!(!xml.contains(r#"<field name="bitsPerKey"><integer value="8"/></field>"#));
-        assert!(!xml.contains(r#"<field name="maxKeyValue"><integer value="3900"/></field>"#));
+        assert_eq!(mesh_key_info(7802), (13, 7801, 13));
+        assert!(xml.contains(r#"<field name="numPrimitiveKeys"><integer value="7802"/></field>"#));
+        assert!(xml.contains(r#"<field name="bitsPerKey"><integer value="13"/></field>"#));
+        assert!(xml.contains(r#"<field name="maxKeyValue"><integer value="7801"/></field>"#));
+        assert!(xml.contains(r#"<field name="numShapeKeyBits"><integer value="13"/></field>"#));
     }
 
     fn separate_triangles_mesh(count: usize) -> CollisionTriMesh {
@@ -1626,14 +1656,31 @@ mod tests {
         let out = neutralize_acceleration_payload(xml).unwrap();
 
         assert!(out.contains(r#"<array count="0" elementtypeid="type357">"#));
-        assert!(!out.contains(r#"elementtypeid="type357">
-              <record>"#));
+        assert!(!out.contains(
+            r#"elementtypeid="type357">
+              <record>"#
+        ));
         assert!(out.contains(r#"<array count="0" elementtypeid="type375">"#));
         assert!(out.contains(r#"<array count="0" elementtypeid="type135">"#));
         assert!(out.contains(r#"<array count="0" elementtypeid="type377">"#));
         assert!(out.contains(r#"<field name="isCompact"><bool value="false"/></field>"#));
         assert!(out.contains(r#"<field name="hasSimdTree"><bool value="false"/></field>"#));
         assert!(!out.contains(r#"value="true""#));
+    }
+
+    #[test]
+    fn faithful_builder_uses_game_shell_and_neutralizes_acceleration() {
+        let mesh = separate_triangles_mesh(50);
+        let xml = build_mesh_collision_xml_faithful(&mesh).unwrap();
+
+        // Geometry injected into the real-game shell (body "rr"), not the box template.
+        assert!(xml.contains(r#"<field name="meshTree">"#));
+        assert!(xml.contains(r#"<string value="rr"/>"#));
+        assert!(!xml.contains("object_box01_col01"));
+
+        // Acceleration payload neutralized; primitive-key shape sizing (50 -> 100 keys).
+        assert!(xml.contains(r#"<field name="hasSimdTree"><bool value="false"/></field>"#));
+        assert!(xml.contains(r#"<field name="numPrimitiveKeys"><integer value="100"/></field>"#));
     }
 
     #[test]

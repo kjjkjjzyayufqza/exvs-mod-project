@@ -1,6 +1,5 @@
 /** Shared sizing and overflow rules for the Scene Editor properties panel. */
 export const PROP_PANEL = "min-w-0 max-w-full overflow-x-hidden";
-export const PROP_CONTROL = "h-7 min-h-7 max-h-7";
 export const PROP_INPUT =
   "h-7 min-h-7 max-h-7 min-w-0 w-full text-[11px] font-mono px-2 bg-background/60";
 export const PROP_BTN = "h-7 min-h-7 max-h-7 px-2 text-[11px] shrink-0";

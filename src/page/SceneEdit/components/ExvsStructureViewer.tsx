@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, memo } from "react";
+import { useState, useCallback, useMemo, memo, useEffect } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -18,7 +18,6 @@ import {
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +26,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { VirtualizedList } from "./VirtualizedList";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -87,6 +87,15 @@ type TreeNode = {
   depth: number;
 };
 
+type FlatRow = {
+  node: TreeNode;
+  pathKey: string;
+  hasChildren: boolean;
+  isExpanded: boolean;
+};
+
+const TREE_ROW_HEIGHT = 28;
+
 function buildTreeFromFlat(entries: StructureEntry[], filePool: SubFileDataEntry[]): TreeNode[] {
   const roots: TreeNode[] = [];
   const stack: { children: TreeNode[]; depth: number }[] = [{ children: roots, depth: -1 }];
@@ -139,6 +148,52 @@ function classifyItem(e: StructureItem): string {
   }
 }
 
+function isNodeVisible(node: TreeNode, filter: string): boolean {
+  if (!filter) return true;
+  const lower = filter.toLowerCase();
+  const check = (n: TreeNode): boolean => {
+    if (n.kind === "item") return (n.resolvedFile?.fileBaseName ?? "").toLowerCase().includes(lower);
+    return n.children.some(check);
+  };
+  return check(node);
+}
+
+function collectDefaultExpanded(nodes: TreeNode[], pathPrefix = "", acc = new Set<string>()): Set<string> {
+  nodes.forEach((node, i) => {
+    const pathKey = pathPrefix ? `${pathPrefix}/${i}` : `${i}`;
+    if (node.depth < 2 && node.children.length > 0) {
+      acc.add(pathKey);
+    }
+    collectDefaultExpanded(node.children, pathKey, acc);
+  });
+  return acc;
+}
+
+function flattenVisibleTree(
+  nodes: TreeNode[],
+  expandedPaths: Set<string>,
+  filter: string,
+  pathPrefix = "",
+): FlatRow[] {
+  const rows: FlatRow[] = [];
+
+  nodes.forEach((node, i) => {
+    if (!isNodeVisible(node, filter)) return;
+
+    const pathKey = pathPrefix ? `${pathPrefix}/${i}` : `${i}`;
+    const hasChildren = node.children.length > 0;
+    const isExpanded = hasChildren && expandedPaths.has(pathKey);
+
+    rows.push({ node, pathKey, hasChildren, isExpanded });
+
+    if (isExpanded && hasChildren) {
+      rows.push(...flattenVisibleTree(node.children, expandedPaths, filter, pathKey));
+    }
+  });
+
+  return rows;
+}
+
 // ── Visual config ────────────────────────────────────────────────────────────
 
 const ROLE_META: Record<string, { icon: typeof File; accent: string; tag: string }> = {
@@ -178,11 +233,13 @@ function formatStructureTreeText(nodes: TreeNode[]): string {
     const prefix = "  ".repeat(node.depth);
     if (node.kind === "folder") {
       const entry = node.entry;
+      if (entry.type !== "Folder") return;
       lines.push(
         `${prefix}${folderDisplayName(node.semanticRole)}/  x${entry.folderCount}  u1=${entry.unk1} u2=${entry.unk2} u2_1=${entry.unk2_1} u3=${entry.unk3} u4=${entry.unk4} u5=${entry.unk5} u6=${entry.unk6}`,
       );
     } else {
       const entry = node.entry;
+      if (entry.type !== "Item") return;
       const file = node.resolvedFile;
       const meta = ROLE_META[node.semanticRole] ?? ROLE_META.file;
       const tag = meta.tag ? ` [${meta.tag}]` : "";
@@ -219,10 +276,39 @@ export interface ExvsStructureViewerProps {
 export const ExvsStructureViewer = memo(function ExvsStructureViewer({ data }: ExvsStructureViewerProps) {
   const [filter, setFilter] = useState("");
   const tree = useMemo(() => buildTreeFromFlat(data.SubFileStructure, data.SubFileData), [data]);
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => collectDefaultExpanded(tree));
+
+  useEffect(() => {
+    setExpandedPaths(collectDefaultExpanded(tree));
+  }, [tree]);
+
+  const flatRows = useMemo(
+    () => flattenVisibleTree(tree, expandedPaths, filter),
+    [tree, expandedPaths, filter],
+  );
+
+  const toggleExpanded = useCallback((pathKey: string) => {
+    setExpandedPaths((prev) => {
+      const next = new Set(prev);
+      if (next.has(pathKey)) {
+        next.delete(pathKey);
+      } else {
+        next.add(pathKey);
+      }
+      return next;
+    });
+  }, []);
 
   const handleCopyTree = useCallback(() => {
     void copyStructureTreeToClipboard(tree);
   }, [tree]);
+
+  const renderRow = useCallback(
+    (row: FlatRow) => <TreeRow row={row} onToggle={toggleExpanded} />,
+    [toggleExpanded],
+  );
+
+  const getItemKey = useCallback((row: FlatRow) => row.pathKey, []);
 
   return (
     <div className="flex h-full flex-col text-xs">
@@ -286,78 +372,72 @@ export const ExvsStructureViewer = memo(function ExvsStructureViewer({ data }: E
       </div>
 
       {/* Tree */}
-      <ScrollArea className="flex-1">
-        <div className="p-1">
-          {tree.map((node, i) => (
-            <NodeRow key={i} node={node} filter={filter} />
-          ))}
-        </div>
-      </ScrollArea>
+      <VirtualizedList
+        items={flatRows}
+        rowHeight={TREE_ROW_HEIGHT}
+        getItemKey={getItemKey}
+        renderRow={renderRow}
+        className="flex-1 min-h-0 overflow-auto p-1"
+        emptyState={
+          filter ? (
+            <p className="px-2 py-4 text-center text-[10px] text-muted-foreground">No matching nodes</p>
+          ) : (
+            <p className="px-2 py-4 text-center text-[10px] text-muted-foreground">No structure entries</p>
+          )
+        }
+      />
     </div>
   );
 });
 
-// ── Node Row ─────────────────────────────────────────────────────────────────
+// ── Tree Row ─────────────────────────────────────────────────────────────────
 
-const NodeRow = memo(function NodeRow({
-  node,
-  filter,
+const TreeRow = memo(function TreeRow({
+  row,
+  onToggle,
 }: {
-  node: TreeNode;
-  filter: string;
+  row: FlatRow;
+  onToggle: (pathKey: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(node.depth < 2);
-  const hasChildren = node.children.length > 0;
-  const handleToggle = useCallback(() => setExpanded((v) => !v), []);
-
-  const visible = useMemo(() => {
-    if (!filter) return true;
-    const lower = filter.toLowerCase();
-    const check = (n: TreeNode): boolean => {
-      if (n.kind === "item") return (n.resolvedFile?.fileBaseName ?? "").toLowerCase().includes(lower);
-      return n.children.some(check);
-    };
-    return check(node);
-  }, [node, filter]);
-
-  if (!visible) return null;
-
+  const { node, pathKey, hasChildren, isExpanded } = row;
   const meta = ROLE_META[node.semanticRole] ?? ROLE_META.file;
   const Icon = meta.icon;
 
+  const handleToggle = useCallback(() => {
+    onToggle(pathKey);
+  }, [onToggle, pathKey]);
+
   return (
-    <div>
-      <div
-        className={cn(
-          "group flex items-center gap-1.5 rounded-sm px-2 py-1 select-none",
-          "hover:bg-accent/60 cursor-default transition-colors",
-        )}
-        style={{ paddingLeft: `${node.depth * 16 + 6}px` }}
-        onClick={hasChildren ? handleToggle : undefined}
-      >
-        {hasChildren ? (
-          <button
-            className="h-5 w-5 flex items-center justify-center shrink-0 hover:bg-accent rounded-sm"
-            onClick={(e) => { e.stopPropagation(); handleToggle(); }}
-          >
-            {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-          </button>
-        ) : (
-          <span className="h-5 w-5 shrink-0" />
-        )}
+    <div
+      className={cn(
+        "group flex h-full items-center gap-1.5 rounded-sm px-2 select-none",
+        "hover:bg-accent/60 cursor-default transition-colors",
+      )}
+      style={{ paddingLeft: `${node.depth * 16 + 6}px` }}
+      onClick={hasChildren ? handleToggle : undefined}
+    >
+      {hasChildren ? (
+        <button
+          type="button"
+          className="h-5 w-5 flex items-center justify-center shrink-0 hover:bg-accent rounded-sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleToggle();
+          }}
+        >
+          {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        </button>
+      ) : (
+        <span className="h-5 w-5 shrink-0" />
+      )}
 
-        <Icon className={cn("h-3.5 w-3.5 shrink-0", meta.accent)} />
+      <Icon className={cn("h-3.5 w-3.5 shrink-0", meta.accent)} />
 
-        {node.kind === "folder" ? (
-          <FolderLabel entry={node.entry as StructureFolder} role={node.semanticRole} />
-        ) : (
-          <ItemLabel node={node} />
-        )}
-      </div>
-
-      {expanded && hasChildren && node.children.map((child, i) => (
-        <NodeRow key={i} node={child} filter={filter} />
-      ))}
+      {node.kind === "folder" ? (
+        <FolderLabel entry={node.entry as StructureFolder} role={node.semanticRole} />
+      ) : (
+        <ItemLabel node={node} />
+      )}
     </div>
   );
 });

@@ -10,6 +10,7 @@ import {
 } from "./sceneSaveFolderPipeline";
 import { resolveStagePackStructureTarget } from "./sceneStageStructure";
 import { repackFolderToFhm2dFile } from "@/utils/repackRunner";
+import { validateStageForRepack, type ExvsStageValidationError } from "./sceneSessionService";
 
 export type SaveFhm2dParams = SaveFolderParams & {
   outputFhm2dPath: string;
@@ -18,6 +19,8 @@ export type SaveFhm2dParams = SaveFolderParams & {
 export type SaveFhm2dResult = SaveFolderResult & {
   fhm2dPath: string;
   fhm2dSizeBytes: number;
+  /** Populated when the post-redistribute repack validation (case B) blocks packing. */
+  validationErrors?: ExvsStageValidationError[];
 };
 
 function fhm2dLog(msg: string) {
@@ -69,6 +72,46 @@ export async function executeSaveFhm2dPipeline(params: SaveFhm2dParams): Promise
     onProgress({
       id: "redistribute",
       label: "Populating model textures...",
+      status: "error",
+      error: msg,
+    });
+    return {
+      ...folderResult,
+      success: false,
+      fhm2dPath: outputFhm2dPath,
+      fhm2dSizeBytes: 0,
+    };
+  }
+
+  // Second gate (case B): now that textures live in per-model 0//1/ subdirs,
+  // verify every numatb texture reference exists on disk + structural checks.
+  fhm2dLog("Validating stage for repack...");
+  onProgress({ id: "validate-repack", label: "Validating stage for repack...", status: "running" });
+  try {
+    const validation = await validateStageForRepack(packRoot);
+    if (!validation.valid) {
+      fhm2dLog(`Repack validation failed: ${validation.errors.length} error(s)`);
+      onProgress({
+        id: "validate-repack",
+        label: "Validating stage for repack...",
+        status: "error",
+        error: `${validation.errors.length} texture/structure issue(s) block packing`,
+      });
+      return {
+        ...folderResult,
+        success: false,
+        fhm2dPath: outputFhm2dPath,
+        fhm2dSizeBytes: 0,
+        validationErrors: validation.errors,
+      };
+    }
+    onProgress({ id: "validate-repack", label: "Validating stage for repack...", status: "done" });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[SaveFHM2D] Repack validation failed:", msg);
+    onProgress({
+      id: "validate-repack",
+      label: "Validating stage for repack...",
       status: "error",
       error: msg,
     });

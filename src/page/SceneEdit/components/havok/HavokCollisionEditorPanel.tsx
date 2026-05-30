@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { HavokMeshData } from "@/utils/havokXmlParser";
 import { parseHavokXML } from "@/utils/havokXmlParser";
@@ -46,6 +46,7 @@ export function HavokCollisionEditorPanel({
     hktSimplify ?? { ...DEFAULT_HKT_SIMPLIFY },
   );
   const [importConfig, setImportConfig] = useState<ImportConfig | null>(null);
+  const [isLoadingConfig, setIsLoadingConfig] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [regenError, setRegenError] = useState<string | null>(null);
 
@@ -61,6 +62,7 @@ export function HavokCollisionEditorPanel({
       return;
     }
     let cancelled = false;
+    setIsLoadingConfig(true);
     sceneGetImportConfig(sessionId, sessionImportId)
       .then((cfg) => {
         if (!cancelled) {
@@ -73,6 +75,11 @@ export function HavokCollisionEditorPanel({
       .catch(() => {
         if (!cancelled) {
           setImportConfig(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingConfig(false);
         }
       });
     return () => {
@@ -137,6 +144,13 @@ export function HavokCollisionEditorPanel({
 
   return (
     <div className="flex flex-col gap-2">
+      {isLoadingConfig ? (
+        <div className="flex items-center gap-2 px-1 py-1 text-[10px] text-muted-foreground">
+          <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+          Loading collision settings...
+        </div>
+      ) : null}
+
       {activeTris != null ? (
         <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-[11px]">
           <div className="flex items-center justify-between">
@@ -147,7 +161,11 @@ export function HavokCollisionEditorPanel({
             Use Collision / Both view mode in the toolbar to visualize the wireframe overlay.
           </p>
         </div>
-      ) : null}
+      ) : (
+        <DaeImportStatusAlert tone="info">
+          No collision mesh loaded. Adjust simplification below and regenerate HKT.
+        </DaeImportStatusAlert>
+      )}
 
       <DaeImportHktSimplifyFields
         value={localSimplify}
@@ -165,12 +183,22 @@ export function HavokCollisionEditorPanel({
           type="button"
           size="sm"
           className="h-7 w-full text-[11px]"
-          disabled={disabled || regenerating || !sessionId}
+          disabled={disabled || regenerating || isLoadingConfig || !sessionId}
           onClick={() => void handleRegenerate()}
         >
-          <RefreshCw className={`mr-1.5 h-3 w-3 ${regenerating ? "animate-spin" : ""}`} />
-          Regenerate HKT
+          {regenerating ? (
+            <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+          ) : (
+            <RefreshCw className="mr-1.5 h-3 w-3" />
+          )}
+          {regenerating ? "Regenerating HKT..." : "Regenerate HKT"}
         </Button>
+        {regenerating ? (
+          <p className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+            Building collision mesh from source geometry...
+          </p>
+        ) : null}
         {regenError ? (
           <p className="mt-1 text-[10px] text-destructive">{regenError}</p>
         ) : null}

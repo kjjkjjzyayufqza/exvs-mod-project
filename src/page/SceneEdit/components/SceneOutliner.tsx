@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -21,9 +21,11 @@ import {
   Shield,
   GripVertical,
   Settings,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useSceneValidationStore } from "../store/sceneValidationStore";
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -40,9 +42,48 @@ import { useSceneEditorStore, type OutlinerGroup } from "../store/sceneEditorSto
 import type { StageTreeNode } from "./StageHierarchyTree";
 import { canOpenDetailView } from "./detail-view/sceneDetailViewTypes";
 import { getNodeTypeInfo } from "../utils/sceneNodeTypeInfo";
+import { VirtualizedList } from "./VirtualizedList";
+import {
+  flattenSceneOutliner,
+  OUTLINER_INDENT_PX,
+  OUTLINER_ROW_HEIGHT,
+  type OutlinerFlatRow,
+} from "./sceneOutlinerFlatten";
+
+/** Indented pulsing rows shown while a stage bundle is loading. */
+function OutlinerSkeleton() {
+  const rows = [
+    { indent: 0, width: "70%" },
+    { indent: 1, width: "55%" },
+    { indent: 1, width: "62%" },
+    { indent: 2, width: "48%" },
+    { indent: 2, width: "44%" },
+    { indent: 1, width: "58%" },
+    { indent: 2, width: "50%" },
+    { indent: 2, width: "46%" },
+    { indent: 1, width: "60%" },
+  ];
+  return (
+    <div className="flex h-full flex-col gap-1 p-2" aria-busy="true" aria-label="Loading scene tree">
+      {rows.map((row, index) => (
+        <div
+          key={index}
+          className="flex items-center gap-1.5"
+          style={{ paddingLeft: row.indent * OUTLINER_INDENT_PX }}
+        >
+          <Skeleton className="h-3 w-3 shrink-0 rounded-sm" />
+          <Skeleton className="h-3.5 w-3.5 shrink-0 rounded-sm" />
+          <Skeleton className="h-3 rounded-sm" style={{ width: row.width }} />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 interface SceneOutlinerProps {
   root: StageTreeNode | null;
+  /** When true and no tree is ready yet, show a skeleton placeholder. */
+  isLoading?: boolean;
   onSelect: (id: string | null) => void;
   onDuplicate?: (ids: string[]) => void;
   onDelete?: (ids: string[]) => void;
@@ -58,6 +99,7 @@ interface SceneOutlinerProps {
 
 export function SceneOutliner({
   root,
+  isLoading = false,
   onSelect,
   onDuplicate,
   onDelete,
@@ -72,16 +114,13 @@ export function SceneOutliner({
 }: SceneOutlinerProps) {
   const {
     selectedIds,
-    lastSelectedId,
     select,
     selectAll,
     deselectAll,
     groups,
     createGroup,
     removeGroup,
-    renameGroup,
     toggleGroupCollapse,
-    nodeVisibility,
     toggleVisibility,
     isVisible,
     toggleLock,
@@ -89,6 +128,25 @@ export function SceneOutliner({
     copyToClipboard,
     clipboard,
   } = useSceneEditorStore();
+
+  const [expandedById, setExpandedById] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setExpandedById({});
+  }, [root]);
+
+  const getNodeExpanded = useCallback(
+    (nodeId: string, depth: number) =>
+      nodeId in expandedById ? expandedById[nodeId] : depth < 2,
+    [expandedById],
+  );
+
+  const toggleNodeExpanded = useCallback((nodeId: string, depth: number) => {
+    setExpandedById((prev) => {
+      const current = nodeId in prev ? prev[nodeId] : depth < 2;
+      return { ...prev, [nodeId]: !current };
+    });
+  }, []);
 
   const allNodeIds = useMemo(() => {
     if (!root) return [];
@@ -100,6 +158,11 @@ export function SceneOutliner({
     collect(root);
     return ids;
   }, [root]);
+
+  const flatRows = useMemo(() => {
+    if (!root) return [];
+    return flattenSceneOutliner({ root, groups, expandedById });
+  }, [root, groups, expandedById]);
 
   const handleNodeClick = useCallback(
     (id: string, e: React.MouseEvent) => {
@@ -137,7 +200,105 @@ export function SceneOutliner({
     onDelete?.([...selectedIds]);
   }, [selectedIds, onDelete]);
 
+  const renderFlatRow = useCallback(
+    (row: OutlinerFlatRow) => {
+      if (!root) return null;
+
+      const content = (() => {
+        switch (row.kind) {
+          case "group-header":
+            return (
+              <GroupHeaderRow
+                group={row.group}
+                toggleGroupCollapse={toggleGroupCollapse}
+                removeGroup={removeGroup}
+                onDelete={onDelete}
+              />
+            );
+          case "group-child":
+            return (
+              <div className="ml-3 h-full border-l border-amber-500/20 pl-1">
+                <OutlinerNodeRow
+                  node={row.node}
+                  depth={row.depth}
+                  selectedIds={selectedIds}
+                  onNodeClick={handleNodeClick}
+                  isVisible={isVisible}
+                  toggleVisibility={toggleVisibility}
+                  isLocked={isLocked}
+                  toggleLock={toggleLock}
+                  onDuplicate={onDuplicate}
+                  onDelete={onDelete}
+                  onGenerateHkt={onGenerateHkt}
+                  onReplaceHkt={onReplaceHkt}
+                  onOpenProperties={onOpenProperties}
+                />
+              </div>
+            );
+          case "root":
+            return (
+              <RootOutlinerRow
+                node={row.node}
+                depth={row.depth}
+                hasChildren={row.hasChildren}
+                expanded={getNodeExpanded(row.node.id, row.depth)}
+                onToggle={() => toggleNodeExpanded(row.node.id, row.depth)}
+              />
+            );
+          case "node":
+            return (
+              <OutlinerNodeRow
+                node={row.node}
+                depth={row.depth}
+                selectedIds={selectedIds}
+                onNodeClick={handleNodeClick}
+                isVisible={isVisible}
+                toggleVisibility={toggleVisibility}
+                isLocked={isLocked}
+                toggleLock={toggleLock}
+                onDuplicate={onDuplicate}
+                onDelete={onDelete}
+                onGenerateHkt={onGenerateHkt}
+                onReplaceHkt={onReplaceHkt}
+                onReorderRootChild={onReorderRootChild}
+                onOpenProperties={onOpenProperties}
+                hasChildren={row.hasChildren}
+                expanded={getNodeExpanded(row.node.id, row.depth)}
+                onToggle={() => toggleNodeExpanded(row.node.id, row.depth)}
+              />
+            );
+          default:
+            return null;
+        }
+      })();
+
+      return <div className="h-full min-h-0 overflow-hidden">{content}</div>;
+    },
+    [
+      root,
+      selectedIds,
+      handleNodeClick,
+      isVisible,
+      toggleVisibility,
+      isLocked,
+      toggleLock,
+      onDuplicate,
+      onDelete,
+      onGenerateHkt,
+      onReplaceHkt,
+      onReorderRootChild,
+      onOpenProperties,
+      toggleGroupCollapse,
+      removeGroup,
+      getNodeExpanded,
+      toggleNodeExpanded,
+    ],
+  );
+
   if (!root) {
+    if (isLoading) {
+      return <OutlinerSkeleton />;
+    }
     return (
       <div className="flex min-w-0 w-full max-w-full flex-col items-center justify-center h-full text-muted-foreground p-4 gap-3">
         <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center shrink-0">
@@ -156,47 +317,15 @@ export function SceneOutliner({
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <ScrollArea className="h-full">
-          <div className="p-1">
-            {groups.map((group) => (
-              <GroupNode
-                key={group.id}
-                group={group}
-                root={root}
-                selectedIds={selectedIds}
-                onNodeClick={handleNodeClick}
-                toggleGroupCollapse={toggleGroupCollapse}
-                removeGroup={removeGroup}
-                isVisible={isVisible}
-                toggleVisibility={toggleVisibility}
-                isLocked={isLocked}
-                toggleLock={toggleLock}
-                onDuplicate={onDuplicate}
-                onDelete={onDelete}
-                onGenerateHkt={onGenerateHkt}
-                onReplaceHkt={onReplaceHkt}
-                onOpenProperties={onOpenProperties}
-              />
-            ))}
-            <OutlinerNode
-              node={root}
-              depth={0}
-              selectedIds={selectedIds}
-              onNodeClick={handleNodeClick}
-              groups={groups}
-              isVisible={isVisible}
-              toggleVisibility={toggleVisibility}
-              isLocked={isLocked}
-              toggleLock={toggleLock}
-              onDuplicate={onDuplicate}
-              onDelete={onDelete}
-              onGenerateHkt={onGenerateHkt}
-              onReplaceHkt={onReplaceHkt}
-              onReorderRootChild={onReorderRootChild}
-              onOpenProperties={onOpenProperties}
-            />
-          </div>
-        </ScrollArea>
+        <div className="h-full min-h-0">
+          <VirtualizedList
+            items={flatRows}
+            rowHeight={OUTLINER_ROW_HEIGHT}
+            getItemKey={(row) => row.key}
+            className="h-full min-h-0 overflow-auto p-1"
+            renderRow={renderFlatRow}
+          />
+        </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-56">
         <ContextMenuItem onClick={handleSelectAll}>
@@ -261,104 +390,42 @@ export function SceneOutliner({
   );
 }
 
-function GroupNode({
+function GroupHeaderRow({
   group,
-  root,
-  selectedIds,
-  onNodeClick,
   toggleGroupCollapse,
   removeGroup,
-  isVisible,
-  toggleVisibility,
-  isLocked,
-  toggleLock,
-  onDuplicate,
   onDelete,
-  onGenerateHkt,
-  onReplaceHkt,
-  onReorderRootChild,
-  onOpenProperties,
 }: {
   group: OutlinerGroup;
-  root: StageTreeNode;
-  selectedIds: Set<string>;
-  onNodeClick: (id: string, e: React.MouseEvent) => void;
   toggleGroupCollapse: (id: string) => void;
   removeGroup: (id: string) => void;
-  isVisible: (id: string) => boolean;
-  toggleVisibility: (id: string) => void;
-  isLocked: (id: string) => boolean;
-  toggleLock: (id: string) => void;
-  onDuplicate?: (ids: string[]) => void;
   onDelete?: (ids: string[]) => void;
-  onGenerateHkt?: (ids: string[]) => void;
-  onReplaceHkt?: (id: string) => void;
-  onReorderRootChild?: (activeId: string, overId: string) => void;
-  onOpenProperties?: (nodeId: string) => void;
 }) {
-  const childNodes = useMemo(() => {
-    const findNode = (node: StageTreeNode, id: string): StageTreeNode | null => {
-      if (node.id === id) return node;
-      for (const child of node.children ?? []) {
-        const found = findNode(child, id);
-        if (found) return found;
-      }
-      return null;
-    };
-    return group.children
-      .map((id) => findNode(root, id))
-      .filter((n): n is StageTreeNode => n !== null);
-  }, [group, root]);
-
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <div className="mb-0.5">
-          <div
-            className={cn(
-              "flex items-center gap-1.5 px-1.5 py-[3px] rounded-sm cursor-pointer text-xs select-none transition-colors",
-              "hover:bg-accent/60 bg-accent/20",
-            )}
-          >
-            <button
-              className="h-4 w-4 flex items-center justify-center shrink-0 hover:bg-accent rounded-sm"
-              onClick={() => toggleGroupCollapse(group.id)}
-            >
-              {group.collapsed ? (
-                <ChevronRight className="h-3 w-3" />
-              ) : (
-                <ChevronDown className="h-3 w-3" />
-              )}
-            </button>
-            <Group className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-            <span className="truncate font-medium text-amber-600 dark:text-amber-400">{group.label}</span>
-            <span className="ml-auto text-[9px] text-muted-foreground/70 font-mono">
-              {group.children.length}
-            </span>
-          </div>
-          {!group.collapsed && (
-            <div className="ml-3 border-l border-amber-500/20 pl-1">
-              {childNodes.map((child) => (
-                <OutlinerNodeRow
-                  key={child.id}
-                  node={child}
-                  depth={1}
-                  selectedIds={selectedIds}
-                  onNodeClick={onNodeClick}
-                  isVisible={isVisible}
-                  toggleVisibility={toggleVisibility}
-                  isLocked={isLocked}
-                  toggleLock={toggleLock}
-                  onDuplicate={onDuplicate}
-                  onDelete={onDelete}
-                  onGenerateHkt={onGenerateHkt}
-                  onReplaceHkt={onReplaceHkt}
-                  onReorderRootChild={onReorderRootChild}
-                  onOpenProperties={onOpenProperties}
-                />
-              ))}
-            </div>
+        <div
+          className={cn(
+            "flex h-full items-center gap-1.5 px-1.5 rounded-sm cursor-pointer text-xs select-none transition-colors",
+            "hover:bg-accent/60 bg-accent/20",
           )}
+        >
+          <button
+            type="button"
+            className="h-4 w-4 flex items-center justify-center shrink-0 hover:bg-accent rounded-sm"
+            onClick={() => toggleGroupCollapse(group.id)}
+          >
+            {group.collapsed ? (
+              <ChevronRight className="h-3 w-3" />
+            ) : (
+              <ChevronDown className="h-3 w-3" />
+            )}
+          </button>
+          <Group className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+          <span className="truncate font-medium text-amber-600 dark:text-amber-400">{group.label}</span>
+          <span className="ml-auto text-[9px] text-muted-foreground/70 font-mono">
+            {group.children.length}
+          </span>
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-52">
@@ -376,116 +443,35 @@ function GroupNode({
   );
 }
 
-function OutlinerNode({
+function RootOutlinerRow({
   node,
   depth,
-  selectedIds,
-  onNodeClick,
-  groups,
-  isVisible,
-  toggleVisibility,
-  isLocked,
-  toggleLock,
-  onDuplicate,
-  onDelete,
-  onGenerateHkt,
-  onReplaceHkt,
-  onReorderRootChild,
-  onOpenProperties,
+  hasChildren,
+  expanded,
+  onToggle,
 }: {
   node: StageTreeNode;
   depth: number;
-  selectedIds: Set<string>;
-  onNodeClick: (id: string, e: React.MouseEvent) => void;
-  groups: OutlinerGroup[];
-  isVisible: (id: string) => boolean;
-  toggleVisibility: (id: string) => void;
-  isLocked: (id: string) => boolean;
-  toggleLock: (id: string) => void;
-  onDuplicate?: (ids: string[]) => void;
-  onDelete?: (ids: string[]) => void;
-  onGenerateHkt?: (ids: string[]) => void;
-  onReplaceHkt?: (id: string) => void;
-  onReorderRootChild?: (activeId: string, overId: string) => void;
-  onOpenProperties?: (nodeId: string) => void;
+  hasChildren: boolean;
+  expanded: boolean;
+  onToggle: () => void;
 }) {
-  const [expanded, setExpanded] = useState(depth < 2);
-  const hasChildren = node.children && node.children.length > 0;
-
-  const groupedIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const g of groups) {
-      for (const cid of g.children) ids.add(cid);
-    }
-    return ids;
-  }, [groups]);
-
-  const visibleChildren = useMemo(() => {
-    if (!node.children) return [];
-    return node.children.filter((c) => !groupedIds.has(c.id));
-  }, [node.children, groupedIds]);
-
-  if (node.id !== "root" && groupedIds.has(node.id)) return null;
-
   return (
-    <div>
-      {node.id !== "root" ? (
-        <OutlinerNodeRow
-          node={node}
-          depth={depth}
-          selectedIds={selectedIds}
-          onNodeClick={onNodeClick}
-          isVisible={isVisible}
-          toggleVisibility={toggleVisibility}
-          isLocked={isLocked}
-          toggleLock={toggleLock}
-          onDuplicate={onDuplicate}
-          onDelete={onDelete}
-          onGenerateHkt={onGenerateHkt}
-          onReplaceHkt={onReplaceHkt}
-          onReorderRootChild={onReorderRootChild}
-          onOpenProperties={onOpenProperties}
-          hasChildren={hasChildren}
-          expanded={expanded}
-          onToggle={() => setExpanded((v) => !v)}
-        />
-      ) : (
-        <div
-          className="flex items-center gap-1.5 px-1.5 py-[3px] text-xs select-none text-muted-foreground"
-          style={{ paddingLeft: `${depth * 14 + 4}px` }}
+    <div
+      className="flex h-full items-center gap-1.5 px-1.5 text-xs select-none text-muted-foreground"
+      style={{ paddingLeft: `${depth * OUTLINER_INDENT_PX + 4}px` }}
+    >
+      {hasChildren && (
+        <button
+          type="button"
+          className="h-4 w-4 flex items-center justify-center shrink-0 hover:bg-accent rounded-sm"
+          onClick={onToggle}
         >
-          {hasChildren && (
-            <button
-              className="h-4 w-4 flex items-center justify-center shrink-0 hover:bg-accent rounded-sm"
-              onClick={() => setExpanded((v) => !v)}
-            >
-              {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            </button>
-          )}
-          <Layers className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate font-semibold">{node.label}</span>
-        </div>
+          {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        </button>
       )}
-      {expanded && visibleChildren.map((child) => (
-        <OutlinerNode
-          key={child.id}
-          node={child}
-          depth={depth + 1}
-          selectedIds={selectedIds}
-          onNodeClick={onNodeClick}
-          groups={groups}
-          isVisible={isVisible}
-          toggleVisibility={toggleVisibility}
-          isLocked={isLocked}
-          toggleLock={toggleLock}
-          onDuplicate={onDuplicate}
-          onDelete={onDelete}
-          onGenerateHkt={onGenerateHkt}
-          onReplaceHkt={onReplaceHkt}
-          onReorderRootChild={onReorderRootChild}
-          onOpenProperties={onOpenProperties}
-        />
-      ))}
+      <Layers className="h-3.5 w-3.5 shrink-0" />
+      <span className="truncate font-semibold">{node.label}</span>
     </div>
   );
 }
@@ -532,18 +518,22 @@ function OutlinerNodeRow({
   const locked = isLocked(node.id);
   const RoleIcon = getRoleIcon(node.role);
   const canReorder = depth === 1 && Boolean(onReorderRootChild);
+  const validationErrorCount = useSceneValidationStore(
+    (s) => s.errorFolders[node.id] ?? 0,
+  );
+  const hasValidationError = validationErrorCount > 0;
 
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
           className={cn(
-            "flex items-center gap-1 px-1.5 py-[3px] rounded-sm cursor-pointer text-xs select-none transition-colors group/row",
+            "flex h-full items-center gap-1 px-1.5 rounded-sm cursor-pointer text-xs select-none transition-colors group/row",
             "hover:bg-accent/60",
             isSelected && "bg-primary/15 text-primary ring-1 ring-primary/20",
             !visible && "opacity-40",
           )}
-          style={{ paddingLeft: `${depth * 14 + 4}px` }}
+          style={{ paddingLeft: `${depth * OUTLINER_INDENT_PX + 4}px` }}
           onClick={(e) => onNodeClick(node.id, e)}
           draggable={canReorder}
           onDragStart={(event) => {
@@ -576,6 +566,7 @@ function OutlinerNodeRow({
             </span>
           ) : hasChildren ? (
             <button
+              type="button"
               className="h-4 w-4 flex items-center justify-center shrink-0 hover:bg-accent rounded-sm"
               onClick={(e) => { e.stopPropagation(); onToggle?.(); }}
             >
@@ -585,7 +576,21 @@ function OutlinerNodeRow({
             <span className="h-4 w-4 shrink-0" />
           )}
           <RoleIcon className={cn("h-3.5 w-3.5 shrink-0", isSelected ? "text-primary" : "text-muted-foreground")} />
-          <span className={cn("truncate font-medium flex-1", locked && "italic")}>{node.label}</span>
+          <span
+            className={cn(
+              "truncate font-medium flex-1",
+              locked && "italic",
+              hasValidationError && "text-destructive",
+            )}
+          >
+            {node.label}
+          </span>
+          {hasValidationError && (
+            <AlertTriangle
+              className="h-3 w-3 shrink-0 text-destructive"
+              aria-label={`${validationErrorCount} texture validation error(s)`}
+            />
+          )}
           <div
             className={cn(
               "flex items-center gap-0.5 transition-opacity",
@@ -593,6 +598,7 @@ function OutlinerNodeRow({
             )}
           >
             <button
+              type="button"
               className="h-4 w-4 flex items-center justify-center rounded-sm hover:bg-accent"
               onClick={(e) => { e.stopPropagation(); toggleVisibility(node.id); }}
               title={visible ? "Hide" : "Show"}
@@ -601,6 +607,7 @@ function OutlinerNodeRow({
               {visible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3 text-muted-foreground" />}
             </button>
             <button
+              type="button"
               className="h-4 w-4 flex items-center justify-center rounded-sm hover:bg-accent"
               onClick={(e) => { e.stopPropagation(); toggleLock(node.id); }}
               title={locked ? "Unlock" : "Lock"}

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { FolderOpen, ImagePlus, Link2 } from "lucide-react";
+import { FolderOpen, ImagePlus, Link2, Loader2 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,8 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
   const [textureName, setTextureName] = useState("");
   const [selectedProfile, setSelectedProfile] = useState<"maya" | "nust">("nust");
   const [selectedEntryIdx, setSelectedEntryIdx] = useState(0);
+  const [isImportingTexture, setIsImportingTexture] = useState(false);
+  const [isPickingOutputDir, setIsPickingOutputDir] = useState(false);
 
   const children = useMemo(() => getChildren(assetId), [assetId, getChildren]);
 
@@ -71,6 +73,7 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
       return;
     }
     const name = textureName.trim() || `texture_${Date.now()}`;
+    setIsImportingTexture(true);
     try {
       const result = await importPngAsNutexb({
         outputDir: asset.outputDir,
@@ -83,8 +86,22 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
       toast.success(`Imported texture: ${result.nutexbName}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsImportingTexture(false);
     }
   }, [asset?.outputDir, textureName, ddsFormat, assetId, setTextureSlot, propagateFromParent]);
+
+  const handlePickOutputDir = useCallback(async () => {
+    setIsPickingOutputDir(true);
+    try {
+      const dir = await open({ directory: true, title: "Asset output directory" });
+      if (typeof dir === "string" && dir.trim()) {
+        setOutputDir(assetId, dir.trim());
+      }
+    } finally {
+      setIsPickingOutputDir(false);
+    }
+  }, [assetId, setOutputDir]);
 
   if (!asset) {
     return (
@@ -129,12 +146,14 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
             variant="outline"
             size="sm"
             className={PROP_BTN_ICON}
-            onClick={async () => {
-              const dir = await open({ directory: true, title: "Asset output directory" });
-              if (typeof dir === "string" && dir.trim()) setOutputDir(assetId, dir.trim());
-            }}
+            disabled={isPickingOutputDir}
+            onClick={() => void handlePickOutputDir()}
           >
-            <FolderOpen className="h-3.5 w-3.5" />
+            {isPickingOutputDir ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <FolderOpen className="h-3.5 w-3.5" />
+            )}
           </Button>
         </div>
       </div>
@@ -148,6 +167,7 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
               onChange={(e) => setTextureName(e.target.value)}
               className={`${PROP_INPUT} min-w-0 flex-1`}
               placeholder="Texture name (e.g. basecolor)"
+              disabled={isImportingTexture}
             />
             <TextureFormatSelect
               value={ddsFormat}
@@ -160,14 +180,19 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
             variant="outline"
             size="sm"
             className={`${PROP_BTN} w-full`}
-            onClick={handleImportTexture}
+            disabled={isImportingTexture}
+            onClick={() => void handleImportTexture()}
           >
-            <ImagePlus className="mr-1 h-3.5 w-3.5" />
-            Pick PNG & Convert to nutexb
+            {isImportingTexture ? (
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ImagePlus className="mr-1 h-3.5 w-3.5" />
+            )}
+            {isImportingTexture ? "Converting PNG..." : "Pick PNG & Convert to nutexb"}
           </Button>
         </div>
 
-        {Object.keys(asset.textureOverrides).length > 0 && (
+        {Object.keys(asset.textureOverrides).length > 0 ? (
           <div className="mt-2 space-y-0.5">
             <p className="text-[10px] text-muted-foreground">Texture Slots:</p>
             {Object.entries(asset.textureOverrides).map(([paramId, path]) => (
@@ -177,6 +202,10 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
               </div>
             ))}
           </div>
+        ) : (
+          <p className="mt-2 text-[10px] italic text-muted-foreground">
+            No texture slots assigned yet. Import a PNG above to create one.
+          </p>
         )}
       </div>
 
@@ -189,7 +218,7 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
           </TabsList>
         </Tabs>
 
-        {currentFile && currentFile.entries.length > 0 && (
+        {currentFile && currentFile.entries.length > 0 ? (
           <div className="mt-1.5">
             <select
               className={`${PROP_INPUT} w-full appearance-none rounded-md border border-input`}
@@ -201,9 +230,13 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
               ))}
             </select>
           </div>
+        ) : (
+          <p className="mt-1.5 text-[10px] italic text-muted-foreground">
+            No numatb material data for this profile.
+          </p>
         )}
 
-        {currentFile && currentEntry && (
+        {currentFile && currentEntry ? (
           <ScrollArea className="mt-1.5 max-h-[280px]">
             <NumatbMaterialEntryEditor
               entry={currentEntry}
@@ -224,7 +257,7 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
               }}
             />
           </ScrollArea>
-        )}
+        ) : null}
       </div>
     </div>
   );

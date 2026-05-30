@@ -19,7 +19,10 @@ import type { PlacementRow } from "../types/placement";
 import { PLACEMENT_VDK_TYPES, type PlacementVdkType } from "../utils/placementFieldCatalog";
 import { listPlacementFields } from "../utils/placementFieldModel";
 import { PlacementFieldEditor } from "./PlacementFieldEditor";
+import { VirtualizedList } from "./VirtualizedList";
 import { PROP_BTN, PROP_BTN_ICON, PROP_INPUT, PROP_PANEL } from "./propertyPanelStyles";
+
+const PLACEMENT_ROW_HEIGHT = 28;
 
 interface PlacementCsvEditorPanelProps {
   entries: PlacementRow[];
@@ -108,18 +111,26 @@ export function PlacementCsvEditorPanel({
         onChange={(event) => setFilter(event.target.value)}
       />
 
-      <div className="max-h-40 space-y-1 overflow-y-auto border border-border/40 rounded-sm p-1">
-        {rows.map(({ entry, index }) => (
+      <VirtualizedList
+        items={rows}
+        rowHeight={PLACEMENT_ROW_HEIGHT}
+        getItemKey={(row) => row.index}
+        className="max-h-40 overflow-y-auto border border-border/40 rounded-sm p-1"
+        emptyState={
+          <div className="py-2 text-center text-[10px] text-muted-foreground">
+            No rows match the filter
+          </div>
+        }
+        renderRow={({ entry, index }) => (
           <PlacementRowChip
-            key={index}
             entry={entry}
             initialEntry={initialEntries?.[index] ?? null}
             index={index}
             selected={selectedIndex === index}
             onSelectEntry={onSelectEntry}
           />
-        ))}
-      </div>
+        )}
+      />
 
       {selectedEntry && selectedIndex !== null && (
         <div className="min-w-0 space-y-1.5 border-t border-border/30 pt-2">
@@ -223,7 +234,7 @@ function PlacementRowChip({
     <button
       type="button"
       className={cn(
-        "flex w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-sm border px-1.5 py-1 text-left transition-colors",
+        "flex h-full w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-sm border px-1.5 py-1 text-left transition-colors",
         selected ? "border-primary/50 bg-primary/10" : "border-border/40 hover:bg-muted/20",
         isNewRow && "border-l-2 border-l-green-500/60",
         rowModified && !isNewRow && "border-l-2 border-l-yellow-500/60",

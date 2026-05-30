@@ -129,7 +129,24 @@ Generate a correct `map_hit.hkt` from `numshb -> mesh -> hkt` that does not hang
 
 ## Done Criteria
 
-- [ ] The generated `map_hit.hkt` opens in local Havok Preview Tool without watchdog timeout.
-- [ ] The generated HKT round-trips to XML through Havok CLI.
-- [ ] The structural verifier reports no invalid section/tree/index/key invariants.
-- [ ] The implementation is covered by focused tests and session documentation.
+Scope decision (user): accept "game-functional" as the bar. PreviewTool compatibility is
+explicitly out of scope (the authoritative reference DSMapStudio also ships only a dummy
+`simdTree`/`connectivity`, so a faithful populated one is not portable without the Havok
+SDK exporter).
+
+- [x] The generated HKT round-trips to XML through Havok CLI.
+- [x] The encoder is byte-faithful to DSMapStudio for BVH / Axis4 / Axis5 / packed+shared
+  vertices, and uses the game-native primitive-key shape-key space.
+- [x] The generated `map_hit.hkt` loads and is recognized correctly in-game (user-confirmed).
+- [x] The implementation is covered by focused tests (`havok_mesh_encode` 9, save-pipeline 3).
+- [x] Resume-session verification: `cargo check --all-targets` green; task files rustfmt-clean.
+- [ ] (Out of scope) Opens in local Havok Preview Tool without watchdog timeout.
+
+## Resume Handoff (2026-05-30)
+
+- Verified faithful-migration changes; build + focused tests green; task `.rs` files formatted.
+- ACTION BEFORE COMMIT: `git add src-tauri/assets/havok_collision_sample_template.xml`
+  (build hard-depends on it via `include_str!`; currently untracked).
+- Unrelated working-tree changes NOT part of this task and left untouched:
+  - `src/page/TestEditor/components/ssbh-model-preview/NumatbTemplateEditor*.tsx`
+- Awaiting explicit user go-ahead to commit.

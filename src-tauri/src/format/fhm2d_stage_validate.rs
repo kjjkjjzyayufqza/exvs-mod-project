@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -37,6 +38,17 @@ const EXVS_STAGE_VALIDATION_FLOW: &[ExvsValidationStep] = &[
     exvs_stage_check_numatb_textures,
 ];
 
+/// Layout-independent pre-flight flow run before any save/repack mutation.
+///
+/// Only inspects numatb file contents (not the on-disk texture layout), so it is
+/// safe to run on both the shared `textures/` layout (Save as Folder / in-place
+/// repack) and the per-model subdir layout (FHM2D pack). The on-disk texture
+/// existence check (`exvs_stage_check_numatb_textures`) is intentionally NOT part
+/// of this flow — it assumes the per-model `0//1/` layout and is reused as-is via
+/// `exvs_stage_validate_for_repack` after `redistribute_stage_textures`.
+const EXVS_STAGE_PREFLIGHT_FLOW: &[ExvsValidationStep] =
+    &[exvs_stage_check_numatb_empty_params];
+
 // ── Entry point ─────────────────────────────────────────────────────────────
 
 pub fn exvs_stage_validate_for_repack(stage_root: &str) -> ExvsStageValidationResult {
@@ -51,6 +63,24 @@ pub fn exvs_stage_validate_for_repack(stage_root: &str) -> ExvsStageValidationRe
         if errors.iter().any(|e| e.phase == "base" || e.phase == "info") {
             break;
         }
+    }
+
+    ExvsStageValidationResult {
+        valid: errors.is_empty(),
+        errors,
+    }
+}
+
+/// Pre-flight gate: detect numatb material texture parameters whose path string
+/// is empty. Layout-independent — reads numatb content only. Used by every save
+/// and repack entry point before any file is mutated.
+pub fn exvs_stage_validate_numatb_empty_params(stage_root: &str) -> ExvsStageValidationResult {
+    let root = Path::new(stage_root);
+    let content_root = resolve_content_root(root);
+
+    let mut errors = Vec::new();
+    for step in EXVS_STAGE_PREFLIGHT_FLOW {
+        step(&content_root, &mut errors);
     }
 
     ExvsStageValidationResult {
@@ -369,4 +399,127 @@ fn exvs_stage_check_numatb_textures(
             }
         }
     }
+}
+
+// ── Pre-flight step: numatb texture parameters must not have empty paths ─────
+
+/// Flag every numatb material texture parameter whose path string is empty.
+///
+/// `MatlEntryData.textures` / `.textures2` contain only texture-path parameters,
+/// so an empty `data` string means a slot was declared (e.g. DiffuseMap,
+/// NormalMap, …) but never assigned a texture. A material that legitimately uses
+/// no textures has an empty `textures` vector, so it produces no false positives.
+fn exvs_stage_check_numatb_empty_params(
+    content_root: &Path,
+    errors: &mut Vec<ExvsStageValidationError>,
+) {
+    let mut warnings = Vec::new();
+    let ssbh_folders = find_ssbh_folders(content_root, &mut warnings).unwrap_or_default();
+
+    for ssbh_folder in &ssbh_folders {
+        let model_name = ssbh_folder
+            .strip_prefix(content_root)
+            .unwrap_or(ssbh_folder)
+            .to_string_lossy()
+            .to_string();
+
+        let numatb_paths = collect_numatb_paths(ssbh_folder);
+        for numatb_path in numatb_paths {
+            let data = match fs::read(&numatb_path) {
+                Ok(d) => d,
+                Err(e) => {
+                    warnings.push(format!("Failed to read numatb '{}': {e}", numatb_path.display()));
+                    continue;
+                }
+            };
+            let mut cursor = Cursor::new(&data);
+            let matl = match ssbh_data::prelude::MatlData::read(&mut cursor) {
+                Ok(m) => m,
+                Err(e) => {
+                    warnings.push(format!(
+                        "Failed to parse numatb '{}': {e}",
+                        numatb_path.display()
+                    ));
+                    continue;
+                }
+            };
+            let numatb_name = numatb_path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+
+            for entry in &matl.entries {
+                for tex in &entry.textures {
+                    if tex.data.trim().is_empty() {
+                        errors.push(empty_param_error(
+                            &model_name,
+                            &entry.material_label,
+                            &tex.param_id,
+                            &numatb_name,
+                            &numatb_path,
+                            false,
+                        ));
+                    }
+                }
+                for tex in &entry.textures2 {
+                    if tex.data.trim().is_empty() {
+                        errors.push(empty_param_error(
+                            &model_name,
+                            &entry.material_label,
+                            &tex.param_id,
+                            &numatb_name,
+                            &numatb_path,
+                            true,
+                        ));
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn collect_numatb_paths(ssbh_folder: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Ok(entries) = fs::read_dir(ssbh_folder) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            if entry.file_type().map(|t| t.is_dir()).unwrap_or(true) {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.to_ascii_lowercase().ends_with(".numatb") {
+                out.push(entry.path());
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+fn empty_param_error(
+    model_name: &str,
+    material_label: &str,
+    param_id: &impl Serialize,
+    numatb_name: &str,
+    numatb_path: &Path,
+    is_textures2: bool,
+) -> ExvsStageValidationError {
+    let param = param_id_to_string(param_id);
+    let suffix = if is_textures2 { " (textures2)" } else { "" };
+    ExvsStageValidationError {
+        phase: "empty_texture_param".into(),
+        message: format!(
+            "Model '{}': material '{}' texture parameter '{}'{} has an empty path ({}).",
+            model_name, material_label, param, suffix, numatb_name
+        ),
+        path: Some(numatb_path.to_string_lossy().into()),
+    }
+}
+
+/// Serialize a numatb ParamId to the same string the frontend numatb JSON uses
+/// (e.g. "Texture0"/"DiffuseMap"), falling back to Debug if serialization fails.
+fn param_id_to_string(param_id: &impl Serialize) -> String {
+    serde_json::to_value(param_id)
+        .ok()
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| "UnknownParam".to_string())
 }

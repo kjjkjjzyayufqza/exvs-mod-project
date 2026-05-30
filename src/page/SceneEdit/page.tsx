@@ -30,10 +30,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import { MapToolbar } from "./components/MapToolbar";
-import {
-  StageHierarchyTree,
-  type StageTreeNode,
-} from "./components/StageHierarchyTree";
+import type { StageTreeNode } from "./components/StageHierarchyTree";
 import { SceneOutliner } from "./components/SceneOutliner";
 import { GlobalLoadedTexturePanel, ModelTextureSlotPanel } from "./components/ModelTextureSlotPanel";
 import { SceneTextureManager } from "./components/SceneTextureManager";
@@ -193,9 +190,14 @@ import {
   sceneRemoveHavokData,
   stageLoadSkeleton,
   stageStreamBundles,
+  validateNumatbEmptyParams,
   type StageSkeleton,
   type StageStreamChunk,
+  type ExvsStageValidationError,
 } from "./utils/sceneSessionService";
+import { useSceneValidationStore } from "./store/sceneValidationStore";
+import { buildErrorFolderCounts } from "./utils/sceneValidationErrors";
+import { StageValidationErrorDialog } from "./components/StageValidationErrorDialog";
 import {
   buildSsbhSessionImportConfig,
   ensureImportedDaeSessionImport,
@@ -388,6 +390,11 @@ export default function SceneEdit() {
     meta?: DeleteConfirmMeta;
     resolve: ((confirmed: boolean) => void) | null;
   }>({ open: false, preview: null, resolve: null });
+  const [validationDialog, setValidationDialog] = useState<{
+    open: boolean;
+    title: string;
+    errors: ExvsStageValidationError[];
+  }>({ open: false, title: "", errors: [] });
 
   const [baseModel, setBaseModel] = useState<SsbhModelPreviewBundle | null>(
     null
@@ -1399,6 +1406,40 @@ export default function SceneEdit() {
     setDeleteConfirmState({ open: false, preview: null, resolve: null });
   }, [deleteConfirmState.resolve]);
 
+  const surfaceValidationErrors = useCallback(
+    (errors: ExvsStageValidationError[], title: string) => {
+      const knownFolders = [...subModels.map((s) => s.folderName), "base"];
+      const errorFolders = buildErrorFolderCounts(errors, knownFolders);
+      useSceneValidationStore.getState().setErrors(errors, errorFolders);
+      setValidationDialog({ open: true, title, errors });
+      const objectCount = Object.keys(errorFolders).length;
+      toast.error(
+        `${errors.length} texture issue${errors.length !== 1 ? "s" : ""}${
+          objectCount ? ` on ${objectCount} object${objectCount !== 1 ? "s" : ""}` : ""
+        } blocked packing`,
+      );
+    },
+    [subModels],
+  );
+
+  const runNumatbPreflight = useCallback(
+    async (root: string): Promise<boolean> => {
+      try {
+        const result = await validateNumatbEmptyParams(root);
+        if (result.valid) {
+          useSceneValidationStore.getState().clear();
+          return true;
+        }
+        surfaceValidationErrors(result.errors, "Empty texture paths block packing");
+        return false;
+      } catch (err) {
+        toast.error("Texture validation failed", { description: String(err) });
+        return false;
+      }
+    },
+    [surfaceValidationErrors],
+  );
+
   const handleSaveFolder = useCallback(async () => {
     if (!stageRoot) return;
 
@@ -1408,6 +1449,8 @@ export default function SceneEdit() {
       const confirmed = await promptSaveConfirm(changePreview);
       if (!confirmed) return;
     }
+
+    if (!(await runNumatbPreflight(stageRoot))) return;
 
     setSaveProgressState({
       open: true,
@@ -1474,7 +1517,7 @@ export default function SceneEdit() {
       setSaveProgressState((prev) => ({ ...prev, canClose: true }));
       toast.error("Save failed", { description: String(err) });
     }
-  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, promptDeleteConfirm, promptSaveConfirm]);
+  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, promptDeleteConfirm, promptSaveConfirm, runNumatbPreflight, surfaceValidationErrors]);
 
   const handleSaveFhm2d = useCallback(async () => {
     if (!stageRoot) return;
@@ -1485,6 +1528,8 @@ export default function SceneEdit() {
       const confirmed = await promptSaveConfirm(changePreview);
       if (!confirmed) return;
     }
+
+    if (!(await runNumatbPreflight(stageRoot))) return;
 
     const outputPath = await save({
       filters: [{ name: "FHM2D File", extensions: ["fhm2d"] }],
@@ -1518,6 +1563,9 @@ export default function SceneEdit() {
 
       if (!result.success) {
         setSaveProgressState((prev) => ({ ...prev, canClose: true }));
+        if (result.validationErrors && result.validationErrors.length > 0) {
+          surfaceValidationErrors(result.validationErrors, "Missing textures block packing");
+        }
         return;
       }
 
@@ -1547,7 +1595,7 @@ export default function SceneEdit() {
       setSaveProgressState((prev) => ({ ...prev, canClose: true }));
       toast.error("FHM2D save failed", { description: String(err) });
     }
-  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, promptDeleteConfirm, promptSaveConfirm]);
+  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, promptDeleteConfirm, promptSaveConfirm, runNumatbPreflight, surfaceValidationErrors]);
 
   const handleGraphicParamValueChange = useCallback(
     (index: number, value: string) => {
@@ -3373,6 +3421,7 @@ export default function SceneEdit() {
                 <TabsContent value="outliner" className="mt-0 min-h-0 flex-1 overflow-hidden">
                   <SceneOutliner
                     root={outlinerRoot}
+                    isLoading={isLoading}
                     onSelect={handleOutlinerSelectNode}
                     onDuplicate={handleDuplicateSelected}
                     onDelete={handleDeleteSelected}
@@ -3817,6 +3866,17 @@ export default function SceneEdit() {
           meta={deleteConfirmState.meta}
           onConfirm={handleDeleteConfirmAccept}
           onCancel={handleDeleteConfirmCancel}
+        />
+        <StageValidationErrorDialog
+          open={validationDialog.open}
+          title={validationDialog.title}
+          errors={validationDialog.errors}
+          knownFolderNames={[...subModels.map((s) => s.folderName), "base"]}
+          onClose={() => setValidationDialog((prev) => ({ ...prev, open: false }))}
+          onSelectFolder={(folderName) => {
+            applyPrimarySelectionState(folderName);
+            setValidationDialog((prev) => ({ ...prev, open: false }));
+          }}
         />
 
         {showDaeImportModal && daeImportEntries.length > 0 && (

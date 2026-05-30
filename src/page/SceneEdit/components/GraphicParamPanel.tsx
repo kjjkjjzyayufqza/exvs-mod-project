@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { memo, useDeferredValue, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -99,6 +99,10 @@ interface IndexedParam extends GraphicParam {
   originalIndex: number;
 }
 
+/** Expanded categories above this count use bounded scroll instead of virtualization. */
+const LARGE_CATEGORY_SCROLL_THRESHOLD = 30;
+const LARGE_CATEGORY_MAX_HEIGHT = "max-h-72";
+
 export function GraphicParamPanel({
   params,
   initialParams,
@@ -113,6 +117,7 @@ export function GraphicParamPanel({
   onResetValue,
 }: GraphicParamPanelProps) {
   const [filter, setFilter] = useState("");
+  const deferredFilter = useDeferredValue(filter);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(() => new Set());
 
   const initialMap = useMemo(() => {
@@ -123,7 +128,7 @@ export function GraphicParamPanel({
   }, [initialParams]);
 
   const grouped = useMemo(() => {
-    const lower = filter.toLowerCase();
+    const lower = deferredFilter.toLowerCase();
     const indexed: IndexedParam[] = params
       .map((p, i) => ({ ...p, originalIndex: i }))
       .filter((p) => !lower || p.key.toLowerCase().includes(lower));
@@ -136,7 +141,16 @@ export function GraphicParamPanel({
       groups.set(catId, arr);
     }
     return groups;
-  }, [params, filter]);
+  }, [params, deferredFilter]);
+
+  const totalFilteredCount = useMemo(() => {
+    let count = 0;
+    for (const items of grouped.values()) count += items.length;
+    return count;
+  }, [grouped]);
+
+  const filterActive = deferredFilter.trim().length > 0;
+  const showNoFilterMatches = filterActive && totalFilteredCount === 0;
 
   const toggleCategory = (id: string) => {
     setCollapsedCategories((prev) => {
@@ -177,59 +191,66 @@ export function GraphicParamPanel({
         />
       )}
 
-      <div className="space-y-1">
-        {CATEGORIES.map((cat) => {
-          const items = grouped.get(cat.id);
-          if (!items || items.length === 0) return null;
-          const collapsed = collapsedCategories.has(cat.id);
-          return (
-            <div key={cat.id}>
-              <button
-                type="button"
-                className="flex w-full items-center gap-1 rounded-sm px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/40"
-                onClick={() => toggleCategory(cat.id)}
-              >
-                <ChevronRight
-                  className={cn("h-3 w-3 transition-transform", !collapsed && "rotate-90")}
-                />
-                {cat.label}
-                <span className="ml-auto font-mono text-[9px] opacity-60">{items.length}</span>
-              </button>
-              {!collapsed && (
-                <div className="ml-1 space-y-1 border-l border-border/30 pl-2 pt-1">
-                  {items.map((p) => (
-                    <ParamRow
-                      key={`${p.key}-${p.originalIndex}`}
-                      param={p}
-                      applied={appliedKeys.has(p.key)}
-                      initialMap={initialMap}
-                      onValueChange={onValueChange}
-                      onKeyChange={onKeyChange}
-                      onDelete={onDelete}
-                      onToggleApplied={onToggleApplied}
-                      onResetValue={onResetValue}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {showNoFilterMatches ? (
+        <p
+          data-testid="graphic-param-filter-empty"
+          className="py-2 text-center text-[10px] text-muted-foreground"
+        >
+          No matching parameters
+        </p>
+      ) : (
+        <div className="space-y-1">
+          {CATEGORIES.map((cat) => {
+            const items = grouped.get(cat.id);
+            if (!items || items.length === 0) return null;
+            const collapsed = collapsedCategories.has(cat.id);
+            const useBoundedScroll =
+              !collapsed && items.length > LARGE_CATEGORY_SCROLL_THRESHOLD;
+            return (
+              <div key={cat.id}>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-1 rounded-sm px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/40"
+                  onClick={() => toggleCategory(cat.id)}
+                >
+                  <ChevronRight
+                    className={cn("h-3 w-3 transition-transform", !collapsed && "rotate-90")}
+                  />
+                  {cat.label}
+                  <span className="ml-auto font-mono text-[9px] opacity-60">{items.length}</span>
+                </button>
+                {!collapsed && (
+                  <div
+                    className={cn(
+                      "ml-1 space-y-1 border-l border-border/30 pl-2 pt-1",
+                      useBoundedScroll && `${LARGE_CATEGORY_MAX_HEIGHT} overflow-y-auto overscroll-contain`,
+                    )}
+                  >
+                    {items.map((p) => (
+                      <ParamRow
+                        key={`${p.key}-${p.originalIndex}`}
+                        param={p}
+                        applied={appliedKeys.has(p.key)}
+                        initialMap={initialMap}
+                        onValueChange={onValueChange}
+                        onKeyChange={onKeyChange}
+                        onDelete={onDelete}
+                        onToggleApplied={onToggleApplied}
+                        onResetValue={onResetValue}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-function ParamRow({
-  param: p,
-  applied,
-  initialMap,
-  onValueChange,
-  onKeyChange,
-  onDelete,
-  onToggleApplied,
-  onResetValue,
-}: {
+interface ParamRowProps {
   param: IndexedParam;
   applied: boolean;
   initialMap: Map<string, string> | null;
@@ -238,7 +259,28 @@ function ParamRow({
   onDelete: (index: number) => void;
   onToggleApplied: (key: string, applied: boolean) => void;
   onResetValue: (index: number) => void;
-}) {
+}
+
+function paramRowPropsAreEqual(prev: ParamRowProps, next: ParamRowProps): boolean {
+  return (
+    prev.applied === next.applied &&
+    prev.initialMap === next.initialMap &&
+    prev.param.originalIndex === next.param.originalIndex &&
+    prev.param.key === next.param.key &&
+    prev.param.value === next.param.value
+  );
+}
+
+const ParamRow = memo(function ParamRow({
+  param: p,
+  applied,
+  initialMap,
+  onValueChange,
+  onKeyChange,
+  onDelete,
+  onToggleApplied,
+  onResetValue,
+}: ParamRowProps) {
   const slider = numericConfig(p.key, p.value);
   const originalValue = initialMap?.get(p.key);
   const valueModified = originalValue !== undefined && p.value !== originalValue;
@@ -319,4 +361,4 @@ function ParamRow({
       </div>
     </div>
   );
-}
+}, paramRowPropsAreEqual);

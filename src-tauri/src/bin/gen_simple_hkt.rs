@@ -1,17 +1,18 @@
-//! Build a single-section collision HKT by replacing only the shape/data chain of an
-//! exported sample XML (e.g. `map_hit.xml`) with data derived from a `numshb`.
+//! Build a collision HKT by replacing only the shape/data chain of an exported sample
+//! XML (e.g. `map_hit.xml`) with data derived from a `numshb`.
 //!
-//! This is the purpose-built entrypoint for the simple single-section template
-//! replacement experiment (see `simple-hkt-template` plan): it forces a one-section /
-//! no-shared-vertex mesh, patches only the shape/data fields of the sample shell, and
-//! neutralizes the stale acceleration payload so the result is fully regenerated.
+//! By default this produces the full, game-faithful multi-section encode (the shipping
+//! path). The single-section template-replacement experiment is preserved for analysis
+//! only and is opt-in via `HKT_FIT=single`.
 //!
 //! Usage: cargo run --bin gen_simple_hkt -- [numshb] [template_xml] [out_dir]
+//!   - default            : full game-faithful HKT  -> `map_hit_sssssccccc.*`
+//!   - HKT_FIT=single      : single-section analysis  -> `map_hit_sssssccccc_single.*`
 //!
 //! Outputs (under `out_dir`, default `test/sssssccccc_simple_replace/`):
-//!   - `map_hit_sssssccccc.xml` : patched single-section XML for inspection
-//!   - `map_hit_sssssccccc.obj` : OBJ exported from the patched XML for a visual sanity check
-//!   - `map_hit_sssssccccc.hkt` : round-tripped HKT for Havok preview testing
+//!   - `<stem>.xml` : patched XML for inspection
+//!   - `<stem>.obj` : OBJ exported from the patched XML for a visual sanity check
+//!   - `<stem>.hkt` : round-tripped HKT
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -28,8 +29,12 @@ const DEFAULT_OUT_DIR: &str = r"e:\TAURI_PROJECT\test\sssssccccc_simple_replace"
 const OUTPUT_STEM: &str = "map_hit_sssssccccc";
 
 fn main() {
-    let numshb = std::env::args().nth(1).unwrap_or_else(|| DEFAULT_NUMSHB.to_string());
-    let template = std::env::args().nth(2).unwrap_or_else(|| DEFAULT_TEMPLATE.to_string());
+    let numshb = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| DEFAULT_NUMSHB.to_string());
+    let template = std::env::args()
+        .nth(2)
+        .unwrap_or_else(|| DEFAULT_TEMPLATE.to_string());
     let out_dir = PathBuf::from(
         std::env::args()
             .nth(3)
@@ -53,27 +58,27 @@ fn run(numshb: &str, template: &str, out_dir: &Path) -> Result<(), String> {
         full.triangle_count()
     );
 
-    // Default path is the single-section isolation experiment. Set HKT_FIT=full to keep
-    // the whole mesh and let the encoder emit as many sections as it needs — used to test
-    // whether the full mesh loads now that the template shell is clean (neutralized
-    // simdTree / connectivity / hasSimdTree).
-    let full_mesh = std::env::var("HKT_FIT")
-        .map(|v| v.eq_ignore_ascii_case("full"))
+    // Production path is the full, game-faithful multi-section encode (verified
+    // byte-identical to DSMapStudio's hknpCollisionMeshBuilder for BVH / Axis4 / Axis5 /
+    // packed+shared vertex encoding). The single-section fit is kept only as an analysis
+    // aid and is no longer the shipping path: set HKT_FIT=single to use it.
+    let single_section = std::env::var("HKT_FIT")
+        .map(|v| v.eq_ignore_ascii_case("single"))
         .unwrap_or(false);
-    let (mesh, stem) = if full_mesh {
-        println!(
-            "fit mode      : full ({} tris, multi-section, no reduction)",
-            full.triangle_count()
-        );
-        (full.clone(), format!("{OUTPUT_STEM}_full"))
-    } else {
+    let (mesh, stem) = if single_section {
         let fitted = fit_to_single_section(&full)?;
         println!(
-            "single section: {} verts, {} tris",
+            "encode mode   : single-section (ANALYSIS ONLY) — {} verts, {} tris",
             fitted.vertices.len(),
             fitted.triangle_count()
         );
-        (fitted, OUTPUT_STEM.to_string())
+        (fitted, format!("{OUTPUT_STEM}_single"))
+    } else {
+        println!(
+            "encode mode   : full game-faithful — {} tris, multi-section",
+            full.triangle_count()
+        );
+        (full.clone(), OUTPUT_STEM.to_string())
     };
 
     let template_xml =

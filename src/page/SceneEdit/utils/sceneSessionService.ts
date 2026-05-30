@@ -64,6 +64,37 @@ export interface SaveResult {
   warnings: string[];
 }
 
+export interface ExvsStageValidationError {
+  phase: string;
+  message: string;
+  path: string | null;
+}
+
+export interface ExvsStageValidationResult {
+  valid: boolean;
+  errors: ExvsStageValidationError[];
+}
+
+/**
+ * Pre-flight gate: detect numatb material texture parameters whose path is empty.
+ * Layout-independent — safe to run before any save/repack mutation.
+ */
+export function validateNumatbEmptyParams(
+  stageRoot: string,
+): Promise<ExvsStageValidationResult> {
+  return invoke<ExvsStageValidationResult>("scene_validate_numatb_empty_params", { stageRoot });
+}
+
+/**
+ * Full repack validation (structure + on-disk numatb texture existence). Assumes
+ * the per-model `0//1/` texture layout, so only run after redistribute_stage_textures.
+ */
+export function validateStageForRepack(
+  stageRoot: string,
+): Promise<ExvsStageValidationResult> {
+  return invoke<ExvsStageValidationResult>("exvs_stage_validate_for_repack", { stageRoot });
+}
+
 export function sceneSessionCreate(source: SceneSource): Promise<string> {
   return invoke<string>("scene_session_create", { source });
 }

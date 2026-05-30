@@ -3,8 +3,9 @@ import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Pencil } from "lucide-react";
+import { Pencil, Loader2 } from "lucide-react";
 import { TexturePathPicker } from "./TexturePathPicker";
+import { Skeleton } from "@/components/ui/skeleton";
 import { type TexturePreviewSlotKey } from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
 import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
 import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
@@ -52,8 +53,8 @@ export function ModelTextureSlotPanel({
 
   if (textures.length === 0) {
     return (
-      <div className="text-[10px] text-muted-foreground italic py-1">
-        No textures resolved for this model
+      <div className="py-2 text-center text-[10px] italic text-muted-foreground">
+        No texture slots found for this model.
       </div>
     );
   }
@@ -67,6 +68,29 @@ export function ModelTextureSlotPanel({
       )}
       {textures.map((tex) => {
         const slotLabel = tex.slots.map(textureSlotShortLabel).join(", ");
+        const isLoading = tex.enabled && !tex.loaded;
+
+        if (isLoading) {
+          return (
+            <div key={tex.pathKey} className="min-w-0 space-y-1 rounded-sm px-1 py-1">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-4 w-4 shrink-0 rounded-sm" />
+                <Skeleton className="h-3.5 flex-1" />
+                <Badge variant="outline" className="h-4 gap-0.5 px-1 text-[9px]">
+                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                  loading
+                </Badge>
+              </div>
+              <div className="ml-5 space-y-1">
+                <Skeleton className="h-2.5 w-2/3" />
+                <p className="truncate text-[9px] text-muted-foreground" title={tex.internalName}>
+                  {tex.internalName}
+                </p>
+              </div>
+            </div>
+          );
+        }
+
         return (
           <div key={tex.pathKey} className="min-w-0 space-y-0.5 rounded-sm px-1 py-1 hover:bg-muted/30">
             <div className="flex min-w-0 items-center gap-2">

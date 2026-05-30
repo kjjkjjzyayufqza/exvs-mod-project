@@ -1,0 +1,14 @@
+[
+  {
+    "id": "task-exvs-structure-viewer",
+    "key": "exvs-structure-viewer",
+    "content": "Task completed: exvs-structure-viewer",
+    "namespace": "tasks",
+    "type": "task-outcome",
+    "metadata": {
+      "success": true,
+      "quality": 0.85
+    },
+    "createdAt": 1780131163298
+  }
+]

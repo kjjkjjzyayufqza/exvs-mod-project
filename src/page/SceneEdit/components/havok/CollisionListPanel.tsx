@@ -1,10 +1,13 @@
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import type { HavokMeshData } from "@/utils/havokXmlParser";
 import { useSceneEditorStore } from "../../store/sceneEditorStore";
 import { countHavokCollisionTriangles, formatTriangleCount } from "../../utils/hktSimplifyUtils";
+import { VirtualizedList } from "../VirtualizedList";
+
+/** py-0.5 + text-[11px] row with h-3 icon */
+const COLLISION_ROW_HEIGHT = 22;
 
 interface CollisionMeta {
   displayName: string;
@@ -58,39 +61,43 @@ export function CollisionListPanel({ sourceIds, meshDataMap, metaMap }: Collisio
           {allVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
         </Button>
       </div>
-      <ScrollArea className="max-h-[200px]">
-        <div className="flex flex-col">
-          {sourceIds.map((sourceId) => {
-            const folder = folderLabel(sourceId);
-            const visible = collisionVisibility[folder] !== false;
-            const meshData = meshDataMap?.get(sourceId);
-            const triCount = meshData ? countHavokCollisionTriangles(meshData) : null;
-            return (
-              <button
-                key={sourceId}
-                type="button"
-                className={cn(
-                  "flex items-center gap-1.5 px-1.5 py-0.5 text-[11px] rounded hover:bg-accent/40 text-left",
-                  !visible && "opacity-40",
-                )}
-                onClick={() => toggleCollisionVisibility(folder)}
-              >
-                {visible ? (
-                  <Eye className="h-3 w-3 shrink-0 text-green-400" />
-                ) : (
-                  <EyeOff className="h-3 w-3 shrink-0 text-muted-foreground" />
-                )}
-                <span className="min-w-0 flex-1 truncate">{labelForSource(sourceId, metaMap?.get(sourceId))}</span>
-                {triCount != null ? (
-                  <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-                    {formatTriangleCount(triCount)}
-                  </span>
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
-      </ScrollArea>
+      <VirtualizedList
+        items={sourceIds}
+        rowHeight={COLLISION_ROW_HEIGHT}
+        getItemKey={(sourceId) => sourceId}
+        className="max-h-[200px] overflow-y-auto"
+        emptyState={
+          <p className="px-1.5 py-2 text-[10px] text-muted-foreground">No collision sources</p>
+        }
+        renderRow={(sourceId) => {
+          const folder = folderLabel(sourceId);
+          const visible = collisionVisibility[folder] !== false;
+          const meshData = meshDataMap?.get(sourceId);
+          const triCount = meshData ? countHavokCollisionTriangles(meshData) : null;
+          return (
+            <button
+              type="button"
+              className={cn(
+                "flex h-full w-full items-center gap-1.5 px-1.5 py-0.5 text-[11px] rounded hover:bg-accent/40 text-left",
+                !visible && "opacity-40",
+              )}
+              onClick={() => toggleCollisionVisibility(folder)}
+            >
+              {visible ? (
+                <Eye className="h-3 w-3 shrink-0 text-green-400" />
+              ) : (
+                <EyeOff className="h-3 w-3 shrink-0 text-muted-foreground" />
+              )}
+              <span className="min-w-0 flex-1 truncate">{labelForSource(sourceId, metaMap?.get(sourceId))}</span>
+              {triCount != null ? (
+                <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                  {formatTriangleCount(triCount)}
+                </span>
+              ) : null}
+            </button>
+          );
+        }}
+      />
     </div>
   );
 }

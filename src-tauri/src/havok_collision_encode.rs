@@ -6,7 +6,7 @@ use crate::collision_mesh::{
     bake_and_merge_collision_mesh, parse_import_scene_from_bytes, simplify_collision_mesh,
     CollisionMeshOptions,
 };
-use crate::havok_mesh_encode::build_mesh_collision_xml;
+use crate::havok_mesh_encode::build_mesh_collision_xml_faithful;
 
 /// Result of mesh-accurate HKT generation.
 pub struct HktGenerationResult {
@@ -24,11 +24,7 @@ pub struct HktCollisionPreview {
 }
 
 fn render_triangle_count_from_scene(scene: &crate::ssbh_dae::ImportScene) -> usize {
-    scene
-        .meshes
-        .iter()
-        .map(|m| m.indices.len() / 3)
-        .sum()
+    scene.meshes.iter().map(|m| m.indices.len() / 3).sum()
 }
 
 /// Preview collision mesh stats without invoking Havok Content Tools.
@@ -60,7 +56,7 @@ pub fn generate_hkt_from_import_bytes(
     let merged = bake_and_merge_collision_mesh(&scene, &options)?;
     let mesh = simplify_collision_mesh(&merged, &options.simplify);
     let triangle_count = mesh.triangle_count();
-    let xml = build_mesh_collision_xml(&mesh)?;
+    let xml = build_mesh_collision_xml_faithful(&mesh)?;
     let bytes = convert_xml_string_to_hkt(filter_manager_exe, &xml)?;
     Ok(HktGenerationResult {
         bytes,
@@ -83,10 +79,12 @@ pub fn generate_hkt_from_dae_bytes(
     .map(|r| r.bytes)
 }
 
-pub(crate) fn convert_xml_string_to_hkt(filter_manager_exe: &str, xml: &str) -> Result<Vec<u8>, String> {
+pub(crate) fn convert_xml_string_to_hkt(
+    filter_manager_exe: &str,
+    xml: &str,
+) -> Result<Vec<u8>, String> {
     let temp_dir = std::env::temp_dir().join(format!("havok_hkt_gen_{}", uuid::Uuid::new_v4()));
-    std::fs::create_dir_all(&temp_dir)
-        .map_err(|e| format!("Failed to create temp dir: {e}"))?;
+    std::fs::create_dir_all(&temp_dir).map_err(|e| format!("Failed to create temp dir: {e}"))?;
 
     let cleanup = || {
         let _ = std::fs::remove_dir_all(&temp_dir);
@@ -174,7 +172,9 @@ mod tests {
 
     #[test]
     fn pipeline_simplify_reduces_subdivided_quad_before_xml() {
-        use crate::collision_mesh::{simplify_collision_mesh, CollisionSimplifyOptions, CollisionTriMesh};
+        use crate::collision_mesh::{
+            simplify_collision_mesh, CollisionSimplifyOptions, CollisionTriMesh,
+        };
 
         let mesh = CollisionTriMesh {
             vertices: vec![
@@ -357,7 +357,8 @@ mod tests {
 
                 match bake_and_merge_collision_mesh(scene, &options) {
                     Ok(mesh) => {
-                        let (aabb_min, aabb_max) = mesh.compute_aabb().unwrap_or(([0.; 3], [0.; 3]));
+                        let (aabb_min, aabb_max) =
+                            mesh.compute_aabb().unwrap_or(([0.; 3], [0.; 3]));
                         eprintln!("\n  [bake_and_merge_collision_mesh] OK");
                         eprintln!(
                             "    merged verts={} tris={}",
@@ -378,11 +379,7 @@ mod tests {
                             .iter()
                             .filter(|m| !m.bone_influences.is_empty())
                             .count();
-                        eprintln!(
-                            "    skinned_meshes={}/{}",
-                            skinned,
-                            scene.meshes.len()
-                        );
+                        eprintln!("    skinned_meshes={}/{}", skinned, scene.meshes.len());
 
                         match build_mesh_collision_xml(&mesh) {
                             Ok(xml) => {
@@ -397,12 +394,7 @@ mod tests {
                         }
 
                         if let Some(exe) = filter_exe {
-                            match generate_hkt_from_import_bytes(
-                                &file_bytes,
-                                &name,
-                                exe,
-                                options,
-                            ) {
+                            match generate_hkt_from_import_bytes(&file_bytes, &name, exe, options) {
                                 Ok(r) => {
                                     eprintln!("\n  [generate_hkt_from_import_bytes] OK");
                                     eprintln!(
@@ -500,7 +492,9 @@ mod tests {
             };
             eprintln!(
                 "      {:30} v={:>6} tri={:>6} {skin}",
-                m.name, m.vertices.len(), tris
+                m.name,
+                m.vertices.len(),
+                tris
             );
         }
     }
@@ -562,19 +556,13 @@ mod tests {
                     .filter(|v| !referenced.contains(v))
                     .take(5)
                     .collect();
-                eprintln!(
-                    "        orphan sample (first 5 of {orphan_count}): {sample:?}"
-                );
+                eprintln!("        orphan sample (first 5 of {orphan_count}): {sample:?}");
             }
         }
         eprintln!("    skinned_meshes={skin_mesh_count}");
     }
 
-    fn compare_pair(
-        path_a: std::path::PathBuf,
-        path_b: std::path::PathBuf,
-        label: &str,
-    ) {
+    fn compare_pair(path_a: std::path::PathBuf, path_b: std::path::PathBuf, label: &str) {
         if !path_a.exists() || !path_b.exists() {
             eprintln!("  {label}: SKIP (file missing)");
             return;
@@ -621,9 +609,7 @@ mod tests {
                 );
                 let tri_match = a.triangle_count() == b.triangle_count();
                 let vert_match = a.vertices.len() == b.vertices.len();
-                eprintln!(
-                    "    match: verts={vert_match} tris={tri_match}"
-                );
+                eprintln!("    match: verts={vert_match} tris={tri_match}");
             }
             _ => eprintln!("    SKIP: one or both failed to parse/bake"),
         }
@@ -651,7 +637,12 @@ mod tests {
             Err(e) => return ("OK", "FAIL", "—", e.chars().take(60).collect()),
         };
         if let Err(e) = build_mesh_collision_xml(&mesh) {
-            return ("OK", "OK", "—", format!("xml: {}", e.chars().take(40).collect::<String>()));
+            return (
+                "OK",
+                "OK",
+                "—",
+                format!("xml: {}", e.chars().take(40).collect::<String>()),
+            );
         }
         if let Some(exe) = filter_exe {
             match generate_hkt_from_import_bytes(bytes, name, exe, opts) {
@@ -659,7 +650,11 @@ mod tests {
                     "OK",
                     "OK",
                     "OK",
-                    format!("{} tris, {} HKT", r.triangle_count, format_size(r.bytes.len() as u64)),
+                    format!(
+                        "{} tris, {} HKT",
+                        r.triangle_count,
+                        format_size(r.bytes.len() as u64)
+                    ),
                 ),
                 Err(e) => ("OK", "OK", "FAIL", e.chars().take(60).collect()),
             }
@@ -695,12 +690,17 @@ mod tests {
 
         for path in &files {
             let name = path.file_name().unwrap().to_string_lossy().to_string();
-            let bytes = std::fs::read(path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+            let bytes =
+                std::fs::read(path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
             eprintln!("\n--- {name} ({} bytes) ---", bytes.len());
 
             let scene = match parse_import_scene_from_bytes(&name, &bytes) {
                 Ok(s) => {
-                    eprintln!("  parse OK: meshes={} bones={}", s.meshes.len(), s.bones.len());
+                    eprintln!(
+                        "  parse OK: meshes={} bones={}",
+                        s.meshes.len(),
+                        s.bones.len()
+                    );
                     s
                 }
                 Err(e) => {

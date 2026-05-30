@@ -15,6 +15,16 @@ All numbers below are taken from real round-tripped files, not assumptions:
 
 ---
 
+> **Update (migration applied):** the shape-key space has been migrated to the
+> game-native **primitive-key** sizing (`mesh_key_info` in `havok_mesh_encode.rs`).
+> Our full output now reports `numShapeKeyBits=13 / numPrimitiveKeys=7802 /
+> bitsPerKey=13 / maxKeyValue=7801`, which is internally consistent and matches the
+> game's own formula (`maxKeyValue = numPrimitiveKeys - 1`, `bitsPerKey` covers every
+> key). PreviewTool is explicitly out of scope from here on. `simdTree`/`connectivity`
+> remain intentionally empty with `hasSimdTree=false` — a valid, game-accepted
+> configuration (see §4/§5). The tables below keep the pre-migration values in the
+> "previous" columns for history.
+
 ## 0. TL;DR
 
 - The game accepts our file because its **runtime collision query only needs the
@@ -39,7 +49,7 @@ All numbers below are taken from real round-tripped files, not assumptions:
 | Sections | 1 | many (31 for this geometry) | many (hand BVH) | 1 (fit mode) **or** 31 (full mode) |
 | Geometry kept | full (tiny: 5 quads) | full | full | **127 tris only** (fit) or full 3901 tris (full) |
 | `meshTree` source | Havok official builder | Havok official builder | hand-written | hand-written (`split_and_encode_sections`) |
-| Shape-key space | primitive-key | primitive-key | mixed / fixed=4 | **section-key (inconsistent)** |
+| Shape-key space | primitive-key | primitive-key | mixed / fixed=4 | **primitive-key (game-native)** |
 | `simdTree` | populated | populated | stale (copied from template) | **emptied** |
 | `connectivity` | present | populated | stale | **emptied** |
 | `hasSimdTree` | `true` | `true` | `true` (stale) | `false` |
@@ -52,31 +62,31 @@ All numbers below are taken from real round-tripped files, not assumptions:
 
 ## 2. Field-level numbers (the decisive divergence)
 
-| Field | Game simple | Game complex | Our full output |
-|---|---|---|---|
-| `numShapeKeyBits` (shape) | 4 | **13** | 5 |
-| `numPrimitiveKeys` (meshTree) | 10 | ~10086 | **7802** |
-| `bitsPerKey` | 4 | **13** | **5** |
-| `maxKeyValue` | 9 | **5043** | **30** |
-| primitive count | 5 | ~5043 | 3901 |
-| section count | 1 | 31 | 31 |
+| Field | Game simple | Game complex | Our full — **before** | Our full — **after migration** |
+|---|---|---|---|---|
+| `numShapeKeyBits` (shape) | 4 | **13** | 5 | **13** |
+| `numPrimitiveKeys` (meshTree) | 10 | ~10086 | 7802 | 7802 |
+| `bitsPerKey` | 4 | **13** | **5** ❌ | **13** ✅ |
+| `maxKeyValue` | 9 | **5043** | **30** ❌ | **7801** ✅ |
+| primitive count | 5 | ~5043 | 3901 | 3901 |
+| section count | 1 | 31 | 31 | 31 |
 
-**Read the right-hand column carefully.** In both game formats the key width
-covers every primitive key:
+**The fix.** In both game formats the key width covers every primitive key, and
+`maxKeyValue = numPrimitiveKeys - 1`:
 
 - simple: `bitsPerKey=4` → 16 values ≥ `numPrimitiveKeys=10` ✅
 - complex: `bitsPerKey=13` → 8192 values ≥ `maxKeyValue=5043` ✅
 
-In our output it does **not**:
+Before migration our output sized the key space to the **section count (31 → 5
+bits)** while still declaring **7802 primitive keys** — internally inconsistent.
+The game's broadphase walks the `meshTree` arrays directly and never trusted this
+width (so it always worked in-game), but it diverged from every authentic asset.
 
-- ours: `bitsPerKey=5` → 32 values, but `numPrimitiveKeys=7802` ❌
-
-We sized the key space to the **section count (31 → 5 bits)** while still
-declaring **7802 primitive keys**. The game's broadphase walks the `meshTree`
-section/primitive arrays directly and never trusts this width, so it works.
-`PreviewTool` enumerates shape keys using `bitsPerKey`, collides with the
-declared `numPrimitiveKeys`, and hangs. This is the single highest-confidence
-cause of the PreviewTool failure.
+After migration `mesh_key_info` sizes everything from `numPrimitiveKeys`:
+`maxKeyValue = 7801`, `bitsPerKey = 13`, `numShapeKeyBits = 13` — `13` bits cover
+all `7802` keys, exactly as the game does. Shape keys now decode unambiguously, so
+per-triangle features (material / surface / damage lookups) resolve the correct
+primitive.
 
 ---
 
@@ -98,7 +108,7 @@ behavior observed.
 
 | # | Problem | Why it matters | Severity |
 |---|---|---|---|
-| 1 | **Shape-key space is inconsistent** (`bitsPerKey` sized to sections, `numPrimitiveKeys` to primitives) | Relies on the game runtime being lenient. Any feature that decodes a hit back to a specific triangle — material, surface type, footstep sound, destructible chunk, damage zone — can resolve the wrong primitive or fail. | **High** |
+| 1 | ~~**Shape-key space is inconsistent**~~ — **RESOLVED.** `mesh_key_info` now sizes `numShapeKeyBits/bitsPerKey/maxKeyValue` from `numPrimitiveKeys` (primitive-key space), matching both game formats. | Shape keys decode unambiguously; per-triangle material/surface/damage lookups resolve the correct primitive. | ~~High~~ Done |
 | 2 | **PreviewTool cannot open multi-section output** | We lose the only visual QA tool for collision. Every change is shipped blind and can only be checked in-game. | **High** |
 | 3 | **`simdTree` emptied / `hasSimdTree=false`** | No SIMD broadphase acceleration. Fine for small meshes; large collision meshes get slower narrow-phase queries and diverge from every authentic game asset. | Medium |
 | 4 | **`connectivity` emptied** | No edge/adjacency data. Character-controller edge smoothing and continuous collision can snag or jitter on internal section boundaries. | Medium |
@@ -125,3 +135,56 @@ behavior observed.
 
 The cheapest high-value next experiment is option 1's shape-key fix, because it is
 the one field that is provably inconsistent with every working game asset.
+
+---
+
+## 6. DSMapStudio reference cross-check (game-faithful migration)
+
+Option 2 above ("match the game faithfully, port DSMapStudio's builder") was
+researched against the actual source:
+`soulsmods/DSMapStudio`, `src/HKX2/HKX2/Builders/hknpCollisionMeshBuilder.cs` and
+`BVH.cs`. The finding reframes the work.
+
+### Our encoder is already byte-identical to the reference
+
+Every field that governs collision correctness matches DSMapStudio line-for-line:
+
+| Piece | DSMapStudio | Our `havok_mesh_encode.rs` | Match |
+|---|---|---|---|
+| Compressed-AABB nibble (`CompressDim`) | `226/extent`, `sqrt`, `(a<<4)\|b` | `compress_dim` | ✅ identical |
+| Section BVH (Axis4) | leaf `prim*2`, internal `offset\|0x1` | `build_axis4_tree` | ✅ identical |
+| Mesh BVH (Axis5) | leaf section idx lo/hi, internal `offset/2`, hi`\|0x80`, root xyz=0 | `build_axis5_tree` | ✅ identical |
+| Packed vertex | 11/11/10, `x\|y<<11\|z<<22` | `encode_packed_vertex` | ✅ identical |
+| Shared vertex | 21/21/22 | `encode_shared_vertex` | ✅ identical |
+| Section split | `>127 prims \|\| >255 verts` | `split_bvh_sections` | ✅ identical |
+| Primitive record | `[a,b,c,c]` | same | ✅ identical |
+
+### The reference itself dummies the acceleration structures
+
+The pieces I previously listed as "missing" are **not built by the authoritative
+reference either**:
+
+- `simdTree`: DSMapStudio writes a **dummy 2-node tree** with inverted infinite
+  bounds (`lx=ly=lz=+inf`, `hx=hy=hz=-inf`) and all `data=0`. It is not a real SIMD
+  tree. Our emptied tree + `hasSimdTree=false` is the same non-functional dummy.
+- `connectivity`: DSMapStudio never sets it (left empty/default). We empty it. Same.
+- `triangleIsInterior`: DSMapStudio sets `numBits=0`. The game's own exporter sizes
+  it to `numPrimitiveKeys` with all-zero bits; we match the game (all-zero).
+- `bitsPerKey=5 / maxKeyValue=30`: hardcoded in DSMapStudio with literal `// ?`
+  comments (a FromSoftware guess). Our game uses **primitive-key** sizing, which we
+  follow — so here we are *more* correct for this game than DSMapStudio.
+
+A real populated `simdTree`/`connectivity` only exists in assets produced by
+Havok's full SDK exporter, which is not available to us or to DSMapStudio. There is
+therefore no "fuller" version to port — building one by hand would be guesswork.
+
+### Resolution (applied)
+
+- The full multi-section encoder is now the **production default**
+  (`gen_simple_hkt`, no env var). It is the game-faithful path.
+- The single-section fit is **analysis-only**, opt-in via `HKT_FIT=single`.
+- Shape-key space is primitive-key (game-native); geometry/tree encoding is
+  byte-identical to DSMapStudio; `simdTree`/`connectivity`/`triangleIsInterior`
+  match what the reference and the game runtime accept.
+
+This is the faithful migration. PreviewTool remains out of scope by decision.
