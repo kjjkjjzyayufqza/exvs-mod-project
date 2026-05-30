@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SceneEditRndModalShell } from "../SceneEditRndModalShell";
 import { getDetailViewModalDimensions } from "../sceneEditRndModalUtils";
+import { SCENE_EDIT_RND_SIZE_KEYS } from "../sceneEditRndSizePersistence";
 import { NumdlbMappingEditorBody } from "@/page/TestEditor/components/ssbh-model-preview/NumdlbMappingEditorBody";
 import { NuhlpbEditorBody } from "@/page/TestEditor/components/ssbh-model-preview/NuhlpbEditorBody";
 import { NumatbTemplateEditorModalBody } from "@/page/TestEditor/components/ssbh-model-preview/NumatbTemplateEditorModalBody";
@@ -80,6 +81,7 @@ export function SceneDetailViewWindow({
       onActivate={onActivate}
       onClose={onClose}
       getDimensions={getDetailViewModalDimensions}
+      sizeStorageKey={SCENE_EDIT_RND_SIZE_KEYS.detailView}
     >
       <Tabs
         value={activeTab}

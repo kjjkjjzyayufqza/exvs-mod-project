@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
 import { createPortal } from "react-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Rnd } from "react-rnd";
@@ -7,12 +7,40 @@ import { Button } from "@/components/ui/button";
 import { TextureFormatSelect, type DdsFormat } from "./TextureFormatSelect";
 import { DEFAULT_DDS_FORMAT } from "../utils/sceneTextureDdsFormat";
 import { isImageFile } from "@/page/TestEditor/components/ImagePreview";
+import { clampRndSizeToConstraints } from "./sceneEditRndModalUtils";
+import {
+  SCENE_EDIT_RND_SIZE_KEYS,
+  persistSceneEditRndSize,
+  resolveSceneEditRndInitialSize,
+} from "./sceneEditRndSizePersistence";
 
 const VIEWPORT_MARGIN = 32;
 
 function getViewportSize() {
   if (typeof window === "undefined") return { width: 1280, height: 800 };
   return { width: window.innerWidth, height: window.innerHeight };
+}
+
+function getTextureAddConfirmModalDimensions() {
+  const { width: vw, height: vh } = getViewportSize();
+  const width = Math.min(420, vw - VIEWPORT_MARGIN * 2);
+  const height = Math.min(440, vh - VIEWPORT_MARGIN * 2);
+  return {
+    width,
+    height,
+    minWidth: 300,
+    minHeight: 280,
+    maxWidth: vw - VIEWPORT_MARGIN,
+    maxHeight: vh - VIEWPORT_MARGIN,
+  };
+}
+
+function getCenteredModalPosition(size: { width: number; height: number }) {
+  const { width: vw, height: vh } = getViewportSize();
+  return {
+    x: Math.round((vw - size.width) / 2),
+    y: Math.round((vh - size.height) / 2),
+  };
 }
 
 export interface TextureAddConfirmPayload {
@@ -36,34 +64,68 @@ export function TextureAddConfirmModal({
 }: TextureAddConfirmModalProps) {
   const [ddsFormat, setDdsFormat] = useState<DdsFormat>(DEFAULT_DDS_FORMAT);
   const [previewError, setPreviewError] = useState(false);
+  const [modalConstraints, setModalConstraints] = useState(getTextureAddConfirmModalDimensions);
+  const [size, setSize] = useState(() => {
+    const dims = getTextureAddConfirmModalDimensions();
+    return resolveSceneEditRndInitialSize(SCENE_EDIT_RND_SIZE_KEYS.textureAddConfirm, dims);
+  });
+  const [position, setPosition] = useState(() => {
+    const dims = getTextureAddConfirmModalDimensions();
+    const initialSize = resolveSceneEditRndInitialSize(
+      SCENE_EDIT_RND_SIZE_KEYS.textureAddConfirm,
+      dims,
+    );
+    return getCenteredModalPosition(initialSize);
+  });
+
+  useEffect(() => {
+    const onResize = () => {
+      const dims = getTextureAddConfirmModalDimensions();
+      setModalConstraints(dims);
+      setSize((prev) => clampRndSizeToConstraints(prev, dims));
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const handleResizeStop = useCallback(
+    (...args: Parameters<NonNullable<ComponentProps<typeof Rnd>["onResizeStop"]>>) => {
+      const ref = args[2];
+      const nextPosition = args[4];
+      const dims = getTextureAddConfirmModalDimensions();
+      const nextSize = persistSceneEditRndSize(
+        SCENE_EDIT_RND_SIZE_KEYS.textureAddConfirm,
+        { width: ref.offsetWidth, height: ref.offsetHeight },
+        dims,
+      );
+      setModalConstraints(dims);
+      setSize(nextSize);
+      setPosition(nextPosition);
+    },
+    [],
+  );
 
   const previewSrc = useMemo(() => {
     if (!isImageFile(payload.filename)) return null;
     return convertFileSrc(payload.sourcePath);
   }, [payload.filename, payload.sourcePath]);
 
-  const { width: vw, height: vh } = getViewportSize();
-  const modalWidth = Math.min(420, vw - VIEWPORT_MARGIN * 2);
-  const modalHeight = Math.min(440, vh - VIEWPORT_MARGIN * 2);
-
   const content = (
     <div className="fixed inset-0 z-50 pointer-events-none">
       <Rnd
-        default={{
-          x: Math.round((vw - modalWidth) / 2),
-          y: Math.round((vh - modalHeight) / 2),
-          width: modalWidth,
-          height: modalHeight,
-        }}
-        minWidth={300}
-        minHeight={280}
-        maxWidth={vw - VIEWPORT_MARGIN}
-        maxHeight={vh - VIEWPORT_MARGIN}
+        size={size}
+        position={position}
+        minWidth={modalConstraints.minWidth}
+        minHeight={modalConstraints.minHeight}
+        maxWidth={modalConstraints.maxWidth}
+        maxHeight={modalConstraints.maxHeight}
         dragHandleClassName="texture-add-confirm-drag-handle"
         cancel="button, input, textarea, select, label, a, [data-no-drag]"
         bounds="window"
         className="pointer-events-auto"
         style={{ zIndex: 60 }}
+        onDragStop={(_event, data) => setPosition({ x: data.x, y: data.y })}
+        onResizeStop={handleResizeStop}
       >
         <div className="flex flex-col h-full bg-background border border-border rounded-lg shadow-xl overflow-hidden">
           <div className="texture-add-confirm-drag-handle flex items-center justify-between px-3 py-1.5 bg-muted/40 border-b cursor-move select-none shrink-0">

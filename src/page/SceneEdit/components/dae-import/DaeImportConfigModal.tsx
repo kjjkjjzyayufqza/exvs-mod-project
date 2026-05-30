@@ -24,6 +24,12 @@ import {
   DaeImportSection,
 } from "./daeImportUi";
 import { useSceneModalViewportSuspendInteraction } from "../../hooks/useSceneModalViewportSuspendInteraction";
+import {
+  SCENE_EDIT_RND_SIZE_KEYS,
+  persistSceneEditRndSize,
+  resolveSceneEditRndInitialSize,
+} from "../sceneEditRndSizePersistence";
+import { clampRndSizeToConstraints } from "../sceneEditRndModalUtils";
 
 export type DaeImportPrimaryMode = "preview" | "ssbh";
 
@@ -102,6 +108,19 @@ function clampModalPosition(
     x: Math.min(Math.max(edge, position.x), maxX),
     y: Math.min(Math.max(edge, position.y), maxY),
   };
+}
+
+function getDaeImportSizeStorageKey(mode: DaeImportPrimaryMode) {
+  return mode === "ssbh"
+    ? SCENE_EDIT_RND_SIZE_KEYS.daeImportSsbh
+    : SCENE_EDIT_RND_SIZE_KEYS.daeImportPreview;
+}
+
+function resolveDaeImportModalSize(
+  mode: DaeImportPrimaryMode,
+  dims: DaeImportModalDimensions,
+) {
+  return resolveSceneEditRndInitialSize(getDaeImportSizeStorageKey(mode), dims);
 }
 
 interface DaeImportConfigModalProps {
@@ -316,11 +335,12 @@ export function DaeImportConfigModal({
     useSceneModalViewportSuspendInteraction();
   const [position, setPosition] = useState(() => {
     const dims = getDaeImportModalDimensions("preview");
-    return clampModalPosition(getCenteredModalPosition(dims), dims);
+    const size = resolveDaeImportModalSize("preview", dims);
+    return clampModalPosition(getCenteredModalPosition(size), size);
   });
   const [size, setSize] = useState(() => {
     const dims = getDaeImportModalDimensions("preview");
-    return { width: dims.width, height: dims.height };
+    return resolveDaeImportModalSize("preview", dims);
   });
   const [modeConstraints, setModeConstraints] = useState(() =>
     getDaeImportModalDimensions("preview"),
@@ -333,9 +353,10 @@ export function DaeImportConfigModal({
     if (!entry || !config) return;
     const primaryMode = getPrimaryMode(config);
     const dims = getDaeImportModalDimensions(primaryMode);
+    const nextSize = resolveDaeImportModalSize(primaryMode, dims);
     setModeConstraints(dims);
-    setSize({ width: dims.width, height: dims.height });
-    setPosition(clampModalPosition(getCenteredModalPosition(dims), dims));
+    setSize(nextSize);
+    setPosition(clampModalPosition(getCenteredModalPosition(nextSize), nextSize));
   }, [entry, config?.convertToSsbh, config?.loadToScene]);
 
   useEffect(() => {
@@ -345,10 +366,7 @@ export function DaeImportConfigModal({
       const dims = getDaeImportModalDimensions(primaryMode);
       setModeConstraints(dims);
       setSize((prev) => {
-        const next = {
-          width: Math.min(dims.maxWidth, Math.max(dims.minWidth, prev.width)),
-          height: Math.min(dims.maxHeight, Math.max(dims.minHeight, prev.height)),
-        };
+        const next = clampRndSizeToConstraints(prev, dims);
         setPosition((pos) => clampModalPosition(pos, next));
         return next;
       });
@@ -379,13 +397,18 @@ export function DaeImportConfigModal({
       stopViewportSuspend();
       const ref = args[2];
       const nextPosition = args[4];
-      setSize({
-        width: ref.offsetWidth,
-        height: ref.offsetHeight,
-      });
+      if (!config) return;
+      const primaryMode = getPrimaryMode(config);
+      const dims = getDaeImportModalDimensions(primaryMode);
+      const nextSize = persistSceneEditRndSize(
+        getDaeImportSizeStorageKey(primaryMode),
+        { width: ref.offsetWidth, height: ref.offsetHeight },
+        dims,
+      );
+      setSize(nextSize);
       setPosition(nextPosition);
     },
-    [stopViewportSuspend],
+    [config, stopViewportSuspend],
   );
 
   if (!entry || !config) return null;

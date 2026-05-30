@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ComponentProps } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { Rnd } from "react-rnd";
@@ -19,6 +19,12 @@ import {
   normalizeDdsFormat,
   resolveDetectedDdsFormat,
 } from "../utils/sceneTextureDdsFormat";
+import { clampRndSizeToConstraints } from "./sceneEditRndModalUtils";
+import {
+  SCENE_EDIT_RND_SIZE_KEYS,
+  persistSceneEditRndSize,
+  resolveSceneEditRndInitialSize,
+} from "./sceneEditRndSizePersistence";
 
 const VIEWPORT_MARGIN = 32;
 const PREVIEW_MODAL_ID = "texture-preview-modal-layer";
@@ -26,6 +32,28 @@ const PREVIEW_MODAL_ID = "texture-preview-modal-layer";
 function getViewportSize() {
   if (typeof window === "undefined") return { width: 1280, height: 800 };
   return { width: window.innerWidth, height: window.innerHeight };
+}
+
+function getTexturePreviewModalDimensions() {
+  const { width: vw, height: vh } = getViewportSize();
+  const width = Math.min(560, vw - VIEWPORT_MARGIN * 2);
+  const height = Math.min(520, vh - VIEWPORT_MARGIN * 2);
+  return {
+    width,
+    height,
+    minWidth: 280,
+    minHeight: 260,
+    maxWidth: vw - VIEWPORT_MARGIN,
+    maxHeight: vh - VIEWPORT_MARGIN,
+  };
+}
+
+function getCenteredModalPosition(size: { width: number; height: number }) {
+  const { width: vw, height: vh } = getViewportSize();
+  return {
+    x: Math.round((vw - size.width) / 2),
+    y: Math.round((vh - size.height) / 2),
+  };
 }
 
 interface TexturePreviewModalProps {
@@ -51,6 +79,46 @@ export function TexturePreviewModal({
   const [ddsFormat, setDdsFormat] = useState<DdsFormat>(DEFAULT_DDS_FORMAT);
   const [detectedFormat, setDetectedFormat] = useState<string | null>(null);
   const [formatLoading, setFormatLoading] = useState(false);
+  const [modalConstraints, setModalConstraints] = useState(getTexturePreviewModalDimensions);
+  const [size, setSize] = useState(() => {
+    const dims = getTexturePreviewModalDimensions();
+    return resolveSceneEditRndInitialSize(SCENE_EDIT_RND_SIZE_KEYS.texturePreview, dims);
+  });
+  const [position, setPosition] = useState(() => {
+    const dims = getTexturePreviewModalDimensions();
+    const initialSize = resolveSceneEditRndInitialSize(
+      SCENE_EDIT_RND_SIZE_KEYS.texturePreview,
+      dims,
+    );
+    return getCenteredModalPosition(initialSize);
+  });
+
+  useEffect(() => {
+    const onResize = () => {
+      const dims = getTexturePreviewModalDimensions();
+      setModalConstraints(dims);
+      setSize((prev) => clampRndSizeToConstraints(prev, dims));
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const handleResizeStop = useCallback(
+    (...args: Parameters<NonNullable<ComponentProps<typeof Rnd>["onResizeStop"]>>) => {
+      const ref = args[2];
+      const nextPosition = args[4];
+      const dims = getTexturePreviewModalDimensions();
+      const nextSize = persistSceneEditRndSize(
+        SCENE_EDIT_RND_SIZE_KEYS.texturePreview,
+        { width: ref.offsetWidth, height: ref.offsetHeight },
+        dims,
+      );
+      setModalConstraints(dims);
+      setSize(nextSize);
+      setPosition(nextPosition);
+    },
+    [],
+  );
 
   const loadedData = entry.nutexbPath
     ? lookupSceneTextureData(textureDataMap, entry.nutexbPath)
@@ -134,10 +202,6 @@ export function TexturePreviewModal({
     onFormatApply(ddsFormat);
   }, [ddsFormat, formatDirty, onFormatApply]);
 
-  const { width: vw, height: vh } = getViewportSize();
-  const modalWidth = Math.min(560, vw - VIEWPORT_MARGIN * 2);
-  const modalHeight = Math.min(520, vh - VIEWPORT_MARGIN * 2);
-
   const previewWidth = loadedRgba?.width ?? entry.width;
   const previewHeight = loadedRgba?.height ?? entry.height;
 
@@ -147,21 +211,19 @@ export function TexturePreviewModal({
       className="fixed inset-0 z-50 pointer-events-none"
     >
       <Rnd
-        default={{
-          x: Math.round((vw - modalWidth) / 2),
-          y: Math.round((vh - modalHeight) / 2),
-          width: modalWidth,
-          height: modalHeight,
-        }}
-        minWidth={280}
-        minHeight={260}
-        maxWidth={vw - VIEWPORT_MARGIN}
-        maxHeight={vh - VIEWPORT_MARGIN}
+        size={size}
+        position={position}
+        minWidth={modalConstraints.minWidth}
+        minHeight={modalConstraints.minHeight}
+        maxWidth={modalConstraints.maxWidth}
+        maxHeight={modalConstraints.maxHeight}
         dragHandleClassName="texture-preview-drag-handle"
         cancel="button, input, textarea, select, label, a, [data-no-drag]"
         bounds="window"
         className="pointer-events-auto"
         style={{ zIndex: 60 }}
+        onDragStop={(_event, data) => setPosition({ x: data.x, y: data.y })}
+        onResizeStop={handleResizeStop}
       >
         <div className="flex flex-col h-full bg-background border border-border rounded-lg shadow-xl overflow-hidden">
           <div className="texture-preview-drag-handle flex items-center justify-between px-3 py-1.5 bg-muted/40 border-b cursor-move select-none shrink-0">

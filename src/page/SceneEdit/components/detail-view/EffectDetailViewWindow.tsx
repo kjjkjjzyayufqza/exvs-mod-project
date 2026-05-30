@@ -1,6 +1,7 @@
 import { Loader2, Sparkles } from "lucide-react";
 import { SceneEditRndModalShell } from "../SceneEditRndModalShell";
 import { getEffectDetailViewModalDimensions } from "../sceneEditRndModalUtils";
+import { SCENE_EDIT_RND_SIZE_KEYS } from "../sceneEditRndSizePersistence";
 import { EffectProjectEditorBody } from "@/page/TestEditor/components/ssbh-model-preview/EffectProjectEditorBody";
 import type { DetailViewSession } from "./sceneDetailViewTypes";
 
@@ -34,6 +35,7 @@ export function EffectDetailViewWindow({
       onActivate={onActivate}
       onClose={onClose}
       getDimensions={getEffectDetailViewModalDimensions}
+      sizeStorageKey={SCENE_EDIT_RND_SIZE_KEYS.effectDetailView}
     >
       <div className="min-h-0 flex-1 overflow-auto p-3">
         {data.loading ? (

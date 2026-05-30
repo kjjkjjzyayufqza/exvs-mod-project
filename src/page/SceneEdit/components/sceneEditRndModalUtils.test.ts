@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  clampRndSizeToConstraints,
   clampSceneEditModalPosition,
   getDetailViewModalDimensions,
   getSceneEditCascadePosition,
@@ -18,5 +19,15 @@ describe("sceneEditRndModalUtils", () => {
     const second = getSceneEditCascadePosition({ width: dims.width, height: dims.height }, 1);
     expect(second.x).toBeGreaterThan(first.x);
     expect(second.y).toBeGreaterThan(first.y);
+  });
+
+  it("clamps rnd size to min and max constraints", () => {
+    const dims = getDetailViewModalDimensions();
+    const clamped = clampRndSizeToConstraints(
+      { width: 10, height: 99999 },
+      dims,
+    );
+    expect(clamped.width).toBe(dims.minWidth);
+    expect(clamped.height).toBe(dims.maxHeight);
   });
 });

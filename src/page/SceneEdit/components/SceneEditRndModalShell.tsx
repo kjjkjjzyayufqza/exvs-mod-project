@@ -7,10 +7,16 @@ import { cn } from "@/lib/utils";
 import { useSceneModalViewportSuspendInteraction } from "../hooks/useSceneModalViewportSuspendInteraction";
 import {
   SCENE_EDIT_RND_DRAG_HANDLE,
+  clampRndSizeToConstraints,
   clampSceneEditModalPosition,
   getSceneEditCascadePosition,
   type SceneEditRndModalDimensions,
 } from "./sceneEditRndModalUtils";
+import {
+  persistSceneEditRndSize,
+  resolveSceneEditRndInitialSize,
+  type SceneEditRndSizeStorageKey,
+} from "./sceneEditRndSizePersistence";
 
 type SceneEditRndModalShellProps = {
   cascadeIndex: number;
@@ -22,6 +28,7 @@ type SceneEditRndModalShellProps = {
   onActivate: () => void;
   onClose: () => void;
   getDimensions: () => SceneEditRndModalDimensions;
+  sizeStorageKey?: SceneEditRndSizeStorageKey;
   skipActivate?: boolean;
   children: ReactNode;
   footer?: ReactNode;
@@ -37,6 +44,7 @@ export function SceneEditRndModalShell({
   onActivate,
   onClose,
   getDimensions,
+  sizeStorageKey,
   skipActivate = false,
   children,
   footer,
@@ -46,37 +54,32 @@ export function SceneEditRndModalShell({
   const [constraints, setConstraints] = useState(getDimensions);
   const [size, setSize] = useState(() => {
     const dims = getDimensions();
-    return { width: dims.width, height: dims.height };
+    return resolveSceneEditRndInitialSize(sizeStorageKey, dims);
   });
   const [position, setPosition] = useState(() => {
     const dims = getDimensions();
-    return getSceneEditCascadePosition(
-      { width: dims.width, height: dims.height },
-      cascadeIndex,
-    );
+    const initialSize = resolveSceneEditRndInitialSize(sizeStorageKey, dims);
+    return getSceneEditCascadePosition(initialSize, cascadeIndex);
   });
 
   useEffect(() => {
     const dims = getDimensions();
     setConstraints(dims);
-    setSize({ width: dims.width, height: dims.height });
-    setPosition(
-      getSceneEditCascadePosition(
-        { width: dims.width, height: dims.height },
-        cascadeIndex,
-      ),
-    );
-  }, [cascadeIndex]);
+    setSize((prev) => {
+      const next = sizeStorageKey
+        ? resolveSceneEditRndInitialSize(sizeStorageKey, dims)
+        : clampRndSizeToConstraints(prev, dims);
+      setPosition(getSceneEditCascadePosition(next, cascadeIndex));
+      return next;
+    });
+  }, [cascadeIndex, getDimensions, sizeStorageKey]);
 
   useEffect(() => {
     const onResize = () => {
       const dims = getDimensions();
       setConstraints(dims);
       setSize((prev) => {
-        const next = {
-          width: Math.min(dims.maxWidth, Math.max(dims.minWidth, prev.width)),
-          height: Math.min(dims.maxHeight, Math.max(dims.minHeight, prev.height)),
-        };
+        const next = clampRndSizeToConstraints(prev, dims);
         setPosition((pos) => clampSceneEditModalPosition(pos, next));
         return next;
       });
@@ -120,13 +123,16 @@ export function SceneEditRndModalShell({
       stopViewportSuspend();
       const ref = args[2];
       const nextPosition = args[4];
-      setSize({
-        width: ref.offsetWidth,
-        height: ref.offsetHeight,
-      });
+      const dims = getDimensions();
+      const nextSize = persistSceneEditRndSize(
+        sizeStorageKey,
+        { width: ref.offsetWidth, height: ref.offsetHeight },
+        dims,
+      );
+      setSize(nextSize);
       setPosition(nextPosition);
     },
-    [stopViewportSuspend],
+    [getDimensions, sizeStorageKey, stopViewportSuspend],
   );
 
   return (

@@ -13,6 +13,21 @@ export interface SceneEditRndModalDimensions {
   maxHeight: number;
 }
 
+export type RndSizeConstraints = Pick<
+  SceneEditRndModalDimensions,
+  "minWidth" | "minHeight" | "maxWidth" | "maxHeight"
+>;
+
+export function clampRndSizeToConstraints(
+  size: { width: number; height: number },
+  constraints: RndSizeConstraints,
+): { width: number; height: number } {
+  return {
+    width: Math.min(constraints.maxWidth, Math.max(constraints.minWidth, size.width)),
+    height: Math.min(constraints.maxHeight, Math.max(constraints.minHeight, size.height)),
+  };
+}
+
 export function getSceneEditViewportSize() {
   if (typeof window === "undefined") {
     return { width: 1280, height: 800 };
