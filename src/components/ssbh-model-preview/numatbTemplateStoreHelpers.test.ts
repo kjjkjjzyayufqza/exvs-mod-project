@@ -76,6 +76,58 @@ describe("numatb template helpers", () => {
     expect(reduced.nustFile.entries.map((entry) => entry.material_label)).toEqual(["bodyMaterial"]);
   });
 
+  it("collectMissingTexturePathSlots flags SpecularMap on Maya when UseSpecularUvTransform is true and slot exists", () => {
+    const file = createEmptyNumatbFile();
+    file.entries.push({
+      material_label: "m1",
+      shader_label: "",
+      textures: [{ param_id: "SpecularMap", data: "" }],
+      booleans: [{ param_id: "UseSpecularUvTransform", data: false }],
+    });
+    expect(collectMissingTexturePathSlots(file, "maya")).toEqual([]);
+
+    file.entries[0].booleans = [{ param_id: "UseSpecularUvTransform", data: true }];
+    expect(collectMissingTexturePathSlots(file, "maya")).toEqual(["m1 → SpecularMap"]);
+  });
+
+  it("collectMissingTexturePathSlots allows Maya UseSpecularUvTransform without SpecularMap slot", () => {
+    const file = createEmptyNumatbFile();
+    file.entries.push({
+      material_label: "m1",
+      shader_label: "",
+      textures: [],
+      booleans: [{ param_id: "UseSpecularUvTransform", data: true }],
+    });
+    expect(collectMissingTexturePathSlots(file, "maya")).toEqual([]);
+  });
+
+  it("collectMissingTexturePathSlots flags DiffuseCubeMap when UseDiffuseUvTransform is true and slot exists", () => {
+    const file = createEmptyNumatbFile();
+    file.entries.push({
+      material_label: "m1",
+      shader_label: "",
+      textures: [],
+      textures2: [{ param_id: "DiffuseCubeMap", data: "" }],
+      booleans: [{ param_id: "UseDiffuseUvTransform", data: false }],
+    });
+    expect(collectMissingTexturePathSlots(file, "nust")).toEqual([]);
+
+    file.entries[0].booleans = [{ param_id: "UseDiffuseUvTransform", data: true }];
+    expect(collectMissingTexturePathSlots(file, "nust")).toEqual(["m1 → DiffuseCubeMap (textures2)"]);
+  });
+
+  it("collectMissingTexturePathSlots allows UseDiffuseUvTransform without DiffuseCubeMap slot", () => {
+    const file = createEmptyNumatbFile();
+    file.entries.push({
+      material_label: "m1",
+      shader_label: "",
+      textures: [],
+      booleans: [{ param_id: "UseDiffuseUvTransform", data: true }],
+    });
+    expect(collectMissingTexturePathSlots(file, "nust")).toEqual([]);
+    expect(collectMissingTexturePathSlots(file, "maya")).toEqual([]);
+  });
+
   it("collectMissingTexturePathSlots flags RoughnessMap only when UseRoughnessMap is true", () => {
     const file = createEmptyNumatbFile();
     file.entries.push({
@@ -85,10 +137,10 @@ describe("numatb template helpers", () => {
       textures2: [{ param_id: "RoughnessMap", data: "" }],
       booleans: [{ param_id: "UseRoughnessMap", data: false }],
     });
-    expect(collectMissingTexturePathSlots(file)).toEqual([]);
+    expect(collectMissingTexturePathSlots(file, "maya")).toEqual([]);
 
     file.entries[0].booleans = [{ param_id: "UseRoughnessMap", data: true }];
-    expect(collectMissingTexturePathSlots(file)).toEqual([
+    expect(collectMissingTexturePathSlots(file, "maya")).toEqual([
       "m1 → RoughnessMap (textures2)",
     ]);
   });
@@ -108,7 +160,7 @@ describe("numatb template helpers", () => {
       textures2: [{ param_id: "NormalMap", data: null as unknown as string }],
       booleans: [{ param_id: "UseNormalMap", data: true }],
     });
-    expect(collectMissingTexturePathSlots(file)).toEqual([
+    expect(collectMissingTexturePathSlots(file, "maya")).toEqual([
       "m1 → BaseColorMap (textures2)",
       "m2 → NormalMap (textures2)",
     ]);
@@ -123,18 +175,18 @@ describe("numatb template helpers", () => {
       textures2: [{ param_id: "BaseColorMap", data: "path/to/base" }],
     });
     // No Texture1 row -> Texture1 is not forced.
-    expect(collectMissingTexturePathSlots(file)).toEqual([]);
+    expect(collectMissingTexturePathSlots(file, "maya")).toEqual([]);
 
     // Declaring an empty Texture1 -> flagged.
     file.entries[0].textures2?.push({ param_id: "Texture1", data: "" });
-    expect(collectMissingTexturePathSlots(file)).toEqual(["m1 → Texture1 (textures2)"]);
+    expect(collectMissingTexturePathSlots(file, "maya")).toEqual(["m1 → Texture1 (textures2)"]);
 
     // Filling it -> complete again.
     file.entries[0].textures2 = [
       { param_id: "BaseColorMap", data: "path/to/base" },
       { param_id: "Texture1", data: "path/to/tex" },
     ];
-    expect(collectMissingTexturePathSlots(file)).toEqual([]);
+    expect(collectMissingTexturePathSlots(file, "maya")).toEqual([]);
   });
 
   it("collectNumatbEmptyTexturePathErrors formats backend-style messages for both profiles", () => {

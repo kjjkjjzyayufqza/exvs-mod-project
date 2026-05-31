@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 import { Loader2, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -8,6 +8,10 @@ import { SCENE_EDIT_RND_SIZE_KEYS } from "../sceneEditRndSizePersistence";
 import { NumdlbMappingEditorBody } from "@/components/ssbh-model-preview/NumdlbMappingEditorBody";
 import { NuhlpbEditorBody } from "@/components/ssbh-model-preview/NuhlpbEditorBody";
 import { NumatbTemplateEditorModalBody } from "@/components/ssbh-model-preview/NumatbTemplateEditorModalBody";
+import {
+  buildNumatbClipboardExportPayload,
+  copyNumatbProfilesJsonToClipboard,
+} from "@/components/ssbh-model-preview/copyNumatbProfilesJson";
 import { collectNumatbEmptyTexturePathErrors } from "@/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
 import type { NumatbModalBundle } from "@/components/ssbh-model-preview/numatbEditorUtils";
 import { NumatbValidationErrorsPanel } from "./NumatbValidationErrorsPanel";
@@ -61,6 +65,20 @@ export function SceneDetailViewWindow({
       nustNumatbName: basenameOrNull(numatbPaths.nust),
     });
   }, [numatbDraft, numatbPaths, session.nodeLabel]);
+
+  const handleCopyNumatbJson = useCallback(async () => {
+    if (!numatbDraft) return;
+    await copyNumatbProfilesJsonToClipboard(
+      buildNumatbClipboardExportPayload({
+        modelName: session.nodeLabel,
+        numatbPaths: numatbPaths ?? undefined,
+        mirrorTexturePathsAcrossProfiles: numatbDraft.mirrorTexturePathsAcrossProfiles,
+        mayaProfile: numatbDraft.mayaFile,
+        nustProfile: numatbDraft.nustFile,
+        numdlbMaterialMappings: data?.numdlb.draft?.entries ?? null,
+      }),
+    );
+  }, [data?.numdlb.draft?.entries, numatbDraft, numatbPaths, session.nodeLabel]);
 
   if (!data) return null;
 
@@ -131,6 +149,7 @@ export function SceneDetailViewWindow({
                   <NumatbTemplateEditorModalBody
                     bundle={data.numatb.draft}
                     onChange={onNumatbDraftChange}
+                    onCopyProfilesJson={handleCopyNumatbJson}
                   />
                 </div>
               ) : (

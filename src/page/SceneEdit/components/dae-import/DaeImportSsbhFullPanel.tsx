@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Copy } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +10,10 @@ import type { SsbhDaeAnalysisReport } from "@/components/ssbh-model-preview/ssbh
 import { NumdlbMaterialMappingEditor } from "@/components/ssbh-model-preview/components/NumdlbMaterialMappingEditor";
 import { NumatbTemplateEditor } from "@/components/ssbh-model-preview/components/NumatbTemplateEditor";
 import { MissingTexturePathFillPanel } from "@/components/ssbh-model-preview/components/MissingTexturePathFillPanel";
+import {
+  buildNumatbClipboardExportPayload,
+  copyNumatbProfilesJsonToClipboard,
+} from "@/components/ssbh-model-preview/copyNumatbProfilesJson";
 import { useStableMissingTextureFillSlots } from "@/components/ssbh-model-preview/hooks/useStableMissingTextureFillSlots";
 import {
   applyTexturePathFillToProfiles,
@@ -80,28 +82,22 @@ export function DaeImportSsbhFullPanel({ analysis, sourcePath, stageRoot }: DaeI
     liveMissingTextureSlots,
   );
 
-  /**
-   * Serializes the in-memory Maya/Nust numatb profile JSON for clipboard export.
-   * Intended for pasting into an AI assistant for material/texture troubleshooting (not for game export).
-   */
   const handleCopyNumatbProfilesJson = useCallback(async () => {
-    const payload = {
-      mayaProfile: session.mayaFile,
-      nustProfile: session.nustFile,
-      numdlbMaterialMappings: session.numdlbEntries,
-      exportOptions: {
-        writeMayaProfile: session.writeMayaProfile,
-        writeNumatb: session.writeNumatb,
-      },
-    };
-    try {
-      await writeText(JSON.stringify(payload, null, 2));
-      toast.success("Copied NUMATB profiles JSON to clipboard");
-    } catch {
-      toast.error("Failed to copy NUMATB profiles to clipboard");
-    }
+    await copyNumatbProfilesJsonToClipboard(
+      buildNumatbClipboardExportPayload({
+        mirrorTexturePathsAcrossProfiles: session.mirrorTexturePathsAcrossProfiles,
+        mayaProfile: session.mayaFile,
+        nustProfile: session.nustFile,
+        numdlbMaterialMappings: session.numdlbEntries,
+        exportOptions: {
+          writeMayaProfile: session.writeMayaProfile,
+          writeNumatb: session.writeNumatb,
+        },
+      }),
+    );
   }, [
     session.mayaFile,
+    session.mirrorTexturePathsAcrossProfiles,
     session.nustFile,
     session.numdlbEntries,
     session.writeMayaProfile,

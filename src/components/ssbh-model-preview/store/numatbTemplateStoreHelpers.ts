@@ -150,14 +150,14 @@ export function isTexturePathParamId(paramId: string): boolean {
   return false;
 }
 
-/** Map param_id -> boolean param_id that enables sampling (aligned with numatbStore COMMON_ATTRIBUTES). */
+/** Map param_id -> boolean param_id that enables sampling (aligned with numatbStore COMMON_ATTRIBUTES).
+ * SpecularMap and DiffuseCubeMap are intentionally omitted: profile-specific UV toggle rules apply instead. */
 export const TEXTURE_MAP_USE_TOGGLES: Readonly<Record<string, string>> = {
   MetallicMap: "UseMetallicMap",
   RoughnessMap: "UseRoughnessMap",
   AmbientOcclusionMap: "UseAmbientOcclusionMap",
   NormalMap: "UseNormalMap",
   EmissiveMap: "UseEmissiveMap",
-  SpecularMap: "UseSpecularMap",
 };
 
 const BASE_COLOR_MAP_PARAM_IDS = [
@@ -211,13 +211,47 @@ function isBaseColorMapPathRequired(entry: MatlEntryJson): boolean {
 }
 
 /**
+ * EXVS Maya materials may declare UseSpecularUvTransform without a SpecularMap slot.
+ * Do not treat the UV toggle as a blanket SpecularMap requirement on the Maya profile;
+ * only flag when the slot row exists and UseSpecularUvTransform is true.
+ */
+function shouldRequireMayaSpecularMapPath(entry: MatlEntryJson): boolean {
+  return (
+    readEntryBoolean(entry, "UseSpecularUvTransform") === true &&
+    entryHasTextureParam(entry, "SpecularMap")
+  );
+}
+
+/**
+ * EXVS materials may declare UseDiffuseUvTransform without a DiffuseCubeMap slot.
+ * Do not treat the UV toggle as a blanket DiffuseCubeMap requirement;
+ * only flag when the slot row exists and UseDiffuseUvTransform is true.
+ */
+function shouldRequireDiffuseCubeMapPath(entry: MatlEntryJson): boolean {
+  return (
+    readEntryBoolean(entry, "UseDiffuseUvTransform") === true &&
+    entryHasTextureParam(entry, "DiffuseCubeMap")
+  );
+}
+
+/**
  * Whether a texture path must be non-empty for export validation.
  * Texture1 is required only when the entry actually declares it; PBR maps require their Use* flag;
  * base color follows UseBaseColorMap / implicit slot rules.
  */
-export function isTextureMapPathRequired(entry: MatlEntryJson, mapParamId: string): boolean {
+export function isTextureMapPathRequired(
+  entry: MatlEntryJson,
+  mapParamId: string,
+  profile: NumatbProfileKind,
+): boolean {
   if (mapParamId === "Texture1") {
     return entryHasTextureParam(entry, "Texture1");
+  }
+  if (mapParamId === "SpecularMap") {
+    return profile === "maya" && shouldRequireMayaSpecularMapPath(entry);
+  }
+  if (mapParamId === "DiffuseCubeMap") {
+    return shouldRequireDiffuseCubeMapPath(entry);
   }
   const useToggle = TEXTURE_MAP_USE_TOGGLES[mapParamId];
   if (useToggle) {
@@ -246,7 +280,7 @@ function defaultTextureDataKindForParam(paramId: string): "String" | "String1" {
   return "String";
 }
 
-function collectRequiredTextureMapParamIds(entry: MatlEntryJson): string[] {
+function collectRequiredTextureMapParamIds(entry: MatlEntryJson, profile: NumatbProfileKind): string[] {
   const required = new Set<string>();
 
   // Texture1 is validated only when the entry actually declares it (textures or textures2),
@@ -259,6 +293,14 @@ function collectRequiredTextureMapParamIds(entry: MatlEntryJson): string[] {
     if (readEntryBoolean(entry, useId) === true) {
       required.add(mapId);
     }
+  }
+
+  if (profile === "maya" && shouldRequireMayaSpecularMapPath(entry)) {
+    required.add("SpecularMap");
+  }
+
+  if (shouldRequireDiffuseCubeMapPath(entry)) {
+    required.add("DiffuseCubeMap");
   }
 
   if (isBaseColorMapPathRequired(entry)) {
@@ -404,10 +446,11 @@ function lookupTexturePathSlot(entry: MatlEntryJson, paramId: string): TexturePa
 
 function collectMissingTexturePathsForEntry(
   entry: MatlEntryJson,
+  profile: NumatbProfileKind,
   formatMissing: (paramId: string, textureDataKind: "String" | "String1") => string,
 ): string[] {
   const missing: string[] = [];
-  for (const paramId of collectRequiredTextureMapParamIds(entry)) {
+  for (const paramId of collectRequiredTextureMapParamIds(entry, profile)) {
     const slot = lookupTexturePathSlot(entry, paramId);
     if (slot === null || !slot.path) {
       missing.push(formatMissing(paramId, slot?.textureDataKind ?? defaultTextureDataKindForParam(paramId)));
@@ -479,6 +522,7 @@ export function mirrorTexturePathOntoOtherProfile(
 
 function collectMissingTexturePathSlotsImpl(
   file: MatlDataJson,
+  profile: NumatbProfileKind,
   materialLabelFilter: Set<string> | null,
 ): string[] {
   const missing: string[] = [];
@@ -487,7 +531,7 @@ function collectMissingTexturePathSlotsImpl(
       continue;
     }
     missing.push(
-      ...collectMissingTexturePathsForEntry(entry, (paramId, textureDataKind) => {
+      ...collectMissingTexturePathsForEntry(entry, profile, (paramId, textureDataKind) => {
         const textures2Suffix = textureDataKind === "String1" ? " (textures2)" : "";
         return `${entry.material_label} → ${paramId}${textures2Suffix}`;
       }),
@@ -496,12 +540,15 @@ function collectMissingTexturePathSlotsImpl(
   return missing;
 }
 
-export function collectMissingTexturePathSlots(file: MatlDataJson): string[] {
-  return collectMissingTexturePathSlotsImpl(file, null);
+export function collectMissingTexturePathSlots(
+  file: MatlDataJson,
+  profile: NumatbProfileKind,
+): string[] {
+  return collectMissingTexturePathSlotsImpl(file, profile, null);
 }
 
-export function areNumatbTexturePathsComplete(file: MatlDataJson): boolean {
-  return collectMissingTexturePathSlots(file).length === 0;
+export function areNumatbTexturePathsComplete(file: MatlDataJson, profile: NumatbProfileKind): boolean {
+  return collectMissingTexturePathSlots(file, profile).length === 0;
 }
 
 export interface MissingTexturePathSlotRef {
@@ -526,7 +573,7 @@ function collectMissingTexturePathSlotRefsImpl(
     if (materialLabelFilter !== null && !materialLabelFilter.has(entry.material_label)) {
       continue;
     }
-    for (const paramId of collectRequiredTextureMapParamIds(entry)) {
+    for (const paramId of collectRequiredTextureMapParamIds(entry, profile)) {
       const slot = lookupTexturePathSlot(entry, paramId);
       if (slot !== null && slot.path) {
         continue;

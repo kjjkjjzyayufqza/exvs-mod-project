@@ -444,7 +444,10 @@ fn exvs_stage_check_numatb_empty_params(
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default();
 
-            for missing in numatb_format::collect_missing_texture_paths_for_matl(&matl) {
+            for missing in numatb_format::collect_missing_texture_paths_for_matl(
+                &matl,
+                numatb_format::detect_numatb_profile_from_name(&numatb_name),
+            ) {
                 errors.push(empty_param_error(
                     &model_name,
                     &missing.material_label,

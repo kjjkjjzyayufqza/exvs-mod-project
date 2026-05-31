@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Boxes, FileInput, Loader2, Plus, RotateCw, Save, Search, Trash2 } from "lucide-react";
+import { Boxes, Copy, FileInput, Loader2, Plus, RotateCw, Save, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,8 @@ type NumatbTemplateEditorModalBodyProps = {
   disabled?: boolean;
   /** Which profile tab shows the file loaded from disk (Maya vs Nust). */
   defaultActiveProfile?: NumatbProfileKind;
+  /** Copies Maya/Nust profile JSON for AI troubleshooting. */
+  onCopyProfilesJson?: () => void | Promise<void>;
 };
 
 export function NumatbTemplateEditorModalBody({
@@ -44,6 +46,7 @@ export function NumatbTemplateEditorModalBody({
   onChange,
   disabled,
   defaultActiveProfile,
+  onCopyProfilesJson,
 }: NumatbTemplateEditorModalBodyProps) {
   const materialListScrollRef = useRef<HTMLDivElement>(null);
   const [activeProfile, setActiveProfile] = useState<NumatbProfileKind>(() => defaultActiveProfile ?? "maya");
@@ -234,6 +237,21 @@ export function NumatbTemplateEditorModalBody({
           <FileInput className="mr-1 h-3.5 w-3.5" />
           Import {activeProfile}
         </Button>
+        {onCopyProfilesJson ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-[10px] uppercase tracking-wide"
+            disabled={disabled}
+            title="Copy full NUMATB profile data as JSON (for AI analysis)"
+            aria-label="Copy NUMATB profiles as JSON"
+            onClick={() => void onCopyProfilesJson()}
+          >
+            <Copy className="mr-1 h-3.5 w-3.5" />
+            Copy JSON
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="outline"
