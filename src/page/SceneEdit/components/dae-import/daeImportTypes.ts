@@ -4,6 +4,7 @@ import type {
 } from "@/components/ssbh-model-preview/daeSsbhTypes";
 
 export type SsbhDaeUpAxis = "y_up" | "z_up";
+export type StaticMeshImportFormat = "dae" | "fbx";
 
 export interface SsbhImportConfig {
   baseFilename: string;
@@ -40,6 +41,8 @@ export interface DaeImportConfig {
   loadToScene: boolean;
   convertToSsbh: boolean;
   generateHkt: boolean;
+  directToDisk: boolean;
+  outputDirectory: string | null;
   hktSimplify: HktSimplifyConfig;
   ssbhConfig: SsbhImportConfig;
   textureEntries?: TextureImportEntry[];
@@ -76,6 +79,7 @@ export interface DaeImportEntry {
   importId: string;
   fileName: string;
   filePath: string;
+  sourceFormat: StaticMeshImportFormat;
   analysis: DaeAnalysisResult | null;
   config: DaeImportConfig;
   analyzing: boolean;

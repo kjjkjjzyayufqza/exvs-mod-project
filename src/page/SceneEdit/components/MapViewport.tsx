@@ -1308,9 +1308,10 @@ function createDataTexture(
   data: NutexbTextureData,
   slot: PbrSlotKind,
   binding: ResolvedMaterialBinding,
+  sourcePath: string,
 ): THREE.Texture {
   if (data.kind === "compressed") {
-    return createCompressedTexture(data, slot, binding);
+    return createCompressedTexture(data, slot, binding, sourcePath);
   }
 
   const tex = new THREE.DataTexture(
@@ -1349,6 +1350,7 @@ function createDataTexture(
   }
 
   tex.needsUpdate = true;
+  tex.userData.sceneTexturePath = sourcePath;
   return tex;
 }
 
@@ -1356,6 +1358,7 @@ function createCompressedTexture(
   data: NutexbCompressedData,
   slot: PbrSlotKind,
   binding: ResolvedMaterialBinding,
+  sourcePath: string,
 ): THREE.CompressedTexture {
   const entry = COMPRESSED_FORMAT_MAP[data.formatId]!;
   const isSrgb = SRGB_SLOTS.has(slot);
@@ -1393,6 +1396,7 @@ function createCompressedTexture(
   }
 
   tex.needsUpdate = true;
+  tex.userData.sceneTexturePath = sourcePath;
   return tex;
 }
 
@@ -1456,7 +1460,7 @@ const TexturedMesh = memo(function TexturedMesh({
       const path = pathForSlot(binding, slot);
       if (!path) continue;
       const poolKey = buildTexturePoolKey(path, slot, binding, data.width, data.height);
-      result[slot] = texturePool.acquire(poolKey, () => createDataTexture(data, slot, binding));
+      result[slot] = texturePool.acquire(poolKey, () => createDataTexture(data, slot, binding, path));
     }
 
     return result;
@@ -1911,7 +1915,7 @@ const InstancedTexturedMesh = memo(function InstancedTexturedMesh({
       const path = pathForSlot(binding, slot);
       if (!path) continue;
       const poolKey = buildTexturePoolKey(path, slot, binding, data.width, data.height);
-      result[slot] = texturePool.acquire(poolKey, () => createDataTexture(data, slot, binding));
+      result[slot] = texturePool.acquire(poolKey, () => createDataTexture(data, slot, binding, path));
     }
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps

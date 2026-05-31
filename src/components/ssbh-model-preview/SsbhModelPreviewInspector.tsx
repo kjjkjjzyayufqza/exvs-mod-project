@@ -25,6 +25,7 @@ import {
 } from "./nutexbPreviewCache";
 import { useSsbhModelPreview, type PreviewRenderStyle } from "./SsbhModelPreviewContext";
 import { TEXTURE_PREVIEW_SLOT_META, TEXTURE_SLOT_TO_PATH_FIELD, buildMatlLookup } from "./meshFromSsbh";
+import { lookupTextureData } from "./ssbhTextureUpload";
 import { ssbhExportFolderToDae, type SsbhDaeUpAxis } from "./ssbhDaeIoService";
 import { hasAnyPreviewSkeleton } from "./ssbhPreviewSkeletonVisibility";
 import type { BoneJson, MatlDataJson, SkelDataJson } from "./types";
@@ -167,7 +168,7 @@ export function SsbhModelPreviewInspector() {
   const debugRows = scopedDraws
     .map((d) => {
       const binding = p.drawMaterialBindingsByDrawKey.get(d.key);
-      const dataUrls = p.drawMaterialDataUrlsByDrawKey.get(d.key);
+      const cubePath = binding?.texturePaths.cubePath ?? null;
       const unresolvedRefs = binding
         ? Object.entries(binding.textureRefs).filter(([, ref]) => !!ref).length -
           Object.values(binding.texturePaths).filter((path) => !!path).length
@@ -178,7 +179,7 @@ export function SsbhModelPreviewInspector() {
         shaderLabel: binding?.shaderLabel ?? "",
         shaderFamily: binding?.shaderFamily ?? "generic",
         unresolvedRefs: Math.max(0, unresolvedRefs),
-        hasCube: Boolean(dataUrls?.cubeMap),
+        hasCube: Boolean(cubePath && lookupTextureData(p.textureDataMap, cubePath)),
       };
     })
     .slice(0, 20);
@@ -187,9 +188,6 @@ export function SsbhModelPreviewInspector() {
     (debugRows.length > 0 ? debugRows[0] : null);
   const selectedBinding = selectedDebugRow
     ? p.drawMaterialBindingsByDrawKey.get(selectedDebugRow.key)
-    : undefined;
-  const selectedDataUrls = selectedDebugRow
-    ? p.drawMaterialDataUrlsByDrawKey.get(selectedDebugRow.key)
     : undefined;
   const activeBundle = activeInstance?.bundle ?? p.bundle ?? null;
   const activeMatlLookup = useMemo(
@@ -630,7 +628,7 @@ export function SsbhModelPreviewInspector() {
                     const pathField = TEXTURE_SLOT_TO_PATH_FIELD[key];
                     const diskPath = selectedBinding.texturePaths[pathField] ?? null;
                     const loadOn = p.textureSlotLoadEnabled[key];
-                    const decoded = selectedDataUrls?.[key];
+                    const decoded = diskPath ? lookupTextureData(p.textureDataMap, diskPath) : null;
                     const sampling =
                       key === "map"
                         ? selectedBinding.sampling.map
@@ -1026,7 +1024,7 @@ export function SsbhModelPreviewInspector() {
           </div>
           <div className="flex flex-col">
             <span className="text-[9px] uppercase text-muted-foreground">Textures</span>
-            <span className="text-[11px] font-mono">{p.drawMaterialDataUrlsByDrawKey.size}</span>
+            <span className="text-[11px] font-mono">{p.textureDataMap.size}</span>
           </div>
           <div className="flex flex-col col-span-2">
             <span className="text-[9px] uppercase text-muted-foreground">Bones</span>

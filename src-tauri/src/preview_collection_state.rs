@@ -148,16 +148,20 @@ impl PreviewCollectionStore {
     }
 
     pub fn replace_items(&mut self, source_items: Vec<PreviewCollectionSourceItem>) -> Result<PreviewCollectionSnapshot, String> {
+        // The first loaded item becomes active, mirroring `append_items`. Without an
+        // active instance the viewport cannot bind NUANMB motion or bone manipulation
+        // (both gate on `activePreviewInstanceId`), so a freshly loaded model would
+        // render but neither animate nor expose its skeleton.
         self.items = source_items
             .into_iter()
             .enumerate()
-            .map(|(_, item)| PreviewCollectionEntry {
+            .map(|(index, item)| PreviewCollectionEntry {
                 id: item.id,
                 display_label: item.display_label,
                 modl_path: item.modl_path,
                 visible: true,
                 selected: false,
-                active: false,
+                active: index == 0,
             })
             .collect();
         Ok(self.snapshot())
@@ -416,6 +420,25 @@ mod tests {
                 modl_path: String::from("memory://gamma/model.numdlb"),
             },
         ]
+    }
+
+    #[test]
+    fn collection_replace_activates_first_item() {
+        let mut store = PreviewCollectionStore::default();
+        let snapshot = store.replace_items(sample_items()).expect("replace should succeed");
+        assert_eq!(snapshot.active_item_id.as_deref(), Some("inst-a"));
+        assert_eq!(
+            snapshot.items.iter().filter(|item| item.active).count(),
+            1,
+            "exactly one item should be active after replace"
+        );
+    }
+
+    #[test]
+    fn collection_replace_empty_has_no_active_item() {
+        let mut store = PreviewCollectionStore::default();
+        let snapshot = store.replace_items(Vec::new()).expect("replace should succeed");
+        assert_eq!(snapshot.active_item_id, None);
     }
 
     #[test]

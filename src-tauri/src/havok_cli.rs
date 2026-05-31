@@ -77,6 +77,21 @@ pub fn generate_hkt_from_import(
     )
 }
 
+pub fn generate_hkt_from_import_path(
+    path: &Path,
+    havok_config: &HavokCliConfig,
+    options: crate::collision_mesh::CollisionMeshOptions,
+) -> Result<crate::havok_collision_encode::HktGenerationResult, String> {
+    if !Path::new(&havok_config.filter_manager_path).exists() {
+        return Err("hctStandAloneFilterManager.exe not found".into());
+    }
+    crate::havok_collision_encode::generate_hkt_from_import_path(
+        path,
+        &havok_config.filter_manager_path,
+        options,
+    )
+}
+
 pub fn generate_hkt_from_dae(
     dae_bytes: &[u8],
     source_name: &str,
@@ -151,8 +166,7 @@ pub fn run_filter_manager_with_hko(
     output_path: &Path,
 ) -> Result<(), String> {
     let temp_dir = std::env::temp_dir().join(format!("havok_convert_{}", std::process::id()));
-    std::fs::create_dir_all(&temp_dir)
-        .map_err(|e| format!("Failed to create temp dir: {e}"))?;
+    std::fs::create_dir_all(&temp_dir).map_err(|e| format!("Failed to create temp dir: {e}"))?;
 
     let hko_path = temp_dir.join("settings.hko");
     std::fs::write(&hko_path, hko_content)
@@ -217,15 +231,14 @@ pub fn convert_hkt_bytes_to_xml(
     hkt_bytes: &[u8],
 ) -> Result<String, String> {
     let temp_dir = std::env::temp_dir().join(format!("havok_mem_{}", uuid::Uuid::new_v4()));
-    std::fs::create_dir_all(&temp_dir)
-        .map_err(|e| format!("Failed to create temp dir: {e}"))?;
+    std::fs::create_dir_all(&temp_dir).map_err(|e| format!("Failed to create temp dir: {e}"))?;
 
     let input_path = temp_dir.join("input.hkt");
-    std::fs::write(&input_path, hkt_bytes)
-        .map_err(|e| format!("Failed to write temp HKT: {e}"))?;
+    std::fs::write(&input_path, hkt_bytes).map_err(|e| format!("Failed to write temp HKT: {e}"))?;
 
     let output_path = temp_dir.join("output.xml");
-    let result = run_filter_manager_with_hko(filter_manager_exe, HKO_WRITE_XML, &input_path, &output_path);
+    let result =
+        run_filter_manager_with_hko(filter_manager_exe, HKO_WRITE_XML, &input_path, &output_path);
 
     let cleanup = || {
         let _ = std::fs::remove_dir_all(&temp_dir);
@@ -247,8 +260,7 @@ pub fn convert_hkt_bytes_to_xml(
 
 #[tauri::command]
 pub async fn convert_hkt_to_xml(input_path: String, output_path: String) -> Result<String, String> {
-    let config = HavokCliConfig::detect()
-        .ok_or("Havok Content Tools not found")?;
+    let config = HavokCliConfig::detect().ok_or("Havok Content Tools not found")?;
 
     if !Path::new(&config.filter_manager_path).exists() {
         return Err("hctStandAloneFilterManager.exe not found".to_string());
@@ -261,12 +273,7 @@ pub async fn convert_hkt_to_xml(input_path: String, output_path: String) -> Resu
 
     let output = PathBuf::from(&output_path);
     tauri::async_runtime::spawn_blocking(move || {
-        run_filter_manager_with_hko(
-            &config.filter_manager_path,
-            HKO_WRITE_XML,
-            &input,
-            &output,
-        )
+        run_filter_manager_with_hko(&config.filter_manager_path, HKO_WRITE_XML, &input, &output)
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))??;
@@ -276,8 +283,7 @@ pub async fn convert_hkt_to_xml(input_path: String, output_path: String) -> Resu
 
 #[tauri::command]
 pub async fn convert_xml_to_hkt(input_path: String, output_path: String) -> Result<String, String> {
-    let config = HavokCliConfig::detect()
-        .ok_or("Havok Content Tools not found")?;
+    let config = HavokCliConfig::detect().ok_or("Havok Content Tools not found")?;
 
     if !Path::new(&config.filter_manager_path).exists() {
         return Err("hctStandAloneFilterManager.exe not found".to_string());
@@ -290,12 +296,7 @@ pub async fn convert_xml_to_hkt(input_path: String, output_path: String) -> Resu
 
     let output = PathBuf::from(&output_path);
     tauri::async_runtime::spawn_blocking(move || {
-        run_filter_manager_with_hko(
-            &config.filter_manager_path,
-            HKO_WRITE_HKT,
-            &input,
-            &output,
-        )
+        run_filter_manager_with_hko(&config.filter_manager_path, HKO_WRITE_HKT, &input, &output)
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))??;
@@ -322,8 +323,7 @@ pub async fn scene_generate_hkt_from_dae_path(
     output_path: String,
     config_profile: String,
 ) -> Result<String, String> {
-    let config = HavokCliConfig::detect()
-        .ok_or("Havok Content Tools not found")?;
+    let config = HavokCliConfig::detect().ok_or("Havok Content Tools not found")?;
 
     if !Path::new(&config.filter_manager_path).exists() {
         return Err("hctStandAloneFilterManager.exe not found".to_string());
@@ -337,7 +337,9 @@ pub async fn scene_generate_hkt_from_dae_path(
     let hko_path = if config_profile == "auto" {
         // Use first available .hko profile from config dir
         let profiles = list_hko_configs(&config.config_dir);
-        profiles.first().map(|p| PathBuf::from(&config.config_dir).join(p))
+        profiles
+            .first()
+            .map(|p| PathBuf::from(&config.config_dir).join(p))
     } else {
         Some(PathBuf::from(&config.config_dir).join(&config_profile))
     };

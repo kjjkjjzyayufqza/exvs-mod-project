@@ -95,6 +95,7 @@ interface SceneOutlinerProps {
   onSelectAll?: (ids: string[]) => void;
   onGenerateHkt?: (ids: string[]) => void;
   onReplaceHkt?: (id: string) => void;
+  onGenerateHktFromModel?: (id: string) => void;
   onReorderRootChild?: (activeId: string, overId: string) => void;
   onOpenProperties?: (nodeId: string) => void;
   onExportDae?: (nodeId: string) => void;
@@ -112,6 +113,7 @@ export function SceneOutliner({
   onSelectAll,
   onGenerateHkt,
   onReplaceHkt,
+  onGenerateHktFromModel,
   onReorderRootChild,
   onOpenProperties,
   onExportDae,
@@ -235,6 +237,7 @@ export function SceneOutliner({
                   onDelete={onDelete}
                   onGenerateHkt={onGenerateHkt}
                   onReplaceHkt={onReplaceHkt}
+                  onGenerateHktFromModel={onGenerateHktFromModel}
                   onOpenProperties={onOpenProperties}
                   onExportDae={onExportDae}
                 />
@@ -265,6 +268,7 @@ export function SceneOutliner({
                 onDelete={onDelete}
                 onGenerateHkt={onGenerateHkt}
                 onReplaceHkt={onReplaceHkt}
+                onGenerateHktFromModel={onGenerateHktFromModel}
                 onReorderRootChild={onReorderRootChild}
                 onOpenProperties={onOpenProperties}
                 onExportDae={onExportDae}
@@ -292,6 +296,7 @@ export function SceneOutliner({
       onDelete,
       onGenerateHkt,
       onReplaceHkt,
+      onGenerateHktFromModel,
       onReorderRootChild,
       onOpenProperties,
       onExportDae,
@@ -496,6 +501,7 @@ function OutlinerNodeRow({
   onDelete,
   onGenerateHkt,
   onReplaceHkt,
+  onGenerateHktFromModel,
   onReorderRootChild,
   onOpenProperties,
   onExportDae,
@@ -515,6 +521,7 @@ function OutlinerNodeRow({
   onDelete?: (ids: string[]) => void;
   onGenerateHkt?: (ids: string[]) => void;
   onReplaceHkt?: (id: string) => void;
+  onGenerateHktFromModel?: (id: string) => void;
   onReorderRootChild?: (activeId: string, overId: string) => void;
   onOpenProperties?: (nodeId: string) => void;
   onExportDae?: (nodeId: string) => void;
@@ -642,6 +649,7 @@ function OutlinerNodeRow({
         onDelete={onDelete}
         onGenerateHkt={onGenerateHkt}
         onReplaceHkt={onReplaceHkt}
+        onGenerateHktFromModel={onGenerateHktFromModel}
         onOpenProperties={onOpenProperties}
         onExportDae={onExportDae}
       />
@@ -659,6 +667,7 @@ function NodeContextMenuContent({
   onDelete,
   onGenerateHkt,
   onReplaceHkt,
+  onGenerateHktFromModel,
   onOpenProperties,
   onExportDae,
 }: {
@@ -671,11 +680,13 @@ function NodeContextMenuContent({
   onDelete?: (ids: string[]) => void;
   onGenerateHkt?: (ids: string[]) => void;
   onReplaceHkt?: (id: string) => void;
+  onGenerateHktFromModel?: (id: string) => void;
   onOpenProperties?: (nodeId: string) => void;
   onExportDae?: (nodeId: string) => void;
 }) {
   const supportsHkt = (node.role === "imported_dae" || node.role === "collision" || node.role === "sub_model" || node.role === "base") && Boolean(onGenerateHkt);
   const supportsReplaceHkt = (node.role === "imported_dae" || node.role === "collision" || node.role === "sub_model" || node.role === "base") && Boolean(onReplaceHkt);
+  const supportsGenerateHktFromModel = (node.role === "imported_dae" || node.role === "collision" || node.role === "sub_model" || node.role === "base") && Boolean(onGenerateHktFromModel);
   const isCollisionNode = node.role === "collision" && node.id.startsWith("__col__");
   const hktTargetId = isCollisionNode ? node.id.slice("__col__".length) : node.id;
   const supportsProperties = canOpenDetailView(node.role);
@@ -697,7 +708,7 @@ function NodeContextMenuContent({
         <>
           <ContextMenuItem onClick={() => onExportDae!(node.id)}>
             <Download className="mr-2 h-3.5 w-3.5" />
-            Export DAE...
+            Export Model...
           </ContextMenuItem>
           <ContextMenuSeparator />
         </>
@@ -740,6 +751,15 @@ function NodeContextMenuContent({
           <ContextMenuItem onClick={() => onReplaceHkt!(hktTargetId)}>
             <Shield className="mr-2 h-3.5 w-3.5" />
             Replace HKT...
+          </ContextMenuItem>
+        </>
+      )}
+      {supportsGenerateHktFromModel && (
+        <>
+          {!supportsHkt && !supportsReplaceHkt && <ContextMenuSeparator />}
+          <ContextMenuItem onClick={() => onGenerateHktFromModel!(hktTargetId)}>
+            <Sparkles className="mr-2 h-3.5 w-3.5" />
+            Generate HKT from Model...
           </ContextMenuItem>
         </>
       )}

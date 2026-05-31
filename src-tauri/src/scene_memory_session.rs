@@ -90,6 +90,7 @@ pub struct HavokCollisionData {
 pub struct PendingImport {
     pub id: String,
     pub name: String,
+    pub source_name: String,
     pub dae_bytes: Vec<u8>,
     pub config: ImportConfig,
     pub ssbh_artifacts: Option<SsbhArtifacts>,
@@ -159,10 +160,25 @@ impl SceneMemorySession {
     }
 
     pub fn add_import(&mut self, name: String, dae_bytes: Vec<u8>) -> String {
+        let source_name = if name.ends_with(".dae") || name.ends_with(".fbx") {
+            name.clone()
+        } else {
+            format!("{name}.dae")
+        };
+        self.add_import_with_source_name(name, source_name, dae_bytes)
+    }
+
+    pub fn add_import_with_source_name(
+        &mut self,
+        name: String,
+        source_name: String,
+        dae_bytes: Vec<u8>,
+    ) -> String {
         let id = uuid::Uuid::new_v4().to_string();
         self.pending_imports.push(PendingImport {
             id: id.clone(),
             name,
+            source_name,
             dae_bytes,
             config: ImportConfig {
                 load_to_scene: true,
@@ -185,7 +201,17 @@ impl SceneMemorySession {
     ) -> Result<String, String> {
         let dae_bytes = std::fs::read(path)
             .map_err(|e| format!("Failed to read '{}': {}", path.display(), e))?;
-        Ok(self.add_import(name, dae_bytes))
+        let source_name = path
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| {
+                if name.ends_with(".dae") || name.ends_with(".fbx") {
+                    name.clone()
+                } else {
+                    format!("{name}.dae")
+                }
+            });
+        Ok(self.add_import_with_source_name(name, source_name, dae_bytes))
     }
 
     pub fn find_import_mut(&mut self, import_id: &str) -> Result<&mut PendingImport, String> {

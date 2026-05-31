@@ -18,7 +18,7 @@ export function DaeImportAnalysisPanel({
       <DaeImportStatusAlert tone="info">
         <span className="inline-flex items-center gap-1.5">
           <Loader2 className="h-3 w-3 animate-spin" />
-          Analyzing DAE...
+          Analyzing static mesh...
         </span>
       </DaeImportStatusAlert>
     );

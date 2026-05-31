@@ -117,7 +117,7 @@ export function SsbhModelPreviewViewport() {
           <div className="relative h-full min-h-0 px-1 pb-1">
             <SsbhModelCanvas
               draws={p.draws}
-              drawMaterialDataUrlsByDrawKey={p.drawMaterialDataUrlsByDrawKey}
+              textureDataMap={p.textureDataMap}
               drawMaterialBindingsByDrawKey={p.drawMaterialBindingsByDrawKey}
               materialDebugViewMode={p.materialDebugViewMode}
               textureFlipY={p.textureFlipY}

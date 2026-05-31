@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getBaseName,
   getParentDir,
+  inferUnitModelModOutputPath,
   inferUnitModelOutputPath,
   inferUnitModelStructurePath,
   toWindowsPath,
@@ -33,6 +34,30 @@ describe("unitModelRepackService path helpers", () => {
         "E:\\XB\\解包\\com\\file\\0xAF73362C_structure.json",
       ),
     ).toBe("E:\\XB\\解包\\com\\file\\0xAF73362C.fhm2d");
+  });
+
+  it("infers mod-folder fhm2d path from structure stem", () => {
+    expect(
+      inferUnitModelModOutputPath(
+        "E:/Games/exvs/mod",
+        "E:\\XB\\解包\\com\\file\\0xAF73362C_structure.json",
+      ),
+    ).toBe("E:\\Games\\exvs\\mod\\0xAF73362C.fhm2d");
+  });
+
+  it("strips trailing separators on the mod folder", () => {
+    expect(
+      inferUnitModelModOutputPath(
+        "E:\\Games\\exvs\\mod\\",
+        "E:\\XB\\com\\0x49235031.json",
+      ),
+    ).toBe("E:\\Games\\exvs\\mod\\0x49235031.fhm2d");
+  });
+
+  it("throws when the mod folder is empty", () => {
+    expect(() =>
+      inferUnitModelModOutputPath("", "E:\\XB\\com\\0x49235031_structure.json"),
+    ).toThrow(/OB Mod folder is not configured/);
   });
 });
 

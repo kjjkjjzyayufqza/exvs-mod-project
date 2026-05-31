@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tauri::State;
 
 use crate::format::fhm2d_stage;
@@ -8,7 +8,9 @@ use crate::scene_memory_session::{
     GraphicParam, HavokCollisionData, ImportConfig, PlacementEntry, SceneSessionState, SceneSource,
     SsbhArtifacts,
 };
-use crate::ssbh_dae::{convert_dae_file, DaeConvertConfig};
+use crate::ssbh_dae::{
+    convert_dae_file, convert_fbx_file, ConvertedFiles, DaeConvertConfig, SsbhConvertStats,
+};
 use crate::ssbh_dae_cmd::build_session_numatb_artifacts;
 use crate::ssbh_preview::{MatlProfilePreviewValues, SsbhModelPreviewBundle, TextureRefResolve};
 
@@ -172,6 +174,25 @@ pub fn scene_preview_hkt_collision_path(
         std::fs::read(&file_path).map_err(|e| format!("Failed to read '{}': {}", file_path, e))?;
     let options = hkt_collision_options_from_import(&config);
     crate::havok_collision_encode::preview_hkt_collision_from_import_bytes(
+        &dae_bytes,
+        &source_name,
+        options,
+    )
+}
+
+/// Build the simplified collision mesh geometry for a freshly-selected DAE/FBX
+/// so the New-Model HKT window can render a live 3D collision preview before the
+/// (Havok-dependent) HKT is generated and applied.
+#[tauri::command]
+pub fn scene_preview_hkt_collision_mesh_path(
+    file_path: String,
+    source_name: String,
+    config: ImportConfig,
+) -> Result<crate::havok_collision_encode::HktCollisionMeshGeometry, String> {
+    let dae_bytes =
+        std::fs::read(&file_path).map_err(|e| format!("Failed to read '{}': {}", file_path, e))?;
+    let options = hkt_collision_options_from_import(&config);
+    crate::havok_collision_encode::preview_hkt_collision_mesh_from_import_bytes(
         &dae_bytes,
         &source_name,
         options,
@@ -654,12 +675,13 @@ pub async fn scene_execute_import(
         "[scene_execute_import] session_id={} import_id={}",
         options.session_id, options.import_id
     );
-    let (dae_bytes, name, config) = state
+    let (dae_bytes, name, source_name, config) = state
         .with_session(&options.session_id, |s| {
             let import = s.find_import(&options.import_id)?;
             Ok((
                 import.dae_bytes.clone(),
                 import.name.clone(),
+                import.source_name.clone(),
                 import.config.clone(),
             ))
         })
@@ -669,8 +691,9 @@ pub async fn scene_execute_import(
         })?;
 
     eprintln!(
-        "[scene_execute_import] name={} dae_bytes_len={} convert_to_ssbh={} generate_hkt={}",
+        "[scene_execute_import] name={} source_name={} dae_bytes_len={} convert_to_ssbh={} generate_hkt={}",
         name,
+        source_name,
         dae_bytes.len(),
         config.convert_to_ssbh,
         config.generate_hkt
@@ -707,8 +730,13 @@ pub async fn scene_execute_import(
         );
 
         let dae_bytes_clone = dae_bytes.clone();
+        let source_name_clone = source_name.clone();
         let artifacts = tauri::async_runtime::spawn_blocking(move || {
-            convert_dae_bytes_to_ssbh_artifacts(&dae_bytes_clone, &ssbh_config)
+            convert_import_bytes_to_ssbh_artifacts(
+                &dae_bytes_clone,
+                &source_name_clone,
+                &ssbh_config,
+            )
         })
         .await
         .map_err(|e| {
@@ -748,7 +776,7 @@ pub async fn scene_execute_import(
                     "[scene_execute_import] using Havok filter manager for mesh collision HKT"
                 );
                 let dae_bytes_clone = dae_bytes.clone();
-                let import_name = name.clone();
+                let import_name = source_name.clone();
                 let filter_path = havok_config.filter_manager_path.clone();
                 match tauri::async_runtime::spawn_blocking(move || {
                     havok_cli::generate_hkt_from_dae(
@@ -914,33 +942,74 @@ fn resolve_session_numatb_profiles(
     (nust, maya)
 }
 
-fn convert_dae_bytes_to_ssbh_artifacts(
+fn import_extension_from_name(source_name: &str) -> Result<&'static str, String> {
+    let ext = Path::new(source_name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("dae")
+        .to_ascii_lowercase();
+    match ext.as_str() {
+        "dae" => Ok("dae"),
+        "fbx" => Ok("fbx"),
+        "" => Ok("dae"),
+        other => Err(format!(
+            "Unsupported static mesh format '.{other}'. Use .dae or .fbx"
+        )),
+    }
+}
+
+fn import_extension_from_path(path: &Path) -> Result<&'static str, String> {
+    let name = path
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.to_string_lossy().to_string());
+    import_extension_from_name(&name)
+}
+
+fn convert_import_file(
+    input_path: &Path,
+    convert_config: &DaeConvertConfig,
+) -> Result<(ConvertedFiles, SsbhConvertStats), String> {
+    match import_extension_from_path(input_path)? {
+        "fbx" => convert_fbx_file(input_path, convert_config)
+            .map_err(|e| format!("FBX conversion failed: {e:#}")),
+        "dae" => convert_dae_file(input_path, convert_config)
+            .map_err(|e| format!("DAE conversion failed: {e:#}")),
+        _ => unreachable!("import_extension_from_path only returns dae/fbx"),
+    }
+}
+
+fn convert_import_bytes_to_ssbh_artifacts(
     dae_bytes: &[u8],
+    source_name: &str,
     ssbh_config: &crate::scene_memory_session::SsbhConvertConfig,
 ) -> Result<SsbhArtifacts, String> {
+    let source_ext = import_extension_from_name(source_name)?;
     eprintln!(
-        "[convert_dae_bytes_to_ssbh] start: dae_bytes_len={} base_filename={}",
+        "[convert_import_bytes_to_ssbh] start: source_name={} source_ext={} bytes_len={} base_filename={}",
+        source_name,
+        source_ext,
         dae_bytes.len(),
         ssbh_config.base_filename
     );
     let temp_dir = tempfile::tempdir().map_err(|e| {
         eprintln!(
-            "[convert_dae_bytes_to_ssbh] failed to create temp dir: {}",
+            "[convert_import_bytes_to_ssbh] failed to create temp dir: {}",
             e
         );
         format!("Failed to create temp dir: {e}")
     })?;
-    let input_path = temp_dir.path().join("input.dae");
+    let input_path = temp_dir.path().join(format!("input.{source_ext}"));
     eprintln!(
-        "[convert_dae_bytes_to_ssbh] writing temp DAE to {}",
+        "[convert_import_bytes_to_ssbh] writing temp import file to {}",
         input_path.display()
     );
     std::fs::write(&input_path, dae_bytes).map_err(|e| {
         eprintln!(
-            "[convert_dae_bytes_to_ssbh] failed to write temp DAE: {}",
+            "[convert_import_bytes_to_ssbh] failed to write temp import file: {}",
             e
         );
-        format!("Failed to write temp DAE: {e}")
+        format!("Failed to write temp import file: {e}")
     })?;
 
     let up_axis = match ssbh_config.up_axis.to_ascii_lowercase().as_str() {
@@ -948,7 +1017,7 @@ fn convert_dae_bytes_to_ssbh_artifacts(
         "none" | "no_conversion" => crate::ssbh_dae::UpAxisConversion::NoConversion,
         _ => crate::ssbh_dae::UpAxisConversion::YUp,
     };
-    eprintln!("[convert_dae_bytes_to_ssbh] up_axis={:?}", up_axis);
+    eprintln!("[convert_import_bytes_to_ssbh] up_axis={:?}", up_axis);
 
     let convert_config = DaeConvertConfig {
         output_directory: temp_dir.path().to_path_buf(),
@@ -964,20 +1033,17 @@ fn convert_dae_bytes_to_ssbh_artifacts(
     };
 
     eprintln!(
-        "[convert_dae_bytes_to_ssbh] calling convert_dae_file: numdlb={} numshb={} nusktb={}",
+        "[convert_import_bytes_to_ssbh] calling converter: numdlb={} numshb={} nusktb={}",
         convert_config.write_numdlb, convert_config.write_numshb, convert_config.write_nusktb
     );
-    let (converted_files, stats) = convert_dae_file(&input_path, &convert_config).map_err(|e| {
-        eprintln!("[convert_dae_bytes_to_ssbh] convert_dae_file failed: {}", e);
-        e.to_string()
-    })?;
+    let (converted_files, stats) = convert_import_file(&input_path, &convert_config)?;
 
     eprintln!(
-        "[convert_dae_bytes_to_ssbh] convert_dae_file success: mesh_objects={} total_vertices={} total_indices={} bones={}",
+        "[convert_import_bytes_to_ssbh] convert success: mesh_objects={} total_vertices={} total_indices={} bones={}",
         stats.mesh_objects, stats.total_vertices, stats.total_triangle_indices, stats.bones
     );
     eprintln!(
-        "[convert_dae_bytes_to_ssbh] output files: numdlb={} numshb={} nusktb={} numatb={}",
+        "[convert_import_bytes_to_ssbh] output files: numdlb={} numshb={} nusktb={} numatb={}",
         converted_files
             .numdlb_path
             .as_ref()
@@ -1001,20 +1067,23 @@ fn convert_dae_bytes_to_ssbh_artifacts(
             Some(p) => {
                 let data = std::fs::read(p).map_err(|e| {
                     eprintln!(
-                        "[convert_dae_bytes_to_ssbh] failed to read {}: {}",
+                        "[convert_import_bytes_to_ssbh] failed to read {}: {}",
                         label, e
                     );
                     format!("Failed to read {}: {e}", p.display())
                 })?;
                 eprintln!(
-                    "[convert_dae_bytes_to_ssbh] read {}: {} bytes",
+                    "[convert_import_bytes_to_ssbh] read {}: {} bytes",
                     label,
                     data.len()
                 );
                 Ok(data)
             }
             None => {
-                eprintln!("[convert_dae_bytes_to_ssbh] {} not generated (None)", label);
+                eprintln!(
+                    "[convert_import_bytes_to_ssbh] {} not generated (None)",
+                    label
+                );
                 Ok(Vec::new())
             }
         }
@@ -1030,14 +1099,14 @@ fn convert_dae_bytes_to_ssbh_artifacts(
     )
     .map_err(|e| {
         eprintln!(
-            "[convert_dae_bytes_to_ssbh] numatb generation failed: {}",
+            "[convert_import_bytes_to_ssbh] numatb generation failed: {}",
             e
         );
         e
     })?;
 
     eprintln!(
-        "[convert_dae_bytes_to_ssbh] numatb artifacts: nust={} bytes, maya={:?} bytes",
+        "[convert_import_bytes_to_ssbh] numatb artifacts: nust={} bytes, maya={:?} bytes",
         numatb.len(),
         maya_numatb.as_ref().map(|v| v.len())
     );
@@ -1050,7 +1119,10 @@ fn convert_dae_bytes_to_ssbh_artifacts(
             .as_ref()
             .map(|p| {
                 std::fs::read(p).map_err(|e| {
-                    eprintln!("[convert_dae_bytes_to_ssbh] failed to read nusktb: {}", e);
+                    eprintln!(
+                        "[convert_import_bytes_to_ssbh] failed to read nusktb: {}",
+                        e
+                    );
                     format!("Failed to read nusktb: {e}")
                 })
             })
@@ -1059,8 +1131,133 @@ fn convert_dae_bytes_to_ssbh_artifacts(
         maya_numatb,
         jnttbl: Vec::new(),
     };
-    eprintln!("[convert_dae_bytes_to_ssbh] done, artifacts ready");
+    eprintln!("[convert_import_bytes_to_ssbh] done, artifacts ready");
     Ok(artifacts)
+}
+
+#[cfg(test)]
+fn convert_dae_bytes_to_ssbh_artifacts(
+    dae_bytes: &[u8],
+    ssbh_config: &crate::scene_memory_session::SsbhConvertConfig,
+) -> Result<SsbhArtifacts, String> {
+    convert_import_bytes_to_ssbh_artifacts(dae_bytes, "input.dae", ssbh_config)
+}
+
+fn convert_import_path_to_ssbh_artifacts(
+    source_path: &Path,
+    ssbh_config: &crate::scene_memory_session::SsbhConvertConfig,
+) -> Result<SsbhArtifacts, String> {
+    import_extension_from_path(source_path)?;
+    let temp_dir = tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {e}"))?;
+    let up_axis = match ssbh_config.up_axis.to_ascii_lowercase().as_str() {
+        "z_up" | "zup" => crate::ssbh_dae::UpAxisConversion::ZUp,
+        "none" | "no_conversion" => crate::ssbh_dae::UpAxisConversion::NoConversion,
+        _ => crate::ssbh_dae::UpAxisConversion::YUp,
+    };
+
+    let convert_config = DaeConvertConfig {
+        output_directory: temp_dir.path().to_path_buf(),
+        base_filename: ssbh_config.base_filename.clone(),
+        scale_factor: ssbh_config.scale_factor as f32,
+        up_axis_conversion: up_axis,
+        flip_uv: false,
+        include_geometry_names: Vec::new(),
+        write_numdlb: ssbh_config.write_numdlb,
+        write_numshb: ssbh_config.write_numshb,
+        write_nusktb: ssbh_config.write_nusktb,
+        modl_entries: ssbh_config.numdlb_entries.clone(),
+    };
+
+    let (converted_files, stats) = convert_import_file(source_path, &convert_config)?;
+    eprintln!(
+        "[convert_import_path_to_ssbh] source={} mesh_objects={} total_vertices={} total_indices={} bones={}",
+        source_path.display(),
+        stats.mesh_objects,
+        stats.total_vertices,
+        stats.total_triangle_indices,
+        stats.bones
+    );
+
+    let read_opt = |label: &str, path: &Option<PathBuf>| -> Result<Vec<u8>, String> {
+        match path {
+            Some(p) => {
+                std::fs::read(p).map_err(|e| format!("Failed to read {label} {}: {e}", p.display()))
+            }
+            None => Ok(Vec::new()),
+        }
+    };
+
+    let (nust_payload, maya_payload) = resolve_session_numatb_profiles(ssbh_config);
+    let (numatb, maya_numatb) = build_session_numatb_artifacts(
+        &ssbh_config.base_filename,
+        ssbh_config.write_numatb,
+        ssbh_config.write_maya_profile,
+        Some(&nust_payload),
+        maya_payload.as_ref(),
+    )?;
+
+    Ok(SsbhArtifacts {
+        numdlb: read_opt("numdlb", &converted_files.numdlb_path)?,
+        numshb: read_opt("numshb", &converted_files.numshb_path)?,
+        nusktb: converted_files
+            .nusktb_path
+            .as_ref()
+            .map(|p| std::fs::read(p).map_err(|e| format!("Failed to read nusktb: {e}")))
+            .transpose()?,
+        numatb,
+        maya_numatb,
+        jnttbl: Vec::new(),
+    })
+}
+
+fn write_static_mesh_artifacts(
+    output_dir: &Path,
+    base: &str,
+    artifacts: &SsbhArtifacts,
+    write_jnttbl: bool,
+) -> Result<Vec<String>, String> {
+    let model_dir = output_dir.join(base).join("0");
+    std::fs::create_dir_all(&model_dir)
+        .map_err(|e| format!("Failed to create {}: {e}", model_dir.display()))?;
+
+    let mut written = Vec::new();
+    let mut write_file = |relative: String, data: &[u8]| -> Result<(), String> {
+        if data.is_empty() {
+            return Ok(());
+        }
+        let target = output_dir.join(&relative);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create {}: {e}", parent.display()))?;
+        }
+        std::fs::write(&target, data)
+            .map_err(|e| format!("Failed to write {}: {e}", target.display()))?;
+        written.push(relative);
+        Ok(())
+    };
+
+    let model_rel = format!("{base}/0");
+    write_file(format!("{model_rel}/{base}.numdlb"), &artifacts.numdlb)?;
+    write_file(format!("{model_rel}/{base}.numshb"), &artifacts.numshb)?;
+    if let Some(ref nusktb) = artifacts.nusktb {
+        write_file(format!("{model_rel}/{base}.nusktb"), nusktb)?;
+    }
+    write_file(
+        format!("{model_rel}/{base}__nust__.numatb"),
+        &artifacts.numatb,
+    )?;
+    if let Some(ref maya) = artifacts.maya_numatb {
+        write_file(format!("{model_rel}/{base}__maya__.numatb"), maya)?;
+    }
+    if write_jnttbl {
+        let relative = format!("{model_rel}/{base}.jnttbl");
+        let target = output_dir.join(&relative);
+        std::fs::write(&target, &artifacts.jnttbl)
+            .map_err(|e| format!("Failed to write {}: {e}", target.display()))?;
+        written.push(relative);
+    }
+
+    Ok(written)
 }
 
 #[tauri::command]
@@ -1081,7 +1278,7 @@ pub async fn scene_generate_hkt(
             );
             Ok((
                 import.dae_bytes.clone(),
-                import.name.clone(),
+                import.source_name.clone(),
                 hkt_collision_options_from_import(&import.config),
             ))
         })
@@ -1343,7 +1540,6 @@ pub async fn scene_replace_hkt(
         String::new()
     };
 
-    let node_id = options.import_id.clone();
     state.with_session_mut(&options.session_id, |s| {
         eprintln!(
             "[scene_replace_hkt] import_id={:?} pending_imports={} has_base_bundle={} source={:?}",
@@ -1352,72 +1548,155 @@ pub async fn scene_replace_hkt(
             s.base_bundle.is_some(),
             s.source
         );
-        // Try pending_imports first (DAE-imported models)
-        if s.find_import(&options.import_id).is_ok() {
-            eprintln!("[scene_replace_hkt] found in pending_imports");
-            s.store_hkt_bytes(&options.import_id, hkt_bytes.clone())?;
-        } else if let Some(bundle) = s.base_bundle.as_mut() {
-            // FHM2D in-memory model: extract folder name from sourceId
-            let folder = options
-                .import_id
-                .replace('/', "\\")
-                .split('\\')
-                .next()
-                .unwrap_or(&options.import_id)
-                .to_string();
-            eprintln!(
-                "[scene_replace_hkt] trying base_bundle folder={:?} available_folders={:?}",
-                folder,
-                bundle.sub_model_files.keys().collect::<Vec<_>>()
-            );
-            let files = bundle.sub_model_files.entry(folder.clone()).or_default();
-            let old_hkt_keys: Vec<String> = files
-                .keys()
-                .filter(|k| k.to_ascii_lowercase().ends_with(".hkt"))
-                .cloned()
-                .collect();
-            eprintln!("[scene_replace_hkt] old_hkt_keys={:?}", old_hkt_keys);
-            for k in old_hkt_keys {
-                files.remove(&k);
-            }
-            let hkt_name = options
-                .import_id
-                .replace('/', "\\")
-                .split('\\')
-                .last()
-                .unwrap_or(&format!("{folder}.hkt"))
-                .to_string();
-            files.insert(hkt_name, hkt_bytes.clone());
-        } else if let SceneSource::Folder { ref path } = s.source {
-            // Folder-based session: write HKT directly to disk
-            let hkt_disk_path = std::path::Path::new(path).join(
-                options
-                    .import_id
-                    .replace('/', std::path::MAIN_SEPARATOR_STR),
-            );
-            eprintln!("[scene_replace_hkt] writing to disk: {:?}", hkt_disk_path);
-            if let Some(parent) = hkt_disk_path.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-            std::fs::write(&hkt_disk_path, &hkt_bytes)
-                .map_err(|e| format!("Failed to write HKT to {}: {e}", hkt_disk_path.display()))?;
-        } else {
-            return Err(format!(
-                "Import '{}' not found in session",
-                options.import_id
-            ));
-        }
-        s.upsert_havok_data(HavokCollisionData {
-            source_id: options.import_id.clone(),
-            display_name,
-            object_node_id: Some(node_id),
-            hkt_xml,
-            raw_bytes: hkt_bytes,
-        });
-        s.dirty = true;
-        Ok(())
+        apply_replacement_hkt_to_session(s, &options.import_id, hkt_bytes, hkt_xml, display_name)
     })?;
 
+    Ok(true)
+}
+
+/// Apply replacement HKT (already-decoded bytes + optional XML) onto a target in
+/// the session, resolving the target across pending DAE imports, the in-memory
+/// base bundle (FHM2D sub-models), and folder-backed sessions. Shared by both
+/// `scene_replace_hkt` (existing .hkt file) and `scene_replace_hkt_from_dae_path`
+/// (HKT freshly generated from a new DAE).
+fn apply_replacement_hkt_to_session(
+    s: &mut crate::scene_memory_session::SceneMemorySession,
+    import_id: &str,
+    hkt_bytes: Vec<u8>,
+    hkt_xml: String,
+    display_name: String,
+) -> Result<(), String> {
+    // Try pending_imports first (DAE-imported models)
+    if s.find_import(import_id).is_ok() {
+        eprintln!("[apply_replacement_hkt] found in pending_imports");
+        s.store_hkt_bytes(import_id, hkt_bytes.clone())?;
+    } else if let Some(bundle) = s.base_bundle.as_mut() {
+        // FHM2D in-memory model: extract folder name from sourceId
+        let folder = import_id
+            .replace('/', "\\")
+            .split('\\')
+            .next()
+            .unwrap_or(import_id)
+            .to_string();
+        eprintln!(
+            "[apply_replacement_hkt] trying base_bundle folder={:?} available_folders={:?}",
+            folder,
+            bundle.sub_model_files.keys().collect::<Vec<_>>()
+        );
+        let files = bundle.sub_model_files.entry(folder.clone()).or_default();
+        let old_hkt_keys: Vec<String> = files
+            .keys()
+            .filter(|k| k.to_ascii_lowercase().ends_with(".hkt"))
+            .cloned()
+            .collect();
+        eprintln!("[apply_replacement_hkt] old_hkt_keys={:?}", old_hkt_keys);
+        for k in old_hkt_keys {
+            files.remove(&k);
+        }
+        let hkt_name = import_id
+            .replace('/', "\\")
+            .split('\\')
+            .last()
+            .unwrap_or(&format!("{folder}.hkt"))
+            .to_string();
+        files.insert(hkt_name, hkt_bytes.clone());
+    } else if let SceneSource::Folder { ref path } = s.source {
+        // Folder-based session: write HKT directly to disk
+        let hkt_disk_path =
+            std::path::Path::new(path).join(import_id.replace('/', std::path::MAIN_SEPARATOR_STR));
+        eprintln!("[apply_replacement_hkt] writing to disk: {:?}", hkt_disk_path);
+        if let Some(parent) = hkt_disk_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        std::fs::write(&hkt_disk_path, &hkt_bytes)
+            .map_err(|e| format!("Failed to write HKT to {}: {e}", hkt_disk_path.display()))?;
+    } else {
+        return Err(format!("Import '{}' not found in session", import_id));
+    }
+    s.upsert_havok_data(HavokCollisionData {
+        source_id: import_id.to_string(),
+        display_name,
+        object_node_id: Some(import_id.to_string()),
+        hkt_xml,
+        raw_bytes: hkt_bytes,
+    });
+    s.dirty = true;
+    Ok(())
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceHktFromDaeOptions {
+    pub session_id: String,
+    pub import_id: String,
+    pub file_path: String,
+    pub source_name: String,
+    pub config: ImportConfig,
+}
+
+/// Generate a mesh-accurate HKT from a freshly-selected DAE/FBX (using the same
+/// skin-bake → merge → simplify pipeline as scene_generate_hkt) and apply it to
+/// the target import — the "generate HKT from a new model" replace flow.
+#[tauri::command]
+pub async fn scene_replace_hkt_from_dae_path(
+    state: State<'_, SceneSessionState>,
+    options: ReplaceHktFromDaeOptions,
+) -> Result<bool, String> {
+    eprintln!(
+        "[scene_replace_hkt_from_dae_path] session_id={} import_id={} path={}",
+        options.session_id, options.import_id, options.file_path
+    );
+    let dae_bytes = std::fs::read(&options.file_path)
+        .map_err(|e| format!("Failed to read '{}': {}", options.file_path, e))?;
+    let mesh_options = hkt_collision_options_from_import(&options.config);
+    let havok_config = havok_cli::HavokCliConfig::detect().ok_or_else(|| {
+        eprintln!("[scene_replace_hkt_from_dae_path] Havok SDK not found");
+        "Havok SDK not found".to_string()
+    })?;
+
+    let source_name = options.source_name.clone();
+    let hkt_result = tauri::async_runtime::spawn_blocking(move || {
+        havok_cli::generate_hkt_from_dae(&dae_bytes, &source_name, &havok_config, mesh_options)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+    .map_err(|e| {
+        eprintln!("[scene_replace_hkt_from_dae_path] generate_hkt_from_dae failed: {e}");
+        e
+    })?;
+
+    let hkt_bytes = hkt_result.bytes;
+    eprintln!(
+        "[scene_replace_hkt_from_dae_path] generated {} bytes ({} triangles)",
+        hkt_bytes.len(),
+        hkt_result.triangle_count
+    );
+
+    let filter_path = havok_cli::HavokCliConfig::detect()
+        .map(|c| c.filter_manager_path.clone())
+        .unwrap_or_default();
+    let hkt_xml = if !filter_path.is_empty() {
+        let bytes_for_xml = hkt_bytes.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            havok_cli::convert_hkt_bytes_to_xml(&filter_path, &bytes_for_xml)
+        })
+        .await
+        .map_err(|e| format!("XML conversion join error: {e}"))?
+        .unwrap_or_else(|e| {
+            eprintln!("[scene_replace_hkt_from_dae_path] HKT→XML failed: {e}");
+            String::new()
+        })
+    } else {
+        String::new()
+    };
+
+    let display_name = options.source_name.clone();
+    let import_id = options.import_id.clone();
+    state.with_session_mut(&options.session_id, |s| {
+        apply_replacement_hkt_to_session(s, &import_id, hkt_bytes, hkt_xml, display_name)
+    })?;
+
+    eprintln!("[scene_replace_hkt_from_dae_path] done");
     Ok(true)
 }
 
@@ -1495,15 +1774,9 @@ pub fn scene_preview_hkt_collision_session(
     state.with_session(&args.session_id, |s| {
         let import = s.find_import(&args.import_id)?;
         let options = hkt_collision_options_from_import(&args.config);
-        let lower = import.name.to_ascii_lowercase();
-        let source_name = if lower.ends_with(".dae") || lower.ends_with(".fbx") {
-            import.name.clone()
-        } else {
-            format!("{}.dae", import.name)
-        };
         crate::havok_collision_encode::preview_hkt_collision_from_import_bytes(
             &import.dae_bytes,
-            &source_name,
+            &import.source_name,
             options,
         )
     })
@@ -1544,6 +1817,126 @@ pub fn scene_get_import_config(
     state.with_session(&options.session_id, |s| {
         let import = s.find_import(&options.import_id)?;
         Ok(import.config.clone())
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StaticMeshDirectConvertOptions {
+    pub source_path: String,
+    pub output_dir: String,
+    pub config: ImportConfig,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StaticMeshDirectConvertResult {
+    pub source_path: String,
+    pub output_dir: String,
+    pub model_dir: String,
+    pub base_filename: String,
+    pub ssbh_generated: bool,
+    pub hkt_generated: bool,
+    pub files_written: Vec<String>,
+    pub hkt_detail: Option<String>,
+    pub warnings: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn scene_convert_static_mesh_to_stage_files(
+    options: StaticMeshDirectConvertOptions,
+) -> Result<StaticMeshDirectConvertResult, String> {
+    let source_path = PathBuf::from(options.source_path.trim());
+    if !source_path.is_file() {
+        return Err(format!(
+            "Static mesh file not found: {}",
+            source_path.display()
+        ));
+    }
+    import_extension_from_path(&source_path)?;
+
+    let output_dir = PathBuf::from(options.output_dir.trim());
+    if options.output_dir.trim().is_empty() {
+        return Err("output_dir cannot be empty".to_string());
+    }
+
+    let ssbh_config = options.config.ssbh_config.clone().ok_or_else(|| {
+        "Direct static mesh conversion requires SSBH conversion settings".to_string()
+    })?;
+    let base = ssbh_config.base_filename.trim().to_string();
+    if base.is_empty() {
+        return Err("base_filename cannot be empty".to_string());
+    }
+
+    let source_for_convert = source_path.clone();
+    let output_for_write = output_dir.clone();
+    let ssbh_config_for_convert = ssbh_config.clone();
+    let mut files_written = tauri::async_runtime::spawn_blocking(move || {
+        let artifacts =
+            convert_import_path_to_ssbh_artifacts(&source_for_convert, &ssbh_config_for_convert)?;
+        write_static_mesh_artifacts(
+            &output_for_write,
+            &ssbh_config_for_convert.base_filename,
+            &artifacts,
+            ssbh_config_for_convert.write_jnttbl,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+
+    let mut hkt_generated = false;
+    let mut hkt_detail = None;
+    let mut warnings = Vec::new();
+
+    if options.config.generate_hkt {
+        let hkt_options = hkt_collision_options_from_import(&options.config);
+        if let Some(havok_config) = havok_cli::HavokCliConfig::detect() {
+            let hkt_source_path = source_path.clone();
+            match tauri::async_runtime::spawn_blocking(move || {
+                havok_cli::generate_hkt_from_import_path(
+                    &hkt_source_path,
+                    &havok_config,
+                    hkt_options,
+                )
+            })
+            .await
+            {
+                Ok(Ok(result)) => {
+                    let relative = format!("{base}/map_hit.hkt");
+                    let target = output_dir.join(&relative);
+                    if let Some(parent) = target.parent() {
+                        std::fs::create_dir_all(parent)
+                            .map_err(|e| format!("Failed to create {}: {e}", parent.display()))?;
+                    }
+                    std::fs::write(&target, &result.bytes)
+                        .map_err(|e| format!("Failed to write {}: {e}", target.display()))?;
+                    files_written.push(relative);
+                    hkt_detail = Some(hkt_success_detail(
+                        &base,
+                        result.bytes.len(),
+                        result.triangle_count,
+                    ));
+                    hkt_generated = true;
+                }
+                Ok(Err(e)) => warnings.push(format!("HKT generation failed: {e}")),
+                Err(e) => warnings.push(format!("HKT generation task failed: {e}")),
+            }
+        } else {
+            warnings.push("HKT generation skipped: Havok Content Tools not installed".to_string());
+        }
+    }
+
+    let model_dir = output_dir.join(&base).to_string_lossy().to_string();
+    Ok(StaticMeshDirectConvertResult {
+        source_path: source_path.to_string_lossy().to_string(),
+        output_dir: output_dir.to_string_lossy().to_string(),
+        model_dir,
+        base_filename: base,
+        ssbh_generated: true,
+        hkt_generated,
+        files_written,
+        hkt_detail,
+        warnings,
     })
 }
 

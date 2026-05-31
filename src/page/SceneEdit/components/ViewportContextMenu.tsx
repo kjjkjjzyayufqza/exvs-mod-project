@@ -144,11 +144,11 @@ export function ViewportContextMenu({
 
         <ContextMenuItem onClick={onImportDAE}>
           <Upload className="mr-2 h-3.5 w-3.5" />
-          Import DAE...
+          Import Static Mesh...
         </ContextMenuItem>
         <ContextMenuItem onClick={onExportDAE} disabled={!hasSelection}>
           <Download className="mr-2 h-3.5 w-3.5" />
-          Export Selected as DAE...
+          Export Selected Model...
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

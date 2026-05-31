@@ -8,6 +8,8 @@ function makeDefaultDaeImportConfig(): DaeImportConfig {
     loadToScene: true,
     convertToSsbh: false,
     generateHkt: false,
+    directToDisk: false,
+    outputDirectory: null,
     hktSimplify: { ...DEFAULT_HKT_SIMPLIFY },
     ssbhConfig: {
       baseFilename: "model",

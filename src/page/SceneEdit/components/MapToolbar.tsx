@@ -212,12 +212,12 @@ export function MapToolbar({
             className="h-6 w-6"
             onClick={onImportDaeWithConfig}
             disabled={isLoading}
-            aria-label="Import DAE objects"
+            aria-label="Import static mesh"
           >
             <Upload className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Import DAE</TooltipContent>
+        <TooltipContent side="bottom">Import DAE / FBX</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -228,12 +228,12 @@ export function MapToolbar({
             className="h-6 w-6"
             onClick={onExportSelectedDae}
             disabled={!canExportDae || isLoading}
-            aria-label="Export selected objects as DAE"
+            aria-label="Export selected objects"
           >
             <Download className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Export selected DAE</TooltipContent>
+        <TooltipContent side="bottom">Export selected model</TooltipContent>
       </Tooltip>
 
       <Separator orientation="vertical" className="h-4 mx-0.5" />

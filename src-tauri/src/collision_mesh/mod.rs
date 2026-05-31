@@ -6,7 +6,7 @@ mod simplify;
 mod skin_bake;
 mod types;
 
-pub use import::parse_import_scene_from_bytes;
+pub use import::{parse_import_scene_from_bytes, parse_import_scene_from_path};
 pub use simplify::simplify_collision_mesh;
 pub use skin_bake::bake_and_merge_collision_mesh;
 pub use types::{

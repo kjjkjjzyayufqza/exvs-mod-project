@@ -45,6 +45,50 @@ pub fn preview_hkt_collision_from_import_bytes(
     })
 }
 
+/// Simplified collision mesh geometry (collision space) plus stage stats, for a
+/// live 3D collision preview. Mirrors the geometry that the mesh-accurate HKT
+/// pipeline bakes — without invoking Havok Content Tools.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HktCollisionMeshGeometry {
+    /// Flattened `[x, y, z, ...]` collision-space vertex positions.
+    pub positions: Vec<f32>,
+    /// Triangle list indices (len divisible by 3).
+    pub indices: Vec<u32>,
+    pub triangle_count: usize,
+    pub vertex_count: usize,
+    pub render_triangle_count: usize,
+    pub merged_triangle_count: usize,
+}
+
+/// Produce the simplified collision mesh geometry for a 3D preview, without
+/// invoking Havok Content Tools (parse → skin-bake/merge → simplify only).
+pub fn preview_hkt_collision_mesh_from_import_bytes(
+    bytes: &[u8],
+    source_name: &str,
+    options: CollisionMeshOptions,
+) -> Result<HktCollisionMeshGeometry, String> {
+    let scene = parse_import_scene_from_bytes(source_name, bytes)?;
+    let render_triangle_count = render_triangle_count_from_scene(&scene);
+    let merged = bake_and_merge_collision_mesh(&scene, &options)?;
+    let merged_triangle_count = merged.triangle_count();
+    let simplified = simplify_collision_mesh(&merged, &options.simplify);
+    let mut positions = Vec::with_capacity(simplified.vertices.len() * 3);
+    for v in &simplified.vertices {
+        positions.push(v[0] as f32);
+        positions.push(v[1] as f32);
+        positions.push(v[2] as f32);
+    }
+    Ok(HktCollisionMeshGeometry {
+        triangle_count: simplified.triangle_count(),
+        vertex_count: simplified.vertices.len(),
+        indices: simplified.indices,
+        positions,
+        render_triangle_count,
+        merged_triangle_count,
+    })
+}
+
 /// Generate binary HKT from DAE/FBX bytes (detected via `source_name` extension).
 pub fn generate_hkt_from_import_bytes(
     bytes: &[u8],
@@ -53,6 +97,23 @@ pub fn generate_hkt_from_import_bytes(
     options: CollisionMeshOptions,
 ) -> Result<HktGenerationResult, String> {
     let scene = parse_import_scene_from_bytes(source_name, bytes)?;
+    generate_hkt_from_import_scene(scene, filter_manager_exe, options)
+}
+
+pub fn generate_hkt_from_import_path(
+    path: &std::path::Path,
+    filter_manager_exe: &str,
+    options: CollisionMeshOptions,
+) -> Result<HktGenerationResult, String> {
+    let scene = crate::collision_mesh::parse_import_scene_from_path(path)?;
+    generate_hkt_from_import_scene(scene, filter_manager_exe, options)
+}
+
+fn generate_hkt_from_import_scene(
+    scene: crate::ssbh_dae::ImportScene,
+    filter_manager_exe: &str,
+    options: CollisionMeshOptions,
+) -> Result<HktGenerationResult, String> {
     let merged = bake_and_merge_collision_mesh(&scene, &options)?;
     let mesh = simplify_collision_mesh(&merged, &options.simplify);
     let triangle_count = mesh.triangle_count();

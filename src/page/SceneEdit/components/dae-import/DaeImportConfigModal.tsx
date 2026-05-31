@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
 import { createPortal } from "react-dom";
-import { Box, X } from "lucide-react";
+import { Box, FolderOpen, X } from "lucide-react";
 import { Rnd } from "react-rnd";
+import { open } from "@tauri-apps/plugin-dialog";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -198,14 +199,17 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
     updateConfig({
       loadToScene: mode === "preview",
       convertToSsbh: mode === "ssbh",
+      directToDisk: mode === "preview" ? false : config.directToDisk,
     });
   };
 
   const canImport =
     !entry.analyzing &&
-    (primaryMode === "preview"
-      ? true
-      : (entry.analysis?.canConvert ?? false) && ssbhReady);
+    (config.directToDisk
+      ? Boolean(config.outputDirectory) && (entry.analysis?.canConvert ?? false) && ssbhReady
+      : primaryMode === "preview"
+        ? true
+        : (entry.analysis?.canConvert ?? false) && ssbhReady);
 
   return (
     <Card
@@ -268,7 +272,11 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
                 }}
               >
                 <TabsList className="h-8 w-full">
-                  <TabsTrigger value="preview" className="flex-1 text-[11px]">
+                  <TabsTrigger
+                    value="preview"
+                    className="flex-1 text-[11px]"
+                    disabled={config.directToDisk}
+                  >
                     Preview
                   </TabsTrigger>
                   <TabsTrigger value="ssbh" className="flex-1 text-[11px]">
@@ -277,6 +285,48 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
                 </TabsList>
               </Tabs>
             </DaeImportFieldRow>
+
+            <DaeImportBoolField
+              label="Out-of-scene conversion"
+              hint="Write files to disk and skip viewport loading"
+              checked={config.directToDisk}
+              onCheckedChange={(checked) =>
+                updateConfig({
+                  directToDisk: checked,
+                  loadToScene: !checked && primaryMode === "preview",
+                  convertToSsbh: checked ? true : config.convertToSsbh,
+                })
+              }
+            />
+
+            {config.directToDisk && (
+              <DaeImportFieldRow
+                label="Output Directory"
+                hint="Writes model folder under this directory"
+              >
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 w-full justify-start gap-2 px-2 text-[10px]"
+                  onClick={async () => {
+                    const selected = await open({
+                      directory: true,
+                      title: "Select static mesh output directory",
+                      defaultPath: config.outputDirectory ?? stageRoot ?? undefined,
+                    });
+                    if (typeof selected === "string") {
+                      updateConfig({ outputDirectory: selected });
+                    }
+                  }}
+                >
+                  <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">
+                    {config.outputDirectory ?? "Choose folder"}
+                  </span>
+                </Button>
+              </DaeImportFieldRow>
+            )}
 
             <DaeImportBoolField
               label="Generate HKT Collision"
@@ -315,7 +365,11 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
             Cancel
           </Button>
           <Button type="button" size="sm" onClick={onImport} disabled={!canImport}>
-            {primaryMode === "ssbh" ? "Convert to SSBH" : "Import"}
+            {config.directToDisk
+              ? "Convert to Disk"
+              : primaryMode === "ssbh"
+                ? "Convert to SSBH"
+                : "Import"}
           </Button>
         </div>
       </CardContent>

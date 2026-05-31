@@ -5,7 +5,6 @@ import {
   GizmoViewport,
   OrbitControls,
   Stats,
-  useTexture,
 } from "@react-three/drei";
 import { Perf } from "r3f-perf";
 import {
@@ -33,21 +32,15 @@ import { filterDrawsForMotionSkinning, resolveDrawVisibility } from "./motionVis
 import { advanceMotionFrame } from "./motionPlaybackMath";
 import {
   Bone,
-  ClampToEdgeWrapping,
   Color,
   DoubleSide,
-  EquirectangularReflectionMapping,
   Group,
   LineBasicMaterial,
   Matrix4,
-  MirroredRepeatWrapping,
   Mesh,
-  NoColorSpace,
   PerspectiveCamera,
   Quaternion,
-  RepeatWrapping,
   Skeleton,
-  SRGBColorSpace,
   Vector2,
   Vector3,
 } from "three";
@@ -86,7 +79,16 @@ import type {
   PreviewInstanceViewMode,
   PreviewRenderStyle,
 } from "./SsbhModelPreviewContext";
-import type { DrawMaterialDataUrls, ResolvedMaterialBinding, ResolvedTextureSampling } from "./meshFromSsbh";
+import type { ResolvedMaterialBinding } from "./meshFromSsbh";
+import {
+  SceneTexturePool,
+  buildTexturePoolKey,
+  createDataTexture,
+  lookupTextureData,
+  pathForSlot,
+  type NutexbTextureData,
+  type PbrSlotKind,
+} from "./ssbhTextureUpload";
 import type { BuiltMeshDraw, SkelDataJson, SsbhModelPreviewInstance } from "./types";
 
 function instanceLayoutPosition(_index: number, _count: number): [number, number, number] {
@@ -155,7 +157,7 @@ function useRenderDebug(name: string, tracked: Record<string, unknown>): void {
 
 type SsbhModelCanvasProps = {
   draws: BuiltMeshDraw[];
-  drawMaterialDataUrlsByDrawKey: ReadonlyMap<string, DrawMaterialDataUrls>;
+  textureDataMap: ReadonlyMap<string, NutexbTextureData>;
   drawMaterialBindingsByDrawKey: ReadonlyMap<string, ResolvedMaterialBinding>;
   materialDebugViewMode: MaterialDebugViewMode;
   textureFlipY: boolean;
@@ -286,6 +288,9 @@ function AdaptiveCanvasPerformanceController({
   const regress = useThree((s) => s.performance.regress);
   const invalidate = useThree((s) => s.invalidate);
   const setDpr = useThree((s) => s.setDpr);
+  const gl = useThree((s) => s.gl);
+  const viewportWidth = useThree((s) => s.size.width);
+  const viewportHeight = useThree((s) => s.size.height);
   const resolvedBaseDpr = useMemo(() => resolveBaseDpr(baseDprRange), [baseDprRange]);
   const isRegressed = current < max - 1e-3;
   const perfMinimal = perfMonitorOptions.minimal || isRegressed;
@@ -295,6 +300,18 @@ function AdaptiveCanvasPerformanceController({
   useEffect(() => {
     setDpr(getSsbhAdaptiveDpr(resolvedBaseDpr, current));
   }, [current, resolvedBaseDpr, setDpr]);
+
+  // Keep the drawing buffer at full device resolution across viewport resizes.
+  // With a `demand` frameloop, a regressed/low DPR (set during interaction or
+  // motion) would otherwise persist as a stretched, blurry buffer after the
+  // panel or window changes size — nothing repaints until the next interaction.
+  // Resizing therefore snaps DPR back to base and forces one fresh frame.
+  useEffect(() => {
+    setDpr(resolvedBaseDpr);
+    gl.setPixelRatio(resolvedBaseDpr);
+    gl.setSize(viewportWidth, viewportHeight, false);
+    invalidate();
+  }, [viewportWidth, viewportHeight, resolvedBaseDpr, gl, setDpr, invalidate]);
 
   useEffect(() => {
     if (!motionActive) {
@@ -443,55 +460,11 @@ function DrawMeshUntextured({ draw, visible, wireframe, ignoreRaycast, skeleton,
   );
 }
 
-type PbrSlotKind =
-  | "map"
-  | "normalMap"
-  | "roughnessMap"
-  | "metalnessMap"
-  | "emissiveMap"
-  | "aoMap"
-  | "cubeMap";
-
-function toThreeWrapping(mode: ResolvedTextureSampling["wrapS"]) {
-  switch (mode) {
-    case "Repeat":
-      return RepeatWrapping;
-    case "MirroredRepeat":
-      return MirroredRepeatWrapping;
-    case "ClampToBorder":
-    case "ClampToEdge":
-    default:
-      return ClampToEdgeWrapping;
-  }
-}
-
-function samplingForSlot(
-  binding: ResolvedMaterialBinding | null,
-  kind: PbrSlotKind,
-): ResolvedTextureSampling | null {
-  if (!binding || kind === "cubeMap") return null;
-  switch (kind) {
-    case "map":
-      return binding.sampling.map;
-    case "normalMap":
-      return binding.sampling.normal;
-    case "roughnessMap":
-      return binding.sampling.roughness;
-    case "metalnessMap":
-      return binding.sampling.metalness;
-    case "emissiveMap":
-      return binding.sampling.emissive;
-    case "aoMap":
-      return binding.sampling.ao;
-    default:
-      return null;
-  }
-}
-
 function DrawMeshUnifiedPbr({
   draw,
   slots,
   binding,
+  texturePool,
   visible,
   wireframe,
   ignoreRaycast,
@@ -503,42 +476,36 @@ function DrawMeshUnifiedPbr({
   animeKeyLightDir,
   selected,
 }: DrawMeshProps & {
-  slots: { kind: PbrSlotKind; url: string }[];
+  slots: { kind: PbrSlotKind; path: string; data: NutexbTextureData }[];
   binding: ResolvedMaterialBinding | null;
+  texturePool: SceneTexturePool;
   textureFlipY: boolean;
   materialDebugViewMode: MaterialDebugViewMode;
   previewRenderStyle: PreviewRenderStyle;
   animeKeyLightDir: Vector3;
 }) {
-  const urls = slots.map((s) => s.url);
-  const texs = useTexture(urls);
+  // Upload decoded nutexb pixels directly as pooled DataTextures (scene-editor
+  // core path), sharing GPU textures across draws/instances by content key.
+  const byKind = useMemo<Partial<Record<PbrSlotKind, Texture>>>(() => {
+    const result: Partial<Record<PbrSlotKind, Texture>> = {};
+    if (!binding) return result;
+    for (const s of slots) {
+      const poolKey = buildTexturePoolKey(s.path, s.kind, binding, s.data.width, s.data.height);
+      result[s.kind] = texturePool.acquire(poolKey, () =>
+        createDataTexture(s.data, s.kind, binding, s.path),
+      );
+    }
+    return result;
+  }, [slots, texturePool, binding]);
   useLayoutEffect(() => {
-    const list = Array.isArray(texs) ? texs : [texs];
-    slots.forEach((s, i) => {
-      const t = list[i];
-      if (!t) return;
-      t.colorSpace = s.kind === "map" || s.kind === "emissiveMap" ? SRGBColorSpace : NoColorSpace;
-      if (s.kind !== "cubeMap") {
+    for (const s of slots) {
+      const t = byKind[s.kind];
+      if (t && s.kind !== "cubeMap") {
         t.flipY = textureFlipY;
-        const sampling = samplingForSlot(binding, s.kind);
-        t.wrapS = toThreeWrapping(sampling?.wrapS ?? "ClampToEdge");
-        t.wrapT = toThreeWrapping(sampling?.wrapT ?? "ClampToEdge");
-        t.center.set(0, 0);
-        t.repeat.set(sampling?.uvTransform?.scale_u ?? 1, sampling?.uvTransform?.scale_v ?? 1);
-        t.offset.set(sampling?.uvTransform?.translate_u ?? 0, sampling?.uvTransform?.translate_v ?? 0);
-        t.rotation = sampling?.uvTransform?.rotation ?? 0;
+        t.needsUpdate = true;
       }
-      if (s.kind === "cubeMap") {
-        t.mapping = EquirectangularReflectionMapping;
-      }
-      t.needsUpdate = true;
-    });
-  }, [slots, texs, textureFlipY]);
-  const list = Array.isArray(texs) ? texs : [texs];
-  const byKind: Partial<Record<PbrSlotKind, Texture>> = {};
-  slots.forEach((s, i) => {
-    byKind[s.kind] = list[i] as Texture;
-  });
+    }
+  }, [byKind, slots, textureFlipY]);
   const exvsActive = previewRenderStyle === "anime" && materialDebugViewMode === "full";
   const exvsUniforms = useMemo(() => createAnimeExvsUniforms(), [draw.key]);
   const onBeforeCompileExvs = useMemo(() => animeExvsOnBeforeCompile(exvsUniforms), [exvsUniforms]);
@@ -650,40 +617,36 @@ function DrawMeshUnifiedPbr({
 }
 
 function buildDrawMeshSlots(
-  mats: DrawMaterialDataUrls | undefined,
+  binding: ResolvedMaterialBinding | null,
+  textureDataMap: ReadonlyMap<string, NutexbTextureData>,
   materialDebugViewMode: MaterialDebugViewMode,
   normalMapEnabled: boolean,
-): { kind: PbrSlotKind; url: string }[] {
-  const slots: { kind: PbrSlotKind; url: string }[] = [];
+): { kind: PbrSlotKind; path: string; data: NutexbTextureData }[] {
+  const slots: { kind: PbrSlotKind; path: string; data: NutexbTextureData }[] = [];
+  if (!binding) return slots;
   const mode = materialDebugViewMode;
-  const mapUrl = mats?.map ?? null;
-  if (mapUrl && (mode === "full" || mode === "baseColor")) {
-    slots.push({ kind: "map", url: mapUrl });
-  }
-  if (normalMapEnabled && mats?.normalMap && (mode === "full" || mode === "normals")) {
-    slots.push({ kind: "normalMap", url: mats.normalMap });
-  }
-  if (mats?.roughnessMap && (mode === "full" || mode === "roughnessMetalness")) {
-    slots.push({ kind: "roughnessMap", url: mats.roughnessMap });
-  }
-  if (mats?.metalnessMap && (mode === "full" || mode === "roughnessMetalness")) {
-    slots.push({ kind: "metalnessMap", url: mats.metalnessMap });
-  }
-  if (mats?.emissiveMap && (mode === "full" || mode === "emissive")) {
-    slots.push({ kind: "emissiveMap", url: mats.emissiveMap });
-  }
-  if (mats?.aoMap && (mode === "full" || mode === "roughnessMetalness")) {
-    slots.push({ kind: "aoMap", url: mats.aoMap });
-  }
-  if (mats?.cubeMap && (mode === "full" || mode === "reflection")) {
-    slots.push({ kind: "cubeMap", url: mats.cubeMap });
-  }
+  const add = (kind: PbrSlotKind, allowed: boolean): void => {
+    if (!allowed) return;
+    const path = pathForSlot(binding, kind);
+    if (!path) return;
+    const data = lookupTextureData(textureDataMap, path);
+    if (!data) return;
+    slots.push({ kind, path, data });
+  };
+  add("map", mode === "full" || mode === "baseColor");
+  add("normalMap", normalMapEnabled && (mode === "full" || mode === "normals"));
+  add("roughnessMap", mode === "full" || mode === "roughnessMetalness");
+  add("metalnessMap", mode === "full" || mode === "roughnessMetalness");
+  add("emissiveMap", mode === "full" || mode === "emissive");
+  add("aoMap", mode === "full" || mode === "roughnessMetalness");
+  add("cubeMap", mode === "full" || mode === "reflection");
   return slots;
 }
 
 const DrawMeshEntry = memo(function DrawMeshEntry({
   draw,
-  mats,
+  textureDataMap,
+  texturePool,
   binding,
   visible,
   wireframe,
@@ -697,7 +660,8 @@ const DrawMeshEntry = memo(function DrawMeshEntry({
   selected,
 }: {
   draw: BuiltMeshDraw;
-  mats: DrawMaterialDataUrls | undefined;
+  textureDataMap: ReadonlyMap<string, NutexbTextureData>;
+  texturePool: SceneTexturePool;
   binding: ResolvedMaterialBinding | null;
   visible: boolean;
   wireframe: boolean;
@@ -711,8 +675,8 @@ const DrawMeshEntry = memo(function DrawMeshEntry({
   selected: boolean;
 }) {
   const slots = useMemo(
-    () => buildDrawMeshSlots(mats, materialDebugViewMode, normalMapEnabled),
-    [mats, materialDebugViewMode, normalMapEnabled],
+    () => buildDrawMeshSlots(binding, textureDataMap, materialDebugViewMode, normalMapEnabled),
+    [binding, textureDataMap, materialDebugViewMode, normalMapEnabled],
   );
 
   return (
@@ -722,6 +686,7 @@ const DrawMeshEntry = memo(function DrawMeshEntry({
           draw={draw}
           slots={slots}
           binding={binding}
+          texturePool={texturePool}
           visible={visible}
           wireframe={wireframe}
           ignoreRaycast={ignoreRaycast}
@@ -747,7 +712,8 @@ const DrawMeshEntry = memo(function DrawMeshEntry({
   );
 }, (prev, next) =>
   prev.draw === next.draw &&
-  prev.mats === next.mats &&
+  prev.textureDataMap === next.textureDataMap &&
+  prev.texturePool === next.texturePool &&
   prev.binding === next.binding &&
   prev.visible === next.visible &&
   prev.wireframe === next.wireframe &&
@@ -763,7 +729,8 @@ const DrawMeshEntry = memo(function DrawMeshEntry({
 
 const DrawMeshes = memo(function DrawMeshes({
   draws,
-  drawMaterialDataUrlsByDrawKey,
+  textureDataMap,
+  texturePool,
   drawMaterialBindingsByDrawKey,
   materialDebugViewMode,
   textureFlipY,
@@ -780,7 +747,7 @@ const DrawMeshes = memo(function DrawMeshes({
 }: Pick<
   SsbhModelCanvasProps,
   | "draws"
-  | "drawMaterialDataUrlsByDrawKey"
+  | "textureDataMap"
   | "drawMaterialBindingsByDrawKey"
   | "materialDebugViewMode"
   | "textureFlipY"
@@ -790,6 +757,7 @@ const DrawMeshes = memo(function DrawMeshes({
   | "previewRenderStyle"
   | "motionForceVisibleDuringPlayback"
 > & {
+  texturePool: SceneTexturePool;
   ignoreMeshRaycastForBonePicking: boolean;
   animeKeyLightDir: Vector3;
   skeleton: Skeleton | null;
@@ -811,7 +779,6 @@ const DrawMeshes = memo(function DrawMeshes({
   return (
     <>
       {draws.map((d) => {
-        const mats = drawMaterialDataUrlsByDrawKey.get(d.key);
         const binding = drawMaterialBindingsByDrawKey.get(d.key) ?? null;
         const visible = resolveDrawVisibility({
           drawKey: d.key,
@@ -826,7 +793,8 @@ const DrawMeshes = memo(function DrawMeshes({
           <DrawMeshEntry
             key={d.key}
             draw={d}
-            mats={mats}
+            textureDataMap={textureDataMap}
+            texturePool={texturePool}
             binding={binding}
             visible={visible}
             wireframe={wireframe}
@@ -870,7 +838,8 @@ function SkeletonLines({ geometry }: { geometry: BufferGeometry }) {
 
 const Scene = memo(function Scene({
   draws,
-  drawMaterialDataUrlsByDrawKey,
+  textureDataMap,
+  texturePool,
   drawMaterialBindingsByDrawKey,
   materialDebugViewMode,
   textureFlipY,
@@ -922,7 +891,7 @@ const Scene = memo(function Scene({
   | "onBoneTransformHotkey"
   | "onUndoBonePose"
   | "onRedoBonePose"
->) {
+> & { texturePool: SceneTexturePool }) {
   const modelRootRef = useRef<Group>(null);
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const camera = useThree((s) => s.camera);
@@ -1464,7 +1433,8 @@ const Scene = memo(function Scene({
               ) : null}
               <DrawMeshes
                 draws={instDraws}
-                drawMaterialDataUrlsByDrawKey={drawMaterialDataUrlsByDrawKey}
+                textureDataMap={textureDataMap}
+                texturePool={texturePool}
                 drawMaterialBindingsByDrawKey={drawMaterialBindingsByDrawKey}
                 materialDebugViewMode={materialDebugViewMode}
                 textureFlipY={textureFlipY}
@@ -1543,6 +1513,10 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
     ...restSceneProps
   } = sceneProps;
   const { previewInstances, activePreviewInstanceId } = restSceneProps;
+  // Shared GPU texture pool for the whole canvas — decoded nutexb DataTextures are
+  // deduped by content key across draws/instances (scene-editor core path).
+  const texturePool = useMemo(() => new SceneTexturePool(), []);
+  useEffect(() => () => texturePool.disposeAll(), [texturePool]);
   const activeInstance = activePreviewInstanceId
     ? (previewInstances.find((i) => i.id === activePreviewInstanceId) ?? null)
     : null;
@@ -1693,6 +1667,7 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
           antialias: canvasPerformanceProfile.antialias,
           alpha: false,
           powerPreference: "high-performance",
+          logarithmicDepthBuffer: true,
         }}
         performance={adaptivePerformanceOptions}
         dpr={canvasPerformanceProfile.dpr}
@@ -1710,7 +1685,12 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
           previewRenderStyle={restSceneProps.previewRenderStyle}
           showStats={restSceneProps.showStats}
         />
-        <Scene {...restSceneProps} background={background} motionScrubbing={motionScrubbing} />
+        <Scene
+          {...restSceneProps}
+          background={background}
+          motionScrubbing={motionScrubbing}
+          texturePool={texturePool}
+        />
       </Canvas>
     </div>
   );

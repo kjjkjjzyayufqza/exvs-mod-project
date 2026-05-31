@@ -7,15 +7,17 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { useConfigStore } from "@/store/configStore";
 import { useSsbhModelPreview } from "@/components/ssbh-model-preview/SsbhModelPreviewPanel";
 import {
   formatUnitModelReviewPayload,
+  getBaseName,
   inferUnitModelStructurePath,
-  repackValidatedUnitModelFolder,
   validateUnitModelForRepack,
   type UnitModelRepackResult,
   type UnitModelValidationResult,
 } from "../utils/unitModelRepackService";
+import { UnitModelRepackDialog } from "./UnitModelRepackDialog";
 
 type Props = {
   unitRoot: string | null;
@@ -40,6 +42,7 @@ function inferLoadedRoot(preview: ReturnType<typeof useSsbhModelPreview>): strin
 
 export function UnitModelToolsPanel({ unitRoot, onUnitRootChange }: Props) {
   const preview = useSsbhModelPreview();
+  const obModPath = useConfigStore((state) => state.obModPath ?? "");
   const loadedRoot = inferLoadedRoot(preview);
   const activeRoot = unitRoot ?? loadedRoot;
   const structurePath = useMemo(() => {
@@ -50,9 +53,11 @@ export function UnitModelToolsPanel({ unitRoot, onUnitRootChange }: Props) {
       return null;
     }
   }, [activeRoot]);
+  const folderName = useMemo(() => (activeRoot ? getBaseName(activeRoot) : ""), [activeRoot]);
   const [validation, setValidation] = useState<UnitModelValidationResult | null>(null);
   const [lastRepack, setLastRepack] = useState<UnitModelRepackResult | null>(null);
-  const [busy, setBusy] = useState<"pick" | "validate" | "repack" | null>(null);
+  const [busy, setBusy] = useState<"pick" | "validate" | null>(null);
+  const [repackDialogOpen, setRepackDialogOpen] = useState(false);
 
   const hasErrors = Boolean(validation && validation.errors.length > 0);
   const statusLabel = validation ? (validation.valid ? "Ready to repack" : "Blocked") : "Not validated";
@@ -108,29 +113,18 @@ export function UnitModelToolsPanel({ unitRoot, onUnitRootChange }: Props) {
     }
   };
 
-  const runRepack = async () => {
+  const openRepackDialog = () => {
     if (!activeRoot || !structurePath) {
       toast.error("No unit model folder selected");
       return;
     }
-    setBusy("repack");
-    try {
-      const result = await validateUnitModelForRepack(activeRoot, structurePath);
-      setValidation(result);
-      if (!result.valid) {
-        toast.error("Repack blocked by validation", {
-          description: `${result.errors.length} issue(s) must be fixed first`,
-        });
-        return;
-      }
-      const repack = await repackValidatedUnitModelFolder(activeRoot, structurePath);
-      setLastRepack(repack);
-      toast.success("Unit model repacked", { description: repack.outputPath });
-    } catch (error) {
-      toast.error("Unit model repack failed", { description: String(error) });
-    } finally {
-      setBusy(null);
+    if (!obModPath.trim()) {
+      toast.error("OB Mod folder is not configured", {
+        description: "Set the OB Mod path in Config before repacking.",
+      });
+      return;
     }
+    setRepackDialogOpen(true);
   };
 
   const copyReviewPayload = async () => {
@@ -206,8 +200,13 @@ export function UnitModelToolsPanel({ unitRoot, onUnitRootChange }: Props) {
               <Button
                 type="button"
                 size="sm"
-                onClick={() => void runRepack()}
+                onClick={openRepackDialog}
                 disabled={!activeRoot || busy !== null}
+                title={
+                  obModPath.trim()
+                    ? "Repack into the configured OB Mod folder"
+                    : "Set the OB Mod path in Config to enable repack"
+                }
               >
                 <PackageCheck className="mr-2 h-4 w-4" />
                 Repack
@@ -236,6 +235,12 @@ export function UnitModelToolsPanel({ unitRoot, onUnitRootChange }: Props) {
               <div>
                 <div className="text-muted-foreground">Structure JSON</div>
                 <div className="wrap-break-word font-mono">{structurePath ?? "None"}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">OB Mod folder (repack target)</div>
+                <div className={cn("wrap-break-word font-mono", !obModPath.trim() && "text-destructive")}>
+                  {obModPath.trim() || "Not configured — set in Config"}
+                </div>
               </div>
             </div>
           </section>
@@ -294,6 +299,16 @@ export function UnitModelToolsPanel({ unitRoot, onUnitRootChange }: Props) {
           </section>
         </div>
       </ScrollArea>
+
+      <UnitModelRepackDialog
+        open={repackDialogOpen}
+        onOpenChange={setRepackDialogOpen}
+        modelRoot={activeRoot}
+        structurePath={structurePath}
+        modFolder={obModPath}
+        folderName={folderName}
+        onRepacked={setLastRepack}
+      />
     </div>
   );
 }

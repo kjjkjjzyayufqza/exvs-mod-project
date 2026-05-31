@@ -72,6 +72,24 @@ export function inferUnitModelOutputPath(modelRoot: string, structurePath?: stri
   return `${parent}\\${stem}.fhm2d`;
 }
 
+/**
+ * Resolve the repack destination inside the configured OB Mod folder.
+ * The packed `.fhm2d` is named after the structure JSON stem (e.g.
+ * `0xAF73362C_structure.json` → `<modFolder>\0xAF73362C.fhm2d`), matching the
+ * pack naming used by the Test Editor "Repack Changes" flow.
+ */
+export function inferUnitModelModOutputPath(modFolder: string, structurePath: string): string {
+  const normalizedModFolder = trimTrailingSeparators(toWindowsPath(modFolder));
+  const stem = getBaseName(structurePath).replace(/_structure\.json$/i, "").replace(/\.json$/i, "");
+  if (!normalizedModFolder) {
+    throw new Error("OB Mod folder is not configured. Set it in Config before repacking.");
+  }
+  if (!stem) {
+    throw new Error(`Cannot infer pack name from structure path: ${structurePath}`);
+  }
+  return `${normalizedModFolder}\\${stem}.fhm2d`;
+}
+
 export async function validateUnitModelForRepack(
   modelRoot: string,
   structureJsonPath = inferUnitModelStructurePath(modelRoot),
@@ -87,6 +105,23 @@ export async function repackValidatedUnitModelFolder(
   structureJsonPath = inferUnitModelStructurePath(modelRoot),
 ): Promise<UnitModelRepackResult> {
   const outputPath = inferUnitModelOutputPath(modelRoot, structureJsonPath);
+  return await invoke<UnitModelRepackResult>("repack_fhm2d", {
+    structureJsonPath: toWindowsPath(structureJsonPath),
+    outputPath,
+    atomicWrite: true,
+  });
+}
+
+/**
+ * Repack the validated unit-model folder directly into the configured OB Mod
+ * folder, mirroring the Test Editor "Repack Changes" destination instead of
+ * writing the `.fhm2d` next to the source `_structure.json`.
+ */
+export async function repackValidatedUnitModelFolderToModFolder(
+  modFolder: string,
+  structureJsonPath: string,
+): Promise<UnitModelRepackResult> {
+  const outputPath = inferUnitModelModOutputPath(modFolder, structureJsonPath);
   return await invoke<UnitModelRepackResult>("repack_fhm2d", {
     structureJsonPath: toWindowsPath(structureJsonPath),
     outputPath,

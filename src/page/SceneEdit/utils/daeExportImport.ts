@@ -1,9 +1,10 @@
 import * as THREE from "three";
 import { ColladaLoader } from "three-stdlib";
 import { ColladaExporter } from "three-stdlib";
+import { FBXLoader } from "three-stdlib";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { readFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { copyFile, readFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 import {
   getStoredDialogDefaultPath,
@@ -64,10 +65,48 @@ export async function loadDAEFromPath(
   };
 }
 
+export async function loadStaticMeshFromPath(
+  filePath: string,
+  scaleFactor = 1,
+): Promise<DAEImportResult> {
+  if (!filePath.toLowerCase().endsWith(".fbx")) {
+    return loadDAEFromPath(filePath, scaleFactor);
+  }
+
+  const loader = new FBXLoader();
+  const content = await readFile(filePath);
+  const blob = new Blob([content], { type: "application/octet-stream" });
+  const blobUrl = URL.createObjectURL(blob);
+  const scene = await new Promise<THREE.Group>((resolve, reject) => {
+    loader.load(blobUrl, (object) => resolve(object as THREE.Group), undefined, reject);
+  });
+
+  const fileName = filePath.split(/[/\\]/).pop() ?? "model.fbx";
+  if (Number.isFinite(scaleFactor) && scaleFactor > 0 && scaleFactor !== 1) {
+    scene.scale.multiplyScalar(scaleFactor);
+    scene.updateMatrixWorld(true);
+  }
+
+  const bbox = new THREE.Box3().setFromObject(scene);
+  const size = new THREE.Vector3();
+  bbox.getSize(size);
+  if (!size.x || !Number.isFinite(size.x)) size.x = 1;
+  if (!size.y || !Number.isFinite(size.y)) size.y = 1;
+  if (!size.z || !Number.isFinite(size.z)) size.z = 1;
+
+  return {
+    fileName,
+    filePath,
+    scene,
+    blobUrl,
+    boundingSize: size,
+  };
+}
+
 export async function loadDAEFromPaths(filePaths: string[]): Promise<DAEImportResult[]> {
   const results: DAEImportResult[] = [];
   for (const filePath of filePaths) {
-    results.push(await loadDAEFromPath(filePath));
+    results.push(await loadStaticMeshFromPath(filePath));
   }
   return results;
 }
@@ -110,6 +149,439 @@ export function serializeObjectAsDAE(object: THREE.Object3D): string {
 export function serializeDaeToBytes(object: THREE.Object3D): number[] {
   const content = serializeObjectAsDAE(object);
   return Array.from(new TextEncoder().encode(content));
+}
+
+type ModelExportUpAxis = "y_up" | "z_up";
+
+interface ExportedTextureRef {
+  sourcePath: string;
+  relativePath: string;
+}
+
+interface FbxMeshExportRecord {
+  name: string;
+  geometryId: number;
+  modelId: number;
+  materialId: number;
+  textureId: number | null;
+  videoId: number | null;
+  materialName: string;
+  textureRelativePath: string | null;
+  vertices: number[];
+  polygonVertexIndices: number[];
+  normals: number[];
+  uvs: number[];
+  color: THREE.Color;
+}
+
+interface FbxTextureNameState {
+  usedNames: Set<string>;
+  sourceToRelative: Map<string, string>;
+}
+
+function sanitizeExportName(value: string): string {
+  const cleaned = value.trim().replace(/[\\/:*?"<>|]/g, "_");
+  return cleaned || "export";
+}
+
+function normalizePathKey(value: string): string {
+  return value.trim().replace(/\\/g, "/").toLowerCase();
+}
+
+function fileStem(value: string): string {
+  const name = value.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? value;
+  const idx = name.lastIndexOf(".");
+  return idx > 0 ? name.slice(0, idx) : name;
+}
+
+function fileExtension(value: string): string {
+  const name = value.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? value;
+  const idx = name.lastIndexOf(".");
+  return idx >= 0 ? name.slice(idx + 1).toLowerCase() : "";
+}
+
+function nextUniqueExportName(baseName: string, usedNames: Set<string>): string {
+  let candidate = sanitizeExportName(baseName);
+  if (!usedNames.has(candidate.toLowerCase())) {
+    usedNames.add(candidate.toLowerCase());
+    return candidate;
+  }
+  const extIdx = candidate.lastIndexOf(".");
+  const stem = extIdx > 0 ? candidate.slice(0, extIdx) : candidate;
+  const ext = extIdx > 0 ? candidate.slice(extIdx) : "";
+  let index = 1;
+  do {
+    candidate = `${stem}_${index}${ext}`;
+    index += 1;
+  } while (usedNames.has(candidate.toLowerCase()));
+  usedNames.add(candidate.toLowerCase());
+  return candidate;
+}
+
+function formatFbxNumber(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  if (Math.abs(value) < 1e-10) return "0";
+  return Number(value.toFixed(7)).toString();
+}
+
+function formatFbxArray(values: number[]): string {
+  return values.map(formatFbxNumber).join(",");
+}
+
+function materialArray(material: THREE.Material | THREE.Material[] | undefined): THREE.Material[] {
+  if (!material) return [];
+  return Array.isArray(material) ? material : [material];
+}
+
+function firstMaterial(mesh: THREE.Mesh | THREE.InstancedMesh): THREE.Material | null {
+  return materialArray(mesh.material)[0] ?? null;
+}
+
+function materialColor(material: THREE.Material | null): THREE.Color {
+  const candidate = material as (THREE.Material & { color?: THREE.Color }) | null;
+  return candidate?.color instanceof THREE.Color ? candidate.color : new THREE.Color(0.8, 0.8, 0.8);
+}
+
+function materialMap(material: THREE.Material | null): THREE.Texture | null {
+  const candidate = material as (THREE.Material & { map?: THREE.Texture | null }) | null;
+  return candidate?.map ?? null;
+}
+
+function textureSourcePath(texture: THREE.Texture | null): string | null {
+  const data = texture?.userData as { sceneTexturePath?: unknown; sourcePath?: unknown } | undefined;
+  const value = typeof data?.sceneTexturePath === "string"
+    ? data.sceneTexturePath
+    : typeof data?.sourcePath === "string"
+      ? data.sourcePath
+      : null;
+  return value?.trim() || null;
+}
+
+async function exportTextureReference(
+  sourcePath: string,
+  outputDir: string,
+  state: FbxTextureNameState,
+): Promise<ExportedTextureRef> {
+  const sourceKey = normalizePathKey(sourcePath);
+  const cached = state.sourceToRelative.get(sourceKey);
+  if (cached) return { sourcePath, relativePath: cached };
+
+  const ext = fileExtension(sourcePath);
+  const relativePath = nextUniqueExportName(
+    ext === "nutexb" ? `${fileStem(sourcePath)}.png` : (sourcePath.replace(/\\/g, "/").split("/").pop() ?? "texture"),
+    state.usedNames,
+  );
+  const outputPath = `${outputDir.replace(/[/\\]+$/, "")}/${relativePath}`;
+  if (ext === "nutexb") {
+    await invoke("nutexb_export_png", { inputPath: sourcePath, outputPath });
+  } else {
+    await copyFile(sourcePath, outputPath);
+  }
+  state.sourceToRelative.set(sourceKey, relativePath);
+  return { sourcePath, relativePath };
+}
+
+function addTriangleFromGeometry(
+  geometry: THREE.BufferGeometry,
+  sourceIndices: [number, number, number],
+  transform: THREE.Matrix4,
+  normalMatrix: THREE.Matrix3,
+  record: FbxMeshExportRecord,
+) {
+  const position = geometry.getAttribute("position");
+  const normal = geometry.getAttribute("normal");
+  const uv = geometry.getAttribute("uv");
+
+  for (let corner = 0; corner < 3; corner += 1) {
+    const sourceIndex = sourceIndices[corner];
+    const vertexIndex = record.vertices.length / 3;
+    const p = new THREE.Vector3().fromBufferAttribute(position, sourceIndex).applyMatrix4(transform);
+    record.vertices.push(p.x, p.y, p.z);
+
+    if (normal) {
+      const n = new THREE.Vector3().fromBufferAttribute(normal, sourceIndex).applyMatrix3(normalMatrix).normalize();
+      record.normals.push(n.x, n.y, n.z);
+    } else {
+      record.normals.push(0, 1, 0);
+    }
+
+    if (uv) {
+      const u = uv.getX(sourceIndex);
+      const v = uv.getY(sourceIndex);
+      record.uvs.push(u, v);
+    } else {
+      record.uvs.push(0, 0);
+    }
+
+    record.polygonVertexIndices.push(corner === 2 ? -vertexIndex - 1 : vertexIndex);
+  }
+}
+
+function buildFbxMeshRecord(
+  mesh: THREE.Mesh | THREE.InstancedMesh,
+  transform: THREE.Matrix4,
+  rootName: string,
+  index: number,
+  textureRelativePath: string | null,
+): FbxMeshExportRecord | null {
+  const sourceGeometry = mesh.geometry;
+  if (!sourceGeometry?.getAttribute("position")) return null;
+
+  const geometry = sourceGeometry.clone();
+  if (!geometry.getAttribute("normal")) {
+    geometry.computeVertexNormals();
+  }
+
+  const name = sanitizeExportName(mesh.name || `${rootName}_mesh_${index + 1}`);
+  const normalMatrix = new THREE.Matrix3().getNormalMatrix(transform);
+  const record: FbxMeshExportRecord = {
+    name,
+    geometryId: 100000 + index * 10,
+    modelId: 200000 + index * 10,
+    materialId: 300000 + index * 10,
+    textureId: textureRelativePath ? 400000 + index * 10 : null,
+    videoId: textureRelativePath ? 500000 + index * 10 : null,
+    materialName: `${name}_mat`,
+    textureRelativePath,
+    vertices: [],
+    polygonVertexIndices: [],
+    normals: [],
+    uvs: [],
+    color: materialColor(firstMaterial(mesh)),
+  };
+
+  const position = geometry.getAttribute("position");
+  const indexed = geometry.index;
+  const indexCount = indexed ? indexed.count : position.count;
+  for (let i = 0; i + 2 < indexCount; i += 3) {
+    const a = indexed ? indexed.getX(i) : i;
+    const b = indexed ? indexed.getX(i + 1) : i + 1;
+    const c = indexed ? indexed.getX(i + 2) : i + 2;
+    addTriangleFromGeometry(geometry, [a, b, c], transform, normalMatrix, record);
+  }
+
+  geometry.dispose();
+  return record.vertices.length > 0 ? record : null;
+}
+
+async function collectFbxMeshRecords(
+  object: THREE.Object3D,
+  outputDir: string,
+  exportTextures: boolean,
+  textureState: FbxTextureNameState,
+): Promise<FbxMeshExportRecord[]> {
+  object.updateMatrixWorld(true);
+  const rootInverse = object.matrixWorld.clone().invert();
+  const records: FbxMeshExportRecord[] = [];
+  const texturePromises = new Map<THREE.Texture, Promise<ExportedTextureRef | null>>();
+
+  const getTextureRel = async (texture: THREE.Texture | null) => {
+    if (!exportTextures || !texture) return null;
+    const sourcePath = textureSourcePath(texture);
+    if (!sourcePath) return null;
+    let promise = texturePromises.get(texture);
+    if (!promise) {
+      promise = exportTextureReference(sourcePath, outputDir, textureState);
+      texturePromises.set(texture, promise);
+    }
+    return (await promise)?.relativePath ?? null;
+  };
+
+  const meshEntries: Array<{ mesh: THREE.Mesh | THREE.InstancedMesh; transform: THREE.Matrix4 }> = [];
+  object.traverse((child) => {
+    const maybeMesh = child as THREE.Mesh | THREE.InstancedMesh;
+    if (!maybeMesh.isMesh && !(maybeMesh as THREE.InstancedMesh).isInstancedMesh) return;
+    maybeMesh.updateWorldMatrix(true, false);
+    if ((maybeMesh as THREE.InstancedMesh).isInstancedMesh) {
+      const instanced = maybeMesh as THREE.InstancedMesh;
+      const instanceMatrix = new THREE.Matrix4();
+      for (let i = 0; i < instanced.count; i += 1) {
+        instanced.getMatrixAt(i, instanceMatrix);
+        meshEntries.push({
+          mesh: instanced,
+          transform: rootInverse.clone().multiply(instanced.matrixWorld).multiply(instanceMatrix),
+        });
+      }
+    } else {
+      meshEntries.push({
+        mesh: maybeMesh,
+        transform: rootInverse.clone().multiply(maybeMesh.matrixWorld),
+      });
+    }
+  });
+
+  for (const entry of meshEntries) {
+    const material = firstMaterial(entry.mesh);
+    const textureRel = await getTextureRel(materialMap(material));
+    const record = buildFbxMeshRecord(entry.mesh, entry.transform, object.name || "object", records.length, textureRel);
+    if (record) records.push(record);
+  }
+
+  return records;
+}
+
+function serializeRecordsAsFbx(
+  records: FbxMeshExportRecord[],
+  sourceName: string,
+  upAxis: ModelExportUpAxis,
+): string {
+  if (records.length === 0) {
+    throw new Error("FBX export found no mesh geometry");
+  }
+
+  const upAxisIndex = upAxis === "z_up" ? 2 : 1;
+  const lines: string[] = [];
+  lines.push("; FBX 7.4.0 project file");
+  lines.push("; Generated by EXVS2 Scene Editor");
+  lines.push("FBXHeaderExtension:  {");
+  lines.push("\tFBXHeaderVersion: 1003");
+  lines.push("\tFBXVersion: 7400");
+  lines.push("\tCreator: \"EXVS2 Scene Editor\"");
+  lines.push("}");
+  lines.push("GlobalSettings:  {");
+  lines.push("\tVersion: 1000");
+  lines.push("\tProperties70:  {");
+  lines.push(`\t\tP: "UpAxis", "int", "Integer", "",${upAxisIndex}`);
+  lines.push("\t\tP: \"UpAxisSign\", \"int\", \"Integer\", \"\",1");
+  lines.push("\t\tP: \"FrontAxis\", \"int\", \"Integer\", \"\",2");
+  lines.push("\t\tP: \"FrontAxisSign\", \"int\", \"Integer\", \"\",1");
+  lines.push("\t\tP: \"CoordAxis\", \"int\", \"Integer\", \"\",0");
+  lines.push("\t\tP: \"CoordAxisSign\", \"int\", \"Integer\", \"\",1");
+  lines.push("\t\tP: \"UnitScaleFactor\", \"double\", \"Number\", \"\",1");
+  lines.push("\t}");
+  lines.push("}");
+  lines.push("Definitions:  {");
+  lines.push("\tVersion: 100");
+  lines.push(`\tCount: ${records.length * 3 + records.filter((r) => r.textureRelativePath).length * 2}`);
+  lines.push(`\tObjectType: "Geometry" { Count: ${records.length} }`);
+  lines.push(`\tObjectType: "Model" { Count: ${records.length} }`);
+  lines.push(`\tObjectType: "Material" { Count: ${records.length} }`);
+  const textureCount = records.filter((r) => r.textureRelativePath).length;
+  if (textureCount > 0) {
+    lines.push(`\tObjectType: "Texture" { Count: ${textureCount} }`);
+    lines.push(`\tObjectType: "Video" { Count: ${textureCount} }`);
+  }
+  lines.push("}");
+  lines.push("Objects:  {");
+
+  for (const record of records) {
+    lines.push(`\tGeometry: ${record.geometryId}, "Geometry::${record.name}", "Mesh" {`);
+    lines.push(`\t\tVertices: *${record.vertices.length} {`);
+    lines.push(`\t\t\ta: ${formatFbxArray(record.vertices)}`);
+    lines.push("\t\t}");
+    lines.push(`\t\tPolygonVertexIndex: *${record.polygonVertexIndices.length} {`);
+    lines.push(`\t\t\ta: ${record.polygonVertexIndices.join(",")}`);
+    lines.push("\t\t}");
+    lines.push("\t\tGeometryVersion: 124");
+    lines.push("\t\tLayerElementNormal: 0 {");
+    lines.push("\t\t\tVersion: 101");
+    lines.push("\t\t\tName: \"\"");
+    lines.push("\t\t\tMappingInformationType: \"ByPolygonVertex\"");
+    lines.push("\t\t\tReferenceInformationType: \"Direct\"");
+    lines.push(`\t\t\tNormals: *${record.normals.length} {`);
+    lines.push(`\t\t\t\ta: ${formatFbxArray(record.normals)}`);
+    lines.push("\t\t\t}");
+    lines.push("\t\t}");
+    lines.push("\t\tLayerElementUV: 0 {");
+    lines.push("\t\t\tVersion: 101");
+    lines.push("\t\t\tName: \"UVChannel_1\"");
+    lines.push("\t\t\tMappingInformationType: \"ByPolygonVertex\"");
+    lines.push("\t\t\tReferenceInformationType: \"Direct\"");
+    lines.push(`\t\t\tUV: *${record.uvs.length} {`);
+    lines.push(`\t\t\t\ta: ${formatFbxArray(record.uvs)}`);
+    lines.push("\t\t\t}");
+    lines.push("\t\t}");
+    lines.push("\t\tLayerElementMaterial: 0 {");
+    lines.push("\t\t\tVersion: 101");
+    lines.push("\t\t\tName: \"\"");
+    lines.push("\t\t\tMappingInformationType: \"AllSame\"");
+    lines.push("\t\t\tReferenceInformationType: \"IndexToDirect\"");
+    lines.push("\t\t\tMaterials: *1 { a: 0 }");
+    lines.push("\t\t}");
+    lines.push("\t\tLayer: 0 {");
+    lines.push("\t\t\tVersion: 100");
+    lines.push("\t\t\tLayerElement: { Type: \"LayerElementNormal\" TypedIndex: 0 }");
+    lines.push("\t\t\tLayerElement: { Type: \"LayerElementUV\" TypedIndex: 0 }");
+    lines.push("\t\t\tLayerElement: { Type: \"LayerElementMaterial\" TypedIndex: 0 }");
+    lines.push("\t\t}");
+    lines.push("\t}");
+
+    lines.push(`\tModel: ${record.modelId}, "Model::${record.name}", "Mesh" {`);
+    lines.push("\t\tVersion: 232");
+    lines.push("\t\tProperties70:  {");
+    lines.push("\t\t\tP: \"Lcl Translation\", \"Lcl Translation\", \"\", \"A\",0,0,0");
+    lines.push("\t\t\tP: \"Lcl Rotation\", \"Lcl Rotation\", \"\", \"A\",0,0,0");
+    lines.push("\t\t\tP: \"Lcl Scaling\", \"Lcl Scaling\", \"\", \"A\",1,1,1");
+    lines.push("\t\t}");
+    lines.push("\t\tShading: T");
+    lines.push("\t\tCulling: \"CullingOff\"");
+    lines.push("\t}");
+
+    lines.push(`\tMaterial: ${record.materialId}, "Material::${record.materialName}", "" {`);
+    lines.push("\t\tVersion: 102");
+    lines.push("\t\tShadingModel: \"phong\"");
+    lines.push("\t\tMultiLayer: 0");
+    lines.push("\t\tProperties70:  {");
+    lines.push(`\t\t\tP: "DiffuseColor", "Color", "", "A",${formatFbxNumber(record.color.r)},${formatFbxNumber(record.color.g)},${formatFbxNumber(record.color.b)}`);
+    lines.push("\t\t\tP: \"SpecularColor\", \"Color\", \"\", \"A\",0.2,0.2,0.2");
+    lines.push("\t\t\tP: \"Shininess\", \"Number\", \"\", \"A\",20");
+    lines.push("\t\t}");
+    lines.push("\t}");
+
+    if (record.textureRelativePath && record.textureId && record.videoId) {
+      const textureName = sanitizeExportName(fileStem(record.textureRelativePath));
+      lines.push(`\tTexture: ${record.textureId}, "Texture::${textureName}", "" {`);
+      lines.push("\t\tType: \"TextureVideoClip\"");
+      lines.push("\t\tVersion: 202");
+      lines.push(`\t\tTextureName: "Texture::${textureName}"`);
+      lines.push(`\t\tMedia: "Video::${textureName}"`);
+      lines.push(`\t\tFileName: "${record.textureRelativePath}"`);
+      lines.push(`\t\tRelativeFilename: "${record.textureRelativePath}"`);
+      lines.push("\t\tModelUVTranslation: 0,0");
+      lines.push("\t\tModelUVScaling: 1,1");
+      lines.push("\t\tTexture_Alpha_Source: \"None\"");
+      lines.push("\t\tCropping: 0,0,0,0");
+      lines.push("\t}");
+      lines.push(`\tVideo: ${record.videoId}, "Video::${textureName}", "Clip" {`);
+      lines.push("\t\tType: \"Clip\"");
+      lines.push(`\t\tFileName: "${record.textureRelativePath}"`);
+      lines.push(`\t\tRelativeFilename: "${record.textureRelativePath}"`);
+      lines.push("\t}");
+    }
+  }
+
+  lines.push("}");
+  lines.push("Connections:  {");
+  for (const record of records) {
+    lines.push(`\tC: "OO",${record.geometryId},${record.modelId}`);
+    lines.push(`\tC: "OO",${record.modelId},0`);
+    lines.push(`\tC: "OO",${record.materialId},${record.modelId}`);
+    if (record.textureRelativePath && record.textureId && record.videoId) {
+      lines.push(`\tC: "OO",${record.videoId},${record.textureId}`);
+      lines.push(`\tC: "OP",${record.textureId},${record.materialId},"DiffuseColor"`);
+    }
+  }
+  lines.push("}");
+  lines.push(`; Source: ${sourceName}`);
+  return `${lines.join("\n")}\n`;
+}
+
+export async function writeObjectAsFBX(
+  object: THREE.Object3D,
+  filePath: string,
+  options?: {
+    outputDir?: string;
+    exportTextures?: boolean;
+    upAxis?: ModelExportUpAxis;
+    textureState?: FbxTextureNameState;
+  },
+): Promise<string> {
+  const outputDir = options?.outputDir ?? filePath.replace(/[/\\][^/\\]*$/, "");
+  const textureState = options?.textureState ?? { usedNames: new Set<string>(), sourceToRelative: new Map<string, string>() };
+  const records = await collectFbxMeshRecords(object, outputDir, options?.exportTextures ?? false, textureState);
+  const content = serializeRecordsAsFbx(records, object.name || "object", options?.upAxis ?? "y_up");
+  await writeTextFile(filePath, content);
+  return filePath;
 }
 
 export async function writeObjectAsDAE(
@@ -168,6 +640,53 @@ export async function exportMultipleObjectsAsDAE(
   return exported;
 }
 
+export async function exportObjectsAsDAEToDirectory(
+  objects: Array<{ object: THREE.Object3D; name: string }>,
+  outputDir: string,
+): Promise<string[]> {
+  const exporter = new ColladaExporter();
+  const exported: string[] = [];
+
+  for (const { object, name } of objects) {
+    const content = parseDAE(exporter, object);
+    const safeName = sanitizeExportName(name);
+    const filePath = `${outputDir.replace(/[/\\]+$/, "")}/${safeName}.dae`;
+    await writeTextFile(filePath, content);
+    exported.push(filePath);
+  }
+
+  return exported;
+}
+
+export async function exportObjectsAsFBXToDirectory(
+  objects: Array<{ object: THREE.Object3D; name: string }>,
+  outputDir: string,
+  options?: {
+    exportTextures?: boolean;
+    upAxis?: ModelExportUpAxis;
+  },
+): Promise<string[]> {
+  const exported: string[] = [];
+  const textureState: FbxTextureNameState = {
+    usedNames: new Set<string>(),
+    sourceToRelative: new Map<string, string>(),
+  };
+
+  for (const { object, name } of objects) {
+    const safeName = sanitizeExportName(name);
+    const filePath = `${outputDir.replace(/[/\\]+$/, "")}/${safeName}.fbx`;
+    await writeObjectAsFBX(object, filePath, {
+      outputDir,
+      exportTextures: options?.exportTextures ?? false,
+      upAxis: options?.upAxis ?? "y_up",
+      textureState,
+    });
+    exported.push(filePath);
+  }
+
+  return exported;
+}
+
 // ── Rust-backed SSBH → DAE export (high performance) ──────────────────────
 
 export interface BatchDaeExportEntry {
@@ -205,6 +724,18 @@ export async function batchExportStageDae(
   if (!outputDir) return null;
   await rememberStoredDialogSelection(SCENE_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY, outputDir, "directory");
 
+  return exportStageDaeBatchToDirectory(entries, outputDir, options);
+}
+
+export async function exportStageDaeBatchToDirectory(
+  entries: BatchDaeExportEntry[],
+  outputDir: string,
+  options?: {
+    scaleFactor?: number;
+    upAxis?: string;
+    exportTextures?: boolean;
+  },
+): Promise<BatchDaeExportResult> {
   const result = await invoke<BatchDaeExportResult>("stage_batch_export_dae", {
     outputDir,
     entries,

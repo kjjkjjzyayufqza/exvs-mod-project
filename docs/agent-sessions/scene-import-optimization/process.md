@@ -88,3 +88,45 @@
 ### Verification
 - TypeScript `tsc --noEmit`: PASS (exit 0)
 - Rust `cargo check`: PASS (exit 0)
+
+## 2026-05-31 Resume Notes
+
+### User Objective
+- Scene Editor must import/export DAE and FBX.
+- Existing DAE import to SSBH + HKT must gain FBX support.
+- Import Static Mesh modal needs an out-of-scene/direct-to-disk checkbox for very large files such as `D:\output\minecraft\untitledout.dae`.
+- Direct-to-disk import must save SSBH + HKT files without returning heavy parsed data through IPC or immediately loading into Three.js.
+- Right-click model export should export DAE, FBX, and referenced textures to a chosen output directory.
+
+### Evidence Gathered
+- `src-tauri/Cargo.toml` already includes `ufbx = "0.10"`.
+- `src-tauri/src/ssbh_dae/fbx_import.rs` parses FBX through `ufbx` into the shared `ImportScene`.
+- `src-tauri/src/ssbh_dae_cmd.rs` already registers `ssbh_analyze_fbx` and `ssbh_convert_fbx_to_ssbh`.
+- Scene session import is still DAE-named and byte-backed: `PendingImport.dae_bytes`, `scene_import_dae_from_path`, `convert_dae_bytes_to_ssbh_artifacts`.
+- `src-tauri/src/collision_mesh/import.rs` can parse DAE or FBX bytes when the source name has the correct extension.
+- Autodesk has an official FBX SDK for C++/Python, but no official Rust SDK was found. `ufbx` is the current practical Rust loader.
+
+### Current Direction
+- Preserve existing DAE behavior.
+- Rename/extend frontend concepts only where needed; avoid broad `ImportedDaeObject` refactors unless required.
+- Add source format metadata so FBX bytes do not get parsed as DAE inside session/HKT generation.
+- Add a Rust one-shot direct-to-disk command that accepts a file path, detects `.dae`/`.fbx`, writes SSBH artifacts and optional `map_hit.hkt`, and returns only a small result.
+
+### Implementation Notes
+- Import Static Mesh now accepts `.dae` and `.fbx`; FBX analysis routes to `ssbh_analyze_fbx`.
+- Out-of-scene conversion uses `scene_convert_static_mesh_to_stage_files` so large DAE/FBX files stay path-based on the Rust side and do not return parsed scene data through IPC.
+- Session imports now preserve source names/extensions so FBX data is converted and used for HKT generation as FBX rather than being treated as DAE.
+- `collision_mesh::parse_import_scene_from_path` and Havok generation now support path-based DAE/FBX input.
+- Right-click/outliner export opens a model export dialog with DAE/FBX format checkboxes and a chosen output directory.
+- SSBH DAE export still uses the Rust `stage_batch_export_dae` path; imported static meshes use the existing frontend Collada exporter.
+- FBX export uses a local Three.js ASCII FBX writer for geometry, normals, UVs, material color, and diffuse texture references when the texture source path is available. This is intentionally scoped because Autodesk provides no official Rust FBX SDK.
+
+### Verification 2026-05-31
+- `cargo check` from `src-tauri`: PASS; only pre-existing dead-code/debug-bin warnings.
+- `cargo test --lib scene_memory_session::tests`: PASS, 22 tests.
+- `cargo test --lib scene_session_commands::tests`: PASS, 17 tests.
+- `cargo test --lib ssbh_dae::fbx_import::tests`: PASS, 2 tests.
+- `npx vitest run src/page/SceneEdit/components/dae-import/daeImportDefaults.test.ts src/page/SceneEdit/utils/sceneSessionService.test.ts src/page/SceneEdit/utils/sceneDaeSessionImport.test.ts`: PASS, 33 tests.
+- `npx vitest run src/page/SceneEdit/utils/daeExportDialogState.test.ts src/page/SceneEdit/components/dae-import/daeImportDefaults.test.ts src/page/SceneEdit/utils/sceneSessionService.test.ts src/page/SceneEdit/utils/sceneDaeSessionImport.test.ts`: PASS, 37 tests.
+- `npx tsc --noEmit --pretty false`: FAILS on existing unrelated errors in `sceneEditRndSizePersistence.test.ts` and `DdsFormat` imports; no new errors from the static mesh import/export changes appeared.
+- `git diff --check`: PASS; Git reported only LF-to-CRLF working-copy warnings.

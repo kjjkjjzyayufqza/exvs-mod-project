@@ -58,6 +58,18 @@ export interface ImportResult {
   warnings: string[];
 }
 
+export interface StaticMeshDirectConvertResult {
+  sourcePath: string;
+  outputDir: string;
+  modelDir: string;
+  baseFilename: string;
+  ssbhGenerated: boolean;
+  hktGenerated: boolean;
+  filesWritten: string[];
+  hktDetail: string | null;
+  warnings: string[];
+}
+
 export interface SaveResult {
   success: boolean;
   filesWritten: number;
@@ -207,6 +219,50 @@ export function sceneReplaceHkt(
   });
 }
 
+export interface HktCollisionMeshGeometry {
+  /** Flattened [x, y, z, ...] collision-space vertex positions. */
+  positions: number[];
+  /** Triangle list indices (length divisible by 3). */
+  indices: number[];
+  triangleCount: number;
+  vertexCount: number;
+  renderTriangleCount: number;
+  mergedTriangleCount: number;
+}
+
+/**
+ * Build the simplified collision mesh geometry for a freshly-selected DAE/FBX
+ * (skin-bake → merge → simplify only, no Havok), for a live 3D collision
+ * preview before the HKT is generated and applied.
+ */
+export function scenePreviewHktCollisionMeshPath(
+  filePath: string,
+  sourceName: string,
+  config: ImportConfig,
+): Promise<HktCollisionMeshGeometry> {
+  return invoke<HktCollisionMeshGeometry>("scene_preview_hkt_collision_mesh_path", {
+    filePath,
+    sourceName,
+    config,
+  });
+}
+
+/**
+ * Generate a mesh-accurate HKT from a newly-selected DAE/FBX and apply it onto
+ * the target import — the "generate HKT from a new model" replace flow.
+ */
+export function sceneReplaceHktFromDaePath(
+  sessionId: string,
+  importId: string,
+  filePath: string,
+  sourceName: string,
+  config: ImportConfig,
+): Promise<boolean> {
+  return invoke<boolean>("scene_replace_hkt_from_dae_path", {
+    options: { sessionId, importId, filePath, sourceName, config },
+  });
+}
+
 export function scenePreviewHktCollisionBytes(
   daeBytes: number[],
   sourceName: string,
@@ -245,6 +301,16 @@ export function sceneGetImportConfig(
 ): Promise<ImportConfig> {
   return invoke<ImportConfig>("scene_get_import_config", {
     options: { sessionId, importId },
+  });
+}
+
+export function sceneConvertStaticMeshToStageFiles(params: {
+  sourcePath: string;
+  outputDir: string;
+  config: ImportConfig;
+}): Promise<StaticMeshDirectConvertResult> {
+  return invoke<StaticMeshDirectConvertResult>("scene_convert_static_mesh_to_stage_files", {
+    options: params,
   });
 }
 

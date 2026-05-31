@@ -26,21 +26,16 @@ import {
   buildDrawListFromBundle,
   buildMatlLookup,
   buildTextureRefToPathMap,
-  bundleForPreviewDraw,
   createDefaultTextureSlotLoadEnabled,
   resolveMaterialBinding,
   resolveMaterialTexturePaths,
   TEXTURE_PREVIEW_SLOT_META,
   TEXTURE_SLOT_TO_PATH_FIELD,
-  type DrawMaterialDataUrls,
   type ResolvedMaterialBinding,
   type TexturePreviewSlotKey,
 } from "./meshFromSsbh";
-import {
-  getOrDecodeNutexbPngBlobUrl,
-  makeNutexbVersionId,
-  resolveNutexbVersionId,
-} from "./nutexbPreviewCache";
+import type { NutexbTextureData, NutexbTextureDataMap } from "./ssbhTextureUpload";
+import { decodeSceneNutexbRgba } from "@/page/SceneEdit/utils/sceneTextureDecode";
 import {
   buildNextRecentPaths,
   readAutoLoadAfterConvertFromStorage,
@@ -159,20 +154,8 @@ type PreviewTextureSource = {
   sourceSessionId: string | null | undefined;
 };
 
-/** Parallel nutexb→PNG IPC for cache misses; LRU avoids re-decoding across model switches. */
+/** Parallel nutexb→RGBA IPC for cache misses; LRU avoids re-decoding across model switches. */
 const NUTEXB_DECODE_CONCURRENCY = 12;
-
-function createEmptyDrawMaterialDataUrls(): DrawMaterialDataUrls {
-  return {
-    map: null,
-    normalMap: null,
-    roughnessMap: null,
-    metalnessMap: null,
-    emissiveMap: null,
-    aoMap: null,
-    cubeMap: null,
-  };
-}
 
 const INSTANCE_LOAD_CONCURRENCY = 4;
 
@@ -285,7 +268,12 @@ export type SsbhModelPreviewContextValue = {
   setNormalMapEnabled: (v: boolean) => void;
   selectedDebugDrawKey: string | null;
   setSelectedDebugDrawKey: (v: string | null) => void;
-  drawMaterialDataUrlsByDrawKey: ReadonlyMap<string, DrawMaterialDataUrls>;
+  /**
+   * Decoded nutexb pixels keyed by texture path (scene-editor core path).
+   * Consumed by `SsbhModelCanvas` via `SceneTexturePool` + `createDataTexture`,
+   * replacing the legacy per-draw PNG data-URL pipeline.
+   */
+  textureDataMap: ReadonlyMap<string, NutexbTextureData>;
   drawMaterialBindingsByDrawKey: ReadonlyMap<string, ResolvedMaterialBinding>;
   materialDebugViewMode: MaterialDebugViewMode;
   setMaterialDebugViewMode: (v: MaterialDebugViewMode) => void;
@@ -479,9 +467,7 @@ export function SsbhModelPreviewProvider({
   const [directionalZ, setDirectionalZ] = useState(DEFAULT_PREVIEW_DIRECTIONAL_Z);
   const [normalMapEnabled, setNormalMapEnabled] = useState(true);
   const [selectedDebugDrawKey, setSelectedDebugDrawKey] = useState<string | null>(null);
-  const [drawMaterialDataUrlsByDrawKey, setDrawMaterialDataUrlsByDrawKey] = useState<
-    Map<string, DrawMaterialDataUrls>
-  >(() => new Map());
+  const [textureDataMap, setTextureDataMap] = useState<NutexbTextureDataMap>(() => new Map());
   const [drawMaterialBindingsByDrawKey, setDrawMaterialBindingsByDrawKey] = useState<
     Map<string, ResolvedMaterialBinding>
   >(() => new Map());
@@ -1379,7 +1365,7 @@ export function SsbhModelPreviewProvider({
 
   useEffect(() => {
     if (previewInstances.length === 0 || draws.length === 0) {
-      setDrawMaterialDataUrlsByDrawKey(new Map());
+      setTextureDataMap(new Map());
       setDrawMaterialBindingsByDrawKey(new Map());
       setTextureDecodeProgressBatched(null);
       return;
@@ -1401,9 +1387,11 @@ export function SsbhModelPreviewProvider({
             refMap: buildTextureRefToPathMap(previewInstances[0]!.bundle),
           }
         : null;
-    const drawPathsByKey = new Map<string, ReturnType<typeof resolveMaterialTexturePaths>>();
     const pathSlotCounts = new Map<string, number>();
     const pathSourceByPath = new Map<string, PreviewTextureSource>();
+    // Bindings carry the resolved texture paths + sampling; the canvas uploads the
+    // decoded pixels (textureDataMap, keyed by path) through SceneTexturePool.
+    const nextBindings = new Map<string, ResolvedMaterialBinding>();
     for (const d of draws) {
       const inst =
         (d.previewInstanceId ? instanceById.get(d.previewInstanceId) : null) ??
@@ -1414,8 +1402,8 @@ export function SsbhModelPreviewProvider({
       if (!ctx) {
         continue;
       }
+      nextBindings.set(d.key, resolveMaterialBinding(d.materialLabel, ctx.lookup, ctx.refMap));
       const paths = resolveMaterialTexturePaths(d.materialLabel, ctx.lookup, ctx.refMap);
-      drawPathsByKey.set(d.key, paths);
       for (const { key } of TEXTURE_PREVIEW_SLOT_META) {
         if (!textureSlotLoadEnabled[key]) continue;
         const field = TEXTURE_SLOT_TO_PATH_FIELD[key];
@@ -1430,120 +1418,34 @@ export function SsbhModelPreviewProvider({
         }
       }
     }
+    setDrawMaterialBindingsByDrawKey(nextBindings);
+
     const totalUniquePaths = pathSlotCounts.size;
     if (totalUniquePaths === 0) {
-      const nextBindings = new Map<string, ResolvedMaterialBinding>();
-      const next = new Map<string, DrawMaterialDataUrls>();
-      for (const d of draws) {
-        const instBundle = bundleForPreviewDraw(d, previewInstances);
-        if (!instBundle) {
-          throw new Error("Missing preview bundle for draw (instance mapping)");
-        }
-        const ctx = materialCtxByInstanceId.get(
-          d.previewInstanceId ?? previewInstances[0]!.id,
-        ) ?? {
-          lookup: buildMatlLookup(instBundle.matl as MatlDataJson | null),
-          refMap: buildTextureRefToPathMap(instBundle),
-        };
-        nextBindings.set(d.key, resolveMaterialBinding(d.materialLabel, ctx.lookup, ctx.refMap));
-        next.set(d.key, createEmptyDrawMaterialDataUrls());
-      }
-      setDrawMaterialBindingsByDrawKey(nextBindings);
-      setDrawMaterialDataUrlsByDrawKey(next);
+      setTextureDataMap(new Map());
       setTextureDecodeProgressBatched(null);
       return;
     }
 
-    const syncBindings = new Map<string, ResolvedMaterialBinding>();
-    const initialUrls = new Map<string, DrawMaterialDataUrls>();
-    for (const d of draws) {
-      const instId = d.previewInstanceId ?? previewInstances[0]?.id ?? null;
-      const ctx = instId ? materialCtxByInstanceId.get(instId) : null;
-      if (!ctx) {
-        throw new Error("Missing preview material context for draw");
-      }
-      syncBindings.set(d.key, resolveMaterialBinding(d.materialLabel, ctx.lookup, ctx.refMap));
-      initialUrls.set(d.key, createEmptyDrawMaterialDataUrls());
-    }
-    setDrawMaterialBindingsByDrawKey(syncBindings);
-    setDrawMaterialDataUrlsByDrawKey(initialUrls);
     setTextureDecodeProgressBatched({ done: 0, total: totalUniquePaths, currentLabel: null });
 
-    let materialFlushRafId: number | null = null;
+    let dataFlushRafId: number | null = null;
 
     (async () => {
       const failedTextures: string[] = [];
-      const pathToDataUrl = new Map<string, string>();
+      const pathToData = new Map<string, NutexbTextureData>();
       const uniquePaths = [...pathSlotCounts.keys()];
-      const versionByPath = new Map<string, { versionId: string; persistEligible: boolean }>();
-      if (uniquePaths.length > 0) {
-        await Promise.all(
-          uniquePaths.map(async (p) => {
-            const source = pathSourceByPath.get(p);
-            try {
-              if (source?.sourceKind === "memory") {
-                if (!source.sourceSessionId) {
-                  throw new Error("Memory texture source is missing a session id.");
-                }
-                const identity = await invoke<{ nutexbSize: number; crc32: number }>(
-                  "fhm2d_memory_nutexb_preview_identity",
-                  {
-                    sessionId: source.sourceSessionId,
-                    virtualPath: p,
-                  },
-                );
-                versionByPath.set(p, {
-                  versionId: makeNutexbVersionId(p, identity.nutexbSize, identity.crc32),
-                  persistEligible: false,
-                });
-                return;
-              }
-              const resolved = await resolveNutexbVersionId(p);
-              versionByPath.set(p, resolved);
-            } catch (e) {
-              failedTextures.push(`${p}: ${String(e)}`);
-            }
-          }),
-        );
-      }
-      if (cancelled) {
-        return;
-      }
 
-      const flushMaterialUrlsToReact = () => {
+      const flushTextureDataToReact = () => {
         if (cancelled) return;
-        setDrawMaterialDataUrlsByDrawKey((prev) => {
-          const nextMap = new Map(prev);
-          for (const d of draws) {
-            const paths = drawPathsByKey.get(d.key);
-            if (!paths) continue;
-            const prevUrls = nextMap.get(d.key) ?? createEmptyDrawMaterialDataUrls();
-            const merged: DrawMaterialDataUrls = { ...prevUrls };
-            let changed = false;
-            for (const { key } of TEXTURE_PREVIEW_SLOT_META) {
-              if (!textureSlotLoadEnabled[key]) continue;
-              const field = TEXTURE_SLOT_TO_PATH_FIELD[key];
-              const pathVal = paths[field];
-              if (!pathVal) continue;
-              const url = pathToDataUrl.get(pathVal) ?? null;
-              if (merged[key] !== url) {
-                merged[key] = url;
-                changed = true;
-              }
-            }
-            if (changed) {
-              nextMap.set(d.key, merged);
-            }
-          }
-          return nextMap;
-        });
+        setTextureDataMap(new Map(pathToData));
       };
 
-      const scheduleMaterialUrlFlush = () => {
-        if (cancelled || materialFlushRafId !== null) return;
-        materialFlushRafId = requestAnimationFrame(() => {
-          materialFlushRafId = null;
-          flushMaterialUrlsToReact();
+      const scheduleTextureDataFlush = () => {
+        if (cancelled || dataFlushRafId !== null) return;
+        dataFlushRafId = requestAnimationFrame(() => {
+          dataFlushRafId = null;
+          flushTextureDataToReact();
         });
       };
 
@@ -1568,27 +1470,19 @@ export function SsbhModelPreviewProvider({
           );
         }
         try {
-          const meta = versionByPath.get(path);
-          if (!meta) {
-            throw new Error("Missing CRC identity for texture path (see earlier errors)");
-          }
           const source = pathSourceByPath.get(path);
-          const { versionId, persistEligible } = meta;
-          const url = await getOrDecodeNutexbPngBlobUrl(versionId, persistEligible, async () => {
-            if (source?.sourceKind === "memory") {
-              if (!source.sourceSessionId) {
-                throw new Error("Memory texture source is missing a session id.");
-              }
-              return invoke<ArrayBuffer | Uint8Array>("fhm2d_memory_nutexb_png_bytes", {
-                sessionId: source.sourceSessionId,
-                virtualPath: path,
-              });
-            }
-            return invoke<ArrayBuffer | Uint8Array>("nutexb_png_bytes", { inputPath: path });
+          const sourceKind = source?.sourceKind === "memory" ? "memory" : "disk";
+          if (sourceKind === "memory" && !source?.sourceSessionId) {
+            throw new Error("Memory texture source is missing a session id.");
+          }
+          const rgba = await decodeSceneNutexbRgba(path, {
+            sessionId: source?.sourceSessionId ?? null,
+            sourceKind,
+            maxDimension: null,
           });
           if (cancelled) return;
-          pathToDataUrl.set(path, url);
-          scheduleMaterialUrlFlush();
+          pathToData.set(path, { kind: "rgba", width: rgba.width, height: rgba.height, rgba: rgba.rgba });
+          scheduleTextureDataFlush();
         } catch (e) {
           failedTextures.push(`${path}: ${String(e)}`);
         } finally {
@@ -1612,11 +1506,11 @@ export function SsbhModelPreviewProvider({
       if (cancelled) {
         return;
       }
-      if (materialFlushRafId !== null) {
-        cancelAnimationFrame(materialFlushRafId);
-        materialFlushRafId = null;
+      if (dataFlushRafId !== null) {
+        cancelAnimationFrame(dataFlushRafId);
+        dataFlushRafId = null;
       }
-      flushMaterialUrlsToReact();
+      flushTextureDataToReact();
       setTextureDecodeProgressBatched(null);
       if (failedTextures.length > 0) {
         const preview = failedTextures.slice(0, 4).join("\n");
@@ -1630,9 +1524,9 @@ export function SsbhModelPreviewProvider({
 
     return () => {
       cancelled = true;
-      if (materialFlushRafId !== null) {
-        cancelAnimationFrame(materialFlushRafId);
-        materialFlushRafId = null;
+      if (dataFlushRafId !== null) {
+        cancelAnimationFrame(dataFlushRafId);
+        dataFlushRafId = null;
       }
     };
   }, [previewInstances, draws, textureSlotLoadEnabled]);
@@ -2295,7 +2189,7 @@ export function SsbhModelPreviewProvider({
       setNormalMapEnabled,
       selectedDebugDrawKey,
       setSelectedDebugDrawKey,
-      drawMaterialDataUrlsByDrawKey,
+      textureDataMap,
       drawMaterialBindingsByDrawKey,
       materialDebugViewMode,
       setMaterialDebugViewMode,
@@ -2424,7 +2318,7 @@ export function SsbhModelPreviewProvider({
       directionalZ,
       normalMapEnabled,
       selectedDebugDrawKey,
-      drawMaterialDataUrlsByDrawKey,
+      textureDataMap,
       drawMaterialBindingsByDrawKey,
       materialDebugViewMode,
       textureFlipY,

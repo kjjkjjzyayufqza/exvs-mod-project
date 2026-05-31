@@ -108,12 +108,11 @@ import {
   type TexturePreviewSlotKey,
 } from "@/components/ssbh-model-preview/meshFromSsbh";
 import {
-  exportMultipleObjectsAsDAE,
-  exportObjectAsDAE,
-  exportSingleStageDae,
-  batchExportStageDae,
+  exportObjectsAsDAEToDirectory,
+  exportObjectsAsFBXToDirectory,
+  exportStageDaeBatchToDirectory,
   importDAEFiles,
-  loadDAEFromPath,
+  loadStaticMeshFromPath,
   type BatchDaeExportEntry,
 } from "./utils/daeExportImport";
 import { buildDaeExportDialogState } from "./utils/daeExportDialogState";
@@ -165,13 +164,18 @@ import {
 } from "./utils/sceneSaveConfirm";
 import { DaeImportConfigModal } from "./components/dae-import/DaeImportConfigModal";
 import type { DaeImportEntry, HavokInstallInfo } from "./components/dae-import/daeImportTypes";
-import { createDefaultDaeImportConfig, sanitizeBaseFilename } from "./components/dae-import/daeImportDefaults";
+import {
+  createDefaultDaeImportConfig,
+  detectStaticMeshImportFormat,
+  sanitizeBaseFilename,
+} from "./components/dae-import/daeImportDefaults";
 import { SceneAssetConfigPanel } from "./components/SceneAssetConfigPanel";
 import { useSceneAssetStore } from "./store/sceneAssetStore";
 import type { HavokMeshData } from "@/utils/havokXmlParser";
 import { parseHavokXML } from "@/utils/havokXmlParser";
 import { CollisionListPanel } from "./components/havok/CollisionListPanel";
 import { HavokCollisionEditorPanel } from "./components/havok/HavokCollisionEditorPanel";
+import { GenerateHktFromModelDialog } from "./components/havok/GenerateHktFromModelDialog";
 import type { HktSimplifyConfig } from "./components/dae-import/daeImportTypes";
 import { DEFAULT_HKT_SIMPLIFY } from "./utils/hktSimplifyUtils";
 import {
@@ -192,6 +196,7 @@ import {
   sceneForgetModel,
   sceneForgetBaseModel,
   sceneBuildImportPreviewBundle,
+  sceneConvertStaticMeshToStageFiles,
   stageLoadSkeleton,
   stageStreamBundles,
   validateNumatbEmptyParams,
@@ -491,6 +496,12 @@ export default function SceneEdit() {
     targets: DaeExportTarget[];
     threeObjects: SceneExportObject[];
   }>({ open: false, targets: [], threeObjects: [] });
+
+  const [genHktFromModel, setGenHktFromModel] = useState<{
+    open: boolean;
+    targetImportId: string | null;
+    targetName: string;
+  }>({ open: false, targetImportId: null, targetName: "" });
 
   const [daeImportEntries, setDaeImportEntries] = useState<DaeImportEntry[]>([]);
   const [showDaeImportModal, setShowDaeImportModal] = useState(false);
@@ -2555,15 +2566,9 @@ export default function SceneEdit() {
   }, [handleClearSelection, handleSelectNode, importedDaeObjects, placementEntries, placementIndexForNodeId, selectedPlacementIdx, subModels]);
 
   const handleImportDae = useCallback(async () => {
-    if (isMemoryImport) {
-      toast.error("Cannot import DAE in memory mode", {
-        description: "Please save to folder first (Save Folder / Save FHM2D), then re-open the stage before importing DAE.",
-      });
-      return;
-    }
     const selected = await open({
       multiple: true,
-      filters: [{ name: "Collada DAE", extensions: ["dae"] }],
+      filters: [{ name: "Static Mesh", extensions: ["dae", "fbx"] }],
       defaultPath: await getStoredDialogDefaultPath(SCENE_IMPORT_DAE_CONFIG_DIALOG_PATH_KEY),
     });
     if (!selected) return;
@@ -2576,12 +2581,16 @@ export default function SceneEdit() {
     const entries: DaeImportEntry[] = paths.map((filePath) => {
       const fileName = filePath.split(/[/\\]/).pop() ?? "model.dae";
       const baseName = sanitizeBaseFilename(fileName);
+      const sourceFormat = detectStaticMeshImportFormat(fileName);
+      const config = createDefaultDaeImportConfig(baseName);
+      config.outputDirectory = stageRoot;
       return {
         importId: `dae_cfg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         fileName,
         filePath,
+        sourceFormat,
         analysis: null,
-        config: createDefaultDaeImportConfig(baseName),
+        config,
         analyzing: true,
         analyzeError: null,
       };
@@ -2592,7 +2601,10 @@ export default function SceneEdit() {
 
     for (let i = 0; i < entries.length; i++) {
       try {
-        const analysis = await invoke("ssbh_analyze_dae", { daePath: paths[i] });
+        const analysis =
+          entries[i].sourceFormat === "fbx"
+            ? await invoke("ssbh_analyze_fbx", { fbxPath: paths[i] })
+            : await invoke("ssbh_analyze_dae", { daePath: paths[i] });
         setDaeImportEntries((prev) =>
           prev.map((e, idx) =>
             idx === i ? { ...e, analysis: analysis as DaeImportEntry["analysis"], analyzing: false } : e,
@@ -2608,10 +2620,53 @@ export default function SceneEdit() {
         );
       }
     }
-  }, [isMemoryImport]);
+  }, [stageRoot]);
 
   const processSsbhSessionImport = useCallback(
     async (entries: DaeImportEntry[]) => {
+      const sessionState = useDaeSsbhSessionStore.getState();
+      const directEntries = entries.filter((entry) => entry.config.directToDisk);
+      const previewEntries = entries.filter((entry) => !entry.config.directToDisk);
+
+      for (const entry of directEntries) {
+        try {
+          if (!entry.config.outputDirectory) {
+            throw new Error("Choose an output directory before converting out-of-scene");
+          }
+          const explicitBaseName = sessionState.outputBaseName.trim();
+          const baseFilename =
+            explicitBaseName && entries.length === 1
+              ? explicitBaseName
+              : sanitizeBaseFilename(entry.fileName);
+          const importConfig = buildSsbhSessionImportConfig(
+            entry.config,
+            sessionState,
+            baseFilename,
+          );
+          const result = await sceneConvertStaticMeshToStageFiles({
+            sourcePath: entry.filePath,
+            outputDir: entry.config.outputDirectory,
+            config: importConfig,
+          });
+          for (const warning of result.warnings) {
+            toast.warning(warning);
+          }
+          toast.success(`Converted ${entry.fileName} to disk`, {
+            description: `${result.filesWritten.length} file(s) written to ${result.modelDir}`,
+          });
+        } catch (err) {
+          toast.error(
+            `Direct convert failed for ${entry.fileName}: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+      }
+
+      if (previewEntries.length === 0) {
+        return;
+      }
+
       let activeSessionId = sceneSessionId;
       if (!activeSessionId) {
         if (stageRoot) {
@@ -2624,17 +2679,19 @@ export default function SceneEdit() {
         }
       }
 
-      const sessionState = useDaeSsbhSessionStore.getState();
       let successCount = 0;
       let failCount = 0;
       let offsetX = 0;
       const spacing = 2;
       const created: ImportedDaeObject[] = [];
 
-      for (const entry of entries) {
+      for (const entry of previewEntries) {
         try {
+          const explicitBaseName = sessionState.outputBaseName.trim();
           const baseFilename =
-            sessionState.outputBaseName.trim() || sanitizeBaseFilename(entry.fileName);
+            explicitBaseName && entries.length === 1
+              ? explicitBaseName
+              : sanitizeBaseFilename(entry.fileName);
           const importConfig = buildSsbhSessionImportConfig(
             entry.config,
             sessionState,
@@ -2698,7 +2755,7 @@ export default function SceneEdit() {
             toast.warning(warning);
           }
 
-          const loaded = await loadDAEFromPath(
+          const loaded = await loadStaticMeshFromPath(
             entry.filePath,
             importConfig.ssbhConfig?.scaleFactor ?? 1,
           );
@@ -2756,7 +2813,7 @@ export default function SceneEdit() {
         exportObjects: viewportRef.current?.getSelectedExportObjects() ?? [],
       });
       if (!payload) {
-        toast.error("This object cannot be exported as DAE");
+        toast.error("This object cannot be exported as a model");
         return false;
       }
       setDaeExportDialog({ open: true, ...payload });
@@ -2768,7 +2825,7 @@ export default function SceneEdit() {
   const handleExportSelectedDae = useCallback(() => {
     const objects = viewportRef.current?.getSelectedExportObjects() ?? [];
     if (objects.length === 0) {
-      toast.error("Select one or more scene objects before exporting DAE");
+      toast.error("Select one or more scene objects before exporting");
       return;
     }
     openDaeExportDialogForNodeIds(objects.map((entry) => entry.name));
@@ -2794,42 +2851,57 @@ export default function SceneEdit() {
     setDaeExportDialog((prev) => ({ ...prev, open: false }));
 
     try {
+      const wantsDae = config.formats.includes("dae");
+      const wantsFbx = config.formats.includes("fbx");
       const ssbhTargets = targets.filter((t) => t.type === "ssbh" && t.rootPath);
       const daeTargets = targets.filter((t) => t.type === "imported-dae");
+      const outputDir = config.outputDirectory;
 
-      if (ssbhTargets.length === 1) {
-        await exportSingleStageDae(ssbhTargets[0].rootPath!, {
-          scaleFactor: config.scaleFactor,
-          upAxis: config.upAxis,
-          exportTextures: config.exportTextures,
-        });
-      } else if (ssbhTargets.length > 1) {
+      if (wantsDae && ssbhTargets.length > 0) {
         const entries: BatchDaeExportEntry[] = ssbhTargets.map((t) => ({
           rootPath: t.rootPath!,
           outputName: t.name,
         }));
-        await batchExportStageDae(entries, {
+        await exportStageDaeBatchToDirectory(entries, outputDir, {
           scaleFactor: config.scaleFactor,
           upAxis: config.upAxis,
           exportTextures: config.exportTextures,
         });
       }
 
-      if (daeTargets.length > 0) {
+      const selectedExportObjects: SceneExportObject[] = targets
+        .map((t) => {
+          const found = threeObjects.find((o) => o.name === t.nodeId);
+          return found ? { object: found.object, name: t.name } : null;
+        })
+        .filter((o): o is SceneExportObject => o !== null);
+
+      if (wantsDae && daeTargets.length > 0) {
         const daeObjects: SceneExportObject[] = daeTargets
           .map((t) => {
             const found = threeObjects.find((o) => o.name === t.nodeId);
             return found ? { object: found.object, name: t.name } : null;
           })
           .filter((o): o is SceneExportObject => o !== null);
-        if (daeObjects.length === 1) {
-          await exportObjectAsDAE(daeObjects[0].object, daeObjects[0].name);
-        } else if (daeObjects.length > 1) {
-          await exportMultipleObjectsAsDAE(daeObjects);
+        if (daeObjects.length > 0) {
+          const exported = await exportObjectsAsDAEToDirectory(daeObjects, outputDir);
+          toast.success(`Exported ${exported.length} DAE file${exported.length === 1 ? "" : "s"}`);
+        }
+      }
+
+      if (wantsFbx) {
+        if (selectedExportObjects.length === 0) {
+          toast.warning("FBX export needs the selected object to be visible in the viewport");
+        } else {
+          const exported = await exportObjectsAsFBXToDirectory(selectedExportObjects, outputDir, {
+            exportTextures: config.exportTextures,
+            upAxis: config.upAxis,
+          });
+          toast.success(`Exported ${exported.length} FBX file${exported.length === 1 ? "" : "s"}`);
         }
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to export DAE");
+      toast.error(err instanceof Error ? err.message : "Failed to export model");
     }
   }, [daeExportDialog]);
 
@@ -3247,6 +3319,48 @@ export default function SceneEdit() {
     [sceneSessionId, subModels, importedDaeObjects],
   );
 
+  // Feature 1: open the new-model HKT window for the replace target. Unlike
+  // handleReplaceHkt (which picks an existing .hkt), this reads a fresh DAE/FBX,
+  // rebuilds a Havok collision, previews it, then replaces the target's HKT.
+  const handleGenerateHktFromModel = useCallback(
+    (importId: string) => {
+      if (!sceneSessionId) return;
+      let resolvedImportId = importId;
+      const isSubModelOrBase = subModels.some((s) => s.folderName === importId) || importId === "base";
+      if (isSubModelOrBase) {
+        resolvedImportId = `${importId}/map_hit.hkt`;
+      }
+      const daeObj = importedDaeObjects.find((o) => o.id === importId);
+      const targetName = daeObj?.name ?? (importId === "base" ? "Base model" : importId);
+      setGenHktFromModel({ open: true, targetImportId: resolvedImportId, targetName });
+    },
+    [sceneSessionId, subModels, importedDaeObjects],
+  );
+
+  const handleGenHktFromModelReplaced = useCallback(
+    async (resolvedImportId: string) => {
+      if (!sceneSessionId) return;
+      const havokResult = await sceneGetHavokMeta(sceneSessionId, resolvedImportId);
+      if (havokResult) {
+        const meshData = parseHavokXML(havokResult.hktXml);
+        setHavokMeshDataMap((prev) => {
+          const next = new Map(prev);
+          next.set(havokResult.sourceId, meshData);
+          return next;
+        });
+        setHavokMetaMap((prev) => {
+          const next = new Map(prev);
+          next.set(havokResult.sourceId, { displayName: havokResult.displayName, objectNodeId: havokResult.objectNodeId });
+          return next;
+        });
+      }
+      useSceneDirtyStore
+        .getState()
+        .markObjectModified(genHktFromModel.targetName || resolvedImportId, "hkt");
+    },
+    [sceneSessionId, genHktFromModel.targetName],
+  );
+
   const handleReorderOutlinerNode = useCallback((activeId: string, overId: string) => {
     useSceneEditorStore.getState().reorderOutlinerNode(activeId, overId);
     useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
@@ -3526,6 +3640,7 @@ export default function SceneEdit() {
                     }}
                     onGenerateHkt={handleGenerateHkt}
                     onReplaceHkt={handleReplaceHkt}
+                    onGenerateHktFromModel={handleGenerateHktFromModel}
                     onReorderRootChild={handleReorderOutlinerNode}
                     onOpenProperties={handleOpenProperties}
                     onExportDae={handleExportDaeFromOutliner}
@@ -3858,6 +3973,14 @@ export default function SceneEdit() {
           onLoad={handleRenameLoad}
           onClose={handleRenameCancel}
         />
+        <GenerateHktFromModelDialog
+          open={genHktFromModel.open}
+          onOpenChange={(open) => setGenHktFromModel((prev) => ({ ...prev, open }))}
+          sessionId={sceneSessionId}
+          targetImportId={genHktFromModel.targetImportId}
+          targetName={genHktFromModel.targetName}
+          onReplaced={handleGenHktFromModelReplaced}
+        />
         <DaeExportDialog
           open={daeExportDialog.open}
           targets={daeExportDialog.targets}
@@ -3917,6 +4040,7 @@ export default function SceneEdit() {
 
               const previewOnly = entriesToProcess.every(
                 (entry) =>
+                  !entry.config.directToDisk &&
                   entry.config.loadToScene &&
                   !entry.config.convertToSsbh &&
                   !entry.config.generateHkt,
@@ -3928,12 +4052,12 @@ export default function SceneEdit() {
                   const SPACING = 2;
                   const created: ImportedDaeObject[] = [];
                   for (const entry of entriesToProcess) {
-                    const loaded = await loadDAEFromPath(entry.filePath);
+                    const loaded = await loadStaticMeshFromPath(entry.filePath);
                     const posX = offsetX;
                     offsetX += loaded.boundingSize.x + SPACING;
                     created.push({
                       id: `dae_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${created.length}`,
-                      name: loaded.fileName.replace(/\.dae$/i, ""),
+                      name: loaded.fileName.replace(/\.(dae|fbx)$/i, ""),
                       sourcePath: loaded.filePath,
                       scene: loaded.scene,
                       transform: { ...DEFAULT_TRANSFORM, posX },
