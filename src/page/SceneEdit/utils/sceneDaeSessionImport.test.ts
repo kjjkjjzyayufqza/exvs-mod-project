@@ -52,6 +52,7 @@ describe("buildSsbhSessionImportConfig", () => {
         outputBaseName: "sample_mesh",
         scaleFactorText: "2",
         upAxis: "z_up",
+        flipUv: true,
         writeNumdlb: true,
         writeNumshb: true,
         writeNusktb: false,
@@ -60,7 +61,7 @@ describe("buildSsbhSessionImportConfig", () => {
         mayaFile: materialProfile,
         nustFile: materialProfile,
         numdlbEntries,
-      },
+      } as Parameters<typeof buildSsbhSessionImportConfig>[1] & { flipUv: boolean },
       "sample_mesh",
     );
 
@@ -73,6 +74,7 @@ describe("buildSsbhSessionImportConfig", () => {
       baseFilename: "sample_mesh",
       scaleFactor: 2,
       upAxis: "z_up",
+      flipUv: true,
       writeNumdlb: true,
       writeNumshb: true,
       writeNusktb: false,

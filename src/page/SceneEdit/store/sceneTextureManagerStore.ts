@@ -25,12 +25,23 @@ export interface RemovedTextureRef {
   nutexbPath: string | null;
 }
 
+const MAX_RECENT_TEXTURE_ENTRY_IDS = 32;
+
+function bumpRecentEntryIds(recentEntryIds: string[], id: string): string[] {
+  return [id, ...recentEntryIds.filter((existingId) => existingId !== id)].slice(
+    0,
+    MAX_RECENT_TEXTURE_ENTRY_IDS,
+  );
+}
+
 interface SceneTextureManagerState {
   entries: TextureManagerEntry[];
   selectedId: string | null;
   searchQuery: string;
   /** Existing stage textures removed in-memory, pending deletion on save. */
   removedExisting: RemovedTextureRef[];
+  /** Recently added/replaced entries, surfaced first in texture suggestion pickers. */
+  recentEntryIds: string[];
 }
 
 interface SceneTextureManagerActions {
@@ -59,10 +70,14 @@ export const useSceneTextureManagerStore = create<SceneTextureManagerStore>(
     selectedId: null,
     searchQuery: "",
     removedExisting: [],
+    recentEntryIds: [],
 
-    setEntries: (entries) => set({ entries }),
+    setEntries: (entries) => set({ entries, recentEntryIds: [] }),
     addEntry: (entry) =>
-      set((state) => ({ entries: [...state.entries, entry] })),
+      set((state) => ({
+        entries: [...state.entries, entry],
+        recentEntryIds: bumpRecentEntryIds(state.recentEntryIds, entry.id),
+      })),
     removeEntry: (id) =>
       set((state) => {
         const target = state.entries.find((e) => e.id === id);
@@ -83,14 +98,21 @@ export const useSceneTextureManagerStore = create<SceneTextureManagerStore>(
                 { filename: target.filename, nutexbPath: target.nutexbPath },
               ]
             : state.removedExisting,
+          recentEntryIds: state.recentEntryIds.filter((existingId) => existingId !== id),
         };
       }),
     replaceEntry: (id, updated) =>
-      set((state) => ({
-        entries: state.entries.map((e) =>
-          e.id === id ? { ...e, ...updated } : e
-        ),
-      })),
+      set((state) => {
+        const hasMatch = state.entries.some((entry) => entry.id === id);
+        return {
+          entries: state.entries.map((e) =>
+            e.id === id ? { ...e, ...updated } : e
+          ),
+          recentEntryIds: hasMatch
+            ? bumpRecentEntryIds(state.recentEntryIds, id)
+            : state.recentEntryIds,
+        };
+      }),
     setSelectedId: (id) => set({ selectedId: id }),
     setSearchQuery: (query) => set({ searchQuery: query }),
     setThumbnail: (id, dataUrl) =>
@@ -111,9 +133,16 @@ export const useSceneTextureManagerStore = create<SceneTextureManagerStore>(
           e.status === "added" ? { ...e, status: "existing" } : e
         ),
         removedExisting: [],
+        recentEntryIds: [],
       })),
     clear: () =>
-      set({ entries: [], selectedId: null, searchQuery: "", removedExisting: [] }),
+      set({
+        entries: [],
+        selectedId: null,
+        searchQuery: "",
+        removedExisting: [],
+        recentEntryIds: [],
+      }),
   })
 );
 

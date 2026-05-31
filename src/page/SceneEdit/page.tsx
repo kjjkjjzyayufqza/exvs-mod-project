@@ -136,6 +136,10 @@ import {
   type ObjectTextureInventory,
   type ObjectTextureLoadState,
 } from "./utils/sceneTextureInventory";
+import {
+  collectSceneTextureManagerEntries,
+  listStageTextureFilePaths,
+} from "./utils/sceneTextureManagerEntries";
 import { useConfigStore } from "@/store/configStore";
 import {
   DEFAULT_SCENE_GIZMO_SIZE,
@@ -148,7 +152,7 @@ import {
   SCENE_SAVE_FHM2D_DIALOG_PATH_KEY,
 } from "./utils/sceneEditorSettings";
 import { useSceneDirtyStore } from "./store/sceneDirtyStore";
-import { useSceneTextureManagerStore, type TextureManagerEntry } from "./store/sceneTextureManagerStore";
+import { useSceneTextureManagerStore } from "./store/sceneTextureManagerStore";
 import { executeSaveFolderPipeline } from "./utils/sceneSaveFolderPipeline";
 import { executeSaveFhm2dPipeline } from "./utils/sceneSaveFhm2dPipeline";
 import { SaveProgressDialog, type SaveStepInfo } from "./components/SaveProgressDialog";
@@ -313,54 +317,6 @@ function ResetIconButton({ onClick, label, disabled }: { onClick: () => void; la
       <TooltipContent side="bottom" className="text-[10px]">{label}</TooltipContent>
     </Tooltip>
   );
-}
-
-function collectExistingNutexbEntries(
-  baseModel: SsbhModelPreviewBundle | null,
-  subModels: Array<{ folderName: string; bundle: SsbhModelPreviewBundle }>,
-): TextureManagerEntry[] {
-  const seen = new Map<string, TextureManagerEntry>();
-  const processBundle = (bundle: SsbhModelPreviewBundle, objectLabel: string) => {
-    // Build a map from nutexbPath → display name using textureResolve
-    const pathToName = new Map<string, string>();
-    for (const tr of bundle.textureResolve ?? []) {
-      if (tr.nutexbPath) {
-        const ref = tr.reference?.trim().replace(/\\/g, "/").split("/").pop() ?? "";
-        const name = ref ? (ref.toLowerCase().endsWith(".nutexb") ? ref : `${ref}.nutexb`) : "";
-        if (name) pathToName.set(tr.nutexbPath, name);
-      }
-    }
-
-    for (const path of bundle.resolvedNutexbPaths) {
-      const filename = pathToName.get(path) ?? path.split(/[/\\]/).pop() ?? path;
-      const key = filename.toLowerCase();
-      if (seen.has(key)) {
-        const existing = seen.get(key)!;
-        if (!existing.referencedBy.includes(objectLabel)) {
-          existing.referencedBy.push(objectLabel);
-        }
-      } else {
-        seen.set(key, {
-          id: `existing_${key}`,
-          filename,
-          status: "existing",
-          format: "unknown",
-          width: 0,
-          height: 0,
-          sizeBytes: 0,
-          referencedBy: [objectLabel],
-          thumbnailDataUrl: null,
-          nutexbPath: path,
-          sourceImagePath: null,
-        });
-      }
-    }
-  };
-  if (baseModel) processBundle(baseModel, "base");
-  for (const sub of subModels) {
-    processBundle(sub.bundle, sub.folderName);
-  }
-  return Array.from(seen.values());
 }
 
 export default function SceneEdit() {
@@ -957,7 +913,19 @@ export default function SceneEdit() {
   );
 
   const applyBundle = useCallback(
-    (path: string, bundle: StageBundleResponse, options: { showToast?: boolean } = {}) => {
+    async (path: string, bundle: StageBundleResponse, options: { showToast?: boolean } = {}) => {
+      let sharedTexturePaths: string[] = [];
+      try {
+        sharedTexturePaths = await listStageTextureFilePaths(path);
+      } catch (error) {
+        console.warn("[SceneEdit] Failed to list shared stage textures:", error);
+      }
+      const texEntries = collectSceneTextureManagerEntries(
+        bundle.baseModel,
+        bundle.subModels,
+        sharedTexturePaths,
+      );
+
       startTransition(() => {
         const folderName =
           path.split(/[/\\]/).filter(Boolean).pop() ?? "stage";
@@ -1001,8 +969,7 @@ export default function SceneEdit() {
         setSelectedNodeIdRaw(null);
         setSelectedPlacementIdxRaw(null);
         useSceneEditorStore.getState().deselectAll();
-        // Populate Texture Manager with existing stage nutexb entries
-        const texEntries = collectExistingNutexbEntries(bundle.baseModel, bundle.subModels);
+        // Show both referenced textures and extra files already present in textures/.
         useSceneTextureManagerStore.getState().setEntries(texEntries);
       });
 
@@ -1022,7 +989,14 @@ export default function SceneEdit() {
   );
 
   const applySkeleton = useCallback(
-    (path: string, skeleton: StageSkeleton) => {
+    async (path: string, skeleton: StageSkeleton) => {
+      let sharedTexturePaths: string[] = [];
+      try {
+        sharedTexturePaths = await listStageTextureFilePaths(path);
+      } catch (error) {
+        console.warn("[SceneEdit] Failed to list shared stage textures:", error);
+      }
+
       startTransition(() => {
         const folderName =
           path.split(/[/\\]/).filter(Boolean).pop() ?? "stage";
@@ -1078,6 +1052,9 @@ export default function SceneEdit() {
         setSelectedNodeIdRaw(null);
         setSelectedPlacementIdxRaw(null);
         useSceneEditorStore.getState().deselectAll();
+        useSceneTextureManagerStore.getState().setEntries(
+          collectSceneTextureManagerEntries(null, [], sharedTexturePaths),
+        );
       });
 
       if (skeleton.warnings.length > 0) {
@@ -1157,7 +1134,7 @@ export default function SceneEdit() {
       const bundle = await invoke<StageBundleResponse>("load_stage_bundle", {
         stageRoot,
       });
-      applyBundle(stageRoot, bundle);
+      await applyBundle(stageRoot, bundle);
 
       sceneOpenFolder(stageRoot).then(async (result) => {
         setSceneSessionId(result.sessionId);
@@ -1347,7 +1324,7 @@ export default function SceneEdit() {
       if (result.sessionId) {
         setSessionId(result.sessionId);
       }
-      applyBundle("memory://stage", result.bundle);
+      await applyBundle("memory://stage", result.bundle);
 
       // Load HKT collision data from memory session
       if (result.sessionId) {
@@ -1506,7 +1483,7 @@ export default function SceneEdit() {
       }
 
       if (result.hasStructuralChanges && result.reloadedBundle) {
-        applyBundle(stageRoot, result.reloadedBundle as any, { showToast: false });
+        await applyBundle(stageRoot, result.reloadedBundle as any, { showToast: false });
       } else if (!result.hasStructuralChanges) {
         // Non-structural save: in-memory state is already correct, just update baseline snapshot
         initialSnapshotRef.current = {
@@ -1597,7 +1574,7 @@ export default function SceneEdit() {
       }
 
       if (result.hasStructuralChanges && result.reloadedBundle) {
-        applyBundle(stageRoot, result.reloadedBundle as any, { showToast: false });
+        await applyBundle(stageRoot, result.reloadedBundle as any, { showToast: false });
       } else if (!result.hasStructuralChanges) {
         initialSnapshotRef.current = {
           graphicParams: graphicParams.map((p) => ({ ...p })),

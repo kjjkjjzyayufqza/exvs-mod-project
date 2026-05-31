@@ -154,6 +154,18 @@ export function DaeImportSsbhFullPanel({ analysis, sourcePath, stageRoot }: DaeI
               </select>
             </div>
           </div>
+          <label className="md:col-span-2 flex cursor-pointer items-start gap-2 rounded-md border border-dashed px-3 py-2 text-[11px]">
+            <Checkbox
+              checked={session.flipUv}
+              onCheckedChange={(checked) => session.setFlipUv(checked === true)}
+            />
+            <span className="space-y-0.5">
+              <span className="block font-medium text-foreground">Flip UV (V)</span>
+              <span className="block text-[10px] text-muted-foreground">
+                Invert the V coordinate during SSBH conversion.
+              </span>
+            </span>
+          </label>
         </div>
       </DaeImportPanelSection>
 

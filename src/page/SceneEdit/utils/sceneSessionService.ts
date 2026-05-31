@@ -37,6 +37,7 @@ export interface SsbhConvertConfig {
   baseFilename: string;
   scaleFactor: number;
   upAxis: string;
+  flipUv?: boolean;
   writeNumdlb: boolean;
   writeNumshb: boolean;
   writeNusktb: boolean;
@@ -423,6 +424,7 @@ export function mapDaeImportConfigToBackend(config: DaeImportConfig): ImportConf
           baseFilename: config.ssbhConfig.baseFilename,
           scaleFactor: config.ssbhConfig.scaleFactor,
           upAxis: config.ssbhConfig.upAxis,
+          flipUv: config.ssbhConfig.flipUv ?? false,
           writeNumdlb: config.convertToSsbh && config.ssbhConfig.writeNumdlb,
           writeNumshb: config.convertToSsbh && config.ssbhConfig.writeNumshb,
           writeNusktb: config.convertToSsbh && config.ssbhConfig.writeNusktb,

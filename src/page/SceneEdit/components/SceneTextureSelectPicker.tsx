@@ -9,6 +9,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronsUpDown } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -33,6 +34,59 @@ interface SceneTextureSelectPickerProps {
   onChange: (basename: string) => void;
   disabled?: boolean;
   className?: string;
+}
+
+function stripNutexbExtension(value: string): string {
+  return value.replace(/\.nutexb$/i, "");
+}
+
+function normalizeTextureBasename(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const filename = trimmed.replace(/\\/g, "/").split("/").pop() ?? trimmed;
+  return stripNutexbExtension(filename);
+}
+
+function buildOrderedTextureOptions(
+  entries: Array<{ id: string; filename: string; referencedBy?: string[] }>,
+  recentEntryIds: string[],
+  currentValue: string,
+): string[] {
+  const entryNameById = new Map(
+    entries.map((entry) => [entry.id, stripNutexbExtension(entry.filename)]),
+  );
+  const normalizedCurrentValue = normalizeTextureBasename(currentValue).toLowerCase();
+  const currentEntryName =
+    entries.find(
+      (entry) =>
+        stripNutexbExtension(entry.filename).toLowerCase() === normalizedCurrentValue,
+    )?.filename ?? null;
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+
+  const pushOption = (option: string | null | undefined) => {
+    const trimmed = option?.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    ordered.push(trimmed);
+  };
+
+  pushOption(currentEntryName ? stripNutexbExtension(currentEntryName) : null);
+  for (const id of recentEntryIds) {
+    pushOption(entryNameById.get(id));
+  }
+  for (const entry of entries) {
+    if ((entry.referencedBy?.length ?? 0) !== 0) continue;
+    pushOption(stripNutexbExtension(entry.filename));
+  }
+  for (const entry of entries) {
+    if ((entry.referencedBy?.length ?? 0) === 0) continue;
+    pushOption(stripNutexbExtension(entry.filename));
+  }
+
+  return ordered;
 }
 
 function measureMenuPosition(anchor: HTMLElement): MenuPosition {
@@ -68,7 +122,12 @@ export function SceneTextureSelectPicker({
   const inputId = `${instanceId}-texture-input`;
   const anchorRef = useRef<HTMLDivElement>(null);
 
-  const entries = useSceneTextureManagerStore((s) => s.entries);
+  const { entries, recentEntryIds } = useSceneTextureManagerStore(
+    useShallow((state) => ({
+      entries: state.entries,
+      recentEntryIds: state.recentEntryIds,
+    })),
+  );
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState(value);
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
@@ -99,21 +158,26 @@ export function SceneTextureSelectPicker({
   }, [open, inputValue]);
 
   const textureOptions = useMemo(
-    () => entries.map((entry) => entry.filename.replace(/\.nutexb$/i, "")),
-    [entries],
+    () => buildOrderedTextureOptions(entries, recentEntryIds, value),
+    [entries, recentEntryIds, value],
+  );
+
+  const normalizedQuery = useMemo(
+    () => normalizeTextureBasename(deferredQuery),
+    [deferredQuery],
   );
 
   const filteredOptions = useMemo(() => {
-    const query = deferredQuery.trim().toLowerCase();
+    const query = normalizedQuery.toLowerCase();
     if (!query) {
       return textureOptions.slice(0, MAX_OPTIONS_WITHOUT_QUERY);
     }
     return textureOptions
       .filter((filename) => filename.toLowerCase().includes(query))
       .slice(0, MAX_OPTIONS_FILTERED);
-  }, [textureOptions, deferredQuery]);
+  }, [textureOptions, normalizedQuery]);
 
-  const queryTrim = deferredQuery.trim().toLowerCase();
+  const queryTrim = normalizedQuery.toLowerCase();
   const filteredTruncated = useMemo(() => {
     if (!queryTrim) {
       return textureOptions.length > MAX_OPTIONS_WITHOUT_QUERY;
@@ -133,7 +197,7 @@ export function SceneTextureSelectPicker({
   }, [textureOptions, queryTrim]);
 
   const commitValue = (next: string) => {
-    const stripped = next.replace(/\.nutexb$/i, "");
+    const stripped = normalizeTextureBasename(next);
     setInputValue(stripped);
     onChange(stripped);
   };
@@ -152,12 +216,12 @@ export function SceneTextureSelectPicker({
       ? createPortal(
           <>
             <div
-              className="fixed inset-0 z-[9999]"
+              className="fixed inset-0 z-9999"
               aria-hidden
               onMouseDown={() => setOpen(false)}
             />
             <div
-              className="fixed z-[10000] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md"
+              className="fixed z-10000 overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md"
               style={{
                 top: menuPosition.top,
                 left: menuPosition.left,
@@ -186,7 +250,7 @@ export function SceneTextureSelectPicker({
 
                   {filteredOptions.map((filename) => {
                     const selected =
-                      filename.toLowerCase() === inputValue.trim().toLowerCase();
+                      filename.toLowerCase() === normalizeTextureBasename(inputValue).toLowerCase();
                     return (
                       <button
                         key={filename}
@@ -263,8 +327,8 @@ export function SceneTextureSelectPicker({
           onChange={(event) => setInputOnly(event.target.value)}
           onBlur={() => {
             const trimmed = inputValue.trim();
-            if (trimmed !== value) {
-              onChange(trimmed);
+            if (normalizeTextureBasename(trimmed) !== normalizeTextureBasename(value)) {
+              commitValue(trimmed);
             }
           }}
           onKeyDown={(event) => {

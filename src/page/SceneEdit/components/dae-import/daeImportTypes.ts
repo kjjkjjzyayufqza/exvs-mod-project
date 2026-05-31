@@ -10,6 +10,7 @@ export interface SsbhImportConfig {
   baseFilename: string;
   scaleFactor: number;
   upAxis: SsbhDaeUpAxis;
+  flipUv?: boolean;
   writeNumdlb: boolean;
   writeNumshb: boolean;
   writeNusktb: boolean;

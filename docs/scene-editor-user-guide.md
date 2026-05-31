@@ -130,7 +130,7 @@ Right-click anywhere in the 3D viewport to open the context menu:
    |--------|-------------|
    | **Load to scene** | Preview the DAE in the 3D viewport (visual only) |
    | **Convert to SSBH** | Convert DAE to game-ready binary format (numdlb, numshb, nusktb, numatb) |
-   | **Generate HKT** | Generate Havok collision data (requires Havok SDK installed) |
+   | **Generate HKT** | Generate Havok collision data (requires Havok SDK installed, off by default) |
 
 4. When **Convert to SSBH** is checked, additional settings appear:
 
@@ -139,6 +139,7 @@ Right-click anywhere in the 3D viewport to open the context menu:
    | Base Filename | Name prefix for output files |
    | Scale Factor | Scale multiplier (default: 1.0) |
    | Up Axis | Y-Up or Z-Up coordinate system |
+   | Flip UV (V) | Invert the V texture coordinate during SSBH conversion |
    | Write numdlb | Model definition binary |
    | Write numshb | Mesh data binary |
    | Write nusktb | Skeleton binary |

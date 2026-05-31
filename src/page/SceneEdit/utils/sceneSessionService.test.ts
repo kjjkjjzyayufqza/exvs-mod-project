@@ -15,6 +15,7 @@ function makeDefaultDaeImportConfig(): DaeImportConfig {
       baseFilename: "model",
       scaleFactor: 1.0,
       upAxis: "y_up",
+      flipUv: false,
       writeNumdlb: true,
       writeNumshb: true,
       writeNusktb: true,
@@ -54,6 +55,7 @@ describe("sceneSessionService", () => {
       expect(result.ssbhConfig!.baseFilename).toBe("custom_model");
       expect(result.ssbhConfig!.scaleFactor).toBe(2.5);
       expect(result.ssbhConfig!.upAxis).toBe("z_up");
+      expect(result.ssbhConfig!.flipUv).toBe(false);
       expect(result.ssbhConfig!.writeNusktb).toBe(false);
       expect(result.ssbhConfig!.writeNumdlb).toBe(true);
     });
@@ -219,6 +221,7 @@ describe("sceneSessionService", () => {
           baseFilename: "backpack_up",
           scaleFactor: 1.0,
           upAxis: "y_up",
+          flipUv: false,
           writeNumdlb: true,
           writeNumshb: true,
           writeNusktb: true,

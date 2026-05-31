@@ -8,6 +8,7 @@ export function createDefaultSsbhConfig(
     baseFilename,
     scaleFactor: 1.0,
     upAxis: "y_up",
+    flipUv: false,
     writeNumdlb: true,
     writeNumshb: true,
     writeNusktb: true,
@@ -24,7 +25,7 @@ export function createDefaultDaeImportConfig(
   return {
     loadToScene: true,
     convertToSsbh: true,
-    generateHkt: true,
+    generateHkt: false,
     directToDisk: false,
     outputDirectory: null,
     hktSimplify: { ...DEFAULT_HKT_SIMPLIFY },

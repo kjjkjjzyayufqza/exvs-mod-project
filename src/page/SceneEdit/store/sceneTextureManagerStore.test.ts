@@ -34,6 +34,7 @@ describe("sceneTextureManagerStore", () => {
     expect(state.entries).toEqual([]);
     expect(state.selectedId).toBeNull();
     expect(state.searchQuery).toBe("");
+    expect(state.recentEntryIds).toEqual([]);
   });
 
   it("setEntries sets entries array", () => {
@@ -52,6 +53,14 @@ describe("sceneTextureManagerStore", () => {
     expect(ids).toEqual(["a", "b"]);
   });
 
+  it("tracks recently edited entries for picker prioritization", () => {
+    const state = useSceneTextureManagerStore.getState();
+    state.addEntry(makeEntry({ id: "a" }));
+    state.addEntry(makeEntry({ id: "b" }));
+    state.replaceEntry("a", { format: "BC5_UNORM" });
+    expect(useSceneTextureManagerStore.getState().recentEntryIds).toEqual(["a", "b"]);
+  });
+
   it("removeEntry removes by id", () => {
     useSceneTextureManagerStore
       .getState()
@@ -64,8 +73,10 @@ describe("sceneTextureManagerStore", () => {
   it("removeEntry clears selectedId if removed entry was selected", () => {
     useSceneTextureManagerStore.getState().setEntries([makeEntry({ id: "a" })]);
     useSceneTextureManagerStore.getState().setSelectedId("a");
+    useSceneTextureManagerStore.getState().replaceEntry("a", { format: "BC5_UNORM" });
     useSceneTextureManagerStore.getState().removeEntry("a");
     expect(useSceneTextureManagerStore.getState().selectedId).toBeNull();
+    expect(useSceneTextureManagerStore.getState().recentEntryIds).toEqual([]);
   });
 
   it("removeEntry keeps selectedId if different entry removed", () => {
@@ -173,6 +184,7 @@ describe("sceneTextureManagerStore", () => {
     const state = useSceneTextureManagerStore.getState();
     expect(state.entries.every((e) => e.status === "existing")).toBe(true);
     expect(state.removedExisting).toEqual([]);
+    expect(state.recentEntryIds).toEqual([]);
   });
 });
 

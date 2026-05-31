@@ -77,6 +77,7 @@ export function buildSsbhSessionImportConfig(
     | "outputBaseName"
     | "scaleFactorText"
     | "upAxis"
+    | "flipUv"
     | "writeNumdlb"
     | "writeNumshb"
     | "writeNusktb"
@@ -98,6 +99,7 @@ export function buildSsbhSessionImportConfig(
       baseFilename,
       scaleFactor: Number.isFinite(scaleFactor) && scaleFactor > 0 ? scaleFactor : 1,
       upAxis: sessionState.upAxis,
+      flipUv: sessionState.flipUv,
       writeNumdlb: sessionState.writeNumdlb,
       writeNumshb: sessionState.writeNumshb,
       writeNusktb: sessionState.writeNusktb,

@@ -1,0 +1,5 @@
+- [completed] Trace `Import Static Mesh` UI/config/backend path for `flipUv` and `generateHkt` defaults.
+- [completed] Add failing tests for `generateHkt` default-off and `flipUv` propagation.
+- [completed] Implement `flipUv` UI plus config/backend plumbing.
+- [completed] Run focused verification and lint on touched files.
+- [completed] Update session notes with findings and results.

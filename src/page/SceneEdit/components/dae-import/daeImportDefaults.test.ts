@@ -8,10 +8,11 @@ import {
 describe("daeImportDefaults", () => {
   it("creates config without manual HKT settings", () => {
     const config = createDefaultDaeImportConfig("model_a");
-    expect(config.generateHkt).toBe(true);
+    expect(config.generateHkt).toBe(false);
     expect(config.directToDisk).toBe(false);
     expect(config.outputDirectory).toBeNull();
     expect(config.ssbhConfig.baseFilename).toBe("model_a");
+    expect((config.ssbhConfig as { flipUv?: boolean }).flipUv).toBe(false);
     expect("hktConfig" in config).toBe(false);
   });
 
