@@ -200,13 +200,14 @@ import {
   sceneForgetModel,
   sceneForgetBaseModel,
   sceneBuildImportPreviewBundle,
-  sceneConvertStaticMeshToStageFiles,
+  sceneConvertStaticMeshToStageFilesWithProgress,
   stageLoadSkeleton,
   stageStreamBundles,
   validateNumatbEmptyParams,
   type StageSkeleton,
   type StageStreamChunk,
   type ExvsStageValidationError,
+  type StaticMeshImportProgress,
 } from "./utils/sceneSessionService";
 import { useSceneValidationStore } from "./store/sceneValidationStore";
 import { buildErrorFolderCounts } from "./utils/sceneValidationErrors";
@@ -249,6 +250,139 @@ interface StageBundleResponse {
     rawFields: string[];
   }>;
   warnings: string[];
+}
+
+type ImportProgressUpdate = {
+  step: string;
+  label: string;
+  progress: number;
+  detail?: string;
+  tone?: ImportStep["tone"];
+};
+
+function formatImportBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"] as const;
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex++;
+  }
+  return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function createStaticMeshImportSteps(fileName: string, directToDisk: boolean): ImportStep[] {
+  const steps: ImportStep[] = [
+    { step: "read", label: `Preparing ${fileName}...`, status: "active" },
+    { step: "check", label: "Checking file size and IPC path...", status: "pending" },
+    { step: "convert", label: "Waiting for Rust SSBH conversion...", status: "pending" },
+    { step: "artifacts", label: "Preparing converted SSBH artifacts...", status: "pending" },
+  ];
+  if (directToDisk) {
+    steps.push({ step: "write", label: "Writing converted files to disk...", status: "pending" });
+    steps.push({ step: "hkt", label: "Generating HKT collision...", status: "pending" });
+  } else {
+    steps.push({ step: "hkt", label: "Generating HKT collision...", status: "pending" });
+    steps.push({ step: "preview", label: "Building viewport preview...", status: "pending" });
+  }
+  steps.push({ step: "done", label: "Completing static mesh import...", status: "pending" });
+  return steps;
+}
+
+function staticMeshPhaseToStep(phase: string): string {
+  switch (phase) {
+    case "read":
+      return "read";
+    case "collisionCheck":
+      return "hkt";
+    case "artifacts":
+      return "artifacts";
+    default:
+      return "check";
+  }
+}
+
+function mapStaticMeshProgress(chunk: StaticMeshImportProgress): ImportProgressUpdate {
+  switch (chunk.kind) {
+    case "status":
+      return {
+        step: staticMeshPhaseToStep(chunk.phase),
+        label: chunk.label,
+        progress: chunk.phase === "artifacts" ? 68 : chunk.phase === "collisionCheck" ? 22 : 8,
+      };
+    case "sourceFile":
+      return {
+        step: "check",
+        label: `Checked ${chunk.format} source size`,
+        detail: `${formatImportBytes(chunk.bytes)} - ${chunk.path}`,
+        progress: 12,
+      };
+    case "ipcWarning":
+      return {
+        step: "check",
+        label: "Large file / IPC payload warning",
+        detail: `${chunk.message} (${formatImportBytes(chunk.bytes)})`,
+        progress: 14,
+        tone: "warning",
+      };
+    case "convertStarted":
+      return {
+        step: "convert",
+        label: `Converting ${chunk.format} to SSBH in Rust...`,
+        detail: `${chunk.sourceName} -> ${chunk.baseFilename}`,
+        progress: 35,
+      };
+    case "convertFinished":
+      return {
+        step: "artifacts",
+        label: "SSBH conversion finished",
+        detail: `${chunk.fileCount} artifact(s), ${formatImportBytes(chunk.totalBytes)}`,
+        progress: 66,
+      };
+    case "writeStarted":
+      return {
+        step: "write",
+        label: "Writing converted files directly to disk...",
+        detail: `${chunk.outputDir}\\${chunk.baseFilename}`,
+        progress: 72,
+      };
+    case "writeFinished":
+      return {
+        step: "write",
+        label: "Converted files written",
+        detail: `${chunk.fileCount} file(s) written`,
+        progress: 82,
+      };
+    case "hktStarted":
+      return {
+        step: "hkt",
+        label: "Generating HKT collision in Rust...",
+        detail: chunk.sourceName,
+        progress: 86,
+      };
+    case "hktFinished":
+      return {
+        step: "hkt",
+        label: "HKT collision generated",
+        detail: `${formatImportBytes(chunk.bytes)}, ${chunk.triangleCount} triangles`,
+        progress: 94,
+      };
+    case "complete":
+      return {
+        step: "artifacts",
+        label: "Rust conversion command completed",
+        progress: 90,
+      };
+    case "error":
+      return {
+        step: "convert",
+        label: "Static mesh conversion failed",
+        detail: chunk.message,
+        progress: 100,
+        tone: "warning",
+      };
+  }
 }
 
 const SCENE_EDIT_PANEL_IDS = [
@@ -509,6 +643,57 @@ export default function SceneEdit() {
       });
     },
     []
+  );
+
+  const staticMeshProgressActiveRef = useRef(false);
+
+  const applyStaticMeshProgressUpdate = useCallback((update: ImportProgressUpdate) => {
+    setImportProgress((prev) => {
+      const hasStep = prev.steps.some((step) => step.step === update.step);
+      const steps = hasStep
+        ? prev.steps
+        : [
+            ...prev.steps,
+            {
+              step: update.step,
+              label: update.label,
+              status: "pending" as const,
+            },
+          ];
+      return {
+        open: true,
+        progress: update.progress,
+        steps: steps.map((step): ImportStep => {
+          if (step.step === update.step) {
+            return {
+              ...step,
+              label: update.label,
+              detail: update.detail,
+              tone: update.tone ?? "default",
+              status: update.step === "done" ? "done" : "active",
+            };
+          }
+          if (step.status === "active") {
+            return { ...step, status: "done" };
+          }
+          return step;
+        }),
+      };
+    });
+  }, []);
+
+  const handleStaticMeshProgress = useCallback(
+    (chunk: StaticMeshImportProgress) => {
+      if (!staticMeshProgressActiveRef.current) {
+        return;
+      }
+      const update = mapStaticMeshProgress(chunk);
+      applyStaticMeshProgressUpdate(update);
+      if (chunk.kind === "ipcWarning") {
+        toast.warning("Large static mesh import", { description: chunk.message });
+      }
+    },
+    [applyStaticMeshProgressUpdate],
   );
 
   const unlistenRef = useRef<UnlistenFn | null>(null);
@@ -2610,6 +2795,12 @@ export default function SceneEdit() {
           if (!entry.config.outputDirectory) {
             throw new Error("Choose an output directory before converting out-of-scene");
           }
+          staticMeshProgressActiveRef.current = true;
+          setImportProgress({
+            open: true,
+            progress: 0,
+            steps: createStaticMeshImportSteps(entry.fileName, true),
+          });
           const explicitBaseName = sessionState.outputBaseName.trim();
           const baseFilename =
             explicitBaseName && entries.length === 1
@@ -2620,10 +2811,18 @@ export default function SceneEdit() {
             sessionState,
             baseFilename,
           );
-          const result = await sceneConvertStaticMeshToStageFiles({
-            sourcePath: entry.filePath,
-            outputDir: entry.config.outputDirectory,
-            config: importConfig,
+          const result = await sceneConvertStaticMeshToStageFilesWithProgress(
+            {
+              sourcePath: entry.filePath,
+              outputDir: entry.config.outputDirectory,
+              config: importConfig,
+            },
+            handleStaticMeshProgress,
+          );
+          applyStaticMeshProgressUpdate({
+            step: "done",
+            label: "Direct-to-disk static mesh conversion completed",
+            progress: 100,
           });
           for (const warning of result.warnings) {
             toast.warning(warning);
@@ -2637,6 +2836,9 @@ export default function SceneEdit() {
               err instanceof Error ? err.message : String(err)
             }`,
           );
+        } finally {
+          staticMeshProgressActiveRef.current = false;
+          setImportProgress((prev) => ({ ...prev, open: false }));
         }
       }
 
@@ -2664,6 +2866,12 @@ export default function SceneEdit() {
 
       for (const entry of previewEntries) {
         try {
+          staticMeshProgressActiveRef.current = true;
+          setImportProgress({
+            open: true,
+            progress: 0,
+            steps: createStaticMeshImportSteps(entry.fileName, false),
+          });
           const explicitBaseName = sessionState.outputBaseName.trim();
           const baseFilename =
             explicitBaseName && entries.length === 1
@@ -2679,11 +2887,18 @@ export default function SceneEdit() {
             filePath: entry.filePath,
             name: baseFilename,
             importConfig,
+            onProgress: handleStaticMeshProgress,
           });
           if (!result.ssbhGenerated) {
             throw new Error("SSBH conversion did not produce in-memory artifacts");
           }
 
+          applyStaticMeshProgressUpdate({
+            step: "preview",
+            label: "Receiving viewport preview bundle from Rust...",
+            detail: "Large mesh preview data may take time to cross IPC.",
+            progress: 94,
+          });
           const ssbhBundle = await sceneBuildImportPreviewBundle({
             sessionId: activeSessionId,
             importId: result.importId,
@@ -2732,6 +2947,11 @@ export default function SceneEdit() {
             toast.warning(warning);
           }
 
+          applyStaticMeshProgressUpdate({
+            step: "preview",
+            label: "Loading static mesh into viewport...",
+            progress: 97,
+          });
           const loaded = await loadStaticMeshFromPath(
             entry.filePath,
             importConfig.ssbhConfig?.scaleFactor ?? 1,
@@ -2748,12 +2968,20 @@ export default function SceneEdit() {
             sessionImportId: result.importId,
             hktSimplify: { ...entry.config.hktSimplify },
           });
+          applyStaticMeshProgressUpdate({
+            step: "done",
+            label: "Static mesh preview import completed",
+            progress: 100,
+          });
           successCount++;
         } catch (err) {
           failCount++;
           toast.error(
             `Convert failed for ${entry.fileName}: ${err instanceof Error ? err.message : String(err)}`,
           );
+        } finally {
+          staticMeshProgressActiveRef.current = false;
+          setImportProgress((prev) => ({ ...prev, open: false }));
         }
       }
 
@@ -2772,7 +3000,7 @@ export default function SceneEdit() {
         toast.warning(`Converted ${successCount}, failed ${failCount}`);
       }
     },
-    [sceneSessionId, stageRoot, handleSelectNode],
+    [sceneSessionId, stageRoot, handleSelectNode, handleStaticMeshProgress, applyStaticMeshProgressUpdate],
   );
 
   const importedDaeIdSet = useMemo(

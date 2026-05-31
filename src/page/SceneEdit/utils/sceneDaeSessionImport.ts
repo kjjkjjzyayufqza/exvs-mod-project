@@ -6,10 +6,13 @@ import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
 import {
   sceneConfigureImport,
   sceneExecuteImport,
+  sceneExecuteImportWithProgress,
   sceneGetImportConfig,
   sceneImportDaeFromPath,
+  sceneImportDaeFromPathWithProgress,
   type ImportConfig,
   type ImportResult,
+  type StaticMeshImportProgress,
 } from "./sceneSessionService";
 
 /**
@@ -119,10 +122,20 @@ export async function importDaeThroughSceneSession(params: {
   filePath: string;
   name: string;
   importConfig: ImportConfig;
+  onProgress?: (chunk: StaticMeshImportProgress) => void;
 }): Promise<ImportResult> {
-  const importId = await sceneImportDaeFromPath(params.sessionId, params.filePath, params.name);
+  const importId = params.onProgress
+    ? await sceneImportDaeFromPathWithProgress(
+        params.sessionId,
+        params.filePath,
+        params.name,
+        params.onProgress,
+      )
+    : await sceneImportDaeFromPath(params.sessionId, params.filePath, params.name);
   await sceneConfigureImport(params.sessionId, importId, params.importConfig);
-  return sceneExecuteImport(params.sessionId, importId);
+  return params.onProgress
+    ? sceneExecuteImportWithProgress(params.sessionId, importId, params.onProgress)
+    : sceneExecuteImport(params.sessionId, importId);
 }
 
 export async function retargetSessionImportFolderName(
@@ -165,4 +178,3 @@ export async function ensureImportedDaeSessionImport(params: {
   });
   return result.importId;
 }
-

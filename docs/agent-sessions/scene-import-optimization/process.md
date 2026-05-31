@@ -130,3 +130,42 @@
 - `npx vitest run src/page/SceneEdit/utils/daeExportDialogState.test.ts src/page/SceneEdit/components/dae-import/daeImportDefaults.test.ts src/page/SceneEdit/utils/sceneSessionService.test.ts src/page/SceneEdit/utils/sceneDaeSessionImport.test.ts`: PASS, 37 tests.
 - `npx tsc --noEmit --pretty false`: FAILS on existing unrelated errors in `sceneEditRndSizePersistence.test.ts` and `DdsFormat` imports; no new errors from the static mesh import/export changes appeared.
 - `git diff --check`: PASS; Git reported only LF-to-CRLF working-copy warnings.
+
+## 2026-05-31 Conversion Progress IPC Resume
+
+### User Objective
+- Show immediate status when Rust starts DAE/FBX -> SSBH conversion.
+- Warn or otherwise notify users when large DAE/FBX imports may cause heavy IPC/backend work.
+- Use the existing custom IPC Channel pattern for lightweight progress/status messages instead of large event/result payloads.
+
+### Evidence Gathered
+- `scene_execute_import` currently logs conversion phases to stderr only; frontend waits for the final `ImportResult`.
+- `scene_convert_static_mesh_to_stage_files` also runs conversion inside `spawn_blocking` with no frontend progress until it returns.
+- Existing custom Channel usage is `stageStreamBundles(stageRoot, onChunk)` and `stage_stream_bundles(stageRoot, on_chunk: Channel<StageStreamChunk>)`.
+- Scene Editor already has `StageImportProgressDialog`, but it only receives FHM2D progress and is not wired to static mesh conversion.
+- Direct-to-disk conversion already accepts source path + output dir, so the large DAE/FBX source file does not need to cross frontend IPC as bytes.
+
+### Current Direction
+- Add streamed variants of the two Rust commands and keep the existing commands as compatibility wrappers.
+- Send only small typed progress messages over Channel: phase labels, sizes, file counts, stats, warning text.
+- Update Scene Editor service helpers and DAE/FBX import flow to use the streamed commands.
+- Reuse the existing import progress dialog with extra steps/details rather than creating a second progress UI.
+
+### Implementation Notes
+- Added `StaticMeshImportProgress` Channel messages in `scene_session_commands.rs`.
+- Added streamed compatibility commands:
+  - `scene_import_dae_from_path_streamed`
+  - `scene_execute_import_streamed`
+  - `scene_convert_static_mesh_to_stage_files_streamed`
+- Existing non-streamed commands remain as wrappers, so older callers are unchanged.
+- Large source files (64 MiB+) and large converted artifact payloads (16 MiB+) emit `ipcWarning` messages instead of silently blocking.
+- Direct-to-disk conversion still reads by source path and writes artifacts on the Rust side; it only returns the small final `StaticMeshDirectConvertResult`.
+- Scene Editor now routes import progress through Tauri `Channel`, updates `StageImportProgressDialog`, and shows a warning toast for heavy payload conditions.
+- Preview imports now explicitly show the heavy `scene_build_import_preview_bundle` / viewport load step after Rust conversion returns.
+- Scene Editor guards against late Channel messages reopening the progress dialog after an import finishes.
+
+### Verification
+- `cargo check --manifest-path src-tauri\Cargo.toml`: PASS; only existing warnings in `fhm2d_stage.rs`, `havok_mesh_export.rs`, and debug bin code.
+- `pnpm exec vitest run src/page/SceneEdit/utils/sceneSessionService.test.ts src/page/SceneEdit/utils/sceneDaeSessionImport.test.ts`: PASS, 30 tests.
+- `pnpm exec tsc --noEmit --pretty false`: FAILS on existing unrelated TypeScript errors in DAE import tests, RND persistence test, SceneTextureSelectPicker test, missing `flipUv` in test fixtures, and `DdsFormat` imports.
+- `git diff --check`: PASS; Git reported only LF-to-CRLF working-copy warnings.

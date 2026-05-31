@@ -1,8 +1,18 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { dirname, join, resourceDir } from "@tauri-apps/api/path";
-import { FileEdit, FolderOpen, Code, Loader2 } from "lucide-react";
+import {
+  ExternalLink,
+  FileCode,
+  FileText,
+  FolderOpen,
+  Hammer,
+  Loader2,
+  Package,
+  Play,
+  Wand2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -22,7 +32,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Command } from "@tauri-apps/plugin-shell";
-import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { exists, readDir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import {
@@ -32,11 +43,16 @@ import {
   getMscRepackOutputPath,
 } from "../../utils/mscWorkspaceUtils";
 import { renameScript2CallbacksByActionMask } from "../../utils/mscActionRename";
-
-interface FileInfo {
-  name: string;
-  path: string;
-}
+import {
+  compareByLeadingIndex,
+  computeMscSlotStatuses,
+  getMscFileRole,
+  groupMscFiles,
+  isMscPackScriptCFile,
+  type MscFileInfo,
+} from "./mscPipeline";
+import { MscPipelineBar } from "./MscPipelineBar";
+import { MscFileRow, type MscFileActionDescriptor } from "./MscFileRow";
 
 interface MscWorkspaceViewProps {
   workspaceRoot: string;
@@ -46,19 +62,18 @@ interface MscWorkspaceViewProps {
   onUnsavedChanges?: (hasChanges: boolean) => void;
 }
 
-interface FileAction {
-  label: string;
-  onClick: () => Promise<void>;
-  className?: string;
-  disabled?: boolean;
+type BatchKind = "decompile" | "repack";
+
+interface BatchState {
+  kind: BatchKind;
+  total: number;
+  done: number;
 }
 
-interface ConvertDialogTarget {
-  file: FileInfo;
-  outputPath: string;
-  logPath: string;
-  filesToOverwrite: string[];
-}
+type ConfirmState =
+  | { mode: "convert-one"; file: MscFileInfo; outputPath: string; logPath: string; overwrite: string[] }
+  | { mode: "decompile-all"; targets: MscFileInfo[]; overwrite: string[] }
+  | { mode: "repack-all"; targets: MscFileInfo[]; overwrite: string[] };
 
 const FILE_TYPES = [
   { value: "all", label: "All Files" },
@@ -69,29 +84,23 @@ const FILE_TYPES = [
   { value: "dscex", label: ".dscex" },
 ] as const;
 
-const BUTTON_STYLES = {
-  convert: "bg-gray-900 hover:bg-black text-white border-gray-900 shadow-sm",
-  edit: "bg-gray-700 hover:bg-gray-800 text-white border-gray-700 shadow-sm",
-  replace: "bg-gray-600 hover:bg-gray-700 text-white border-gray-600 shadow-sm",
-  repack: "bg-gray-800 hover:bg-gray-900 text-white border-gray-800 shadow-sm",
-  view: "bg-gray-500 hover:bg-gray-600 text-white border-gray-500 shadow-sm",
-};
-
 function matchesFileType(fileName: string, type: string): boolean {
   const lower = fileName.toLowerCase();
   if (type === "all") return true;
-  if (type === "c") return lower.endsWith(".c");
-  if (type === "txt") return lower.endsWith(".txt");
-  if (type === "bscex") return lower.endsWith(".bscex");
-  if (type === "cscex") return lower.endsWith(".cscex");
-  if (type === "dscex") return lower.endsWith(".dscex");
-  return false;
+  return lower.endsWith(`.${type}`);
 }
 
-/** MSC pack root scripts that support Replace + Repack in this workspace. */
-function isMscCoreScriptCFile(fileName: string): boolean {
-  const lower = fileName.toLowerCase();
-  return lower === "0.c" || lower === "1.c" || lower === "2.c";
+function getFileIcon(fileName: string) {
+  switch (getMscFileRole(fileName)) {
+    case "c":
+      return <FileCode className="size-4 text-foreground" />;
+    case "log":
+      return <FileText className="size-4 text-muted-foreground" />;
+    case "script":
+      return <Package className="size-4 text-foreground" />;
+    default:
+      return <FileText className="size-4 text-muted-foreground" />;
+  }
 }
 
 export default function MscWorkspaceView({
@@ -102,13 +111,15 @@ export default function MscWorkspaceView({
 }: MscWorkspaceViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [fileType, setFileType] = useState<string>("all");
-  const [localFiles, setLocalFiles] = useState<FileInfo[]>([]);
+  const [allFiles, setAllFiles] = useState<MscFileInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [processingFile, setProcessingFile] = useState<string | null>(null);
   const [isFolderRepacking, setIsFolderRepacking] = useState(false);
   const [isPickingFolder, setIsPickingFolder] = useState(false);
-  const [convertDialogOpen, setConvertDialogOpen] = useState(false);
-  const [convertDialogTarget, setConvertDialogTarget] = useState<ConvertDialogTarget | null>(null);
+  const [batch, setBatch] = useState<BatchState | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+
+  const isBusy = processingFile !== null || batch !== null || isFolderRepacking;
 
   const resolveTauriExeDir = useCallback(async () => {
     const resourcePath = await resourceDir();
@@ -121,12 +132,7 @@ export default function MscWorkspaceView({
 
   const resolveExvsMappingPath = useCallback(async () => {
     const exeDir = await resolveTauriExeDir();
-    const mappingPath = await join(
-      exeDir,
-      "tools",
-      "mappings",
-      "exvs_0xF1EF3B32.native_truth.json",
-    );
+    const mappingPath = await join(exeDir, "tools", "mappings", "exvs_0xF1EF3B32.native_truth.json");
     if (!(await exists(mappingPath))) {
       throw new Error(`MSC workspace: EXVS mapping file not found: ${mappingPath}`);
     }
@@ -135,31 +141,23 @@ export default function MscWorkspaceView({
 
   const fetchFiles = useCallback(async () => {
     if (!mscFolderPath) return;
-
     try {
       setIsLoading(true);
       const entries = await readDir(mscFolderPath);
-      const filteredEntries: FileInfo[] = [];
+      const files: MscFileInfo[] = [];
       for (const entry of entries) {
         if (!entry.isFile || !entry.name) continue;
-        const name = entry.name;
-        const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase());
-        if (!matchesSearch || !matchesFileType(name, fileType)) continue;
-        filteredEntries.push({
-          name,
-          path: await join(mscFolderPath, name),
-        });
+        files.push({ name: entry.name, path: await join(mscFolderPath, entry.name) });
       }
-
-      filteredEntries.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-      setLocalFiles(filteredEntries);
+      files.sort(compareByLeadingIndex);
+      setAllFiles(files);
     } catch (error) {
       console.error("Error reading directory:", error);
       toast.error("Failed to read MSC folder");
     } finally {
       setIsLoading(false);
     }
-  }, [mscFolderPath, searchQuery, fileType]);
+  }, [mscFolderPath]);
 
   useEffect(() => {
     if (isActive && mscFolderPath) {
@@ -167,16 +165,33 @@ export default function MscWorkspaceView({
     }
   }, [isActive, mscFolderPath, fetchFiles]);
 
+  const filteredFiles = useMemo(
+    () =>
+      allFiles.filter(
+        (file) =>
+          file.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
+          matchesFileType(file.name, fileType),
+      ),
+    [allFiles, searchQuery, fileType],
+  );
+
+  const groups = useMemo(() => groupMscFiles(filteredFiles), [filteredFiles]);
+  const slots = useMemo(() => computeMscSlotStatuses(allFiles.map((f) => f.name)), [allFiles]);
+
+  const scriptTargets = useMemo(
+    () => allFiles.filter((f) => getMscFileRole(f.name) === "script").sort(compareByLeadingIndex),
+    [allFiles],
+  );
+  const repackTargets = useMemo(
+    () => allFiles.filter((f) => isMscPackScriptCFile(f.name)).sort(compareByLeadingIndex),
+    [allFiles],
+  );
+
   const handlePickFolder = async () => {
     try {
       setIsPickingFolder(true);
-      const selected = await open({
-        directory: true,
-        multiple: false,
-      });
-      if (!selected || Array.isArray(selected)) {
-        return;
-      }
+      const selected = await open({ directory: true, multiple: false });
+      if (!selected || Array.isArray(selected)) return;
       const ok = await folderContainsMscScriptFiles(selected);
       if (!ok) {
         toast.error("Selected folder must contain at least one .bscex, .cscex, or .dscex file");
@@ -199,12 +214,7 @@ export default function MscWorkspaceView({
       const parentDir = normalized.split("\\").slice(0, -1).join("\\");
       const structurePath = `${parentDir}\\${folderName}_structure.json`;
       const outputPath = `${parentDir}\\${folderName}.fhm2d`;
-
-      await invoke("repack_fhm2d", {
-        structureJsonPath: structurePath,
-        outputPath,
-        atomicWrite: true,
-      });
+      await invoke("repack_fhm2d", { structureJsonPath: structurePath, outputPath, atomicWrite: true });
       toast.success("Repack Folder completed successfully");
     } catch (error) {
       console.error("Error during repack folder:", error);
@@ -214,32 +224,12 @@ export default function MscWorkspaceView({
     }
   };
 
-  const handleOpenConvertDialog = async (file: FileInfo) => {
-    try {
+  /** Decompile one script and apply the func_0 -> main / action-rename post pass. Throws on tool failure. */
+  const convertScriptCore = useCallback(
+    async (file: MscFileInfo): Promise<string> => {
       const inputPath = file.path;
       const outputPath = getMscConvertOutputPath(inputPath);
       const logPath = getMscConvertLogPath(inputPath);
-      const outputExists = await exists(outputPath);
-      const logExists = await exists(logPath);
-      const filesToOverwrite = [outputExists ? outputPath : null, logExists ? logPath : null].filter(
-        (path): path is string => path !== null,
-      );
-      setConvertDialogTarget({
-        file,
-        outputPath,
-        logPath,
-        filesToOverwrite,
-      });
-      setConvertDialogOpen(true);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : `Failed to prepare convert for ${file.name}`);
-    }
-  };
-
-  const handleConvertScriptToC = async (file: FileInfo, outputPath: string, logPath: string) => {
-    try {
-      setProcessingFile(file.name);
-      const inputPath = file.path;
       const resourcePath = await resourceDir();
       const exvsMappingPath = await resolveExvsMappingPath();
 
@@ -255,105 +245,48 @@ export default function MscWorkspaceView({
       ]).execute();
 
       if (command.code !== 0) {
-        toast.error(`Failed to convert ${file.name}: ${command.stderr}`);
-        return;
+        throw new Error(command.stderr || `mscdec failed for ${file.name}`);
       }
 
       const cContent = await readTextFile(outputPath);
       const baseName = file.name.split(".")[0].toLowerCase();
 
       if (baseName === "2") {
-        try {
-          const scriptFolder = await dirname(file.path);
-          const script0Path = await join(scriptFolder, "0.c");
-          if (await exists(script0Path)) {
+        const scriptFolder = await dirname(file.path);
+        const script0Path = await join(scriptFolder, "0.c");
+        if (await exists(script0Path)) {
+          try {
             const script0Content = await readTextFile(script0Path);
             const result = renameScript2CallbacksByActionMask(script0Content, cContent);
             const normalized = result.updatedScript2.replace(/func_0/g, "main");
             await writeTextFile(outputPath, normalized);
-            toast.success(
-              `Converted ${file.name}: renamed ${result.renamedCallbackCount} callbacks + func_0→main`,
-            );
-          } else {
+            return `${file.name}: ${result.renamedCallbackCount} callbacks renamed, func_0 to main`;
+          } catch (renameError) {
             const normalized = cContent.replace(/func_0/g, "main");
             await writeTextFile(outputPath, normalized);
-            toast.success(`Converted ${file.name} + func_0→main (0.c not found, skipped action rename)`);
+            const reason = renameError instanceof Error ? renameError.message : String(renameError);
+            return `${file.name}: func_0 to main (action rename skipped: ${reason})`;
           }
-        } catch (renameErr) {
-          const normalized = cContent.replace(/func_0/g, "main");
-          await writeTextFile(outputPath, normalized);
-          toast.success(`Converted ${file.name} + func_0→main (action rename skipped: ${renameErr})`);
         }
-      } else if (baseName === "0" || baseName === "1") {
         const normalized = cContent.replace(/func_0/g, "main");
         await writeTextFile(outputPath, normalized);
-        toast.success(`Converted ${file.name} + func_0→main`);
-      } else {
-        toast.success(`Successfully converted ${file.name} to .c`);
+        return `${file.name}: func_0 to main (0.c missing, action rename skipped)`;
       }
 
-      void fetchFiles();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : `Error converting ${file.name}`);
-    } finally {
-      setProcessingFile(null);
-    }
-  };
-
-  const handleConvertDialogOpenChange = (open: boolean) => {
-    if (processingFile && convertDialogTarget && processingFile === convertDialogTarget.file.name) {
-      return;
-    }
-    setConvertDialogOpen(open);
-    if (!open) {
-      setConvertDialogTarget(null);
-    }
-  };
-
-  const handleConfirmConvert = async () => {
-    if (!convertDialogTarget) {
-      toast.error("MSC workspace: missing convert dialog target");
-      return;
-    }
-    await handleConvertScriptToC(
-      convertDialogTarget.file,
-      convertDialogTarget.outputPath,
-      convertDialogTarget.logPath,
-    );
-    setConvertDialogOpen(false);
-    setConvertDialogTarget(null);
-  };
-
-  const handleRenameActions = async (file: FileInfo) => {
-    try {
-      setProcessingFile(file.name);
-      const scriptFolder = await dirname(file.path);
-      const script0Path = await join(scriptFolder, "0.c");
-
-      if (!(await exists(script0Path))) {
-        toast.error("MSC workspace: 0.c not found, cannot rename actions");
-        return;
+      if (baseName === "0" || baseName === "1") {
+        const normalized = cContent.replace(/func_0/g, "main");
+        await writeTextFile(outputPath, normalized);
+        return `${file.name}: func_0 to main`;
       }
 
-      const script0Content = await readTextFile(script0Path);
-      const script2Content = await readTextFile(file.path);
-      const result = renameScript2CallbacksByActionMask(script0Content, script2Content);
-      const normalized = result.updatedScript2.replace(/func_0/g, "main");
-      await writeTextFile(file.path, normalized);
-      toast.success(
-        `Renamed ${result.renamedCallbackCount} callbacks, updated ${result.bindingCommentCount} action bindings, and replaced func_0→main in ${file.name}`,
-      );
-      void fetchFiles();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : `Error renaming actions in ${file.name}`);
-    } finally {
-      setProcessingFile(null);
-    }
-  };
+      return `${file.name} converted to C`;
+    },
+    [resolveExvsMappingPath],
+  );
 
-  const handleRepackCToScript = async (file: FileInfo) => {
-    try {
-      setProcessingFile(file.name);
+  /** Recompile one C file back to its source pack extension. Throws on tool failure. */
+  const repackScriptCore = useCallback(
+    async (file: MscFileInfo): Promise<string> => {
       const inputPath = file.path;
       const outputPath = getMscRepackOutputPath(inputPath);
       const resourcePath = await resourceDir();
@@ -374,141 +307,247 @@ export default function MscWorkspaceView({
       ).execute();
 
       if (command.code !== 0) {
-        toast.error(`Failed to repack ${file.name}: ${command.stderr}`);
-      } else {
-        const outputName = outputPath.replace(/^.*[\\/]/, "");
-        toast.success(`Successfully repacked ${file.name} to ${outputName}`);
+        throw new Error(command.stderr || `msclang failed for ${file.name}`);
       }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : `Error repacking ${file.name}`);
-    } finally {
-      setProcessingFile(null);
-    }
-  };
+      return `${file.name} to ${outputPath.replace(/^.*[\\/]/, "")}`;
+    },
+    [resolveExvsMappingPath],
+  );
 
-  const handleOpenInCursor = async (file: FileInfo) => {
+  const handleConvertOne = useCallback(
+    async (file: MscFileInfo) => {
+      try {
+        setProcessingFile(file.name);
+        toast.success(`Converted ${await convertScriptCore(file)}`);
+        await fetchFiles();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : `Error converting ${file.name}`);
+      } finally {
+        setProcessingFile(null);
+      }
+    },
+    [convertScriptCore, fetchFiles],
+  );
+
+  const handleRepackOne = useCallback(
+    async (file: MscFileInfo) => {
+      try {
+        setProcessingFile(file.name);
+        toast.success(`Repacked ${await repackScriptCore(file)}`);
+        await fetchFiles();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : `Error repacking ${file.name}`);
+      } finally {
+        setProcessingFile(null);
+      }
+    },
+    [repackScriptCore, fetchFiles],
+  );
+
+  const handleRenameActions = useCallback(
+    async (file: MscFileInfo) => {
+      try {
+        setProcessingFile(file.name);
+        const scriptFolder = await dirname(file.path);
+        const script0Path = await join(scriptFolder, "0.c");
+        if (!(await exists(script0Path))) {
+          toast.error("MSC workspace: 0.c not found, cannot rename actions");
+          return;
+        }
+        const script0Content = await readTextFile(script0Path);
+        const script2Content = await readTextFile(file.path);
+        const result = renameScript2CallbacksByActionMask(script0Content, script2Content);
+        const normalized = result.updatedScript2.replace(/func_0/g, "main");
+        await writeTextFile(file.path, normalized);
+        toast.success(
+          `Renamed ${result.renamedCallbackCount} callbacks, updated ${result.bindingCommentCount} bindings, func_0 to main in ${file.name}`,
+        );
+        await fetchFiles();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : `Error renaming actions in ${file.name}`);
+      } finally {
+        setProcessingFile(null);
+      }
+    },
+    [fetchFiles],
+  );
+
+  const handleOpenInEditor = useCallback(async (file: MscFileInfo) => {
     try {
       setProcessingFile(file.name);
       const command = await Command.create("exec-cmd", ["/C", "cursor", file.path]).execute();
       if (command.code !== 0) {
-        toast.error(`Failed to open ${file.name} in Cursor: ${command.stderr}`);
+        toast.error(`Failed to open ${file.name} in editor: ${command.stderr}`);
       }
     } catch {
-      toast.error(`Error opening ${file.name} in Cursor`);
+      toast.error(`Error opening ${file.name} in editor`);
     } finally {
       setProcessingFile(null);
     }
-  };
+  }, []);
 
-  const createFileActions = (file: FileInfo): FileAction[] => {
-    const extension = file.name.split(".").pop()?.toLowerCase();
+  const runBatch = useCallback(
+    async (kind: BatchKind, targets: MscFileInfo[]) => {
+      if (targets.length === 0) return;
+      setBatch({ kind, total: targets.length, done: 0 });
+      let failures = 0;
+      for (const file of targets) {
+        try {
+          await (kind === "decompile" ? convertScriptCore(file) : repackScriptCore(file));
+        } catch (error) {
+          failures += 1;
+          toast.error(`${file.name}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        setBatch((prev) => (prev ? { ...prev, done: prev.done + 1 } : prev));
+      }
+      setBatch(null);
+      await fetchFiles();
+      const verb = kind === "decompile" ? "Decompiled" : "Repacked";
+      if (failures === 0) {
+        toast.success(`${verb} ${targets.length} file(s)`);
+      } else {
+        toast.warning(`${verb} ${targets.length - failures}/${targets.length} file(s), ${failures} failed`);
+      }
+    },
+    [convertScriptCore, repackScriptCore, fetchFiles],
+  );
 
-    switch (extension) {
-      case "bscex":
-      case "cscex":
-      case "dscex":
+  const collectExisting = useCallback(async (paths: string[]): Promise<string[]> => {
+    const present: string[] = [];
+    for (const path of paths) {
+      if (await exists(path)) present.push(path);
+    }
+    return present;
+  }, []);
+
+  const openConvertOne = useCallback(
+    async (file: MscFileInfo) => {
+      try {
+        const outputPath = getMscConvertOutputPath(file.path);
+        const logPath = getMscConvertLogPath(file.path);
+        const overwrite = await collectExisting([outputPath, logPath]);
+        setConfirm({ mode: "convert-one", file, outputPath, logPath, overwrite });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : `Failed to prepare convert for ${file.name}`);
+      }
+    },
+    [collectExisting],
+  );
+
+  const openDecompileAll = useCallback(async () => {
+    const outputs = scriptTargets.flatMap((f) => [getMscConvertOutputPath(f.path), getMscConvertLogPath(f.path)]);
+    const overwrite = await collectExisting(outputs);
+    setConfirm({ mode: "decompile-all", targets: scriptTargets, overwrite });
+  }, [scriptTargets, collectExisting]);
+
+  const openRepackAll = useCallback(async () => {
+    const overwrite = await collectExisting(repackTargets.map((f) => getMscRepackOutputPath(f.path)));
+    setConfirm({ mode: "repack-all", targets: repackTargets, overwrite });
+  }, [repackTargets, collectExisting]);
+
+  const handleConfirm = useCallback(async () => {
+    if (!confirm) return;
+    const current = confirm;
+    setConfirm(null);
+    if (current.mode === "convert-one") {
+      await handleConvertOne(current.file);
+    } else if (current.mode === "decompile-all") {
+      await runBatch("decompile", current.targets);
+    } else {
+      await runBatch("repack", current.targets);
+    }
+  }, [confirm, handleConvertOne, runBatch]);
+
+  const createFileActions = useCallback(
+    (file: MscFileInfo): MscFileActionDescriptor[] => {
+      const role = getMscFileRole(file.name);
+      const working = processingFile === file.name;
+      const disabled = isBusy;
+
+      if (role === "script") {
         return [
           {
-            label: processingFile === file.name ? "Converting..." : "Convert",
-            onClick: () => handleOpenConvertDialog(file),
-            className: BUTTON_STYLES.convert,
-            disabled: processingFile === file.name,
+            key: "convert",
+            label: working ? "Converting…" : "Convert",
+            onClick: () => openConvertOne(file),
+            variant: "default",
+            disabled,
+            icon: working ? <Loader2 className="animate-spin" /> : <Play />,
           },
         ];
-      case "c": {
-        const openCursor: FileAction = {
-          label: "Open Cursor",
-          onClick: () => handleOpenInCursor(file),
-          className: BUTTON_STYLES.edit,
-          disabled: processingFile === file.name,
-        };
-        if (!isMscCoreScriptCFile(file.name)) {
-          return [openCursor];
-        }
-        const actions: FileAction[] = [openCursor];
-        if (file.name.toLowerCase() === "2.c") {
+      }
+
+      if (role === "c") {
+        const actions: MscFileActionDescriptor[] = [
+          {
+            key: "open",
+            label: "Open",
+            onClick: () => handleOpenInEditor(file),
+            variant: "ghost",
+            disabled,
+            icon: <ExternalLink />,
+          },
+        ];
+        if (isMscPackScriptCFile(file.name)) {
+          if (file.name.toLowerCase() === "2.c") {
+            actions.push({
+              key: "rename",
+              label: working ? "Renaming…" : "Rename Actions",
+              onClick: () => handleRenameActions(file),
+              variant: "secondary",
+              disabled,
+              icon: <Wand2 />,
+            });
+          }
           actions.push({
-            label:
-              processingFile === file.name
-                ? "Renaming..."
-                : "Rename Actions",
-            onClick: () => handleRenameActions(file),
-            className: BUTTON_STYLES.replace,
-            disabled: processingFile === file.name,
+            key: "repack",
+            label: working ? "Repacking…" : "Repack",
+            onClick: () => handleRepackOne(file),
+            variant: "default",
+            disabled,
+            icon: working ? <Loader2 className="animate-spin" /> : <Hammer />,
           });
         }
-        actions.push({
-          label: processingFile === file.name ? "Repacking..." : "Repack",
-          onClick: () => handleRepackCToScript(file),
-          className: BUTTON_STYLES.repack,
-          disabled: processingFile === file.name,
-        });
         return actions;
       }
-      case "txt":
+
+      if (role === "log") {
         return [
           {
-            label: "Open Cursor",
-            onClick: () => handleOpenInCursor(file),
-            className: BUTTON_STYLES.view,
-            disabled: processingFile === file.name,
+            key: "open",
+            label: "Open",
+            onClick: () => handleOpenInEditor(file),
+            variant: "ghost",
+            disabled,
+            icon: <ExternalLink />,
           },
         ];
-      default:
-        return [];
-    }
-  };
+      }
 
-  const getFileIcon = (fileName: string) => {
-    const extension = fileName.split(".").pop()?.toLowerCase();
-    switch (extension) {
-      case "c":
-        return <Code className="h-4 w-4 text-foreground" />;
-      case "txt":
-        return <FileEdit className="h-4 w-4 text-muted-foreground" />;
-      case "bscex":
-      case "cscex":
-      case "dscex":
-        return <FileEdit className="h-4 w-4 text-foreground" />;
-      default:
-        return <FileEdit className="h-4 w-4 text-muted-foreground" />;
-    }
-  };
+      return [];
+    },
+    [processingFile, isBusy, openConvertOne, handleOpenInEditor, handleRenameActions, handleRepackOne],
+  );
 
   if (!mscFolderPath) {
     return (
       <div className="flex h-full min-h-48 flex-col items-center justify-center gap-4 px-4 text-center text-muted-foreground">
-        <FolderOpen className="h-10 w-10 opacity-50" />
+        <FolderOpen className="size-10 opacity-50" />
         <div className="max-w-md space-y-2 text-sm">
-          <p className="text-foreground font-medium">MSC Workspace</p>
+          <p className="font-medium text-foreground">MSC Workspace</p>
           <p>
-            Select a folder in the file tree that contains at least one{" "}
-            <code className="rounded bg-muted px-1">.bscex</code>,{" "}
-            <code className="rounded bg-muted px-1">.cscex</code>, or{" "}
-            <code className="rounded bg-muted px-1">.dscex</code> file, or pick a folder below.
+            Select a folder containing at least one{" "}
+            <code className="rounded bg-muted px-1 font-mono">.bscex</code>,{" "}
+            <code className="rounded bg-muted px-1 font-mono">.cscex</code>, or{" "}
+            <code className="rounded bg-muted px-1 font-mono">.dscex</code> file.
           </p>
           {workspaceRoot ? (
-            <p className="text-[11px] text-muted-foreground">Workspace root: {workspaceRoot}</p>
+            <p className="font-mono text-[11px] text-muted-foreground">Workspace root: {workspaceRoot}</p>
           ) : null}
         </div>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => void handlePickFolder()}
-          disabled={isPickingFolder}
-        >
-          {isPickingFolder ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Picking…
-            </>
-          ) : (
-            <>
-              <FolderOpen className="mr-2 h-4 w-4" />
-              Pick folder
-            </>
-          )}
+        <Button type="button" variant="secondary" size="sm" onClick={() => void handlePickFolder()} disabled={isPickingFolder}>
+          {isPickingFolder ? <Loader2 className="mr-2 animate-spin" /> : <FolderOpen className="mr-2" />}
+          {isPickingFolder ? "Picking…" : "Pick folder"}
         </Button>
       </div>
     );
@@ -516,163 +555,167 @@ export default function MscWorkspaceView({
 
   return (
     <>
-      <div className="flex h-full flex-col space-y-4 pb-4">
-      <div className="flex flex-col gap-3 shrink-0 border-b pb-4">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0 flex-1 space-y-1">
-            <h2 className="text-lg font-semibold tracking-tight">MSC Workspace</h2>
-            <p className="break-all text-[11px] text-muted-foreground" title={mscFolderPath}>
-              {mscFolderPath}
-            </p>
+      <div className="flex h-full flex-col gap-4 pb-4">
+        <div className="flex shrink-0 flex-col gap-3 border-b pb-4">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0 flex-1 space-y-1">
+              <h2 className="text-lg font-semibold tracking-tight">MSC Workspace</h2>
+              <p className="break-all font-mono text-[11px] text-muted-foreground" title={mscFolderPath}>
+                {mscFolderPath}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => void handlePickFolder()} disabled={isPickingFolder || isBusy}>
+                {isPickingFolder ? <Loader2 className="mr-2 animate-spin" /> : <FolderOpen className="mr-2" />}
+                Pick folder
+              </Button>
+              <Button type="button" size="sm" onClick={() => void openDecompileAll()} disabled={isBusy || scriptTargets.length === 0}>
+                <Play className="mr-2" />
+                Decompile All
+              </Button>
+              <Button type="button" size="sm" onClick={() => void openRepackAll()} disabled={isBusy || repackTargets.length === 0}>
+                <Hammer className="mr-2" />
+                Repack All
+              </Button>
+              <Button type="button" variant="secondary" size="sm" onClick={() => void handleRepackFolder()} disabled={isBusy}>
+                {isFolderRepacking ? <Loader2 className="mr-2 animate-spin" /> : <Package className="mr-2" />}
+                Repack .fhm2d
+              </Button>
+            </div>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void handlePickFolder()}
-              disabled={isPickingFolder}
-            >
-              {isPickingFolder ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <FolderOpen className="mr-2 h-4 w-4" />
-              )}
-              Pick folder
-            </Button>
-            <Button
-              type="button"
-              onClick={handleRepackFolder}
-              disabled={isFolderRepacking}
-              size="sm"
-            >
-              {isFolderRepacking && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Repack Folder
-            </Button>
+
+          <MscPipelineBar slots={slots} />
+
+          {batch ? (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  {batch.kind === "decompile" ? "Decompiling" : "Repacking"} {batch.done}/{batch.total}
+                </span>
+                <span className="font-mono tabular-nums">{Math.round((batch.done / batch.total) * 100)}%</span>
+              </div>
+              <Progress value={(batch.done / batch.total) * 100} />
+            </div>
+          ) : null}
+
+          <div className="flex gap-2">
+            <Input
+              placeholder="Search files in this folder…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1"
+            />
+            <Select value={fileType} onValueChange={setFileType}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="File type" />
+              </SelectTrigger>
+              <SelectContent>
+                {FILE_TYPES.map((type) => (
+                  <SelectItem key={type.value} value={type.value}>
+                    {type.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
-        <div className="flex gap-2">
-          <Input
-            placeholder="Search files in this folder…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1"
-          />
-          <Select value={fileType} onValueChange={setFileType}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="File type" />
-            </SelectTrigger>
-            <SelectContent>
-              {FILE_TYPES.map((type) => (
-                <SelectItem key={type.value} value={type.value}>
-                  {type.label}
-                </SelectItem>
+        <div className="flex-1 space-y-4 overflow-y-auto pr-2">
+          {isLoading && allFiles.length === 0 ? (
+            <div className="space-y-2">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <Skeleton key={index} className="h-11 w-full rounded-md" />
               ))}
-            </SelectContent>
-          </Select>
+            </div>
+          ) : groups.length === 0 ? (
+            <div className="flex h-32 flex-col items-center justify-center text-muted-foreground">
+              <FolderOpen className="mb-2 size-8 opacity-50" />
+              No files match the current filter
+            </div>
+          ) : (
+            groups.map((group) => (
+              <section key={group.role} className="space-y-1.5">
+                <div className="flex items-center gap-2 px-1">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.label}</h3>
+                  <span className="font-mono text-[11px] text-muted-foreground/70">{group.files.length}</span>
+                </div>
+                <div className="divide-y rounded-md border">
+                  {group.files.map((file) => (
+                    <MscFileRow
+                      key={file.path}
+                      name={file.name}
+                      icon={getFileIcon(file.name)}
+                      actions={createFileActions(file)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))
+          )}
         </div>
       </div>
 
-      <div className="flex-1 space-y-2 overflow-y-auto pr-2">
-        {isLoading ? (
-          <div className="flex h-32 items-center justify-center text-muted-foreground">
-            <Loader2 className="mr-2 h-6 w-6 animate-spin" />
-            Loading files…
-          </div>
-        ) : localFiles.length === 0 ? (
-          <div className="flex h-32 flex-col items-center justify-center text-muted-foreground">
-            <FolderOpen className="mb-2 h-8 w-8 opacity-50" />
-            No files match the current filter
-          </div>
-        ) : (
-          localFiles.map((file, index) => {
-            const actions = createFileActions(file);
-            return (
-              <Card key={`${file.path}-${index}`} className="p-3 transition-colors hover:bg-muted/50">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex min-w-0 items-center space-x-3 overflow-hidden">
-                    {getFileIcon(file.name)}
-                    <span className="truncate" title={file.name}>
-                      {file.name}
-                    </span>
-                  </div>
-                  <div className="flex shrink-0 items-center space-x-2">
-                    {actions.map((action, actionIndex) => (
-                      <Button
-                        key={actionIndex}
-                        size="sm"
-                        className={action.className}
-                        onClick={() => void action.onClick()}
-                        disabled={action.disabled}
-                      >
-                        {action.label}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              </Card>
-            );
-          })
-        )}
-      </div>
-      </div>
-      <AlertDialog open={convertDialogOpen} onOpenChange={handleConvertDialogOpenChange}>
+      <AlertDialog open={confirm !== null} onOpenChange={(next) => !next && !isBusy && setConfirm(null)}>
         <AlertDialogContent className="max-w-xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Convert</AlertDialogTitle>
+            <AlertDialogTitle>
+              {confirm?.mode === "convert-one"
+                ? "Convert to C"
+                : confirm?.mode === "decompile-all"
+                  ? "Decompile all scripts"
+                  : "Repack all C files"}
+            </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-sm text-muted-foreground">
-                <p>
-                  Convert <code className="rounded bg-muted px-1 py-0.5 text-foreground">{convertDialogTarget?.file.name ?? "—"}</code> to C source now?
-                </p>
-                <div className="space-y-1">
-                  <p className="font-medium text-foreground">Output targets</p>
+                {confirm?.mode === "convert-one" ? (
+                  <>
+                    <p>
+                      Convert{" "}
+                      <code className="rounded bg-muted px-1 py-0.5 font-mono text-foreground">{confirm.file.name}</code>{" "}
+                      to C source now?
+                    </p>
+                    <div className="space-y-1">
+                      <p className="font-medium text-foreground">Output targets</p>
+                      <p>
+                        <code className="rounded bg-muted px-1 py-0.5 font-mono">{confirm.outputPath}</code>
+                      </p>
+                      <p>
+                        <code className="rounded bg-muted px-1 py-0.5 font-mono">{confirm.logPath}</code>
+                      </p>
+                    </div>
+                  </>
+                ) : confirm ? (
                   <p>
-                    <code className="rounded bg-muted px-1 py-0.5">{convertDialogTarget?.outputPath ?? "—"}</code>
+                    {confirm.mode === "decompile-all" ? "Decompile" : "Repack"}{" "}
+                    <span className="font-medium text-foreground">{confirm.targets.length}</span> file(s):{" "}
+                    <span className="font-mono text-foreground">
+                      {confirm.targets.map((t) => t.name).join(", ")}
+                    </span>
+                    .
                   </p>
-                  <p>
-                    <code className="rounded bg-muted px-1 py-0.5">{convertDialogTarget?.logPath ?? "—"}</code>
-                  </p>
-                </div>
-                {convertDialogTarget && convertDialogTarget.filesToOverwrite.length > 0 ? (
+                ) : null}
+
+                {confirm && confirm.overwrite.length > 0 ? (
                   <div className="space-y-1">
                     <p className="font-medium text-amber-600 dark:text-amber-500">
                       Existing files that will be overwritten
                     </p>
-                    {convertDialogTarget.filesToOverwrite.map((path) => (
+                    {confirm.overwrite.map((path) => (
                       <p key={path}>
-                        <code className="rounded bg-muted px-1 py-0.5">{path}</code>
+                        <code className="rounded bg-muted px-1 py-0.5 font-mono">{path}</code>
                       </p>
                     ))}
                   </div>
                 ) : (
-                  <p>No existing .c/.txt output files will be overwritten.</p>
+                  <p>No existing output files will be overwritten.</p>
                 )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel
-              disabled={
-                !!(processingFile && convertDialogTarget && processingFile === convertDialogTarget.file.name)
-              }
-            >
-              Cancel
-            </AlertDialogCancel>
-            <Button
-              type="button"
-              onClick={() => void handleConfirmConvert()}
-              disabled={
-                !convertDialogTarget ||
-                !!(processingFile && convertDialogTarget && processingFile === convertDialogTarget.file.name)
-              }
-            >
-              {processingFile && convertDialogTarget && processingFile === convertDialogTarget.file.name
-                ? "Converting..."
-                : convertDialogTarget && convertDialogTarget.filesToOverwrite.length > 0
-                  ? "Overwrite and Convert"
-                  : "Convert"}
+            <AlertDialogCancel disabled={isBusy}>Cancel</AlertDialogCancel>
+            <Button type="button" onClick={() => void handleConfirm()} disabled={isBusy}>
+              {confirm && confirm.overwrite.length > 0 ? "Overwrite and continue" : "Continue"}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

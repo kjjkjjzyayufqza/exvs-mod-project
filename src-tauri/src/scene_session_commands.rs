@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use tauri::State;
+use tauri::{ipc::Channel, State};
 
 use crate::format::fhm2d_stage;
 use crate::havok_cli;
@@ -31,6 +31,170 @@ pub struct ImportResult {
     pub hkt_generated: bool,
     pub hkt_detail: Option<String>,
     pub warnings: Vec<String>,
+}
+
+const LARGE_STATIC_MESH_SOURCE_BYTES: u64 = 64 * 1024 * 1024;
+const LARGE_STATIC_MESH_IPC_PAYLOAD_BYTES: u64 = 16 * 1024 * 1024;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum StaticMeshImportProgress {
+    Status {
+        phase: String,
+        label: String,
+    },
+    SourceFile {
+        path: String,
+        bytes: u64,
+        format: String,
+    },
+    IpcWarning {
+        phase: String,
+        bytes: u64,
+        threshold_bytes: u64,
+        message: String,
+    },
+    ConvertStarted {
+        format: String,
+        source_name: String,
+        base_filename: String,
+    },
+    ConvertFinished {
+        total_bytes: u64,
+        file_count: usize,
+    },
+    WriteStarted {
+        output_dir: String,
+        base_filename: String,
+    },
+    WriteFinished {
+        file_count: usize,
+    },
+    HktStarted {
+        source_name: String,
+    },
+    HktFinished {
+        bytes: u64,
+        triangle_count: usize,
+    },
+    Complete,
+    Error {
+        message: String,
+    },
+}
+
+fn send_static_mesh_progress(
+    on_progress: Option<&Channel<StaticMeshImportProgress>>,
+    chunk: StaticMeshImportProgress,
+) {
+    if let Some(channel) = on_progress {
+        let _ = channel.send(chunk);
+    }
+}
+
+fn send_static_mesh_status(
+    on_progress: Option<&Channel<StaticMeshImportProgress>>,
+    phase: &str,
+    label: impl Into<String>,
+) {
+    send_static_mesh_progress(
+        on_progress,
+        StaticMeshImportProgress::Status {
+            phase: phase.to_string(),
+            label: label.into(),
+        },
+    );
+}
+
+fn static_mesh_format_label(ext: &str) -> String {
+    ext.to_ascii_uppercase()
+}
+
+fn static_mesh_source_name(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.to_string_lossy().to_string())
+}
+
+fn send_large_source_warning(
+    on_progress: Option<&Channel<StaticMeshImportProgress>>,
+    phase: &str,
+    bytes: u64,
+    format: &str,
+) {
+    if bytes < LARGE_STATIC_MESH_SOURCE_BYTES {
+        return;
+    }
+    send_static_mesh_progress(
+        on_progress,
+        StaticMeshImportProgress::IpcWarning {
+            phase: phase.to_string(),
+            bytes,
+            threshold_bytes: LARGE_STATIC_MESH_SOURCE_BYTES,
+            message: format!(
+                "Large {format} source detected. Conversion status will use Channel metadata and avoid sending the source file back through frontend IPC."
+            ),
+        },
+    );
+}
+
+fn send_large_artifact_warning(
+    on_progress: Option<&Channel<StaticMeshImportProgress>>,
+    phase: &str,
+    bytes: u64,
+) {
+    if bytes < LARGE_STATIC_MESH_IPC_PAYLOAD_BYTES {
+        return;
+    }
+    send_static_mesh_progress(
+        on_progress,
+        StaticMeshImportProgress::IpcWarning {
+            phase: phase.to_string(),
+            bytes,
+            threshold_bytes: LARGE_STATIC_MESH_IPC_PAYLOAD_BYTES,
+            message: "Large converted SSBH artifact payload detected. The command keeps payload transfer to Channel metadata and returns only the final small result.".to_string(),
+        },
+    );
+}
+
+fn send_static_mesh_source_progress(
+    on_progress: Option<&Channel<StaticMeshImportProgress>>,
+    source_path: &Path,
+    phase: &str,
+) -> Result<(&'static str, u64), String> {
+    let ext = import_extension_from_path(source_path)?;
+    let bytes = std::fs::metadata(source_path)
+        .map_err(|e| format!("Failed to inspect '{}': {}", source_path.display(), e))?
+        .len();
+    let format = static_mesh_format_label(ext);
+    send_static_mesh_progress(
+        on_progress,
+        StaticMeshImportProgress::SourceFile {
+            path: source_path.to_string_lossy().to_string(),
+            bytes,
+            format: format.clone(),
+        },
+    );
+    send_large_source_warning(on_progress, phase, bytes, &format);
+    Ok((ext, bytes))
+}
+
+fn ssbh_artifact_payload_bytes(artifacts: &SsbhArtifacts) -> u64 {
+    artifacts.numdlb.len() as u64
+        + artifacts.numshb.len() as u64
+        + artifacts.nusktb.as_ref().map_or(0, |v| v.len() as u64)
+        + artifacts.numatb.len() as u64
+        + artifacts.maya_numatb.as_ref().map_or(0, |v| v.len() as u64)
+        + artifacts.jnttbl.len() as u64
+}
+
+fn ssbh_artifact_file_count(artifacts: &SsbhArtifacts) -> usize {
+    usize::from(!artifacts.numdlb.is_empty())
+        + usize::from(!artifacts.numshb.is_empty())
+        + usize::from(artifacts.nusktb.as_ref().is_some_and(|v| !v.is_empty()))
+        + usize::from(!artifacts.numatb.is_empty())
+        + usize::from(artifacts.maya_numatb.as_ref().is_some_and(|v| !v.is_empty()))
+        + usize::from(!artifacts.jnttbl.is_empty())
 }
 
 pub fn hkt_success_detail(name: &str, byte_len: usize, triangle_count: usize) -> String {
@@ -197,6 +361,57 @@ pub fn scene_import_dae_from_path(
             import_id
         ),
         Err(e) => eprintln!("[scene_import_dae_from_path] failed: {}", e),
+    }
+    result
+}
+
+#[tauri::command]
+pub fn scene_import_dae_from_path_streamed(
+    state: State<'_, SceneSessionState>,
+    session_id: String,
+    file_path: String,
+    name: String,
+    on_progress: Channel<StaticMeshImportProgress>,
+) -> Result<String, String> {
+    eprintln!(
+        "[scene_import_dae_from_path_streamed] session_id={} name={} path={}",
+        session_id, name, file_path
+    );
+    let path = std::path::Path::new(&file_path);
+    send_static_mesh_status(
+        Some(&on_progress),
+        "read",
+        "Checking selected static mesh file...",
+    );
+    let (ext, _) = send_static_mesh_source_progress(Some(&on_progress), path, "read")?;
+    send_static_mesh_status(
+        Some(&on_progress),
+        "read",
+        format!(
+            "Reading {} source into Rust session...",
+            static_mesh_format_label(ext)
+        ),
+    );
+    let result = state.with_session_mut(&session_id, |s| s.add_import_from_path(name, path));
+    match &result {
+        Ok(import_id) => {
+            eprintln!(
+                "[scene_import_dae_from_path_streamed] success import_id={}",
+                import_id
+            );
+            send_static_mesh_status(
+                Some(&on_progress),
+                "read",
+                "Source stored in Rust session.",
+            );
+        }
+        Err(e) => {
+            eprintln!("[scene_import_dae_from_path_streamed] failed: {}", e);
+            send_static_mesh_progress(
+                Some(&on_progress),
+                StaticMeshImportProgress::Error { message: e.clone() },
+            );
+        }
     }
     result
 }
@@ -708,9 +923,31 @@ pub async fn scene_execute_import(
     state: State<'_, SceneSessionState>,
     options: ExecuteImportOptions,
 ) -> Result<ImportResult, String> {
+    scene_execute_import_impl(state, options, None).await
+}
+
+#[tauri::command]
+pub async fn scene_execute_import_streamed(
+    state: State<'_, SceneSessionState>,
+    options: ExecuteImportOptions,
+    on_progress: Channel<StaticMeshImportProgress>,
+) -> Result<ImportResult, String> {
+    scene_execute_import_impl(state, options, Some(on_progress)).await
+}
+
+async fn scene_execute_import_impl(
+    state: State<'_, SceneSessionState>,
+    options: ExecuteImportOptions,
+    on_progress: Option<Channel<StaticMeshImportProgress>>,
+) -> Result<ImportResult, String> {
     eprintln!(
         "[scene_execute_import] session_id={} import_id={}",
         options.session_id, options.import_id
+    );
+    send_static_mesh_status(
+        on_progress.as_ref(),
+        "read",
+        "Loading static mesh import from Rust session...",
     );
     let (dae_bytes, name, source_name, config) = state
         .with_session(&options.session_id, |s| {
@@ -740,9 +977,32 @@ pub async fn scene_execute_import(
     let mut hkt_generated = false;
     let mut hkt_detail: Option<String> = None;
     let mut warnings: Vec<String> = Vec::new();
+    let source_ext = import_extension_from_name(&source_name)?;
+    let source_format = static_mesh_format_label(source_ext);
+    let source_bytes = dae_bytes.len() as u64;
+
+    send_static_mesh_progress(
+        on_progress.as_ref(),
+        StaticMeshImportProgress::SourceFile {
+            path: source_name.clone(),
+            bytes: source_bytes,
+            format: source_format.clone(),
+        },
+    );
+    send_large_source_warning(
+        on_progress.as_ref(),
+        "read",
+        source_bytes,
+        &source_format,
+    );
 
     if config.convert_to_ssbh {
         if config.generate_hkt {
+            send_static_mesh_status(
+                on_progress.as_ref(),
+                "collisionCheck",
+                "Checking HKT collision mesh input...",
+            );
             validate_static_mesh_hkt_collision_from_bytes(&dae_bytes, &source_name, &config)?;
         }
 
@@ -770,10 +1030,18 @@ pub async fn scene_execute_import(
             "[scene_execute_import] SSBH conversion: base_filename={} scale={} up_axis={}",
             ssbh_config.base_filename, ssbh_config.scale_factor, ssbh_config.up_axis
         );
+        send_static_mesh_progress(
+            on_progress.as_ref(),
+            StaticMeshImportProgress::ConvertStarted {
+                format: source_format.clone(),
+                source_name: source_name.clone(),
+                base_filename: ssbh_config.base_filename.clone(),
+            },
+        );
 
         let dae_bytes_clone = dae_bytes.clone();
         let source_name_clone = source_name.clone();
-        let artifacts = tauri::async_runtime::spawn_blocking(move || {
+        let artifacts_result = tauri::async_runtime::spawn_blocking(move || {
             convert_import_bytes_to_ssbh_artifacts(
                 &dae_bytes_clone,
                 &source_name_clone,
@@ -783,10 +1051,20 @@ pub async fn scene_execute_import(
         .await
         .map_err(|e| {
             eprintln!("[scene_execute_import] spawn_blocking join error: {}", e);
+            send_static_mesh_progress(
+                on_progress.as_ref(),
+                StaticMeshImportProgress::Error {
+                    message: format!("Task join error: {e}"),
+                },
+            );
             format!("Task join error: {e}")
-        })?
-        .map_err(|e| {
+        })?;
+        let artifacts = artifacts_result.map_err(|e| {
             eprintln!("[scene_execute_import] SSBH conversion failed: {}", e);
+            send_static_mesh_progress(
+                on_progress.as_ref(),
+                StaticMeshImportProgress::Error { message: e.clone() },
+            );
             e
         })?;
 
@@ -797,6 +1075,21 @@ pub async fn scene_execute_import(
             artifacts.nusktb.as_ref().map_or(0, |v| v.len()),
             artifacts.numatb.len()
         );
+        let artifact_bytes = ssbh_artifact_payload_bytes(&artifacts);
+        let artifact_file_count = ssbh_artifact_file_count(&artifacts);
+        send_static_mesh_progress(
+            on_progress.as_ref(),
+            StaticMeshImportProgress::ConvertFinished {
+                total_bytes: artifact_bytes,
+                file_count: artifact_file_count,
+            },
+        );
+        send_large_artifact_warning(on_progress.as_ref(), "artifacts", artifact_bytes);
+        send_static_mesh_status(
+            on_progress.as_ref(),
+            "artifacts",
+            "Storing converted SSBH artifacts in Rust session...",
+        );
 
         state.with_session_mut(&options.session_id, |s| {
             s.store_ssbh_artifacts(&options.import_id, artifacts)
@@ -806,6 +1099,12 @@ pub async fn scene_execute_import(
 
     if config.generate_hkt {
         eprintln!("[scene_execute_import] starting HKT generation");
+        send_static_mesh_progress(
+            on_progress.as_ref(),
+            StaticMeshImportProgress::HktStarted {
+                source_name: source_name.clone(),
+            },
+        );
         let hkt_options = hkt_collision_options_from_import(&config);
         if let Some(havok_config) = havok_cli::HavokCliConfig::detect() {
             if !std::path::Path::new(&havok_config.filter_manager_path).exists() {
@@ -877,6 +1176,13 @@ pub async fn scene_execute_import(
                         hkt_generated = true;
                         hkt_detail =
                             Some(hkt_success_detail(&name, hkt_size, result.triangle_count));
+                        send_static_mesh_progress(
+                            on_progress.as_ref(),
+                            StaticMeshImportProgress::HktFinished {
+                                bytes: hkt_size as u64,
+                                triangle_count: result.triangle_count,
+                            },
+                        );
                     }
                     Ok(Err(e)) => {
                         eprintln!(
@@ -906,6 +1212,7 @@ pub async fn scene_execute_import(
         "[scene_execute_import] done: name={} ssbh_generated={} hkt_generated={}",
         name, ssbh_generated, hkt_generated
     );
+    send_static_mesh_progress(on_progress.as_ref(), StaticMeshImportProgress::Complete);
     Ok(ImportResult {
         import_id: options.import_id,
         name,
@@ -1888,6 +2195,21 @@ pub struct StaticMeshDirectConvertResult {
 pub async fn scene_convert_static_mesh_to_stage_files(
     options: StaticMeshDirectConvertOptions,
 ) -> Result<StaticMeshDirectConvertResult, String> {
+    scene_convert_static_mesh_to_stage_files_impl(options, None).await
+}
+
+#[tauri::command]
+pub async fn scene_convert_static_mesh_to_stage_files_streamed(
+    options: StaticMeshDirectConvertOptions,
+    on_progress: Channel<StaticMeshImportProgress>,
+) -> Result<StaticMeshDirectConvertResult, String> {
+    scene_convert_static_mesh_to_stage_files_impl(options, Some(on_progress)).await
+}
+
+async fn scene_convert_static_mesh_to_stage_files_impl(
+    options: StaticMeshDirectConvertOptions,
+    on_progress: Option<Channel<StaticMeshImportProgress>>,
+) -> Result<StaticMeshDirectConvertResult, String> {
     let source_path = PathBuf::from(options.source_path.trim());
     if !source_path.is_file() {
         return Err(format!(
@@ -1895,7 +2217,14 @@ pub async fn scene_convert_static_mesh_to_stage_files(
             source_path.display()
         ));
     }
-    import_extension_from_path(&source_path)?;
+    send_static_mesh_status(
+        on_progress.as_ref(),
+        "read",
+        "Checking selected static mesh file...",
+    );
+    let (source_ext, _) =
+        send_static_mesh_source_progress(on_progress.as_ref(), &source_path, "read")?;
+    let source_format = static_mesh_format_label(source_ext);
 
     let output_dir = PathBuf::from(options.output_dir.trim());
     if options.output_dir.trim().is_empty() {
@@ -1911,30 +2240,90 @@ pub async fn scene_convert_static_mesh_to_stage_files(
     }
 
     if options.config.generate_hkt {
+        send_static_mesh_status(
+            on_progress.as_ref(),
+            "collisionCheck",
+            "Checking HKT collision mesh input...",
+        );
         validate_static_mesh_hkt_collision_from_path(&source_path, &options.config)?;
     }
+
+    send_static_mesh_progress(
+        on_progress.as_ref(),
+        StaticMeshImportProgress::ConvertStarted {
+            format: source_format.clone(),
+            source_name: static_mesh_source_name(&source_path),
+            base_filename: base.clone(),
+        },
+    );
 
     let source_for_convert = source_path.clone();
     let output_for_write = output_dir.clone();
     let ssbh_config_for_convert = ssbh_config.clone();
-    let mut files_written = tauri::async_runtime::spawn_blocking(move || {
+    let progress_for_write = on_progress.clone();
+    let write_result = tauri::async_runtime::spawn_blocking(move || {
         let artifacts =
             convert_import_path_to_ssbh_artifacts(&source_for_convert, &ssbh_config_for_convert)?;
-        write_static_mesh_artifacts(
+        let artifact_bytes = ssbh_artifact_payload_bytes(&artifacts);
+        let artifact_count = ssbh_artifact_file_count(&artifacts);
+        send_static_mesh_progress(
+            progress_for_write.as_ref(),
+            StaticMeshImportProgress::ConvertFinished {
+                total_bytes: artifact_bytes,
+                file_count: artifact_count,
+            },
+        );
+        send_large_artifact_warning(progress_for_write.as_ref(), "artifacts", artifact_bytes);
+        send_static_mesh_progress(
+            progress_for_write.as_ref(),
+            StaticMeshImportProgress::WriteStarted {
+                output_dir: output_for_write.to_string_lossy().to_string(),
+                base_filename: ssbh_config_for_convert.base_filename.clone(),
+            },
+        );
+        let files_written = write_static_mesh_artifacts(
             &output_for_write,
             &ssbh_config_for_convert.base_filename,
             &artifacts,
             ssbh_config_for_convert.write_jnttbl,
-        )
+        )?;
+        send_static_mesh_progress(
+            progress_for_write.as_ref(),
+            StaticMeshImportProgress::WriteFinished {
+                file_count: files_written.len(),
+            },
+        );
+        Ok::<_, String>((files_written, artifact_bytes, artifact_count))
     })
     .await
-    .map_err(|e| format!("Task join error: {e}"))??;
+    .map_err(|e| {
+        send_static_mesh_progress(
+            on_progress.as_ref(),
+            StaticMeshImportProgress::Error {
+                message: format!("Task join error: {e}"),
+            },
+        );
+        format!("Task join error: {e}")
+    })?;
+    let (mut files_written, _, _) = write_result.map_err(|e| {
+        send_static_mesh_progress(
+            on_progress.as_ref(),
+            StaticMeshImportProgress::Error { message: e.clone() },
+        );
+        e
+    })?;
 
     let mut hkt_generated = false;
     let mut hkt_detail = None;
     let mut warnings = Vec::new();
 
     if options.config.generate_hkt {
+        send_static_mesh_progress(
+            on_progress.as_ref(),
+            StaticMeshImportProgress::HktStarted {
+                source_name: static_mesh_source_name(&source_path),
+            },
+        );
         let hkt_options = hkt_collision_options_from_import(&options.config);
         if let Some(havok_config) = havok_cli::HavokCliConfig::detect() {
             let hkt_source_path = source_path.clone();
@@ -1962,6 +2351,13 @@ pub async fn scene_convert_static_mesh_to_stage_files(
                         result.bytes.len(),
                         result.triangle_count,
                     ));
+                    send_static_mesh_progress(
+                        on_progress.as_ref(),
+                        StaticMeshImportProgress::HktFinished {
+                            bytes: result.bytes.len() as u64,
+                            triangle_count: result.triangle_count,
+                        },
+                    );
                     hkt_generated = true;
                 }
                 Ok(Err(e)) => warnings.push(format!("HKT generation failed: {e}")),
@@ -1973,6 +2369,7 @@ pub async fn scene_convert_static_mesh_to_stage_files(
     }
 
     let model_dir = output_dir.join(&base).to_string_lossy().to_string();
+    send_static_mesh_progress(on_progress.as_ref(), StaticMeshImportProgress::Complete);
     Ok(StaticMeshDirectConvertResult {
         source_path: source_path.to_string_lossy().to_string(),
         output_dir: output_dir.to_string_lossy().to_string(),

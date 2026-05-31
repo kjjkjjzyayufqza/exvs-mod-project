@@ -6,14 +6,16 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle2, Loader2, Circle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface ImportStep {
   step: string;
   label: string;
+  detail?: string;
   elapsedMs?: number;
   status: "pending" | "active" | "done";
+  tone?: "default" | "warning";
 }
 
 interface StageImportProgressDialogProps {
@@ -30,26 +32,37 @@ function formatElapsed(ms: number): string {
 
 function StepRow({ step }: { step: ImportStep }) {
   return (
-    <div className="flex items-center gap-2 py-1 text-sm">
+    <div className="flex items-start gap-2 py-1 text-sm">
       {step.status === "done" && (
         <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
       )}
       {step.status === "active" && (
         <Loader2 className="h-4 w-4 text-blue-400 shrink-0 animate-spin" />
       )}
-      {step.status === "pending" && (
+      {step.status === "pending" && step.tone !== "warning" && (
         <Circle className="h-4 w-4 text-muted-foreground/40 shrink-0" />
       )}
-      <span
-        className={cn(
-          "flex-1",
-          step.status === "done" && "text-muted-foreground",
-          step.status === "active" && "text-foreground font-medium",
-          step.status === "pending" && "text-muted-foreground/50"
+      {step.status === "pending" && step.tone === "warning" && (
+        <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+      )}
+      <div className="min-w-0 flex-1">
+        <div
+          className={cn(
+            "break-words",
+            step.status === "done" && "text-muted-foreground",
+            step.status === "active" && "text-foreground font-medium",
+            step.status === "pending" && "text-muted-foreground/50",
+            step.tone === "warning" && "text-amber-600"
+          )}
+        >
+          {step.label}
+        </div>
+        {step.detail && (
+          <div className="mt-0.5 break-words text-xs text-muted-foreground">
+            {step.detail}
+          </div>
         )}
-      >
-        {step.label}
-      </span>
+      </div>
       {step.status === "done" && step.elapsedMs != null && (
         <span className="text-xs text-muted-foreground tabular-nums">
           {formatElapsed(step.elapsedMs)}

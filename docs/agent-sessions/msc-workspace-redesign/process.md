@@ -98,3 +98,36 @@ characters (workflow doc scoped it to `0xF1EF3B32` "first").
 - Make **symbol resolution a first-class, inspectable, persisted stage** rather than scattered
   post-processing across Python + TS.
 - Make the workflow **project-centric and batch-driven** instead of per-file manual clicks.
+
+## Implementation Log (UI redesign, current branch)
+
+Scope: Plan Workstream 3 (UI) + the frontend-orchestratable parts of Workstream 2. No Python or
+Tauri-command changes (auto-naming backend, round-trip verify, and the symbol table are deferred
+because building UI for a non-existent backend would be incomplete/placeholder code).
+
+Design dials: VARIANCE 4 (structured), MOTION 2 (state feedback only), DENSITY 7 (cockpit, mono
+for hex/offsets). design-taste-frontend Section 13 marks this surface (dense tool UI) out of scope
+for the landing-page rules; only transferable principles applied.
+
+Changes:
+- New `mscPipeline.ts`: pure file-role classification, per-slot pipeline status, grouping, and a
+  leading-index comparator. Fully unit-tested (`mscPipeline.test.ts`, 7 tests).
+- New `MscPipelineBar.tsx`: 3 pack-slot chips with semantic SRC/C presence flags (real state, not
+  decoration). New `MscFileRow.tsx`: dense row with semantic action-button variants.
+- Rewrote `MscWorkspaceView.tsx`:
+  - Semantic button hierarchy replaces the all-gray `BUTTON_STYLES`. Primary = pipeline-advancing
+    (Convert / Repack / Decompile All / Repack All); secondary = Rename Actions / Repack .fhm2d;
+    ghost = Open; outline = Pick folder.
+  - Batch "Decompile All" / "Repack All" orchestrate the existing per-file `mscdec`/`msclang`
+    commands sequentially (0 -> 1 -> 2 so 2.c rename sees a freshly written 0.c), with a progress bar.
+  - Unified confirm dialog (convert-one / decompile-all / repack-all) with overwrite warnings.
+  - Unfiltered `allFiles` fetch + memoized filter/group/slots (fixes re-fetch-per-keystroke and
+    makes batch targets + pipeline state independent of the active search filter).
+  - Grouped dense `divide-y` list (Source scripts / Decompiled C / Logs / Other), skeleton loading,
+    composed empty state, toast errors.
+  - Preserved behavior: action-mask rename for 2.c, func_0 -> main, Repack Folder (`repack_fhm2d`),
+    external-editor open, hardcoded `0xF1EF3B32` mapping path (unchanged; addressed by W1 later).
+
+Verification: `pnpm exec tsc --noEmit` reports zero errors in msc-editor files (11 pre-existing
+errors live in `src/page/SceneEdit/*`, unrelated uncommitted work). `vitest run` 7/7 pass.
+Did not start a dev server (per project rule).

@@ -1,6 +1,6 @@
 # Scene Editor Import Optimization — TODO
 
-## Status: Resumed for FBX, Direct-to-Disk Import, and Export Scope
+## Status: Resumed for DAE/FBX Conversion Progress IPC
 
 ## Phase 1: Import Flow Refactoring ✅
 - [x] Remove Quick Import dropdown, unify to single Import button → DaeImportConfigModal
@@ -39,3 +39,10 @@
 - Thumbnail decode via `scene_decode_nutexb_thumbnail` Rust command (lazy, not yet implemented)
 - fhm2d save reassembly Rust command to consume TextureSaveManifest (integration point ready)
 - Wire `useSceneDragDrop` hook into SceneEdit page component with actual handlers
+
+## 2026-05-31 Conversion Progress IPC
+- [x] Trace DAE/FBX conversion flows for in-session import and direct-to-disk import
+- [x] Add lightweight custom Channel progress messages from Rust conversion commands
+- [x] Surface conversion, artifact, HKT, and large IPC/file payload warnings in the Scene Editor progress dialog
+- [x] Keep large file transfer path-based and avoid changing repack or structure JSON behavior
+- [x] Run focused Rust/TypeScript verification and record results

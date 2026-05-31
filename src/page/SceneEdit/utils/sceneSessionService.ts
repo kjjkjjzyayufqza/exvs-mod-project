@@ -71,6 +71,30 @@ export interface StaticMeshDirectConvertResult {
   warnings: string[];
 }
 
+export type StaticMeshImportProgress =
+  | { kind: "status"; phase: string; label: string }
+  | { kind: "sourceFile"; path: string; bytes: number; format: string }
+  | {
+      kind: "ipcWarning";
+      phase: string;
+      bytes: number;
+      thresholdBytes: number;
+      message: string;
+    }
+  | {
+      kind: "convertStarted";
+      format: string;
+      sourceName: string;
+      baseFilename: string;
+    }
+  | { kind: "convertFinished"; totalBytes: number; fileCount: number }
+  | { kind: "writeStarted"; outputDir: string; baseFilename: string }
+  | { kind: "writeFinished"; fileCount: number }
+  | { kind: "hktStarted"; sourceName: string }
+  | { kind: "hktFinished"; bytes: number; triangleCount: number }
+  | { kind: "complete" }
+  | { kind: "error"; message: string };
+
 export interface SaveResult {
   success: boolean;
   filesWritten: number;
@@ -136,6 +160,22 @@ export function sceneImportDaeFromPath(
   return invoke<string>("scene_import_dae_from_path", { sessionId, filePath, name });
 }
 
+export function sceneImportDaeFromPathWithProgress(
+  sessionId: string,
+  filePath: string,
+  name: string,
+  onProgress: (chunk: StaticMeshImportProgress) => void,
+): Promise<string> {
+  const channel = new Channel<StaticMeshImportProgress>();
+  channel.onmessage = onProgress;
+  return invoke<string>("scene_import_dae_from_path_streamed", {
+    sessionId,
+    filePath,
+    name,
+    onProgress: channel,
+  });
+}
+
 export function sceneConfigureImport(
   sessionId: string,
   importId: string,
@@ -173,6 +213,19 @@ export function sceneForgetBaseModel(sessionId: string): Promise<boolean> {
 export function sceneExecuteImport(sessionId: string, importId: string): Promise<ImportResult> {
   return invoke<ImportResult>("scene_execute_import", {
     options: { sessionId, importId },
+  });
+}
+
+export function sceneExecuteImportWithProgress(
+  sessionId: string,
+  importId: string,
+  onProgress: (chunk: StaticMeshImportProgress) => void,
+): Promise<ImportResult> {
+  const channel = new Channel<StaticMeshImportProgress>();
+  channel.onmessage = onProgress;
+  return invoke<ImportResult>("scene_execute_import_streamed", {
+    options: { sessionId, importId },
+    onProgress: channel,
   });
 }
 
@@ -312,6 +365,22 @@ export function sceneConvertStaticMeshToStageFiles(params: {
 }): Promise<StaticMeshDirectConvertResult> {
   return invoke<StaticMeshDirectConvertResult>("scene_convert_static_mesh_to_stage_files", {
     options: params,
+  });
+}
+
+export function sceneConvertStaticMeshToStageFilesWithProgress(
+  params: {
+    sourcePath: string;
+    outputDir: string;
+    config: ImportConfig;
+  },
+  onProgress: (chunk: StaticMeshImportProgress) => void,
+): Promise<StaticMeshDirectConvertResult> {
+  const channel = new Channel<StaticMeshImportProgress>();
+  channel.onmessage = onProgress;
+  return invoke<StaticMeshDirectConvertResult>("scene_convert_static_mesh_to_stage_files_streamed", {
+    options: params,
+    onProgress: channel,
   });
 }
 
