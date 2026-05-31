@@ -45,6 +45,9 @@ export function buildSaveChangePreview(store: SceneDirtyStore): SaveChangePrevie
   if (store.global.placementOrder) {
     globalChanges.push("Object placement (placement.csv)");
   }
+  if (store.global.textures) {
+    globalChanges.push("Scene textures (textures/ folder)");
+  }
 
   const hasChanges =
     added.length > 0 ||

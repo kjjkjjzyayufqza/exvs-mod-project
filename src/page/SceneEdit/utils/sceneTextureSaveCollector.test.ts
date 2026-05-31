@@ -28,6 +28,20 @@ describe("sceneTextureSaveCollector", () => {
     const manifest = collectTextureSaveManifest();
     expect(manifest.existing).toEqual([]);
     expect(manifest.added).toEqual([]);
+    expect(manifest.removed).toEqual([]);
+  });
+
+  it("collects removed existing textures pending deletion", () => {
+    useSceneTextureManagerStore
+      .getState()
+      .setEntries([
+        makeEntry({ id: "e1", status: "existing", filename: "diffuse.nutexb", nutexbPath: "D:/t/diffuse.nutexb" }),
+      ]);
+    useSceneTextureManagerStore.getState().removeEntry("e1");
+    const manifest = collectTextureSaveManifest();
+    expect(manifest.removed).toEqual([
+      { filename: "diffuse.nutexb", nutexbPath: "D:/t/diffuse.nutexb" },
+    ]);
   });
 
   it("collects existing entries with nutexbPath", () => {

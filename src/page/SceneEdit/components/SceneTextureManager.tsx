@@ -29,7 +29,7 @@ import { TexturePreviewModal } from "./TexturePreviewModal";
 import { TextureReplaceModal } from "./TextureReplaceModal";
 import {
   TextureAddConfirmModal,
-  type TextureAddConfirmPayload,
+  type TextureAddSelection,
 } from "./TextureAddConfirmModal";
 import { VirtualizedList } from "./VirtualizedList";
 import {
@@ -37,6 +37,13 @@ import {
   exportNutexbToPng,
   reencodeNutexbWithFormat,
 } from "../utils/sceneTextureConvert";
+import {
+  analyzeTextureAddCandidates,
+  invalidateNutexbInternalName,
+  type AnalyzedAddCandidate,
+  type RawAddFile,
+} from "../utils/sceneTextureAddPlan";
+import { useSceneDirtyStore } from "../store/sceneDirtyStore";
 import type { DdsFormat } from "./TextureFormatSelect";
 
 const ASYNC_THUMB_CONCURRENCY = 4;
@@ -63,13 +70,15 @@ export function SceneTextureManager({
   } = useSceneTextureManagerStore();
   const [previewEntry, setPreviewEntry] = useState<TextureManagerEntry | null>(null);
   const [replaceTarget, setReplaceTarget] = useState<TextureManagerEntry | null>(null);
-  const [addConfirm, setAddConfirm] = useState<TextureAddConfirmPayload | null>(
+  const [addCandidates, setAddCandidates] = useState<AnalyzedAddCandidate[] | null>(
     null,
   );
-  const [pendingAddQueue, setPendingAddQueue] = useState<TextureAddConfirmPayload[]>(
-    [],
-  );
+  const [addAnalyzing, setAddAnalyzing] = useState(false);
   const [isAddConverting, setIsAddConverting] = useState(false);
+  const [convertProgress, setConvertProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const [isPreviewReencoding, setIsPreviewReencoding] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [, bumpThumbnailCache] = useReducer((value: number) => value + 1, 0);
@@ -149,65 +158,6 @@ export function SceneTextureManager({
     return entries.filter((e) => e.filename.toLowerCase().includes(q));
   }, [entries, searchQuery]);
 
-  const commitImageAdd = useCallback(
-    async (filePath: string, ddsFormat: DdsFormat) => {
-      const filename = filePath.split(/[/\\]/).pop() ?? "unknown";
-      const nutexbFilename = filename.replace(/\.[^.]+$/, ".nutexb");
-      const entryId = `tex_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
-      addEntry({
-        id: entryId,
-        filename: nutexbFilename,
-        status: "added",
-        format: "converting",
-        width: 0,
-        height: 0,
-        sizeBytes: 0,
-        referencedBy: [],
-        thumbnailDataUrl: null,
-        nutexbPath: null,
-        sourceImagePath: filePath,
-      });
-
-      try {
-        const result = await convertImageToNutexb({
-          sourcePath: filePath,
-          ddsFormat,
-        });
-        replaceEntry(entryId, {
-          nutexbPath: result.outputNutexbPath,
-          format: ddsFormat,
-          thumbnailDataUrl: null,
-        });
-      } catch {
-        replaceEntry(entryId, { format: "error" });
-      }
-    },
-    [addEntry, replaceEntry],
-  );
-
-  const advanceAddQueue = useCallback(() => {
-    setPendingAddQueue((queue) => {
-      const [next, ...rest] = queue;
-      setAddConfirm(next ?? null);
-      return rest;
-    });
-  }, []);
-
-  const handleAddConfirm = useCallback(
-    async (ddsFormat: DdsFormat) => {
-      if (!addConfirm) return;
-      setIsAddConverting(true);
-      try {
-        await commitImageAdd(addConfirm.sourcePath, ddsFormat);
-        advanceAddQueue();
-      } finally {
-        setIsAddConverting(false);
-      }
-    },
-    [addConfirm, advanceAddQueue, commitImageAdd],
-  );
-
   const handleAddTexture = useCallback(async () => {
     const selected = await open({
       title: "Add Texture to Scene",
@@ -218,44 +168,113 @@ export function SceneTextureManager({
     });
     if (!selected) return;
     const paths = Array.isArray(selected) ? selected : [selected];
+    if (paths.length === 0) return;
 
-    const imagePayloads: TextureAddConfirmPayload[] = [];
+    const files: RawAddFile[] = paths.map((p) => ({
+      sourcePath: p,
+      filename: p.split(/[/\\]/).pop() ?? "unknown",
+    }));
 
-    for (const filePath of paths) {
-      const filename = filePath.split(/[/\\]/).pop() ?? "unknown";
-      const isNutexb = filename.toLowerCase().endsWith(".nutexb");
+    // Open the modal immediately with un-analyzed rows so the user sees the
+    // selection at once, then fill in duplicate flags once the (async) internal
+    // name reads finish.
+    setAddAnalyzing(true);
+    setAddCandidates(
+      files.map((f) => ({
+        id: f.sourcePath,
+        sourcePath: f.sourcePath,
+        filename: f.filename,
+        nutexbFilename: f.filename.replace(/\.[^.]+$/, ".nutexb"),
+        isNutexb: f.filename.toLowerCase().endsWith(".nutexb"),
+        internalName: null,
+        duplicate: false,
+        duplicateReason: null,
+        duplicateOf: null,
+      })),
+    );
 
-      if (isNutexb) {
-        const entryId = `tex_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        addEntry({
-          id: entryId,
-          filename,
-          status: "added",
-          format: "unknown",
-          width: 0,
-          height: 0,
-          sizeBytes: 0,
-          referencedBy: [],
-          thumbnailDataUrl: null,
-          nutexbPath: filePath,
-          sourceImagePath: null,
-        });
-        continue;
-      }
-
-      imagePayloads.push({
-        sourcePath: filePath,
-        filename,
-        nutexbFilename: filename.replace(/\.[^.]+$/, ".nutexb"),
-      });
+    try {
+      const analyzed = await analyzeTextureAddCandidates(
+        files,
+        useSceneTextureManagerStore.getState().entries,
+      );
+      setAddCandidates(analyzed);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to analyze textures for duplicates");
+    } finally {
+      setAddAnalyzing(false);
     }
+  }, []);
 
-    if (imagePayloads.length === 0) return;
+  const handleBatchConfirm = useCallback(
+    async (selections: TextureAddSelection[]) => {
+      if (selections.length === 0) return;
+      setIsAddConverting(true);
+      setConvertProgress({ done: 0, total: selections.length });
 
-    const [first, ...rest] = imagePayloads;
-    setAddConfirm(first);
-    setPendingAddQueue(rest);
-  }, [addEntry]);
+      try {
+        let done = 0;
+        for (const { candidate, ddsFormat } of selections) {
+          const entryId = `tex_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+          if (candidate.isNutexb) {
+            addEntry({
+              id: entryId,
+              filename: candidate.nutexbFilename,
+              status: "added",
+              format: "unknown",
+              width: 0,
+              height: 0,
+              sizeBytes: 0,
+              referencedBy: [],
+              thumbnailDataUrl: null,
+              nutexbPath: candidate.sourcePath,
+              sourceImagePath: null,
+            });
+          } else {
+            addEntry({
+              id: entryId,
+              filename: candidate.nutexbFilename,
+              status: "added",
+              format: "converting",
+              width: 0,
+              height: 0,
+              sizeBytes: 0,
+              referencedBy: [],
+              thumbnailDataUrl: null,
+              nutexbPath: null,
+              sourceImagePath: candidate.sourcePath,
+            });
+            try {
+              const result = await convertImageToNutexb({
+                sourcePath: candidate.sourcePath,
+                ddsFormat,
+              });
+              replaceEntry(entryId, {
+                nutexbPath: result.outputNutexbPath,
+                format: ddsFormat,
+                thumbnailDataUrl: null,
+              });
+            } catch {
+              replaceEntry(entryId, { format: "error" });
+            }
+          }
+
+          done += 1;
+          setConvertProgress({ done, total: selections.length });
+        }
+
+        useSceneDirtyStore.getState().markGlobalDirty("textures");
+      } finally {
+        setIsAddConverting(false);
+        setConvertProgress(null);
+        setAddCandidates(null);
+        setAddAnalyzing(false);
+      }
+    },
+    [addEntry, replaceEntry],
+  );
 
   const handleReplace = useCallback(
     (entry: TextureManagerEntry) => {
@@ -266,8 +285,18 @@ export function SceneTextureManager({
 
   const handleDelete = useCallback(
     (entry: TextureManagerEntry) => {
-      if (entry.status !== "added") return;
+      // A texture wired into a numatb material must not be removed — doing so
+      // would leave a dangling reference. Removal stays in-memory until the user
+      // commits with "save changes" (existing files are deleted from the stage
+      // textures/ folder by the save pipeline at that point).
+      if (entry.referencedBy.length > 0) {
+        toast.error("Cannot remove a texture referenced by numatb", {
+          description: `${entry.filename} is used by: ${entry.referencedBy.join(", ")}`,
+        });
+        return;
+      }
       removeEntry(entry.id);
+      useSceneDirtyStore.getState().markGlobalDirty("textures");
     },
     [removeEntry]
   );
@@ -314,6 +343,7 @@ export function SceneTextureManager({
           ddsFormat,
           sourceImagePath: previewEntry.sourceImagePath,
         });
+        invalidateNutexbInternalName(previewEntry.nutexbPath);
         replaceEntry(previewEntry.id, {
           format: ddsFormat,
           thumbnailDataUrl: null,
@@ -411,17 +441,19 @@ export function SceneTextureManager({
         />
       )}
 
-      {addConfirm && (
+      {addCandidates && (
         <TextureAddConfirmModal
-          payload={addConfirm}
+          candidates={addCandidates}
+          analyzing={addAnalyzing}
+          isConverting={isAddConverting}
+          convertProgress={convertProgress}
           onClose={() => {
             if (!isAddConverting) {
-              setAddConfirm(null);
-              setPendingAddQueue([]);
+              setAddCandidates(null);
+              setAddAnalyzing(false);
             }
           }}
-          onConfirm={handleAddConfirm}
-          isConverting={isAddConverting}
+          onConfirm={handleBatchConfirm}
         />
       )}
 
@@ -443,6 +475,7 @@ export function SceneTextureManager({
               const filePath = selected.trim();
               const isNutexb = filePath.toLowerCase().endsWith(".nutexb");
               if (isNutexb) {
+                invalidateNutexbInternalName(filePath);
                 replaceEntry(entry.id, {
                   nutexbPath: filePath,
                   sourceImagePath: null,
@@ -577,11 +610,15 @@ function TextureRow({
         )}
         <ContextMenuItem onClick={onReplace}>Replace</ContextMenuItem>
         <ContextMenuItem onClick={onCopyPath}>Copy Path</ContextMenuItem>
-        {entry.status === "added" && (
-          <ContextMenuItem onClick={onDelete} className="text-destructive">
-            Delete
-          </ContextMenuItem>
-        )}
+        <ContextMenuItem
+          onClick={onDelete}
+          disabled={entry.referencedBy.length > 0}
+          className={entry.referencedBy.length > 0 ? undefined : "text-destructive"}
+        >
+          {entry.referencedBy.length > 0
+            ? "Remove (referenced by numatb)"
+            : "Remove"}
+        </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );

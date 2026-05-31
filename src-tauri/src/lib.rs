@@ -133,6 +133,7 @@ pub fn run() {
             stage_commands::repack_fhm2d,
             stage_commands::redistribute_stage_textures,
             stage_commands::restore_shared_textures,
+            stage_commands::apply_scene_texture_edits,
             stage_commands::rebuild_stage_structure_json,
             stage_commands::rebuild_stage_structure_json_forced,
             stage_commands::rebuild_stage_structure_json_with_shared_textures,

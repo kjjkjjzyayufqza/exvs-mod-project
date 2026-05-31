@@ -3006,3 +3006,82 @@ fn find_model_numshb_returns_none_without_numdlb() {
 
     assert!(find_model_numshb(&folder).is_none());
 }
+
+// ── apply_scene_texture_edits ─────────────────────────────────────────────
+
+#[test]
+fn apply_scene_texture_edits_copies_added_into_shared_textures() {
+    let tmp = tempfile::tempdir().unwrap();
+    let stage_root = tmp.path();
+    // Source nutexb to add (content need not be a valid container for a copy).
+    let src = tmp.path().join("source_diffuse.nutexb");
+    fs::write(&src, b"NUTEXB-PAYLOAD").unwrap();
+
+    let added = vec![AddedTextureEdit {
+        filename: "added_diffuse.nutexb".to_string(),
+        nutexb_path: src.to_string_lossy().to_string(),
+    }];
+    let result =
+        apply_scene_texture_edits(&stage_root.to_string_lossy(), &added, &[]).unwrap();
+
+    assert_eq!(result.copied, 1);
+    assert_eq!(result.deleted, 0);
+    let dest = stage_root.join("textures").join("added_diffuse.nutexb");
+    assert!(dest.is_file(), "added texture must land in textures/");
+    assert_eq!(fs::read(&dest).unwrap(), b"NUTEXB-PAYLOAD");
+}
+
+#[test]
+fn apply_scene_texture_edits_deletes_removed_from_shared_textures() {
+    let tmp = tempfile::tempdir().unwrap();
+    let stage_root = tmp.path();
+    let textures_dir = stage_root.join("textures");
+    fs::create_dir_all(&textures_dir).unwrap();
+    let victim = textures_dir.join("stale.nutexb");
+    fs::write(&victim, b"stale").unwrap();
+
+    let removed = vec![RemovedTextureEdit {
+        filename: "stale.nutexb".to_string(),
+    }];
+    let result =
+        apply_scene_texture_edits(&stage_root.to_string_lossy(), &[], &removed).unwrap();
+
+    assert_eq!(result.deleted, 1);
+    assert!(!victim.exists(), "removed texture must be deleted");
+}
+
+#[test]
+fn apply_scene_texture_edits_warns_when_removed_missing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let removed = vec![RemovedTextureEdit {
+        filename: "ghost.nutexb".to_string(),
+    }];
+    let result =
+        apply_scene_texture_edits(&tmp.path().to_string_lossy(), &[], &removed).unwrap();
+
+    assert_eq!(result.deleted, 0);
+    assert_eq!(result.warnings.len(), 1);
+}
+
+#[test]
+fn apply_scene_texture_edits_errors_when_added_source_missing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let added = vec![AddedTextureEdit {
+        filename: "missing.nutexb".to_string(),
+        nutexb_path: tmp.path().join("does_not_exist.nutexb").to_string_lossy().to_string(),
+    }];
+    let result = apply_scene_texture_edits(&tmp.path().to_string_lossy(), &added, &[]);
+    assert!(result.is_err());
+}
+
+#[test]
+fn sanitized_texture_filename_rejects_invalid_names() {
+    assert!(sanitized_texture_filename("good.nutexb").is_ok());
+    assert!(sanitized_texture_filename("  spaced.nutexb  ").is_ok());
+    assert!(sanitized_texture_filename("").is_err());
+    assert!(sanitized_texture_filename("no_extension").is_err());
+    assert!(sanitized_texture_filename("foo.png").is_err());
+    assert!(sanitized_texture_filename("../escape.nutexb").is_err());
+    assert!(sanitized_texture_filename("sub/dir.nutexb").is_err());
+    assert!(sanitized_texture_filename("sub\\dir.nutexb").is_err());
+}

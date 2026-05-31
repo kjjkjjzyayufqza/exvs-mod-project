@@ -517,6 +517,39 @@ pub async fn restore_shared_textures(
 }
 
 #[tauri::command]
+pub async fn apply_scene_texture_edits(
+    stage_root: String,
+    added: Vec<fhm2d_stage::AddedTextureEdit>,
+    removed: Vec<fhm2d_stage::RemovedTextureEdit>,
+) -> Result<fhm2d_stage::ApplyTextureEditsResult, String> {
+    eprintln!(
+        "[apply_texture_edits] Starting for: {stage_root} (+{} / -{})",
+        added.len(),
+        removed.len()
+    );
+    let t = Instant::now();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        fhm2d_stage::apply_scene_texture_edits(&stage_root, &added, &removed)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?;
+    match &result {
+        Ok(r) => eprintln!(
+            "[apply_texture_edits] Done in {}ms — {} copied, {} deleted, {} warnings",
+            t.elapsed().as_millis(),
+            r.copied,
+            r.deleted,
+            r.warnings.len()
+        ),
+        Err(e) => eprintln!(
+            "[apply_texture_edits] Failed in {}ms — {e}",
+            t.elapsed().as_millis()
+        ),
+    }
+    result
+}
+
+#[tauri::command]
 pub async fn rebuild_stage_structure_json(stage_root: String) -> Result<String, String> {
     eprintln!("[rebuild_structure] Starting for: {stage_root}");
     let t = Instant::now();

@@ -120,11 +120,59 @@ describe("sceneTextureManagerStore", () => {
     useSceneTextureManagerStore.getState().setEntries([makeEntry({ id: "a" })]);
     useSceneTextureManagerStore.getState().setSelectedId("a");
     useSceneTextureManagerStore.getState().setSearchQuery("test");
+    useSceneTextureManagerStore.getState().removeEntry("a");
     useSceneTextureManagerStore.getState().clear();
     const state = useSceneTextureManagerStore.getState();
     expect(state.entries).toEqual([]);
     expect(state.selectedId).toBeNull();
     expect(state.searchQuery).toBe("");
+    expect(state.removedExisting).toEqual([]);
+  });
+
+  it("removeEntry records an existing texture for deletion on save", () => {
+    useSceneTextureManagerStore
+      .getState()
+      .setEntries([
+        makeEntry({ id: "a", status: "existing", filename: "diffuse.nutexb", nutexbPath: "D:/t/diffuse.nutexb" }),
+      ]);
+    useSceneTextureManagerStore.getState().removeEntry("a");
+    expect(useSceneTextureManagerStore.getState().removedExisting).toEqual([
+      { filename: "diffuse.nutexb", nutexbPath: "D:/t/diffuse.nutexb" },
+    ]);
+  });
+
+  it("removeEntry does not record an added texture", () => {
+    useSceneTextureManagerStore
+      .getState()
+      .setEntries([makeEntry({ id: "a", status: "added", nutexbPath: "D:/tmp/new.nutexb" })]);
+    useSceneTextureManagerStore.getState().removeEntry("a");
+    expect(useSceneTextureManagerStore.getState().removedExisting).toEqual([]);
+  });
+
+  it("removeEntry does not record the same filename twice", () => {
+    useSceneTextureManagerStore
+      .getState()
+      .setEntries([
+        makeEntry({ id: "a", status: "existing", filename: "shared.nutexb" }),
+        makeEntry({ id: "b", status: "existing", filename: "Shared.nutexb" }),
+      ]);
+    useSceneTextureManagerStore.getState().removeEntry("a");
+    useSceneTextureManagerStore.getState().removeEntry("b");
+    expect(useSceneTextureManagerStore.getState().removedExisting).toHaveLength(1);
+  });
+
+  it("markTexturesSaved promotes added entries and clears removals", () => {
+    useSceneTextureManagerStore
+      .getState()
+      .setEntries([
+        makeEntry({ id: "a", status: "existing", filename: "old.nutexb" }),
+        makeEntry({ id: "b", status: "added", filename: "new.nutexb" }),
+      ]);
+    useSceneTextureManagerStore.getState().removeEntry("a");
+    useSceneTextureManagerStore.getState().markTexturesSaved();
+    const state = useSceneTextureManagerStore.getState();
+    expect(state.entries.every((e) => e.status === "existing")).toBe(true);
+    expect(state.removedExisting).toEqual([]);
   });
 });
 

@@ -18,6 +18,7 @@ export type ObjectDirtyEntry = {
 export type GlobalDirtyState = {
   graphicParams: boolean;
   placementOrder: boolean;
+  textures: boolean;
 };
 
 const EMPTY_MODIFIED_FIELDS: ModifiedFields = {
@@ -50,12 +51,16 @@ export type SceneDirtyStore = SceneDirtyState & SceneDirtyActions;
 export const useSceneDirtyStore = create<SceneDirtyStore>()(
   immer((set, get) => ({
     objects: {} as Record<string, ObjectDirtyEntry>,
-    global: { graphicParams: false, placementOrder: false },
+    global: { graphicParams: false, placementOrder: false, textures: false },
 
     hasAnyChanges: () => {
       const state = get();
       if (Object.keys(state.objects).length > 0) return true;
-      return state.global.graphicParams || state.global.placementOrder;
+      return (
+        state.global.graphicParams ||
+        state.global.placementOrder ||
+        state.global.textures
+      );
     },
 
     markObjectAdded: (folderName) => {
@@ -123,7 +128,7 @@ export const useSceneDirtyStore = create<SceneDirtyStore>()(
     reset: () => {
       set((state) => {
         state.objects = {};
-        state.global = { graphicParams: false, placementOrder: false };
+        state.global = { graphicParams: false, placementOrder: false, textures: false };
       });
     },
 

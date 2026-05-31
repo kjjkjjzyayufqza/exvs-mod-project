@@ -374,7 +374,11 @@ export default function SceneEdit() {
   const [isLoading, setIsLoading] = useState(false);
   const [modelLoadProgress, setModelLoadProgress] = useState<{ loaded: number; total: number } | null>(null);
   const hasUnsavedChanges = useSceneDirtyStore(
-    (s) => Object.keys(s.objects).length > 0 || s.global.graphicParams || s.global.placementOrder,
+    (s) =>
+      Object.keys(s.objects).length > 0 ||
+      s.global.graphicParams ||
+      s.global.placementOrder ||
+      s.global.textures,
   );
   const [saveProgressState, setSaveProgressState] = useState<{
     open: boolean;
@@ -1501,6 +1505,7 @@ export default function SceneEdit() {
       }
 
       useSceneDirtyStore.getState().reset();
+      useSceneTextureManagerStore.getState().markTexturesSaved();
       const completionSummary = buildSaveResultSummary(changePreview, result);
       setSaveProgressState((prev) => ({ ...prev, canClose: true, completionSummary }));
 
@@ -1590,6 +1595,7 @@ export default function SceneEdit() {
       }
 
       useSceneDirtyStore.getState().reset();
+      useSceneTextureManagerStore.getState().markTexturesSaved();
       const completionSummary = [
         ...buildSaveResultSummary(changePreview, result),
         `Packed FHM2D (${(result.fhm2dSizeBytes / (1024 * 1024)).toFixed(1)} MB)`,
@@ -1657,6 +1663,7 @@ export default function SceneEdit() {
         setStandaloneTransforms(new Map());
         useSceneEditorStore.getState().clearHistory();
         useSceneDirtyStore.getState().reset();
+      useSceneTextureManagerStore.getState().markTexturesSaved();
         toast.success("All changes reverted to loaded state");
       },
     );

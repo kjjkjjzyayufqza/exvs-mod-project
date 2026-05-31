@@ -38,6 +38,10 @@ import { serializeDaeToBytes } from "./daeExportImport";
 import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
 import { resolveOrCreateInfoFolder } from "./sceneInfoFolder";
 import { ensureSkyPlacementObjectNumber } from "./ensureSkyPlacementObjectNumber";
+import {
+  collectTextureSaveManifest,
+  manifestHasTextureChanges,
+} from "./sceneTextureSaveCollector";
 import { remapPlacementObjectNumbers } from "./remapPlacementObjectNumbers";
 
 function joinTauriPath(...parts: string[]): string {
@@ -294,8 +298,34 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
   // Phase 4: Write materials (placeholder — material editing not yet implemented)
   emitStep(onProgress, "materials", "Writing materials...", "done", "Skipped");
 
-  // Phase 5: Write textures (placeholder — texture editing not yet fully implemented)
-  emitStep(onProgress, "textures", "Writing textures...", "done", "Skipped");
+  // Phase 5: Write textures — apply Texture Manager add/remove edits into the
+  // shared textures/ folder. Runs before consolidation (Phase 8) and the fhm2d
+  // redistribute step so both save modes see the updated shared folder.
+  const textureManifest = collectTextureSaveManifest();
+  if (manifestHasTextureChanges(textureManifest)) {
+    emitStep(onProgress, "textures", "Writing textures...", "running");
+    try {
+      const packTarget = resolveStagePackStructureTarget(stageRoot);
+      const added = textureManifest.added
+        .filter((t) => Boolean(t.nutexbPath))
+        .map((t) => ({ filename: t.filename, nutexbPath: t.nutexbPath as string }));
+      const skipped = textureManifest.added.length - added.length;
+      const removed = textureManifest.removed.map((t) => ({ filename: t.filename }));
+
+      const result = await invoke<{ copied: number; deleted: number; warnings: string[] }>(
+        "apply_scene_texture_edits",
+        { stageRoot: packTarget.packRoot, added, removed },
+      );
+
+      const detailParts = [`${result.copied} added`, `${result.deleted} removed`];
+      if (skipped > 0) detailParts.push(`${skipped} unconverted skipped`);
+      emitStep(onProgress, "textures", "Writing textures...", "done", detailParts.join(", "));
+    } catch (err) {
+      emitStep(onProgress, "textures", "Writing textures...", "error", undefined, err instanceof Error ? err.message : String(err));
+    }
+  } else {
+    emitStep(onProgress, "textures", "Writing textures...", "done", "Skipped");
+  }
 
   // Phase 6: Write HKT files (session-based HKT is handled by sceneSaveAsFolder IPC)
   emitStep(onProgress, "hkt", "Writing HKT files...", "done", "Via session");

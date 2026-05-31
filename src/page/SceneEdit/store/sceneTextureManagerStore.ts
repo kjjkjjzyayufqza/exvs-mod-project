@@ -16,10 +16,21 @@ export interface TextureManagerEntry {
   sourceImagePath: string | null;
 }
 
+/**
+ * An existing stage texture that was removed in-memory and must be deleted from
+ * the stage textures/ folder when the user commits with "save changes".
+ */
+export interface RemovedTextureRef {
+  filename: string;
+  nutexbPath: string | null;
+}
+
 interface SceneTextureManagerState {
   entries: TextureManagerEntry[];
   selectedId: string | null;
   searchQuery: string;
+  /** Existing stage textures removed in-memory, pending deletion on save. */
+  removedExisting: RemovedTextureRef[];
 }
 
 interface SceneTextureManagerActions {
@@ -31,6 +42,11 @@ interface SceneTextureManagerActions {
   setSearchQuery: (query: string) => void;
   setThumbnail: (id: string, dataUrl: string) => void;
   updateReferences: (id: string, refs: string[]) => void;
+  /**
+   * Mark all in-memory texture edits as persisted: promote "added" entries to
+   * "existing" and clear the pending-removal list. Called after a successful save.
+   */
+  markTexturesSaved: () => void;
   clear: () => void;
 }
 
@@ -42,15 +58,33 @@ export const useSceneTextureManagerStore = create<SceneTextureManagerStore>(
     entries: [],
     selectedId: null,
     searchQuery: "",
+    removedExisting: [],
 
     setEntries: (entries) => set({ entries }),
     addEntry: (entry) =>
       set((state) => ({ entries: [...state.entries, entry] })),
     removeEntry: (id) =>
-      set((state) => ({
-        entries: state.entries.filter((e) => e.id !== id),
-        selectedId: state.selectedId === id ? null : state.selectedId,
-      })),
+      set((state) => {
+        const target = state.entries.find((e) => e.id === id);
+        // Only existing stage textures need on-disk deletion at save time;
+        // an "added" entry was never written to the stage, so dropping it from
+        // memory is enough. Guard against recording the same filename twice.
+        const shouldTrack =
+          target?.status === "existing" &&
+          !state.removedExisting.some(
+            (r) => r.filename.toLowerCase() === target.filename.toLowerCase(),
+          );
+        return {
+          entries: state.entries.filter((e) => e.id !== id),
+          selectedId: state.selectedId === id ? null : state.selectedId,
+          removedExisting: shouldTrack
+            ? [
+                ...state.removedExisting,
+                { filename: target.filename, nutexbPath: target.nutexbPath },
+              ]
+            : state.removedExisting,
+        };
+      }),
     replaceEntry: (id, updated) =>
       set((state) => ({
         entries: state.entries.map((e) =>
@@ -71,7 +105,15 @@ export const useSceneTextureManagerStore = create<SceneTextureManagerStore>(
           e.id === id ? { ...e, referencedBy: refs } : e
         ),
       })),
-    clear: () => set({ entries: [], selectedId: null, searchQuery: "" }),
+    markTexturesSaved: () =>
+      set((state) => ({
+        entries: state.entries.map((e) =>
+          e.status === "added" ? { ...e, status: "existing" } : e
+        ),
+        removedExisting: [],
+      })),
+    clear: () =>
+      set({ entries: [], selectedId: null, searchQuery: "", removedExisting: [] }),
   })
 );
 

@@ -4480,6 +4480,103 @@ pub fn restore_shared_textures(stage_root: &str) -> Result<RestoreSharedResult, 
     })
 }
 
+// ── Scene Texture Manager edits (add / remove in the shared textures/ folder) ─
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AddedTextureEdit {
+    /// Target nutexb filename inside the stage textures/ folder.
+    pub filename: String,
+    /// Absolute path to the source nutexb to copy in.
+    pub nutexb_path: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RemovedTextureEdit {
+    /// nutexb filename to delete from the stage textures/ folder.
+    pub filename: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyTextureEditsResult {
+    pub copied: usize,
+    pub deleted: usize,
+    pub warnings: Vec<String>,
+}
+
+/// Validate that a manifest filename is a bare `*.nutexb` name (no path
+/// separators or traversal). Filenames come from the UI, so this guards the
+/// shared `textures/` folder against writing/deleting outside itself.
+fn sanitized_texture_filename(filename: &str) -> Result<String, String> {
+    let trimmed = filename.trim();
+    if trimmed.is_empty() {
+        return Err("Empty texture filename".to_string());
+    }
+    if trimmed.contains('/') || trimmed.contains('\\') || trimmed.contains("..") {
+        return Err(format!("Invalid texture filename: {trimmed}"));
+    }
+    if !trimmed.to_ascii_lowercase().ends_with(".nutexb") {
+        return Err(format!("Texture filename must end with .nutexb: {trimmed}"));
+    }
+    Ok(trimmed.to_string())
+}
+
+/// Apply texture-manager edits to the stage's shared `textures/` folder:
+/// remove deleted nutexb files first, then copy newly added nutexb files in.
+/// Must run before `restore_shared_textures` / `redistribute_stage_textures`
+/// so the shared folder is the single source of truth for both save modes.
+pub fn apply_scene_texture_edits(
+    stage_root: &str,
+    added: &[AddedTextureEdit],
+    removed: &[RemovedTextureEdit],
+) -> Result<ApplyTextureEditsResult, String> {
+    let stage_root_path = Path::new(stage_root);
+    let (_pack_root, content_root) = resolve_stage_roots(stage_root_path);
+    let textures_dir = content_root.join(STAGE_TEXTURES_NAME);
+
+    let mut warnings = Vec::new();
+    let mut deleted = 0usize;
+    let mut copied = 0usize;
+
+    // Deletions first so a removed name can be re-added in the same save.
+    for item in removed {
+        let fname = sanitized_texture_filename(&item.filename)?;
+        let dest = textures_dir.join(&fname);
+        if dest.is_file() {
+            fs::remove_file(&dest)
+                .map_err(|e| format!("Failed to delete texture {}: {e}", dest.display()))?;
+            deleted += 1;
+        } else {
+            warnings.push(format!("Removed texture not found on disk: {fname}"));
+        }
+    }
+
+    if !added.is_empty() && !textures_dir.is_dir() {
+        fs::create_dir_all(&textures_dir)
+            .map_err(|e| format!("Failed to create textures/ folder: {e}"))?;
+    }
+
+    for item in added {
+        let src = Path::new(&item.nutexb_path);
+        if !src.is_file() {
+            return Err(format!("Added texture source not found: {}", src.display()));
+        }
+        let fname = sanitized_texture_filename(&item.filename)?;
+        let dest = textures_dir.join(&fname);
+        fs::copy(src, &dest)
+            .map_err(|e| format!("Failed to copy {} → {}: {e}", src.display(), dest.display()))?;
+        copied += 1;
+    }
+
+    Ok(ApplyTextureEditsResult {
+        copied,
+        deleted,
+        warnings,
+    })
+}
+
 fn index_nutexb_folder(textures_dir: &Path) -> Result<BTreeMap<String, PathBuf>, String> {
     let mut map = BTreeMap::new();
     let entries =

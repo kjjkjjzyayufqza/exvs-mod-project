@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "
 import { createPortal } from "react-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Rnd } from "react-rnd";
-import { ImageIcon, Loader2, X } from "lucide-react";
+import { AlertTriangle, ImageIcon, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 import { TextureFormatSelect, type DdsFormat } from "./TextureFormatSelect";
 import { DEFAULT_DDS_FORMAT } from "../utils/sceneTextureDdsFormat";
 import { isImageFile } from "@/page/TestEditor/components/ImagePreview";
@@ -13,8 +15,17 @@ import {
   persistSceneEditRndSize,
   resolveSceneEditRndInitialSize,
 } from "./sceneEditRndSizePersistence";
+import {
+  describeDuplicate,
+  type AnalyzedAddCandidate,
+} from "../utils/sceneTextureAddPlan";
 
 const VIEWPORT_MARGIN = 32;
+
+export interface TextureAddSelection {
+  candidate: AnalyzedAddCandidate;
+  ddsFormat: DdsFormat;
+}
 
 function getViewportSize() {
   if (typeof window === "undefined") return { width: 1280, height: 800 };
@@ -23,13 +34,13 @@ function getViewportSize() {
 
 function getTextureAddConfirmModalDimensions() {
   const { width: vw, height: vh } = getViewportSize();
-  const width = Math.min(420, vw - VIEWPORT_MARGIN * 2);
-  const height = Math.min(440, vh - VIEWPORT_MARGIN * 2);
+  const width = Math.min(560, vw - VIEWPORT_MARGIN * 2);
+  const height = Math.min(620, vh - VIEWPORT_MARGIN * 2);
   return {
     width,
     height,
-    minWidth: 300,
-    minHeight: 280,
+    minWidth: 420,
+    minHeight: 360,
     maxWidth: vw - VIEWPORT_MARGIN,
     maxHeight: vh - VIEWPORT_MARGIN,
   };
@@ -43,27 +54,28 @@ function getCenteredModalPosition(size: { width: number; height: number }) {
   };
 }
 
-export interface TextureAddConfirmPayload {
-  sourcePath: string;
-  filename: string;
-  nutexbFilename: string;
-}
-
 interface TextureAddConfirmModalProps {
-  payload: TextureAddConfirmPayload;
-  onClose: () => void;
-  onConfirm: (ddsFormat: DdsFormat) => void;
+  candidates: AnalyzedAddCandidate[];
+  /** True while duplicate analysis (internal-name reads) is still running. */
+  analyzing: boolean;
   isConverting?: boolean;
+  convertProgress?: { done: number; total: number } | null;
+  onClose: () => void;
+  onConfirm: (selections: TextureAddSelection[]) => void;
 }
 
 export function TextureAddConfirmModal({
-  payload,
+  candidates,
+  analyzing,
+  isConverting = false,
+  convertProgress = null,
   onClose,
   onConfirm,
-  isConverting = false,
 }: TextureAddConfirmModalProps) {
-  const [ddsFormat, setDdsFormat] = useState<DdsFormat>(DEFAULT_DDS_FORMAT);
-  const [previewError, setPreviewError] = useState(false);
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [formats, setFormats] = useState<Record<string, DdsFormat>>({});
+  const [bulkFormat, setBulkFormat] = useState<DdsFormat>(DEFAULT_DDS_FORMAT);
+
   const [modalConstraints, setModalConstraints] = useState(getTextureAddConfirmModalDimensions);
   const [size, setSize] = useState(() => {
     const dims = getTextureAddConfirmModalDimensions();
@@ -88,6 +100,30 @@ export function TextureAddConfirmModal({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // Keep per-row selection in sync with the candidate list. Duplicates can never
+  // be checked; non-duplicate rows default to checked and preserve prior choices
+  // (so the row stays selected when analysis flips an unrelated row).
+  useEffect(() => {
+    setChecked((prev) => {
+      const next: Record<string, boolean> = {};
+      for (const candidate of candidates) {
+        if (candidate.duplicate) {
+          next[candidate.id] = false;
+        } else {
+          next[candidate.id] = prev[candidate.id] ?? true;
+        }
+      }
+      return next;
+    });
+    setFormats((prev) => {
+      const next: Record<string, DdsFormat> = {};
+      for (const candidate of candidates) {
+        next[candidate.id] = prev[candidate.id] ?? DEFAULT_DDS_FORMAT;
+      }
+      return next;
+    });
+  }, [candidates]);
+
   const handleResizeStop = useCallback(
     (...args: Parameters<NonNullable<ComponentProps<typeof Rnd>["onResizeStop"]>>) => {
       const ref = args[2];
@@ -105,10 +141,57 @@ export function TextureAddConfirmModal({
     [],
   );
 
-  const previewSrc = useMemo(() => {
-    if (!isImageFile(payload.filename)) return null;
-    return convertFileSrc(payload.sourcePath);
-  }, [payload.filename, payload.sourcePath]);
+  const selectableIds = useMemo(
+    () => candidates.filter((c) => !c.duplicate).map((c) => c.id),
+    [candidates],
+  );
+  const imageIds = useMemo(
+    () => candidates.filter((c) => !c.duplicate && !c.isNutexb).map((c) => c.id),
+    [candidates],
+  );
+  const duplicateCount = candidates.length - selectableIds.length;
+  const selectedCount = useMemo(
+    () => selectableIds.filter((id) => checked[id]).length,
+    [selectableIds, checked],
+  );
+
+  const masterState: boolean | "indeterminate" = useMemo(() => {
+    if (selectableIds.length === 0 || selectedCount === 0) return false;
+    if (selectedCount === selectableIds.length) return true;
+    return "indeterminate";
+  }, [selectableIds.length, selectedCount]);
+
+  const busy = analyzing || isConverting;
+
+  const toggleAll = useCallback(
+    (value: boolean) => {
+      setChecked((prev) => {
+        const next = { ...prev };
+        for (const id of selectableIds) next[id] = value;
+        return next;
+      });
+    },
+    [selectableIds],
+  );
+
+  const applyFormatTo = useCallback(
+    (ids: string[]) => {
+      setFormats((prev) => {
+        const next = { ...prev };
+        for (const id of ids) next[id] = bulkFormat;
+        return next;
+      });
+    },
+    [bulkFormat],
+  );
+
+  const handleConfirm = useCallback(() => {
+    const selections: TextureAddSelection[] = candidates
+      .filter((c) => !c.duplicate && checked[c.id])
+      .map((c) => ({ candidate: c, ddsFormat: formats[c.id] ?? DEFAULT_DDS_FORMAT }));
+    if (selections.length === 0) return;
+    onConfirm(selections);
+  }, [candidates, checked, formats, onConfirm]);
 
   const content = (
     <div className="fixed inset-0 z-50 pointer-events-none">
@@ -130,7 +213,7 @@ export function TextureAddConfirmModal({
         <div className="flex flex-col h-full bg-background border border-border rounded-lg shadow-xl overflow-hidden">
           <div className="texture-add-confirm-drag-handle flex items-center justify-between px-3 py-1.5 bg-muted/40 border-b cursor-move select-none shrink-0">
             <span className="text-xs font-medium truncate mr-2">
-              Add texture preview
+              Add textures ({candidates.length})
             </span>
             <Button
               variant="ghost"
@@ -144,74 +227,103 @@ export function TextureAddConfirmModal({
             </Button>
           </div>
 
-          <div className="flex flex-col gap-3 p-3 flex-1 min-h-0">
-            <div className="flex flex-1 min-h-[140px] items-center justify-center rounded border bg-[repeating-conic-gradient(#80808020_0%_25%,transparent_0%_50%)] bg-[length:16px_16px] overflow-hidden">
-              {previewSrc && !previewError ? (
-                <img
-                  src={previewSrc}
-                  alt={payload.filename}
-                  className="max-w-full max-h-full object-contain"
-                  draggable={false}
-                  onError={() => setPreviewError(true)}
-                />
-              ) : (
-                <div className="flex flex-col items-center gap-1 text-muted-foreground px-2 text-center">
-                  <ImageIcon className="h-6 w-6 opacity-50" />
-                  <span className="text-[10px] break-all">{payload.filename}</span>
-                  {previewError && (
-                    <span className="text-[10px] text-destructive">
-                      Preview unavailable for this file type
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-1 shrink-0">
-              <span className="text-[10px] text-muted-foreground">Output</span>
-              <span className="text-xs font-mono truncate" title={payload.nutexbFilename}>
-                {payload.nutexbFilename}
-              </span>
-            </div>
-
-            <div className="flex flex-col gap-1 shrink-0">
-              <label className="text-xs text-muted-foreground">
-                DDS format for conversion
-              </label>
-              <TextureFormatSelect
-                value={ddsFormat}
-                onChange={setDdsFormat}
-                disabled={isConverting}
-                triggerClassName="h-8 text-xs w-full"
+          {/* Bulk toolbar */}
+          <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/20 shrink-0">
+            <label className="flex items-center gap-1.5 text-[11px] select-none cursor-pointer">
+              <Checkbox
+                checked={masterState}
+                disabled={busy || selectableIds.length === 0}
+                onCheckedChange={(value) => toggleAll(value === true)}
               />
-            </div>
+              <span>
+                {selectedCount}/{selectableIds.length} selected
+              </span>
+            </label>
 
-            <div className="flex items-center gap-2 mt-auto shrink-0">
+            <div className="flex items-center gap-1 ml-auto" data-no-drag>
+              <TextureFormatSelect
+                value={bulkFormat}
+                onChange={setBulkFormat}
+                disabled={busy || imageIds.length === 0}
+                triggerClassName="h-7 text-[11px] w-[150px]"
+              />
               <Button
                 variant="outline"
                 size="sm"
-                className="flex-1 text-xs"
-                onClick={onClose}
-                disabled={isConverting}
+                className="h-7 text-[11px] px-2"
+                disabled={busy || imageIds.length === 0}
+                onClick={() => applyFormatTo(imageIds.filter((id) => checked[id]))}
+                title="Apply this format to the checked image rows"
               >
-                Cancel
+                To selected
               </Button>
               <Button
+                variant="outline"
                 size="sm"
-                className="flex-1 text-xs"
-                onClick={() => onConfirm(ddsFormat)}
-                disabled={isConverting}
+                className="h-7 text-[11px] px-2"
+                disabled={busy || imageIds.length === 0}
+                onClick={() => applyFormatTo(imageIds)}
+                title="Apply this format to every image row"
               >
-                {isConverting ? (
-                  <>
-                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                    Converting...
-                  </>
-                ) : (
-                  "Confirm & Convert"
-                )}
+                To all
               </Button>
             </div>
+          </div>
+
+          {/* Candidate list */}
+          <div className="flex-1 min-h-0 overflow-auto">
+            {candidates.map((candidate) => (
+              <CandidateRow
+                key={candidate.id}
+                candidate={candidate}
+                checked={!!checked[candidate.id]}
+                format={formats[candidate.id] ?? DEFAULT_DDS_FORMAT}
+                disabled={busy}
+                onToggle={(value) =>
+                  setChecked((prev) => ({ ...prev, [candidate.id]: value }))
+                }
+                onFormatChange={(value) =>
+                  setFormats((prev) => ({ ...prev, [candidate.id]: value }))
+                }
+              />
+            ))}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center gap-2 px-3 py-2 border-t bg-muted/20 shrink-0">
+            <span className="text-[10px] text-muted-foreground mr-auto">
+              {analyzing
+                ? "Checking for duplicate names..."
+                : duplicateCount > 0
+                  ? `${duplicateCount} duplicate(s) skipped`
+                  : "No duplicates"}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              onClick={onClose}
+              disabled={isConverting}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="text-xs min-w-[150px]"
+              onClick={handleConfirm}
+              disabled={busy || selectedCount === 0}
+            >
+              {isConverting ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  {convertProgress
+                    ? `Converting ${convertProgress.done}/${convertProgress.total}...`
+                    : "Converting..."}
+                </>
+              ) : (
+                `Confirm & Convert (${selectedCount})`
+              )}
+            </Button>
           </div>
         </div>
       </Rnd>
@@ -219,4 +331,94 @@ export function TextureAddConfirmModal({
   );
 
   return createPortal(content, document.body);
+}
+
+interface CandidateRowProps {
+  candidate: AnalyzedAddCandidate;
+  checked: boolean;
+  format: DdsFormat;
+  disabled: boolean;
+  onToggle: (value: boolean) => void;
+  onFormatChange: (value: DdsFormat) => void;
+}
+
+function CandidateRow({
+  candidate,
+  checked,
+  format,
+  disabled,
+  onToggle,
+  onFormatChange,
+}: CandidateRowProps) {
+  const [previewError, setPreviewError] = useState(false);
+  const previewSrc = useMemo(() => {
+    if (candidate.isNutexb || !isImageFile(candidate.filename)) return null;
+    return convertFileSrc(candidate.sourcePath);
+  }, [candidate.filename, candidate.isNutexb, candidate.sourcePath]);
+
+  const isDuplicate = candidate.duplicate;
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 px-3 py-1.5 border-b border-border/30",
+        isDuplicate ? "bg-destructive/5 opacity-70" : "hover:bg-muted/30",
+      )}
+    >
+      <Checkbox
+        checked={checked}
+        disabled={disabled || isDuplicate}
+        onCheckedChange={(value) => onToggle(value === true)}
+        title={isDuplicate ? describeDuplicate(candidate) : undefined}
+      />
+
+      <div className="w-9 h-9 shrink-0 rounded bg-muted/50 flex items-center justify-center overflow-hidden">
+        {previewSrc && !previewError ? (
+          <img
+            src={previewSrc}
+            alt={candidate.filename}
+            className="w-full h-full object-cover"
+            draggable={false}
+            onError={() => setPreviewError(true)}
+          />
+        ) : (
+          <ImageIcon className="h-4 w-4 text-muted-foreground/50" />
+        )}
+      </div>
+
+      <div className="flex flex-col min-w-0 flex-1">
+        <span className="text-[11px] truncate leading-tight" title={candidate.filename}>
+          {candidate.filename}
+        </span>
+        {isDuplicate ? (
+          <span className="flex items-center gap-1 text-[10px] text-destructive leading-tight">
+            <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+            <span className="truncate">{describeDuplicate(candidate)}</span>
+          </span>
+        ) : (
+          <span
+            className="text-[10px] text-muted-foreground font-mono truncate leading-tight"
+            title={candidate.nutexbFilename}
+          >
+            → {candidate.nutexbFilename}
+          </span>
+        )}
+      </div>
+
+      <div className="shrink-0 w-[150px]" data-no-drag>
+        {candidate.isNutexb ? (
+          <span className="text-[10px] text-muted-foreground italic block text-right pr-1">
+            copy as-is
+          </span>
+        ) : (
+          <TextureFormatSelect
+            value={format}
+            onChange={onFormatChange}
+            disabled={disabled || isDuplicate}
+            triggerClassName="h-7 text-[11px] w-full"
+          />
+        )}
+      </div>
+    </div>
+  );
 }

@@ -11,6 +11,7 @@ import { useSceneTextureManagerStore } from "../store/sceneTextureManagerStore";
 export interface TextureSaveManifest {
   existing: Array<{ filename: string; nutexbPath: string }>;
   added: Array<{ filename: string; nutexbPath: string | null; sourceImagePath: string | null }>;
+  removed: Array<{ filename: string; nutexbPath: string | null }>;
 }
 
 /**
@@ -19,13 +20,14 @@ export interface TextureSaveManifest {
  * 1. Keep existing nutexb entries in their original positions
  * 2. Append new (added) entries to the stage_image_list section
  * 3. Convert any sourceImagePath (png/dds) to nutexb before packing
+ * 4. Delete removed existing nutexb files from the shared textures/ folder
  */
 export function collectTextureSaveManifest(): TextureSaveManifest {
-  const entries = useSceneTextureManagerStore.getState().entries;
+  const state = useSceneTextureManagerStore.getState();
   const existing: TextureSaveManifest["existing"] = [];
   const added: TextureSaveManifest["added"] = [];
 
-  for (const entry of entries) {
+  for (const entry of state.entries) {
     if (entry.status === "existing" && entry.nutexbPath) {
       existing.push({ filename: entry.filename, nutexbPath: entry.nutexbPath });
     } else if (entry.status === "added") {
@@ -37,5 +39,15 @@ export function collectTextureSaveManifest(): TextureSaveManifest {
     }
   }
 
-  return { existing, added };
+  const removed: TextureSaveManifest["removed"] = state.removedExisting.map((r) => ({
+    filename: r.filename,
+    nutexbPath: r.nutexbPath,
+  }));
+
+  return { existing, added, removed };
+}
+
+/** True when the manifest carries texture changes that require disk writes. */
+export function manifestHasTextureChanges(manifest: TextureSaveManifest): boolean {
+  return manifest.added.length > 0 || manifest.removed.length > 0;
 }
