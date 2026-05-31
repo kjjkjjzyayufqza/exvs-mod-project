@@ -1,6 +1,6 @@
 import MainPage from "../page/Main/page"
 import ExtractFilePage from "../page/Extract/page"
-import { Calendar, Home, Inbox, List, Search, Settings, FileCode, Package, Edit, Map, Wrench } from "lucide-react"
+import { Calendar, Home, Inbox, List, Search, Settings, FileCode, Package, Edit, Map, Wrench, Box } from "lucide-react"
 import UnitEdit from "../page/UnitEdit/page"
 import FilesEdit from "../page/FilesEdit/page"
 import UnitList from "../page/UnitList/page"
@@ -10,6 +10,7 @@ import RepackPage from "../page/Repack/page"
 import SceneEdit from "../page/SceneEdit/page"
 import MiscToolsPage from "../page/MiscTools/page"
 import TestEditorPage from "../page/TestEditor/page"
+import UnitModelEdit from "../page/UnitModelEdit/page"
 import { SIDEBAR_ROUTE_URLS } from "./sidebarRouteUrls"
 
 // Menu items.
@@ -61,6 +62,12 @@ export const RouterItems = [
         url: "/SceneEdit",
         icon: Map,
         element: <SceneEdit />
+    },
+    {
+        title: "Unit Model Editor",
+        url: "/UnitModelEdit",
+        icon: Box,
+        element: <UnitModelEdit />
     },
     {
         title: "Misc Tools",

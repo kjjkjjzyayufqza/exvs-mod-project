@@ -5,11 +5,11 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SceneEditRndModalShell } from "../SceneEditRndModalShell";
 import { getDetailViewModalDimensions } from "../sceneEditRndModalUtils";
 import { SCENE_EDIT_RND_SIZE_KEYS } from "../sceneEditRndSizePersistence";
-import { NumdlbMappingEditorBody } from "@/page/TestEditor/components/ssbh-model-preview/NumdlbMappingEditorBody";
-import { NuhlpbEditorBody } from "@/page/TestEditor/components/ssbh-model-preview/NuhlpbEditorBody";
-import { NumatbTemplateEditorModalBody } from "@/page/TestEditor/components/ssbh-model-preview/NumatbTemplateEditorModalBody";
-import { collectNumatbEmptyTexturePathErrors } from "@/page/TestEditor/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
-import type { NumatbModalBundle } from "@/page/TestEditor/components/ssbh-model-preview/numatbEditorUtils";
+import { NumdlbMappingEditorBody } from "@/components/ssbh-model-preview/NumdlbMappingEditorBody";
+import { NuhlpbEditorBody } from "@/components/ssbh-model-preview/NuhlpbEditorBody";
+import { NumatbTemplateEditorModalBody } from "@/components/ssbh-model-preview/NumatbTemplateEditorModalBody";
+import { collectNumatbEmptyTexturePathErrors } from "@/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
+import type { NumatbModalBundle } from "@/components/ssbh-model-preview/numatbEditorUtils";
 import { NumatbValidationErrorsPanel } from "./NumatbValidationErrorsPanel";
 import { shouldMountDetailTab } from "../../utils/sceneDetailViewTabPolicy";
 import type {

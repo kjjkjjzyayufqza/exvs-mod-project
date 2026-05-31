@@ -1,11 +1,11 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
 import type { DaeImportConfig, HktSimplifyConfig } from "../components/dae-import/daeImportTypes";
 import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
-import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
+import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
 import type {
   MatlDataJson,
   NumdlbMappingRow,
-} from "@/page/TestEditor/components/ssbh-model-preview/daeSsbhTypes";
+} from "@/components/ssbh-model-preview/daeSsbhTypes";
 
 export type SceneSource =
   | { type: "fhm2d"; path: string }

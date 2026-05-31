@@ -10,6 +10,7 @@ use crate::fhm2d_memory_preview::Fhm2dMemorySessionState;
 use crate::format::fhm2d::{extract_fhm2d_to_memory_impl, InMemoryFhm2dExtraction};
 use crate::format::fhm2d_stage;
 use crate::format::fhm2d_stage_validate;
+use crate::format::unit_model_validate;
 
 // ── Pending import state ────────────────────────────────────────────────────
 
@@ -724,6 +725,22 @@ pub async fn scene_validate_numatb_empty_params(
 ) -> Result<fhm2d_stage_validate::ExvsStageValidationResult, String> {
     let result = tauri::async_runtime::spawn_blocking(move || {
         fhm2d_stage_validate::exvs_stage_validate_numatb_empty_params(&stage_root)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn validate_unit_model_for_repack(
+    model_root: String,
+    structure_json_path: Option<String>,
+) -> Result<unit_model_validate::UnitModelValidationResult, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_validate::validate_unit_model_for_repack(
+            &model_root,
+            structure_json_path.as_deref(),
+        )
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))?;

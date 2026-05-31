@@ -2,7 +2,7 @@ import { useCallback, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { TextureRefResolve } from "@/page/TestEditor/components/ssbh-model-preview/types";
+import type { TextureRefResolve } from "@/components/ssbh-model-preview/types";
 
 const VIRTUALIZE_ROW_THRESHOLD = 50;
 const ROW_HEIGHT = 28;

@@ -1,8 +1,8 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSceneTextureLoader } from "./useSceneTextureLoader";
-import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
-import type { TexturePreviewSlotKey } from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
+import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
+import type { TexturePreviewSlotKey } from "@/components/ssbh-model-preview/meshFromSsbh";
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -14,11 +14,11 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: mocks.invoke,
 }));
 
-vi.mock("@/page/TestEditor/components/ssbh-model-preview/fhm2dMemoryPreviewService", () => ({
+vi.mock("@/components/ssbh-model-preview/fhm2dMemoryPreviewService", () => ({
   getMemoryNutexbPreviewIdentity: mocks.getMemoryNutexbPreviewIdentity,
 }));
 
-vi.mock("@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache", () => ({
+vi.mock("@/components/ssbh-model-preview/nutexbPreviewCache", () => ({
   COMPRESSED_FORMAT_MAP: {},
   parseIdentityAndCompressedResponse: vi.fn(),
   getOrDecodeNutexbRgba: mocks.getOrDecodeNutexbRgba,

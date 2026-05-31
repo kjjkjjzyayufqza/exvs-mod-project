@@ -9,7 +9,7 @@ import type { PlacementRow } from "../types/placement";
 import {
   ssbhAnalyzeDae,
   ssbhConvertDaeToSsbh,
-} from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
+} from "@/components/ssbh-model-preview/ssbhDaeIoService";
 import { writeObjectAsDAE } from "../utils/daeExportImport";
 import {
   buildImportedDaeStageRegistrationPlan,

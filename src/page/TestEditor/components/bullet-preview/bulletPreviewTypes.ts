@@ -43,20 +43,60 @@ export const BULLET_PREVIEW_PHYSICS_KEYS: BulletPreviewPhysicsKey[] = [
 
 export type BulletPreviewPhysicsOverrides = Partial<Record<BulletPreviewPhysicsKey, number>>;
 
+/**
+ * EXVS lock-on state. Determines whether bullet induction (homing) is active.
+ * Reverse-engineering note: the unit exposes concentric lock distance bands
+ * (sub_1405F8600 LockDistanceGetter: redLock / midLock / farLock / maxLock /
+ * greenLock). A bullet only homes ("誘導") when the firing lock is RED (target
+ * inside induction range) or BLUE (awakening / special). GREEN (locked but beyond
+ * induction range) and YELLOW (forced / non-locked) fire with NO induction — the
+ * bullet keeps its launch-direction inertia.
+ */
+export type BulletLockState = "red" | "green" | "yellow" | "blue";
+
+export const BULLET_LOCK_STATES: BulletLockState[] = ["red", "green", "yellow", "blue"];
+
+export const BULLET_LOCK_STATE_LABELS: Record<BulletLockState, string> = {
+  red: "Red lock (induction)",
+  green: "Green lock (no induction)",
+  yellow: "Yellow lock (no induction)",
+  blue: "Blue lock (special)",
+};
+
+/** Returns whether bullet induction (homing) is allowed for the given lock state. */
+export function isInductionActive(lockState: BulletLockState): boolean {
+  return lockState === "red" || lockState === "blue";
+}
+
 export interface BulletPreviewScenario {
   targetDistance: number;
   targetHeight: number;
   targetOffsetX: number;
+  /**
+   * Base launch speed in world units per frame (60fps). This is NOT a bulletparam
+   * field: in the game the base velocity is supplied by the firing weapon/action,
+   * while bulletparam only carries modifiers (acceleration, gravity, homing, etc.).
+   * Exposed here as an explicit scenario input. Defaults to the entry's initial_speed
+   * when that field is nonzero, otherwise to DEFAULT_LAUNCH_SPEED.
+   */
+  launchSpeed: number;
+  /** Lock-on state that gates induction (homing). */
+  lockState: BulletLockState;
   enemyLateralMotionEnabled: boolean;
   enemyLateralAmplitude: number;
   enemyLateralPeriodFrames: number;
   enemyLateralPhaseDeg: number;
 }
 
+/** Fallback base launch speed (world units/frame) when the entry has no initial_speed. */
+export const DEFAULT_LAUNCH_SPEED = 4;
+
 export const DEFAULT_BULLET_PREVIEW_SCENARIO: BulletPreviewScenario = {
   targetDistance: 120,
   targetHeight: 0,
   targetOffsetX: 0,
+  launchSpeed: DEFAULT_LAUNCH_SPEED,
+  lockState: "red",
   enemyLateralMotionEnabled: false,
   enemyLateralAmplitude: 25,
   enemyLateralPeriodFrames: 120,

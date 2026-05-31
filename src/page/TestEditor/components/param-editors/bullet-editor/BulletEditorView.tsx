@@ -54,6 +54,15 @@ function TimelineBar() {
         {trajectory ? (
           <>
             <span className="font-medium text-foreground">{trajectory.moveTypeLabel}</span>
+            <span
+              className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
+                trajectory.inductionActive
+                  ? "bg-orange-500/20 text-orange-300"
+                  : "bg-sky-500/20 text-sky-300"
+              }`}
+            >
+              {trajectory.inductionActive ? "Induction ON" : "No induction"}
+            </span>
             <span>
               frame <span className="font-mono text-foreground">{frame}</span>/
               {trajectory.totalFrames}

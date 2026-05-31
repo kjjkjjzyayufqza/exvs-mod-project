@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { useSceneDetailView } from "./useSceneDetailView";
-import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
+import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
 import type { StageTreeNode } from "../components/StageHierarchyTree";
 
 const mocks = vi.hoisted(() => ({
@@ -16,7 +16,7 @@ vi.mock("sonner", () => ({
   },
 }));
 
-vi.mock("@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService", () => ({
+vi.mock("@/components/ssbh-model-preview/ssbhDaeIoService", () => ({
   ssbhReadNumdlbMapping: mocks.ssbhReadNumdlbMapping,
   ssbhWriteNumdlbMapping: vi.fn(),
   ssbhTemplateReadNumatb: mocks.ssbhTemplateReadNumatb,

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Bone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VirtualizedList } from "@/page/SceneEdit/components/VirtualizedList";
-import type { SkelDataJson, BoneJson } from "@/page/TestEditor/components/ssbh-model-preview/types";
+import type { SkelDataJson, BoneJson } from "@/components/ssbh-model-preview/types";
 
 type SkeletonReadonlyTabProps = {
   skel: unknown | null;

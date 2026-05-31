@@ -18,15 +18,15 @@ import {
   PROP_LABEL,
   PROP_PANEL,
 } from "./propertyPanelStyles";
-import { NumatbMaterialEntryEditor } from "@/page/TestEditor/components/ssbh-model-preview/components/NumatbMaterialEntryEditor";
-import type { MatlDataJson, MatlEntryJson } from "@/page/TestEditor/components/ssbh-model-preview/types";
+import { NumatbMaterialEntryEditor } from "@/components/ssbh-model-preview/components/NumatbMaterialEntryEditor";
+import type { MatlDataJson, MatlEntryJson } from "@/components/ssbh-model-preview/types";
 import {
   addEntryAttribute,
   removeEntryAttribute,
   updateEntryAttribute,
   updateMaterialLabel,
   updateShaderLabel,
-} from "@/page/TestEditor/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
+} from "@/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
 
 interface SceneAssetConfigPanelProps {
   assetId: string;

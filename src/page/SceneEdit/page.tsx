@@ -92,12 +92,12 @@ import {
 import { SceneInfoContent, SceneStatsContent } from "./components/SceneStatusPanel";
 import { useSceneTextureLoader } from "./hooks/useSceneTextureLoader";
 import { TextureQualityPanel, getMaxDimensionForQuality } from "./components/TextureQualityPanel";
-import { disposeFhm2dMemorySession } from "@/page/TestEditor/components/ssbh-model-preview/fhm2dMemoryPreviewService";
-import { useDaeSsbhSessionStore } from "@/page/TestEditor/components/ssbh-model-preview/store/daeSsbhSessionStore";
+import { disposeFhm2dMemorySession } from "@/components/ssbh-model-preview/fhm2dMemoryPreviewService";
+import { useDaeSsbhSessionStore } from "@/components/ssbh-model-preview/store/daeSsbhSessionStore";
 import {
   clearNutexbPreviewCacheAsync,
   clearNutexbRgbaCache,
-} from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
+} from "@/components/ssbh-model-preview/nutexbPreviewCache";
 import { clearSceneTextureThumbnailCache } from "./utils/sceneTextureThumbnail";
 import type { SceneTextureDecodeContext } from "./utils/sceneTextureDecode";
 import { reorderPlacementEntriesBySubModels } from "./utils/reorderPlacementBySubModels";
@@ -106,7 +106,7 @@ import {
   createDefaultTextureSlotLoadEnabled,
   createUniformTextureSlotLoadEnabled,
   type TexturePreviewSlotKey,
-} from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
+} from "@/components/ssbh-model-preview/meshFromSsbh";
 import {
   exportMultipleObjectsAsDAE,
   exportObjectAsDAE,
@@ -211,9 +211,9 @@ import { applyOutlinerOrder } from "./utils/sceneOutlinerOrder";
 import { buildSubModelOutlinerNode } from "./utils/sceneOutlinerTree";
 import { SceneDetailViewHost } from "./components/detail-view/SceneDetailViewHost";
 
-import type { PreviewRenderStyle } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
+import type { PreviewRenderStyle } from "@/components/ssbh-model-preview/SsbhModelPreviewContext";
 
-import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
+import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
 
 interface StageBundleResponse {
   rootPath: string;
@@ -254,6 +254,11 @@ const SCENE_EDIT_DEFAULT_LAYOUT: Record<(typeof SCENE_EDIT_PANEL_IDS)[number], n
     "scene-viewport": 60,
     "scene-properties": 20,
   };
+
+const SCENE_HIERARCHY_TABS_LIST =
+  "shrink-0 grid h-8 w-full grid-cols-3 gap-0 rounded-none border-b bg-muted/30 p-0";
+const SCENE_HIERARCHY_TAB_TRIGGER =
+  "h-8 rounded-none border-b-2 border-transparent px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-none";
 
 function nearlyEqual(a: number, b: number): boolean {
   return Math.abs(a - b) <= 1e-6;
@@ -3495,14 +3500,14 @@ export default function SceneEdit() {
           >
             <div className="flex h-full min-w-0 flex-col overflow-hidden border-r">
               <Tabs defaultValue="outliner" className="flex h-full flex-col">
-                <TabsList className="shrink-0 h-7 w-full justify-start rounded-none border-b bg-muted/20 px-1">
-                  <TabsTrigger value="outliner" className="h-5 px-2 text-[10px] data-[state=active]:bg-background">
+                <TabsList className={SCENE_HIERARCHY_TABS_LIST}>
+                  <TabsTrigger value="outliner" className={SCENE_HIERARCHY_TAB_TRIGGER}>
                     Outliner
                   </TabsTrigger>
-                  <TabsTrigger value="textures" className="h-5 px-2 text-[10px] data-[state=active]:bg-background">
+                  <TabsTrigger value="textures" className={SCENE_HIERARCHY_TAB_TRIGGER}>
                     Textures
                   </TabsTrigger>
-                  <TabsTrigger value="structure" className="h-5 px-2 text-[10px] data-[state=active]:bg-background">
+                  <TabsTrigger value="structure" className={SCENE_HIERARCHY_TAB_TRIGGER}>
                     Structure
                   </TabsTrigger>
                 </TabsList>

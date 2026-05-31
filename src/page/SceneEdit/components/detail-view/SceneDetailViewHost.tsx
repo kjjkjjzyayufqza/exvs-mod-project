@@ -2,8 +2,8 @@ import { useMemo } from "react";
 import type { DetailViewSession, DetailViewModelTab, DetailViewModelData } from "./sceneDetailViewTypes";
 import { SceneDetailViewWindow } from "./SceneDetailViewWindow";
 import { EffectDetailViewWindow } from "./EffectDetailViewWindow";
-import type { NumdlbReadResult, NuhlpbReadResult } from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
-import type { NumatbModalBundle } from "@/page/TestEditor/components/ssbh-model-preview/numatbEditorUtils";
+import type { NumdlbReadResult, NuhlpbReadResult } from "@/components/ssbh-model-preview/ssbhDaeIoService";
+import type { NumatbModalBundle } from "@/components/ssbh-model-preview/numatbEditorUtils";
 
 type SceneDetailViewHostProps = {
   sessions: DetailViewSession[];

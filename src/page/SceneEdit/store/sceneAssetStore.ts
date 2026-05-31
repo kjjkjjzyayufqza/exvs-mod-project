@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
-import type { MatlDataJson } from "@/page/TestEditor/components/ssbh-model-preview/types";
-import { createEmptyNumatbFile } from "@/page/TestEditor/components/ssbh-model-preview/daeSsbhTypes";
+import type { MatlDataJson } from "@/components/ssbh-model-preview/types";
+import { createEmptyNumatbFile } from "@/components/ssbh-model-preview/daeSsbhTypes";
 
 /** Per-object texture slot override: maps paramId → nutexb path */
 export type TextureSlotOverrides = Record<string, string>;

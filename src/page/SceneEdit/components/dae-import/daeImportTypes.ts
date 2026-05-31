@@ -1,7 +1,7 @@
 import type {
   MatlDataJson,
   NumdlbMappingRow,
-} from "@/page/TestEditor/components/ssbh-model-preview/daeSsbhTypes";
+} from "@/components/ssbh-model-preview/daeSsbhTypes";
 
 export type SsbhDaeUpAxis = "y_up" | "z_up";
 

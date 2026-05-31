@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Save } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import type { TestTreeNode } from "../../types";
+import type { TestTreeNode } from "@/page/TestEditor/types";
 import {
   jnttblReadFile,
   jnttblWriteFile,

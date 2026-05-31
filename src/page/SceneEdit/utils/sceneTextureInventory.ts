@@ -5,8 +5,8 @@ import {
   resolveMaterialBinding,
   TEXTURE_PREVIEW_SLOT_META,
   type TexturePreviewSlotKey,
-} from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
-import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
+} from "@/components/ssbh-model-preview/meshFromSsbh";
+import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
 import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
 
 export type ObjectTextureLoadState = Record<string, Record<string, boolean>>;

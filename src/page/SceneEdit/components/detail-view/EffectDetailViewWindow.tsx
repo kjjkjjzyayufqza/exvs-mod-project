@@ -2,7 +2,7 @@ import { Loader2, Sparkles } from "lucide-react";
 import { SceneEditRndModalShell } from "../SceneEditRndModalShell";
 import { getEffectDetailViewModalDimensions } from "../sceneEditRndModalUtils";
 import { SCENE_EDIT_RND_SIZE_KEYS } from "../sceneEditRndSizePersistence";
-import { EffectProjectEditorBody } from "@/page/TestEditor/components/ssbh-model-preview/EffectProjectEditorBody";
+import { EffectProjectEditorBody } from "@/components/ssbh-model-preview/EffectProjectEditorBody";
 import type { DetailViewSession } from "./sceneDetailViewTypes";
 
 type EffectDetailViewWindowProps = {

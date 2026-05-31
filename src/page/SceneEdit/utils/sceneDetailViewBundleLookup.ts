@@ -1,4 +1,4 @@
-import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
+import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
 import type { StageTreeNode } from "../components/StageHierarchyTree";
 
 export type DetailViewBundleLookup = {

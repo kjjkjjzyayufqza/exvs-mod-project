@@ -42,6 +42,20 @@ export interface BulletEditorState {
   tick: (delta: number) => void;
 }
 
+/**
+ * Auto-syncs the scenario base launch speed to the selected entry's initial_speed when
+ * that field is set; otherwise keeps the user's current value. Base velocity is not a
+ * bulletparam field (it comes from the firing weapon/action), so this is only a sensible
+ * starting point the user can override.
+ */
+function deriveLaunchSpeed(
+  entry: TypedParamEntry | undefined,
+  scenario: BulletPreviewScenario,
+): number {
+  const initial = entry && typeof entry.initialSpeed === "number" ? Math.abs(entry.initialSpeed) : 0;
+  return initial > 0 ? initial : scenario.launchSpeed;
+}
+
 function validateBulletEntry(entry: TypedParamEntry): ValidationMessage[] {
   const messages: ValidationMessage[] = [];
   const speed = typeof entry.initialSpeed === "number" ? entry.initialSpeed : 0;
@@ -135,11 +149,12 @@ export const useBulletEditorStore = create<BulletEditorState>((set, get) => ({
   visualization: { ...DEFAULT_BULLET_PREVIEW_VISUALIZATION },
 
   setData: (data, filePath) => {
-    const { armsData, selectedArmsIndex } = get();
+    const { armsData, selectedArmsIndex, scenario } = get();
+    const nextScenario = { ...scenario, launchSpeed: deriveLaunchSpeed(data.entries[0], scenario) };
     const { trajectory, shootingLoopResult, validationMessages } = recompute(
       data,
       0,
-      get().scenario,
+      nextScenario,
       armsData,
       selectedArmsIndex,
     );
@@ -148,6 +163,7 @@ export const useBulletEditorStore = create<BulletEditorState>((set, get) => ({
       filePath,
       selectedIndex: 0,
       dirty: false,
+      scenario: nextScenario,
       trajectory,
       shootingLoopResult,
       validationMessages,
@@ -179,15 +195,17 @@ export const useBulletEditorStore = create<BulletEditorState>((set, get) => ({
 
   selectEntry: (index) => {
     const { data, scenario, armsData, selectedArmsIndex } = get();
+    const nextScenario = { ...scenario, launchSpeed: deriveLaunchSpeed(data?.entries[index], scenario) };
     const { trajectory, shootingLoopResult, validationMessages } = recompute(
       data,
       index,
-      scenario,
+      nextScenario,
       armsData,
       selectedArmsIndex,
     );
     set({
       selectedIndex: index,
+      scenario: nextScenario,
       trajectory,
       shootingLoopResult,
       validationMessages,

@@ -33,33 +33,33 @@ import { normalizePackFolderName } from "./utils/packName";
 import { applyFileTreeViewSort } from "./utils/fileTreeViewSort";
 import { sortTreeByStarOrder, useFileTreeStarOrder } from "./utils/fileTreeStars";
 import { useFileTreeViewOptions } from "./hooks/useFileTreeViewOptions";
-import { NumdlbEditorModalHost } from "./components/ssbh-model-preview/NumdlbEditorModalHost";
-import type { NumdlbEditorWindowSession } from "./components/ssbh-model-preview/NumdlbEditorModalWindow";
+import { NumdlbEditorModalHost } from "@/components/ssbh-model-preview/NumdlbEditorModalHost";
+import type { NumdlbEditorWindowSession } from "@/components/ssbh-model-preview/NumdlbEditorModalWindow";
 import {
   cloneNumdlbReadResult,
   assertNumdlbValidForSave,
   isNumdlbDraftDirty,
-} from "./components/ssbh-model-preview/numdlbEditorUtils";
-import { NuhlpbEditorModalHost } from "./components/ssbh-model-preview/NuhlpbEditorModalHost";
-import type { NuhlpbEditorWindowSession } from "./components/ssbh-model-preview/NuhlpbEditorModalWindow";
+} from "@/components/ssbh-model-preview/numdlbEditorUtils";
+import { NuhlpbEditorModalHost } from "@/components/ssbh-model-preview/NuhlpbEditorModalHost";
+import type { NuhlpbEditorWindowSession } from "@/components/ssbh-model-preview/NuhlpbEditorModalWindow";
 import {
   cloneNuhlpbReadResult,
   isNuhlpbDraftDirty,
-} from "./components/ssbh-model-preview/nuhlpbEditorUtils";
-import { JnttblEditorModalHost } from "./components/ssbh-model-preview/JnttblEditorModalHost";
-import type { JnttblEditorWindowSession } from "./components/ssbh-model-preview/JnttblEditorModalWindow";
+} from "@/components/ssbh-model-preview/nuhlpbEditorUtils";
+import { JnttblEditorModalHost } from "@/components/ssbh-model-preview/JnttblEditorModalHost";
+import type { JnttblEditorWindowSession } from "@/components/ssbh-model-preview/JnttblEditorModalWindow";
 import {
   assertJnttblValidForSave,
   cloneJnttblEditorDocument,
   computeNextJnttblDirtyState,
   readResultToEditorDocument,
   resolveJnttblBoneCountForSave,
-} from "./components/ssbh-model-preview/jnttblEditorUtils";
+} from "@/components/ssbh-model-preview/jnttblEditorUtils";
 import {
   jnttblReadFile,
   jnttblWriteFile,
   type JnttblEditorDocument,
-} from "./components/ssbh-model-preview/jnttblIoService";
+} from "@/components/ssbh-model-preview/jnttblIoService";
 import {
   ssbhReadNumdlbMapping,
   ssbhWriteNumdlbMapping,
@@ -69,33 +69,33 @@ import {
   ssbhTemplateWriteNumatb,
   type NumdlbReadResult,
   type NuhlpbReadResult,
-} from "./components/ssbh-model-preview/ssbhDaeIoService";
-import { ensureMatlDataSerdeFields, type NumatbProfileKind } from "./components/ssbh-model-preview/daeSsbhTypes";
-import { NumatbEditorModalHost } from "./components/ssbh-model-preview/NumatbEditorModalHost";
-import type { NumatbEditorWindowSession } from "./components/ssbh-model-preview/NumatbEditorModalWindow";
+} from "@/components/ssbh-model-preview/ssbhDaeIoService";
+import { ensureMatlDataSerdeFields, type NumatbProfileKind } from "@/components/ssbh-model-preview/daeSsbhTypes";
+import { NumatbEditorModalHost } from "@/components/ssbh-model-preview/NumatbEditorModalHost";
+import type { NumatbEditorWindowSession } from "@/components/ssbh-model-preview/NumatbEditorModalWindow";
 import {
   buildNumatbModalBundleFromLoadedFile,
   cloneNumatbBundle,
   detectNumatbProfileFromPath,
   type NumatbModalBundle,
-} from "./components/ssbh-model-preview/numatbEditorUtils";
-import { EffectProjectEditorModalHost } from "./components/ssbh-model-preview/EffectProjectEditorModalHost";
-import type { EffectProjectEditorWindowSession } from "./components/ssbh-model-preview/EffectProjectEditorModalWindow";
+} from "@/components/ssbh-model-preview/numatbEditorUtils";
+import { EffectProjectEditorModalHost } from "@/components/ssbh-model-preview/EffectProjectEditorModalHost";
+import type { EffectProjectEditorWindowSession } from "@/components/ssbh-model-preview/EffectProjectEditorModalWindow";
 import {
   effectProjectReadFile,
   effectProjectWriteFile,
-} from "./components/ssbh-model-preview/effectProjectIoService";
+} from "@/components/ssbh-model-preview/effectProjectIoService";
 import {
   assertEffectProjectValidForSave,
   cloneEffectProjectDocument,
   computeNextEffectProjectDirtyState,
   sortEffectProjectRowsByEffectProjectIdAscending,
   type EffectProjectEditorDocument,
-} from "./components/ssbh-model-preview/effectProjectEditorUtils";
+} from "@/components/ssbh-model-preview/effectProjectEditorUtils";
 import {
   EffectProjectAuxiliaryCacheService,
   createIdleAuxiliarySnapshot,
-} from "./components/ssbh-model-preview/effectProjectAuxiliaryCache";
+} from "@/components/ssbh-model-preview/effectProjectAuxiliaryCache";
 
 const WATCH_COMMAND = "watch_folder";
 const TEST_EDITOR_FOLDER_STORE_KEY = "testEditorFolder";
@@ -1526,7 +1526,6 @@ const TestEditorPage = () => {
         <TestEditorWorkspaceArea
           folderStoreKey={TEST_EDITOR_FOLDER_STORE_KEY}
           currentDir={currentDir}
-          isPageActive={isPageActive}
           fileTreeData={fileTreeData}
           onFileSelect={handleFileSelect}
           selectedId={selectedId}

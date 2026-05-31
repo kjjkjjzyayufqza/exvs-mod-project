@@ -18,15 +18,15 @@ vi.mock("react-rnd", () => ({
   ),
 }));
 
-vi.mock("@/page/TestEditor/components/ssbh-model-preview/NumdlbMappingEditorBody", () => ({
+vi.mock("@/components/ssbh-model-preview/NumdlbMappingEditorBody", () => ({
   NumdlbMappingEditorBody: () => <div>Numdlb editor</div>,
 }));
 
-vi.mock("@/page/TestEditor/components/ssbh-model-preview/NumatbTemplateEditorModalBody", () => ({
+vi.mock("@/components/ssbh-model-preview/NumatbTemplateEditorModalBody", () => ({
   NumatbTemplateEditorModalBody: () => <div>Numatb editor</div>,
 }));
 
-vi.mock("@/page/TestEditor/components/ssbh-model-preview/NuhlpbEditorBody", () => ({
+vi.mock("@/components/ssbh-model-preview/NuhlpbEditorBody", () => ({
   NuhlpbEditorBody: () => <div>Nuhlpb editor</div>,
 }));
 

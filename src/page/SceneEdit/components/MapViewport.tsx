@@ -40,7 +40,7 @@ import {
 import type {
   SsbhModelPreviewBundle,
   BuiltMeshDraw,
-} from "@/page/TestEditor/components/ssbh-model-preview/types";
+} from "@/components/ssbh-model-preview/types";
 import {
   buildDrawListFromBundle,
   buildMatlLookup,
@@ -49,25 +49,25 @@ import {
   type ResolvedMaterialBinding,
   type ResolvedTextureSampling,
   type TexturePreviewSlotKey,
-} from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
+} from "@/components/ssbh-model-preview/meshFromSsbh";
 import type { NutexbTextureDataMap, NutexbTextureData } from "../hooks/useSceneTextureLoader";
-import { COMPRESSED_FORMAT_MAP, type NutexbCompressedData } from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
+import { COMPRESSED_FORMAT_MAP, type NutexbCompressedData } from "@/components/ssbh-model-preview/nutexbPreviewCache";
 import type { PlacementRow } from "../types/placement";
 import type { GraphicParam } from "./GraphicParamPanel";
 import { deriveSceneLightingFromGraphicParams } from "../utils/graphicParamSceneLighting";
 import { formatPlacementViewportNodeId } from "../utils/placementNodeId";
 import type { SceneDrawStats } from "./SceneViewportOverlay";
 import type { TransformData } from "./StagePropertyEditor";
-import type { PreviewRenderStyle } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
-import { DEFAULT_PREVIEW_3D_BACKGROUND } from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
+import type { PreviewRenderStyle } from "@/components/ssbh-model-preview/SsbhModelPreviewContext";
+import { DEFAULT_PREVIEW_3D_BACKGROUND } from "@/components/ssbh-model-preview/SsbhModelPreviewContext";
 import {
   getSsbhAdaptivePerformanceOptions,
   getSsbhCanvasPerformanceProfile,
   measureDrawComplexity,
   shouldDisableSsbhAnimePostFx,
-} from "@/page/TestEditor/components/ssbh-model-preview/ssbhCanvasPerformance";
-import { animeExvsOnBeforeCompile, createAnimeExvsUniforms } from "@/page/TestEditor/components/ssbh-model-preview/animeExvsMeshStandard";
-import { AnimePreviewPostFx } from "@/page/TestEditor/components/ssbh-model-preview/AnimePreviewPostFx";
+} from "@/components/ssbh-model-preview/ssbhCanvasPerformance";
+import { animeExvsOnBeforeCompile, createAnimeExvsUniforms } from "@/components/ssbh-model-preview/animeExvsMeshStandard";
+import { AnimePreviewPostFx } from "@/components/ssbh-model-preview/AnimePreviewPostFx";
 import { SceneTexturePool } from "../utils/SceneTexturePool";
 import { buildImportedDaeDisplayRoot } from "../utils/importedDaeSceneNormalize";
 import {
@@ -91,7 +91,7 @@ import { appendSelectionOutlineShell, createSelectionOutlineMaterial, SCENE_SELE
 import {
   createPreviewSelectionUniforms,
   previewSelectionOnBeforeCompile,
-} from "@/page/TestEditor/components/ssbh-model-preview/previewSelectionMaterial";
+} from "@/components/ssbh-model-preview/previewSelectionMaterial";
 import { DEFAULT_SCENE_GIZMO_SIZE } from "../utils/sceneEditorSettings";
 import { HavokCollisionOverlay, type ObjectTransform } from "./havok/HavokCollisionOverlay";
 import type { HavokMeshData } from "@/utils/havokXmlParser";

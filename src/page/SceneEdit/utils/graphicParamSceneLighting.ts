@@ -4,7 +4,7 @@ import {
   DEFAULT_PREVIEW_DIRECTIONAL_X,
   DEFAULT_PREVIEW_DIRECTIONAL_Y,
   DEFAULT_PREVIEW_DIRECTIONAL_Z,
-} from "@/page/TestEditor/components/ssbh-model-preview/SsbhModelPreviewContext";
+} from "@/components/ssbh-model-preview/SsbhModelPreviewContext";
 
 const DEG2RAD = Math.PI / 180;
 

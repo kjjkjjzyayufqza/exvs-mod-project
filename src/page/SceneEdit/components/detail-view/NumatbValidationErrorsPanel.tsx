@@ -3,7 +3,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AlertTriangle, Check, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import type { NumatbEmptyTexturePathError } from "@/page/TestEditor/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
+import type { NumatbEmptyTexturePathError } from "@/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
 
 type NumatbValidationErrorsPanelProps = {
   errors: NumatbEmptyTexturePathError[];

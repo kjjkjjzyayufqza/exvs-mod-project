@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 
 export default function SidebarLayout() {
   const location = useLocation()
-  const sceneEditFullBleed = location.pathname === "/SceneEdit"
+  const fullBleedEditor = location.pathname === "/SceneEdit" || location.pathname === "/UnitModelEdit"
 
   return (
     <>
@@ -19,7 +19,7 @@ export default function SidebarLayout() {
             <main
               className={cn(
                 "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
-                sceneEditFullBleed ? "p-0" : "p-4",
+                fullBleedEditor ? "p-0" : "p-4",
               )}
             >
               <Outlet />

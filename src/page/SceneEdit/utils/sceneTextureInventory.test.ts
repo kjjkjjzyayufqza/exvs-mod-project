@@ -6,7 +6,7 @@ import {
   normalizeTexturePathKey,
   setTexturePathEnabledForObject,
 } from "./sceneTextureInventory";
-import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
+import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
 import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
 
 function makeBundle(): SsbhModelPreviewBundle {

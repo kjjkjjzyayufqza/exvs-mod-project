@@ -11,7 +11,7 @@ import {
 import {
   TEXTURE_PREVIEW_SLOT_META,
   type TexturePreviewSlotKey,
-} from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
+} from "@/components/ssbh-model-preview/meshFromSsbh";
 
 export interface TextureQualityPreset {
   key: string;

@@ -2,8 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   getOrDecodeNutexbRgba,
   type NutexbRgbaData,
-} from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
-import { getMemoryNutexbPreviewIdentity } from "@/page/TestEditor/components/ssbh-model-preview/fhm2dMemoryPreviewService";
+} from "@/components/ssbh-model-preview/nutexbPreviewCache";
+import { getMemoryNutexbPreviewIdentity } from "@/components/ssbh-model-preview/fhm2dMemoryPreviewService";
 
 export type SceneTextureSourceKind = "disk" | "memory";
 

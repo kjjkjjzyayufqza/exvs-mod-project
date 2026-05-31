@@ -1,20 +1,20 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
+import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
 import {
   collectUniqueTexturePathsForSceneBundles,
   type TexturePreviewSlotKey,
-} from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
+} from "@/components/ssbh-model-preview/meshFromSsbh";
 import {
   getOrDecodeNutexbRgba,
   parseIdentityAndCompressedResponse,
   COMPRESSED_FORMAT_MAP,
   type NutexbRgbaData,
   type NutexbCompressedData,
-} from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
+} from "@/components/ssbh-model-preview/nutexbPreviewCache";
 import {
   getMemoryNutexbPreviewIdentity,
-} from "@/page/TestEditor/components/ssbh-model-preview/fhm2dMemoryPreviewService";
+} from "@/components/ssbh-model-preview/fhm2dMemoryPreviewService";
 import type { PlacementRow } from "../types/placement";
 import {
   collectEnabledTexturePathsForBundle,

@@ -13,7 +13,6 @@ import StageIconListView from "./StageIconListView";
 import StageListView from "./StageListView";
 import MscWorkspaceView from "./msc-editor/MscWorkspaceView";
 import ParamEditorView from "./param-editor/ParamEditorView";
-import { SsbhModelPreviewViewport } from "./ssbh-model-preview/SsbhModelPreviewPanel";
 import { BulletEditorView } from "./param-editors/bullet-editor/BulletEditorView";
 import { ArmsEditorView } from "./param-editors/arms-editor/ArmsEditorView";
 import { SpeedEditorView } from "./param-editors/speed-editor/SpeedEditorView";
@@ -44,33 +43,6 @@ interface MainViewProps {
 const TAB_STRIP_SCROLL_EPSILON_px = 2;
 
 const tabs: StageTab[] = [
-  {
-    name: "3D View",
-    value: "3d",
-    render: () => <SsbhModelPreviewViewport />,
-  },
-  {
-    name: "Preview",
-    value: "preview",
-    content: (
-      <div className="text-sm text-muted-foreground space-y-2 max-w-lg">
-        <p>
-          SSBH model preview lives in the <span className="font-medium text-foreground">3D View</span> tab: Rust loads
-          <code className="mx-1 rounded bg-muted px-1">numdlb</code> /
-          <code className="mx-1 rounded bg-muted px-1">numshb</code> /
-          <code className="mx-1 rounded bg-muted px-1">nusktb</code> /
-          <code className="mx-1 rounded bg-muted px-1">numatb</code> via{" "}
-          <code className="rounded bg-muted px-1">ssbh_data</code>, returns JSON, then the viewport renders with React
-          Three Fiber.
-        </p>
-        <p>
-          Open a model folder (or a <code className="rounded bg-muted px-1">.numdlb</code> file), then use the right{" "}
-          <span className="font-medium text-foreground">Model Preview</span> tab (mesh list, lighting, grid) while you
-          orbit in <span className="font-medium text-foreground">3D View</span>.
-        </p>
-      </div>
-    ),
-  },
   {
     name: "Folder structure",
     value: "folder-structure",
@@ -231,7 +203,7 @@ const MainView = ({
   onUnsavedChanges,
   onRevealTreeFolder,
 }: MainViewProps) => {
-  const initialTab = tabs[0]?.value ?? "3d";
+  const initialTab = tabs[0]?.value ?? "folder-structure";
   const [activeTab, setActiveTab] = useState<string>(initialTab);
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set([initialTab]));
   const [pendingCharacterIdTableSelection, setPendingCharacterIdTableSelection] = useState<number | null>(null);
@@ -656,7 +628,7 @@ const MainView = ({
           {resolvedTabs.map((tab) => {
             if (!visitedTabs.has(tab.value)) return null;
             const isActive = activeTab === tab.value;
-            const shouldKeepMounted = isActive || tab.value === "3d" || tab.value === "bullet-editor" || tab.value === "speed-editor" || tab.value === "depiction-editor" || Boolean(unsavedTabMap[tab.value]);
+            const shouldKeepMounted = isActive || tab.value === "bullet-editor" || tab.value === "speed-editor" || tab.value === "depiction-editor" || Boolean(unsavedTabMap[tab.value]);
             if (!shouldKeepMounted) {
               return null;
             }
@@ -671,13 +643,9 @@ const MainView = ({
                   isActive
                     ? "relative z-10 flex-1"
                     : "pointer-events-none invisible absolute inset-0 z-0 overflow-hidden",
-                  tab.value === "3d" || tab.value === "bullet-3d"
-                    ? isActive
-                      ? "m-0 flex h-full w-full flex-1 flex-col overflow-hidden p-0"
-                      : "p-0"
-                    : isActive
-                      ? "h-full w-full flex-1 overflow-auto px-4 pt-4"
-                      : "px-4 pt-4",
+                  isActive
+                    ? "h-full w-full flex-1 overflow-auto px-4 pt-4"
+                    : "px-4 pt-4",
                 )}
                 aria-hidden={!isActive}
                 {...(!isActive ? { inert: true } : {})}
@@ -693,4 +661,3 @@ const MainView = ({
 };
 
 export default MainView;
-

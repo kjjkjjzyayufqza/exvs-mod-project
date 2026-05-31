@@ -1,28 +1,37 @@
 /**
- * Trajectory simulator for bullet preview.
- * Dispatches on the real moveType field values (0-7, 255) from bulletparam.bin.
+ * Bullet trajectory simulator for the Bullet Editor preview.
  *
- * Note: sub_14043C200 (IDA) is a command query dispatcher, NOT bullet physics.
- * The 513-595 range are entity command IDs, not move types.
+ * Reverse-engineering-grounded model (see
+ * docs/agent-sessions/bullet-editor-physics-redesign/process.md):
+ *
+ * - The projectile is a CUnitTaskAutomata entity. Its per-frame update integrates a
+ *   PhysicsBody (pos += vel at 60fps) while an ActionController (MSC action script)
+ *   applies steering/induction. bulletparam does NOT store the base launch velocity —
+ *   that is supplied by the firing weapon/action — so the base launch speed is an
+ *   explicit scenario input (`scenario.launchSpeed`). bulletparam carries MODIFIERS:
+ *   acceleration, gravity, homing, lifetime, ranges, hitbox, blast.
+ * - Induction (homing) only applies under RED/BLUE lock (see `isInductionActive`).
+ * - Ballistic arc (moveType 1 / gravity_rate > 0) uses the exact game solver
+ *   (`ballisticAngleSolver`, ported from sub_1405C42E0).
+ *
+ * Field names are the verified bulletparam command-pool names (src-tauri bulletparam.rs).
+ * Calibration constants that are not yet bit-exactly extracted from the action VM are
+ * centralized in CALIBRATION below and documented; they are NOT scattered magic numbers.
  */
 
 import type { TypedParamEntry } from "../param-editor/typedParamTypes";
 import {
   computeScenarioTargetPosition,
+  isInductionActive,
+  DEFAULT_LAUNCH_SPEED,
   type BulletPreviewScenario,
 } from "./bulletPreviewTypes";
 import {
-  getMoveTypeDefinition,
   getMoveTypeLabel,
   getMoveTypeCategory,
   type MoveTypeCategory,
 } from "@/lib/gameAlgorithms/moveTypes";
-import {
-  ballisticAngleSolver,
-  ballisticTrajectoryMidpoint,
-} from "@/lib/gameAlgorithms/ballisticSolver";
-import { degToRad as gameDegreesToRad } from "@/lib/gameAlgorithms/vec3";
-import type { Vec3 } from "@/lib/gameAlgorithms/vec3";
+import { ballisticAngleSolver } from "@/lib/gameAlgorithms/ballisticSolver";
 
 export interface TrajectoryResult {
   positions: Float32Array;
@@ -36,17 +45,35 @@ export interface TrajectoryResult {
   moveType: number;
   moveTypeLabel: string;
   moveTypeCategory: MoveTypeCategory;
+  inductionActive: boolean;
+  /** Induction (homing) range radius for visualization; 0 when no induction band applies. */
+  inductionRange: number;
   warnings: string[];
 }
 
-const MAX_SIM_FRAMES = 600;
-const SAFE_MAX_SPEED = 640;
-const SAFE_MAX_RANGE = 10000;
-const SAFE_MAX_DISTANCE = 10000;
+/**
+ * Calibration constants. Defaults are RE-grounded but the exact action-VM scaling for
+ * turn_rate and the acceleration units are not bit-exactly extracted; refine via in-game
+ * capture or deeper action-VM RE. Keep ALL such tunables here, never inline.
+ */
+const CALIBRATION = {
+  fps: 60,
+  maxSimFrames: 600,
+  /** Hard clamp on base launch speed (game initial_speed range is 0..640). */
+  maxLaunchSpeed: 640,
+  /** turn_rate (bulletparam, range 0..1000) is treated as degrees/frame directly. */
+  turnRateToDegPerFrame: 1,
+  /** Safety clamp so outlier turn_rate values cannot produce instant snapping. */
+  maxTurnDegPerFrame: 30,
+  /** Distance cutoffs are clamped to this to keep the preview bounded. */
+  safeMaxDistance: 12000,
+} as const;
 
-function f(v: unknown, fallback = 0): number {
-  if (typeof v === "number" && Number.isFinite(v)) return v;
-  return fallback;
+const RAD = Math.PI / 180;
+
+function f(entry: TypedParamEntry, key: string, fallback = 0): number {
+  const v = entry[key];
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -57,120 +84,362 @@ function pushWarningOnce(warnings: string[], warning: string): void {
   if (!warnings.includes(warning)) warnings.push(warning);
 }
 
-function degToRad(deg: number): number {
-  return (deg * Math.PI) / 180;
-}
-
-function vec3Len(x: number, y: number, z: number): number {
+function vlen(x: number, y: number, z: number): number {
   return Math.sqrt(x * x + y * y + z * z);
 }
 
-function vec3Normalize(x: number, y: number, z: number): [number, number, number] {
-  const len = vec3Len(x, y, z);
+function normalize(x: number, y: number, z: number): [number, number, number] {
+  const len = vlen(x, y, z);
   if (len < 1e-8) return [0, 0, 1];
   return [x / len, y / len, z / len];
 }
 
 function normalizeAngleDeg(value: number): number {
   if (!Number.isFinite(value)) return 0;
-  const normalized = ((value % 360) + 360) % 360;
-  return normalized > 180 ? normalized - 360 : normalized;
+  const n = ((value % 360) + 360) % 360;
+  return n > 180 ? n - 360 : n;
 }
-
-export const MOVE_TYPE_LABELS: Record<number, string> = {
-  0: "Standard missile",
-  1: "Throw projectile",
-  2: "Funnel flight",
-  3: "Funnel approach",
-  4: "Anchor / chain",
-  5: "Funnel flysword",
-  6: "Attach change",
-  7: "Funnel throw",
-  255: "Generic projectile",
-};
-
-// moveType values from bulletparam: 0-7 and 255 are the only known valid values
 
 interface SimState {
   px: number; py: number; pz: number;
   vx: number; vy: number; vz: number;
 }
 
-function resolveHorizontalLaunchDeg(entry: TypedParamEntry): number {
-  const launchH = f(entry.launchAngleHorizontal);
-  if (launchH !== 0 || entry.launchAngleHorizontal === 0) return launchH;
-  return f(entry.initialAngle);
+/**
+ * Launch direction from the horizontal launch angle (yaw about +Y) and the elevation
+ * angle (pitch). Coordinate frame matches the viewport: +Z forward, +Y up, +X lateral.
+ */
+function launchDirection(entry: TypedParamEntry): [number, number, number] {
+  const yaw = normalizeAngleDeg(f(entry, "launchAngleHorizontal") || f(entry, "initialAngle")) * RAD;
+  const pitch = normalizeAngleDeg(f(entry, "elevationAngle")) * RAD;
+  const cp = Math.cos(pitch);
+  return normalize(Math.sin(yaw) * cp, Math.sin(pitch), Math.cos(yaw) * cp);
 }
 
-function computeLaunchDirection(entry: TypedParamEntry): [number, number, number] {
-  const launchAngleH = degToRad(normalizeAngleDeg(resolveHorizontalLaunchDeg(entry)));
-  const launchAngleV = degToRad(normalizeAngleDeg(f(entry.elevationAngle)));
-
-  const dirX = Math.sin(launchAngleH) * Math.cos(launchAngleV);
-  const dirY = Math.sin(launchAngleV);
-  const dirZ = Math.cos(launchAngleH) * Math.cos(launchAngleV);
-  return vec3Normalize(dirX, dirY, dirZ);
+/**
+ * Resolves the base launch speed (units/frame). Prefers the explicit scenario value;
+ * falls back to the entry's initial_speed when set, else the documented default.
+ */
+function resolveLaunchSpeed(entry: TypedParamEntry, scenario: BulletPreviewScenario): number {
+  const fromScenario = Number.isFinite(scenario.launchSpeed) ? scenario.launchSpeed : 0;
+  if (fromScenario > 0) return clamp(fromScenario, 0, CALIBRATION.maxLaunchSpeed);
+  const initial = Math.abs(f(entry, "initialSpeed"));
+  if (initial > 0) return clamp(initial, 0, CALIBRATION.maxLaunchSpeed);
+  return DEFAULT_LAUNCH_SPEED;
 }
 
-function applyHoming(
-  state: SimState,
-  targetX: number, targetY: number, targetZ: number,
-  homingStrength: number,
-  turnRate: number,
-  turnAccel: number,
-  frame: number,
-): void {
-  const curSpeed = vec3Len(state.vx, state.vy, state.vz);
-  if (curSpeed < 1e-6) return;
-
-  const toTargetX = targetX - state.px;
-  const toTargetY = targetY - state.py;
-  const toTargetZ = targetZ - state.pz;
-  const [ttx, tty, ttz] = vec3Normalize(toTargetX, toTargetY, toTargetZ);
-
-  let effectiveTurnRate = turnRate;
-  if (turnAccel > 0) {
-    effectiveTurnRate = Math.min(turnRate + turnAccel * frame, Math.PI);
-  }
-
-  const blend = Math.min(homingStrength, effectiveTurnRate > 0 ? effectiveTurnRate : 0.1);
-
-  state.vx = state.vx * (1 - blend) + ttx * curSpeed * blend;
-  state.vy = state.vy * (1 - blend) + tty * curSpeed * blend;
-  state.vz = state.vz * (1 - blend) + ttz * curSpeed * blend;
-
-  const newSpeed = vec3Len(state.vx, state.vy, state.vz);
-  if (newSpeed > 1e-6) {
-    const scale = curSpeed / newSpeed;
-    state.vx *= scale;
-    state.vy *= scale;
-    state.vz *= scale;
-  }
+/**
+ * Per-frame speed-magnitude delta applied to the velocity. speed_acceleration is treated
+ * as units/frame^2; acceleration_value as units/second^2 (divided by fps). Both ranges
+ * (speed_acceleration -2..30, acceleration_value -360..3000) reduce to compatible
+ * per-frame magnitudes under this interpretation.
+ */
+function speedDeltaPerFrame(entry: TypedParamEntry): number {
+  return f(entry, "speedAcceleration") + f(entry, "accelerationValue") / CALIBRATION.fps;
 }
 
-function applyAcceleration(state: SimState, accel: number): void {
-  if (accel === 0) return;
-  const spd = vec3Len(state.vx, state.vy, state.vz);
+function applySpeedDelta(state: SimState, delta: number): void {
+  if (delta === 0) return;
+  const spd = vlen(state.vx, state.vy, state.vz);
   if (spd < 1e-6) return;
-  const newSpeed = Math.max(0, spd + accel);
-  const scale = newSpeed / spd;
+  const next = Math.max(0, spd + delta);
+  const scale = next / spd;
   state.vx *= scale;
   state.vy *= scale;
   state.vz *= scale;
 }
 
-function applyGravity(state: SimState, gravity: number): void {
-  state.vy -= gravity;
+interface HomingConfig {
+  active: boolean;
+  turnDegPerFrame: number;
+  trackingAngleDeg: number;
+  startFrame: number;
+  endFrame: number;
+  minDistance: number;
+  maxDistance: number;
 }
 
-function stepPosition(state: SimState): void {
-  state.px += state.vx;
-  state.py += state.vy;
-  state.pz += state.vz;
+function resolveHoming(
+  entry: TypedParamEntry,
+  scenario: BulletPreviewScenario,
+  maxSimFrames: number,
+): HomingConfig {
+  const homingType = Math.trunc(f(entry, "homingType"));
+  const turnRate = Math.abs(f(entry, "turnRate"));
+  const inductionAllowed = isInductionActive(scenario.lockState);
+  const active = inductionAllowed && homingType > 0 && turnRate > 0;
+
+  const turnDegPerFrame = clamp(
+    turnRate * CALIBRATION.turnRateToDegPerFrame,
+    0,
+    CALIBRATION.maxTurnDegPerFrame,
+  );
+
+  // tracking_angle is the induction cone half-angle in degrees; 0 -> treat as omni.
+  const trackingAngleRaw = Math.abs(f(entry, "trackingAngle"));
+  const trackingAngleDeg = trackingAngleRaw > 0 ? Math.min(trackingAngleRaw, 180) : 180;
+
+  const startFrame = Math.max(0, Math.round(f(entry, "homingStartDistance") > 0 ? 0 : 0));
+  const duration = Math.round(Math.abs(f(entry, "homingDuration")));
+  const endFrame = duration > 0 ? Math.min(duration, maxSimFrames) : maxSimFrames;
+
+  const minDistance = Math.max(0, f(entry, "minHomingDistance"));
+  const homingRange = Math.abs(f(entry, "homingRange"));
+  const trackingStart = Math.abs(f(entry, "trackingStartDistance"));
+  const maxDistance = clamp(
+    Math.max(homingRange, trackingStart) || CALIBRATION.safeMaxDistance,
+    0,
+    CALIBRATION.safeMaxDistance,
+  );
+
+  return { active, turnDegPerFrame, trackingAngleDeg, startFrame, endFrame, minDistance, maxDistance };
 }
 
-function checkDivergence(state: SimState): boolean {
+/**
+ * Rotates the velocity toward the target by at most `turnDegPerFrame`, but only when the
+ * target is inside the induction cone and within the homing distance band.
+ */
+function applyInduction(
+  state: SimState,
+  tx: number, ty: number, tz: number,
+  homing: HomingConfig,
+  frame: number,
+): void {
+  if (!homing.active) return;
+  if (frame < homing.startFrame || frame >= homing.endFrame) return;
+
+  const dx = tx - state.px;
+  const dy = ty - state.py;
+  const dz = tz - state.pz;
+  const dist = vlen(dx, dy, dz);
+  if (dist < 1e-4) return;
+  if (dist < homing.minDistance || dist > homing.maxDistance) return;
+
+  const speed = vlen(state.vx, state.vy, state.vz);
+  if (speed < 1e-6) return;
+
+  const [cdx, cdy, cdz] = normalize(state.vx, state.vy, state.vz);
+  const [tdx, tdy, tdz] = normalize(dx, dy, dz);
+
+  const dot = clamp(cdx * tdx + cdy * tdy + cdz * tdz, -1, 1);
+  const angleToTargetDeg = Math.acos(dot) / RAD;
+
+  // Outside the induction cone -> no steering this frame.
+  if (angleToTargetDeg > homing.trackingAngleDeg) return;
+
+  const maxStep = Math.min(homing.turnDegPerFrame, angleToTargetDeg);
+  if (maxStep <= 1e-4) return;
+  const t = maxStep / angleToTargetDeg; // fraction of the way to the target direction
+
+  const nx = cdx + (tdx - cdx) * t;
+  const ny = cdy + (tdy - cdy) * t;
+  const nz = cdz + (tdz - cdz) * t;
+  const [ndx, ndy, ndz] = normalize(nx, ny, nz);
+
+  state.vx = ndx * speed;
+  state.vy = ndy * speed;
+  state.vz = ndz * speed;
+}
+
+function diverged(state: SimState): boolean {
   return !Number.isFinite(state.px) || !Number.isFinite(state.py) || !Number.isFinite(state.pz);
+}
+
+function writeFrame(
+  positions: Float32Array,
+  targets: Float32Array,
+  frame: number,
+  state: SimState,
+  tx: number, ty: number, tz: number,
+): void {
+  const i = frame * 3;
+  positions[i] = state.px;
+  positions[i + 1] = state.py;
+  positions[i + 2] = state.pz;
+  targets[i] = tx;
+  targets[i + 1] = ty;
+  targets[i + 2] = tz;
+}
+
+/** Standard projectile integrator (moveType 0 / 6 / 255 and any homing bullet). */
+function simulateProjectile(
+  positions: Float32Array,
+  targets: Float32Array,
+  maxFrames: number,
+  entry: TypedParamEntry,
+  scenario: BulletPreviewScenario,
+  homing: HomingConfig,
+): number {
+  const [dx, dy, dz] = launchDirection(entry);
+  const speed = resolveLaunchSpeed(entry, scenario);
+  const accel = speedDeltaPerFrame(entry);
+  const gravity = Math.abs(f(entry, "gravityRate"));
+  const delay = Math.max(0, Math.round(f(entry, "delayFrame")));
+  const maxDistance = clamp(Math.abs(f(entry, "maxDistance")), 0, CALIBRATION.safeMaxDistance);
+
+  const state: SimState = { px: 0, py: 0, pz: 0, vx: 0, vy: 0, vz: 0 };
+
+  for (let frame = 0; frame < maxFrames; frame++) {
+    const [tx, ty, tz] = computeScenarioTargetPosition(scenario, frame);
+    writeFrame(positions, targets, frame, state, tx, ty, tz);
+
+    if (frame < delay) continue;
+    if (frame === delay) {
+      state.vx = dx * speed;
+      state.vy = dy * speed;
+      state.vz = dz * speed;
+    }
+
+    applyInduction(state, tx, ty, tz, homing, frame - delay);
+    applySpeedDelta(state, accel);
+    if (gravity > 0) state.vy -= gravity;
+
+    state.px += state.vx;
+    state.py += state.vy;
+    state.pz += state.vz;
+
+    if (diverged(state)) return Math.max(1, frame);
+    if (maxDistance > 0 && vlen(state.px, state.py, state.pz) >= maxDistance) return frame + 1;
+  }
+  return maxFrames;
+}
+
+/** Ballistic arc (moveType 1): exact launch-angle solver + gravity integration. */
+function simulateBallistic(
+  positions: Float32Array,
+  targets: Float32Array,
+  maxFrames: number,
+  entry: TypedParamEntry,
+  scenario: BulletPreviewScenario,
+): number {
+  const [tx0, ty0, tz0] = computeScenarioTargetPosition(scenario, 0);
+  const speed = resolveLaunchSpeed(entry, scenario);
+  const gravity = Math.max(Math.abs(f(entry, "gravityRate")), 1e-3);
+  const useHighArc = f(entry, "elevationAngle") > 30 || f(entry, "maxAltitude") > 0;
+
+  const launchAngle = ballisticAngleSolver([0, 0, 0], [tx0, ty0, tz0], speed, gravity, useHighArc);
+  const [hdx, , hdz] = normalize(tx0, 0, tz0);
+  const cosA = Math.cos(launchAngle);
+  const sinA = Math.sin(launchAngle);
+
+  const state: SimState = {
+    px: 0, py: 0, pz: 0,
+    vx: hdx * speed * cosA, vy: speed * sinA, vz: hdz * speed * cosA,
+  };
+
+  for (let frame = 0; frame < maxFrames; frame++) {
+    const [tx, ty, tz] = computeScenarioTargetPosition(scenario, frame);
+    writeFrame(positions, targets, frame, state, tx, ty, tz);
+
+    state.vy -= gravity;
+    state.px += state.vx;
+    state.py += state.vy;
+    state.pz += state.vz;
+
+    if (diverged(state)) return Math.max(1, frame);
+    if (state.py < -10 && frame > 5) return frame + 1;
+  }
+  return maxFrames;
+}
+
+/**
+ * Funnel / bit (moveType 2, 3, 5). Real motion is action-script driven; this is a
+ * documented preview approximation: hold an orbit offset, then (for the approach types)
+ * accelerate toward the target. Induction gating still applies to the approach.
+ */
+function simulateFunnel(
+  positions: Float32Array,
+  targets: Float32Array,
+  maxFrames: number,
+  entry: TypedParamEntry,
+  scenario: BulletPreviewScenario,
+  moveType: number,
+  homing: HomingConfig,
+): number {
+  const orbitRadius = clamp(Math.max(f(entry, "effectiveRange"), 12), 1, 200);
+  const speed = resolveLaunchSpeed(entry, scenario);
+  const orbitOmega = clamp(speed * 0.05, 0.02, 0.4);
+  const isApproach = moveType === 3 && homing.active;
+  const approachStart = Math.floor(maxFrames * 0.3);
+
+  for (let frame = 0; frame < maxFrames; frame++) {
+    const [tx, ty, tz] = computeScenarioTargetPosition(scenario, frame);
+    const ox = Math.cos(frame * orbitOmega) * orbitRadius;
+    const oy = 3 + Math.sin(frame * 0.03) * 1.5;
+    const oz = Math.sin(frame * orbitOmega) * orbitRadius;
+
+    if (isApproach && frame > approachStart) {
+      const t = Math.min(1, (frame - approachStart) / Math.max(maxFrames - approachStart, 1));
+      const eased = t * t;
+      positions[frame * 3] = ox * (1 - eased) + tx * eased;
+      positions[frame * 3 + 1] = oy * (1 - eased) + ty * eased;
+      positions[frame * 3 + 2] = oz * (1 - eased) + tz * eased;
+    } else {
+      positions[frame * 3] = ox;
+      positions[frame * 3 + 1] = oy;
+      positions[frame * 3 + 2] = oz;
+    }
+    targets[frame * 3] = tx;
+    targets[frame * 3 + 1] = ty;
+    targets[frame * 3 + 2] = tz;
+  }
+  return maxFrames;
+}
+
+/**
+ * Anchor / chain (moveType 4, 7). Extends toward the target then retracts. Action-script
+ * driven in game; documented preview approximation.
+ */
+function simulateAnchor(
+  positions: Float32Array,
+  targets: Float32Array,
+  maxFrames: number,
+  entry: TypedParamEntry,
+  scenario: BulletPreviewScenario,
+): number {
+  const [bx, by, bz] = computeScenarioTargetPosition(scenario, 0);
+  const targetDist = Math.max(1, vlen(bx, by, bz));
+  const maxDistance = clamp(Math.abs(f(entry, "maxDistance")), 0, CALIBRATION.safeMaxDistance);
+  const reach = Math.min(targetDist * 0.85, maxDistance || targetDist * 0.85);
+  const speed = Math.max(resolveLaunchSpeed(entry, scenario), 0.5);
+  const extendFrames = clamp(Math.ceil(reach / speed), 1, maxFrames);
+  const retractStart = Math.min(extendFrames + 30, maxFrames - 1);
+
+  for (let frame = 0; frame < maxFrames; frame++) {
+    const [tx, ty, tz] = computeScenarioTargetPosition(scenario, frame);
+    let t: number;
+    if (frame < extendFrames) t = frame / Math.max(extendFrames, 1);
+    else if (frame < retractStart) t = 1;
+    else t = 1 - (frame - retractStart) / Math.max(maxFrames - retractStart, 1);
+
+    const [dx, dy, dz] = normalize(tx, ty, tz);
+    positions[frame * 3] = dx * reach * t;
+    positions[frame * 3 + 1] = dy * reach * t;
+    positions[frame * 3 + 2] = dz * reach * t;
+    targets[frame * 3] = tx;
+    targets[frame * 3 + 1] = ty;
+    targets[frame * 3 + 2] = tz;
+  }
+  return maxFrames;
+}
+
+function findHitFrame(
+  positions: Float32Array,
+  targets: Float32Array,
+  totalFrames: number,
+  hitboxRadius: number,
+): number {
+  const radius = hitboxRadius > 0 ? hitboxRadius : 2;
+  for (let frame = 3; frame < totalFrames; frame++) {
+    const i = frame * 3;
+    const d = vlen(
+      positions[i]! - targets[i]!,
+      positions[i + 1]! - targets[i + 1]!,
+      positions[i + 2]! - targets[i + 2]!,
+    );
+    if (d < radius) return frame;
+  }
+  return totalFrames;
 }
 
 export function simulateTrajectory(
@@ -178,106 +447,67 @@ export function simulateTrajectory(
   scenario: BulletPreviewScenario,
 ): TrajectoryResult {
   const warnings: string[] = [];
-  const moveType = Math.trunc(f(entry.moveType, 255));
+  const moveType = Math.trunc(f(entry, "moveType", 255));
   const category = getMoveTypeCategory(moveType);
   const moveTypeLabel = getMoveTypeLabel(moveType);
 
-  const lifetimeRaw = Math.max(Math.abs(f(entry.lifetime)), 1);
-  if (lifetimeRaw > MAX_SIM_FRAMES) {
-    pushWarningOnce(warnings, `Lifetime ${lifetimeRaw.toFixed(0)}f clamped to ${MAX_SIM_FRAMES}f for preview.`);
+  const lifetimeRaw = Math.max(Math.abs(f(entry, "lifetime")), 1);
+  if (lifetimeRaw > CALIBRATION.maxSimFrames) {
+    pushWarningOnce(
+      warnings,
+      `Lifetime ${lifetimeRaw.toFixed(0)}f clamped to ${CALIBRATION.maxSimFrames}f for preview.`,
+    );
   }
-  const maxSimFrames = clamp(Math.ceil(lifetimeRaw), 1, MAX_SIM_FRAMES);
+  const maxSimFrames = clamp(Math.ceil(lifetimeRaw), 1, CALIBRATION.maxSimFrames);
 
-  const maxRange = clamp(Math.abs(f(entry.maxRange)), 0, SAFE_MAX_RANGE);
-  const effectiveRange = clamp(Math.abs(f(entry.effectiveRange)), 0, SAFE_MAX_DISTANCE);
-  const blastRadius = clamp(Math.abs(f(entry.blastRadius)), 0, SAFE_MAX_RANGE);
+  const maxRange = clamp(Math.abs(f(entry, "maxRange")), 0, CALIBRATION.safeMaxDistance);
+  const effectiveRange = clamp(Math.abs(f(entry, "effectiveRange")), 0, CALIBRATION.safeMaxDistance);
+  const blastRadius = clamp(Math.abs(f(entry, "blastRadius")), 0, CALIBRATION.safeMaxDistance);
   const hitboxSize: [number, number, number] = [
-    clamp(Math.abs(f(entry.hitboxWidth)), 0, 300),
-    clamp(Math.abs(f(entry.hitboxHeight)), 0, 300),
-    clamp(Math.abs(f(entry.hitboxDepth)), 0, 300),
+    clamp(Math.abs(f(entry, "hitboxWidth")), 0, 300),
+    clamp(Math.abs(f(entry, "hitboxHeight")), 0, 300),
+    clamp(Math.abs(f(entry, "hitboxDepth")), 0, 300),
   ];
 
-  const speed = clamp(Math.abs(f(entry.initialSpeed)), 0, SAFE_MAX_SPEED);
-  const accel = f(entry.accelerationValue);
-  const gravity = Math.abs(f(entry.gravityRate));
-  const homingStr = clamp(Math.abs(f(entry.homingStrength)), 0, 1);
-  const turnRate = f(entry.turnRate);
-  const turnAccel = f(entry.turnAcceleration);
-  const homingDur = clamp(Math.round(Math.abs(f(entry.homingDuration))), 0, maxSimFrames);
-  const delayFrame = Math.max(0, Math.round(f(entry.delayFrame)));
+  const homing = resolveHoming(entry, scenario, maxSimFrames);
+  const homingRangeRaw = Math.max(
+    Math.abs(f(entry, "homingRange")),
+    Math.abs(f(entry, "trackingStartDistance")),
+  );
+  const inductionRange = homing.active && homingRangeRaw > 0
+    ? clamp(homingRangeRaw, 0, CALIBRATION.safeMaxDistance)
+    : 0;
+  if (Math.trunc(f(entry, "homingType")) > 0 && !isInductionActive(scenario.lockState)) {
+    pushWarningOnce(warnings, "Induction disabled by lock state (green/yellow lock).");
+  }
 
   const positions = new Float32Array(maxSimFrames * 3);
   const targetPositions = new Float32Array(maxSimFrames * 3);
-  let hitFrame = maxSimFrames;
-  let actualFrames = maxSimFrames;
 
+  let actualFrames: number;
   switch (moveType) {
-    case 0: // Missile
-    case 255: // Generic
-      if (homingStr > 0 && homingDur > 0) {
-        actualFrames = simulateHoming(
-          positions, targetPositions, maxSimFrames,
-          entry, scenario, speed, accel, homingStr, turnRate, homingDur, delayFrame, warnings,
-        );
-      } else {
-        actualFrames = simulateStraight(
-          positions, targetPositions, maxSimFrames,
-          entry, scenario, speed, accel, delayFrame, warnings,
-        );
-      }
+    case 1:
+      actualFrames = simulateBallistic(positions, targetPositions, maxSimFrames, entry, scenario);
       break;
-
-    case 1: // Throw (gravity arc)
-      actualFrames = simulateBallistic(
-        positions, targetPositions, maxSimFrames,
-        entry, scenario, speed, gravity, turnRate, warnings,
-      );
+    case 2:
+    case 3:
+    case 5:
+      actualFrames = simulateFunnel(positions, targetPositions, maxSimFrames, entry, scenario, moveType, homing);
       break;
-
-    case 2: // Funnel (orbit)
-    case 5: // Funnel Flysword
-      actualFrames = simulateFunnel(
-        positions, targetPositions, maxSimFrames,
-        entry, scenario, moveType, speed, warnings,
-      );
+    case 4:
+    case 7:
+      actualFrames = simulateAnchor(positions, targetPositions, maxSimFrames, entry, scenario);
       break;
-
-    case 3: // Funnel Approach (attack)
-      actualFrames = simulateFunnel(
-        positions, targetPositions, maxSimFrames,
-        entry, scenario, moveType, speed, warnings,
-      );
-      break;
-
-    case 4: // Anchor
-      actualFrames = simulateAnchor(
-        positions, targetPositions, maxSimFrames,
-        entry, scenario, speed, warnings,
-      );
-      break;
-
-    case 6: // Attach Change
-      actualFrames = simulateStraight(
-        positions, targetPositions, maxSimFrames,
-        entry, scenario, speed, accel, delayFrame, warnings,
-      );
-      break;
-
-    case 7: // Funnel Throw
-      actualFrames = simulateMine(
-        positions, targetPositions, maxSimFrames,
-        entry, scenario, warnings,
-      );
-      break;
-
+    case 0:
+    case 6:
+    case 255:
     default:
-      actualFrames = simulateStraight(
-        positions, targetPositions, maxSimFrames,
-        entry, scenario, speed, accel, delayFrame, warnings,
-      );
+      actualFrames = simulateProjectile(positions, targetPositions, maxSimFrames, entry, scenario, homing);
+      break;
   }
 
-  hitFrame = findHitFrame(positions, targetPositions, actualFrames, maxRange);
+  const hitboxRadius = Math.max(hitboxSize[0], hitboxSize[1], hitboxSize[2]) * 0.5;
+  const hitFrame = findHitFrame(positions, targetPositions, actualFrames, hitboxRadius || maxRange);
 
   const trimmed = actualFrames < maxSimFrames ? positions.subarray(0, actualFrames * 3) : positions;
   const trimmedTargets = actualFrames < maxSimFrames
@@ -296,744 +526,8 @@ export function simulateTrajectory(
     moveType,
     moveTypeLabel,
     moveTypeCategory: category,
+    inductionActive: homing.active,
+    inductionRange,
     warnings,
   };
-}
-
-function findHitFrame(
-  positions: Float32Array,
-  targetPositions: Float32Array,
-  totalFrames: number,
-  maxRange: number,
-): number {
-  const hitRadius = maxRange > 0 ? maxRange : 2.0;
-  for (let frame = 3; frame < totalFrames; frame++) {
-    const px = positions[frame * 3]!;
-    const py = positions[frame * 3 + 1]!;
-    const pz = positions[frame * 3 + 2]!;
-    const tx = targetPositions[frame * 3]!;
-    const ty = targetPositions[frame * 3 + 1]!;
-    const tz = targetPositions[frame * 3 + 2]!;
-    if (vec3Len(px - tx, py - ty, pz - tz) < hitRadius) {
-      return frame;
-    }
-  }
-  return totalFrames;
-}
-
-function simulateStraight(
-  positions: Float32Array,
-  targetPositions: Float32Array,
-  maxFrames: number,
-  entry: TypedParamEntry,
-  scenario: BulletPreviewScenario,
-  speed: number,
-  accel: number,
-  delayFrame: number,
-  warnings: string[],
-): number {
-  const [ndx, ndy, ndz] = computeLaunchDirection(entry);
-  const effectiveRange = clamp(Math.abs(f(entry.effectiveRange)), 0, SAFE_MAX_DISTANCE);
-  const state: SimState = { px: 0, py: 0, pz: 0, vx: 0, vy: 0, vz: 0 };
-
-  for (let frame = 0; frame < maxFrames; frame++) {
-    const [tx, ty, tz] = computeScenarioTargetPosition(scenario, frame);
-    targetPositions[frame * 3] = tx;
-    targetPositions[frame * 3 + 1] = ty;
-    targetPositions[frame * 3 + 2] = tz;
-    positions[frame * 3] = state.px;
-    positions[frame * 3 + 1] = state.py;
-    positions[frame * 3 + 2] = state.pz;
-
-    if (frame < delayFrame) continue;
-
-    if (frame === delayFrame) {
-      state.vx = ndx * speed;
-      state.vy = ndy * speed;
-      state.vz = ndz * speed;
-    }
-
-    applyAcceleration(state, accel);
-    stepPosition(state);
-
-    if (checkDivergence(state)) return Math.max(1, frame);
-
-    if (effectiveRange > 0 && vec3Len(state.px, state.py, state.pz) >= effectiveRange) {
-      return frame + 1;
-    }
-  }
-  return maxFrames;
-}
-
-function simulateHoming(
-  positions: Float32Array,
-  targetPositions: Float32Array,
-  maxFrames: number,
-  entry: TypedParamEntry,
-  scenario: BulletPreviewScenario,
-  speed: number,
-  accel: number,
-  homingStr: number,
-  turnRate: number,
-  homingDur: number,
-  delayFrame: number,
-  warnings: string[],
-): number {
-  const [ndx, ndy, ndz] = computeLaunchDirection(entry);
-  const effectiveRange = clamp(Math.abs(f(entry.effectiveRange)), 0, SAFE_MAX_DISTANCE);
-  const homingTurnRateRad = degToRad(clamp(turnRate, 0, 180));
-  const state: SimState = {
-    px: 0, py: 0, pz: 0,
-    vx: ndx * speed, vy: ndy * speed, vz: ndz * speed,
-  };
-
-  for (let frame = 0; frame < maxFrames; frame++) {
-    const [tx, ty, tz] = computeScenarioTargetPosition(scenario, frame);
-    targetPositions[frame * 3] = tx;
-    targetPositions[frame * 3 + 1] = ty;
-    targetPositions[frame * 3 + 2] = tz;
-    positions[frame * 3] = state.px;
-    positions[frame * 3 + 1] = state.py;
-    positions[frame * 3 + 2] = state.pz;
-
-    if (frame < delayFrame) continue;
-
-    if (frame >= delayFrame && frame < delayFrame + homingDur) {
-      applyHoming(state, tx, ty, tz, homingStr, homingTurnRateRad, 0, frame - delayFrame);
-    }
-
-    applyAcceleration(state, accel);
-    stepPosition(state);
-
-    if (checkDivergence(state)) return Math.max(1, frame);
-    if (effectiveRange > 0 && vec3Len(state.px, state.py, state.pz) >= effectiveRange) {
-      return frame + 1;
-    }
-  }
-  return maxFrames;
-}
-
-function simulateBallistic(
-  positions: Float32Array,
-  targetPositions: Float32Array,
-  maxFrames: number,
-  entry: TypedParamEntry,
-  scenario: BulletPreviewScenario,
-  speed: number,
-  gravity: number,
-  turnRate: number,
-  warnings: string[],
-): number {
-  const [targetX, targetY, targetZ] = computeScenarioTargetPosition(scenario, 0);
-  const source: Vec3 = [0, 0, 0];
-  const target: Vec3 = [targetX, targetY, targetZ];
-
-  const useHighArc = f(entry.elevationAngle) > 30 || f(entry.maxAltitude) > 0;
-
-  const effectiveGravity = gravity > 0 ? gravity : 0.1;
-  const effectiveSpeed = speed > 0 ? speed : 5;
-
-  const launchAngle = ballisticAngleSolver(source, target, effectiveSpeed, effectiveGravity, useHighArc);
-
-  const horizDir = vec3Normalize(targetX, 0, targetZ);
-  const cosA = Math.cos(launchAngle);
-  const sinA = Math.sin(launchAngle);
-
-  const state: SimState = {
-    px: 0, py: 0, pz: 0,
-    vx: horizDir[0] * effectiveSpeed * cosA,
-    vy: effectiveSpeed * sinA,
-    vz: horizDir[2] * effectiveSpeed * cosA,
-  };
-
-  for (let frame = 0; frame < maxFrames; frame++) {
-    const [tx, ty, tz] = computeScenarioTargetPosition(scenario, frame);
-    targetPositions[frame * 3] = tx;
-    targetPositions[frame * 3 + 1] = ty;
-    targetPositions[frame * 3 + 2] = tz;
-    positions[frame * 3] = state.px;
-    positions[frame * 3 + 1] = state.py;
-    positions[frame * 3 + 2] = state.pz;
-
-    applyGravity(state, effectiveGravity);
-    stepPosition(state);
-
-    if (checkDivergence(state)) return Math.max(1, frame);
-
-    if (state.py < -10 && frame > 5) {
-      return frame + 1;
-    }
-  }
-  return maxFrames;
-}
-
-function simulateSpread(
-  positions: Float32Array,
-  targetPositions: Float32Array,
-  maxFrames: number,
-  entry: TypedParamEntry,
-  scenario: BulletPreviewScenario,
-  speed: number,
-  accel: number,
-  warnings: string[],
-): number {
-  const spreadAngle = degToRad(f(entry.spreadAngle));
-  const [ndx, ndy, ndz] = computeLaunchDirection(entry);
-  const cosS = Math.cos(spreadAngle);
-  const sinS = Math.sin(spreadAngle);
-  const launchDirX = ndx * cosS + ndz * sinS;
-  const launchDirZ = -ndx * sinS + ndz * cosS;
-
-  const effectiveRange = clamp(Math.abs(f(entry.effectiveRange)), 0, SAFE_MAX_DISTANCE);
-  const state: SimState = {
-    px: 0, py: 0, pz: 0,
-    vx: launchDirX * speed, vy: ndy * speed, vz: launchDirZ * speed,
-  };
-
-  warnings.push("Spread preview shows single projectile with spread angle offset applied.");
-
-  for (let frame = 0; frame < maxFrames; frame++) {
-    const [tx, ty, tz] = computeScenarioTargetPosition(scenario, frame);
-    targetPositions[frame * 3] = tx;
-    targetPositions[frame * 3 + 1] = ty;
-    targetPositions[frame * 3 + 2] = tz;
-    positions[frame * 3] = state.px;
-    positions[frame * 3 + 1] = state.py;
-    positions[frame * 3 + 2] = state.pz;
-
-    applyAcceleration(state, accel);
-    stepPosition(state);
-
-    if (checkDivergence(state)) return Math.max(1, frame);
-    if (effectiveRange > 0 && vec3Len(state.px, state.py, state.pz) >= effectiveRange) {
-      return frame + 1;
-    }
-  }
-  return maxFrames;
-}
-
-function simulateSpecial(
-  positions: Float32Array,
-  targetPositions: Float32Array,
-  maxFrames: number,
-  entry: TypedParamEntry,
-  scenario: BulletPreviewScenario,
-  gameMoveType: number,
-  speed: number,
-  warnings: string[],
-): number {
-  switch (gameMoveType) {
-    case 545:
-    case 546:
-      return simulateBeam(positions, targetPositions, maxFrames, entry, scenario, gameMoveType, warnings);
-    case 547:
-    case 548:
-      return simulateFunnel(positions, targetPositions, maxFrames, entry, scenario, gameMoveType, speed, warnings);
-    case 549:
-    case 550:
-      return simulateAnchor(positions, targetPositions, maxFrames, entry, scenario, speed, warnings);
-    case 551:
-      return simulateShield(positions, targetPositions, maxFrames, scenario, warnings);
-    case 552:
-      return simulateMine(positions, targetPositions, maxFrames, entry, scenario, warnings);
-    default:
-      return simulateStraight(positions, targetPositions, maxFrames, entry, scenario, speed, 0, 0, warnings);
-  }
-}
-
-function simulateBeam(
-  positions: Float32Array,
-  targetPositions: Float32Array,
-  maxFrames: number,
-  entry: TypedParamEntry,
-  scenario: BulletPreviewScenario,
-  gameMoveType: number,
-  warnings: string[],
-): number {
-  const [ndx, ndy, ndz] = computeLaunchDirection(entry);
-  const beamLength = clamp(Math.abs(f(entry.maxDistance, 100)), 1, SAFE_MAX_DISTANCE);
-  const isSweep = gameMoveType === 546;
-
-  for (let frame = 0; frame < maxFrames; frame++) {
-    const [tx, ty, tz] = computeScenarioTargetPosition(scenario, frame);
-    targetPositions[frame * 3] = tx;
-    targetPositions[frame * 3 + 1] = ty;
-    targetPositions[frame * 3 + 2] = tz;
-
-    let sweepAngle = 0;
-    if (isSweep) {
-      sweepAngle = Math.sin(frame * 0.05) * degToRad(f(entry.spreadAngle, 30));
-    }
-
-    const t = frame / Math.max(maxFrames - 1, 1);
-    const reach = beamLength * Math.min(t * 4, 1);
-    const cos = Math.cos(sweepAngle);
-    const sin = Math.sin(sweepAngle);
-    const dirX = ndx * cos + ndz * sin;
-    const dirZ = -ndx * sin + ndz * cos;
-
-    positions[frame * 3] = dirX * reach;
-    positions[frame * 3 + 1] = ndy * reach;
-    positions[frame * 3 + 2] = dirZ * reach;
-  }
-  return maxFrames;
-}
-
-function simulateFunnel(
-  positions: Float32Array,
-  targetPositions: Float32Array,
-  maxFrames: number,
-  entry: TypedParamEntry,
-  scenario: BulletPreviewScenario,
-  gameMoveType: number,
-  speed: number,
-  warnings: string[],
-): number {
-  const orbitRadius = clamp(Math.abs(f(entry.effectiveRange, 15)), 1, 200);
-  const orbitSpeed = speed > 0 ? speed * 0.02 : 0.05;
-  const isAttack = gameMoveType === 3 || gameMoveType === 548;
-
-  for (let frame = 0; frame < maxFrames; frame++) {
-    const [tx, ty, tz] = computeScenarioTargetPosition(scenario, frame);
-    targetPositions[frame * 3] = tx;
-    targetPositions[frame * 3 + 1] = ty;
-    targetPositions[frame * 3 + 2] = tz;
-
-    if (isAttack && frame > maxFrames * 0.3) {
-      const t = (frame - maxFrames * 0.3) / (maxFrames * 0.7);
-      const easedT = Math.min(1, t * t);
-      positions[frame * 3] = orbitRadius * Math.cos(frame * orbitSpeed) * (1 - easedT) + tx * easedT;
-      positions[frame * 3 + 1] = 3 + ty * easedT;
-      positions[frame * 3 + 2] = orbitRadius * Math.sin(frame * orbitSpeed) * (1 - easedT) + tz * easedT;
-    } else {
-      const height = 3 + Math.sin(frame * 0.03) * 1.5;
-      positions[frame * 3] = Math.cos(frame * orbitSpeed) * orbitRadius;
-      positions[frame * 3 + 1] = height;
-      positions[frame * 3 + 2] = Math.sin(frame * orbitSpeed) * orbitRadius;
-    }
-  }
-  return maxFrames;
-}
-
-function simulateAnchor(
-  positions: Float32Array,
-  targetPositions: Float32Array,
-  maxFrames: number,
-  entry: TypedParamEntry,
-  scenario: BulletPreviewScenario,
-  speed: number,
-  warnings: string[],
-): number {
-  const [baseX, baseY, baseZ] = computeScenarioTargetPosition(scenario, 0);
-  const targetDistance = Math.max(1, vec3Len(baseX, baseY, baseZ));
-  const maxDistance = clamp(Math.abs(f(entry.maxDistance)), 0, SAFE_MAX_DISTANCE);
-  const reach = Math.min(targetDistance * 0.8, maxDistance || targetDistance * 0.8);
-  const effectiveSpeed = clamp(speed, 0.1, SAFE_MAX_SPEED);
-  const extendFrames = clamp(Math.ceil(reach / effectiveSpeed), 1, maxFrames);
-  const retractStart = Math.min(extendFrames + 30, maxFrames - 1);
-  const effectiveRange = clamp(Math.abs(f(entry.effectiveRange)), 0, SAFE_MAX_DISTANCE);
-
-  for (let frame = 0; frame < maxFrames; frame++) {
-    const [tx, ty, tz] = computeScenarioTargetPosition(scenario, frame);
-    targetPositions[frame * 3] = tx;
-    targetPositions[frame * 3 + 1] = ty;
-    targetPositions[frame * 3 + 2] = tz;
-
-    let t: number;
-    if (frame < extendFrames) {
-      t = frame / Math.max(extendFrames, 1);
-    } else if (frame < retractStart) {
-      t = 1.0;
-    } else {
-      t = 1.0 - (frame - retractStart) / Math.max(maxFrames - retractStart, 1);
-    }
-
-    const [dirX, dirY, dirZ] = vec3Normalize(tx, ty, tz);
-    positions[frame * 3] = dirX * reach * t;
-    positions[frame * 3 + 1] = dirY * reach * t;
-    positions[frame * 3 + 2] = dirZ * reach * t;
-
-    if (effectiveRange > 0 && vec3Len(positions[frame * 3]!, positions[frame * 3 + 1]!, positions[frame * 3 + 2]!) >= effectiveRange) {
-      return frame + 1;
-    }
-  }
-  return maxFrames;
-}
-
-function simulateShield(
-  positions: Float32Array,
-  targetPositions: Float32Array,
-  maxFrames: number,
-  scenario: BulletPreviewScenario,
-  warnings: string[],
-): number {
-  for (let frame = 0; frame < maxFrames; frame++) {
-    const [tx, ty, tz] = computeScenarioTargetPosition(scenario, frame);
-    targetPositions[frame * 3] = tx;
-    targetPositions[frame * 3 + 1] = ty;
-    targetPositions[frame * 3 + 2] = tz;
-    positions[frame * 3] = 0;
-    positions[frame * 3 + 1] = 1.2;
-    positions[frame * 3 + 2] = 1.5;
-  }
-  return maxFrames;
-}
-
-function simulateMine(
-  positions: Float32Array,
-  targetPositions: Float32Array,
-  maxFrames: number,
-  entry: TypedParamEntry,
-  scenario: BulletPreviewScenario,
-  warnings: string[],
-): number {
-  const [ndx, ndy, ndz] = computeLaunchDirection(entry);
-  const throwSpeed = clamp(Math.abs(f(entry.initialSpeed, 3)), 0.1, 50);
-  const gravity = Math.abs(f(entry.gravityRate, 0.2));
-  let settled = false;
-  let settledFrame = 0;
-
-  const state: SimState = {
-    px: 0, py: 1, pz: 0,
-    vx: ndx * throwSpeed, vy: ndy * throwSpeed + 2, vz: ndz * throwSpeed,
-  };
-
-  for (let frame = 0; frame < maxFrames; frame++) {
-    const [tx, ty, tz] = computeScenarioTargetPosition(scenario, frame);
-    targetPositions[frame * 3] = tx;
-    targetPositions[frame * 3 + 1] = ty;
-    targetPositions[frame * 3 + 2] = tz;
-
-    if (settled) {
-      positions[frame * 3] = state.px;
-      positions[frame * 3 + 1] = 0;
-      positions[frame * 3 + 2] = state.pz;
-      continue;
-    }
-
-    positions[frame * 3] = state.px;
-    positions[frame * 3 + 1] = state.py;
-    positions[frame * 3 + 2] = state.pz;
-
-    applyGravity(state, gravity);
-    stepPosition(state);
-
-    if (state.py <= 0) {
-      state.py = 0;
-      settled = true;
-      settledFrame = frame;
-    }
-  }
-  return maxFrames;
-}
-
-function simulateAdvancedHoming(
-  positions: Float32Array,
-  targetPositions: Float32Array,
-  maxFrames: number,
-  entry: TypedParamEntry,
-  scenario: BulletPreviewScenario,
-  gameMoveType: number,
-  speed: number,
-  accel: number,
-  homingStr: number,
-  turnRate: number,
-  turnAccel: number,
-  homingDur: number,
-  delayFrame: number,
-  warnings: string[],
-): number {
-  const [ndx, ndy, ndz] = computeLaunchDirection(entry);
-  const effectiveRange = clamp(Math.abs(f(entry.effectiveRange)), 0, SAFE_MAX_DISTANCE);
-  const homingTurnRateRad = degToRad(clamp(turnRate, 0, 180));
-  const turnAccelRad = degToRad(clamp(turnAccel, 0, 15));
-
-  const state: SimState = {
-    px: 0, py: 0, pz: 0,
-    vx: ndx * speed, vy: ndy * speed, vz: ndz * speed,
-  };
-
-  const patternMod = getAdvancedHomingPattern(gameMoveType);
-
-  for (let frame = 0; frame < maxFrames; frame++) {
-    const [tx, ty, tz] = computeScenarioTargetPosition(scenario, frame);
-    targetPositions[frame * 3] = tx;
-    targetPositions[frame * 3 + 1] = ty;
-    targetPositions[frame * 3 + 2] = tz;
-    positions[frame * 3] = state.px;
-    positions[frame * 3 + 1] = state.py;
-    positions[frame * 3 + 2] = state.pz;
-
-    if (frame < delayFrame) continue;
-
-    const homingFrame = frame - delayFrame;
-    if (homingFrame < homingDur) {
-      applyHoming(state, tx, ty, tz, homingStr, homingTurnRateRad, turnAccelRad, homingFrame);
-    }
-
-    patternMod(state, frame, homingFrame, speed);
-
-    applyAcceleration(state, accel);
-    stepPosition(state);
-
-    if (checkDivergence(state)) return Math.max(1, frame);
-    if (effectiveRange > 0 && vec3Len(state.px, state.py, state.pz) >= effectiveRange) {
-      return frame + 1;
-    }
-  }
-  return maxFrames;
-}
-
-type PatternModifier = (state: SimState, frame: number, homingFrame: number, speed: number) => void;
-
-function getAdvancedHomingPattern(gameMoveType: number): PatternModifier {
-  switch (gameMoveType) {
-    case 555:
-      return (state, _frame, homingFrame, speed) => {
-        const sway = Math.sin(homingFrame * 0.15) * speed * 0.3;
-        const perpX = -state.vz;
-        const perpZ = state.vx;
-        const perpLen = vec3Len(perpX, 0, perpZ);
-        if (perpLen > 1e-6) {
-          state.vx += (perpX / perpLen) * sway * 0.01;
-          state.vz += (perpZ / perpLen) * sway * 0.01;
-        }
-      };
-    case 560:
-      return (state, _frame, homingFrame, speed) => {
-        const zigPhase = Math.floor(homingFrame / 10) % 2 === 0 ? 1 : -1;
-        const perpX = -state.vz;
-        const perpZ = state.vx;
-        const perpLen = vec3Len(perpX, 0, perpZ);
-        if (perpLen > 1e-6) {
-          state.vx += (perpX / perpLen) * speed * 0.15 * zigPhase * 0.01;
-          state.vz += (perpZ / perpLen) * speed * 0.15 * zigPhase * 0.01;
-        }
-      };
-    case 561:
-      return (state, _frame, homingFrame, speed) => {
-        const wave = Math.sin(homingFrame * 0.1) * speed * 0.2;
-        const perpX = -state.vz;
-        const perpZ = state.vx;
-        const perpLen = vec3Len(perpX, 0, perpZ);
-        if (perpLen > 1e-6) {
-          state.vx += (perpX / perpLen) * wave * 0.01;
-          state.vz += (perpZ / perpLen) * wave * 0.01;
-        }
-      };
-    case 564:
-      return (state, _frame, homingFrame, speed) => {
-        const corkRadius = speed * 0.15;
-        const corkAngle = homingFrame * 0.2;
-        state.vy += Math.sin(corkAngle) * corkRadius * 0.01;
-        const perpX = -state.vz;
-        const perpZ = state.vx;
-        const perpLen = vec3Len(perpX, 0, perpZ);
-        if (perpLen > 1e-6) {
-          state.vx += (perpX / perpLen) * Math.cos(corkAngle) * corkRadius * 0.01;
-          state.vz += (perpZ / perpLen) * Math.cos(corkAngle) * corkRadius * 0.01;
-        }
-      };
-    default:
-      return () => {};
-  }
-}
-
-function simulateGravityAffected(
-  positions: Float32Array,
-  targetPositions: Float32Array,
-  maxFrames: number,
-  entry: TypedParamEntry,
-  scenario: BulletPreviewScenario,
-  gameMoveType: number,
-  speed: number,
-  accel: number,
-  gravity: number,
-  homingStr: number,
-  turnRate: number,
-  homingDur: number,
-  warnings: string[],
-): number {
-  const [ndx, ndy, ndz] = computeLaunchDirection(entry);
-  const effectiveRange = clamp(Math.abs(f(entry.effectiveRange)), 0, SAFE_MAX_DISTANCE);
-  const effectiveGravity = gravity > 0 ? gravity : 0.1;
-  const homingTurnRateRad = degToRad(clamp(turnRate, 0, 180));
-
-  let launchVy = ndy * speed;
-  if (gameMoveType === 570) {
-    launchVy = Math.abs(speed) * 0.8;
-  } else if (gameMoveType === 569) {
-    launchVy = Math.abs(speed) * 0.2;
-  } else if (gameMoveType === 575) {
-    launchVy = -Math.abs(speed) * 0.6;
-  }
-
-  const state: SimState = {
-    px: 0, py: 0, pz: 0,
-    vx: ndx * speed, vy: launchVy, vz: ndz * speed,
-  };
-
-  for (let frame = 0; frame < maxFrames; frame++) {
-    const [tx, ty, tz] = computeScenarioTargetPosition(scenario, frame);
-    targetPositions[frame * 3] = tx;
-    targetPositions[frame * 3 + 1] = ty;
-    targetPositions[frame * 3 + 2] = tz;
-    positions[frame * 3] = state.px;
-    positions[frame * 3 + 1] = state.py;
-    positions[frame * 3 + 2] = state.pz;
-
-    if (gameMoveType === 571 && frame > maxFrames * 0.5 && frame < homingDur) {
-      applyHoming(state, tx, ty, tz, homingStr, homingTurnRateRad, 0, frame);
-    }
-
-    let frameGravity = effectiveGravity;
-    if (gameMoveType === 569 || gameMoveType === 574) {
-      frameGravity = effectiveGravity * 0.3;
-    }
-
-    applyGravity(state, frameGravity);
-    applyAcceleration(state, accel);
-    stepPosition(state);
-
-    if (checkDivergence(state)) return Math.max(1, frame);
-    if (state.py < -50 && frame > 5) return frame + 1;
-    if (effectiveRange > 0 && vec3Len(state.px, state.py, state.pz) >= effectiveRange) {
-      return frame + 1;
-    }
-  }
-  return maxFrames;
-}
-
-function simulateUnique(
-  positions: Float32Array,
-  targetPositions: Float32Array,
-  maxFrames: number,
-  entry: TypedParamEntry,
-  scenario: BulletPreviewScenario,
-  gameMoveType: number,
-  speed: number,
-  warnings: string[],
-): number {
-  switch (gameMoveType) {
-    case 576:
-    case 577:
-      return simulateBoomerang(positions, targetPositions, maxFrames, entry, scenario, gameMoveType, speed, warnings);
-    case 578:
-      return simulateTeleport(positions, targetPositions, maxFrames, entry, scenario, speed, warnings);
-    case 579:
-    case 580:
-      return simulateMine(positions, targetPositions, maxFrames, entry, scenario, warnings);
-    case 581:
-    case 582:
-      return simulateFormation(positions, targetPositions, maxFrames, entry, scenario, gameMoveType, speed, warnings);
-    case 583:
-    case 584:
-      return simulateFunnel(positions, targetPositions, maxFrames, entry, scenario, gameMoveType === 584 ? 548 : 547, speed, warnings);
-    default:
-      return simulateStraight(positions, targetPositions, maxFrames, entry, scenario, speed, 0, 0, warnings);
-  }
-}
-
-function simulateBoomerang(
-  positions: Float32Array,
-  targetPositions: Float32Array,
-  maxFrames: number,
-  entry: TypedParamEntry,
-  scenario: BulletPreviewScenario,
-  gameMoveType: number,
-  speed: number,
-  warnings: string[],
-): number {
-  const [ndx, ndy, ndz] = computeLaunchDirection(entry);
-  const maxDistance = clamp(Math.abs(f(entry.maxDistance, 40)), 1, SAFE_MAX_DISTANCE);
-  const turnPoint = Math.floor(maxFrames * 0.4);
-  const isReturn = gameMoveType === 577;
-
-  for (let frame = 0; frame < maxFrames; frame++) {
-    const [tx, ty, tz] = computeScenarioTargetPosition(scenario, frame);
-    targetPositions[frame * 3] = tx;
-    targetPositions[frame * 3 + 1] = ty;
-    targetPositions[frame * 3 + 2] = tz;
-
-    let t: number;
-    if (isReturn) {
-      t = 1 - frame / maxFrames;
-    } else if (frame < turnPoint) {
-      t = frame / turnPoint;
-    } else {
-      t = 1 - (frame - turnPoint) / (maxFrames - turnPoint);
-    }
-
-    const curveOffset = Math.sin(t * Math.PI) * maxDistance * 0.3;
-    positions[frame * 3] = ndx * maxDistance * t + curveOffset;
-    positions[frame * 3 + 1] = ndy * maxDistance * t + Math.sin(t * Math.PI) * 3;
-    positions[frame * 3 + 2] = ndz * maxDistance * t;
-  }
-  return maxFrames;
-}
-
-function simulateTeleport(
-  positions: Float32Array,
-  targetPositions: Float32Array,
-  maxFrames: number,
-  entry: TypedParamEntry,
-  scenario: BulletPreviewScenario,
-  speed: number,
-  warnings: string[],
-): number {
-  const [tx0, ty0, tz0] = computeScenarioTargetPosition(scenario, 0);
-  const teleportFrame = Math.min(Math.floor(maxFrames * 0.3), 30);
-
-  for (let frame = 0; frame < maxFrames; frame++) {
-    const [tx, ty, tz] = computeScenarioTargetPosition(scenario, frame);
-    targetPositions[frame * 3] = tx;
-    targetPositions[frame * 3 + 1] = ty;
-    targetPositions[frame * 3 + 2] = tz;
-
-    if (frame < teleportFrame) {
-      const t = frame / teleportFrame;
-      positions[frame * 3] = 0;
-      positions[frame * 3 + 1] = t * 5;
-      positions[frame * 3 + 2] = t * speed * 0.5;
-    } else {
-      positions[frame * 3] = tx;
-      positions[frame * 3 + 1] = ty;
-      positions[frame * 3 + 2] = tz;
-    }
-  }
-  return maxFrames;
-}
-
-function simulateFormation(
-  positions: Float32Array,
-  targetPositions: Float32Array,
-  maxFrames: number,
-  entry: TypedParamEntry,
-  scenario: BulletPreviewScenario,
-  gameMoveType: number,
-  speed: number,
-  warnings: string[],
-): number {
-  const isCircle = gameMoveType === 582;
-  const [ndx, ndy, ndz] = computeLaunchDirection(entry);
-  const formationSpeed = speed > 0 ? speed * 0.5 : 2;
-
-  for (let frame = 0; frame < maxFrames; frame++) {
-    const [tx, ty, tz] = computeScenarioTargetPosition(scenario, frame);
-    targetPositions[frame * 3] = tx;
-    targetPositions[frame * 3 + 1] = ty;
-    targetPositions[frame * 3 + 2] = tz;
-
-    if (isCircle) {
-      const radius = 5 + frame * 0.05;
-      positions[frame * 3] = Math.cos(frame * 0.08) * radius;
-      positions[frame * 3 + 1] = 2;
-      positions[frame * 3 + 2] = Math.sin(frame * 0.08) * radius + frame * formationSpeed * 0.1;
-    } else {
-      positions[frame * 3] = ndx * frame * formationSpeed * 0.1;
-      positions[frame * 3 + 1] = ndy * frame * formationSpeed * 0.1 + 1;
-      positions[frame * 3 + 2] = ndz * frame * formationSpeed * 0.1;
-    }
-  }
-  return maxFrames;
 }

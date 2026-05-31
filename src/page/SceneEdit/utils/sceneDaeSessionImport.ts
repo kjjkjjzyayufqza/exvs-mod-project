@@ -1,5 +1,5 @@
-import type { DaeSsbhSessionState } from "@/page/TestEditor/components/ssbh-model-preview/daeSsbhTypes";
-import type { MatlDataJson } from "@/page/TestEditor/components/ssbh-model-preview/types";
+import type { DaeSsbhSessionState } from "@/components/ssbh-model-preview/daeSsbhTypes";
+import type { MatlDataJson } from "@/components/ssbh-model-preview/types";
 import type { ImportedDaeObject } from "../components/MapViewport";
 import type { DaeImportConfig } from "../components/dae-import/daeImportTypes";
 import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";

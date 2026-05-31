@@ -16,8 +16,8 @@ import type {
   HavokInstallInfo,
 } from "./daeImportTypes";
 import { isHktGenerationAvailable } from "./daeImportDefaults";
-import { useDaeSsbhSessionStore } from "@/page/TestEditor/components/ssbh-model-preview/store/daeSsbhSessionStore";
-import { collectMissingTexturePathsForExportSession } from "@/page/TestEditor/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
+import { useDaeSsbhSessionStore } from "@/components/ssbh-model-preview/store/daeSsbhSessionStore";
+import { collectMissingTexturePathsForExportSession } from "@/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
 import {
   DaeImportBoolField,
   DaeImportFieldRow,

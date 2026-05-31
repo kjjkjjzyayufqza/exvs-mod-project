@@ -3,14 +3,12 @@ import type { TestTreeNode } from "../types";
 import type { FileTreeViewOptions } from "../utils/fileTreeViewSort";
 import MainView from "./MainView";
 import InfoPanel from "./InfoPanel";
-import { SsbhModelPreviewProvider } from "./ssbh-model-preview/SsbhModelPreviewPanel";
 import { FileTreePane } from "./FileTreePane";
 import { TestEditorWorkspacePanels } from "./TestEditorWorkspacePanels";
 
 type Props = {
   folderStoreKey: string;
   currentDir: string;
-  isPageActive: boolean;
   fileTreeData: TestTreeNode[];
   onFileSelect: (node: TestTreeNode | null) => void;
   selectedId: string | null;
@@ -42,7 +40,6 @@ type Props = {
 export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
   folderStoreKey,
   currentDir,
-  isPageActive,
   fileTreeData,
   onFileSelect,
   selectedId,
@@ -71,47 +68,45 @@ export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
   onOpenAsEffectProject,
 }: Props) {
   return (
-    <SsbhModelPreviewProvider workspaceRoot={currentDir} previewSuspended={!isPageActive}>
-      <TestEditorWorkspacePanels
-        left={
-          <FileTreePane
-            data={fileTreeData}
-            onSelect={onFileSelect}
-            selectedId={selectedId}
-            searchTerm={searchTerm}
-            onSearchChange={onSearchChange}
-            onPickFolder={onPickFolder}
-            onRefresh={onRefresh}
-            folderStoreKey={folderStoreKey}
-            isLoading={isLoading}
-            currentDir={currentDir}
-            currentJsonPath={selectedJsonPath}
-            hasUnsavedChanges={hasUnsavedChanges}
-            dirtyTopLevelFolderNames={dirtyFolderList}
-            workspaceTopLevelFolderNames={workspaceTopLevelFolderNames}
-            workspaceRootStructureJsonNames={workspaceRootStructureJsonNames}
-            fileTreeStructureScanKey={fileTreeStructureScanKey}
-            modFolderPath={obModPath || undefined}
-            onFolderRepacked={onFolderRepacked}
-            starredPathSet={starredPathSet}
-            onToggleStar={onToggleStar}
-            viewOptions={viewOptions}
-            onViewOptionsChange={onViewOptionsChange}
-            onOpenAsEffectProject={onOpenAsEffectProject}
-          />
-        }
-        center={
-          <MainView
-            jsonFilePath={selectedJsonPath}
-            folderPath={currentDir}
-            mscWorkspaceFolderPath={mscWorkspaceFolderPath}
-            onMscWorkspaceFolderChange={onMscWorkspaceFolderChange}
-            onUnsavedChanges={onUnsavedChanges}
-            onRevealTreeFolder={onRevealTreeFolder}
-          />
-        }
-        right={<InfoPanel selected={selectedNode} />}
-      />
-    </SsbhModelPreviewProvider>
+    <TestEditorWorkspacePanels
+      left={
+        <FileTreePane
+          data={fileTreeData}
+          onSelect={onFileSelect}
+          selectedId={selectedId}
+          searchTerm={searchTerm}
+          onSearchChange={onSearchChange}
+          onPickFolder={onPickFolder}
+          onRefresh={onRefresh}
+          folderStoreKey={folderStoreKey}
+          isLoading={isLoading}
+          currentDir={currentDir}
+          currentJsonPath={selectedJsonPath}
+          hasUnsavedChanges={hasUnsavedChanges}
+          dirtyTopLevelFolderNames={dirtyFolderList}
+          workspaceTopLevelFolderNames={workspaceTopLevelFolderNames}
+          workspaceRootStructureJsonNames={workspaceRootStructureJsonNames}
+          fileTreeStructureScanKey={fileTreeStructureScanKey}
+          modFolderPath={obModPath || undefined}
+          onFolderRepacked={onFolderRepacked}
+          starredPathSet={starredPathSet}
+          onToggleStar={onToggleStar}
+          viewOptions={viewOptions}
+          onViewOptionsChange={onViewOptionsChange}
+          onOpenAsEffectProject={onOpenAsEffectProject}
+        />
+      }
+      center={
+        <MainView
+          jsonFilePath={selectedJsonPath}
+          folderPath={currentDir}
+          mscWorkspaceFolderPath={mscWorkspaceFolderPath}
+          onMscWorkspaceFolderChange={onMscWorkspaceFolderChange}
+          onUnsavedChanges={onUnsavedChanges}
+          onRevealTreeFolder={onRevealTreeFolder}
+        />
+      }
+      right={<InfoPanel selected={selectedNode} />}
+    />
   );
 });

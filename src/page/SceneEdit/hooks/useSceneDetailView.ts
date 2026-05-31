@@ -7,13 +7,13 @@ import type {
   DetailViewNodeKind,
 } from "../components/detail-view/sceneDetailViewTypes";
 import { SSBH_MODEL_ROLES } from "../components/detail-view/sceneDetailViewTypes";
-import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
-import type { NumatbModalBundle } from "@/page/TestEditor/components/ssbh-model-preview/numatbEditorUtils";
+import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
+import type { NumatbModalBundle } from "@/components/ssbh-model-preview/numatbEditorUtils";
 import {
   detectNumatbProfileFromPath,
   deriveNumatbSisterPath,
-} from "@/page/TestEditor/components/ssbh-model-preview/numatbEditorUtils";
-import { createEmptyNumatbFile } from "@/page/TestEditor/components/ssbh-model-preview/daeSsbhTypes";
+} from "@/components/ssbh-model-preview/numatbEditorUtils";
+import { createEmptyNumatbFile } from "@/components/ssbh-model-preview/daeSsbhTypes";
 import type { NumatbPathsByProfile } from "../components/detail-view/sceneDetailViewTypes";
 import {
   ssbhReadNumdlbMapping,
@@ -22,9 +22,9 @@ import {
   ssbhTemplateWriteNumatb,
   ssbhReadNuhlpb,
   ssbhWriteNuhlpb,
-} from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
-import type { NumdlbReadResult, NuhlpbReadResult } from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
-import type { MatlDataJson } from "@/page/TestEditor/components/ssbh-model-preview/types";
+} from "@/components/ssbh-model-preview/ssbhDaeIoService";
+import type { NumdlbReadResult, NuhlpbReadResult } from "@/components/ssbh-model-preview/ssbhDaeIoService";
+import type { MatlDataJson } from "@/components/ssbh-model-preview/types";
 import type { StageTreeNode } from "../components/StageHierarchyTree";
 import {
   findBundleForDetailViewNode,

@@ -1,9 +1,9 @@
-import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
-import type { NumdlbReadResult } from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
-import type { NuhlpbReadResult } from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
-import type { NumatbModalBundle } from "@/page/TestEditor/components/ssbh-model-preview/numatbEditorUtils";
-import type { EffectProjectEditorDocument } from "@/page/TestEditor/components/ssbh-model-preview/effectProjectEditorUtils";
-import type { EffectProjectAuxiliarySnapshot } from "@/page/TestEditor/components/ssbh-model-preview/effectProjectAuxiliaryCache";
+import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
+import type { NumdlbReadResult } from "@/components/ssbh-model-preview/ssbhDaeIoService";
+import type { NuhlpbReadResult } from "@/components/ssbh-model-preview/ssbhDaeIoService";
+import type { NumatbModalBundle } from "@/components/ssbh-model-preview/numatbEditorUtils";
+import type { EffectProjectEditorDocument } from "@/components/ssbh-model-preview/effectProjectEditorUtils";
+import type { EffectProjectAuxiliarySnapshot } from "@/components/ssbh-model-preview/effectProjectAuxiliaryCache";
 
 export type DetailViewModelTab =
   | "model"

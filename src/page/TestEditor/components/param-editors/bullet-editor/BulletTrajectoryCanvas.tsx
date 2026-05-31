@@ -172,6 +172,7 @@ function ProjectileBody() {
   const meshRef = useRef<THREE.Mesh>(null);
   const glowRef = useRef<THREE.Mesh>(null);
   const trajectory = useBulletEditorStore((s) => s.trajectory);
+  const induction = trajectory?.inductionActive ?? false;
 
   useFrame(() => {
     const state = useBulletEditorStore.getState();
@@ -186,16 +187,41 @@ function ProjectileBody() {
 
   if (!trajectory) return null;
 
+  // Warm (red/orange) = induction active; cool (cyan/blue) = no induction.
+  const coreColor = induction ? "#ff3344" : "#38bdf8";
+  const emissiveColor = induction ? "#dd0018" : "#0284c7";
+  const glowColor = induction ? "#ff5522" : "#22d3ee";
+
   return (
     <group>
       <mesh ref={meshRef}>
         <sphereGeometry args={[0.28, 24, 24]} />
-        <meshStandardMaterial color="#ff3344" emissive="#dd0018" emissiveIntensity={2.2} metalness={0.15} roughness={0.35} />
+        <meshStandardMaterial color={coreColor} emissive={emissiveColor} emissiveIntensity={2.2} metalness={0.15} roughness={0.35} />
       </mesh>
       <mesh ref={glowRef}>
         <sphereGeometry args={[0.62, 16, 16]} />
-        <meshBasicMaterial color="#ff5522" transparent opacity={0.14} depthWrite={false} />
+        <meshBasicMaterial color={glowColor} transparent opacity={0.14} depthWrite={false} />
       </mesh>
+    </group>
+  );
+}
+
+function InductionRangeRing() {
+  const trajectory = useBulletEditorStore((s) => s.trajectory);
+  if (!trajectory || !trajectory.inductionActive || trajectory.inductionRange <= 0) return null;
+  const r = trajectory.inductionRange;
+
+  return (
+    <group>
+      <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[Math.max(r * 0.99, 0.1), r, 96]} />
+        <meshBasicMaterial color="#22c55e" transparent opacity={0.4} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+      <Html position={[0, 0.2, r]} center distanceFactor={90}>
+        <div className="pointer-events-none whitespace-nowrap rounded bg-emerald-950/80 px-1.5 py-0.5 text-[9px] font-medium text-emerald-200">
+          induction {r.toFixed(0)}u
+        </div>
+      </Html>
     </group>
   );
 }
@@ -214,7 +240,7 @@ function ProgressiveTrailLine() {
     geo.setAttribute("position", new THREE.Float32BufferAttribute(trajectory.positions, 3));
     geo.setDrawRange(0, 1);
     const mat = new THREE.LineBasicMaterial({
-      color: "#ff7744",
+      color: trajectory.inductionActive ? "#ff7744" : "#38bdf8",
       transparent: true,
       opacity: 0.92,
     });
@@ -400,6 +426,7 @@ export function BulletTrajectoryCanvas() {
         <DistanceLine />
         {trajectory && (
           <>
+            <InductionRangeRing />
             <GhostTrailLine />
             <ProgressiveTrailLine />
             <ProjectileBody />

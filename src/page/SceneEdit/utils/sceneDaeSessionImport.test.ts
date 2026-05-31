@@ -8,7 +8,7 @@ vi.mock("./sceneSessionService", () => ({
 }));
 
 import { createDefaultDaeImportConfig } from "../components/dae-import/daeImportDefaults";
-import { createEmptyNumatbFile } from "@/page/TestEditor/components/ssbh-model-preview/daeSsbhTypes";
+import { createEmptyNumatbFile } from "@/components/ssbh-model-preview/daeSsbhTypes";
 import { createImportedDaeMaterialProfile } from "./sceneDaeSsbhSave";
 import {
   buildSsbhSessionImportConfig,

@@ -1,4 +1,4 @@
-import type { NutexbRgbaData } from "@/page/TestEditor/components/ssbh-model-preview/nutexbPreviewCache";
+import type { NutexbRgbaData } from "@/components/ssbh-model-preview/nutexbPreviewCache";
 import type { NutexbTextureData, NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
 import { normalizeTexturePathKey } from "./sceneTextureInventory";
 import {

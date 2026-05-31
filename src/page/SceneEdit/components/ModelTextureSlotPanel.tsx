@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Pencil, Loader2 } from "lucide-react";
 import { TexturePathPicker } from "./TexturePathPicker";
 import { Skeleton } from "@/components/ui/skeleton";
-import { type TexturePreviewSlotKey } from "@/page/TestEditor/components/ssbh-model-preview/meshFromSsbh";
+import { type TexturePreviewSlotKey } from "@/components/ssbh-model-preview/meshFromSsbh";
 import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
-import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
+import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
 import {
   collectBundleTextureInventory,
   collectGlobalLoadedNutexbInventory,

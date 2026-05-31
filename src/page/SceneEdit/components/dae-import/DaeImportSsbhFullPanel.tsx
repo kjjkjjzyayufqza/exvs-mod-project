@@ -7,16 +7,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useDaeSsbhSessionStore } from "@/page/TestEditor/components/ssbh-model-preview/store/daeSsbhSessionStore";
-import type { SsbhDaeAnalysisReport } from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
-import { NumdlbMaterialMappingEditor } from "@/page/TestEditor/components/ssbh-model-preview/components/NumdlbMaterialMappingEditor";
-import { NumatbTemplateEditor } from "@/page/TestEditor/components/ssbh-model-preview/components/NumatbTemplateEditor";
-import { MissingTexturePathFillPanel } from "@/page/TestEditor/components/ssbh-model-preview/components/MissingTexturePathFillPanel";
-import { useStableMissingTextureFillSlots } from "@/page/TestEditor/components/ssbh-model-preview/hooks/useStableMissingTextureFillSlots";
+import { useDaeSsbhSessionStore } from "@/components/ssbh-model-preview/store/daeSsbhSessionStore";
+import type { SsbhDaeAnalysisReport } from "@/components/ssbh-model-preview/ssbhDaeIoService";
+import { NumdlbMaterialMappingEditor } from "@/components/ssbh-model-preview/components/NumdlbMaterialMappingEditor";
+import { NumatbTemplateEditor } from "@/components/ssbh-model-preview/components/NumatbTemplateEditor";
+import { MissingTexturePathFillPanel } from "@/components/ssbh-model-preview/components/MissingTexturePathFillPanel";
+import { useStableMissingTextureFillSlots } from "@/components/ssbh-model-preview/hooks/useStableMissingTextureFillSlots";
 import {
   applyTexturePathFillToProfiles,
   collectMissingTexturePathSlotRefsForExportSession,
-} from "@/page/TestEditor/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
+} from "@/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
 import type { DaeAnalysisResult } from "./daeImportTypes";
 import { DaeImportPanelSection } from "./daeImportUi";
 

@@ -1,9 +1,9 @@
-import type { SsbhDaeUpAxis, SsbhConvertToSsbhParams } from "@/page/TestEditor/components/ssbh-model-preview/ssbhDaeIoService";
+import type { SsbhDaeUpAxis, SsbhConvertToSsbhParams } from "@/components/ssbh-model-preview/ssbhDaeIoService";
 import {
   createEmptyMaterialEntry,
   type MatlDataJson,
   type NumdlbMappingRow,
-} from "@/page/TestEditor/components/ssbh-model-preview/daeSsbhTypes";
+} from "@/components/ssbh-model-preview/daeSsbhTypes";
 import type { PlacementRow } from "../types/placement";
 
 export const DEFAULT_IMPORTED_DAE_MATERIAL_LABEL = "pbr1Mtl";

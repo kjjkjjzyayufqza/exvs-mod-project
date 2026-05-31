@@ -17,4 +17,5 @@ pub mod param_bin_format;
 pub mod param_entry_schema;
 pub mod projectile_depiction_table;
 pub mod speedparam;
+pub mod unit_model_validate;
 pub mod vernier_table;

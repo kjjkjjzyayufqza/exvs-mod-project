@@ -11,6 +11,7 @@ export const SIDEBAR_ROUTE_URLS: readonly string[] = [
   "/UnitList",
   "/Config",
   "/SceneEdit",
+  "/UnitModelEdit",
   "/MiscTools",
   "/TestEditor",
 ];

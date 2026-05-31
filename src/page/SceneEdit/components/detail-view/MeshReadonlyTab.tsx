@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { MeshDataJson, MeshObjectJson } from "@/page/TestEditor/components/ssbh-model-preview/types";
+import type { MeshDataJson, MeshObjectJson } from "@/components/ssbh-model-preview/types";
 
 const VIRTUALIZE_ROW_THRESHOLD = 40;
 const ROW_HEIGHT = 28;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { findBundleForDetailViewNode } from "./sceneDetailViewBundleLookup";
 import type { StageTreeNode } from "../components/StageHierarchyTree";
-import type { SsbhModelPreviewBundle } from "@/page/TestEditor/components/ssbh-model-preview/types";
+import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
 
 function makeBundle(rootFolder: string): SsbhModelPreviewBundle {
   return {
