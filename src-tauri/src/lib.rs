@@ -131,6 +131,7 @@ pub fn run() {
             stage_commands::load_stage_from_preview,
             stage_commands::extract_stage_fhm2d_to_folder,
             stage_commands::repack_fhm2d,
+            stage_commands::repack_stage_fhm2d_preserving_shared_textures,
             stage_commands::redistribute_stage_textures,
             stage_commands::restore_shared_textures,
             stage_commands::apply_scene_texture_edits,

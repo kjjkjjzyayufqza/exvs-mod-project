@@ -3085,3 +3085,88 @@ fn sanitized_texture_filename_rejects_invalid_names() {
     assert!(sanitized_texture_filename("sub/dir.nutexb").is_err());
     assert!(sanitized_texture_filename("sub\\dir.nutexb").is_err());
 }
+
+#[test]
+fn repack_preserving_shared_textures_does_not_mutate_source_layout() {
+    if skip_if_fhm2d_missing("16F73C97") {
+        return;
+    }
+
+    let (tmp, pack_root, content_root) = extract_to_temp("16F73C97");
+    restore_shared_textures(&pack_root.to_string_lossy()).unwrap();
+
+    let textures_dir = content_root.join("textures");
+    assert!(textures_dir.is_dir(), "source shared textures/ should exist before repack");
+    assert!(
+        directory_has_nutexb(&textures_dir),
+        "source shared textures/ should contain nutexb before repack"
+    );
+    assert!(
+        !stage_has_numbered_nutexb_subdirs(&content_root),
+        "source should start in editing layout"
+    );
+
+    let output_path = tmp.path().join("preserve_shared_repack.fhm2d");
+    let result = repack_stage_fhm2d_preserving_shared_textures(
+        &pack_root.to_string_lossy(),
+        &output_path.to_string_lossy(),
+        true,
+        None,
+    )
+    .unwrap();
+
+    assert!(
+        result.validation.valid,
+        "test fixture should pass isolated repack validation"
+    );
+    assert!(result.output_size > 0, "repack should write an fhm2d");
+    assert!(output_path.is_file(), "output fhm2d should exist");
+    assert!(
+        result.textures_folder_removed,
+        "isolated workspace should still use the existing redistribute logic"
+    );
+
+    assert!(textures_dir.is_dir(), "source shared textures/ must remain after repack");
+    assert!(
+        directory_has_nutexb(&textures_dir),
+        "source shared textures/ files must remain after repack"
+    );
+    assert!(
+        !stage_has_numbered_nutexb_subdirs(&content_root),
+        "source model folders must not receive numbered nutexb subdirs"
+    );
+}
+
+fn directory_has_nutexb(dir: &Path) -> bool {
+    fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.ok())
+        .any(|entry| {
+            entry
+                .path()
+                .extension()
+                .map(|ext| ext.eq_ignore_ascii_case("nutexb"))
+                .unwrap_or(false)
+        })
+}
+
+fn stage_has_numbered_nutexb_subdirs(content_root: &Path) -> bool {
+    let mut warnings = Vec::new();
+    let ssbh_folders = find_ssbh_folders(content_root, &mut warnings).unwrap_or_default();
+    ssbh_folders.iter().any(|ssbh_folder| {
+        fs::read_dir(ssbh_folder)
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| entry.ok())
+            .any(|entry| {
+                let is_numbered_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false)
+                    && entry
+                        .file_name()
+                        .to_string_lossy()
+                        .chars()
+                        .all(|c| c.is_ascii_digit());
+                is_numbered_dir && directory_has_nutexb(&entry.path())
+            })
+    })
+}

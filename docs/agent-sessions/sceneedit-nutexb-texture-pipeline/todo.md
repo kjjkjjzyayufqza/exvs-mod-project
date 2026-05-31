@@ -14,3 +14,11 @@ Apply `.nutexb` textures to SceneEdit models with the same end-to-end behavior a
 - [ ] Verify duplicate texture cache hits across models.
 - [ ] Run `cargo check` and frontend lint checks on changed files.
 
+## 2026-05-31 Texture Folder Regression
+
+- [x] Identify which Scene Editor operation deletes shared `textures/` and recreates per-model texture folders.
+- [x] Make Save as FHM2D pack from an isolated temporary workspace so the source stage folder remains in shared-textures layout.
+- [x] Preserve existing repack structure JSON logic inside the isolated workspace.
+- [x] Add/adjust verification covering original on-disk layout preservation.
+- [x] Record commands and outcomes in `process.md`.
+

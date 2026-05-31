@@ -397,8 +397,8 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
 
   // Phase 8: Consolidate textures into a single shared textures/ folder.
   // The folder layout keeps one shared textures/ (no per-model texture subdirs);
-  // per-model subdirs are only restored when repacking to .fhm2d, which runs
-  // redistribute_stage_textures in sceneSaveFhm2dPipeline (skipStructureRebuild).
+  // per-model subdirs are only materialized inside the isolated .fhm2d repack
+  // workspace.
   if (!params.skipStructureRebuild) {
     emitStep(onProgress, "migrate", "Consolidating textures to shared folder...", "running");
     try {
@@ -415,8 +415,8 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
   }
 
   // Phase 9: Rebuild structure JSON referencing the shared textures/ layout.
-  // (Skipped when saving as FHM2D — that pipeline redistributes to per-model
-  // subdirs and rebuilds the structure JSON forced for the packable layout.)
+  // The FHM2D pipeline also runs this, then does the packable-layout rebuild in
+  // an isolated workspace.
   if (!params.skipStructureRebuild) {
     emitStep(onProgress, "structure", "Rebuilding structure JSON...", "running");
     try {

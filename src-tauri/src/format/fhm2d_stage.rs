@@ -2921,6 +2921,19 @@ pub struct RestoreSharedResult {
     pub warnings: Vec<String>,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StageRepackPreserveResult {
+    pub output_path: String,
+    pub total_files: usize,
+    pub output_size: usize,
+    pub models_processed: usize,
+    pub textures_copied: usize,
+    pub textures_folder_removed: bool,
+    pub warnings: Vec<String>,
+    pub validation: crate::format::fhm2d_stage_validate::ExvsStageValidationResult,
+}
+
 // ── Structure JSON path helper ────────────────────────────────────────────
 
 fn find_structure_json_path(stage_root: &Path) -> Option<PathBuf> {
@@ -4100,6 +4113,111 @@ pub fn rebuild_structure_json_for_stage_with_shared_textures(
     );
 
     Ok(structure_path)
+}
+
+fn copy_stage_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
+    fs::create_dir_all(dst)
+        .map_err(|e| format!("Failed to create temp repack dir {}: {e}", dst.display()))?;
+
+    for entry in fs::read_dir(src)
+        .map_err(|e| format!("Failed to read stage dir {}: {e}", src.display()))?
+    {
+        let entry = entry.map_err(|e| format!("Failed to read stage dir entry: {e}"))?;
+        let file_type = entry.file_type()
+            .map_err(|e| format!("Failed to read file type for {}: {e}", entry.path().display()))?;
+        let dst_path = dst.join(entry.file_name());
+
+        if file_type.is_dir() {
+            copy_stage_dir_recursive(&entry.path(), &dst_path)?;
+        } else if file_type.is_file() {
+            fs::copy(entry.path(), &dst_path).map_err(|e| {
+                format!(
+                    "Failed to copy {} to {}: {e}",
+                    entry.path().display(),
+                    dst_path.display()
+                )
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Repack a stage from an isolated temporary copy so the editable source folder
+/// keeps its shared `textures/` layout on disk.
+pub fn repack_stage_fhm2d_preserving_shared_textures(
+    stage_root: &str,
+    output_path: &str,
+    atomic_write: bool,
+    progress_callback: Option<&dyn Fn(crate::format::fhm2d_pack::RepackProgress)>,
+) -> Result<StageRepackPreserveResult, String> {
+    let source_root = Path::new(stage_root);
+    if !source_root.is_dir() {
+        return Err(format!("Stage root is not a directory: {}", source_root.display()));
+    }
+
+    let stage_folder_name = source_root
+        .file_name()
+        .ok_or_else(|| format!("Cannot determine stage folder name: {}", source_root.display()))?;
+    let temp_dir =
+        tempfile::tempdir().map_err(|e| format!("Failed to create temp repack workspace: {e}"))?;
+    let temp_stage_root = temp_dir.path().join(stage_folder_name);
+
+    copy_stage_dir_recursive(source_root, &temp_stage_root)?;
+
+    if let Some(structure_path) = find_structure_json_path(source_root) {
+        let temp_structure_path = temp_dir.path().join(
+            structure_path.file_name().ok_or_else(|| {
+                format!(
+                    "Cannot determine structure JSON file name: {}",
+                    structure_path.display()
+                )
+            })?
+        );
+        fs::copy(&structure_path, &temp_structure_path).map_err(|e| {
+            format!(
+                "Failed to copy structure JSON {} to {}: {e}",
+                structure_path.display(),
+                temp_structure_path.display()
+            )
+        })?;
+    }
+
+    let temp_stage_root_str = temp_stage_root.to_string_lossy().to_string();
+    let mut redistribute = redistribute_stage_textures(&temp_stage_root_str)?;
+    let validation =
+        crate::format::fhm2d_stage_validate::exvs_stage_validate_for_repack(&temp_stage_root_str);
+    if !validation.valid {
+        return Ok(StageRepackPreserveResult {
+            output_path: output_path.to_string(),
+            total_files: 0,
+            output_size: 0,
+            models_processed: redistribute.models_processed,
+            textures_copied: redistribute.textures_copied,
+            textures_folder_removed: redistribute.textures_folder_removed,
+            warnings: redistribute.warnings,
+            validation,
+        });
+    }
+
+    let structure_path = rebuild_structure_json_for_stage_forced(&temp_stage_root_str)?;
+    let repack = crate::format::fhm2d_pack::repack_fhm2d_from_structure(
+        &structure_path,
+        output_path,
+        atomic_write,
+        progress_callback,
+    )?;
+
+    Ok(StageRepackPreserveResult {
+        output_path: repack.output_path,
+        total_files: repack.total_files,
+        output_size: repack.output_size,
+        models_processed: redistribute.models_processed,
+        textures_copied: redistribute.textures_copied,
+        textures_folder_removed: redistribute.textures_folder_removed,
+        warnings: std::mem::take(&mut redistribute.warnings),
+        validation,
+    })
 }
 
 /// Redistribute nutexb files from a shared `textures/` folder back into

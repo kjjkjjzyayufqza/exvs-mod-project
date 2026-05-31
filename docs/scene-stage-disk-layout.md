@@ -18,13 +18,14 @@ nutexb textures, models `001stage001_object_box01`, `base`, `sky`).
 | **Extract .fhm2d → folder** | Creates the folder tree | Consolidates all nutexb into one content-level `0/0/textures/` | Writes a fresh structure JSON |
 | **Open Stage Folder** | **Yes — consolidates** | Runs `restore_shared_textures`: moves numbered nutexb subdirs into `0/0/textures/`, deletes those subdirs + empty numbered subdirs | No (only URL-patches if it moved files) |
 | **Save changes to folder** | **Yes — consolidates** | `restore_shared_textures` again (no-op if already consolidated) | Yes — `rebuild_..._with_shared_textures` (preserve, or full rebuild if disk changed) |
-| **Repack → .fhm2d** | **Yes — redistributes** | `redistribute_stage_textures`: shared `textures/` → per-model `0/`(maya)+`1/`(nust), deletes shared folder | Yes — `rebuild_..._forced` (per-model layout) |
+| **Repack → .fhm2d** | **No — source folder stays shared** | A temporary repack workspace runs `redistribute_stage_textures`; the real folder keeps shared `textures/` | Source JSON stays/rebuilds shared; temp JSON is forced per-model for packing |
 
 **The short version:** the editing operations (Extract / Open / Save) all converge
-the folder on a single shared `textures/`. Only **Repack to .fhm2d** scatters
-textures back into per-model subdirs. Every one of these operations rewrites or
-patches the structure JSON, and a full rebuild **picks up new files you added by
-hand** (see §7).
+the folder on a single shared `textures/`. **Repack to .fhm2d** still needs the
+per-model packable layout, but Scene Editor now builds that layout only in a
+temporary workspace. The source folder remains in the shared-textures editing
+layout. Structure JSON rebuilds still pick up new files you added by hand (see
+§7).
 
 ---
 
@@ -61,7 +62,7 @@ SSBH folder holds only the model files; it has **no** texture subdirs.
             └── ... (13 nutexb total)
 ```
 
-### 1b. Packable layout (per-model) — produced by Repack to .fhm2d
+### 1b. Packable layout (per-model) — used inside the Repack workspace
 
 No shared `textures/`. Each model's SSBH folder gets numbered texture subdirs:
 `0/` for the maya material's textures, `1/` for the nust material's textures.
@@ -133,8 +134,8 @@ which:
 - Patches matching `fileUrl`s in `<stem>_structure.json` to the `textures/` path.
 
 So opening a folder **converges it to the editing layout (§1a).** A folder that was
-left in per-model layout (e.g. just repacked) gets consolidated on open. A folder
-already consolidated is unchanged (no-op).
+manually left in per-model layout gets consolidated on open. A folder already
+consolidated is unchanged (no-op).
 
 Open does **not** rebuild the structure tree — it only patches URLs if it actually
 moved files.
@@ -172,23 +173,23 @@ you added (§7).
 **Frontend:** `executeSaveFhm2dPipeline`
 (`src/page/SceneEdit/utils/sceneSaveFhm2dPipeline.ts`).
 
-1. Calls `executeSaveFolderPipeline({ skipStructureRebuild: true })` — runs the
-   delete/convert/CSV/HKT phases but **skips** the consolidate (Phase 8) and
-   structure-rebuild (Phase 9) steps.
-2. `redistribute_stage_textures` (`src-tauri/src/format/fhm2d_stage.rs`): reads the
-   shared `0/0/textures/`, and for each model parses its numatb texture references
-   *by role*, recreating per-model `0/` (maya) and `1/` (nust) and copying the
-   referenced nutexb in. It then **deletes the shared `textures/`** and patches the
-   `fileUrl`s to the per-model paths. (Phase 2 also cross-populates any textures a
-   model references but is missing, from a global nutexb index.)
-3. `rebuild_stage_structure_json_forced`: full rebuild for the **per-model**
-   layout (no shared `textures/`).
-4. `repackFolderToFhm2dFile`: packs the folder back into the `.fhm2d` binary using
-   the structure JSON.
+1. Calls `executeSaveFolderPipeline(...)` normally, so the real source folder is
+   consolidated to shared `textures/` and its structure JSON is rebuilt for the
+   editing layout.
+2. Calls `repack_stage_fhm2d_preserving_shared_textures`: the backend copies the
+   pack root and sibling `_structure.json` into a temporary workspace.
+3. Inside that temporary workspace only, `redistribute_stage_textures` reads shared
+   `0/0/textures/`, parses each model's numatb texture refs by role, recreates
+   per-model `0/` (maya) and `1/` (nust), copies referenced nutexb, and deletes the
+   temp shared `textures/`.
+4. Still inside the temporary workspace, `rebuild_stage_structure_json_forced`
+   rebuilds the **per-model** packable structure JSON, then `repack_fhm2d` packs
+   the `.fhm2d` binary.
 
-So Repack **does reorganize the folder** — it converts the editing layout into the
-packable layout (§1b) and rewrites the JSON accordingly. After a repack, the folder
-on disk is in per-model layout (a subsequent Open will re-consolidate it).
+So Repack **does not reorganize the real folder** anymore. It still uses the
+packable layout (§1b), but only in the temporary workspace used for the output
+`.fhm2d`. After a repack, the source folder on disk remains in editing layout
+(§1a).
 
 ---
 
@@ -300,7 +301,7 @@ cargo run --manifest-path src-tauri/Cargo.toml \
 
 It extracts, then exercises:
 - **Path A** Save-to-folder (`restore_shared_textures` + `rebuild_..._with_shared_textures`)
-- **Path B** Repack (`redistribute_stage_textures` + `rebuild_..._forced`)
+- **Path B** Repack workspace (`redistribute_stage_textures` + `rebuild_..._forced`)
 - **Path C** re-consolidate a per-model folder (simulates Open/Save), and reports
   the `textures/` location, leftover subdirs, and dangling `fileUrl`s.
 

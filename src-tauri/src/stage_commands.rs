@@ -176,8 +176,8 @@ pub async fn load_stage_bundle(stage_root: String) -> Result<fhm2d_stage::StageB
         // This keeps the editing layout consistent with extract and Save-to-folder
         // (one shared textures/, no per-model subdirs); the model loader resolves
         // textures from textures/ via ancestor walk, so per-model subdirs are not
-        // required for display. Per-model subdirs are only restored when repacking
-        // to .fhm2d (sceneSaveFhm2dPipeline runs redistribute_stage_textures).
+        // required for display. Per-model subdirs are only materialized inside
+        // the isolated .fhm2d repack workspace.
         if let Err(e) = fhm2d_stage::restore_shared_textures(&stage_root) {
             eprintln!("[load_bundle] Texture consolidation warning: {e}");
         }
@@ -463,6 +463,47 @@ pub async fn repack_fhm2d(
         ),
         Err(e) => eprintln!(
             "[repack_fhm2d] Failed in {}ms — {e}",
+            t.elapsed().as_millis()
+        ),
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn repack_stage_fhm2d_preserving_shared_textures(
+    app: AppHandle,
+    stage_root: String,
+    output_path: String,
+    atomic_write: Option<bool>,
+) -> Result<fhm2d_stage::StageRepackPreserveResult, String> {
+    let atomic = atomic_write.unwrap_or(true);
+    let app_clone = app.clone();
+
+    eprintln!(
+        "[repack_stage_preserve_shared] Starting — stage: {stage_root}, output: {output_path}"
+    );
+    let t = Instant::now();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        fhm2d_stage::repack_stage_fhm2d_preserving_shared_textures(
+            &stage_root,
+            &output_path,
+            atomic,
+            Some(&|progress| {
+                let _ = app_clone.emit("repack-fhm2d-progress", progress.clone());
+            }),
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?;
+    match &result {
+        Ok(r) => eprintln!(
+            "[repack_stage_preserve_shared] Done in {}ms — {} bytes, {} textures staged",
+            t.elapsed().as_millis(),
+            r.output_size,
+            r.textures_copied
+        ),
+        Err(e) => eprintln!(
+            "[repack_stage_preserve_shared] Failed in {}ms — {e}",
             t.elapsed().as_millis()
         ),
     }
