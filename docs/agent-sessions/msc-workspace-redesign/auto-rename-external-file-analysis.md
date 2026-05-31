@@ -71,8 +71,168 @@ encrypted/packed localized UI text. It is not a hash->name source.
    hash in the dictionary -> rename the callback. This is character-agnostic and external-file
    driven, matching the "depends on an external file" recollection.
 
+## Refinement from per-unit sample `0x693F756D` / `0x38C44F75`
+
+Using the concrete unit sample:
+
+- MSC: `E:\XB\解包\com\file\0x693F756D`
+- param/ammo bundle: `E:\XB\解包\com\file\0x38C44F75`
+
+the picture becomes more precise.
+
+### 1. This sample is structurally incompatible with the old mask renamer
+
+The old TS helper `mscActionRename.ts` assumes:
+
+- `0.c func_143`
+- nested `global48 & MASK` branches
+- `func_95(hash, callback, ...)`
+
+But in `0x693F756D/0.c`, `func_143()` instead does:
+
+- `var0 = sys_41(...)`
+- `var1 = func_144(var0)`
+- `func_145(var0, var1, 0)`
+
+So the legacy mask-based rename path is not just incomplete here; it is the wrong structural model.
+
+### 2. New-style dispatch is layered: action hash -> callback -> slot callback -> slot-hash table
+
+The `2.c` registration table is in `func_1219()`:
+
+- `func_241(0x6d00aeaa, func_390)`
+- `func_241(0x9cf36e1b, func_392)`
+- ...
+- `func_241(0x900ab393, func_482)`
+
+For many of these callbacks, the first real branch is not direct resource spawn, but:
+
+- `func_69(slot)` inside the action callback
+- `func_69()` loads `sys_0(0x10001, 0x2, slot)` and executes it immediately
+- that slot table is populated by `func_1220()` via
+  `sys_1(0x10001, 0x2, slot, func_112x/func_115x)`
+
+Examples:
+
+- `0x6d00aeaa -> func_390 -> func_69(0x1) -> func_1124`
+- `0x9cf36e1b -> func_392 -> func_69(0x2) -> func_1125`
+- `0x900ab393 -> func_482 -> func_69(0x35) -> func_1158`
+
+Those slot callbacks frequently call `func_74(slotB, delay)`, which resolves a second table:
+
+- `func_74()` -> `func_79()`
+- `func_79()` loads `sys_0(0x10001, 0x3 + global170, slotB)`
+- `func_1221()` pre-populates that table with `sys_1(0x10001, 0x3, slotB, hash)`
+
+Examples:
+
+- `func_1124` uses `func_74(0, 0xA)` -> slot-hash `0x1f588bd9`
+- `func_1125` uses slots `2/3/4` -> `0x377e9872 / 0xd74ba485 / 0xf0b3ea12`
+- `func_1158` uses `func_74(0x4F, 0)` -> slot-hash `0xb189334e`
+
+Across the sample, this `0x10001,0x3` slot table contains **38 unique hashes**.
+Byte-scanning the full `0x38C44F75` param bundle shows **none of those 38 hashes occur in the bundle**.
+
+So this second hash table is **internal script-side state/motion/action data**, not the ammo file.
+
+### 3. The ammo bundle appears later, as resource semantics, not as the primary action-name dictionary
+
+The sample still uses the external param bundle heavily, but at a different layer:
+
+- `func_1158()` directly issues six `sys_4F(0, 0x5, 0x...)` calls whose hashes exist in `bulletparam.bin`
+- the same function also hits `interactionid.bin` via `sys_58(0, 0x2d1b6b6d)`
+- other functions hit `chrsysparam.csyspm` (`0x56a95d29`, `0xaca6604a`, `0x8bae1423`, ...)
+
+Concrete traced example:
+
+- `0x900ab393 -> func_482 -> func_69(0x35) -> func_1158`
+- `func_1158` uses bullet hashes:
+  - `0x9700595f`
+  - `0x0e0908e5`
+  - `0x790e3873`
+  - `0xe76aadd0`
+  - `0x906d9d46`
+  - `0x0964ccfc`
+- and later an interaction hash `0x2d1b6b6d`
+
+This is strong evidence that the external param/ammo pack is a **secondary semantic layer**:
+it tells us what concrete projectile / interaction / system resources a callback uses,
+but it does **not** by itself provide the primary `action_hash -> callback_name` mapping.
+
+### 4. There is a promising label surface in params, but the current toolchain does not decode it yet
+
+One important codebase-level finding changes the implementation roadmap:
+
+- `armsparam.rs`, `characterparam.rs`, and `speedparam.rs` all declare:
+  - `0xE6213731` -> `action_label_offset` (kind 7)
+  - `0xF3C4CAE9` -> `resource_label_offset` (kind 7)
+- `command_mapping.md` also marks them as shared string/blob references
+
+However, the current generic parser does **not** resolve kind-7 strings:
+
+- `src-tauri/src/commands.rs parse_command_table_file()` returns kind `7` as raw `u32`
+- `value_string` stays `None`
+
+In the sample `0x38C44F75/armsparam.bin`:
+
+- `action_label_offset` and `resource_label_offset` are **absolute file offsets**
+- the first `action_label_offset` is `0x71C`, exactly the end of the entries block
+- the pointed data is **not** plain null-terminated text; it looks like a binary label/blob record
+
+So there likely *is* extra naming material in the per-unit params,
+but we are still missing the **label-record decode rule**.
+
+### 5. The repository currently references, but does not ship, the CRC32 reverse-search tool
+
+Docs reference `tools/crc32_reverse_search.py`, but the file is not present in the repo.
+Only the planning doc exists:
+
+- `docs/superpowers/plans/2026-04-03-crc32-reverse-search-tool.md`
+
+So the current codebase has:
+
+- docs/plans for CRC32 reverse lookup
+- no checked-in implementation
+
+This means a future rename pipeline cannot depend on that script today without first building it.
+
+## Updated implementation direction
+
+The refined model is now:
+
+1. **Primary callback naming layer**:
+   a versioned `action_hash -> name` dictionary (global/shared vocabulary)
+2. **Script-structure layer**:
+   parse `func_1219` / `func_1220` / `func_1221` so the tool understands
+   action callback -> slot callback -> slot-hash-table routing
+3. **Per-unit semantic enrichment layer**:
+   cross-reference callback/resource hashes against the unit's param bundle
+   (`bulletparam`, `interactionid`, `chrsysparam`, etc.)
+4. **Future label-decoder layer**:
+   decode kind-7 `action_label_offset` / `resource_label_offset` blobs from
+   `armsparam` / `characterparam` / `speedparam`
+
+So the earlier conclusion still holds in spirit:
+
+- the ammo bundle is **not** the complete action-name dictionary
+
+But it should now be refined to:
+
+- the new auto-rename path is probably **hybrid**
+- global action names come from a shared hash dictionary
+- per-unit params contribute weapon semantics
+- per-unit label blobs are a promising missing source for better human-readable names
+
 ## Practical next step for the tool
 
-Extend `native_truth.json` with a first-class `action_names` map (`{ "0xF48D2D49": "mainShot", ... }`)
-and add a TS/Python pass `renameByActionHashDictionary(2.c, dictionary)` that supersedes the
-mask-based `mscActionRename.ts` while keeping the mask pass as a fallback labeler for unmapped hashes.
+1. Extend `native_truth.json` with a first-class `action_names` map
+   (`{ "0xF48D2D49": "mainShot", ... }`)
+2. Add a TS/Python pass `renameByActionHashDictionary(2.c, dictionary)` for the primary names
+3. Add a second pass that parses:
+   - `func_1219` action registrations
+   - `func_1220` slot-callback registrations
+   - `func_1221` slot-hash registrations
+   - direct `sys_4F/sys_58/sys_47` resource hashes
+4. Use the unit's param bundle to append low- or medium-confidence semantic suffixes
+5. Research and implement decoding for kind-7 label blobs before claiming the params can provide
+   final human-readable weapon names

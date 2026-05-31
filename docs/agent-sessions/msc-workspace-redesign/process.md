@@ -131,3 +131,49 @@ Changes:
 Verification: `pnpm exec tsc --noEmit` reports zero errors in msc-editor files (11 pre-existing
 errors live in `src/page/SceneEdit/*`, unrelated uncommitted work). `vitest run` 7/7 pass.
 Did not start a dev server (per project rule).
+
+## Research Log (new-style MSC sample `0x693F756D`)
+
+Goal: continue the auto-rename investigation with a concrete per-unit "new MSC" sample and its
+paired param bundle:
+
+- MSC: `E:\XB\解包\com\file\0x693F756D`
+- param bundle: `E:\XB\解包\com\file\0x38C44F75`
+
+Key findings:
+
+- `0.c func_143()` in this sample is **not** the old `global48 & MASK` router. It now uses
+  `sys_41(...) -> func_144(...) -> func_145(...)`, so the legacy `mscActionRename.ts` structural
+  assumptions do not apply.
+- `2.c func_1219()` registers 28 action hashes with `func_241(hash, callback)`.
+- Most action callbacks do **not** directly spawn projectiles. Instead:
+  - action callback -> `func_69(slot)`
+  - `func_69(slot)` executes `sys_0(0x10001, 0x2, slot)` from the slot-callback table populated by
+    `func_1220()`
+  - those slot callbacks often call `func_74(slotB, delay)`, which resolves a second table
+    populated by `func_1221()` (`sys_1(0x10001, 0x3, slotB, hash)`)
+- The `0x10001,0x3` slot-hash table contains 38 unique hashes in this sample, and **none** of them
+  appear in the paired param bundle. Therefore that table is internal script-side routing/state
+  data, not the external ammo file.
+- The external param bundle appears later as **resource semantics**:
+  - `func_1158()` directly uses six `bulletparam.bin` entry hashes plus one
+    `interactionid.bin` hash
+  - other functions use `chrsysparam.csyspm` hashes
+  - example chain: `0x900ab393 -> func_482 -> func_69(0x35) -> func_1158`
+- `parse_command_table_file()` currently does not decode kind-7 strings. It returns raw `u32`
+  offsets and leaves `valueString = None`.
+- `armsparam.rs`, `characterparam.rs`, and `speedparam.rs` all define two shared kind-7 fields:
+  `action_label_offset` and `resource_label_offset`.
+- In sample `armsparam.bin`, those kind-7 values are **absolute file offsets** into the trailing
+  blob area, but the pointed records are not plain null-terminated text. They look like unresolved
+  binary label/blob records. This is a promising but still undecoded naming surface.
+- Docs reference `tools/crc32_reverse_search.py`, but the file does **not** exist in the repo; only
+  the planning doc exists under `docs/superpowers/plans/2026-04-03-crc32-reverse-search-tool.md`.
+
+Refined conclusion:
+
+- The new auto-rename path is likely **hybrid**, not single-source:
+  1. global/shared action-hash dictionary for stable callback names
+  2. script-side slot-table analysis (`func_1219` / `func_1220` / `func_1221`)
+  3. per-unit param enrichment for projectile/interaction/system semantics
+  4. future decode of kind-7 label blobs for richer human-readable labels

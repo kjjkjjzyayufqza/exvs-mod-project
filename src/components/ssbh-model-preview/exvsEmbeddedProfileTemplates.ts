@@ -9,10 +9,14 @@ import {
 
 export function getExvsDefaultMayaProfileTemplate(): MatlDataJson {
   const raw = ensureMatlDataSerdeFields(mayaFixtureJson as MatlDataJson);
-  return stripTextureUrlStringsFromNumatbFile(ensureShaderLabelsOnEntries(raw));
+  return stripTextureUrlStringsFromNumatbFile(ensureShaderLabelsOnEntries(raw), {
+    removeEmptyDiffuseCubeMap: true,
+  });
 }
 
 export function getExvsDefaultNustProfileTemplate(): MatlDataJson {
   const raw = ensureMatlDataSerdeFields(nustFixtureJson as MatlDataJson);
-  return stripTextureUrlStringsFromNumatbFile(ensureShaderLabelsOnEntries(raw));
+  return stripTextureUrlStringsFromNumatbFile(ensureShaderLabelsOnEntries(raw), {
+    removeEmptyDiffuseCubeMap: true,
+  });
 }

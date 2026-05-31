@@ -333,6 +333,10 @@ type TexturePathSlotLookup = {
   textureDataKind: "String" | "String1";
 };
 
+type PresentTexturePathSlot = TexturePathSlotLookup & {
+  paramId: string;
+};
+
 export function missingTexturePathSlotKey(slot: MissingTexturePathSlotRef): string {
   return `${slot.profile}:${slot.materialLabel}:${slot.paramId}:${slot.materialIndex}:${slot.attributeIndex}`;
 }
@@ -444,16 +448,71 @@ function lookupTexturePathSlot(entry: MatlEntryJson, paramId: string): TexturePa
   };
 }
 
+function collectPresentTexturePathSlots(entry: MatlEntryJson): PresentTexturePathSlot[] {
+  return flattenEntryToAttributes(entry).flatMap((attribute, attributeIndex) => {
+    const paramId = String(attribute.param_id);
+    if (!isTexturePathParamId(paramId) || paramId.startsWith("Use")) {
+      return [];
+    }
+
+    const data = attribute.param.data;
+    if (data.String !== undefined) {
+      return [{
+        paramId,
+        path: String(data.String ?? "").trim(),
+        attributeIndex,
+        textureDataKind: "String",
+      }];
+    }
+    if (data.String1 !== undefined) {
+      return [{
+        paramId,
+        path: String(data.String1 ?? "").trim(),
+        attributeIndex,
+        textureDataKind: "String1",
+      }];
+    }
+    return [{
+      paramId,
+      path: "",
+      attributeIndex,
+      textureDataKind: defaultTextureDataKindForParam(paramId),
+    }];
+  });
+}
+
+function textureSlotMissingKey(paramId: string, textureDataKind: "String" | "String1"): string {
+  return `${paramId}:${textureDataKind}`;
+}
+
 function collectMissingTexturePathsForEntry(
   entry: MatlEntryJson,
   profile: NumatbProfileKind,
   formatMissing: (paramId: string, textureDataKind: "String" | "String1") => string,
 ): string[] {
   const missing: string[] = [];
+  const seen = new Set<string>();
+
+  for (const slot of collectPresentTexturePathSlots(entry)) {
+    if (slot.path) {
+      continue;
+    }
+    const key = textureSlotMissingKey(slot.paramId, slot.textureDataKind);
+    if (!seen.has(key)) {
+      seen.add(key);
+      missing.push(formatMissing(slot.paramId, slot.textureDataKind));
+    }
+  }
+
   for (const paramId of collectRequiredTextureMapParamIds(entry, profile)) {
     const slot = lookupTexturePathSlot(entry, paramId);
     if (slot === null || !slot.path) {
-      missing.push(formatMissing(paramId, slot?.textureDataKind ?? defaultTextureDataKindForParam(paramId)));
+      const textureDataKind = slot?.textureDataKind ?? defaultTextureDataKindForParam(paramId);
+      const key = textureSlotMissingKey(paramId, textureDataKind);
+      if (!seen.has(key)) {
+        seen.add(key);
+        missing.push(formatMissing(paramId, textureDataKind));
+      }
     }
   }
   return missing;
@@ -573,20 +632,44 @@ function collectMissingTexturePathSlotRefsImpl(
     if (materialLabelFilter !== null && !materialLabelFilter.has(entry.material_label)) {
       continue;
     }
-    for (const paramId of collectRequiredTextureMapParamIds(entry, profile)) {
-      const slot = lookupTexturePathSlot(entry, paramId);
-      if (slot !== null && slot.path) {
-        continue;
+    const seen = new Set<string>();
+    const pushMissing = (
+      paramId: string,
+      attributeIndex: number,
+      textureDataKind: "String" | "String1",
+    ) => {
+      const key = textureSlotMissingKey(paramId, textureDataKind);
+      if (seen.has(key)) {
+        return;
       }
+      seen.add(key);
       missing.push({
         profile,
         materialLabel: entry.material_label,
         paramId,
         materialIndex,
-        attributeIndex: slot?.attributeIndex ?? -1,
+        attributeIndex,
         value: "",
-        textureDataKind: slot?.textureDataKind ?? defaultTextureDataKindForParam(paramId),
+        textureDataKind,
       });
+    };
+
+    for (const slot of collectPresentTexturePathSlots(entry)) {
+      if (!slot.path) {
+        pushMissing(slot.paramId, slot.attributeIndex, slot.textureDataKind);
+      }
+    }
+
+    for (const paramId of collectRequiredTextureMapParamIds(entry, profile)) {
+      const slot = lookupTexturePathSlot(entry, paramId);
+      if (slot !== null && slot.path) {
+        continue;
+      }
+      pushMissing(
+        paramId,
+        slot?.attributeIndex ?? -1,
+        slot?.textureDataKind ?? defaultTextureDataKindForParam(paramId),
+      );
     }
   }
   return missing;
@@ -677,9 +760,16 @@ export function collectNumatbEmptyTexturePathErrors(
   });
 }
 
-export function stripTextureUrlStringsFromNumatbFile(file: MatlDataJson): MatlDataJson {
+export function stripTextureUrlStringsFromNumatbFile(
+  file: MatlDataJson,
+  options: { removeEmptyDiffuseCubeMap?: boolean } = {},
+): MatlDataJson {
   const next = cloneNumatbFile(file);
   for (const entry of next.entries) {
+    if (options.removeEmptyDiffuseCubeMap) {
+      entry.textures = (entry.textures ?? []).filter((row) => String(row.param_id) !== "DiffuseCubeMap");
+      entry.textures2 = (entry.textures2 ?? []).filter((row) => String(row.param_id) !== "DiffuseCubeMap");
+    }
     for (const row of entry.textures ?? []) {
       row.data = "";
     }
