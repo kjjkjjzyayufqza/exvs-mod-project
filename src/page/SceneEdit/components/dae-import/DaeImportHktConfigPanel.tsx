@@ -10,6 +10,7 @@ interface DaeImportHktConfigPanelProps {
   onConfigChange: (partial: Partial<DaeImportConfig>) => void;
   sourcePath?: string;
   sourceName?: string;
+  onValidationChange?: (error: string | null) => void;
 }
 
 export function DaeImportHktConfigPanel({
@@ -18,6 +19,7 @@ export function DaeImportHktConfigPanel({
   onConfigChange,
   sourcePath,
   sourceName,
+  onValidationChange,
 }: DaeImportHktConfigPanelProps) {
   if (!havokInfo) {
     return (
@@ -68,6 +70,7 @@ export function DaeImportHktConfigPanel({
         importConfig={backendConfig}
         sourcePath={sourcePath}
         sourceName={sourceName}
+        onValidationChange={onValidationChange}
       />
     </>
   );

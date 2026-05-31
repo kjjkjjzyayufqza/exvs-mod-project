@@ -1,16 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Slider } from "@/components/ui/slider";
-import type { HktSimplifyConfig } from "./daeImportTypes";
+import type { HktSimplifyConfig, HktSimplifyPreset } from "./daeImportTypes";
 import {
-  DaeImportBoolField,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   DaeImportFieldRow,
   DaeImportSection,
   DaeImportStatusAlert,
+  daeImportModalSelectContentClass,
 } from "./daeImportUi";
 import {
   buildImportConfigForHktPreview,
+  detectHktSimplifyPreset,
   formatTriangleCount,
+  HKT_SIMPLIFY_PRESET_HINTS,
+  HKT_SIMPLIFY_PRESET_LABELS,
+  HKT_SIMPLIFY_PRESET_ORDER,
+  hktSimplifyConfigFromPreset,
+  normalizeHktSimplifyConfig,
   reductionPercent,
   serializeHktPreviewConfigKey,
 } from "../../utils/hktSimplifyUtils";
@@ -30,6 +41,7 @@ interface DaeImportHktSimplifyFieldsProps {
   sessionId?: string | null;
   sessionImportId?: string | null;
   compact?: boolean;
+  onValidationChange?: (error: string | null) => void;
 }
 
 export function DaeImportHktSimplifyFields({
@@ -41,21 +53,22 @@ export function DaeImportHktSimplifyFields({
   sessionId,
   sessionImportId,
   compact = false,
+  onValidationChange,
 }: DaeImportHktSimplifyFieldsProps) {
   const [preview, setPreview] = useState<HktCollisionPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  const update = <K extends keyof HktSimplifyConfig>(
-    key: K,
-    nextValue: HktSimplifyConfig[K],
-  ) => {
-    onChange({ ...value, [key]: nextValue });
+  const normalizedValue = useMemo(() => normalizeHktSimplifyConfig(value), [value]);
+  const activePreset = detectHktSimplifyPreset(normalizedValue);
+
+  const handlePresetChange = (nextPreset: HktSimplifyPreset) => {
+    onChange(hktSimplifyConfigFromPreset(nextPreset));
   };
 
   const ssbhConfig = importConfig.ssbhConfig;
   const previewConfigKey = useMemo(
-    () => serializeHktPreviewConfigKey(importConfig, value),
+    () => serializeHktPreviewConfigKey(importConfig, normalizedValue),
     [
       importConfig.generateHkt,
       importConfig.convertToSsbh,
@@ -69,10 +82,11 @@ export function DaeImportHktSimplifyFields({
       ssbhConfig?.writeJnttbl,
       ssbhConfig?.writeMayaProfile,
       ssbhConfig?.materialTemplate,
-      value.enabled,
-      value.planarityAngleDeg,
-      value.minTriangleArea,
-      value.weldEpsilon,
+      normalizedValue.preset,
+      normalizedValue.enabled,
+      normalizedValue.planarityAngleDeg,
+      normalizedValue.minTriangleArea,
+      normalizedValue.weldEpsilon,
     ],
   );
 
@@ -82,7 +96,7 @@ export function DaeImportHktSimplifyFields({
         generateHkt: importConfig.generateHkt,
         convertToSsbh: importConfig.convertToSsbh,
         ssbhConfig: importConfig.ssbhConfig,
-        hktSimplify: value,
+        hktSimplify: normalizedValue,
       }),
     [previewConfigKey],
   );
@@ -91,6 +105,7 @@ export function DaeImportHktSimplifyFields({
     if (!importConfig.generateHkt) {
       setPreview(null);
       setPreviewError(null);
+      onValidationChange?.(null);
       return;
     }
 
@@ -99,6 +114,7 @@ export function DaeImportHktSimplifyFields({
     if (!canPreviewFromSession && !canPreviewFromFile) {
       setPreview(null);
       setPreviewError(null);
+      onValidationChange?.(null);
       return;
     }
 
@@ -125,11 +141,15 @@ export function DaeImportHktSimplifyFields({
         }
         if (!cancelled) {
           setPreview(result);
+          setPreviewError(null);
+          onValidationChange?.(null);
         }
       } catch (err) {
         if (!cancelled) {
+          const message = err instanceof Error ? err.message : String(err);
           setPreview(null);
-          setPreviewError(err instanceof Error ? err.message : String(err));
+          setPreviewError(message);
+          onValidationChange?.(message);
         }
       } finally {
         if (!cancelled) {
@@ -149,6 +169,7 @@ export function DaeImportHktSimplifyFields({
     sessionImportId,
     previewConfigKey,
     importConfig.generateHkt,
+    onValidationChange,
   ]);
 
   const reduction = preview
@@ -158,77 +179,38 @@ export function DaeImportHktSimplifyFields({
   return (
     <DaeImportSection title={compact ? "Simplify" : "Collision Simplification"}>
       <DaeImportStatusAlert tone="info">
-        Merges coplanar faces with similar normals (Havok-style planarity threshold) before
-        building HKT. Creases and curved regions keep their triangles.
+        Merges adjacent coplanar faces before building HKT. Curved or high-poly render meshes
+        rarely shrink much — use a dedicated low-poly collision mesh when Preview stays near
+        the render count.
       </DaeImportStatusAlert>
 
-      <DaeImportBoolField
-        label="Enable Simplification"
-        hint="Disable to export every render triangle as collision"
-        checked={value.enabled}
-        onCheckedChange={(checked) => update("enabled", checked)}
-      />
-
       <DaeImportFieldRow
-        label="Planarity Angle"
-        hint="Max angle between normals to merge (degrees)"
+        label="Simplify Level"
+        hint={HKT_SIMPLIFY_PRESET_HINTS[activePreset]}
       >
-        <div className="space-y-1.5">
-          <Slider
-            min={1}
-            max={30}
-            step={0.5}
-            value={[value.planarityAngleDeg]}
-            disabled={!value.enabled}
-            onValueChange={(v) => update("planarityAngleDeg", v[0] ?? value.planarityAngleDeg)}
-          />
-          <Input
-            className="h-7 text-[11px]"
-            type="number"
-            min={1}
-            max={45}
-            step={0.5}
-            disabled={!value.enabled}
-            value={value.planarityAngleDeg}
-            onChange={(e) =>
-              update("planarityAngleDeg", Math.min(45, Math.max(1, Number(e.target.value) || 8)))
-            }
-          />
-        </div>
-      </DaeImportFieldRow>
-
-      <DaeImportFieldRow label="Weld Epsilon" hint="Merge vertices closer than this distance">
-        <Input
-          className="h-8 text-[11px]"
-          type="number"
-          min={0}
-          step={0.00001}
-          disabled={!value.enabled}
-          value={value.weldEpsilon}
-          onChange={(e) => update("weldEpsilon", Math.max(0, Number(e.target.value) || 0))}
-        />
-      </DaeImportFieldRow>
-
-      <DaeImportFieldRow label="Min Triangle Area" hint="Drop degenerate micro triangles">
-        <Input
-          className="h-8 text-[11px]"
-          type="number"
-          min={0}
-          step={1e-9}
-          disabled={!value.enabled}
-          value={value.minTriangleArea}
-          onChange={(e) => update("minTriangleArea", Math.max(0, Number(e.target.value) || 0))}
-        />
+        <Select value={activePreset} onValueChange={handlePresetChange}>
+          <SelectTrigger className="h-8 text-[11px]">
+            <SelectValue placeholder="Select level" />
+          </SelectTrigger>
+          <SelectContent className={daeImportModalSelectContentClass}>
+            {HKT_SIMPLIFY_PRESET_ORDER.map((preset) => (
+              <SelectItem key={preset} value={preset} className="text-[11px]">
+                {HKT_SIMPLIFY_PRESET_LABELS[preset]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </DaeImportFieldRow>
 
       {importConfig.generateHkt && (sourcePath || sessionImportId) ? (
         <div className="space-y-1 px-4 py-2 text-[11px] text-muted-foreground">
           <p className="font-medium text-foreground">Preview</p>
+          {previewError ? (
+            <p className="text-destructive">{previewError}</p>
+          ) : null}
           {previewLoading ? (
             <p>Computing collision stats…</p>
-          ) : previewError ? (
-            <p className="text-destructive">{previewError}</p>
-          ) : preview ? (
+          ) : previewError ? null : preview ? (
             <div className="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[10px]">
               <span>Render tris</span>
               <span className="text-right">{formatTriangleCount(preview.renderTriangleCount)}</span>
@@ -240,7 +222,7 @@ export function DaeImportHktSimplifyFields({
               </span>
               <span>Vertices</span>
               <span className="text-right">{formatTriangleCount(preview.vertexCount)}</span>
-              {reduction != null && value.enabled ? (
+              {reduction != null && normalizedValue.enabled ? (
                 <>
                   <span>Reduction</span>
                   <span className="text-right">{reduction}%</span>

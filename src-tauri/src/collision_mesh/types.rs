@@ -29,8 +29,8 @@ impl CollisionTriMesh {
     }
 }
 
-/// Default maximum angle (degrees) between mergeable face normals — matches UI / session config.
-pub const DEFAULT_PLANARITY_ANGLE_DEG: f64 = 8.0;
+/// Default maximum angle (degrees) between mergeable face normals — medium preset.
+pub const DEFAULT_PLANARITY_ANGLE_DEG: f64 = 15.0;
 
 /// Cosine threshold from planarity angle in degrees.
 pub fn cos_planarity_from_angle_deg(angle_deg: f64) -> f64 {
@@ -57,8 +57,8 @@ impl Default for CollisionSimplifyOptions {
         Self {
             enabled: true,
             cos_planarity_threshold: cos_planarity_from_angle_deg(DEFAULT_PLANARITY_ANGLE_DEG),
-            min_triangle_area: 1e-8,
-            weld_epsilon: 1e-5,
+            min_triangle_area: 1e-6,
+            weld_epsilon: 1e-3,
         }
     }
 }
@@ -100,10 +100,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_planarity_matches_eight_degrees() {
+    fn default_planarity_matches_medium_preset_degrees() {
         let opts = CollisionSimplifyOptions::default();
         let expected = cos_planarity_from_angle_deg(DEFAULT_PLANARITY_ANGLE_DEG);
         assert!((opts.cos_planarity_threshold - expected).abs() < 1e-12);
+        assert!((opts.weld_epsilon - 1e-3).abs() < 1e-12);
+        assert!((opts.min_triangle_area - 1e-6).abs() < 1e-12);
     }
 
     #[test]

@@ -1,16 +1,93 @@
 import type { HavokMeshData } from "@/utils/havokXmlParser";
-import type { HktSimplifyConfig } from "../components/dae-import/daeImportTypes";
+import type { HktSimplifyConfig, HktSimplifyPreset } from "../components/dae-import/daeImportTypes";
 import type { ImportConfig } from "./sceneSessionService";
 
-export const DEFAULT_HKT_SIMPLIFY: HktSimplifyConfig = {
-  // Off by default: the user opts in per import. When disabled, every render triangle is
-  // exported as collision. The simplify algorithm and its UI controls remain available, and
-  // enabling it is what keeps dense meshes within Havok's per-section triangle limits.
-  enabled: false,
-  planarityAngleDeg: 8,
-  minTriangleArea: 1e-8,
-  weldEpsilon: 1e-5,
+export const HKT_SIMPLIFY_PRESET_ORDER: HktSimplifyPreset[] = ["none", "medium", "heavy"];
+
+export const HKT_SIMPLIFY_PRESET_LABELS: Record<HktSimplifyPreset, string> = {
+  none: "None",
+  medium: "Medium",
+  heavy: "Heavy",
 };
+
+export const HKT_SIMPLIFY_PRESET_HINTS: Record<HktSimplifyPreset, string> = {
+  none: "Export every render triangle as collision",
+  medium: "Merge coplanar faces on flats and panels (recommended)",
+  heavy: "Aggressive coplanar merge; best for blockout / planar geometry",
+};
+
+/** Preset parameters sent to the Rust collision pipeline. */
+export function hktSimplifyConfigFromPreset(preset: HktSimplifyPreset): HktSimplifyConfig {
+  switch (preset) {
+    case "none":
+      return {
+        preset,
+        enabled: false,
+        planarityAngleDeg: 8,
+        minTriangleArea: 1e-8,
+        weldEpsilon: 1e-5,
+      };
+    case "medium":
+      return {
+        preset,
+        enabled: true,
+        planarityAngleDeg: 15,
+        minTriangleArea: 1e-6,
+        weldEpsilon: 0.001,
+      };
+    case "heavy":
+      return {
+        preset,
+        enabled: true,
+        planarityAngleDeg: 45,
+        minTriangleArea: 0.001,
+        weldEpsilon: 0.01,
+      };
+  }
+}
+
+export function detectHktSimplifyPreset(config: HktSimplifyConfig): HktSimplifyPreset {
+  if (config.preset && HKT_SIMPLIFY_PRESET_ORDER.includes(config.preset)) {
+    const canonical = hktSimplifyConfigFromPreset(config.preset);
+    if (
+      config.enabled === canonical.enabled &&
+      config.planarityAngleDeg === canonical.planarityAngleDeg &&
+      config.minTriangleArea === canonical.minTriangleArea &&
+      config.weldEpsilon === canonical.weldEpsilon
+    ) {
+      return config.preset;
+    }
+  }
+
+  for (const preset of HKT_SIMPLIFY_PRESET_ORDER) {
+    const canonical = hktSimplifyConfigFromPreset(preset);
+    if (
+      config.enabled === canonical.enabled &&
+      config.planarityAngleDeg === canonical.planarityAngleDeg &&
+      config.minTriangleArea === canonical.minTriangleArea &&
+      config.weldEpsilon === canonical.weldEpsilon
+    ) {
+      return preset;
+    }
+  }
+
+  return config.enabled ? "medium" : "none";
+}
+
+/** Normalize legacy configs that omit `preset` or drift from preset values. */
+export function normalizeHktSimplifyConfig(
+  config: Partial<HktSimplifyConfig> | null | undefined,
+): HktSimplifyConfig {
+  const merged: HktSimplifyConfig = {
+    ...hktSimplifyConfigFromPreset("medium"),
+    ...config,
+    preset: config?.preset ?? "medium",
+  };
+  const preset = detectHktSimplifyPreset(merged);
+  return hktSimplifyConfigFromPreset(preset);
+}
+
+export const DEFAULT_HKT_SIMPLIFY: HktSimplifyConfig = hktSimplifyConfigFromPreset("medium");
 
 export function countHavokCollisionTriangles(data: HavokMeshData): number {
   let count = 0;
@@ -45,7 +122,7 @@ export function buildImportConfigForHktPreview(
     convertToSsbh: partial.convertToSsbh,
     generateHkt: partial.generateHkt,
     ssbhConfig: partial.ssbhConfig,
-    hktSimplify: partial.hktSimplify,
+    hktSimplify: normalizeHktSimplifyConfig(partial.hktSimplify),
   };
 }
 
@@ -54,11 +131,12 @@ export function serializeHktPreviewConfigKey(
   importConfig: Pick<ImportConfig, "generateHkt" | "convertToSsbh" | "ssbhConfig">,
   hktSimplify: HktSimplifyConfig,
 ): string {
+  const normalized = normalizeHktSimplifyConfig(hktSimplify);
   const ssbh = importConfig.ssbhConfig;
   return JSON.stringify({
     generateHkt: importConfig.generateHkt,
     convertToSsbh: importConfig.convertToSsbh,
-    hktSimplify,
+    hktSimplify: normalized,
     ssbh: ssbh
       ? {
           baseFilename: ssbh.baseFilename,

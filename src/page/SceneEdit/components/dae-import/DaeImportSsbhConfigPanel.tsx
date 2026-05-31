@@ -11,6 +11,7 @@ import {
   DaeImportBoolField,
   DaeImportFieldRow,
   DaeImportSection,
+  daeImportModalSelectContentClass,
 } from "./daeImportUi";
 
 interface DaeImportSsbhConfigPanelProps {
@@ -57,7 +58,7 @@ export function DaeImportSsbhConfigPanel({
             <SelectTrigger className="h-8 text-[11px]">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className={daeImportModalSelectContentClass}>
               <SelectItem value="y_up" className="text-[11px]">
                 Y-Up
               </SelectItem>

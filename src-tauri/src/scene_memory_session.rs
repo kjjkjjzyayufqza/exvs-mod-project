@@ -26,9 +26,9 @@ impl Default for HktSimplifyConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            planarity_angle_deg: 8.0,
-            min_triangle_area: 1e-8,
-            weld_epsilon: 1e-5,
+            planarity_angle_deg: 15.0,
+            min_triangle_area: 1e-6,
+            weld_epsilon: 1e-3,
         }
     }
 }

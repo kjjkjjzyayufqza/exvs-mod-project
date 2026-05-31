@@ -3,6 +3,7 @@ import type { HavokMeshData } from "@/utils/havokXmlParser";
 import {
   countHavokCollisionTriangles,
   DEFAULT_HKT_SIMPLIFY,
+  hktSimplifyConfigFromPreset,
   reductionPercent,
   serializeHktPreviewConfigKey,
 } from "./hktSimplifyUtils";
@@ -20,6 +21,19 @@ describe("hktSimplifyUtils", () => {
       bodies: [],
     };
     expect(countHavokCollisionTriangles(mesh)).toBe(3);
+  });
+
+  it("maps preset values for none, medium, and heavy", () => {
+    expect(hktSimplifyConfigFromPreset("none").enabled).toBe(false);
+    expect(hktSimplifyConfigFromPreset("medium").enabled).toBe(true);
+    expect(hktSimplifyConfigFromPreset("medium").planarityAngleDeg).toBe(15);
+    expect(hktSimplifyConfigFromPreset("heavy").planarityAngleDeg).toBe(45);
+    expect(hktSimplifyConfigFromPreset("heavy").weldEpsilon).toBe(0.01);
+  });
+
+  it("defaults to medium preset with simplification enabled", () => {
+    expect(DEFAULT_HKT_SIMPLIFY.preset).toBe("medium");
+    expect(DEFAULT_HKT_SIMPLIFY.enabled).toBe(true);
   });
 
   it("computes reduction percentage from merged and simplified counts", () => {

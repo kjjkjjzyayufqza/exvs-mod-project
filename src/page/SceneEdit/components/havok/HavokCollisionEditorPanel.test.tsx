@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { HavokMeshData } from "@/utils/havokXmlParser";
 import { HavokCollisionEditorPanel } from "./HavokCollisionEditorPanel";
+import { DEFAULT_HKT_SIMPLIFY } from "../../utils/hktSimplifyUtils";
 
 const mockMeshData: HavokMeshData = {
   vertices: [
@@ -33,10 +34,11 @@ vi.mock("../../utils/sceneSessionService", () => ({
     generateHkt: true,
     ssbhConfig: null,
     hktSimplify: {
+      preset: "medium",
       enabled: true,
-      planarityAngleDeg: 8,
-      minTriangleArea: 1e-8,
-      weldEpsilon: 1e-5,
+      planarityAngleDeg: 15,
+      minTriangleArea: 1e-6,
+      weldEpsilon: 0.001,
     },
   }),
   scenePreviewHktCollisionBytes: vi.fn(),
@@ -55,12 +57,7 @@ import {
   sceneGetHavokMeta,
 } from "../../utils/sceneSessionService";
 
-const defaultHktSimplify = {
-  enabled: true,
-  planarityAngleDeg: 8,
-  minTriangleArea: 1e-8,
-  weldEpsilon: 1e-5,
-};
+const defaultHktSimplify = { ...DEFAULT_HKT_SIMPLIFY };
 
 describe("HavokCollisionEditorPanel", () => {
   beforeAll(() => {

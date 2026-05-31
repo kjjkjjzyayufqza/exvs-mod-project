@@ -23,6 +23,54 @@ pub struct HktCollisionPreview {
     pub vertex_count: usize,
 }
 
+/// Maximum collision triangles the HKT encoder can reasonably accept for stage assets.
+pub const MAX_HKT_COLLISION_TRIANGLES: usize = 50_000;
+
+/// Merged triangle count above which ineffective simplification is treated as a complex mesh.
+pub const COMPLEX_MESH_MERGED_TRIANGLE_THRESHOLD: usize = 10_000;
+
+/// Minimum simplification reduction ratio required once [`COMPLEX_MESH_MERGED_TRIANGLE_THRESHOLD`]
+/// is exceeded (5%).
+pub const COMPLEX_MESH_MIN_REDUCTION_RATIO: f64 = 0.05;
+
+fn collision_reduction_ratio(merged: usize, simplified: usize) -> f64 {
+    if merged == 0 {
+        return 0.0;
+    }
+    1.0 - (simplified as f64 / merged as f64)
+}
+
+/// Reject render meshes that are too dense or cannot be simplified enough for HKT export.
+pub fn validate_collision_mesh_for_hkt(
+    preview: &HktCollisionPreview,
+    simplify_enabled: bool,
+) -> Result<(), String> {
+    let merged = preview.merged_triangle_count;
+    let simplified = preview.simplified_triangle_count;
+
+    if simplified > MAX_HKT_COLLISION_TRIANGLES {
+        return Err(format!(
+            "Collision mesh is too complex for HKT export ({simplified} triangles after processing, \
+             limit {MAX_HKT_COLLISION_TRIANGLES}). Prepare a dedicated low-poly collision mesh \
+             (target under ~15k triangles) in a separate DAE/FBX."
+        ));
+    }
+
+    if merged >= COMPLEX_MESH_MERGED_TRIANGLE_THRESHOLD
+        && simplify_enabled
+        && collision_reduction_ratio(merged, simplified) < COMPLEX_MESH_MIN_REDUCTION_RATIO
+    {
+        let reduction_pct = collision_reduction_ratio(merged, simplified) * 100.0;
+        return Err(format!(
+            "High-poly render mesh cannot be simplified enough for HKT ({merged} merged triangles, \
+             {reduction_pct:.0}% reduction). Use a dedicated low-poly collision mesh instead of the \
+             visual mesh."
+        ));
+    }
+
+    Ok(())
+}
+
 fn render_triangle_count_from_scene(scene: &crate::ssbh_dae::ImportScene) -> usize {
     scene.meshes.iter().map(|m| m.indices.len() / 3).sum()
 }
@@ -37,12 +85,14 @@ pub fn preview_hkt_collision_from_import_bytes(
     let render_triangle_count = render_triangle_count_from_scene(&scene);
     let merged = bake_and_merge_collision_mesh(&scene, &options)?;
     let simplified = simplify_collision_mesh(&merged, &options.simplify);
-    Ok(HktCollisionPreview {
+    let preview = HktCollisionPreview {
         render_triangle_count,
         merged_triangle_count: merged.triangle_count(),
         simplified_triangle_count: simplified.triangle_count(),
         vertex_count: simplified.vertices.len(),
-    })
+    };
+    validate_collision_mesh_for_hkt(&preview, options.simplify.enabled)?;
+    Ok(preview)
 }
 
 /// Simplified collision mesh geometry (collision space) plus stage stats, for a
@@ -73,6 +123,13 @@ pub fn preview_hkt_collision_mesh_from_import_bytes(
     let merged = bake_and_merge_collision_mesh(&scene, &options)?;
     let merged_triangle_count = merged.triangle_count();
     let simplified = simplify_collision_mesh(&merged, &options.simplify);
+    let preview = HktCollisionPreview {
+        render_triangle_count,
+        merged_triangle_count,
+        simplified_triangle_count: simplified.triangle_count(),
+        vertex_count: simplified.vertices.len(),
+    };
+    validate_collision_mesh_for_hkt(&preview, options.simplify.enabled)?;
     let mut positions = Vec::with_capacity(simplified.vertices.len() * 3);
     for v in &simplified.vertices {
         positions.push(v[0] as f32);
@@ -116,6 +173,13 @@ fn generate_hkt_from_import_scene(
 ) -> Result<HktGenerationResult, String> {
     let merged = bake_and_merge_collision_mesh(&scene, &options)?;
     let mesh = simplify_collision_mesh(&merged, &options.simplify);
+    let preview = HktCollisionPreview {
+        render_triangle_count: render_triangle_count_from_scene(&scene),
+        merged_triangle_count: merged.triangle_count(),
+        simplified_triangle_count: mesh.triangle_count(),
+        vertex_count: mesh.vertices.len(),
+    };
+    validate_collision_mesh_for_hkt(&preview, options.simplify.enabled)?;
     let triangle_count = mesh.triangle_count();
     let xml = build_mesh_collision_xml_faithful(&mesh)?;
     let bytes = convert_xml_string_to_hkt(filter_manager_exe, &xml)?;
@@ -189,6 +253,41 @@ mod tests {
     use super::*;
     use crate::collision_mesh::CollisionTriMesh;
     use crate::havok_mesh_encode::build_mesh_collision_xml;
+
+    #[test]
+    fn validate_rejects_high_triangle_count() {
+        let preview = HktCollisionPreview {
+            render_triangle_count: MAX_HKT_COLLISION_TRIANGLES + 1,
+            merged_triangle_count: MAX_HKT_COLLISION_TRIANGLES + 1,
+            simplified_triangle_count: MAX_HKT_COLLISION_TRIANGLES + 1,
+            vertex_count: 100,
+        };
+        let err = validate_collision_mesh_for_hkt(&preview, true).unwrap_err();
+        assert!(err.contains("too complex"));
+    }
+
+    #[test]
+    fn validate_rejects_ineffective_simplification() {
+        let preview = HktCollisionPreview {
+            render_triangle_count: 30_000,
+            merged_triangle_count: 30_000,
+            simplified_triangle_count: 29_500,
+            vertex_count: 20_000,
+        };
+        let err = validate_collision_mesh_for_hkt(&preview, true).unwrap_err();
+        assert!(err.contains("cannot be simplified enough"));
+    }
+
+    #[test]
+    fn validate_accepts_small_simplified_mesh() {
+        let preview = HktCollisionPreview {
+            render_triangle_count: 8_000,
+            merged_triangle_count: 8_000,
+            simplified_triangle_count: 2_000,
+            vertex_count: 4_000,
+        };
+        validate_collision_mesh_for_hkt(&preview, true).expect("small simplified mesh");
+    }
 
     #[test]
     fn preview_collision_counts_for_subdivided_planar_quad_dae() {

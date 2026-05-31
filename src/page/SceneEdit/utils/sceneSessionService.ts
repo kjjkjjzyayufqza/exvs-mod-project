@@ -1,6 +1,6 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
 import type { DaeImportConfig, HktSimplifyConfig } from "../components/dae-import/daeImportTypes";
-import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
+import { DEFAULT_HKT_SIMPLIFY, normalizeHktSimplifyConfig } from "./hktSimplifyUtils";
 import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
 import type {
   MatlDataJson,
@@ -417,7 +417,7 @@ export function mapDaeImportConfigToBackend(config: DaeImportConfig): ImportConf
     loadToScene: config.loadToScene,
     convertToSsbh: config.convertToSsbh,
     generateHkt: config.generateHkt,
-    hktSimplify: config.hktSimplify ?? { ...DEFAULT_HKT_SIMPLIFY },
+    hktSimplify: normalizeHktSimplifyConfig(config.hktSimplify ?? DEFAULT_HKT_SIMPLIFY),
     ssbhConfig: needsAxis
       ? {
           baseFilename: config.ssbhConfig.baseFilename,

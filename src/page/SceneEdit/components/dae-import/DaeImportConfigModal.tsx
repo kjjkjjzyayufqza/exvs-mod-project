@@ -162,6 +162,17 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
 }: DaeImportConfigModalBodyProps) {
   const primaryMode = getPrimaryMode(config);
   const hktAvailable = isHktGenerationAvailable(havokInfo);
+  const [hktValidationError, setHktValidationError] = useState<string | null>(null);
+
+  const handleHktValidationChange = useCallback((error: string | null) => {
+    setHktValidationError(error);
+  }, []);
+
+  useEffect(() => {
+    if (!config.generateHkt) {
+      setHktValidationError(null);
+    }
+  }, [config.generateHkt]);
 
   const ssbhSession = useDaeSsbhSessionStore(
     useShallow((state) => ({
@@ -203,8 +214,14 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
     });
   };
 
+  const blockedByHkt =
+    config.generateHkt &&
+    Boolean(hktValidationError) &&
+    (config.directToDisk || primaryMode === "ssbh");
+
   const canImport =
     !entry.analyzing &&
+    !blockedByHkt &&
     (config.directToDisk
       ? Boolean(config.outputDirectory) && (entry.analysis?.canConvert ?? false) && ssbhReady
       : primaryMode === "preview"
@@ -348,6 +365,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
               onConfigChange={updateConfig}
               sourcePath={entry.filePath}
               sourceName={entry.fileName}
+              onValidationChange={handleHktValidationChange}
             />
           )}
 

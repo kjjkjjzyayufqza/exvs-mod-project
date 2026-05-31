@@ -70,6 +70,43 @@ pub fn hkt_collision_options_from_import(
     options
 }
 
+fn validate_static_mesh_hkt_collision_from_path(
+    source_path: &Path,
+    config: &ImportConfig,
+) -> Result<(), String> {
+    let source_name = source_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("input.dae")
+        .to_string();
+    let bytes = std::fs::read(source_path).map_err(|e| {
+        format!(
+            "Failed to read '{}': {}",
+            source_path.display(),
+            e
+        )
+    })?;
+    crate::havok_collision_encode::preview_hkt_collision_from_import_bytes(
+        &bytes,
+        &source_name,
+        hkt_collision_options_from_import(config),
+    )
+    .map(|_| ())
+}
+
+fn validate_static_mesh_hkt_collision_from_bytes(
+    bytes: &[u8],
+    source_name: &str,
+    config: &ImportConfig,
+) -> Result<(), String> {
+    crate::havok_collision_encode::preview_hkt_collision_from_import_bytes(
+        bytes,
+        source_name,
+        hkt_collision_options_from_import(config),
+    )
+    .map(|_| ())
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveResult {
@@ -705,6 +742,10 @@ pub async fn scene_execute_import(
     let mut warnings: Vec<String> = Vec::new();
 
     if config.convert_to_ssbh {
+        if config.generate_hkt {
+            validate_static_mesh_hkt_collision_from_bytes(&dae_bytes, &source_name, &config)?;
+        }
+
         let ssbh_config = config.ssbh_config.clone().unwrap_or_else(|| {
             eprintln!("[scene_execute_import] no ssbh_config provided, using defaults");
             crate::scene_memory_session::SsbhConvertConfig {
@@ -1868,6 +1909,10 @@ pub async fn scene_convert_static_mesh_to_stage_files(
         return Err("base_filename cannot be empty".to_string());
     }
 
+    if options.config.generate_hkt {
+        validate_static_mesh_hkt_collision_from_path(&source_path, &options.config)?;
+    }
+
     let source_for_convert = source_path.clone();
     let output_for_write = output_dir.clone();
     let ssbh_config_for_convert = ssbh_config.clone();
@@ -2126,14 +2171,14 @@ mod tests {
 
         let cfg = HktSimplifyConfig {
             enabled: true,
-            planarity_angle_deg: 8.0,
-            min_triangle_area: 1e-8,
-            weld_epsilon: 1e-5,
+            planarity_angle_deg: 15.0,
+            min_triangle_area: 1e-6,
+            weld_epsilon: 1e-3,
         };
         let opts = hkt_simplify_to_options(&cfg);
         assert_eq!(
             opts.cos_planarity_threshold,
-            cos_planarity_from_angle_deg(8.0),
+            cos_planarity_from_angle_deg(15.0),
         );
         assert_eq!(opts, CollisionSimplifyOptions::default());
     }

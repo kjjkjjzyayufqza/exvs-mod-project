@@ -8,6 +8,7 @@ vi.mock("./sceneSessionService", () => ({
 }));
 
 import { createDefaultDaeImportConfig } from "../components/dae-import/daeImportDefaults";
+import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
 import { createEmptyNumatbFile } from "@/components/ssbh-model-preview/daeSsbhTypes";
 import { createImportedDaeMaterialProfile } from "./sceneDaeSsbhSave";
 import {
@@ -66,7 +67,8 @@ describe("buildSsbhSessionImportConfig", () => {
     expect(importConfig.loadToScene).toBe(false);
     expect(importConfig.convertToSsbh).toBe(true);
     expect(importConfig.generateHkt).toBe(true);
-    expect(importConfig.hktSimplify.enabled).toBe(false);
+    expect(importConfig.hktSimplify.enabled).toBe(true);
+    expect(importConfig.hktSimplify.preset).toBe("medium");
     expect(importConfig.ssbhConfig).toEqual({
       baseFilename: "sample_mesh",
       scaleFactor: 2,
@@ -147,12 +149,7 @@ describe("resolveSessionImportConfigForSave", () => {
       loadToScene: true,
       convertToSsbh: true,
       generateHkt: true,
-      hktSimplify: {
-        enabled: true,
-        planarityAngleDeg: 8,
-        minTriangleArea: 1e-8,
-        weldEpsilon: 1e-5,
-      },
+      hktSimplify: { ...DEFAULT_HKT_SIMPLIFY },
       ssbhConfig: {
         baseFilename: "modelsss",
         scaleFactor: 2,
@@ -204,12 +201,7 @@ describe("resolveSessionImportConfigForSave", () => {
       loadToScene: true,
       convertToSsbh: false,
       generateHkt: false,
-      hktSimplify: {
-        enabled: true,
-        planarityAngleDeg: 8,
-        minTriangleArea: 1e-8,
-        weldEpsilon: 1e-5,
-      },
+      hktSimplify: { ...DEFAULT_HKT_SIMPLIFY },
       ssbhConfig: null,
     });
 
@@ -239,12 +231,7 @@ describe("importDaeThroughSceneSession", () => {
       loadToScene: false,
       convertToSsbh: true,
       generateHkt: false,
-      hktSimplify: {
-        enabled: true,
-        planarityAngleDeg: 8,
-        minTriangleArea: 1e-8,
-        weldEpsilon: 1e-5,
-      },
+      hktSimplify: { ...DEFAULT_HKT_SIMPLIFY },
       ssbhConfig: {
         baseFilename: "sample_mesh",
         scaleFactor: 1,
@@ -300,12 +287,7 @@ describe("retargetAndReconvertSessionImport", () => {
       loadToScene: true,
       convertToSsbh: true,
       generateHkt: false,
-      hktSimplify: {
-        enabled: true,
-        planarityAngleDeg: 8,
-        minTriangleArea: 1e-8,
-        weldEpsilon: 1e-5,
-      },
+      hktSimplify: { ...DEFAULT_HKT_SIMPLIFY },
       ssbhConfig: {
         baseFilename: "modelsss",
         scaleFactor: 1,
@@ -342,12 +324,7 @@ describe("retargetAndReconvertSessionImport", () => {
       loadToScene: true,
       convertToSsbh: false,
       generateHkt: false,
-      hktSimplify: {
-        enabled: true,
-        planarityAngleDeg: 8,
-        minTriangleArea: 1e-8,
-        weldEpsilon: 1e-5,
-      },
+      hktSimplify: { ...DEFAULT_HKT_SIMPLIFY },
       ssbhConfig: {
         baseFilename: "modelsss",
         scaleFactor: 1,
@@ -385,12 +362,7 @@ describe("retargetSessionImportFolderName", () => {
       loadToScene: true,
       convertToSsbh: true,
       generateHkt: false,
-      hktSimplify: {
-        enabled: true,
-        planarityAngleDeg: 8,
-        minTriangleArea: 1e-8,
-        weldEpsilon: 1e-5,
-      },
+      hktSimplify: { ...DEFAULT_HKT_SIMPLIFY },
       ssbhConfig: {
         baseFilename: "old_name",
         scaleFactor: 1,
@@ -426,7 +398,7 @@ describe("retargetSessionImportFolderName", () => {
       retargetSessionImportFolderName(
         "session-1",
         "import-1",
-        { loadToScene: true, convertToSsbh: false, generateHkt: false, ssbhConfig: null, hktSimplify: { enabled: true, planarityAngleDeg: 8, minTriangleArea: 1e-8, weldEpsilon: 1e-5 } },
+        { loadToScene: true, convertToSsbh: false, generateHkt: false, ssbhConfig: null, hktSimplify: { ...DEFAULT_HKT_SIMPLIFY } },
         "sample_mesh",
       ),
     ).rejects.toThrow("Session import is missing SSBH configuration");

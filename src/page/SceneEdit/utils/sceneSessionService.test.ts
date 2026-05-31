@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { mapDaeImportConfigToBackend, type ImportConfig, type ImportResult, type SaveResult, type SceneOpenResult, type HavokDataMeta } from "./sceneSessionService";
 import type { DaeImportConfig } from "../components/dae-import/daeImportTypes";
-import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
+import { DEFAULT_HKT_SIMPLIFY, hktSimplifyConfigFromPreset } from "./hktSimplifyUtils";
 
 function makeDefaultDaeImportConfig(): DaeImportConfig {
   return {
@@ -87,15 +87,10 @@ describe("sceneSessionService", () => {
     it("maps hktSimplify settings when generateHkt is enabled", () => {
       const config = makeDefaultDaeImportConfig();
       config.generateHkt = true;
-      config.hktSimplify = {
-        enabled: false,
-        planarityAngleDeg: 12,
-        minTriangleArea: 0.001,
-        weldEpsilon: 0.0001,
-      };
+      config.hktSimplify = hktSimplifyConfigFromPreset("heavy");
 
       const result = mapDaeImportConfigToBackend(config);
-      expect(result.hktSimplify).toEqual(config.hktSimplify);
+      expect(result.hktSimplify).toEqual(hktSimplifyConfigFromPreset("heavy"));
     });
 
     it("maps all ssbh write flags correctly", () => {
@@ -219,12 +214,7 @@ describe("sceneSessionService", () => {
         loadToScene: false,
         convertToSsbh: true,
         generateHkt: true,
-        hktSimplify: {
-          enabled: false,
-          planarityAngleDeg: 8,
-          minTriangleArea: 1e-8,
-          weldEpsilon: 1e-5,
-        },
+        hktSimplify: { ...DEFAULT_HKT_SIMPLIFY },
         ssbhConfig: {
           baseFilename: "backpack_up",
           scaleFactor: 1.0,

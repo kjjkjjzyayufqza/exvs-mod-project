@@ -29,7 +29,10 @@ export interface TextureImportEntry {
     | { type: "new"; pngPath: string; ddsFormat: string };
 }
 
+export type HktSimplifyPreset = "none" | "medium" | "heavy";
+
 export interface HktSimplifyConfig {
+  preset: HktSimplifyPreset;
   enabled: boolean;
   /** Max angle (degrees) between coplanar mergeable face normals. */
   planarityAngleDeg: number;

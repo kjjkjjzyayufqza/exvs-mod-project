@@ -7,6 +7,9 @@ import { Label } from "@/components/ui/label";
 export const daeImportSectionTitleClass =
   "text-[10px] font-semibold uppercase tracking-wide text-muted-foreground";
 
+/** Radix Select portal must render above the import modal shell (`z-100`). */
+export const daeImportModalSelectContentClass = "z-[110]";
+
 export function DaeImportSection({
   title,
   children,

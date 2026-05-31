@@ -77,6 +77,7 @@ import {
   retargetAndReconvertSessionImport,
 } from "./sceneDaeSessionImport";
 import { buildImportedDaeStageRegistrationPlan } from "./sceneDaeSsbhSave";
+import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
 import { createBakedImportedDaeExportObject } from "./sceneSavePipeline";
 import { resolveStagePackStructureTarget } from "./sceneStageStructure";
 
@@ -156,12 +157,7 @@ describe("sceneSaveFolderPipeline", () => {
       loadToScene: false,
       convertToSsbh: true,
       generateHkt: false,
-      hktSimplify: {
-        enabled: true,
-        planarityAngleDeg: 8,
-        minTriangleArea: 1e-8,
-        weldEpsilon: 1e-5,
-      },
+      hktSimplify: { ...DEFAULT_HKT_SIMPLIFY },
       ssbhConfig: {
         baseFilename: "sample_mesh",
         scaleFactor: 1,
