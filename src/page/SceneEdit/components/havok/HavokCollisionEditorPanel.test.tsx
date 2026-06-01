@@ -39,6 +39,8 @@ vi.mock("../../utils/sceneSessionService", () => ({
       planarityAngleDeg: 15,
       minTriangleArea: 1e-6,
       weldEpsilon: 0.001,
+      targetTriangleRatio: null,
+      maxTargetTriangles: null,
     },
   }),
   scenePreviewHktCollisionBytes: vi.fn(),

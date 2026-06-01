@@ -50,6 +50,10 @@ pub struct CollisionSimplifyOptions {
     pub min_triangle_area: f64,
     /// Weld vertices closer than this distance (collision-space units).
     pub weld_epsilon: f64,
+    /// Optional target ratio for spatial decimation after similar-face merging.
+    pub target_triangle_ratio: Option<f64>,
+    /// Optional absolute cap applied with `target_triangle_ratio`.
+    pub max_target_triangles: Option<usize>,
 }
 
 impl Default for CollisionSimplifyOptions {
@@ -59,6 +63,8 @@ impl Default for CollisionSimplifyOptions {
             cos_planarity_threshold: cos_planarity_from_angle_deg(DEFAULT_PLANARITY_ANGLE_DEG),
             min_triangle_area: 1e-6,
             weld_epsilon: 1e-3,
+            target_triangle_ratio: None,
+            max_target_triangles: None,
         }
     }
 }
@@ -106,6 +112,8 @@ mod tests {
         assert!((opts.cos_planarity_threshold - expected).abs() < 1e-12);
         assert!((opts.weld_epsilon - 1e-3).abs() < 1e-12);
         assert!((opts.min_triangle_area - 1e-6).abs() < 1e-12);
+        assert_eq!(opts.target_triangle_ratio, None);
+        assert_eq!(opts.max_target_triangles, None);
     }
 
     #[test]

@@ -13,7 +13,7 @@ export const HKT_SIMPLIFY_PRESET_LABELS: Record<HktSimplifyPreset, string> = {
 export const HKT_SIMPLIFY_PRESET_HINTS: Record<HktSimplifyPreset, string> = {
   none: "Export every render triangle as collision",
   medium: "Merge coplanar faces on flats and panels (recommended)",
-  heavy: "Aggressive coplanar merge; best for blockout / planar geometry",
+  heavy: "Aggressive merge and curved-surface decimation for low-poly collision",
 };
 
 /** Preset parameters sent to the Rust collision pipeline. */
@@ -26,6 +26,8 @@ export function hktSimplifyConfigFromPreset(preset: HktSimplifyPreset): HktSimpl
         planarityAngleDeg: 8,
         minTriangleArea: 1e-8,
         weldEpsilon: 1e-5,
+        targetTriangleRatio: null,
+        maxTargetTriangles: null,
       };
     case "medium":
       return {
@@ -34,6 +36,8 @@ export function hktSimplifyConfigFromPreset(preset: HktSimplifyPreset): HktSimpl
         planarityAngleDeg: 15,
         minTriangleArea: 1e-6,
         weldEpsilon: 0.001,
+        targetTriangleRatio: null,
+        maxTargetTriangles: null,
       };
     case "heavy":
       return {
@@ -42,6 +46,8 @@ export function hktSimplifyConfigFromPreset(preset: HktSimplifyPreset): HktSimpl
         planarityAngleDeg: 45,
         minTriangleArea: 0.001,
         weldEpsilon: 0.01,
+        targetTriangleRatio: 0.05,
+        maxTargetTriangles: 50_000,
       };
   }
 }
@@ -53,7 +59,9 @@ export function detectHktSimplifyPreset(config: HktSimplifyConfig): HktSimplifyP
       config.enabled === canonical.enabled &&
       config.planarityAngleDeg === canonical.planarityAngleDeg &&
       config.minTriangleArea === canonical.minTriangleArea &&
-      config.weldEpsilon === canonical.weldEpsilon
+      config.weldEpsilon === canonical.weldEpsilon &&
+      (config.targetTriangleRatio ?? null) === canonical.targetTriangleRatio &&
+      (config.maxTargetTriangles ?? null) === canonical.maxTargetTriangles
     ) {
       return config.preset;
     }
@@ -65,7 +73,9 @@ export function detectHktSimplifyPreset(config: HktSimplifyConfig): HktSimplifyP
       config.enabled === canonical.enabled &&
       config.planarityAngleDeg === canonical.planarityAngleDeg &&
       config.minTriangleArea === canonical.minTriangleArea &&
-      config.weldEpsilon === canonical.weldEpsilon
+      config.weldEpsilon === canonical.weldEpsilon &&
+      (config.targetTriangleRatio ?? null) === canonical.targetTriangleRatio &&
+      (config.maxTargetTriangles ?? null) === canonical.maxTargetTriangles
     ) {
       return preset;
     }
@@ -78,6 +88,9 @@ export function detectHktSimplifyPreset(config: HktSimplifyConfig): HktSimplifyP
 export function normalizeHktSimplifyConfig(
   config: Partial<HktSimplifyConfig> | null | undefined,
 ): HktSimplifyConfig {
+  if (config?.preset && HKT_SIMPLIFY_PRESET_ORDER.includes(config.preset)) {
+    return hktSimplifyConfigFromPreset(config.preset);
+  }
   const merged: HktSimplifyConfig = {
     ...hktSimplifyConfigFromPreset("medium"),
     ...config,

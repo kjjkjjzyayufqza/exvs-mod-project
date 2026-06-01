@@ -87,6 +87,8 @@ export function DaeImportHktSimplifyFields({
       normalizedValue.planarityAngleDeg,
       normalizedValue.minTriangleArea,
       normalizedValue.weldEpsilon,
+      normalizedValue.targetTriangleRatio,
+      normalizedValue.maxTargetTriangles,
     ],
   );
 
@@ -179,9 +181,8 @@ export function DaeImportHktSimplifyFields({
   return (
     <DaeImportSection title={compact ? "Simplify" : "Collision Simplification"}>
       <DaeImportStatusAlert tone="info">
-        Merges adjacent coplanar faces before building HKT. Curved or high-poly render meshes
-        rarely shrink much — use a dedicated low-poly collision mesh when Preview stays near
-        the render count.
+        Merges adjacent similar faces before building HKT. Heavy mode also decimates curved
+        surfaces toward a low-poly collision mesh for dense render geometry.
       </DaeImportStatusAlert>
 
       <DaeImportFieldRow

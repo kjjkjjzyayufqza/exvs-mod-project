@@ -29,6 +29,8 @@ describe("hktSimplifyUtils", () => {
     expect(hktSimplifyConfigFromPreset("medium").planarityAngleDeg).toBe(15);
     expect(hktSimplifyConfigFromPreset("heavy").planarityAngleDeg).toBe(45);
     expect(hktSimplifyConfigFromPreset("heavy").weldEpsilon).toBe(0.01);
+    expect(hktSimplifyConfigFromPreset("heavy").targetTriangleRatio).toBe(0.05);
+    expect(hktSimplifyConfigFromPreset("heavy").maxTargetTriangles).toBe(50_000);
   });
 
   it("defaults to medium preset with simplification enabled", () => {

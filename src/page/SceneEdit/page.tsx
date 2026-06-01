@@ -2902,20 +2902,30 @@ export default function SceneEdit() {
             throw new Error("SSBH conversion did not produce in-memory artifacts");
           }
 
-          applyStaticMeshProgressUpdate({
-            step: "preview",
-            label: "Receiving viewport preview bundle from Rust...",
-            detail: "Large mesh preview data may take time to cross IPC.",
-            progress: 94,
-          });
-          const ssbhBundle = await sceneBuildImportPreviewBundle({
-            sessionId: activeSessionId,
-            importId: result.importId,
-            stageRoot,
-            sourcePath: entry.filePath,
-          });
-          for (const warning of ssbhBundle.warnings) {
-            toast.warning(warning);
+          let ssbhBundle: SsbhModelPreviewBundle | null = null;
+          if (entry.config.loadToScene) {
+            applyStaticMeshProgressUpdate({
+              step: "preview",
+              label: "Receiving viewport preview bundle from Rust...",
+              detail: "Large mesh preview data may take time to cross IPC.",
+              progress: 94,
+            });
+            ssbhBundle = await sceneBuildImportPreviewBundle({
+              sessionId: activeSessionId,
+              importId: result.importId,
+              stageRoot,
+              sourcePath: entry.filePath,
+            });
+            for (const warning of ssbhBundle.warnings) {
+              toast.warning(warning);
+            }
+          } else {
+            applyStaticMeshProgressUpdate({
+              step: "preview",
+              label: "Static mesh SSBH conversion completed",
+              detail: "SSBH artifact preview bundle skipped to avoid large mesh IPC payloads.",
+              progress: 94,
+            });
           }
 
           if (entry.config.generateHkt) {

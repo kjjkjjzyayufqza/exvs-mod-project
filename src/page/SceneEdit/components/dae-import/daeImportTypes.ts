@@ -39,6 +39,10 @@ export interface HktSimplifyConfig {
   planarityAngleDeg: number;
   minTriangleArea: number;
   weldEpsilon: number;
+  /** Optional target ratio for aggressive curved-surface collision decimation. */
+  targetTriangleRatio: number | null;
+  /** Optional absolute cap applied after targetTriangleRatio. */
+  maxTargetTriangles: number | null;
 }
 
 export interface DaeImportConfig {

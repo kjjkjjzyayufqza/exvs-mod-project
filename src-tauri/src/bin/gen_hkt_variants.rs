@@ -201,6 +201,8 @@ fn main() {
             cos_planarity_threshold: cos_planarity_from_angle_deg(60.0),
             min_triangle_area: 1e-3,
             weld_epsilon: 1e-2,
+            target_triangle_ratio: Some(0.05),
+            max_target_triangles: Some(50_000),
         },
     );
     gen(&fm, "V2_low", &low, &out_dir, None);

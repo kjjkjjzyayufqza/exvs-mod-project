@@ -5,8 +5,8 @@ use tauri::{ipc::Channel, State};
 use crate::format::fhm2d_stage;
 use crate::havok_cli;
 use crate::scene_memory_session::{
-    GraphicParam, HavokCollisionData, ImportConfig, PlacementEntry, SceneSessionState, SceneSource,
-    SsbhArtifacts,
+    GraphicParam, HavokCollisionData, ImportConfig, PlacementEntry, SceneMemorySession,
+    SceneSessionState, SceneSource, SsbhArtifactPaths, SsbhArtifacts,
 };
 use crate::ssbh_dae::{
     convert_dae_file, convert_fbx_file, ConvertedFiles, DaeConvertConfig, SsbhConvertStats,
@@ -35,6 +35,7 @@ pub struct ImportResult {
 
 const LARGE_STATIC_MESH_SOURCE_BYTES: u64 = 64 * 1024 * 1024;
 const LARGE_STATIC_MESH_IPC_PAYLOAD_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_IMPORT_PREVIEW_ARTIFACT_BYTES: u64 = 128 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(
@@ -206,6 +207,68 @@ fn ssbh_artifact_file_count(artifacts: &SsbhArtifacts) -> usize {
         + usize::from(!artifacts.jnttbl.is_empty())
 }
 
+enum SessionSsbhArtifacts {
+    Memory(SsbhArtifacts),
+    Paths(SsbhArtifactPaths),
+}
+
+impl SessionSsbhArtifacts {
+    fn payload_bytes(&self) -> u64 {
+        match self {
+            Self::Memory(artifacts) => ssbh_artifact_payload_bytes(artifacts),
+            Self::Paths(paths) => paths.payload_bytes(),
+        }
+    }
+
+    fn file_count(&self) -> usize {
+        match self {
+            Self::Memory(artifacts) => ssbh_artifact_file_count(artifacts),
+            Self::Paths(paths) => paths.file_count(),
+        }
+    }
+
+    fn numdlb_len(&self) -> u64 {
+        self.path_or_memory_len(
+            |artifacts| artifacts.numdlb.len() as u64,
+            |paths| paths.numdlb.as_ref(),
+        )
+    }
+
+    fn numshb_len(&self) -> u64 {
+        self.path_or_memory_len(
+            |artifacts| artifacts.numshb.len() as u64,
+            |paths| paths.numshb.as_ref(),
+        )
+    }
+
+    fn nusktb_len(&self) -> u64 {
+        self.path_or_memory_len(
+            |artifacts| artifacts.nusktb.as_ref().map_or(0, |v| v.len() as u64),
+            |paths| paths.nusktb.as_ref(),
+        )
+    }
+
+    fn numatb_len(&self) -> u64 {
+        self.path_or_memory_len(
+            |artifacts| artifacts.numatb.len() as u64,
+            |paths| paths.numatb.as_ref(),
+        )
+    }
+
+    fn path_or_memory_len(
+        &self,
+        memory_len: impl FnOnce(&SsbhArtifacts) -> u64,
+        path_ref: impl FnOnce(&SsbhArtifactPaths) -> Option<&PathBuf>,
+    ) -> u64 {
+        match self {
+            Self::Memory(artifacts) => memory_len(artifacts),
+            Self::Paths(paths) => path_ref(paths)
+                .and_then(|path| std::fs::metadata(path).ok())
+                .map_or(0, |meta| meta.len()),
+        }
+    }
+}
+
 pub fn hkt_success_detail(name: &str, byte_len: usize, triangle_count: usize) -> String {
     format!(
         "HKT mesh collision generated for \"{name}\" ({byte_len} bytes, {triangle_count} triangles, skin-baked merge). \
@@ -223,6 +286,8 @@ pub fn hkt_simplify_to_options(
         ),
         min_triangle_area: cfg.min_triangle_area,
         weld_epsilon: cfg.weld_epsilon,
+        target_triangle_ratio: cfg.target_triangle_ratio,
+        max_target_triangles: cfg.max_target_triangles,
     }
 }
 
@@ -392,7 +457,7 @@ pub fn scene_import_dae_from_path_streamed(
         Some(&on_progress),
         "read",
         format!(
-            "Reading {} source into Rust session...",
+            "Registering {} source path in Rust session...",
             static_mesh_format_label(ext)
         ),
     );
@@ -724,15 +789,18 @@ pub fn scene_build_import_preview_bundle(
 ) -> Result<SsbhModelPreviewBundle, String> {
     state.with_session(&session_id, |s| {
         let import = s.find_import(&import_id)?;
-        let artifacts = import
-            .ssbh_artifacts
-            .as_ref()
-            .ok_or_else(|| format!("Import '{import_id}' has no SSBH artifacts"))?;
+        let artifact_bytes = SceneMemorySession::import_ssbh_artifact_payload_bytes(import);
+        if artifact_bytes > MAX_IMPORT_PREVIEW_ARTIFACT_BYTES {
+            return Err(format!(
+                "Import '{import_id}' generated {artifact_bytes} bytes of SSBH artifacts, which is too large for viewport preview IPC. Use out-of-scene conversion or save the session to disk."
+            ));
+        }
+        let artifacts = SceneMemorySession::read_import_ssbh_artifacts(import)?;
         build_scene_import_preview_bundle_from_artifacts(
             &session_id,
             &import_id,
             &import.config,
-            artifacts,
+            &artifacts,
             stage_root.as_deref(),
             source_path.as_deref(),
         )
@@ -949,11 +1017,12 @@ async fn scene_execute_import_impl(
         "read",
         "Loading static mesh import from Rust session...",
     );
-    let (dae_bytes, name, source_name, config) = state
+    let (dae_bytes, source_path, name, source_name, config) = state
         .with_session(&options.session_id, |s| {
             let import = s.find_import(&options.import_id)?;
             Ok((
                 import.dae_bytes.clone(),
+                import.source_path.clone(),
                 import.name.clone(),
                 import.source_name.clone(),
                 import.config.clone(),
@@ -968,7 +1037,10 @@ async fn scene_execute_import_impl(
         "[scene_execute_import] name={} source_name={} dae_bytes_len={} convert_to_ssbh={} generate_hkt={}",
         name,
         source_name,
-        dae_bytes.len(),
+        source_path
+            .as_ref()
+            .and_then(|p| std::fs::metadata(p).ok())
+            .map_or(dae_bytes.len() as u64, |m| m.len()),
         config.convert_to_ssbh,
         config.generate_hkt
     );
@@ -979,7 +1051,10 @@ async fn scene_execute_import_impl(
     let mut warnings: Vec<String> = Vec::new();
     let source_ext = import_extension_from_name(&source_name)?;
     let source_format = static_mesh_format_label(source_ext);
-    let source_bytes = dae_bytes.len() as u64;
+    let source_bytes = source_path
+        .as_ref()
+        .and_then(|p| std::fs::metadata(p).ok())
+        .map_or(dae_bytes.len() as u64, |m| m.len());
 
     send_static_mesh_progress(
         on_progress.as_ref(),
@@ -998,7 +1073,11 @@ async fn scene_execute_import_impl(
                 "collisionCheck",
                 "Checking HKT collision mesh input...",
             );
-            validate_static_mesh_hkt_collision_from_bytes(&dae_bytes, &source_name, &config)?;
+            if let Some(source_path) = source_path.as_ref() {
+                validate_static_mesh_hkt_collision_from_path(source_path, &config)?;
+            } else {
+                validate_static_mesh_hkt_collision_from_bytes(&dae_bytes, &source_name, &config)?;
+            }
         }
 
         let ssbh_config = config.ssbh_config.clone().unwrap_or_else(|| {
@@ -1036,12 +1115,19 @@ async fn scene_execute_import_impl(
 
         let dae_bytes_clone = dae_bytes.clone();
         let source_name_clone = source_name.clone();
+        let source_path_clone = source_path.clone();
         let artifacts_result = tauri::async_runtime::spawn_blocking(move || {
-            convert_import_bytes_to_ssbh_artifacts(
-                &dae_bytes_clone,
-                &source_name_clone,
-                &ssbh_config,
-            )
+            if let Some(source_path) = source_path_clone.as_ref() {
+                convert_import_path_to_ssbh_artifact_paths(source_path, &ssbh_config)
+                    .map(SessionSsbhArtifacts::Paths)
+            } else {
+                convert_import_bytes_to_ssbh_artifacts(
+                    &dae_bytes_clone,
+                    &source_name_clone,
+                    &ssbh_config,
+                )
+                .map(SessionSsbhArtifacts::Memory)
+            }
         })
         .await
         .map_err(|e| {
@@ -1065,13 +1151,13 @@ async fn scene_execute_import_impl(
 
         eprintln!(
             "[scene_execute_import] SSBH artifacts generated: numdlb={} numshb={} nusktb={} numatb={}",
-            artifacts.numdlb.len(),
-            artifacts.numshb.len(),
-            artifacts.nusktb.as_ref().map_or(0, |v| v.len()),
-            artifacts.numatb.len()
+            artifacts.numdlb_len(),
+            artifacts.numshb_len(),
+            artifacts.nusktb_len(),
+            artifacts.numatb_len()
         );
-        let artifact_bytes = ssbh_artifact_payload_bytes(&artifacts);
-        let artifact_file_count = ssbh_artifact_file_count(&artifacts);
+        let artifact_bytes = artifacts.payload_bytes();
+        let artifact_file_count = artifacts.file_count();
         send_static_mesh_progress(
             on_progress.as_ref(),
             StaticMeshImportProgress::ConvertFinished {
@@ -1086,8 +1172,13 @@ async fn scene_execute_import_impl(
             "Storing converted SSBH artifacts in Rust session...",
         );
 
-        state.with_session_mut(&options.session_id, |s| {
-            s.store_ssbh_artifacts(&options.import_id, artifacts)
+        state.with_session_mut(&options.session_id, |s| match artifacts {
+            SessionSsbhArtifacts::Memory(artifacts) => {
+                s.store_ssbh_artifacts(&options.import_id, artifacts)
+            }
+            SessionSsbhArtifacts::Paths(paths) => {
+                s.store_ssbh_artifact_paths(&options.import_id, paths)
+            }
         })?;
         ssbh_generated = true;
     }
@@ -1113,14 +1204,23 @@ async fn scene_execute_import_impl(
                 );
                 let dae_bytes_clone = dae_bytes.clone();
                 let import_name = source_name.clone();
+                let source_path_clone = source_path.clone();
                 let filter_path = havok_config.filter_manager_path.clone();
                 match tauri::async_runtime::spawn_blocking(move || {
-                    havok_cli::generate_hkt_from_dae(
-                        &dae_bytes_clone,
-                        &import_name,
-                        &havok_config,
-                        hkt_options,
-                    )
+                    if let Some(source_path) = source_path_clone.as_ref() {
+                        havok_cli::generate_hkt_from_import_path(
+                            source_path,
+                            &havok_config,
+                            hkt_options,
+                        )
+                    } else {
+                        havok_cli::generate_hkt_from_dae(
+                            &dae_bytes_clone,
+                            &import_name,
+                            &havok_config,
+                            hkt_options,
+                        )
+                    }
                 })
                 .await
                 {
@@ -1487,12 +1587,29 @@ fn convert_dae_bytes_to_ssbh_artifacts(
     convert_import_bytes_to_ssbh_artifacts(dae_bytes, "input.dae", ssbh_config)
 }
 
-fn convert_import_path_to_ssbh_artifacts(
+fn write_optional_artifact(
+    output_dir: &Path,
+    file_name: &str,
+    data: &[u8],
+) -> Result<Option<PathBuf>, String> {
+    if data.is_empty() {
+        return Ok(None);
+    }
+    let path = output_dir.join(file_name);
+    std::fs::write(&path, data)
+        .map_err(|e| format!("Failed to write generated artifact {}: {e}", path.display()))?;
+    Ok(Some(path))
+}
+
+fn convert_import_path_to_ssbh_artifact_paths(
     source_path: &Path,
     ssbh_config: &crate::scene_memory_session::SsbhConvertConfig,
-) -> Result<SsbhArtifacts, String> {
+) -> Result<SsbhArtifactPaths, String> {
     import_extension_from_path(source_path)?;
-    let temp_dir = tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {e}"))?;
+    let temp_dir = tempfile::Builder::new()
+        .prefix("scene-import-ssbh-")
+        .tempdir()
+        .map_err(|e| format!("Failed to create temp dir: {e}"))?;
     let up_axis = match ssbh_config.up_axis.to_ascii_lowercase().as_str() {
         "z_up" | "zup" => crate::ssbh_dae::UpAxisConversion::ZUp,
         "none" | "no_conversion" => crate::ssbh_dae::UpAxisConversion::NoConversion,
@@ -1514,22 +1631,13 @@ fn convert_import_path_to_ssbh_artifacts(
 
     let (converted_files, stats) = convert_import_file(source_path, &convert_config)?;
     eprintln!(
-        "[convert_import_path_to_ssbh] source={} mesh_objects={} total_vertices={} total_indices={} bones={}",
+        "[convert_import_path_to_ssbh_paths] source={} mesh_objects={} total_vertices={} total_indices={} bones={}",
         source_path.display(),
         stats.mesh_objects,
         stats.total_vertices,
         stats.total_triangle_indices,
         stats.bones
     );
-
-    let read_opt = |label: &str, path: &Option<PathBuf>| -> Result<Vec<u8>, String> {
-        match path {
-            Some(p) => {
-                std::fs::read(p).map_err(|e| format!("Failed to read {label} {}: {e}", p.display()))
-            }
-            None => Ok(Vec::new()),
-        }
-    };
 
     let (nust_payload, maya_payload) = resolve_session_numatb_profiles(ssbh_config);
     let (numatb, maya_numatb) = build_session_numatb_artifacts(
@@ -1539,25 +1647,39 @@ fn convert_import_path_to_ssbh_artifacts(
         Some(&nust_payload),
         maya_payload.as_ref(),
     )?;
+    let numatb_path = write_optional_artifact(
+        temp_dir.path(),
+        &format!("{}__nust__.numatb", ssbh_config.base_filename),
+        &numatb,
+    )?;
+    let maya_numatb_path = maya_numatb
+        .as_ref()
+        .map(|bytes| {
+            write_optional_artifact(
+                temp_dir.path(),
+                &format!("{}__maya__.numatb", ssbh_config.base_filename),
+                bytes,
+            )
+        })
+        .transpose()?
+        .flatten();
+    let root_dir = temp_dir.keep();
 
-    Ok(SsbhArtifacts {
-        numdlb: read_opt("numdlb", &converted_files.numdlb_path)?,
-        numshb: read_opt("numshb", &converted_files.numshb_path)?,
-        nusktb: converted_files
-            .nusktb_path
-            .as_ref()
-            .map(|p| std::fs::read(p).map_err(|e| format!("Failed to read nusktb: {e}")))
-            .transpose()?,
-        numatb,
-        maya_numatb,
-        jnttbl: Vec::new(),
+    Ok(SsbhArtifactPaths {
+        root_dir,
+        numdlb: converted_files.numdlb_path,
+        numshb: converted_files.numshb_path,
+        nusktb: converted_files.nusktb_path,
+        numatb: numatb_path,
+        maya_numatb: maya_numatb_path,
+        jnttbl: None,
     })
 }
 
-fn write_static_mesh_artifacts(
+fn write_static_mesh_artifact_paths(
     output_dir: &Path,
     base: &str,
-    artifacts: &SsbhArtifacts,
+    artifacts: &SsbhArtifactPaths,
     write_jnttbl: bool,
 ) -> Result<Vec<String>, String> {
     let model_dir = output_dir.join(base).join("0");
@@ -1565,8 +1687,11 @@ fn write_static_mesh_artifacts(
         .map_err(|e| format!("Failed to create {}: {e}", model_dir.display()))?;
 
     let mut written = Vec::new();
-    let mut write_file = |relative: String, data: &[u8]| -> Result<(), String> {
-        if data.is_empty() {
+    let mut copy_file = |relative: String, source: &Option<PathBuf>| -> Result<(), String> {
+        let Some(source) = source.as_ref() else {
+            return Ok(());
+        };
+        if !source.is_file() {
             return Ok(());
         }
         let target = output_dir.join(&relative);
@@ -1574,31 +1699,27 @@ fn write_static_mesh_artifacts(
             std::fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create {}: {e}", parent.display()))?;
         }
-        std::fs::write(&target, data)
-            .map_err(|e| format!("Failed to write {}: {e}", target.display()))?;
+        std::fs::copy(source, &target).map_err(|e| {
+            format!(
+                "Failed to copy generated artifact {} to {}: {e}",
+                source.display(),
+                target.display()
+            )
+        })?;
         written.push(relative);
         Ok(())
     };
 
-    let model_rel = format!("{base}/0");
-    write_file(format!("{model_rel}/{base}.numdlb"), &artifacts.numdlb)?;
-    write_file(format!("{model_rel}/{base}.numshb"), &artifacts.numshb)?;
-    if let Some(ref nusktb) = artifacts.nusktb {
-        write_file(format!("{model_rel}/{base}.nusktb"), nusktb)?;
-    }
-    write_file(
-        format!("{model_rel}/{base}__nust__.numatb"),
-        &artifacts.numatb,
+    copy_file(format!("{base}/0/{base}.numdlb"), &artifacts.numdlb)?;
+    copy_file(format!("{base}/0/{base}.numshb"), &artifacts.numshb)?;
+    copy_file(format!("{base}/0/{base}.nusktb"), &artifacts.nusktb)?;
+    copy_file(format!("{base}/0/{base}__nust__.numatb"), &artifacts.numatb)?;
+    copy_file(
+        format!("{base}/0/{base}__maya__.numatb"),
+        &artifacts.maya_numatb,
     )?;
-    if let Some(ref maya) = artifacts.maya_numatb {
-        write_file(format!("{model_rel}/{base}__maya__.numatb"), maya)?;
-    }
     if write_jnttbl {
-        let relative = format!("{model_rel}/{base}.jnttbl");
-        let target = output_dir.join(&relative);
-        std::fs::write(&target, &artifacts.jnttbl)
-            .map_err(|e| format!("Failed to write {}: {e}", target.display()))?;
-        written.push(relative);
+        copy_file(format!("{base}/0/{base}.jnttbl"), &artifacts.jnttbl)?;
     }
 
     Ok(written)
@@ -1613,15 +1734,17 @@ pub async fn scene_generate_hkt(
         "[scene_generate_hkt] session_id={} import_id={} profile={}",
         options.session_id, options.import_id, options.config_profile
     );
-    let (dae_bytes, import_name, hkt_options) = state
+    let (dae_bytes, source_path, import_name, hkt_options) = state
         .with_session(&options.session_id, |s| {
             let import = s.find_import(&options.import_id)?;
             eprintln!(
-                "[scene_generate_hkt] dae_bytes_len={}",
-                import.dae_bytes.len()
+                "[scene_generate_hkt] source_path={:?} dae_bytes_len={}",
+                import.source_path,
+                import.dae_bytes.len(),
             );
             Ok((
                 import.dae_bytes.clone(),
+                import.source_path.clone(),
                 import.source_name.clone(),
                 hkt_collision_options_from_import(&import.config),
             ))
@@ -1638,9 +1761,13 @@ pub async fn scene_generate_hkt(
 
     let _profile = &options.config_profile;
     let regen_display_name = import_name.clone();
-    eprintln!("[scene_generate_hkt] calling generate_hkt_from_dae (mesh collision)");
+    eprintln!("[scene_generate_hkt] calling mesh collision HKT generator");
     let hkt_result = tauri::async_runtime::spawn_blocking(move || {
-        havok_cli::generate_hkt_from_dae(&dae_bytes, &import_name, &havok_config, hkt_options)
+        if let Some(source_path) = source_path.as_ref() {
+            havok_cli::generate_hkt_from_import_path(source_path, &havok_config, hkt_options)
+        } else {
+            havok_cli::generate_hkt_from_dae(&dae_bytes, &import_name, &havok_config, hkt_options)
+        }
     })
     .await
     .map_err(|e| {
@@ -2260,10 +2387,12 @@ async fn scene_convert_static_mesh_to_stage_files_impl(
     let ssbh_config_for_convert = ssbh_config.clone();
     let progress_for_write = on_progress.clone();
     let write_result = tauri::async_runtime::spawn_blocking(move || {
-        let artifacts =
-            convert_import_path_to_ssbh_artifacts(&source_for_convert, &ssbh_config_for_convert)?;
-        let artifact_bytes = ssbh_artifact_payload_bytes(&artifacts);
-        let artifact_count = ssbh_artifact_file_count(&artifacts);
+        let artifacts = convert_import_path_to_ssbh_artifact_paths(
+            &source_for_convert,
+            &ssbh_config_for_convert,
+        )?;
+        let artifact_bytes = artifacts.payload_bytes();
+        let artifact_count = artifacts.file_count();
         send_static_mesh_progress(
             progress_for_write.as_ref(),
             StaticMeshImportProgress::ConvertFinished {
@@ -2279,12 +2408,15 @@ async fn scene_convert_static_mesh_to_stage_files_impl(
                 base_filename: ssbh_config_for_convert.base_filename.clone(),
             },
         );
-        let files_written = write_static_mesh_artifacts(
+        let artifact_root = artifacts.root_dir.clone();
+        let files_written_result = write_static_mesh_artifact_paths(
             &output_for_write,
             &ssbh_config_for_convert.base_filename,
             &artifacts,
             ssbh_config_for_convert.write_jnttbl,
-        )?;
+        );
+        let _ = std::fs::remove_dir_all(artifact_root);
+        let files_written = files_written_result?;
         send_static_mesh_progress(
             progress_for_write.as_ref(),
             StaticMeshImportProgress::WriteFinished {
@@ -2507,7 +2639,7 @@ pub fn scene_list_imports(
             .map(|i| ImportResult {
                 import_id: i.id.clone(),
                 name: i.name.clone(),
-                ssbh_generated: i.ssbh_artifacts.is_some(),
+                ssbh_generated: SceneMemorySession::import_has_ssbh_artifacts(i),
                 hkt_generated: i.hkt_bytes.is_some(),
                 hkt_detail: None,
                 warnings: Vec::new(),
@@ -2526,6 +2658,8 @@ mod tests {
 
     const STAGE_ROOT: &str = r"E:\XB\解包\com\test\0x4D1F5138\0\0";
     const DAE_DIR: &str = r"D:\output\exvs2\zabanya";
+    const MINECRAFT_BLENDER_FBX: &str = r"D:\output\minecraft\test.fbx";
+    const MINECRAFT_LARGE_BLENDER_FBX: &str = r"D:\output\minecraft\test2.fbx";
 
     fn skip_if_missing(path: &str) -> bool {
         if !std::path::Path::new(path).exists() {
@@ -2570,6 +2704,8 @@ mod tests {
             planarity_angle_deg: 15.0,
             min_triangle_area: 1e-6,
             weld_epsilon: 1e-3,
+            target_triangle_ratio: None,
+            max_target_triangles: None,
         };
         let opts = hkt_simplify_to_options(&cfg);
         assert_eq!(
@@ -2864,6 +3000,75 @@ mod tests {
             "import should have SSBH artifacts after conversion"
         );
         println!("[OK] SSBH artifacts stored in session");
+    }
+
+    #[test]
+    fn convert_fbx_path_to_ssbh_artifact_paths_keeps_mesh_on_disk() {
+        if skip_if_missing(MINECRAFT_BLENDER_FBX) {
+            return;
+        }
+
+        let ssbh_config = crate::scene_memory_session::SsbhConvertConfig {
+            base_filename: "minecraft_test".into(),
+            scale_factor: 1.0,
+            up_axis: "none".into(),
+            flip_uv: false,
+            write_numdlb: true,
+            write_numshb: true,
+            write_nusktb: true,
+            write_numatb: true,
+            write_jnttbl: false,
+            write_maya_profile: false,
+            material_template: None,
+            maya_file: None,
+            nust_file: None,
+            numdlb_entries: Vec::new(),
+        };
+
+        let artifacts = convert_import_path_to_ssbh_artifact_paths(
+            Path::new(MINECRAFT_BLENDER_FBX),
+            &ssbh_config,
+        )
+        .expect("FBX path conversion should produce file-backed artifacts");
+        assert!(artifacts.numshb.as_ref().is_some_and(|path| path.is_file()));
+        assert!(artifacts.payload_bytes() > 1_000_000);
+        let root_dir = artifacts.root_dir.clone();
+        std::fs::remove_dir_all(root_dir).ok();
+    }
+
+    #[test]
+    #[ignore = "large local FBX regression sample"]
+    fn convert_large_fbx_path_to_ssbh_artifact_paths_keeps_mesh_on_disk() {
+        if skip_if_missing(MINECRAFT_LARGE_BLENDER_FBX) {
+            return;
+        }
+
+        let ssbh_config = crate::scene_memory_session::SsbhConvertConfig {
+            base_filename: "minecraft_large_test".into(),
+            scale_factor: 1.0,
+            up_axis: "none".into(),
+            flip_uv: false,
+            write_numdlb: true,
+            write_numshb: true,
+            write_nusktb: true,
+            write_numatb: true,
+            write_jnttbl: false,
+            write_maya_profile: false,
+            material_template: None,
+            maya_file: None,
+            nust_file: None,
+            numdlb_entries: Vec::new(),
+        };
+
+        let artifacts = convert_import_path_to_ssbh_artifact_paths(
+            Path::new(MINECRAFT_LARGE_BLENDER_FBX),
+            &ssbh_config,
+        )
+        .expect("large FBX path conversion should produce file-backed artifacts");
+        assert!(artifacts.numshb.as_ref().is_some_and(|path| path.is_file()));
+        assert!(artifacts.payload_bytes() > 128 * 1024 * 1024);
+        let root_dir = artifacts.root_dir.clone();
+        std::fs::remove_dir_all(root_dir).ok();
     }
 
     #[test]

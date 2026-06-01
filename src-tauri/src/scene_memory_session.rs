@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ssbh_dae::ModlEntryConfig;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,6 +21,10 @@ pub struct HktSimplifyConfig {
     pub planarity_angle_deg: f64,
     pub min_triangle_area: f64,
     pub weld_epsilon: f64,
+    #[serde(default)]
+    pub target_triangle_ratio: Option<f64>,
+    #[serde(default)]
+    pub max_target_triangles: Option<usize>,
 }
 
 impl Default for HktSimplifyConfig {
@@ -29,6 +34,8 @@ impl Default for HktSimplifyConfig {
             planarity_angle_deg: 15.0,
             min_triangle_area: 1e-6,
             weld_epsilon: 1e-3,
+            target_triangle_ratio: None,
+            max_target_triangles: None,
         }
     }
 }
@@ -78,6 +85,71 @@ pub struct SsbhArtifacts {
     pub jnttbl: Vec<u8>,
 }
 
+#[derive(Debug)]
+pub struct SsbhArtifactPaths {
+    pub root_dir: PathBuf,
+    pub numdlb: Option<PathBuf>,
+    pub numshb: Option<PathBuf>,
+    pub nusktb: Option<PathBuf>,
+    pub numatb: Option<PathBuf>,
+    pub maya_numatb: Option<PathBuf>,
+    pub jnttbl: Option<PathBuf>,
+}
+
+impl SsbhArtifactPaths {
+    pub fn payload_bytes(&self) -> u64 {
+        [
+            self.numdlb.as_ref(),
+            self.numshb.as_ref(),
+            self.nusktb.as_ref(),
+            self.numatb.as_ref(),
+            self.maya_numatb.as_ref(),
+            self.jnttbl.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .filter_map(|path| std::fs::metadata(path).ok())
+        .map(|meta| meta.len())
+        .sum()
+    }
+
+    pub fn file_count(&self) -> usize {
+        [
+            self.numdlb.as_ref(),
+            self.numshb.as_ref(),
+            self.nusktb.as_ref(),
+            self.numatb.as_ref(),
+            self.maya_numatb.as_ref(),
+            self.jnttbl.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .filter(|path| path.is_file())
+        .count()
+    }
+
+    pub fn read_artifacts(&self) -> Result<SsbhArtifacts, String> {
+        let read_optional =
+            |label: &str, path: &Option<PathBuf>| -> Result<Option<Vec<u8>>, String> {
+                path.as_ref()
+                    .map(|path| {
+                        std::fs::read(path).map_err(|e| {
+                            format!("Failed to read generated {label} {}: {e}", path.display())
+                        })
+                    })
+                    .transpose()
+            };
+        Ok(SsbhArtifacts {
+            numdlb: read_optional("numdlb", &self.numdlb)?.unwrap_or_default(),
+            numshb: read_optional("numshb", &self.numshb)?.unwrap_or_default(),
+            nusktb: read_optional("nusktb", &self.nusktb)?,
+            numatb: read_optional("nust numatb", &self.numatb)?.unwrap_or_default(),
+            maya_numatb: read_optional("maya numatb", &self.maya_numatb)?,
+            jnttbl: read_optional("jnttbl", &self.jnttbl)?.unwrap_or_default(),
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HavokCollisionData {
@@ -93,10 +165,27 @@ pub struct PendingImport {
     pub id: String,
     pub name: String,
     pub source_name: String,
+    pub source_path: Option<PathBuf>,
     pub dae_bytes: Vec<u8>,
     pub config: ImportConfig,
     pub ssbh_artifacts: Option<SsbhArtifacts>,
+    pub ssbh_artifact_paths: Option<SsbhArtifactPaths>,
     pub hkt_bytes: Option<Vec<u8>>,
+}
+
+impl Drop for PendingImport {
+    fn drop(&mut self) {
+        cleanup_ssbh_artifact_paths(self.ssbh_artifact_paths.take());
+    }
+}
+
+fn cleanup_ssbh_artifact_paths(paths: Option<SsbhArtifactPaths>) {
+    let Some(paths) = paths else {
+        return;
+    };
+    if paths.root_dir.is_dir() {
+        let _ = std::fs::remove_dir_all(paths.root_dir);
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -181,6 +270,7 @@ impl SceneMemorySession {
             id: id.clone(),
             name,
             source_name,
+            source_path: None,
             dae_bytes,
             config: ImportConfig {
                 load_to_scene: true,
@@ -190,19 +280,17 @@ impl SceneMemorySession {
                 hkt_simplify: HktSimplifyConfig::default(),
             },
             ssbh_artifacts: None,
+            ssbh_artifact_paths: None,
             hkt_bytes: None,
         });
         self.dirty = true;
         id
     }
 
-    pub fn add_import_from_path(
-        &mut self,
-        name: String,
-        path: &std::path::Path,
-    ) -> Result<String, String> {
-        let dae_bytes = std::fs::read(path)
-            .map_err(|e| format!("Failed to read '{}': {}", path.display(), e))?;
+    pub fn add_import_from_path(&mut self, name: String, path: &Path) -> Result<String, String> {
+        if !path.is_file() {
+            return Err(format!("Static mesh file not found: {}", path.display()));
+        }
         let source_name = path
             .file_name()
             .map(|s| s.to_string_lossy().to_string())
@@ -213,7 +301,26 @@ impl SceneMemorySession {
                     format!("{name}.dae")
                 }
             });
-        Ok(self.add_import_with_source_name(name, source_name, dae_bytes))
+        let id = uuid::Uuid::new_v4().to_string();
+        self.pending_imports.push(PendingImport {
+            id: id.clone(),
+            name,
+            source_name,
+            source_path: Some(path.to_path_buf()),
+            dae_bytes: Vec::new(),
+            config: ImportConfig {
+                load_to_scene: true,
+                convert_to_ssbh: false,
+                generate_hkt: false,
+                ssbh_config: None,
+                hkt_simplify: HktSimplifyConfig::default(),
+            },
+            ssbh_artifacts: None,
+            ssbh_artifact_paths: None,
+            hkt_bytes: None,
+        });
+        self.dirty = true;
+        Ok(id)
     }
 
     pub fn find_import_mut(&mut self, import_id: &str) -> Result<&mut PendingImport, String> {
@@ -247,7 +354,21 @@ impl SceneMemorySession {
         artifacts: SsbhArtifacts,
     ) -> Result<(), String> {
         let import = self.find_import_mut(import_id)?;
+        cleanup_ssbh_artifact_paths(import.ssbh_artifact_paths.take());
         import.ssbh_artifacts = Some(artifacts);
+        self.dirty = true;
+        Ok(())
+    }
+
+    pub fn store_ssbh_artifact_paths(
+        &mut self,
+        import_id: &str,
+        artifacts: SsbhArtifactPaths,
+    ) -> Result<(), String> {
+        let import = self.find_import_mut(import_id)?;
+        cleanup_ssbh_artifact_paths(import.ssbh_artifact_paths.take());
+        import.ssbh_artifacts = None;
+        import.ssbh_artifact_paths = Some(artifacts);
         self.dirty = true;
         Ok(())
     }
@@ -257,6 +378,35 @@ impl SceneMemorySession {
         import.hkt_bytes = Some(hkt_bytes);
         self.dirty = true;
         Ok(())
+    }
+
+    pub fn import_has_ssbh_artifacts(import: &PendingImport) -> bool {
+        import.ssbh_artifacts.is_some() || import.ssbh_artifact_paths.is_some()
+    }
+
+    pub fn read_import_ssbh_artifacts(import: &PendingImport) -> Result<SsbhArtifacts, String> {
+        if let Some(artifacts) = import.ssbh_artifacts.as_ref() {
+            return Ok(artifacts.clone());
+        }
+        if let Some(paths) = import.ssbh_artifact_paths.as_ref() {
+            return paths.read_artifacts();
+        }
+        Err(format!("Import '{}' has no SSBH artifacts", import.id))
+    }
+
+    pub fn import_ssbh_artifact_payload_bytes(import: &PendingImport) -> u64 {
+        if let Some(artifacts) = import.ssbh_artifacts.as_ref() {
+            return artifacts.numdlb.len() as u64
+                + artifacts.numshb.len() as u64
+                + artifacts.nusktb.as_ref().map_or(0, |v| v.len() as u64)
+                + artifacts.numatb.len() as u64
+                + artifacts.maya_numatb.as_ref().map_or(0, |v| v.len() as u64)
+                + artifacts.jnttbl.len() as u64;
+        }
+        import
+            .ssbh_artifact_paths
+            .as_ref()
+            .map_or(0, SsbhArtifactPaths::payload_bytes)
     }
 
     pub fn upsert_havok_data(&mut self, data: HavokCollisionData) {
@@ -356,7 +506,10 @@ impl SceneMemorySession {
         }
 
         for import in &self.pending_imports {
-            if let Some(ref ssbh) = import.ssbh_artifacts {
+            if Self::import_has_ssbh_artifacts(import) {
+                let Ok(ssbh) = Self::read_import_ssbh_artifacts(import) else {
+                    continue;
+                };
                 let base = import
                     .config
                     .ssbh_config
@@ -400,7 +553,7 @@ impl SceneMemorySession {
                 if write_jnttbl {
                     artifacts.push(SaveArtifact {
                         relative_path: format!("{model_dir}/{base}.jnttbl"),
-                        data: ssbh.jnttbl.clone(),
+                        data: ssbh.jnttbl,
                     });
                 }
             }
@@ -601,6 +754,77 @@ mod tests {
         let import = s.find_import(&id).unwrap();
         assert!(import.ssbh_artifacts.is_some());
         assert_eq!(import.ssbh_artifacts.as_ref().unwrap().numdlb, vec![10]);
+    }
+
+    #[test]
+    fn add_import_from_path_keeps_source_path_without_reading_bytes() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("large.fbx");
+        std::fs::write(&source, [1u8, 2, 3, 4]).unwrap();
+        let mut s = new_session();
+
+        let id = s.add_import_from_path("large".into(), &source).unwrap();
+        let import = s.find_import(&id).unwrap();
+
+        assert_eq!(import.source_name, "large.fbx");
+        assert_eq!(import.source_path.as_deref(), Some(source.as_path()));
+        assert!(import.dae_bytes.is_empty());
+    }
+
+    #[test]
+    fn collect_save_artifacts_reads_path_backed_ssbh_artifacts() {
+        let temp = tempfile::tempdir().unwrap();
+        let numdlb = temp.path().join("model.numdlb");
+        let numshb = temp.path().join("model.numshb");
+        let numatb = temp.path().join("model__nust__.numatb");
+        std::fs::write(&numdlb, [1u8]).unwrap();
+        std::fs::write(&numshb, [2u8]).unwrap();
+        std::fs::write(&numatb, [3u8]).unwrap();
+
+        let mut s = new_session();
+        let id = s.add_import("test_model".into(), vec![]);
+        {
+            let import = s.find_import_mut(&id).unwrap();
+            import.config.convert_to_ssbh = true;
+            import.config.ssbh_config = Some(SsbhConvertConfig {
+                base_filename: "mymodel".into(),
+                scale_factor: 1.0,
+                up_axis: "y_up".into(),
+                flip_uv: false,
+                write_numdlb: true,
+                write_numshb: true,
+                write_nusktb: true,
+                write_numatb: true,
+                write_jnttbl: false,
+                write_maya_profile: false,
+                material_template: None,
+                maya_file: None,
+                nust_file: None,
+                numdlb_entries: Vec::new(),
+            });
+        }
+
+        s.store_ssbh_artifact_paths(
+            &id,
+            SsbhArtifactPaths {
+                root_dir: temp.path().to_path_buf(),
+                numdlb: Some(numdlb),
+                numshb: Some(numshb),
+                nusktb: None,
+                numatb: Some(numatb),
+                maya_numatb: None,
+                jnttbl: None,
+            },
+        )
+        .unwrap();
+
+        let artifacts = s.collect_save_artifacts();
+        assert!(artifacts
+            .iter()
+            .any(|a| a.relative_path == "mymodel/0/mymodel.numshb" && a.data == vec![2]));
+        assert!(artifacts
+            .iter()
+            .any(|a| a.relative_path == "mymodel/0/mymodel__nust__.numatb" && a.data == vec![3]));
     }
 
     #[test]

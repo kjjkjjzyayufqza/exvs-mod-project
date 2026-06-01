@@ -24,6 +24,12 @@ struct UnionFind {
     rank: Vec<u8>,
 }
 
+#[derive(Default)]
+struct ClusterAccum {
+    sum: [f64; 3],
+    count: usize,
+}
+
 impl UnionFind {
     fn new(n: usize) -> Self {
         Self {
@@ -158,11 +164,7 @@ fn weld_vertices(mesh: &CollisionTriMesh, epsilon: f64) -> CollisionTriMesh {
         remap.push(idx);
     }
 
-    let indices: Vec<u32> = mesh
-        .indices
-        .iter()
-        .map(|&i| remap[i as usize])
-        .collect();
+    let indices: Vec<u32> = mesh.indices.iter().map(|&i| remap[i as usize]).collect();
 
     let mut deduped_indices = Vec::new();
     for tri in indices.chunks(3) {
@@ -181,14 +183,276 @@ fn weld_vertices(mesh: &CollisionTriMesh, epsilon: f64) -> CollisionTriMesh {
     }
 }
 
+fn compact_mesh(vertices: Vec<[f64; 3]>, indices: Vec<u32>) -> CollisionTriMesh {
+    let mut remap: HashMap<u32, u32> = HashMap::new();
+    let mut compact_vertices = Vec::new();
+    let mut compact_indices = Vec::with_capacity(indices.len());
+
+    for index in indices {
+        let next = if let Some(&mapped) = remap.get(&index) {
+            mapped
+        } else {
+            let mapped = compact_vertices.len() as u32;
+            if let Some(vertex) = vertices.get(index as usize) {
+                compact_vertices.push(*vertex);
+                remap.insert(index, mapped);
+                mapped
+            } else {
+                continue;
+            }
+        };
+        compact_indices.push(next);
+    }
+
+    CollisionTriMesh {
+        vertices: compact_vertices,
+        indices: compact_indices,
+    }
+}
+
+fn target_triangle_count(
+    source_triangles: usize,
+    options: &CollisionSimplifyOptions,
+) -> Option<usize> {
+    if source_triangles <= 4 {
+        return None;
+    }
+
+    let mut target = options
+        .target_triangle_ratio
+        .filter(|ratio| ratio.is_finite() && *ratio > 0.0 && *ratio < 1.0)
+        .map(|ratio| ((source_triangles as f64) * ratio).ceil() as usize);
+
+    if let Some(max_target) = options.max_target_triangles.filter(|max| *max > 0) {
+        target = Some(target.map_or(max_target, |current| current.min(max_target)));
+    }
+
+    let target = target?.clamp(4, source_triangles - 1);
+    (target < source_triangles).then_some(target)
+}
+
+fn quantize_axis(value: f64, min: f64, extent: f64, resolution: usize) -> i32 {
+    if extent <= 1e-12 {
+        return 0;
+    }
+    let max_cell = resolution.saturating_sub(1) as f64;
+    let scaled = ((value - min) / extent) * resolution as f64;
+    scaled.floor().clamp(0.0, max_cell) as i32
+}
+
+fn cluster_vertices_at_resolution(
+    mesh: &CollisionTriMesh,
+    resolution: usize,
+    min_triangle_area: f64,
+) -> CollisionTriMesh {
+    if resolution < 2 || mesh.vertices.is_empty() || mesh.indices.len() < 3 {
+        return mesh.clone();
+    }
+
+    let Ok((min, max)) = mesh.compute_aabb() else {
+        return mesh.clone();
+    };
+    let extent = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
+    if extent.iter().all(|axis| *axis <= 1e-12) {
+        return mesh.clone();
+    }
+
+    let mut cell_map: HashMap<(i32, i32, i32), u32> = HashMap::new();
+    let mut accum: Vec<ClusterAccum> = Vec::new();
+    let mut remap = Vec::with_capacity(mesh.vertices.len());
+
+    for vertex in &mesh.vertices {
+        let key = (
+            quantize_axis(vertex[0], min[0], extent[0], resolution),
+            quantize_axis(vertex[1], min[1], extent[1], resolution),
+            quantize_axis(vertex[2], min[2], extent[2], resolution),
+        );
+        let index = if let Some(&index) = cell_map.get(&key) {
+            index
+        } else {
+            let index = accum.len() as u32;
+            cell_map.insert(key, index);
+            accum.push(ClusterAccum::default());
+            index
+        };
+        let acc = &mut accum[index as usize];
+        acc.sum[0] += vertex[0];
+        acc.sum[1] += vertex[1];
+        acc.sum[2] += vertex[2];
+        acc.count += 1;
+        remap.push(index);
+    }
+
+    let vertices: Vec<[f64; 3]> = accum
+        .into_iter()
+        .map(|acc| {
+            let inv = (acc.count.max(1) as f64).recip();
+            [acc.sum[0] * inv, acc.sum[1] * inv, acc.sum[2] * inv]
+        })
+        .collect();
+
+    let mut seen = HashSet::new();
+    let mut indices = Vec::new();
+    for tri in mesh.indices.chunks(3) {
+        if tri.len() != 3 {
+            continue;
+        }
+        let candidate = [
+            remap[tri[0] as usize],
+            remap[tri[1] as usize],
+            remap[tri[2] as usize],
+        ];
+        if candidate[0] == candidate[1]
+            || candidate[1] == candidate[2]
+            || candidate[0] == candidate[2]
+        {
+            continue;
+        }
+        let Some(info) = triangle_data(&vertices, candidate) else {
+            continue;
+        };
+        if info.area < min_triangle_area {
+            continue;
+        }
+        let mut key = candidate;
+        key.sort_unstable();
+        if seen.insert(key) {
+            indices.extend_from_slice(&candidate);
+        }
+    }
+
+    compact_mesh(vertices, indices)
+}
+
+fn simplify_to_triangle_target(
+    mesh: &CollisionTriMesh,
+    target: usize,
+    min_triangle_area: f64,
+) -> CollisionTriMesh {
+    if mesh.triangle_count() <= target {
+        return mesh.clone();
+    }
+
+    let estimate = (((target as f64) / 6.0).sqrt().ceil() as usize).clamp(2, 512);
+    let max_resolution = mesh.vertices.len().max(estimate).min(1024);
+    let mut cache: HashMap<usize, CollisionTriMesh> = HashMap::new();
+
+    fn cached_cluster(
+        mesh: &CollisionTriMesh,
+        min_triangle_area: f64,
+        cache: &mut HashMap<usize, CollisionTriMesh>,
+        resolution: usize,
+    ) -> CollisionTriMesh {
+        if let Some(cached) = cache.get(&resolution) {
+            return cached.clone();
+        }
+        let simplified = cluster_vertices_at_resolution(mesh, resolution, min_triangle_area);
+        cache.insert(resolution, simplified.clone());
+        simplified
+    }
+
+    let mut low_under: Option<usize> = None;
+    let mut high_over: Option<usize> = None;
+    let mut best_over: Option<CollisionTriMesh> = None;
+
+    let first = cached_cluster(mesh, min_triangle_area, &mut cache, estimate);
+    let first_count = first.triangle_count();
+    if first_count > 0 && first_count <= target {
+        low_under = Some(estimate);
+        let mut resolution = estimate;
+        for _ in 0..8 {
+            let next = (resolution.saturating_mul(2)).min(max_resolution);
+            if next == resolution {
+                break;
+            }
+            let candidate = cached_cluster(mesh, min_triangle_area, &mut cache, next);
+            let count = candidate.triangle_count();
+            if count > 0 && count <= target {
+                low_under = Some(next);
+                resolution = next;
+            } else {
+                high_over = Some(next);
+                best_over = Some(candidate);
+                break;
+            }
+        }
+    } else {
+        high_over = Some(estimate);
+        if first_count < mesh.triangle_count() {
+            best_over = Some(first);
+        }
+        let mut resolution = estimate;
+        while resolution > 2 {
+            let next = ((resolution + 1) / 2).max(2);
+            if next == resolution {
+                break;
+            }
+            let candidate = cached_cluster(mesh, min_triangle_area, &mut cache, next);
+            let count = candidate.triangle_count();
+            if count > 0 && count <= target {
+                low_under = Some(next);
+                break;
+            }
+            if count > 0
+                && count
+                    < best_over
+                        .as_ref()
+                        .map_or(mesh.triangle_count(), |m| m.triangle_count())
+            {
+                best_over = Some(candidate);
+            }
+            high_over = Some(next);
+            resolution = next;
+        }
+    }
+
+    if let (Some(mut low), Some(mut high)) = (low_under, high_over) {
+        for _ in 0..10 {
+            if high <= low + 1 {
+                break;
+            }
+            let mid = (low + high) / 2;
+            let candidate = cached_cluster(mesh, min_triangle_area, &mut cache, mid);
+            let count = candidate.triangle_count();
+            if count > 0 && count <= target {
+                low = mid;
+                low_under = Some(mid);
+            } else {
+                high = mid;
+                if count > 0
+                    && count
+                        < best_over
+                            .as_ref()
+                            .map_or(mesh.triangle_count(), |m| m.triangle_count())
+                {
+                    best_over = Some(candidate);
+                }
+            }
+        }
+    }
+
+    if let Some(resolution) = low_under {
+        let candidate = cached_cluster(mesh, min_triangle_area, &mut cache, resolution);
+        if candidate.triangle_count() > 0 && candidate.triangle_count() < mesh.triangle_count() {
+            return candidate;
+        }
+    }
+
+    if let Some(candidate) = best_over {
+        if candidate.triangle_count() > 0 && candidate.triangle_count() < mesh.triangle_count() {
+            return candidate;
+        }
+    }
+
+    mesh.clone()
+}
+
 fn build_edge_map(tris: &[TriInfo]) -> HashMap<(u32, u32), Vec<(usize, u32)>> {
     let mut map: HashMap<(u32, u32), Vec<(usize, u32)>> = HashMap::new();
     for (ti, tri) in tris.iter().enumerate() {
         let [a, b, c] = tri.indices;
         for (u, v, opp) in [(a, b, c), (b, c, a), (c, a, b)] {
-            map.entry(canonical_edge(u, v))
-                .or_default()
-                .push((ti, opp));
+            map.entry(canonical_edge(u, v)).or_default().push((ti, opp));
         }
     }
     map
@@ -281,9 +545,13 @@ fn ear_clip_triangulate(loop_verts: &[u32], poly2d: &[[f64; 2]]) -> Vec<[u32; 3]
             let p_prev = points[i_prev];
             let p_next = points[i_next];
 
-            let cross_z =
-                (pi[0] - p_prev[0]) * (p_next[1] - pi[1]) - (pi[1] - p_prev[1]) * (p_next[0] - pi[0]);
-            let is_ear = if ccw { cross_z > 1e-12 } else { cross_z < -1e-12 };
+            let cross_z = (pi[0] - p_prev[0]) * (p_next[1] - pi[1])
+                - (pi[1] - p_prev[1]) * (p_next[0] - pi[0]);
+            let is_ear = if ccw {
+                cross_z > 1e-12
+            } else {
+                cross_z < -1e-12
+            };
             if !is_ear {
                 continue;
             }
@@ -403,10 +671,7 @@ fn extract_boundary_loops(region_tris: &[TriInfo]) -> Vec<Vec<u32>> {
     loops
 }
 
-fn retriangulate_region(
-    vertices: &[[f64; 3]],
-    region_tris: &[TriInfo],
-) -> Vec<[u32; 3]> {
+fn retriangulate_region(vertices: &[[f64; 3]], region_tris: &[TriInfo]) -> Vec<[u32; 3]> {
     if region_tris.is_empty() {
         return Vec::new();
     }
@@ -458,9 +723,7 @@ fn retriangulate_region(
 
     let tris = ear_clip_triangulate(&loop_verts, &poly2d);
     let input_tri_count = region_tris.len();
-    if tris.is_empty()
-        || (input_tri_count > 2 && tris.len() * 2 < input_tri_count)
-    {
+    if tris.is_empty() || (input_tri_count > 2 && tris.len() * 2 < input_tri_count) {
         region_tris.iter().map(|t| t.indices).collect()
     } else {
         tris
@@ -510,13 +773,19 @@ pub fn simplify_collision_mesh(
         }
     }
 
-    if out_indices.is_empty() {
-        return welded;
-    }
+    let merged = if out_indices.is_empty() {
+        welded
+    } else {
+        CollisionTriMesh {
+            vertices: welded.vertices,
+            indices: out_indices,
+        }
+    };
 
-    CollisionTriMesh {
-        vertices: welded.vertices,
-        indices: out_indices,
+    if let Some(target) = target_triangle_count(merged.triangle_count(), options) {
+        simplify_to_triangle_target(&merged, target, options.min_triangle_area)
+    } else {
+        merged
     }
 }
 
@@ -543,6 +812,49 @@ mod tests {
         CollisionTriMesh { vertices, indices }
     }
 
+    fn uv_sphere_mesh(lat_segments: usize, lon_segments: usize) -> CollisionTriMesh {
+        let mut vertices = Vec::new();
+        vertices.push([0.0, 0.0, 1.0]);
+        for lat in 1..lat_segments {
+            let theta = std::f64::consts::PI * lat as f64 / lat_segments as f64;
+            let z = theta.cos();
+            let r = theta.sin();
+            for lon in 0..lon_segments {
+                let phi = std::f64::consts::TAU * lon as f64 / lon_segments as f64;
+                vertices.push([r * phi.cos(), r * phi.sin(), z]);
+            }
+        }
+        let bottom = vertices.len() as u32;
+        vertices.push([0.0, 0.0, -1.0]);
+
+        let ring_index = |lat: usize, lon: usize| -> u32 {
+            1 + ((lat - 1) * lon_segments + (lon % lon_segments)) as u32
+        };
+
+        let mut indices = Vec::new();
+        for lon in 0..lon_segments {
+            indices.extend_from_slice(&[0, ring_index(1, lon + 1), ring_index(1, lon)]);
+        }
+        for lat in 1..lat_segments - 1 {
+            for lon in 0..lon_segments {
+                let a = ring_index(lat, lon);
+                let b = ring_index(lat, lon + 1);
+                let c = ring_index(lat + 1, lon + 1);
+                let d = ring_index(lat + 1, lon);
+                indices.extend_from_slice(&[a, b, c, a, c, d]);
+            }
+        }
+        for lon in 0..lon_segments {
+            indices.extend_from_slice(&[
+                ring_index(lat_segments - 1, lon),
+                ring_index(lat_segments - 1, lon + 1),
+                bottom,
+            ]);
+        }
+
+        CollisionTriMesh { vertices, indices }
+    }
+
     #[test]
     fn coplanar_quad_merges_to_two_triangles() {
         let mesh = subdivided_quad_mesh();
@@ -551,9 +863,14 @@ mod tests {
             cos_planarity_threshold: 0.99,
             min_triangle_area: 1e-8,
             weld_epsilon: 1e-6,
+            ..Default::default()
         };
         let out = simplify_collision_mesh(&mesh, &opts);
-        assert_eq!(out.triangle_count(), 2, "coplanar fan should collapse to 2 tris");
+        assert_eq!(
+            out.triangle_count(),
+            2,
+            "coplanar fan should collapse to 2 tris"
+        );
     }
 
     #[test]
@@ -593,7 +910,16 @@ mod tests {
         ];
         let mut indices: Vec<u32> = Vec::new();
         // Outer ring (two tris per side)
-        for (a, b, c) in [(0, 1, 4), (1, 5, 4), (1, 2, 5), (2, 6, 5), (2, 3, 6), (3, 7, 6), (3, 0, 7), (0, 4, 7)] {
+        for (a, b, c) in [
+            (0, 1, 4),
+            (1, 5, 4),
+            (1, 2, 5),
+            (2, 6, 5),
+            (2, 3, 6),
+            (3, 7, 6),
+            (3, 0, 7),
+            (0, 4, 7),
+        ] {
             indices.extend_from_slice(&[a, b, c]);
         }
         // Inner hole fill (keeps two boundary loops on the coplanar region)
@@ -637,5 +963,29 @@ mod tests {
         };
         let out = simplify_collision_mesh(&mesh, &opts);
         assert!(out.triangle_count() <= 2);
+    }
+
+    #[test]
+    fn heavy_target_decimates_closed_curved_mesh() {
+        let mesh = uv_sphere_mesh(16, 32);
+        assert!(
+            (900..=1100).contains(&mesh.triangle_count()),
+            "test fixture should stay near 1000 tris"
+        );
+        let opts = CollisionSimplifyOptions {
+            target_triangle_ratio: Some(0.05),
+            max_target_triangles: Some(50_000),
+            ..Default::default()
+        };
+        let out = simplify_collision_mesh(&mesh, &opts);
+        assert!(
+            out.triangle_count() <= 60,
+            "expected about 5% collision tris, got {}",
+            out.triangle_count()
+        );
+        assert!(
+            out.triangle_count() >= 12,
+            "closed curved mesh should not collapse to an unusable primitive"
+        );
     }
 }
