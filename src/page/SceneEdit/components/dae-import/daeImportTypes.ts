@@ -3,7 +3,7 @@ import type {
   NumdlbMappingRow,
 } from "@/components/ssbh-model-preview/daeSsbhTypes";
 
-export type SsbhDaeUpAxis = "y_up" | "z_up";
+export type SsbhDaeUpAxis = "y_up" | "z_up" | "none";
 export type StaticMeshImportFormat = "dae" | "fbx";
 
 export interface SsbhImportConfig {

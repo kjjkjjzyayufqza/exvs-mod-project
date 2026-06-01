@@ -1,4 +1,4 @@
-import type { DaeImportConfig, SsbhImportConfig, StaticMeshImportFormat } from "./daeImportTypes";
+import type { DaeAnalysisResult, DaeImportConfig, SsbhDaeUpAxis, SsbhImportConfig, StaticMeshImportFormat } from "./daeImportTypes";
 import { DEFAULT_HKT_SIMPLIFY } from "../../utils/hktSimplifyUtils";
 
 export function createDefaultSsbhConfig(
@@ -47,6 +47,40 @@ export function sanitizeBaseFilename(fileName: string): string {
 
 export function detectStaticMeshImportFormat(fileName: string): StaticMeshImportFormat {
   return fileName.toLowerCase().endsWith(".fbx") ? "fbx" : "dae";
+}
+
+export function normalizeDaeImportUpAxis(value: string): SsbhDaeUpAxis | null {
+  switch (value.trim().toLowerCase()) {
+    case "y_up":
+    case "y-up":
+    case "yup":
+      return "y_up";
+    case "z_up":
+    case "z-up":
+    case "zup":
+      return "z_up";
+    case "none":
+    case "no_conversion":
+    case "noconversion":
+      return "none";
+    default:
+      return null;
+  }
+}
+
+export function syncDaeImportConfigUpAxisFromAnalysis(
+  config: DaeImportConfig,
+  analysis: Pick<DaeAnalysisResult, "upAxis">,
+): DaeImportConfig {
+  const upAxis = normalizeDaeImportUpAxis(analysis.upAxis);
+  if (!upAxis) return config;
+  return {
+    ...config,
+    ssbhConfig: {
+      ...config.ssbhConfig,
+      upAxis,
+    },
+  };
 }
 
 export function isHktGenerationAvailable(

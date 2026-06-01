@@ -165,8 +165,34 @@ Key findings:
 - `armsparam.rs`, `characterparam.rs`, and `speedparam.rs` all define two shared kind-7 fields:
   `action_label_offset` and `resource_label_offset`.
 - In sample `armsparam.bin`, those kind-7 values are **absolute file offsets** into the trailing
-  blob area, but the pointed records are not plain null-terminated text. They look like unresolved
-  binary label/blob records. This is a promising but still undecoded naming surface.
+  blob area.
+- Additional label-blob structure findings from the current extracted param corpus
+  (`7` arms files, `7` character files, `7` speed files under `E:\XB\解包\com\file`):
+  - `resource_label_offset` always points to a `0x1C` record with stable head
+    `83 9F 86 0A` and stable tail `42 FC 19 00`
+  - `action_label_offset` records are family-typed:
+    - arms: `8B AA 36 0A...`
+    - character: `8F A7 22 EA...`
+    - speed: `A3 96 32 0A...`
+  - all valid pairs satisfy `action_label_offset < resource_label_offset`
+  - in `armsparam`, same-entry action/resource label records share bytes `4..26` exactly;
+    only the 4-byte head differs and the action record continues with an extra tail before `00`
+  - the exact sample resource-label blob from `0x38C44F75` appears only in
+    `armsparam.bin` / `characterparam.bin` / `speedparam.bin` of that same bundle, and was not
+    found by byte-scan in `vs2\x64/010localizedtext`, `020common`, or `100system`
+  - decoder breakthrough: these records decode correctly with the same `obf_string`
+    transform already used by `characterlist`, starting from byte 0 of the record
+  - batch validation decoded `100%` of observed records in the current corpus into plausible
+    identifier-like labels
+  - examples:
+    - arms resource: `CHR_059NEXTGN_001NEXTGE_001`
+    - arms action: `GUN_059NEXTGN_001NEXTGE_001_BOMBER_KNUCKLE_ERUPTION`
+    - character action: `ORDER_0`
+    - speed action: `SKL_MOVE`
+  - direct script linkage: sample `2.c` initializes `global142 = 0xC2B19D12`, and that id
+    decodes from `speedparam.bin` to `SKL_MOVE`; later `global142` is used in repeated
+    `sys_0(0x60006, global142, <speedparam field hash>)` calls, so the decoded label is
+    a script-consumed param key/state name rather than mere display metadata
 - Docs reference `tools/crc32_reverse_search.py`, but the file does **not** exist in the repo; only
   the planning doc exists under `docs/superpowers/plans/2026-04-03-crc32-reverse-search-tool.md`.
 
@@ -176,4 +202,5 @@ Refined conclusion:
   1. global/shared action-hash dictionary for stable callback names
   2. script-side slot-table analysis (`func_1219` / `func_1220` / `func_1221`)
   3. per-unit param enrichment for projectile/interaction/system semantics
-  4. future decode of kind-7 label blobs for richer human-readable labels
+  4. per-unit kind-7 labels decoded via `obf_string` for directly readable
+     weapon/resource/order/movement names

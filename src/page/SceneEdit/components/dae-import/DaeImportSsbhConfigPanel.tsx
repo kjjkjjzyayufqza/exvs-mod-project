@@ -65,6 +65,9 @@ export function DaeImportSsbhConfigPanel({
               <SelectItem value="z_up" className="text-[11px]">
                 Z-Up
               </SelectItem>
+              <SelectItem value="none" className="text-[11px]">
+                No Conversion
+              </SelectItem>
             </SelectContent>
           </Select>
         </DaeImportFieldRow>

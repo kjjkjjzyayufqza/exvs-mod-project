@@ -37,7 +37,11 @@ const LARGE_STATIC_MESH_SOURCE_BYTES: u64 = 64 * 1024 * 1024;
 const LARGE_STATIC_MESH_IPC_PAYLOAD_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum StaticMeshImportProgress {
     Status {
         phase: String,
@@ -193,7 +197,12 @@ fn ssbh_artifact_file_count(artifacts: &SsbhArtifacts) -> usize {
         + usize::from(!artifacts.numshb.is_empty())
         + usize::from(artifacts.nusktb.as_ref().is_some_and(|v| !v.is_empty()))
         + usize::from(!artifacts.numatb.is_empty())
-        + usize::from(artifacts.maya_numatb.as_ref().is_some_and(|v| !v.is_empty()))
+        + usize::from(
+            artifacts
+                .maya_numatb
+                .as_ref()
+                .is_some_and(|v| !v.is_empty()),
+        )
         + usize::from(!artifacts.jnttbl.is_empty())
 }
 
@@ -243,13 +252,8 @@ fn validate_static_mesh_hkt_collision_from_path(
         .and_then(|name| name.to_str())
         .unwrap_or("input.dae")
         .to_string();
-    let bytes = std::fs::read(source_path).map_err(|e| {
-        format!(
-            "Failed to read '{}': {}",
-            source_path.display(),
-            e
-        )
-    })?;
+    let bytes = std::fs::read(source_path)
+        .map_err(|e| format!("Failed to read '{}': {}", source_path.display(), e))?;
     crate::havok_collision_encode::preview_hkt_collision_from_import_bytes(
         &bytes,
         &source_name,
@@ -399,11 +403,7 @@ pub fn scene_import_dae_from_path_streamed(
                 "[scene_import_dae_from_path_streamed] success import_id={}",
                 import_id
             );
-            send_static_mesh_status(
-                Some(&on_progress),
-                "read",
-                "Source stored in Rust session.",
-            );
+            send_static_mesh_status(Some(&on_progress), "read", "Source stored in Rust session.");
         }
         Err(e) => {
             eprintln!("[scene_import_dae_from_path_streamed] failed: {}", e);
@@ -989,12 +989,7 @@ async fn scene_execute_import_impl(
             format: source_format.clone(),
         },
     );
-    send_large_source_warning(
-        on_progress.as_ref(),
-        "read",
-        source_bytes,
-        &source_format,
-    );
+    send_large_source_warning(on_progress.as_ref(), "read", source_bytes, &source_format);
 
     if config.convert_to_ssbh {
         if config.generate_hkt {
@@ -1953,7 +1948,10 @@ fn apply_replacement_hkt_to_session(
         // Folder-based session: write HKT directly to disk
         let hkt_disk_path =
             std::path::Path::new(path).join(import_id.replace('/', std::path::MAIN_SEPARATOR_STR));
-        eprintln!("[apply_replacement_hkt] writing to disk: {:?}", hkt_disk_path);
+        eprintln!(
+            "[apply_replacement_hkt] writing to disk: {:?}",
+            hkt_disk_path
+        );
         if let Some(parent) = hkt_disk_path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }

@@ -159,7 +159,7 @@ This is strong evidence that the external param/ammo pack is a **secondary seman
 it tells us what concrete projectile / interaction / system resources a callback uses,
 but it does **not** by itself provide the primary `action_hash -> callback_name` mapping.
 
-### 4. There is a promising label surface in params, but the current toolchain does not decode it yet
+### 4. There is a directly usable label surface in params, but the current toolchain does not decode it yet
 
 One important codebase-level finding changes the implementation roadmap:
 
@@ -168,19 +168,129 @@ One important codebase-level finding changes the implementation roadmap:
   - `0xF3C4CAE9` -> `resource_label_offset` (kind 7)
 - `command_mapping.md` also marks them as shared string/blob references
 
-However, the current generic parser does **not** resolve kind-7 strings:
+The current generic parser still does **not** resolve kind-7 strings:
 
 - `src-tauri/src/commands.rs parse_command_table_file()` returns kind `7` as raw `u32`
 - `value_string` stays `None`
 
-In the sample `0x38C44F75/armsparam.bin`:
+But the decode rule is now identified:
 
-- `action_label_offset` and `resource_label_offset` are **absolute file offsets**
-- the first `action_label_offset` is `0x71C`, exactly the end of the entries block
-- the pointed data is **not** plain null-terminated text; it looks like a binary label/blob record
+- kind-7 label records in `armsparam` / `characterparam` / `speedparam`
+  are encoded with the **same `obf_string` byte transform already used by**
+  `src-tauri/src/format/characterlist.rs`
+- they should be decoded from **byte 0 of the pointed record**, not from a
+  secondary inner offset
 
-So there likely *is* extra naming material in the per-unit params,
-but we are still missing the **label-record decode rule**.
+That means the problem is no longer "reverse an unknown blob format".
+The problem is now "wire the existing obfuscated-string decoder into the param pipeline".
+
+### 4b. The kind-7 blobs already have a repeatable binary record shape
+
+Further byte-level inspection of the currently extracted param bundles under
+`E:\XB\解包\com\file` makes the label-blob picture sharper:
+
+- scanned files:
+  - `7` `armsparam.bin`
+  - `7` `characterparam.bin`
+  - `7` `speedparam.bin`
+- valid `action_label_offset` / `resource_label_offset` pairs observed:
+  - `42` arms pairs
+  - `12` character pairs
+  - `15` speed pairs
+
+Across **all** of those observed pairs:
+
+- `resource_label_offset` always points to a fixed-length `0x1C` binary record
+- every resource record starts with the same 4-byte head:
+  - `83 9F 86 0A`
+- every resource record ends with the same 4-byte tail:
+  - `42 FC 19 00`
+- `action_label_offset < resource_label_offset` in every valid pair
+
+And the action records are family-typed rather than generic text:
+
+- `armsparam action_label` records always start with:
+  - `8B AA 36 0A`
+- `characterparam action_label` records always start with:
+  - `8F A7 22 EA`
+- `speedparam action_label` records always start with:
+  - `A3 96 32 0A`
+
+The strongest relationship is in `armsparam`:
+
+- for every same-entry action/resource pair, bytes `4..26` are identical
+- only the first 4 bytes differ (`8B AA 36 0A` vs `83 9F 86 0A`)
+- after that shared body, the action record continues with extra action-specific bytes
+  before its terminating `00`
+
+So `armsparam` is not storing two unrelated strings. It is storing two related binary
+label records with:
+
+- a shared middle body
+- a record-type-specific head
+- an action-only tail extension
+
+One more important negative result:
+
+- byte-scanning `vs2\x64/010localizedtext`, `020common`, and `100system` for the exact sample
+  `0x38C44F75` resource-label record found **no matches**
+- the exact sample record only appears in:
+  - `0x38C44F75/armsparam.bin`
+  - `0x38C44F75/characterparam.bin`
+  - `0x38C44F75/speedparam.bin`
+
+The earlier "fixed binary record" observation was real, but the meaning is now clearer:
+
+- `83 9F 86 0A ...` is simply an obfuscated string starting with `CHR_...`
+- `8B AA 36 0A ...` is an obfuscated string starting with `GUN_...`
+- `8F A7 22 EA ...` is an obfuscated string starting with `ORDER_...`
+- `A3 96 32 0A ...` is an obfuscated string starting with `SKL_...`
+
+Batch validation over the currently extracted corpus (`7` arms + `7` character + `7` speed files)
+decoded **100%** of observed label records into plausible ASCII/identifier-style names:
+
+- `42 / 42` arms action labels
+- `42 / 42` arms resource labels
+- `12 / 12` character action labels
+- `12 / 12` character resource labels
+- `15 / 15` speed action labels
+- `15 / 15` speed resource labels
+
+Examples:
+
+- arms resource:
+  - `CHR_059NEXTGN_001NEXTGE_001`
+- arms action:
+  - `GUN_059NEXTGN_001NEXTGE_001_BOMBER_KNUCKLE_ERUPTION`
+  - `GUN_021DESTNY_001STRKFR_001_FULLBURST`
+  - `GUN_015GNDMUC_004DELTPL_001_BEAMRIFLE`
+- character action:
+  - `ORDER_0`
+  - `ORDER_1`
+  - `ORDER_2`
+- speed action:
+  - `SKL_MOVE`
+  - `SKL_MOVE_SEED`
+  - `SKL_MOVE_BARST`
+
+So kind-7 is not merely a promising clue anymore.
+It is a confirmed human-readable naming surface stored inside the unit's external param bundle.
+
+### 4c. At least one decoded label is directly consumed by the script
+
+For the concrete sample `0x693F756D` / `0x38C44F75`:
+
+- `speedparam.bin` decodes entry id `0xC2B19D12` as `SKL_MOVE`
+- the script `2.c` initializes:
+  - `global142 = 0xc2b19d12`
+- later the script repeatedly queries:
+  - `sys_0(0x60006, global142, <speedparam field hash>)`
+
+Those field hashes (`0x607C25BC`, `0x97BE8DFC`, `0x7C2572A1`, etc.) match the
+`speedparam` command pool.
+
+So the decoded kind-7 label is not just editor-facing metadata.
+It is the readable name of a script-consumed param key/state (`SKL_MOVE`).
 
 ### 5. The repository currently references, but does not ship, the CRC32 reverse-search tool
 
@@ -208,20 +318,21 @@ The refined model is now:
 3. **Per-unit semantic enrichment layer**:
    cross-reference callback/resource hashes against the unit's param bundle
    (`bulletparam`, `interactionid`, `chrsysparam`, etc.)
-4. **Future label-decoder layer**:
-   decode kind-7 `action_label_offset` / `resource_label_offset` blobs from
-   `armsparam` / `characterparam` / `speedparam`
+4. **Kind-7 label decode layer**:
+   decode `action_label_offset` / `resource_label_offset` using the existing
+   `obf_string` transform already used by `characterlist`
 
 So the earlier conclusion still holds in spirit:
 
-- the ammo bundle is **not** the complete action-name dictionary
+- the ammo bundle is **not** the complete action-hash dictionary
 
 But it should now be refined to:
 
 - the new auto-rename path is probably **hybrid**
 - global action names come from a shared hash dictionary
 - per-unit params contribute weapon semantics
-- per-unit label blobs are a promising missing source for better human-readable names
+- per-unit kind-7 labels contribute directly readable names for
+  weapon/resource/order/movement surfaces
 
 ## Practical next step for the tool
 
@@ -234,5 +345,5 @@ But it should now be refined to:
    - `func_1221` slot-hash registrations
    - direct `sys_4F/sys_58/sys_47` resource hashes
 4. Use the unit's param bundle to append low- or medium-confidence semantic suffixes
-5. Research and implement decoding for kind-7 label blobs before claiming the params can provide
-   final human-readable weapon names
+5. Implement kind-7 label decoding in the parser/UI path before claiming the params can provide
+   final human-readable weapon names in-app

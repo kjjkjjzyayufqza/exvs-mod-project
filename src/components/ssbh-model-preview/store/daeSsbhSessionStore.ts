@@ -116,6 +116,25 @@ export function shouldPreserveMaterialProfilesOnAnalysisLoad(
   );
 }
 
+export function normalizeAnalysisUpAxis(value: string): SsbhDaeUpAxis | null {
+  switch (value.trim().toLowerCase()) {
+    case "y_up":
+    case "y-up":
+    case "yup":
+      return "y_up";
+    case "z_up":
+    case "z-up":
+    case "zup":
+      return "z_up";
+    case "none":
+    case "no_conversion":
+    case "noconversion":
+      return "none";
+    default:
+      return null;
+  }
+}
+
 function buildInitialState(): DaeSsbhSessionState {
   return {
     sessionVersion: SESSION_VERSION,
@@ -273,10 +292,12 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
         const baseMaya = preserveProfiles ? state.mayaFile : getExvsDefaultMayaProfileTemplate();
         const baseNust = preserveProfiles ? state.nustFile : getExvsDefaultNustProfileTemplate();
         const ensured = ensureMissingMappingLabelsInProfiles(baseMaya, baseNust, rows);
+        const analysisUpAxis = normalizeAnalysisUpAxis(analysis.upAxis);
         set({
           analysis,
           loadedAnalysisKey: analysisKey,
           includeGeometryNames: [...analysis.geometryNames],
+          upAxis: analysisUpAxis ?? state.upAxis,
           numdlbEntries: rows,
           mayaFile: ensured.mayaFile,
           nustFile: ensured.nustFile,

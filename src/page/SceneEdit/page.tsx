@@ -172,6 +172,7 @@ import {
   createDefaultDaeImportConfig,
   detectStaticMeshImportFormat,
   sanitizeBaseFilename,
+  syncDaeImportConfigUpAxisFromAnalysis,
 } from "./components/dae-import/daeImportDefaults";
 import { SceneAssetConfigPanel } from "./components/SceneAssetConfigPanel";
 import { useSceneAssetStore } from "./store/sceneAssetStore";
@@ -2767,9 +2768,17 @@ export default function SceneEdit() {
           entries[i].sourceFormat === "fbx"
             ? await invoke("ssbh_analyze_fbx", { fbxPath: paths[i] })
             : await invoke("ssbh_analyze_dae", { daePath: paths[i] });
+        const typedAnalysis = analysis as DaeImportEntry["analysis"];
         setDaeImportEntries((prev) =>
           prev.map((e, idx) =>
-            idx === i ? { ...e, analysis: analysis as DaeImportEntry["analysis"], analyzing: false } : e,
+            idx === i && typedAnalysis
+              ? {
+                  ...e,
+                  analysis: typedAnalysis,
+                  config: syncDaeImportConfigUpAxisFromAnalysis(e.config, typedAnalysis),
+                  analyzing: false,
+                }
+              : e,
           ),
         );
       } catch (err) {

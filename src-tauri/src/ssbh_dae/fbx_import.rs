@@ -1,7 +1,7 @@
 //! FBX import via ufbx into the neutral `ImportScene` used by `dae_to_ssbh`.
 
 use anyhow::{anyhow, Result};
-use glam::{Mat4, Vec4};
+use glam::{Mat4, Vec3, Vec4};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use ufbx::{LoadOpts, Matrix, Mesh, Node, Real, Scene, SkinCluster, SkinDeformer};
@@ -63,6 +63,34 @@ fn disambiguate_mesh_name(base: &str, used: &mut HashMap<String, u32>) -> String
     }
 }
 
+fn transform_instance_position(position: [f32; 3], instance_to_world: Mat4) -> [f32; 3] {
+    instance_to_world
+        .transform_point3(Vec3::from_array(position))
+        .to_array()
+}
+
+fn normalized_vec3(v: Vec3) -> Option<[f32; 3]> {
+    (v.is_finite() && v.length_squared() > f32::EPSILON).then(|| v.normalize().to_array())
+}
+
+fn transform_instance_normal(normal: [f32; 3], instance_to_world: Mat4) -> [f32; 3] {
+    let source = Vec3::from_array(normal);
+    let normal_matrix = instance_to_world.inverse().transpose();
+    let transformed = normal_matrix.transform_vector3(source);
+    normalized_vec3(transformed)
+        .or_else(|| normalized_vec3(instance_to_world.transform_vector3(source)))
+        .unwrap_or(normal)
+}
+
+fn apply_instance_transform_to_mesh(mesh: &mut ImportMesh, instance_to_world: Mat4) {
+    for vertex in &mut mesh.vertices {
+        *vertex = transform_instance_position(*vertex, instance_to_world);
+    }
+    for normal in &mut mesh.normals {
+        *normal = transform_instance_normal(*normal, instance_to_world);
+    }
+}
+
 fn cluster_bone_name(cluster: &SkinCluster) -> String {
     cluster
         .bone_node
@@ -99,7 +127,8 @@ fn first_inverse_bind_per_bone(scene: &Scene) -> HashMap<String, [[f32; 4]; 4]> 
                 if name.is_empty() {
                     continue;
                 }
-                out.entry(name).or_insert_with(|| matrix_3x4_to_import_columns(&cluster.geometry_to_bone));
+                out.entry(name)
+                    .or_insert_with(|| matrix_3x4_to_import_columns(&cluster.geometry_to_bone));
             }
         }
     }
@@ -121,17 +150,13 @@ fn local_transform_upto_ancestor(child: &Node, ancestor: &Node) -> Result<Mat4> 
     let mut m = Mat4::IDENTITY;
     while cur.element.element_id != target_id {
         m = ufbx_matrix3x4_to_glam(&cur.node_to_parent) * m;
-        cur = cur
-            .parent
-            .as_ref()
-            .map(|r| r.as_ref())
-            .ok_or_else(|| {
-                anyhow!(
-                    "FBX skeleton: bone node '{}' is not a scene descendant of parent bone '{}'",
-                    child.element.name,
-                    ancestor.element.name
-                )
-            })?;
+        cur = cur.parent.as_ref().map(|r| r.as_ref()).ok_or_else(|| {
+            anyhow!(
+                "FBX skeleton: bone node '{}' is not a scene descendant of parent bone '{}'",
+                child.element.name,
+                ancestor.element.name
+            )
+        })?;
     }
     Ok(m)
 }
@@ -155,7 +180,10 @@ fn ancestor_bone_parent_index(
 }
 
 /// World pose for skinned bones that have no matching scene node (append-only path).
-fn bone_world_from_skin_clusters(scene: &Scene, required_names: &HashSet<String>) -> HashMap<String, Mat4> {
+fn bone_world_from_skin_clusters(
+    scene: &Scene,
+    required_names: &HashSet<String>,
+) -> HashMap<String, Mat4> {
     let mut out: HashMap<String, Mat4> = HashMap::new();
     for mesh in scene.meshes.iter() {
         for skin_ref in mesh.skin_deformers.iter() {
@@ -208,7 +236,8 @@ fn build_bones_preorder(
     ) {
         let name = node.element.name.to_string();
         if required_names.contains(&name) && !name_to_index.contains_key(&name) {
-            let parent_index = ancestor_bone_parent_index(node.parent.as_ref().map(|p| p.as_ref()), name_to_index);
+            let parent_index =
+                ancestor_bone_parent_index(node.parent.as_ref().map(|p| p.as_ref()), name_to_index);
             let world = ufbx_matrix3x4_to_glam(&node.node_to_world);
             let inverse_bind_matrix = inverse_by_bone.get(&name).copied();
             let idx = drafts.len();
@@ -291,13 +320,8 @@ fn build_bones_preorder(
                         parent_name
                     )
                 })?;
-                local_transform_upto_ancestor(child_node, parent_node).map_err(|e| {
-                    anyhow!(
-                        "FBX skeleton: bone '{}': {}",
-                        d.name,
-                        e
-                    )
-                })?
+                local_transform_upto_ancestor(child_node, parent_node)
+                    .map_err(|e| anyhow!("FBX skeleton: bone '{}': {}", d.name, e))?
             }
             None => d.world,
         };
@@ -471,10 +495,9 @@ fn skin_influences_for_mesh(mesh: &Mesh, skin: &SkinDeformer) -> Result<Vec<Impo
         for w in wb..we {
             let sw = skin.weights[w];
             let ci = sw.cluster_index as usize;
-            let bone_name = cluster_names
-                .get(ci)
-                .cloned()
-                .ok_or_else(|| anyhow!("Mesh '{}': invalid cluster_index {}", mesh.element.name, ci))?;
+            let bone_name = cluster_names.get(ci).cloned().ok_or_else(|| {
+                anyhow!("Mesh '{}': invalid cluster_index {}", mesh.element.name, ci)
+            })?;
             if bone_name.is_empty() {
                 continue;
             }
@@ -538,7 +561,10 @@ fn import_one_mesh(mesh: &Mesh, name: String) -> Result<ImportMesh> {
 
     let indices = triangulated_indices(mesh)?;
     if indices.is_empty() {
-        return Err(anyhow!("Mesh '{}' produced no triangles", mesh.element.name));
+        return Err(anyhow!(
+            "Mesh '{}' produced no triangles",
+            mesh.element.name
+        ));
     }
 
     let bone_influences = if let Some(skin_ref) = mesh.skin_deformers.first() {
@@ -563,18 +589,66 @@ fn import_one_mesh(mesh: &Mesh, name: String) -> Result<ImportMesh> {
     })
 }
 
+fn collect_mesh_instance_nodes<'a>(node: &'a Node, nodes: &mut Vec<&'a Node>) {
+    if node.mesh.is_some() {
+        nodes.push(node);
+    }
+    for child in node.children.iter() {
+        collect_mesh_instance_nodes(child.as_ref(), nodes);
+    }
+}
+
+fn mesh_instance_base_name(node: &Node, mesh: &Mesh) -> String {
+    let node_name = node.element.name.as_ref();
+    if !node_name.is_empty() {
+        return node_name.to_string();
+    }
+    let mesh_name = mesh.element.name.as_ref();
+    if !mesh_name.is_empty() {
+        return mesh_name.to_string();
+    }
+    format!("UnnamedMesh_{}", mesh.element.element_id)
+}
+
+fn import_mesh_instance_node(
+    node: &Node,
+    mesh_name_counts: &mut HashMap<String, u32>,
+) -> Result<ImportMesh> {
+    let mesh = node
+        .mesh
+        .as_ref()
+        .ok_or_else(|| anyhow!("FBX node '{}' has no mesh instance", node.element.name))?
+        .as_ref();
+    let unique_name =
+        disambiguate_mesh_name(&mesh_instance_base_name(node, mesh), mesh_name_counts);
+    let mut imported = import_one_mesh(mesh, unique_name)?;
+    apply_instance_transform_to_mesh(
+        &mut imported,
+        ufbx_matrix3x4_to_glam(&node.geometry_to_world),
+    );
+    Ok(imported)
+}
+
+fn import_uninstanced_mesh(
+    mesh: &Mesh,
+    mesh_name_counts: &mut HashMap<String, u32>,
+) -> Result<ImportMesh> {
+    let base = mesh.element.name.as_ref();
+    let base = if base.is_empty() {
+        format!("UnnamedMesh_{}", mesh.element.element_id)
+    } else {
+        base.to_string()
+    };
+    import_one_mesh(mesh, disambiguate_mesh_name(&base, mesh_name_counts))
+}
+
 /// Load an FBX file and build an `ImportScene` (same downstream path as COLLADA).
 pub fn parse_fbx_file(path: &Path) -> Result<ImportScene> {
     let path_str = path
         .to_str()
         .ok_or_else(|| anyhow!("FBX path must be valid UTF-8: {}", path.display()))?;
-    let root = ufbx::load_file(path_str, LoadOpts::default()).map_err(|e| {
-        anyhow!(
-            "ufbx failed to load FBX: {} — {}",
-            e.description,
-            e.info()
-        )
-    })?;
+    let root = ufbx::load_file(path_str, LoadOpts::default())
+        .map_err(|e| anyhow!("ufbx failed to load FBX: {} — {}", e.description, e.info()))?;
     let scene: &Scene = &root;
 
     let up_axis = up_axis_from_scene(scene);
@@ -582,20 +656,21 @@ pub fn parse_fbx_file(path: &Path) -> Result<ImportScene> {
     let inverse_by_bone = first_inverse_bind_per_bone(scene);
     let bones = build_bones_preorder(scene, &skin_bone_names, &inverse_by_bone)?;
 
-    let mut mesh_name_counts: HashMap<String, u32> = HashMap::new();
     let mut meshes = Vec::new();
-    for mesh_ref in scene.meshes.iter() {
-        let mesh = mesh_ref.as_ref();
-        let base = mesh.element.name.to_string();
-        let base = if base.is_empty() {
-            format!("UnnamedMesh_{}", mesh.element.element_id)
-        } else {
-            base
-        };
-        let unique_name = disambiguate_mesh_name(&base, &mut mesh_name_counts);
-        let imported = import_one_mesh(mesh, unique_name)?;
-        if !imported.vertices.is_empty() {
-            meshes.push(imported);
+    let mut mesh_name_counts: HashMap<String, u32> = HashMap::new();
+    let mut mesh_nodes = Vec::new();
+    collect_mesh_instance_nodes(scene.root_node.as_ref(), &mut mesh_nodes);
+
+    if mesh_nodes.is_empty() {
+        for mesh_ref in scene.meshes.iter() {
+            meshes.push(import_uninstanced_mesh(
+                mesh_ref.as_ref(),
+                &mut mesh_name_counts,
+            )?);
+        }
+    } else {
+        for node in mesh_nodes {
+            meshes.push(import_mesh_instance_node(node, &mut mesh_name_counts)?);
         }
     }
 
@@ -633,6 +708,66 @@ mod tests {
     const BIGZAM_AKENO: &str = r"D:\output\bigzam\Akeno.fbx";
     const BIGZAM_AKENO_BODY: &str = r"D:\output\bigzam\Akeno_body.fbx";
 
+    fn assert_close3(actual: [f32; 3], expected: [f32; 3]) {
+        for (actual, expected) in actual.iter().zip(expected.iter()) {
+            assert!(
+                (actual - expected).abs() < 1e-5,
+                "expected {expected}, got {actual}"
+            );
+        }
+    }
+
+    #[test]
+    fn apply_instance_transform_bakes_positions_and_normals() {
+        let mut mesh = ImportMesh {
+            name: "Cube".to_string(),
+            vertices: vec![[1.0, 2.0, 3.0]],
+            normals: vec![[1.0, 0.0, 0.0]],
+            uvs: Vec::new(),
+            indices: vec![0, 0, 0],
+            material_name: None,
+            bone_influences: Vec::new(),
+        };
+        let transform = Mat4::from_scale_rotation_translation(
+            glam::Vec3::new(2.0, 3.0, 4.0),
+            glam::Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
+            glam::Vec3::new(10.0, 20.0, 30.0),
+        );
+
+        apply_instance_transform_to_mesh(&mut mesh, transform);
+
+        assert_close3(mesh.vertices[0], [4.0, 22.0, 42.0]);
+        assert_close3(mesh.normals[0], [0.0, 1.0, 0.0]);
+    }
+
+    #[test]
+    fn apply_instance_transform_preserves_skin_weight_indices() {
+        let mut mesh = ImportMesh {
+            name: "Skinned".to_string(),
+            vertices: vec![[0.0, 0.0, 0.0]],
+            normals: Vec::new(),
+            uvs: Vec::new(),
+            indices: vec![0, 0, 0],
+            material_name: None,
+            bone_influences: vec![ImportBoneInfluence {
+                bone_name: "Root".to_string(),
+                vertex_weights: vec![ImportVertexWeight {
+                    vertex_index: 0,
+                    weight: 1.0,
+                }],
+            }],
+        };
+
+        apply_instance_transform_to_mesh(
+            &mut mesh,
+            Mat4::from_translation(glam::Vec3::new(5.0, 0.0, 0.0)),
+        );
+
+        assert_eq!(mesh.vertices[0], [5.0, 0.0, 0.0]);
+        assert_eq!(mesh.bone_influences[0].vertex_weights[0].vertex_index, 0);
+        assert_eq!(mesh.bone_influences[0].vertex_weights[0].weight, 1.0);
+    }
+
     #[test]
     fn parse_fbx_with_orphan_logical_vertices_succeeds() {
         let path = Path::new(BIGZAM_AKENO);
@@ -640,8 +775,8 @@ mod tests {
             eprintln!("SKIP: {BIGZAM_AKENO} not found");
             return;
         }
-        let scene = parse_fbx_file(path)
-            .expect("orphan logical vertices must not block FBX import");
+        let scene =
+            parse_fbx_file(path).expect("orphan logical vertices must not block FBX import");
         assert_eq!(scene.meshes.len(), 1);
         let mesh = &scene.meshes[0];
         assert!(!mesh.vertices.is_empty());

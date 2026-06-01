@@ -77,6 +77,24 @@ describe("daeSsbhSessionStore loadAnalysis material profiles", () => {
     const next = useDaeSsbhSessionStore.getState();
     expect(readTexturePath(next.mayaFile, "DiffuseMap")).toBe("textures/user_diffuse");
   });
+
+  it("syncs up axis from analysis when the value is valid", () => {
+    const store = useDaeSsbhSessionStore.getState();
+    store.setUpAxis("y_up");
+
+    store.loadAnalysis({ ...sampleAnalysis, upAxis: "z_up" });
+
+    expect(useDaeSsbhSessionStore.getState().upAxis).toBe("z_up");
+  });
+
+  it("supports no conversion as an analysis up axis", () => {
+    const store = useDaeSsbhSessionStore.getState();
+    store.setUpAxis("z_up");
+
+    store.loadAnalysis({ ...sampleAnalysis, upAxis: "none" });
+
+    expect(useDaeSsbhSessionStore.getState().upAxis).toBe("none");
+  });
 });
 
 describe("daeSsbhSessionStore analysis load helpers", () => {

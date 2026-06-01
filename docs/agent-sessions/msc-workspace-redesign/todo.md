@@ -21,9 +21,12 @@ Status legend: [ ] pending, [~] in progress, [x] done, [-] dropped
 - [ ] W1.6 Add a per-project `symbols.json` (persisted, user-editable name overrides) + merge order.
 - [ ] W1.7 Implement and integrate CRC32 reverse-search to recover names from action hashes.
       (The repo currently has only the planning doc; `tools/crc32_reverse_search.py` is not checked in.)
-- [ ] W1.8 Decode kind-7 label blobs (`action_label_offset` / `resource_label_offset`) from
-      `armsparam` / `characterparam` / `speedparam` trailing data and test whether they can seed
-      human-readable names for new-style MSC workflows.
+- [ ] W1.8 Wire kind-7 label decoding into the parser/UI path for
+      `action_label_offset` / `resource_label_offset` in
+      `armsparam` / `characterparam` / `speedparam`.
+      Research result: the pointed records decode correctly with the existing
+      `obf_string` transform (same family as `characterlist`), e.g.
+      `GUN_...`, `CHR_...`, `ORDER_*`, `SKL_MOVE*`.
 
 ### Workstream 2 - Workflow / pipeline redesign
 - [x] W2.1 Folder persistence (already handled by parent `mscWorkspaceFolderPath` in MainView).

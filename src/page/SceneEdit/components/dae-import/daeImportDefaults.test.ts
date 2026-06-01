@@ -3,6 +3,7 @@ import {
   createDefaultDaeImportConfig,
   detectStaticMeshImportFormat,
   isHktGenerationAvailable,
+  syncDaeImportConfigUpAxisFromAnalysis,
 } from "./daeImportDefaults";
 
 describe("daeImportDefaults", () => {
@@ -33,5 +34,16 @@ describe("daeImportDefaults", () => {
         filterManagerAvailable: true,
       }),
     ).toBe(true);
+  });
+
+  it("syncs SSBH up axis from static mesh analysis", () => {
+    const config = createDefaultDaeImportConfig("model_a");
+
+    const next = syncDaeImportConfigUpAxisFromAnalysis(config, {
+      upAxis: "z_up",
+    });
+
+    expect(next.ssbhConfig.upAxis).toBe("z_up");
+    expect(config.ssbhConfig.upAxis).toBe("y_up");
   });
 });
