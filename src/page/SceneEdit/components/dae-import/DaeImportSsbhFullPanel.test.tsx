@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useDaeSsbhSessionStore } from "@/components/ssbh-model-preview/store/daeSsbhSessionStore";
 import { DaeImportSsbhFullPanel } from "./DaeImportSsbhFullPanel";
+import type { DaeAnalysisResult } from "./daeImportTypes";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   writeText: vi.fn(),
@@ -45,7 +46,7 @@ vi.mock(
   },
 );
 
-const analysis = {
+const analysis: DaeAnalysisResult = {
   daePath: "E:\\test\\mesh.dae",
   upAxis: "Y_UP",
   meshRows: [
@@ -69,7 +70,7 @@ const analysis = {
   blockingErrors: [],
   warnings: [],
   canConvert: true,
-} as const;
+};
 
 describe("DaeImportSsbhFullPanel", () => {
   beforeEach(() => {

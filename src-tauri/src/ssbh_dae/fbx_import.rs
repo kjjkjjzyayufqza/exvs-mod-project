@@ -4,7 +4,10 @@ use anyhow::{anyhow, Result};
 use glam::{Mat4, Vec3, Vec4};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use ufbx::{LoadOpts, Matrix, Mesh, Node, Real, Scene, SkinCluster, SkinDeformer};
+use ufbx::{
+    AllocatorOpts, LoadOpts, Matrix, Mesh, Node, Real, Scene, SkinCluster, SkinDeformer,
+    VertexStream,
+};
 
 use super::dae_analyze::{analysis_report_for_import_scene, DaeAnalysisReport};
 use super::dae_parse::{ConvertedFiles, DaeConvertConfig};
@@ -13,8 +16,67 @@ use super::import_scene::{
     ImportBone, ImportBoneInfluence, ImportMesh, ImportScene, ImportVertexWeight, UpAxisConversion,
 };
 
+const DEFAULT_NORMAL: [f32; 3] = [0.0, 0.0, 1.0];
+const DEFAULT_UV: [f32; 2] = [0.0, 0.0];
+
 fn rf32(v: Real) -> f32 {
     v as f32
+}
+
+fn f32_key(v: f32) -> u32 {
+    if v == 0.0 {
+        0.0f32.to_bits()
+    } else {
+        v.to_bits()
+    }
+}
+
+fn vec2_key(v: [f32; 2]) -> [u32; 2] {
+    [f32_key(v[0]), f32_key(v[1])]
+}
+
+fn vec3_key(v: [f32; 3]) -> [u32; 3] {
+    [f32_key(v[0]), f32_key(v[1]), f32_key(v[2])]
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct PackedFbxVertex {
+    logical_vertex: u32,
+    position: [u32; 3],
+    normal: [u32; 3],
+    uv: [u32; 2],
+}
+
+impl PackedFbxVertex {
+    fn new(logical_vertex: u32, position: [f32; 3], normal: [f32; 3], uv: [f32; 2]) -> Self {
+        Self {
+            logical_vertex,
+            position: vec3_key(position),
+            normal: vec3_key(normal),
+            uv: vec2_key(uv),
+        }
+    }
+
+    fn position(self) -> [f32; 3] {
+        [
+            f32::from_bits(self.position[0]),
+            f32::from_bits(self.position[1]),
+            f32::from_bits(self.position[2]),
+        ]
+    }
+
+    fn normal(self) -> [f32; 3] {
+        [
+            f32::from_bits(self.normal[0]),
+            f32::from_bits(self.normal[1]),
+            f32::from_bits(self.normal[2]),
+        ]
+    }
+
+    fn uv(self) -> [f32; 2] {
+        [f32::from_bits(self.uv[0]), f32::from_bits(self.uv[1])]
+    }
 }
 
 /// Column-major 4x4 (same layout as DAE `ImportBone::transform` / `glam::Mat4::from_cols_array_2d`).
@@ -335,33 +397,6 @@ fn build_bones_preorder(
     Ok(bones)
 }
 
-/// ufbx `VertexVec2` / `VertexVec3` use **corner indices** (`0..num_indices`), not logical vertex indices.
-/// Logical vertex `v` is stored in `mesh.vertices[v]`; attributes use one corner that references `v`.
-/// Returns `None` when no polygon corner references the logical vertex (orphan / unused slot).
-fn try_corner_for_logical_vertex(mesh: &Mesh, logical_vertex: usize) -> Option<usize> {
-    if logical_vertex >= mesh.num_vertices {
-        return None;
-    }
-    let want = logical_vertex as u32;
-    let corners = mesh.vertex_indices.as_ref();
-    let first = mesh.vertex_first_index.as_ref();
-    if logical_vertex < first.len() {
-        let ix = first[logical_vertex];
-        if ix != u32::MAX {
-            let ci = ix as usize;
-            if ci < corners.len() && corners[ci] == want {
-                return Some(ci);
-            }
-        }
-    }
-    for (ci, &v) in corners.iter().enumerate() {
-        if v == want {
-            return Some(ci);
-        }
-    }
-    None
-}
-
 fn mesh_vertex_position(mesh: &Mesh, vi: usize) -> Result<[f32; 3]> {
     if vi >= mesh.num_vertices {
         return Err(anyhow!(
@@ -382,6 +417,22 @@ fn mesh_vertex_position(mesh: &Mesh, vi: usize) -> Result<[f32; 3]> {
     }
     let p = verts[vi];
     Ok([rf32(p.x), rf32(p.y), rf32(p.z)])
+}
+
+fn mesh_position_at_corner(mesh: &Mesh, corner: usize, logical_vertex: u32) -> Result<[f32; 3]> {
+    if corner >= mesh.num_indices {
+        return Err(anyhow!(
+            "Mesh '{}': corner index {} out of range (num_indices={})",
+            mesh.element.name,
+            corner,
+            mesh.num_indices
+        ));
+    }
+    if mesh.vertex_position.exists {
+        let p = mesh.vertex_position[corner];
+        return Ok([rf32(p.x), rf32(p.y), rf32(p.z)]);
+    }
+    mesh_vertex_position(mesh, logical_vertex as usize)
 }
 
 fn mesh_normal_at_corner(mesh: &Mesh, corner: usize) -> Option<[f32; 3]> {
@@ -413,54 +464,40 @@ fn mesh_uv_at_corner(mesh: &Mesh, corner: usize) -> Option<[f32; 2]> {
     None
 }
 
-/// ufbx `triangulate_face` writes **per-mesh corner indices** (`face.index_begin + k`, in `0..num_indices`),
-/// not logical vertex indices. Map each corner through `vertex_indices[corner]` to get `0..num_vertices`.
-fn triangulated_indices(mesh: &Mesh) -> Result<Vec<u32>> {
-    let mut indices: Vec<u32> = Vec::new();
-    let mut corner_buf: Vec<u32> = Vec::new();
-    let all_corners = mesh.vertex_indices.as_ref();
-    for face in mesh.faces.iter() {
-        let f = *face;
-        if f.num_indices < 3 {
-            continue;
-        }
-        corner_buf.clear();
-        let begin = f.index_begin as usize;
-        let end = begin + f.num_indices as usize;
-        if end > all_corners.len() {
-            return Err(anyhow!(
-                "Mesh '{}': face index range out of bounds",
-                mesh.element.name
-            ));
-        }
-        let ntri = ufbx::triangulate_face_vec(&mut corner_buf, mesh, f);
-        if ntri == 0 {
-            continue;
-        }
-        for &corner_idx in corner_buf.iter() {
-            let ci = corner_idx as usize;
-            if ci >= all_corners.len() {
-                return Err(anyhow!(
-                    "Mesh '{}': triangulation produced out-of-bounds corner index {} (num_indices={})",
-                    mesh.element.name,
-                    corner_idx,
-                    all_corners.len()
-                ));
+fn mesh_has_uv(mesh: &Mesh) -> bool {
+    mesh.vertex_uv.exists || mesh.uv_sets.iter().any(|set| set.vertex_uv.exists)
+}
+
+fn remap_skin_influences_to_expanded_vertices(
+    influences: Vec<ImportBoneInfluence>,
+    logical_to_expanded: &[Vec<u32>],
+) -> Vec<ImportBoneInfluence> {
+    let mut remapped = Vec::with_capacity(influences.len());
+
+    for influence in influences {
+        let mut vertex_weights = Vec::new();
+        for weight in influence.vertex_weights {
+            let logical_index = weight.vertex_index as usize;
+            let Some(expanded_indices) = logical_to_expanded.get(logical_index) else {
+                continue;
+            };
+            vertex_weights.reserve(expanded_indices.len());
+            for &expanded_index in expanded_indices {
+                vertex_weights.push(ImportVertexWeight {
+                    vertex_index: expanded_index,
+                    weight: weight.weight,
+                });
             }
-            let logical = all_corners[ci];
-            if logical as usize >= mesh.num_vertices {
-                return Err(anyhow!(
-                    "Mesh '{}': corner {} maps to invalid logical vertex {} (num_vertices={})",
-                    mesh.element.name,
-                    corner_idx,
-                    logical,
-                    mesh.num_vertices
-                ));
-            }
-            indices.push(logical);
+        }
+        if !vertex_weights.is_empty() {
+            remapped.push(ImportBoneInfluence {
+                bone_name: influence.bone_name,
+                vertex_weights,
+            });
         }
     }
-    Ok(indices)
+
+    remapped
 }
 
 fn skin_influences_for_mesh(mesh: &Mesh, skin: &SkinDeformer) -> Result<Vec<ImportBoneInfluence>> {
@@ -529,37 +566,140 @@ fn import_one_mesh(mesh: &Mesh, name: String) -> Result<ImportMesh> {
         return Err(anyhow!("Mesh '{}' has no vertices", mesh.element.name));
     }
 
-    let mut vertices = Vec::with_capacity(mesh.num_vertices);
-    let mut normals: Vec<[f32; 3]> = Vec::new();
-    let mut uvs: Vec<[f32; 2]> = Vec::new();
-
-    for vi in 0..mesh.num_vertices {
-        vertices.push(mesh_vertex_position(mesh, vi)?);
+    let all_corners = mesh.vertex_indices.as_ref();
+    let has_normals = mesh.vertex_normal.exists;
+    let has_uvs = mesh_has_uv(mesh);
+    let has_skin = !mesh.skin_deformers.is_empty();
+    let estimated_triangle_corners = mesh.num_triangles.saturating_mul(3);
+    if estimated_triangle_corners > u32::MAX as usize {
+        return Err(anyhow!(
+            "Mesh '{}': too many triangle corners for u32 indices ({})",
+            mesh.element.name,
+            estimated_triangle_corners
+        ));
     }
 
-    let has_uv = mesh.vertex_uv.exists || !mesh.uv_sets.is_empty();
-    const ORPHAN_NORMAL: [f32; 3] = [0.0, 0.0, 1.0];
-    const ORPHAN_UV: [f32; 2] = [0.0, 0.0];
+    let mut packed_vertices: Vec<PackedFbxVertex> = Vec::with_capacity(estimated_triangle_corners);
+    let mut corner_buf = vec![0u32; mesh.max_face_triangles.saturating_mul(3).max(3)];
 
-    if mesh.vertex_normal.exists {
-        for vi in 0..mesh.num_vertices {
-            let n = try_corner_for_logical_vertex(mesh, vi)
-                .and_then(|corner| mesh_normal_at_corner(mesh, corner))
-                .unwrap_or(ORPHAN_NORMAL);
-            normals.push(n);
+    for face in mesh.faces.iter() {
+        let f = *face;
+        if f.num_indices < 3 {
+            continue;
+        }
+
+        let begin = f.index_begin as usize;
+        let end = begin + f.num_indices as usize;
+        if end > all_corners.len() {
+            return Err(anyhow!(
+                "Mesh '{}': face index range out of bounds",
+                mesh.element.name
+            ));
+        }
+
+        let ntri = ufbx::triangulate_face(&mut corner_buf, mesh, f);
+        let corner_count = ntri as usize * 3;
+        if corner_count == 0 {
+            continue;
+        }
+
+        for &corner_idx in &corner_buf[..corner_count] {
+            let corner = corner_idx as usize;
+            if corner >= all_corners.len() {
+                return Err(anyhow!(
+                    "Mesh '{}': triangulation produced out-of-bounds corner index {} (num_indices={})",
+                    mesh.element.name,
+                    corner_idx,
+                    all_corners.len()
+                ));
+            }
+            let logical_vertex = all_corners[corner];
+            if logical_vertex as usize >= mesh.num_vertices {
+                return Err(anyhow!(
+                    "Mesh '{}': corner {} maps to invalid logical vertex {} (num_vertices={})",
+                    mesh.element.name,
+                    corner_idx,
+                    logical_vertex,
+                    mesh.num_vertices
+                ));
+            }
+
+            let position = mesh_position_at_corner(mesh, corner, logical_vertex)?;
+            let normal = if has_normals {
+                mesh_normal_at_corner(mesh, corner).unwrap_or(DEFAULT_NORMAL)
+            } else {
+                DEFAULT_NORMAL
+            };
+            let uv = if has_uvs {
+                mesh_uv_at_corner(mesh, corner).unwrap_or(DEFAULT_UV)
+            } else {
+                DEFAULT_UV
+            };
+
+            let skin_vertex_key = if has_skin { logical_vertex } else { 0 };
+            packed_vertices.push(PackedFbxVertex::new(skin_vertex_key, position, normal, uv));
         }
     }
 
-    if has_uv {
-        for vi in 0..mesh.num_vertices {
-            let uv = try_corner_for_logical_vertex(mesh, vi)
-                .and_then(|corner| mesh_uv_at_corner(mesh, corner))
-                .unwrap_or(ORPHAN_UV);
-            uvs.push(uv);
-        }
+    if packed_vertices.is_empty() {
+        return Err(anyhow!(
+            "Mesh '{}' produced no triangles",
+            mesh.element.name
+        ));
     }
 
-    let indices = triangulated_indices(mesh)?;
+    let mut indices = vec![0u32; packed_vertices.len()];
+    let unique_count = {
+        let mut streams = [VertexStream::new(&mut packed_vertices)];
+        ufbx::generate_indices(&mut streams, &mut indices, AllocatorOpts::default()).map_err(
+            |e| {
+                anyhow!(
+                    "ufbx failed to generate mesh indices: {} — {}",
+                    e.description,
+                    e.info()
+                )
+            },
+        )?
+    };
+    packed_vertices.truncate(unique_count);
+
+    let logical_to_expanded = if has_skin {
+        let mut logical_to_expanded = vec![Vec::new(); mesh.num_vertices];
+        for (expanded_index, packed) in packed_vertices.iter().enumerate() {
+            let logical_index = packed.logical_vertex as usize;
+            if logical_index < logical_to_expanded.len() {
+                logical_to_expanded[logical_index].push(expanded_index as u32);
+            }
+        }
+        logical_to_expanded
+    } else {
+        Vec::new()
+    };
+
+    let vertices: Vec<[f32; 3]> = packed_vertices
+        .iter()
+        .copied()
+        .map(PackedFbxVertex::position)
+        .collect();
+    let normals: Vec<[f32; 3]> = if has_normals {
+        packed_vertices
+            .iter()
+            .copied()
+            .map(PackedFbxVertex::normal)
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let uvs: Vec<[f32; 2]> = if has_uvs {
+        packed_vertices
+            .iter()
+            .copied()
+            .map(PackedFbxVertex::uv)
+            .collect()
+    } else {
+        Vec::new()
+    };
+
     if indices.is_empty() {
         return Err(anyhow!(
             "Mesh '{}' produced no triangles",
@@ -568,7 +708,10 @@ fn import_one_mesh(mesh: &Mesh, name: String) -> Result<ImportMesh> {
     }
 
     let bone_influences = if let Some(skin_ref) = mesh.skin_deformers.first() {
-        skin_influences_for_mesh(mesh, skin_ref.as_ref())?
+        remap_skin_influences_to_expanded_vertices(
+            skin_influences_for_mesh(mesh, skin_ref.as_ref())?,
+            &logical_to_expanded,
+        )
     } else {
         Vec::new()
     };
@@ -707,6 +850,7 @@ mod tests {
 
     const BIGZAM_AKENO: &str = r"D:\output\bigzam\Akeno.fbx";
     const BIGZAM_AKENO_BODY: &str = r"D:\output\bigzam\Akeno_body.fbx";
+    const MINECRAFT_BLENDER_FBX: &str = r"D:\output\minecraft\test.fbx";
 
     fn assert_close3(actual: [f32; 3], expected: [f32; 3]) {
         for (actual, expected) in actual.iter().zip(expected.iter()) {
@@ -794,5 +938,89 @@ mod tests {
         let scene = parse_fbx_file(path).expect("body FBX export must parse");
         assert_eq!(scene.meshes.len(), 1);
         assert!(scene.meshes[0].indices.len() >= 3);
+    }
+
+    #[test]
+    fn parse_blender_fbx_preserves_corner_attribute_splits() {
+        let path = Path::new(MINECRAFT_BLENDER_FBX);
+        if !path.is_file() {
+            eprintln!("SKIP: {MINECRAFT_BLENDER_FBX} not found");
+            return;
+        }
+
+        let path_str = path.to_string_lossy();
+        let root = ufbx::load_file(path_str.as_ref(), LoadOpts::default())
+            .expect("sample Blender FBX should load through ufbx");
+        let logical_vertex_count: usize = root.meshes.iter().map(|m| m.as_ref().num_vertices).sum();
+
+        let scene = parse_fbx_file(path).expect("sample Blender FBX should parse");
+        let expanded_vertex_count: usize = scene.meshes.iter().map(|m| m.vertices.len()).sum();
+        let uv_count: usize = scene.meshes.iter().map(|m| m.uvs.len()).sum();
+
+        assert_eq!(scene.bones.len(), 0);
+        assert!(
+            expanded_vertex_count > logical_vertex_count * 2,
+            "Blender FBX corner UV/normal splits should expand vertices: logical={logical_vertex_count}, expanded={expanded_vertex_count}"
+        );
+        assert_eq!(
+            uv_count, expanded_vertex_count,
+            "UVs should be in the same vertex domain as positions"
+        );
+        for mesh in &scene.meshes {
+            assert_eq!(mesh.indices.len() % 3, 0);
+            assert!(mesh
+                .indices
+                .iter()
+                .all(|&i| (i as usize) < mesh.vertices.len()));
+        }
+    }
+
+    #[test]
+    fn convert_blender_fbx_sample_to_ssbh_files() {
+        use ssbh_data::modl_data::ModlData;
+        use ssbh_data::prelude::*;
+
+        let path = Path::new(MINECRAFT_BLENDER_FBX);
+        if !path.is_file() {
+            eprintln!("SKIP: {MINECRAFT_BLENDER_FBX} not found");
+            return;
+        }
+
+        let output = tempfile::tempdir().expect("temp conversion dir");
+        let config = DaeConvertConfig {
+            output_directory: output.path().to_path_buf(),
+            base_filename: "minecraft_test".to_string(),
+            scale_factor: 1.0,
+            up_axis_conversion: UpAxisConversion::NoConversion,
+            flip_uv: false,
+            include_geometry_names: Vec::new(),
+            write_numdlb: true,
+            write_numshb: true,
+            write_nusktb: true,
+            modl_entries: Vec::new(),
+        };
+
+        let (files, stats) =
+            convert_fbx_file(path, &config).expect("Blender FBX should convert to SSBH files");
+
+        assert_eq!(stats.mesh_objects, 17);
+        assert_eq!(stats.bones, 0);
+        assert!(
+            stats.total_vertices > 25_000,
+            "corner attribute splits should be preserved through conversion, stats={stats:?}"
+        );
+        assert!(files.numdlb_path.as_ref().is_some_and(|p| p.is_file()));
+        assert!(files.numshb_path.as_ref().is_some_and(|p| p.is_file()));
+        assert!(files.nusktb_path.as_ref().is_some_and(|p| p.is_file()));
+
+        let modl = ModlData::from_file(files.numdlb_path.as_ref().unwrap())
+            .expect("converted numdlb should parse");
+        let mesh = MeshData::from_file(files.numshb_path.as_ref().unwrap())
+            .expect("converted numshb should parse");
+        let skel = SkelData::from_file(files.nusktb_path.as_ref().unwrap())
+            .expect("converted nusktb should parse");
+        assert_eq!(modl.entries.len(), 17);
+        assert_eq!(mesh.objects.len(), 17);
+        assert!(skel.bones.is_empty());
     }
 }

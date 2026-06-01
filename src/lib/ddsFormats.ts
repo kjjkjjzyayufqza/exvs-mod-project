@@ -23,3 +23,6 @@ export const DDS_FORMATS = [
   { value: "BC7RgbaUnorm", label: "BC7RgbaUnorm" },
   { value: "BC7RgbaUnormSrgb", label: "BC7RgbaUnormSrgb" },
 ] as const;
+
+/** Union of every DDS format value string supported above. */
+export type DdsFormat = (typeof DDS_FORMATS)[number]["value"];

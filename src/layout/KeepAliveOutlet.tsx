@@ -1,9 +1,17 @@
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { findMatchedRouteUrl, pathMatchesRoute } from "@/router/pathMatch";
 import { RouterItems } from "@/router/router";
 import { KeepAliveProvider } from "./KeepAliveContext";
 import { cn } from "@/lib/utils";
+
+function PageLoadingFallback() {
+  return (
+    <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
+      Loading…
+    </div>
+  );
+}
 
 /**
  * Renders matched sidebar pages in a stacked layout: visited routes stay mounted
@@ -50,7 +58,9 @@ export function KeepAliveOutlet() {
             aria-hidden={!active}
             {...(!active ? { inert: true } : {})}
           >
-            {item.element}
+            <Suspense fallback={<PageLoadingFallback />}>
+              {item.element}
+            </Suspense>
           </div>
         );
       })}

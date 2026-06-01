@@ -1,13 +1,21 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { SettingsDialog } from "./SettingsDialog";
-import RepackModal from "./RepackModal";
-import Fhm2dInitModal from "./Fhm2dInitModal";
+
+// These modals carry heavy logic (repack pipeline, fhm2d extraction) and are
+// only needed after the user interacts with the top bar. Lazy-load them so
+// they (and their transitive deps) stay out of the initial startup bundle.
+// Once first opened, each stays mounted for the session so its internal
+// open/close state and exit animations behave exactly as before.
+const SettingsDialog = lazy(() =>
+  import("./SettingsDialog").then((m) => ({ default: m.SettingsDialog })),
+);
+const RepackModal = lazy(() => import("./RepackModal"));
+const Fhm2dInitModal = lazy(() => import("./Fhm2dInitModal"));
 
 export function TopNavBar() {
   const [isRepackModalOpen, setIsRepackModalOpen] = useState(false);
@@ -15,11 +23,19 @@ export function TopNavBar() {
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // Track first open so the lazy chunk is fetched on demand and the modal then
+  // remains mounted (keeps prior always-mounted behavior after first use).
+  const [settingsMounted, setSettingsMounted] = useState(false);
+  const [repackMounted, setRepackMounted] = useState(false);
+  const [fhm2dMounted, setFhm2dMounted] = useState(false);
+
   const handleRepackClick = () => {
+    setRepackMounted(true);
     setIsRepackModalOpen((prev) => !prev);
   };
 
   const handleFhm2dInitClick = () => {
+    setFhm2dMounted(true);
     setIsFhm2dInitModalOpen((prev) => !prev);
   };
 
@@ -42,6 +58,7 @@ export function TopNavBar() {
               className="w-full justify-start h-8 px-2 text-xs font-normal"
               onClick={() => {
                 setOptionsOpen(false);
+                setSettingsMounted(true);
                 setSettingsOpen(true);
               }}
             >
@@ -67,17 +84,29 @@ export function TopNavBar() {
         </Button>
       </div>
 
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      {settingsMounted && (
+        <Suspense fallback={null}>
+          <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        </Suspense>
+      )}
 
-      <RepackModal
-        isOpen={isRepackModalOpen}
-        onClose={() => setIsRepackModalOpen(false)}
-      />
+      {repackMounted && (
+        <Suspense fallback={null}>
+          <RepackModal
+            isOpen={isRepackModalOpen}
+            onClose={() => setIsRepackModalOpen(false)}
+          />
+        </Suspense>
+      )}
 
-      <Fhm2dInitModal
-        isOpen={isFhm2dInitModalOpen}
-        onClose={() => setIsFhm2dInitModalOpen(false)}
-      />
+      {fhm2dMounted && (
+        <Suspense fallback={null}>
+          <Fhm2dInitModal
+            isOpen={isFhm2dInitModalOpen}
+            onClose={() => setIsFhm2dInitModalOpen(false)}
+          />
+        </Suspense>
+      )}
     </>
   );
 }

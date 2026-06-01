@@ -13,7 +13,11 @@ default-run = "app"
 
 [lib]
 name = "app_lib"
-crate-type = ["staticlib", "cdylib", "lib"]
+# Desktop-only build: the `app` binary links `app_lib` as an rlib. The
+# `staticlib`/`cdylib` crate types are only required for mobile (iOS/Android)
+# FFI — re-add them if a mobile target is introduced. Dropping them avoids
+# building/linking two unused artifacts on every build.
+crate-type = ["lib"]
 
 [build-dependencies]
 tauri-build = { version = "2.6.1", features = [] }
@@ -51,3 +55,22 @@ flate2 = "1"
 tempfile = "3"
 uuid = { version = "1", features = ["v4"] }
 rayon = "1.10"
+
+# --- Build profiles -------------------------------------------------------
+
+# Dev: keep app code unoptimized (default opt-level 0) for fast incremental
+# rebuilds, but optimize dependencies once (they rarely change) so heavy
+# decode/mesh crates such as image_dds, ufbx, glam and rayon are not crippling
+# at runtime during dev.
+[profile.dev.package."*"]
+opt-level = 1
+
+# Release: smaller, faster production binary. `panic` is intentionally left as
+# the default "unwind" — the format parsers (binrw / image / ufbx) can panic on
+# malformed input and must not abort the whole process. ThinLTO keeps build
+# time reasonable while still optimizing across crate boundaries; `strip`
+# removes debug symbols to shrink the shipped binary.
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = true

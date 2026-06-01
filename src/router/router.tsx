@@ -1,17 +1,21 @@
-import MainPage from "../page/Main/page"
-import ExtractFilePage from "../page/Extract/page"
-import { Calendar, Home, Inbox, List, Search, Settings, FileCode, Package, Edit, Map, Wrench, Box } from "lucide-react"
-import UnitEdit from "../page/UnitEdit/page"
-import FilesEdit from "../page/FilesEdit/page"
-import UnitList from "../page/UnitList/page"
-import ConfigPage from "../page/Config/page"
-
-import RepackPage from "../page/Repack/page"
-import SceneEdit from "../page/SceneEdit/page"
-import MiscToolsPage from "../page/MiscTools/page"
-import TestEditorPage from "../page/TestEditor/page"
-import UnitModelEdit from "../page/UnitModelEdit/page"
+import { lazy } from "react"
+import { Home, List, Settings, FileCode, Package, Map, Wrench, Box } from "lucide-react"
 import { SIDEBAR_ROUTE_URLS } from "./sidebarRouteUrls"
+
+// Pages are code-split via React.lazy so the initial app shell loads without
+// pulling every page (and heavy deps like three.js) into the first bundle.
+// KeepAliveOutlet renders each element inside a Suspense boundary.
+const MainPage = lazy(() => import("../page/Main/page"))
+const ExtractFilePage = lazy(() => import("../page/Extract/page"))
+const RepackPage = lazy(() => import("../page/Repack/page"))
+const UnitEdit = lazy(() => import("../page/UnitEdit/page"))
+const FilesEdit = lazy(() => import("../page/FilesEdit/page"))
+const UnitList = lazy(() => import("../page/UnitList/page"))
+const ConfigPage = lazy(() => import("../page/Config/page"))
+const SceneEdit = lazy(() => import("../page/SceneEdit/page"))
+const UnitModelEdit = lazy(() => import("../page/UnitModelEdit/page"))
+const MiscToolsPage = lazy(() => import("../page/MiscTools/page"))
+const TestEditorPage = lazy(() => import("../page/TestEditor/page"))
 
 // Menu items.
 export const RouterItems = [
