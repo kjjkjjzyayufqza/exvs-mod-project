@@ -18,6 +18,7 @@ mod scene_memory_session;
 mod scene_session_commands;
 pub mod ssbh_dae;
 mod ssbh_dae_cmd;
+mod ssbh_mesh_binary;
 mod ssbh_motion;
 pub mod ssbh_preview;
 mod stage_commands;
@@ -127,6 +128,8 @@ pub fn run() {
             stage_commands::load_stage_bundle,
             stage_commands::stage_load_skeleton,
             stage_commands::stage_stream_bundles,
+            ssbh_mesh_binary::take_mesh_geometry,
+            ssbh_mesh_binary::clear_mesh_geometry_registry,
             stage_commands::preview_stage_fhm2d_rename,
             stage_commands::load_stage_from_preview,
             stage_commands::extract_stage_fhm2d_to_folder,

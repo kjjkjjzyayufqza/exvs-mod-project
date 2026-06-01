@@ -225,6 +225,10 @@ import { SceneDetailViewHost } from "./components/detail-view/SceneDetailViewHos
 import type { PreviewRenderStyle } from "@/components/ssbh-model-preview/SsbhModelPreviewContext";
 
 import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
+import {
+  clearMeshGeometryRegistry,
+  hydrateStageBundleGeometry,
+} from "@/components/ssbh-model-preview/meshGeometryHydrate";
 
 interface StageBundleResponse {
   rootPath: string;
@@ -457,6 +461,8 @@ function ResetIconButton({ onClick, label, disabled }: { onClick: () => void; la
 export default function SceneEdit() {
   const viewportRef = useRef<MapViewportHandle>(null);
   const allNodeIdsRef = useRef<string[]>([]);
+  /** Stage root whose bundle load is currently in flight, to dedupe re-entrant opens. */
+  const stageLoadInFlightRef = useRef<string | null>(null);
   const [, startTransition] = useTransition();
 
   const { defaultLayout: persistedLayout, onLayoutChanged } = useDefaultLayout({
@@ -1100,6 +1106,11 @@ export default function SceneEdit() {
 
   const applyBundle = useCallback(
     async (path: string, bundle: StageBundleResponse, options: { showToast?: boolean } = {}) => {
+      // Fetch binary geometry and attach typed-array views before any geometry is built
+      // (texture inventory below builds draw lists). The same bundle object references
+      // then carry their geometry into viewport state.
+      await hydrateStageBundleGeometry(bundle.baseModel, bundle.subModels);
+
       let sharedTexturePaths: string[] = [];
       try {
         sharedTexturePaths = await listStageTextureFilePaths(path);
@@ -1254,6 +1265,8 @@ export default function SceneEdit() {
   );
 
   const resetState = useCallback(() => {
+    // Release any geometry blobs still buffered backend-side from a previous stage.
+    clearMeshGeometryRegistry().catch(() => {});
     if (sessionId) {
       disposeFhm2dMemorySession(sessionId).catch(() => {});
     }
@@ -1314,6 +1327,11 @@ export default function SceneEdit() {
 
       const stageRoot = `${selected}\\0\\0`;
 
+      // Guard against re-entrant loads of the same stage (the heavy bundle load was
+      // observed running twice). Skip if an identical load is already in flight.
+      if (stageLoadInFlightRef.current === stageRoot) return;
+      stageLoadInFlightRef.current = stageRoot;
+
       setIsLoading(true);
       resetState();
 
@@ -1354,6 +1372,7 @@ export default function SceneEdit() {
       toast.error("Failed to load stage", { description: String(err) });
     } finally {
       setIsLoading(false);
+      stageLoadInFlightRef.current = null;
     }
   }, [applyBundle, resetState]);
 

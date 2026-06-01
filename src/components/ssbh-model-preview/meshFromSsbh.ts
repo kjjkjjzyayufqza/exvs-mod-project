@@ -33,6 +33,31 @@ function vectorDataToVec2(data: VectorDataJson | undefined): [number, number][] 
   return null;
 }
 
+/** Flattens a legacy `[[x,y,z],...]` attribute into a packed `Float32Array` (stride 3). */
+function vec3RowsToFloat32(rows: [number, number, number][] | null): Float32Array | null {
+  if (!rows || rows.length === 0) return null;
+  const out = new Float32Array(rows.length * 3);
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]!;
+    out[i * 3] = r[0];
+    out[i * 3 + 1] = r[1];
+    out[i * 3 + 2] = r[2];
+  }
+  return out;
+}
+
+/** Flattens a legacy `[[u,v],...]` attribute into a packed `Float32Array` (stride 2). */
+function vec2RowsToFloat32(rows: [number, number][] | null): Float32Array | null {
+  if (!rows || rows.length === 0) return null;
+  const out = new Float32Array(rows.length * 2);
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]!;
+    out[i * 2] = r[0];
+    out[i * 2 + 1] = r[1];
+  }
+  return out;
+}
+
 function normalizeParamId(paramId: unknown): string {
   if (typeof paramId === "string") return paramId;
   if (paramId && typeof paramId === "object") {
@@ -1033,24 +1058,24 @@ function buildGeometryForObject(
   obj: MeshObjectJson,
   skel: SkelDataJson | null | undefined,
 ): { geometry: BufferGeometry; skin: MeshSkinRuntime | null } {
-  const indices = obj.vertex_indices;
+  // Two sources of truth: a binary side-channel (typed-array views attached as `__bin`
+  // by hydrateBundleGeometry) or the legacy inline `{Vector3:[...]}` JSON arrays. Both are
+  // normalized to packed Float32Array/Uint32Array here so the de-index loop is shared.
+  const bin = obj.__bin;
+  const indices: ArrayLike<number> = bin ? bin.indices : (obj.vertex_indices ?? []);
   if (indices.length % 3 !== 0) {
     throw new Error(
       `Mesh "${obj.name}" subindex ${obj.subindex}: vertex_indices length must be a multiple of 3`,
     );
   }
-  const posAttr = obj.positions[0];
-  const positions = vectorDataToVec3(posAttr?.data);
-  if (!positions?.length) {
+  const positions = bin ? bin.positions : vec3RowsToFloat32(vectorDataToVec3(obj.positions?.[0]?.data));
+  if (!positions || positions.length === 0) {
     throw new Error(`Mesh "${obj.name}" subindex ${obj.subindex}: missing Position attribute`);
   }
-  const logicalCount = positions.length;
-  const nAttr = obj.normals[0];
-  const normals = nAttr ? vectorDataToVec3(nAttr.data) : null;
-  const uvAttr = obj.texture_coordinates[0];
-  const uvs = uvAttr ? vectorDataToVec2(uvAttr.data) : null;
-  const uv2Attr = obj.texture_coordinates[1];
-  const uvs2 = uv2Attr ? vectorDataToVec2(uv2Attr.data) : null;
+  const logicalCount = positions.length / 3;
+  const normals = bin ? bin.normals : vec3RowsToFloat32(vectorDataToVec3(obj.normals?.[0]?.data));
+  const uvs = bin ? bin.uv0 : vec2RowsToFloat32(vectorDataToVec2(obj.texture_coordinates?.[0]?.data));
+  const uvs2 = bin ? bin.uv1 : vec2RowsToFloat32(vectorDataToVec2(obj.texture_coordinates?.[1]?.data));
 
   const logicalSkin =
     skel && obj.bone_influences?.length
@@ -1067,16 +1092,18 @@ function buildGeometryForObject(
 
   for (let i = 0; i < indices.length; i++) {
     const vi = indices[i]!;
-    const p = positions[vi];
-    if (!p) {
+    if (vi < 0 || vi >= logicalCount) {
       throw new Error(
         `Mesh "${obj.name}" subindex ${obj.subindex}: vertex index ${vi} out of range`,
       );
     }
-    pos.push(p[0], p[1], p[2]);
-    bindPositions[i * 3] = p[0];
-    bindPositions[i * 3 + 1] = p[1];
-    bindPositions[i * 3 + 2] = p[2];
+    const px = positions[vi * 3]!;
+    const py = positions[vi * 3 + 1]!;
+    const pz = positions[vi * 3 + 2]!;
+    pos.push(px, py, pz);
+    bindPositions[i * 3] = px;
+    bindPositions[i * 3 + 1] = py;
+    bindPositions[i * 3 + 2] = pz;
     if (logicalSkin) {
       const o = vi * 4;
       for (let k = 0; k < 4; k++) {
@@ -1084,14 +1111,14 @@ function buildGeometryForObject(
         boneWeights[i * 4 + k] = logicalSkin.w[o + k]!;
       }
     }
-    if (normals?.[vi]) {
-      nrm.push(normals[vi][0], normals[vi][1], normals[vi][2]);
+    if (normals) {
+      nrm.push(normals[vi * 3]!, normals[vi * 3 + 1]!, normals[vi * 3 + 2]!);
     }
-    if (uvs?.[vi]) {
-      uv.push(uvs[vi][0], uvs[vi][1]);
+    if (uvs) {
+      uv.push(uvs[vi * 2]!, uvs[vi * 2 + 1]!);
     }
-    if (uvs2?.[vi]) {
-      uv2.push(uvs2[vi][0], uvs2[vi][1]);
+    if (uvs2) {
+      uv2.push(uvs2[vi * 2]!, uvs2[vi * 2 + 1]!);
     }
   }
 

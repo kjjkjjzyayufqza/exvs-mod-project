@@ -749,8 +749,9 @@ fn build_scene_import_preview_bundle_from_artifacts(
         matl_paths,
         modl: serde_json::to_value(&modl)
             .map_err(|e| format!("Failed to serialize in-memory Modl: {e}"))?,
-        mesh: serde_json::to_value(&mesh)
-            .map_err(|e| format!("Failed to serialize in-memory Mesh: {e}"))?,
+        // Geometry travels as a binary side-channel; see ssbh_mesh_binary::pack_and_register.
+        mesh: serde_json::to_value(crate::ssbh_mesh_binary::pack_and_register(&mesh))
+            .map_err(|e| format!("Failed to serialize in-memory Mesh header: {e}"))?,
         skel: skel
             .map(|value| serde_json::to_value(&value))
             .transpose()

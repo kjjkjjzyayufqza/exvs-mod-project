@@ -1069,7 +1069,10 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
         };
 
     let modl_json = serde_json::to_value(&modl).map_err(|e| format!("Failed to serialize Modl: {e}"))?;
-    let mesh_json = serde_json::to_value(&mesh).map_err(|e| format!("Failed to serialize Mesh: {e}"))?;
+    // Geometry travels as a binary side-channel (registered blob fetched by the frontend),
+    // never as a JSON Value — large meshes otherwise blow memory up and abort the host.
+    let mesh_json = serde_json::to_value(crate::ssbh_mesh_binary::pack_and_register(&mesh))
+        .map_err(|e| format!("Failed to serialize Mesh header: {e}"))?;
 
     let bundle = SsbhModelPreviewBundle {
         root_folder: preview_path_to_frontend(&root_canon),

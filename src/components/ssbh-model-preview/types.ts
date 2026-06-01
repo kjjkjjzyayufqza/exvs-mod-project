@@ -58,15 +58,30 @@ export type BoneInfluenceJson = {
   vertex_weights: VertexWeightJson[];
 };
 
+/**
+ * Geometry delivered as a binary side-channel: typed-array views over the packed buffer
+ * fetched via `take_mesh_geometry` and attached to each object by `hydrateBundleGeometry`.
+ */
+export type MeshBinaryObjectViews = {
+  positions: Float32Array | null;
+  normals: Float32Array | null;
+  uv0: Float32Array | null;
+  uv1: Float32Array | null;
+  indices: Uint32Array;
+};
+
 export type MeshObjectJson = {
   name: string;
   subindex: number;
   parent_bone_name: string;
-  vertex_indices: number[];
-  positions: MeshAttributeJson[];
-  normals: MeshAttributeJson[];
-  texture_coordinates: MeshAttributeJson[];
   bone_influences?: BoneInfluenceJson[];
+  /** Legacy inline geometry; absent when `__bin` (binary side-channel) is present. */
+  vertex_indices?: number[];
+  positions?: MeshAttributeJson[];
+  normals?: MeshAttributeJson[];
+  texture_coordinates?: MeshAttributeJson[];
+  /** Runtime-only: typed-array views attached after fetching the binary geometry buffer. */
+  __bin?: MeshBinaryObjectViews;
 };
 
 export type MeshDataJson = {
@@ -74,6 +89,43 @@ export type MeshDataJson = {
   minor_version: number;
   objects: MeshObjectJson[];
   is_vs2: boolean;
+};
+
+/** Byte-slice descriptor for one attribute inside the packed geometry buffer (camelCase from Rust). */
+export type MeshAttributeSliceJson = {
+  offset: number;
+  count: number;
+  components: number;
+};
+
+export type MeshIndexSliceJson = {
+  offset: number;
+  count: number;
+};
+
+/** Per-object entry of the binary mesh header emitted by the Rust loader. */
+export type MeshObjectGeometryHeaderJson = {
+  name: string;
+  subindex: number;
+  parentBoneName: string;
+  boneInfluences?: BoneInfluenceJson[];
+  vertexCount: number;
+  indexCount: number;
+  positions: MeshAttributeSliceJson | null;
+  normals: MeshAttributeSliceJson | null;
+  uv0: MeshAttributeSliceJson | null;
+  uv1: MeshAttributeSliceJson | null;
+  indices: MeshIndexSliceJson;
+};
+
+/** The light mesh header that replaces inline geometry in the preview bundle. */
+export type MeshGeometryHeaderJson = {
+  majorVersion: number;
+  minorVersion: number;
+  isVs2: boolean;
+  binary: true;
+  geometryId: string;
+  objects: MeshObjectGeometryHeaderJson[];
 };
 
 export type ModlEntryJson = {

@@ -968,8 +968,9 @@ fn build_preview_bundle_from_snapshot(
         matl_paths: input.candidate.matl_virtual_paths.clone(),
         modl: serde_json::to_value(&modl)
             .map_err(|e| format!("Failed to serialize in-memory Modl: {e}"))?,
-        mesh: serde_json::to_value(&mesh)
-            .map_err(|e| format!("Failed to serialize in-memory Mesh: {e}"))?,
+        // Geometry travels as a binary side-channel; see ssbh_mesh_binary::pack_and_register.
+        mesh: serde_json::to_value(crate::ssbh_mesh_binary::pack_and_register(&mesh))
+            .map_err(|e| format!("Failed to serialize in-memory Mesh header: {e}"))?,
         skel: skel_value,
         matl: matl_combined
             .map(|matl| serde_json::to_value(&matl).map_err(|e| format!("Failed to serialize in-memory Matl: {e}")))

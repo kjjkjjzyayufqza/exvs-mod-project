@@ -303,6 +303,42 @@ describe("buildDrawListFromBundle", () => {
     expect(uv2?.array).toEqual(uv?.array);
   });
 
+  it("builds geometry from binary __bin views without inline arrays", () => {
+    const modl: ModlDataJson = {
+      entries: [
+        { mesh_object_name: "body", mesh_object_subindex: 0, material_label: "mat_body" },
+      ],
+    };
+    const mesh: MeshDataJson = {
+      major_version: 1,
+      minor_version: 10,
+      is_vs2: true,
+      objects: [
+        {
+          name: "body",
+          subindex: 0,
+          parent_bone_name: "",
+          __bin: {
+            positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+            normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]),
+            uv0: new Float32Array([0, 0, 1, 0, 0, 1]),
+            uv1: null,
+            indices: new Uint32Array([0, 1, 2]),
+          },
+        },
+      ],
+    };
+
+    const draws = buildDrawListFromBundle(modl, mesh, null);
+    expect(draws).toHaveLength(1);
+    const geom = draws[0]?.geometry;
+    const position = geom?.getAttribute("position");
+    expect(position?.count).toBe(3);
+    expect(Array.from(position!.array as Float32Array)).toEqual([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+    // uv duplicated into uv2 when the second channel is absent (same as inline path).
+    expect(geom?.getAttribute("uv2")?.array).toEqual(geom?.getAttribute("uv")?.array);
+  });
+
   it("writes skinIndex and skinWeight attributes for skinned draws", () => {
     const modl: ModlDataJson = {
       entries: [

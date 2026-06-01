@@ -34,6 +34,7 @@ import {
   type ResolvedMaterialBinding,
   type TexturePreviewSlotKey,
 } from "./meshFromSsbh";
+import { hydrateBundleGeometry } from "./meshGeometryHydrate";
 import type { NutexbTextureData, NutexbTextureDataMap } from "./ssbhTextureUpload";
 import { decodeSceneNutexbRgba } from "@/page/SceneEdit/utils/sceneTextureDecode";
 import {
@@ -864,6 +865,8 @@ export function SsbhModelPreviewProvider({
       const id = previewInstanceIdFromModlPath(b.modlPath, startSlotIndex + index);
         const label = fileBasename(b.modlPath).replace(/\.numdlb$/i, "") || "model";
         const skelJson = b.skel ? (b.skel as SkelDataJson) : null;
+        // Attach binary geometry (typed-array views) before building draws.
+        await hydrateBundleGeometry(b);
         let created: BuiltMeshDraw[];
         try {
           created = buildDrawListFromBundle(

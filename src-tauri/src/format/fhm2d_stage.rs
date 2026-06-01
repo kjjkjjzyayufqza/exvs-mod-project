@@ -2862,7 +2862,8 @@ fn build_model_bundle_from_virtual_folder(
     }
 
     let modl_json = serde_json::to_value(&modl).ok()?;
-    let mesh_json = serde_json::to_value(&mesh).ok()?;
+    // Geometry travels as a binary side-channel; see ssbh_mesh_binary::pack_and_register.
+    let mesh_json = serde_json::to_value(crate::ssbh_mesh_binary::pack_and_register(&mesh)).ok()?;
     let skel_json = skel.as_ref().and_then(|s| serde_json::to_value(s).ok());
     let matl_json = matl_combined
         .as_ref()
