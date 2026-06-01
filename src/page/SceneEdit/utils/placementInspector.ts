@@ -44,13 +44,13 @@ export function summarizePlacementRow(
   if (customName) return customName;
 
   const type = entry.vdkType?.toUpperCase() ?? "ROW";
-  if (entry.objectNumber !== null && type === "OBJECT") {
+  if (entry.objectNumber != null && type === "OBJECT") {
     const sub = subModels.find((sm) => sm.objectIndex === entry.objectNumber);
     if (sub) return sub.folderName;
     return `Object #${entry.objectNumber}`;
   }
 
-  if (entry.objectNumber !== null) {
+  if (entry.objectNumber != null) {
     return `${type} #${entry.objectNumber}`;
   }
 

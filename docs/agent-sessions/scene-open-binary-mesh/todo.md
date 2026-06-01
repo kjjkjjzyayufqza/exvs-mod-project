@@ -11,10 +11,14 @@
       `resetState` (clear), and `SsbhModelPreviewContext.buildInstancesFromBundles`.
 - [x] ③ (partial): defensive re-entrant-open guard in `handleOpenFolder` (true trigger needs live confirm).
 - [x] Verify: cargo `ssbh_mesh_binary` 3/3 + lib compiles; vitest meshFromSsbh 10/10; tsc 0 errors.
-- [ ] ② open-folder uses `stageStreamBundles` (base first, sub-models streamed). Needs the stream
-      command to also carry placement/graphic-params (or pre-load skeleton) + live-app validation.
+- [x] ② open-folder uses `stageStreamBundles` with `stageLoadSkeleton` pre-load. Frontend now
+      streams base/sub-model bundles, hydrates binary geometry per chunk, tracks stream progress,
+      and treats `complete` as the reliable finish signal.
+- [x] Verify: streaming-open wiring type-checks with `npm exec tsc --noEmit`; `page.tsx` lints clean.
 - [ ] Manual: open `0x16F73C97` in the running app and confirm no crash + new_model renders.
 - [ ] Follow-up: `SceneDetailViewWindow` MeshReadonlyTab shows no arrays for binary mesh (display-only).
+- [ ] Follow-up perf: `stage_stream_bundles` still parses sub-models in rayon before sending, so
+      frontend open is progressive but backend peak memory is not yet guaranteed to be single-model.
 - [ ] Follow-up perf: only positions/normals/uv0/uv1/indices are packed (tangents/colorsets dropped from
       preview geometry — matches what the renderer used anyway).
 

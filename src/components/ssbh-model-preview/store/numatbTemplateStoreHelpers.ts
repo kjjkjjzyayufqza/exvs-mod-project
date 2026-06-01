@@ -255,7 +255,7 @@ export function isTextureMapPathRequired(
   }
   const useToggle = TEXTURE_MAP_USE_TOGGLES[mapParamId];
   if (useToggle) {
-    return readEntryBoolean(entry, useToggle) === true;
+    return readEntryBoolean(entry, useToggle) === true && entryHasTextureParam(entry, mapParamId);
   }
   if ((BASE_COLOR_MAP_PARAM_IDS as readonly string[]).includes(mapParamId)) {
     return isBaseColorMapPathRequired(entry);
@@ -493,26 +493,17 @@ function collectMissingTexturePathsForEntry(
   const missing: string[] = [];
   const seen = new Set<string>();
 
-  for (const slot of collectPresentTexturePathSlots(entry)) {
+    for (const slot of collectPresentTexturePathSlots(entry)) {
     if (slot.path) {
+      continue;
+    }
+    if (!isTextureMapPathRequired(entry, slot.paramId, profile)) {
       continue;
     }
     const key = textureSlotMissingKey(slot.paramId, slot.textureDataKind);
     if (!seen.has(key)) {
       seen.add(key);
       missing.push(formatMissing(slot.paramId, slot.textureDataKind));
-    }
-  }
-
-  for (const paramId of collectRequiredTextureMapParamIds(entry, profile)) {
-    const slot = lookupTexturePathSlot(entry, paramId);
-    if (slot === null || !slot.path) {
-      const textureDataKind = slot?.textureDataKind ?? defaultTextureDataKindForParam(paramId);
-      const key = textureSlotMissingKey(paramId, textureDataKind);
-      if (!seen.has(key)) {
-        seen.add(key);
-        missing.push(formatMissing(paramId, textureDataKind));
-      }
     }
   }
   return missing;
@@ -655,21 +646,13 @@ function collectMissingTexturePathSlotRefsImpl(
     };
 
     for (const slot of collectPresentTexturePathSlots(entry)) {
-      if (!slot.path) {
-        pushMissing(slot.paramId, slot.attributeIndex, slot.textureDataKind);
-      }
-    }
-
-    for (const paramId of collectRequiredTextureMapParamIds(entry, profile)) {
-      const slot = lookupTexturePathSlot(entry, paramId);
-      if (slot !== null && slot.path) {
+      if (slot.path) {
         continue;
       }
-      pushMissing(
-        paramId,
-        slot?.attributeIndex ?? -1,
-        slot?.textureDataKind ?? defaultTextureDataKindForParam(paramId),
-      );
+      if (!isTextureMapPathRequired(entry, slot.paramId, profile)) {
+        continue;
+      }
+      pushMissing(slot.paramId, slot.attributeIndex, slot.textureDataKind);
     }
   }
   return missing;

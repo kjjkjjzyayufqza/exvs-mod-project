@@ -144,39 +144,59 @@ pub fn texture_param_uses_textures2_bucket(entry: &MatlEntryData, param_id: Para
         .unwrap_or_else(|| default_texture_param_uses_textures2_bucket(param_id))
 }
 
+pub fn is_texture_map_path_required(
+    entry: &MatlEntryData,
+    map_param_id: ParamId,
+    profile: NumatbProfileKind,
+) -> bool {
+    if map_param_id == ParamId::Texture1 {
+        return entry_has_texture_param(entry, ParamId::Texture1);
+    }
+    if map_param_id == ParamId::SpecularMap {
+        return profile == NumatbProfileKind::Maya && should_require_maya_specular_map_path(entry);
+    }
+    if map_param_id == ParamId::DiffuseCubeMap {
+        return should_require_diffuse_cube_map_path(entry);
+    }
+    for &(map_id, use_id) in TEXTURE_MAP_USE_TOGGLES {
+        if map_id == map_param_id {
+            return read_entry_boolean(entry, use_id) == Some(true)
+                && entry_has_texture_param(entry, map_param_id);
+        }
+    }
+    if BASE_COLOR_MAP_PATHS.contains(&map_param_id) {
+        if !is_base_color_map_path_required(entry) {
+            return false;
+        }
+        return entry_has_texture_param(entry, map_param_id)
+            || read_entry_boolean(entry, ParamId::UseBaseColorMap) == Some(true)
+            || read_entry_boolean(entry, ParamId::UseDiffuseMap) == Some(true);
+    }
+    false
+}
+
 pub fn collect_missing_texture_paths_for_entry(
     entry: &MatlEntryData,
     profile: NumatbProfileKind,
 ) -> Vec<MissingTexturePath> {
     let mut missing: Vec<MissingTexturePath> = Vec::new();
 
-    // Rule 1 (authoritative): every texture parameter that physically exists must have a
-    // non-empty path. A present-but-empty texture key is dereferenced by the game regardless
-    // of any Use* toggle (e.g. DiffuseCubeMap is always sampled for diffuse IBL), so an empty
-    // value crashes the stage. Flag any empty key unconditionally.
+    // Rule 1: present texture rows with empty paths are flagged only when that map is
+    // actually required (Use* toggle true, implicit base-color slot, Texture1 declared, etc.).
+    // If the enabling boolean key is absent or false, an empty map path is ignored.
     for row in &entry.textures {
-        if row.data.trim().is_empty() {
+        if row.data.trim().is_empty()
+            && is_texture_map_path_required(entry, row.param_id, profile)
+        {
             push_missing(&mut missing, entry, row.param_id, false);
         }
     }
     for row in &entry.textures2 {
-        if row.data.trim().is_empty() {
+        if row.data.trim().is_empty()
+            && is_texture_map_path_required(entry, row.param_id, profile)
+        {
             push_missing(&mut missing, entry, row.param_id, true);
         }
-    }
-
-    // Rule 2: toggled/implicit requirements may additionally demand a slot that is entirely
-    // ABSENT (e.g. UseBaseColorMap=true but no BaseColorMap row present yet). Rule 1 cannot
-    // catch those because there is no row to inspect.
-    for param_id in collect_required_texture_map_param_ids(entry, profile) {
-        let slot = lookup_texture_path_slot(entry, param_id);
-        if slot.is_some_and(|slot| !slot.path.trim().is_empty()) {
-            continue;
-        }
-        let is_textures2_bucket = slot
-            .map(|slot| slot.is_textures2_bucket)
-            .unwrap_or_else(|| default_texture_param_uses_textures2_bucket(param_id));
-        push_missing(&mut missing, entry, param_id, is_textures2_bucket);
     }
 
     missing
@@ -330,21 +350,28 @@ mod tests {
     }
 
     #[test]
-    fn roughness_map_empty_row_is_flagged_regardless_of_use_toggle() {
-        // A present-but-empty texture key must always be flagged: the game samples the slot
-        // regardless of the Use* toggle, so an empty path crashes the stage.
+    fn roughness_map_empty_row_is_flagged_only_when_use_toggle_true() {
         let mut entry = empty_entry("m1");
         entry.textures2.push(texture2(ParamId::RoughnessMap, ""));
         entry
             .booleans
             .push(boolean(ParamId::UseRoughnessMap, false));
 
-        assert_eq!(missing_ids(&entry, MAYA), vec![ParamId::RoughnessMap]);
+        assert!(missing_ids(&entry, MAYA).is_empty());
 
         entry.booleans.clear();
         entry.booleans.push(boolean(ParamId::UseRoughnessMap, true));
 
         assert_eq!(missing_ids(&entry, MAYA), vec![ParamId::RoughnessMap]);
+    }
+
+    #[test]
+    fn roughness_map_empty_row_without_use_toggle_is_allowed() {
+        let mut entry = empty_entry("m1");
+        entry.textures2.push(texture2(ParamId::RoughnessMap, ""));
+
+        assert!(missing_ids(&entry, NUST).is_empty());
+        assert!(missing_ids(&entry, MAYA).is_empty());
     }
 
     #[test]
@@ -356,50 +383,57 @@ mod tests {
     }
 
     #[test]
-    fn base_color_empty_row_is_flagged_even_with_false_toggle() {
-        // Present-but-empty key is always flagged, even when the Use toggle is false.
+    fn base_color_empty_row_is_ignored_when_use_toggle_false() {
         let mut entry = empty_entry("m1");
         entry.textures2.push(texture2(ParamId::BaseColorMap, ""));
         entry
             .booleans
             .push(boolean(ParamId::UseBaseColorMap, false));
 
-        assert_eq!(missing_ids(&entry, MAYA), vec![ParamId::BaseColorMap]);
+        assert!(missing_ids(&entry, MAYA).is_empty());
     }
 
     #[test]
-    fn explicit_base_color_toggle_requires_default_slot_when_absent() {
+    fn explicit_base_color_toggle_without_slot_is_allowed() {
         let mut entry = empty_entry("m1");
         entry.booleans.push(boolean(ParamId::UseBaseColorMap, true));
 
-        let missing = collect_missing_texture_paths_for_entry(&entry, MAYA);
-
-        assert_eq!(
-            missing.iter().map(|item| item.param_id).collect::<Vec<_>>(),
-            vec![ParamId::BaseColorMap]
-        );
-        assert!(missing[0].is_textures2_bucket);
+        assert!(collect_missing_texture_paths_for_entry(&entry, MAYA).is_empty());
     }
 
     #[test]
-    fn normal_map_empty_row_is_flagged_without_use_toggle() {
-        // Present-but-empty key is always flagged, even without a Use toggle.
+    fn use_metallic_true_without_metallic_row_is_allowed() {
+        let mut entry = empty_entry("pbr1Mtl");
+        entry.booleans.push(boolean(ParamId::UseMetallicMap, true));
+        entry.booleans.push(boolean(ParamId::UseRoughnessMap, true));
+        entry.booleans.push(boolean(ParamId::UseAmbientOcclusionMap, true));
+        entry.booleans.push(boolean(ParamId::UseNormalMap, true));
+        entry.booleans.push(boolean(ParamId::UseEmissiveMap, true));
+
+        assert!(collect_missing_texture_paths_for_entry(&entry, NUST).is_empty());
+    }
+
+    #[test]
+    fn normal_map_empty_row_is_flagged_only_when_use_toggle_true() {
         let mut entry = empty_entry("m1");
         entry.textures2.push(texture2(ParamId::NormalMap, ""));
+
+        assert!(missing_ids(&entry, MAYA).is_empty());
+
+        entry.booleans.push(boolean(ParamId::UseNormalMap, true));
 
         assert_eq!(missing_ids(&entry, MAYA), vec![ParamId::NormalMap]);
     }
 
     #[test]
-    fn specular_map_empty_row_is_flagged_regardless_of_uv_transform() {
-        // Present-but-empty key is always flagged, regardless of UseSpecularUvTransform.
+    fn specular_map_empty_row_is_flagged_only_when_uv_transform_requires_it() {
         let mut entry = empty_entry("m1");
         entry.textures.push(texture(ParamId::SpecularMap, ""));
         entry
             .booleans
             .push(boolean(ParamId::UseSpecularUvTransform, false));
 
-        assert_eq!(missing_ids(&entry, MAYA), vec![ParamId::SpecularMap]);
+        assert!(missing_ids(&entry, MAYA).is_empty());
 
         entry.booleans.clear();
         entry
@@ -420,38 +454,31 @@ mod tests {
     }
 
     #[test]
-    fn nust_profile_still_flags_present_empty_specular_row() {
-        // The Maya-specific "require SpecularMap when UseSpecularUvTransform" rule does not
-        // apply on Nust, but the present-but-empty key rule still flags the empty SpecularMap.
+    fn nust_profile_ignores_empty_specular_row_without_uv_transform() {
         let mut entry = empty_entry("m1");
         entry.textures.push(texture(ParamId::SpecularMap, ""));
         entry
             .booleans
             .push(boolean(ParamId::UseSpecularUvTransform, true));
 
-        assert_eq!(missing_ids(&entry, NUST), vec![ParamId::SpecularMap]);
+        assert!(missing_ids(&entry, NUST).is_empty());
     }
 
     #[test]
-    fn diffuse_cube_map_empty_row_is_flagged_regardless_of_uv_transform() {
-        // Regression: an imported __nust__ material had DiffuseCubeMap="" with no
-        // UseDiffuseUvTransform toggle. The old gated rule let it pass pre-flight and the
-        // packed stage crashed in-game. A present-but-empty DiffuseCubeMap must always flag.
+    fn diffuse_cube_map_empty_row_is_flagged_only_when_uv_transform_requires_it() {
         let mut entry = empty_entry("m1");
         entry.textures2.push(texture2(ParamId::DiffuseCubeMap, ""));
         entry
             .booleans
             .push(boolean(ParamId::UseDiffuseUvTransform, false));
 
-        assert_eq!(missing_ids(&entry, NUST), vec![ParamId::DiffuseCubeMap]);
-        assert_eq!(missing_ids(&entry, MAYA), vec![ParamId::DiffuseCubeMap]);
+        assert!(missing_ids(&entry, NUST).is_empty());
+        assert!(missing_ids(&entry, MAYA).is_empty());
 
-        // The real-world crash case: the toggle row is entirely absent.
         entry.booleans.clear();
-        assert_eq!(missing_ids(&entry, NUST), vec![ParamId::DiffuseCubeMap]);
-        assert_eq!(missing_ids(&entry, MAYA), vec![ParamId::DiffuseCubeMap]);
+        assert!(missing_ids(&entry, NUST).is_empty());
+        assert!(missing_ids(&entry, MAYA).is_empty());
 
-        // And still flagged when the toggle is true.
         entry
             .booleans
             .push(boolean(ParamId::UseDiffuseUvTransform, true));
@@ -501,6 +528,21 @@ mod tests {
                 ParamId::SpecularMap,
             ]
         );
+    }
+
+    #[test]
+    fn pbr_maps_with_empty_paths_and_no_use_toggles_are_allowed() {
+        let mut entry = empty_entry("pbr1Mtl");
+        entry.textures2.extend([
+            texture2(ParamId::MetallicMap, ""),
+            texture2(ParamId::RoughnessMap, ""),
+            texture2(ParamId::AmbientOcclusionMap, ""),
+            texture2(ParamId::NormalMap, ""),
+            texture2(ParamId::EmissiveMap, ""),
+        ]);
+
+        assert!(collect_missing_texture_paths_for_entry(&entry, NUST).is_empty());
+        assert!(collect_missing_texture_paths_for_entry(&entry, MAYA).is_empty());
     }
 
     #[test]

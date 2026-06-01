@@ -89,10 +89,20 @@ Frontend `bundle.mesh` consumers: geometry — `meshFromSsbh.ts` (`buildGeometry
   All 4 mesh `Value` producers now emit a light header + registered blob id. Frontend builds
   geometry from typed-array views (`buildGeometryForObject`), hydrated via
   `meshGeometryHydrate.ts` in `applyBundle` / preview context; `resetState` clears the registry.
+- ② done on frontend: `src/page/SceneEdit/page.tsx` now opens folders via
+  `stageLoadSkeleton` -> `applySkeleton` -> `stageStreamBundles`, hydrates each streamed
+  bundle with `hydrateBundleGeometry`, keeps `modelLoadProgress` in sync with stream chunks,
+  and waits for the `complete` chunk before dropping the loading overlay. `sceneOpenFolder`
+  now runs in parallel only for session/HKT work.
 - ③ partial: defensive re-entrant guard in `handleOpenFolder`.
-- Verified: cargo `ssbh_mesh_binary` 3/3 + lib compiles green; vitest meshFromSsbh 10/10; tsc 0 errors.
-- Not done: ② streaming open (optimization on top of the now-fixed crash); live-app open of
-  `0x16F73C97` not yet run (cannot launch dev server from here).
+- Verified: cargo `ssbh_mesh_binary` 3/3 + lib compiles green; vitest meshFromSsbh 10/10;
+  prior tsc 0 errors. Follow-up verification for the streaming-open wiring: `npm exec tsc --noEmit`
+  exits 0 and `ReadLints` on `src/page/SceneEdit/page.tsx` reports no diagnostics.
+- Not done: live-app open of `0x16F73C97` not yet run (cannot launch dev server from here).
+- Follow-up note: current `stage_stream_bundles` still parses sub-models in rayon and then
+  sends them in manifest order. The frontend no longer waits on monolithic `load_stage_bundle`
+  and base-model-first rendering now works, but a stricter "one model peak at a time" backend
+  guarantee would require a later emit-as-produced pass.
 
 ## Delivery decision (big-bang, per user)
 

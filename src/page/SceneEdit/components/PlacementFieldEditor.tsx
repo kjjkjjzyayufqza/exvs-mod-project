@@ -296,13 +296,28 @@ function placementFieldRowPropsAreEqual(
   );
 }
 
+function resolveSubModelIndex(
+  sub: { folderName: string; objectIndex: number },
+  listIndex: number,
+): number {
+  return typeof sub.objectIndex === "number" && Number.isFinite(sub.objectIndex)
+    ? sub.objectIndex
+    : listIndex;
+}
+
 function formatObjectNumberLabel(
   value: string,
   subModels: Array<{ folderName: string; objectIndex: number }>,
 ): string {
-  const selected = subModels.find((sm) => String(sm.objectIndex) === value.trim());
-  if (selected) return `${selected.objectIndex} · ${selected.folderName}`;
-  if (value.trim()) return value;
+  const trimmed = value.trim();
+  const selected = subModels.find(
+    (sm, index) => String(resolveSubModelIndex(sm, index)) === trimmed,
+  );
+  if (selected) {
+    const index = resolveSubModelIndex(selected, subModels.indexOf(selected));
+    return `${index} · ${selected.folderName}`;
+  }
+  if (trimmed) return trimmed;
   return "Select object...";
 }
 
@@ -334,19 +349,22 @@ function PlacementObjectNumberSelect({
         position="popper"
         className="max-h-72 min-w-56 max-w-[min(32rem,calc(100vw-2rem))]"
       >
-        {subModels.map((sm) => (
+        {subModels.map((sm, index) => {
+          const objectIndex = resolveSubModelIndex(sm, index);
+          return (
           <SelectItem
-            key={sm.objectIndex}
-            value={String(sm.objectIndex)}
+            key={`${sm.folderName}:${objectIndex}`}
+            value={String(objectIndex)}
             className="items-start py-1.5 pl-8 pr-2 text-left text-[10px]"
-            title={`${sm.objectIndex} · ${sm.folderName}`}
+            title={`${objectIndex} · ${sm.folderName}`}
           >
-            <span className="font-mono tabular-nums text-muted-foreground">{sm.objectIndex}</span>
+            <span className="font-mono tabular-nums text-muted-foreground">{objectIndex}</span>
             <span className="ml-1.5 min-w-0 whitespace-normal break-all leading-snug">
               {sm.folderName}
             </span>
           </SelectItem>
-        ))}
+          );
+        })}
       </SelectContent>
     </Select>
   );

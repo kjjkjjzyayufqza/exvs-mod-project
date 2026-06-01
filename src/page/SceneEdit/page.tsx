@@ -63,8 +63,10 @@ import {
 } from "./utils/placementNodeId";
 import {
   getRequestedSceneNodeIds,
+  normalizePlacementObjectNumber,
   resolveNodeIdForPlacementIndex,
   resolveSelectionForSceneNode,
+  resolveSubModelPlacementRef,
 } from "./utils/sceneEditorSelection";
 import {
   patchPlacementRawFieldsForNumericField,
@@ -205,6 +207,7 @@ import {
   stageLoadSkeleton,
   stageStreamBundles,
   validateNumatbEmptyParams,
+  type SubModelManifestEntry,
   type StageSkeleton,
   type StageStreamChunk,
   type ExvsStageValidationError,
@@ -227,6 +230,7 @@ import type { PreviewRenderStyle } from "@/components/ssbh-model-preview/SsbhMod
 import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
 import {
   clearMeshGeometryRegistry,
+  hydrateBundleGeometry,
   hydrateStageBundleGeometry,
 } from "@/components/ssbh-model-preview/meshGeometryHydrate";
 
@@ -549,11 +553,24 @@ export default function SceneEdit() {
     graphicParams: GraphicParam[];
     placementEntries: PlacementRow[];
   } | null>(null);
+  const subModelManifestRef = useRef<SubModelManifestEntry[]>([]);
 
   // Merge disk-loaded subModels with imported DAE objects so the placement panel
   // can reference newly imported models before saving to disk.
   const effectiveSubModels = useMemo(() => {
-    if (importedDaeObjects.length === 0) return subModels;
+    const manifest = subModelManifestRef.current;
+    const normalize = (
+      models: Array<{
+        folderName: string;
+        objectIndex: number;
+        bundle?: SsbhModelPreviewBundle;
+      }>,
+    ): Array<{ folderName: string; objectIndex: number }> =>
+      models.map((model, index) =>
+        resolveSubModelPlacementRef(model, manifest, index),
+      );
+
+    if (importedDaeObjects.length === 0) return normalize(subModels);
     const existing = new Set(subModels.map((s) => s.folderName));
     const nextIndex = subModels.length;
     const extras = importedDaeObjects
@@ -562,7 +579,9 @@ export default function SceneEdit() {
         folderName: obj.name,
         objectIndex: nextIndex + i,
       }));
-    return extras.length > 0 ? [...subModels, ...extras] : subModels;
+    return extras.length > 0
+      ? normalize([...subModels, ...extras])
+      : normalize(subModels);
   }, [subModels, importedDaeObjects]);
 
   const [resetDialogState, setResetDialogState] = useState<{
@@ -1129,7 +1148,15 @@ export default function SceneEdit() {
         setStageName(folderName);
         setStageRoot(path);
         setBaseModel(bundle.baseModel);
-        setSubModels(bundle.subModels);
+        subModelManifestRef.current = bundle.subModels.map((sub, index) =>
+          resolveSubModelPlacementRef(sub, bundle.subModels, index),
+        );
+        setSubModels(
+          bundle.subModels.map((sub, index) => ({
+            ...sub,
+            ...resolveSubModelPlacementRef(sub, subModelManifestRef.current, index),
+          })),
+        );
         setGraphicParams(
           bundle.graphicParams.map((p) => ({ key: p.key, value: p.value }))
         );
@@ -1142,7 +1169,7 @@ export default function SceneEdit() {
         setPlacementColMap(colMap);
         const mappedPlacements = bundle.placementEntries.map((e) => ({
           vdkType: e.vdkType,
-          objectNumber: e.objectNumber,
+          objectNumber: normalizePlacementObjectNumber(e.objectNumber),
           posX: e.posX,
           posY: e.posY,
           posZ: e.posZ,
@@ -1201,6 +1228,7 @@ export default function SceneEdit() {
         setStageRoot(path);
         setBaseModel(null);
         setSubModels([]);
+        subModelManifestRef.current = skeleton.subModelManifest;
         setGraphicParams(
           skeleton.graphicParams.map((p) => ({ key: p.key, value: p.value }))
         );
@@ -1213,7 +1241,7 @@ export default function SceneEdit() {
         setPlacementColMap(colMap);
         const mappedPlacements = skeleton.placementEntries.map((e) => ({
           vdkType: e.vdkType,
-          objectNumber: e.objectNumber,
+          objectNumber: normalizePlacementObjectNumber(e.objectNumber),
           posX: e.posX,
           posY: e.posY,
           posZ: e.posZ,
@@ -1274,6 +1302,7 @@ export default function SceneEdit() {
       sceneSessionDestroy(sceneSessionId).catch(() => {});
     }
     initialSnapshotRef.current = null;
+    subModelManifestRef.current = [];
     setStageName(null);
     setStageRoot(null);
     setIsMemoryImport(false);
@@ -1281,6 +1310,7 @@ export default function SceneEdit() {
     setSceneSessionId(null);
     setBaseModel(null);
     setSubModels([]);
+    setModelLoadProgress(null);
     setGraphicParams([]);
     setAppliedGraphicParamKeys(new Set());
     setPlacementHeader([]);
@@ -1335,10 +1365,26 @@ export default function SceneEdit() {
       setIsLoading(true);
       resetState();
 
-      const bundle = await invoke<StageBundleResponse>("load_stage_bundle", {
-        stageRoot,
-      });
-      await applyBundle(stageRoot, bundle);
+      const skeleton = await stageLoadSkeleton(stageRoot);
+      await applySkeleton(stageRoot, skeleton);
+
+      const totalModels =
+        skeleton.subModelManifest.length + (skeleton.hasBaseModel ? 1 : 0);
+      setModelLoadProgress(
+        totalModels > 0 ? { loaded: 0, total: totalModels } : null,
+      );
+
+      let sharedTexturePaths: string[] = [];
+      try {
+        sharedTexturePaths = await listStageTextureFilePaths(stageRoot);
+      } catch (error) {
+        console.warn("[SceneEdit] Failed to list shared stage textures:", error);
+      }
+
+      let streamedBaseModel: SsbhModelPreviewBundle | null = null;
+      const streamedSubModels: StageBundleResponse["subModels"] = [];
+      const streamIssues: string[] = [];
+      const subModelManifest = skeleton.subModelManifest;
 
       sceneOpenFolder(stageRoot).then(async (result) => {
         setSceneSessionId(result.sessionId);
@@ -1368,13 +1414,110 @@ export default function SceneEdit() {
       }).catch((e) => {
         toast.error("Havok scene session failed", { description: String(e) });
       });
+
+      await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        let chunkChain = Promise.resolve();
+
+        const settleResolve = () => {
+          if (settled) return;
+          settled = true;
+          resolve();
+        };
+        const settleReject = (error: unknown) => {
+          if (settled) return;
+          settled = true;
+          reject(error);
+        };
+
+        const processChunk = async (chunk: StageStreamChunk) => {
+          switch (chunk.kind) {
+            case "baseModel": {
+              await hydrateBundleGeometry(chunk.bundle);
+              streamedBaseModel = chunk.bundle;
+              const nextTextureEntries = collectSceneTextureManagerEntries(
+                streamedBaseModel,
+                streamedSubModels,
+                sharedTexturePaths,
+              );
+              startTransition(() => {
+                setBaseModel(chunk.bundle);
+                useSceneTextureManagerStore.getState().setEntries(nextTextureEntries);
+              });
+              break;
+            }
+            case "subModel": {
+              await hydrateBundleGeometry(chunk.bundle);
+              const streamIndex = streamedSubModels.length;
+              const resolved = resolveSubModelPlacementRef(
+                chunk,
+                subModelManifest,
+                streamIndex,
+              );
+              const nextSubModel = {
+                folderName: resolved.folderName,
+                objectIndex: resolved.objectIndex,
+                bundle: chunk.bundle,
+              };
+              streamedSubModels.push(nextSubModel);
+              const nextSubModels = [...streamedSubModels];
+              const nextTextureEntries = collectSceneTextureManagerEntries(
+                streamedBaseModel,
+                nextSubModels,
+                sharedTexturePaths,
+              );
+              startTransition(() => {
+                setSubModels(nextSubModels);
+                useSceneTextureManagerStore.getState().setEntries(nextTextureEntries);
+              });
+              break;
+            }
+            case "progress":
+              setModelLoadProgress({ loaded: chunk.loaded, total: chunk.total });
+              break;
+            case "error":
+              streamIssues.push(
+                chunk.folderName
+                  ? `${chunk.folderName}: ${chunk.message}`
+                  : chunk.message,
+              );
+              console.warn("[SceneEdit] Stage stream error:", chunk);
+              break;
+            case "complete":
+              setModelLoadProgress(null);
+              if (streamIssues.length > 0) {
+                toast.warning(
+                  `Stage streamed with ${streamIssues.length} issue(s)`,
+                  { description: streamIssues.slice(0, 3).join("\n") },
+                );
+              } else {
+                toast.success("Stage loaded successfully");
+              }
+              break;
+          }
+        };
+
+        void stageStreamBundles(stageRoot, (chunk) => {
+          chunkChain = chunkChain.then(() => processChunk(chunk));
+          chunkChain.catch(settleReject);
+          if (chunk.kind === "complete") {
+            chunkChain.then(settleResolve, settleReject);
+          }
+        }).catch((error) => {
+          chunkChain.then(
+            () => settleReject(error),
+            settleReject,
+          );
+        });
+      });
     } catch (err: unknown) {
       toast.error("Failed to load stage", { description: String(err) });
     } finally {
+      setModelLoadProgress(null);
       setIsLoading(false);
       stageLoadInFlightRef.current = null;
     }
-  }, [applyBundle, resetState]);
+  }, [applySkeleton, resetState]);
 
   const handleImportFhm2d = useCallback(async () => {
     try {
