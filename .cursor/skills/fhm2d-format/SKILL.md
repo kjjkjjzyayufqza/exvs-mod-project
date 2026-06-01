@@ -128,6 +128,34 @@ this value to locate file data in the body.
 | .nurpdb | 0x19 | ascending |
 | .bin/.hkt/.csv/other | 0x00 | last |
 
+## Pitfall #4: Wrong Numatb Shader for Color-Only Stage Props
+
+### The Problem
+
+New stage models exported from DAE/FBX often get a default nust material with
+`shader_label = vsngCharaBasic` (character PBR). If the model only has a **single color
+nutexb**, in-game rendering shows **severe overexposure / white blowout** on flat
+surfaces — even after disabling `Use*` toggles or trimming PBR paths.
+
+### The Fix
+
+Use the **stage vertex-color shader** path:
+
+| GVS origin | EXVS2 nust runtime |
+|------------|-------------------|
+| `FeRendererMovableVertexColor` | `vstgStandard_VertexColor` |
+
+Keep only the color texture slot:
+
+- nust: `BaseColorMap` + `UseBaseColorMap: true` + `DiffuseSampler`
+- maya: `DiffuseMap` only, empty `shader_label`
+
+Delete all unused PBR texture rows before repack. Saving editor JSON alone is not enough —
+write `__nust__.numatb` / `__maya__.numatb` to disk.
+
+**Read next:** `docs/exvs-stage-numatb-simple-color.md` and skill
+`.cursor/skills/exvs-stage-numatb/SKILL.md`.
+
 ## Checklist: Adding New Model Files to a Stage
 
 When adding a complete SSBH model (numatb + numshb + numdlb + nusktb + ...) to an
@@ -136,6 +164,8 @@ existing fhm2d:
 - [ ] Add entries to `SubFileData[]` in the structure JSON with sequential `fileIndex`
 - [ ] Add corresponding `SubFileStructure` tree entries (Folder/Item/EndMark)
 - [ ] Ensure Item `fileIndex` values match `SubFileData` array indices
+- [ ] For **color-only** props: nust uses `vstgStandard_VertexColor`, not
+      `vsngCharaBasic`; strip unused PBR texture rows (see Pitfall #4)
 - [ ] Repack with `repack_fhm2d_from_structure` — it handles type-sorting + remapping
 - [ ] Verify extraction round-trip: all files match by content hash
 - [ ] Verify stage rename: `base`, `info`, `sky` are correctly identified by content

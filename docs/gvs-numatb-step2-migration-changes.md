@@ -83,10 +83,38 @@ Some migrated maps rendered green in EXVS2. Root cause:
 
 ---
 
+## White / Overexposure Fix (color-only stage props)
+
+Symptoms in EXVS2: map props show color but large flat surfaces are **blown out to
+white** (severe overexposure).
+
+Root cause:
+
+- Material uses **`vsngCharaBasic`** (character PBR) or leaves PBR texture rows bound
+  to a single color nutexb.
+- Stage props with **only a color texture** must use **`FeRendererMovableVertexColor`**
+  (GVS) → **`vstgStandard_VertexColor`** (EXVS2 `__nust__`), not `vsngCharaBasic`.
+
+**Fix**:
+
+1. Set nust `shader_label` to `vstgStandard_VertexColor` after Step2 migration.
+2. Keep only `BaseColorMap` (+ `UseBaseColorMap: true`, `DiffuseSampler`) on nust;
+   keep only `DiffuseMap` on maya (`shader_label` empty).
+3. **Delete** unused texture rows (`MetallicMap`, `RoughnessMap`, `NormalMap`,
+   `EmissiveMap`, `AmbientOcclusionMap`, `Texture1`, `DiffuseCubeMap`, …) — do not
+   rely on `Use*: false` alone.
+4. Save `.numatb` to disk and repack the stage before in-game verification.
+
+Full recipe: `docs/exvs-stage-numatb-simple-color.md`  
+Agent skill: `.cursor/skills/exvs-stage-numatb/SKILL.md`
+
+---
+
 ## Changelog
 
 | Date | Change |
 |------|--------|
+| 2026-06 | Documented white/overexposure fix for color-only stage props (vstgStandard_VertexColor) |
 | 2025-03 | Added UseBaseColorMap / UseDiffuseMap migration in booleans |
 | 2025-03 | Added DiffuseMapLayer1 → BaseColorMapLayer1 texture mapping |
 | 2025-03 | Added FeRendererMovableMultiUVVertexColorAO → vstgStandard_MultiUV_LightAndShadowMap |

@@ -43,6 +43,10 @@ Use `docs/` as the first source of project truth:
 
 - `docs/msc-binary-format-spec.md` — MSC bytecode format specification (header,
   opcodes, pushBit, script offset table, string table, EXVS2 vs Smash differences).
+- `docs/exvs-stage-numatb-simple-color.md` — stage map props with only a color
+  texture: use `FeRendererMovableVertexColor` → `vstgStandard_VertexColor`, strip
+  unused PBR slots (avoids in-game overexposure).
+- `docs/gvs-numatb-step2-migration-changes.md` — GVS→EXVS2 numatb migration rules.
 
 When adding new research findings, write them under `docs/` and link them from
 the active session `process.md`.
@@ -92,6 +96,12 @@ Current project rule entry points:
 
 - Cursor project rule: `.cursor/rules/custom-rules.mdc`
 - Cross-agent hub: `AGENTS.md`
+
+Project skills (domain):
+
+- FHM2D stage pack/extract: `.cursor/skills/fhm2d-format/SKILL.md`
+- Stage numatb color-only materials: `.cursor/skills/exvs-stage-numatb/SKILL.md`
+- Tauri large binary IPC: `.cursor/skills/tauri-ipc-large-binary/SKILL.md`
 
 ## Development Conduct
 

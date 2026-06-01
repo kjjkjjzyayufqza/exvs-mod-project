@@ -1,97 +1,896 @@
-folder/  x2  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
-  folder/  x5  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
-    folder/  x2  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
-      folder/  x8  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
-        001stage001_base__maya__  .nusktb [SKEL]  u1=00000000 u2=10000000 u2_1=0 u3=0 u4=0  [0]
-        textures/  x6  u1=00000000 u2=00000000 u2_1=0 u3=32 u4=0 u5=1 u6=0
-          stage001_panel_01_ambientocclusion  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [1]
-          stage001_panel_01_diffuse  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [2]
-          stage001_panel_01_emissive  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [3]
-          stage001_panel_01_normal  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [4]
-          stage001_panel_01_roughness  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [5]
-          stage001_panel_01_specular  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [6]
-        001stage001_base__maya__  .numatb [MAT]  u1=00000000 u2=21000000 u2_1=0 u3=0 u4=0  [7]
-        textures/  x6  u1=00000000 u2=00000000 u2_1=0 u3=32 u4=0 u5=1 u6=0
-          stage001_panel_01_ambientocclusion  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [1]
-          stage001_panel_01_diffuse  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [2]
-          stage001_panel_01_emissive  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [3]
-          stage001_panel_01_normal  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [4]
-          stage001_panel_01_roughness  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [5]
-          stage001_panel_01_specular  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [6]
-        001stage001_base__nust__  .numatb [MAT]  u1=00000000 u2=21000000 u2_1=0 u3=0 u4=0  [8]
-        001stage001_base__maya__  .numshb [MESH]  u1=00000000 u2=30000000 u2_1=0 u3=0 u4=0  [9]
-        001stage001_base  .numdlb [MDL]  u1=00000000 u2=40000000 u2_1=0 u3=0 u4=0  [10]
-        001stage001_base  .bin [JNT]  u1=00000000 u2=50000000 u2_1=0 u3=0 u4=0  [11]
-      map_hit  .bin  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [12]
-    folder/  x7  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
-      folder/  x2  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
-        900default_ibl_irradiance  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [13]
-        900default_ibl_specular  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [14]
-      folder/  x1  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
-        001stage001_rampfog  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [15]
-      border_hit  .bin  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [16]
-      placement  .bin  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [17]
-      graphic_param  .bin  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [18]
-      plan_param  .bin  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [19]
-      folder/  x1  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
-        lut_none  .nutexb [FX]  u1=00000000 u2=01010000 u2_1=0 u3=0 u4=0  [20]
-    folder/  x2  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
-      folder/  x8  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
-        001stage001_object_box01__maya__  .nusktb [SKEL]  u1=00000000 u2=10000000 u2_1=0 u3=0 u4=0  [21]
-        textures/  x12  u1=00000000 u2=00000000 u2_1=0 u3=32 u4=0 u5=1 u6=0
-          stage001_panel_01_ambientocclusion  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [1]
-          stage001_panel_01_diffuse  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [2]
-          stage001_panel_01_emissive  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [3]
-          stage001_panel_01_normal  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [4]
-          stage001_panel_01_roughness  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [5]
-          stage001_panel_01_specular  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [6]
-          stage001_panel_02_ambientocclusion  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [22]
-          stage001_panel_02_diffuse  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [23]
-          stage001_panel_02_emissive  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [24]
-          stage001_panel_02_normal  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [25]
-          stage001_panel_02_roughness  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [26]
-          stage001_panel_02_specular  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [27]
-        001stage001_object_box01__maya__  .numatb [MAT]  u1=00000000 u2=21000000 u2_1=0 u3=0 u4=0  [28]
-        textures/  x12  u1=00000000 u2=00000000 u2_1=0 u3=32 u4=0 u5=1 u6=0
-          stage001_panel_01_ambientocclusion  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [1]
-          stage001_panel_01_diffuse  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [2]
-          stage001_panel_01_emissive  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [3]
-          stage001_panel_01_normal  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [4]
-          stage001_panel_01_roughness  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [5]
-          stage001_panel_01_specular  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [6]
-          stage001_panel_02_ambientocclusion  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [22]
-          stage001_panel_02_diffuse  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [23]
-          stage001_panel_02_emissive  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [24]
-          stage001_panel_02_normal  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [25]
-          stage001_panel_02_roughness  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [26]
-          stage001_panel_02_specular  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [27]
-        001stage001_object_box01__nust__  .numatb [MAT]  u1=00000000 u2=21000000 u2_1=0 u3=0 u4=0  [29]
-        001stage001_object_box01__maya__  .numshb [MESH]  u1=00000000 u2=30000000 u2_1=0 u3=0 u4=0  [30]
-        001stage001_object_box01  .numdlb [MDL]  u1=00000000 u2=40000000 u2_1=0 u3=0 u4=0  [31]
-        001stage001_object_box01  .bin [JNT]  u1=00000000 u2=50000000 u2_1=0 u3=0 u4=0  [32]
-      map_hit  .bin  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [33]
-    folder/  x2  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
-      folder/  x8  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
-        sssssccccc  .nusktb [SKEL]  u1=00000000 u2=10000000 u2_1=0 u3=0 u4=0  [34]
-        textures/  x1  u1=00000000 u2=00000000 u2_1=0 u3=32 u4=0 u5=1 u6=0
-          stage001_panel_01_diffuse  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [2]
-        sssssccccc__maya__  .numatb [MAT]  u1=00000000 u2=21000000 u2_1=0 u3=0 u4=0  [35]
-        textures/  x1  u1=00000000 u2=00000000 u2_1=0 u3=32 u4=0 u5=1 u6=0
-          stage001_panel_01_diffuse  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [2]
-        sssssccccc__nust__  .numatb [MAT]  u1=00000000 u2=21000000 u2_1=0 u3=0 u4=0  [36]
-        sssssccccc  .numshb [MESH]  u1=00000000 u2=30000000 u2_1=0 u3=0 u4=0  [37]
-        sssssccccc  .numdlb [MDL]  u1=00000000 u2=40000000 u2_1=0 u3=0 u4=0  [38]
-        sssssccccc  .bin [JNT]  u1=00000000 u2=50000000 u2_1=0 u3=0 u4=0  [39]
-      sssssccccc  .bin  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [40]
-    folder/  x1  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
-      folder/  x8  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
-        001stage001_sky__maya__  .nusktb [SKEL]  u1=00000000 u2=10000000 u2_1=0 u3=0 u4=0  [41]
-        textures/  x1  u1=00000000 u2=00000000 u2_1=0 u3=32 u4=0 u5=1 u6=0
-          stage001_skydome_sky  .nutexb  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0  [42]
-        001stage001_sky__maya__  .numatb [MAT]  u1=00000000 u2=21000000 u2_1=0 u3=0 u4=0  [43]
-        textures/  x0  u1=00000000 u2=00000000 u2_1=0 u3=32 u4=0 u5=1 u6=0
-        001stage001_sky__nust__  .numatb [MAT]  u1=00000000 u2=21000000 u2_1=0 u3=0 u4=0  [44]
-        001stage001_sky__maya__  .numshb [MESH]  u1=00000000 u2=30000000 u2_1=0 u3=0 u4=0  [45]
-        001stage001_sky  .numdlb [MDL]  u1=00000000 u2=40000000 u2_1=0 u3=0 u4=0  [46]
-        001stage001_sky  .bin [JNT]  u1=00000000 u2=50000000 u2_1=0 u3=0 u4=0  [47]
-  folder/  x0  u1=00000000 u2=00000000 u2_1=0 u3=0 u4=0 u5=0 u6=0
+{
+  "modelName": "new_model",
+  "numatbPaths": {
+    "maya": "E:/XB/解包/com/test/0x16F73C97/0/0/new_model/0/new_model__maya__.numatb",
+    "nust": "E:/XB/解包/com/test/0x16F73C97/0/0/new_model/0/new_model__nust__.numatb"
+  },
+  "mirrorTexturePathsAcrossProfiles": true,
+  "numdlbMaterialMappings": [
+    {
+      "meshObjectName": "Andesite",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Azalea_Leaves",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Birch_Leaves",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Birch_Log",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Bubble_Column",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Bush",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Coal_Ore",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Copper_Ore",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Diorite",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Dirt",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Flowering_Azalea_Leaves",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Glow_Lichen",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Granite",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Grass_Block",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Gravel",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Iron_Ore",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Kelp",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Lapis_Lazuli_Ore",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Magma_Block",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Sand",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Sandstone",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Seagrass",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Short_Grass",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Stationary_Water",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Stone",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Sugar_Cane",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Tall_Seagrass",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "Wildflowers",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    }
+  ],
+  "mayaProfile": {
+    "major_version": 1,
+    "minor_version": 6,
+    "entries": [
+      {
+        "material_label": "emiMtl",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [
+          {
+            "param_id": "CosinePower",
+            "data": 20
+          }
+        ],
+        "booleans": [
+          {
+            "param_id": "UseDiffuseUvTransform",
+            "data": true
+          },
+          {
+            "param_id": "UseSpecularUvTransform",
+            "data": true
+          },
+          {
+            "param_id": "UseNormalUvTransform",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          },
+          {
+            "param_id": "Specular",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          },
+          {
+            "param_id": "SpecularSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          },
+          {
+            "param_id": "NormalSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "newmodeltexture"
+          },
+          {
+            "param_id": "SpecularMap",
+            "data": "newmodeltexture"
+          },
+          {
+            "param_id": "NormalMap",
+            "data": "newmodeltexture"
+          },
+          {
+            "param_id": "Texture1",
+            "data": "newmodeltexture"
+          },
+          {
+            "param_id": "RoughnessMap",
+            "data": "newmodeltexture"
+          },
+          {
+            "param_id": "AmbientOcclusionMap",
+            "data": "newmodeltexture"
+          },
+          {
+            "param_id": "EmissiveMap",
+            "data": "newmodeltexture"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": [
+          {
+            "param_id": "DiffuseUvTransform",
+            "data": {
+              "scale_u": 1,
+              "scale_v": 1,
+              "rotation": 0,
+              "translate_u": 0,
+              "translate_v": 0
+            }
+          },
+          {
+            "param_id": "SpecularUvTransform",
+            "data": {
+              "scale_u": 1,
+              "scale_v": 1,
+              "rotation": 0,
+              "translate_u": 0,
+              "translate_v": 0
+            }
+          },
+          {
+            "param_id": "NormalUvTransform",
+            "data": {
+              "scale_u": 1,
+              "scale_v": 1,
+              "rotation": 0,
+              "translate_u": 0,
+              "translate_v": 0
+            }
+          }
+        ]
+      },
+      {
+        "material_label": "pbr1Mtl",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [
+          {
+            "param_id": "CosinePower",
+            "data": 20
+          }
+        ],
+        "booleans": [
+          {
+            "param_id": "UseDiffuseUvTransform",
+            "data": true
+          },
+          {
+            "param_id": "UseSpecularUvTransform",
+            "data": false
+          },
+          {
+            "param_id": "UseNormalUvTransform",
+            "data": false
+          }
+        ],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          },
+          {
+            "param_id": "Specular",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          },
+          {
+            "param_id": "SpecularSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          },
+          {
+            "param_id": "NormalSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "newmodeltexture"
+          },
+          {
+            "param_id": "Texture1",
+            "data": "newmodeltexture-Alpha"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": [
+          {
+            "param_id": "DiffuseUvTransform",
+            "data": {
+              "scale_u": 1,
+              "scale_v": 1,
+              "rotation": 0,
+              "translate_u": 0,
+              "translate_v": 0
+            }
+          },
+          {
+            "param_id": "SpecularUvTransform",
+            "data": {
+              "scale_u": 1,
+              "scale_v": 1,
+              "rotation": 0,
+              "translate_u": 0,
+              "translate_v": 0
+            }
+          },
+          {
+            "param_id": "NormalUvTransform",
+            "data": {
+              "scale_u": 1,
+              "scale_v": 1,
+              "rotation": 0,
+              "translate_u": 0,
+              "translate_v": 0
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "nustProfile": {
+    "major_version": 1,
+    "minor_version": 6,
+    "entries": [
+      {
+        "material_label": "pbr1Mtl",
+        "shader_label": "vsngCharaBasic",
+        "blend_states": [],
+        "floats": [
+          {
+            "param_id": "CustomInteger0",
+            "data": 0
+          }
+        ],
+        "float1s": [
+          {
+            "param_id": "CustomFloat0",
+            "data": 0.10000000149011612
+          },
+          {
+            "param_id": "CustomFloat1",
+            "data": 1
+          },
+          {
+            "param_id": "CustomFloat2",
+            "data": 1
+          },
+          {
+            "param_id": "CustomFloat3",
+            "data": 1
+          },
+          {
+            "param_id": "CustomFloat4",
+            "data": 1
+          },
+          {
+            "param_id": "CustomFloat5",
+            "data": 0
+          },
+          {
+            "param_id": "CustomFloat7",
+            "data": 1
+          },
+          {
+            "param_id": "CustomFloat8",
+            "data": 1
+          },
+          {
+            "param_id": "CustomFloat9",
+            "data": 1
+          },
+          {
+            "param_id": "EmissiveScale",
+            "data": 0
+          }
+        ],
+        "booleans": [
+          {
+            "param_id": "UseMetallicMap",
+            "data": false
+          },
+          {
+            "param_id": "UseAmbientOcclusionMap",
+            "data": false
+          },
+          {
+            "param_id": "ReceiveShadow",
+            "data": true
+          },
+          {
+            "param_id": "UseRoughnessMap",
+            "data": false
+          },
+          {
+            "param_id": "UseNormalMap",
+            "data": false
+          },
+          {
+            "param_id": "UseEmissiveMap",
+            "data": false
+          },
+          {
+            "param_id": "NormalMapBc5",
+            "data": false
+          }
+        ],
+        "vectors": [
+          {
+            "param_id": "CustomVector0",
+            "data": {
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "w": 0
+            }
+          },
+          {
+            "param_id": "CustomVector2",
+            "data": {
+              "x": 1,
+              "y": 1,
+              "z": 1,
+              "w": 1
+            }
+          },
+          {
+            "param_id": "CustomVector3",
+            "data": {
+              "x": 1,
+              "y": 1,
+              "z": 1,
+              "w": 1
+            }
+          }
+        ],
+        "colors": [
+          {
+            "param_id": "CustomColor0",
+            "data": {
+              "r": 0,
+              "g": 0,
+              "b": 0,
+              "a": 0
+            }
+          },
+          {
+            "param_id": "CustomColor1",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          },
+          {
+            "param_id": "CustomColor2",
+            "data": {
+              "r": 0,
+              "g": 0,
+              "b": 0,
+              "a": 0
+            }
+          }
+        ],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "Texture1",
+            "data": "newmodeltexture-Alpha"
+          },
+          {
+            "param_id": "BaseColorMap",
+            "data": "newmodeltexture"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "emiMtl",
+        "shader_label": "vsngCharaBasic",
+        "blend_states": [],
+        "floats": [
+          {
+            "param_id": "CustomInteger0",
+            "data": 0
+          }
+        ],
+        "float1s": [
+          {
+            "param_id": "CustomFloat0",
+            "data": 0.10000000149011612
+          },
+          {
+            "param_id": "CustomFloat1",
+            "data": 1
+          },
+          {
+            "param_id": "CustomFloat2",
+            "data": 1
+          },
+          {
+            "param_id": "EmissiveScale",
+            "data": 10
+          },
+          {
+            "param_id": "CustomFloat3",
+            "data": 1
+          },
+          {
+            "param_id": "CustomFloat4",
+            "data": 1
+          },
+          {
+            "param_id": "CustomFloat5",
+            "data": 0
+          },
+          {
+            "param_id": "CustomFloat7",
+            "data": 1
+          },
+          {
+            "param_id": "CustomFloat8",
+            "data": 0.31869998574256897
+          },
+          {
+            "param_id": "CustomFloat9",
+            "data": 1
+          }
+        ],
+        "booleans": [
+          {
+            "param_id": "UseMetallicMap",
+            "data": true
+          },
+          {
+            "param_id": "UseAmbientOcclusionMap",
+            "data": true
+          },
+          {
+            "param_id": "ReceiveShadow",
+            "data": false
+          },
+          {
+            "param_id": "UseRoughnessMap",
+            "data": true
+          },
+          {
+            "param_id": "UseNormalMap",
+            "data": true
+          },
+          {
+            "param_id": "UseEmissiveMap",
+            "data": true
+          },
+          {
+            "param_id": "NormalMapBc5",
+            "data": false
+          }
+        ],
+        "vectors": [
+          {
+            "param_id": "CustomVector0",
+            "data": {
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "w": 0
+            }
+          },
+          {
+            "param_id": "CustomVector2",
+            "data": {
+              "x": 1,
+              "y": 1,
+              "z": 1,
+              "w": 1
+            }
+          },
+          {
+            "param_id": "CustomVector3",
+            "data": {
+              "x": 1,
+              "y": 1,
+              "z": 1,
+              "w": 1
+            }
+          }
+        ],
+        "colors": [
+          {
+            "param_id": "CustomColor0",
+            "data": {
+              "r": 0,
+              "g": 0,
+              "b": 0,
+              "a": 0
+            }
+          },
+          {
+            "param_id": "CustomColor1",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          },
+          {
+            "param_id": "CustomColor2",
+            "data": {
+              "r": 0,
+              "g": 0,
+              "b": 0,
+              "a": 0
+            }
+          }
+        ],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "AmbientOcclusionMap",
+            "data": "newmodeltexture"
+          },
+          {
+            "param_id": "EmissiveMap",
+            "data": "newmodeltexture"
+          },
+          {
+            "param_id": "MetallicMap",
+            "data": "newmodeltexture"
+          },
+          {
+            "param_id": "RoughnessMap",
+            "data": "newmodeltexture"
+          },
+          {
+            "param_id": "Texture1",
+            "data": "newmodeltexture"
+          },
+          {
+            "param_id": "BaseColorMap",
+            "data": "newmodeltexture"
+          },
+          {
+            "param_id": "NormalMap",
+            "data": "newmodeltexture"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      }
+    ]
+  }
+}
