@@ -10,5 +10,29 @@
       "quality": 0.85
     },
     "createdAt": 1780131163298
+  },
+  {
+    "id": "task-TASK_ID",
+    "key": "TASK_ID",
+    "content": "Task completed: TASK_ID",
+    "namespace": "tasks",
+    "type": "task-outcome",
+    "metadata": {
+      "success": true,
+      "quality": 0.85
+    },
+    "createdAt": 1780335278550
+  },
+  {
+    "id": "task-TASK_ID",
+    "key": "TASK_ID",
+    "content": "Task completed: TASK_ID",
+    "namespace": "tasks",
+    "type": "task-outcome",
+    "metadata": {
+      "success": true,
+      "quality": 0.85
+    },
+    "createdAt": 1780335628732
   }
 ]

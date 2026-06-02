@@ -60,15 +60,17 @@ pub fn convert_import_scene_to_ssbh_files(
         ));
     }
 
+    let prepared_meshes = prepare_meshes_for_vs2(&scene.meshes)?;
+
     eprintln!("[dae_to_ssbh] checking unique geometry names...");
-    ensure_unique_geometry_names_for_vs2(&scene.meshes)?;
+    ensure_unique_geometry_names_for_vs2(&prepared_meshes)?;
 
     eprintln!("[dae_to_ssbh] converting skeleton...");
     let skel_data = convert_skeleton_from_dae(&scene.bones, &scene.meshes, config)?;
     eprintln!("[dae_to_ssbh] skeleton: {} bones", skel_data.bones.len());
 
     eprintln!("[dae_to_ssbh] converting meshes...");
-    let mesh_data = convert_meshes_to_ssbh(&scene.meshes, config)?;
+    let mesh_data = convert_prepared_meshes_to_ssbh(&prepared_meshes, config)?;
     let stats = compute_convert_stats(&mesh_data, skel_data.bones.len());
     eprintln!(
         "[dae_to_ssbh] mesh stats: {} objects, {} vertices, {} triangle_indices",
@@ -76,7 +78,7 @@ pub fn convert_import_scene_to_ssbh_files(
     );
 
     eprintln!("[dae_to_ssbh] converting model entries...");
-    let modl_data = convert_model_to_ssbh(&scene.meshes, config)?;
+    let modl_data = convert_prepared_model_to_ssbh(&prepared_meshes, config)?;
     eprintln!("[dae_to_ssbh] modl entries: {}", modl_data.entries.len());
 
     if config.write_nusktb {
@@ -178,7 +180,7 @@ pub fn convert_import_scene_file(
 
 /// VS2 mesh write path stores `subindex` 0 on disk for every object; modl entries must use 0 as well.
 /// Distinct objects therefore require unique geometry names in the DAE.
-fn ensure_unique_geometry_names_for_vs2(meshes: &[DaeMesh]) -> Result<()> {
+fn ensure_unique_geometry_names_for_vs2(meshes: &[Vs2PreparedMesh]) -> Result<()> {
     let mut seen = HashSet::new();
     for m in meshes {
         if m.vertices.is_empty() {
@@ -199,7 +201,245 @@ fn ensure_unique_geometry_names_for_vs2(meshes: &[DaeMesh]) -> Result<()> {
     Ok(())
 }
 
+const VS2_MAX_VERTEX_INDEX: u32 = u16::MAX as u32;
+const VS2_MAX_VERTEX_COUNT: usize = u16::MAX as usize + 1;
+
+#[derive(Debug)]
+struct Vs2PreparedMesh {
+    name: String,
+    source_name: String,
+    vertices: Vec<[f32; 3]>,
+    normals: Vec<[f32; 3]>,
+    uvs: Vec<[f32; 2]>,
+    indices: Vec<u32>,
+    bone_influences: Vec<super::dae_parse::DaeBoneInfluence>,
+}
+
+fn prepare_meshes_for_vs2(meshes: &[DaeMesh]) -> Result<Vec<Vs2PreparedMesh>> {
+    let mut prepared = Vec::new();
+    let mut reserved_names: HashSet<String> = meshes
+        .iter()
+        .filter(|mesh| !mesh.vertices.is_empty())
+        .map(|mesh| mesh.name.clone())
+        .collect();
+
+    for mesh in meshes {
+        if mesh.vertices.is_empty() || mesh.indices.is_empty() {
+            prepared.push(Vs2PreparedMesh {
+                name: mesh.name.clone(),
+                source_name: mesh.name.clone(),
+                vertices: mesh.vertices.clone(),
+                normals: mesh.normals.clone(),
+                uvs: mesh.uvs.clone(),
+                indices: mesh.indices.clone(),
+                bone_influences: mesh.bone_influences.clone(),
+            });
+            continue;
+        }
+
+        let max_index = mesh.indices.iter().copied().max().unwrap_or(0);
+        if mesh.vertices.len() <= VS2_MAX_VERTEX_COUNT && max_index <= VS2_MAX_VERTEX_INDEX {
+            prepared.push(Vs2PreparedMesh {
+                name: mesh.name.clone(),
+                source_name: mesh.name.clone(),
+                vertices: mesh.vertices.clone(),
+                normals: mesh.normals.clone(),
+                uvs: mesh.uvs.clone(),
+                indices: mesh.indices.clone(),
+                bone_influences: mesh.bone_influences.clone(),
+            });
+            continue;
+        }
+
+        let split = split_mesh_for_vs2_with_reserved_names(mesh, &mut reserved_names)?;
+        eprintln!(
+            "[dae_to_ssbh] split mesh '{}' for VS2 u16 index safety: {} verts, {} indices -> {} parts",
+            mesh.name,
+            mesh.vertices.len(),
+            mesh.indices.len(),
+            split.len()
+        );
+        prepared.extend(split);
+    }
+
+    Ok(prepared)
+}
+
+#[cfg(test)]
+fn split_mesh_for_vs2(mesh: &DaeMesh) -> Result<Vec<Vs2PreparedMesh>> {
+    split_mesh_for_vs2_with_reserved_names(mesh, &mut HashSet::new())
+}
+
+fn split_mesh_for_vs2_with_reserved_names(
+    mesh: &DaeMesh,
+    reserved_names: &mut HashSet<String>,
+) -> Result<Vec<Vs2PreparedMesh>> {
+    if mesh.indices.len() % 3 != 0 {
+        return Err(anyhow!(
+            "Mesh '{}' index count {} is not divisible by 3",
+            mesh.name,
+            mesh.indices.len()
+        ));
+    }
+
+    let mut parts = Vec::new();
+    let mut vertex_order = Vec::new();
+    let mut local_indices = Vec::new();
+    let mut remap: HashMap<u32, u32> = HashMap::new();
+
+    for triangle in mesh.indices.chunks_exact(3) {
+        let additional_vertices = triangle
+            .iter()
+            .filter(|&&index| !remap.contains_key(&index))
+            .count();
+
+        if !local_indices.is_empty() && vertex_order.len() + additional_vertices > VS2_MAX_VERTEX_COUNT {
+            parts.push(build_vs2_split_part(
+                mesh,
+                parts.len(),
+                &vertex_order,
+                &local_indices,
+                &remap,
+                reserved_names,
+            )?);
+            vertex_order.clear();
+            local_indices.clear();
+            remap.clear();
+        }
+
+        for &source_index in triangle {
+            let local_index = if let Some(&existing) = remap.get(&source_index) {
+                existing
+            } else {
+                let next = vertex_order.len() as u32;
+                vertex_order.push(source_index);
+                remap.insert(source_index, next);
+                next
+            };
+            local_indices.push(local_index);
+        }
+    }
+
+    if !local_indices.is_empty() {
+        parts.push(build_vs2_split_part(
+            mesh,
+            parts.len(),
+            &vertex_order,
+            &local_indices,
+            &remap,
+            reserved_names,
+        )?);
+    }
+
+    Ok(parts)
+}
+
+fn build_vs2_split_part(
+    mesh: &DaeMesh,
+    part_index: usize,
+    vertex_order: &[u32],
+    local_indices: &[u32],
+    remap: &HashMap<u32, u32>,
+    reserved_names: &mut HashSet<String>,
+) -> Result<Vs2PreparedMesh> {
+    let vertices = vertex_order
+        .iter()
+        .map(|&source_index| {
+            mesh.vertices
+                .get(source_index as usize)
+                .copied()
+                .ok_or_else(|| anyhow!("Mesh '{}' split vertex index {} out of bounds", mesh.name, source_index))
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    let normals = if mesh.normals.is_empty() {
+        Vec::new()
+    } else {
+        vertex_order
+            .iter()
+            .map(|&source_index| {
+                mesh.normals
+                    .get(source_index as usize)
+                    .copied()
+                    .ok_or_else(|| anyhow!("Mesh '{}' split normal index {} out of bounds", mesh.name, source_index))
+            })
+            .collect::<Result<Vec<_>>>()?
+    };
+
+    let uvs = if mesh.uvs.is_empty() {
+        Vec::new()
+    } else {
+        vertex_order
+            .iter()
+            .map(|&source_index| {
+                mesh.uvs
+                    .get(source_index as usize)
+                    .copied()
+                    .ok_or_else(|| anyhow!("Mesh '{}' split uv index {} out of bounds", mesh.name, source_index))
+            })
+            .collect::<Result<Vec<_>>>()?
+    };
+
+    let bone_influences = mesh
+        .bone_influences
+        .iter()
+        .filter_map(|influence| {
+            let vertex_weights: Vec<super::dae_parse::DaeVertexWeight> = influence
+                .vertex_weights
+                .iter()
+                .filter_map(|weight| {
+                    remap.get(&weight.vertex_index).map(|&local_index| super::dae_parse::DaeVertexWeight {
+                        vertex_index: local_index,
+                        weight: weight.weight,
+                    })
+                })
+                .collect();
+
+            (!vertex_weights.is_empty()).then_some(super::dae_parse::DaeBoneInfluence {
+                bone_name: influence.bone_name.clone(),
+                vertex_weights,
+            })
+        })
+        .collect();
+
+    Ok(Vs2PreparedMesh {
+        name: next_vs2_split_part_name(&mesh.name, part_index, reserved_names),
+        source_name: mesh.name.clone(),
+        vertices,
+        normals,
+        uvs,
+        indices: local_indices.to_vec(),
+        bone_influences,
+    })
+}
+
+fn next_vs2_split_part_name(
+    mesh_name: &str,
+    part_index: usize,
+    reserved_names: &mut HashSet<String>,
+) -> String {
+    let preferred = format!("{}__part{}", mesh_name, part_index);
+    if reserved_names.insert(preferred.clone()) {
+        return preferred;
+    }
+
+    let mut split_index = 0usize;
+    loop {
+        let candidate = format!("{}__split{}__part{}", mesh_name, split_index, part_index);
+        if reserved_names.insert(candidate.clone()) {
+            return candidate;
+        }
+        split_index += 1;
+    }
+}
+
+#[cfg(test)]
 fn convert_meshes_to_ssbh(meshes: &[DaeMesh], config: &DaeConvertConfig) -> Result<MeshData> {
+    let prepared = prepare_meshes_for_vs2(meshes)?;
+    convert_prepared_meshes_to_ssbh(&prepared, config)
+}
+
+fn convert_prepared_meshes_to_ssbh(meshes: &[Vs2PreparedMesh], config: &DaeConvertConfig) -> Result<MeshData> {
     let mut mesh_objects = Vec::new();
 
     for dae_mesh in meshes {
@@ -325,7 +565,7 @@ fn convert_meshes_to_ssbh(meshes: &[DaeMesh], config: &DaeConvertConfig) -> Resu
     })
 }
 
-fn convert_model_to_ssbh(meshes: &[DaeMesh], config: &DaeConvertConfig) -> Result<ModlData> {
+fn convert_prepared_model_to_ssbh(meshes: &[Vs2PreparedMesh], config: &DaeConvertConfig) -> Result<ModlData> {
     let mut entries = Vec::new();
     let configured_entries: HashMap<(&str, u64), &str> = config
         .modl_entries
@@ -346,8 +586,10 @@ fn convert_model_to_ssbh(meshes: &[DaeMesh], config: &DaeConvertConfig) -> Resul
             "DefaultMaterial".to_string()
         } else {
             let key = (mesh.name.as_str(), 0u64);
+            let source_key = (mesh.source_name.as_str(), 0u64);
             configured_entries
                 .get(&key)
+                .or_else(|| configured_entries.get(&source_key))
                 .ok_or_else(|| anyhow!("Missing numdlb mapping for mesh '{}'", mesh.name))?
                 .trim()
                 .to_string()
@@ -475,4 +717,190 @@ fn generate_default_colorset0_data(vertex_count: usize) -> Vec<[f32; 2]> {
 
 fn generate_default_colorset1_data(vertex_count: usize) -> Vec<[f32; 2]> {
     vec![[0.0, 0.0]; vertex_count]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    fn make_mesh_with_unique_triangle_vertices(name: &str, triangle_count: usize) -> DaeMesh {
+        let mut vertices = Vec::with_capacity(triangle_count * 3);
+        let mut normals = Vec::with_capacity(triangle_count * 3);
+        let mut uvs = Vec::with_capacity(triangle_count * 3);
+        let mut indices = Vec::with_capacity(triangle_count * 3);
+
+        for tri in 0..triangle_count {
+            let base = (tri * 3) as u32;
+            let x = tri as f32;
+            vertices.push([x, 0.0, 0.0]);
+            vertices.push([x, 1.0, 0.0]);
+            vertices.push([x, 0.0, 1.0]);
+            normals.push([0.0, 0.0, 1.0]);
+            normals.push([0.0, 0.0, 1.0]);
+            normals.push([0.0, 0.0, 1.0]);
+            uvs.push([0.0, 0.0]);
+            uvs.push([1.0, 0.0]);
+            uvs.push([0.0, 1.0]);
+            indices.extend([base, base + 1, base + 2]);
+        }
+
+        DaeMesh {
+            name: name.to_string(),
+            vertices,
+            normals,
+            uvs,
+            indices,
+            material_name: None,
+            bone_influences: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn convert_meshes_to_ssbh_splits_large_meshes_for_vs2_u16_index_limit() {
+        let mesh = make_mesh_with_unique_triangle_vertices("HugeMesh", 25_000);
+        assert!(mesh.vertices.len() > u16::MAX as usize + 1);
+
+        let mesh_data =
+            convert_meshes_to_ssbh(&[mesh], &DaeConvertConfig::default()).expect("mesh conversion");
+
+        assert!(
+            mesh_data.objects.len() > 1,
+            "large VS2 mesh should be split before writing so each object stays u16-index-safe"
+        );
+        for object in &mesh_data.objects {
+            let vertex_count = object.vertex_count().expect("vertex count");
+            let max_index = object.vertex_indices.iter().copied().max().unwrap_or(0);
+            assert!(
+                vertex_count <= u16::MAX as usize + 1,
+                "split object '{}' still exceeds u16-safe vertex count: {}",
+                object.name,
+                vertex_count
+            );
+            assert!(
+                max_index <= u16::MAX as u32,
+                "split object '{}' still exceeds u16-safe max index: {}",
+                object.name,
+                max_index
+            );
+        }
+    }
+
+    #[test]
+    fn convert_meshes_to_ssbh_avoids_split_name_collisions_with_existing_meshes() {
+        let huge = make_mesh_with_unique_triangle_vertices("HugeMesh", 25_000);
+        let existing_part = make_mesh_with_unique_triangle_vertices("HugeMesh__part0", 1);
+
+        let mesh_data = convert_meshes_to_ssbh(
+            &[huge, existing_part],
+            &DaeConvertConfig::default(),
+        )
+        .expect("mesh conversion");
+
+        let names: Vec<&str> = mesh_data.objects.iter().map(|object| object.name.as_str()).collect();
+        let unique_names: std::collections::HashSet<&str> = names.iter().copied().collect();
+
+        assert_eq!(
+            unique_names.len(),
+            names.len(),
+            "split output names must remain unique even when the input already contains __partN names"
+        );
+    }
+
+    #[test]
+    fn split_mesh_for_vs2_remaps_bone_influences_to_local_part_indices() {
+        let mut mesh = make_mesh_with_unique_triangle_vertices("SkinnedHuge", 25_000);
+        let last_vertex_index = mesh.vertices.len() as u32 - 1;
+        mesh.bone_influences = vec![super::super::dae_parse::DaeBoneInfluence {
+            bone_name: "Root".to_string(),
+            vertex_weights: vec![
+                super::super::dae_parse::DaeVertexWeight {
+                    vertex_index: 0,
+                    weight: 1.0,
+                },
+                super::super::dae_parse::DaeVertexWeight {
+                    vertex_index: last_vertex_index,
+                    weight: 0.5,
+                },
+            ],
+        }];
+
+        let parts = split_mesh_for_vs2(&mesh).expect("split mesh");
+        assert!(parts.len() > 1, "expected the large skinned mesh to split");
+
+        let total_weights: usize = parts
+            .iter()
+            .map(|part| {
+                part.bone_influences
+                    .iter()
+                    .map(|influence| influence.vertex_weights.len())
+                    .sum::<usize>()
+            })
+            .sum();
+        assert_eq!(total_weights, 2, "split parts should preserve both source weights");
+
+        for part in &parts {
+            for influence in &part.bone_influences {
+                for weight in &influence.vertex_weights {
+                    assert!(
+                        (weight.vertex_index as usize) < part.vertices.len(),
+                        "weight {} in '{}' should be remapped into the local vertex range {}",
+                        weight.vertex_index,
+                        part.name,
+                        part.vertices.len()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn convert_import_scene_to_ssbh_files_preserves_material_mapping_for_split_parts() {
+        use ssbh_data::modl_data::ModlData;
+
+        let output = tempdir().expect("temp dir");
+        let scene = ImportScene {
+            meshes: vec![make_mesh_with_unique_triangle_vertices("HugeMesh", 25_000)],
+            materials: Vec::new(),
+            bones: Vec::new(),
+            up_axis: super::super::import_scene::UpAxisConversion::NoConversion,
+        };
+        let config = DaeConvertConfig {
+            output_directory: output.path().to_path_buf(),
+            base_filename: "huge_mesh_test".to_string(),
+            scale_factor: 1.0,
+            up_axis_conversion: super::super::import_scene::UpAxisConversion::NoConversion,
+            flip_uv: false,
+            include_geometry_names: Vec::new(),
+            write_numdlb: true,
+            write_numshb: true,
+            write_nusktb: true,
+            modl_entries: vec![super::super::dae_parse::ModlEntryConfig {
+                mesh_object_name: "HugeMesh".to_string(),
+                mesh_object_subindex: 0,
+                material_label: "StoneMaterial".to_string(),
+            }],
+        };
+
+        let (files, stats) =
+            convert_import_scene_to_ssbh_files(&scene, &config).expect("full conversion");
+        let modl = ModlData::from_file(files.numdlb_path.as_ref().expect("numdlb path"))
+            .expect("parse modl");
+
+        assert!(
+            stats.mesh_objects > 1,
+            "large VS2 mesh should become multiple mesh objects"
+        );
+        assert_eq!(
+            modl.entries.len(),
+            stats.mesh_objects,
+            "numdlb should contain one entry per split mesh object"
+        );
+        assert!(
+            modl.entries
+                .iter()
+                .all(|entry| entry.material_label == "StoneMaterial"),
+            "all split parts should inherit the original mesh material mapping"
+        );
+    }
 }

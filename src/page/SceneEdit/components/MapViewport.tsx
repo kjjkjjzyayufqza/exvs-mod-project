@@ -21,11 +21,11 @@ import {
   type RefObject,
 } from "react";
 import * as THREE from "three";
-import { mergeBufferGeometries } from "three-stdlib";
 import { StageOrbitControls } from "./StageOrbitControls";
 import { StageViewportGizmo } from "./StageViewportGizmo";
 import { ViewportFrameLoopGate } from "./ViewportFrameLoopGate";
 import { ViewportMarqueeOverlay } from "./ViewportMarqueeOverlay";
+import { mergeDrawBindingsByMaterial } from "./mapViewportDrawMerge";
 import {
   ViewportSelectionController,
   type SelectableNodeRegistry,
@@ -1675,31 +1675,7 @@ const InstancedStageModel = memo(function InstancedStageModel({
       const binding = resolveMaterialBinding(draw.materialLabel, matlLookup, refToPathMap);
       return { draw, binding };
     });
-    const grouped = new Map<string, DrawBinding[]>();
-    for (const db of rawBindings) {
-      const key = db.draw.materialLabel;
-      const list = grouped.get(key);
-      if (list) list.push(db);
-      else grouped.set(key, [db]);
-    }
-    const merged: DrawBinding[] = [];
-    for (const group of grouped.values()) {
-      if (group.length === 1) {
-        merged.push(group[0]);
-        continue;
-      }
-      const geometries = group.map((db) => db.draw.geometry);
-      const mergedGeo = mergeBufferGeometries(geometries, false);
-      if (mergedGeo) {
-        merged.push({
-          draw: { ...group[0].draw, geometry: mergedGeo, key: `merged_${group[0].draw.materialLabel}` },
-          binding: group[0].binding,
-        });
-      } else {
-        merged.push(...group);
-      }
-    }
-    return merged;
+    return mergeDrawBindingsByMaterial(rawBindings);
   }, [draws, matlLookup, refToPathMap]);
 
   const visibleInstances = useMemo(
@@ -2109,33 +2085,7 @@ const StageModelGroup = memo(function StageModelGroup({
       const binding = resolveMaterialBinding(draw.materialLabel, matlLookup, refToPathMap);
       return { draw, binding };
     });
-
-    const grouped = new Map<string, DrawBinding[]>();
-    for (const db of rawBindings) {
-      const key = db.draw.materialLabel;
-      const list = grouped.get(key);
-      if (list) list.push(db);
-      else grouped.set(key, [db]);
-    }
-
-    const merged: DrawBinding[] = [];
-    for (const group of grouped.values()) {
-      if (group.length === 1) {
-        merged.push(group[0]);
-        continue;
-      }
-      const geometries = group.map((db) => db.draw.geometry);
-      const mergedGeo = mergeBufferGeometries(geometries, false);
-      if (mergedGeo) {
-        merged.push({
-          draw: { ...group[0].draw, geometry: mergedGeo, key: `merged_${group[0].draw.materialLabel}` },
-          binding: group[0].binding,
-        });
-      } else {
-        merged.push(...group);
-      }
-    }
-    return merged;
+    return mergeDrawBindingsByMaterial(rawBindings);
   }, [draws, matlLookup, refToPathMap]);
 
   const handleClick = useCallback(

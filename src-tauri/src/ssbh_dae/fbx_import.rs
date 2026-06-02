@@ -851,6 +851,7 @@ mod tests {
     const BIGZAM_AKENO: &str = r"D:\output\bigzam\Akeno.fbx";
     const BIGZAM_AKENO_BODY: &str = r"D:\output\bigzam\Akeno_body.fbx";
     const MINECRAFT_BLENDER_FBX: &str = r"D:\output\minecraft\test.fbx";
+    const MINECRAFT_LARGE_BLENDER_FBX: &str = r"D:\output\minecraft\test3.fbx";
 
     fn assert_close3(actual: [f32; 3], expected: [f32; 3]) {
         for (actual, expected) in actual.iter().zip(expected.iter()) {
@@ -1022,5 +1023,80 @@ mod tests {
         assert_eq!(modl.entries.len(), 17);
         assert_eq!(mesh.objects.len(), 17);
         assert!(skel.bones.is_empty());
+    }
+
+    #[test]
+    #[ignore = "large local FBX regression sample"]
+    fn convert_large_blender_fbx_to_ssbh_files_has_in_bounds_indices() {
+        use ssbh_data::prelude::*;
+
+        let path = Path::new(MINECRAFT_LARGE_BLENDER_FBX);
+        if !path.is_file() {
+            eprintln!("SKIP: {MINECRAFT_LARGE_BLENDER_FBX} not found");
+            return;
+        }
+
+        let output = tempfile::tempdir().expect("temp conversion dir");
+        let config = DaeConvertConfig {
+            output_directory: output.path().to_path_buf(),
+            base_filename: "minecraft_large_test".to_string(),
+            scale_factor: 1.0,
+            up_axis_conversion: UpAxisConversion::NoConversion,
+            flip_uv: false,
+            include_geometry_names: Vec::new(),
+            write_numdlb: true,
+            write_numshb: true,
+            write_nusktb: true,
+            modl_entries: Vec::new(),
+        };
+
+        let (files, stats) = convert_fbx_file(path, &config)
+            .expect("large Blender FBX should convert to SSBH files");
+        eprintln!(
+            "[large_test3] mesh_objects={} vertices={} triangle_indices={} bones={}",
+            stats.mesh_objects, stats.total_vertices, stats.total_triangle_indices, stats.bones
+        );
+
+        let mesh = MeshData::from_file(files.numshb_path.as_ref().unwrap())
+            .expect("converted large numshb should parse");
+        assert_eq!(mesh.objects.len(), stats.mesh_objects);
+        assert_eq!(stats.bones, 0);
+
+        let mut biggest_vertex_object: Option<(&str, usize, usize)> = None;
+        for obj in &mesh.objects {
+            let vertex_count = obj.vertex_count().expect("vertex count");
+            let index_count = obj.vertex_indices.len();
+            let max_index = obj.vertex_indices.iter().copied().max().unwrap_or(0);
+            assert!(
+                (max_index as usize) < vertex_count,
+                "mesh '{}' subindex {} has max index {} >= vertex_count {}",
+                obj.name,
+                obj.subindex,
+                max_index,
+                vertex_count
+            );
+            assert!(
+                max_index <= u16::MAX as u32,
+                "mesh '{}' subindex {} still exceeds VS2 u16-safe index range: {}",
+                obj.name,
+                obj.subindex,
+                max_index
+            );
+
+            let candidate = (obj.name.as_str(), vertex_count, index_count);
+            if biggest_vertex_object
+                .as_ref()
+                .is_none_or(|(_, current_vertices, _)| vertex_count > *current_vertices)
+            {
+                biggest_vertex_object = Some(candidate);
+            }
+        }
+
+        if let Some((name, vertex_count, index_count)) = biggest_vertex_object {
+            eprintln!(
+                "[large_test3] biggest object='{}' vertex_count={} index_count={}",
+                name, vertex_count, index_count
+            );
+        }
     }
 }
