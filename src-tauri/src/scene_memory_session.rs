@@ -13,6 +13,14 @@ pub enum SceneSource {
     New,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum CollisionStrategy {
+    #[default]
+    ShapePreserving,
+    ConvexHull,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct HktSimplifyConfig {
@@ -25,6 +33,10 @@ pub struct HktSimplifyConfig {
     pub target_triangle_ratio: Option<f64>,
     #[serde(default)]
     pub max_target_triangles: Option<usize>,
+    #[serde(default)]
+    pub strategy: CollisionStrategy,
+    #[serde(default)]
+    pub hull_target_faces: Option<usize>,
 }
 
 impl Default for HktSimplifyConfig {
@@ -36,6 +48,8 @@ impl Default for HktSimplifyConfig {
             weld_epsilon: 1e-3,
             target_triangle_ratio: None,
             max_target_triangles: None,
+            strategy: CollisionStrategy::ShapePreserving,
+            hull_target_faces: None,
         }
     }
 }

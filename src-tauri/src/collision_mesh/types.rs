@@ -37,6 +37,16 @@ pub fn cos_planarity_from_angle_deg(angle_deg: f64) -> f64 {
     angle_deg.to_radians().cos()
 }
 
+/// How collision geometry is reduced before HKT encoding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CollisionSimplifyMode {
+    /// Merge coplanar faces and optionally decimate, keeping the original surface.
+    #[default]
+    ShapePreserving,
+    /// Replace the geometry with a coarse convex hull ("outer frame").
+    ConvexHull,
+}
+
 /// Havok-style collision mesh simplification settings.
 ///
 /// Mirrors `hkaiNavMeshGenerationSettings::m_cosPlanarityThreshold`:
@@ -54,6 +64,10 @@ pub struct CollisionSimplifyOptions {
     pub target_triangle_ratio: Option<f64>,
     /// Optional absolute cap applied with `target_triangle_ratio`.
     pub max_target_triangles: Option<usize>,
+    /// Collision reduction strategy.
+    pub mode: CollisionSimplifyMode,
+    /// For `ConvexHull` mode: collapse the hull toward this many faces (None = no extra budget).
+    pub hull_target_faces: Option<usize>,
 }
 
 impl Default for CollisionSimplifyOptions {
@@ -65,6 +79,8 @@ impl Default for CollisionSimplifyOptions {
             weld_epsilon: 1e-3,
             target_triangle_ratio: None,
             max_target_triangles: None,
+            mode: CollisionSimplifyMode::ShapePreserving,
+            hull_target_faces: None,
         }
     }
 }
@@ -121,5 +137,12 @@ mod tests {
         let opts = CollisionMeshOptions::from_ssbh_axis("z_up", 2.0);
         assert_eq!(opts.scale_factor, 2.0);
         assert_eq!(opts.up_axis, UpAxisConversion::ZUp);
+    }
+
+    #[test]
+    fn default_simplify_mode_is_shape_preserving() {
+        let opts = CollisionSimplifyOptions::default();
+        assert_eq!(opts.mode, CollisionSimplifyMode::ShapePreserving);
+        assert_eq!(opts.hull_target_faces, None);
     }
 }

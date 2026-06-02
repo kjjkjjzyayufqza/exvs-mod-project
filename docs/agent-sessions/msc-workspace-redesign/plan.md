@@ -30,6 +30,14 @@ auto-naming, (b) redesigns the reverse-packing pipeline to be project-centric an
 with round-trip verification, and (c) redesigns the UI to a hierarchical Dark Industrial layout
 with symbol resolution as a first-class inspectable stage.
 
+### 2026-06-02 Correction
+
+The new-version action auto-rename design must **not** use an `action_hash -> name` dictionary.
+The user explicitly rejects a dictionary fallback. The correct direction is dynamic mapping:
+derive fixed gameplay labels and semantic names from script routes, slot tables, resource usage,
+and decoded per-unit labels. So far, no file has been found that records the original new-version
+action hash names.
+
 ---
 
 ## 3. Current-State Audit
@@ -104,11 +112,10 @@ type/float heuristics (#7/#8); regex switch-case beautification over generated `
    `func_143/func_95/func_241`, plus a complete mask table, so "new" characters get `ACTION_*` names.
 5. **An IDA ground-truth extraction pass** for each new character. The workflow doc scoped extraction
    to `0xF1EF3B32` "first"; nothing has been extracted for others, so there is no symbol source.
-6. **CRC32 reverse-search integration** to turn opaque action hashes into human-readable names.
-   The standalone tool is already planned (`docs/superpowers/plans/2026-04-03-crc32-reverse-search-tool.md`)
-   but is not connected to the decompile naming step.
-7. **A per-project persisted `symbols.json`** holding resolved + user-edited names so naming is
-   stable across decompile/recompile cycles and reusable as the next character's seed.
+6. **Dynamic action mapping** to trace each action hash through callback, slot callback,
+   slot-hash/resource usage, and param labels. This replaces the earlier dictionary/CRC32 idea.
+7. **A per-project mapping report** holding evidence, confidence, and user-reviewed labels.
+   It must not become a blind action-hash dictionary.
 
 Short answer for the user: the **standard MSC** is "almost named" but the UI does not invoke its
 XML naming channel and the offset table is empty; the **new MSC** has none of the four data sources
@@ -135,8 +142,8 @@ extract .fhm2d -> folder (0.bscex/1.cscex/2.dscex + _structure.json)
 ```
 Open MSC Project (folder)  ->  persisted project + per-file state
   Stage 1 Decompile All     (one action; runs 0/1/2 with correct mapping + xml)
-  Stage 2 Resolve Symbols   (ordered: xml -> native-truth -> action-mask -> crc32 -> user overrides)
-                            -> writes/merges project symbols.json; shows Symbol table
+  Stage 2 Resolve Symbols   (ordered: xml -> native-truth -> dynamic action graph -> user review)
+                            -> writes/updates project mapping evidence; shows Symbol table
   Stage 3 Edit              (in-app .c preview/diff; external editor optional)
   Stage 4 Recompile All     (msclang.py with the same per-project mapping)
   Stage 5 Round-trip Verify (byte-compare recompiled vs original; first-divergence report)
@@ -146,8 +153,8 @@ Open MSC Project (folder)  ->  persisted project + per-file state
 Principles:
 - Naming order is explicit and deterministic; each name carries its source.
 - Every stage is idempotent and shows status (idle / running / ok / warn / fail).
-- Mapping + XML are selected by `script_file_id`, with a clear "no mapping yet" branch that offers a
-  one-click bootstrap (seed extractor + crc32 search) to start a mapping for a new character.
+- Mapping + XML are selected by `script_file_id`, with a clear "no mapping yet" branch that offers
+  a visible unresolved-action report and research path for finding the real action-hash source.
 - Round-trip verification is built in, addressing problem #12 directly in the UX.
 
 ---
@@ -187,8 +194,9 @@ default, but project consistency wins here; keep Lucide and standardize stroke w
 icon families.
 
 ### 6.3 Symbol table (the naming surface)
-- One row per function: current name, resolved name, source badge (`seq / xml / native / mask / crc32 / user`).
-- Inline rename writes to project `symbols.json` (source becomes `user`, wins over auto sources).
+- One row per function: current name, resolved name, source badge (`seq / xml / native / dynamic-route / param-label / user`).
+- Inline rename writes to the project mapping evidence as user-reviewed data; it is not treated as
+  a global hash dictionary.
 - Filter chips: `unnamed`, `user-edited`, `conflicts`. Mono font for ids and hex.
 
 ### 6.4 States
@@ -204,12 +212,12 @@ Error: inline on the failing file row + toast, with the tool's stderr in the ins
 - script_file_id auto-detection (folder name + MSC header).
 - Per-script mapping/XML resolution; graceful "no mapping" branch.
 - Populate `script_functions` for `0xF1EF3B32`; ship `tools/mscinfo.xml`; wire `--assumeCharStd`/`--xmlPath` from the UI.
-- Define and persist per-project `symbols.json` with a documented merge order.
+- Define and persist a per-project dynamic mapping report with evidence and confidence.
 
 ### Phase 2 - Generalized naming
 - Discover action-router function instead of hardcoded ids; complete the mask table.
-- Integrate CRC32 reverse-search for action-hash names.
-- One-click "bootstrap mapping for a new character" (seed extractor + crc32).
+- Build dynamic action-route extraction for new-version MSC.
+- Keep unresolved action hashes visible while researching the true recording source.
 
 ### Phase 3 - Pipeline + verification UX
 - Project model + persistence (DocumentRegistry-style store).
@@ -261,7 +269,7 @@ Error: inline on the failing file row + toast, with the tool's stderr in the ins
 | Wrong mapping auto-selected for a new id | Medium | Require explicit confirmation when id has no mapping; never silently use `0xF1EF3B32` |
 | Generalized action router misnames callbacks | Medium | Keep source badges + user override; never overwrite a `user` name |
 | Removing MSCEdit breaks a `.bin` flow still in use | Medium | Confirm `.bin` parity in new UI before deletion |
-| CRC32 search produces false-positive names | Medium | Mark crc32 names as low-confidence; rank below xml/native |
+| Dynamic mapping overfits one script layout | Medium | Keep evidence badges, confidence levels, and unresolved states instead of forcing names |
 
 ---
 
@@ -276,5 +284,5 @@ Open questions for the user before implementation:
 2. Should `mscActionRename` stay in TypeScript or be ported into the Python toolchain so naming lives
    in one place?
 3. Is there an existing `mscinfo.xml` (standard-library names) anywhere, or must it be reconstructed?
-4. For "new MSC": is there IDA ground truth available now, or should Phase 2 lead with CRC32 + seed
-   bootstrap as the primary name source?
+4. For "new MSC": where should we search next for the file or runtime table that records action
+   hash names, if it exists?

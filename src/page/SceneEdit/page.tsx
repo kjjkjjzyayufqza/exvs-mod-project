@@ -157,6 +157,7 @@ import { useSceneDirtyStore } from "./store/sceneDirtyStore";
 import { useSceneTextureManagerStore } from "./store/sceneTextureManagerStore";
 import { executeSaveFolderPipeline } from "./utils/sceneSaveFolderPipeline";
 import { executeSaveFhm2dPipeline } from "./utils/sceneSaveFhm2dPipeline";
+import { beginSceneOp, type SceneOpTimer } from "./utils/sceneOpTimer";
 import { SaveProgressDialog, type SaveStepInfo } from "./components/SaveProgressDialog";
 import { SaveConfirmDialog } from "./components/SaveConfirmDialog";
 import { DeleteConfirmDialog, type DeleteConfirmMeta } from "./components/DeleteConfirmDialog";
@@ -1347,6 +1348,7 @@ export default function SceneEdit() {
   }, [resetState]);
 
   const handleOpenFolder = useCallback(async () => {
+    let loadTimer: SceneOpTimer | null = null;
     try {
       const selected = await open({
         directory: true,
@@ -1361,6 +1363,7 @@ export default function SceneEdit() {
       // observed running twice). Skip if an identical load is already in flight.
       if (stageLoadInFlightRef.current === stageRoot) return;
       stageLoadInFlightRef.current = stageRoot;
+      loadTimer = beginSceneOp("load_stage_folder");
 
       setIsLoading(true);
       resetState();
@@ -1511,8 +1514,10 @@ export default function SceneEdit() {
         });
       });
     } catch (err: unknown) {
+      loadTimer?.fail(err);
       toast.error("Failed to load stage", { description: String(err) });
     } finally {
+      loadTimer?.end();
       setModelLoadProgress(null);
       setIsLoading(false);
       stageLoadInFlightRef.current = null;
@@ -1811,6 +1816,7 @@ export default function SceneEdit() {
       completionSummary: undefined,
     });
 
+    const saveTimer = beginSceneOp("save_folder");
     try {
       const result = await executeSaveFolderPipeline({
         stageRoot,
@@ -1867,7 +1873,10 @@ export default function SceneEdit() {
       }
     } catch (err: any) {
       setSaveProgressState((prev) => ({ ...prev, canClose: true }));
+      saveTimer.fail(err);
       toast.error("Save failed", { description: String(err) });
+    } finally {
+      saveTimer.end();
     }
   }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, autoApproveSaveDelete, promptSaveConfirm, runNumatbPreflight, surfaceValidationErrors]);
 
@@ -1898,6 +1907,7 @@ export default function SceneEdit() {
       completionSummary: undefined,
     });
 
+    const repackTimer = beginSceneOp("save_fhm2d");
     try {
       const result = await executeSaveFhm2dPipeline({
         stageRoot,
@@ -1946,7 +1956,10 @@ export default function SceneEdit() {
       toast.success(`FHM2D saved (${(result.fhm2dSizeBytes / (1024 * 1024)).toFixed(1)} MB)`);
     } catch (err: any) {
       setSaveProgressState((prev) => ({ ...prev, canClose: true }));
+      repackTimer.fail(err);
       toast.error("FHM2D save failed", { description: String(err) });
+    } finally {
+      repackTimer.end();
     }
   }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, autoApproveSaveDelete, promptSaveConfirm, runNumatbPreflight, surfaceValidationErrors]);
 

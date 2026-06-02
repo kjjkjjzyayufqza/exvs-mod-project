@@ -177,7 +177,7 @@ pub fn fit_to_single_section(mesh: &CollisionTriMesh) -> Result<CollisionTriMesh
         return Err("Cannot fit an empty collision mesh into a single Havok section".into());
     }
 
-    let simplified = simplify_collision_mesh(mesh, &CollisionSimplifyOptions::default());
+    let simplified = simplify_collision_mesh(mesh, &CollisionSimplifyOptions::default())?;
     let source = if simplified.triangle_count() > 0 {
         &simplified
     } else {

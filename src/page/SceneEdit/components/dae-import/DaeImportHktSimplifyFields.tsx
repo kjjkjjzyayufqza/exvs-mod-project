@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import type { HktSimplifyConfig, HktSimplifyPreset } from "./daeImportTypes";
+import { cn } from "@/lib/utils";
+import type {
+  HktHullPreset,
+  HktSimplifyConfig,
+  HktSimplifyPreset,
+  HktSimplifyStrategy,
+} from "./daeImportTypes";
 import {
   Select,
   SelectContent,
@@ -17,9 +23,13 @@ import {
   buildImportConfigForHktPreview,
   detectHktSimplifyPreset,
   formatTriangleCount,
+  HKT_HULL_PRESET_HINTS,
+  HKT_HULL_PRESET_LABELS,
+  HKT_HULL_PRESET_ORDER,
   HKT_SIMPLIFY_PRESET_HINTS,
   HKT_SIMPLIFY_PRESET_LABELS,
   HKT_SIMPLIFY_PRESET_ORDER,
+  hktHullConfigFromPreset,
   hktSimplifyConfigFromPreset,
   normalizeHktSimplifyConfig,
   reductionPercent,
@@ -32,6 +42,11 @@ import {
   type ImportConfig,
 } from "../../utils/sceneSessionService";
 
+const STRATEGY_OPTIONS: { value: HktSimplifyStrategy; label: string; hint: string }[] = [
+  { value: "shapePreserving", label: "Shape-preserving", hint: "Follow the original surface" },
+  { value: "convexHull", label: "Convex outline", hint: "Coarse outer frame, few faces" },
+];
+
 interface DaeImportHktSimplifyFieldsProps {
   value: HktSimplifyConfig;
   onChange: (next: HktSimplifyConfig) => void;
@@ -41,6 +56,8 @@ interface DaeImportHktSimplifyFieldsProps {
   sessionId?: string | null;
   sessionImportId?: string | null;
   compact?: boolean;
+  /** When false, collision stats preview only runs if a parent triggers it (no debounced auto-run). */
+  autoPreview?: boolean;
   onValidationChange?: (error: string | null) => void;
 }
 
@@ -53,6 +70,7 @@ export function DaeImportHktSimplifyFields({
   sessionId,
   sessionImportId,
   compact = false,
+  autoPreview = true,
   onValidationChange,
 }: DaeImportHktSimplifyFieldsProps) {
   const [preview, setPreview] = useState<HktCollisionPreview | null>(null);
@@ -61,9 +79,24 @@ export function DaeImportHktSimplifyFields({
 
   const normalizedValue = useMemo(() => normalizeHktSimplifyConfig(value), [value]);
   const activePreset = detectHktSimplifyPreset(normalizedValue);
+  const activeStrategy = normalizedValue.strategy;
+  const activeHullPreset = normalizedValue.hullPreset;
 
   const handlePresetChange = (nextPreset: HktSimplifyPreset) => {
     onChange(hktSimplifyConfigFromPreset(nextPreset));
+  };
+
+  const handleStrategyChange = (next: HktSimplifyStrategy) => {
+    if (next === activeStrategy) return;
+    onChange(
+      next === "convexHull"
+        ? hktHullConfigFromPreset(activeHullPreset)
+        : hktSimplifyConfigFromPreset("medium"),
+    );
+  };
+
+  const handleHullPresetChange = (next: HktHullPreset) => {
+    onChange(hktHullConfigFromPreset(next));
   };
 
   const ssbhConfig = importConfig.ssbhConfig;
@@ -89,6 +122,9 @@ export function DaeImportHktSimplifyFields({
       normalizedValue.weldEpsilon,
       normalizedValue.targetTriangleRatio,
       normalizedValue.maxTargetTriangles,
+      normalizedValue.strategy,
+      normalizedValue.hullPreset,
+      normalizedValue.hullTargetFaces,
     ],
   );
 
@@ -104,7 +140,7 @@ export function DaeImportHktSimplifyFields({
   );
 
   useEffect(() => {
-    if (!importConfig.generateHkt) {
+    if (!autoPreview || !importConfig.generateHkt) {
       setPreview(null);
       setPreviewError(null);
       onValidationChange?.(null);
@@ -165,6 +201,7 @@ export function DaeImportHktSimplifyFields({
       window.clearTimeout(timer);
     };
   }, [
+    autoPreview,
     sourcePath,
     sourceName,
     sessionId,
@@ -178,36 +215,106 @@ export function DaeImportHktSimplifyFields({
     ? reductionPercent(preview.mergedTriangleCount, preview.simplifiedTriangleCount)
     : null;
 
-  return (
-    <DaeImportSection title={compact ? "Simplify" : "Collision Simplification"}>
-      <DaeImportStatusAlert tone="info">
-        Merges adjacent similar faces before building HKT. Heavy mode also decimates curved
-        surfaces toward a low-poly collision mesh for dense render geometry.
-      </DaeImportStatusAlert>
+  const compactFieldRowClass = compact
+    ? "grid-cols-1 items-start gap-1.5 py-2 [&>div:last-child]:w-full"
+    : undefined;
 
-      <DaeImportFieldRow
-        label="Simplify Level"
-        hint={HKT_SIMPLIFY_PRESET_HINTS[activePreset]}
-      >
-        <Select value={activePreset} onValueChange={handlePresetChange}>
-          <SelectTrigger className="h-8 text-[11px]">
-            <SelectValue placeholder="Select level" />
-          </SelectTrigger>
-          <SelectContent className={daeImportModalSelectContentClass}>
-            {HKT_SIMPLIFY_PRESET_ORDER.map((preset) => (
-              <SelectItem key={preset} value={preset} className="text-[11px]">
-                {HKT_SIMPLIFY_PRESET_LABELS[preset]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </DaeImportFieldRow>
+  return (
+    <DaeImportSection title={compact ? "Simplify" : "Collision Simplification"} compact={compact}>
+      {!compact ? (
+        <DaeImportStatusAlert tone="info">
+          Shape-preserving merges similar faces and can decimate curves. Convex outline builds a
+          coarse outer shell — best for large flat terrain where heavy simplification still leaves
+          too many faces.
+        </DaeImportStatusAlert>
+      ) : null}
+
+      <div className={cn("min-w-0 space-y-2", compact ? "px-3" : "px-1")}>
+        <div className="text-[11px] font-medium text-foreground">Strategy</div>
+        <div
+          className={cn(
+            "grid min-w-0 gap-1 rounded-lg border border-border/60 bg-muted/20 p-1",
+            compact ? "grid-cols-1" : "grid-cols-2",
+          )}
+        >
+          {STRATEGY_OPTIONS.map((opt) => {
+            const active = activeStrategy === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                aria-pressed={active}
+                onClick={() => handleStrategyChange(opt.value)}
+                className={cn(
+                  "flex min-w-0 w-full flex-col items-start gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/50",
+                  active
+                    ? "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/40"
+                    : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                )}
+              >
+                <span className="text-[11px] font-semibold">{opt.label}</span>
+                <span className="text-pretty text-[10px] leading-snug opacity-80 break-words">
+                  {opt.hint}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {activeStrategy === "shapePreserving" ? (
+        <DaeImportFieldRow
+          label="Simplify Level"
+          hint={HKT_SIMPLIFY_PRESET_HINTS[activePreset]}
+          className={compactFieldRowClass}
+        >
+          <Select value={activePreset} onValueChange={handlePresetChange}>
+            <SelectTrigger className="h-8 text-[11px]">
+              <SelectValue placeholder="Select level" />
+            </SelectTrigger>
+            <SelectContent className={daeImportModalSelectContentClass}>
+              {HKT_SIMPLIFY_PRESET_ORDER.map((preset) => (
+                <SelectItem key={preset} value={preset} className="text-[11px]">
+                  {HKT_SIMPLIFY_PRESET_LABELS[preset]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </DaeImportFieldRow>
+      ) : (
+        <DaeImportFieldRow
+          label="Hull Detail"
+          hint={HKT_HULL_PRESET_HINTS[activeHullPreset]}
+          className={compactFieldRowClass}
+        >
+          <Select
+            value={activeHullPreset}
+            onValueChange={(v) => handleHullPresetChange(v as HktHullPreset)}
+          >
+            <SelectTrigger className="h-8 text-[11px]">
+              <SelectValue placeholder="Select detail" />
+            </SelectTrigger>
+            <SelectContent className={daeImportModalSelectContentClass}>
+              {HKT_HULL_PRESET_ORDER.map((preset) => (
+                <SelectItem key={preset} value={preset} className="text-[11px]">
+                  {HKT_HULL_PRESET_LABELS[preset]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </DaeImportFieldRow>
+      )}
 
       {importConfig.generateHkt && (sourcePath || sessionImportId) ? (
-        <div className="space-y-1 px-4 py-2 text-[11px] text-muted-foreground">
+        <div
+          className={cn(
+            "min-w-0 space-y-1 py-2 text-[11px] text-muted-foreground",
+            compact ? "px-3" : "px-4",
+          )}
+        >
           <p className="font-medium text-foreground">Preview</p>
           {previewError ? (
-            <p className="text-destructive">{previewError}</p>
+            <p className="text-pretty break-words text-destructive">{previewError}</p>
           ) : null}
           {previewLoading ? (
             <p>Computing collision stats…</p>

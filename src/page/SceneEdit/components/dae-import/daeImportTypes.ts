@@ -31,9 +31,16 @@ export interface TextureImportEntry {
 }
 
 export type HktSimplifyPreset = "none" | "medium" | "heavy";
+export type HktSimplifyStrategy = "shapePreserving" | "convexHull";
+export type HktHullPreset = "coarse" | "balanced" | "fine";
 
 export interface HktSimplifyConfig {
+  /** Top-level reduction strategy. */
+  strategy: HktSimplifyStrategy;
+  /** Shape-preserving sub-preset (used when strategy === "shapePreserving"). */
   preset: HktSimplifyPreset;
+  /** Convex-hull coarseness sub-preset (used when strategy === "convexHull"). */
+  hullPreset: HktHullPreset;
   enabled: boolean;
   /** Max angle (degrees) between coplanar mergeable face normals. */
   planarityAngleDeg: number;
@@ -43,6 +50,8 @@ export interface HktSimplifyConfig {
   targetTriangleRatio: number | null;
   /** Optional absolute cap applied after targetTriangleRatio. */
   maxTargetTriangles: number | null;
+  /** Convex-hull face budget (used when strategy === "convexHull"). */
+  hullTargetFaces: number | null;
 }
 
 export interface DaeImportConfig {

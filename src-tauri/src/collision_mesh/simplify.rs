@@ -8,7 +8,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::types::{CollisionSimplifyOptions, CollisionTriMesh};
+use super::types::{CollisionSimplifyMode, CollisionSimplifyOptions, CollisionTriMesh};
 
 const DEGENERATE_AREA: f64 = 1e-14;
 
@@ -119,7 +119,7 @@ fn canonical_edge(a: u32, b: u32) -> (u32, u32) {
     }
 }
 
-fn weld_vertices(mesh: &CollisionTriMesh, epsilon: f64) -> CollisionTriMesh {
+pub(super) fn weld_vertices(mesh: &CollisionTriMesh, epsilon: f64) -> CollisionTriMesh {
     if epsilon <= 0.0 || mesh.vertices.is_empty() {
         return mesh.clone();
     }
@@ -730,15 +730,27 @@ fn retriangulate_region(vertices: &[[f64; 3]], region_tris: &[TriInfo]) -> Vec<[
     }
 }
 
-/// Simplify a collision mesh by merging coplanar regions (similar face normals).
+/// Reduce a collision mesh according to `options.mode`.
 pub fn simplify_collision_mesh(
     mesh: &CollisionTriMesh,
     options: &CollisionSimplifyOptions,
-) -> CollisionTriMesh {
+) -> Result<CollisionTriMesh, String> {
     if !options.enabled {
-        return mesh.clone();
+        return Ok(mesh.clone());
     }
+    match options.mode {
+        CollisionSimplifyMode::ConvexHull => {
+            super::convex_hull::convex_hull_collision_mesh(mesh, options)
+        }
+        CollisionSimplifyMode::ShapePreserving => Ok(shape_preserving_simplify(mesh, options)),
+    }
+}
 
+/// Simplify by merging coplanar regions (similar face normals), keeping the surface.
+fn shape_preserving_simplify(
+    mesh: &CollisionTriMesh,
+    options: &CollisionSimplifyOptions,
+) -> CollisionTriMesh {
     let welded = weld_vertices(mesh, options.weld_epsilon);
 
     let mut tris: Vec<TriInfo> = Vec::new();
@@ -865,7 +877,7 @@ mod tests {
             weld_epsilon: 1e-6,
             ..Default::default()
         };
-        let out = simplify_collision_mesh(&mesh, &opts);
+        let out = simplify_collision_mesh(&mesh, &opts).unwrap();
         assert_eq!(
             out.triangle_count(),
             2,
@@ -888,7 +900,7 @@ mod tests {
         let indices = vec![0, 1, 2, 0, 2, 3, 1, 5, 6, 1, 6, 2];
         let mesh = CollisionTriMesh { vertices, indices };
         let opts = CollisionSimplifyOptions::default();
-        let out = simplify_collision_mesh(&mesh, &opts);
+        let out = simplify_collision_mesh(&mesh, &opts).unwrap();
         assert!(
             out.triangle_count() >= 3,
             "dissimilar normals should not fully collapse crease"
@@ -928,7 +940,7 @@ mod tests {
         }
         let mesh = CollisionTriMesh { vertices, indices };
         let input_tris = mesh.triangle_count();
-        let out = simplify_collision_mesh(&mesh, &CollisionSimplifyOptions::default());
+        let out = simplify_collision_mesh(&mesh, &CollisionSimplifyOptions::default()).unwrap();
         assert_eq!(
             out.triangle_count(),
             input_tris,
@@ -943,7 +955,7 @@ mod tests {
             enabled: false,
             ..Default::default()
         };
-        let out = simplify_collision_mesh(&mesh, &opts);
+        let out = simplify_collision_mesh(&mesh, &opts).unwrap();
         assert_eq!(out.triangle_count(), mesh.triangle_count());
     }
 
@@ -961,7 +973,7 @@ mod tests {
             weld_epsilon: 1e-4,
             ..Default::default()
         };
-        let out = simplify_collision_mesh(&mesh, &opts);
+        let out = simplify_collision_mesh(&mesh, &opts).unwrap();
         assert!(out.triangle_count() <= 2);
     }
 
@@ -977,7 +989,7 @@ mod tests {
             max_target_triangles: Some(50_000),
             ..Default::default()
         };
-        let out = simplify_collision_mesh(&mesh, &opts);
+        let out = simplify_collision_mesh(&mesh, &opts).unwrap();
         assert!(
             out.triangle_count() <= 60,
             "expected about 5% collision tris, got {}",

@@ -18,9 +18,10 @@ Status legend: [ ] pending, [~] in progress, [x] done, [-] dropped
 - [ ] W1.3 Populate `script_functions` offset->symbol table for `0xF1EF3B32` (reference char).
 - [ ] W1.4 Ship a `tools/mscinfo.xml` (or `--xmlPath` per project) and wire `--assumeCharStd` from UI.
 - [ ] W1.5 Generalize `mscActionRename` to discover the action-router function; complete the mask table.
-- [ ] W1.6 Add a per-project `symbols.json` (persisted, user-editable name overrides) + merge order.
-- [ ] W1.7 Implement and integrate CRC32 reverse-search to recover names from action hashes.
-      (The repo currently has only the planning doc; `tools/crc32_reverse_search.py` is not checked in.)
+- [ ] W1.6 Design a dynamic action-mapping artifact/report for each MSC project.
+      It should record traced evidence, not act as an `action_hash -> name` dictionary.
+- [ ] W1.7 Research where new-version action hashes are recorded, if anywhere.
+      Current state: no complete action-hash name file has been found; user rejects dictionary fallback.
 - [ ] W1.8 Wire kind-7 label decoding into the parser/UI path for
       `action_label_offset` / `resource_label_offset` in
       `armsparam` / `characterparam` / `speedparam`.
@@ -63,5 +64,18 @@ Status legend: [ ] pending, [~] in progress, [x] done, [-] dropped
 - [ ] W4.4 Quiet/route debug output behind a verbosity flag.
 
 ## Next agent starts here
-Begin with Workstream 1 (W1.1 -> W1.3) because auto-naming is the highest-value user-visible gap.
-W2/W3 depend on W1's persisted `symbols.json` contract. Confirm phase order with user first.
+Begin with Workstream 1 because auto-naming is the highest-value user-visible gap.
+Use a dynamic mapping/report contract, not a dictionary contract. Confirm phase order with user first.
+
+## 2026-06-02 follow-up: new MSC action auto-rename brainstorming
+- [x] Re-read root `AGENTS.md`, Cursor rule, and brainstorming skill.
+- [x] Re-read existing MSC workspace redesign session notes.
+- [x] Verify current code path for `MscWorkspaceView` -> `renameScript2CallbacksByActionMask`.
+- [x] Re-check old common sample `0xF1EF3B32` and new per-unit sample `0x693F756D`.
+- [x] Confirm current repo still lacks `tools/crc32_reverse_search.py` and has empty `script_functions`.
+- [x] Record user correction: dictionary-based action-hash naming is rejected.
+- [x] Extract `0.c` action slot table and selector table for `0x693F756D`.
+- [x] Extract `2.c` two-level action graph for `0x693F756D`.
+- [x] Check current Codex tool exposure for IDA MCP; no IDA tools/resources are visible in this session.
+- [~] Research native source of `sys_41` / `0x700000` action records.
+- [ ] Propose naming-source approaches and get user approval before writing a design spec.

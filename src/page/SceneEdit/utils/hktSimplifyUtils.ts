@@ -1,5 +1,9 @@
 import type { HavokMeshData } from "@/utils/havokXmlParser";
-import type { HktSimplifyConfig, HktSimplifyPreset } from "../components/dae-import/daeImportTypes";
+import type {
+  HktHullPreset,
+  HktSimplifyConfig,
+  HktSimplifyPreset,
+} from "../components/dae-import/daeImportTypes";
 import type { ImportConfig } from "./sceneSessionService";
 
 export const HKT_SIMPLIFY_PRESET_ORDER: HktSimplifyPreset[] = ["none", "medium", "heavy"];
@@ -16,12 +20,39 @@ export const HKT_SIMPLIFY_PRESET_HINTS: Record<HktSimplifyPreset, string> = {
   heavy: "Aggressive merge and curved-surface decimation for low-poly collision",
 };
 
+export const HKT_HULL_PRESET_ORDER: HktHullPreset[] = ["coarse", "balanced", "fine"];
+
+export const HKT_HULL_PRESET_LABELS: Record<HktHullPreset, string> = {
+  coarse: "Coarse",
+  balanced: "Balanced",
+  fine: "Fine",
+};
+
+export const HKT_HULL_PRESET_HINTS: Record<HktHullPreset, string> = {
+  coarse: "Tightest outer shell, fewest faces",
+  balanced: "Outer shell with rounded detail (recommended)",
+  fine: "Detailed convex shell",
+};
+
+/** Target collision-face budget per hull coarseness preset. */
+export const HKT_HULL_PRESET_FACES: Record<HktHullPreset, number> = {
+  coarse: 24,
+  balanced: 80,
+  fine: 200,
+};
+
 /** Preset parameters sent to the Rust collision pipeline. */
 export function hktSimplifyConfigFromPreset(preset: HktSimplifyPreset): HktSimplifyConfig {
+  const base = {
+    strategy: "shapePreserving" as const,
+    preset,
+    hullPreset: "balanced" as const,
+    hullTargetFaces: null,
+  };
   switch (preset) {
     case "none":
       return {
-        preset,
+        ...base,
         enabled: false,
         planarityAngleDeg: 8,
         minTriangleArea: 1e-8,
@@ -31,7 +62,7 @@ export function hktSimplifyConfigFromPreset(preset: HktSimplifyPreset): HktSimpl
       };
     case "medium":
       return {
-        preset,
+        ...base,
         enabled: true,
         planarityAngleDeg: 15,
         minTriangleArea: 1e-6,
@@ -41,7 +72,7 @@ export function hktSimplifyConfigFromPreset(preset: HktSimplifyPreset): HktSimpl
       };
     case "heavy":
       return {
-        preset,
+        ...base,
         enabled: true,
         planarityAngleDeg: 45,
         minTriangleArea: 0.001,
@@ -50,6 +81,22 @@ export function hktSimplifyConfigFromPreset(preset: HktSimplifyPreset): HktSimpl
         maxTargetTriangles: 50_000,
       };
   }
+}
+
+/** Convex-hull ("outer frame") config for a coarseness preset. */
+export function hktHullConfigFromPreset(preset: HktHullPreset): HktSimplifyConfig {
+  return {
+    strategy: "convexHull",
+    preset: "medium",
+    hullPreset: preset,
+    enabled: true,
+    planarityAngleDeg: 15,
+    minTriangleArea: 1e-6,
+    weldEpsilon: 0.001,
+    targetTriangleRatio: null,
+    maxTargetTriangles: null,
+    hullTargetFaces: HKT_HULL_PRESET_FACES[preset],
+  };
 }
 
 export function detectHktSimplifyPreset(config: HktSimplifyConfig): HktSimplifyPreset {
@@ -88,6 +135,13 @@ export function detectHktSimplifyPreset(config: HktSimplifyConfig): HktSimplifyP
 export function normalizeHktSimplifyConfig(
   config: Partial<HktSimplifyConfig> | null | undefined,
 ): HktSimplifyConfig {
+  if (config?.strategy === "convexHull") {
+    const hullPreset =
+      config.hullPreset && HKT_HULL_PRESET_ORDER.includes(config.hullPreset)
+        ? config.hullPreset
+        : "balanced";
+    return hktHullConfigFromPreset(hullPreset);
+  }
   if (config?.preset && HKT_SIMPLIFY_PRESET_ORDER.includes(config.preset)) {
     return hktSimplifyConfigFromPreset(config.preset);
   }

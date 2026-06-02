@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { DaeImportHktSimplifyFields } from "./DaeImportHktSimplifyFields";
 import { DEFAULT_HKT_SIMPLIFY } from "../../utils/hktSimplifyUtils";
 import type { ImportConfig } from "../../utils/sceneSessionService";
@@ -94,5 +94,42 @@ describe("DaeImportHktSimplifyFields", () => {
 
     await new Promise((resolve) => window.setTimeout(resolve, 500));
     expect(scenePreviewHktCollisionPath).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not auto-run HKT preview when autoPreview is false", async () => {
+    render(
+      <DaeImportHktSimplifyFields
+        value={DEFAULT_HKT_SIMPLIFY}
+        onChange={vi.fn()}
+        importConfig={buildImportConfig()}
+        sourcePath="C:/assets/mesh.dae"
+        sourceName="mesh.dae"
+        autoPreview={false}
+      />,
+    );
+
+    await new Promise((resolve) => window.setTimeout(resolve, 500));
+    expect(scenePreviewHktCollisionPath).not.toHaveBeenCalled();
+  });
+
+  it("switches to the convex-hull strategy and emits a convexHull config", async () => {
+    const onChange = vi.fn();
+    render(
+      <DaeImportHktSimplifyFields
+        value={DEFAULT_HKT_SIMPLIFY}
+        onChange={onChange}
+        importConfig={buildImportConfig()}
+        sourcePath="C:/assets/mesh.dae"
+        sourceName="mesh.dae"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /convex outline/i }));
+
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const next = onChange.mock.calls[0][0];
+    expect(next.strategy).toBe("convexHull");
+    expect(next.enabled).toBe(true);
+    expect(next.hullTargetFaces).toBeGreaterThan(0);
   });
 });

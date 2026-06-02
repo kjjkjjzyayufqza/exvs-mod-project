@@ -10,12 +10,13 @@ grounded in the actual EXVS2 resource dump at `e:\XB\解包\vs2\x64`.
 | Implementation | `src/page/TestEditor/utils/mscActionRename.ts` | not yet implemented as a generic pass |
 | Key in script | action MASK (`global48 & 0xMASK`) parsed from `0.c func_143` | action HASH `func_241(0xHASH, cb)` / `bindActionHashHandler(0xHASH, cb)` |
 | Names produced | generic A/B/C semantics (A_SHOT, B_MELEE, AB_SUB...) | per-action callback name |
-| Source of truth | derived in-pack from `0.c` | an external dictionary keyed by action hash |
-| Scope | tuned to one script layout (func_143/func_95/func_241) | character-agnostic if the dictionary is complete |
+| Source of truth | derived dynamically in-pack from `0.c` control flow | **unknown**; no complete action-hash record file has been found |
+| Scope | tuned to one script layout (func_143/func_95/func_241) | must be per-script dynamic mapping, not dictionary lookup |
 
 The action hash is the real dispatch key (see `docs/exvs-msc-input-action-weapon-pipeline.md`):
 input -> `pendingActionHash` -> `activeActionHash` -> `sys_0(0x10002,0x2,hash)` fetches the
-registered callback. The hashes are CRC32 of authoring-time identifiers.
+registered callback. The values are action-hash-like dispatch keys, but the resource file that
+records their original names has **not** been found.
 
 ## Evidence: where do the action hashes live?
 
@@ -33,8 +34,9 @@ big-endian. The scan used LE, so it finds hashes in param data but not inside `.
 | `100system`, `012list`, `020common`, `800etcetera`, `060navi`, `011camera`, `005renderinfo` | 0 / 54 |
 | `040msc` (120 MB of MSC, scanned LE) | 0 (hashes are BE inside bytecode) |
 
-**46 of 54 action hashes do not appear in ANY resource file.** They are CRC32 of identifiers that
-only exist at authoring time. There is no EXVS resource that is a complete `hash -> name` dictionary.
+**46 of 54 action hashes do not appear in ANY scanned resource file.** There is no evidence for a
+complete EXVS resource file that can be used as `action_hash -> name`. The tool design must treat
+the action hash source as unsolved rather than fill the gap with a dictionary.
 
 The 8 action hashes present in `.csyspm` (LE), i.e. the system/core subset that needs per-character
 system params:
@@ -51,25 +53,38 @@ vocabulary is **global/shared** (main shot has the same hash for every character
 The localized command list `010localizedtext/commandlist/*.ntx` does NOT contain these hashes and is
 encrypted/packed localized UI text. It is not a hash->name source.
 
-## Conclusion: what the "external file" is, and what it should be
+## Corrected Conclusion: no dictionary path
+
+2026-06-02 correction from user direction:
+
+- The user explicitly does **not** want an `action_hash -> name` dictionary.
+- Do not design the new auto-rename as "look up hash in JSON, then rename".
+- The old rename path did not depend on a dictionary. It dynamically inferred fixed gameplay
+  labels such as Shoot/射击, Melee/格斗, Sub/副射, Special Shoot/特射, and
+  Special Melee/特格 from script structure.
+- The new rename path should follow the same spirit: dynamically map script routes and derive
+  names from observed control/resource relationships.
+- So far, we have **not** found the file that records the new action hash names.
+
+## What the current external evidence means
 
 1. In our tooling, the external file that replaces the `0.c`-derived heuristic is
    `tools/mappings/exvs_0xF1EF3B32.native_truth.json`, specifically its `callback_bindings_seed`
-   (`action_hash -> callback_symbol_hint`). That dictionary is currently hand/tool-seeded from
-   behavioral reverse-engineering plus `tools/crc32_reverse_search.py`.
+   (`action_hash -> callback_symbol_hint`). This must be treated as historical evidence from one
+   analyzed common script, not as the desired product design for new MSC auto-rename.
 
 2. In native EXVS resources, the only file family that shares the action-hash space is the
    character system param `.csyspm` (`041cpm/chrsys/`). It can corroborate and scope the ~8 core
    system actions (including main shot) but is NOT a complete or human-readable name source.
 
-3. Therefore the new auto-rename cannot be backed by a single EXVS data file. The right design is a
-   versioned JSON dictionary `action_hash -> name`, populated from three sources, in priority order:
-   - behavioral names already recovered in `2.c` analysis,
-   - CRC32 reverse-search hits (`crc32_reverse_search.py`),
-   - `.csyspm` cross-reference for the system-action subset.
-   Auto-rename then becomes: parse `2.c` `func_241`/`bindActionHashHandler` bindings -> look up each
-   hash in the dictionary -> rename the callback. This is character-agnostic and external-file
-   driven, matching the "depends on an external file" recollection.
+3. Therefore the new auto-rename cannot be backed by a single known EXVS data file today. It should
+   be a dynamic mapping pass:
+   - parse `2.c` action registration (`func_241` / `bindActionHashHandler`)
+   - parse the slot-callback and slot-hash tables
+   - trace each action callback into slot/resource usage
+   - infer stable gameplay labels from the graph, known fixed gameplay categories, and decoded
+     per-unit labels
+   - report unresolved action hashes instead of pretending a dictionary exists
 
 ## Refinement from per-unit sample `0x693F756D` / `0x38C44F75`
 
@@ -135,7 +150,7 @@ Byte-scanning the full `0x38C44F75` param bundle shows **none of those 38 hashes
 
 So this second hash table is **internal script-side state/motion/action data**, not the ammo file.
 
-### 3. The ammo bundle appears later, as resource semantics, not as the primary action-name dictionary
+### 3. The ammo bundle appears later, as resource semantics, not as the primary action-name source
 
 The sample still uses the external param bundle heavily, but at a different layer:
 
@@ -292,6 +307,104 @@ Those field hashes (`0x607C25BC`, `0x97BE8DFC`, `0x7C2572A1`, etc.) match the
 So the decoded kind-7 label is not just editor-facing metadata.
 It is the readable name of a script-consumed param key/state (`SKL_MOVE`).
 
+### 4d. 2026-06-02 continuation: new MSC has an action-slot layer in `0.c`
+
+Further research on `E:\XB\解包\com\file\0x693F756D\0.c` found that the new-style action hashes
+are not only registered in `2.c`.
+
+`0.c func_13()` initializes:
+
+```c
+sys_1(0x10000, 0x1, slot, actionHash);
+```
+
+Examples:
+
+| action slot | action hash |
+|---:|---:|
+| `0x2` | `0x6d00aeaa` |
+| `0x3` | `0x9cf36e1b` |
+| `0xa` | `0xf5f21169` |
+| `0x1d` | `0xdabb0543` |
+| `0x24` | `0xf32aa1ba` |
+| `0x25` | `0x900ab393` |
+| `0x28` | `0x27786a84` |
+
+`0.c func_14()` then binds those action slots to selector callbacks through:
+
+```c
+func_83(slot, selectorCallback);
+```
+
+`func_83()` resolves the slot to the action hash and registers:
+
+```c
+sys_1(0x10002, 0, actionHash, selectorCallback);
+```
+
+This is a better dynamic-mapping surface than any dictionary idea:
+
+- `func_13()` gives `actionSlot -> actionHash`
+- `func_14()` gives `actionSlot -> selectorCallback`
+- selector callbacks can return other action slots with `sys_0(0x10000, 0x1, targetSlot)`
+- the route graph can be analyzed to infer fixed gameplay categories and fallback chains
+
+### 4e. `sys_41` / `0x700000` are the likely native source path
+
+`0.c func_143()` now points to a more important native layer:
+
+```c
+var0 = sys_41(...);
+var1 = func_144(var0);
+func_145(var0, var1, 0);
+```
+
+`func_145()` reads an action record:
+
+```c
+var3 = sys_0(0x700000, 0, arg0, 0x2e);
+var4 = sys_0(0x700000, 0, arg0, 0xa);
+var6 = sys_0(0x700002, var4, 0, arg0, 1);
+var7 = sys_0(0x700002, var4, 1, arg0, 1) | arg2;
+func_95(var3, var6, var7, arg1);
+```
+
+Current interpretation:
+
+- `sys_41(...)` returns an action-record index or handle.
+- `0x700000` field `0x2e` is the action hash.
+- `0x700000` field `0x3` is an action category/type.
+- `0x700000` field `0x4` is an input/direction mask.
+- `0x700000` field `0xa` links into `0x700002`.
+
+So the correct "where is the action hash recorded?" research target is no longer only `2.c`
+registration. It is the native backing store for `sys_41`, `0x700000`, and `0x700002`.
+
+### 4f. Two-level `2.c` tracing is required
+
+`2.c` dynamic tracing must not map `func_69(actionSlot)` directly to `func_1221()` using the same
+slot number. The real route is usually:
+
+```text
+actionHash -> actionCallback -> func_69(actionSlot)
+  -> sys_0(0x10001, 0x2, actionSlot) -> slotCallback
+  -> func_74(innerSlot, delay)
+  -> sys_0(0x10001, 0x3 + global170, innerSlot) -> slotHash/resource
+```
+
+Examples from `0x693F756D/2.c`:
+
+| action hash | traced route |
+|---:|---|
+| `0x6d00aeaa` | `func_390 -> actionSlot 0x1 -> func_1124 -> innerSlot 0x0 -> 0x1f588bd9` |
+| `0x9cf36e1b` | `func_392 -> actionSlot 0x2 -> func_1125 -> innerSlots 0x2/0x4/0x3 -> 0x377e9872 / 0xf0b3ea12 / 0xd74ba485` |
+| `0x86d45295` | `func_437 -> actionSlot 0x1d -> func_1137 -> innerSlots 0x1/0x0/0x29 -> 0xe53bc97 / 0x1f588bd9 / 0xf270ea6a` |
+| `0xf32aa1ba` | `func_480 -> actionSlot 0x34 -> func_1148..1152 -> innerSlot 0x4e -> conditional hashes` |
+| `0x900ab393` | `func_482 -> actionSlot 0x35 -> func_1158 -> innerSlot 0x4f -> 0xb189334e` |
+
+This confirms the new no-dictionary rename route should build an action graph first, then attach
+fixed gameplay labels and param labels only after the route is understood.
+
 ### 5. The repository currently references, but does not ship, the CRC32 reverse-search tool
 
 Docs reference `tools/crc32_reverse_search.py`, but the file is not present in the repo.
@@ -310,8 +423,10 @@ This means a future rename pipeline cannot depend on that script today without f
 
 The refined model is now:
 
-1. **Primary callback naming layer**:
-   a versioned `action_hash -> name` dictionary (global/shared vocabulary)
+1. **Dynamic action mapping layer**:
+   parse the script's registration and routing graph. The output is an action graph, not a lookup
+   table:
+   `action_hash -> action_callback -> slot_callback -> slot_hash/resource usage`.
 2. **Script-structure layer**:
    parse `func_1219` / `func_1220` / `func_1221` so the tool understands
    action callback -> slot callback -> slot-hash-table routing
@@ -324,26 +439,37 @@ The refined model is now:
 
 So the earlier conclusion still holds in spirit:
 
-- the ammo bundle is **not** the complete action-hash dictionary
+- the ammo bundle is **not** the complete action-hash name source
 
 But it should now be refined to:
 
 - the new auto-rename path is probably **hybrid**
-- global action names come from a shared hash dictionary
+- no shared hash dictionary should be assumed or chosen
+- fixed gameplay words such as Shoot/射击, Melee/格斗, and Sub/副射 should be derived dynamically
+  from the script route, like the old mask-based path
 - per-unit params contribute weapon semantics
 - per-unit kind-7 labels contribute directly readable names for
   weapon/resource/order/movement surfaces
+- unresolved action hashes stay unresolved and visible until the actual recording source is found
 
 ## Practical next step for the tool
 
-1. Extend `native_truth.json` with a first-class `action_names` map
-   (`{ "0xF48D2D49": "mainShot", ... }`)
-2. Add a TS/Python pass `renameByActionHashDictionary(2.c, dictionary)` for the primary names
-3. Add a second pass that parses:
+1. Add a TS/Python dynamic action graph extractor that parses:
    - `func_1219` action registrations
    - `func_1220` slot-callback registrations
    - `func_1221` slot-hash registrations
    - direct `sys_4F/sys_58/sys_47` resource hashes
-4. Use the unit's param bundle to append low- or medium-confidence semantic suffixes
-5. Implement kind-7 label decoding in the parser/UI path before claiming the params can provide
+2. Preserve the old fixed-word naming style for gameplay categories:
+   - Shoot / 射击
+   - Melee / 格斗
+   - Sub / 副射
+   - Special Shoot / 特射
+   - Special Melee / 特格
+   - Awakening Skill / 觉醒技
+   but derive those labels from dynamic route evidence rather than from a hash dictionary.
+3. Use the unit's param bundle to append semantic suffixes only when the traced callback actually
+   reaches matching resource / label evidence.
+4. Implement kind-7 label decoding in the parser/UI path before claiming the params can provide
    final human-readable weapon names in-app
+5. Keep a visible "unresolved action hash" report. The correct long-term research question remains:
+   where, if anywhere, EXVS records the original action hash names.

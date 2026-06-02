@@ -84,7 +84,7 @@ pub fn preview_hkt_collision_from_import_bytes(
     let scene = parse_import_scene_from_bytes(source_name, bytes)?;
     let render_triangle_count = render_triangle_count_from_scene(&scene);
     let merged = bake_and_merge_collision_mesh(&scene, &options)?;
-    let simplified = simplify_collision_mesh(&merged, &options.simplify);
+    let simplified = simplify_collision_mesh(&merged, &options.simplify)?;
     let preview = HktCollisionPreview {
         render_triangle_count,
         merged_triangle_count: merged.triangle_count(),
@@ -122,7 +122,7 @@ pub fn preview_hkt_collision_mesh_from_import_bytes(
     let render_triangle_count = render_triangle_count_from_scene(&scene);
     let merged = bake_and_merge_collision_mesh(&scene, &options)?;
     let merged_triangle_count = merged.triangle_count();
-    let simplified = simplify_collision_mesh(&merged, &options.simplify);
+    let simplified = simplify_collision_mesh(&merged, &options.simplify)?;
     let preview = HktCollisionPreview {
         render_triangle_count,
         merged_triangle_count,
@@ -172,7 +172,7 @@ fn generate_hkt_from_import_scene(
     options: CollisionMeshOptions,
 ) -> Result<HktGenerationResult, String> {
     let merged = bake_and_merge_collision_mesh(&scene, &options)?;
-    let mesh = simplify_collision_mesh(&merged, &options.simplify);
+    let mesh = simplify_collision_mesh(&merged, &options.simplify)?;
     let preview = HktCollisionPreview {
         render_triangle_count: render_triangle_count_from_scene(&scene),
         merged_triangle_count: merged.triangle_count(),
@@ -346,7 +346,7 @@ mod tests {
             ],
             indices: vec![0, 1, 4, 1, 2, 4, 2, 3, 4, 3, 0, 4],
         };
-        let simplified = simplify_collision_mesh(&mesh, &CollisionSimplifyOptions::default());
+        let simplified = simplify_collision_mesh(&mesh, &CollisionSimplifyOptions::default()).unwrap();
         assert_eq!(simplified.triangle_count(), 2);
         let xml = build_mesh_collision_xml(&simplified).expect("xml");
         assert!(xml.contains("<array count=\"2\"") || xml.contains("count=\"2\""));

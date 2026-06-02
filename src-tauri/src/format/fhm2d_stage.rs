@@ -4771,49 +4771,6 @@ fn find_ssbh_folders_recurse(
     Ok(())
 }
 
-/// Parse all `.numatb` files in a directory, sorted by filename.
-/// Returns a Vec of texture reference lists, one per numatb file.
-fn parse_numatb_texture_refs(ssbh_folder: &Path, warnings: &mut Vec<String>) -> Vec<Vec<String>> {
-    let mut numatb_files: Vec<(String, PathBuf)> = Vec::new();
-
-    if let Ok(entries) = fs::read_dir(ssbh_folder) {
-        for entry in entries.filter_map(|e| e.ok()) {
-            let name = entry.file_name().to_string_lossy().to_string();
-            if name.to_ascii_lowercase().ends_with(".numatb")
-                && !entry.file_type().map(|t| t.is_dir()).unwrap_or(true)
-            {
-                numatb_files.push((name.clone(), entry.path()));
-            }
-        }
-    }
-
-    numatb_files.sort_by(|a, b| a.0.cmp(&b.0));
-
-    let mut all_refs = Vec::new();
-    for (name, path) in &numatb_files {
-        match fs::read(path) {
-            Ok(data) => {
-                let mut cursor = Cursor::new(&data);
-                match ssbh_data::prelude::MatlData::read(&mut cursor) {
-                    Ok(matl) => {
-                        let refs = extract_nutexb_names_from_matl(&matl);
-                        all_refs.push(refs);
-                    }
-                    Err(e) => {
-                        warnings.push(format!("Failed to parse numatb '{}': {e}", name));
-                        all_refs.push(Vec::new());
-                    }
-                }
-            }
-            Err(e) => {
-                warnings.push(format!("Failed to read numatb '{}': {e}", name));
-                all_refs.push(Vec::new());
-            }
-        }
-    }
-    all_refs
-}
-
 /// Extract deduplicated texture filenames (with .nutexb extension) from a MatlData.
 fn extract_nutexb_names_from_matl(matl: &ssbh_data::prelude::MatlData) -> Vec<String> {
     let mut seen = HashSet::new();

@@ -55,13 +55,6 @@ fn collect_integers(array_el: &xmltree::Element) -> Vec<i64> {
         .collect()
 }
 
-fn collect_u64_integers(array_el: &xmltree::Element) -> Vec<u64> {
-    child_elements(array_el)
-        .filter(|e| e.name == "integer")
-        .filter_map(|e| e.attributes.get("value")?.parse::<u64>().ok())
-        .collect()
-}
-
 fn collect_reals(array_el: &xmltree::Element) -> Vec<f64> {
     child_elements(array_el)
         .filter(|e| e.name == "real")

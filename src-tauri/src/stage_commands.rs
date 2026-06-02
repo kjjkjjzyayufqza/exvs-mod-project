@@ -94,8 +94,10 @@ pub async fn extract_stage_fhm2d_to_folder(
     if out.is_empty() {
         return Err("output_dir cannot be empty.".to_string());
     }
+    eprintln!("[extract_fhm2d] Starting — source: {src}, output: {out}");
+    let t = Instant::now();
     let app_clone = app.clone();
-    tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         emit_extract_step(
             &app_clone,
             "extract",
@@ -153,18 +155,41 @@ pub async fn extract_stage_fhm2d_to_folder(
         Ok(result)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+    match &result {
+        Ok(r) => eprintln!(
+            "[extract_fhm2d] Done in {}ms — {} files, {} warnings",
+            t.elapsed().as_millis(),
+            r.total_files,
+            r.warnings.len()
+        ),
+        Err(e) => eprintln!(
+            "[extract_fhm2d] Failed in {}ms — {e}",
+            t.elapsed().as_millis()
+        ),
+    }
+    result
 }
 
 #[tauri::command]
 pub async fn stage_apply_rename(
     extracted_dir: String,
 ) -> Result<fhm2d_stage::StageApplyRenameResult, String> {
-    tauri::async_runtime::spawn_blocking(move || {
+    eprintln!("[stage_apply_rename] Starting — dir: {extracted_dir}");
+    let t = Instant::now();
+    let result = tauri::async_runtime::spawn_blocking(move || {
         fhm2d_stage::stage_apply_rename_impl(&extracted_dir)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+    match &result {
+        Ok(_) => eprintln!("[stage_apply_rename] Done in {}ms", t.elapsed().as_millis()),
+        Err(e) => eprintln!(
+            "[stage_apply_rename] Failed in {}ms — {e}",
+            t.elapsed().as_millis()
+        ),
+    }
+    result
 }
 
 #[tauri::command]
@@ -346,12 +371,13 @@ pub async fn preview_stage_fhm2d_rename(
         .unwrap_or_else(|| "stage".to_string());
 
     stage_log(&format!("preview rename start: source={source_name}"));
+    let t_total = Instant::now();
 
     emit_progress(&app, "read", "Reading file...", 5, None);
 
     let source_name_clone = source_name.clone();
     let app_clone = app.clone();
-    let (result, extraction, tree_clone, warnings_clone) =
+    let spawn_outcome =
         tauri::async_runtime::spawn_blocking(move || {
             let t0 = Instant::now();
             let bytes =
@@ -413,7 +439,17 @@ pub async fn preview_stage_fhm2d_rename(
             Ok::<_, String>((preview, extraction, tree, warnings))
         })
         .await
-        .map_err(|e| e.to_string())??;
+        .map_err(|e| e.to_string())?;
+    let (result, extraction, tree_clone, warnings_clone) = match spawn_outcome {
+        Ok(v) => v,
+        Err(e) => {
+            stage_log(&format!(
+                "preview rename Failed in {}ms — {e}",
+                t_total.elapsed().as_millis()
+            ));
+            return Err(e);
+        }
+    };
 
     {
         let mut guard = pending_state
@@ -428,6 +464,11 @@ pub async fn preview_stage_fhm2d_rename(
         });
     }
 
+    stage_log(&format!(
+        "preview rename Done in {}ms — {} files",
+        t_total.elapsed().as_millis(),
+        result.total_files
+    ));
     Ok(result)
 }
 
@@ -680,6 +721,7 @@ pub async fn load_stage_from_preview(
         pending.source_name,
         pending.extraction.files.len()
     ));
+    let t_total = Instant::now();
 
     emit_progress(&app, "build", "Building model bundles...", 30, None);
 
@@ -691,7 +733,7 @@ pub async fn load_stage_from_preview(
     let tree = pending.tree;
 
     let app_for_build = app.clone();
-    let (bundle, extraction_for_session) = tauri::async_runtime::spawn_blocking(move || {
+    let spawn_outcome = tauri::async_runtime::spawn_blocking(move || {
         let t0 = Instant::now();
         let result = fhm2d_stage::build_stage_bundle_from_memory(
             &extraction.files,
@@ -713,14 +755,27 @@ pub async fn load_stage_from_preview(
         result.map(|b| (b, extraction))
     })
     .await
-    .map_err(|e| e.to_string())??;
+    .map_err(|e| e.to_string())?;
+    let (bundle, extraction_for_session) = match spawn_outcome {
+        Ok(v) => v,
+        Err(e) => {
+            stage_log(&format!(
+                "load_stage_from_preview Failed in {}ms — {e}",
+                t_total.elapsed().as_millis()
+            ));
+            return Err(e);
+        }
+    };
 
     emit_progress(&app, "session", "Creating texture session...", 92, None);
 
     let session_id = memory_state
         .allocate_and_insert_session(extraction_for_session, source_name)
         .map_err(|e| {
-            stage_log(&format!("session creation failed: {e}"));
+            stage_log(&format!(
+                "load_stage_from_preview Failed in {}ms — session creation failed: {e}",
+                t_total.elapsed().as_millis()
+            ));
             e
         })?;
 
@@ -738,6 +793,11 @@ pub async fn load_stage_from_preview(
 
     emit_progress(&app, "done", "Complete", 100, None);
 
+    stage_log(&format!(
+        "load_stage_from_preview Done in {}ms — {} sub-models",
+        t_total.elapsed().as_millis(),
+        final_bundle.sub_models.len()
+    ));
     Ok(fhm2d_stage::StageInMemoryImportResult {
         bundle: final_bundle,
         tree: tree_for_result,

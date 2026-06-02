@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Boxes, FileUp, Loader2, Replace, ShieldAlert, Sparkles } from "lucide-react";
+import { Boxes, Eye, FileUp, Loader2, Replace, ShieldAlert, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -82,36 +82,27 @@ export function GenerateHktFromModelDialog({
     setApplying(false);
   }, [isOpen]);
 
-  const simplifyKey = JSON.stringify(simplify);
+  const handleSimplifyChange = useCallback((next: HktSimplifyConfig) => {
+    setSimplify(next);
+    setMeshPreview(null);
+    setPreviewError(null);
+  }, []);
 
-  // Debounced live collision-mesh preview (Havok-free: parse -> merge -> simplify).
-  useEffect(() => {
-    if (!isOpen || !sourcePath || !sourceName) {
+  const runPreview = useCallback(async () => {
+    if (!sourcePath || !sourceName) return;
+    setPreviewLoading(true);
+    setPreviewError(null);
+    setMeshPreview(null);
+    try {
+      const result = await scenePreviewHktCollisionMeshPath(sourcePath, sourceName, importConfig);
+      setMeshPreview(result);
+    } catch (err) {
       setMeshPreview(null);
-      setPreviewError(null);
-      return;
+      setPreviewError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPreviewLoading(false);
     }
-    let cancelled = false;
-    const timer = window.setTimeout(async () => {
-      setPreviewLoading(true);
-      setPreviewError(null);
-      try {
-        const result = await scenePreviewHktCollisionMeshPath(sourcePath, sourceName, importConfig);
-        if (!cancelled) setMeshPreview(result);
-      } catch (err) {
-        if (!cancelled) {
-          setMeshPreview(null);
-          setPreviewError(err instanceof Error ? err.message : String(err));
-        }
-      } finally {
-        if (!cancelled) setPreviewLoading(false);
-      }
-    }, 300);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [isOpen, sourcePath, sourceName, simplifyKey, importConfig]);
+  }, [sourcePath, sourceName, importConfig]);
 
   const pickFile = async () => {
     try {
@@ -159,7 +150,7 @@ export function GenerateHktFromModelDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(next) => (!applying ? onOpenChange(next) : undefined)}>
-      <DialogContent className="max-w-5xl gap-0 overflow-hidden p-0">
+      <DialogContent className="flex max-h-[min(90dvh,900px)] max-w-5xl flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="space-y-1 border-b border-border/60 px-5 py-4">
           <DialogTitle className="flex items-center gap-2 text-base">
             <Sparkles className="h-4 w-4 text-emerald-400" />
@@ -171,11 +162,11 @@ export function GenerateHktFromModelDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+        <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
           {/* Controls */}
-          <ScrollArea className="max-h-[68vh] border-b border-border/60 lg:border-b-0 lg:border-r">
-            <div className="space-y-4 p-4">
-              <section className="rounded-lg border border-border/60 bg-muted/20 p-3">
+          <ScrollArea className="min-h-0 min-w-0 border-b border-border/60 lg:max-h-none lg:border-b-0 lg:border-r">
+            <div className="min-w-0 space-y-4 p-4">
+              <section className="min-w-0 overflow-hidden rounded-lg border border-border/60 bg-muted/20 p-3">
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   <Replace className="h-3.5 w-3.5" />
                   Replace target
@@ -186,7 +177,7 @@ export function GenerateHktFromModelDialog({
                 </p>
               </section>
 
-              <section className="space-y-2">
+              <section className="min-w-0 space-y-2 overflow-hidden">
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   Source model
                 </div>
@@ -214,40 +205,77 @@ export function GenerateHktFromModelDialog({
               {sourcePath ? (
                 <DaeImportHktSimplifyFields
                   value={simplify}
-                  onChange={setSimplify}
+                  onChange={handleSimplifyChange}
                   importConfig={importConfig}
                   sourcePath={sourcePath}
                   sourceName={sourceName ?? undefined}
+                  autoPreview={false}
                   compact
                 />
               ) : null}
             </div>
           </ScrollArea>
 
-          {/* Live collision preview */}
-          <div className="relative min-h-[360px] bg-[#0b0f14] lg:min-h-[520px]">
+          {/* Collision preview (manual — click Preview after choosing a model) */}
+          <div className="relative min-h-[280px] min-w-0 overflow-hidden bg-[#0b0f14] lg:min-h-0">
             {meshPreview ? (
               <HktCollisionPreviewCanvas geometry={meshPreview} />
             ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
                 <Boxes className="h-8 w-8 text-muted-foreground/50" />
                 <p className="text-sm text-muted-foreground">
                   {previewError
                     ? "Could not build a collision preview"
                     : sourcePath
-                      ? "Computing collision mesh..."
-                      : "Select a model to preview its collision"}
+                      ? "Click Preview to build the collision mesh"
+                      : "Select a model, then preview its collision"}
                 </p>
                 {previewError ? (
                   <p className="max-w-sm break-words text-[11px] text-destructive">{previewError}</p>
                 ) : null}
+                {sourcePath ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void runPreview()}
+                    disabled={previewLoading || applying}
+                  >
+                    {previewLoading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Eye className="mr-2 h-4 w-4" />
+                    )}
+                    {previewLoading ? "Previewing..." : "Preview"}
+                  </Button>
+                ) : null}
               </div>
             )}
 
-            {previewLoading ? (
+            {sourcePath && meshPreview ? (
+              <div className="absolute right-3 top-3 flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 px-2 text-[11px]"
+                  onClick={() => void runPreview()}
+                  disabled={previewLoading || applying}
+                >
+                  {previewLoading ? (
+                    <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                  ) : (
+                    <Eye className="mr-1.5 h-3 w-3" />
+                  )}
+                  {previewLoading ? "Updating..." : "Refresh preview"}
+                </Button>
+              </div>
+            ) : null}
+
+            {previewLoading && !meshPreview ? (
               <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-md bg-background/80 px-2 py-1 text-[11px] text-muted-foreground backdrop-blur">
                 <Loader2 className="h-3 w-3 animate-spin" />
-                Updating
+                Building preview
               </div>
             ) : null}
 
@@ -268,12 +296,12 @@ export function GenerateHktFromModelDialog({
           </div>
         </div>
 
-        <DialogFooter className="items-center gap-2 border-t border-border/60 px-5 py-3 sm:justify-between">
-          <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <ShieldAlert className="h-3.5 w-3.5" />
-            Generating the final HKT needs Havok Content Tools installed.
+        <DialogFooter className="shrink-0 flex-wrap items-center gap-2 border-t border-border/60 px-5 py-3 sm:justify-between">
+          <p className="flex min-w-0 flex-1 basis-full items-start gap-1.5 text-pretty text-[11px] leading-snug text-muted-foreground break-words sm:basis-auto">
+            <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>Generating the final HKT needs Havok Content Tools installed.</span>
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={applying}>
               Cancel
             </Button>

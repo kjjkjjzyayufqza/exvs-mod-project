@@ -3,7 +3,10 @@ import type { HavokMeshData } from "@/utils/havokXmlParser";
 import {
   countHavokCollisionTriangles,
   DEFAULT_HKT_SIMPLIFY,
+  HKT_HULL_PRESET_FACES,
+  hktHullConfigFromPreset,
   hktSimplifyConfigFromPreset,
+  normalizeHktSimplifyConfig,
   reductionPercent,
   serializeHktPreviewConfigKey,
 } from "./hktSimplifyUtils";
@@ -70,5 +73,33 @@ describe("hktSimplifyUtils", () => {
     expect(serializeHktPreviewConfigKey(importConfigA, DEFAULT_HKT_SIMPLIFY)).toBe(
       serializeHktPreviewConfigKey(importConfigB, DEFAULT_HKT_SIMPLIFY),
     );
+  });
+
+  it("shape-preserving presets default to the shapePreserving strategy", () => {
+    expect(hktSimplifyConfigFromPreset("medium").strategy).toBe("shapePreserving");
+    expect(hktSimplifyConfigFromPreset("medium").hullTargetFaces).toBeNull();
+  });
+
+  it("maps hull presets to a convexHull strategy with a face budget", () => {
+    const coarse = hktHullConfigFromPreset("coarse");
+    expect(coarse.strategy).toBe("convexHull");
+    expect(coarse.enabled).toBe(true);
+    expect(coarse.hullPreset).toBe("coarse");
+    expect(coarse.hullTargetFaces).toBe(HKT_HULL_PRESET_FACES.coarse);
+    expect(hktHullConfigFromPreset("fine").hullTargetFaces).toBe(HKT_HULL_PRESET_FACES.fine);
+  });
+
+  it("normalize preserves a convexHull strategy and its hull preset", () => {
+    const normalized = normalizeHktSimplifyConfig({ strategy: "convexHull", hullPreset: "balanced" });
+    expect(normalized.strategy).toBe("convexHull");
+    expect(normalized.hullPreset).toBe("balanced");
+    expect(normalized.hullTargetFaces).toBe(HKT_HULL_PRESET_FACES.balanced);
+  });
+
+  it("preview key changes when the strategy changes", () => {
+    const importConfig = { generateHkt: true, convertToSsbh: false, ssbhConfig: null } as const;
+    const shape = serializeHktPreviewConfigKey(importConfig, DEFAULT_HKT_SIMPLIFY);
+    const hull = serializeHktPreviewConfigKey(importConfig, hktHullConfigFromPreset("coarse"));
+    expect(shape).not.toBe(hull);
   });
 });

@@ -8,8 +8,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use app_lib::collision_mesh::{
-    cos_planarity_from_angle_deg, simplify_collision_mesh, CollisionSimplifyOptions,
-    CollisionTriMesh,
+    cos_planarity_from_angle_deg, simplify_collision_mesh, CollisionSimplifyMode,
+    CollisionSimplifyOptions, CollisionTriMesh,
 };
 use app_lib::havok_cli::{run_filter_manager_with_hko, HavokCliConfig, HKO_WRITE_HKT};
 use app_lib::havok_mesh_encode::{
@@ -203,12 +203,16 @@ fn main() {
             weld_epsilon: 1e-2,
             target_triangle_ratio: Some(0.05),
             max_target_triangles: Some(50_000),
+            mode: CollisionSimplifyMode::ShapePreserving,
+            hull_target_faces: None,
         },
-    );
+    )
+    .expect("V2_low simplify failed");
     gen(&fm, "V2_low", &low, &out_dir, None);
 
     // V3: default simplify (8 deg) — the normal pipeline setting.
-    let mid = simplify_collision_mesh(&full, &CollisionSimplifyOptions::default());
+    let mid = simplify_collision_mesh(&full, &CollisionSimplifyOptions::default())
+        .expect("V3_mid simplify failed");
     gen(&fm, "V3_mid", &mid, &out_dir, None);
 
     // V4: full mesh, no simplify — baseline that currently hangs.

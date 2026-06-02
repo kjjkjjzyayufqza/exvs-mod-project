@@ -130,7 +130,7 @@ fn process_file(path: &Path) -> Result<(), String> {
     eprintln!("  Written: {}", merged_obj.display());
 
     // --- 3. Simplify ---
-    let simplified = simplify_collision_mesh(&merged, &options.simplify);
+    let simplified = simplify_collision_mesh(&merged, &options.simplify)?;
     print_mesh_stats("Simplified collision mesh", &simplified);
 
     let simplified_obj = out_dir.join(format!("{stem}_collision_simplified.obj"));

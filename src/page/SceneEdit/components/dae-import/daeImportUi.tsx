@@ -14,17 +14,24 @@ export function DaeImportSection({
   title,
   children,
   className,
+  compact = false,
 }: {
   title: string;
   children: ReactNode;
   className?: string;
+  compact?: boolean;
 }) {
   return (
-    <section className={cn("border-b border-border last:border-b-0", className)}>
-      <div className="border-b border-border/60 bg-muted/30 px-4 py-2">
+    <section className={cn("min-w-0 overflow-hidden border-b border-border last:border-b-0", className)}>
+      <div
+        className={cn(
+          "border-b border-border/60 bg-muted/30 py-2",
+          compact ? "px-3" : "px-4",
+        )}
+      >
         <p className={daeImportSectionTitleClass}>{title}</p>
       </div>
-      <div>{children}</div>
+      <div className="min-w-0">{children}</div>
     </section>
   );
 }
@@ -50,10 +57,12 @@ export function DaeImportFieldRow({
       <div className="min-w-0">
         <Label className="text-[11px] font-normal text-foreground">{label}</Label>
         {hint ? (
-          <p className="truncate text-[9px] leading-tight text-muted-foreground">{hint}</p>
+          <p className="text-pretty text-[9px] leading-snug text-muted-foreground break-words">
+            {hint}
+          </p>
         ) : null}
       </div>
-      <div className="min-w-0 justify-self-stretch">{children}</div>
+      <div className="min-w-0 w-full justify-self-stretch">{children}</div>
     </div>
   );
 }
@@ -88,10 +97,12 @@ export function DaeImportStatusAlert({
   tone,
   children,
   className,
+  compact = false,
 }: {
   tone: "info" | "warning" | "error";
   children: ReactNode;
   className?: string;
+  compact?: boolean;
 }) {
   const toneClass =
     tone === "error"
@@ -101,8 +112,15 @@ export function DaeImportStatusAlert({
         : "border-border bg-muted/40 text-foreground";
 
   return (
-    <Alert className={cn("mx-4 my-2 rounded-md px-3 py-2 text-[11px]", toneClass, className)}>
-      <AlertDescription className="text-[11px] leading-snug [&_p]:leading-snug">
+    <Alert
+      className={cn(
+        "min-w-0 max-w-full overflow-hidden rounded-md text-[11px]",
+        compact ? "mx-3 my-1.5 px-2.5 py-1.5" : "mx-4 my-2 px-3 py-2",
+        toneClass,
+        className,
+      )}
+    >
+      <AlertDescription className="min-w-0 text-pretty text-[11px] leading-snug break-words [&_p]:leading-snug">
         {children}
       </AlertDescription>
     </Alert>

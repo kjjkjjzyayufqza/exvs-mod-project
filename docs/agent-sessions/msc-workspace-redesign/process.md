@@ -198,9 +198,371 @@ Key findings:
 
 Refined conclusion:
 
-- The new auto-rename path is likely **hybrid**, not single-source:
-  1. global/shared action-hash dictionary for stable callback names
-  2. script-side slot-table analysis (`func_1219` / `func_1220` / `func_1221`)
-  3. per-unit param enrichment for projectile/interaction/system semantics
-  4. per-unit kind-7 labels decoded via `obf_string` for directly readable
-     weapon/resource/order/movement names
+- 2026-06-02 correction: do **not** treat the new auto-rename path as an
+  `action_hash -> name` dictionary problem. The user explicitly rejects a dictionary-based design.
+- The old path dynamically inferred fixed gameplay words from script structure
+  (`Shoot/射击`, `Melee/格斗`, `Sub/副射`, `Special Shoot/特射`,
+  `Special Melee/特格`, etc.). The new path should preserve that dynamic-mapping spirit.
+- So far, no file has been found that records the original names for the new action hashes.
+- The new path should build a script-side action graph:
+  1. action registration table (`func_1219` / `func_241`)
+  2. slot-callback table (`func_1220` / `sys_1(0x10001, 0x2, ...)`)
+  3. slot-hash/resource table (`func_1221` / `sys_1(0x10001, 0x3/0x4, ...)`)
+  4. resource and kind-7 param label evidence reached by each callback
+- Names should be generated from traced behavior and fixed gameplay categories where evidence is
+  strong. Unknown action hashes must remain visible as unresolved.
+
+## 2026-06-02 Follow-up: new MSC action auto-rename design context
+
+Scope: brainstorming only. No implementation code changed. Session docs updated per project protocol.
+
+Startup/context commands:
+
+- Read `AGENTS.md`.
+- Read `.cursor/rules/custom-rules.mdc`.
+- Read `C:\Users\kjjkjj\.agents\skills\brainstorming\SKILL.md`.
+- Searched `docs/` for MSC workspace, action rename, `0.c`, `2.c`, function-name, and related terms.
+- Re-read:
+  - `docs/agent-sessions/msc-workspace-redesign/auto-rename-external-file-analysis.md`
+  - `docs/agent-sessions/msc-workspace-redesign/process.md`
+  - `docs/agent-sessions/msc-workspace-redesign/todo.md`
+  - `docs/agent-sessions/msc-workspace-redesign/plan.md`
+  - `docs/exvs-msc-input-action-weapon-pipeline.md`
+  - `docs/exvs-native-truth-mapping-workflow.md`
+  - `docs/msc-binary-format-spec.md`
+  - `docs/msc-system-problems-analysis.md`
+
+Current code findings:
+
+- `MscWorkspaceView` still hardcodes mapping selection to
+  `tools/mappings/exvs_0xF1EF3B32.native_truth.json`.
+- During decompile, `2.c` still runs `renameScript2CallbacksByActionMask(0.c, 2.c)` and then
+  `func_0 -> main`; `0.c` / `1.c` only get `func_0 -> main`.
+- `renameScript2CallbacksByActionMask` still depends on:
+  - `0.c` containing `void func_143()`
+  - action routes appearing as `func_95(hash, ...)`
+  - conditions containing `global48 & MASK`
+  - `2.c` bindings appearing as `func_241(hash, callback)`
+- `tools/mappings/exvs_0xF1EF3B32.native_truth.json` still has `script_functions: []`.
+  Therefore native-truth `function_ref` symbolization has no offset-to-name table to resolve.
+- The repo still does not contain `tools/crc32_reverse_search.py`, although docs and plans refer
+  to it.
+- `src-tauri/src/format/obf_string.rs` exists and can decode obfuscated strings.
+- `armsparam.rs`, `characterparam.rs`, and `speedparam.rs` define
+  `action_label_offset` / `resource_label_offset`, but `parse_command_table_file()` still treats
+  kind `7` as raw `u32` and leaves `value_string` empty.
+
+External sample checks:
+
+- Existing sample paths:
+  - `E:\XB\解包\com\file\0xF1EF3B32\0.c`
+  - `E:\XB\解包\com\file\0xF1EF3B32\2.c`
+  - `E:\XB\解包\com\file\0x693F756D\0.c`
+  - `E:\XB\解包\com\file\0x693F756D\2.c`
+  - `E:\XB\解包\com\file\0x38C44F75`
+- Old/common `0xF1EF3B32/2.c` already contains meaningful manually recovered names such as
+  `bindActionHashHandler`, `activeActionHash`, `pendingActionHash`,
+  `setupMainShotScriptCallbacks`, `mainShotOnInitScript`, and `mainShotOnPhaseTickScript`.
+- New sample `0x693F756D/0.c func_143()` is not the old mask router. It uses
+  `sys_41(...) -> func_144(...) -> func_145(...)`; `func_95(...)` appears under that helper chain,
+  not in the old `global48 & MASK` structure.
+- New sample `0x693F756D/2.c` registers action callbacks in `func_1219()`:
+  `func_241(action_hash, callback)`.
+- The same sample registers slot callbacks in `func_1220()`:
+  `sys_1(0x10001, 0x2, slot, callback)`.
+- It registers slot hashes in `func_1221()`:
+  `sys_1(0x10001, 0x3/0x4, slot, hash)`.
+- The action callbacks often call `func_69(slot)`, which resolves the slot callback through
+  `sys_0(0x10001, 0x2, slot)`, then executes it.
+- Slot callbacks often call `func_74(slot, delay)` / `func_79(...)`, which resolves the second
+  hash table through `sys_0(0x10001, 0x3 + global170, slot)`.
+
+Design implication:
+
+- The new auto-rename should not try to stretch the old mask parser.
+- Do not use a stored `action_hash -> name` dictionary as the primary mechanism.
+- A useful name needs a source badge and confidence level because different evidence names
+  different layers:
+  - dynamic route evidence maps action hash to callback/slot/resource flow
+  - fixed gameplay labels such as Shoot/射击, Melee/格斗, and Sub/副射 are assigned only when the
+    route evidence supports them
+  - param kind-7 labels provide readable weapon/resource/order/movement names for per-unit
+    semantics
+  - resource hashes from `sys_4F` / `sys_58` / `sys_0(0x60006, ...)` enrich callbacks but do not
+    always identify the primary action hash
+- The open research question remains: where, if anywhere, the original action hash names are
+  recorded.
+
+User correction recorded:
+
+- The previous dictionary-centered conclusion was wrong for the desired design.
+- The user will not choose a dictionary solution.
+- Future design/spec work must focus on dynamic mapping and on finding the true action-hash source,
+  not on inventing a replacement dictionary.
+
+## 2026-06-02 Continued Research: new MSC dynamic mapping
+
+User direction:
+
+- Continue researching new-version MSC.
+- IDA Pro MCP is reportedly connected to the EXVS executable.
+- Keep the no-dictionary rule: action hash names must not be solved by a hand-maintained
+  `action_hash -> name` table.
+
+Tool availability note:
+
+- In this Codex session, `tool_search` did not expose any IDA MCP tools.
+- `list_mcp_resources` only returned Exa resources.
+- Therefore native/IDA verification could not be executed directly in this turn.
+- Local extracted samples under `E:\XB\解包\com\file` are readable, so script-side evidence
+  extraction continued from decompiled C.
+
+### New key finding: `0.c` has an action slot table
+
+For sample:
+
+- MSC: `E:\XB\解包\com\file\0x693F756D`
+- `0.c`
+- `2.c`
+
+`0.c func_13()` initializes a table:
+
+```c
+sys_1(0x10000, 0x1, slot, actionHash);
+```
+
+Examples:
+
+| action slot | action hash |
+|---:|---:|
+| `0x2` | `0x6d00aeaa` |
+| `0x3` | `0x9cf36e1b` |
+| `0x4` | `0x868ec571` |
+| `0x5` | `0xa8ab2ac9` |
+| `0xa` | `0xf5f21169` |
+| `0x1d` | `0xdabb0543` |
+| `0x24` | `0xf32aa1ba` |
+| `0x25` | `0x900ab393` |
+| `0x28` | `0x27786a84` |
+
+This means the action hashes are not only in `2.c func_1219()`.
+They are also script-side action-slot values in `0.c`.
+
+Important correction to the previous mental model:
+
+- We still have not found the original human-readable action-hash name file.
+- But we have found a script-local action-slot layer that can support dynamic mapping.
+- This is much closer to the old fixed-word route than to a dictionary lookup.
+
+### `0.c func_14()` binds action slots to selector callbacks
+
+`0.c func_14()` calls:
+
+```c
+func_83(slot, selectorCallback);
+```
+
+`func_83()` resolves the slot's hash through `sys_0(0x10000, 0x1, slot)` and registers:
+
+```c
+sys_1(0x10002, 0, actionHash, selectorCallback);
+```
+
+Examples:
+
+| action slot | action hash | selector |
+|---:|---:|---|
+| `0x1` | `0x4cdc9902` | `func_15` |
+| `0x2` | `0x6d00aeaa` | `func_16` |
+| `0x3` | `0x9cf36e1b` | `func_17` |
+| `0xa` | `0xf5f21169` | `func_24` |
+| `0x1d` | `0xdabb0543` | `func_31` |
+| `0x1e` | `0x68790b03` | `func_32` |
+| `0x1f` | `0xeee34191` | `func_33` |
+| `0x20` | `0x676aca0b` | `func_34` |
+| `0x21` | `0x1ad4e055` | `func_39` |
+| `0x23` | `0x450c6ce4` | `func_40` |
+| `0x24` | `0xf32aa1ba` | disabled selector (`0`) |
+| `0x25` | `0x900ab393` | disabled selector (`0`) |
+| `0x28` | `0x27786a84` | disabled selector (`0`) |
+
+Selector callbacks often return other action slots through:
+
+```c
+return sys_0(0x10000, 0x1, targetSlot);
+```
+
+Examples:
+
+- `func_17` for slot `0x3` can return slot `0x4`.
+- `func_19` for slot `0x5` can return slot `0x2`.
+- `func_20` for slot `0x6` can return slots `0x2` or `0x8`.
+- `func_21` for slot `0x7` can return slots `0x8` or `0xa`.
+- `func_22` for slot `0x8` can return slots `0x9` or `0xa`.
+- `func_31` for slot `0x1d` can return slot `0x1e`.
+- `func_32` for slot `0x1e` can return slot `0x1f`.
+- `func_33` for slot `0x1f` can return slot `0xa`.
+
+This suggests a dynamic action graph exists on the `0.c` side before the selected hash reaches
+the `2.c` action layer.
+
+### `sys_41` and `0x700000` are now the main native questions
+
+`0.c func_143()` does:
+
+```c
+var0 = sys_41(...);
+var1 = func_144(var0);
+func_145(var0, var1, 0);
+```
+
+`func_145()` reads:
+
+```c
+var3 = sys_0(0x700000, 0, arg0, 0x2e);
+var4 = sys_0(0x700000, 0, arg0, 0xa);
+var6 = sys_0(0x700002, var4, 0, arg0, 1);
+var7 = sys_0(0x700002, var4, 1, arg0, 1) | arg2;
+func_95(var3, var6, var7, arg1);
+```
+
+Current interpretation:
+
+- `sys_41(...)` returns an action-record index or encoded action-record handle.
+- `sys_0(0x700000, 0, actionRecord, 0x2e)` returns the action hash.
+- `sys_0(0x700000, 0, actionRecord, 0x3)` is used by `func_144()` as an action category/type.
+- `sys_0(0x700000, 0, actionRecord, 0x4)` is used by `func_144()` as an input/direction mask.
+- `sys_0(0x700000, 0, actionRecord, 0xa)` is used as a key into `0x700002`.
+- `0x700002` returns additional selected action fields passed into `func_95()`.
+
+This makes `sys_41` and the backing store for `0x700000` / `0x700002` the highest-priority IDA
+targets. If an external file exists for action names or action records, it is more likely connected
+to this native path than to `2.c func_241()` alone.
+
+### `func_144()` dynamically maps native action records to fixed categories
+
+`func_144()` computes:
+
+```c
+var1 = sys_0(0x700000, 0, arg0, 0x3) % 0x64;
+var2 = sys_0(0x700000, 0, arg0, 0x4);
+```
+
+When `var1 == 1`, it maps `var2` values to category ids:
+
+| `var2` mask | returned category |
+|---:|---:|
+| `0x4` | `0x2` |
+| `0xc` | `0x2` |
+| `0x3c` | `0x2` |
+| `0x10` | `0x3` |
+| `0x20` | `0x4` |
+| `0x30` | `0x4` |
+| `0x8` | `0x5` |
+
+This resembles the old fixed-word action grouping, but the exact labels are not proven yet.
+It is a strong candidate for dynamically recovering categories such as melee / directional melee /
+subroutes, once the native meaning of field `0x4` and the category ids are verified.
+
+### `2.c` requires two-level slot tracing
+
+`2.c func_1219()` registers:
+
+```c
+func_241(actionHash, actionCallback);
+```
+
+`2.c func_1220()` registers:
+
+```c
+sys_1(0x10001, 0x2, actionSlot, slotCallback);
+```
+
+`2.c func_1221()` registers:
+
+```c
+sys_1(0x10001, 0x3, innerSlot, slotHash);
+sys_1(0x10001, 0x4, innerSlot, slotHash);
+```
+
+Important correction:
+
+- The `func_69(actionSlot)` argument is not usually the final slot-hash index.
+- The action callback calls `func_69(actionSlot)`.
+- That loads a slot callback through `sys_0(0x10001, 0x2, actionSlot)`.
+- The slot callback then calls `func_74(innerSlot, delay)` / related helpers.
+- `func_79()` resolves the final slot hash through `sys_0(0x10001, 0x3 + global170, innerSlot)`.
+
+So dynamic mapping must trace at least:
+
+```text
+actionHash -> actionCallback -> func_69(actionSlot)
+  -> slotCallback -> func_74(innerSlot)
+  -> slotHash/resource
+```
+
+Selected extracted chains:
+
+| action hash | action callback | traced chain |
+|---:|---|---|
+| `0x6d00aeaa` | `func_390` | `actionSlot 0x1 -> func_1124 -> innerSlot 0x0 -> 0x1f588bd9` |
+| `0x9cf36e1b` | `func_392` | `actionSlot 0x2 -> func_1125 -> innerSlots 0x2/0x4/0x3 -> 0x377e9872 / 0xf0b3ea12 / 0xd74ba485` |
+| `0xa8ab2ac9` | `func_401` | `actionSlot 0x4 -> func_1127 -> innerSlot 0x8 -> 0x1f588bd9` |
+| `0x4de2206b` | `func_403` | `actionSlot 0x5 -> func_1128 -> innerSlot 0xe -> 0xc00b5dec` |
+| `0x901c3623` | `func_408` | `actionSlot 0x7 -> func_1130 -> innerSlots 0x10/0x11 -> 0x44542fbc` |
+| `0x86d45295` | `func_437` | `actionSlot 0x1d -> func_1137 -> innerSlots 0x1/0x0/0x29 -> 0xe53bc97 / 0x1f588bd9 / 0xf270ea6a` |
+| `0xf32aa1ba` | `func_480` | `actionSlot 0x34 -> func_1148..1152 -> innerSlot 0x4e -> conditional hashes` |
+| `0x900ab393` | `func_482` | `actionSlot 0x35 -> func_1158 -> innerSlot 0x4f -> 0xb189334e` |
+| `0x27786a84` | `func_486` | `actionSlot 0x36 -> func_1159 -> innerSlot 0x50 -> 0x1f588bd9` |
+
+Actions with no first-pass route evidence:
+
+- `0x506ac760 -> func_425`
+- `0x1ad4e055 -> func_1144`
+- `0xef809e66 -> func_1146`
+- `0x676aca0b -> func_472`
+- `0x613494c8 -> func_58`
+
+Disabled in `2.c func_1219()`:
+
+- `0x9475130e`
+- `0x77b100ff`
+- `0xa02d57dc`
+
+### Current research conclusion
+
+The most promising no-dictionary auto-rename route is:
+
+1. Use `0.c func_13()` to build `actionSlot -> actionHash`.
+2. Use `0.c func_14()` to build `actionSlot -> selectorCallback`.
+3. Analyze selector callbacks to infer dynamic route categories and fallback chains.
+4. Use `func_144()` / `0x700000` fields to recover fixed gameplay category ids.
+5. Use `2.c func_1219()` to map `actionHash -> actionCallback`.
+6. Trace `2.c` from action callback through slot callback to slot hash/resource.
+7. Use per-unit params and kind-7 labels only as semantic enrichment after the script route is known.
+
+This keeps the old-style "fixed gameplay word" approach, but adapts it to the new action-slot and
+native action-record structure.
+
+### IDA verification targets once IDA MCP is available
+
+Search/query priorities:
+
+1. Native syscall handler for `sys_41`.
+   - Determine what data structure it searches.
+   - Determine whether it reads a file-backed action table.
+   - Confirm whether its return value is an index into the `0x700000` action-record table.
+2. Native handler for `sys_0(0x700000, 0, record, field)`.
+   - Identify the backing struct.
+   - Confirm field `0x2e` is action hash.
+   - Confirm field `0x3` is category/type.
+   - Confirm field `0x4` is input/direction mask.
+   - Confirm field `0xa` is a key/group for `0x700002`.
+3. Native handler for `sys_0(0x700002, group, subfield, record, 1)`.
+   - Identify what `var6` and `var7` represent before `func_95`.
+4. Native backing source for `0x10000, 0x1` action-slot table.
+   - Confirm whether it is purely script-initialized by `func_13` or also mirrored natively.
+5. Search EXE strings / RTTI / data refs around action-record loading.
+   - Look for names related to command action, action table, input action, route, weapon, or command list.
+6. Cross-check whether resource packages contain data loaded into `0x700000`.
+   - Candidate file families should be investigated only after IDA identifies the loader path.

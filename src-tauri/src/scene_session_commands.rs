@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use tauri::{ipc::Channel, State};
 
 use crate::format::fhm2d_stage;
@@ -288,6 +289,15 @@ pub fn hkt_simplify_to_options(
         weld_epsilon: cfg.weld_epsilon,
         target_triangle_ratio: cfg.target_triangle_ratio,
         max_target_triangles: cfg.max_target_triangles,
+        mode: match cfg.strategy {
+            crate::scene_memory_session::CollisionStrategy::ShapePreserving => {
+                crate::collision_mesh::CollisionSimplifyMode::ShapePreserving
+            }
+            crate::scene_memory_session::CollisionStrategy::ConvexHull => {
+                crate::collision_mesh::CollisionSimplifyMode::ConvexHull
+            }
+        },
+        hull_target_faces: cfg.hull_target_faces,
     }
 }
 
@@ -840,18 +850,27 @@ pub async fn scene_open_folder(
     state: State<'_, SceneSessionState>,
     path: String,
 ) -> Result<SceneOpenResult, String> {
-    eprintln!("[scene_open_folder] path={}", path);
+    eprintln!("[scene_open_folder] Starting — path={}", path);
+    let t = Instant::now();
     let path_clone = path.clone();
     let skeleton = tauri::async_runtime::spawn_blocking(move || {
         fhm2d_stage::load_stage_skeleton_impl(&path_clone)
     })
     .await
     .map_err(|e| {
-        eprintln!("[scene_open_folder] spawn_blocking join error: {}", e);
+        eprintln!(
+            "[scene_open_folder] Failed in {}ms — spawn_blocking join error: {}",
+            t.elapsed().as_millis(),
+            e
+        );
         e.to_string()
     })?
     .map_err(|e| {
-        eprintln!("[scene_open_folder] load_stage_skeleton_impl failed: {}", e);
+        eprintln!(
+            "[scene_open_folder] Failed in {}ms — load_stage_skeleton_impl failed: {}",
+            t.elapsed().as_millis(),
+            e
+        );
         e
     })?;
 
@@ -898,7 +917,8 @@ pub async fn scene_open_folder(
     })?;
 
     eprintln!(
-        "[scene_open_folder] success session_id={} warnings={}",
+        "[scene_open_folder] Done in {}ms — session_id={} warnings={}",
+        t.elapsed().as_millis(),
         session_id,
         warnings.len()
     );
@@ -1902,7 +1922,7 @@ pub async fn scene_generate_hkt_from_mesh(
             mesh.vertices.len(),
             mesh.triangle_count()
         );
-        let mesh = crate::collision_mesh::simplify_collision_mesh(&mesh, &simplify_opts);
+        let mesh = crate::collision_mesh::simplify_collision_mesh(&mesh, &simplify_opts)?;
         eprintln!(
             "[scene_generate_hkt_from_mesh] after simplify tris={}",
             mesh.triangle_count()
@@ -2520,40 +2540,57 @@ pub async fn scene_save_as_folder(
     session_id: String,
     output_path: String,
 ) -> Result<SaveResult, String> {
-    let artifacts = state.with_session(&session_id, |s| Ok(s.collect_save_artifacts()))?;
+    eprintln!("[scene_save_as_folder] Starting — output: {output_path}");
+    let t = Instant::now();
+    let result: Result<SaveResult, String> = async {
+        let artifacts = state.with_session(&session_id, |s| Ok(s.collect_save_artifacts()))?;
 
-    let output_dir = output_path.clone();
-    let count = tauri::async_runtime::spawn_blocking(move || -> Result<u32, String> {
-        let base = Path::new(&output_dir);
-        std::fs::create_dir_all(base)
-            .map_err(|e| format!("Failed to create output directory: {e}"))?;
+        let output_dir = output_path.clone();
+        let count = tauri::async_runtime::spawn_blocking(move || -> Result<u32, String> {
+            let base = Path::new(&output_dir);
+            std::fs::create_dir_all(base)
+                .map_err(|e| format!("Failed to create output directory: {e}"))?;
 
-        let mut written = 0u32;
-        for artifact in &artifacts {
-            let target = base.join(&artifact.relative_path);
-            if let Some(parent) = target.parent() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|e| format!("Failed to create dir {}: {e}", parent.display()))?;
+            let mut written = 0u32;
+            for artifact in &artifacts {
+                let target = base.join(&artifact.relative_path);
+                if let Some(parent) = target.parent() {
+                    std::fs::create_dir_all(parent)
+                        .map_err(|e| format!("Failed to create dir {}: {e}", parent.display()))?;
+                }
+                std::fs::write(&target, &artifact.data)
+                    .map_err(|e| format!("Failed to write {}: {e}", target.display()))?;
+                written += 1;
             }
-            std::fs::write(&target, &artifact.data)
-                .map_err(|e| format!("Failed to write {}: {e}", target.display()))?;
-            written += 1;
-        }
-        Ok(written)
-    })
-    .await
-    .map_err(|e| format!("Task join error: {e}"))??;
+            Ok(written)
+        })
+        .await
+        .map_err(|e| format!("Task join error: {e}"))??;
 
-    state.with_session_mut(&session_id, |s| {
-        s.mark_clean();
-        Ok(())
-    })?;
+        state.with_session_mut(&session_id, |s| {
+            s.mark_clean();
+            Ok(())
+        })?;
 
-    Ok(SaveResult {
-        success: true,
-        files_written: count,
-        warnings: Vec::new(),
-    })
+        Ok(SaveResult {
+            success: true,
+            files_written: count,
+            warnings: Vec::new(),
+        })
+    }
+    .await;
+    match &result {
+        Ok(r) => eprintln!(
+            "[scene_save_as_folder] Done in {}ms — {} files written",
+            t.elapsed().as_millis(),
+            r.files_written
+        ),
+        Err(e) => eprintln!(
+            "[scene_save_as_folder] Failed in {}ms — {e}",
+            t.elapsed().as_millis()
+        ),
+    }
+    result
 }
 
 #[tauri::command]
@@ -2561,72 +2598,89 @@ pub async fn scene_repack_in_place(
     state: State<'_, SceneSessionState>,
     session_id: String,
 ) -> Result<SaveResult, String> {
-    let (source, artifacts) = state.with_session(&session_id, |s| {
-        let source_path = match &s.source {
-            SceneSource::Folder { path } => path.clone(),
-            SceneSource::Fhm2d { path } => {
-                let p = Path::new(path);
-                p.parent()
-                    .map(|pp| pp.to_string_lossy().to_string())
-                    .unwrap_or_else(|| path.clone())
-            }
-            SceneSource::New => {
-                return Err("Cannot repack a new session without a source path".into())
-            }
-        };
-        Ok((source_path, s.collect_save_artifacts()))
-    })?;
+    eprintln!("[scene_repack_in_place] Starting — session: {session_id}");
+    let t = Instant::now();
+    let result: Result<SaveResult, String> = async {
+        let (source, artifacts) = state.with_session(&session_id, |s| {
+            let source_path = match &s.source {
+                SceneSource::Folder { path } => path.clone(),
+                SceneSource::Fhm2d { path } => {
+                    let p = Path::new(path);
+                    p.parent()
+                        .map(|pp| pp.to_string_lossy().to_string())
+                        .unwrap_or_else(|| path.clone())
+                }
+                SceneSource::New => {
+                    return Err("Cannot repack a new session without a source path".into())
+                }
+            };
+            Ok((source_path, s.collect_save_artifacts()))
+        })?;
 
-    // Pre-flight gate: numatb texture parameters with empty paths must be fixed
-    // before repacking (matches the Scene Editor save/repack validation gate).
-    let validation =
-        crate::format::fhm2d_stage_validate::exvs_stage_validate_numatb_empty_params(&source);
-    if !validation.valid {
-        let summary = validation
-            .errors
-            .iter()
-            .take(5)
-            .map(|e| e.message.clone())
-            .collect::<Vec<_>>()
-            .join("; ");
-        return Err(format!(
-            "Repack blocked: {} numatb texture parameter(s) have empty paths. {}",
-            validation.errors.len(),
-            summary
-        ));
-    }
-
-    let count = tauri::async_runtime::spawn_blocking(move || -> Result<u32, String> {
-        let base = Path::new(&source);
-        std::fs::create_dir_all(base)
-            .map_err(|e| format!("Failed to create output directory: {e}"))?;
-
-        let mut written = 0u32;
-        for artifact in &artifacts {
-            let target = base.join(&artifact.relative_path);
-            if let Some(parent) = target.parent() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|e| format!("Failed to create dir {}: {e}", parent.display()))?;
-            }
-            std::fs::write(&target, &artifact.data)
-                .map_err(|e| format!("Failed to write {}: {e}", target.display()))?;
-            written += 1;
+        // Pre-flight gate: numatb texture parameters with empty paths must be fixed
+        // before repacking (matches the Scene Editor save/repack validation gate).
+        let validation =
+            crate::format::fhm2d_stage_validate::exvs_stage_validate_numatb_empty_params(&source);
+        if !validation.valid {
+            let summary = validation
+                .errors
+                .iter()
+                .take(5)
+                .map(|e| e.message.clone())
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(format!(
+                "Repack blocked: {} numatb texture parameter(s) have empty paths. {}",
+                validation.errors.len(),
+                summary
+            ));
         }
-        Ok(written)
-    })
-    .await
-    .map_err(|e| format!("Task join error: {e}"))??;
 
-    state.with_session_mut(&session_id, |s| {
-        s.mark_clean();
-        Ok(())
-    })?;
+        let count = tauri::async_runtime::spawn_blocking(move || -> Result<u32, String> {
+            let base = Path::new(&source);
+            std::fs::create_dir_all(base)
+                .map_err(|e| format!("Failed to create output directory: {e}"))?;
 
-    Ok(SaveResult {
-        success: true,
-        files_written: count,
-        warnings: Vec::new(),
-    })
+            let mut written = 0u32;
+            for artifact in &artifacts {
+                let target = base.join(&artifact.relative_path);
+                if let Some(parent) = target.parent() {
+                    std::fs::create_dir_all(parent)
+                        .map_err(|e| format!("Failed to create dir {}: {e}", parent.display()))?;
+                }
+                std::fs::write(&target, &artifact.data)
+                    .map_err(|e| format!("Failed to write {}: {e}", target.display()))?;
+                written += 1;
+            }
+            Ok(written)
+        })
+        .await
+        .map_err(|e| format!("Task join error: {e}"))??;
+
+        state.with_session_mut(&session_id, |s| {
+            s.mark_clean();
+            Ok(())
+        })?;
+
+        Ok(SaveResult {
+            success: true,
+            files_written: count,
+            warnings: Vec::new(),
+        })
+    }
+    .await;
+    match &result {
+        Ok(r) => eprintln!(
+            "[scene_repack_in_place] Done in {}ms — {} files written",
+            t.elapsed().as_millis(),
+            r.files_written
+        ),
+        Err(e) => eprintln!(
+            "[scene_repack_in_place] Failed in {}ms — {e}",
+            t.elapsed().as_millis()
+        ),
+    }
+    result
 }
 
 #[tauri::command]
@@ -2707,6 +2761,8 @@ mod tests {
             weld_epsilon: 1e-3,
             target_triangle_ratio: None,
             max_target_triangles: None,
+            strategy: crate::scene_memory_session::CollisionStrategy::ShapePreserving,
+            hull_target_faces: None,
         };
         let opts = hkt_simplify_to_options(&cfg);
         assert_eq!(
@@ -2714,6 +2770,31 @@ mod tests {
             cos_planarity_from_angle_deg(15.0),
         );
         assert_eq!(opts, CollisionSimplifyOptions::default());
+    }
+
+    #[test]
+    fn hkt_simplify_to_options_maps_convex_hull_strategy() {
+        let cfg = HktSimplifyConfig {
+            strategy: crate::scene_memory_session::CollisionStrategy::ConvexHull,
+            hull_target_faces: Some(48),
+            ..HktSimplifyConfig::default()
+        };
+        let opts = hkt_simplify_to_options(&cfg);
+        assert_eq!(
+            opts.mode,
+            crate::collision_mesh::CollisionSimplifyMode::ConvexHull
+        );
+        assert_eq!(opts.hull_target_faces, Some(48));
+    }
+
+    #[test]
+    fn hkt_simplify_to_options_defaults_to_shape_preserving() {
+        let opts = hkt_simplify_to_options(&HktSimplifyConfig::default());
+        assert_eq!(
+            opts.mode,
+            crate::collision_mesh::CollisionSimplifyMode::ShapePreserving
+        );
+        assert_eq!(opts.hull_target_faces, None);
     }
 
     #[test]
