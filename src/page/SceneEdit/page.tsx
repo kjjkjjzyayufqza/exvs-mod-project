@@ -157,6 +157,11 @@ import { useSceneDirtyStore } from "./store/sceneDirtyStore";
 import { useSceneTextureManagerStore } from "./store/sceneTextureManagerStore";
 import { executeSaveFolderPipeline } from "./utils/sceneSaveFolderPipeline";
 import { executeSaveFhm2dPipeline } from "./utils/sceneSaveFhm2dPipeline";
+import {
+  resolveModelReplaceTarget,
+  type ModelReplaceTargetInfo,
+  type ModelReplacement,
+} from "./utils/sceneModelReplace";
 import { beginSceneOp, type SceneOpTimer } from "./utils/sceneOpTimer";
 import { SaveProgressDialog, type SaveStepInfo } from "./components/SaveProgressDialog";
 import { SaveConfirmDialog } from "./components/SaveConfirmDialog";
@@ -622,6 +627,8 @@ export default function SceneEdit() {
 
   const [daeImportEntries, setDaeImportEntries] = useState<DaeImportEntry[]>([]);
   const [showDaeImportModal, setShowDaeImportModal] = useState(false);
+  const [modelReplacements, setModelReplacements] = useState<ModelReplacement[]>([]);
+  const [replaceTarget, setReplaceTarget] = useState<ModelReplaceTargetInfo | null>(null);
   const [havokInfo, setHavokInfo] = useState<HavokInstallInfo | null>(null);
   const [havokMeshDataMap, setHavokMeshDataMap] = useState(() => new Map<string, HavokMeshData>());
   const [havokMetaMap, setHavokMetaMap] = useState(() => new Map<string, { displayName: string; objectNodeId: string | null }>());
@@ -1827,6 +1834,7 @@ export default function SceneEdit() {
         subModels,
         importedDaeObjects,
         sceneSessionId,
+        modelReplacements,
         onProgress: updateSaveProgress,
         onDeleteConfirm: autoApproveSaveDelete,
       });
@@ -1853,6 +1861,7 @@ export default function SceneEdit() {
 
       useSceneDirtyStore.getState().reset();
       useSceneTextureManagerStore.getState().markTexturesSaved();
+      setModelReplacements([]);
       const completionSummary = buildSaveResultSummary(changePreview, result);
       setSaveProgressState((prev) => ({ ...prev, canClose: true, completionSummary }));
 
@@ -1878,7 +1887,7 @@ export default function SceneEdit() {
     } finally {
       saveTimer.end();
     }
-  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, autoApproveSaveDelete, promptSaveConfirm, runNumatbPreflight, surfaceValidationErrors]);
+  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, modelReplacements, applyBundle, updateSaveProgress, autoApproveSaveDelete, promptSaveConfirm, runNumatbPreflight, surfaceValidationErrors]);
 
   const handleSaveFhm2d = useCallback(async () => {
     if (!stageRoot) return;
@@ -1918,6 +1927,7 @@ export default function SceneEdit() {
         subModels,
         importedDaeObjects,
         sceneSessionId,
+        modelReplacements,
         outputFhm2dPath: outputPath,
         onProgress: updateSaveProgress,
         onDeleteConfirm: autoApproveSaveDelete,
@@ -1947,6 +1957,7 @@ export default function SceneEdit() {
 
       useSceneDirtyStore.getState().reset();
       useSceneTextureManagerStore.getState().markTexturesSaved();
+      setModelReplacements([]);
       const completionSummary = [
         ...buildSaveResultSummary(changePreview, result),
         `Packed FHM2D (${(result.fhm2dSizeBytes / (1024 * 1024)).toFixed(1)} MB)`,
@@ -1961,7 +1972,7 @@ export default function SceneEdit() {
     } finally {
       repackTimer.end();
     }
-  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, applyBundle, updateSaveProgress, autoApproveSaveDelete, promptSaveConfirm, runNumatbPreflight, surfaceValidationErrors]);
+  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, modelReplacements, applyBundle, updateSaveProgress, autoApproveSaveDelete, promptSaveConfirm, runNumatbPreflight, surfaceValidationErrors]);
 
   const handleGraphicParamValueChange = useCallback(
     (index: number, value: string) => {
@@ -2968,6 +2979,75 @@ export default function SceneEdit() {
     }
   }, [stageRoot]);
 
+  const handleReplaceModel = useCallback(
+    async (nodeId: string) => {
+      const target = resolveModelReplaceTarget(nodeId, subModels);
+      if (!target) {
+        toast.error("This node cannot be replaced");
+        return;
+      }
+      const selected = await open({
+        multiple: false,
+        filters: [{ name: "Static Mesh", extensions: ["dae", "fbx"] }],
+        defaultPath: await getStoredDialogDefaultPath(SCENE_IMPORT_DAE_CONFIG_DIALOG_PATH_KEY),
+      });
+      if (!selected) return;
+      const filePath = Array.isArray(selected) ? selected[0] : selected;
+      if (!filePath) return;
+      await rememberStoredDialogSelection(SCENE_IMPORT_DAE_CONFIG_DIALOG_PATH_KEY, filePath, "file");
+
+      const fileName = filePath.split(/[/\\]/).pop() ?? "model.dae";
+      const sourceFormat = detectStaticMeshImportFormat(fileName);
+      // Force the on-disk folder name to the replace target so the new model is
+      // written to {folderName}/0/... on save.
+      const config = createDefaultDaeImportConfig(target.folderName);
+      config.outputDirectory = stageRoot;
+      const entry: DaeImportEntry = {
+        importId: `dae_cfg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        fileName,
+        filePath,
+        sourceFormat,
+        analysis: null,
+        config,
+        analyzing: true,
+        analyzeError: null,
+      };
+
+      setReplaceTarget(target);
+      setDaeImportEntries([entry]);
+      setShowDaeImportModal(true);
+
+      try {
+        const analysis =
+          sourceFormat === "fbx"
+            ? await invoke("ssbh_analyze_fbx", { fbxPath: filePath })
+            : await invoke("ssbh_analyze_dae", { daePath: filePath });
+        const typedAnalysis = analysis as DaeImportEntry["analysis"];
+        setDaeImportEntries((prev) =>
+          prev.map((e) =>
+            e.importId === entry.importId && typedAnalysis
+              ? {
+                  ...e,
+                  analysis: typedAnalysis,
+                  config: syncDaeImportConfigUpAxisFromAnalysis(e.config, typedAnalysis),
+                  analyzing: false,
+                }
+              : e,
+          ),
+        );
+      } catch (err) {
+        setDaeImportEntries((prev) =>
+          prev.map((e) =>
+            e.importId === entry.importId
+              ? { ...e, analyzing: false, analyzeError: String(err) }
+              : e,
+          ),
+        );
+      }
+    },
+    [stageRoot, subModels],
+  );
+
   const processSsbhSessionImport = useCallback(
     async (entries: DaeImportEntry[]) => {
       const sessionState = useDaeSsbhSessionStore.getState();
@@ -3195,6 +3275,112 @@ export default function SceneEdit() {
       }
     },
     [sceneSessionId, stageRoot, handleSelectNode, handleStaticMeshProgress, applyStaticMeshProgressUpdate],
+  );
+
+  const processModelReplacement = useCallback(
+    async (entry: DaeImportEntry, target: ModelReplaceTargetInfo) => {
+      const sessionState = useDaeSsbhSessionStore.getState();
+
+      let activeSessionId = sceneSessionId;
+      if (!activeSessionId) {
+        if (stageRoot) {
+          const opened = await sceneOpenFolder(stageRoot);
+          activeSessionId = opened.sessionId;
+          setSceneSessionId(opened.sessionId);
+        } else {
+          activeSessionId = await sceneSessionCreate({ type: "new" });
+          setSceneSessionId(activeSessionId);
+        }
+      }
+
+      if (!target.isBase && !subModels.some((s) => s.folderName === target.folderName)) {
+        toast.error(`Model slot "${target.folderName}" not found in the loaded stage`);
+        return;
+      }
+
+      try {
+        staticMeshProgressActiveRef.current = true;
+        setImportProgress({
+          open: true,
+          progress: 0,
+          steps: createStaticMeshImportSteps(entry.fileName, false),
+        });
+
+        // baseFilename forced to the target folder; collect_save_artifacts writes the
+        // converted model to {folderName}/0/... on the next save.
+        const importConfig = buildSsbhSessionImportConfig(entry.config, sessionState, target.folderName);
+        const result = await importDaeThroughSceneSession({
+          sessionId: activeSessionId,
+          filePath: entry.filePath,
+          name: target.folderName,
+          importConfig,
+          onProgress: handleStaticMeshProgress,
+        });
+        if (!result.ssbhGenerated) {
+          throw new Error("SSBH conversion did not produce in-memory artifacts");
+        }
+
+        applyStaticMeshProgressUpdate({
+          step: "preview",
+          label: "Receiving viewport preview bundle from Rust...",
+          detail: "Large mesh preview data may take time to cross IPC.",
+          progress: 94,
+        });
+        const previewBundle = await sceneBuildImportPreviewBundle({
+          sessionId: activeSessionId,
+          importId: result.importId,
+          stageRoot,
+          sourcePath: entry.filePath,
+        });
+        for (const warning of previewBundle.warnings) {
+          toast.warning(warning);
+        }
+
+        // Swap the in-scene preview for the target slot.
+        if (target.isBase) {
+          setBaseModel(previewBundle);
+        } else {
+          setSubModels((prev) =>
+            prev.map((s) =>
+              s.folderName === target.folderName ? { ...s, bundle: previewBundle } : s,
+            ),
+          );
+        }
+
+        setModelReplacements((prev) => [
+          ...prev.filter((r) => r.folderName !== target.folderName),
+          {
+            folderName: target.folderName,
+            isBase: target.isBase,
+            sessionImportId: result.importId,
+            sourcePath: entry.filePath,
+            sourceName: entry.fileName,
+          },
+        ]);
+        useSceneDirtyStore.getState().markModelReplaced(target.folderName);
+
+        applyStaticMeshProgressUpdate({
+          step: "done",
+          label: "Model replacement staged",
+          progress: 100,
+        });
+        toast.success(`Staged ${target.folderName} model replacement. Save the stage to commit.`);
+      } catch (err) {
+        toast.error(
+          `Replace ${target.folderName} failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      } finally {
+        staticMeshProgressActiveRef.current = false;
+        setImportProgress((prev) => ({ ...prev, open: false }));
+      }
+    },
+    [
+      sceneSessionId,
+      stageRoot,
+      subModels,
+      handleStaticMeshProgress,
+      applyStaticMeshProgressUpdate,
+    ],
   );
 
   const importedDaeIdSet = useMemo(
@@ -4043,6 +4229,7 @@ export default function SceneEdit() {
                     onReorderRootChild={handleReorderOutlinerNode}
                     onOpenProperties={handleOpenProperties}
                     onExportDae={handleExportDaeFromOutliner}
+                    onReplaceModel={handleReplaceModel}
                   />
                   {havokMeshDataMap.size > 0 && (
                     <MayaSection title="Collision" badge={havokMeshDataMap.size}>
@@ -4433,6 +4620,18 @@ export default function SceneEdit() {
               );
             }}
             onImport={async () => {
+              if (replaceTarget) {
+                setShowDaeImportModal(false);
+                const replaceEntries = [...daeImportEntries];
+                setDaeImportEntries([]);
+                const target = replaceTarget;
+                setReplaceTarget(null);
+                if (replaceEntries[0]) {
+                  await processModelReplacement(replaceEntries[0], target);
+                }
+                return;
+              }
+
               setShowDaeImportModal(false);
               const entriesToProcess = [...daeImportEntries];
               setDaeImportEntries([]);
@@ -4483,6 +4682,7 @@ export default function SceneEdit() {
             onCancel={() => {
               setShowDaeImportModal(false);
               setDaeImportEntries([]);
+              setReplaceTarget(null);
             }}
           />
         )}
