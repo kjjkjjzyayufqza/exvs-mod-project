@@ -23,6 +23,7 @@ import {
   Settings,
   AlertTriangle,
   Download,
+  FolderSync,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -44,6 +45,7 @@ import type { StageTreeNode } from "./StageHierarchyTree";
 import { canOpenDetailView } from "./detail-view/sceneDetailViewTypes";
 import { getNodeTypeInfo } from "../utils/sceneNodeTypeInfo";
 import { canExportNodeRoleToDae } from "../utils/daeExportDialogState";
+import { canReplaceModelNode } from "../utils/sceneModelReplace";
 import { VirtualizedList } from "./VirtualizedList";
 import {
   flattenSceneOutliner,
@@ -99,6 +101,7 @@ interface SceneOutlinerProps {
   onReorderRootChild?: (activeId: string, overId: string) => void;
   onOpenProperties?: (nodeId: string) => void;
   onExportDae?: (nodeId: string) => void;
+  onReplaceModel?: (nodeId: string) => void;
 }
 
 export function SceneOutliner({
@@ -117,6 +120,7 @@ export function SceneOutliner({
   onReorderRootChild,
   onOpenProperties,
   onExportDae,
+  onReplaceModel,
 }: SceneOutlinerProps) {
   const {
     selectedIds,
@@ -240,6 +244,7 @@ export function SceneOutliner({
                   onGenerateHktFromModel={onGenerateHktFromModel}
                   onOpenProperties={onOpenProperties}
                   onExportDae={onExportDae}
+                  onReplaceModel={onReplaceModel}
                 />
               </div>
             );
@@ -272,6 +277,7 @@ export function SceneOutliner({
                 onReorderRootChild={onReorderRootChild}
                 onOpenProperties={onOpenProperties}
                 onExportDae={onExportDae}
+                onReplaceModel={onReplaceModel}
                 hasChildren={row.hasChildren}
                 expanded={getNodeExpanded(row.node.id, row.depth)}
                 onToggle={() => toggleNodeExpanded(row.node.id, row.depth)}
@@ -300,6 +306,7 @@ export function SceneOutliner({
       onReorderRootChild,
       onOpenProperties,
       onExportDae,
+      onReplaceModel,
       toggleGroupCollapse,
       removeGroup,
       getNodeExpanded,
@@ -505,6 +512,7 @@ function OutlinerNodeRow({
   onReorderRootChild,
   onOpenProperties,
   onExportDae,
+  onReplaceModel,
   hasChildren,
   expanded,
   onToggle,
@@ -525,6 +533,7 @@ function OutlinerNodeRow({
   onReorderRootChild?: (activeId: string, overId: string) => void;
   onOpenProperties?: (nodeId: string) => void;
   onExportDae?: (nodeId: string) => void;
+  onReplaceModel?: (nodeId: string) => void;
   hasChildren?: boolean;
   expanded?: boolean;
   onToggle?: () => void;
@@ -652,6 +661,7 @@ function OutlinerNodeRow({
         onGenerateHktFromModel={onGenerateHktFromModel}
         onOpenProperties={onOpenProperties}
         onExportDae={onExportDae}
+        onReplaceModel={onReplaceModel}
       />
     </ContextMenu>
   );
@@ -670,6 +680,7 @@ function NodeContextMenuContent({
   onGenerateHktFromModel,
   onOpenProperties,
   onExportDae,
+  onReplaceModel,
 }: {
   node: StageTreeNode;
   visible: boolean;
@@ -683,6 +694,7 @@ function NodeContextMenuContent({
   onGenerateHktFromModel?: (id: string) => void;
   onOpenProperties?: (nodeId: string) => void;
   onExportDae?: (nodeId: string) => void;
+  onReplaceModel?: (nodeId: string) => void;
 }) {
   const supportsHkt = (node.role === "imported_dae" || node.role === "collision" || node.role === "sub_model" || node.role === "base") && Boolean(onGenerateHkt);
   const supportsReplaceHkt = (node.role === "imported_dae" || node.role === "collision" || node.role === "sub_model" || node.role === "base") && Boolean(onReplaceHkt);
@@ -691,6 +703,7 @@ function NodeContextMenuContent({
   const hktTargetId = isCollisionNode ? node.id.slice("__col__".length) : node.id;
   const supportsProperties = canOpenDetailView(node.role);
   const supportsExportDae = canExportNodeRoleToDae(node.role) && Boolean(onExportDae);
+  const supportsReplaceModel = canReplaceModelNode(node) && Boolean(onReplaceModel);
   const { label: typeLabel, Icon: TypeIcon } = getNodeTypeInfo(node.role);
 
   return (
@@ -709,6 +722,15 @@ function NodeContextMenuContent({
           <ContextMenuItem onClick={() => onExportDae!(node.id)}>
             <Download className="mr-2 h-3.5 w-3.5" />
             Export Model...
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+        </>
+      )}
+      {supportsReplaceModel && (
+        <>
+          <ContextMenuItem onClick={() => onReplaceModel!(node.id)}>
+            <FolderSync className="mr-2 h-3.5 w-3.5" />
+            Replace Model...
           </ContextMenuItem>
           <ContextMenuSeparator />
         </>
