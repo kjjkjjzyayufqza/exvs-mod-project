@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
 export interface CollisionPreviewGeometry {
-  positions: number[];
-  indices: number[];
+  positions: Float32Array;
+  indices: Uint32Array;
 }
 
 /** Collision visualization accent — matches the in-scene Havok overlay green. */
@@ -70,6 +70,37 @@ function FitView({
   return null;
 }
 
+function PreviewOrbitControls({
+  controlsRef,
+}: {
+  controlsRef: React.RefObject<OrbitControlsImpl | null>;
+}) {
+  const invalidate = useThree((s) => s.invalidate);
+  const regress = useThree((s) => s.performance.regress);
+
+  const requestRender = useCallback(() => {
+    regress();
+    invalidate();
+  }, [invalidate, regress]);
+
+  return (
+    <OrbitControls
+      ref={controlsRef}
+      makeDefault
+      enableDamping
+      dampingFactor={0.08}
+      enableZoom
+      zoomSpeed={0.85}
+      screenSpacePanning
+      minDistance={0.08}
+      maxDistance={5e6}
+      onStart={requestRender}
+      onChange={requestRender}
+      onEnd={requestRender}
+    />
+  );
+}
+
 /**
  * Live collision-mesh preview viewport for the New-Model HKT window. Renders the
  * simplified collision geometry as a translucent emerald shell plus wireframe,
@@ -87,8 +118,10 @@ export function HktCollisionPreviewCanvas({
       return null;
     }
     const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(geometry.positions), 3));
-    g.setIndex(new THREE.BufferAttribute(new Uint32Array(geometry.indices), 1));
+    // positions/indices are already typed-array views over the binary IPC buffer; use them
+    // directly without an intermediate copy.
+    g.setAttribute("position", new THREE.BufferAttribute(geometry.positions, 3));
+    g.setIndex(new THREE.BufferAttribute(geometry.indices, 1));
     g.computeVertexNormals();
     g.computeBoundingSphere();
     return g;
@@ -101,44 +134,44 @@ export function HktCollisionPreviewCanvas({
   }, [builtGeometry]);
 
   return (
-    <Canvas
-      className="h-full w-full touch-none"
-      frameloop="demand"
-      gl={{ antialias: true, alpha: false, powerPreference: "high-performance", logarithmicDepthBuffer: true }}
-      dpr={[1, 2]}
-      camera={{ position: [4, 3, 4], fov: 45, near: 0.05, far: 5000 }}
-      style={{ background: PREVIEW_BACKGROUND }}
+    <div
+      className="h-full w-full touch-none overscroll-contain"
+      onWheel={(event) => {
+        event.stopPropagation();
+      }}
     >
-      <color attach="background" args={[PREVIEW_BACKGROUND]} />
-      <ambientLight intensity={0.65} />
-      <hemisphereLight args={["#cbd5e1", "#0b0f14", 0.4]} />
-      <directionalLight position={[6, 10, 6]} intensity={0.8} />
-      <directionalLight position={[-5, 4, -5]} intensity={0.3} />
+      <Canvas
+        className="h-full w-full touch-none"
+        frameloop="demand"
+        gl={{ antialias: true, alpha: false, powerPreference: "high-performance", logarithmicDepthBuffer: true }}
+        dpr={[1, 2]}
+        camera={{ position: [4, 3, 4], fov: 45, near: 0.05, far: 5e6 }}
+        style={{ background: PREVIEW_BACKGROUND, touchAction: "none" }}
+      >
+        <color attach="background" args={[PREVIEW_BACKGROUND]} />
+        <ambientLight intensity={0.65} />
+        <hemisphereLight args={["#cbd5e1", "#0b0f14", 0.4]} />
+        <directionalLight position={[6, 10, 6]} intensity={0.8} />
+        <directionalLight position={[-5, 4, -5]} intensity={0.3} />
 
-      {builtGeometry ? <CollisionMeshObject geometry={builtGeometry} /> : null}
+        {builtGeometry ? <CollisionMeshObject geometry={builtGeometry} /> : null}
 
-      <Grid
-        args={[40, 40]}
-        infiniteGrid={false}
-        cellSize={1}
-        sectionSize={5}
-        fadeDistance={400}
-        fadeStrength={1}
-        sectionColor="#475569"
-        cellColor="#1e293b"
-        sectionThickness={1}
-        cellThickness={0.6}
-      />
+        <Grid
+          args={[40, 40]}
+          infiniteGrid={false}
+          cellSize={1}
+          sectionSize={5}
+          fadeDistance={400}
+          fadeStrength={1}
+          sectionColor="#475569"
+          cellColor="#1e293b"
+          sectionThickness={1}
+          cellThickness={0.6}
+        />
 
-      <OrbitControls
-        ref={controlsRef}
-        makeDefault
-        enableDamping
-        dampingFactor={0.08}
-        minDistance={0.1}
-        maxDistance={4000}
-      />
-      <FitView boundingSphere={builtGeometry?.boundingSphere ?? null} controlsRef={controlsRef} />
-    </Canvas>
+        <PreviewOrbitControls controlsRef={controlsRef} />
+        <FitView boundingSphere={builtGeometry?.boundingSphere ?? null} controlsRef={controlsRef} />
+      </Canvas>
+    </div>
   );
 }

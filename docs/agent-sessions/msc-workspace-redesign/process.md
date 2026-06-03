@@ -566,3 +566,206 @@ Search/query priorities:
    - Look for names related to command action, action table, input action, route, weapon, or command list.
 6. Cross-check whether resource packages contain data loaded into `0x700000`.
    - Candidate file families should be investigated only after IDA identifies the loader path.
+
+## 2026-06-03 Continued Research: dynamic `0x700000` action records
+
+User direction:
+
+- Continue researching new-version MSC.
+- IDA Pro MCP is reportedly connected to the EXVS executable.
+- Preserve the no-dictionary rule. The user will not choose an
+  `action_hash -> name` dictionary solution.
+
+Tool availability check:
+
+- `list_mcp_resources` showed only Exa resources.
+- `tool_search` for IDA/IDA Pro tools returned no tools.
+- Therefore EXE-side IDA queries could not be executed directly in this Codex
+  session. Local decompiled samples were used instead.
+
+### Cross-sample script-side scan
+
+Local scan roots:
+
+- `E:\XB\解包\com\file`
+- 6 directories with both `0.c` and `2.c`
+- 30 directories with parseable `2.c` action-graph tables
+- 15 `2.c` files using `0x700000` / `0x700001` / `0x700002`
+
+Important cross-sample result:
+
+- The `0.c` `sys_1(0x10000, 0x1, slot, actionHash)` table is identical in
+  all 6 directories that have `0.c`.
+- It is a stable base action-slot vocabulary, not a per-unit accidental table.
+- The table has 30 slots. `2.c` generally registers 27 of those base hashes.
+- These 3 base hashes are present in `0.c` but were not registered in any
+  scanned `2.c` sample:
+  - `0x4cdc9902`
+  - `0x16d0093c`
+  - `0x450c6ce4`
+- `0x613494c8` is the common extra `2.c` action hash outside the `0.c`
+  base table. It binds to `func_58`, whose body is empty in checked samples,
+  so treat it as a no-op/system placeholder, not a meaningful weapon action.
+
+For `0x700000`-style `2.c` samples:
+
+- 15 samples were found.
+- Their static registrations are mostly the base `0.c` action hashes.
+- 24 base hashes appear in every `0x700000`-style sample.
+- The only common extra outside the base table is usually `0x613494c8`.
+- Some samples omit `0xf32aa1ba`, `0x900ab393`, or `0x27786a84`, which looks
+  like per-unit capability/enablement rather than a different naming system.
+
+### New key finding: dynamic action registration from `0x700000`
+
+In `E:\XB\解包\com\file\0x693F756D\2.c`, `func_849()` is the dynamic
+registration entry:
+
+```c
+var0 = sys_0(0x700001, 0);
+var1 = 0x1;
+while (var1 < var0)
+{
+    var2 = sys_0(0x700000, 0, var1, 0x2e);
+    var3 = sys_0(0x700000, 0, var1, 0xa);
+    var4 = func_873(var3);
+    func_241(var2, var4);
+    var1++;
+}
+```
+
+This is the strongest current answer to "where are new action hashes recorded":
+
+- the script reads action hashes at runtime from the native `0x700000`
+  action-record table
+- `0x700001` returns the action-record count
+- `0x700000` field `0x2e` is the action hash
+- `0x700000` field `0xa` is a group/type key
+- the group/type key is resolved by a local resolver such as `func_873`
+- the resolved callback is registered through `func_241(actionHash, callback)`
+
+This is not an `action_hash -> name` dictionary. It is a runtime action-record
+import path. The unresolved part is still the native/file backing source for
+`0x700000`.
+
+### `0x700000` also builds reverse and phase-callback tables
+
+The same dynamic registration function also builds:
+
+```c
+sys_1(0x10002, 0x1f, actionHash, recordIndex);
+sys_1(0x10001, 0x10, recordIndex, func_975(func_875(recordIndex, 0x2)));
+sys_1(0x10001, 0x11, recordIndex, func_975(func_875(recordIndex, 0x7c)));
+sys_1(0x10001, 0x12, recordIndex, func_975(func_875(recordIndex, 0x7d)));
+```
+
+Current interpretation:
+
+- `0x10002,0x1f`: `actionHash -> actionRecordIndex`
+- `0x10001,0x10`: record init/start callback
+- `0x10001,0x11`: record tick/phase callback
+- `0x10001,0x12`: record end/cancel callback
+- `0x700000` fields `0x2`, `0x7c`, and `0x7d` store callback-key hashes
+  that are resolved through the large local resolver `func_975`.
+
+Runtime usage in `0x693F756D/2.c`:
+
+- `func_866()` reads `global4` (active action hash) through
+  `sys_0(0x10002, 0x1f, global4)` into `global798` (record index).
+- `func_862()` runs the `0x10001,0x10` callback for that record.
+- `func_863()` runs the `0x10001,0x11` callback for that record.
+- `func_865()` runs the `0x10001,0x12` callback for that record.
+
+So the new dynamic action path is:
+
+```text
+native action-record table
+  -> recordIndex
+  -> field 0x2e actionHash
+  -> field 0xa group resolver -> action callback
+  -> field 0x2 / 0x7c / 0x7d phase callback keys
+  -> local key->function resolver
+  -> init/tick/end script functions
+```
+
+### `0.c func_145()` and `2.c func_872()` are parallel dispatch writers
+
+`0.c func_145()` and `2.c func_872()` both read:
+
+```c
+actionHash = sys_0(0x700000, 0, recordIndex, 0x2e);
+group = sys_0(0x700000, 0, recordIndex, 0xa);
+route0 = sys_0(0x700002, group, 0, recordIndex, ...);
+route1 = sys_0(0x700002, group, 1, recordIndex, ...);
+```
+
+Then they write the resolved action/route state into script globals or shared
+slots. This confirms `0x700000` is not merely an editor-side metadata clue; it
+is used in both selection and execution layers.
+
+### Function-ref decode issue: raw offset plus `0x30`
+
+In `0x693F756D/2.c`, `func_873()` returns raw constants:
+
+```c
+else if (arg0 == 0x3) { return 0x3b343; }
+```
+
+The same script's `2.txt` function table shows:
+
+- `0x3b343 + 0x30 = 0x3b373`, which is `func_950`
+- `0x39689 + 0x30 = 0x396b9`, which is `func_924`
+- `0x3a9e1 + 0x30 = 0x3aa11`, which is `func_942`
+- `0x3aeef + 0x30 = 0x3af1f`, which is `func_946`
+- `0x3bbfe + 0x30 = 0x3bc2e`, which is `func_956`
+- `0x388b1 + 0x30 = 0x388e1`, which is `func_916`
+- `0x38bd3 + 0x30 = 0x38c03`, which is `func_919`
+
+So raw function refs in this resolver use `decode_add = 0x30`.
+
+Other `0x700000` samples already decompile the same resolver style as
+`return func_945;` / `return func_949;`, so the structural logic exists but is
+not reliable across all samples. Current code explains the miss:
+
+- `tools/msc_cfg.py::_try_resolve_ref()` only resolves exact script entry
+  offsets.
+- It does not try `value + SCRIPT_BASE` / `value + 0x30`.
+- `tools/exvs_native_truth.py` supports `decode_add`, and the existing
+  `exvs_0xF1EF3B32.native_truth.json` already has a `func241_arg1` rule with
+  `decode_add = 48`, but `script_functions` is empty.
+- `_walk_and_symbolize_exvs_native_truth()` currently handles call arguments,
+  not raw `return 0x...;` constants inside resolver functions.
+
+Practical implementation implication:
+
+- The new extractor should not rely on hardcoded function numbers.
+- It should discover the dynamic registration function by the
+  `sys_0(0x700001, 0)` plus `func_241(var2, var4)` pattern.
+- It should discover the group resolver from `var4 = resolver(var3)`.
+- It should resolve resolver return values either as direct symbols or as
+  `raw + 0x30` using the script function offset table.
+- It should use this to build a dynamic action-record graph, not a dictionary.
+
+### Updated native/IDA targets
+
+The IDA target list should now be sharpened:
+
+1. Find the native handlers/backing classes for `sys_0(0x700001, 0)`,
+   `sys_0(0x700000, ...)`, and `sys_0(0x700002, ...)`.
+2. Identify the loader that populates the `0x700000` action-record table.
+3. Determine the file/package type and per-unit key that feeds that loader.
+4. Confirm field layout:
+   - `0x2e`: action hash
+   - `0xa`: group/type key for callback resolver and `0x700002`
+   - `0x3`: category/type used by `0.c func_144`
+   - `0x4`: input/direction mask used by `0.c func_144`
+   - `0x2`, `0x7c`, `0x7d`: callback-key fields used by `2.c`
+5. Confirm whether `0x700002` stores route/state values or a secondary table
+   keyed by `field 0xa`.
+
+Current bottom line:
+
+- We still have not found the file that stores new action records.
+- We have found the runtime table that records the action hash.
+- The next EXE-side question is no longer "does a table exist?" but "which
+  native loader populates `0x700000` / `0x700001` / `0x700002`?"

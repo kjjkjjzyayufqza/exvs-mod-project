@@ -4,18 +4,23 @@
 - Status: Approved (pending implementation plan)
 - Area: Scene Editor (`src/page/SceneEdit`, `src-tauri/src` stage/session commands)
 
+> **Scope update (2026-06-03):** generalized from base/sky to **all on-disk stage
+> SSBH models**. `base`, every sub-model, and `sky` are the same SSBH format stored
+> at `{folder}/0/...`; the replace feature now targets any such node by folder name.
+> The implementation plan is `docs/superpowers/plans/2026-06-03-stage-model-replace.md`.
+
 ## 1. Goal
 
-Let the user **replace** the stage's `base` model and `sky` model by importing a
-new DAE/FBX file, mirroring how a sub-model is added. This is a *replace*, not a
-remove: the model geometry/material/textures are swapped wholesale while the
-slot's role in the scene (base backdrop; sky's `SKY` placement entry) is
+Let the user **replace** any on-disk stage SSBH model — the `base` model or any
+sub-model (including `sky`) — by importing a new DAE/FBX file, mirroring how a
+sub-model is added. This is a *replace*, not a remove: the model
+geometry/material/textures are swapped wholesale while the slot's role in the scene
+(base backdrop; a sub-model's placement entry; sky's `SKY` placement entry) is
 preserved.
 
-Out of scope: adding a base/sky when the slot does not already exist; partial
+Out of scope: adding a model when the folder does not already exist; partial
 geometry-only replacement that keeps the old material/texture binding; replacing
-arbitrary non-base/non-sky sub-models (the mechanism generalizes to them, but
-this feature only wires up base + sky).
+not-yet-saved imports (`imported_dae`) that are not on disk.
 
 ## 2. Key codebase facts (why this is feasible)
 

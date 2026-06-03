@@ -17,8 +17,17 @@
 - [x] Verify: streaming-open wiring type-checks with `npm exec tsc --noEmit`; `page.tsx` lints clean.
 - [ ] Manual: open `0x16F73C97` in the running app and confirm no crash + new_model renders.
 - [ ] Follow-up: `SceneDetailViewWindow` MeshReadonlyTab shows no arrays for binary mesh (display-only).
-- [ ] Follow-up perf: `stage_stream_bundles` still parses sub-models in rayon before sending, so
-      frontend open is progressive but backend peak memory is not yet guaranteed to be single-model.
+- [x] Follow-up perf: `stage_stream_bundles` now streams sub-models as produced — rayon
+      `for_each_with` sends each parsed bundle down an mpsc channel; a consumer task forwards to
+      `on_chunk` and emits progress as they arrive. Peak memory drops from "all sub-models at once"
+      to ~one bundle per rayon worker; sub-models render progressively. Completion order is safe —
+      each chunk carries its own `folder_name`/`object_index` and the frontend resolves placement
+      from the chunk (`resolveSubModelPlacementRef`), not arrival order.
+- [x] HKT collision preview now uses the same binary-IPC side-channel as the SSBH loader:
+      `scene_preview_hkt_collision_mesh_path` returns a light header (`HktCollisionMeshGeometryHeader`)
+      with a `geometryId`; the packed buffer (positions f32 LE + indices u32 LE) is registered via
+      `ssbh_mesh_binary::register_geometry` and fetched once with `take_mesh_geometry`. Frontend builds
+      `BufferAttribute`s straight from typed-array views (no JSON number arrays).
 - [ ] Follow-up perf: only positions/normals/uv0/uv1/indices are packed (tangents/colorsets dropped from
       preview geometry — matches what the renderer used anyway).
 

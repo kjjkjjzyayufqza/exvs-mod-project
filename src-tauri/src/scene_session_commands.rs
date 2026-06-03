@@ -515,15 +515,19 @@ pub fn scene_preview_hkt_collision_mesh_path(
     file_path: String,
     source_name: String,
     config: ImportConfig,
-) -> Result<crate::havok_collision_encode::HktCollisionMeshGeometry, String> {
+) -> Result<crate::havok_collision_encode::HktCollisionMeshGeometryHeader, String> {
     let dae_bytes =
         std::fs::read(&file_path).map_err(|e| format!("Failed to read '{}': {}", file_path, e))?;
     let options = hkt_collision_options_from_import(&config);
-    crate::havok_collision_encode::preview_hkt_collision_mesh_from_import_bytes(
+    let geometry = crate::havok_collision_encode::preview_hkt_collision_mesh_from_import_bytes(
         &dae_bytes,
         &source_name,
         options,
-    )
+    )?;
+    // Ship geometry as a binary blob over the IPC side-channel (same path as the SSBH
+    // model loader) instead of a JSON number array; the frontend fetches it via
+    // `take_mesh_geometry` and builds typed-array BufferAttributes directly.
+    Ok(crate::havok_collision_encode::pack_and_register_collision_mesh(&geometry))
 }
 
 #[tauri::command]

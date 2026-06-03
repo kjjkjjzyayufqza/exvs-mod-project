@@ -405,6 +405,107 @@ Examples from `0x693F756D/2.c`:
 This confirms the new no-dictionary rename route should build an action graph first, then attach
 fixed gameplay labels and param labels only after the route is understood.
 
+### 4g. 2026-06-03 update: `0x700000` is a dynamic action-record source
+
+Further cross-sample research found the strongest current answer to the
+"where is the action hash recorded?" question.
+
+In `0x700000`-style new `2.c` files, the action hashes are imported at runtime
+from native action records, not only from static `func_241(0xHASH, callback)`
+lines.
+
+Concrete sample:
+
+- `E:\XB\解包\com\file\0x693F756D\2.c`
+- dynamic registration function: `func_849`
+
+Key pattern:
+
+```c
+var0 = sys_0(0x700001, 0);
+var1 = 0x1;
+while (var1 < var0)
+{
+    var2 = sys_0(0x700000, 0, var1, 0x2e);
+    var3 = sys_0(0x700000, 0, var1, 0xa);
+    var4 = func_873(var3);
+    func_241(var2, var4);
+    var1++;
+}
+```
+
+Current interpretation:
+
+- `0x700001` returns the action-record count.
+- `0x700000` is the action-record table.
+- `0x700000` field `0x2e` is the action hash.
+- `0x700000` field `0xa` is a group/type key.
+- A local resolver such as `func_873` maps that group/type key to the script
+  callback.
+- `func_241(var2, var4)` registers the imported action hash and callback.
+
+This changes the external-file question:
+
+- We have still not found the file backing the action records.
+- But the script-visible runtime source is now identified as
+  `0x700000` / `0x700001` / `0x700002`.
+- The next native task is to use IDA to find which loader populates those
+  tables.
+
+The same dynamic registration function also records reverse and phase-callback
+tables:
+
+```c
+sys_1(0x10002, 0x1f, actionHash, recordIndex);
+sys_1(0x10001, 0x10, recordIndex, func_975(func_875(recordIndex, 0x2)));
+sys_1(0x10001, 0x11, recordIndex, func_975(func_875(recordIndex, 0x7c)));
+sys_1(0x10001, 0x12, recordIndex, func_975(func_875(recordIndex, 0x7d)));
+```
+
+Runtime usage:
+
+- active action hash (`global4`) is resolved through
+  `sys_0(0x10002, 0x1f, global4)` into an action-record index
+- `0x10001,0x10/0x11/0x12` then provide init/tick/end callback functions
+  for that record
+
+This is a dynamic mapping surface, not a dictionary surface.
+
+### 4h. Cross-sample stability and raw function refs
+
+Local scan results:
+
+- 6 directories with both `0.c` and `2.c`
+- 30 directories with parseable `2.c` action-graph registrations
+- 15 `2.c` files using `0x700000` / `0x700001` / `0x700002`
+
+The `0.c` base action-slot table is identical across all 6 checked `0.c`
+samples. It defines 30 base `actionSlot -> actionHash` pairs. Most new
+`0x700000`-style `2.c` files register a subset of this base table plus the
+common extra `0x613494c8`.
+
+`0x613494c8` is not in the `0.c` base action-slot table, but it appears broadly
+in `2.c` registrations. In checked samples it binds to `func_58`, whose body is
+empty, so it should be treated as a no-op/system placeholder rather than a
+weapon/action name.
+
+One tooling issue is now clear:
+
+- `0x693F756D/2.c func_873()` returns raw function-ref constants such as
+  `0x3b343`.
+- `2.txt` shows the actual callback is `0x3b343 + 0x30 = func_950`.
+- Other samples already decompile the same pattern as `return func_945;`, etc.
+
+So the new dynamic extractor must resolve both forms:
+
+- direct `return func_N`
+- raw `return 0x...` where `raw + 0x30` hits a script entry pointer
+
+The existing mapping model already supports `decode_add = 48`, but the current
+native-truth mapping has empty `script_functions`, and the AST symbolizer only
+rewrites call arguments, not return constants. That is why this dynamic resolver
+is still partially raw in the generated `.c`.
+
 ### 5. The repository currently references, but does not ship, the CRC32 reverse-search tool
 
 Docs reference `tools/crc32_reverse_search.py`, but the file is not present in the repo.
@@ -425,11 +526,13 @@ The refined model is now:
 
 1. **Dynamic action mapping layer**:
    parse the script's registration and routing graph. The output is an action graph, not a lookup
-   table:
-   `action_hash -> action_callback -> slot_callback -> slot_hash/resource usage`.
+   table. This now includes both static registrations and dynamic action-record imports:
+   `0x700000 record -> action_hash -> action_callback -> phase callbacks -> resource usage`.
 2. **Script-structure layer**:
    parse `func_1219` / `func_1220` / `func_1221` so the tool understands
-   action callback -> slot callback -> slot-hash-table routing
+   action callback -> slot callback -> slot-hash-table routing. Also discover the
+   dynamic registration function by the `sys_0(0x700001, 0)` plus
+   `func_241(var2, var4)` pattern.
 3. **Per-unit semantic enrichment layer**:
    cross-reference callback/resource hashes against the unit's param bundle
    (`bulletparam`, `interactionid`, `chrsysparam`, etc.)

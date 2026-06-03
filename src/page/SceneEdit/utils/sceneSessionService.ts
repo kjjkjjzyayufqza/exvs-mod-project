@@ -275,11 +275,26 @@ export function sceneReplaceHkt(
 
 export interface HktCollisionMeshGeometry {
   /** Flattened [x, y, z, ...] collision-space vertex positions. */
-  positions: number[];
+  positions: Float32Array;
   /** Triangle list indices (length divisible by 3). */
-  indices: number[];
+  indices: Uint32Array;
   triangleCount: number;
   vertexCount: number;
+  renderTriangleCount: number;
+  mergedTriangleCount: number;
+}
+
+/**
+ * Light header returned by `scene_preview_hkt_collision_mesh_path`: collision stats plus
+ * the registry id of the packed geometry buffer (positions `f32` LE, then indices `u32`
+ * LE), fetched separately via `take_mesh_geometry`.
+ */
+interface HktCollisionMeshGeometryHeader {
+  binary: true;
+  geometryId: string;
+  vertexCount: number;
+  indexCount: number;
+  triangleCount: number;
   renderTriangleCount: number;
   mergedTriangleCount: number;
 }
@@ -288,17 +303,32 @@ export interface HktCollisionMeshGeometry {
  * Build the simplified collision mesh geometry for a freshly-selected DAE/FBX
  * (skin-bake → merge → simplify only, no Havok), for a live 3D collision
  * preview before the HKT is generated and applied.
+ *
+ * Geometry travels as a binary blob over the IPC side-channel (the same path the SSBH
+ * model loader uses) rather than a JSON number array: the command returns a light header
+ * and the packed buffer is fetched once via `take_mesh_geometry`, then sliced into
+ * typed-array views with no `JSON.parse` of float arrays.
  */
-export function scenePreviewHktCollisionMeshPath(
+export async function scenePreviewHktCollisionMeshPath(
   filePath: string,
   sourceName: string,
   config: ImportConfig,
 ): Promise<HktCollisionMeshGeometry> {
-  return invoke<HktCollisionMeshGeometry>("scene_preview_hkt_collision_mesh_path", {
-    filePath,
-    sourceName,
-    config,
+  const header = await invoke<HktCollisionMeshGeometryHeader>(
+    "scene_preview_hkt_collision_mesh_path",
+    { filePath, sourceName, config },
+  );
+  const buffer = await invoke<ArrayBuffer>("take_mesh_geometry", {
+    geometryId: header.geometryId,
   });
+  return {
+    positions: new Float32Array(buffer, 0, header.vertexCount * 3),
+    indices: new Uint32Array(buffer, header.vertexCount * 3 * 4, header.indexCount),
+    triangleCount: header.triangleCount,
+    vertexCount: header.vertexCount,
+    renderTriangleCount: header.renderTriangleCount,
+    mergedTriangleCount: header.mergedTriangleCount,
+  };
 }
 
 /**

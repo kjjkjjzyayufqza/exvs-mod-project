@@ -146,6 +146,51 @@ pub fn preview_hkt_collision_mesh_from_import_bytes(
     })
 }
 
+/// Light header for the binary-IPC collision preview: stats plus the registry id of the
+/// packed geometry buffer. Mirrors the SSBH mesh binary transfer so collision geometry
+/// never travels as a JSON number array (which would balloon ~6-10x for float arrays).
+/// The packed buffer is `positions` (`f32` LE) followed by `indices` (`u32` LE); the
+/// frontend fetches it via `take_mesh_geometry` and slices typed-array views straight out
+/// of the resulting `ArrayBuffer`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HktCollisionMeshGeometryHeader {
+    /// Always `true`; marks the binary side-channel path for the frontend.
+    pub binary: bool,
+    /// Registry key the frontend passes to `take_mesh_geometry` to fetch the packed buffer.
+    pub geometry_id: String,
+    pub vertex_count: usize,
+    pub index_count: usize,
+    pub triangle_count: usize,
+    pub render_triangle_count: usize,
+    pub merged_triangle_count: usize,
+}
+
+/// Packs a collision preview mesh into one little-endian byte buffer (`positions` as `f32`,
+/// then `indices` as `u32`), registers it in the shared geometry registry, and returns the
+/// light header carrying the registry id.
+pub fn pack_and_register_collision_mesh(
+    geo: &HktCollisionMeshGeometry,
+) -> HktCollisionMeshGeometryHeader {
+    let mut buf: Vec<u8> = Vec::with_capacity(geo.positions.len() * 4 + geo.indices.len() * 4);
+    for &p in &geo.positions {
+        buf.extend_from_slice(&p.to_le_bytes());
+    }
+    for &i in &geo.indices {
+        buf.extend_from_slice(&i.to_le_bytes());
+    }
+    let geometry_id = crate::ssbh_mesh_binary::register_geometry(buf);
+    HktCollisionMeshGeometryHeader {
+        binary: true,
+        geometry_id,
+        vertex_count: geo.vertex_count,
+        index_count: geo.indices.len(),
+        triangle_count: geo.triangle_count,
+        render_triangle_count: geo.render_triangle_count,
+        merged_triangle_count: geo.merged_triangle_count,
+    }
+}
+
 /// Generate binary HKT from DAE/FBX bytes (detected via `source_name` extension).
 pub fn generate_hkt_from_import_bytes(
     bytes: &[u8],
@@ -287,6 +332,43 @@ mod tests {
             vertex_count: 4_000,
         };
         validate_collision_mesh_for_hkt(&preview, true).expect("small simplified mesh");
+    }
+
+    #[test]
+    fn pack_and_register_collision_mesh_packs_positions_then_indices() {
+        let geo = HktCollisionMeshGeometry {
+            positions: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            indices: vec![0, 1, 2],
+            triangle_count: 1,
+            vertex_count: 2,
+            render_triangle_count: 4,
+            merged_triangle_count: 3,
+        };
+        let header = pack_and_register_collision_mesh(&geo);
+
+        assert!(header.binary);
+        assert!(!header.geometry_id.is_empty());
+        assert_eq!(header.vertex_count, 2);
+        assert_eq!(header.index_count, 3);
+        assert_eq!(header.triangle_count, 1);
+        assert_eq!(header.render_triangle_count, 4);
+        assert_eq!(header.merged_triangle_count, 3);
+
+        let buf = crate::ssbh_mesh_binary::take_geometry(&header.geometry_id)
+            .expect("registered geometry buffer");
+        // 6 positions (f32) + 3 indices (u32) = (6 + 3) * 4 = 36 bytes.
+        assert_eq!(buf.len(), 36);
+        let f0 = f32::from_le_bytes(buf[0..4].try_into().unwrap());
+        let f5 = f32::from_le_bytes(buf[20..24].try_into().unwrap());
+        assert_eq!(f0, 1.0);
+        assert_eq!(f5, 6.0);
+        // Indices follow at byte offset 24 (6 f32 * 4).
+        let i0 = u32::from_le_bytes(buf[24..28].try_into().unwrap());
+        let i2 = u32::from_le_bytes(buf[32..36].try_into().unwrap());
+        assert_eq!(i0, 0);
+        assert_eq!(i2, 2);
+        // Taken once → registry frees it.
+        assert!(crate::ssbh_mesh_binary::take_geometry(&header.geometry_id).is_none());
     }
 
     #[test]

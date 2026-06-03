@@ -294,53 +294,75 @@ pub async fn stage_stream_bundles(
         }
     }
 
-    // Phase 2: Sub-models parsed in parallel via rayon, results sent as they complete
+    // Phase 2: Sub-models parsed in parallel via rayon and forwarded to the webview as each
+    // one finishes — NOT collected into a Vec first. Collecting held every sub-model bundle
+    // (plus its registered geometry blob) in memory at once, which pushed peak memory toward
+    // the abort threshold on large stages. Streaming as produced bounds peak memory to
+    // roughly one bundle per rayon worker and lets sub-models render progressively. Order is
+    // completion order rather than manifest order, which is safe: each chunk carries its own
+    // `folder_name` + `object_index`, so the frontend resolves placement from the chunk
+    // itself, not arrival order.
     let manifest = skeleton.sub_model_manifest.clone();
     eprintln!(
-        "[stage_stream_bundles] Parsing {} sub-models with rayon",
+        "[stage_stream_bundles] Parsing {} sub-models with rayon (streaming as produced)",
         manifest.len(),
     );
 
+    let (tx, rx) = std::sync::mpsc::channel::<fhm2d_stage::StageStreamChunk>();
     let stage_root_for_rayon = stage_root.clone();
-    let results = tauri::async_runtime::spawn_blocking(move || {
+    // Producer: parse sub-models in parallel, sending each result down the channel as soon
+    // as it is ready. `for_each_with` hands every rayon worker its own `Sender` clone, so no
+    // shared `&Sender` crosses threads. The channel closes once all clones drop (parse done).
+    let producer = tauri::async_runtime::spawn_blocking(move || {
         use rayon::prelude::*;
-        manifest
-            .par_iter()
-            .map(|entry| {
-                let root = std::path::Path::new(&stage_root_for_rayon);
-                let mut warnings = Vec::new();
-                let bundle = fhm2d_stage::load_model_in_subfolder_pub(
-                    root,
-                    &entry.folder_name,
-                    &mut warnings,
-                );
-                (entry.folder_name.clone(), entry.object_index, bundle)
-            })
-            .collect::<Vec<_>>()
+        manifest.par_iter().for_each_with(tx, |tx, entry| {
+            let root = std::path::Path::new(&stage_root_for_rayon);
+            let mut warnings = Vec::new();
+            match fhm2d_stage::load_model_in_subfolder_pub(root, &entry.folder_name, &mut warnings)
+            {
+                Some(bundle) => {
+                    let _ = tx.send(fhm2d_stage::StageStreamChunk::SubModel {
+                        folder_name: entry.folder_name.clone(),
+                        object_index: entry.object_index,
+                        bundle,
+                    });
+                }
+                None => {
+                    let _ = tx.send(fhm2d_stage::StageStreamChunk::Error {
+                        message: format!("Failed to load sub-model '{}'", entry.folder_name),
+                        folder_name: Some(entry.folder_name.clone()),
+                    });
+                }
+            }
+        });
+    });
+
+    // Consumer: forward each chunk to the webview as it arrives, emitting a progress update
+    // after every successfully loaded sub-model. Runs on the blocking pool so the blocking
+    // `recv` loop never stalls the async runtime, and hands `on_chunk` back with the final
+    // loaded count.
+    let total_for_consumer = total;
+    let base_loaded = loaded;
+    let (on_chunk, sub_loaded) = tauri::async_runtime::spawn_blocking(move || {
+        let mut loaded = base_loaded;
+        while let Ok(chunk) = rx.recv() {
+            let is_sub_model = matches!(chunk, fhm2d_stage::StageStreamChunk::SubModel { .. });
+            let _ = on_chunk.send(chunk);
+            if is_sub_model {
+                loaded += 1;
+                let _ = on_chunk.send(fhm2d_stage::StageStreamChunk::Progress {
+                    loaded,
+                    total: total_for_consumer,
+                });
+            }
+        }
+        (on_chunk, loaded)
     })
     .await
     .map_err(|e| e.to_string())?;
 
-    // Send results in manifest order (deterministic) with progress updates
-    for (folder_name, object_index, result) in results {
-        match result {
-            Some(bundle) => {
-                loaded += 1;
-                let _ = on_chunk.send(fhm2d_stage::StageStreamChunk::SubModel {
-                    folder_name: folder_name.clone(),
-                    object_index,
-                    bundle,
-                });
-                let _ = on_chunk.send(fhm2d_stage::StageStreamChunk::Progress { loaded, total });
-            }
-            None => {
-                let _ = on_chunk.send(fhm2d_stage::StageStreamChunk::Error {
-                    message: format!("Failed to load sub-model '{folder_name}'"),
-                    folder_name: Some(folder_name),
-                });
-            }
-        }
-    }
+    producer.await.map_err(|e| e.to_string())?;
+    loaded = sub_loaded;
 
     let elapsed_ms = t.elapsed().as_millis() as u64;
     let _ = on_chunk.send(fhm2d_stage::StageStreamChunk::Complete {

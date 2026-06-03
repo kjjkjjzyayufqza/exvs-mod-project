@@ -77,5 +77,20 @@ Use a dynamic mapping/report contract, not a dictionary contract. Confirm phase 
 - [x] Extract `0.c` action slot table and selector table for `0x693F756D`.
 - [x] Extract `2.c` two-level action graph for `0x693F756D`.
 - [x] Check current Codex tool exposure for IDA MCP; no IDA tools/resources are visible in this session.
+- [x] Cross-scan local `2.c` action graphs under `E:\XB\解包\com\file`.
+- [x] Confirm the `0.c` action-slot table is stable across all checked `0.c` samples.
+- [x] Identify new `2.c` dynamic action-record registration from `0x700000`:
+      `0x700001` count -> `0x700000` field `0x2e` action hash ->
+      field `0xa` group resolver -> `func_241(actionHash, callback)`.
+- [x] Identify record reverse/phase tables:
+      `0x10002,0x1f` actionHash->recordIndex and
+      `0x10001,0x10/0x11/0x12` record phase callbacks from fields
+      `0x2/0x7c/0x7d`.
+- [x] Confirm raw resolver constants in `0x693F756D` decode with `+0x30`
+      to script function entry pointers.
 - [~] Research native source of `sys_41` / `0x700000` action records.
+- [ ] Use IDA to find the native loader/backing file for
+      `0x700000` / `0x700001` / `0x700002`.
+      Current blocker: IDA Pro MCP is reportedly connected, but no IDA tools are
+      exposed in this Codex session.
 - [ ] Propose naming-source approaches and get user approval before writing a design spec.
