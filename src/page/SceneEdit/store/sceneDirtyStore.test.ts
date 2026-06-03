@@ -138,4 +138,31 @@ describe("sceneDirtyStore", () => {
     s.markObjectDeleted("nonexistent");
     expect(useSceneDirtyStore.getState().getDeletedObjects()).toEqual(["nonexistent"]);
   });
+
+  it("markModelReplaced flags the folder and surfaces it via getReplacedModels", () => {
+    const s = useSceneDirtyStore.getState();
+    s.markModelReplaced("base");
+    const state = useSceneDirtyStore.getState();
+    expect(state.hasAnyChanges()).toBe(true);
+    expect(state.getReplacedModels()).toEqual(["base"]);
+  });
+
+  it("getReplacedModels returns each replaced folder", () => {
+    const s = useSceneDirtyStore.getState();
+    s.markModelReplaced("sky");
+    s.markModelReplaced("stage_floor");
+    expect(useSceneDirtyStore.getState().getReplacedModels().sort()).toEqual([
+      "sky",
+      "stage_floor",
+    ]);
+  });
+
+  it("reset clears replaced models", () => {
+    const s = useSceneDirtyStore.getState();
+    s.markModelReplaced("sky");
+    useSceneDirtyStore.getState().reset();
+    const state = useSceneDirtyStore.getState();
+    expect(state.getReplacedModels()).toEqual([]);
+    expect(state.hasAnyChanges()).toBe(false);
+  });
 });

@@ -31,6 +31,7 @@ const EMPTY_MODIFIED_FIELDS: ModifiedFields = {
 interface SceneDirtyState {
   objects: Record<string, ObjectDirtyEntry>;
   global: GlobalDirtyState;
+  replacedModels: Record<string, boolean>;
 }
 
 interface SceneDirtyActions {
@@ -39,6 +40,8 @@ interface SceneDirtyActions {
   markObjectModified: (folderName: string, field: keyof ModifiedFields) => void;
   markObjectDeleted: (folderName: string) => void;
   markGlobalDirty: (field: keyof GlobalDirtyState) => void;
+  markModelReplaced: (folderName: string) => void;
+  getReplacedModels: () => string[];
   getAddedObjects: () => string[];
   getModifiedObjects: () => string[];
   getDeletedObjects: () => string[];
@@ -52,10 +55,12 @@ export const useSceneDirtyStore = create<SceneDirtyStore>()(
   immer((set, get) => ({
     objects: {} as Record<string, ObjectDirtyEntry>,
     global: { graphicParams: false, placementOrder: false, textures: false },
+    replacedModels: {} as Record<string, boolean>,
 
     hasAnyChanges: () => {
       const state = get();
       if (Object.keys(state.objects).length > 0) return true;
+      if (Object.values(state.replacedModels).some(Boolean)) return true;
       return (
         state.global.graphicParams ||
         state.global.placementOrder ||
@@ -107,6 +112,17 @@ export const useSceneDirtyStore = create<SceneDirtyStore>()(
       });
     },
 
+    markModelReplaced: (folderName) => {
+      set((state) => {
+        state.replacedModels[folderName] = true;
+      });
+    },
+
+    getReplacedModels: () => {
+      const { replacedModels } = get();
+      return Object.keys(replacedModels).filter((name) => replacedModels[name]);
+    },
+
     getAddedObjects: () => {
       return Object.entries(get().objects)
         .filter(([, e]) => e.changeType === "added")
@@ -129,6 +145,7 @@ export const useSceneDirtyStore = create<SceneDirtyStore>()(
       set((state) => {
         state.objects = {};
         state.global = { graphicParams: false, placementOrder: false, textures: false };
+        state.replacedModels = {} as Record<string, boolean>;
       });
     },
 
