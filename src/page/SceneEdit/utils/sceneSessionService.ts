@@ -335,6 +335,36 @@ export async function scenePreviewHktCollisionMeshPath(
  * Generate a mesh-accurate HKT from a newly-selected DAE/FBX and apply it onto
  * the target import — the "generate HKT from a new model" replace flow.
  */
+export interface GeneratedHktFromDaePayload {
+  hktBytes: number[];
+  triangleCount: number;
+}
+
+/** Generate HKT bytes from a model path without applying to the session. */
+export function sceneGenerateReplacementHktFromDaePath(
+  filePath: string,
+  sourceName: string,
+  config: ImportConfig,
+): Promise<GeneratedHktFromDaePayload> {
+  return invoke<GeneratedHktFromDaePayload>("scene_generate_replacement_hkt_from_dae_path", {
+    filePath,
+    sourceName,
+    config,
+  });
+}
+
+/** Apply pre-generated HKT bytes to a session import (no regeneration). */
+export function sceneApplyReplacementHktBytes(
+  sessionId: string,
+  importId: string,
+  hktBytes: number[],
+  displayName: string,
+): Promise<boolean> {
+  return invoke<boolean>("scene_apply_replacement_hkt_bytes", {
+    options: { sessionId, importId, hktBytes, displayName },
+  });
+}
+
 export function sceneReplaceHktFromDaePath(
   sessionId: string,
   importId: string,

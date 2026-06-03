@@ -34,7 +34,10 @@ import {
   resolveSessionImportConfigForSave,
   retargetAndReconvertSessionImport,
 } from "./sceneDaeSessionImport";
-import type { ModelReplacement } from "./sceneModelReplace";
+import {
+  buildLegacySlotSubfolderDeletePath,
+  type ModelReplacement,
+} from "./sceneModelReplace";
 import { serializeDaeToBytes } from "./daeExportImport";
 import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
 import { resolveOrCreateInfoFolder } from "./sceneInfoFolder";
@@ -253,11 +256,10 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
     emitStep(onProgress, "delete", "Checking for deletions...", "done", "None");
   }
 
-  // Phase 1b: Replace models (deferred commit). For each replaced folder, wipe the
-  // existing folder, then re-target the session import to that folder name so
-  // collect_save_artifacts writes it to {folderName}/0/... during Phase 7's
-  // sceneSaveAsFolder. Replacing a same-named folder changes no model-folder count,
-  // so object indices stay stable.
+  // Phase 1b: Replace models (deferred commit). Re-target each session import to the
+  // slot folder name so collect_save_artifacts writes to {folderName}/0/... during
+  // Phase 7's sceneSaveAsFolder. Do not call sceneForgetModel here — it drops the
+  // pending import keyed by folder name before we can reconvert it.
   const replacements = modelReplacements ?? [];
   if (replacements.length > 0) {
     emitStep(onProgress, "replace", `Replacing models (0/${replacements.length})...`, "running");
@@ -286,7 +288,6 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
 
     let done = 0;
     for (const replacement of replacements) {
-      await executeDelete(stageRoot, [replacement.folderName]);
       const importConfig = await resolveSessionImportConfigForSave(
         sceneSessionId,
         replacement.sessionImportId,
@@ -452,6 +453,17 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
 
     if (sceneSessionId) {
       await sceneSaveAsFolder(sceneSessionId, stageRoot);
+    }
+
+    for (const replacement of replacements) {
+      if (replacement.legacySlotSubfolder) {
+        await executeDelete(stageRoot, [
+          buildLegacySlotSubfolderDeletePath(
+            replacement.folderName,
+            replacement.legacySlotSubfolder,
+          ),
+        ]);
+      }
     }
 
     emitStep(onProgress, "csv", "Writing CSV files...", "done");

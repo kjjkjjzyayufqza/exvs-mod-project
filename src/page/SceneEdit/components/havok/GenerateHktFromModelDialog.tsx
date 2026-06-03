@@ -21,12 +21,24 @@ import {
   formatTriangleCount,
 } from "../../utils/hktSimplifyUtils";
 import {
+  sceneApplyReplacementHktBytes,
+  sceneGenerateReplacementHktFromDaePath,
   scenePreviewHktCollisionMeshPath,
   sceneReplaceHktFromDaePath,
   type HktCollisionMeshGeometry,
   type ImportConfig,
 } from "../../utils/sceneSessionService";
 import { HktCollisionPreviewCanvas } from "./HktCollisionPreviewCanvas";
+import {
+  getStoredDialogDefaultPath,
+  rememberStoredDialogFilePath,
+} from "@/utils/dialogDefaultPathStore";
+import { SCENE_GENERATE_HKT_FROM_MODEL_DIALOG_PATH_KEY } from "../../utils/sceneEditorSettings";
+import {
+  buildHktFromModelConfigKey,
+  isCachedHktFromModelValid,
+  type CachedHktFromModelGeneration,
+} from "./generateHktFromModelCache";
 
 interface GenerateHktFromModelDialogProps {
   open: boolean;
@@ -54,7 +66,9 @@ export function GenerateHktFromModelDialog({
   const [sourcePath, setSourcePath] = useState<string | null>(null);
   const [simplify, setSimplify] = useState<HktSimplifyConfig>({ ...DEFAULT_HKT_SIMPLIFY });
   const [meshPreview, setMeshPreview] = useState<HktCollisionMeshGeometry | null>(null);
+  const [cachedHkt, setCachedHkt] = useState<CachedHktFromModelGeneration | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [hktGenerating, setHktGenerating] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
 
@@ -71,38 +85,83 @@ export function GenerateHktFromModelDialog({
     [simplify],
   );
 
-  // Reset transient state every time the window opens for a fresh target.
+  const previewConfigKey = useMemo(
+    () => buildHktFromModelConfigKey(importConfig, simplify),
+    [importConfig, simplify],
+  );
+
+  const hasValidCachedHkt = isCachedHktFromModelValid(cachedHkt, sourcePath, previewConfigKey);
+
+  // Reset preview state when the window opens; restore last model path from config.
   useEffect(() => {
     if (!isOpen) return;
-    setSourcePath(null);
+
+    let cancelled = false;
+    void (async () => {
+      const lastSourcePath = await getStoredDialogDefaultPath(
+        SCENE_GENERATE_HKT_FROM_MODEL_DIALOG_PATH_KEY,
+      );
+      if (!cancelled) {
+        setSourcePath(lastSourcePath ?? null);
+      }
+    })();
+
     setSimplify({ ...DEFAULT_HKT_SIMPLIFY });
     setMeshPreview(null);
+    setCachedHkt(null);
     setPreviewError(null);
     setPreviewLoading(false);
+    setHktGenerating(false);
     setApplying(false);
+
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen]);
 
-  const handleSimplifyChange = useCallback((next: HktSimplifyConfig) => {
-    setSimplify(next);
+  const invalidatePreviewArtifacts = useCallback(() => {
     setMeshPreview(null);
+    setCachedHkt(null);
     setPreviewError(null);
   }, []);
 
+  const handleSimplifyChange = useCallback(
+    (next: HktSimplifyConfig) => {
+      setSimplify(next);
+      invalidatePreviewArtifacts();
+    },
+    [invalidatePreviewArtifacts],
+  );
+
   const runPreview = useCallback(async () => {
     if (!sourcePath || !sourceName) return;
+    const configKey = buildHktFromModelConfigKey(importConfig, simplify);
     setPreviewLoading(true);
+    setHktGenerating(true);
     setPreviewError(null);
     setMeshPreview(null);
+    setCachedHkt(null);
     try {
-      const result = await scenePreviewHktCollisionMeshPath(sourcePath, sourceName, importConfig);
-      setMeshPreview(result);
+      const [meshResult, hktPayload] = await Promise.all([
+        scenePreviewHktCollisionMeshPath(sourcePath, sourceName, importConfig),
+        sceneGenerateReplacementHktFromDaePath(sourcePath, sourceName, importConfig),
+      ]);
+      setMeshPreview(meshResult);
+      setCachedHkt({
+        sourcePath,
+        configKey,
+        hktBytes: hktPayload.hktBytes,
+        triangleCount: hktPayload.triangleCount,
+      });
     } catch (err) {
       setMeshPreview(null);
+      setCachedHkt(null);
       setPreviewError(err instanceof Error ? err.message : String(err));
     } finally {
       setPreviewLoading(false);
+      setHktGenerating(false);
     }
-  }, [sourcePath, sourceName, importConfig]);
+  }, [sourcePath, sourceName, importConfig, simplify]);
 
   const pickFile = async () => {
     try {
@@ -110,32 +169,52 @@ export function GenerateHktFromModelDialog({
         title: "Select model file for HKT collision",
         filters: [{ name: "Model", extensions: ["dae", "fbx"] }],
         multiple: false,
+        defaultPath: await getStoredDialogDefaultPath(SCENE_GENERATE_HKT_FROM_MODEL_DIALOG_PATH_KEY),
       });
       const next = typeof selected === "string" ? selected : Array.isArray(selected) ? selected[0] : null;
       if (!next) return;
+      await rememberStoredDialogFilePath(SCENE_GENERATE_HKT_FROM_MODEL_DIALOG_PATH_KEY, next);
       setSourcePath(next);
-      setMeshPreview(null);
-      setPreviewError(null);
+      invalidatePreviewArtifacts();
     } catch (err) {
       toast.error("Failed to open file picker", { description: String(err) });
     }
   };
 
   const canApply =
-    Boolean(sessionId && targetImportId && sourcePath && sourceName && meshPreview) &&
+    Boolean(sessionId && targetImportId && sourcePath && sourceName && meshPreview && hasValidCachedHkt) &&
     !previewLoading &&
+    !hktGenerating &&
     !applying;
 
   const handleApply = async () => {
     if (!sessionId || !targetImportId || !sourcePath || !sourceName) return;
     setApplying(true);
     try {
-      toast.loading(`Generating HKT from ${sourceName}...`, { id: "hkt-from-model" });
-      await sceneReplaceHktFromDaePath(sessionId, targetImportId, sourcePath, sourceName, importConfig);
+      if (hasValidCachedHkt && cachedHkt) {
+        toast.loading(`Applying HKT from ${sourceName}...`, { id: "hkt-from-model" });
+        await sceneApplyReplacementHktBytes(
+          sessionId,
+          targetImportId,
+          cachedHkt.hktBytes,
+          sourceName,
+        );
+      } else {
+        toast.loading(`Generating HKT from ${sourceName}...`, { id: "hkt-from-model" });
+        await sceneReplaceHktFromDaePath(
+          sessionId,
+          targetImportId,
+          sourcePath,
+          sourceName,
+          importConfig,
+        );
+      }
       await onReplaced(targetImportId);
       toast.success(`HKT replaced for ${targetName}`, {
         id: "hkt-from-model",
-        description: `Rebuilt collision from ${sourceName}`,
+        description: hasValidCachedHkt
+          ? `Applied preview collision from ${sourceName}`
+          : `Rebuilt collision from ${sourceName}`,
       });
       onOpenChange(false);
     } catch (err) {
@@ -148,6 +227,12 @@ export function GenerateHktFromModelDialog({
     }
   };
 
+  const applyButtonLabel = applying
+    ? "Applying HKT..."
+    : hasValidCachedHkt
+      ? "Replace HKT"
+      : "Generate & Replace HKT";
+
   return (
     <Dialog open={isOpen} onOpenChange={(next) => (!applying ? onOpenChange(next) : undefined)}>
       <DialogContent className="flex max-h-[min(90dvh,900px)] max-w-5xl flex-col gap-0 overflow-hidden p-0">
@@ -159,6 +244,7 @@ export function GenerateHktFromModelDialog({
           <DialogDescription className="text-xs">
             Read a fresh DAE or FBX, rebuild a Havok collision shape, and replace the collision for{" "}
             <span className="font-medium text-foreground">{targetName}</span>.
+            Preview builds the final HKT once; Replace reuses it unless you change the source or simplify settings.
           </DialogDescription>
         </DialogHeader>
 
@@ -213,6 +299,19 @@ export function GenerateHktFromModelDialog({
                   compact
                 />
               ) : null}
+
+              {hasValidCachedHkt ? (
+                <p className="text-[11px] text-emerald-400/90">
+                  Preview HKT ready ({formatTriangleCount(cachedHkt.triangleCount)} collision triangles). Replace
+                  will apply without regenerating.
+                </p>
+              ) : meshPreview && (previewLoading || hktGenerating) ? (
+                <p className="text-[11px] text-muted-foreground">Building final HKT for apply...</p>
+              ) : meshPreview && !hasValidCachedHkt ? (
+                <p className="text-[11px] text-amber-400/90">
+                  Settings changed since preview. Run Preview again before Replace.
+                </p>
+              ) : null}
             </div>
           </ScrollArea>
 
@@ -227,7 +326,7 @@ export function GenerateHktFromModelDialog({
                   {previewError
                     ? "Could not build a collision preview"
                     : sourcePath
-                      ? "Click Preview to build the collision mesh"
+                      ? "Click Preview to build the collision mesh and HKT"
                       : "Select a model, then preview its collision"}
                 </p>
                 {previewError ? (
@@ -299,7 +398,7 @@ export function GenerateHktFromModelDialog({
         <DialogFooter className="shrink-0 flex-wrap items-center gap-2 border-t border-border/60 px-5 py-3 sm:justify-between">
           <p className="flex min-w-0 flex-1 basis-full items-start gap-1.5 text-pretty text-[11px] leading-snug text-muted-foreground break-words sm:basis-auto">
             <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>Generating the final HKT needs Havok Content Tools installed.</span>
+            <span>Preview runs Havok once. Replace reuses that HKT unless settings change.</span>
           </p>
           <div className="flex shrink-0 items-center gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={applying}>
@@ -315,7 +414,7 @@ export function GenerateHktFromModelDialog({
               ) : (
                 <Replace className="mr-2 h-4 w-4" />
               )}
-              {applying ? "Generating HKT..." : "Generate & Replace HKT"}
+              {applyButtonLabel}
             </Button>
           </div>
         </DialogFooter>

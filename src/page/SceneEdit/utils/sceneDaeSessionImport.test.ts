@@ -5,6 +5,12 @@ vi.mock("./sceneSessionService", () => ({
   sceneConfigureImport: vi.fn(),
   sceneExecuteImport: vi.fn(),
   sceneGetImportConfig: vi.fn(),
+  sceneConvertStaticMeshToStageFiles: vi.fn(),
+  sceneConvertStaticMeshToStageFilesWithProgress: vi.fn(),
+}));
+
+vi.mock("./sceneDeleteConfirm", () => ({
+  executeDelete: vi.fn(),
 }));
 
 import { createDefaultDaeImportConfig } from "../components/dae-import/daeImportDefaults";
@@ -18,19 +24,27 @@ import {
   resolveSessionImportConfigForSave,
   retargetAndReconvertSessionImport,
   retargetSessionImportFolderName,
+  writeModelReplacementToDisk,
 } from "./sceneDaeSessionImport";
+import { executeDelete } from "./sceneDeleteConfirm";
 import {
   sceneConfigureImport,
+  sceneConvertStaticMeshToStageFilesWithProgress,
   sceneExecuteImport,
   sceneGetImportConfig,
   sceneImportDaeFromPath,
   type ImportConfig,
 } from "./sceneSessionService";
 
+const mockExecuteDelete = vi.mocked(executeDelete);
+
 const mockSceneImportDaeFromPath = vi.mocked(sceneImportDaeFromPath);
 const mockSceneConfigureImport = vi.mocked(sceneConfigureImport);
 const mockSceneExecuteImport = vi.mocked(sceneExecuteImport);
 const mockSceneGetImportConfig = vi.mocked(sceneGetImportConfig);
+const mockSceneConvertStaticMeshToStageFilesWithProgress = vi.mocked(
+  sceneConvertStaticMeshToStageFilesWithProgress,
+);
 
 describe("buildSsbhSessionImportConfig", () => {
   it("maps session store settings into a memory-session import config", () => {
@@ -269,6 +283,76 @@ describe("importDaeThroughSceneSession", () => {
     );
     expect(mockSceneExecuteImport).toHaveBeenCalledWith("session-1", "import-1");
     expect(result.ssbhGenerated).toBe(true);
+  });
+});
+
+describe("writeModelReplacementToDisk", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockExecuteDelete.mockResolvedValue(undefined);
+    mockSceneConvertStaticMeshToStageFilesWithProgress.mockResolvedValue({
+      filesWritten: ["base/0/base.numdlb"],
+      modelDir: "E:/stage/0/0/base",
+      warnings: [],
+    });
+  });
+
+  it("writes converted SSBH files under stageRoot without pre-deleting the folder", async () => {
+    const importConfig = buildSsbhSessionImportConfig(
+      createDefaultDaeImportConfig("base"),
+      { outputBaseName: "", scaleFactorText: "1", upAxis: "y_up", flipUv: false, writeNumdlb: true, writeNumshb: true, writeNusktb: true, writeNumatb: true, writeMayaProfile: false, mayaFile: null, nustFile: null, numdlbEntries: [] },
+      "base",
+    );
+
+    const result = await writeModelReplacementToDisk({
+      stageRoot: "E:/stage/0/0",
+      filePath: "E:/models/base.dae",
+      folderName: "base",
+      importConfig,
+      onProgress: vi.fn(),
+    });
+
+    expect(mockSceneConvertStaticMeshToStageFilesWithProgress).toHaveBeenCalledWith(
+      {
+        sourcePath: "E:/models/base.dae",
+        outputDir: "E:/stage/0/0",
+        config: importConfig,
+      },
+      expect.any(Function),
+    );
+    expect(result.filesWritten).toHaveLength(1);
+    expect(mockExecuteDelete).not.toHaveBeenCalled();
+  });
+
+  it("removes only the legacy named subfolder after a successful write", async () => {
+    const importConfig = buildSsbhSessionImportConfig(
+      createDefaultDaeImportConfig("base"),
+      {
+        outputBaseName: "",
+        scaleFactorText: "1",
+        upAxis: "y_up",
+        flipUv: false,
+        writeNumdlb: true,
+        writeNumshb: true,
+        writeNusktb: true,
+        writeNumatb: true,
+        writeMayaProfile: false,
+        mayaFile: null,
+        nustFile: null,
+        numdlbEntries: [],
+      },
+      "base",
+    );
+
+    await writeModelReplacementToDisk({
+      stageRoot: "E:/stage/0/0",
+      filePath: "E:/models/base.dae",
+      folderName: "base",
+      importConfig,
+      legacySlotSubfolder: "001stage001_base",
+    });
+
+    expect(mockExecuteDelete).toHaveBeenCalledWith("E:/stage/0/0", ["base/001stage001_base"]);
   });
 });
 

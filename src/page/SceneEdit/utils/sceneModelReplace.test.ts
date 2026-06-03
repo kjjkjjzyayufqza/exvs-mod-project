@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildLegacySlotSubfolderDeletePath,
   canReplaceModelNode,
+  resolveLegacyModelSubfolderUnderSlot,
   resolveModelReplaceTarget,
 } from "./sceneModelReplace";
 
@@ -41,6 +43,35 @@ describe("sceneModelReplace", () => {
     });
     it("returns null for an unknown node id", () => {
       expect(resolveModelReplaceTarget("ghost", subModels)).toBeNull();
+    });
+  });
+
+  describe("resolveLegacyModelSubfolderUnderSlot", () => {
+    it("returns the named subfolder for legacy base layouts", () => {
+      const bundle = {
+        modlPath:
+          "E:/XB/com/test/0x16F73C97/0/0/base/001stage001_base/0/001stage001_base.numdlb",
+      };
+      expect(resolveLegacyModelSubfolderUnderSlot(bundle, "base")).toBe("001stage001_base");
+    });
+
+    it("returns null when the model already uses slot/0 layout", () => {
+      const bundle = {
+        modlPath: "E:/stage/0/0/base/0/base.numdlb",
+      };
+      expect(resolveLegacyModelSubfolderUnderSlot(bundle, "base")).toBeNull();
+    });
+
+    it("returns null when modlPath is missing", () => {
+      expect(resolveLegacyModelSubfolderUnderSlot(null, "base")).toBeNull();
+    });
+  });
+
+  describe("buildLegacySlotSubfolderDeletePath", () => {
+    it("joins slot folder and legacy subfolder for executeDelete", () => {
+      expect(buildLegacySlotSubfolderDeletePath("base", "001stage001_base")).toBe(
+        "base/001stage001_base",
+      );
     });
   });
 });

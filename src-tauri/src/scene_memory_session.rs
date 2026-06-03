@@ -394,6 +394,71 @@ impl SceneMemorySession {
         Ok(())
     }
 
+    pub fn ensure_base_bundle(&mut self) -> &mut StageBundleMemory {
+        if self.base_bundle.is_none() {
+            self.base_bundle = Some(StageBundleMemory {
+                root_files: HashMap::new(),
+                sub_model_files: HashMap::new(),
+            });
+        }
+        self.base_bundle.as_mut().unwrap()
+    }
+
+    fn remove_hkt_files_in_folder(files: &mut HashMap<String, Vec<u8>>) {
+        let old_hkt_keys: Vec<String> = files
+            .keys()
+            .filter(|k| k.to_ascii_lowercase().ends_with(".hkt"))
+            .cloned()
+            .collect();
+        for key in old_hkt_keys {
+            files.remove(&key);
+        }
+    }
+
+    /// Store replacement HKT for an on-disk stage model folder in memory only.
+    /// `target_id` is typically `folder/map_hit.hkt` (forward or backslash separators).
+    pub fn store_stage_folder_hkt_bytes(
+        &mut self,
+        target_id: &str,
+        hkt_bytes: Vec<u8>,
+    ) -> Result<(), String> {
+        let normalized = target_id.replace('\\', "/");
+        let parts: Vec<&str> = normalized.split('/').filter(|part| !part.is_empty()).collect();
+        let bundle = self.ensure_base_bundle();
+
+        match parts.as_slice() {
+            [folder, file] if file.to_ascii_lowercase().ends_with(".hkt") => {
+                let files = bundle
+                    .sub_model_files
+                    .entry((*folder).to_string())
+                    .or_default();
+                Self::remove_hkt_files_in_folder(files);
+                files.insert((*file).to_string(), hkt_bytes);
+            }
+            [file] if file.to_ascii_lowercase().ends_with(".hkt") => {
+                bundle
+                    .root_files
+                    .insert((*file).to_string(), hkt_bytes);
+            }
+            [folder] => {
+                let files = bundle
+                    .sub_model_files
+                    .entry((*folder).to_string())
+                    .or_default();
+                Self::remove_hkt_files_in_folder(files);
+                files.insert("map_hit.hkt".to_string(), hkt_bytes);
+            }
+            _ => {
+                return Err(format!(
+                    "Invalid stage HKT target id '{target_id}' (expected folder/map_hit.hkt)"
+                ));
+            }
+        }
+
+        self.dirty = true;
+        Ok(())
+    }
+
     pub fn import_has_ssbh_artifacts(import: &PendingImport) -> bool {
         import.ssbh_artifacts.is_some() || import.ssbh_artifact_paths.is_some()
     }
@@ -848,6 +913,21 @@ mod tests {
         s.store_hkt_bytes(&id, vec![0x48, 0x4B]).unwrap();
         let import = s.find_import(&id).unwrap();
         assert!(import.hkt_bytes.is_some());
+    }
+
+    #[test]
+    fn store_stage_folder_hkt_bytes_collects_on_save() {
+        let mut s = SceneMemorySession::new(
+            "sid".into(),
+            SceneSource::Folder {
+                path: "E:/stage".into(),
+            },
+        );
+        s.store_stage_folder_hkt_bytes("prop01/map_hit.hkt", vec![9, 9]).unwrap();
+        let artifacts = s.collect_save_artifacts();
+        assert!(artifacts.iter().any(|artifact| {
+            artifact.relative_path == "prop01/map_hit.hkt" && artifact.data == vec![9, 9]
+        }));
     }
 
     #[test]

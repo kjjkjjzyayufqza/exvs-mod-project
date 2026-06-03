@@ -175,6 +175,7 @@ export function HavokCollisionEditorPanel({
         sourceName={sourceName}
         sessionId={sessionId}
         sessionImportId={sessionImportId}
+        autoPreview={false}
         compact
       />
 

@@ -576,3 +576,527 @@ But it should now be refined to:
    final human-readable weapon names in-app
 5. Keep a visible "unresolved action hash" report. The correct long-term research question remains:
    where, if anywhere, EXVS records the original action hash names.
+
+## 2026-06-03 correction: new action records are in `chrsysparam.csyspm`
+
+The concrete sample from the user is unit `59001001`:
+
+```json
+{
+  "id": 59001001,
+  "Param": 952389493,
+  "Msc": 1765766509
+}
+```
+
+Hex mapping:
+
+- `59001001` -> `0x038448A9`
+- `Param 952389493` -> `0x38C44F75`
+- `Msc 1765766509` -> `0x693F756D`
+
+This pairs the MSC scripts with the param bundle:
+
+```text
+Msc   -> E:\XB\解包\com\file\0x693F756D\
+Param -> E:\XB\解包\com\file\0x38C44F75\
+```
+
+The file-side backing source for `sys_0(0x700000, ...)` is:
+
+```text
+E:\XB\解包\com\file\0x38C44F75\chrsysparam.csyspm
+```
+
+For this sample:
+
+- file magic is `0xB4ACACAF`
+- version/type is `0x00010000`
+- header id is `0x038448A9`
+- table0 offset is `0x1C`
+- table0 marker is `0xA8BBBAB9`
+- table0 shape is `55 x 128` u32 values
+- table1 offset is `0x6E2C`
+- table1 marker is `0xA8BAA9BA`
+- table1 shape is `1 x 1`
+
+This matches the native IDA finding:
+
+- `0x700000` reads from `env[11]`
+- `env[11]` is initialized from the runtime object field populated by init
+  input `a2 + 168`
+- `a2 + 168` is validated as magic `0xB4ACACAF` and version `0x10000`
+- the native reader treats `+0x14/+0x18` as subtable offsets and reads a
+  row/column u32 matrix
+
+The existing repo parser in `src-tauri/src/format/chrsysparam.rs` should not be
+used as semantic truth for this feature yet. It currently treats `0x10` as a
+flat count of 20-byte entries. In the real large table, `0x10 == 2` means there
+are two subtables, and table0 is the action matrix.
+
+### Correct auto-rename source chain
+
+The new chain is now:
+
+```text
+resource list
+  -> Param hash
+  -> chrsysparam.csyspm
+  -> table0 action matrix row
+  -> field 0x2e action hash
+  -> field 0x0a group key
+  -> Msc/2.c group resolver, e.g. func_873(group)
+  -> func_241(actionHash, callback)
+```
+
+`Msc/0.c` supplies the gameplay category layer:
+
+```c
+var1 = sys_0(0x700000, 0, recordIndex, 0x3) % 0x64;
+var2 = sys_0(0x700000, 0, recordIndex, 0x4);
+```
+
+So labels such as Shoot/射击, Melee/格斗, Sub/副射, Special Shoot/特射, and
+Special Melee/特格 should be derived from `0.c func_144()` plus
+`chrsysparam` fields `0x03/0x04`. They must not come from a user-maintained
+dictionary.
+
+The next analysis target is field semantics for the `chrsysparam` action
+matrix, especially:
+
+- `0x03`: base category/type
+- `0x04`: input/category refinement mask
+- `0x0a`: group key into the local `2.c` resolver
+- `0x2e`: action hash
+- `0x02`, `0x7c`, `0x7d`: phase callback keys
+- `0x1c` through `0x22` and `0x6e`: route/condition fields still requiring
+  script usage analysis
+
+## 2026-06-03 row-level mapping for `59001001`
+
+This section records the current dynamic mapping evidence for the user's
+sample. It is not an action-hash dictionary. The unit-specific source is still:
+
+```text
+Msc   -> E:\XB\解包\com\file\0x693F756D\
+Param -> E:\XB\解包\com\file\0x38C44F75\
+```
+
+### `func_873(group)` callback resolver
+
+`2.c` registers imported action records with:
+
+```c
+var0 = sys_0(0x700001, 0);
+var1 = 1;
+while (var1 < var0) {
+    var2 = sys_0(0x700000, 0, var1, 0x2e);
+    var3 = sys_0(0x700000, 0, var1, 0xa);
+    var4 = func_873(var3);
+    func_241(var2, var4);
+    var1++;
+}
+```
+
+For `0x693F756D/2.c`, the resolver currently maps:
+
+| group | resolver return | `+0x30` function |
+|---:|---:|---|
+| `0x03` | `0x3B343` | `func_950` |
+| `0x0C` | `0x39689` | `func_924` |
+| `0x0D` | `0x3A9E1` | `func_942` |
+| `0x0F` | `0x3AEEF` | `func_946` |
+| `0x10` | `0x3BBFE` | `func_956` |
+| `0x13` | `0x3BBFE` | `func_956` |
+| `0x1F` | `0x388B1` | `func_916` |
+| `0x25` | `0x38BD3` | `func_919` |
+| `0x26` | `0x38BD3` | `func_919` |
+
+Groups `0x27`, `0x28`, and `0x29` appear in the matrix but are not handled by
+this resolver. `func_873()` returns `0` for them, so an auto-renamer must not
+invent callback names for those groups. They may still have phase callback
+records through fields `0x02/0x7C/0x7D`.
+
+### `func_144(row)` category derivation
+
+`0.c` derives a runtime category from fields `0x03/0x04`:
+
+```text
+derived = field_0x03 % 0x64
+if derived == 1:
+  field_0x04 == 0x20 -> 4
+  field_0x04 == 0x10 -> 3
+  field_0x04 == 0x08 -> 5
+  field_0x04 == 0x04 -> 2
+  field_0x04 == 0x0C -> 2
+  field_0x04 == 0x30 -> 4
+  field_0x04 == 0x3C -> 2
+```
+
+The old fixed gameplay words, such as Shoot/射击, Melee/格斗, Sub/副射,
+Special Shoot/特射, and Special Melee/特格, should be treated as a small
+category vocabulary after this dynamic category is derived. They are not an
+`action_hash -> name` dictionary. The exact numeric category-to-word alignment
+still needs one more verification pass against `sys_41` input selection or
+runtime traces before the tool should claim high confidence labels.
+
+Current core rows where `field_0x03 == 1`:
+
+| row | action hash | field `0x04` | derived category | group | callback |
+|---:|---|---:|---:|---:|---|
+| 20 | `0x178D1109` | `0x00` | `1` | `0x0C` | `func_924` |
+| 25 | `0x84BD2B08` | `0x04` | `2` | `0x1F` | `func_916` |
+| 27 | `0x0E962048` | `0x30` | `4` | `0x0C` | `func_924` |
+| 32 | `0x58CC87CE` | `0x08` | `5` | `0x0D` | `func_942` |
+| 38 | `0x446C1D89` | `0x04` | `2` | `0x0C` | `func_924` |
+
+No row in this sample currently produces derived category `3` through
+`field_0x04 == 0x10`.
+
+### Phase callbacks from `func_975`
+
+`2.c` also writes three per-record phase callback slots:
+
+```c
+sys_1(0x10001, 0x10, row, func_975(func_875(row, 0x2)));
+sys_1(0x10001, 0x11, row, func_975(func_875(row, 0x7c)));
+sys_1(0x10001, 0x12, row, func_975(func_875(row, 0x7d)));
+```
+
+`func_975` currently contains 162 hash-to-function cases. For this sample,
+every nonzero `0x02/0x7C/0x7D` field in the action matrix resolves to a local
+script function. This gives the renamer a second dynamic naming layer:
+
+```text
+action row -> phase0/phase1/phase2 hash -> func_975 -> phase callback function
+```
+
+Example core rows:
+
+| row | action hash | action callback | phase0 `0x02` | phase1 `0x7C` | phase2 `0x7D` |
+|---:|---|---|---|---|---|
+| 20 | `0x178D1109` | `func_924` | `func_1019` | `func_1018` | `func_1020` |
+| 25 | `0x84BD2B08` | `func_916` | `func_1034` | `func_1033` | `func_1035` |
+| 27 | `0x0E962048` | `func_924` | `func_1040` | `func_1039` | `func_1041` |
+| 32 | `0x58CC87CE` | `func_942` | `func_1055` | `func_1054` | `func_1056` |
+| 38 | `0x446C1D89` | `func_924` | `func_1073` | `func_1072` | `func_1074` |
+
+Rows with `group 0x25/0x26` may have no phase callbacks in this table; their
+fields are zero.
+
+### Practical rename contract
+
+The next implementation should build an evidence object per action row:
+
+```text
+unit id
+msc hash
+param hash
+row index
+action hash from field 0x2e
+derived category from fields 0x03/0x04
+group key from field 0x0a
+action callback from 2.c resolver
+phase callbacks from fields 0x02/0x7c/0x7d via func_975
+source paths and confidence flags
+```
+
+Suggested naming behavior:
+
+1. Prefer category-derived names only after numeric category labels are
+   verified for the script family.
+2. Until then, use deterministic evidence names such as
+   `ACTION_CAT_02_ROW_25`, `ACTION_GROUP_1F_ROW_25`, or
+   `ACTION_ROW_25_FUNC_916`.
+3. Rename phase callbacks as children of their row, for example
+   `ACTION_ROW_25_PHASE_0`, `ACTION_ROW_25_PHASE_1`,
+   `ACTION_ROW_25_PHASE_2`, until phase semantics are known.
+4. Keep unresolved groups visible. Do not hide them behind guessed names.
+5. Keep the action hash as evidence or collision suffix, not as the primary
+   source of meaning.
+
+## Old EXVS1-style in-MSC B4AC comparison
+
+User-provided comparison file:
+
+```text
+G:\1. Gundam - 1011.c
+```
+
+The file is valuable because it shows the same action-record concept before it
+was externalized into `chrsysparam.csyspm`. In this older script, the action
+matrix is embedded in MSC code:
+
+```c
+sys_74(0);
+add_B4AC();       // generated from MBON 011.bin, according to file comments
+sys_74(0x2);
+func_764();
+```
+
+`add_B4AC()` writes records directly with:
+
+```c
+sys_2D(0x3, row, field, value);
+```
+
+and the script later reads logical action dataset `n` with:
+
+```c
+sys_2C(0x3, 0x11 + n - 1, field);
+```
+
+This is functionally the same role as the newer external table access:
+
+```c
+sys_0(0x700000, 0, row, field);
+```
+
+The old file comments explicitly state that `sys_0(0x30013, 0, row, field)`
+is the newer substitute for this `sys_2C(0x3, 0x11 + row - 1, field)` read.
+
+### Storage and access equivalence
+
+| Concept | Old in-MSC file | New `59001001` sample |
+|---|---|---|
+| Storage | `add_B4AC()` emits `sys_2D(0x3,row,field,value)` | `Param/chrsysparam.csyspm` table0 |
+| Main read | `sys_2C(0x3, 0x11 + idx - 1, field)` / `func_796(idx,field)` | `sys_0(0x700000,0,row,field)` / `func_875(row,field)` |
+| Record count | hardcoded `0x1E`, comment says MBON `011.bin` offset `0x20` | `sys_0(0x700001,0)` |
+| Selection | `sys_74(0x3, ...)` returns dataset index | `sys_41(...)` returns record index |
+| Category fields | `field 0x03/0x04` | `field 0x03/0x04` |
+| Group field | `field 0x0A` -> `func_786()` handler switch | `field 0x0A` -> `func_873(group)` |
+| Action hash / ID | `field 0x2E` | `field 0x2E` |
+| Phase hashes | `field 0x02/0x7C/0x7D` -> `func_926()` | `field 0x02/0x7C/0x7D` -> `func_975()` |
+
+The old file also includes the same B4AC section markers in comments:
+
+```text
+A8 BB BA B9 = main 0x80 batch
+A8 BA A9 BA = extra variable section
+```
+
+and has an inline literal write of `0xA8BAA9BA` at the end of the main embedded
+table:
+
+```c
+sys_2D(0x3, 0x2D, 0x80, 0xA8BAA9BA);
+```
+
+This matches the marker family observed in the newer
+`0x38C44F75/chrsysparam.csyspm` file. The old C file does not need to contain
+the `0xA8BBBAB9` marker as a normal literal because the table is already
+expanded into `sys_2D` writes.
+
+### Category derivation similarity
+
+The old script derives the same runtime category from `field 0x03/0x04`, but
+the `field 0x04` encoding differs:
+
+```text
+old:
+  field 0x04 == 0x01 -> category 4
+  field 0x04 == 0x02 -> category 3
+  field 0x04 == 0x04 -> category 5
+  field 0x04 == 0x08 / 0x0C / 0x0F -> category 2
+  field 0x04 == 0x03 -> category 4
+
+new:
+  field 0x04 == 0x20 / 0x30 -> category 4
+  field 0x04 == 0x10 -> category 3
+  field 0x04 == 0x08 -> category 5
+  field 0x04 == 0x04 / 0x0C / 0x3C -> category 2
+```
+
+So the semantic rule is stable, but the bit encoding moved between generations.
+This supports a dynamic field-based category derivation rather than an
+`action_hash -> name` dictionary.
+
+### Old core category rows
+
+Rows `0x11..0x2D` in the old embedded table correspond to logical datasets
+`1..29`. The rows that derive the old core categories `1..5` are:
+
+| MSC row | logical row | field `0x03` | field `0x04` | category | group | action hash / ID |
+|---:|---:|---:|---:|---:|---:|---|
+| `0x1B` | 11 | `0x01` | `0x00` | 1 | `0x0C` | `0xDB2CA8B5` |
+| `0x20` | 16 | `0x01` | `0x08` | 2 | `0x0C` | `0x8C02D1FC` |
+| `0x22` | 18 | `0x01` | `0x03` | 4 | `0x0C` | `0x137D0C4E` |
+| `0x29` | 25 | `0x01` | `0x04` | 5 | `0x0C` | `0x7ABD7BF6` |
+
+The quick sample did not contain a core row deriving category `3`.
+
+### Phase callback equivalence
+
+Old `func_766()` creates three phase callback tables from the same row fields:
+
+```c
+sys_2D(0x3, 0xd, row, func_926(func_796(row, 0x2)));
+sys_2D(0x3, 0xe, row, func_926(func_796(row, 0x7c)));
+sys_2D(0x3, 0xf, row, func_926(func_796(row, 0x7d)));
+```
+
+This is directly analogous to the new sample:
+
+```c
+sys_1(0x10001, 0x10, row, func_975(func_875(row, 0x2)));
+sys_1(0x10001, 0x11, row, func_975(func_875(row, 0x7c)));
+sys_1(0x10001, 0x12, row, func_975(func_875(row, 0x7d)));
+```
+
+Examples from the old file:
+
+| logical row | action hash / ID | phase0 | phase1 | phase2 |
+|---:|---|---|---|---|
+| 16 | `0x8C02D1FC` | `func_1034` | `func_1033` | `func_1035` |
+| 25 | `0x7ABD7BF6` | `func_1088` | `func_1087` | `func_1089` |
+
+### Group-handler similarity and unresolved groups
+
+Old `func_786()` switches on `field 0x0A` and routes to action handlers:
+
+```text
+0x00 -> func_861
+0x03 -> func_865
+0x05 -> func_871
+0x0C -> func_840
+0x0D -> func_857
+0x10 -> func_877
+0x15 -> func_883
+0x1F -> func_889
+0x2D -> func_892
+```
+
+The embedded rows still contain groups such as `0x27` and `0x28` that this
+handler switch does not resolve. This mirrors the newer `59001001` case where
+`group 0x27/0x28/0x29` exist in `chrsysparam.csyspm` but `func_873()` returns
+`0`.
+
+### `field 0x2E` bridge from old masks to new hashes
+
+The old file contains an important comment:
+
+```text
+For MBON, instead of using the global81 flag, they use the hash stored at 0x2e.
+0x2e hash is used for assigning extra_B4AC.
+```
+
+Because the older target lacks `sys_74(0xd, hash, mode)`, this script implements
+`parse_B4AC_0x2e(hashOrId)` by hand and converts `field 0x2E` back into the old
+concentrated `global81`-style category value. This is strong evidence that
+`field 0x2E` is the compatibility bridge between old mask routing and new
+hash/ID routing.
+
+### `parse_Melee_Var` is related but not the primary action matrix
+
+The large tail function:
+
+```c
+parse_Melee_Var(set_hash, var_hash)
+```
+
+is not an action-name table. Its call sites load melee parameter variables by
+`set_hash + var_hash`. It shows the same migration pattern: data that is likely
+external/newer-engine parameter data has been inlined into the older MSC. It
+should be treated as a secondary parameter surface, similar in spirit to the
+extra B4AC variables, not as `action_hash -> name`.
+
+### Updated conclusion
+
+The old file and new `chrsysparam.csyspm` are not merely superficially similar.
+They implement the same row/field action-record model:
+
+```text
+action selection -> row index -> fields 0x03/0x04/0x0A/0x2E/0x02/0x7C/0x7D
+```
+
+The main generation change is storage and syscall access:
+
+```text
+old compatibility MSC: inline sys_2D/sys_2C table
+new native MSC: external chrsysparam.csyspm + 0x700000 syscalls
+```
+
+For auto-rename, this comparison strengthens the current design:
+
+1. Pair `Msc` and `Param` dynamically.
+2. Parse the action rows, whether embedded or external.
+3. Derive category, group callback, and phase callbacks from row fields.
+4. Keep `field 0x2E` as evidence and dispatch key.
+5. Do not use a user-maintained action-hash dictionary.
+
+## Key design answer: can `chrsysparam.csyspm` enable old-style rename?
+
+Yes, `chrsysparam.csyspm` is enough to implement the new equivalent of the old
+`0.c -> helper -> 2.c` rename chain, but it is not enough by itself to recover
+all final human-readable action names.
+
+The new rename chain should be:
+
+```text
+resource list
+  -> Msc / Param pair
+  -> Param/chrsysparam.csyspm table0 action row
+  -> field 0x03/0x04 derived category
+  -> field 0x2E action hash
+  -> field 0x0A group
+  -> Msc/2.c group resolver, e.g. func_873(group)
+  -> func_241(actionHash, callback)
+  -> field 0x02/0x7C/0x7D phase hashes
+  -> func_975/hash resolver phase callbacks
+```
+
+So the relationship is:
+
+```text
+old: 0.c input mask -> helper derives action type -> 2.c callback rename
+new: chrsysparam row -> category/group/hash evidence -> 2.c callback/phase rename
+```
+
+The first implementation should therefore produce evidence-based names such as:
+
+```text
+ACTION_ROW_25_CAT_02_GROUP_1F
+ACTION_ROW_25_FUNC_916
+ACTION_ROW_25_PHASE_0
+ACTION_ROW_25_PHASE_1
+ACTION_ROW_25_PHASE_2
+```
+
+After category-number-to-gameplay-label alignment is verified, those names can
+be upgraded to stable gameplay vocabulary such as Shoot, Melee, Sub, Special
+Shot, and Special Melee. Until then, the tool must not claim exact labels such
+as `副射` or `特射` solely from `chrsysparam`.
+
+## Editing implication: MSC changes may also require `chrsysparam` changes
+
+For future modding workflows, `chrsysparam.csyspm` should be treated as action
+metadata, not just rename metadata.
+
+If an edit only changes the implementation of an existing callback function in
+MSC, and it keeps the same action rows, groups, hashes, category, and phase
+keys, `chrsysparam.csyspm` usually does not need to change.
+
+If an edit changes action selection or registration semantics, then
+`chrsysparam.csyspm` probably must change together with MSC. Examples:
+
+- adding or removing an action row
+- changing an action hash or ID in `field 0x2E`
+- changing input/category behavior in `field 0x03/0x04`
+- changing group routing in `field 0x0A`
+- assigning different phase callbacks through `field 0x02/0x7C/0x7D`
+- changing route/condition fields such as `0x1C..0x22` or `0x6E`
+
+This is the same relationship as the older embedded B4AC table, except that
+the table is now an external binary file. The toolchain should eventually expose
+`chrsysparam.csyspm` as a human-readable structured artifact, for example:
+
+```text
+chrsysparam.csyspm
+  -> action_rows.json / action_rows.yaml
+  -> edited rows
+  -> rebuild chrsysparam.csyspm
+```
+
+The row artifact should preserve unknown fields and round-trip the binary
+exactly unless the user edits specific fields. That avoids forcing users to edit
+raw binary while still keeping MSC and its action metadata consistent.

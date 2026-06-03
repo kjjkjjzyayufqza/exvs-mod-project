@@ -88,9 +88,46 @@ Use a dynamic mapping/report contract, not a dictionary contract. Confirm phase 
       `0x2/0x7c/0x7d`.
 - [x] Confirm raw resolver constants in `0x693F756D` decode with `+0x30`
       to script function entry pointers.
-- [~] Research native source of `sys_41` / `0x700000` action records.
-- [ ] Use IDA to find the native loader/backing file for
-      `0x700000` / `0x700001` / `0x700002`.
-      Current blocker: IDA Pro MCP is reportedly connected, but no IDA tools are
-      exposed in this Codex session.
-- [ ] Propose naming-source approaches and get user approval before writing a design spec.
+- [x] Research native source of `sys_41` / `0x700000` action records enough to
+      identify the file-side source:
+      `Param/chrsysparam.csyspm` (`0xB4ACACAF`, version `0x10000`) table0.
+- [x] Confirm concrete 59001001 pairing:
+      `Msc=0x693F756D`, `Param=0x38C44F75`, unit id/header `0x038448A9`.
+- [x] Confirm `0x38C44F75/chrsysparam.csyspm` table0 layout:
+      marker `0xA8BBBAB9`, `55 x 128` u32 matrix; table1 marker
+      `0xA8BAA9BA`, `1 x 1`.
+- [x] Record parser correction: current `chrsysparam.rs` flat 20-byte-entry
+      parser is not the large action-table layout.
+- [x] Analyze `chrsysparam.csyspm` action matrix field semantics needed for first-pass auto rename.
+      Confirmed fields: `0x2e` action hash, `0x0a` group key,
+      `0x03` base category/type, `0x04` input/category refinement,
+      `0x02/0x7c/0x7d` phase callback keys.
+- [x] Map `0x38C44F75/chrsysparam.csyspm` rows to
+      `0x693F756D/2.c func_873()` callback functions.
+- [x] Compare user-provided old EXVS1-style MSC
+      `G:\1. Gundam - 1011.c` against the new `chrsysparam.csyspm`
+      evidence. Conclusion: old MSC embeds the same B4AC/action row-field
+      model with `sys_2D/sys_2C`; new MSC reads the external matrix via
+      `0x700000` syscalls.
+- [~] Verify old fixed gameplay label alignment from `0x693F756D/0.c func_144()` and
+      action matrix fields, not from a dictionary.
+      Current status: numeric categories are derived; exact category number
+      -> Shoot/Melee/Sub/Special Shoot/Special Melee label mapping still needs
+      `sys_41` input-selection or runtime verification.
+- [ ] Design storage-backend abstraction for action rows:
+      embedded B4AC table (`sys_2D/sys_2C`) vs external
+      `Param/chrsysparam.csyspm` matrix, with one shared row-evidence output.
+- [ ] Design structured editable export/import for `chrsysparam.csyspm`
+      action rows so future MSC edits can update action metadata without
+      manual binary editing. Must preserve unknown fields and round-trip
+      unchanged rows exactly.
+- [x] Draft the auto-rename design contract:
+      `resource list -> Msc/Param pair -> chrsysparam action row -> group resolver -> callback`.
+- [x] Record key design answer: `chrsysparam.csyspm` can implement a new
+      equivalent of old `0.c -> helper -> 2.c` rename, but only as
+      row-evidence naming until category labels are verified.
+- [ ] Parse/confirm `0x700002` route field semantics for groups, especially fields
+      `0x1c` through `0x22` and `0x6e`.
+- [ ] Decide first-pass UI naming fallback:
+      evidence names such as `ACTION_CAT_02_ROW_25`, `ACTION_GROUP_1F_ROW_25`,
+      and `ACTION_ROW_25_PHASE_0` until category labels are verified.

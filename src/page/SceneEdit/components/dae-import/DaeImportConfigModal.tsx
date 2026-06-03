@@ -128,6 +128,8 @@ interface DaeImportConfigModalProps {
   entries: DaeImportEntry[];
   havokInfo: HavokInstallInfo | null;
   stageRoot: string | null;
+  /** When set, out-of-scene writes go to `{stageRoot}/{replaceFolderName}/0/...` only. */
+  replaceFolderName?: string | null;
   onConfigChange: (importId: string, config: DaeImportConfig) => void;
   onImport: () => void;
   onCancel: () => void;
@@ -143,6 +145,7 @@ interface DaeImportConfigModalBodyProps {
   config: DaeImportConfig;
   havokInfo: HavokInstallInfo | null;
   stageRoot: string | null;
+  replaceFolderName?: string | null;
   onConfigChange: (importId: string, config: DaeImportConfig) => void;
   onImport: () => void;
   onCancel: () => void;
@@ -155,6 +158,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
   config,
   havokInfo,
   stageRoot,
+  replaceFolderName,
   onConfigChange,
   onImport,
   onCancel,
@@ -319,29 +323,41 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
             {config.directToDisk && (
               <DaeImportFieldRow
                 label="Output Directory"
-                hint="Writes model folder under this directory"
+                hint={
+                  replaceFolderName
+                    ? `Replaces ${replaceFolderName} under the open stage folder`
+                    : "Writes model folder under this directory"
+                }
               >
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 w-full justify-start gap-2 px-2 text-[10px]"
-                  onClick={async () => {
-                    const selected = await open({
-                      directory: true,
-                      title: "Select static mesh output directory",
-                      defaultPath: config.outputDirectory ?? stageRoot ?? undefined,
-                    });
-                    if (typeof selected === "string") {
-                      updateConfig({ outputDirectory: selected });
-                    }
-                  }}
-                >
-                  <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">
-                    {config.outputDirectory ?? "Choose folder"}
+                {replaceFolderName ? (
+                  <span className="block truncate px-1 text-[10px] text-muted-foreground">
+                    {stageRoot
+                      ? `${stageRoot}\\${replaceFolderName}\\0\\`
+                      : "Open a stage folder first"}
                   </span>
-                </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-full justify-start gap-2 px-2 text-[10px]"
+                    onClick={async () => {
+                      const selected = await open({
+                        directory: true,
+                        title: "Select static mesh output directory",
+                        defaultPath: config.outputDirectory ?? stageRoot ?? undefined,
+                      });
+                      if (typeof selected === "string") {
+                        updateConfig({ outputDirectory: selected });
+                      }
+                    }}
+                  >
+                    <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">
+                      {config.outputDirectory ?? "Choose folder"}
+                    </span>
+                  </Button>
+                )}
               </DaeImportFieldRow>
             )}
 
@@ -399,6 +415,7 @@ export function DaeImportConfigModal({
   entries,
   havokInfo,
   stageRoot,
+  replaceFolderName,
   onConfigChange,
   onImport,
   onCancel,
@@ -527,6 +544,7 @@ export function DaeImportConfigModal({
           config={config}
           havokInfo={havokInfo}
           stageRoot={stageRoot}
+          replaceFolderName={replaceFolderName}
           onConfigChange={onConfigChange}
           onImport={onImport}
           onCancel={onCancel}

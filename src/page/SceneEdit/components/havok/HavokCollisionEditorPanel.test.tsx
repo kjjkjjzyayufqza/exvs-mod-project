@@ -57,6 +57,7 @@ import {
   sceneConfigureImport,
   sceneGenerateHkt,
   sceneGetHavokMeta,
+  scenePreviewHktCollisionSession,
 } from "../../utils/sceneSessionService";
 
 const defaultHktSimplify = { ...DEFAULT_HKT_SIMPLIFY };
@@ -74,6 +75,25 @@ describe("HavokCollisionEditorPanel", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("does not auto-run collision preview when the details panel mounts", async () => {
+    render(
+      <HavokCollisionEditorPanel
+        sessionId="session-1"
+        sessionImportId="import-1"
+        sourcePath="E:/models/sample.dae"
+        sourceName="sample_mesh"
+        hktSimplify={defaultHktSimplify}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /regenerate hkt/i })).toBeInTheDocument();
+    });
+
+    expect(scenePreviewHktCollisionSession).not.toHaveBeenCalled();
+    expect(sceneGenerateHkt).not.toHaveBeenCalled();
   });
 
   it("notifies parent with parsed collision mesh after Regenerate HKT", async () => {

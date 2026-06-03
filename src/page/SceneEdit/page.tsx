@@ -161,6 +161,7 @@ import {
   resolveModelReplaceTarget,
   type ModelReplaceTargetInfo,
   type ModelReplacement,
+  resolveLegacyModelSubfolderUnderSlot,
 } from "./utils/sceneModelReplace";
 import { beginSceneOp, type SceneOpTimer } from "./utils/sceneOpTimer";
 import { SaveProgressDialog, type SaveStepInfo } from "./components/SaveProgressDialog";
@@ -226,7 +227,9 @@ import {
   buildSsbhSessionImportConfig,
   ensureImportedDaeSessionImport,
   importDaeThroughSceneSession,
+  writeModelReplacementToDisk,
 } from "./utils/sceneDaeSessionImport";
+import { runModelReplacementPreview } from "./utils/sceneModelReplacePreview";
 import { applyOutlinerOrder } from "./utils/sceneOutlinerOrder";
 import { buildSubModelOutlinerNode } from "./utils/sceneOutlinerTree";
 import { SceneDetailViewHost } from "./components/detail-view/SceneDetailViewHost";
@@ -1325,6 +1328,7 @@ export default function SceneEdit() {
     setPlacementColMap({});
     setPlacementEntries([]);
     setImportedDaeObjects([]);
+    setModelReplacements([]);
     setTreeRoot(null);
     setDrawStats(null);
     setBaseTransform({ ...DEFAULT_TRANSFORM });
@@ -3280,6 +3284,25 @@ export default function SceneEdit() {
   const processModelReplacement = useCallback(
     async (entry: DaeImportEntry, target: ModelReplaceTargetInfo) => {
       const sessionState = useDaeSsbhSessionStore.getState();
+      const directToDisk = entry.config.directToDisk;
+
+      if (!target.isBase && !subModels.some((s) => s.folderName === target.folderName)) {
+        toast.error(`Model slot "${target.folderName}" not found in the loaded stage`);
+        return;
+      }
+
+      if (directToDisk && !stageRoot) {
+        toast.error("Open a stage folder before replacing with out-of-scene conversion");
+        return;
+      }
+
+      const currentSlotBundle = target.isBase
+        ? baseModel
+        : (subModels.find((s) => s.folderName === target.folderName)?.bundle ?? null);
+      const legacySlotSubfolder = resolveLegacyModelSubfolderUnderSlot(
+        currentSlotBundle,
+        target.folderName,
+      );
 
       let activeSessionId = sceneSessionId;
       if (!activeSessionId) {
@@ -3293,32 +3316,19 @@ export default function SceneEdit() {
         }
       }
 
-      if (!target.isBase && !subModels.some((s) => s.folderName === target.folderName)) {
-        toast.error(`Model slot "${target.folderName}" not found in the loaded stage`);
-        return;
-      }
-
       try {
         staticMeshProgressActiveRef.current = true;
         setImportProgress({
           open: true,
           progress: 0,
-          steps: createStaticMeshImportSteps(entry.fileName, false),
+          steps: createStaticMeshImportSteps(entry.fileName, directToDisk),
         });
 
-        // baseFilename forced to the target folder; collect_save_artifacts writes the
-        // converted model to {folderName}/0/... on the next save.
-        const importConfig = buildSsbhSessionImportConfig(entry.config, sessionState, target.folderName);
-        const result = await importDaeThroughSceneSession({
-          sessionId: activeSessionId,
-          filePath: entry.filePath,
-          name: target.folderName,
-          importConfig,
-          onProgress: handleStaticMeshProgress,
-        });
-        if (!result.ssbhGenerated) {
-          throw new Error("SSBH conversion did not produce in-memory artifacts");
-        }
+        const importConfig = buildSsbhSessionImportConfig(
+          entry.config,
+          sessionState,
+          target.folderName,
+        );
 
         applyStaticMeshProgressUpdate({
           step: "preview",
@@ -3326,17 +3336,55 @@ export default function SceneEdit() {
           detail: "Large mesh preview data may take time to cross IPC.",
           progress: 94,
         });
-        const previewBundle = await sceneBuildImportPreviewBundle({
-          sessionId: activeSessionId,
-          importId: result.importId,
-          stageRoot,
-          sourcePath: entry.filePath,
+
+        const replacementPreview = await runModelReplacementPreview({
+          importAndConvert: async () => {
+            const result = await importDaeThroughSceneSession({
+              sessionId: activeSessionId,
+              filePath: entry.filePath,
+              name: target.folderName,
+              importConfig,
+              onProgress: handleStaticMeshProgress,
+            });
+            return { importId: result.importId, ssbhGenerated: result.ssbhGenerated };
+          },
+          buildPreviewBundle: async (importId) =>
+            sceneBuildImportPreviewBundle({
+              sessionId: activeSessionId,
+              importId,
+              stageRoot,
+              sourcePath: entry.filePath,
+            }),
+          hydratePreviewBundle: hydrateBundleGeometry,
+          writeToDisk: directToDisk
+            ? async () => {
+                if (!stageRoot) {
+                  throw new Error(
+                    "Open a stage folder before replacing with out-of-scene conversion",
+                  );
+                }
+                applyStaticMeshProgressUpdate({
+                  step: "write",
+                  label: "Writing replaced model to stage folder...",
+                  progress: 97,
+                });
+                return writeModelReplacementToDisk({
+                  stageRoot,
+                  filePath: entry.filePath,
+                  folderName: target.folderName,
+                  importConfig,
+                  legacySlotSubfolder,
+                  onProgress: handleStaticMeshProgress,
+                });
+              }
+            : undefined,
         });
+
+        const { previewBundle, importId: replacementImportId } = replacementPreview;
         for (const warning of previewBundle.warnings) {
           toast.warning(warning);
         }
 
-        // Swap the in-scene preview for the target slot.
         if (target.isBase) {
           setBaseModel(previewBundle);
         } else {
@@ -3347,14 +3395,33 @@ export default function SceneEdit() {
           );
         }
 
+        if (replacementPreview.wroteToDisk && replacementPreview.diskResult) {
+          for (const warning of replacementPreview.diskResult.warnings) {
+            toast.warning(warning);
+          }
+          setModelReplacements((prev) =>
+            prev.filter((r) => r.folderName !== target.folderName),
+          );
+          applyStaticMeshProgressUpdate({
+            step: "done",
+            label: "Model replacement written to disk",
+            progress: 100,
+          });
+          toast.success(`Replaced ${target.folderName} on disk`, {
+            description: `${replacementPreview.diskResult.filesWritten.length} file(s) written to ${replacementPreview.diskResult.modelDir}`,
+          });
+          return;
+        }
+
         setModelReplacements((prev) => [
           ...prev.filter((r) => r.folderName !== target.folderName),
           {
             folderName: target.folderName,
             isBase: target.isBase,
-            sessionImportId: result.importId,
+            sessionImportId: replacementImportId,
             sourcePath: entry.filePath,
             sourceName: entry.fileName,
+            legacySlotSubfolder,
           },
         ]);
         useSceneDirtyStore.getState().markModelReplaced(target.folderName);
@@ -3377,6 +3444,7 @@ export default function SceneEdit() {
     [
       sceneSessionId,
       stageRoot,
+      baseModel,
       subModels,
       handleStaticMeshProgress,
       applyStaticMeshProgressUpdate,
@@ -4612,6 +4680,7 @@ export default function SceneEdit() {
             entries={daeImportEntries}
             havokInfo={havokInfo}
             stageRoot={stageRoot}
+            replaceFolderName={replaceTarget?.folderName ?? null}
             onConfigChange={(importId, config) => {
               setDaeImportEntries((prev) =>
                 prev.map((e) =>

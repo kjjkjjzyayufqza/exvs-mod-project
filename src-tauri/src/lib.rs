@@ -162,6 +162,8 @@ pub fn run() {
             scene_session_commands::scene_generate_hkt,
             scene_session_commands::scene_generate_hkt_from_mesh,
             scene_session_commands::scene_replace_hkt,
+            scene_session_commands::scene_generate_replacement_hkt_from_dae_path,
+            scene_session_commands::scene_apply_replacement_hkt_bytes,
             scene_session_commands::scene_replace_hkt_from_dae_path,
             scene_session_commands::scene_preview_hkt_collision_bytes,
             scene_session_commands::scene_preview_hkt_collision_session,

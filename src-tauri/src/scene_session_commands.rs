@@ -1968,20 +1968,9 @@ pub async fn scene_generate_hkt_from_mesh(
     let source_id = format!("mesh-hkt-{}", folder_name);
     let display_name = format!("{}/map_hit.hkt", folder_name);
 
+    let hkt_target_id = format!("{folder_name}/map_hit.hkt");
     state.with_session_mut(&options.session_id, |s| {
-        if let Some(bundle) = s.base_bundle.as_mut() {
-            if folder_name == "base" {
-                bundle
-                    .root_files
-                    .insert("map_hit.hkt".to_string(), hkt_bytes.clone());
-            } else {
-                bundle
-                    .sub_model_files
-                    .entry(folder_name.clone())
-                    .or_default()
-                    .insert("map_hit.hkt".to_string(), hkt_bytes.clone());
-            }
-        }
+        s.store_stage_folder_hkt_bytes(&hkt_target_id, hkt_bytes.clone())?;
         s.upsert_havok_data(HavokCollisionData {
             source_id,
             display_name,
@@ -2062,55 +2051,16 @@ fn apply_replacement_hkt_to_session(
     hkt_xml: String,
     display_name: String,
 ) -> Result<(), String> {
-    // Try pending_imports first (DAE-imported models)
+    // Pending DAE imports keep HKT on the import record; on-disk stage folders use
+    // the in-memory base bundle overlay until scene_save_as_folder commits.
     if s.find_import(import_id).is_ok() {
         eprintln!("[apply_replacement_hkt] found in pending_imports");
         s.store_hkt_bytes(import_id, hkt_bytes.clone())?;
-    } else if let Some(bundle) = s.base_bundle.as_mut() {
-        // FHM2D in-memory model: extract folder name from sourceId
-        let folder = import_id
-            .replace('/', "\\")
-            .split('\\')
-            .next()
-            .unwrap_or(import_id)
-            .to_string();
-        eprintln!(
-            "[apply_replacement_hkt] trying base_bundle folder={:?} available_folders={:?}",
-            folder,
-            bundle.sub_model_files.keys().collect::<Vec<_>>()
-        );
-        let files = bundle.sub_model_files.entry(folder.clone()).or_default();
-        let old_hkt_keys: Vec<String> = files
-            .keys()
-            .filter(|k| k.to_ascii_lowercase().ends_with(".hkt"))
-            .cloned()
-            .collect();
-        eprintln!("[apply_replacement_hkt] old_hkt_keys={:?}", old_hkt_keys);
-        for k in old_hkt_keys {
-            files.remove(&k);
-        }
-        let hkt_name = import_id
-            .replace('/', "\\")
-            .split('\\')
-            .last()
-            .unwrap_or(&format!("{folder}.hkt"))
-            .to_string();
-        files.insert(hkt_name, hkt_bytes.clone());
-    } else if let SceneSource::Folder { ref path } = s.source {
-        // Folder-based session: write HKT directly to disk
-        let hkt_disk_path =
-            std::path::Path::new(path).join(import_id.replace('/', std::path::MAIN_SEPARATOR_STR));
-        eprintln!(
-            "[apply_replacement_hkt] writing to disk: {:?}",
-            hkt_disk_path
-        );
-        if let Some(parent) = hkt_disk_path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        std::fs::write(&hkt_disk_path, &hkt_bytes)
-            .map_err(|e| format!("Failed to write HKT to {}: {e}", hkt_disk_path.display()))?;
     } else {
-        return Err(format!("Import '{}' not found in session", import_id));
+        eprintln!(
+            "[apply_replacement_hkt] staging in memory for target_id={import_id}"
+        );
+        s.store_stage_folder_hkt_bytes(import_id, hkt_bytes.clone())?;
     }
     s.upsert_havok_data(HavokCollisionData {
         source_id: import_id.to_string(),
@@ -2119,7 +2069,6 @@ fn apply_replacement_hkt_to_session(
         hkt_xml,
         raw_bytes: hkt_bytes,
     });
-    s.dirty = true;
     Ok(())
 }
 
@@ -2131,6 +2080,116 @@ pub struct ReplaceHktFromDaeOptions {
     pub file_path: String,
     pub source_name: String,
     pub config: ImportConfig,
+}
+
+async fn generate_hkt_bytes_from_dae_path(
+    file_path: &str,
+    source_name: &str,
+    config: &ImportConfig,
+) -> Result<crate::havok_collision_encode::HktGenerationResult, String> {
+    let dae_bytes = std::fs::read(file_path)
+        .map_err(|e| format!("Failed to read '{}': {}", file_path, e))?;
+    let mesh_options = hkt_collision_options_from_import(config);
+    let havok_config = havok_cli::HavokCliConfig::detect().ok_or_else(|| {
+        eprintln!("[generate_hkt_bytes_from_dae_path] Havok SDK not found");
+        "Havok SDK not found".to_string()
+    })?;
+    let source_name = source_name.to_string();
+    tauri::async_runtime::spawn_blocking(move || {
+        havok_cli::generate_hkt_from_dae(&dae_bytes, &source_name, &havok_config, mesh_options)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+    .map_err(|e| {
+        eprintln!("[generate_hkt_bytes_from_dae_path] generate_hkt_from_dae failed: {e}");
+        e
+    })
+}
+
+async fn hkt_xml_from_bytes(hkt_bytes: &[u8]) -> String {
+    let filter_path = havok_cli::HavokCliConfig::detect()
+        .map(|c| c.filter_manager_path.clone())
+        .unwrap_or_default();
+    if filter_path.is_empty() {
+        return String::new();
+    }
+    let bytes_for_xml = hkt_bytes.to_vec();
+    match tauri::async_runtime::spawn_blocking(move || {
+        havok_cli::convert_hkt_bytes_to_xml(&filter_path, &bytes_for_xml)
+    })
+    .await
+    {
+        Ok(Ok(xml)) => xml,
+        Ok(Err(e)) => {
+            eprintln!("[hkt_xml_from_bytes] HKT→XML failed: {e}");
+            String::new()
+        }
+        Err(e) => {
+            eprintln!("[hkt_xml_from_bytes] XML conversion join error: {e}");
+            String::new()
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GeneratedHktFromDaePayload {
+    pub hkt_bytes: Vec<u8>,
+    pub triangle_count: usize,
+}
+
+/// Generate HKT bytes from a DAE/FBX path without applying to the session.
+/// Used by the New-Model HKT dialog so Apply can reuse the preview generation.
+#[tauri::command]
+pub async fn scene_generate_replacement_hkt_from_dae_path(
+    file_path: String,
+    source_name: String,
+    config: ImportConfig,
+) -> Result<GeneratedHktFromDaePayload, String> {
+    eprintln!(
+        "[scene_generate_replacement_hkt_from_dae_path] path={} source={}",
+        file_path, source_name
+    );
+    let hkt_result = generate_hkt_bytes_from_dae_path(&file_path, &source_name, &config).await?;
+    eprintln!(
+        "[scene_generate_replacement_hkt_from_dae_path] generated {} bytes ({} triangles)",
+        hkt_result.bytes.len(),
+        hkt_result.triangle_count
+    );
+    Ok(GeneratedHktFromDaePayload {
+        hkt_bytes: hkt_result.bytes,
+        triangle_count: hkt_result.triangle_count,
+    })
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyReplacementHktBytesOptions {
+    pub session_id: String,
+    pub import_id: String,
+    pub hkt_bytes: Vec<u8>,
+    pub display_name: String,
+}
+
+/// Apply pre-generated HKT bytes onto a session target (no mesh/Havok re-generation).
+#[tauri::command]
+pub async fn scene_apply_replacement_hkt_bytes(
+    state: State<'_, SceneSessionState>,
+    options: ApplyReplacementHktBytesOptions,
+) -> Result<bool, String> {
+    eprintln!(
+        "[scene_apply_replacement_hkt_bytes] session_id={} import_id={} bytes={}",
+        options.session_id,
+        options.import_id,
+        options.hkt_bytes.len()
+    );
+    let hkt_xml = hkt_xml_from_bytes(&options.hkt_bytes).await;
+    let import_id = options.import_id.clone();
+    let display_name = options.display_name.clone();
+    state.with_session_mut(&options.session_id, |s| {
+        apply_replacement_hkt_to_session(s, &import_id, options.hkt_bytes, hkt_xml, display_name)
+    })?;
+    Ok(true)
 }
 
 /// Generate a mesh-accurate HKT from a freshly-selected DAE/FBX (using the same
@@ -2145,25 +2204,12 @@ pub async fn scene_replace_hkt_from_dae_path(
         "[scene_replace_hkt_from_dae_path] session_id={} import_id={} path={}",
         options.session_id, options.import_id, options.file_path
     );
-    let dae_bytes = std::fs::read(&options.file_path)
-        .map_err(|e| format!("Failed to read '{}': {}", options.file_path, e))?;
-    let mesh_options = hkt_collision_options_from_import(&options.config);
-    let havok_config = havok_cli::HavokCliConfig::detect().ok_or_else(|| {
-        eprintln!("[scene_replace_hkt_from_dae_path] Havok SDK not found");
-        "Havok SDK not found".to_string()
-    })?;
-
-    let source_name = options.source_name.clone();
-    let hkt_result = tauri::async_runtime::spawn_blocking(move || {
-        havok_cli::generate_hkt_from_dae(&dae_bytes, &source_name, &havok_config, mesh_options)
-    })
-    .await
-    .map_err(|e| format!("Task join error: {e}"))?
-    .map_err(|e| {
-        eprintln!("[scene_replace_hkt_from_dae_path] generate_hkt_from_dae failed: {e}");
-        e
-    })?;
-
+    let hkt_result = generate_hkt_bytes_from_dae_path(
+        &options.file_path,
+        &options.source_name,
+        &options.config,
+    )
+    .await?;
     let hkt_bytes = hkt_result.bytes;
     eprintln!(
         "[scene_replace_hkt_from_dae_path] generated {} bytes ({} triangles)",
@@ -2171,24 +2217,7 @@ pub async fn scene_replace_hkt_from_dae_path(
         hkt_result.triangle_count
     );
 
-    let filter_path = havok_cli::HavokCliConfig::detect()
-        .map(|c| c.filter_manager_path.clone())
-        .unwrap_or_default();
-    let hkt_xml = if !filter_path.is_empty() {
-        let bytes_for_xml = hkt_bytes.clone();
-        tauri::async_runtime::spawn_blocking(move || {
-            havok_cli::convert_hkt_bytes_to_xml(&filter_path, &bytes_for_xml)
-        })
-        .await
-        .map_err(|e| format!("XML conversion join error: {e}"))?
-        .unwrap_or_else(|e| {
-            eprintln!("[scene_replace_hkt_from_dae_path] HKT→XML failed: {e}");
-            String::new()
-        })
-    } else {
-        String::new()
-    };
-
+    let hkt_xml = hkt_xml_from_bytes(&hkt_bytes).await;
     let display_name = options.source_name.clone();
     let import_id = options.import_id.clone();
     state.with_session_mut(&options.session_id, |s| {

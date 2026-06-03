@@ -375,7 +375,7 @@ describe("sceneSaveFolderPipeline", () => {
     );
   });
 
-  it("replaces a model: cleans the target folder and re-targets the session import", async () => {
+  it("replaces a model: re-targets the session import without pre-deleting the folder", async () => {
     const params = makeParams({
       sceneSessionId: "session-1",
       modelReplacements: [
@@ -394,7 +394,7 @@ describe("sceneSaveFolderPipeline", () => {
     expect(result.success).toBe(true);
     expect(result.replacedCount).toBe(1);
     expect(result.hasStructuralChanges).toBe(true);
-    expect(mockExecuteDelete).toHaveBeenCalledWith("E:/stage/16F73C97/0/0", ["stage_floor"]);
+    expect(mockExecuteDelete).not.toHaveBeenCalled();
     expect(mockResolveSessionImportConfigForSave).toHaveBeenCalledWith(
       "session-1",
       "imp-1",
@@ -407,6 +407,29 @@ describe("sceneSaveFolderPipeline", () => {
       "stage_floor",
     );
     expect(mockSceneSaveAsFolder).toHaveBeenCalledWith("session-1", "E:/stage/16F73C97/0/0");
+  });
+
+  it("removes only the legacy base subfolder after save commits replacements", async () => {
+    const params = makeParams({
+      sceneSessionId: "session-1",
+      modelReplacements: [
+        {
+          folderName: "base",
+          isBase: true,
+          sessionImportId: "imp-base",
+          sourcePath: "E:/m/base.dae",
+          sourceName: "base.dae",
+          legacySlotSubfolder: "001stage001_base",
+        },
+      ],
+    });
+
+    const result = await executeSaveFolderPipeline(params);
+
+    expect(result.success).toBe(true);
+    expect(mockExecuteDelete).toHaveBeenCalledWith("E:/stage/16F73C97/0/0", [
+      "base/001stage001_base",
+    ]);
   });
 
   it("leaves replacedCount at 0 and no structural change when there are no replacements", async () => {

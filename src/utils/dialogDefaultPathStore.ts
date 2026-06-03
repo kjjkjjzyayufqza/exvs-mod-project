@@ -22,6 +22,20 @@ export async function getStoredDialogDefaultPath(key: string): Promise<string | 
   return value || undefined;
 }
 
+/** Remember the exact file path (not only its parent directory). */
+export async function rememberStoredDialogFilePath(
+  key: string,
+  filePath: string,
+): Promise<void> {
+  const trimmed = filePath.trim();
+  if (!trimmed) return;
+
+  const { getSetting, setSetting } = useConfigStore.getState();
+  const map =
+    (await getSetting<DialogDefaultPathMap>(DIALOG_DEFAULT_PATH_STORE_KEY)) ?? {};
+  await setSetting(DIALOG_DEFAULT_PATH_STORE_KEY, { ...map, [key]: trimmed });
+}
+
 export async function rememberStoredDialogSelection(
   key: string,
   selectedPath: string,

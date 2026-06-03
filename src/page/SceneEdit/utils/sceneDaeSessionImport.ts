@@ -3,8 +3,12 @@ import type { MatlDataJson } from "@/components/ssbh-model-preview/types";
 import type { ImportedDaeObject } from "../components/MapViewport";
 import type { DaeImportConfig } from "../components/dae-import/daeImportTypes";
 import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
+import { executeDelete } from "./sceneDeleteConfirm";
+import { buildLegacySlotSubfolderDeletePath } from "./sceneModelReplace";
 import {
   sceneConfigureImport,
+  sceneConvertStaticMeshToStageFiles,
+  sceneConvertStaticMeshToStageFilesWithProgress,
   sceneExecuteImport,
   sceneExecuteImportWithProgress,
   sceneGetImportConfig,
@@ -12,6 +16,7 @@ import {
   sceneImportDaeFromPathWithProgress,
   type ImportConfig,
   type ImportResult,
+  type StaticMeshDirectConvertResult,
   type StaticMeshImportProgress,
 } from "./sceneSessionService";
 
@@ -71,6 +76,39 @@ export async function retargetAndReconvertSessionImport(
   if (importConfig.convertToSsbh) {
     await sceneExecuteImport(sessionId, importId);
   }
+}
+
+/**
+ * Replace an on-disk stage model folder immediately by writing converted SSBH files
+ * under `{stageRoot}/{folderName}/0/...`. Existing files in that folder are
+ * overwritten; the folder is not removed before conversion (so a failed convert
+ * cannot leave the slot empty on disk).
+ */
+export async function writeModelReplacementToDisk(params: {
+  stageRoot: string;
+  filePath: string;
+  folderName: string;
+  importConfig: ImportConfig;
+  /** Named subfolder under the slot to remove after a successful write (legacy base layout). */
+  legacySlotSubfolder?: string | null;
+  onProgress?: (chunk: StaticMeshImportProgress) => void;
+}): Promise<StaticMeshDirectConvertResult> {
+  const convertParams = {
+    sourcePath: params.filePath,
+    outputDir: params.stageRoot,
+    config: params.importConfig,
+  };
+  const result = params.onProgress
+    ? await sceneConvertStaticMeshToStageFilesWithProgress(convertParams, params.onProgress)
+    : await sceneConvertStaticMeshToStageFiles(convertParams);
+
+  if (params.legacySlotSubfolder) {
+    await executeDelete(params.stageRoot, [
+      buildLegacySlotSubfolderDeletePath(params.folderName, params.legacySlotSubfolder),
+    ]);
+  }
+
+  return result;
 }
 
 export function buildSsbhSessionImportConfig(
