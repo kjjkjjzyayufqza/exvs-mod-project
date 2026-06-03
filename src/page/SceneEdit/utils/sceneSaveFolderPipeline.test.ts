@@ -375,6 +375,64 @@ describe("sceneSaveFolderPipeline", () => {
     );
   });
 
+  it("replaces a model: cleans the target folder and re-targets the session import", async () => {
+    const params = makeParams({
+      sceneSessionId: "session-1",
+      modelReplacements: [
+        {
+          folderName: "stage_floor",
+          isBase: false,
+          sessionImportId: "imp-1",
+          sourcePath: "E:/m/floor.dae",
+          sourceName: "floor.dae",
+        },
+      ],
+    });
+
+    const result = await executeSaveFolderPipeline(params);
+
+    expect(result.success).toBe(true);
+    expect(result.replacedCount).toBe(1);
+    expect(result.hasStructuralChanges).toBe(true);
+    expect(mockExecuteDelete).toHaveBeenCalledWith("E:/stage/16F73C97/0/0", ["stage_floor"]);
+    expect(mockResolveSessionImportConfigForSave).toHaveBeenCalledWith(
+      "session-1",
+      "imp-1",
+      "stage_floor",
+    );
+    expect(mockRetargetAndReconvertSessionImport).toHaveBeenCalledWith(
+      "session-1",
+      "imp-1",
+      expect.any(Object),
+      "stage_floor",
+    );
+    expect(mockSceneSaveAsFolder).toHaveBeenCalledWith("session-1", "E:/stage/16F73C97/0/0");
+  });
+
+  it("leaves replacedCount at 0 and no structural change when there are no replacements", async () => {
+    const result = await executeSaveFolderPipeline(makeParams());
+    expect(result.replacedCount).toBe(0);
+    expect(result.hasStructuralChanges).toBe(false);
+  });
+
+  it("fails the save when a replacement is requested without a scene session", async () => {
+    const params = makeParams({
+      sceneSessionId: null,
+      modelReplacements: [
+        {
+          folderName: "base",
+          isBase: true,
+          sessionImportId: "imp-2",
+          sourcePath: "E:/m/base.dae",
+          sourceName: "base.dae",
+        },
+      ],
+    });
+    const result = await executeSaveFolderPipeline(params);
+    expect(result.success).toBe(false);
+    expect(mockExecuteDelete).not.toHaveBeenCalled();
+  });
+
   it("converts preview-only imported DAE through the session pipeline on save", async () => {
     const store = useSceneDirtyStore.getState();
     store.markObjectAdded("sample_mesh");

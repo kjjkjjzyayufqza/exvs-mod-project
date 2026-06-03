@@ -34,6 +34,7 @@ import {
   resolveSessionImportConfigForSave,
   retargetAndReconvertSessionImport,
 } from "./sceneDaeSessionImport";
+import type { ModelReplacement } from "./sceneModelReplace";
 import { serializeDaeToBytes } from "./daeExportImport";
 import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
 import { resolveOrCreateInfoFolder } from "./sceneInfoFolder";
@@ -154,6 +155,7 @@ export type SaveFolderParams = {
   subModels: ReadonlyArray<{ folderName: string; objectIndex: number }>;
   importedDaeObjects: readonly ImportedDaeObject[];
   sceneSessionId: string | null;
+  modelReplacements?: ReadonlyArray<ModelReplacement>;
   onProgress: (step: SaveStepInfo) => void;
   onDeleteConfirm: (preview: DeleteConfirmation) => Promise<boolean>;
   skipStructureRebuild?: boolean;
@@ -166,6 +168,7 @@ export type SaveFolderResult = {
   failedNames: string[];
   convertedDaeObjectIds: string[];
   deletedCount: number;
+  replacedCount: number;
   migratedTextures: number;
   reloadedBundle: StageBundleResponse | null;
   hasStructuralChanges: boolean;
@@ -200,11 +203,13 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
     subModels,
     importedDaeObjects,
     sceneSessionId,
+    modelReplacements,
     onProgress,
     onDeleteConfirm,
   } = params;
 
   let deletedCount = 0;
+  let replacedCount = 0;
   let migratedTextures = 0;
   let convertedCount = 0;
   let failedCount = 0;
@@ -231,6 +236,7 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
           failedNames: [],
           convertedDaeObjectIds: [],
           deletedCount: 0,
+          replacedCount: 0,
           migratedTextures: 0,
           reloadedBundle: null,
           hasStructuralChanges: false,
@@ -245,6 +251,64 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
     emitStep(onProgress, "delete", "Checking for deletions...", "done", `${deletedCount} deleted`);
   } else {
     emitStep(onProgress, "delete", "Checking for deletions...", "done", "None");
+  }
+
+  // Phase 1b: Replace models (deferred commit). For each replaced folder, wipe the
+  // existing folder, then re-target the session import to that folder name so
+  // collect_save_artifacts writes it to {folderName}/0/... during Phase 7's
+  // sceneSaveAsFolder. Replacing a same-named folder changes no model-folder count,
+  // so object indices stay stable.
+  const replacements = modelReplacements ?? [];
+  if (replacements.length > 0) {
+    emitStep(onProgress, "replace", `Replacing models (0/${replacements.length})...`, "running");
+    if (!sceneSessionId) {
+      emitStep(
+        onProgress,
+        "replace",
+        "Replacing models...",
+        "error",
+        undefined,
+        "No scene session available for model replacement",
+      );
+      return {
+        success: false,
+        convertedCount: 0,
+        failedCount: 0,
+        failedNames: [],
+        convertedDaeObjectIds: [],
+        deletedCount,
+        replacedCount: 0,
+        migratedTextures: 0,
+        reloadedBundle: null,
+        hasStructuralChanges: false,
+      };
+    }
+
+    let done = 0;
+    for (const replacement of replacements) {
+      await executeDelete(stageRoot, [replacement.folderName]);
+      const importConfig = await resolveSessionImportConfigForSave(
+        sceneSessionId,
+        replacement.sessionImportId,
+        replacement.folderName,
+      );
+      await retargetAndReconvertSessionImport(
+        sceneSessionId,
+        replacement.sessionImportId,
+        importConfig,
+        replacement.folderName,
+      );
+      done++;
+      emitStep(onProgress, "replace", `Replacing models (${done}/${replacements.length})...`, "running");
+    }
+    replacedCount = replacements.length;
+    emitStep(
+      onProgress,
+      "replace",
+      `Replacing models (${replacements.length}/${replacements.length})...`,
+      "done",
+      `${replacedCount} replaced`,
+    );
   }
 
   // Phase 2: Convert new objects (DAE → SSBH)
@@ -429,7 +493,7 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
   }
 
   // Phase 10: Reload (only when structural changes happened)
-  const hasStructuralChanges = convertedCount > 0 || deletedCount > 0;
+  const hasStructuralChanges = convertedCount > 0 || deletedCount > 0 || replacedCount > 0;
   if (hasStructuralChanges) {
     try {
       reloadedBundle = await invoke<StageBundleResponse>("load_stage_bundle", { stageRoot });
@@ -445,6 +509,7 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
     failedNames,
     convertedDaeObjectIds,
     deletedCount,
+    replacedCount,
     migratedTextures,
     reloadedBundle,
     hasStructuralChanges,
