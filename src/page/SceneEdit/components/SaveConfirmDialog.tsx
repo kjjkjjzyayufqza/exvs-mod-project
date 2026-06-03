@@ -10,7 +10,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { FolderMinus, FolderPlus, FolderPen, Info } from "lucide-react";
+import { FolderMinus, FolderPlus, FolderPen, FolderSync, Info } from "lucide-react";
 import type { SaveChangePreview } from "../utils/sceneSaveConfirm";
 import { buildSavePipelineNotes } from "../utils/sceneSaveConfirm";
 
@@ -65,6 +65,7 @@ export function SaveConfirmDialog({
   const modifiedItems = preview.modified.map(
     (item) => `${item.folderName} (${item.fields.join(", ")})`,
   );
+  const replacedItems = preview.replaced.map((folderName) => `${folderName} model`);
 
   return (
     <AlertDialog open={open}>
@@ -96,6 +97,12 @@ export function SaveConfirmDialog({
               icon={<FolderMinus className="h-4 w-4 shrink-0" />}
               toneClass="text-destructive"
               items={preview.deleted}
+            />
+            <ChangeSection
+              title={`Replace ${preview.replaced.length} model${preview.replaced.length !== 1 ? "s" : ""}`}
+              icon={<FolderSync className="h-4 w-4 shrink-0" />}
+              toneClass="text-blue-600 dark:text-blue-400"
+              items={replacedItems}
             />
             <ChangeSection
               title={`Update ${preview.globalChanges.length} scene file${preview.globalChanges.length !== 1 ? "s" : ""}`}

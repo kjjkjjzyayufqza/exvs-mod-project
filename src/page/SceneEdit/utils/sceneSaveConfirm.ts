@@ -17,6 +17,7 @@ export type SaveChangePreview = {
   added: string[];
   modified: SaveModifiedObjectPreview[];
   deleted: string[];
+  replaced: string[];
   globalChanges: string[];
   hasChanges: boolean;
 };
@@ -49,13 +50,16 @@ export function buildSaveChangePreview(store: SceneDirtyStore): SaveChangePrevie
     globalChanges.push("Scene textures (textures/ folder)");
   }
 
+  const replaced = store.getReplacedModels();
+
   const hasChanges =
     added.length > 0 ||
     modified.length > 0 ||
     deleted.length > 0 ||
+    replaced.length > 0 ||
     globalChanges.length > 0;
 
-  return { added, modified, deleted, globalChanges, hasChanges };
+  return { added, modified, deleted, replaced, globalChanges, hasChanges };
 }
 
 function formatModifiedFields(fields: ModifiedFields): string[] {
@@ -74,6 +78,9 @@ export function buildSavePipelineNotes(preview: SaveChangePreview): string[] {
   }
   if (preview.deleted.length > 0) {
     notes.push("Permanently delete removed object folders from disk");
+  }
+  if (preview.replaced.length > 0) {
+    notes.push("Swap replaced model folders with the new import");
   }
   return notes;
 }
@@ -109,6 +116,10 @@ export function buildSaveResultSummary(
     lines.push(
       `Deleted ${result.deletedCount} object folder(s): ${preview.deleted.join(", ")}`,
     );
+  }
+
+  for (const folderName of preview.replaced) {
+    lines.push(`Replaced ${folderName} model`);
   }
 
   for (const change of preview.globalChanges) {

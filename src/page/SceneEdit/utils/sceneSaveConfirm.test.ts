@@ -77,4 +77,26 @@ describe("sceneSaveConfirm", () => {
     expect(lines).toContain("Collected 2 texture(s) into textures/");
     expect(lines).toContain("Rebuilt stage structure JSON");
   });
+
+  it("buildSaveChangePreview includes replaced models and marks hasChanges", () => {
+    const store = useSceneDirtyStore.getState();
+    store.markModelReplaced("base");
+    const preview = buildSaveChangePreview(useSceneDirtyStore.getState());
+    expect(preview.hasChanges).toBe(true);
+    expect(preview.replaced).toEqual(["base"]);
+  });
+
+  it("buildSaveResultSummary reports replaced models", () => {
+    const store = useSceneDirtyStore.getState();
+    store.markModelReplaced("stage_floor");
+    const preview = buildSaveChangePreview(useSceneDirtyStore.getState());
+    const summary = buildSaveResultSummary(preview, {
+      convertedCount: 0,
+      failedCount: 0,
+      failedNames: [],
+      deletedCount: 0,
+      migratedTextures: 0,
+    });
+    expect(summary).toContain("Replaced stage_floor model");
+  });
 });
