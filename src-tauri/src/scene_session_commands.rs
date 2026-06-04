@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use tauri::{ipc::Channel, State};
+use tauri::{ipc::Channel, Emitter, State};
 
 use crate::format::fhm2d_stage;
 use crate::havok_cli;
@@ -22,6 +22,19 @@ pub struct SceneOpenResult {
     pub root_path: String,
     pub warnings: Vec<String>,
 }
+
+/// Progress payload emitted while `scene_open_folder` converts the stage's HKT
+/// collision files to XML (each file is a slow Havok Content Tools invocation).
+/// Mirrors the model-stream / texture-decode progress surfaced in the viewport.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HktLoadProgress {
+    loaded: usize,
+    total: usize,
+}
+
+/// Event name for HKT collision load progress (listened to in SceneEdit page).
+const SCENE_HKT_PROGRESS_EVENT: &str = "scene-hkt-progress";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -511,23 +524,53 @@ pub fn scene_preview_hkt_collision_path(
 /// so the New-Model HKT window can render a live 3D collision preview before the
 /// (Havok-dependent) HKT is generated and applied.
 #[tauri::command]
-pub fn scene_preview_hkt_collision_mesh_path(
+pub async fn scene_preview_hkt_collision_mesh_path(
     file_path: String,
     source_name: String,
     config: ImportConfig,
 ) -> Result<crate::havok_collision_encode::HktCollisionMeshGeometryHeader, String> {
-    let dae_bytes =
-        std::fs::read(&file_path).map_err(|e| format!("Failed to read '{}': {}", file_path, e))?;
+    // Must be async + spawn_blocking: this runs the full FBX/DAE parse → skin-bake →
+    // merge → simplify pipeline, which is heavy for large models. A synchronous
+    // command would run on the Tauri main thread and freeze the whole UI (and stall
+    // any sibling invoke fired in the same Promise.all batch).
+    let t = Instant::now();
+    eprintln!(
+        "[scene_preview_hkt_collision_mesh_path] start path={} source={}",
+        file_path, source_name
+    );
     let options = hkt_collision_options_from_import(&config);
-    let geometry = crate::havok_collision_encode::preview_hkt_collision_mesh_from_import_bytes(
-        &dae_bytes,
-        &source_name,
-        options,
-    )?;
-    // Ship geometry as a binary blob over the IPC side-channel (same path as the SSBH
-    // model loader) instead of a JSON number array; the frontend fetches it via
-    // `take_mesh_geometry` and builds typed-array BufferAttributes directly.
-    Ok(crate::havok_collision_encode::pack_and_register_collision_mesh(&geometry))
+    let source_for_task = source_name.clone();
+    let header = tauri::async_runtime::spawn_blocking(
+        move || -> Result<crate::havok_collision_encode::HktCollisionMeshGeometryHeader, String> {
+            let read_t = Instant::now();
+            let dae_bytes = std::fs::read(&file_path)
+                .map_err(|e| format!("Failed to read '{}': {}", file_path, e))?;
+            eprintln!(
+                "[scene_preview_hkt_collision_mesh_path] read {} bytes in {}ms",
+                dae_bytes.len(),
+                read_t.elapsed().as_millis()
+            );
+            let geometry =
+                crate::havok_collision_encode::preview_hkt_collision_mesh_from_import_bytes(
+                    &dae_bytes,
+                    &source_for_task,
+                    options,
+                )?;
+            // Ship geometry as a binary blob over the IPC side-channel (same path as the
+            // SSBH model loader) instead of a JSON number array; the frontend fetches it
+            // via `take_mesh_geometry` and builds typed-array BufferAttributes directly.
+            Ok(crate::havok_collision_encode::pack_and_register_collision_mesh(&geometry))
+        },
+    )
+    .await
+    .map_err(|e| format!("Preview task join error: {e}"))??;
+    eprintln!(
+        "[scene_preview_hkt_collision_mesh_path] done in {}ms (verts={} tris={})",
+        t.elapsed().as_millis(),
+        header.vertex_count,
+        header.triangle_count
+    );
+    Ok(header)
 }
 
 #[tauri::command]
@@ -851,6 +894,7 @@ pub fn scene_forget_base_model(
 
 #[tauri::command]
 pub async fn scene_open_folder(
+    app: tauri::AppHandle,
     state: State<'_, SceneSessionState>,
     path: String,
 ) -> Result<SceneOpenResult, String> {
@@ -884,10 +928,18 @@ pub async fn scene_open_folder(
     let graphic_params = skeleton.graphic_params;
 
     let stage_path = path.clone();
-    let havok_data_list =
-        tauri::async_runtime::spawn_blocking(move || collect_hkt_as_xml(&stage_path))
-            .await
-            .map_err(|e| e.to_string())?;
+    let app_for_hkt = app.clone();
+    let havok_data_list = tauri::async_runtime::spawn_blocking(move || {
+        let emit = |loaded: usize, total: usize| {
+            let _ = app_for_hkt.emit(
+                SCENE_HKT_PROGRESS_EVENT,
+                HktLoadProgress { loaded, total },
+            );
+        };
+        collect_hkt_as_xml(&stage_path, &emit)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
 
     let session_id = state.create_session(SceneSource::Folder { path: path.clone() });
     state.with_session_mut(&session_id, |s| {
@@ -934,7 +986,16 @@ pub async fn scene_open_folder(
 }
 
 /// Scan stage folder for all .hkt files and convert each to XML via Havok Content Tools.
-fn collect_hkt_as_xml(stage_root: &str) -> Vec<HavokCollisionData> {
+///
+/// `on_progress(loaded, total)` is invoked once with `loaded == 0` after the file
+/// list is known, then after every converted file, so the viewport can render an
+/// HKT load progress bar. Source ids use forward slashes so they match the
+/// replace / staging convention (`folder/map_hit.hkt`) and stay stable across
+/// platforms.
+fn collect_hkt_as_xml(
+    stage_root: &str,
+    on_progress: &dyn Fn(usize, usize),
+) -> Vec<HavokCollisionData> {
     let config = match havok_cli::HavokCliConfig::detect() {
         Some(c) => c,
         None => {
@@ -963,7 +1024,7 @@ fn collect_hkt_as_xml(stage_root: &str) -> Vec<HavokCollisionData> {
             } else if p.extension().and_then(|e| e.to_str()) == Some("hkt") {
                 let rel = p
                     .strip_prefix(root)
-                    .map(|r| r.to_string_lossy().to_string())
+                    .map(|r| r.to_string_lossy().replace('\\', "/"))
                     .unwrap_or_else(|_| p.file_name().unwrap().to_string_lossy().to_string());
                 if let Ok(bytes) = std::fs::read(&p) {
                     out.push((rel, bytes));
@@ -975,7 +1036,10 @@ fn collect_hkt_as_xml(stage_root: &str) -> Vec<HavokCollisionData> {
     let mut hkt_files: Vec<(String, Vec<u8>)> = Vec::new();
     find_hkt_files(root, root, &mut hkt_files);
 
-    for (source_id, raw_bytes) in hkt_files {
+    let total = hkt_files.len();
+    on_progress(0, total);
+
+    for (index, (source_id, raw_bytes)) in hkt_files.into_iter().enumerate() {
         match havok_cli::convert_hkt_bytes_to_xml(&config.filter_manager_path, &raw_bytes) {
             Ok(xml) => {
                 eprintln!("[collect_hkt_as_xml] converted: {}", source_id);
@@ -1006,6 +1070,7 @@ fn collect_hkt_as_xml(stage_root: &str) -> Vec<HavokCollisionData> {
                 );
             }
         }
+        on_progress(index + 1, total);
     }
 
     results

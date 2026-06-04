@@ -30,7 +30,7 @@ export function EffectProjectEditorModalHost({
 
   return (
     <TooltipProvider delayDuration={100}>
-      <div className="pointer-events-none fixed inset-0 z-[65]">
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 top-[var(--layout-topbar-height)] z-[var(--z-modal-nested)]">
         {sessions.map((session, cascadeIndex) => (
           <EffectProjectEditorModalWindow
             key={session.id}

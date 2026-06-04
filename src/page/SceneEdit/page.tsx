@@ -169,7 +169,10 @@ import { SaveConfirmDialog } from "./components/SaveConfirmDialog";
 import { DeleteConfirmDialog, type DeleteConfirmMeta } from "./components/DeleteConfirmDialog";
 import type { DeleteConfirmation } from "./utils/sceneDeleteConfirm";
 import { buildDeletePreview, buildBaseDeletePreview } from "./utils/sceneDeleteConfirm";
-import { collectHavokSourceIdsForFolders } from "./utils/havokOverlayCleanup";
+import {
+  collectHavokSourceIdsForFolders,
+  resolveHavokFolderName,
+} from "./utils/havokOverlayCleanup";
 import {
   buildSaveChangePreview,
   buildSaveResultSummary,
@@ -407,6 +410,26 @@ function mapStaticMeshProgress(chunk: StaticMeshImportProgress): ImportProgressU
   }
 }
 
+/**
+ * Insert/replace a havok overlay entry while dropping any stale entry that
+ * resolves to the same owning model folder. Replace, generate-from-mesh, and
+ * generate-from-model each key the new collision under a different sourceId
+ * scheme (`folder/map_hit.hkt`, `mesh-hkt-folder`, or — pre-fix — a backslash
+ * variant from the on-disk scan). Pruning by resolved folder name guarantees the
+ * viewport keeps exactly one collision per target so the previous HKT cannot
+ * linger in three.js after a replace/generate.
+ */
+function upsertHavokMap<T>(prev: Map<string, T>, sourceId: string, value: T): Map<string, T> {
+  const folderKey = resolveHavokFolderName(sourceId);
+  const next = new Map<string, T>();
+  for (const [key, val] of prev) {
+    if (key !== sourceId && resolveHavokFolderName(key) === folderKey) continue;
+    next.set(key, val);
+  }
+  next.set(sourceId, value);
+  return next;
+}
+
 const SCENE_EDIT_PANEL_IDS = [
   "scene-hierarchy",
   "scene-viewport",
@@ -497,6 +520,7 @@ export default function SceneEdit() {
   const [stageRoot, setStageRoot] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [modelLoadProgress, setModelLoadProgress] = useState<{ loaded: number; total: number } | null>(null);
+  const [hktLoadProgress, setHktLoadProgress] = useState<{ loaded: number; total: number } | null>(null);
   const hasUnsavedChanges = useSceneDirtyStore(
     (s) =>
       Object.keys(s.objects).length > 0 ||
@@ -766,6 +790,27 @@ export default function SceneEdit() {
       unlistenRef.current = null;
     };
   }, [handleProgressEvent]);
+
+  // HKT collision load progress (emitted by scene_open_folder while converting
+  // each .hkt to XML). Surfaced as a third viewport progress bar alongside the
+  // model-stream and texture-decode bars.
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: UnlistenFn | null = null;
+    listen<{ loaded: number; total: number }>("scene-hkt-progress", (event) => {
+      if (cancelled) return;
+      const { loaded, total } = event.payload;
+      setHktLoadProgress(total > 0 && loaded < total ? { loaded, total } : null);
+    }).then((fn) => {
+      if (cancelled) fn();
+      else unlisten = fn;
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
 
   const [selectedNodeId, setSelectedNodeIdRaw] = useState<string | null>(null);
   const [selectedPlacementIdx, setSelectedPlacementIdxRaw] = useState<
@@ -1345,6 +1390,7 @@ export default function SceneEdit() {
     setRenamePreview(null);
     setImportProgress((prev) => ({ ...prev, open: false }));
     setHavokMeshDataMap(new Map());
+    setHktLoadProgress(null);
   }, [sessionId, sceneSessionId]);
 
   const handleConfirmClearCache = useCallback(async () => {
@@ -1431,6 +1477,8 @@ export default function SceneEdit() {
         }
       }).catch((e) => {
         toast.error("Havok scene session failed", { description: String(e) });
+      }).finally(() => {
+        setHktLoadProgress(null);
       });
 
       await new Promise<void>((resolve, reject) => {
@@ -3201,16 +3249,13 @@ export default function SceneEdit() {
               const havokResult = await sceneGetHavokMeta(activeSessionId, result.importId);
               if (havokResult) {
                 const meshData = parseHavokXML(havokResult.hktXml);
-                setHavokMeshDataMap((prev) => {
-                  const next = new Map(prev);
-                  next.set(havokResult.sourceId, meshData);
-                  return next;
-                });
-                setHavokMetaMap((prev) => {
-                  const next = new Map(prev);
-                  next.set(havokResult.sourceId, { displayName: havokResult.displayName, objectNodeId: havokResult.objectNodeId });
-                  return next;
-                });
+                setHavokMeshDataMap((prev) => upsertHavokMap(prev, havokResult.sourceId, meshData));
+                setHavokMetaMap((prev) =>
+                  upsertHavokMap(prev, havokResult.sourceId, {
+                    displayName: havokResult.displayName,
+                    objectNodeId: havokResult.objectNodeId,
+                  }),
+                );
               }
             } else {
               const hktWarning =
@@ -3877,16 +3922,13 @@ export default function SceneEdit() {
             const havokResult = await sceneGetHavokMeta(sceneSessionId, sessionImportId);
             if (havokResult) {
               const meshData = parseHavokXML(havokResult.hktXml);
-              setHavokMeshDataMap((prev) => {
-                const next = new Map(prev);
-                next.set(havokResult.sourceId, meshData);
-                return next;
-              });
-              setHavokMetaMap((prev) => {
-                const next = new Map(prev);
-                next.set(havokResult.sourceId, { displayName: havokResult.displayName, objectNodeId: havokResult.objectNodeId });
-                return next;
-              });
+              setHavokMeshDataMap((prev) => upsertHavokMap(prev, havokResult.sourceId, meshData));
+              setHavokMetaMap((prev) =>
+                upsertHavokMap(prev, havokResult.sourceId, {
+                  displayName: havokResult.displayName,
+                  objectNodeId: havokResult.objectNodeId,
+                }),
+              );
             }
             useSceneDirtyStore.getState().markObjectModified(obj.name, "hkt");
             toast.success(`HKT generated for ${obj.name}`, { id: `hkt-${id}` });
@@ -3917,18 +3959,16 @@ export default function SceneEdit() {
             const havokResult = await sceneGetHavokMeta(sceneSessionId, `mesh-hkt-${folderName}`);
             if (havokResult) {
               const meshData = parseHavokXML(havokResult.hktXml);
-              setHavokMeshDataMap((prev) => {
-                const next = new Map(prev);
-                if (id !== resolvedId) next.delete(id);
-                next.set(havokResult.sourceId, meshData);
-                return next;
-              });
-              setHavokMetaMap((prev) => {
-                const next = new Map(prev);
-                if (id !== resolvedId) next.delete(id);
-                next.set(havokResult.sourceId, { displayName: havokResult.displayName, objectNodeId: havokResult.objectNodeId });
-                return next;
-              });
+              // upsertHavokMap prunes the same folder's prior collision (disk
+              // `folder/map_hit.hkt` and any earlier `mesh-hkt-folder`) so the
+              // freshly generated mesh replaces it in the viewport immediately.
+              setHavokMeshDataMap((prev) => upsertHavokMap(prev, havokResult.sourceId, meshData));
+              setHavokMetaMap((prev) =>
+                upsertHavokMap(prev, havokResult.sourceId, {
+                  displayName: havokResult.displayName,
+                  objectNodeId: havokResult.objectNodeId,
+                }),
+              );
             }
             useSceneDirtyStore.getState().markObjectModified(folderName, "hkt");
             toast.success(`HKT generated for ${folderName}`, { id: `hkt-${id}` });
@@ -3967,16 +4007,13 @@ export default function SceneEdit() {
         const havokResult = await sceneGetHavokMeta(sceneSessionId, resolvedImportId);
         if (havokResult) {
           const meshData = parseHavokXML(havokResult.hktXml);
-          setHavokMeshDataMap((prev) => {
-            const next = new Map(prev);
-            next.set(havokResult.sourceId, meshData);
-            return next;
-          });
-          setHavokMetaMap((prev) => {
-            const next = new Map(prev);
-            next.set(havokResult.sourceId, { displayName: havokResult.displayName, objectNodeId: havokResult.objectNodeId });
-            return next;
-          });
+          setHavokMeshDataMap((prev) => upsertHavokMap(prev, havokResult.sourceId, meshData));
+          setHavokMetaMap((prev) =>
+            upsertHavokMap(prev, havokResult.sourceId, {
+              displayName: havokResult.displayName,
+              objectNodeId: havokResult.objectNodeId,
+            }),
+          );
         }
         const daeObj = importedDaeObjects.find((o) => o.id === importId);
         useSceneDirtyStore.getState().markObjectModified(daeObj ? daeObj.name : importId, "hkt");
@@ -4012,16 +4049,13 @@ export default function SceneEdit() {
       const havokResult = await sceneGetHavokMeta(sceneSessionId, resolvedImportId);
       if (havokResult) {
         const meshData = parseHavokXML(havokResult.hktXml);
-        setHavokMeshDataMap((prev) => {
-          const next = new Map(prev);
-          next.set(havokResult.sourceId, meshData);
-          return next;
-        });
-        setHavokMetaMap((prev) => {
-          const next = new Map(prev);
-          next.set(havokResult.sourceId, { displayName: havokResult.displayName, objectNodeId: havokResult.objectNodeId });
-          return next;
-        });
+        setHavokMeshDataMap((prev) => upsertHavokMap(prev, havokResult.sourceId, meshData));
+        setHavokMetaMap((prev) =>
+          upsertHavokMap(prev, havokResult.sourceId, {
+            displayName: havokResult.displayName,
+            objectNodeId: havokResult.objectNodeId,
+          }),
+        );
       }
       useSceneDirtyStore
         .getState()
@@ -4414,7 +4448,7 @@ export default function SceneEdit() {
                 collisionVisibility={collisionVisibility}
                 selectedCollisionSourceId={selectedCollisionSourceId}
               />
-              <SceneViewportOverlay isLoading={isLoading} modelLoadProgress={modelLoadProgress} textureProgress={textureProgress} />
+              <SceneViewportOverlay isLoading={isLoading} modelLoadProgress={modelLoadProgress} textureProgress={textureProgress} hktLoadProgress={hktLoadProgress} />
             </div>
             </ViewportContextMenu>
           </ResizablePanel>

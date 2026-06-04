@@ -146,7 +146,7 @@ fn exvs_stage_check_info(content_root: &Path, errors: &mut Vec<ExvsStageValidati
         }
     }
 
-    // Required subfolders: fog/, light/, post_effect/
+    // Required subfolders: light/, fog/, post_effect/
     for subfolder in INFO_SUBFOLDER_NAMES {
         if !info_dir.join(subfolder).is_dir() {
             errors.push(ExvsStageValidationError {

@@ -131,6 +131,26 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
+/*
+ * Layout + stacking contract (theme-independent).
+ *
+ * The top bar is portaled to <body> and must paint above every floating layer,
+ * including Radix portals and custom fixed overlays. The scale below is the
+ * single source of truth for layer ordering; modals reference these tokens
+ * instead of ad-hoc z-index values so nothing can outrank the top bar.
+ *
+ * Order: page content < sidebar < modal < nested editor < popover < toast < topbar
+ */
+:root {
+  --layout-topbar-height: 2rem; /* matches the legacy h-8 top bar */
+  --z-sidebar: 10;
+  --z-modal: 100;
+  --z-modal-nested: 110;
+  --z-popover: 200;
+  --z-toast: 300;
+  --z-topbar: 1000;
+}
+
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);

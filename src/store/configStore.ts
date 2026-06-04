@@ -7,6 +7,29 @@ import {
   normalizeSceneGizmoSize,
 } from "@/page/SceneEdit/utils/sceneEditorSettings";
 
+// Authoritative persistence for the sidebar collapse state lives in the Tauri
+// store (settings.json). The localStorage mirror is a non-authoritative cache
+// read synchronously on first paint to avoid an expanded->collapsed flicker
+// while the async store loads.
+const SIDEBAR_OPEN_STORE_KEY = "sidebarOpen";
+const SIDEBAR_OPEN_MIRROR_KEY = "sidebar:open";
+
+export function readSidebarOpenMirror(): boolean {
+  try {
+    return window.localStorage.getItem(SIDEBAR_OPEN_MIRROR_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+function writeSidebarOpenMirror(open: boolean): void {
+  try {
+    window.localStorage.setItem(SIDEBAR_OPEN_MIRROR_KEY, String(open));
+  } catch {
+    // localStorage may be unavailable; the Tauri store remains authoritative.
+  }
+}
+
 export const useConfigStore = create<ConfigState>((set, get) => ({
   store: null,
   obDplCachePath: "",
@@ -15,6 +38,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   imgToNutexbOutputPath: "",
   repackInputPath: "",
   sceneEditGizmoSize: DEFAULT_SCENE_GIZMO_SIZE,
+  sidebarOpen: readSidebarOpenMirror(),
 
   initStore: async () => {
     // Init the tauri store
@@ -30,6 +54,9 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     const sceneEditGizmoSize = normalizeSceneGizmoSize(
       await _store.get(SCENE_GIZMO_SIZE_SETTING_KEY),
     );
+    const storedSidebarOpen = await _store.get(SIDEBAR_OPEN_STORE_KEY);
+    const sidebarOpen = storedSidebarOpen === undefined ? true : Boolean(storedSidebarOpen);
+    writeSidebarOpenMirror(sidebarOpen);
 
     // Update state with loaded values
     set({
@@ -39,6 +66,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       imgToNutexbOutputPath: imgToNutexbOutputPath as string,
       repackInputPath: repackInputPath as string,
       sceneEditGizmoSize,
+      sidebarOpen,
     });
 
     // Save changes
@@ -85,5 +113,15 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       await store.save();
     }
     set({ sceneEditGizmoSize: normalized });
+  },
+
+  setSidebarOpen: async (open: boolean) => {
+    writeSidebarOpenMirror(open);
+    set({ sidebarOpen: open });
+    const { store } = get();
+    if (store) {
+      await store.set(SIDEBAR_OPEN_STORE_KEY, open);
+      await store.save();
+    }
   },
 }));

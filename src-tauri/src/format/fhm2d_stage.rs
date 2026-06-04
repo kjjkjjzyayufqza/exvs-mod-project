@@ -4,7 +4,7 @@
 //! this module reads the `_structure.json` and renames them into a human-readable
 //! stage directory:  base/ , info/ , <numdlb-inferred-name>/ , ... , textures/ (skipped).
 //!
-//! Info folder internals: sub-folders 0,1,2 → fog/ , light/ , post_effect/ ;
+//! Info folder internals: sub-folders 0,1,2 → light/ , fog/ , post_effect/ ;
 //! remaining files are renamed to fixed names by JSON array order.
 
 use serde::{Deserialize, Serialize};
@@ -26,7 +26,7 @@ pub(crate) const STAGE_BASE_NAME: &str = "base";
 pub(crate) const STAGE_INFO_NAME: &str = "info";
 const STAGE_TEXTURES_NAME: &str = "textures";
 
-pub(crate) const INFO_SUBFOLDER_NAMES: &[&str] = &["fog", "light", "post_effect"];
+pub(crate) const INFO_SUBFOLDER_NAMES: &[&str] = &["light", "fog", "post_effect"];
 
 pub(crate) const INFO_FILE_NAMES: &[&str] = &[
     "border_hit.hkt",

@@ -809,8 +809,22 @@ This file matches the IDA/native path exactly:
 - table1 offset: `0x6E2C`
 - table0 marker: `0xA8BBBAB9`
 - table0 shape: `55` rows x `128` u32 columns
+- table0 data start/end: `0x2C` -> `0x6E2C`
 - table1 marker: `0xA8BAA9BA`
 - table1 shape: `1` row x `1` u32 column
+- table1 data start/end: `0x6E3C` -> `0x6E40`
+
+Subtable header correction:
+
+```text
+u32 marker
+u32 row_count
+u32 column_count
+u32 reserved_or_zero
+```
+
+Matrix data starts at `subtable_offset + 0x10`. Do not parse row data from
+`subtable_offset + 0x0C`.
 
 This corrects an earlier assumption in the repo parser:
 
@@ -1149,3 +1163,762 @@ chrsysparam.csyspm -> action_rows.json/yaml -> rebuild chrsysparam.csyspm
 
 The artifact must preserve unknown fields and support exact round-trip unless
 the user intentionally edits specific fields.
+
+## 2026-06-04 follow-up: MSC editing boundary with `chrsysparam.csyspm`
+
+Recorded the answer to the follow-up design question: future MSC editing does
+not automatically mean `chrsysparam.csyspm` must be changed, but action-level
+edits must treat it as paired metadata.
+
+Safe MSC-only edits:
+
+- modify an existing callback body
+- keep the same action row, action hash, group, category, phase keys, and route
+  metadata
+- avoid changing how the action is selected or registered
+
+Paired edits that likely require rebuilding `chrsysparam.csyspm`:
+
+- add/delete/move an action row
+- change field `0x2E` action hash
+- change field `0x0A` group routing
+- change fields `0x03/0x04` category/input behavior
+- change fields `0x02/0x7C/0x7D` phase callback keys
+- change route/condition fields used by `0x700002`; after the old B4AC
+  comparison, the strongest first-pass candidates are `0x03`, `0x2C`, and
+  `0x6E`, while `0x1C..0x22` should be preserved as callback-specific action
+  parameters unless proven otherwise
+
+Tooling implication: `chrsysparam.csyspm` must eventually be exposed as a
+human-readable structured artifact, not edited by hand as raw binary:
+
+```text
+chrsysparam.csyspm -> action row model -> user edit -> exact binary rebuild
+```
+
+The exporter/rebuilder must preserve unknown fields and round-trip unchanged
+rows byte-for-byte.
+
+## 2026-06-04 follow-up: `0x700002` route/flags boundary
+
+Continued the `0x700002` investigation without IDA MCP access in this session.
+Used script-side evidence from:
+
+- `E:\XB\解包\com\file\0x693F756D\0.c`
+- `E:\XB\解包\com\file\0x693F756D\2.c`
+- `E:\XB\解包\com\file\0x38C44F75\chrsysparam.csyspm`
+- `E:\XB\解包\com\file\0x31A97FD4\chrsysparam.csyspm`
+
+Confirmed script state roles:
+
+```text
+0x700002(..., subfield 0, row) -> routeEnum
+0x700002(..., subfield 1, row) -> flagsMask
+```
+
+Evidence:
+
+- `0.c func_145()` reads subfields `0` and `1`, ORs subfield `1` with caller
+  flags, then calls `func_95(actionHash, routeEnum, flagsMask, category)`.
+- `0.c func_95()` stores route into `global23`, flags into `global24`, and uses
+  `flagsMask & 0x800` to select action state `global22 = 2` vs `1`.
+- `2.c func_872()` repeats the same `0x700002` subfield reads.
+- `2.c func_81()` stores route into `global67`, flags into `global52`, and uses
+  `flagsMask & 0x800` to select `global154 = 2` vs `1`.
+- `2.c func_81()` also treats `routeEnum == 2` as an inherit/keep-previous
+  value by replacing it with `global174`.
+
+Shared runtime slots:
+
+```text
+0.c writes route/flags to 0x10000 fields 0x1C/0x1D
+2.c reads those into global67/global52
+2.c writes route/flags to 0x10000 fields 0x1E/0x1F
+0.c reads those into global23/global24
+```
+
+This confirms that `0x700002` is not an action-name source and not a callback
+resolver. It is a native decoder that returns action route/state metadata.
+
+Large-table field shape check:
+
+- `0x38C44F75` table0: `55 x 128`, paired with unit `59001001`
+- `0x31A97FD4` table0: `72 x 128`, paired with unit `33004001`
+
+The fields `0x1C..0x22` are group-specific:
+
+- groups `0x0C` and `0x0D`: dense `0x1C..0x22` records
+- groups `0x1F` and `0x1D`: compact `0x1C` plus small `0x1D` style records
+- group `0x27`: no `0x1C`; consistently uses `0x1D`, `0x1F`, `0x20`,
+  `0x21`, `0x22`
+- group `0x03`: mixed hash-like and small numeric fields
+
+Field `0x6E` should be kept separate for now. It is read directly by
+`2.c func_870()` into `global912`; in the checked `0x693F756D` script,
+callbacks such as `func_950()` / `func_956()` branch on `global912`. It is not
+yet proven to feed `0x700002`.
+
+Unresolved at this point: exact native mapping from action-row fields to route
+enum and flags bits. The next strong step was to compare the old embedded B4AC
+script, because it may contain the script-side predecessor of native
+`0x700002`.
+
+## 2026-06-04 follow-up: old B4AC gives a partial `0x700002` formula
+
+Read `G:\1. Gundam - 1011.c` again, focusing on the caller of the old
+`func_138(actionCallback, routeEnum, flagsMask, category)` path.
+
+Key finding: old `func_138()` is structurally equivalent to new
+`0x693F756D/2.c func_81()`.
+
+Both functions:
+
+- use `flagsMask & 0x800` to choose state `2` vs `1`
+- treat `routeEnum == 2` as "inherit previous route"
+- store route and flags into action-state globals
+- store callback/hash and category beside them
+
+The old caller `func_786(rowIndex, category)` reads embedded B4AC rows with
+`func_796(row, field)` / `sys_2C(0x3,row,field)` and builds route/flags without
+using `0x1C..0x22`.
+
+Old formula evidence:
+
+```text
+extra400 = field_0x2C == 1 ? 0x400 : 0
+baseFlag = field_0x03 > 0x12C ? 0x200 : 0x20000
+group = field_0x0A
+groupExtra = field_0x6E
+```
+
+Observed old group mapping:
+
+```text
+group 0x00 -> route 0, flags 0x1 + extra400 + baseFlag
+group 0x03 -> route 1, flags 0x1 + extra400 + baseFlag
+group 0x05 -> route 1, flags 0x1 + extra400 + baseFlag
+group 0x0C -> route 1, flags 0x2 + extra400 + baseFlag
+group 0x0D -> route 1, flags 0x2 + extra400 + baseFlag
+group 0x10 -> route 1, flags 0x1 + extra400 + baseFlag
+group 0x15 -> route 1, flags 0x401 + baseFlag
+group 0x1F -> route 1, flags (field_0x6E ? 0x402 : 0x4) + baseFlag
+group 0x2D -> route 1, flags 0x2 + extra400 + baseFlag
+```
+
+Applied the formula to local new tables:
+
+- `0x38C44F75` / `59001001`:
+  - group `0x03`: route `1`, flags `0x20001`
+  - group `0x0C` / `0x0D`: route `1`, flags `0x20002`
+  - group `0x10`: route `1`, flags `0x20001`
+  - group `0x1F`: route `1`, flags `0x20004`
+- `0x31A97FD4` / `33004001`:
+  - rows with `field_0x03 > 0x12C` drop the base flag to `0x200`
+  - group `0x1F` with `field_0x6E = 1` yields `0x20402`
+
+Correction to the previous research direction:
+
+- `0x1C..0x22` are still important action-row fields, but they are probably
+  selected-callback parameters rather than primary `0x700002` inputs.
+- The first-pass `0x700002` reconstruction should prioritize fields `0x0A`,
+  `0x03`, `0x2C`, and `0x6E`.
+- New-only groups still need native or runtime verification:
+  `0x0F`, `0x13`, `0x25`, `0x26`, `0x27`, `0x28`, `0x29`.
+
+Added `tools/research_chrsysparam_700002.py` as a local helper for first-pass
+route/flags emulation. It parses `chrsysparam.csyspm` as B4AC table headers plus
+little-endian `u32` matrices, applies the old `func_786()` formula to supported
+groups, and reports unsupported groups instead of guessing.
+
+Verification commands:
+
+```powershell
+python -m py_compile tools\research_chrsysparam_700002.py
+python tools\research_chrsysparam_700002.py E:\XB\解包\com\file\0x38C44F75\chrsysparam.csyspm --supported-only | Select-Object -First 15
+python tools\research_chrsysparam_700002.py E:\XB\解包\com\file\0x31A97FD4\chrsysparam.csyspm --supported-only | Select-Object -First 20
+python tools\research_chrsysparam_700002.py E:\XB\解包\com\file\0x38C44F75\chrsysparam.csyspm E:\XB\解包\com\file\0x31A97FD4\chrsysparam.csyspm | Select-String -Pattern "unsupported_group" | Select-Object -First 20
+```
+
+Outcomes:
+
+- syntax check passed
+- `59001001` supported rows show the expected groups/flags, e.g.
+  `0x03 -> route 1 flags 0x20001`, `0x0C -> 0x20002`,
+  `0x1F -> 0x20004`
+- `33004001` confirms the `field_0x03 > 0x12C` base-flag drop, e.g.
+  group `0x1F` row with `field_0x03 = 0x190` yields flags `0x204`
+- `33004001` also confirms the old `field_0x6E` rule for group `0x1F`:
+  `field_0x6E = 1` yields flags `0x20402`
+- unsupported rows are mostly the expected new-only groups, especially
+  `0x0F`, `0x13`, `0x25`, `0x26`, and `0x27`
+
+Editing implication recorded in
+`auto-rename-external-file-analysis.md`: future edits should be classified as
+MSC-only callback-body edits vs paired `Msc + Param/chrsysparam.csyspm` action
+metadata edits. Users should not hand-edit the binary; the needed design is a
+structured export/import and exact-preserving binary rebuild for action rows.
+
+## 2026-06-04 follow-up: table1 and derived-action evidence
+
+Added `tools/research_chrsysparam_action_report.py`.
+
+Purpose:
+
+- parse `chrsysparam.csyspm` table0/table1
+- parse matching `2.txt` function pointer list
+- parse matching `2.c func_873(group)` to map group -> callback function
+- parse matching `2.c func_975(hash)` to map phase/predicate hashes -> callback
+  functions
+- output row-evidence TSV/CSV for action rows and transition rows
+
+Verification commands:
+
+```powershell
+python -m py_compile tools\research_chrsysparam_action_report.py tools\research_chrsysparam_700002.py
+python tools\research_chrsysparam_action_report.py E:\XB\解包\com\file\0x38C44F75\chrsysparam.csyspm --msc-dir E:\XB\解包\com\file\0x693F756D --mode actions --format csv
+python tools\research_chrsysparam_action_report.py E:\XB\解包\com\file\0x31A97FD4\chrsysparam.csyspm --mode transitions --format csv
+```
+
+Key `59001001` action summary:
+
+```text
+0x03 -> func_950, old route formula covered, 5 rows
+0x0C -> func_924, old route formula covered, 8 rows
+0x0D -> func_942, old route formula covered, 2 rows
+0x0F -> func_946, route unknown, 3 rows
+0x10 -> func_956, old route formula covered, 2 rows
+0x13 -> func_956, route unknown, 3 rows
+0x1F -> func_916, old route formula covered, 7 rows
+0x25 -> func_919, route unknown, 2 rows
+0x26 -> func_919, route unknown, 2 rows
+0x27 -> no group callback, phase callbacks only, 17 rows
+0x28 -> no group callback, phase callbacks only, 2 rows
+0x29 -> no group callback, phase callbacks only, 1 row
+```
+
+Important correction:
+
+- groups `0x27`, `0x28`, and `0x29` are not empty even though `func_873()`
+  returns `0`
+- their fields `0x02`, `0x7C`, and `0x7D` still resolve through `func_975()`
+  into real phase callbacks
+- auto-rename should surface these as phase-driven action rows, not hide them
+
+New table1 finding:
+
+- `2.c func_869()` loads table0 fields `0x7E/0x7F` and adds `1` when the value
+  is non-negative
+- `2.c func_962()` iterates that range
+- `2.c func_963()` reads table1 through `sys_0(0x700000, 0x1, row, field)`
+
+So table0 fields `0x7E/0x7F` are zero-based ranges into table1; script-side
+table1 access is one-based.
+
+Confirmed with `33004001` / `0x31A97FD4`:
+
+```text
+table0 row 20 action 0x280BEB91 group 0x27 range 0..0 -> table1 row 1 action 0x280BEB91
+table0 row 18 action 0x2B58E76E group 0x1F range 1..1 -> table1 row 2 action 0x2B58E76E
+table0 row 37 action 0x58921C28 group 0x27 range 2..2 -> table1 row 3 action 0x58921C28
+table0 row 42 action 0x7AE860E7 group 0x27 range 3..3 -> table1 row 4 action 0x7AE860E7
+```
+
+First table1 semantics from `func_963()`:
+
+- fields `0x01`, `0x1F`, `0x20`, `0x21`, `0x22`: action hashes matched against
+  current action hash `global855`
+- field `0x02`: state compared with `global808`
+- field `0x06`: transition mode
+- field `0x1C`: optional predicate callback hash via `func_975()`
+- fields `0x1D/0x1E`: timing/window thresholds
+- fields `0x04/0x05`: returned transition values
+
+Derived-action evidence from `func_921()`:
+
+- current action row fields `0x30..0x39` are derived action-hash keys
+- fields `0x59..0x62` are the per-slot delays; field `0x58` is separate
+- native `0x700003` maps those keys plus `1 << global143` to another action row
+- the returned row's field `0x06` filters route side/state, and field `0x04`
+  maps to scheduled input/condition masks through `func_536()`
+
+## 2026-06-04 follow-up: stronger `0x700003` evidence
+
+Read both script-side `0x700003` entry points in `0x693F756D/2.c`:
+
+- `func_900(delay,key)` takes a script-provided key, calls
+  `sys_0(0x700003, key, 1 << global143)`, stores the returned row in the first
+  free `global936..global945` slot, and schedules `func_928..func_937`
+- `func_921(slot,defaultDelay)` reads current table0 fields `0x30..0x39` as
+  action-hash keys and fields `0x59..0x62` as per-slot delays, then calls the
+  same native lookup
+- `func_928..func_937` set `global813` to the candidate row, call `func_874()`,
+  then `func_938()` runs phase-only special handlers for groups
+  `0x27/0x28/0x29` or falls back to `func_872(candidateRow, 0)`
+
+Extended `tools/research_chrsysparam_action_report.py` with `--mode derived`.
+It reports source row, source slot, delay, target row, target action hash,
+target group/callback, target `field_0x04`, target schedule mask, and target
+`field_0x06`.
+
+Verification commands:
+
+```powershell
+python -m py_compile tools\research_chrsysparam_action_report.py
+python tools\research_chrsysparam_action_report.py E:\XB\解包\com\file\0x38C44F75\chrsysparam.csyspm --msc-dir E:\XB\解包\com\file\0x693F756D --mode derived --format csv
+python tools\research_chrsysparam_action_report.py E:\XB\解包\com\file\0x31A97FD4\chrsysparam.csyspm --mode derived --format csv
+```
+
+Outcomes:
+
+- `59001001` / `0x38C44F75`: 42 derived links; every nonzero key in
+  `0x30..0x39` matches a table0 action hash at field `0x2E`
+- `33004001` / `0x31A97FD4`: 39 derived links; every nonzero key also matches a
+  table0 action hash
+- no missing derived targets in either checked sample
+- both checked table0 samples have unique action hashes:
+  `59001001` has `54/54` unique nonzero action hashes, and `33004001` has
+  `71/71`; therefore these samples cannot prove duplicate-key variant
+  selection
+
+Current best `0x700003` model:
+
+```text
+0x700003(actionHashKey, 1 << global143) -> matching table0 action row index
+```
+
+The mask likely selects a variant when multiple rows share the same key. The
+checked samples prove hash-to-row lookup but do not yet prove duplicate-key
+selection rules.
+
+Schedule-mask mapping from target field `0x04`:
+
+```text
+0x00 -> 0x001
+0x04 -> 0x002
+0x08 -> 0x004
+0x10 -> 0x008
+0x20 -> 0x010
+0x40 -> 0x020
+0x41 -> 0x040
+0x42 -> 0x080
+0x43 -> 0x100
+0x44 -> 0x400
+0x45 -> 0x200
+0x46 -> 0x800
+```
+
+Example `59001001` links:
+
+```text
+row 20 action 0x178D1109 group 0x0C slot 0 delay 11 -> row 21 group 0x27 phase-only
+row 20 action 0x178D1109 group 0x0C slot 1 delay 6  -> row 38 group 0x0C func_924 schedule 0x002
+row 20 action 0x178D1109 group 0x0C slot 2 delay 11 -> row 41 group 0x0C func_924 schedule 0x100
+row 42 action 0x476F6B01 group 0x27 slot 0 delay 30 -> row 43 group 0x1F func_916
+row 47 action 0x1DDC5F3A group 0x0F slot 0 delay 0  -> row 48 group 0x29 phase-only schedule 0x800
+```
+
+Design implication:
+
+- derived links are a third naming layer, after direct group callbacks and phase
+  callbacks
+- `0x27/0x28/0x29` rows can often be named by their source row + derived slot
+  even when they have no direct group callback
+- structured Param export/import must include table1 and table0 `0x7E/0x7F`
+  ranges, not only table0 action rows
+- auto-rename should output both group-callback names and phase-callback names
+- `0x27/0x28/0x29` should use phase evidence names until their native route
+  semantics are understood
+- Param export/import must preserve fields `0x30..0x39` and `0x59..0x62` as
+  derived-action links
+
+## 2026-06-04 follow-up: old embedded B4AC confirms derived-action model
+
+Added `tools/research_old_b4ac_action_report.py`.
+
+Purpose:
+
+- parse old embedded `sys_2D(0x3,row,field,value)` action rows
+- treat physical row `0x11` as logical action row `1`, matching old
+  `func_796(row,field)` which reads `sys_2C(0x3, 0x11 + row - 1, field)`
+- report derived links from fields `0x30..0x39`
+- use fields `0x59..0x62` as per-slot delays
+- map old `field_0x04` values to schedule masks using old script logic
+
+Verification commands:
+
+```powershell
+python -m py_compile tools\research_old_b4ac_action_report.py tools\research_chrsysparam_action_report.py
+python tools\research_old_b4ac_action_report.py "G:\1. Gundam - 1011.c" --format csv
+```
+
+Outcomes:
+
+- old file has `29` action rows and `29` unique action hashes
+- old derived report finds `19` derived links
+- all `19` derived links target an action hash present in the same embedded
+  table
+- no duplicate action hash is present, so the old sample also cannot prove
+  duplicate-key variant selection
+
+Function equivalence:
+
+```text
+old func_822(delay,key)             -> new func_900(delay,key)
+old func_837(slot,defaultDelay)     -> new func_921(slot,defaultDelay)
+old func_501(mask,delay,callback)   -> new func_536(mask,delay,callback)
+old func_844..func_853              -> new func_928..func_937
+```
+
+Old lookup:
+
+```c
+candidateRow = sys_74(0x9, actionHashKey, global306);
+```
+
+Old file comments say MBON uses `1 << global306`. New script uses:
+
+```c
+candidateRow = sys_0(0x700003, actionHashKey, 1 << global143);
+```
+
+So `0x700003` is best understood as the newer native wrapper for old
+`sys_74(0x9, actionHashKey, unitModeFlag)` derived-row lookup.
+
+Important correction recorded:
+
+- keys are fields `0x30..0x39`
+- per-slot delays are fields `0x59..0x62`
+- field `0x58` is loaded separately and is not slot 0 delay
+
+Old vs new schedule encoding differs:
+
+```text
+mask 0x001: old field04 0x00 -> new field04 0x00
+mask 0x002: old field04 0x08 -> new field04 0x04
+mask 0x004: old field04 0x04 -> new field04 0x08
+mask 0x008: old field04 0x02 -> new field04 0x10
+mask 0x010: old field04 0x01 -> new field04 0x20
+mask 0x020: old field04 0x10 -> new field04 0x40
+mask 0x040: old field04 0x11 -> new field04 0x41
+mask 0x080: old field04 0x12 -> new field04 0x42
+mask 0x100: old field04 0x13 -> new field04 0x43
+mask 0x200: old field04 0x15 -> new field04 0x45
+mask 0x400: old field04 0x14 -> new field04 0x44
+mask 0x800: old field04 0x16 -> new field04 0x46
+```
+
+Design conclusion: the old and new systems share the same evidence graph
+(`action row -> derived key -> target row -> schedule mask`), but field-value
+decoders must be version-aware.
+
+## 2026-06-04 edit-boundary answer: MSC-only vs paired Param edits
+
+Recorded the explicit answer in
+`docs/agent-sessions/msc-workspace-redesign/auto-rename-external-file-analysis.md`.
+
+Conclusion:
+
+- Function auto-renaming in `2.c` is a tooling symbol operation. It does not
+  require editing `chrsysparam.csyspm`.
+- MSC callback-body edits can stay MSC-only when they preserve the same action
+  contract: action row, field `0x2E` action hash, field `0x0A` group, fields
+  `0x03/0x04` category/input data, phase keys `0x02/0x7C/0x7D`, derived keys,
+  and transition ranges.
+- Edits that add/delete/rekey/move actions require paired `Msc + Param`
+  support because newer MSC reads the action registry from
+  `Param/chrsysparam.csyspm`.
+- Because `chrsysparam.csyspm` is binary, the workspace should not ask users to
+  hand-edit it. The required design is a structured action-row export/import
+  that round-trips unknown fields exactly and rebuilds the binary.
+
+Editor policy to carry forward:
+
+1. allow MSC-only symbol/callback edits;
+2. warn when edits change row/hash/group/category/phase/derived/transition
+   metadata;
+3. block or mark paired edits incomplete until the Param writer exists.
+
+## 2026-06-04 follow-up: local duplicate-key scan and human-readable export v0
+
+Ran a bounded scan over the currently unpacked local
+`E:\XB\解包\com\file\**\chrsysparam.csyspm` files to look for duplicate action
+hashes in table0 field `0x2E`.
+
+Command:
+
+```powershell
+@'
+from pathlib import Path
+from collections import defaultdict
+import sys
+sys.path.insert(0, r'E:\TAURI_PROJECT\tools')
+from research_chrsysparam_700002 import parse_chrsysparam, MAIN_TABLE_MARKER, u32_hex
+
+root = Path(r'E:\XB\解包\com\file')
+paths = sorted(root.rglob('chrsysparam.csyspm'))
+for path in paths:
+    parsed = parse_chrsysparam(path)
+    main_tables = [t for t in parsed['tables'] if t['marker'] == MAIN_TABLE_MARKER and t['columns'] > 0x7F]
+    ...
+'@ | python -
+```
+
+Outcome:
+
+- 7 local `chrsysparam.csyspm` files were present.
+- 5 are placeholder-sized `1 x 1` table pairs.
+- 2 contain large action tables:
+  - `0x31A97FD4`: unit `33004001`, table0 `72 x 128`,
+    `71` nonzero action hashes, `71` unique, `0` duplicates.
+  - `0x38C44F75`: unit `59001001`, table0 `55 x 128`,
+    `54` nonzero action hashes, `54` unique, `0` duplicates.
+- Therefore the local unpacked samples still cannot prove how native
+  `0x700003` selects a variant when multiple rows share one action hash.
+
+This keeps the current `0x700003` model unchanged:
+
+```text
+0x700003(actionHashKey, 1 << global143) -> matching table0 action row index
+```
+
+The second argument is still best understood as a unit-mode/variant mask, but
+the duplicate-key selection rule remains unverified.
+
+Added `tools/research_chrsysparam_human_export.py`.
+
+Purpose: export `chrsysparam.csyspm` into a human-readable research JSON format
+that preserves every raw `u32` cell while also exposing known semantic fields.
+
+Schema target:
+
+```text
+schema: research.chrsysparam.human.v0
+source_path
+unit_id / unit_id_hex
+tables[]
+  index, marker, rows, columns, offsets
+  duplicate_action_hashes
+  row_records[]
+    row
+    kind: action | transition | raw
+    raw_cells[]
+    known{}
+```
+
+For action rows, `known` currently includes:
+
+- field `0x2E` action hash
+- field `0x0A` group
+- resolved `func_873()` group callback when a matching `--msc-dir` is provided
+- fields `0x03/0x04` category/input evidence
+- old-B4AC-derived route/flags coverage
+- phase callback keys `0x02/0x7C/0x7D` resolved through `func_975()`
+- table1 transition range fields `0x7E/0x7F`
+- derived links from `0x30..0x39`, delays from `0x59..0x62`, and all candidate
+  target rows for the key
+- selected named fields while still preserving the full raw row
+
+For transition rows, `known` currently includes:
+
+- action hash match fields `0x01/0x1F/0x20/0x21/0x22`
+- field `0x02` state
+- field `0x06` mode
+- fields `0x04/0x05` returned values
+- field `0x1C` predicate callback key resolved through `func_975()`
+- timing fields `0x1D/0x1E`
+
+Verification commands:
+
+```powershell
+python -m py_compile tools\research_chrsysparam_700002.py tools\research_chrsysparam_action_report.py tools\research_old_b4ac_action_report.py tools\research_chrsysparam_human_export.py
+python tools\research_chrsysparam_human_export.py E:\XB\解包\com\file\0x38C44F75\chrsysparam.csyspm --msc-dir E:\XB\解包\com\file\0x693F756D --non-empty-only
+```
+
+Result:
+
+- syntax check passed.
+- export links `59001001` action rows to group callbacks, phase callbacks,
+  derived links, old-formula route/flags, and raw rows in one JSON document.
+
+Design implication: this JSON is not the final editor format yet, but it is the
+first concrete "human-readable Param evidence" contract. The eventual editable
+format should split this into stable user-facing fields plus an exact-preserved
+raw-cell layer for unknown fields and binary rebuild.
+
+## 2026-06-04 follow-up: MSC + Param human-readable bundle v0
+
+Checked whether an IDA MCP tool is currently exposed for direct native
+`0x700003` handler research. Tool discovery for IDA returned no tools in this
+Codex session, so the next step used local, verifiable evidence rather than
+claiming native-handler results.
+
+Added `tools/research_msc_project_human_bundle.py`.
+
+Purpose: build a project-level human-readable JSON bundle from the paired MSC
+directory and `Param/chrsysparam.csyspm`.
+
+Schema:
+
+```text
+research.msc_project.human_bundle.v0
+  unit: id, msc_id, param_id
+  paths: msc_dir, chrsysparam
+  msc:
+    scripts_present
+    group_resolver from 2.c func_873 + 2.txt
+    phase_resolver_case_count from 2.c func_975
+  param:
+    embedded research.chrsysparam.human.v0 export
+  action_summary[]
+  function_candidates{}
+  unresolved{}
+```
+
+Important design point: `function_candidates` is not a rename dictionary. It is
+a many-to-one evidence index from script function name to candidate semantic
+labels and supporting rows. A single function can receive multiple candidates,
+so this remains reviewable and evidence-based.
+
+Verification commands:
+
+```powershell
+python -m py_compile tools\research_chrsysparam_human_export.py tools\research_msc_project_human_bundle.py
+python tools\research_msc_project_human_bundle.py --unit-id 59001001 --msc-id 0x693F756D --param-id 0x38C44F75 --msc-dir E:\XB\解包\com\file\0x693F756D --chrsysparam E:\XB\解包\com\file\0x38C44F75\chrsysparam.csyspm --non-empty-only
+```
+
+Pipe/JSON decoding issue found and fixed: both JSON export scripts now
+reconfigure stdout to UTF-8 before writing, while `--output` still writes UTF-8
+files directly.
+
+Validation result for `59001001`:
+
+- schema: `research.msc_project.human_bundle.v0`
+- scripts present: `0.c`, `1.c`, `2.c`
+- group resolver entries: 9 groups
+  (`0x03`, `0x0C`, `0x0D`, `0x0F`, `0x10`, `0x13`, `0x1F`, `0x25`, `0x26`)
+- `func_975` phase resolver cases: 162
+- action summary rows: 54
+- function candidate entries: 150 script functions
+- route unknown rows: 30
+- no group callback rows: 20
+- phase unresolved count: 0
+- derived missing count: 0
+
+This is the first project-level "human-readable MSC + Param" artifact:
+
+```text
+resource ids
+  -> paired Msc directory + Param/chrsysparam
+  -> script resolver evidence
+  -> Param row evidence
+  -> function candidate evidence
+  -> unresolved fields/rows for reverse work
+```
+
+Remaining blocker for full semantics is unchanged: current local data still
+lacks duplicate action-hash rows, and IDA native tools are not exposed in this
+session, so `0x700003` duplicate-key variant selection remains unproven.
+
+## 2026-06-04 follow-up: category bits and safer human-readable labels
+
+Re-read the existing TypeScript helper
+`src/page/TestEditor/utils/mscActionRename.ts`. Its old approach maps `0.c`
+condition masks to fixed stems:
+
+```text
+0x1   -> ACTION_A_SHOT
+0x2   -> ACTION_B_MELEE
+0x4   -> ACTION_B_MELEE_DIR_1
+0x8   -> ACTION_B_MELEE_DIR_2
+0x10  -> ACTION_B_MELEE_DIR_3
+0x20  -> ACTION_B_MELEE_DIR_4
+0x40  -> ACTION_B_MELEE_VARIANT
+0x80  -> ACTION_AB_SUB
+0x100 -> ACTION_AC_SPECIAL_SHOT
+0x200 -> ACTION_BC_SPECIAL_MELEE
+0x400 -> ACTION_ABC_FINAL_ATTACK
+0x800 -> ACTION_CHARGE_SHOT
+```
+
+That helper is valid for older `0.c func_143()` structures that directly expose
+mask branches. It is not directly valid for newer `sys_41 -> func_144 ->
+func_145` flow because the newer flow returns a row-derived category, not the
+old branch mask.
+
+Re-read the user-provided old EXVS1-style file around `input()` and
+`assign_B4AC_Weapon_Inputs()`. Its category derivation matches the newer
+`0x693F756D/0.c func_144()` shape, but with different field `0x04` values:
+
+```text
+old:
+field04 0x01 -> category 0x04
+field04 0x02 -> category 0x03
+field04 0x04 -> category 0x05
+field04 0x08 -> category 0x02
+field04 0x0C -> category 0x02
+field04 0x03 -> category 0x04
+field04 0x0F -> category 0x02
+
+new 59001001:
+field04 0x20 -> category 0x04
+field04 0x10 -> category 0x03
+field04 0x08 -> category 0x05
+field04 0x04 -> category 0x02
+field04 0x0C -> category 0x02
+field04 0x30 -> category 0x04
+field04 0x3C -> category 0x02
+```
+
+The old file also contains explicit comments:
+
+```text
+global51 & 0x1 = Shooting
+global51 & 0x2 = Melee
+```
+
+and `write_Weapon_Type_Enum()` writes `1` for shooting and `2` for melee.
+
+This proves a safer first-pass interpretation:
+
+- category bit `0x1` means shooting-type evidence
+- category bit `0x2` means melee-type evidence
+- category values with higher bits, such as `0x04`, `0x08`, and `0x1F`, are
+  composite or still unnamed; do not force them into fixed labels like Sub,
+  Special Shot, or Special Melee yet
+
+Updated `tools/research_chrsysparam_human_export.py`:
+
+- added `computed` category using the newer `func_144()` field `0x03/0x04`
+  formula
+- added `gameplay_type_bits` with `shooting_bit`, `melee_bit`, and
+  `unknown_bits`
+
+Updated `tools/research_msc_project_human_bundle.py`:
+
+- action labels now include category:
+  `ACTION_ROW_001_CAT_00_GROUP_03`
+- function candidates carry category and gameplay bit evidence
+- bundle includes `category_summary`
+
+Validation for `59001001`:
+
+```text
+actions: 54
+category 0x00: 2 rows
+category 0x01: 1 row, shooting bit
+category 0x02: 2 rows, melee bit
+category 0x04: 1 row, unknown bit 0x04
+category 0x05: 1 row, shooting bit + unknown bit 0x04
+category 0x06: 1 row, melee bit + unknown bit 0x04
+category 0x07: 3 rows, shooting bit + melee bit + unknown bit 0x04
+category 0x08: 4 rows, unknown bit 0x08
+category 0x09: 4 rows, shooting bit + unknown bit 0x08
+category 0x0A: 2 rows, melee bit + unknown bit 0x08
+category 0x0B: 1 row, shooting bit + melee bit + unknown bit 0x08
+category 0x1F: 32 rows, shooting bit + melee bit + unknown bits 0x1C
+```
+
+Design decision: the current human-readable layer should use labels such as
+`ACTION_ROW_003_CAT_0B_GROUP_03` and expose bit evidence. It should not yet emit
+claims such as `ACTION_SUB` or `ACTION_SPECIAL_SHOT` unless further `sys_41`
+input-selection or native evidence confirms the exact mapping.

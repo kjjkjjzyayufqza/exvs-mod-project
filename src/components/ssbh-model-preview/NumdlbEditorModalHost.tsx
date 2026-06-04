@@ -31,8 +31,8 @@ export function NumdlbEditorModalHost({
 
   return (
     <TooltipProvider delayDuration={100}>
-      {/* Above Fhm2dInitModal (z-50) in TopNavBar so both can be used at once */}
-      <div className="pointer-events-none fixed inset-0 z-60">
+      {/* Above base modals; offset below the top bar so it can never cover it */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 top-[var(--layout-topbar-height)] z-[var(--z-modal-nested)]">
         {sorted.map((session, cascadeIndex) => (
           <NumdlbEditorModalWindow
             key={session.id}

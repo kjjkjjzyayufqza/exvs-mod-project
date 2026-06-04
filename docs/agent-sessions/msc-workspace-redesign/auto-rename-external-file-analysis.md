@@ -616,9 +616,11 @@ For this sample:
 - table0 offset is `0x1C`
 - table0 marker is `0xA8BBBAB9`
 - table0 shape is `55 x 128` u32 values
+- table0 data starts at `0x2C` (`0x1C + 0x10`) and ends at `0x6E2C`
 - table1 offset is `0x6E2C`
 - table1 marker is `0xA8BAA9BA`
 - table1 shape is `1 x 1`
+- table1 data starts at `0x6E3C` (`0x6E2C + 0x10`) and ends at `0x6E40`
 
 This matches the native IDA finding:
 
@@ -628,6 +630,19 @@ This matches the native IDA finding:
 - `a2 + 168` is validated as magic `0xB4ACACAF` and version `0x10000`
 - the native reader treats `+0x14/+0x18` as subtable offsets and reads a
   row/column u32 matrix
+
+Each subtable has a 16-byte header:
+
+```text
+u32 marker
+u32 row_count
+u32 column_count
+u32 reserved_or_zero
+```
+
+The matrix payload starts at `subtable_offset + 0x10`, not
+`subtable_offset + 0x0C`. This matters for any future parser, exporter, or
+binary rebuilder.
 
 The existing repo parser in `src-tauri/src/format/chrsysparam.rs` should not be
 used as semantic truth for this feature yet. It currently treats `0x10` as a
@@ -1084,7 +1099,10 @@ If an edit changes action selection or registration semantics, then
 - changing input/category behavior in `field 0x03/0x04`
 - changing group routing in `field 0x0A`
 - assigning different phase callbacks through `field 0x02/0x7C/0x7D`
-- changing route/condition fields such as `0x1C..0x22` or `0x6E`
+- changing route/condition fields interpreted through `0x700002`; after the
+  old B4AC comparison, the strongest first-pass candidates are `0x03`, `0x2C`,
+  and `0x6E`, while `0x1C..0x22` should be preserved as callback-specific
+  action parameters unless proven otherwise
 
 This is the same relationship as the older embedded B4AC table, except that
 the table is now an external binary file. The toolchain should eventually expose
@@ -1100,3 +1118,690 @@ chrsysparam.csyspm
 The row artifact should preserve unknown fields and round-trip the binary
 exactly unless the user edits specific fields. That avoids forcing users to edit
 raw binary while still keeping MSC and its action metadata consistent.
+
+## Editing boundary: MSC-only edits vs paired metadata edits
+
+The correct long-term model is not "MSC source is the only editable truth".
+For the newer format, action selection is split across two files:
+
+```text
+MSC .c/.mscsb
+  -> callback implementation and script-side dispatch behavior
+
+Param/chrsysparam.csyspm
+  -> action rows, hashes, groups, categories, phase keys, and route metadata
+```
+
+Therefore future MSC editing does not always require changing
+`chrsysparam.csyspm`, but the editor must know when the paired metadata is part
+of the same logical edit.
+
+Safe MSC-only edits:
+
+- changing internal logic inside an existing callback
+- changing constants, timings, or effects used only inside that callback
+- preserving the same action row, action hash, group, category, and phase keys
+
+Paired edits that need `chrsysparam.csyspm` support:
+
+- adding or deleting an action
+- moving a callback to a different action row
+- changing the action hash in field `0x2E`
+- changing group routing in field `0x0A`
+- changing category/input fields `0x03/0x04`
+- changing phase callback keys `0x02/0x7C/0x7D`
+- changing route/condition fields interpreted through `0x700002`
+
+Because `chrsysparam.csyspm` is binary, the user should not be expected to edit
+it directly. Tooling should expose it through a structured row model and rebuild
+the binary with exact preservation of unknown fields.
+
+## Current `0x700002` evidence: route enum plus flags mask
+
+The current evidence does not prove the native field-to-bit mapping yet, but it
+does prove what the two `0x700002` outputs become in script state.
+
+`0.c func_145()` reads:
+
+```c
+var6 = sys_0(0x700002, group, 0, recordIndex, 1);
+var7 = sys_0(0x700002, group, 1, recordIndex, 1) | extraFlags;
+func_95(actionHash, var6, var7, category);
+```
+
+`0.c func_95()` then stores:
+
+```c
+global25 = actionHash;
+global23 = routeEnum;  // 0x700002 subfield 0
+global24 = flagsMask;  // 0x700002 subfield 1
+global26 = category;
+```
+
+and `flagsMask & 0x800` selects action state `global22 = 2`; otherwise
+`global22 = 1`.
+
+`2.c func_872()` performs the same two reads and passes them to `func_81()`.
+`2.c func_81()` stores:
+
+```c
+global67 = routeEnum;
+global52 = flagsMask;
+global25 = actionHash;
+global50 = category;
+```
+
+with one additional rule: if `routeEnum == 2`, it is replaced with the previous
+`global174`. So subfield `0` is a small route/side/state enum, not a hash or
+callback. Subfield `1` is a bitmask consumed throughout the action state
+machine.
+
+The shared runtime slots mirror this state in both directions:
+
+```text
+0.c writes 0x10000[0x1c] = routeEnum, 0x10000[0x1d] = flagsMask
+2.c writes 0x10000[0x1e] = routeEnum, 0x10000[0x1f] = flagsMask
+```
+
+### Field-shape evidence from large `chrsysparam` samples
+
+Only two local `chrsysparam.csyspm` files currently contain meaningful large
+main tables:
+
+- `0x38C44F75`: unit `59001001`, table0 `55 x 128`
+- `0x31A97FD4`: unit `33004001`, table0 `72 x 128`
+
+Their fields `0x1C..0x22` are clearly group-specific, not one flat structure:
+
+- groups `0x0C` / `0x0D`: dense `0x1C..0x22` records, usually several hash-like
+  values plus small timing/window values
+- groups `0x1F` / `0x1D`: compact records, mostly `0x1C` plus a small value in
+  `0x1D`
+- group `0x27`: no `0x1C`; uses `0x1D`, `0x1F`, `0x20`, `0x21`, `0x22`
+  consistently, likely a separate route/condition shape
+- group `0x03`: mixed hash and small numeric fields
+- field `0x6E` is not common. It is absent in the `59001001` sample and appears
+  only in a small subset of `33004001` rows. In `0x693F756D/2.c`, field `0x6E`
+  is read directly into `global912` by `func_870()`; it is not yet proven to be
+  part of the native `0x700002` decode.
+
+Current boundary before the old-script comparison: `0x700002` is a native
+group-specific decoder from the action row to route enum and flags mask. The
+exact input fields were still unresolved at this point.
+
+## Old embedded B4AC reveals the likely `0x700002` formula
+
+The old EXVS1-style file `G:\1. Gundam - 1011.c` contains a script-side
+equivalent of the missing native `0x700002` behavior.
+
+Its `func_138(actionCallback, routeEnum, flagsMask, category)` is structurally
+equivalent to new `2.c func_81()`:
+
+```c
+if (flagsMask & 0x800)
+    state = 2;
+else
+    state = 1;
+
+if (routeEnum == 2)
+    routeEnum = previousRoute;
+
+global88/global67 = routeEnum;
+global91/global52 = flagsMask;
+global93/global25 = actionCallbackOrHash;
+global82/global50 = category;
+```
+
+The caller `func_786(rowIndex, category)` reads the embedded B4AC row through
+`func_796(row, field)` / `sys_2C(0x3,row,field)` and builds route/flags from a
+small set of fields:
+
+```c
+extra400 = field_0x2C == 1 ? 0x400 : 0;
+baseFlag = field_0x03 > 0x12C ? 0x200 : 0x20000;
+group = field_0x0A;
+groupExtra = field_0x6E;
+```
+
+Observed old-script mapping:
+
+| group | route | flags expression |
+|---:|---:|---|
+| `0x00` | `0` | `0x1 + extra400 + baseFlag` |
+| `0x03` | `1` | `0x1 + extra400 + baseFlag` |
+| `0x05` | `1` | `0x1 + extra400 + baseFlag` |
+| `0x0C` | `1` | `0x2 + extra400 + baseFlag` |
+| `0x0D` | `1` | `0x2 + extra400 + baseFlag` |
+| `0x10` | `1` | `0x1 + extra400 + baseFlag` |
+| `0x15` | `1` | `0x401 + baseFlag` |
+| `0x1F` | `1` | `(field_0x6E ? 0x402 : 0x4) + baseFlag` |
+| `0x2D` | `1` | `0x2 + extra400 + baseFlag` |
+
+This strongly suggests that new native `0x700002(group,subfield,row)` performs
+the same calculation for at least the overlapping groups.
+
+Applying this old formula to the local large new tables produces plausible
+new route/flag values:
+
+- `0x38C44F75` / unit `59001001`:
+  - group `0x03` -> route `1`, flags `0x20001`
+  - group `0x0C` / `0x0D` -> route `1`, flags `0x20002`
+  - group `0x10` -> route `1`, flags `0x20001`
+  - group `0x1F` -> route `1`, flags `0x20004`
+- `0x31A97FD4` / unit `33004001`:
+  - rows with `field_0x03 > 0x12C` drop the base flag from `0x20000` to
+    `0x200`, e.g. group `0x0C` -> `0x202`
+  - group `0x1F` with `field_0x6E = 1` yields `0x20402`
+
+Important correction: fields `0x1C..0x22` should no longer be treated as the
+primary `0x700002` inputs. In the old embedded script, those fields are loaded
+later by the selected action callbacks as move-specific parameters. They are
+still action-row metadata and must be preserved/editable, but they are not the
+first target for route/flags reconstruction.
+
+Still unresolved:
+
+- whether native `0x700002` uses the exact old formula for every overlapping
+  group
+- route/flags rules for new-only groups such as `0x0F`, `0x13`, `0x25`,
+  `0x26`, `0x27`, `0x28`, and `0x29`
+- whether group `0x13` inherits group `0x10` route/flags, since the current
+  `0x693F756D/2.c func_873()` maps both to the same callback
+
+## Editing implication: MSC-only edits vs paired Param edits
+
+The current evidence means future MSC editing should be classified before
+writing files.
+
+Edits that only change the body of an already-registered callback can usually
+remain MSC-only. Examples: changing logic inside the selected `2.c` callback,
+changing calls/effects/timers inside an existing action implementation, or
+renaming symbols in the workspace for readability.
+
+Edits that change the action row model require paired `chrsysparam.csyspm`
+support. Examples:
+
+- adding/removing an action row
+- changing the action hash stored at field `0x2E`
+- changing the action group at field `0x0A`
+- changing the phase callback keys at fields `0x02`, `0x7C`, or `0x7D`
+- changing fields that feed route/flags, currently strong candidates
+  `0x03`, `0x2C`, and `0x6E`
+- making a new action selectable through the game's normal action table path
+
+This does not mean users should hand-edit a binary file. `chrsysparam.csyspm`
+is binary, but its large table is a regular little-endian `u32` matrix:
+header `0xB4ACACAF`, subtable headers, then fixed-width rows. The editor should
+eventually expose a structured export/import view for action rows, preserve all
+unknown fields exactly, and rebuild the binary table only from that structured
+model.
+
+Therefore the correct design is a paired `Msc + Param` workspace, not a
+dictionary. Auto-rename can read `chrsysparam.csyspm` as evidence without
+modifying it; real action-metadata edits need a safe round-trip writer for the
+same file.
+
+## Table1 and derived-action evidence
+
+Added `tools/research_chrsysparam_action_report.py` to join these evidence
+sources:
+
+- `Param/chrsysparam.csyspm` table0/table1 rows
+- matching `Msc/2.c func_873(group)` group resolver
+- matching `Msc/2.txt` function pointer list
+- matching `Msc/2.c func_975(hash)` phase/predicate callback resolver
+
+For `59001001` (`Param=0x38C44F75`, `Msc=0x693F756D`), the structured group
+summary is:
+
+| group | group callback | route evidence | count |
+|---:|---|---|---:|
+| `0x03` | `func_950` | old formula covered | 5 |
+| `0x0C` | `func_924` | old formula covered | 8 |
+| `0x0D` | `func_942` | old formula covered | 2 |
+| `0x0F` | `func_946` | route unknown | 3 |
+| `0x10` | `func_956` | old formula covered | 2 |
+| `0x13` | `func_956` | route unknown | 3 |
+| `0x1F` | `func_916` | old formula covered | 7 |
+| `0x25` | `func_919` | route unknown | 2 |
+| `0x26` | `func_919` | route unknown | 2 |
+| `0x27` | none | phase callbacks only | 17 |
+| `0x28` | none | phase callbacks only | 2 |
+| `0x29` | none | phase callbacks only | 1 |
+
+The important correction is that groups `0x27`, `0x28`, and `0x29` are not
+empty or useless rows. They are not handled by `func_873(group)`, but their
+fields `0x02`, `0x7C`, and `0x7D` still resolve through `func_975()` into real
+phase callbacks. For example, `59001001` group `0x27` rows resolve to phase
+triples such as `func_1004/func_1003/func_1005`, `func_1007/func_1006/func_1008`,
+and so on.
+
+Auto-rename implication:
+
+- rows with a group callback can get names like
+  `ACTION_ROW_16_GROUP_1F_FUNC_916`
+- rows with no group callback but real phase callbacks should get names like
+  `ACTION_ROW_12_GROUP_27_PHASE0_func_1004`, not be hidden or collapsed into
+  "unknown"
+- route/flags remain unknown for new-only groups until native `0x700002` or
+  runtime evidence confirms the formulas
+
+### Table0 field ranges into table1
+
+`2.c func_869()` loads table0 fields `0x7E` and `0x7F` into `global894` and
+`global895`. If either field is non-negative, the script adds `1`:
+
+```c
+global894 = func_875(global798, 0x7e);
+global895 = func_875(global798, 0x7f);
+if (field_0x7e >= 0) global894 += 1;
+if (field_0x7f >= 0) global895 += 1;
+```
+
+`func_962()` then iterates `global894..global895`, and `func_963()` reads
+`sys_0(0x700000, 0x1, transitionRow, field)`. Therefore table0 fields
+`0x7E/0x7F` are zero-based ranges into table1, while script-side row access is
+one-based.
+
+The `33004001` sample (`Param=0x31A97FD4`) confirms this:
+
+| table0 row | action hash | group | raw range | table1 row | table1 action |
+|---:|---:|---:|---:|---:|---:|
+| 20 | `0x280BEB91` | `0x27` | `0..0` | 1 | `0x280BEB91` |
+| 18 | `0x2B58E76E` | `0x1F` | `1..1` | 2 | `0x2B58E76E` |
+| 37 | `0x58921C28` | `0x27` | `2..2` | 3 | `0x58921C28` |
+| 42 | `0x7AE860E7` | `0x27` | `3..3` | 4 | `0x7AE860E7` |
+
+### Table1 transition row semantics
+
+`2.c func_963()` gives the first reliable semantics for table1:
+
+- fields `0x01`, `0x1F`, `0x20`, `0x21`, `0x22`: action hashes that can match
+  the current action hash (`global855`)
+- field `0x02`: required state value checked against `global808`
+- field `0x06`: transition mode (`0`, `1`, `2`, `3`, `4`, `5` observed in code)
+- field `0x1C`: optional predicate callback hash, resolved by `func_975()`
+- fields `0x1D`, `0x1E`: timing/window thresholds
+- fields `0x04`, `0x05`: returned values used by the transition decision
+
+This means future export/import cannot be table0-only. A correct action editor
+must preserve and eventually expose table1 rows plus table0 `0x7E/0x7F` ranges.
+
+### Derived-action lookup through `0x700003`
+
+There are two script-side entry points into the same derived-action path.
+
+`2.c func_900(delay,key)` accepts a key from script logic, calls native
+`0x700003`, stores the returned row into the next free `global936..global945`
+slot, and schedules the matching `func_928..func_937` callback.
+
+`2.c func_921(slot,defaultDelay)` reads the current table0 row's fields
+`0x30..0x39` as keys and `0x59..0x62` as per-slot delays, calls native
+`0x700003`, and receives another action row index:
+
+```c
+candidateRow = sys_0(0x700003, keyFromField_0x30_to_0x39, 1 << global143);
+```
+
+Both paths then use the returned row's field `0x04` to schedule
+`func_536(mask, delay, callback)` and eventually call `func_928..func_937`.
+Those callbacks set `global813` to the candidate row, call `func_874()`, and
+then `func_938()` decides whether to run a special phase-only handler
+(`0x27/0x28/0x29`) or fall back to `func_872(candidateRow, 0)`.
+
+Sample validation:
+
+- `59001001` / `0x38C44F75`: every nonzero derived key in fields `0x30..0x39`
+  matches a table0 action hash in field `0x2E`; all 42 derived links resolve to
+  a target row.
+- `33004001` / `0x31A97FD4`: every nonzero derived key also resolves to a
+  table0 action hash; all 39 derived links resolve to a target row.
+- both checked table0 samples have unique nonzero action hashes
+  (`59001001`: `54/54`, `33004001`: `71/71`), so they cannot prove duplicate-key
+  variant selection.
+
+So the current best evidence is:
+
+```text
+0x700003(actionHashKey, 1 << global143) -> matching table0 action row index
+```
+
+The mask argument probably selects the correct variant when the same key has
+multiple row candidates. The checked samples do not yet prove the native
+variant-selection rule.
+
+Observed target `field 0x04` to schedule-mask mapping comes directly from
+`func_900()` / `func_921()`:
+
+| target field `0x04` | scheduled mask |
+|---:|---:|
+| `0x00` | `0x001` |
+| `0x04` | `0x002` |
+| `0x08` | `0x004` |
+| `0x10` | `0x008` |
+| `0x20` | `0x010` |
+| `0x40` | `0x020` |
+| `0x41` | `0x040` |
+| `0x42` | `0x080` |
+| `0x43` | `0x100` |
+| `0x44` | `0x400` |
+| `0x45` | `0x200` |
+| `0x46` | `0x800` |
+
+Field `0x58` is loaded separately (`global906`) and should not be treated as
+slot-0 delay.
+
+For `59001001`, the derived links show common chains such as:
+
+```text
+row 20 group 0x0C slot 0 delay 11 -> row 21 group 0x27 phase-only
+row 20 group 0x0C slot 1 delay 6  -> row 38 group 0x0C func_924, schedule 0x002
+row 20 group 0x0C slot 2 delay 11 -> row 41 group 0x0C func_924, schedule 0x100
+row 42 group 0x27 slot 0 delay 30 -> row 43 group 0x1F func_916
+row 47 group 0x0F slot 0 delay 0  -> row 48 group 0x29 phase-only, schedule 0x800
+```
+
+This gives auto-rename another useful evidence layer: a phase-only row can
+still receive a meaningful name from its source row and derived slot, for
+example `ACTION_ROW_20_DERIVED_SLOT_0_TO_ROW_21_GROUP_27`.
+
+### Old embedded B4AC confirms the derived-action model
+
+Added `tools/research_old_b4ac_action_report.py` to parse old embedded
+`sys_2D(0x3,row,field,value)` rows and report derived links from the old action
+matrix.
+
+In `G:\1. Gundam - 1011.c`, the equivalent functions are:
+
+| old function | new function | role |
+|---|---|---|
+| `func_822(delay,key)` | `func_900(delay,key)` | script-provided derived lookup |
+| `func_837(slot,defaultDelay)` | `func_921(slot,defaultDelay)` | row-field derived lookup |
+| `func_501(mask,delay,callback)` | `func_536(mask,delay,callback)` | schedule derived callback |
+| `func_844..func_853` | `func_928..func_937` | candidate row entry callbacks |
+
+The old lookup call is:
+
+```c
+candidateRow = sys_74(0x9, actionHashKey, global306);
+```
+
+The file comments state that MBON uses `1 << global306` instead of `global306`
+directly. That matches the newer script-side form:
+
+```c
+candidateRow = sys_0(0x700003, actionHashKey, 1 << global143);
+```
+
+So `0x700003` is very likely the new native wrapper for the same
+`actionHashKey + unitModeFlag` derived-row lookup that old embedded scripts
+performed with `sys_74(0x9, ...)`.
+
+Old sample validation:
+
+- `G:\1. Gundam - 1011.c`: 29 action rows, 29 unique action hashes
+- 19 derived links from fields `0x30..0x39`
+- every derived key resolves to a target row's field `0x2E`
+- no duplicate-key case is present, so variant-selection remains unproven
+
+The old per-slot delay mapping also matches the corrected new mapping: keys are
+fields `0x30..0x39`, while delays are fields `0x59..0x62`. Field `0x58` is not
+slot 0 delay.
+
+The old `field 0x04` schedule encoding differs from the newer sample encoding:
+
+| schedule mask | old field `0x04` | new field `0x04` |
+|---:|---:|---:|
+| `0x001` | `0x00` | `0x00` |
+| `0x002` | `0x08` | `0x04` |
+| `0x004` | `0x04` | `0x08` |
+| `0x008` | `0x02` | `0x10` |
+| `0x010` | `0x01` | `0x20` |
+| `0x020` | `0x10` | `0x40` |
+| `0x040` | `0x11` | `0x41` |
+| `0x080` | `0x12` | `0x42` |
+| `0x100` | `0x13` | `0x43` |
+| `0x200` | `0x15` | `0x45` |
+| `0x400` | `0x14` | `0x44` |
+| `0x800` | `0x16` | `0x46` |
+
+This reinforces the earlier rule: auto-rename can share the same evidence model
+across old embedded B4AC and new external `chrsysparam`, but field-value
+decoders must be version-aware.
+
+## Explicit answer: does MSC editing require `chrsysparam` editing?
+
+Not every MSC edit requires editing `chrsysparam.csyspm`.
+
+Function renaming in decompiled C is a tooling-only symbol change. The game does
+not know those function names, so auto-renaming `2.c` callbacks does not require
+any `chrsysparam.csyspm` change.
+
+MSC-only edits are also reasonable when the mod only changes code inside an
+existing callback and preserves the same external action contract:
+
+- same action row
+- same action hash in field `0x2E`
+- same group key in field `0x0A`
+- same category/input fields such as `0x03/0x04`
+- same phase keys in `0x02/0x7C/0x7D`
+- same derived-action keys and transition ranges
+
+Paired edits are required when the edit changes the action contract rather than
+only the callback implementation. In that case, MSC and `Param/chrsysparam.csyspm`
+are two halves of the same runtime behavior. Examples:
+
+- adding a new action that must be selected by the action system
+- deleting or replacing an action row
+- changing action hash linkage
+- moving behavior to a different group or phase path
+- changing derived-action links through fields `0x30..0x39`
+- changing transition ranges in `0x7E/0x7F` or table1 transition rows
+
+The practical conclusion is that `chrsysparam.csyspm` should not be exposed as a
+raw binary editing requirement. The workspace needs a structured action-row
+artifact that can be exported, edited, and rebuilt while preserving all unknown
+fields exactly. Until that exists, the safe editor policy should be:
+
+1. allow MSC-only callback/symbol edits;
+2. warn when an edit changes row/hash/group/category/phase/derived/transition
+   metadata;
+3. block or mark those edits as incomplete unless the paired Param file can be
+   rebuilt.
+
+## Human-readable Param evidence v0
+
+Added `tools/research_chrsysparam_human_export.py` as the first concrete bridge
+from raw `chrsysparam.csyspm` binary data to a human-readable research artifact.
+
+This is intentionally not a name dictionary. It exports the action/transition
+evidence that the runtime already uses:
+
+```text
+chrsysparam.csyspm
+  -> research.chrsysparam.human.v0 JSON
+     -> table metadata
+     -> row records
+     -> known semantic fields
+     -> full raw u32 cells for exact preservation
+```
+
+For table0 action rows, the JSON exposes:
+
+- action hash from field `0x2E`
+- group from field `0x0A`
+- group callback resolved from matching `2.c func_873()` and `2.txt`
+- category/input evidence from fields `0x03/0x04`
+- old-formula route/flags coverage when known
+- phase callback keys from `0x02/0x7C/0x7D`, resolved through `2.c func_975()`
+- derived-action keys from `0x30..0x39`
+- per-slot delays from `0x59..0x62`
+- table1 transition range fields `0x7E/0x7F`
+- the complete raw row as hex `u32` cells
+
+For table1 transition rows, the JSON exposes:
+
+- current/extra action-hash match fields `0x01/0x1F/0x20/0x21/0x22`
+- state field `0x02`
+- transition mode field `0x06`
+- returned fields `0x04/0x05`
+- predicate callback key field `0x1C`
+- timing fields `0x1D/0x1E`
+- the complete raw row
+
+This gives the workspace a concrete path toward a human-readable version:
+
+```text
+MSC .c/.mscsb
+  + Param/chrsysparam.csyspm
+  -> action evidence JSON
+  -> user-readable/editable action model
+  -> exact-preserving Param rebuild
+```
+
+Local duplicate-key scan result:
+
+- 7 local `chrsysparam.csyspm` files were found under `E:\XB\解包\com\file`.
+- 5 are placeholder `1 x 1` table pairs.
+- `0x31A97FD4` has `71/71` unique nonzero action hashes.
+- `0x38C44F75` has `54/54` unique nonzero action hashes.
+- no local duplicate action-hash sample exists yet, so `0x700003` variant
+  selection remains unproven.
+
+The exporter already records `duplicate_action_hashes` and every derived key's
+`candidate_rows`, so the next duplicate sample can be inspected directly in the
+same human-readable artifact.
+
+## Human-readable MSC project bundle v0
+
+Added `tools/research_msc_project_human_bundle.py` to combine script-side MSC
+evidence and Param evidence into one project-level JSON document:
+
+```text
+research.msc_project.human_bundle.v0
+  unit identity
+  resource ids
+  MSC script files present
+  group resolver from 2.c func_873 + 2.txt
+  phase resolver case count from 2.c func_975
+  embedded research.chrsysparam.human.v0 Param export
+  action_summary[]
+  function_candidates{}
+  unresolved{}
+```
+
+`function_candidates` is deliberately an evidence index, not a final rename
+dictionary. It maps existing script functions to one or more candidate labels,
+each backed by action row, action hash, group, and phase/role evidence. This is
+the right shape for a future human-readable workflow:
+
+```text
+func_1004
+  -> ACTION_ROW_012_PHASE_0
+     evidence: row 12, group 0x27, action hash 0x270DE97B, phase key ...
+```
+
+The 59001001 bundle currently reports:
+
+- 3 MSC scripts present: `0.c`, `1.c`, `2.c`
+- 9 group resolver entries from `func_873()`
+- 162 phase resolver cases from `func_975()`
+- 54 action rows
+- 150 script functions with candidate evidence
+- 30 rows whose route/flags are not covered by the old B4AC formula
+- 20 rows with no direct group callback
+- 0 unresolved phase keys
+- 0 missing derived-action targets
+
+This advances the target from "auto rename 2.c callbacks" to a broader
+human-readable architecture:
+
+```text
+Msc + Param
+  -> evidence bundle
+  -> candidate semantic labels
+  -> unresolved reverse-work list
+  -> later editable model + exact binary rebuild
+```
+
+Current hard boundary: IDA MCP tools are not exposed in this Codex session, and
+the local Param samples have no duplicate action hashes. Native `0x700003`
+duplicate-key variant selection therefore remains an explicit unresolved item,
+not a guessed rule.
+
+## Category-bit evidence for safer readable names
+
+The old TypeScript helper `mscActionRename.ts` maps old `0.c func_143()` branch
+masks to fixed action stems such as `A_SHOT`, `B_MELEE`, `AB_SUB`,
+`AC_SPECIAL_SHOT`, and `BC_SPECIAL_MELEE`. That is a branch-mask rename path.
+
+The newer `59001001` flow does not expose the same branch mask. It computes a
+row-derived category in `0.c func_144()`:
+
+```c
+category = field_0x03 % 0x64;
+if (category == 1) {
+    category = remap(field_0x04);
+}
+```
+
+The user-provided old EXVS1-style file contains the same category-derivation
+shape, but the `field_0x04` values differ by version:
+
+| category | old field `0x04` | new field `0x04` |
+|---:|---:|---:|
+| `0x04` | `0x01`, `0x03` | `0x20`, `0x30` |
+| `0x03` | `0x02` | `0x10` |
+| `0x05` | `0x04` | `0x08` |
+| `0x02` | `0x08`, `0x0C`, `0x0F` | `0x04`, `0x0C`, `0x3C` |
+
+The old file has explicit comments proving only the first two category bits:
+
+```text
+global51 & 0x1 = Shooting
+global51 & 0x2 = Melee
+```
+
+Therefore the current safe interpretation is bit evidence, not full label
+evidence:
+
+- `category & 0x1` -> shooting-type evidence
+- `category & 0x2` -> melee-type evidence
+- higher bits such as `0x04`, `0x08`, and `0x1C` remain unnamed
+
+Updated human-readable exporters now include:
+
+- `category.computed`
+- `category.gameplay_type_bits.shooting_bit`
+- `category.gameplay_type_bits.melee_bit`
+- `category.gameplay_type_bits.unknown_bits`
+- `category_summary` in the project bundle
+
+For `59001001`, this produces category distribution:
+
+| category | rows | known bit evidence |
+|---:|---:|---|
+| `0x00` | 2 | none |
+| `0x01` | 1 | shooting |
+| `0x02` | 2 | melee |
+| `0x04` | 1 | unknown `0x04` |
+| `0x05` | 1 | shooting + unknown `0x04` |
+| `0x06` | 1 | melee + unknown `0x04` |
+| `0x07` | 3 | shooting + melee + unknown `0x04` |
+| `0x08` | 4 | unknown `0x08` |
+| `0x09` | 4 | shooting + unknown `0x08` |
+| `0x0A` | 2 | melee + unknown `0x08` |
+| `0x0B` | 1 | shooting + melee + unknown `0x08` |
+| `0x1F` | 32 | shooting + melee + unknown `0x1C` |
+
+This is why first-pass readable labels should stay evidence-shaped, for
+example:
+
+```text
+ACTION_ROW_003_CAT_0B_GROUP_03
+ACTION_ROW_012_CAT_1F_GROUP_27_PHASE_0
+```
+
+Do not emit `ACTION_SUB`, `ACTION_SPECIAL_SHOT`, or `ACTION_SPECIAL_MELEE`
+solely from these category values yet. Those require further `sys_41`
+input-selection evidence or native handler confirmation.

@@ -216,12 +216,12 @@ export function SceneTextureSelectPicker({
       ? createPortal(
           <>
             <div
-              className="fixed inset-0 z-9999"
+              className="fixed inset-0 z-[var(--z-popover)]"
               aria-hidden
               onMouseDown={() => setOpen(false)}
             />
             <div
-              className="fixed z-10000 overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md"
+              className="fixed z-[var(--z-popover)] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md"
               style={{
                 top: menuPosition.top,
                 left: menuPosition.left,

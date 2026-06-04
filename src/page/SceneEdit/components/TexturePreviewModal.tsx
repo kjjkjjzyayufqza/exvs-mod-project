@@ -208,7 +208,7 @@ export function TexturePreviewModal({
   const content = (
     <div
       id={PREVIEW_MODAL_ID}
-      className="fixed inset-0 z-50 pointer-events-none"
+      className="fixed inset-x-0 bottom-0 top-[var(--layout-topbar-height)] z-[var(--z-modal)] pointer-events-none"
     >
       <Rnd
         size={size}

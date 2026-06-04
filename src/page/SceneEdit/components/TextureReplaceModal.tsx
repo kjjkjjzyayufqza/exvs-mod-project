@@ -28,7 +28,7 @@ export function TextureReplaceModal({ entry, onClose, onConfirm }: TextureReplac
   const modalHeight = 200;
 
   const content = (
-    <div className="fixed inset-0 z-50 pointer-events-none">
+    <div className="fixed inset-x-0 bottom-0 top-[var(--layout-topbar-height)] z-[var(--z-modal)] pointer-events-none">
       <Rnd
         default={{
           x: Math.round((vw - modalWidth) / 2),

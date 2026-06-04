@@ -1,5 +1,7 @@
 //! Build Havok collision (HKT) from merged mesh collision geometry.
 
+use std::time::Instant;
+
 use serde::Serialize;
 
 use crate::collision_mesh::{
@@ -24,15 +26,19 @@ pub struct HktCollisionPreview {
 }
 
 /// Maximum collision triangles the HKT encoder can reasonably accept for stage assets.
+#[allow(dead_code)]
 pub const MAX_HKT_COLLISION_TRIANGLES: usize = 80_000;
 
 /// Merged triangle count above which ineffective simplification is treated as a complex mesh.
+#[allow(dead_code)]
 pub const COMPLEX_MESH_MERGED_TRIANGLE_THRESHOLD: usize = 20_000;
 
 /// Minimum simplification reduction ratio required once [`COMPLEX_MESH_MERGED_TRIANGLE_THRESHOLD`]
 /// is exceeded (2%).
+#[allow(dead_code)]
 pub const COMPLEX_MESH_MIN_REDUCTION_RATIO: f64 = 0.02;
 
+#[allow(dead_code)]
 fn collision_reduction_ratio(merged: usize, simplified: usize) -> f64 {
     if merged == 0 {
         return 0.0;
@@ -45,28 +51,28 @@ pub fn validate_collision_mesh_for_hkt(
     preview: &HktCollisionPreview,
     simplify_enabled: bool,
 ) -> Result<(), String> {
-    let merged = preview.merged_triangle_count;
-    let simplified = preview.simplified_triangle_count;
+    let _ = (preview, simplify_enabled);
 
-    if simplified > MAX_HKT_COLLISION_TRIANGLES {
-        return Err(format!(
-            "Collision mesh is too complex for HKT export ({simplified} triangles after processing, \
-             limit {MAX_HKT_COLLISION_TRIANGLES}). Prepare a dedicated low-poly collision mesh \
-             (target under ~25k triangles) in a separate DAE/FBX."
-        ));
-    }
-
-    if merged >= COMPLEX_MESH_MERGED_TRIANGLE_THRESHOLD
-        && simplify_enabled
-        && collision_reduction_ratio(merged, simplified) < COMPLEX_MESH_MIN_REDUCTION_RATIO
-    {
-        let reduction_pct = collision_reduction_ratio(merged, simplified) * 100.0;
-        return Err(format!(
-            "High-poly render mesh cannot be simplified enough for HKT ({merged} merged triangles, \
-             {reduction_pct:.0}% reduction). Use a dedicated low-poly collision mesh instead of the \
-             visual mesh."
-        ));
-    }
+    // Complexity gate disabled: always allow preview/export regardless of triangle count.
+    // if simplified > MAX_HKT_COLLISION_TRIANGLES {
+    //     return Err(format!(
+    //         "Collision mesh is too complex for HKT export ({simplified} triangles after processing, \
+    //          limit {MAX_HKT_COLLISION_TRIANGLES}). Prepare a dedicated low-poly collision mesh \
+    //          (target under ~25k triangles) in a separate DAE/FBX."
+    //     ));
+    // }
+    //
+    // if merged >= COMPLEX_MESH_MERGED_TRIANGLE_THRESHOLD
+    //     && simplify_enabled
+    //     && collision_reduction_ratio(merged, simplified) < COMPLEX_MESH_MIN_REDUCTION_RATIO
+    // {
+    //     let reduction_pct = collision_reduction_ratio(merged, simplified) * 100.0;
+    //     return Err(format!(
+    //         "High-poly render mesh cannot be simplified enough for HKT ({merged} merged triangles, \
+    //          {reduction_pct:.0}% reduction). Use a dedicated low-poly collision mesh instead of the \
+    //          visual mesh."
+    //     ));
+    // }
 
     Ok(())
 }
@@ -118,11 +124,37 @@ pub fn preview_hkt_collision_mesh_from_import_bytes(
     source_name: &str,
     options: CollisionMeshOptions,
 ) -> Result<HktCollisionMeshGeometry, String> {
+    // Phase-level timing: parse / skin-bake+merge / simplify are the candidate
+    // bottlenecks for large FBX inputs. Logged so the preview hang can be localized.
+    let parse_t = Instant::now();
     let scene = parse_import_scene_from_bytes(source_name, bytes)?;
+    let parse_ms = parse_t.elapsed().as_millis();
+
     let render_triangle_count = render_triangle_count_from_scene(&scene);
+
+    let merge_t = Instant::now();
     let merged = bake_and_merge_collision_mesh(&scene, &options)?;
+    let merge_ms = merge_t.elapsed().as_millis();
     let merged_triangle_count = merged.triangle_count();
+
+    let simplify_t = Instant::now();
     let simplified = simplify_collision_mesh(&merged, &options.simplify)?;
+    let simplify_ms = simplify_t.elapsed().as_millis();
+
+    eprintln!(
+        "[preview_hkt_collision_mesh] source={} bytes={} | parse={}ms (render_tris={}) \
+         bake_merge={}ms (merged_tris={}) simplify={}ms (simplified_tris={} verts={})",
+        source_name,
+        bytes.len(),
+        parse_ms,
+        render_triangle_count,
+        merge_ms,
+        merged_triangle_count,
+        simplify_ms,
+        simplified.triangle_count(),
+        simplified.vertices.len(),
+    );
+
     let preview = HktCollisionPreview {
         render_triangle_count,
         merged_triangle_count,
@@ -299,29 +331,12 @@ mod tests {
     use crate::collision_mesh::CollisionTriMesh;
     use crate::havok_mesh_encode::build_mesh_collision_xml;
 
-    #[test]
-    fn validate_rejects_high_triangle_count() {
-        let preview = HktCollisionPreview {
-            render_triangle_count: MAX_HKT_COLLISION_TRIANGLES + 1,
-            merged_triangle_count: MAX_HKT_COLLISION_TRIANGLES + 1,
-            simplified_triangle_count: MAX_HKT_COLLISION_TRIANGLES + 1,
-            vertex_count: 100,
-        };
-        let err = validate_collision_mesh_for_hkt(&preview, true).unwrap_err();
-        assert!(err.contains("too complex"));
-    }
-
-    #[test]
-    fn validate_rejects_ineffective_simplification() {
-        let preview = HktCollisionPreview {
-            render_triangle_count: 25_000,
-            merged_triangle_count: 25_000,
-            simplified_triangle_count: 24_750,
-            vertex_count: 20_000,
-        };
-        let err = validate_collision_mesh_for_hkt(&preview, true).unwrap_err();
-        assert!(err.contains("cannot be simplified enough"));
-    }
+    // Complexity gate disabled — rejection tests commented out alongside validate_collision_mesh_for_hkt.
+    // #[test]
+    // fn validate_rejects_high_triangle_count() { ... }
+    //
+    // #[test]
+    // fn validate_rejects_ineffective_simplification() { ... }
 
     #[test]
     fn validate_accepts_moderate_reduction_below_new_threshold() {

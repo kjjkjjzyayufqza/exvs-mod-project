@@ -277,7 +277,7 @@ function placementScaleForViewport(sx: number, sy: number, sz: number): [number,
 
 function SceneCanvasPerformanceHud({ showStats }: { showStats: boolean }) {
   return (
-    <>{showStats ? <Stats className="fixed! top-2! right-2! left-auto! z-2147483000" /> : null}</>
+    <>{showStats ? <Stats className="fixed! top-[calc(var(--layout-topbar-height)_+_0.5rem)]! right-2! left-auto! z-[var(--z-popover)]!" /> : null}</>
   );
 }
 

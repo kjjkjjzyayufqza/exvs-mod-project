@@ -499,7 +499,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
 
     return (
         <TooltipProvider delayDuration={100}>
-            <div className="fixed inset-0 z-50">
+            <div className="fixed inset-x-0 bottom-0 top-[var(--layout-topbar-height)] z-[var(--z-modal)]">
                 <div
                     ref={nodeRef}
                     className="w-[720px] max-w-[95vw]"

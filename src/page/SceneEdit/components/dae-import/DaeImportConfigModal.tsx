@@ -505,7 +505,7 @@ export function DaeImportConfigModal({
   const modalLayer = (
     <div
       id={DAE_IMPORT_MODAL_LAYER_ID}
-      className="pointer-events-none fixed inset-0 z-100"
+      className="pointer-events-none fixed inset-x-0 bottom-0 top-[var(--layout-topbar-height)] z-[var(--z-modal-nested)]"
     >
       <Rnd
         size={size}

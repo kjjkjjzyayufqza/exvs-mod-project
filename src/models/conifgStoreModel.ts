@@ -13,8 +13,10 @@ export interface ConfigState {
   imgToNutexbOutputPath?: string;
   repackInputPath?: string;
   sceneEditGizmoSize?: number;
-  
+  sidebarOpen: boolean;
+
   // Methods to update settings
   setRepackInputPath: (path: string) => Promise<void>;
   setSceneEditGizmoSize: (size: number) => Promise<void>;
+  setSidebarOpen: (open: boolean) => Promise<void>;
 }

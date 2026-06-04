@@ -10,7 +10,7 @@
 
 use chull::ConvexHullWrapper;
 
-use super::simplify::{simplify_collision_mesh, weld_vertices};
+use super::simplify::simplify_collision_mesh;
 use super::types::{
     cos_planarity_from_angle_deg, CollisionSimplifyMode, CollisionSimplifyOptions, CollisionTriMesh,
 };
@@ -22,12 +22,19 @@ const HULL_FACET_MERGE_ANGLE_DEG: f64 = 2.0;
 const MIN_HULL_POINTS: usize = 3;
 
 /// Build a coarse convex-hull collision mesh.
+///
+/// The convex hull is invariant to interior and duplicate points, so the full
+/// (often million-vertex) merged cloud is first reduced to its extreme points
+/// along a fixed direction set ([`hull_sample_directions`]). Quickhull then runs
+/// over a few dozen candidates in microseconds instead of minutes on the raw
+/// cloud, and the (otherwise pointless) vertex weld is skipped entirely. The
+/// sampled hull is contained in — and for a coarse "outer frame" effectively
+/// matches — the exact hull; the subsequent budget collapse coarsens it further.
 pub fn convex_hull_collision_mesh(
     mesh: &CollisionTriMesh,
     options: &CollisionSimplifyOptions,
 ) -> Result<CollisionTriMesh, String> {
-    let welded = weld_vertices(mesh, options.weld_epsilon);
-    let points = &welded.vertices;
+    let points = &mesh.vertices;
     if points.len() < MIN_HULL_POINTS {
         return Err(format!(
             "Convex hull collision needs at least {MIN_HULL_POINTS} distinct vertices, got {}",
@@ -35,9 +42,25 @@ pub fn convex_hull_collision_mesh(
         ));
     }
 
-    let (min, max) = welded
-        .compute_aabb()
-        .map_err(|e| format!("Convex hull: {e}"))?;
+    let directions = hull_sample_directions();
+    let candidates = extreme_hull_candidates(points, &directions);
+    if candidates.len() < MIN_HULL_POINTS {
+        return Err(format!(
+            "Convex hull: degenerate extreme-point set ({} candidate points)",
+            candidates.len()
+        ));
+    }
+
+    // AABB from the candidate set. The six axis directions are always sampled, so
+    // the extents (and the planarity decision below) match the full cloud exactly.
+    let mut min = [f64::INFINITY; 3];
+    let mut max = [f64::NEG_INFINITY; 3];
+    for v in &candidates {
+        for axis in 0..3 {
+            min[axis] = min[axis].min(v[axis]);
+            max[axis] = max[axis].max(v[axis]);
+        }
+    }
     let extents = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
     let max_extent = extents.iter().copied().fold(0.0_f64, f64::max);
     if max_extent <= 0.0 {
@@ -48,11 +71,61 @@ pub fn convex_hull_collision_mesh(
         .unwrap_or(0);
 
     if extents[thin_axis] <= max_extent * PLANARITY_RATIO {
-        return planar_hull_mesh(points, thin_axis, options.hull_target_faces);
+        return planar_hull_mesh(&candidates, thin_axis, options.hull_target_faces);
     }
 
-    let hull = hull_3d(points)?;
+    let hull = hull_3d(&candidates)?;
     collapse_hull_to_budget(&hull, options)
+}
+
+/// Fixed direction set for extreme-point extraction (k-DOP style): the six exact
+/// axis directions (so the AABB / planarity test stays exact) plus a
+/// Fibonacci-sphere spread for near-uniform angular coverage of the hull.
+fn hull_sample_directions() -> Vec<[f64; 3]> {
+    const FIB_DIRS: usize = 64;
+    let mut dirs = Vec::with_capacity(FIB_DIRS + 6);
+    for axis in 0..3 {
+        let mut pos = [0.0; 3];
+        pos[axis] = 1.0;
+        dirs.push(pos);
+        let mut neg = [0.0; 3];
+        neg[axis] = -1.0;
+        dirs.push(neg);
+    }
+    let golden_angle = std::f64::consts::PI * (3.0 - 5.0_f64.sqrt());
+    for i in 0..FIB_DIRS {
+        let z = 1.0 - 2.0 * (i as f64 + 0.5) / FIB_DIRS as f64;
+        let radius = (1.0 - z * z).max(0.0).sqrt();
+        let theta = golden_angle * i as f64;
+        dirs.push([radius * theta.cos(), radius * theta.sin(), z]);
+    }
+    dirs
+}
+
+/// One O(n·d) pass collecting the extreme (max-dot) point along each direction.
+/// Every returned point is extreme in some direction and therefore lies on the
+/// true convex hull; duplicates (a sharp vertex winning several directions) are
+/// removed so quickhull receives at most `directions.len()` distinct candidates.
+fn extreme_hull_candidates(points: &[[f64; 3]], directions: &[[f64; 3]]) -> Vec<[f64; 3]> {
+    let mut best_index = vec![0usize; directions.len()];
+    let mut best_dot = vec![f64::NEG_INFINITY; directions.len()];
+    for (i, p) in points.iter().enumerate() {
+        for (d, dir) in directions.iter().enumerate() {
+            let dot = p[0] * dir[0] + p[1] * dir[1] + p[2] * dir[2];
+            if dot > best_dot[d] {
+                best_dot[d] = dot;
+                best_index[d] = i;
+            }
+        }
+    }
+    let mut seen = std::collections::HashSet::with_capacity(directions.len());
+    let mut out = Vec::with_capacity(directions.len());
+    for &index in &best_index {
+        if seen.insert(index) {
+            out.push(points[index]);
+        }
+    }
+    out
 }
 
 /// 3D convex hull of a point cloud via quickhull.
