@@ -18,6 +18,7 @@ import {
   Sparkles,
   SlidersHorizontal,
   MoreHorizontal,
+  Boxes,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,6 +57,7 @@ interface MapToolbarProps {
   onSaveFhm2d: () => void;
   onImportDaeWithConfig: () => void;
   onExportSelectedDae: () => void;
+  onExportHktToObj: () => void;
   canSave: boolean;
   canExportDae: boolean;
   hasUnsavedChanges?: boolean;
@@ -95,6 +97,7 @@ export function MapToolbar({
   onSaveFhm2d,
   onImportDaeWithConfig,
   onExportSelectedDae,
+  onExportHktToObj,
   canSave,
   canExportDae,
   hasUnsavedChanges,
@@ -234,6 +237,22 @@ export function MapToolbar({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom">Export selected model</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={onExportHktToObj}
+            disabled={isLoading}
+            aria-label="Export HKT to OBJ"
+          >
+            <Boxes className="h-3.5 w-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Export HKT to OBJ...</TooltipContent>
       </Tooltip>
 
       <Separator orientation="vertical" className="h-4 mx-0.5" />

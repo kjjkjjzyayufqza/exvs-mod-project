@@ -24,9 +24,35 @@ const COLLISION_SAMPLE_TEMPLATE_XML: &str =
 const MAX_SECTION_VERTS: usize = 255;
 const MAX_SECTION_TRIS: usize = 127;
 const MAX_AXIS5_LEAF_KEY: u32 = 30;
+/// Havok Axis5 mesh-tree leaves encode section indices in 15 bits (0..=32767).
+const MAX_HAVOK_SECTIONS: usize = 0x8000;
+/// Distinct shared vertices are referenced through u16 indices (0..=65535).
+pub const MAX_HAVOK_SHARED_VERTICES: usize = (u16::MAX as usize) + 1;
 const MAX_PACKED_AXIS: f64 = 2047.0;
 const MAX_PACKED_Z: f64 = 1023.0;
 const AABB_PAD: f64 = 0.01;
+
+/// Reject meshes whose shared-vertex count exceeds Havok's u16 index space.
+pub fn validate_havok_shared_vertex_count(count: usize) -> Result<(), String> {
+    if count > MAX_HAVOK_SHARED_VERTICES {
+        return Err(format!(
+            "Shared vertex count {count} exceeds Havok limit ({MAX_HAVOK_SHARED_VERTICES}). \
+             Use a lower-poly collision mesh with fewer cross-section shared vertices."
+        ));
+    }
+    Ok(())
+}
+
+/// Reject meshes that would require more Havok sections than Axis5 leaf indices allow.
+pub fn validate_havok_section_count(count: usize) -> Result<(), String> {
+    if count > MAX_HAVOK_SECTIONS {
+        return Err(format!(
+            "Mesh requires {count} Havok sections (limit {MAX_HAVOK_SECTIONS}). \
+             Reduce triangle count or use a dedicated low-poly collision mesh."
+        ));
+    }
+    Ok(())
+}
 
 #[derive(Clone, Copy, Debug)]
 struct Aabb {
@@ -520,6 +546,7 @@ fn split_and_encode_sections(
         seeds = greedy_section_seeds(&triangles, &triangle_bounds)?;
         mesh_bvh = build_section_bvh_from_seeds(&seeds)?;
     }
+    validate_havok_section_count(seeds.len())?;
 
     let mut vertex_section_counts = vec![0u16; mesh.vertices.len()];
     for seed in &seeds {
@@ -535,10 +562,18 @@ fn split_and_encode_sections(
         .enumerate()
         .filter_map(|(idx, count)| (*count > 1).then_some(idx as u32))
         .collect();
+    validate_havok_shared_vertex_count(shared_set.len())?;
     let mut shared_index_remap = std::collections::HashMap::new();
     let mut shared_vertices = Vec::new();
     for &vertex_index in &shared_set {
-        shared_index_remap.insert(vertex_index, shared_vertices.len() as u16);
+        let shared_index = shared_vertices.len();
+        if shared_index > u16::MAX as usize {
+            return Err(format!(
+                "Shared vertex count {} exceeds Havok u16 limit ({MAX_HAVOK_SHARED_VERTICES})",
+                shared_index + 1
+            ));
+        }
+        shared_index_remap.insert(vertex_index, shared_index as u16);
         shared_vertices.push(encode_shared_vertex(
             mesh.vertices[vertex_index as usize],
             global_min,
@@ -1703,5 +1738,22 @@ mod tests {
 
         assert_eq!(mesh_tree_count, 2);
         assert_eq!(primitive_count, 2);
+    }
+
+    #[test]
+    fn validate_havok_shared_vertex_count_allows_u16_space() {
+        validate_havok_shared_vertex_count(MAX_HAVOK_SHARED_VERTICES).expect("65536 fits u16");
+    }
+
+    #[test]
+    fn validate_havok_shared_vertex_count_rejects_overflow() {
+        let err = validate_havok_shared_vertex_count(MAX_HAVOK_SHARED_VERTICES + 1).unwrap_err();
+        assert!(err.contains("Shared vertex count"));
+    }
+
+    #[test]
+    fn validate_havok_section_count_rejects_axis5_overflow() {
+        let err = validate_havok_section_count(MAX_HAVOK_SECTIONS + 1).unwrap_err();
+        assert!(err.contains("Havok sections"));
     }
 }

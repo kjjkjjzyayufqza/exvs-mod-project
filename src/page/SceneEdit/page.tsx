@@ -237,6 +237,7 @@ import {
   runModelReplacementDirectToDisk,
   runModelReplacementPreview,
 } from "./utils/sceneModelReplacePreview";
+import { runHktToObjExport } from "./utils/hktToObjExport";
 import { applyOutlinerOrder } from "./utils/sceneOutlinerOrder";
 import { buildSubModelOutlinerNode } from "./utils/sceneOutlinerTree";
 import { SceneDetailViewHost } from "./components/detail-view/SceneDetailViewHost";
@@ -3545,6 +3546,26 @@ export default function SceneEdit() {
     openDaeExportDialogForNodeIds(objects.map((entry) => entry.name));
   }, [openDaeExportDialogForNodeIds]);
 
+  const handleExportHktToObj = useCallback(async () => {
+    try {
+      toast.loading("Exporting HKT to OBJ...", { id: "hkt-to-obj" });
+      const result = await runHktToObjExport();
+      if (!result) {
+        toast.dismiss("hkt-to-obj");
+        return;
+      }
+      toast.success("HKT exported to OBJ", {
+        id: "hkt-to-obj",
+        description: result.summary,
+      });
+    } catch (err) {
+      toast.error("HKT to OBJ failed", {
+        id: "hkt-to-obj",
+        description: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }, []);
+
   const handleExportDaeFromOutliner = useCallback(
     (nodeId: string) => {
       if (!(nodeVisibility[nodeId] ?? true)) {
@@ -4027,7 +4048,7 @@ export default function SceneEdit() {
 
   // Feature 1: open the new-model HKT window for the replace target. Unlike
   // handleReplaceHkt (which picks an existing .hkt), this reads a fresh DAE/FBX,
-  // rebuilds a Havok collision, previews it, then replaces the target's HKT.
+  // rebuilds a Havok collision on the backend, and optionally previews before replace.
   const handleGenerateHktFromModel = useCallback(
     (importId: string) => {
       if (!sceneSessionId) return;
@@ -4226,6 +4247,7 @@ export default function SceneEdit() {
           onSaveFhm2d={handleSaveFhm2d}
           onImportDaeWithConfig={handleImportDae}
           onExportSelectedDae={handleExportSelectedDae}
+          onExportHktToObj={() => void handleExportHktToObj()}
           canSave={!!stageName && !isMemoryImport}
           canExportDae={canExportSelectedDae}
           hasUnsavedChanges={hasUnsavedChanges}

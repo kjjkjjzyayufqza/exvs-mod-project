@@ -12,6 +12,8 @@ export const SCENE_EXPORT_DAE_FILE_DIALOG_PATH_KEY = "sceneEdit.exportDaeFile";
 export const SCENE_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY = "sceneEdit.exportDaeFolder";
 /** Last model file picked in Generate HKT from New Model (full path). */
 export const SCENE_GENERATE_HKT_FROM_MODEL_DIALOG_PATH_KEY = "sceneEdit.generateHktFromModel";
+export const SCENE_HKT_TO_OBJ_INPUT_DIALOG_PATH_KEY = "sceneEdit.hktToObjInput";
+export const SCENE_HKT_TO_OBJ_OUTPUT_DIALOG_PATH_KEY = "sceneEdit.hktToObjOutput";
 export const DEFAULT_SCENE_GIZMO_SIZE = 1.12;
 export const MIN_SCENE_GIZMO_SIZE = 0.25;
 export const MAX_SCENE_GIZMO_SIZE = 3;

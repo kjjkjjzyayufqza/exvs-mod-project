@@ -63,11 +63,18 @@ function buildMesh(
     const sBase = verts.length;
     for (let j = 0; j <= maxSL; j++) {
       const si = sec.firstSharedVertexIndex + j;
-      if (si < svi.length && svi[si] < sharedVerts.length) {
-        verts.push(decodeShared(sharedVerts[svi[si]], dMin, dMax));
-      } else {
-        verts.push([0, 0, 0]);
+      if (si >= svi.length) {
+        throw new Error(
+          `Shared vertex index out of range: section shared slot ${j}, sharedVerticesIndex index ${si}`,
+        );
       }
+      const globalIdx = svi[si];
+      if (globalIdx >= sharedVerts.length) {
+        throw new Error(
+          `Shared vertex lookup out of range: sharedVerticesIndex[${si}]=${globalIdx}, sharedVertices length ${sharedVerts.length}`,
+        );
+      }
+      verts.push(decodeShared(sharedVerts[globalIdx], dMin, dMax));
     }
 
     for (let pi = sec.firstPrimitiveIndex; pi < pEnd; pi++) {

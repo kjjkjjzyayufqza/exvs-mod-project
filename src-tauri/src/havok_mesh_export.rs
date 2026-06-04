@@ -261,16 +261,24 @@ pub fn havok_xml_to_obj(xml_content: &str, output_path: &Path) -> Result<String,
         if max_shared_local >= 0 {
             for si in 0..=(max_shared_local as usize) {
                 let svi_idx = section.first_shared_vertex_index as usize + si;
-                if svi_idx < shared_vertices_index.len() {
-                    let global_idx = shared_vertices_index[svi_idx] as usize;
-                    if global_idx < shared_vertices.len() {
-                        obj_verts.push(decode_shared_vertex(shared_vertices[global_idx], &domain));
-                    } else {
-                        obj_verts.push([0.0, 0.0, 0.0]);
-                    }
-                } else {
-                    obj_verts.push([0.0, 0.0, 0.0]);
+                if svi_idx >= shared_vertices_index.len() {
+                    return Err(format!(
+                        "Shared vertex index out of range: section shared slot {si}, \
+                         sharedVerticesIndex index {svi_idx}"
+                    ));
                 }
+                let global_idx = shared_vertices_index[svi_idx] as usize;
+                if global_idx >= shared_vertices.len() {
+                    return Err(format!(
+                        "Shared vertex lookup out of range: sharedVerticesIndex[{svi_idx}]={global_idx}, \
+                         sharedVertices length {}",
+                        shared_vertices.len()
+                    ));
+                }
+                obj_verts.push(decode_shared_vertex(
+                    shared_vertices[global_idx],
+                    &domain,
+                ));
             }
         }
 

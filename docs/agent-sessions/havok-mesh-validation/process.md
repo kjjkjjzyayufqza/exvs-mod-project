@@ -526,3 +526,16 @@ Determine whether the current EXVS stage Havok mesh generation path can correctl
 - Status: the game-functional faithful migration is verified and build/test green. No code
   logic was changed in this resume session beyond `rustfmt`; awaiting explicit user
   confirmation before committing.
+
+## 2026-06-04 — TDD fix for corrupt HKT visualization
+
+User reported vertex-spike corruption after exporting ~1.7M triangle visual mesh (complexity
+gate had been disabled).
+
+Fixes:
+1. Restored `validate_collision_mesh_for_hkt` (>80k tris, ineffective simplification).
+2. Added `validate_havok_shared_vertex_count` / `validate_havok_section_count` in encoder.
+3. Decode fail-fast in `havokXmlParser.ts` and `havok_mesh_export.rs` (no `[0,0,0]` fallback).
+
+Tests: `cargo test validate_`, `cargo test havok_mesh_encode::tests`,
+`npx vitest run src/utils/havokXmlParser.test.ts` — all green.

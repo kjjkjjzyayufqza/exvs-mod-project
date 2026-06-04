@@ -27,7 +27,6 @@ import {
 } from "../../utils/hktCollisionTransformUtils";
 import { HktCollisionTransformFields } from "./HktCollisionTransformFields";
 import {
-  sceneApplyReplacementHktBytes,
   sceneGenerateReplacementHktFromDaePath,
   scenePreviewHktCollisionMeshPath,
   sceneReplaceHktFromDaePath,
@@ -216,7 +215,7 @@ export function GenerateHktFromModelDialog({
   };
 
   const canApply =
-    Boolean(sessionId && targetImportId && sourcePath && sourceName && meshPreview && hasValidCachedHkt) &&
+    Boolean(sessionId && targetImportId && sourcePath && sourceName) &&
     !previewLoading &&
     !hktGenerating &&
     !applying;
@@ -225,30 +224,18 @@ export function GenerateHktFromModelDialog({
     if (!sessionId || !targetImportId || !sourcePath || !sourceName) return;
     setApplying(true);
     try {
-      if (hasValidCachedHkt && cachedHkt) {
-        toast.loading(`Applying HKT from ${sourceName}...`, { id: "hkt-from-model" });
-        await sceneApplyReplacementHktBytes(
-          sessionId,
-          targetImportId,
-          cachedHkt.hktBytes,
-          sourceName,
-        );
-      } else {
-        toast.loading(`Generating HKT from ${sourceName}...`, { id: "hkt-from-model" });
-        await sceneReplaceHktFromDaePath(
-          sessionId,
-          targetImportId,
-          sourcePath,
-          sourceName,
-          importConfig,
-        );
-      }
+      toast.loading(`Generating HKT from ${sourceName}...`, { id: "hkt-from-model" });
+      await sceneReplaceHktFromDaePath(
+        sessionId,
+        targetImportId,
+        sourcePath,
+        sourceName,
+        importConfig,
+      );
       await onReplaced(targetImportId);
       toast.success(`HKT replaced for ${targetName}`, {
         id: "hkt-from-model",
-        description: hasValidCachedHkt
-          ? `Applied preview collision from ${sourceName}`
-          : `Rebuilt collision from ${sourceName}`,
+        description: `Rebuilt collision from ${sourceName}`,
       });
       onOpenChange(false);
     } catch (err) {
@@ -261,11 +248,7 @@ export function GenerateHktFromModelDialog({
     }
   };
 
-  const applyButtonLabel = applying
-    ? "Applying HKT..."
-    : hasValidCachedHkt
-      ? "Replace HKT"
-      : "Generate & Replace HKT";
+  const applyButtonLabel = applying ? "Generating HKT..." : "Generate & Replace HKT";
 
   return (
     <Dialog open={isOpen} onOpenChange={(next) => (!applying ? onOpenChange(next) : undefined)}>
@@ -278,7 +261,8 @@ export function GenerateHktFromModelDialog({
           <DialogDescription className="text-xs">
             Read a fresh DAE or FBX, rebuild a Havok collision shape, and replace the collision for{" "}
             <span className="font-medium text-foreground">{targetName}</span>.
-            Preview shows the same Havok-decoded collision shape as the scene overlay after Replace. Replace reuses the cached HKT unless you change source, scale, axis, or simplify.
+            Preview is optional. Generate & Replace runs on the backend and writes map_hit.hkt
+            directly into the open stage folder when one is loaded.
           </DialogDescription>
         </DialogHeader>
 
@@ -353,15 +337,11 @@ export function GenerateHktFromModelDialog({
 
               {hasValidCachedHkt ? (
                 <p className="text-[11px] text-emerald-400/90">
-                  Preview HKT ready ({formatTriangleCount(cachedHkt.triangleCount)} collision triangles). Replace
-                  will apply without regenerating.
+                  Preview ready ({formatTriangleCount(cachedHkt.triangleCount)} collision triangles). Generate &
+                  Replace always rebuilds from the source file on the backend.
                 </p>
               ) : meshPreview && (previewLoading || hktGenerating) ? (
-                <p className="text-[11px] text-muted-foreground">Building final HKT for apply...</p>
-              ) : meshPreview && !hasValidCachedHkt ? (
-                <p className="text-[11px] text-amber-400/90">
-                  Settings changed since preview. Run Preview again before Replace.
-                </p>
+                <p className="text-[11px] text-muted-foreground">Building preview...</p>
               ) : null}
             </div>
           </ScrollArea>
@@ -449,7 +429,7 @@ export function GenerateHktFromModelDialog({
         <DialogFooter className="shrink-0 flex-wrap items-center gap-2 border-t border-border/60 px-5 py-3 sm:justify-between">
           <p className="flex min-w-0 flex-1 basis-full items-start gap-1.5 text-pretty text-[11px] leading-snug text-muted-foreground break-words sm:basis-auto">
             <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>Preview runs Havok once. Replace reuses that HKT unless settings change.</span>
+            <span>Preview is optional. Generate & Replace does not require it.</span>
           </p>
           <div className="flex shrink-0 items-center gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={applying}>

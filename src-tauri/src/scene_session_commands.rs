@@ -2109,6 +2109,10 @@ pub async fn scene_replace_hkt(
 /// base bundle (FHM2D sub-models), and folder-backed sessions. Shared by both
 /// `scene_replace_hkt` (existing .hkt file) and `scene_replace_hkt_from_dae_path`
 /// (HKT freshly generated from a new DAE).
+///
+/// Folder-backed sessions also update the in-memory bundle overlay; callers such as
+/// `scene_replace_hkt_from_dae_path` may write `map_hit.hkt` to the live stage
+/// directory immediately after this succeeds.
 fn apply_replacement_hkt_to_session(
     s: &mut crate::scene_memory_session::SceneMemorySession,
     import_id: &str,
@@ -2116,8 +2120,8 @@ fn apply_replacement_hkt_to_session(
     hkt_xml: String,
     display_name: String,
 ) -> Result<(), String> {
-    // Pending DAE imports keep HKT on the import record; on-disk stage folders use
-    // the in-memory base bundle overlay until scene_save_as_folder commits.
+    // Pending DAE imports keep HKT on the import record; on-disk stage folders are
+    // staged in the in-memory base bundle (and may also be written live by callers).
     if s.find_import(import_id).is_ok() {
         eprintln!("[apply_replacement_hkt] found in pending_imports");
         s.store_hkt_bytes(import_id, hkt_bytes.clone())?;
@@ -2149,24 +2153,26 @@ pub struct ReplaceHktFromDaeOptions {
 
 async fn generate_hkt_bytes_from_dae_path(
     file_path: &str,
-    source_name: &str,
+    _source_name: &str,
     config: &ImportConfig,
 ) -> Result<crate::havok_collision_encode::HktGenerationResult, String> {
-    let dae_bytes = std::fs::read(file_path)
-        .map_err(|e| format!("Failed to read '{}': {}", file_path, e))?;
     let mesh_options = hkt_collision_options_from_import(config);
     let havok_config = havok_cli::HavokCliConfig::detect().ok_or_else(|| {
         eprintln!("[generate_hkt_bytes_from_dae_path] Havok SDK not found");
         "Havok SDK not found".to_string()
     })?;
-    let source_name = source_name.to_string();
+    let path = file_path.to_string();
     tauri::async_runtime::spawn_blocking(move || {
-        havok_cli::generate_hkt_from_dae(&dae_bytes, &source_name, &havok_config, mesh_options)
+        havok_cli::generate_hkt_from_import_path(
+            std::path::Path::new(&path),
+            &havok_config,
+            mesh_options,
+        )
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))?
     .map_err(|e| {
-        eprintln!("[generate_hkt_bytes_from_dae_path] generate_hkt_from_dae failed: {e}");
+        eprintln!("[generate_hkt_bytes_from_dae_path] generate_hkt_from_import_path failed: {e}");
         e
     })
 }
@@ -2231,6 +2237,22 @@ pub async fn scene_generate_replacement_hkt_from_dae_path(
     })
 }
 
+/// Write HKT bytes to a stage `map_hit.hkt` path via a same-directory temp file.
+fn write_hkt_bytes_to_stage_disk(disk_path: &std::path::Path, hkt_bytes: &[u8]) -> Result<(), String> {
+    if let Some(parent) = disk_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create {}: {e}", parent.display()))?;
+    }
+    let temp_path = disk_path.with_extension("hkt.tmp");
+    std::fs::write(&temp_path, hkt_bytes)
+        .map_err(|e| format!("Failed to write {}: {e}", temp_path.display()))?;
+    std::fs::rename(&temp_path, disk_path).map_err(|e| {
+        let _ = std::fs::remove_file(&temp_path);
+        format!("Failed to replace {}: {e}", disk_path.display())
+    })?;
+    Ok(())
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApplyReplacementHktBytesOptions {
@@ -2289,9 +2311,29 @@ pub async fn scene_replace_hkt_from_dae_path(
     let hkt_xml = hkt_xml_from_bytes(&hkt_bytes).await;
     let display_name = options.source_name.clone();
     let import_id = options.import_id.clone();
-    state.with_session_mut(&options.session_id, |s| {
-        apply_replacement_hkt_to_session(s, &import_id, hkt_bytes, hkt_xml, display_name)
+
+    let disk_path = state.with_session(&options.session_id, |s| {
+        Ok(s.resolve_hkt_disk_path(&import_id))
     })?;
+
+    state.with_session_mut(&options.session_id, |s| {
+        apply_replacement_hkt_to_session(
+            s,
+            &import_id,
+            hkt_bytes.clone(),
+            hkt_xml,
+            display_name,
+        )
+    })?;
+
+    if let Some(disk_path) = disk_path {
+        write_hkt_bytes_to_stage_disk(&disk_path, &hkt_bytes)?;
+        eprintln!(
+            "[scene_replace_hkt_from_dae_path] wrote {} bytes to {}",
+            hkt_bytes.len(),
+            disk_path.display()
+        );
+    }
 
     eprintln!("[scene_replace_hkt_from_dae_path] done");
     Ok(true)

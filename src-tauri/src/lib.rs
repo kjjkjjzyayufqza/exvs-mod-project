@@ -182,7 +182,8 @@ pub fn run() {
             havok_cli::detect_havok_installation,
             havok_cli::convert_hkt_to_xml,
             havok_cli::convert_xml_to_hkt,
-            havok_cli::scene_generate_hkt_from_dae_path
+            havok_cli::scene_generate_hkt_from_dae_path,
+            havok_mesh_export::convert_hkt_to_obj
         ]);
 
     #[cfg(debug_assertions)]

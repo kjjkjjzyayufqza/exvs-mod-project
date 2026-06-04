@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ssbh_dae::ModlEntryConfig;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -424,6 +424,11 @@ impl SceneMemorySession {
     ) -> Result<(), String> {
         let normalized = target_id.replace('\\', "/");
         let parts: Vec<&str> = normalized.split('/').filter(|part| !part.is_empty()).collect();
+        if !hkt_target_segments_valid(&parts) {
+            return Err(format!(
+                "Invalid stage HKT target id '{target_id}' (unsafe path segment)"
+            ));
+        }
         let bundle = self.ensure_base_bundle();
 
         match parts.as_slice() {
@@ -457,6 +462,48 @@ impl SceneMemorySession {
 
         self.dirty = true;
         Ok(())
+    }
+
+    /// Stage content root when the session is backed by a folder or FHM2D pack.
+    pub fn stage_root_path(&self) -> Option<PathBuf> {
+        match &self.source {
+            SceneSource::Folder { path } => Some(PathBuf::from(path)),
+            SceneSource::Fhm2d { path } => Path::new(path)
+                .parent()
+                .map(|p| p.to_path_buf()),
+            SceneSource::New => None,
+        }
+    }
+
+    /// Resolve the on-disk `map_hit.hkt` path for a replace target id.
+    /// Returns `None` when the session has no stage root or the target id is unsafe.
+    pub fn resolve_hkt_disk_path(&self, import_id: &str) -> Option<PathBuf> {
+        let stage_root = self.stage_root_path()?;
+        let normalized = import_id.replace('\\', "/");
+        let parts: Vec<&str> = normalized.split('/').filter(|part| !part.is_empty()).collect();
+        match parts.as_slice() {
+            [folder, file] if file.to_ascii_lowercase().ends_with(".hkt") => {
+                join_stage_hkt_disk_path(&stage_root, &[folder, file])
+            }
+            [file] if file.to_ascii_lowercase().ends_with(".hkt") => {
+                join_stage_hkt_disk_path(&stage_root, &[file])
+            }
+            _ => {
+                if let Ok(import) = self.find_import(import_id) {
+                    let base = import
+                        .config
+                        .ssbh_config
+                        .as_ref()
+                        .map(|c| c.base_filename.as_str())
+                        .unwrap_or(&import.name);
+                    join_stage_hkt_disk_path(&stage_root, &[base, "map_hit.hkt"])
+                } else if parts.len() == 1 {
+                    join_stage_hkt_disk_path(&stage_root, &[parts[0], "map_hit.hkt"])
+                } else {
+                    None
+                }
+            }
+        }
     }
 
     pub fn import_has_ssbh_artifacts(import: &PendingImport) -> bool {
@@ -657,6 +704,50 @@ impl SceneMemorySession {
     pub fn mark_clean(&mut self) {
         self.dirty = false;
     }
+}
+
+/// Reject `.`, `..`, separators, and other unsafe single path segments.
+fn hkt_target_segment_valid(segment: &str) -> bool {
+    !segment.is_empty()
+        && segment != "."
+        && segment != ".."
+        && !segment.contains('/')
+        && !segment.contains('\\')
+        && !segment.contains('\0')
+        && !(cfg!(windows) && segment.contains(':'))
+}
+
+fn hkt_target_segments_valid(segments: &[&str]) -> bool {
+    segments.iter().all(|segment| hkt_target_segment_valid(segment))
+}
+
+/// Join `segments` under `stage_root` and verify the result cannot escape the root.
+fn join_stage_hkt_disk_path(stage_root: &Path, segments: &[&str]) -> Option<PathBuf> {
+    if !hkt_target_segments_valid(segments) {
+        return None;
+    }
+    let mut path = stage_root.to_path_buf();
+    for segment in segments {
+        path.push(segment);
+    }
+    normalized_path_starts_with(&path, stage_root).then_some(path)
+}
+
+fn normalized_path_starts_with(path: &Path, prefix: &Path) -> bool {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if normalized.as_os_str().is_empty() {
+                    return false;
+                }
+                normalized.pop();
+            }
+            other => normalized.push(other.as_os_str()),
+        }
+    }
+    normalized.starts_with(prefix)
 }
 
 #[derive(Debug, Clone)]
@@ -928,6 +1019,68 @@ mod tests {
         assert!(artifacts.iter().any(|artifact| {
             artifact.relative_path == "prop01/map_hit.hkt" && artifact.data == vec![9, 9]
         }));
+    }
+
+    #[test]
+    fn resolve_hkt_disk_path_for_sub_model_target() {
+        let s = SceneMemorySession::new(
+            "sid".into(),
+            SceneSource::Folder {
+                path: "E:/stage".into(),
+            },
+        );
+        let path = s.resolve_hkt_disk_path("prop01/map_hit.hkt").unwrap();
+        assert_eq!(path, PathBuf::from("E:/stage/prop01/map_hit.hkt"));
+    }
+
+    #[test]
+    fn resolve_hkt_disk_path_for_pending_import_uses_base_filename() {
+        let mut s = SceneMemorySession::new(
+            "sid".into(),
+            SceneSource::Folder {
+                path: "E:/stage".into(),
+            },
+        );
+        let id = s.add_import("wall".into(), vec![]);
+        {
+            let import = s.find_import_mut(&id).unwrap();
+            import.config.ssbh_config = Some(SsbhConvertConfig {
+                base_filename: "wall".into(),
+                scale_factor: 1.0,
+                up_axis: "y_up".into(),
+                flip_uv: false,
+                write_numdlb: true,
+                write_numshb: true,
+                write_nusktb: false,
+                write_numatb: false,
+                write_jnttbl: false,
+                write_maya_profile: false,
+                material_template: None,
+                maya_file: None,
+                nust_file: None,
+                numdlb_entries: Vec::new(),
+            });
+        }
+        let path = s.resolve_hkt_disk_path(&id).unwrap();
+        assert_eq!(path, PathBuf::from("E:/stage/wall/map_hit.hkt"));
+    }
+
+    #[test]
+    fn resolve_hkt_disk_path_none_for_new_session_without_folder() {
+        let s = new_session();
+        assert!(s.resolve_hkt_disk_path("prop01/map_hit.hkt").is_none());
+    }
+
+    #[test]
+    fn resolve_hkt_disk_path_rejects_path_traversal() {
+        let s = SceneMemorySession::new(
+            "sid".into(),
+            SceneSource::Folder {
+                path: "E:/stage".into(),
+            },
+        );
+        assert!(s.resolve_hkt_disk_path("../map_hit.hkt").is_none());
+        assert!(s.resolve_hkt_disk_path("prop01/../../map_hit.hkt").is_none());
     }
 
     #[test]

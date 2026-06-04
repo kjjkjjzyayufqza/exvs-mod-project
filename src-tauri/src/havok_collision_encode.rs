@@ -53,26 +53,9 @@ pub fn validate_collision_mesh_for_hkt(
 ) -> Result<(), String> {
     let _ = (preview, simplify_enabled);
 
-    // Complexity gate disabled: always allow preview/export regardless of triangle count.
-    // if simplified > MAX_HKT_COLLISION_TRIANGLES {
-    //     return Err(format!(
-    //         "Collision mesh is too complex for HKT export ({simplified} triangles after processing, \
-    //          limit {MAX_HKT_COLLISION_TRIANGLES}). Prepare a dedicated low-poly collision mesh \
-    //          (target under ~25k triangles) in a separate DAE/FBX."
-    //     ));
-    // }
-    //
-    // if merged >= COMPLEX_MESH_MERGED_TRIANGLE_THRESHOLD
-    //     && simplify_enabled
-    //     && collision_reduction_ratio(merged, simplified) < COMPLEX_MESH_MIN_REDUCTION_RATIO
-    // {
-    //     let reduction_pct = collision_reduction_ratio(merged, simplified) * 100.0;
-    //     return Err(format!(
-    //         "High-poly render mesh cannot be simplified enough for HKT ({merged} merged triangles, \
-    //          {reduction_pct:.0}% reduction). Use a dedicated low-poly collision mesh instead of the \
-    //          visual mesh."
-    //     ));
-    // }
+    // Complexity gate disabled: allow preview/export regardless of triangle count.
+    // if simplified > MAX_HKT_COLLISION_TRIANGLES { ... }
+    // if merged >= COMPLEX_MESH_MERGED_TRIANGLE_THRESHOLD && simplify_enabled { ... }
 
     Ok(())
 }
