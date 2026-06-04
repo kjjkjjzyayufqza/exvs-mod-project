@@ -1,16 +1,23 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { HavokMeshData } from "@/utils/havokXmlParser";
 import { parseHavokXML } from "@/utils/havokXmlParser";
-import type { HktSimplifyConfig } from "../dae-import/daeImportTypes";
+import type { HktSimplifyConfig, SsbhDaeUpAxis } from "../dae-import/daeImportTypes";
 import { DaeImportHktSimplifyFields } from "../dae-import/DaeImportHktSimplifyFields";
+import { HktCollisionTransformFields } from "./HktCollisionTransformFields";
 import { DaeImportStatusAlert } from "../dae-import/daeImportUi";
 import {
   countHavokCollisionTriangles,
   DEFAULT_HKT_SIMPLIFY,
   formatTriangleCount,
 } from "../../utils/hktSimplifyUtils";
+import {
+  DEFAULT_HKT_COLLISION_SCALE,
+  DEFAULT_HKT_COLLISION_UP_AXIS,
+  mergeHktCollisionTransform,
+} from "../../utils/hktCollisionTransformUtils";
+import { normalizeDaeImportUpAxis } from "../dae-import/daeImportDefaults";
 import {
   sceneConfigureImport,
   sceneGenerateHkt,
@@ -45,6 +52,10 @@ export function HavokCollisionEditorPanel({
   const [localSimplify, setLocalSimplify] = useState<HktSimplifyConfig>(
     hktSimplify ?? { ...DEFAULT_HKT_SIMPLIFY },
   );
+  const [collisionScale, setCollisionScale] = useState(DEFAULT_HKT_COLLISION_SCALE);
+  const [collisionUpAxis, setCollisionUpAxis] = useState<SsbhDaeUpAxis>(
+    DEFAULT_HKT_COLLISION_UP_AXIS,
+  );
   const [importConfig, setImportConfig] = useState<ImportConfig | null>(null);
   const [isLoadingConfig, setIsLoadingConfig] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
@@ -70,6 +81,12 @@ export function HavokCollisionEditorPanel({
           if (hktSimplify == null) {
             setLocalSimplify(cfg.hktSimplify);
           }
+          const scale = cfg.ssbhConfig?.scaleFactor ?? DEFAULT_HKT_COLLISION_SCALE;
+          const upAxis =
+            normalizeDaeImportUpAxis(cfg.ssbhConfig?.upAxis ?? "") ??
+            DEFAULT_HKT_COLLISION_UP_AXIS;
+          setCollisionScale(scale);
+          setCollisionUpAxis(upAxis);
         }
       })
       .catch(() => {
@@ -95,13 +112,20 @@ export function HavokCollisionEditorPanel({
     [onHktSimplifyChange],
   );
 
-  const previewImportConfig: ImportConfig = {
-    loadToScene: importConfig?.loadToScene ?? false,
-    convertToSsbh: importConfig?.convertToSsbh ?? false,
-    generateHkt: true,
-    ssbhConfig: importConfig?.ssbhConfig ?? null,
-    hktSimplify: localSimplify,
-  };
+  const previewImportConfig: ImportConfig = useMemo(
+    () => ({
+      loadToScene: importConfig?.loadToScene ?? false,
+      convertToSsbh: importConfig?.convertToSsbh ?? false,
+      generateHkt: true,
+      ssbhConfig: mergeHktCollisionTransform(
+        importConfig?.ssbhConfig,
+        collisionScale,
+        collisionUpAxis,
+      ),
+      hktSimplify: localSimplify,
+    }),
+    [importConfig, collisionScale, collisionUpAxis, localSimplify],
+  );
 
   const handleRegenerate = useCallback(async () => {
     if (!sessionId || !sessionImportId) {
@@ -117,6 +141,11 @@ export function HavokCollisionEditorPanel({
         ...baseConfig,
         generateHkt: true,
         hktSimplify: localSimplify,
+        ssbhConfig: mergeHktCollisionTransform(
+          baseConfig.ssbhConfig,
+          collisionScale,
+          collisionUpAxis,
+        ),
       };
       await sceneConfigureImport(sessionId, sessionImportId, nextConfig);
       await sceneGenerateHkt(sessionId, sessionImportId, "auto");
@@ -130,7 +159,15 @@ export function HavokCollisionEditorPanel({
     } finally {
       setRegenerating(false);
     }
-  }, [sessionId, sessionImportId, importConfig, localSimplify, onHavokDataUpdated]);
+  }, [
+    sessionId,
+    sessionImportId,
+    importConfig,
+    localSimplify,
+    collisionScale,
+    collisionUpAxis,
+    onHavokDataUpdated,
+  ]);
 
   if (!sessionImportId) {
     return (
@@ -166,6 +203,16 @@ export function HavokCollisionEditorPanel({
           No collision mesh loaded. Adjust simplification below and regenerate HKT.
         </DaeImportStatusAlert>
       )}
+
+      <HktCollisionTransformFields
+        compact
+        disabled={disabled || regenerating || isLoadingConfig}
+        value={{ scaleFactor: collisionScale, upAxis: collisionUpAxis }}
+        onChange={({ scaleFactor, upAxis }) => {
+          setCollisionScale(scaleFactor);
+          setCollisionUpAxis(upAxis);
+        }}
+      />
 
       <DaeImportHktSimplifyFields
         value={localSimplify}

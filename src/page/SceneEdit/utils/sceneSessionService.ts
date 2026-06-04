@@ -338,6 +338,8 @@ export async function scenePreviewHktCollisionMeshPath(
 export interface GeneratedHktFromDaePayload {
   hktBytes: number[];
   triangleCount: number;
+  /** Havok-decoded XML; matches what the scene collision overlay renders. */
+  hktXml: string;
 }
 
 /** Generate HKT bytes from a model path without applying to the session. */
@@ -530,6 +532,17 @@ export type StageStreamChunk =
 
 export function stageLoadSkeleton(stageRoot: string): Promise<StageSkeleton> {
   return invoke<StageSkeleton>("stage_load_skeleton", { stageRoot });
+}
+
+/** Reload a single model slot from disk after out-of-scene replace (avoids large IPC import). */
+export function stageLoadModelSlotBundle(
+  stageRoot: string,
+  folderName: string,
+): Promise<SsbhModelPreviewBundle> {
+  return invoke<SsbhModelPreviewBundle>("stage_load_model_slot_bundle", {
+    stageRoot,
+    folderName,
+  });
 }
 
 export function stageStreamBundles(

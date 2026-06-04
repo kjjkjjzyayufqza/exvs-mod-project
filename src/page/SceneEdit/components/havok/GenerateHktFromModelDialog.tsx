@@ -13,13 +13,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import type { HktSimplifyConfig } from "../dae-import/daeImportTypes";
+import type { HktSimplifyConfig, SsbhDaeUpAxis } from "../dae-import/daeImportTypes";
 import { DaeImportHktSimplifyFields } from "../dae-import/DaeImportHktSimplifyFields";
 import {
   buildImportConfigForHktPreview,
   DEFAULT_HKT_SIMPLIFY,
   formatTriangleCount,
 } from "../../utils/hktSimplifyUtils";
+import {
+  createHktOnlySsbhConfig,
+  DEFAULT_HKT_COLLISION_SCALE,
+  DEFAULT_HKT_COLLISION_UP_AXIS,
+} from "../../utils/hktCollisionTransformUtils";
+import { HktCollisionTransformFields } from "./HktCollisionTransformFields";
 import {
   sceneApplyReplacementHktBytes,
   sceneGenerateReplacementHktFromDaePath,
@@ -39,6 +45,7 @@ import {
   isCachedHktFromModelValid,
   type CachedHktFromModelGeneration,
 } from "./generateHktFromModelCache";
+import { resolveHktFromModelPreviewGeometry } from "../../utils/hktPreviewGeometry";
 
 interface GenerateHktFromModelDialogProps {
   open: boolean;
@@ -64,12 +71,17 @@ export function GenerateHktFromModelDialog({
   onReplaced,
 }: GenerateHktFromModelDialogProps) {
   const [sourcePath, setSourcePath] = useState<string | null>(null);
+  const [collisionScale, setCollisionScale] = useState(DEFAULT_HKT_COLLISION_SCALE);
+  const [collisionUpAxis, setCollisionUpAxis] = useState<SsbhDaeUpAxis>(
+    DEFAULT_HKT_COLLISION_UP_AXIS,
+  );
   const [simplify, setSimplify] = useState<HktSimplifyConfig>({ ...DEFAULT_HKT_SIMPLIFY });
   const [meshPreview, setMeshPreview] = useState<HktCollisionMeshGeometry | null>(null);
   const [cachedHkt, setCachedHkt] = useState<CachedHktFromModelGeneration | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [hktGenerating, setHktGenerating] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewUsesPreHavokMesh, setPreviewUsesPreHavokMesh] = useState(false);
   const [applying, setApplying] = useState(false);
 
   const sourceName = useMemo(() => (sourcePath ? fileNameFromPath(sourcePath) : null), [sourcePath]);
@@ -79,10 +91,13 @@ export function GenerateHktFromModelDialog({
       buildImportConfigForHktPreview({
         generateHkt: true,
         convertToSsbh: false,
-        ssbhConfig: null,
+        ssbhConfig: createHktOnlySsbhConfig({
+          scaleFactor: collisionScale,
+          upAxis: collisionUpAxis,
+        }),
         hktSimplify: simplify,
       }),
-    [simplify],
+    [simplify, collisionScale, collisionUpAxis],
   );
 
   const previewConfigKey = useMemo(
@@ -106,10 +121,13 @@ export function GenerateHktFromModelDialog({
       }
     })();
 
+    setCollisionScale(DEFAULT_HKT_COLLISION_SCALE);
+    setCollisionUpAxis(DEFAULT_HKT_COLLISION_UP_AXIS);
     setSimplify({ ...DEFAULT_HKT_SIMPLIFY });
     setMeshPreview(null);
     setCachedHkt(null);
     setPreviewError(null);
+    setPreviewUsesPreHavokMesh(false);
     setPreviewLoading(false);
     setHktGenerating(false);
     setApplying(false);
@@ -133,6 +151,15 @@ export function GenerateHktFromModelDialog({
     [invalidatePreviewArtifacts],
   );
 
+  const handleCollisionTransformChange = useCallback(
+    (scaleFactor: number, upAxis: SsbhDaeUpAxis) => {
+      setCollisionScale(scaleFactor);
+      setCollisionUpAxis(upAxis);
+      invalidatePreviewArtifacts();
+    },
+    [invalidatePreviewArtifacts],
+  );
+
   const runPreview = useCallback(async () => {
     if (!sourcePath || !sourceName) return;
     const configKey = buildHktFromModelConfigKey(importConfig, simplify);
@@ -142,11 +169,18 @@ export function GenerateHktFromModelDialog({
     setMeshPreview(null);
     setCachedHkt(null);
     try {
-      const [meshResult, hktPayload] = await Promise.all([
+      const [meshStats, hktPayload] = await Promise.all([
         scenePreviewHktCollisionMeshPath(sourcePath, sourceName, importConfig),
         sceneGenerateReplacementHktFromDaePath(sourcePath, sourceName, importConfig),
       ]);
-      setMeshPreview(meshResult);
+
+      const { geometry: previewGeometry, usesPreHavokMesh } = resolveHktFromModelPreviewGeometry(
+        meshStats,
+        hktPayload,
+      );
+
+      setPreviewUsesPreHavokMesh(usesPreHavokMesh);
+      setMeshPreview(previewGeometry);
       setCachedHkt({
         sourcePath,
         configKey,
@@ -244,7 +278,7 @@ export function GenerateHktFromModelDialog({
           <DialogDescription className="text-xs">
             Read a fresh DAE or FBX, rebuild a Havok collision shape, and replace the collision for{" "}
             <span className="font-medium text-foreground">{targetName}</span>.
-            Preview builds the final HKT once; Replace reuses it unless you change the source or simplify settings.
+            Preview shows the same Havok-decoded collision shape as the scene overlay after Replace. Replace reuses the cached HKT unless you change source, scale, axis, or simplify.
           </DialogDescription>
         </DialogHeader>
 
@@ -289,15 +323,32 @@ export function GenerateHktFromModelDialog({
               </section>
 
               {sourcePath ? (
-                <DaeImportHktSimplifyFields
-                  value={simplify}
-                  onChange={handleSimplifyChange}
-                  importConfig={importConfig}
-                  sourcePath={sourcePath}
-                  sourceName={sourceName ?? undefined}
-                  autoPreview={false}
-                  compact
-                />
+                <>
+                  <HktCollisionTransformFields
+                    compact
+                    disabled={applying}
+                    value={{ scaleFactor: collisionScale, upAxis: collisionUpAxis }}
+                    onChange={({ scaleFactor, upAxis }) =>
+                      handleCollisionTransformChange(scaleFactor, upAxis)
+                    }
+                  />
+                  <DaeImportHktSimplifyFields
+                    value={simplify}
+                    onChange={handleSimplifyChange}
+                    importConfig={importConfig}
+                    sourcePath={sourcePath}
+                    sourceName={sourceName ?? undefined}
+                    autoPreview={false}
+                    compact
+                  />
+                </>
+              ) : null}
+
+              {previewUsesPreHavokMesh && meshPreview ? (
+                <p className="text-[11px] text-amber-400/90">
+                  Havok SDK XML decode unavailable — preview shows pre-HKT mesh only and may differ from the scene
+                  overlay after Replace.
+                </p>
               ) : null}
 
               {hasValidCachedHkt ? (
@@ -384,7 +435,7 @@ export function GenerateHktFromModelDialog({
                 <span className="text-right tabular-nums">{formatTriangleCount(meshPreview.renderTriangleCount)}</span>
                 <span>Merged</span>
                 <span className="text-right tabular-nums">{formatTriangleCount(meshPreview.mergedTriangleCount)}</span>
-                <span className="text-foreground">Collision</span>
+                <span className="text-foreground">HKT (scene)</span>
                 <span className="text-right tabular-nums text-emerald-400">
                   {formatTriangleCount(meshPreview.triangleCount)}
                 </span>

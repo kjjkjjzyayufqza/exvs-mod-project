@@ -212,6 +212,7 @@ import {
   sceneBuildImportPreviewBundle,
   sceneConvertStaticMeshToStageFilesWithProgress,
   stageLoadSkeleton,
+  stageLoadModelSlotBundle,
   stageStreamBundles,
   validateNumatbEmptyParams,
   type SubModelManifestEntry,
@@ -229,7 +230,10 @@ import {
   importDaeThroughSceneSession,
   writeModelReplacementToDisk,
 } from "./utils/sceneDaeSessionImport";
-import { runModelReplacementPreview } from "./utils/sceneModelReplacePreview";
+import {
+  runModelReplacementDirectToDisk,
+  runModelReplacementPreview,
+} from "./utils/sceneModelReplacePreview";
 import { applyOutlinerOrder } from "./utils/sceneOutlinerOrder";
 import { buildSubModelOutlinerNode } from "./utils/sceneOutlinerTree";
 import { SceneDetailViewHost } from "./components/detail-view/SceneDetailViewHost";
@@ -3330,55 +3334,67 @@ export default function SceneEdit() {
           target.folderName,
         );
 
-        applyStaticMeshProgressUpdate({
-          step: "preview",
-          label: "Receiving viewport preview bundle from Rust...",
-          detail: "Large mesh preview data may take time to cross IPC.",
-          progress: 94,
-        });
-
-        const replacementPreview = await runModelReplacementPreview({
-          importAndConvert: async () => {
-            const result = await importDaeThroughSceneSession({
-              sessionId: activeSessionId,
-              filePath: entry.filePath,
-              name: target.folderName,
-              importConfig,
-              onProgress: handleStaticMeshProgress,
-            });
-            return { importId: result.importId, ssbhGenerated: result.ssbhGenerated };
-          },
-          buildPreviewBundle: async (importId) =>
-            sceneBuildImportPreviewBundle({
-              sessionId: activeSessionId,
-              importId,
-              stageRoot,
-              sourcePath: entry.filePath,
-            }),
-          hydratePreviewBundle: hydrateBundleGeometry,
-          writeToDisk: directToDisk
-            ? async () => {
-                if (!stageRoot) {
-                  throw new Error(
-                    "Open a stage folder before replacing with out-of-scene conversion",
-                  );
-                }
-                applyStaticMeshProgressUpdate({
-                  step: "write",
-                  label: "Writing replaced model to stage folder...",
-                  progress: 97,
-                });
-                return writeModelReplacementToDisk({
-                  stageRoot,
-                  filePath: entry.filePath,
-                  folderName: target.folderName,
-                  importConfig,
-                  legacySlotSubfolder,
-                  onProgress: handleStaticMeshProgress,
-                });
+        const replacementPreview = directToDisk
+          ? await (async () => {
+              if (!stageRoot) {
+                throw new Error(
+                  "Open a stage folder before replacing with out-of-scene conversion",
+                );
               }
-            : undefined,
-        });
+              applyStaticMeshProgressUpdate({
+                step: "write",
+                label: "Converting and writing replaced model to stage folder...",
+                progress: 50,
+              });
+              return runModelReplacementDirectToDisk({
+                writeToDisk: () =>
+                  writeModelReplacementToDisk({
+                    stageRoot,
+                    filePath: entry.filePath,
+                    folderName: target.folderName,
+                    importConfig,
+                    legacySlotSubfolder,
+                    onProgress: handleStaticMeshProgress,
+                  }),
+                loadBundleFromDisk: async () => {
+                  applyStaticMeshProgressUpdate({
+                    step: "preview",
+                    label: "Loading replaced model from disk...",
+                    progress: 94,
+                  });
+                  return stageLoadModelSlotBundle(stageRoot, target.folderName);
+                },
+                hydratePreviewBundle: hydrateBundleGeometry,
+              });
+            })()
+          : await (async () => {
+              applyStaticMeshProgressUpdate({
+                step: "preview",
+                label: "Receiving viewport preview bundle from Rust...",
+                detail: "Large mesh preview data may take time to cross IPC.",
+                progress: 94,
+              });
+              return runModelReplacementPreview({
+                importAndConvert: async () => {
+                  const result = await importDaeThroughSceneSession({
+                    sessionId: activeSessionId,
+                    filePath: entry.filePath,
+                    name: target.folderName,
+                    importConfig,
+                    onProgress: handleStaticMeshProgress,
+                  });
+                  return { importId: result.importId, ssbhGenerated: result.ssbhGenerated };
+                },
+                buildPreviewBundle: async (importId) =>
+                  sceneBuildImportPreviewBundle({
+                    sessionId: activeSessionId,
+                    importId,
+                    stageRoot,
+                    sourcePath: entry.filePath,
+                  }),
+                hydratePreviewBundle: hydrateBundleGeometry,
+              });
+            })();
 
         const { previewBundle, importId: replacementImportId } = replacementPreview;
         for (const warning of previewBundle.warnings) {

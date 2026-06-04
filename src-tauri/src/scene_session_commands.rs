@@ -2136,6 +2136,8 @@ async fn hkt_xml_from_bytes(hkt_bytes: &[u8]) -> String {
 pub struct GeneratedHktFromDaePayload {
     pub hkt_bytes: Vec<u8>,
     pub triangle_count: usize,
+    /// Decoded via Havok Content Tools — same XML the scene overlay parses.
+    pub hkt_xml: String,
 }
 
 /// Generate HKT bytes from a DAE/FBX path without applying to the session.
@@ -2151,6 +2153,7 @@ pub async fn scene_generate_replacement_hkt_from_dae_path(
         file_path, source_name
     );
     let hkt_result = generate_hkt_bytes_from_dae_path(&file_path, &source_name, &config).await?;
+    let hkt_xml = hkt_xml_from_bytes(&hkt_result.bytes).await;
     eprintln!(
         "[scene_generate_replacement_hkt_from_dae_path] generated {} bytes ({} triangles)",
         hkt_result.bytes.len(),
@@ -2159,6 +2162,7 @@ pub async fn scene_generate_replacement_hkt_from_dae_path(
     Ok(GeneratedHktFromDaePayload {
         hkt_bytes: hkt_result.bytes,
         triangle_count: hkt_result.triangle_count,
+        hkt_xml,
     })
 }
 

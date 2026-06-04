@@ -102,9 +102,8 @@ function PreviewOrbitControls({
 }
 
 /**
- * Live collision-mesh preview viewport for the New-Model HKT window. Renders the
- * simplified collision geometry as a translucent emerald shell plus wireframe,
- * matching the in-scene Havok overlay language, and auto-fits the camera.
+ * Live collision preview for the New-Model HKT window. Expects geometry decoded from
+ * the generated HKT (same path as the scene Havok overlay), not the pre-Havok mesh.
  */
 export function HktCollisionPreviewCanvas({
   geometry,

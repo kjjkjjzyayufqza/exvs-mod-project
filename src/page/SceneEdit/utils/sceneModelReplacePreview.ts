@@ -21,6 +21,26 @@ export interface ModelReplacementPreviewResult {
 }
 
 /**
+ * Out-of-scene replace: convert/write on disk only, then load the slot bundle from paths
+ * (no session import or large IPC preview payload).
+ */
+export async function runModelReplacementDirectToDisk(deps: {
+  writeToDisk: () => Promise<ModelReplacementDiskWriteResult>;
+  loadBundleFromDisk: () => Promise<SsbhModelPreviewBundle>;
+  hydratePreviewBundle: (bundle: SsbhModelPreviewBundle) => Promise<void>;
+}): Promise<ModelReplacementPreviewResult> {
+  const diskResult = await deps.writeToDisk();
+  const previewBundle = await deps.loadBundleFromDisk();
+  await deps.hydratePreviewBundle(previewBundle);
+  return {
+    previewBundle,
+    importId: "",
+    wroteToDisk: true,
+    diskResult,
+  };
+}
+
+/**
  * Session import → preview bundle → hydrate (required for viewport) → optional disk write.
  * Keeps replace preview behavior testable and prevents invisible models after replace.
  */

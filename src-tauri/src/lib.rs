@@ -127,6 +127,7 @@ pub fn run() {
             stage_commands::stage_apply_rename,
             stage_commands::load_stage_bundle,
             stage_commands::stage_load_skeleton,
+            stage_commands::stage_load_model_slot_bundle,
             stage_commands::stage_stream_bundles,
             ssbh_mesh_binary::take_mesh_geometry,
             ssbh_mesh_binary::clear_mesh_geometry_registry,

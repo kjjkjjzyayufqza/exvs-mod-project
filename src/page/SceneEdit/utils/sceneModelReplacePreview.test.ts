@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
-import { runModelReplacementPreview } from "./sceneModelReplacePreview";
+import {
+  runModelReplacementDirectToDisk,
+  runModelReplacementPreview,
+} from "./sceneModelReplacePreview";
 
 function makePreviewBundle(): SsbhModelPreviewBundle {
   return {
@@ -17,6 +20,36 @@ function makePreviewBundle(): SsbhModelPreviewBundle {
     displayLabel: "base",
   };
 }
+
+describe("runModelReplacementDirectToDisk", () => {
+  it("writes to disk and reloads the slot bundle without session IPC import", async () => {
+    const callOrder: string[] = [];
+    const diskBundle = { ...makePreviewBundle(), sourceKind: "disk" as const };
+
+    const result = await runModelReplacementDirectToDisk({
+      writeToDisk: async () => {
+        callOrder.push("writeToDisk");
+        return {
+          filesWritten: ["base/0/base.numdlb"],
+          modelDir: "E:/stage/0/0/base",
+          warnings: [],
+        };
+      },
+      loadBundleFromDisk: async () => {
+        callOrder.push("loadFromDisk");
+        return diskBundle;
+      },
+      hydratePreviewBundle: async () => {
+        callOrder.push("hydrate");
+      },
+    });
+
+    expect(callOrder).toEqual(["writeToDisk", "loadFromDisk", "hydrate"]);
+    expect(result.wroteToDisk).toBe(true);
+    expect(result.previewBundle).toBe(diskBundle);
+    expect(result.importId).toBe("");
+  });
+});
 
 describe("runModelReplacementPreview", () => {
   it("hydrates the preview bundle after it is built so the viewport can render IPC mesh data", async () => {

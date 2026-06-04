@@ -90,6 +90,7 @@ describe("HavokCollisionEditorPanel", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /regenerate hkt/i })).toBeInTheDocument();
+      expect(screen.getByText("Scale Factor")).toBeInTheDocument();
     });
 
     expect(scenePreviewHktCollisionSession).not.toHaveBeenCalled();
@@ -116,7 +117,10 @@ describe("HavokCollisionEditorPanel", () => {
       expect(sceneConfigureImport).toHaveBeenCalledWith(
         "session-1",
         "import-1",
-        expect.objectContaining({ generateHkt: true }),
+        expect.objectContaining({
+          generateHkt: true,
+          ssbhConfig: expect.objectContaining({ scaleFactor: 1, upAxis: "y_up" }),
+        }),
       );
       expect(sceneGenerateHkt).toHaveBeenCalledWith("session-1", "import-1", "auto");
       expect(sceneGetHavokMeta).toHaveBeenCalledWith("session-1", "import-1");

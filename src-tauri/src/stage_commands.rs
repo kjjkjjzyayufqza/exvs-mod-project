@@ -250,6 +250,50 @@ pub async fn stage_load_skeleton(
     result
 }
 
+/// Load one stage model slot from disk after a direct-to-disk replace (no session IPC).
+#[tauri::command]
+pub async fn stage_load_model_slot_bundle(
+    stage_root: String,
+    folder_name: String,
+) -> Result<crate::ssbh_preview::SsbhModelPreviewBundle, String> {
+    let stage_root = stage_root.trim().to_string();
+    let folder_name = folder_name.trim().to_string();
+    if stage_root.is_empty() {
+        return Err("stage_root cannot be empty".to_string());
+    }
+    if folder_name.is_empty() {
+        return Err("folder_name cannot be empty".to_string());
+    }
+
+    eprintln!(
+        "[stage_load_model_slot_bundle] stage_root={stage_root} folder_name={folder_name}"
+    );
+    let t = Instant::now();
+
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let root = std::path::Path::new(&stage_root);
+        if !root.is_dir() {
+            return Err(format!("Stage root directory not found: {stage_root}"));
+        }
+        let mut warnings = Vec::new();
+        let bundle = fhm2d_stage::load_model_in_subfolder_pub(root, &folder_name, &mut warnings)
+            .ok_or_else(|| format!("Failed to load model slot '{folder_name}' from disk"))?;
+        let mut bundle = bundle;
+        if !warnings.is_empty() {
+            bundle.warnings.extend(warnings);
+        }
+        Ok(bundle)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?;
+
+    eprintln!(
+        "[stage_load_model_slot_bundle] Done in {}ms",
+        t.elapsed().as_millis()
+    );
+    result
+}
+
 #[tauri::command]
 pub async fn stage_stream_bundles(
     stage_root: String,

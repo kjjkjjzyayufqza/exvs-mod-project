@@ -24,14 +24,14 @@ pub struct HktCollisionPreview {
 }
 
 /// Maximum collision triangles the HKT encoder can reasonably accept for stage assets.
-pub const MAX_HKT_COLLISION_TRIANGLES: usize = 50_000;
+pub const MAX_HKT_COLLISION_TRIANGLES: usize = 80_000;
 
 /// Merged triangle count above which ineffective simplification is treated as a complex mesh.
-pub const COMPLEX_MESH_MERGED_TRIANGLE_THRESHOLD: usize = 10_000;
+pub const COMPLEX_MESH_MERGED_TRIANGLE_THRESHOLD: usize = 20_000;
 
 /// Minimum simplification reduction ratio required once [`COMPLEX_MESH_MERGED_TRIANGLE_THRESHOLD`]
-/// is exceeded (5%).
-pub const COMPLEX_MESH_MIN_REDUCTION_RATIO: f64 = 0.05;
+/// is exceeded (2%).
+pub const COMPLEX_MESH_MIN_REDUCTION_RATIO: f64 = 0.02;
 
 fn collision_reduction_ratio(merged: usize, simplified: usize) -> f64 {
     if merged == 0 {
@@ -52,7 +52,7 @@ pub fn validate_collision_mesh_for_hkt(
         return Err(format!(
             "Collision mesh is too complex for HKT export ({simplified} triangles after processing, \
              limit {MAX_HKT_COLLISION_TRIANGLES}). Prepare a dedicated low-poly collision mesh \
-             (target under ~15k triangles) in a separate DAE/FBX."
+             (target under ~25k triangles) in a separate DAE/FBX."
         ));
     }
 
@@ -314,13 +314,24 @@ mod tests {
     #[test]
     fn validate_rejects_ineffective_simplification() {
         let preview = HktCollisionPreview {
-            render_triangle_count: 30_000,
-            merged_triangle_count: 30_000,
-            simplified_triangle_count: 29_500,
+            render_triangle_count: 25_000,
+            merged_triangle_count: 25_000,
+            simplified_triangle_count: 24_750,
             vertex_count: 20_000,
         };
         let err = validate_collision_mesh_for_hkt(&preview, true).unwrap_err();
         assert!(err.contains("cannot be simplified enough"));
+    }
+
+    #[test]
+    fn validate_accepts_moderate_reduction_below_new_threshold() {
+        let preview = HktCollisionPreview {
+            render_triangle_count: 16_000,
+            merged_triangle_count: 15_398,
+            simplified_triangle_count: 14_936,
+            vertex_count: 12_000,
+        };
+        validate_collision_mesh_for_hkt(&preview, true).expect("~3% reduction under 20k merged");
     }
 
     #[test]
