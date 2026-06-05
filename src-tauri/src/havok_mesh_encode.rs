@@ -1,17 +1,19 @@
-//! Build hknpCompressedMeshShape meshTree XML from a merged triangle mesh.
+//! Build a single hknpCompressedMeshShape meshTree XML from a merged triangle mesh.
 //!
-//! The multi-section encoder here is the game-faithful production path. Its BVH section
+//! The multi-section encoder here follows the current single-shape production path. Its BVH section
 //! split, Axis4/Axis5 codec, compressed-AABB nibble packing, 11/11/10 packed vertices,
 //! and 21/21/22 shared vertices are byte-identical to the authoritative community
 //! reference, DSMapStudio's `HKX2.Builders.hknpCollisionMeshBuilder` / `BVH.cs`
 //! (`soulsmods/DSMapStudio`, `src/HKX2/HKX2/Builders/`). The shape-key width fields
 //! (`mesh_key_info`) intentionally follow this game's own primitive-key sizing rather
 //! than DSMapStudio's hardcoded `bitsPerKey=5 / maxKeyValue=30` (which targets
-//! FromSoftware titles and is marked `// ?` in that source). The reference itself ships a
-//! dummy `simdTree` and omits `connectivity` / `triangleIsInterior`, so neutralizing
-//! those (see `neutralize_acceleration_payload`) is consistent with it.
+//! FromSoftware titles and is marked `// ?` in that source). The faithful path also
+//! regenerates a compact `simdTree` over authored primitive keys.
 
-use crate::collision_mesh::{simplify_collision_mesh, CollisionSimplifyOptions, CollisionTriMesh};
+use crate::collision_mesh::{
+    simplify_collision_mesh, AuthoredCollisionSet, CollisionPrimitive, CollisionPrimitiveMesh,
+    CollisionSimplifyOptions, CollisionTriMesh,
+};
 
 const COLLISION_TEMPLATE_XML: &str = include_str!("../assets/havok_box_collision_template.xml");
 
@@ -99,12 +101,13 @@ struct SectionBuild {
     first_shared_vertex_index: u32,
     first_primitive_index: u32,
     first_data_run_index: u32,
+    primitive_key_count: u32,
 }
 
 #[derive(Clone)]
 struct SectionSeed {
     bounds: Aabb,
-    triangle_indices: Vec<usize>,
+    primitive_indices: Vec<usize>,
     used_vertices: std::collections::BTreeSet<u32>,
 }
 
@@ -114,15 +117,44 @@ struct MeshBuild {
     shared_vertices: Vec<u64>,
 }
 
+#[derive(Clone, Debug)]
+struct SimdLeaf {
+    bounds: Aabb,
+    key: u32,
+}
+
+#[derive(Clone, Debug)]
+struct SimdNode {
+    lane_bounds: [Option<Aabb>; 4],
+    data: [u32; 4],
+    parent: u32,
+    is_leaf: bool,
+}
+
 pub fn build_mesh_collision_xml(mesh: &CollisionTriMesh) -> Result<String, String> {
-    build_mesh_collision_xml_with_template(mesh, COLLISION_TEMPLATE_XML)
+    build_authored_collision_xml(&mesh.to_primitive_mesh())
+}
+
+pub fn build_authored_collision_xml(mesh: &CollisionPrimitiveMesh) -> Result<String, String> {
+    build_authored_collision_xml_with_template(mesh, COLLISION_TEMPLATE_XML)
 }
 
 pub fn build_mesh_collision_xml_with_template(
     mesh: &CollisionTriMesh,
     template_xml: &str,
 ) -> Result<String, String> {
-    build_mesh_collision_xml_with_template_mode(mesh, template_xml, TemplateReplaceMode::All)
+    build_authored_collision_xml_with_template_mode(
+        &mesh.to_primitive_mesh(),
+        template_xml,
+        TemplateReplaceMode::All,
+    )
+}
+
+pub fn build_authored_collision_xml_with_template(
+    mesh: &CollisionPrimitiveMesh,
+    template_xml: &str,
+) -> Result<String, String> {
+    build_authored_collision_xml_with_template_mode(mesh, template_xml, TemplateReplaceMode::All)
 }
 
 #[derive(Clone, Copy)]
@@ -136,14 +168,26 @@ pub fn build_mesh_collision_xml_with_template_mode(
     template_xml: &str,
     replace_mode: TemplateReplaceMode,
 ) -> Result<String, String> {
+    build_authored_collision_xml_with_template_mode(
+        &mesh.to_primitive_mesh(),
+        template_xml,
+        replace_mode,
+    )
+}
+
+pub fn build_authored_collision_xml_with_template_mode(
+    mesh: &CollisionPrimitiveMesh,
+    template_xml: &str,
+    replace_mode: TemplateReplaceMode,
+) -> Result<String, String> {
     let (global_min, global_max) = padded_aabb(mesh)?;
     let build = split_and_encode_sections(mesh, global_min, global_max)?;
-    let total_prims: u32 = build
+    let total_primitive_keys = build
         .sections
         .iter()
-        .map(|s| s.primitives.len() as u32)
+        .flat_map(|section| section.primitives.iter())
+        .map(|primitive| encoded_primitive_key_count(*primitive))
         .sum();
-    let total_primitive_keys = total_prims.saturating_mul(2);
     let (shape_key_bits, _, _) = mesh_key_info(total_primitive_keys);
     let mesh_tree = format_mesh_tree_xml(&build, global_min, global_max)?;
     inject_mesh_tree_into_template(
@@ -157,29 +201,149 @@ pub fn build_mesh_collision_xml_with_template_mode(
     )
 }
 
-/// Production HKT builder. Faithful, game-native multi-section encode of `mesh` injected
-/// into the embedded real-game collision shell, with the stale acceleration payload
-/// neutralized. This is the single entry point used by both DAE-import and existing-SSBH
-/// HKT generation — confirmed to load correctly in-game.
+/// Backward-compatible HKT builder for callers that still provide one triangle mesh.
+/// The faithful production path converts it to an authored single-shape set and
+/// regenerates meshTree + simdTree from that authored geometry.
 pub fn build_mesh_collision_xml_faithful(mesh: &CollisionTriMesh) -> Result<String, String> {
-    build_mesh_collision_xml_sample_template(mesh, COLLISION_SAMPLE_TEMPLATE_XML)
+    build_authored_collision_xml_faithful(&mesh.to_primitive_mesh())
+}
+
+pub fn build_authored_collision_xml_faithful(
+    mesh: &CollisionPrimitiveMesh,
+) -> Result<String, String> {
+    build_authored_collision_set_xml_faithful(&AuthoredCollisionSet {
+        shapes: vec![mesh.clone()],
+    })
+}
+
+pub fn build_authored_collision_set_xml_faithful(
+    set: &AuthoredCollisionSet,
+) -> Result<String, String> {
+    build_authored_collision_set_xml_sample_template(set, COLLISION_SAMPLE_TEMPLATE_XML)
 }
 
 /// Replace only the shape/data chain of an exported sample template (e.g. the
 /// `map_hit.xml` style: `hknpCompressedMeshShape` + `hknpCompressedMeshShapeData`).
 ///
 /// It regenerates the fields that must follow the new mesh — `numShapeKeyBits`,
-/// `triangleIsInterior`, and `meshTree` — via the standard [`TemplateReplaceMode::All`]
-/// path, then neutralizes stale acceleration / connectivity payload left over from the
-/// original sample (`simdTree`, `connectivity`, `hasSimdTree`) so the result is fully
-/// regenerated instead of half-old/half-new.
+/// `triangleIsInterior`, `meshTree`, `simdTree`, and `hasSimdTree` — while clearing
+/// stale connectivity payload left over from the original sample.
 pub fn build_mesh_collision_xml_sample_template(
     mesh: &CollisionTriMesh,
     template_xml: &str,
 ) -> Result<String, String> {
-    let xml =
-        build_mesh_collision_xml_with_template_mode(mesh, template_xml, TemplateReplaceMode::All)?;
-    neutralize_acceleration_payload(&xml)
+    build_authored_collision_xml_sample_template(&mesh.to_primitive_mesh(), template_xml)
+}
+
+pub fn build_authored_collision_xml_sample_template(
+    mesh: &CollisionPrimitiveMesh,
+    template_xml: &str,
+) -> Result<String, String> {
+    build_authored_collision_set_xml_sample_template(
+        &AuthoredCollisionSet {
+            shapes: vec![mesh.clone()],
+        },
+        template_xml,
+    )
+}
+
+pub fn build_authored_collision_set_xml_sample_template(
+    set: &AuthoredCollisionSet,
+    template_xml: &str,
+) -> Result<String, String> {
+    if set.shapes.is_empty() {
+        return Err("Cannot build Havok collision XML with no authored shapes".into());
+    }
+
+    let base_shape_id = find_last_body_shape_id(template_xml)?;
+    let base_shape_range = find_object_range(template_xml, &base_shape_id)?;
+    let base_shape_xml = template_xml[base_shape_range.clone()].to_string();
+    let base_data_id = extract_pointer_field(&base_shape_xml, "data")?;
+    let base_data_range = find_object_range(template_xml, &base_data_id)?;
+    let base_data_xml = template_xml[base_data_range.clone()].to_string();
+    let simd_nodes_type = first_array_elem_typeid_after_field(&base_data_xml, "simdTree")?;
+
+    let mut next_object_number = next_object_number(template_xml)?;
+    let mut shape_data_ids = Vec::with_capacity(set.shapes.len());
+    shape_data_ids.push((base_shape_id.clone(), base_data_id.clone()));
+
+    let mut extra_objects = String::new();
+    for _ in set.shapes.iter().skip(1) {
+        let shape_id = format!("object{next_object_number}");
+        next_object_number += 1;
+        let data_id = format!("object{next_object_number}");
+        next_object_number += 1;
+
+        let shape_xml = replace_object_id(&base_shape_xml, &shape_id)?;
+        let shape_xml = replace_pointer_field(&shape_xml, "data", &data_id)?;
+        let data_xml = replace_object_id(&base_data_xml, &data_id)?;
+
+        extra_objects.push('\n');
+        extra_objects.push_str(&shape_xml);
+        extra_objects.push('\n');
+        extra_objects.push_str(&data_xml);
+        extra_objects.push('\n');
+        shape_data_ids.push((shape_id, data_id));
+    }
+
+    let insert_at = template_xml
+        .rfind("</hktagfile>")
+        .ok_or_else(|| "Collision sample template is missing </hktagfile>".to_string())?;
+    let mut xml = format!(
+        "{}{}{}",
+        &template_xml[..insert_at],
+        extra_objects,
+        &template_xml[insert_at..]
+    );
+
+    let shape_ids: Vec<&str> = shape_data_ids
+        .iter()
+        .map(|(shape_id, _)| shape_id.as_str())
+        .collect();
+    xml = replace_all_named_field_bodies(
+        &xml,
+        "bodyCinfos",
+        &format_body_cinfos_xml(template_xml, &shape_ids)?,
+    )?;
+
+    for (shape, (shape_id, data_id)) in set.shapes.iter().zip(shape_data_ids.iter()) {
+        let (global_min, global_max) = padded_aabb(shape)?;
+        let build = split_and_encode_sections(shape, global_min, global_max)?;
+        let total_primitive_keys: u32 = build
+            .sections
+            .iter()
+            .flat_map(|section| section.primitives.iter())
+            .map(|primitive| encoded_primitive_key_count(*primitive))
+            .sum();
+        let (shape_key_bits, _, _) = mesh_key_info(total_primitive_keys);
+        let mesh_tree = format_mesh_tree_xml(&build, global_min, global_max)?;
+        let simd_tree = format_simd_tree_xml(&build, &simd_nodes_type);
+
+        xml = replace_named_field_body_in_object(&xml, data_id, "meshTree", &mesh_tree)?;
+        xml = replace_named_field_body_in_object(&xml, data_id, "simdTree", &simd_tree)?;
+        xml = replace_raw_field_in_object(
+            &xml,
+            shape_id,
+            "numShapeKeyBits",
+            &format!(
+                r#"<field name="numShapeKeyBits"><integer value="{shape_key_bits}"/></field>"#
+            ),
+        )?;
+        xml = replace_named_field_body_in_object(
+            &xml,
+            shape_id,
+            "triangleIsInterior",
+            &format_triangle_is_interior_xml(total_primitive_keys),
+        )?;
+        xml = replace_raw_field_in_object(
+            &xml,
+            data_id,
+            "hasSimdTree",
+            r#"<field name="hasSimdTree"><bool value="true"/></field>"#,
+        )?;
+    }
+
+    clear_connectivity_payload(&xml)
 }
 
 /// ANALYSIS ONLY — not the shipping path. Reduce a collision mesh so it fits into exactly
@@ -266,7 +430,7 @@ fn compact_triangles(
     Ok(CollisionTriMesh { vertices, indices })
 }
 
-fn padded_aabb(mesh: &CollisionTriMesh) -> Result<([f64; 3], [f64; 3]), String> {
+fn padded_aabb(mesh: &CollisionPrimitiveMesh) -> Result<([f64; 3], [f64; 3]), String> {
     let (mut min, mut max) = mesh.compute_aabb()?;
     for axis in 0..3 {
         if (max[axis] - min[axis]).abs() < 1e-9 {
@@ -300,9 +464,9 @@ fn include_aabb(bounds: &mut Aabb, child: Aabb) {
     }
 }
 
-fn triangle_aabb(mesh: &CollisionTriMesh, tri: [u32; 3]) -> Aabb {
+fn primitive_aabb(mesh: &CollisionPrimitiveMesh, primitive: CollisionPrimitive) -> Aabb {
     let mut bounds = empty_aabb();
-    for vertex_index in tri {
+    for vertex_index in primitive.indices4() {
         include_point(&mut bounds, mesh.vertices[vertex_index as usize]);
     }
     bounds
@@ -408,6 +572,120 @@ fn mesh_key_info(total_primitive_keys: u32) -> (u32, u32, u32) {
     (bits_per_key, max_key, bits_per_key)
 }
 
+fn encoded_primitive_key_count(primitive: [u8; 4]) -> u32 {
+    if primitive[2] == primitive[3] {
+        1
+    } else {
+        2
+    }
+}
+
+fn build_simd_leaves(build: &MeshBuild) -> Vec<SimdLeaf> {
+    let mut leaves = Vec::new();
+    let mut primitive_key = 0u32;
+    for section in &build.sections {
+        for (primitive, bounds) in section
+            .primitives
+            .iter()
+            .zip(section.primitive_bounds.iter())
+        {
+            leaves.push(SimdLeaf {
+                bounds: *bounds,
+                key: primitive_key,
+            });
+            primitive_key += encoded_primitive_key_count(*primitive);
+        }
+    }
+    leaves
+}
+
+fn simd_union_leaf_bounds(leaves: &[SimdLeaf], indices: &[usize]) -> Aabb {
+    let mut out = empty_aabb();
+    for &index in indices {
+        include_aabb(&mut out, leaves[index].bounds);
+    }
+    out
+}
+
+fn simd_split_indices(leaves: &[SimdLeaf], indices: &[usize]) -> Vec<Vec<usize>> {
+    let bounds = simd_union_leaf_bounds(leaves, indices);
+    let extent = bounds_extent(bounds);
+    let split_axis = if extent[0] >= extent[1] && extent[0] >= extent[2] {
+        0
+    } else if extent[1] >= extent[2] {
+        1
+    } else {
+        2
+    };
+
+    let mut sorted = indices.to_vec();
+    sorted.sort_by(|a, b| {
+        let ac = bounds_centroid(leaves[*a].bounds)[split_axis];
+        let bc = bounds_centroid(leaves[*b].bounds)[split_axis];
+        ac.partial_cmp(&bc).unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    let group_count = sorted.len().min(4);
+    let mut groups = Vec::with_capacity(group_count);
+    for group_index in 0..group_count {
+        let start = group_index * sorted.len() / group_count;
+        let end = (group_index + 1) * sorted.len() / group_count;
+        groups.push(sorted[start..end].to_vec());
+    }
+    groups
+}
+
+fn build_simd_node_recursive(
+    leaves: &[SimdLeaf],
+    indices: &[usize],
+    parent: u32,
+    nodes: &mut Vec<SimdNode>,
+) -> u32 {
+    let node_index = nodes.len() as u32;
+    nodes.push(SimdNode {
+        lane_bounds: [None, None, None, None],
+        data: [0, 0, 0, 0],
+        parent,
+        is_leaf: indices.len() <= 4,
+    });
+
+    if indices.len() <= 4 {
+        for (lane, &leaf_index) in indices.iter().enumerate() {
+            nodes[node_index as usize].lane_bounds[lane] = Some(leaves[leaf_index].bounds);
+            nodes[node_index as usize].data[lane] = leaves[leaf_index].key;
+        }
+        return node_index;
+    }
+
+    let groups = simd_split_indices(leaves, indices);
+    for (lane, group) in groups.iter().enumerate() {
+        if group.is_empty() {
+            continue;
+        }
+        let child_bounds = simd_union_leaf_bounds(leaves, group);
+        let child_index = build_simd_node_recursive(leaves, group, node_index, nodes);
+        nodes[node_index as usize].lane_bounds[lane] = Some(child_bounds);
+        nodes[node_index as usize].data[lane] = child_index;
+    }
+    node_index
+}
+
+fn build_simd_tree(build: &MeshBuild) -> Vec<SimdNode> {
+    let leaves = build_simd_leaves(build);
+    let mut nodes = vec![SimdNode {
+        lane_bounds: [None, None, None, None],
+        data: [0, 0, 0, 0],
+        parent: u32::MAX,
+        is_leaf: false,
+    }];
+    if leaves.is_empty() {
+        return nodes;
+    }
+    let indices: Vec<usize> = (0..leaves.len()).collect();
+    build_simd_node_recursive(&leaves, &indices, 0, &mut nodes);
+    nodes
+}
+
 fn collect_leaf_indices(node: &BvhNode, out: &mut Vec<usize>) {
     match node {
         BvhNode::Leaf { index, .. } => out.push(*index),
@@ -419,12 +697,12 @@ fn collect_leaf_indices(node: &BvhNode, out: &mut Vec<usize>) {
 }
 
 fn collect_used_vertices(
-    triangles: &[[u32; 3]],
-    triangle_indices: &[usize],
+    primitives: &[CollisionPrimitive],
+    primitive_indices: &[usize],
 ) -> std::collections::BTreeSet<u32> {
     let mut used = std::collections::BTreeSet::new();
-    for &tri_idx in triangle_indices {
-        for vertex in triangles[tri_idx] {
+    for &primitive_idx in primitive_indices {
+        for vertex in primitives[primitive_idx].indices4() {
             used.insert(vertex);
         }
     }
@@ -432,48 +710,48 @@ fn collect_used_vertices(
 }
 
 fn greedy_section_seeds(
-    triangles: &[[u32; 3]],
-    triangle_bounds: &[Aabb],
+    primitives: &[CollisionPrimitive],
+    primitive_bounds: &[Aabb],
 ) -> Result<Vec<SectionSeed>, String> {
     let mut seeds = Vec::new();
     let mut cursor = 0usize;
 
-    while cursor < triangles.len() {
-        let mut triangle_indices = Vec::new();
+    while cursor < primitives.len() {
+        let mut primitive_indices = Vec::new();
         let mut used_vertices = std::collections::BTreeSet::new();
         let mut bounds = empty_aabb();
 
-        while cursor < triangles.len() {
-            let tri = triangles[cursor];
+        while cursor < primitives.len() {
+            let primitive = primitives[cursor];
             let mut new_vertices = 0usize;
-            for vertex in tri {
+            for vertex in primitive.indices4() {
                 if !used_vertices.contains(&vertex) {
                     new_vertices += 1;
                 }
             }
 
-            if !triangle_indices.is_empty()
-                && (triangle_indices.len() >= MAX_SECTION_TRIS
+            if !primitive_indices.is_empty()
+                && (primitive_indices.len() >= MAX_SECTION_TRIS
                     || used_vertices.len() + new_vertices > MAX_SECTION_VERTS)
             {
                 break;
             }
 
-            for vertex in tri {
+            for vertex in primitive.indices4() {
                 used_vertices.insert(vertex);
             }
-            include_aabb(&mut bounds, triangle_bounds[cursor]);
-            triangle_indices.push(cursor);
+            include_aabb(&mut bounds, primitive_bounds[cursor]);
+            primitive_indices.push(cursor);
             cursor += 1;
         }
 
-        if triangle_indices.is_empty() {
+        if primitive_indices.is_empty() {
             return Err("Failed to greedily partition mesh into Havok sections".into());
         }
 
         seeds.push(SectionSeed {
             bounds,
-            triangle_indices,
+            primitive_indices,
             used_vertices,
         });
     }
@@ -488,12 +766,12 @@ fn build_section_bvh_from_seeds(seeds: &[SectionSeed]) -> Result<BvhNode, String
 
 fn split_bvh_sections(
     node: &BvhNode,
-    triangles: &[[u32; 3]],
+    primitives: &[CollisionPrimitive],
     sections: &mut Vec<SectionSeed>,
 ) -> BvhNode {
-    let mut triangle_indices = Vec::new();
-    collect_leaf_indices(node, &mut triangle_indices);
-    let used_vertices = collect_used_vertices(triangles, &triangle_indices);
+    let mut primitive_indices = Vec::new();
+    collect_leaf_indices(node, &mut primitive_indices);
+    let used_vertices = collect_used_vertices(primitives, &primitive_indices);
 
     if let BvhNode::Branch {
         bounds,
@@ -501,11 +779,11 @@ fn split_bvh_sections(
         right,
     } = node
     {
-        if triangle_indices.len() > MAX_SECTION_TRIS || used_vertices.len() > MAX_SECTION_VERTS {
+        if primitive_indices.len() > MAX_SECTION_TRIS || used_vertices.len() > MAX_SECTION_VERTS {
             return BvhNode::Branch {
                 bounds: *bounds,
-                left: Box::new(split_bvh_sections(left, triangles, sections)),
-                right: Box::new(split_bvh_sections(right, triangles, sections)),
+                left: Box::new(split_bvh_sections(left, primitives, sections)),
+                right: Box::new(split_bvh_sections(right, primitives, sections)),
             };
         }
     }
@@ -513,7 +791,7 @@ fn split_bvh_sections(
     let section_index = sections.len();
     sections.push(SectionSeed {
         bounds: bvh_bounds(node),
-        triangle_indices,
+        primitive_indices,
         used_vertices,
     });
     BvhNode::Leaf {
@@ -523,27 +801,26 @@ fn split_bvh_sections(
 }
 
 fn split_and_encode_sections(
-    mesh: &CollisionTriMesh,
+    mesh: &CollisionPrimitiveMesh,
     global_min: [f64; 3],
     global_max: [f64; 3],
 ) -> Result<MeshBuild, String> {
-    let triangles: Vec<[u32; 3]> = mesh.indices.chunks(3).map(|c| [c[0], c[1], c[2]]).collect();
-
-    if triangles.is_empty() {
+    let source_primitives = mesh.primitives.clone();
+    if source_primitives.is_empty() {
         return Err("Cannot encode an empty Havok collision mesh".into());
     }
 
-    let triangle_bounds: Vec<Aabb> = triangles
+    let source_primitive_bounds: Vec<Aabb> = source_primitives
         .iter()
-        .map(|tri| triangle_aabb(mesh, *tri))
+        .map(|primitive| primitive_aabb(mesh, *primitive))
         .collect();
-    let source_bvh = build_bvh(&triangle_bounds)
+    let source_bvh = build_bvh(&source_primitive_bounds)
         .ok_or_else(|| "Failed to build Havok source BVH".to_string())?;
 
     let mut seeds = Vec::new();
-    let mut mesh_bvh = split_bvh_sections(&source_bvh, &triangles, &mut seeds);
+    let mut mesh_bvh = split_bvh_sections(&source_bvh, &source_primitives, &mut seeds);
     if seeds.len() > MAX_AXIS5_LEAF_KEY as usize + 1 {
-        seeds = greedy_section_seeds(&triangles, &triangle_bounds)?;
+        seeds = greedy_section_seeds(&source_primitives, &source_primitive_bounds)?;
         mesh_bvh = build_section_bvh_from_seeds(&seeds)?;
     }
     validate_havok_section_count(seeds.len())?;
@@ -624,29 +901,33 @@ fn split_and_encode_sections(
             }
         }
 
-        let mut primitives = Vec::new();
-        let mut primitive_bounds = Vec::new();
-        for &tri_idx in &seed.triangle_indices {
-            let tri = triangles[tri_idx];
-            let a = *global_to_local.get(&tri[0]).unwrap();
-            let b = *global_to_local.get(&tri[1]).unwrap();
-            let c = *global_to_local.get(&tri[2]).unwrap();
-            primitives.push([a, b, c, c]);
-            primitive_bounds.push(triangle_bounds[tri_idx]);
+        let mut encoded_primitives = Vec::new();
+        let mut section_primitive_bounds = Vec::new();
+        for &primitive_idx in &seed.primitive_indices {
+            let encoded = source_primitives[primitive_idx]
+                .indices4()
+                .map(|vertex_index| *global_to_local.get(&vertex_index).unwrap());
+            encoded_primitives.push(encoded);
+            section_primitive_bounds.push(source_primitive_bounds[primitive_idx]);
         }
+        let section_primitive_key_count: u32 = encoded_primitives
+            .iter()
+            .map(|primitive| encoded_primitive_key_count(*primitive))
+            .sum();
 
         sections.push(SectionBuild {
             codec_parms: codec,
             packed_vertices,
             shared_vertices_index,
-            primitives,
-            primitive_bounds,
+            primitives: encoded_primitives,
+            primitive_bounds: section_primitive_bounds,
             min,
             max,
             first_packed_vertex_index: global_packed_offset,
             first_shared_vertex_index: global_shared_index_offset,
             first_primitive_index: global_prim_offset,
             first_data_run_index: global_data_run_offset,
+            primitive_key_count: section_primitive_key_count,
         });
 
         global_packed_offset += num_packed_vertices as u32;
@@ -658,7 +939,10 @@ fn split_and_encode_sections(
             .last()
             .map(|s| s.primitives.len() as u32)
             .unwrap_or(0);
-        global_data_run_offset += 1;
+        global_data_run_offset += sections
+            .last()
+            .map(|s| (s.primitive_key_count > 0) as u32)
+            .unwrap_or(0);
     }
 
     Ok(MeshBuild {
@@ -699,6 +983,13 @@ fn encode_shared_vertex(point: [f64; 3], min: [f64; 3], max: [f64; 3]) -> u64 {
     let y = ((point[1] - min[1]) / sy).clamp(0.0, ((1u64 << 21) - 1) as f64) as u64;
     let z = ((point[2] - min[2]) / sz).clamp(0.0, ((1u64 << 22) - 1) as f64) as u64;
     (x & 0x1F_FFFF) | ((y & 0x1F_FFFF) << 21) | ((z & 0x3F_FFFF) << 42)
+}
+
+fn format_shared_vertex_integer(value: u64) -> String {
+    format!(
+        r#"              <integer value="{value}"/>
+"#
+    )
 }
 
 fn format_aabb_xml(min: [f64; 3], max: [f64; 3]) -> String {
@@ -984,7 +1275,11 @@ fn format_mesh_tree_xml(
 ) -> Result<String, String> {
     let sections = &build.sections;
     let total_prims: u32 = sections.iter().map(|s| s.primitives.len() as u32).sum();
-    let total_primitive_keys = total_prims.saturating_mul(2);
+    let total_primitive_keys: u32 = sections
+        .iter()
+        .flat_map(|section| section.primitives.iter())
+        .map(|primitive| encoded_primitive_key_count(*primitive))
+        .sum();
     let total_packed: u32 = sections
         .iter()
         .map(|s| s.packed_vertices.len() as u32)
@@ -1044,11 +1339,7 @@ fn format_mesh_tree_xml(
 
     let mut shared_vertex_integers = String::new();
     for sv in &build.shared_vertices {
-        shared_vertex_integers.push_str(&format!(
-            r#"              <integer value="{}"/>
-"#,
-            *sv as i64
-        ));
+        shared_vertex_integers.push_str(&format_shared_vertex_integer(*sv));
     }
 
     let mut prim_records = String::new();
@@ -1205,11 +1496,18 @@ fn inject_mesh_tree_into_template(
 /// reset `simdTree` to an empty (non-compact) tree, reset `connectivity` to empty
 /// arrays, and clear `hasSimdTree`. Element type ids are read back from the template
 /// so they stay valid for that export's type table.
+#[allow(dead_code)]
 fn neutralize_acceleration_payload(xml: &str) -> Result<String, String> {
     let simd_nodes_type = first_array_elem_typeid_after_field(xml, "simdTree")?;
     let mut out =
         replace_all_named_field_bodies(xml, "simdTree", &empty_simd_tree_body(&simd_nodes_type))?;
+    out = clear_connectivity_payload(&out)?;
 
+    patch_all_has_simd_tree(&out, false)
+}
+
+fn clear_connectivity_payload(xml: &str) -> Result<String, String> {
+    let mut out = xml.to_string();
     let conn_start = out
         .find(r#"<field name="connectivity">"#)
         .ok_or_else(|| "connectivity field missing from collision template".to_string())?;
@@ -1221,8 +1519,7 @@ fn neutralize_acceleration_payload(xml: &str) -> Result<String, String> {
     let connectivity_body =
         empty_connectivity_body(&headers_type, &local_links_type, &global_links_type);
     out = replace_all_named_field_bodies(&out, "connectivity", &connectivity_body)?;
-
-    patch_has_simd_tree(&out, false)
+    Ok(out)
 }
 
 /// Element type id of the first `<array>` that appears after `<field name="{field}">`.
@@ -1247,6 +1544,7 @@ fn first_array_elem_typeid_after_field(xml: &str, field: &str) -> Result<String,
     Ok(xml[value_start..value_end].to_string())
 }
 
+#[allow(dead_code)]
 fn empty_simd_tree_body(nodes_typeid: &str) -> String {
     format!(
         r#"
@@ -1258,6 +1556,112 @@ fn empty_simd_tree_body(nodes_typeid: &str) -> String {
           <field name="isCompact"><bool value="false"/></field>
         </record>
       "#
+    )
+}
+
+fn inactive_simd_min() -> f64 {
+    3.40282e38
+}
+
+fn inactive_simd_max() -> f64 {
+    -3.40282e38
+}
+
+fn format_simd_lane_reals(
+    nodes: &SimdNode,
+    min_axis: usize,
+    max_axis: usize,
+    use_min: bool,
+) -> String {
+    let mut values = String::new();
+    for lane in 0..4 {
+        let value = match nodes.lane_bounds[lane] {
+            Some(bounds) if use_min => bounds.min[min_axis],
+            Some(bounds) => bounds.max[max_axis],
+            None if use_min => inactive_simd_min(),
+            None => inactive_simd_max(),
+        };
+        values.push_str(&format!("                    {}\n", format_real_tag(value)));
+    }
+    values
+}
+
+fn format_simd_node_xml(node: &SimdNode) -> String {
+    let mut data = String::new();
+    for value in node.data {
+        data.push_str(&format!(
+            "                    <integer value=\"{value}\"/>\n"
+        ));
+    }
+
+    format!(
+        r#"<record> <!-- hkcdSimdTree::Node -->
+                <field name="lx">
+                  <array count="4" elementtypeid="type48">
+{lx}                  </array>
+                </field>
+                <field name="hx">
+                  <array count="4" elementtypeid="type48">
+{hx}                  </array>
+                </field>
+                <field name="ly">
+                  <array count="4" elementtypeid="type48">
+{ly}                  </array>
+                </field>
+                <field name="hy">
+                  <array count="4" elementtypeid="type48">
+{hy}                  </array>
+                </field>
+                <field name="lz">
+                  <array count="4" elementtypeid="type48">
+{lz}                  </array>
+                </field>
+                <field name="hz">
+                  <array count="4" elementtypeid="type48">
+{hz}                  </array>
+                </field>
+                <field name="data">
+                  <array count="4" elementtypeid="type36">
+{data}                  </array>
+                </field>
+                <field name="parent"><integer value="{parent}"/></field>
+                <field name="isLeaf"><bool value="{is_leaf}"/></field>
+                <field name="isActive"><bool value="false"/></field>
+              </record>"#,
+        lx = format_simd_lane_reals(node, 0, 0, true),
+        hx = format_simd_lane_reals(node, 0, 0, false),
+        ly = format_simd_lane_reals(node, 1, 1, true),
+        hy = format_simd_lane_reals(node, 1, 1, false),
+        lz = format_simd_lane_reals(node, 2, 2, true),
+        hz = format_simd_lane_reals(node, 2, 2, false),
+        data = data,
+        parent = node.parent,
+        is_leaf = node.is_leaf,
+    )
+}
+
+fn format_simd_tree_xml(build: &MeshBuild, nodes_typeid: &str) -> String {
+    let nodes = build_simd_tree(build);
+    let mut node_records = String::new();
+    for node in &nodes {
+        node_records.push_str(&format_simd_node_xml(node));
+        node_records.push('\n');
+    }
+
+    format!(
+        r#"
+        <record> <!-- hkcdSimdTree -->
+          <field name="nodes">
+            <array count="{count}" elementtypeid="{nodes_typeid}">
+              {node_records}
+            </array>
+          </field>
+          <field name="isCompact"><bool value="true"/></field>
+        </record>
+      "#,
+        count = nodes.len(),
+        nodes_typeid = nodes_typeid,
+        node_records = node_records,
     )
 }
 
@@ -1282,14 +1686,26 @@ fn empty_connectivity_body(headers: &str, local_links: &str, global_links: &str)
     )
 }
 
-fn patch_has_simd_tree(xml: &str, value: bool) -> Result<String, String> {
+#[allow(dead_code)]
+fn patch_all_has_simd_tree(xml: &str, value: bool) -> Result<String, String> {
     let marker = r#"<field name="hasSimdTree">"#;
-    let start = xml
-        .find(marker)
-        .ok_or_else(|| "hasSimdTree field missing from collision template".to_string())?;
-    let end = find_field_end(xml, start)?;
     let replacement = format!(r#"<field name="hasSimdTree"><bool value="{value}"/></field>"#);
-    Ok(format!("{}{}{}", &xml[..start], replacement, &xml[end..]))
+    let mut out = xml.to_string();
+    let mut search_from = 0usize;
+    let mut replacements = 0usize;
+
+    while let Some(rel_start) = out[search_from..].find(marker) {
+        let start = search_from + rel_start;
+        let end = find_field_end(&out, start)?;
+        out.replace_range(start..end, &replacement);
+        search_from = start + replacement.len();
+        replacements += 1;
+    }
+
+    if replacements == 0 {
+        return Err("hasSimdTree field missing from collision template".to_string());
+    }
+    Ok(out)
 }
 
 fn inject_last_body_shape_data(
@@ -1452,6 +1868,93 @@ fn replace_last_raw_field(
     Ok(format!("{}{}{}", &xml[..start], replacement, &xml[end..]))
 }
 
+fn next_object_number(xml: &str) -> Result<u32, String> {
+    let marker = r#"<object id="object"#;
+    let mut search_from = 0usize;
+    let mut max_id = None;
+
+    while let Some(rel_start) = xml[search_from..].find(marker) {
+        let start = search_from + rel_start + marker.len();
+        let end = xml[start..]
+            .find('"')
+            .map(|idx| start + idx)
+            .ok_or_else(|| "Malformed object id in collision template".to_string())?;
+        let object_id = xml[start..end]
+            .parse::<u32>()
+            .map_err(|e| format!("Malformed numeric object id in collision template: {e}"))?;
+        max_id = Some(max_id.map_or(object_id, |current: u32| current.max(object_id)));
+        search_from = end;
+    }
+
+    max_id
+        .map(|value| value + 1)
+        .ok_or_else(|| "No object ids found in collision template".to_string())
+}
+
+fn replace_object_id(object_xml: &str, new_object_id: &str) -> Result<String, String> {
+    let marker = r#"<object id=""#;
+    let start = object_xml
+        .find(marker)
+        .ok_or_else(|| "Object header missing from collision template block".to_string())?
+        + marker.len();
+    let end = object_xml[start..]
+        .find('"')
+        .map(|idx| start + idx)
+        .ok_or_else(|| "Object id is malformed in collision template block".to_string())?;
+    Ok(format!(
+        "{}{}{}",
+        &object_xml[..start],
+        new_object_id,
+        &object_xml[end..]
+    ))
+}
+
+fn replace_pointer_field(xml: &str, field_name: &str, pointer_id: &str) -> Result<String, String> {
+    let marker = format!(r#"<field name="{field_name}">"#);
+    let start = xml
+        .find(&marker)
+        .ok_or_else(|| format!("{field_name} field missing from collision template block"))?;
+    let end = find_field_end(xml, start)?;
+    let replacement = format!(r#"<field name="{field_name}"><pointer id="{pointer_id}"/></field>"#);
+    Ok(format!("{}{}{}", &xml[..start], replacement, &xml[end..]))
+}
+
+fn format_body_cinfos_xml(template_xml: &str, shape_ids: &[&str]) -> Result<String, String> {
+    let field_marker = r#"<field name="bodyCinfos">"#;
+    let field_start = template_xml
+        .find(field_marker)
+        .ok_or_else(|| "bodyCinfos field missing from collision template".to_string())?;
+    let field_end = find_field_end(template_xml, field_start)?;
+    let field_xml = &template_xml[field_start..field_end];
+    let element_type = first_array_elem_typeid_after_field(field_xml, "bodyCinfos")?;
+
+    let array_start = field_xml
+        .find("<array ")
+        .ok_or_else(|| "bodyCinfos array missing from collision template".to_string())?;
+    let record_start = field_xml[array_start..]
+        .find("<record")
+        .map(|idx| array_start + idx)
+        .ok_or_else(|| "bodyCinfos record missing from collision template".to_string())?;
+    let record_end = find_record_end(field_xml, record_start)?;
+    let record_template = &field_xml[record_start..record_end];
+
+    let mut records = String::new();
+    for shape_id in shape_ids {
+        records.push_str("          ");
+        records.push_str(&replace_pointer_field(record_template, "shape", shape_id)?);
+        records.push('\n');
+    }
+
+    Ok(format!(
+        r#"
+        <array count="{}" elementtypeid="{}"> <!-- ArrayOf hknpPhysicsSystemData::bodyCinfoWithAttachment -->
+{records}        </array>
+      "#,
+        shape_ids.len(),
+        element_type,
+    ))
+}
+
 pub fn float_to_havok_hex(value: f64) -> String {
     let bits = value.to_bits();
     format!("#{:016X}", bits)
@@ -1500,6 +2003,41 @@ fn find_field_end(xml: &str, field_start: usize) -> Result<usize, String> {
     Err("Failed to locate end of XML field".into())
 }
 
+fn find_record_end(xml: &str, record_start: usize) -> Result<usize, String> {
+    const OPEN: &str = "<record";
+    const CLOSE: &str = "</record>";
+
+    let after_open = xml[record_start..]
+        .find('>')
+        .map(|idx| record_start + idx + 1)
+        .ok_or_else(|| "Malformed XML record opening tag".to_string())?;
+
+    let mut depth = 1usize;
+    let mut pos = after_open;
+
+    while pos < xml.len() && depth > 0 {
+        let open = xml[pos..].find(OPEN);
+        let close = xml[pos..].find(CLOSE);
+
+        match (open, close) {
+            (Some(o), Some(c)) if o <= c => {
+                depth += 1;
+                pos += o + OPEN.len();
+            }
+            (_, Some(c)) => {
+                depth -= 1;
+                pos += c + CLOSE.len();
+                if depth == 0 {
+                    return Ok(pos);
+                }
+            }
+            _ => break,
+        }
+    }
+
+    Err("Failed to locate end of XML record".into())
+}
+
 fn replace_all_named_field_bodies(
     xml: &str,
     field_name: &str,
@@ -1531,7 +2069,9 @@ fn replace_all_named_field_bodies(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::collision_mesh::CollisionTriMesh;
+    use crate::collision_mesh::{
+        AuthoredCollisionSet, CollisionPrimitive, CollisionPrimitiveMesh, CollisionTriMesh,
+    };
 
     #[test]
     fn single_triangle_mesh_builds_xml_without_template_literals() {
@@ -1582,8 +2122,9 @@ mod tests {
             indices.extend_from_slice(&[base, base + 1, base + 2]);
         }
         let mesh = CollisionTriMesh { vertices, indices };
-        let (global_min, global_max) = padded_aabb(&mesh).unwrap();
-        let build = split_and_encode_sections(&mesh, global_min, global_max).unwrap();
+        let primitive_mesh = mesh.to_primitive_mesh();
+        let (global_min, global_max) = padded_aabb(&primitive_mesh).unwrap();
+        let build = split_and_encode_sections(&primitive_mesh, global_min, global_max).unwrap();
         assert!(build.sections.len() >= 2);
     }
 
@@ -1617,16 +2158,16 @@ mod tests {
 
     #[test]
     fn multi_section_mesh_uses_primitive_key_shape_bits() {
-        // 3901 primitives -> 7802 primitive keys -> 13 bits. The shape-key width follows
-        // the primitive-key space (matching the game's own assets), not the section count.
+        // 3901 triangle primitives -> 3901 primitive keys -> 12 bits. The shape-key width
+        // follows the authored primitive-key space (triangles=1, quads=2), not the section count.
         let mesh = separate_triangles_mesh(3901);
         let xml = build_mesh_collision_xml(&mesh).unwrap();
 
-        assert_eq!(mesh_key_info(7802), (13, 7801, 13));
-        assert!(xml.contains(r#"<field name="numPrimitiveKeys"><integer value="7802"/></field>"#));
-        assert!(xml.contains(r#"<field name="bitsPerKey"><integer value="13"/></field>"#));
-        assert!(xml.contains(r#"<field name="maxKeyValue"><integer value="7801"/></field>"#));
-        assert!(xml.contains(r#"<field name="numShapeKeyBits"><integer value="13"/></field>"#));
+        assert_eq!(mesh_key_info(3901), (12, 3900, 12));
+        assert!(xml.contains(r#"<field name="numPrimitiveKeys"><integer value="3901"/></field>"#));
+        assert!(xml.contains(r#"<field name="bitsPerKey"><integer value="12"/></field>"#));
+        assert!(xml.contains(r#"<field name="maxKeyValue"><integer value="3900"/></field>"#));
+        assert!(xml.contains(r#"<field name="numShapeKeyBits"><integer value="12"/></field>"#));
     }
 
     fn separate_triangles_mesh(count: usize) -> CollisionTriMesh {
@@ -1704,7 +2245,7 @@ mod tests {
     }
 
     #[test]
-    fn faithful_builder_uses_game_shell_and_neutralizes_acceleration() {
+    fn faithful_builder_uses_game_shell_and_generates_simd_tree() {
         let mesh = separate_triangles_mesh(50);
         let xml = build_mesh_collision_xml_faithful(&mesh).unwrap();
 
@@ -1713,9 +2254,92 @@ mod tests {
         assert!(xml.contains(r#"<string value="rr"/>"#));
         assert!(!xml.contains("object_box01_col01"));
 
-        // Acceleration payload neutralized; primitive-key shape sizing (50 -> 100 keys).
-        assert!(xml.contains(r#"<field name="hasSimdTree"><bool value="false"/></field>"#));
-        assert!(xml.contains(r#"<field name="numPrimitiveKeys"><integer value="100"/></field>"#));
+        // Runtime payload regenerated; authored triangle primitives keep 1 key each.
+        assert!(xml.contains(r#"<field name="hasSimdTree"><bool value="true"/></field>"#));
+        assert!(xml.contains(r#"<field name="isCompact"><bool value="true"/></field>"#));
+        assert!(xml.contains(r#"<field name="isLeaf"><bool value="true"/></field>"#));
+        assert!(xml.contains(r#"<field name="numPrimitiveKeys"><integer value="50"/></field>"#));
+    }
+
+    #[test]
+    fn faithful_multi_shape_builder_duplicates_body_shapes() {
+        let shape = CollisionPrimitiveMesh {
+            vertices: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            primitives: vec![CollisionPrimitive::Triangle([0, 1, 2])],
+        };
+        let set = AuthoredCollisionSet {
+            shapes: vec![shape.clone(), shape],
+        };
+
+        let xml = build_authored_collision_set_xml_faithful(&set).unwrap();
+
+        assert!(xml.contains(r#"<array count="2" elementtypeid="type228">"#));
+        assert_eq!(
+            xml.matches(r#"<field name="shape"><pointer id="object"#)
+                .count(),
+            2
+        );
+        assert_eq!(
+            xml.matches(r#"<field name="hasSimdTree"><bool value="true"/></field>"#)
+                .count(),
+            2
+        );
+        assert_eq!(
+            xml.matches(r#"<field name="numPrimitiveKeys"><integer value="1"/></field>"#)
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn simd_tree_leaf_data_uses_authored_primitive_keys() {
+        let mesh = CollisionPrimitiveMesh {
+            vertices: vec![
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [1.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [2.0, 0.0, 0.0],
+                [2.0, 1.0, 0.0],
+            ],
+            primitives: vec![
+                CollisionPrimitive::Quad([0, 1, 2, 3]),
+                CollisionPrimitive::Triangle([1, 4, 5]),
+            ],
+        };
+        let (global_min, global_max) = padded_aabb(&mesh).unwrap();
+        let build = split_and_encode_sections(&mesh, global_min, global_max).unwrap();
+        let leaves = build_simd_leaves(&build);
+        let encoded_primitives: Vec<[u8; 4]> = build
+            .sections
+            .iter()
+            .flat_map(|section| section.primitives.iter().copied())
+            .collect();
+        let mut expected_keys = Vec::new();
+        let mut next_key = 0u32;
+        for primitive in encoded_primitives {
+            expected_keys.push(next_key);
+            next_key += encoded_primitive_key_count(primitive);
+        }
+
+        assert_eq!(leaves.len(), 2);
+        assert_eq!(
+            leaves.iter().map(|leaf| leaf.key).collect::<Vec<_>>(),
+            expected_keys
+        );
+        assert_eq!(mesh.primitive_key_count(), 3);
+        assert_eq!(next_key, 3);
+    }
+
+    #[test]
+    fn shared_vertices_are_formatted_as_unsigned_u64() {
+        let encoded = encode_shared_vertex([1.0, 1.0, 1.0], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
+
+        assert_eq!(encoded, u64::MAX);
+        assert_eq!(
+            format_shared_vertex_integer(encoded).trim(),
+            r#"<integer value="18446744073709551615"/>"#
+        );
     }
 
     #[test]
@@ -1733,7 +2357,7 @@ mod tests {
         let xml = build_mesh_collision_xml_with_template(&mesh, &template).unwrap();
         let mesh_tree_count = xml.matches(r#"<field name="meshTree">"#).count();
         let primitive_count = xml
-            .matches(r#"<field name="numPrimitiveKeys"><integer value="2"/></field>"#)
+            .matches(r#"<field name="numPrimitiveKeys"><integer value="1"/></field>"#)
             .count();
 
         assert_eq!(mesh_tree_count, 2);

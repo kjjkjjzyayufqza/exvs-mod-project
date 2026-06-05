@@ -495,7 +495,8 @@ export function GenerateHktFromModelDialog({
               {meshPreview && !previewLoading && !hktGenerating ? (
                 <p className="text-[11px] text-emerald-400/90">
                   {previewStageLabel(meshPreview.stage)} ready (
-                  {formatTriangleCount(meshPreview.triangleCount)} triangles).
+                  {formatTriangleCount(meshPreview.triangleCount)} triangles, ~
+                  {formatTriangleCount(meshPreview.triangleCount * 2)} primitive keys).
                   {hasValidCachedHkt && !previewUsesPreHavokMesh
                     ? " Decoded HKT was generated for preview only; Replace rebuilds on the backend."
                     : ""}

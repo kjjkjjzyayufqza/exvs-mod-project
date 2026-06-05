@@ -6,6 +6,10 @@ import type {
 } from "../components/dae-import/daeImportTypes";
 import type { ImportConfig } from "./sceneSessionService";
 
+export const HKT_SINGLE_SHAPE_MAX_PRIMITIVE_KEYS = 65_536;
+export const HKT_SINGLE_SHAPE_MAX_TRIANGLES = HKT_SINGLE_SHAPE_MAX_PRIMITIVE_KEYS / 2;
+export const HKT_SAFE_TARGET_TRIANGLES = 32_000;
+
 export const HKT_SIMPLIFY_PRESET_ORDER: HktSimplifyPreset[] = [
   "none",
   "medium",
@@ -16,14 +20,14 @@ export const HKT_SIMPLIFY_PRESET_ORDER: HktSimplifyPreset[] = [
 export const HKT_SIMPLIFY_PRESET_LABELS: Record<HktSimplifyPreset, string> = {
   none: "Full surface",
   medium: "Merge flats",
-  high: "High 50k",
+  high: "High 32k",
   heavy: "Low 5%",
 };
 
 export const HKT_SIMPLIFY_PRESET_HINTS: Record<HktSimplifyPreset, string> = {
   none: "Export every render triangle as collision",
   medium: "Merge coplanar faces on flats and panels (recommended)",
-  high: "Keep the source outline closely, capped at 50k collision triangles",
+  high: "Detailed single-shape collision budget for the current encoder",
   heavy: "Aggressive merge and curved-surface decimation for low-poly collision",
 };
 
@@ -55,6 +59,7 @@ export function hktSimplifyConfigFromPreset(preset: HktSimplifyPreset): HktSimpl
     preset,
     hullPreset: "balanced" as const,
     hullTargetFaces: null,
+    quadMergeEnabled: true,
   };
   switch (preset) {
     case "none":
@@ -85,7 +90,7 @@ export function hktSimplifyConfigFromPreset(preset: HktSimplifyPreset): HktSimpl
         minTriangleArea: 1e-6,
         weldEpsilon: 0.001,
         targetTriangleRatio: null,
-        maxTargetTriangles: 50_000,
+        maxTargetTriangles: HKT_SAFE_TARGET_TRIANGLES,
       };
     case "heavy":
       return {
@@ -95,7 +100,7 @@ export function hktSimplifyConfigFromPreset(preset: HktSimplifyPreset): HktSimpl
         minTriangleArea: 0.001,
         weldEpsilon: 0.01,
         targetTriangleRatio: 0.05,
-        maxTargetTriangles: 50_000,
+        maxTargetTriangles: HKT_SAFE_TARGET_TRIANGLES,
       };
   }
 }
@@ -113,6 +118,7 @@ export function hktHullConfigFromPreset(preset: HktHullPreset): HktSimplifyConfi
     targetTriangleRatio: null,
     maxTargetTriangles: null,
     hullTargetFaces: HKT_HULL_PRESET_FACES[preset],
+    quadMergeEnabled: true,
   };
 }
 
@@ -157,18 +163,28 @@ export function normalizeHktSimplifyConfig(
       config.hullPreset && HKT_HULL_PRESET_ORDER.includes(config.hullPreset)
         ? config.hullPreset
         : "balanced";
-    return hktHullConfigFromPreset(hullPreset);
+    return {
+      ...hktHullConfigFromPreset(hullPreset),
+      quadMergeEnabled: config.quadMergeEnabled ?? true,
+    };
   }
   if (config?.preset && HKT_SIMPLIFY_PRESET_ORDER.includes(config.preset)) {
-    return hktSimplifyConfigFromPreset(config.preset);
+    return {
+      ...hktSimplifyConfigFromPreset(config.preset),
+      quadMergeEnabled: config.quadMergeEnabled ?? true,
+    };
   }
   const merged: HktSimplifyConfig = {
     ...hktSimplifyConfigFromPreset("medium"),
     ...config,
     preset: config?.preset ?? "medium",
+    quadMergeEnabled: config?.quadMergeEnabled ?? true,
   };
   const preset = detectHktSimplifyPreset(merged);
-  return hktSimplifyConfigFromPreset(preset);
+  return {
+    ...hktSimplifyConfigFromPreset(preset),
+    quadMergeEnabled: merged.quadMergeEnabled,
+  };
 }
 
 export const DEFAULT_HKT_SIMPLIFY: HktSimplifyConfig = hktSimplifyConfigFromPreset("medium");

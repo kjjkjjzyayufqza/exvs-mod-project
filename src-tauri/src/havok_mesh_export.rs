@@ -55,6 +55,21 @@ fn collect_integers(array_el: &xmltree::Element) -> Vec<i64> {
         .collect()
 }
 
+fn parse_u64_integer_value(value: &str) -> Option<u64> {
+    if value.starts_with('-') {
+        value.parse::<i64>().ok().map(|v| v as u64)
+    } else {
+        value.parse::<u64>().ok()
+    }
+}
+
+fn collect_u64_integers(array_el: &xmltree::Element) -> Vec<u64> {
+    child_elements(array_el)
+        .filter(|e| e.name == "integer")
+        .filter_map(|e| parse_u64_integer_value(e.attributes.get("value")?))
+        .collect()
+}
+
 fn collect_reals(array_el: &xmltree::Element) -> Vec<f64> {
     child_elements(array_el)
         .filter(|e| e.name == "real")
@@ -62,18 +77,24 @@ fn collect_reals(array_el: &xmltree::Element) -> Vec<f64> {
         .collect()
 }
 
-fn find_mesh_tree_record(root: &xmltree::Element) -> Result<&xmltree::Element, String> {
+fn find_mesh_tree_records<'a>(
+    root: &'a xmltree::Element,
+) -> Result<Vec<&'a xmltree::Element>, String> {
+    let mut mesh_trees = Vec::new();
     for obj in child_elements(root).filter(|e| e.name == "object") {
         if let Some(rec) = first_record(obj) {
             if find_field(rec, "meshTree").is_some() {
                 let mesh_tree_field = find_field(rec, "meshTree").unwrap();
                 if let Some(mt_rec) = first_record(mesh_tree_field) {
-                    return Ok(mt_rec);
+                    mesh_trees.push(mt_rec);
                 }
             }
         }
     }
-    Err("Cannot find meshTree record in Havok XML".into())
+    if mesh_trees.is_empty() {
+        return Err("Cannot find meshTree record in Havok XML".into());
+    }
+    Ok(mesh_trees)
 }
 
 fn extract_domain(mesh_tree: &xmltree::Element) -> Result<DomainAabb, String> {
@@ -159,10 +180,7 @@ fn extract_packed_vertices(mesh_tree: &xmltree::Element) -> Result<Vec<u32>, Str
 fn extract_shared_vertices(mesh_tree: &xmltree::Element) -> Result<Vec<u64>, String> {
     let sv_field = find_field(mesh_tree, "sharedVertices").ok_or("No sharedVertices field")?;
     let sv_array = first_array(sv_field).ok_or("No sharedVertices array")?;
-    Ok(collect_integers(sv_array)
-        .into_iter()
-        .map(|v| v as u64)
-        .collect())
+    Ok(collect_u64_integers(sv_array))
 }
 
 fn extract_shared_vertices_index(mesh_tree: &xmltree::Element) -> Result<Vec<u16>, String> {
@@ -210,102 +228,105 @@ pub fn havok_xml_to_obj(xml_content: &str, output_path: &Path) -> Result<String,
     let root = xmltree::Element::parse(xml_content.as_bytes())
         .map_err(|e| format!("XML parse error: {e}"))?;
 
-    let mesh_tree = find_mesh_tree_record(&root)?;
-    let domain = extract_domain(mesh_tree)?;
-    let sections = extract_sections(mesh_tree)?;
-    let packed_vertices = extract_packed_vertices(mesh_tree)?;
-    let shared_vertices = extract_shared_vertices(mesh_tree)?;
-    let shared_vertices_index = extract_shared_vertices_index(mesh_tree)?;
-    let primitives = extract_primitives(mesh_tree)?;
+    let mesh_trees = find_mesh_tree_records(&root)?;
 
     let mut obj_verts: Vec<[f64; 3]> = Vec::new();
     let mut obj_faces: Vec<[usize; 4]> = Vec::new();
     let mut tri_count = 0usize;
     let mut quad_count = 0usize;
+    let mut total_sections = 0usize;
 
-    for section in &sections {
-        let vert_base = obj_verts.len();
+    for mesh_tree in mesh_trees {
+        let domain = extract_domain(mesh_tree)?;
+        let sections = extract_sections(mesh_tree)?;
+        let packed_vertices = extract_packed_vertices(mesh_tree)?;
+        let shared_vertices = extract_shared_vertices(mesh_tree)?;
+        let shared_vertices_index = extract_shared_vertices_index(mesh_tree)?;
+        let primitives = extract_primitives(mesh_tree)?;
+        total_sections += sections.len();
 
-        let pv_start = section.first_packed_vertex_index as usize;
-        let pv_end = (pv_start + section.num_packed_vertices as usize).min(packed_vertices.len());
-        for i in pv_start..pv_end {
-            let packed = packed_vertices[i];
-            // Havok bit layout: Z[31:22] Y[21:11] X[10:0]
-            let xi = (packed & 0x7FF) as f64;
-            let yi = ((packed >> 11) & 0x7FF) as f64;
-            let zi = ((packed >> 22) & 0x3FF) as f64;
-            // codecParms = [offX, offY, offZ, sX, sY, sZ]
-            obj_verts.push([
-                section.codec_parms[0] + xi * section.codec_parms[3],
-                section.codec_parms[1] + yi * section.codec_parms[4],
-                section.codec_parms[2] + zi * section.codec_parms[5],
-            ]);
-        }
+        for section in &sections {
+            let vert_base = obj_verts.len();
 
-        let prim_start = section.first_primitive_index as usize;
-        let prim_end = (prim_start + section.num_primitives as usize).min(primitives.len());
+            let pv_start = section.first_packed_vertex_index as usize;
+            let pv_end =
+                (pv_start + section.num_packed_vertices as usize).min(packed_vertices.len());
+            for i in pv_start..pv_end {
+                let packed = packed_vertices[i];
+                // Havok bit layout: Z[31:22] Y[21:11] X[10:0]
+                let xi = (packed & 0x7FF) as f64;
+                let yi = ((packed >> 11) & 0x7FF) as f64;
+                let zi = ((packed >> 22) & 0x3FF) as f64;
+                // codecParms = [offX, offY, offZ, sX, sY, sZ]
+                obj_verts.push([
+                    section.codec_parms[0] + xi * section.codec_parms[3],
+                    section.codec_parms[1] + yi * section.codec_parms[4],
+                    section.codec_parms[2] + zi * section.codec_parms[5],
+                ]);
+            }
 
-        let mut max_shared_local: i32 = -1;
-        for pi in prim_start..prim_end {
-            for &idx in &primitives[pi] {
-                if idx as u32 >= section.num_packed_vertices {
-                    let local = (idx as u32 - section.num_packed_vertices) as i32;
-                    if local > max_shared_local {
-                        max_shared_local = local;
+            let prim_start = section.first_primitive_index as usize;
+            let prim_end = (prim_start + section.num_primitives as usize).min(primitives.len());
+
+            let mut max_shared_local: i32 = -1;
+            for pi in prim_start..prim_end {
+                for &idx in &primitives[pi] {
+                    if idx as u32 >= section.num_packed_vertices {
+                        let local = (idx as u32 - section.num_packed_vertices) as i32;
+                        if local > max_shared_local {
+                            max_shared_local = local;
+                        }
                     }
                 }
             }
-        }
 
-        let shared_base = obj_verts.len();
-        if max_shared_local >= 0 {
-            for si in 0..=(max_shared_local as usize) {
-                let svi_idx = section.first_shared_vertex_index as usize + si;
-                if svi_idx >= shared_vertices_index.len() {
-                    return Err(format!(
-                        "Shared vertex index out of range: section shared slot {si}, \
-                         sharedVerticesIndex index {svi_idx}"
-                    ));
+            let shared_base = obj_verts.len();
+            if max_shared_local >= 0 {
+                for si in 0..=(max_shared_local as usize) {
+                    let svi_idx = section.first_shared_vertex_index as usize + si;
+                    if svi_idx >= shared_vertices_index.len() {
+                        return Err(format!(
+                            "Shared vertex index out of range: section shared slot {si}, \
+                             sharedVerticesIndex index {svi_idx}"
+                        ));
+                    }
+                    let global_idx = shared_vertices_index[svi_idx] as usize;
+                    if global_idx >= shared_vertices.len() {
+                        return Err(format!(
+                            "Shared vertex lookup out of range: sharedVerticesIndex[{svi_idx}]={global_idx}, \
+                             sharedVertices length {}",
+                            shared_vertices.len()
+                        ));
+                    }
+                    obj_verts.push(decode_shared_vertex(shared_vertices[global_idx], &domain));
                 }
-                let global_idx = shared_vertices_index[svi_idx] as usize;
-                if global_idx >= shared_vertices.len() {
-                    return Err(format!(
-                        "Shared vertex lookup out of range: sharedVerticesIndex[{svi_idx}]={global_idx}, \
-                         sharedVertices length {}",
-                        shared_vertices.len()
-                    ));
-                }
-                obj_verts.push(decode_shared_vertex(
-                    shared_vertices[global_idx],
-                    &domain,
-                ));
             }
-        }
 
-        for pi in prim_start..prim_end {
-            let [i0, i1, i2, i3] = primitives[pi];
-            let resolve = |idx: u8| -> usize {
-                if (idx as u32) < section.num_packed_vertices {
-                    vert_base + idx as usize
+            for pi in prim_start..prim_end {
+                let [i0, i1, i2, i3] = primitives[pi];
+                let resolve = |idx: u8| -> usize {
+                    if (idx as u32) < section.num_packed_vertices {
+                        vert_base + idx as usize
+                    } else {
+                        shared_base + (idx as u32 - section.num_packed_vertices) as usize
+                    }
+                };
+                let f = [resolve(i0), resolve(i1), resolve(i2), resolve(i3)];
+                if i2 == i3 {
+                    tri_count += 1;
                 } else {
-                    shared_base + (idx as u32 - section.num_packed_vertices) as usize
+                    quad_count += 1;
                 }
-            };
-            let f = [resolve(i0), resolve(i1), resolve(i2), resolve(i3)];
-            if i2 == i3 {
-                tri_count += 1;
-            } else {
-                quad_count += 1;
+                obj_faces.push(f);
             }
-            obj_faces.push(f);
         }
     }
 
     let mut out = String::with_capacity(obj_verts.len() * 40 + obj_faces.len() * 30);
     out.push_str(&format!(
-        "# Havok Collision Mesh (hknpCompressedMeshShape)\n\
+        "# Havok Collision Mesh (aggregated hknpCompressedMeshShape)\n\
          # Sections: {}, Vertices: {}, Triangles: {}, Quads: {}\n\n",
-        sections.len(),
+        total_sections,
         obj_verts.len(),
         tri_count,
         quad_count
@@ -336,7 +357,7 @@ pub fn havok_xml_to_obj(xml_content: &str, output_path: &Path) -> Result<String,
         tri_count + quad_count,
         tri_count,
         quad_count,
-        sections.len()
+        total_sections
     ))
 }
 
@@ -365,4 +386,18 @@ pub async fn convert_hkt_to_obj(input_path: String, output_path: String) -> Resu
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_unsigned_and_legacy_signed_shared_vertices() {
+        assert_eq!(
+            parse_u64_integer_value("18446744073709551615"),
+            Some(u64::MAX)
+        );
+        assert_eq!(parse_u64_integer_value("-1"), Some(u64::MAX));
+    }
 }

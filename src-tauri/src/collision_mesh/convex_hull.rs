@@ -173,6 +173,7 @@ fn collapse_hull_to_budget(
         max_target_triangles: options.hull_target_faces,
         mode: CollisionSimplifyMode::ShapePreserving,
         hull_target_faces: None,
+        quad_merge_enabled: true,
     };
     simplify_collision_mesh(hull, &collapse_opts)
 }

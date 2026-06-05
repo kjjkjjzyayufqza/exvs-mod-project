@@ -311,6 +311,7 @@ pub fn hkt_simplify_to_options(
             }
         },
         hull_target_faces: cfg.hull_target_faces,
+        quad_merge_enabled: cfg.quad_merge_enabled,
     }
 }
 
@@ -1015,10 +1016,7 @@ pub async fn scene_open_folder(
     let app_for_hkt = app.clone();
     let havok_data_list = tauri::async_runtime::spawn_blocking(move || {
         let emit = |loaded: usize, total: usize| {
-            let _ = app_for_hkt.emit(
-                SCENE_HKT_PROGRESS_EVENT,
-                HktLoadProgress { loaded, total },
-            );
+            let _ = app_for_hkt.emit(SCENE_HKT_PROGRESS_EVENT, HktLoadProgress { loaded, total });
         };
         collect_hkt_as_xml(&stage_path, &emit)
     })
@@ -2075,12 +2073,14 @@ pub async fn scene_generate_hkt_from_mesh(
             mesh.vertices.len(),
             mesh.triangle_count()
         );
-        let mesh = crate::collision_mesh::simplify_collision_mesh(&mesh, &simplify_opts)?;
+        let authored = crate::collision_mesh::author_collision_shapes(&mesh, &simplify_opts)?;
+        let mesh = authored.to_triangle_mesh();
         eprintln!(
-            "[scene_generate_hkt_from_mesh] after simplify tris={}",
+            "[scene_generate_hkt_from_mesh] authored shapes={} preview_tris={}",
+            authored.shape_count(),
             mesh.triangle_count()
         );
-        let xml = crate::havok_mesh_encode::build_mesh_collision_xml_faithful(&mesh)?;
+        let xml = crate::havok_mesh_encode::build_authored_collision_set_xml_faithful(&authored)?;
         crate::havok_collision_encode::convert_xml_string_to_hkt(&filter_path, &xml)
     })
     .await
@@ -2210,9 +2210,7 @@ fn apply_replacement_hkt_to_session(
         eprintln!("[apply_replacement_hkt] found in pending_imports");
         s.store_hkt_bytes(import_id, hkt_bytes.clone())?;
     } else {
-        eprintln!(
-            "[apply_replacement_hkt] staging in memory for target_id={import_id}"
-        );
+        eprintln!("[apply_replacement_hkt] staging in memory for target_id={import_id}");
         s.store_stage_folder_hkt_bytes(import_id, hkt_bytes.clone())?;
     }
     s.upsert_havok_data(HavokCollisionData {
@@ -2322,7 +2320,10 @@ pub async fn scene_generate_replacement_hkt_from_dae_path(
 }
 
 /// Write HKT bytes to a stage `map_hit.hkt` path via a same-directory temp file.
-fn write_hkt_bytes_to_stage_disk(disk_path: &std::path::Path, hkt_bytes: &[u8]) -> Result<(), String> {
+fn write_hkt_bytes_to_stage_disk(
+    disk_path: &std::path::Path,
+    hkt_bytes: &[u8],
+) -> Result<(), String> {
     if let Some(parent) = disk_path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create {}: {e}", parent.display()))?;
@@ -2379,12 +2380,9 @@ pub async fn scene_replace_hkt_from_dae_path(
         "[scene_replace_hkt_from_dae_path] session_id={} import_id={} path={}",
         options.session_id, options.import_id, options.file_path
     );
-    let hkt_result = generate_hkt_bytes_from_dae_path(
-        &options.file_path,
-        &options.source_name,
-        &options.config,
-    )
-    .await?;
+    let hkt_result =
+        generate_hkt_bytes_from_dae_path(&options.file_path, &options.source_name, &options.config)
+            .await?;
     let hkt_bytes = hkt_result.bytes;
     eprintln!(
         "[scene_replace_hkt_from_dae_path] generated {} bytes ({} triangles)",
@@ -2401,13 +2399,7 @@ pub async fn scene_replace_hkt_from_dae_path(
     })?;
 
     state.with_session_mut(&options.session_id, |s| {
-        apply_replacement_hkt_to_session(
-            s,
-            &import_id,
-            hkt_bytes.clone(),
-            hkt_xml,
-            display_name,
-        )
+        apply_replacement_hkt_to_session(s, &import_id, hkt_bytes.clone(), hkt_xml, display_name)
     })?;
 
     if let Some(disk_path) = disk_path {
@@ -2991,6 +2983,7 @@ mod tests {
             max_target_triangles: None,
             strategy: crate::scene_memory_session::CollisionStrategy::ShapePreserving,
             hull_target_faces: None,
+            quad_merge_enabled: true,
         };
         let opts = hkt_simplify_to_options(&cfg);
         assert_eq!(
@@ -3023,6 +3016,16 @@ mod tests {
             crate::collision_mesh::CollisionSimplifyMode::ShapePreserving
         );
         assert_eq!(opts.hull_target_faces, None);
+    }
+
+    #[test]
+    fn hkt_simplify_to_options_maps_quad_merge_toggle() {
+        let cfg = HktSimplifyConfig {
+            quad_merge_enabled: false,
+            ..HktSimplifyConfig::default()
+        };
+        let opts = hkt_simplify_to_options(&cfg);
+        assert!(!opts.quad_merge_enabled);
     }
 
     #[test]

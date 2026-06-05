@@ -2,6 +2,15 @@ import type { HavokAabb, HavokBodyInfo, HavokMeshData, HavokSection } from './ha
 
 export type { HavokAabb, HavokBodyInfo, HavokMeshData, HavokSection };
 
+interface HavokMeshTreeData {
+  aabb: HavokAabb | null;
+  sections: HavokSection[];
+  primitives: [number, number, number, number][];
+  sharedVerticesIndex: number[];
+  packedVertices: number[];
+  sharedVertices: bigint[];
+}
+
 export function parseHavokXML(xmlContent: string): HavokMeshData {
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
@@ -11,80 +20,81 @@ export function parseHavokXML(xmlContent: string): HavokMeshData {
     throw new Error('XML parsing failed: ' + parserError.textContent);
   }
 
-  const aabb = extractDomainAabb(xmlDoc);
-  const sections = extractSections(xmlDoc);
-  const primitives = extractPrimitives(xmlDoc);
-  const svi = extractSharedVerticesIndex(xmlDoc);
-  const packedVerts = extractPackedVertices(xmlDoc);
-  const sharedVerts = extractSharedVertices(xmlDoc);
+  const meshTrees = extractMeshTrees(xmlDoc);
   const bodies = extractBodies(xmlDoc);
-
-  const { vertices, quads } = buildMesh(aabb, sections, primitives, svi, packedVerts, sharedVerts);
+  const { vertices, quads, aabb } = buildMesh(meshTrees);
   return { vertices, quads, aabb, bodies };
 }
 
 function buildMesh(
-  aabb: HavokAabb | null,
-  sections: HavokSection[],
-  primitives: [number, number, number, number][],
-  svi: number[],
-  packedVerts: number[],
-  sharedVerts: bigint[],
-): { vertices: [number, number, number][]; quads: [number, number, number, number][] } {
+  meshTrees: HavokMeshTreeData[],
+): { vertices: [number, number, number][]; quads: [number, number, number, number][]; aabb: HavokAabb | null } {
   const verts: [number, number, number][] = [];
   const quads: [number, number, number, number][] = [];
-  const dMin = aabb?.min ?? [0, 0, 0];
-  const dMax = aabb?.max ?? [1, 1, 1];
+  let mergedAabb: HavokAabb | null = null;
 
-  for (const sec of sections) {
-    const vBase = verts.length;
-    const [offX, offY, offZ, sX, sY, sZ] = sec.codecParms;
+  for (const meshTree of meshTrees) {
+    const dMin = meshTree.aabb?.min ?? [0, 0, 0];
+    const dMax = meshTree.aabb?.max ?? [1, 1, 1];
+    mergedAabb = mergeAabbs(mergedAabb, meshTree.aabb);
 
-    const pvEnd = Math.min(sec.firstPackedVertexIndex + sec.numPackedVertices, packedVerts.length);
-    for (let i = sec.firstPackedVertexIndex; i < pvEnd; i++) {
-      const p = packedVerts[i];
-      const xi = p & 0x7FF;
-      const yi = (p >>> 11) & 0x7FF;
-      const zi = (p >>> 22) & 0x3FF;
-      verts.push([offX + xi * sX, offY + yi * sY, offZ + zi * sZ]);
-    }
+    for (const sec of meshTree.sections) {
+      const vBase = verts.length;
+      const [offX, offY, offZ, sX, sY, sZ] = sec.codecParms;
 
-    const pEnd = Math.min(sec.firstPrimitiveIndex + sec.numPrimitives, primitives.length);
-    let maxSL = -1;
-    for (let pi = sec.firstPrimitiveIndex; pi < pEnd; pi++) {
-      for (const idx of primitives[pi]) {
-        if (idx >= sec.numPackedVertices) {
-          const l = idx - sec.numPackedVertices;
-          if (l > maxSL) maxSL = l;
+      const pvEnd = Math.min(
+        sec.firstPackedVertexIndex + sec.numPackedVertices,
+        meshTree.packedVertices.length,
+      );
+      for (let i = sec.firstPackedVertexIndex; i < pvEnd; i++) {
+        const p = meshTree.packedVertices[i];
+        const xi = p & 0x7FF;
+        const yi = (p >>> 11) & 0x7FF;
+        const zi = (p >>> 22) & 0x3FF;
+        verts.push([offX + xi * sX, offY + yi * sY, offZ + zi * sZ]);
+      }
+
+      const pEnd = Math.min(
+        sec.firstPrimitiveIndex + sec.numPrimitives,
+        meshTree.primitives.length,
+      );
+      let maxSL = -1;
+      for (let pi = sec.firstPrimitiveIndex; pi < pEnd; pi++) {
+        for (const idx of meshTree.primitives[pi]) {
+          if (idx >= sec.numPackedVertices) {
+            const l = idx - sec.numPackedVertices;
+            if (l > maxSL) maxSL = l;
+          }
         }
       }
-    }
 
-    const sBase = verts.length;
-    for (let j = 0; j <= maxSL; j++) {
-      const si = sec.firstSharedVertexIndex + j;
-      if (si >= svi.length) {
-        throw new Error(
-          `Shared vertex index out of range: section shared slot ${j}, sharedVerticesIndex index ${si}`,
-        );
+      const sBase = verts.length;
+      for (let j = 0; j <= maxSL; j++) {
+        const si = sec.firstSharedVertexIndex + j;
+        if (si >= meshTree.sharedVerticesIndex.length) {
+          throw new Error(
+            `Shared vertex index out of range: section shared slot ${j}, sharedVerticesIndex index ${si}`,
+          );
+        }
+        const globalIdx = meshTree.sharedVerticesIndex[si];
+        if (globalIdx >= meshTree.sharedVertices.length) {
+          throw new Error(
+            `Shared vertex lookup out of range: sharedVerticesIndex[${si}]=${globalIdx}, sharedVertices length ${meshTree.sharedVertices.length}`,
+          );
+        }
+        verts.push(decodeShared(meshTree.sharedVertices[globalIdx], dMin, dMax));
       }
-      const globalIdx = svi[si];
-      if (globalIdx >= sharedVerts.length) {
-        throw new Error(
-          `Shared vertex lookup out of range: sharedVerticesIndex[${si}]=${globalIdx}, sharedVertices length ${sharedVerts.length}`,
-        );
-      }
-      verts.push(decodeShared(sharedVerts[globalIdx], dMin, dMax));
-    }
 
-    for (let pi = sec.firstPrimitiveIndex; pi < pEnd; pi++) {
-      const [i0, i1, i2, i3] = primitives[pi];
-      const r = (idx: number) => idx < sec.numPackedVertices ? vBase + idx : sBase + (idx - sec.numPackedVertices);
-      quads.push([r(i0), r(i1), r(i2), r(i3)]);
+      for (let pi = sec.firstPrimitiveIndex; pi < pEnd; pi++) {
+        const [i0, i1, i2, i3] = meshTree.primitives[pi];
+        const r = (idx: number) =>
+          idx < sec.numPackedVertices ? vBase + idx : sBase + (idx - sec.numPackedVertices);
+        quads.push([r(i0), r(i1), r(i2), r(i3)]);
+      }
     }
   }
 
-  return { vertices: verts, quads };
+  return { vertices: verts, quads, aabb: mergedAabb };
 }
 
 function decodeShared(sv: bigint, dMin: [number, number, number], dMax: [number, number, number]): [number, number, number] {
@@ -98,101 +108,120 @@ function decodeShared(sv: bigint, dMin: [number, number, number], dMax: [number,
   ];
 }
 
-function extractDomainAabb(doc: Document): HavokAabb | null {
-  const fields = Array.from(doc.querySelectorAll('field')).filter(f => f.getAttribute('name') === 'domain');
-  for (const df of fields) {
-    const rec = df.querySelector('record');
-    if (!rec) continue;
-    const minF = rec.querySelector('field[name="min"]');
-    const maxF = rec.querySelector('field[name="max"]');
-    if (!minF || !maxF) continue;
-    const mn = parseReals(minF);
-    const mx = parseReals(maxF);
-    if (mn.length >= 3 && mx.length >= 3) {
-      return { min: [mn[0], mn[1], mn[2]], max: [mx[0], mx[1], mx[2]] };
+function extractMeshTrees(doc: Document): HavokMeshTreeData[] {
+  const meshTrees: HavokMeshTreeData[] = [];
+  const fields = Array.from(doc.querySelectorAll('field')).filter(
+    (field) => field.getAttribute('name') === 'meshTree',
+  );
+  for (const field of fields) {
+    const meshTree = field.querySelector(':scope > record');
+    if (!meshTree) {
+      continue;
     }
+    meshTrees.push({
+      aabb: extractDomainAabb(meshTree),
+      sections: extractSections(meshTree),
+      primitives: extractPrimitives(meshTree),
+      sharedVerticesIndex: extractSharedVerticesIndex(meshTree),
+      packedVertices: extractPackedVertices(meshTree),
+      sharedVertices: extractSharedVertices(meshTree),
+    });
   }
-  return null;
+  return meshTrees;
 }
 
-function extractSections(doc: Document): HavokSection[] {
+function extractDomainAabb(meshTree: Element): HavokAabb | null {
+  const record = findNamedFieldRecord(meshTree, 'domain');
+  if (!record) {
+    return null;
+  }
+  const minF = record.querySelector(':scope > field[name="min"]');
+  const maxF = record.querySelector(':scope > field[name="max"]');
+  if (!minF || !maxF) {
+    return null;
+  }
+  const mn = parseReals(minF);
+  const mx = parseReals(maxF);
+  if (mn.length < 3 || mx.length < 3) {
+    return null;
+  }
+  return { min: [mn[0], mn[1], mn[2]], max: [mx[0], mx[1], mx[2]] };
+}
+
+function extractSections(meshTree: Element): HavokSection[] {
   const sections: HavokSection[] = [];
-  const fields = Array.from(doc.querySelectorAll('field')).filter(f => f.getAttribute('name') === 'sections');
-  for (const sf of fields) {
-    const arr = sf.querySelector('array');
-    if (!arr || arr.getAttribute('count') === '0') continue;
-    for (const rec of Array.from(arr.querySelectorAll(':scope > record'))) {
-      const cp = rec.querySelector('field[name="codecParms"]');
-      if (!cp) continue;
-      const codecParms = parseReals(cp);
-      if (codecParms.length < 6) continue;
-      sections.push({
-        codecParms,
-        firstPackedVertexIndex: intVal(rec, 'firstPackedVertexIndex'),
-        firstSharedVertexIndex: intVal(rec, 'firstSharedVertexIndex'),
-        firstPrimitiveIndex: intVal(rec, 'firstPrimitiveIndex'),
-        numPackedVertices: intVal(rec, 'numPackedVertices'),
-        numPrimitives: intVal(rec, 'numPrimitives'),
-      });
-    }
-    break;
+  const arr = findNamedFieldArray(meshTree, 'sections');
+  if (!arr || arr.getAttribute('count') === '0') {
+    return sections;
+  }
+  for (const rec of Array.from(arr.querySelectorAll(':scope > record'))) {
+    const cp = rec.querySelector('field[name="codecParms"]');
+    if (!cp) continue;
+    const codecParms = parseReals(cp);
+    if (codecParms.length < 6) continue;
+    sections.push({
+      codecParms,
+      firstPackedVertexIndex: intVal(rec, 'firstPackedVertexIndex'),
+      firstSharedVertexIndex: intVal(rec, 'firstSharedVertexIndex'),
+      firstPrimitiveIndex: intVal(rec, 'firstPrimitiveIndex'),
+      numPackedVertices: intVal(rec, 'numPackedVertices'),
+      numPrimitives: intVal(rec, 'numPrimitives'),
+    });
   }
   return sections;
 }
 
-function extractPrimitives(doc: Document): [number, number, number, number][] {
+function extractPrimitives(meshTree: Element): [number, number, number, number][] {
   const result: [number, number, number, number][] = [];
-  const fields = Array.from(doc.querySelectorAll('field')).filter(f => f.getAttribute('name') === 'primitives');
-  for (const pf of fields) {
-    const arr = pf.querySelector('array');
-    if (!arr || arr.getAttribute('count') === '0') continue;
-    const first = arr.querySelector('record');
-    if (!first || !first.querySelector('field[name="indices"]')) continue;
-    for (const rec of Array.from(arr.querySelectorAll(':scope > record'))) {
-      const idxF = rec.querySelector('field[name="indices"]');
-      if (!idxF) continue;
-      const idxA = idxF.querySelector('array');
-      if (!idxA) continue;
-      const ints = Array.from(idxA.querySelectorAll('integer')).map(el => parseInt(el.getAttribute('value') || '0'));
-      if (ints.length >= 4) result.push([ints[0], ints[1], ints[2], ints[3]]);
-    }
-    break;
+  const arr = findNamedFieldArray(meshTree, 'primitives');
+  if (!arr || arr.getAttribute('count') === '0') {
+    return result;
+  }
+  const first = arr.querySelector(':scope > record');
+  if (!first || !first.querySelector('field[name="indices"]')) {
+    return result;
+  }
+  for (const rec of Array.from(arr.querySelectorAll(':scope > record'))) {
+    const idxF = rec.querySelector('field[name="indices"]');
+    if (!idxF) continue;
+    const idxA = idxF.querySelector('array');
+    if (!idxA) continue;
+    const ints = Array.from(idxA.querySelectorAll('integer')).map((el) =>
+      parseInt(el.getAttribute('value') || '0'),
+    );
+    if (ints.length >= 4) result.push([ints[0], ints[1], ints[2], ints[3]]);
   }
   return result;
 }
 
-function extractIntArray(doc: Document, name: string): number[] {
+function extractIntArray(meshTree: Element, name: string): number[] {
   const result: number[] = [];
-  const fields = Array.from(doc.querySelectorAll('field')).filter(f => f.getAttribute('name') === name);
-  for (const f of fields) {
-    const arr = f.querySelector('array');
-    if (!arr || arr.getAttribute('count') === '0') continue;
-    for (const el of Array.from(arr.querySelectorAll('integer'))) {
-      result.push(parseInt(el.getAttribute('value') || '0'));
-    }
-    if (result.length > 0) break;
+  const arr = findNamedFieldArray(meshTree, name);
+  if (!arr || arr.getAttribute('count') === '0') {
+    return result;
+  }
+  for (const el of Array.from(arr.querySelectorAll('integer'))) {
+    result.push(parseInt(el.getAttribute('value') || '0'));
   }
   return result;
 }
 
-function extractSharedVerticesIndex(doc: Document): number[] {
-  return extractIntArray(doc, 'sharedVerticesIndex');
+function extractSharedVerticesIndex(meshTree: Element): number[] {
+  return extractIntArray(meshTree, 'sharedVerticesIndex');
 }
 
-function extractPackedVertices(doc: Document): number[] {
-  return extractIntArray(doc, 'packedVertices').map(v => v >>> 0);
+function extractPackedVertices(meshTree: Element): number[] {
+  return extractIntArray(meshTree, 'packedVertices').map((v) => v >>> 0);
 }
 
-function extractSharedVertices(doc: Document): bigint[] {
+function extractSharedVertices(meshTree: Element): bigint[] {
   const result: bigint[] = [];
-  const fields = Array.from(doc.querySelectorAll('field')).filter(f => f.getAttribute('name') === 'sharedVertices');
-  for (const f of fields) {
-    const arr = f.querySelector('array');
-    if (!arr || arr.getAttribute('count') === '0') continue;
-    for (const el of Array.from(arr.querySelectorAll('integer'))) {
-      result.push(BigInt(el.getAttribute('value') || '0') & 0xFFFFFFFFFFFFFFFFn);
-    }
-    if (result.length > 0) break;
+  const arr = findNamedFieldArray(meshTree, 'sharedVertices');
+  if (!arr || arr.getAttribute('count') === '0') {
+    return result;
+  }
+  for (const el of Array.from(arr.querySelectorAll('integer'))) {
+    result.push(BigInt(el.getAttribute('value') || '0') & 0xFFFFFFFFFFFFFFFFn);
   }
   return result;
 }
@@ -225,10 +254,39 @@ function parseReals(field: Element | null): number[] {
   return Array.from(arr.querySelectorAll('real')).map(r => parseFloat(r.getAttribute('dec') || '0'));
 }
 
+function findNamedFieldArray(parent: Element, name: string): Element | null {
+  return parent.querySelector(`:scope > field[name="${name}"] > array`);
+}
+
+function findNamedFieldRecord(parent: Element, name: string): Element | null {
+  return parent.querySelector(`:scope > field[name="${name}"] > record`);
+}
+
 function intVal(parent: Element, name: string): number {
   const f = parent.querySelector(`field[name="${name}"]`);
   if (!f) return 0;
   const el = f.querySelector('integer');
   if (!el) return 0;
   return parseInt(el.getAttribute('value') || '0');
+}
+
+function mergeAabbs(current: HavokAabb | null, next: HavokAabb | null): HavokAabb | null {
+  if (!next) {
+    return current;
+  }
+  if (!current) {
+    return { min: [...next.min] as [number, number, number], max: [...next.max] as [number, number, number] };
+  }
+  return {
+    min: [
+      Math.min(current.min[0], next.min[0]),
+      Math.min(current.min[1], next.min[1]),
+      Math.min(current.min[2], next.min[2]),
+    ],
+    max: [
+      Math.max(current.max[0], next.max[0]),
+      Math.max(current.max[1], next.max[1]),
+      Math.max(current.max[2], next.max[2]),
+    ],
+  };
 }

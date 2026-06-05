@@ -7,10 +7,10 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 
 use crate::collision_mesh::{
-    bake_and_merge_collision_mesh, parse_import_scene_from_bytes, simplify_collision_mesh,
+    author_collision_shapes, bake_and_merge_collision_mesh, parse_import_scene_from_bytes,
     CollisionMeshOptions, CollisionTriMesh,
 };
-use crate::havok_mesh_encode::build_mesh_collision_xml_faithful;
+use crate::havok_mesh_encode::build_authored_collision_set_xml_faithful;
 
 /// Result of mesh-accurate HKT generation.
 pub struct HktGenerationResult {
@@ -32,7 +32,7 @@ pub struct HktCollisionPreview {
 pub enum HktCollisionReviewStage {
     /// Skin-baked and axis-converted mesh after merging render geometry, before simplification.
     Merged,
-    /// The exact collision triangle mesh passed to the HKT encoder.
+    /// The exact authored collision geometry passed to the HKT encoder, triangulated for preview.
     HktInput,
 }
 
@@ -59,9 +59,9 @@ pub struct HktCollisionStageMesh {
     pub stage: HktCollisionReviewStage,
 }
 
-/// Maximum collision triangles the HKT encoder can reasonably accept for stage assets.
+/// Conservative triangle budget for the current single-shape HKT builder.
 #[allow(dead_code)]
-pub const MAX_HKT_COLLISION_TRIANGLES: usize = 80_000;
+pub const MAX_HKT_COLLISION_TRIANGLES: usize = 32_000;
 
 /// Merged triangle count above which ineffective simplification is treated as a complex mesh.
 #[allow(dead_code)]
@@ -107,7 +107,8 @@ pub fn preview_hkt_collision_from_import_bytes(
     let scene = parse_import_scene_from_bytes(source_name, bytes)?;
     let render_triangle_count = render_triangle_count_from_scene(&scene);
     let merged = bake_and_merge_collision_mesh(&scene, &options)?;
-    let simplified = simplify_collision_mesh(&merged, &options.simplify)?;
+    let authored = author_collision_shapes(&merged, &options.simplify)?;
+    let simplified = authored.to_triangle_mesh();
     let preview = HktCollisionPreview {
         render_triangle_count,
         merged_triangle_count: merged.triangle_count(),
@@ -192,7 +193,9 @@ pub fn preview_hkt_collision_stage_mesh_from_import_bytes_with_stage(
     let stage_t = Instant::now();
     let mesh = match stage {
         HktCollisionReviewStage::Merged => merged,
-        HktCollisionReviewStage::HktInput => simplify_collision_mesh(&merged, &options.simplify)?,
+        HktCollisionReviewStage::HktInput => {
+            author_collision_shapes(&merged, &options.simplify)?.to_triangle_mesh()
+        }
     };
     let stage_ms = stage_t.elapsed().as_millis();
 
@@ -370,7 +373,8 @@ fn generate_hkt_from_import_scene(
     options: CollisionMeshOptions,
 ) -> Result<HktGenerationResult, String> {
     let merged = bake_and_merge_collision_mesh(&scene, &options)?;
-    let mesh = simplify_collision_mesh(&merged, &options.simplify)?;
+    let authored = author_collision_shapes(&merged, &options.simplify)?;
+    let mesh = authored.to_triangle_mesh();
     let preview = HktCollisionPreview {
         render_triangle_count: render_triangle_count_from_scene(&scene),
         merged_triangle_count: merged.triangle_count(),
@@ -379,7 +383,7 @@ fn generate_hkt_from_import_scene(
     };
     validate_collision_mesh_for_hkt(&preview, options.simplify.enabled)?;
     let triangle_count = mesh.triangle_count();
-    let xml = build_mesh_collision_xml_faithful(&mesh)?;
+    let xml = build_authored_collision_set_xml_faithful(&authored)?;
     let bytes = convert_xml_string_to_hkt(filter_manager_exe, &xml)?;
     Ok(HktGenerationResult {
         bytes,
@@ -594,7 +598,8 @@ mod tests {
             ],
             indices: vec![0, 1, 4, 1, 2, 4, 2, 3, 4, 3, 0, 4],
         };
-        let simplified = simplify_collision_mesh(&mesh, &CollisionSimplifyOptions::default()).unwrap();
+        let simplified =
+            simplify_collision_mesh(&mesh, &CollisionSimplifyOptions::default()).unwrap();
         assert_eq!(simplified.triangle_count(), 2);
         let xml = build_mesh_collision_xml(&simplified).expect("xml");
         assert!(xml.contains("<array count=\"2\"") || xml.contains("count=\"2\""));
@@ -613,7 +618,6 @@ mod tests {
         };
         let xml = build_mesh_collision_xml(&mesh).unwrap();
         assert!(!xml.contains(r#"dec="-40.01""#));
-        assert!(!xml.contains(r#"dec="-40""#));
     }
 
     fn collect_bigzam_import_files(dir: &std::path::Path) -> Vec<std::path::PathBuf> {

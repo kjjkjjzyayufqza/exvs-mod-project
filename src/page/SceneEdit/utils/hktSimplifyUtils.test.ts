@@ -5,6 +5,7 @@ import {
   DEFAULT_HKT_SIMPLIFY,
   HIGH_PRECISION_HKT_SIMPLIFY,
   HKT_HULL_PRESET_FACES,
+  HKT_SAFE_TARGET_TRIANGLES,
   hktHullConfigFromPreset,
   hktSimplifyConfigFromPreset,
   normalizeHktSimplifyConfig,
@@ -30,14 +31,19 @@ describe("hktSimplifyUtils", () => {
   it("maps preset values for none, medium, high, and heavy", () => {
     expect(hktSimplifyConfigFromPreset("none").enabled).toBe(false);
     expect(hktSimplifyConfigFromPreset("medium").enabled).toBe(true);
+    expect(hktSimplifyConfigFromPreset("medium").quadMergeEnabled).toBe(true);
     expect(hktSimplifyConfigFromPreset("medium").planarityAngleDeg).toBe(15);
     expect(hktSimplifyConfigFromPreset("high").planarityAngleDeg).toBe(15);
     expect(hktSimplifyConfigFromPreset("high").targetTriangleRatio).toBeNull();
-    expect(hktSimplifyConfigFromPreset("high").maxTargetTriangles).toBe(50_000);
+    expect(hktSimplifyConfigFromPreset("high").maxTargetTriangles).toBe(
+      HKT_SAFE_TARGET_TRIANGLES,
+    );
     expect(hktSimplifyConfigFromPreset("heavy").planarityAngleDeg).toBe(45);
     expect(hktSimplifyConfigFromPreset("heavy").weldEpsilon).toBe(0.01);
     expect(hktSimplifyConfigFromPreset("heavy").targetTriangleRatio).toBe(0.05);
-    expect(hktSimplifyConfigFromPreset("heavy").maxTargetTriangles).toBe(50_000);
+    expect(hktSimplifyConfigFromPreset("heavy").maxTargetTriangles).toBe(
+      HKT_SAFE_TARGET_TRIANGLES,
+    );
   });
 
   it("defaults to medium preset with simplification enabled", () => {
@@ -45,10 +51,10 @@ describe("hktSimplifyUtils", () => {
     expect(DEFAULT_HKT_SIMPLIFY.enabled).toBe(true);
   });
 
-  it("exposes high precision as the 50k shape-preserving review preset", () => {
+  it("exposes high precision as the current-builder 32k shape-preserving preset", () => {
     expect(HIGH_PRECISION_HKT_SIMPLIFY).toEqual(hktSimplifyConfigFromPreset("high"));
     expect(HIGH_PRECISION_HKT_SIMPLIFY.strategy).toBe("shapePreserving");
-    expect(HIGH_PRECISION_HKT_SIMPLIFY.maxTargetTriangles).toBe(50_000);
+    expect(HIGH_PRECISION_HKT_SIMPLIFY.maxTargetTriangles).toBe(HKT_SAFE_TARGET_TRIANGLES);
   });
 
   it("computes reduction percentage from merged and simplified counts", () => {
@@ -106,10 +112,29 @@ describe("hktSimplifyUtils", () => {
     expect(normalized.hullTargetFaces).toBe(HKT_HULL_PRESET_FACES.balanced);
   });
 
+  it("normalize preserves the authored quad merge toggle", () => {
+    const normalized = normalizeHktSimplifyConfig({
+      preset: "medium",
+      quadMergeEnabled: false,
+    });
+    expect(normalized.preset).toBe("medium");
+    expect(normalized.quadMergeEnabled).toBe(false);
+  });
+
   it("preview key changes when the strategy changes", () => {
     const importConfig = { generateHkt: true, convertToSsbh: false, ssbhConfig: null } as const;
     const shape = serializeHktPreviewConfigKey(importConfig, DEFAULT_HKT_SIMPLIFY);
     const hull = serializeHktPreviewConfigKey(importConfig, hktHullConfigFromPreset("coarse"));
     expect(shape).not.toBe(hull);
+  });
+
+  it("preview key changes when authored quad merging changes", () => {
+    const importConfig = { generateHkt: true, convertToSsbh: false, ssbhConfig: null } as const;
+    const quads = serializeHktPreviewConfigKey(importConfig, DEFAULT_HKT_SIMPLIFY);
+    const triangles = serializeHktPreviewConfigKey(importConfig, {
+      ...DEFAULT_HKT_SIMPLIFY,
+      quadMergeEnabled: false,
+    });
+    expect(quads).not.toBe(triangles);
   });
 });

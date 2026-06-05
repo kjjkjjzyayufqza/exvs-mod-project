@@ -52,6 +52,8 @@ export interface HktSimplifyConfig {
   maxTargetTriangles: number | null;
   /** Convex-hull face budget (used when strategy === "convexHull"). */
   hullTargetFaces: number | null;
+  /** Encode mergeable coplanar triangle pairs as authored quad primitives. */
+  quadMergeEnabled: boolean;
 }
 
 export interface DaeImportConfig {

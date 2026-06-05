@@ -29,6 +29,162 @@ impl CollisionTriMesh {
     }
 }
 
+/// One authored collision primitive in local mesh vertex space.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CollisionPrimitive {
+    Triangle([u32; 3]),
+    Quad([u32; 4]),
+}
+
+impl CollisionPrimitive {
+    pub fn primitive_key_count(self) -> u32 {
+        match self {
+            Self::Triangle(_) => 1,
+            Self::Quad(_) => 2,
+        }
+    }
+
+    pub fn triangle_count(self) -> usize {
+        match self {
+            Self::Triangle(_) => 1,
+            Self::Quad(_) => 2,
+        }
+    }
+
+    pub fn indices4(self) -> [u32; 4] {
+        match self {
+            Self::Triangle([a, b, c]) => [a, b, c, c],
+            Self::Quad(indices) => indices,
+        }
+    }
+
+    pub fn unique_indices(self) -> [u32; 4] {
+        self.indices4()
+    }
+}
+
+/// Authored collision mesh that can preserve real quads before HKT encoding.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CollisionPrimitiveMesh {
+    pub vertices: Vec<[f64; 3]>,
+    pub primitives: Vec<CollisionPrimitive>,
+}
+
+impl CollisionPrimitiveMesh {
+    pub fn primitive_count(&self) -> usize {
+        self.primitives.len()
+    }
+
+    pub fn primitive_key_count(&self) -> u32 {
+        self.primitives
+            .iter()
+            .map(|primitive| primitive.primitive_key_count())
+            .sum()
+    }
+
+    pub fn triangle_count(&self) -> usize {
+        self.primitives
+            .iter()
+            .map(|primitive| primitive.triangle_count())
+            .sum()
+    }
+
+    pub fn compute_aabb(&self) -> Result<([f64; 3], [f64; 3]), String> {
+        if self.vertices.is_empty() {
+            return Err("Collision mesh has no vertices".into());
+        }
+        let mut min = [f64::INFINITY; 3];
+        let mut max = [f64::NEG_INFINITY; 3];
+        for v in &self.vertices {
+            for axis in 0..3 {
+                min[axis] = min[axis].min(v[axis]);
+                max[axis] = max[axis].max(v[axis]);
+            }
+        }
+        Ok((min, max))
+    }
+
+    pub fn to_triangle_mesh(&self) -> CollisionTriMesh {
+        let mut indices = Vec::with_capacity(self.triangle_count() * 3);
+        for primitive in &self.primitives {
+            match primitive {
+                CollisionPrimitive::Triangle([a, b, c]) => {
+                    indices.extend_from_slice(&[*a, *b, *c]);
+                }
+                CollisionPrimitive::Quad([a, b, c, d]) => {
+                    indices.extend_from_slice(&[*a, *b, *c, *a, *c, *d]);
+                }
+            }
+        }
+        CollisionTriMesh {
+            vertices: self.vertices.clone(),
+            indices,
+        }
+    }
+}
+
+/// Authored collision output can contain multiple compressed-mesh shapes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AuthoredCollisionSet {
+    pub shapes: Vec<CollisionPrimitiveMesh>,
+}
+
+impl AuthoredCollisionSet {
+    pub fn shape_count(&self) -> usize {
+        self.shapes.len()
+    }
+
+    pub fn primitive_count(&self) -> usize {
+        self.shapes
+            .iter()
+            .map(CollisionPrimitiveMesh::primitive_count)
+            .sum()
+    }
+
+    pub fn primitive_key_count(&self) -> u32 {
+        self.shapes
+            .iter()
+            .map(CollisionPrimitiveMesh::primitive_key_count)
+            .sum()
+    }
+
+    pub fn triangle_count(&self) -> usize {
+        self.shapes
+            .iter()
+            .map(CollisionPrimitiveMesh::triangle_count)
+            .sum()
+    }
+
+    pub fn vertex_count(&self) -> usize {
+        self.shapes.iter().map(|shape| shape.vertices.len()).sum()
+    }
+
+    pub fn to_triangle_mesh(&self) -> CollisionTriMesh {
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+        for shape in &self.shapes {
+            let base = vertices.len() as u32;
+            vertices.extend_from_slice(&shape.vertices);
+            let tri_mesh = shape.to_triangle_mesh();
+            indices.extend(tri_mesh.indices.into_iter().map(|index| index + base));
+        }
+        CollisionTriMesh { vertices, indices }
+    }
+}
+
+impl CollisionTriMesh {
+    pub fn to_primitive_mesh(&self) -> CollisionPrimitiveMesh {
+        let mut primitives = Vec::with_capacity(self.triangle_count());
+        for tri in self.indices.chunks_exact(3) {
+            primitives.push(CollisionPrimitive::Triangle([tri[0], tri[1], tri[2]]));
+        }
+        CollisionPrimitiveMesh {
+            vertices: self.vertices.clone(),
+            primitives,
+        }
+    }
+}
+
 /// Default maximum angle (degrees) between mergeable face normals — medium preset.
 pub const DEFAULT_PLANARITY_ANGLE_DEG: f64 = 15.0;
 
@@ -68,6 +224,8 @@ pub struct CollisionSimplifyOptions {
     pub mode: CollisionSimplifyMode,
     /// For `ConvexHull` mode: collapse the hull toward this many faces (None = no extra budget).
     pub hull_target_faces: Option<usize>,
+    /// Merge valid coplanar triangle pairs into authored quad primitives.
+    pub quad_merge_enabled: bool,
 }
 
 impl Default for CollisionSimplifyOptions {
@@ -81,6 +239,7 @@ impl Default for CollisionSimplifyOptions {
             max_target_triangles: None,
             mode: CollisionSimplifyMode::ShapePreserving,
             hull_target_faces: None,
+            quad_merge_enabled: true,
         }
     }
 }
@@ -144,5 +303,26 @@ mod tests {
         let opts = CollisionSimplifyOptions::default();
         assert_eq!(opts.mode, CollisionSimplifyMode::ShapePreserving);
         assert_eq!(opts.hull_target_faces, None);
+    }
+
+    #[test]
+    fn primitive_mesh_counts_quad_keys_and_triangles() {
+        let mesh = CollisionPrimitiveMesh {
+            vertices: vec![
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [1.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0],
+            ],
+            primitives: vec![
+                CollisionPrimitive::Quad([0, 1, 2, 3]),
+                CollisionPrimitive::Triangle([0, 2, 3]),
+            ],
+        };
+
+        assert_eq!(mesh.primitive_count(), 2);
+        assert_eq!(mesh.primitive_key_count(), 3);
+        assert_eq!(mesh.triangle_count(), 3);
+        assert_eq!(mesh.to_triangle_mesh().triangle_count(), 3);
     }
 }

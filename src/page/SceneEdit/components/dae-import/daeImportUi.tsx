@@ -72,16 +72,18 @@ export function DaeImportBoolField({
   hint,
   checked,
   disabled,
+  className,
   onCheckedChange,
 }: {
   label: string;
   hint?: string;
   checked: boolean;
   disabled?: boolean;
+  className?: string;
   onCheckedChange: (checked: boolean) => void;
 }) {
   return (
-    <DaeImportFieldRow label={label} hint={hint}>
+    <DaeImportFieldRow label={label} hint={hint} className={className}>
       <div className="flex h-7 items-center justify-end">
         <Checkbox
           checked={checked}

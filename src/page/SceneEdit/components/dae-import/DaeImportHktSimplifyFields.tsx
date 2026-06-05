@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  DaeImportBoolField,
   DaeImportFieldRow,
   DaeImportSection,
   DaeImportStatusAlert,
@@ -99,6 +100,13 @@ export function DaeImportHktSimplifyFields({
     onChange(hktHullConfigFromPreset(next));
   };
 
+  const handleQuadMergeChange = (checked: boolean) => {
+    onChange({
+      ...normalizedValue,
+      quadMergeEnabled: checked,
+    });
+  };
+
   const ssbhConfig = importConfig.ssbhConfig;
   const previewConfigKey = useMemo(
     () => serializeHktPreviewConfigKey(importConfig, normalizedValue),
@@ -125,6 +133,7 @@ export function DaeImportHktSimplifyFields({
       normalizedValue.strategy,
       normalizedValue.hullPreset,
       normalizedValue.hullTargetFaces,
+      normalizedValue.quadMergeEnabled,
     ],
   );
 
@@ -223,8 +232,9 @@ export function DaeImportHktSimplifyFields({
     <DaeImportSection title={compact ? "Simplify" : "Collision Simplification"} compact={compact}>
       {!compact ? (
         <DaeImportStatusAlert tone="info">
-          Shape-preserving keeps the source surface; High 50k is the review-focused option for
-          detailed collision. Convex outline builds a coarse outer shell for low-poly bounds.
+          Shape-preserving keeps the source surface; High 32k is the current single-shape
+          detail budget for HKT generation. Convex outline builds a coarse outer shell for
+          low-poly bounds.
         </DaeImportStatusAlert>
       ) : null}
 
@@ -303,6 +313,16 @@ export function DaeImportHktSimplifyFields({
           </Select>
         </DaeImportFieldRow>
       )}
+
+      {activeStrategy === "shapePreserving" ? (
+        <DaeImportBoolField
+          label="Real Quads"
+          hint="Merge valid triangle pairs into authored quad primitives; disable for triangle-only diagnostics."
+          checked={normalizedValue.quadMergeEnabled}
+          onCheckedChange={handleQuadMergeChange}
+          className={compactFieldRowClass}
+        />
+      ) : null}
 
       {importConfig.generateHkt && (sourcePath || sessionImportId) ? (
         <div

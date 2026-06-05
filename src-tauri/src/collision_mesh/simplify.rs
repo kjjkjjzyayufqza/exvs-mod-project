@@ -6,11 +6,15 @@
 //! flat render tessellation collapses to minimal collision triangles while creases
 //! (dissimilar normals) are preserved.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 
-use super::types::{CollisionSimplifyMode, CollisionSimplifyOptions, CollisionTriMesh};
+use super::types::{
+    AuthoredCollisionSet, CollisionPrimitive, CollisionPrimitiveMesh, CollisionSimplifyMode,
+    CollisionSimplifyOptions, CollisionTriMesh,
+};
 
 const DEGENERATE_AREA: f64 = 1e-14;
+const DEFAULT_AUTHORED_SHAPE_MAX_KEYS: u32 = 8_192;
 
 #[derive(Clone, Copy)]
 struct TriInfo {
@@ -109,6 +113,22 @@ fn triangle_data(vertices: &[[f64; 3]], tri: [u32; 3]) -> Option<TriInfo> {
         normal,
         area,
     })
+}
+
+fn tri_infos(mesh: &CollisionTriMesh, min_triangle_area: f64) -> Vec<TriInfo> {
+    let mut tris = Vec::new();
+    for chunk in mesh.indices.chunks(3) {
+        if chunk.len() != 3 {
+            continue;
+        }
+        let tri = [chunk[0], chunk[1], chunk[2]];
+        if let Some(info) = triangle_data(&mesh.vertices, tri) {
+            if info.area >= min_triangle_area {
+                tris.push(info);
+            }
+        }
+    }
+    tris
 }
 
 fn canonical_edge(a: u32, b: u32) -> (u32, u32) {
@@ -587,6 +607,418 @@ fn ear_clip_triangulate(loop_verts: &[u32], poly2d: &[[f64; 2]]) -> Vec<[u32; 3]
     tris
 }
 
+fn is_convex_polygon_2d(poly: &[[f64; 2]]) -> bool {
+    if poly.len() < 3 {
+        return false;
+    }
+    let mut sign = 0.0;
+    for i in 0..poly.len() {
+        let a = poly[i];
+        let b = poly[(i + 1) % poly.len()];
+        let c = poly[(i + 2) % poly.len()];
+        let cross_z = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+        if cross_z.abs() <= 1e-12 {
+            continue;
+        }
+        if sign == 0.0 {
+            sign = cross_z.signum();
+        } else if cross_z.signum() != sign.signum() {
+            return false;
+        }
+    }
+    sign != 0.0
+}
+
+fn ordered_boundary_loop(boundary_edges: &[(u32, u32)]) -> Option<[u32; 4]> {
+    if boundary_edges.len() != 4 {
+        return None;
+    }
+
+    let mut adjacency: HashMap<u32, Vec<u32>> = HashMap::new();
+    for &(a, b) in boundary_edges {
+        adjacency.entry(a).or_default().push(b);
+        adjacency.entry(b).or_default().push(a);
+    }
+    if adjacency.len() != 4 || adjacency.values().any(|neighbors| neighbors.len() != 2) {
+        return None;
+    }
+
+    let start = *adjacency.keys().min()?;
+    let mut start_neighbors = adjacency.get(&start)?.clone();
+    start_neighbors.sort_unstable();
+
+    for first in start_neighbors {
+        let mut ordered = [0u32; 4];
+        ordered[0] = start;
+        ordered[1] = first;
+        let mut prev = start;
+        let mut current = first;
+        let mut valid = true;
+
+        for slot in ordered.iter_mut().skip(2) {
+            let neighbors = adjacency.get(&current)?;
+            let next = neighbors
+                .iter()
+                .copied()
+                .find(|candidate| *candidate != prev);
+            let Some(next) = next else {
+                valid = false;
+                break;
+            };
+            *slot = next;
+            prev = current;
+            current = next;
+        }
+
+        if !valid {
+            continue;
+        }
+
+        let end_neighbors = adjacency.get(&ordered[3])?;
+        if end_neighbors.contains(&start)
+            && ordered.iter().copied().collect::<BTreeSet<_>>().len() == 4
+        {
+            return Some(ordered);
+        }
+    }
+
+    None
+}
+
+fn try_build_quad(vertices: &[[f64; 3]], tri_a: TriInfo, tri_b: TriInfo) -> Option<[u32; 4]> {
+    let avg_normal = normalize([
+        tri_a.normal[0] + tri_b.normal[0],
+        tri_a.normal[1] + tri_b.normal[1],
+        tri_a.normal[2] + tri_b.normal[2],
+    ])?;
+
+    let mut edge_use: HashMap<(u32, u32), u8> = HashMap::new();
+    for tri in [tri_a.indices, tri_b.indices] {
+        for (u, v) in [(tri[0], tri[1]), (tri[1], tri[2]), (tri[2], tri[0])] {
+            *edge_use.entry(canonical_edge(u, v)).or_insert(0) += 1;
+        }
+    }
+    let boundary_edges: Vec<(u32, u32)> = edge_use
+        .into_iter()
+        .filter(|(_, count)| *count == 1)
+        .map(|(edge, _)| edge)
+        .collect();
+    let mut quad = ordered_boundary_loop(&boundary_edges)?;
+
+    let origin = vertices[quad[0] as usize];
+    let (u, v) = build_plane_basis(avg_normal);
+    let poly2d: Vec<[f64; 2]> = quad
+        .iter()
+        .map(|&index| project_2d(vertices[index as usize], origin, u, v))
+        .collect();
+    if polygon_signed_area_2d(&poly2d).abs() <= DEGENERATE_AREA || !is_convex_polygon_2d(&poly2d) {
+        return None;
+    }
+
+    let quad_normal = normalize(cross(
+        sub(vertices[quad[1] as usize], vertices[quad[0] as usize]),
+        sub(vertices[quad[2] as usize], vertices[quad[0] as usize]),
+    ))?;
+    if dot(quad_normal, avg_normal) < 0.0 {
+        quad = [quad[0], quad[3], quad[2], quad[1]];
+    }
+
+    Some(quad)
+}
+
+fn quadify_region(vertices: &[[f64; 3]], region_tris: &[TriInfo]) -> Vec<CollisionPrimitive> {
+    if region_tris.is_empty() {
+        return Vec::new();
+    }
+    if region_tris.len() == 1 {
+        return vec![CollisionPrimitive::Triangle(region_tris[0].indices)];
+    }
+
+    let edge_map = build_edge_map(region_tris);
+    let mut candidates: Vec<(usize, usize, [u32; 4])> = Vec::new();
+    for shared in edge_map.values() {
+        if shared.len() != 2 {
+            continue;
+        }
+        let a = shared[0].0;
+        let b = shared[1].0;
+        if a == b {
+            continue;
+        }
+        if let Some(quad) = try_build_quad(vertices, region_tris[a], region_tris[b]) {
+            candidates.push((a.min(b), a.max(b), quad));
+        }
+    }
+    candidates.sort_by_key(|(a, b, _)| (*a, *b));
+
+    let mut used = vec![false; region_tris.len()];
+    let mut primitives = Vec::new();
+    for (a, b, quad) in candidates {
+        if used[a] || used[b] {
+            continue;
+        }
+        used[a] = true;
+        used[b] = true;
+        primitives.push(CollisionPrimitive::Quad(quad));
+    }
+    for (index, tri) in region_tris.iter().enumerate() {
+        if !used[index] {
+            primitives.push(CollisionPrimitive::Triangle(tri.indices));
+        }
+    }
+    primitives
+}
+
+fn compact_primitive_mesh(mesh: &CollisionPrimitiveMesh) -> CollisionPrimitiveMesh {
+    let mut used = BTreeSet::new();
+    for primitive in &mesh.primitives {
+        let indices = primitive.unique_indices();
+        used.insert(indices[0]);
+        used.insert(indices[1]);
+        used.insert(indices[2]);
+        if indices[2] != indices[3] {
+            used.insert(indices[3]);
+        }
+    }
+
+    let mut remap = HashMap::new();
+    let mut vertices = Vec::with_capacity(used.len());
+    for old_index in used {
+        remap.insert(old_index, vertices.len() as u32);
+        vertices.push(mesh.vertices[old_index as usize]);
+    }
+
+    let primitives = mesh
+        .primitives
+        .iter()
+        .map(|primitive| match primitive {
+            CollisionPrimitive::Triangle([a, b, c]) => {
+                CollisionPrimitive::Triangle([remap[a], remap[b], remap[c]])
+            }
+            CollisionPrimitive::Quad([a, b, c, d]) => {
+                CollisionPrimitive::Quad([remap[a], remap[b], remap[c], remap[d]])
+            }
+        })
+        .collect();
+
+    CollisionPrimitiveMesh {
+        vertices,
+        primitives,
+    }
+}
+
+fn primitive_edges(primitive: CollisionPrimitive) -> Vec<(u32, u32)> {
+    match primitive {
+        CollisionPrimitive::Triangle([a, b, c]) => {
+            vec![
+                canonical_edge(a, b),
+                canonical_edge(b, c),
+                canonical_edge(c, a),
+            ]
+        }
+        CollisionPrimitive::Quad([a, b, c, d]) => vec![
+            canonical_edge(a, b),
+            canonical_edge(b, c),
+            canonical_edge(c, d),
+            canonical_edge(d, a),
+        ],
+    }
+}
+
+fn build_primitive_adjacency(primitives: &[CollisionPrimitive]) -> Vec<Vec<usize>> {
+    let mut edge_map: HashMap<(u32, u32), Vec<usize>> = HashMap::new();
+    for (index, primitive) in primitives.iter().copied().enumerate() {
+        for edge in primitive_edges(primitive) {
+            edge_map.entry(edge).or_default().push(index);
+        }
+    }
+
+    let mut adjacency = vec![Vec::new(); primitives.len()];
+    for owners in edge_map.values() {
+        if owners.len() < 2 {
+            continue;
+        }
+        for &a in owners {
+            for &b in owners {
+                if a != b {
+                    adjacency[a].push(b);
+                }
+            }
+        }
+    }
+    for neighbors in &mut adjacency {
+        neighbors.sort_unstable();
+        neighbors.dedup();
+    }
+    adjacency
+}
+
+fn compact_primitive_subset(
+    mesh: &CollisionPrimitiveMesh,
+    primitive_indices: &[usize],
+) -> CollisionPrimitiveMesh {
+    let primitives = primitive_indices
+        .iter()
+        .map(|&index| mesh.primitives[index])
+        .collect();
+    compact_primitive_mesh(&CollisionPrimitiveMesh {
+        vertices: mesh.vertices.clone(),
+        primitives,
+    })
+}
+
+fn primitive_indices_key_count(mesh: &CollisionPrimitiveMesh, primitive_indices: &[usize]) -> u32 {
+    primitive_indices
+        .iter()
+        .map(|&index| mesh.primitives[index].primitive_key_count())
+        .sum()
+}
+
+fn split_component_by_key_budget(
+    mesh: &CollisionPrimitiveMesh,
+    component: &[usize],
+    adjacency: &[Vec<usize>],
+    max_keys: u32,
+) -> Vec<CollisionPrimitiveMesh> {
+    let mut remaining: BTreeSet<usize> = component.iter().copied().collect();
+    let mut parts = Vec::new();
+
+    while let Some(&seed) = remaining.iter().next() {
+        let mut queue = VecDeque::from([seed]);
+        let mut queued = BTreeSet::from([seed]);
+        let mut part = Vec::new();
+        let mut keys = 0u32;
+
+        while let Some(index) = queue.pop_front() {
+            queued.remove(&index);
+            if !remaining.contains(&index) {
+                continue;
+            }
+            let primitive_keys = mesh.primitives[index].primitive_key_count();
+            if !part.is_empty() && keys + primitive_keys > max_keys {
+                continue;
+            }
+
+            remaining.remove(&index);
+            part.push(index);
+            keys += primitive_keys;
+
+            for &neighbor in &adjacency[index] {
+                if remaining.contains(&neighbor) && !queued.contains(&neighbor) {
+                    queue.push_back(neighbor);
+                    queued.insert(neighbor);
+                }
+            }
+        }
+
+        if part.is_empty() {
+            remaining.remove(&seed);
+            part.push(seed);
+        }
+
+        part.sort_unstable();
+        parts.push(compact_primitive_subset(mesh, &part));
+    }
+
+    parts
+}
+
+fn split_authored_shapes(mesh: &CollisionPrimitiveMesh, max_keys: u32) -> AuthoredCollisionSet {
+    if mesh.primitives.is_empty() {
+        return AuthoredCollisionSet { shapes: Vec::new() };
+    }
+
+    let adjacency = build_primitive_adjacency(&mesh.primitives);
+    let mut visited = vec![false; mesh.primitives.len()];
+    let mut components: Vec<Vec<usize>> = Vec::new();
+
+    for seed in 0..mesh.primitives.len() {
+        if visited[seed] {
+            continue;
+        }
+        let mut component = Vec::new();
+        let mut queue = VecDeque::from([seed]);
+        visited[seed] = true;
+        while let Some(index) = queue.pop_front() {
+            component.push(index);
+            for &neighbor in &adjacency[index] {
+                if !visited[neighbor] {
+                    visited[neighbor] = true;
+                    queue.push_back(neighbor);
+                }
+            }
+        }
+        component.sort_unstable();
+        components.push(component);
+    }
+
+    let mut shapes = Vec::new();
+    let mut packed_components = Vec::new();
+    let mut packed_keys = 0u32;
+
+    for component in components {
+        let key_count = primitive_indices_key_count(mesh, &component);
+        if key_count > max_keys {
+            if !packed_components.is_empty() {
+                shapes.push(compact_primitive_subset(mesh, &packed_components));
+                packed_components.clear();
+                packed_keys = 0;
+            }
+            shapes.extend(split_component_by_key_budget(
+                mesh, &component, &adjacency, max_keys,
+            ));
+            continue;
+        }
+
+        if !packed_components.is_empty() && packed_keys + key_count > max_keys {
+            shapes.push(compact_primitive_subset(mesh, &packed_components));
+            packed_components.clear();
+            packed_keys = 0;
+        }
+        packed_components.extend(component);
+        packed_keys += key_count;
+    }
+
+    if !packed_components.is_empty() {
+        shapes.push(compact_primitive_subset(mesh, &packed_components));
+    }
+
+    AuthoredCollisionSet { shapes }
+}
+
+fn quadify_triangle_mesh(
+    mesh: &CollisionTriMesh,
+    cos_threshold: f64,
+    min_triangle_area: f64,
+) -> CollisionPrimitiveMesh {
+    let tris = tri_infos(mesh, min_triangle_area);
+    if tris.is_empty() {
+        return mesh.to_primitive_mesh();
+    }
+
+    let mut uf = cluster_coplanar(&tris, cos_threshold);
+    let mut regions: HashMap<usize, Vec<usize>> = HashMap::new();
+    for (index, _) in tris.iter().enumerate() {
+        regions.entry(uf.find(index)).or_default().push(index);
+    }
+
+    let mut primitives = Vec::new();
+    let mut region_ids: Vec<usize> = regions.keys().copied().collect();
+    region_ids.sort_unstable();
+    for region_id in region_ids {
+        let region_tris: Vec<TriInfo> = regions[&region_id]
+            .iter()
+            .map(|&index| tris[index])
+            .collect();
+        primitives.extend(quadify_region(&mesh.vertices, &region_tris));
+    }
+
+    compact_primitive_mesh(&CollisionPrimitiveMesh {
+        vertices: mesh.vertices.clone(),
+        primitives,
+    })
+}
+
 fn extract_boundary_loops(region_tris: &[TriInfo]) -> Vec<Vec<u32>> {
     let mut edge_use: HashMap<(u32, u32), u32> = HashMap::new();
     for tri in region_tris {
@@ -744,6 +1176,30 @@ pub fn simplify_collision_mesh(
         }
         CollisionSimplifyMode::ShapePreserving => Ok(shape_preserving_simplify(mesh, options)),
     }
+}
+
+/// Build authored collision shapes from a triangle mesh: simplify first, then
+/// preserve real quads where coplanar triangle pairs can be merged, and finally
+/// split the result into multiple shape-sized chunks.
+pub fn author_collision_shapes(
+    mesh: &CollisionTriMesh,
+    options: &CollisionSimplifyOptions,
+) -> Result<AuthoredCollisionSet, String> {
+    let simplified = simplify_collision_mesh(mesh, options)?;
+    let authored = if options.quad_merge_enabled {
+        quadify_triangle_mesh(
+            &simplified,
+            options.cos_planarity_threshold,
+            options.min_triangle_area,
+        )
+    } else {
+        simplified.to_primitive_mesh()
+    };
+    let mut set = split_authored_shapes(&authored, DEFAULT_AUTHORED_SHAPE_MAX_KEYS);
+    if set.shapes.is_empty() {
+        set.shapes.push(authored);
+    }
+    Ok(set)
 }
 
 /// Simplify by merging coplanar regions (similar face normals), keeping the surface.
@@ -999,5 +1455,60 @@ mod tests {
             out.triangle_count() >= 12,
             "closed curved mesh should not collapse to an unusable primitive"
         );
+    }
+
+    #[test]
+    fn split_authored_shapes_packs_disconnected_components() {
+        let mut vertices = Vec::new();
+        let mut primitives = Vec::new();
+        for index in 0..20u32 {
+            let base = vertices.len() as u32;
+            let x = index as f64 * 10.0;
+            vertices.push([x, 0.0, 0.0]);
+            vertices.push([x + 1.0, 0.0, 0.0]);
+            vertices.push([x, 1.0, 0.0]);
+            primitives.push(CollisionPrimitive::Triangle([base, base + 1, base + 2]));
+        }
+
+        let set = split_authored_shapes(
+            &CollisionPrimitiveMesh {
+                vertices,
+                primitives,
+            },
+            8,
+        );
+
+        assert_eq!(set.shape_count(), 3);
+        assert_eq!(set.primitive_key_count(), 20);
+        assert!(set
+            .shapes
+            .iter()
+            .all(|shape| shape.primitive_key_count() <= 8));
+    }
+
+    #[test]
+    fn author_collision_shapes_can_skip_quad_merge() {
+        let mesh = subdivided_quad_mesh();
+        let with_quads = author_collision_shapes(&mesh, &CollisionSimplifyOptions::default())
+            .expect("author quads");
+        assert!(with_quads
+            .shapes
+            .iter()
+            .flat_map(|shape| shape.primitives.iter())
+            .any(|primitive| matches!(primitive, CollisionPrimitive::Quad(_))));
+
+        let without_quads = author_collision_shapes(
+            &mesh,
+            &CollisionSimplifyOptions {
+                quad_merge_enabled: false,
+                ..CollisionSimplifyOptions::default()
+            },
+        )
+        .expect("author triangles");
+        assert!(without_quads
+            .shapes
+            .iter()
+            .flat_map(|shape| shape.primitives.iter())
+            .all(|primitive| matches!(primitive, CollisionPrimitive::Triangle(_))));
     }
 }

@@ -37,6 +37,12 @@ pub struct HktSimplifyConfig {
     pub strategy: CollisionStrategy,
     #[serde(default)]
     pub hull_target_faces: Option<usize>,
+    #[serde(default = "default_hkt_quad_merge_enabled")]
+    pub quad_merge_enabled: bool,
+}
+
+fn default_hkt_quad_merge_enabled() -> bool {
+    true
 }
 
 impl Default for HktSimplifyConfig {
@@ -50,6 +56,7 @@ impl Default for HktSimplifyConfig {
             max_target_triangles: None,
             strategy: CollisionStrategy::ShapePreserving,
             hull_target_faces: None,
+            quad_merge_enabled: true,
         }
     }
 }
@@ -423,7 +430,10 @@ impl SceneMemorySession {
         hkt_bytes: Vec<u8>,
     ) -> Result<(), String> {
         let normalized = target_id.replace('\\', "/");
-        let parts: Vec<&str> = normalized.split('/').filter(|part| !part.is_empty()).collect();
+        let parts: Vec<&str> = normalized
+            .split('/')
+            .filter(|part| !part.is_empty())
+            .collect();
         if !hkt_target_segments_valid(&parts) {
             return Err(format!(
                 "Invalid stage HKT target id '{target_id}' (unsafe path segment)"
@@ -441,9 +451,7 @@ impl SceneMemorySession {
                 files.insert((*file).to_string(), hkt_bytes);
             }
             [file] if file.to_ascii_lowercase().ends_with(".hkt") => {
-                bundle
-                    .root_files
-                    .insert((*file).to_string(), hkt_bytes);
+                bundle.root_files.insert((*file).to_string(), hkt_bytes);
             }
             [folder] => {
                 let files = bundle
@@ -468,9 +476,7 @@ impl SceneMemorySession {
     pub fn stage_root_path(&self) -> Option<PathBuf> {
         match &self.source {
             SceneSource::Folder { path } => Some(PathBuf::from(path)),
-            SceneSource::Fhm2d { path } => Path::new(path)
-                .parent()
-                .map(|p| p.to_path_buf()),
+            SceneSource::Fhm2d { path } => Path::new(path).parent().map(|p| p.to_path_buf()),
             SceneSource::New => None,
         }
     }
@@ -480,7 +486,10 @@ impl SceneMemorySession {
     pub fn resolve_hkt_disk_path(&self, import_id: &str) -> Option<PathBuf> {
         let stage_root = self.stage_root_path()?;
         let normalized = import_id.replace('\\', "/");
-        let parts: Vec<&str> = normalized.split('/').filter(|part| !part.is_empty()).collect();
+        let parts: Vec<&str> = normalized
+            .split('/')
+            .filter(|part| !part.is_empty())
+            .collect();
         match parts.as_slice() {
             [folder, file] if file.to_ascii_lowercase().ends_with(".hkt") => {
                 join_stage_hkt_disk_path(&stage_root, &[folder, file])
@@ -718,7 +727,9 @@ fn hkt_target_segment_valid(segment: &str) -> bool {
 }
 
 fn hkt_target_segments_valid(segments: &[&str]) -> bool {
-    segments.iter().all(|segment| hkt_target_segment_valid(segment))
+    segments
+        .iter()
+        .all(|segment| hkt_target_segment_valid(segment))
 }
 
 /// Join `segments` under `stage_root` and verify the result cannot escape the root.
@@ -1014,7 +1025,8 @@ mod tests {
                 path: "E:/stage".into(),
             },
         );
-        s.store_stage_folder_hkt_bytes("prop01/map_hit.hkt", vec![9, 9]).unwrap();
+        s.store_stage_folder_hkt_bytes("prop01/map_hit.hkt", vec![9, 9])
+            .unwrap();
         let artifacts = s.collect_save_artifacts();
         assert!(artifacts.iter().any(|artifact| {
             artifact.relative_path == "prop01/map_hit.hkt" && artifact.data == vec![9, 9]
@@ -1080,7 +1092,9 @@ mod tests {
             },
         );
         assert!(s.resolve_hkt_disk_path("../map_hit.hkt").is_none());
-        assert!(s.resolve_hkt_disk_path("prop01/../../map_hit.hkt").is_none());
+        assert!(s
+            .resolve_hkt_disk_path("prop01/../../map_hit.hkt")
+            .is_none());
     }
 
     #[test]
