@@ -3,6 +3,7 @@ import type { HavokMeshData } from "@/utils/havokXmlParser";
 import {
   countHavokCollisionTriangles,
   DEFAULT_HKT_SIMPLIFY,
+  HIGH_PRECISION_HKT_SIMPLIFY,
   HKT_HULL_PRESET_FACES,
   hktHullConfigFromPreset,
   hktSimplifyConfigFromPreset,
@@ -26,10 +27,13 @@ describe("hktSimplifyUtils", () => {
     expect(countHavokCollisionTriangles(mesh)).toBe(3);
   });
 
-  it("maps preset values for none, medium, and heavy", () => {
+  it("maps preset values for none, medium, high, and heavy", () => {
     expect(hktSimplifyConfigFromPreset("none").enabled).toBe(false);
     expect(hktSimplifyConfigFromPreset("medium").enabled).toBe(true);
     expect(hktSimplifyConfigFromPreset("medium").planarityAngleDeg).toBe(15);
+    expect(hktSimplifyConfigFromPreset("high").planarityAngleDeg).toBe(15);
+    expect(hktSimplifyConfigFromPreset("high").targetTriangleRatio).toBeNull();
+    expect(hktSimplifyConfigFromPreset("high").maxTargetTriangles).toBe(50_000);
     expect(hktSimplifyConfigFromPreset("heavy").planarityAngleDeg).toBe(45);
     expect(hktSimplifyConfigFromPreset("heavy").weldEpsilon).toBe(0.01);
     expect(hktSimplifyConfigFromPreset("heavy").targetTriangleRatio).toBe(0.05);
@@ -39,6 +43,12 @@ describe("hktSimplifyUtils", () => {
   it("defaults to medium preset with simplification enabled", () => {
     expect(DEFAULT_HKT_SIMPLIFY.preset).toBe("medium");
     expect(DEFAULT_HKT_SIMPLIFY.enabled).toBe(true);
+  });
+
+  it("exposes high precision as the 50k shape-preserving review preset", () => {
+    expect(HIGH_PRECISION_HKT_SIMPLIFY).toEqual(hktSimplifyConfigFromPreset("high"));
+    expect(HIGH_PRECISION_HKT_SIMPLIFY.strategy).toBe("shapePreserving");
+    expect(HIGH_PRECISION_HKT_SIMPLIFY.maxTargetTriangles).toBe(50_000);
   });
 
   it("computes reduction percentage from merged and simplified counts", () => {

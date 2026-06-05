@@ -273,6 +273,9 @@ export function sceneReplaceHkt(
   });
 }
 
+export type HktCollisionPreviewStage = "merged" | "hktInput";
+export type HktCollisionDisplayStage = HktCollisionPreviewStage | "decodedHkt";
+
 export interface HktCollisionMeshGeometry {
   /** Flattened [x, y, z, ...] collision-space vertex positions. */
   positions: Float32Array;
@@ -282,6 +285,7 @@ export interface HktCollisionMeshGeometry {
   vertexCount: number;
   renderTriangleCount: number;
   mergedTriangleCount: number;
+  stage: HktCollisionDisplayStage;
 }
 
 /**
@@ -297,6 +301,7 @@ interface HktCollisionMeshGeometryHeader {
   triangleCount: number;
   renderTriangleCount: number;
   mergedTriangleCount: number;
+  stage: HktCollisionPreviewStage;
 }
 
 /**
@@ -313,10 +318,11 @@ export async function scenePreviewHktCollisionMeshPath(
   filePath: string,
   sourceName: string,
   config: ImportConfig,
+  stage: HktCollisionPreviewStage = "hktInput",
 ): Promise<HktCollisionMeshGeometry> {
   const header = await invoke<HktCollisionMeshGeometryHeader>(
     "scene_preview_hkt_collision_mesh_path",
-    { filePath, sourceName, config },
+    { filePath, sourceName, config, stage },
   );
   const buffer = await invoke<ArrayBuffer>("take_mesh_geometry", {
     geometryId: header.geometryId,
@@ -328,7 +334,29 @@ export async function scenePreviewHktCollisionMeshPath(
     vertexCount: header.vertexCount,
     renderTriangleCount: header.renderTriangleCount,
     mergedTriangleCount: header.mergedTriangleCount,
+    stage: header.stage,
   };
+}
+
+export interface HktCollisionReviewObjExport {
+  outputPath: string;
+  stage: HktCollisionPreviewStage;
+  triangleCount: number;
+  vertexCount: number;
+  renderTriangleCount: number;
+  mergedTriangleCount: number;
+}
+
+export function sceneExportHktCollisionReviewObjPath(params: {
+  filePath: string;
+  sourceName: string;
+  config: ImportConfig;
+  stage: HktCollisionPreviewStage;
+  outputPath: string;
+}): Promise<HktCollisionReviewObjExport> {
+  return invoke<HktCollisionReviewObjExport>("scene_export_hkt_collision_review_obj_path", {
+    options: params,
+  });
 }
 
 /**

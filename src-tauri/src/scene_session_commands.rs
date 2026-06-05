@@ -528,6 +528,7 @@ pub async fn scene_preview_hkt_collision_mesh_path(
     file_path: String,
     source_name: String,
     config: ImportConfig,
+    stage: Option<crate::havok_collision_encode::HktCollisionReviewStage>,
 ) -> Result<crate::havok_collision_encode::HktCollisionMeshGeometryHeader, String> {
     // Must be async + spawn_blocking: this runs the full FBX/DAE parse → skin-bake →
     // merge → simplify pipeline, which is heavy for large models. A synchronous
@@ -535,11 +536,14 @@ pub async fn scene_preview_hkt_collision_mesh_path(
     // any sibling invoke fired in the same Promise.all batch).
     let t = Instant::now();
     eprintln!(
-        "[scene_preview_hkt_collision_mesh_path] start path={} source={}",
-        file_path, source_name
+        "[scene_preview_hkt_collision_mesh_path] start path={} source={} stage={}",
+        file_path,
+        source_name,
+        stage.unwrap_or_default().label()
     );
     let options = hkt_collision_options_from_import(&config);
     let source_for_task = source_name.clone();
+    let stage_for_task = stage.unwrap_or_default();
     let header = tauri::async_runtime::spawn_blocking(
         move || -> Result<crate::havok_collision_encode::HktCollisionMeshGeometryHeader, String> {
             let read_t = Instant::now();
@@ -551,10 +555,11 @@ pub async fn scene_preview_hkt_collision_mesh_path(
                 read_t.elapsed().as_millis()
             );
             let geometry =
-                crate::havok_collision_encode::preview_hkt_collision_mesh_from_import_bytes(
+                crate::havok_collision_encode::preview_hkt_collision_mesh_from_import_bytes_with_stage(
                     &dae_bytes,
                     &source_for_task,
                     options,
+                    stage_for_task,
                 )?;
             // Ship geometry as a binary blob over the IPC side-channel (same path as the
             // SSBH model loader) instead of a JSON number array; the frontend fetches it
@@ -571,6 +576,85 @@ pub async fn scene_preview_hkt_collision_mesh_path(
         header.triangle_count
     );
     Ok(header)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportHktCollisionReviewObjOptions {
+    pub file_path: String,
+    pub source_name: String,
+    pub config: ImportConfig,
+    pub stage: crate::havok_collision_encode::HktCollisionReviewStage,
+    pub output_path: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HktCollisionReviewObjExport {
+    pub output_path: String,
+    pub stage: crate::havok_collision_encode::HktCollisionReviewStage,
+    pub triangle_count: usize,
+    pub vertex_count: usize,
+    pub render_triangle_count: usize,
+    pub merged_triangle_count: usize,
+}
+
+/// Export a review OBJ for a selected FBX/DAE → HKT collision stage. The OBJ is
+/// written in the Rust backend so large review meshes do not cross IPC as text.
+#[tauri::command]
+pub async fn scene_export_hkt_collision_review_obj_path(
+    options: ExportHktCollisionReviewObjOptions,
+) -> Result<HktCollisionReviewObjExport, String> {
+    let t = Instant::now();
+    eprintln!(
+        "[scene_export_hkt_collision_review_obj_path] start path={} source={} stage={} output={}",
+        options.file_path,
+        options.source_name,
+        options.stage.label(),
+        options.output_path
+    );
+
+    let mesh_options = hkt_collision_options_from_import(&options.config);
+    let stage = options.stage;
+    let file_path = options.file_path.clone();
+    let source_name = options.source_name.clone();
+    let output_path = options.output_path.clone();
+    let export = tauri::async_runtime::spawn_blocking(
+        move || -> Result<HktCollisionReviewObjExport, String> {
+            let bytes = std::fs::read(&file_path)
+                .map_err(|e| format!("Failed to read '{}': {}", file_path, e))?;
+            let stage_mesh =
+                crate::havok_collision_encode::preview_hkt_collision_stage_mesh_from_import_bytes_with_stage(
+                    &bytes,
+                    &source_name,
+                    mesh_options,
+                    stage,
+                )?;
+            let out = std::path::PathBuf::from(&output_path);
+            crate::havok_collision_encode::write_collision_mesh_obj(
+                &out,
+                &stage_mesh.mesh,
+                stage_mesh.stage,
+            )?;
+            Ok(HktCollisionReviewObjExport {
+                output_path: out.to_string_lossy().to_string(),
+                stage: stage_mesh.stage,
+                triangle_count: stage_mesh.mesh.triangle_count(),
+                vertex_count: stage_mesh.mesh.vertices.len(),
+                render_triangle_count: stage_mesh.render_triangle_count,
+                merged_triangle_count: stage_mesh.merged_triangle_count,
+            })
+        },
+    )
+    .await
+    .map_err(|e| format!("Export OBJ task join error: {e}"))??;
+    eprintln!(
+        "[scene_export_hkt_collision_review_obj_path] done in {}ms (verts={} tris={})",
+        t.elapsed().as_millis(),
+        export.vertex_count,
+        export.triangle_count
+    );
+    Ok(export)
 }
 
 #[tauri::command]

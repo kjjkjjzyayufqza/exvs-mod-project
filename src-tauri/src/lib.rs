@@ -153,6 +153,7 @@ pub fn run() {
             scene_session_commands::scene_import_dae_from_path_streamed,
             scene_session_commands::scene_preview_hkt_collision_path,
             scene_session_commands::scene_preview_hkt_collision_mesh_path,
+            scene_session_commands::scene_export_hkt_collision_review_obj_path,
             scene_session_commands::scene_configure_import,
             scene_session_commands::scene_remove_import,
             scene_session_commands::scene_remove_havok_data,

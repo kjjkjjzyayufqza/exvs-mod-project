@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_HKT_SIMPLIFY } from "../../utils/hktSimplifyUtils";
+import { DEFAULT_HKT_SIMPLIFY, hktSimplifyConfigFromPreset } from "../../utils/hktSimplifyUtils";
 import { buildImportConfigForHktPreview } from "../../utils/hktSimplifyUtils";
 import {
   buildHktFromModelConfigKey,
@@ -33,10 +33,7 @@ describe("generateHktFromModelCache", () => {
       hktBytes: [1, 2, 3],
       triangleCount: 42,
     };
-    const nextKey = buildHktFromModelConfigKey(importConfig, {
-      ...DEFAULT_HKT_SIMPLIFY,
-      preset: "coarse",
-    });
+    const nextKey = buildHktFromModelConfigKey(importConfig, hktSimplifyConfigFromPreset("high"));
     expect(isCachedHktFromModelValid(cached, "E:/models/stage.dae", nextKey)).toBe(false);
   });
 });

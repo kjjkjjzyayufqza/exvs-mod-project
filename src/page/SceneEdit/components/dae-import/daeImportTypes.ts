@@ -30,7 +30,7 @@ export interface TextureImportEntry {
     | { type: "new"; pngPath: string; ddsFormat: string };
 }
 
-export type HktSimplifyPreset = "none" | "medium" | "heavy";
+export type HktSimplifyPreset = "none" | "medium" | "high" | "heavy";
 export type HktSimplifyStrategy = "shapePreserving" | "convexHull";
 export type HktHullPreset = "coarse" | "balanced" | "fine";
 

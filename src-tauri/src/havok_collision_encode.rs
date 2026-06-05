@@ -1,12 +1,14 @@
 //! Build Havok collision (HKT) from merged mesh collision geometry.
 
+use std::io::Write;
+use std::path::Path;
 use std::time::Instant;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::collision_mesh::{
     bake_and_merge_collision_mesh, parse_import_scene_from_bytes, simplify_collision_mesh,
-    CollisionMeshOptions,
+    CollisionMeshOptions, CollisionTriMesh,
 };
 use crate::havok_mesh_encode::build_mesh_collision_xml_faithful;
 
@@ -23,6 +25,38 @@ pub struct HktCollisionPreview {
     pub merged_triangle_count: usize,
     pub simplified_triangle_count: usize,
     pub vertex_count: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HktCollisionReviewStage {
+    /// Skin-baked and axis-converted mesh after merging render geometry, before simplification.
+    Merged,
+    /// The exact collision triangle mesh passed to the HKT encoder.
+    HktInput,
+}
+
+impl Default for HktCollisionReviewStage {
+    fn default() -> Self {
+        Self::HktInput
+    }
+}
+
+impl HktCollisionReviewStage {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Merged => "merged",
+            Self::HktInput => "hkt_input",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct HktCollisionStageMesh {
+    pub mesh: CollisionTriMesh,
+    pub render_triangle_count: usize,
+    pub merged_triangle_count: usize,
+    pub stage: HktCollisionReviewStage,
 }
 
 /// Maximum collision triangles the HKT encoder can reasonably accept for stage assets.
@@ -98,15 +132,50 @@ pub struct HktCollisionMeshGeometry {
     pub vertex_count: usize,
     pub render_triangle_count: usize,
     pub merged_triangle_count: usize,
+    pub stage: HktCollisionReviewStage,
 }
 
-/// Produce the simplified collision mesh geometry for a 3D preview, without
-/// invoking Havok Content Tools (parse → skin-bake/merge → simplify only).
-pub fn preview_hkt_collision_mesh_from_import_bytes(
+fn stage_mesh_to_geometry(stage_mesh: HktCollisionStageMesh) -> HktCollisionMeshGeometry {
+    let mut positions = Vec::with_capacity(stage_mesh.mesh.vertices.len() * 3);
+    for v in &stage_mesh.mesh.vertices {
+        positions.push(v[0] as f32);
+        positions.push(v[1] as f32);
+        positions.push(v[2] as f32);
+    }
+    HktCollisionMeshGeometry {
+        triangle_count: stage_mesh.mesh.triangle_count(),
+        vertex_count: stage_mesh.mesh.vertices.len(),
+        indices: stage_mesh.mesh.indices,
+        positions,
+        render_triangle_count: stage_mesh.render_triangle_count,
+        merged_triangle_count: stage_mesh.merged_triangle_count,
+        stage: stage_mesh.stage,
+    }
+}
+
+/// Produce a selected collision pipeline stage for 3D preview or OBJ review,
+/// without invoking Havok Content Tools.
+pub fn preview_hkt_collision_stage_mesh_from_import_bytes(
     bytes: &[u8],
     source_name: &str,
     options: CollisionMeshOptions,
-) -> Result<HktCollisionMeshGeometry, String> {
+) -> Result<HktCollisionStageMesh, String> {
+    preview_hkt_collision_stage_mesh_from_import_bytes_with_stage(
+        bytes,
+        source_name,
+        options,
+        HktCollisionReviewStage::HktInput,
+    )
+}
+
+/// Produce a selected collision pipeline stage for 3D preview or OBJ review,
+/// without invoking Havok Content Tools.
+pub fn preview_hkt_collision_stage_mesh_from_import_bytes_with_stage(
+    bytes: &[u8],
+    source_name: &str,
+    options: CollisionMeshOptions,
+    stage: HktCollisionReviewStage,
+) -> Result<HktCollisionStageMesh, String> {
     // Phase-level timing: parse / skin-bake+merge / simplify are the candidate
     // bottlenecks for large FBX inputs. Logged so the preview hang can be localized.
     let parse_t = Instant::now();
@@ -120,45 +189,74 @@ pub fn preview_hkt_collision_mesh_from_import_bytes(
     let merge_ms = merge_t.elapsed().as_millis();
     let merged_triangle_count = merged.triangle_count();
 
-    let simplify_t = Instant::now();
-    let simplified = simplify_collision_mesh(&merged, &options.simplify)?;
-    let simplify_ms = simplify_t.elapsed().as_millis();
+    let stage_t = Instant::now();
+    let mesh = match stage {
+        HktCollisionReviewStage::Merged => merged,
+        HktCollisionReviewStage::HktInput => simplify_collision_mesh(&merged, &options.simplify)?,
+    };
+    let stage_ms = stage_t.elapsed().as_millis();
 
     eprintln!(
-        "[preview_hkt_collision_mesh] source={} bytes={} | parse={}ms (render_tris={}) \
-         bake_merge={}ms (merged_tris={}) simplify={}ms (simplified_tris={} verts={})",
+        "[preview_hkt_collision_mesh] source={} stage={} bytes={} | parse={}ms (render_tris={}) \
+         bake_merge={}ms (merged_tris={}) stage={}ms (stage_tris={} verts={})",
         source_name,
+        stage.label(),
         bytes.len(),
         parse_ms,
         render_triangle_count,
         merge_ms,
         merged_triangle_count,
-        simplify_ms,
-        simplified.triangle_count(),
-        simplified.vertices.len(),
+        stage_ms,
+        mesh.triangle_count(),
+        mesh.vertices.len(),
     );
 
     let preview = HktCollisionPreview {
         render_triangle_count,
         merged_triangle_count,
-        simplified_triangle_count: simplified.triangle_count(),
-        vertex_count: simplified.vertices.len(),
+        simplified_triangle_count: mesh.triangle_count(),
+        vertex_count: mesh.vertices.len(),
     };
-    validate_collision_mesh_for_hkt(&preview, options.simplify.enabled)?;
-    let mut positions = Vec::with_capacity(simplified.vertices.len() * 3);
-    for v in &simplified.vertices {
-        positions.push(v[0] as f32);
-        positions.push(v[1] as f32);
-        positions.push(v[2] as f32);
+    if stage == HktCollisionReviewStage::HktInput {
+        validate_collision_mesh_for_hkt(&preview, options.simplify.enabled)?;
     }
-    Ok(HktCollisionMeshGeometry {
-        triangle_count: simplified.triangle_count(),
-        vertex_count: simplified.vertices.len(),
-        indices: simplified.indices,
-        positions,
+
+    Ok(HktCollisionStageMesh {
+        mesh,
         render_triangle_count,
         merged_triangle_count,
+        stage,
     })
+}
+
+/// Produce the simplified collision mesh geometry for a 3D preview, without
+/// invoking Havok Content Tools (parse → skin-bake/merge → simplify only).
+pub fn preview_hkt_collision_mesh_from_import_bytes(
+    bytes: &[u8],
+    source_name: &str,
+    options: CollisionMeshOptions,
+) -> Result<HktCollisionMeshGeometry, String> {
+    preview_hkt_collision_mesh_from_import_bytes_with_stage(
+        bytes,
+        source_name,
+        options,
+        HktCollisionReviewStage::HktInput,
+    )
+}
+
+pub fn preview_hkt_collision_mesh_from_import_bytes_with_stage(
+    bytes: &[u8],
+    source_name: &str,
+    options: CollisionMeshOptions,
+    stage: HktCollisionReviewStage,
+) -> Result<HktCollisionMeshGeometry, String> {
+    let stage_mesh = preview_hkt_collision_stage_mesh_from_import_bytes_with_stage(
+        bytes,
+        source_name,
+        options,
+        stage,
+    )?;
+    Ok(stage_mesh_to_geometry(stage_mesh))
 }
 
 /// Light header for the binary-IPC collision preview: stats plus the registry id of the
@@ -179,6 +277,7 @@ pub struct HktCollisionMeshGeometryHeader {
     pub triangle_count: usize,
     pub render_triangle_count: usize,
     pub merged_triangle_count: usize,
+    pub stage: HktCollisionReviewStage,
 }
 
 /// Packs a collision preview mesh into one little-endian byte buffer (`positions` as `f32`,
@@ -203,7 +302,46 @@ pub fn pack_and_register_collision_mesh(
         triangle_count: geo.triangle_count,
         render_triangle_count: geo.render_triangle_count,
         merged_triangle_count: geo.merged_triangle_count,
+        stage: geo.stage,
     }
+}
+
+pub fn write_collision_mesh_obj(
+    path: &Path,
+    mesh: &CollisionTriMesh,
+    stage: HktCollisionReviewStage,
+) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create {}: {e}", parent.display()))?;
+    }
+    let file = std::fs::File::create(path)
+        .map_err(|e| format!("Failed to create {}: {e}", path.display()))?;
+    let mut writer = std::io::BufWriter::new(file);
+    writeln!(
+        writer,
+        "# hkt collision review stage={} vertices={} triangles={}",
+        stage.label(),
+        mesh.vertices.len(),
+        mesh.triangle_count()
+    )
+    .map_err(|e| format!("Failed to write {}: {e}", path.display()))?;
+
+    for v in &mesh.vertices {
+        writeln!(writer, "v {:.8} {:.8} {:.8}", v[0], v[1], v[2])
+            .map_err(|e| format!("Failed to write {}: {e}", path.display()))?;
+    }
+
+    for tri in mesh.indices.chunks(3) {
+        if tri.len() == 3 {
+            writeln!(writer, "f {} {} {}", tri[0] + 1, tri[1] + 1, tri[2] + 1)
+                .map_err(|e| format!("Failed to write {}: {e}", path.display()))?;
+        }
+    }
+    writer
+        .flush()
+        .map_err(|e| format!("Failed to flush {}: {e}", path.display()))?;
+    Ok(())
 }
 
 /// Generate binary HKT from DAE/FBX bytes (detected via `source_name` extension).
@@ -352,6 +490,7 @@ mod tests {
             vertex_count: 2,
             render_triangle_count: 4,
             merged_triangle_count: 3,
+            stage: HktCollisionReviewStage::HktInput,
         };
         let header = pack_and_register_collision_mesh(&geo);
 
@@ -362,6 +501,7 @@ mod tests {
         assert_eq!(header.triangle_count, 1);
         assert_eq!(header.render_triangle_count, 4);
         assert_eq!(header.merged_triangle_count, 3);
+        assert_eq!(header.stage, HktCollisionReviewStage::HktInput);
 
         let buf = crate::ssbh_mesh_binary::take_geometry(&header.geometry_id)
             .expect("registered geometry buffer");
@@ -378,6 +518,23 @@ mod tests {
         assert_eq!(i2, 2);
         // Taken once → registry frees it.
         assert!(crate::ssbh_mesh_binary::take_geometry(&header.geometry_id).is_none());
+    }
+
+    #[test]
+    fn write_collision_mesh_obj_writes_vertices_and_faces() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("review.obj");
+        let mesh = CollisionTriMesh {
+            vertices: vec![[0.0, 1.0, 2.0], [3.0, 4.0, 5.0], [6.0, 7.0, 8.0]],
+            indices: vec![0, 1, 2],
+        };
+
+        write_collision_mesh_obj(&path, &mesh, HktCollisionReviewStage::HktInput).unwrap();
+        let obj = std::fs::read_to_string(&path).unwrap();
+
+        assert!(obj.contains("stage=hkt_input"));
+        assert!(obj.contains("v 0.00000000 1.00000000 2.00000000"));
+        assert!(obj.contains("f 1 2 3"));
     }
 
     #[test]

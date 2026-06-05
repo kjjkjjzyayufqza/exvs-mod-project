@@ -36,6 +36,7 @@ export function havokMeshDataToCollisionPreviewGeometry(
       vertexCount: 0,
       renderTriangleCount: stats?.renderTriangleCount ?? 0,
       mergedTriangleCount: stats?.mergedTriangleCount ?? 0,
+      stage: "decodedHkt",
     };
   }
 
@@ -49,6 +50,7 @@ export function havokMeshDataToCollisionPreviewGeometry(
     vertexCount: positionAttr.count,
     renderTriangleCount: stats?.renderTriangleCount ?? 0,
     mergedTriangleCount: stats?.mergedTriangleCount ?? 0,
+    stage: "decodedHkt",
   };
 }
 

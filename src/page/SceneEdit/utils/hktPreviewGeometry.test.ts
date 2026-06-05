@@ -26,6 +26,7 @@ function meshStatsWithMarker(marker: number): HktCollisionMeshGeometry {
     vertexCount: 1,
     renderTriangleCount: 100,
     mergedTriangleCount: 80,
+    stage: "hktInput",
   };
 }
 
@@ -42,6 +43,7 @@ describe("havokMeshDataToCollisionPreviewGeometry", () => {
     expect(geo.renderTriangleCount).toBe(10);
     expect(geo.mergedTriangleCount).toBe(8);
     expect(geo.positions.length).toBe(12);
+    expect(geo.stage).toBe("decodedHkt");
   });
 });
 
@@ -62,6 +64,7 @@ describe("resolveHktFromModelPreviewGeometry", () => {
     expect(geometry.vertexCount).toBe(4);
     expect(geometry.renderTriangleCount).toBe(100);
     expect(geometry.mergedTriangleCount).toBe(80);
+    expect(geometry.stage).toBe("decodedHkt");
   });
 
   it("falls back to pre-Havok mesh stats when hktXml is empty", () => {
@@ -74,6 +77,7 @@ describe("resolveHktFromModelPreviewGeometry", () => {
     expect(result.usesPreHavokMesh).toBe(true);
     expect(result.geometry).toBe(meshStats);
     expect(result.geometry.positions[0]).toBe(42);
+    expect(result.geometry.stage).toBe("hktInput");
   });
 
   it("falls back to pre-Havok mesh stats when Havok XML parsing fails", () => {
@@ -90,5 +94,6 @@ describe("resolveHktFromModelPreviewGeometry", () => {
 
     expect(result.usesPreHavokMesh).toBe(true);
     expect(result.geometry).toBe(meshStats);
+    expect(result.geometry.stage).toBe("hktInput");
   });
 });

@@ -6,17 +6,24 @@ import type {
 } from "../components/dae-import/daeImportTypes";
 import type { ImportConfig } from "./sceneSessionService";
 
-export const HKT_SIMPLIFY_PRESET_ORDER: HktSimplifyPreset[] = ["none", "medium", "heavy"];
+export const HKT_SIMPLIFY_PRESET_ORDER: HktSimplifyPreset[] = [
+  "none",
+  "medium",
+  "high",
+  "heavy",
+];
 
 export const HKT_SIMPLIFY_PRESET_LABELS: Record<HktSimplifyPreset, string> = {
-  none: "None",
-  medium: "Medium",
-  heavy: "Heavy",
+  none: "Full surface",
+  medium: "Merge flats",
+  high: "High 50k",
+  heavy: "Low 5%",
 };
 
 export const HKT_SIMPLIFY_PRESET_HINTS: Record<HktSimplifyPreset, string> = {
   none: "Export every render triangle as collision",
   medium: "Merge coplanar faces on flats and panels (recommended)",
+  high: "Keep the source outline closely, capped at 50k collision triangles",
   heavy: "Aggressive merge and curved-surface decimation for low-poly collision",
 };
 
@@ -69,6 +76,16 @@ export function hktSimplifyConfigFromPreset(preset: HktSimplifyPreset): HktSimpl
         weldEpsilon: 0.001,
         targetTriangleRatio: null,
         maxTargetTriangles: null,
+      };
+    case "high":
+      return {
+        ...base,
+        enabled: true,
+        planarityAngleDeg: 15,
+        minTriangleArea: 1e-6,
+        weldEpsilon: 0.001,
+        targetTriangleRatio: null,
+        maxTargetTriangles: 50_000,
       };
     case "heavy":
       return {
@@ -155,6 +172,8 @@ export function normalizeHktSimplifyConfig(
 }
 
 export const DEFAULT_HKT_SIMPLIFY: HktSimplifyConfig = hktSimplifyConfigFromPreset("medium");
+export const HIGH_PRECISION_HKT_SIMPLIFY: HktSimplifyConfig =
+  hktSimplifyConfigFromPreset("high");
 
 export function countHavokCollisionTriangles(data: HavokMeshData): number {
   let count = 0;

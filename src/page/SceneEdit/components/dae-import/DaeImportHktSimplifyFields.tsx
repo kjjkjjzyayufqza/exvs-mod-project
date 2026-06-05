@@ -223,9 +223,8 @@ export function DaeImportHktSimplifyFields({
     <DaeImportSection title={compact ? "Simplify" : "Collision Simplification"} compact={compact}>
       {!compact ? (
         <DaeImportStatusAlert tone="info">
-          Shape-preserving merges similar faces and can decimate curves. Convex outline builds a
-          coarse outer shell — best for large flat terrain where heavy simplification still leaves
-          too many faces.
+          Shape-preserving keeps the source surface; High 50k is the review-focused option for
+          detailed collision. Convex outline builds a coarse outer shell for low-poly bounds.
         </DaeImportStatusAlert>
       ) : null}
 

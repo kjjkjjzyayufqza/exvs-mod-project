@@ -4,9 +4,11 @@
 //! Volumetric input goes through a 3D quickhull (`chull`) then a face-budget
 //! collapse that reuses the shape-preserving coplanar-merge + target-decimation
 //! code. Near-planar input (flat terrain, discs) is degenerate for a 3D hull, so
-//! it is handled with a 2D monotone-chain hull whose polygon is decimated to the
-//! face budget and fan-triangulated. Convexity is intentional: concavities are
-//! filled — this is the rough "outer frame" the caller asked for.
+//! it is handled with a 2D monotone-chain hull. Perfectly flat input is fanned on
+//! its source plane; thin but nonzero terrain is extruded into a closed outline
+//! slab so height noise does not turn the preview into a spiky 3D envelope.
+//! Convexity is intentional: concavities are filled — this is the rough "outer
+//! frame" the caller asked for.
 
 use chull::ConvexHullWrapper;
 
@@ -17,6 +19,8 @@ use super::types::{
 
 /// Thin-axis extent below this fraction of the largest extent is treated as planar.
 const PLANARITY_RATIO: f64 = 1e-3;
+/// Thin but nonzero terrain below this ratio is handled as a 2D outline slab.
+const OUTLINE_SLAB_RATIO: f64 = 0.15;
 /// Near-coplanar hull facets within this angle merge during the budget collapse.
 const HULL_FACET_MERGE_ANGLE_DEG: f64 = 2.0;
 const MIN_HULL_POINTS: usize = 3;
@@ -72,6 +76,16 @@ pub fn convex_hull_collision_mesh(
 
     if extents[thin_axis] <= max_extent * PLANARITY_RATIO {
         return planar_hull_mesh(&candidates, thin_axis, options.hull_target_faces);
+    }
+
+    if extents[thin_axis] <= max_extent * OUTLINE_SLAB_RATIO {
+        return outline_slab_mesh(
+            points,
+            thin_axis,
+            min[thin_axis],
+            max[thin_axis],
+            options.hull_target_faces,
+        );
     }
 
     let hull = hull_3d(&candidates)?;
@@ -169,11 +183,7 @@ fn planar_hull_mesh(
     thin_axis: usize,
     budget: Option<usize>,
 ) -> Result<CollisionTriMesh, String> {
-    let (ax, ay) = match thin_axis {
-        0 => (1usize, 2usize),
-        1 => (0usize, 2usize),
-        _ => (0usize, 1usize),
-    };
+    let (ax, ay) = plane_axes(thin_axis);
     let plane = points.iter().map(|p| p[thin_axis]).sum::<f64>() / points.len() as f64;
 
     let pts2d: Vec<[f64; 2]> = points.iter().map(|p| [p[ax], p[ay]]).collect();
@@ -203,6 +213,122 @@ fn planar_hull_mesh(
         return Err("Convex hull: planar hull collapsed below a triangle".into());
     }
     Ok(CollisionTriMesh { vertices, indices })
+}
+
+/// Thin terrain input: 2D outline in the dominant plane, extruded to a closed slab.
+fn outline_slab_mesh(
+    points: &[[f64; 3]],
+    thin_axis: usize,
+    min_thin: f64,
+    max_thin: f64,
+    budget: Option<usize>,
+) -> Result<CollisionTriMesh, String> {
+    let (ax, ay) = plane_axes(thin_axis);
+    let pts2d: Vec<[f64; 2]> = points.iter().map(|p| [p[ax], p[ay]]).collect();
+    let hull = monotone_chain(&pts2d);
+    if hull.len() < 3 {
+        return Err("Convex hull: outline slab input is degenerate (collinear points)".into());
+    }
+
+    // A slab with V outline vertices uses top (V-2) + bottom (V-2) + sides (2V)
+    // triangles, so the face budget maps to roughly V=(faces+4)/4.
+    let target_verts = budget.map(|faces| ((faces + 4) / 4).max(3));
+    let kept = simplify_polygon(&pts2d, &hull, target_verts);
+    if kept.len() < 3 {
+        return Err("Convex hull: outline slab collapsed below a triangle".into());
+    }
+
+    let n = kept.len();
+    let mut vertices: Vec<[f64; 3]> = Vec::with_capacity(n * 2);
+    for &i in &kept {
+        let mut v = [0.0_f64; 3];
+        v[ax] = pts2d[i][0];
+        v[ay] = pts2d[i][1];
+        v[thin_axis] = min_thin;
+        vertices.push(v);
+    }
+    for &i in &kept {
+        let mut v = [0.0_f64; 3];
+        v[ax] = pts2d[i][0];
+        v[ay] = pts2d[i][1];
+        v[thin_axis] = max_thin;
+        vertices.push(v);
+    }
+
+    let center = mesh_center(&vertices);
+    let mut indices: Vec<u32> = Vec::with_capacity((4 * n - 4) * 3);
+
+    for k in 1..n - 1 {
+        push_oriented_tri(&vertices, center, [0, k + 1, k], &mut indices);
+        push_oriented_tri(&vertices, center, [n, n + k, n + k + 1], &mut indices);
+    }
+
+    for i in 0..n {
+        let j = (i + 1) % n;
+        push_oriented_tri(&vertices, center, [i, j, n + j], &mut indices);
+        push_oriented_tri(&vertices, center, [i, n + j, n + i], &mut indices);
+    }
+
+    Ok(CollisionTriMesh { vertices, indices })
+}
+
+fn plane_axes(thin_axis: usize) -> (usize, usize) {
+    match thin_axis {
+        0 => (1usize, 2usize),
+        1 => (0usize, 2usize),
+        _ => (0usize, 1usize),
+    }
+}
+
+fn mesh_center(vertices: &[[f64; 3]]) -> [f64; 3] {
+    let mut center = [0.0; 3];
+    for v in vertices {
+        center[0] += v[0];
+        center[1] += v[1];
+        center[2] += v[2];
+    }
+    let inv = (vertices.len() as f64).recip();
+    [center[0] * inv, center[1] * inv, center[2] * inv]
+}
+
+fn push_oriented_tri(
+    vertices: &[[f64; 3]],
+    center: [f64; 3],
+    tri: [usize; 3],
+    indices: &mut Vec<u32>,
+) {
+    let v0 = vertices[tri[0]];
+    let v1 = vertices[tri[1]];
+    let v2 = vertices[tri[2]];
+    let normal = cross3(sub3(v1, v0), sub3(v2, v0));
+    let tri_center = [
+        (v0[0] + v1[0] + v2[0]) / 3.0,
+        (v0[1] + v1[1] + v2[1]) / 3.0,
+        (v0[2] + v1[2] + v2[2]) / 3.0,
+    ];
+    let outward = sub3(tri_center, center);
+    let ordered = if dot3(normal, outward) < 0.0 {
+        [tri[0], tri[2], tri[1]]
+    } else {
+        tri
+    };
+    indices.extend_from_slice(&[ordered[0] as u32, ordered[1] as u32, ordered[2] as u32]);
+}
+
+fn sub3(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+fn cross3(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+
+fn dot3(a: [f64; 3], b: [f64; 3]) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
 /// Andrew's monotone chain → CCW hull as indices into `points`, no repeated endpoint.
@@ -316,6 +442,24 @@ mod tests {
         CollisionTriMesh { vertices, indices }
     }
 
+    fn thin_terrain_box() -> CollisionTriMesh {
+        let vertices = vec![
+            [-100.0, 0.0, -50.0],
+            [100.0, 0.0, -50.0],
+            [100.0, 0.0, 50.0],
+            [-100.0, 0.0, 50.0],
+            [-100.0, 10.0, -50.0],
+            [100.0, 10.0, -50.0],
+            [100.0, 10.0, 50.0],
+            [-100.0, 10.0, 50.0],
+            [0.0, 5.0, 0.0],
+        ];
+        CollisionTriMesh {
+            vertices,
+            indices: vec![0, 1, 8, 1, 2, 8, 2, 3, 8, 3, 0, 8],
+        }
+    }
+
     fn uv_sphere(lat: usize, lon: usize) -> CollisionTriMesh {
         let mut vertices = vec![[0.0, 0.0, 1.0]];
         for la in 1..lat {
@@ -371,6 +515,32 @@ mod tests {
     }
 
     #[test]
+    fn thin_terrain_uses_closed_outline_slab() {
+        let out = convex_hull_collision_mesh(&thin_terrain_box(), &opts(Some(24))).unwrap();
+        assert_eq!(
+            out.vertices.len(),
+            8,
+            "4 outline vertices extruded to 8 slab vertices"
+        );
+        assert_eq!(
+            out.triangle_count(),
+            12,
+            "rectangular outline slab is a closed box"
+        );
+
+        let (min, max) = out.compute_aabb().unwrap();
+        assert!((min[1] - 0.0).abs() < 1e-9, "keeps the low thin-axis bound");
+        assert!(
+            (max[1] - 10.0).abs() < 1e-9,
+            "keeps the high thin-axis bound"
+        );
+        assert_eq!(min[0], -100.0);
+        assert_eq!(max[0], 100.0);
+        assert_eq!(min[2], -50.0);
+        assert_eq!(max[2], 50.0);
+    }
+
+    #[test]
     fn planar_disc_collapses_to_budget_fan() {
         let out = convex_hull_collision_mesh(&flat_disc(64), &opts(Some(6))).unwrap();
         assert_eq!(out.triangle_count(), 6, "budget 6 -> 8-gon fan = 6 tris");
@@ -390,8 +560,14 @@ mod tests {
             full.triangle_count(),
             budgeted.triangle_count()
         );
-        assert!(budgeted.triangle_count() <= 48, "stays near the 24-face budget");
-        assert!(budgeted.triangle_count() >= 4, "does not collapse to nothing");
+        assert!(
+            budgeted.triangle_count() <= 48,
+            "stays near the 24-face budget"
+        );
+        assert!(
+            budgeted.triangle_count() >= 4,
+            "does not collapse to nothing"
+        );
     }
 
     #[test]
