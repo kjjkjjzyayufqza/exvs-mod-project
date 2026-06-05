@@ -389,9 +389,10 @@ export function sceneApplyReplacementHktBytes(
   importId: string,
   hktBytes: number[],
   displayName: string,
+  hktXml?: string,
 ): Promise<boolean> {
   return invoke<boolean>("scene_apply_replacement_hkt_bytes", {
-    options: { sessionId, importId, hktBytes, displayName },
+    options: { sessionId, importId, hktBytes, displayName, hktXml },
   });
 }
 

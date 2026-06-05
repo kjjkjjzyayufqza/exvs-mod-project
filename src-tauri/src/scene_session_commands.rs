@@ -2345,6 +2345,8 @@ pub struct ApplyReplacementHktBytesOptions {
     pub import_id: String,
     pub hkt_bytes: Vec<u8>,
     pub display_name: String,
+    #[serde(default)]
+    pub hkt_xml: Option<String>,
 }
 
 /// Apply pre-generated HKT bytes onto a session target (no mesh/Havok re-generation).
@@ -2359,12 +2361,35 @@ pub async fn scene_apply_replacement_hkt_bytes(
         options.import_id,
         options.hkt_bytes.len()
     );
-    let hkt_xml = hkt_xml_from_bytes(&options.hkt_bytes).await;
+    let hkt_xml = match options.hkt_xml {
+        Some(xml) if !xml.trim().is_empty() => xml,
+        _ => hkt_xml_from_bytes(&options.hkt_bytes).await,
+    };
     let import_id = options.import_id.clone();
     let display_name = options.display_name.clone();
-    state.with_session_mut(&options.session_id, |s| {
-        apply_replacement_hkt_to_session(s, &import_id, options.hkt_bytes, hkt_xml, display_name)
+    let disk_path = state.with_session(&options.session_id, |s| {
+        Ok(s.resolve_hkt_disk_path(&import_id))
     })?;
+
+    state.with_session_mut(&options.session_id, |s| {
+        apply_replacement_hkt_to_session(
+            s,
+            &import_id,
+            options.hkt_bytes.clone(),
+            hkt_xml,
+            display_name,
+        )
+    })?;
+
+    if let Some(disk_path) = disk_path {
+        write_hkt_bytes_to_stage_disk(&disk_path, &options.hkt_bytes)?;
+        eprintln!(
+            "[scene_apply_replacement_hkt_bytes] wrote {} bytes to {}",
+            options.hkt_bytes.len(),
+            disk_path.display()
+        );
+    }
+
     Ok(true)
 }
 

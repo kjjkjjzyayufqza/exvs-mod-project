@@ -443,3 +443,53 @@ Temporary diagnostic files deleted:
 - `D:\output\minecraft\test2_authored_collision_prexml_diagnostic.obj`
 - `D:\output\minecraft\test2_authored_collision_py_diagnostic.obj`
 - `D:\output\minecraft\original_0x7A57BA57_map_hit_diagnostic.xml`
+
+## Generate HKT from New Model cache apply flow (2026-06-06)
+
+User requirement: after clicking `Preview`, clicking `Generate & Replace HKT`
+should apply/generate from the HKT already produced for preview, not rerun the
+source model -> HKT conversion.
+
+Findings:
+
+- `GenerateHktFromModelDialog` already had `cachedHkt`, but Preview only filled
+  it when the selected review stage was `decodedHkt`.
+- The default stage is `hktInput`, so the common path still did a mesh-only
+  preview and then `Generate & Replace HKT` called
+  `scene_replace_hkt_from_dae_path`, regenerating from the source path.
+- The existing `scene_apply_replacement_hkt_bytes` backend command applied bytes
+  into session memory, but did not mirror `scene_replace_hkt_from_dae_path` by
+  writing the target `map_hit.hkt` back to an open stage folder.
+
+Changes:
+
+- Preview now always runs `scene_generate_replacement_hkt_from_dae_path` and
+  caches HKT bytes/XML for the current path + config key. The selected review
+  stage only controls which mesh is shown.
+- Changing the review stage clears only the displayed mesh/error state, not the
+  HKT cache, because stage selection does not affect generated HKT bytes.
+- `Generate & Replace HKT` is disabled until the cache is valid. Applying uses
+  `scene_apply_replacement_hkt_bytes` with the cached bytes/XML, so it no longer
+  calls the source-path generation command.
+- `scene_apply_replacement_hkt_bytes` now accepts optional `hktXml`; when present,
+  it reuses the preview XML and skips HKT->XML reconversion. If missing/empty, it
+  falls back to decoding from bytes.
+- `scene_apply_replacement_hkt_bytes` now resolves the target disk path and writes
+  the cached HKT bytes to the live stage folder, matching the old regenerate path.
+
+Verification commands:
+
+```powershell
+cargo test --manifest-path src-tauri\Cargo.toml --lib scene_apply_replacement_hkt_bytes -- --nocapture
+cargo test --manifest-path src-tauri\Cargo.toml --lib scene_session_commands::tests::hkt_ -- --nocapture
+pnpm vitest run src/page/SceneEdit/components/havok/generateHktFromModelCache.test.ts src/page/SceneEdit/utils/hktPreviewGeometry.test.ts
+pnpm tsc --noEmit
+```
+
+Results:
+
+- Backend apply-bytes command compiled.
+- HKT-related scene session tests: 6 passed.
+- Frontend focused vitest: 2 files passed, 6 tests passed.
+- `pnpm tsc --noEmit` still fails only on unrelated existing test mock type
+  errors in `sceneDaeSessionImport.test.ts` and `sceneModelReplacePreview.test.ts`.

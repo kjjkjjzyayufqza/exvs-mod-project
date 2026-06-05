@@ -37,10 +37,10 @@ import {
 } from "../../utils/hktCollisionTransformUtils";
 import { HktCollisionTransformFields } from "./HktCollisionTransformFields";
 import {
+  sceneApplyReplacementHktBytes,
   sceneExportHktCollisionReviewObjPath,
   sceneGenerateReplacementHktFromDaePath,
   scenePreviewHktCollisionMeshPath,
-  sceneReplaceHktFromDaePath,
   type HktCollisionDisplayStage,
   type HktCollisionMeshGeometry,
   type HktCollisionPreviewStage,
@@ -212,9 +212,11 @@ export function GenerateHktFromModelDialog({
   const handlePreviewStageChange = useCallback(
     (stage: HktCollisionDisplayStage) => {
       setPreviewStage(stage);
-      invalidatePreviewArtifacts();
+      setMeshPreview(null);
+      setPreviewError(null);
+      setPreviewUsesPreHavokMesh(false);
     },
-    [invalidatePreviewArtifacts],
+    [],
   );
 
   const runPreview = useCallback(async () => {
@@ -222,17 +224,26 @@ export function GenerateHktFromModelDialog({
     const configKey = buildHktFromModelConfigKey(importConfig, simplify);
     const needsDecodedHkt = previewStage === "decodedHkt";
     setPreviewLoading(true);
-    setHktGenerating(needsDecodedHkt);
+    setHktGenerating(true);
     setPreviewError(null);
     setMeshPreview(null);
     setCachedHkt(null);
     try {
-      if (needsDecodedHkt) {
-        const [meshStats, hktPayload] = await Promise.all([
-          scenePreviewHktCollisionMeshPath(sourcePath, sourceName, importConfig, "hktInput"),
-          sceneGenerateReplacementHktFromDaePath(sourcePath, sourceName, importConfig),
-        ]);
+      const meshStage = needsDecodedHkt ? "hktInput" : (previewStage as HktCollisionPreviewStage);
+      const [meshStats, hktPayload] = await Promise.all([
+        scenePreviewHktCollisionMeshPath(sourcePath, sourceName, importConfig, meshStage),
+        sceneGenerateReplacementHktFromDaePath(sourcePath, sourceName, importConfig),
+      ]);
 
+      setCachedHkt({
+        sourcePath,
+        configKey,
+        hktBytes: hktPayload.hktBytes,
+        hktXml: hktPayload.hktXml,
+        triangleCount: hktPayload.triangleCount,
+      });
+
+      if (needsDecodedHkt) {
         const { geometry: previewGeometry, usesPreHavokMesh } =
           resolveHktFromModelPreviewGeometry(meshStats, hktPayload);
 
@@ -242,20 +253,7 @@ export function GenerateHktFromModelDialog({
             ? { ...previewGeometry, stage: "hktInput" }
             : { ...previewGeometry, stage: "decodedHkt" },
         );
-        setCachedHkt({
-          sourcePath,
-          configKey,
-          hktBytes: hktPayload.hktBytes,
-          triangleCount: hktPayload.triangleCount,
-        });
       } else {
-        const meshStage = previewStage as HktCollisionPreviewStage;
-        const meshStats = await scenePreviewHktCollisionMeshPath(
-          sourcePath,
-          sourceName,
-          importConfig,
-          meshStage,
-        );
         setPreviewUsesPreHavokMesh(false);
         setMeshPreview(meshStats);
       }
@@ -322,6 +320,7 @@ export function GenerateHktFromModelDialog({
 
   const canApply =
     Boolean(sessionId && targetImportId && sourcePath && sourceName) &&
+    hasValidCachedHkt &&
     !previewLoading &&
     !hktGenerating &&
     !applying &&
@@ -329,20 +328,25 @@ export function GenerateHktFromModelDialog({
 
   const handleApply = async () => {
     if (!sessionId || !targetImportId || !sourcePath || !sourceName) return;
+    const hktToApply = cachedHkt;
+    if (!isCachedHktFromModelValid(hktToApply, sourcePath, previewConfigKey)) {
+      setPreviewError("Preview the current model/settings before applying.");
+      return;
+    }
     setApplying(true);
     try {
-      toast.loading(`Generating HKT from ${sourceName}...`, { id: "hkt-from-model" });
-      await sceneReplaceHktFromDaePath(
+      toast.loading(`Applying previewed HKT from ${sourceName}...`, { id: "hkt-from-model" });
+      await sceneApplyReplacementHktBytes(
         sessionId,
         targetImportId,
-        sourcePath,
+        hktToApply.hktBytes,
         sourceName,
-        importConfig,
+        hktToApply.hktXml,
       );
       await onReplaced(targetImportId);
       toast.success(`HKT replaced for ${targetName}`, {
         id: "hkt-from-model",
-        description: `Rebuilt collision from ${sourceName}`,
+        description: `Applied previewed collision from ${sourceName}`,
       });
       onOpenChange(false);
     } catch (err) {
@@ -355,7 +359,11 @@ export function GenerateHktFromModelDialog({
     }
   };
 
-  const applyButtonLabel = applying ? "Generating HKT..." : "Generate & Replace HKT";
+  const applyButtonLabel = applying
+    ? "Applying HKT..."
+    : hasValidCachedHkt
+      ? "Generate & Replace HKT"
+      : "Preview First";
 
   return (
     <Dialog
@@ -371,8 +379,8 @@ export function GenerateHktFromModelDialog({
           <DialogDescription className="text-xs">
             Read a fresh DAE or FBX, rebuild a Havok collision shape, and replace the collision for{" "}
             <span className="font-medium text-foreground">{targetName}</span>.
-            Preview is optional. Generate & Replace runs on the backend and writes map_hit.hkt
-            directly into the open stage folder when one is loaded.
+            Preview generates the HKT once. Generate & Replace applies that previewed HKT from
+            memory and writes map_hit.hkt directly into the open stage folder when one is loaded.
           </DialogDescription>
         </DialogHeader>
 
@@ -498,7 +506,7 @@ export function GenerateHktFromModelDialog({
                   {formatTriangleCount(meshPreview.triangleCount)} triangles, ~
                   {formatTriangleCount(meshPreview.triangleCount * 2)} primitive keys).
                   {hasValidCachedHkt && !previewUsesPreHavokMesh
-                    ? " Decoded HKT was generated for preview only; Replace rebuilds on the backend."
+                    ? " HKT is cached in memory; Replace will apply this exact preview."
                     : ""}
                 </p>
               ) : meshPreview && (previewLoading || hktGenerating || objExporting) ? (
@@ -538,9 +546,7 @@ export function GenerateHktFromModelDialog({
                       <Eye className="mr-2 h-4 w-4" />
                     )}
                     {previewLoading
-                      ? previewStage === "decodedHkt"
-                        ? "Generating HKT..."
-                        : "Previewing..."
+                      ? "Generating HKT..."
                       : "Preview"}
                   </Button>
                 ) : null}
@@ -613,7 +619,7 @@ export function GenerateHktFromModelDialog({
         <DialogFooter className="shrink-0 flex-wrap items-center gap-2 border-t border-border/60 px-5 py-3 sm:justify-between">
           <p className="flex min-w-0 flex-1 basis-full items-start gap-1.5 text-pretty text-[11px] leading-snug text-muted-foreground break-words sm:basis-auto">
             <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>Preview and OBJ export are review-only. Generate & Replace rebuilds from source.</span>
+            <span>Preview generates and caches the HKT. Generate & Replace applies the cached bytes.</span>
           </p>
           <div className="flex shrink-0 items-center gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={applying}>

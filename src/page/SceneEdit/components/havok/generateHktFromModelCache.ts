@@ -6,6 +6,7 @@ export interface CachedHktFromModelGeneration {
   sourcePath: string;
   configKey: string;
   hktBytes: number[];
+  hktXml: string;
   triangleCount: number;
 }
 

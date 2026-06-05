@@ -21,6 +21,7 @@ describe("generateHktFromModelCache", () => {
       sourcePath: "E:/models/stage.dae",
       configKey,
       hktBytes: [1, 2, 3],
+      hktXml: "<hkpackfile/>",
       triangleCount: 42,
     };
     expect(isCachedHktFromModelValid(cached, "E:/models/stage.dae", configKey)).toBe(true);
@@ -31,6 +32,7 @@ describe("generateHktFromModelCache", () => {
       sourcePath: "E:/models/stage.dae",
       configKey: "old-key",
       hktBytes: [1, 2, 3],
+      hktXml: "<hkpackfile/>",
       triangleCount: 42,
     };
     const nextKey = buildHktFromModelConfigKey(importConfig, hktSimplifyConfigFromPreset("high"));

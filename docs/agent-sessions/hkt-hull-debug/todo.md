@@ -58,6 +58,9 @@ user as looking like a fuzzy ball.
   negative and HCT rewrote them to different positive values during HKT roundtrip.
 - Added a `Real Quads` / `quadMergeEnabled` option so authored quads can be
   disabled for triangle-only HKT diagnostics without changing the preset.
+- Updated `Generate HKT from New Model` so Preview is the generation step and
+  `Generate & Replace HKT` applies the cached in-memory HKT instead of rebuilding
+  from the source path.
 - Latest review artifact kept for user inspection:
   `D:\output\minecraft\test2_authored_collision_u64_review.obj`.
 - Remaining known gap versus game-original files: `primitiveDataRuns` grouping
