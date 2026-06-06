@@ -1,12 +1,17 @@
+import { parseStagePackFolderName } from "@/lib/stagePackNaming";
+
 export function normalizePackFolderName(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) return "";
 
-  const matched = /^0x([0-9a-fA-F]{8})$/i.exec(trimmed);
-  if (!matched) {
+  const parsed = parseStagePackFolderName(trimmed);
+  if (!parsed) {
     return trimmed;
   }
 
-  return `0x${matched[1].toUpperCase()}`;
-}
+  if (!parsed.labelSuffix && /^0x/i.test(parsed.folderName)) {
+    return parsed.assetHashHex;
+  }
 
+  return parsed.folderName;
+}

@@ -5,6 +5,24 @@ import { Button } from "@/components/ui/button";
 import { ExvsStructureViewer, type ExvsStructureData } from "./ExvsStructureViewer";
 import { resolveStagePackStructureTarget } from "../utils/sceneStageStructure";
 
+async function readFirstExistingStructureJson(
+  candidates: readonly string[],
+): Promise<string> {
+  let lastError: unknown;
+  for (const structurePath of candidates) {
+    try {
+      return await readTextFile(structurePath);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw new Error(
+    `Stage pack structure JSON not found. Tried: ${candidates.join(", ")}`,
+    { cause: lastError },
+  );
+}
+
 interface StructureInspectorPanelProps {
   stageRoot: string | null;
 }
@@ -20,7 +38,7 @@ export function StructureInspectorPanel({ stageRoot }: StructureInspectorPanelPr
     setError(null);
     try {
       const target = resolveStagePackStructureTarget(stageRoot);
-      const json = await readTextFile(target.structurePath);
+      const json = await readFirstExistingStructureJson(target.structurePathCandidates);
       setData(JSON.parse(json) as ExvsStructureData);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

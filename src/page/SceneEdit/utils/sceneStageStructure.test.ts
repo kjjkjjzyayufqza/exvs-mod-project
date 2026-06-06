@@ -6,18 +6,40 @@ import {
 } from "./sceneStageStructure";
 
 describe("sceneStageStructure", () => {
-  it("resolves a hash pack root and sibling structure json from a nested stage root", () => {
+  it("resolves a stage pack root and sibling structure json from a nested stage root", () => {
     const target = resolveStagePackStructureTarget("E:/XB/unpack/com/test/16F73C97/0/0");
 
     expect(target.packRoot).toBe("E:/XB/unpack/com/test/16F73C97");
-    expect(target.structurePath).toBe("E:/XB/unpack/com/test/0x16F73C97_structure.json");
+    expect(target.structurePath).toBe("E:/XB/unpack/com/test/16F73C97_structure.json");
+    expect(target.structurePathCandidates).toEqual([
+      "E:/XB/unpack/com/test/16F73C97_structure.json",
+      "E:/XB/unpack/com/test/0x16F73C97_structure.json",
+    ]);
     expect(target.packFolderName).toBe("16F73C97");
     expect(target.hashHex).toBe("0x16F73C97");
   });
 
-  it("throws when the stage root is not inside a hash-named pack folder", () => {
+  it("resolves stage pack roots when the folder name includes a descriptive suffix", () => {
+    const target = resolveStagePackStructureTarget(
+      "E:/XB/解包/com/test/0x16F73C97_Minecraft_world_1/0/0",
+    );
+
+    expect(target.packRoot).toBe("E:/XB/解包/com/test/0x16F73C97_Minecraft_world_1");
+    expect(target.structurePath).toBe(
+      "E:/XB/解包/com/test/0x16F73C97_Minecraft_world_1_structure.json",
+    );
+    expect(target.structurePathCandidates).toEqual([
+      "E:/XB/解包/com/test/0x16F73C97_Minecraft_world_1_structure.json",
+      "E:/XB/解包/com/test/0x16F73C97_structure.json",
+      "E:/XB/解包/com/test/16F73C97_structure.json",
+    ]);
+    expect(target.packFolderName).toBe("0x16F73C97_Minecraft_world_1");
+    expect(target.hashHex).toBe("0x16F73C97");
+  });
+
+  it("throws when the stage root is not inside a stage pack folder", () => {
     expect(() => resolveStagePackStructureTarget("E:/stages/custom/base")).toThrow(
-      "Unable to resolve a hash-named stage pack root",
+      "Unable to resolve stage pack root",
     );
   });
 

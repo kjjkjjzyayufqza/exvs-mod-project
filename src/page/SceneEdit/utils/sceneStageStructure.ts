@@ -1,3 +1,8 @@
+import {
+  buildStagePackStructureJsonCandidates,
+  parseStagePackFolderName,
+} from "@/lib/stagePackNaming";
+
 export type StagePackFileEntry = {
   relativePath: string;
   fileType: string;
@@ -14,6 +19,7 @@ type StageStructureJson = {
 export type StagePackStructureTarget = {
   packRoot: string;
   structurePath: string;
+  structurePathCandidates: string[];
   packFolderName: string;
   hashHex: string;
 };
@@ -62,28 +68,40 @@ function splitPath(path: string): string[] {
   return normalizeSlashes(path).split("/").filter(Boolean);
 }
 
-function isHashFolderName(name: string): boolean {
-  return /^(?:0x)?[0-9a-fA-F]{8}$/.test(name);
-}
-
 export function resolveStagePackStructureTarget(stageRoot: string): StagePackStructureTarget {
   const parts = splitPath(stageRoot);
-  const hashIndex = [...parts].reverse().findIndex(isHashFolderName);
-  if (hashIndex < 0) {
-    throw new Error(`Unable to resolve a hash-named stage pack root from '${stageRoot}'`);
+  let packIndex = -1;
+  let parsed: ReturnType<typeof parseStagePackFolderName> = null;
+
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const candidate = parseStagePackFolderName(parts[index]);
+    if (candidate) {
+      packIndex = index;
+      parsed = candidate;
+      break;
+    }
   }
 
-  const packIndex = parts.length - 1 - hashIndex;
-  const packFolderName = parts[packIndex];
-  const hashBody = packFolderName.replace(/^0x/i, "").toUpperCase();
-  const hashHex = `0x${hashBody}`;
+  if (packIndex < 0 || !parsed) {
+    throw new Error(`Unable to resolve stage pack root from '${stageRoot}'`);
+  }
+
+  const packFolderName = parsed.folderName;
+  const hashHex = parsed.assetHashHex;
   const parentParts = parts.slice(0, packIndex);
   const packRoot = joinPath(...parts.slice(0, packIndex + 1));
-  const structurePath = joinPath(...parentParts, `${hashHex}_structure.json`);
+  const parentDir = joinPath(...parentParts);
+  const structurePathCandidates = buildStagePackStructureJsonCandidates(
+    parentDir,
+    packFolderName,
+    hashHex,
+  );
+  const structurePath = structurePathCandidates[0];
 
   return {
     packRoot,
     structurePath,
+    structurePathCandidates,
     packFolderName,
     hashHex,
   };

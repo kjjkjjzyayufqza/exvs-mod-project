@@ -44,7 +44,11 @@ vi.mock("./sceneDaeSsbhSave", () => ({
 vi.mock("./sceneStageStructure", () => ({
   resolveStagePackStructureTarget: vi.fn(() => ({
     packRoot: "E:/stage/16F73C97",
-    structurePath: "E:/stage/0x16F73C97_structure.json",
+    structurePath: "E:/stage/16F73C97_structure.json",
+    structurePathCandidates: [
+      "E:/stage/16F73C97_structure.json",
+      "E:/stage/0x16F73C97_structure.json",
+    ],
     packFolderName: "16F73C97",
     hashHex: "0x16F73C97",
   })),
