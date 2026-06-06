@@ -13,6 +13,8 @@ function makeEntry(overrides: Partial<TextureManagerEntry> = {}): TextureManager
     id: `e_${Math.random().toString(36).slice(2)}`,
     filename: "diffuse.nutexb",
     status: "existing",
+    scope: "model",
+    infoCategory: null,
     format: "BC7_UNORM",
     width: 1024,
     height: 1024,
@@ -55,6 +57,21 @@ describe("buildExistingTextureKeys", () => {
     );
     expect(keys.has("diffuse")).toBe(true);
     expect(keys.has("stage_diffuse_albedo")).toBe(true);
+  });
+
+  it("does not index info folder textures for model texture additions", async () => {
+    const entries = [
+      makeEntry({
+        filename: "fog_lut.nutexb",
+        nutexbPath: "D:/stage/info/fog/fog_lut.nutexb",
+        scope: "info",
+        infoCategory: "fog",
+      }),
+    ];
+    const keys = await buildExistingTextureKeys(entries, readerFrom({
+      "D:/stage/info/fog/fog_lut.nutexb": "fog_lut",
+    }));
+    expect(keys.has("fog_lut")).toBe(false);
   });
 });
 

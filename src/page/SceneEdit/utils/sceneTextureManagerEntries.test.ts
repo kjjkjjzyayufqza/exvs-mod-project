@@ -80,29 +80,74 @@ describe("sceneTextureManagerEntries", () => {
       ]);
       expect(entries[0]?.referencedBy).toEqual(["base"]);
       expect(entries[1]?.referencedBy).toEqual([]);
+      expect(entries[0]?.scope).toBe("model");
+      expect(entries[1]?.scope).toBe("model");
+    });
+
+    it("keeps info textures separate from model textures", () => {
+      const entries = collectSceneTextureManagerEntries(null, [], [], [
+        {
+          path: "E:/stage/info/fog/fog_lut.nutexb",
+          category: "fog",
+        },
+        {
+          path: "E:/stage/info/light/light_map.nutexb",
+          category: "light",
+        },
+      ]);
+
+      expect(entries.map((entry: TextureManagerEntry) => ({
+        filename: entry.filename,
+        scope: entry.scope,
+        infoCategory: entry.infoCategory,
+      }))).toEqual([
+        { filename: "fog_lut.nutexb", scope: "info", infoCategory: "fog" },
+        { filename: "light_map.nutexb", scope: "info", infoCategory: "light" },
+      ]);
     });
   });
 
   describe("listStageTextureFilePaths", () => {
     it("skips virtual memory stage roots", async () => {
-      await expect(listStageTextureFilePaths("memory://stage")).resolves.toEqual([]);
+      await expect(listStageTextureFilePaths("memory://stage")).resolves.toEqual({
+        modelTexturePaths: [],
+        infoTexturePaths: [],
+      });
       expect(mockExists).not.toHaveBeenCalled();
       expect(mockReadDir).not.toHaveBeenCalled();
     });
 
-    it("returns every nutexb file under the shared textures folder", async () => {
-      mockExists.mockResolvedValueOnce(true);
-      mockReadDir.mockResolvedValueOnce([
+    it("returns nutexb files under shared textures and info folders", async () => {
+      mockExists
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false);
+      mockReadDir
+        .mockResolvedValueOnce([
         makeDirEntry("stage_wall_alb.nutexb"),
         makeDirEntry("unused_clouds.nutexb"),
         makeDirEntry("preview.png"),
-        makeDirEntry("nested", true),
-      ] as Awaited<ReturnType<typeof readDir>>);
+        ] as Awaited<ReturnType<typeof readDir>>)
+        .mockResolvedValueOnce([
+          makeDirEntry("light_map.nutexb"),
+          makeDirEntry("readme.txt"),
+        ] as Awaited<ReturnType<typeof readDir>>)
+        .mockResolvedValueOnce([
+          makeDirEntry("bloom_lut.nutexb"),
+        ] as Awaited<ReturnType<typeof readDir>>);
 
-      await expect(listStageTextureFilePaths("E:/stage")).resolves.toEqual([
-        "E:/stage/textures/stage_wall_alb.nutexb",
-        "E:/stage/textures/unused_clouds.nutexb",
-      ]);
+      await expect(listStageTextureFilePaths("E:/stage")).resolves.toEqual({
+        modelTexturePaths: [
+          "E:/stage/textures/stage_wall_alb.nutexb",
+          "E:/stage/textures/unused_clouds.nutexb",
+        ],
+        infoTexturePaths: [
+          { path: "E:/stage/info/light/light_map.nutexb", category: "light" },
+          { path: "E:/stage/info/post_effect/bloom_lut.nutexb", category: "post_effect" },
+        ],
+      });
     });
   });
 });

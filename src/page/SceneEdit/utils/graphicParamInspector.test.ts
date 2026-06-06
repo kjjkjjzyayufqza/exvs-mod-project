@@ -42,4 +42,14 @@ describe("graphicParamInspector", () => {
     expect(total).toBe(1);
     expect(post?.length ?? misc?.length).toBe(1);
   });
+
+  it("keeps pfx keys in post process instead of misc", () => {
+    const grouped = groupIndexedGraphicParams(
+      [{ key: "pfx_bloom_bright_threshold", value: "1.25" }],
+      "",
+    );
+
+    expect(grouped.get("postprocess")).toHaveLength(1);
+    expect(grouped.get("misc")).toBeUndefined();
+  });
 });

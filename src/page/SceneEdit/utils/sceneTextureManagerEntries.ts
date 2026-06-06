@@ -1,18 +1,40 @@
 import { exists, readDir } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
 import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
-import type { TextureManagerEntry } from "../store/sceneTextureManagerStore";
+import type {
+  InfoTextureCategory,
+  TextureEntryScope,
+  TextureManagerEntry,
+} from "../store/sceneTextureManagerStore";
+
+const INFO_TEXTURE_CATEGORIES: InfoTextureCategory[] = [
+  "fog",
+  "light",
+  "post_effect",
+];
+
+export interface StageTextureFilePathInventory {
+  modelTexturePaths: string[];
+  infoTexturePaths: Array<{
+    path: string;
+    category: InfoTextureCategory;
+  }>;
+}
 
 function createExistingTextureEntry(
   filename: string,
   nutexbPath: string,
   referencedBy: string[],
+  scope: TextureEntryScope = "model",
+  infoCategory: InfoTextureCategory | null = null,
 ): TextureManagerEntry {
-  const key = filename.toLowerCase();
+  const key = `${scope}_${infoCategory ?? "shared"}_${nutexbPath.toLowerCase()}`;
   return {
     id: `existing_${key}`,
     filename,
     status: "existing",
+    scope,
+    infoCategory,
     format: "unknown",
     width: 0,
     height: 0,
@@ -45,7 +67,7 @@ function processReferencedBundleTextures(
 
   for (const path of bundle.resolvedNutexbPaths) {
     const filename = pathToName.get(path) ?? filenameFromPath(path);
-    const key = filename.toLowerCase();
+    const key = `model:${filename.toLowerCase()}`;
     const existing = seen.get(key);
     if (existing) {
       if (!existing.referencedBy.includes(objectLabel)) {
@@ -61,6 +83,7 @@ export function collectSceneTextureManagerEntries(
   baseModel: SsbhModelPreviewBundle | null,
   subModels: Array<{ folderName: string; bundle: SsbhModelPreviewBundle }>,
   sharedTexturePaths: string[] = [],
+  infoTexturePaths: StageTextureFilePathInventory["infoTexturePaths"] = [],
 ): TextureManagerEntry[] {
   const seen = new Map<string, TextureManagerEntry>();
 
@@ -73,34 +96,74 @@ export function collectSceneTextureManagerEntries(
 
   for (const path of sharedTexturePaths) {
     const filename = filenameFromPath(path);
-    const key = filename.toLowerCase();
+    const key = `model:${filename.toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.set(key, createExistingTextureEntry(filename, path, []));
+  }
+
+  for (const { path, category } of infoTexturePaths) {
+    const filename = filenameFromPath(path);
+    const key = `info:${category}:${path.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.set(key, createExistingTextureEntry(filename, path, [], "info", category));
   }
 
   return Array.from(seen.values());
 }
 
-export async function listStageTextureFilePaths(stageRoot: string): Promise<string[]> {
-  if (/^[a-z]+:\/\//i.test(stageRoot)) {
+async function listNutexbFilesInDir(dir: string): Promise<string[]> {
+  if (!(await exists(dir))) {
     return [];
+  }
+
+  const entries = await readDir(dir);
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const childPath = await join(dir, entry.name);
+    if (entry.isDirectory) {
+      files.push(...(await listNutexbFilesInDir(childPath)));
+    } else if (/\.nutexb$/i.test(entry.name)) {
+      files.push(childPath);
+    }
+  }
+
+  return files;
+}
+
+export async function listStageTextureFilePaths(
+  stageRoot: string,
+): Promise<StageTextureFilePathInventory> {
+  if (/^[a-z]+:\/\//i.test(stageRoot)) {
+    return { modelTexturePaths: [], infoTexturePaths: [] };
   }
 
   const texturesDir = await join(stageRoot, "textures");
-  if (!(await exists(texturesDir))) {
-    return [];
+  const modelTexturePaths = await listNutexbFilesInDir(texturesDir);
+  const infoTexturePaths: StageTextureFilePathInventory["infoTexturePaths"] = [];
+
+  for (const category of INFO_TEXTURE_CATEGORIES) {
+    const infoDir = await join(stageRoot, "info", category);
+    const paths = await listNutexbFilesInDir(infoDir);
+    for (const path of paths) {
+      infoTexturePaths.push({ path, category });
+    }
   }
 
-  const entries = await readDir(texturesDir);
-  const nutexbPaths = await Promise.all(
-    entries
-      .filter((entry) => !entry.isDirectory && /\.nutexb$/i.test(entry.name))
-      .map((entry) => join(texturesDir, entry.name)),
-  );
-
-  return nutexbPaths.sort((a, b) =>
+  modelTexturePaths.sort((a, b) =>
     filenameFromPath(a).localeCompare(filenameFromPath(b), undefined, {
       sensitivity: "base",
     }),
   );
+  infoTexturePaths.sort((a, b) => {
+    const categoryOrder =
+      INFO_TEXTURE_CATEGORIES.indexOf(a.category) -
+      INFO_TEXTURE_CATEGORIES.indexOf(b.category);
+    if (categoryOrder !== 0) return categoryOrder;
+    return filenameFromPath(a.path).localeCompare(filenameFromPath(b.path), undefined, {
+      sensitivity: "base",
+    });
+  });
+
+  return { modelTexturePaths, infoTexturePaths };
 }

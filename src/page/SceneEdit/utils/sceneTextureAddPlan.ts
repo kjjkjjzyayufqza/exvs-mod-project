@@ -102,6 +102,7 @@ export async function buildExistingTextureKeys(
   const readable: TextureManagerEntry[] = [];
 
   for (const entry of entries) {
+    if (entry.scope !== "model") continue;
     const fileKey = normalizeTextureNameKey(entry.filename);
     if (fileKey && !keys.has(fileKey)) keys.set(fileKey, entry.filename);
     if (entry.nutexbPath && isNutexbName(entry.filename)) readable.push(entry);

@@ -48,16 +48,17 @@ function normalizeTextureBasename(value: string): string {
 }
 
 function buildOrderedTextureOptions(
-  entries: Array<{ id: string; filename: string; referencedBy?: string[] }>,
+  entries: Array<{ id: string; filename: string; referencedBy?: string[]; scope?: string }>,
   recentEntryIds: string[],
   currentValue: string,
 ): string[] {
+  const modelEntries = entries.filter((entry) => entry.scope !== "info");
   const entryNameById = new Map(
-    entries.map((entry) => [entry.id, stripNutexbExtension(entry.filename)]),
+    modelEntries.map((entry) => [entry.id, stripNutexbExtension(entry.filename)]),
   );
   const normalizedCurrentValue = normalizeTextureBasename(currentValue).toLowerCase();
   const currentEntryName =
-    entries.find(
+    modelEntries.find(
       (entry) =>
         stripNutexbExtension(entry.filename).toLowerCase() === normalizedCurrentValue,
     )?.filename ?? null;
@@ -77,11 +78,11 @@ function buildOrderedTextureOptions(
   for (const id of recentEntryIds) {
     pushOption(entryNameById.get(id));
   }
-  for (const entry of entries) {
+  for (const entry of modelEntries) {
     if ((entry.referencedBy?.length ?? 0) !== 0) continue;
     pushOption(stripNutexbExtension(entry.filename));
   }
-  for (const entry of entries) {
+  for (const entry of modelEntries) {
     if ((entry.referencedBy?.length ?? 0) === 0) continue;
     pushOption(stripNutexbExtension(entry.filename));
   }

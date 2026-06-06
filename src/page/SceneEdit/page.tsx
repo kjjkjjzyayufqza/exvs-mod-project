@@ -141,6 +141,7 @@ import {
 import {
   collectSceneTextureManagerEntries,
   listStageTextureFilePaths,
+  type StageTextureFilePathInventory,
 } from "./utils/sceneTextureManagerEntries";
 import { useConfigStore } from "@/store/configStore";
 import {
@@ -297,6 +298,11 @@ function formatImportBytes(bytes: number): string {
   }
   return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
+
+const EMPTY_STAGE_TEXTURE_FILE_PATHS: StageTextureFilePathInventory = {
+  modelTexturePaths: [],
+  infoTexturePaths: [],
+};
 
 function createStaticMeshImportSteps(fileName: string, directToDisk: boolean): ImportStep[] {
   const steps: ImportStep[] = [
@@ -1191,16 +1197,17 @@ export default function SceneEdit() {
       // then carry their geometry into viewport state.
       await hydrateStageBundleGeometry(bundle.baseModel, bundle.subModels);
 
-      let sharedTexturePaths: string[] = [];
+      let stageTexturePaths = EMPTY_STAGE_TEXTURE_FILE_PATHS;
       try {
-        sharedTexturePaths = await listStageTextureFilePaths(path);
+        stageTexturePaths = await listStageTextureFilePaths(path);
       } catch (error) {
-        console.warn("[SceneEdit] Failed to list shared stage textures:", error);
+        console.warn("[SceneEdit] Failed to list stage textures:", error);
       }
       const texEntries = collectSceneTextureManagerEntries(
         bundle.baseModel,
         bundle.subModels,
-        sharedTexturePaths,
+        stageTexturePaths.modelTexturePaths,
+        stageTexturePaths.infoTexturePaths,
       );
 
       startTransition(() => {
@@ -1254,7 +1261,7 @@ export default function SceneEdit() {
         setSelectedNodeIdRaw(null);
         setSelectedPlacementIdxRaw(null);
         useSceneEditorStore.getState().deselectAll();
-        // Show both referenced textures and extra files already present in textures/.
+        // Show referenced model textures, extra shared textures, and separate info textures.
         useSceneTextureManagerStore.getState().setEntries(texEntries);
       });
 
@@ -1275,11 +1282,11 @@ export default function SceneEdit() {
 
   const applySkeleton = useCallback(
     async (path: string, skeleton: StageSkeleton) => {
-      let sharedTexturePaths: string[] = [];
+      let stageTexturePaths = EMPTY_STAGE_TEXTURE_FILE_PATHS;
       try {
-        sharedTexturePaths = await listStageTextureFilePaths(path);
+        stageTexturePaths = await listStageTextureFilePaths(path);
       } catch (error) {
-        console.warn("[SceneEdit] Failed to list shared stage textures:", error);
+        console.warn("[SceneEdit] Failed to list stage textures:", error);
       }
 
       startTransition(() => {
@@ -1339,7 +1346,12 @@ export default function SceneEdit() {
         setSelectedPlacementIdxRaw(null);
         useSceneEditorStore.getState().deselectAll();
         useSceneTextureManagerStore.getState().setEntries(
-          collectSceneTextureManagerEntries(null, [], sharedTexturePaths),
+          collectSceneTextureManagerEntries(
+            null,
+            [],
+            stageTexturePaths.modelTexturePaths,
+            stageTexturePaths.infoTexturePaths,
+          ),
         );
       });
 
@@ -1439,11 +1451,11 @@ export default function SceneEdit() {
         totalModels > 0 ? { loaded: 0, total: totalModels } : null,
       );
 
-      let sharedTexturePaths: string[] = [];
+      let stageTexturePaths = EMPTY_STAGE_TEXTURE_FILE_PATHS;
       try {
-        sharedTexturePaths = await listStageTextureFilePaths(stageRoot);
+        stageTexturePaths = await listStageTextureFilePaths(stageRoot);
       } catch (error) {
-        console.warn("[SceneEdit] Failed to list shared stage textures:", error);
+        console.warn("[SceneEdit] Failed to list stage textures:", error);
       }
 
       let streamedBaseModel: SsbhModelPreviewBundle | null = null;
@@ -1505,7 +1517,8 @@ export default function SceneEdit() {
               const nextTextureEntries = collectSceneTextureManagerEntries(
                 streamedBaseModel,
                 streamedSubModels,
-                sharedTexturePaths,
+                stageTexturePaths.modelTexturePaths,
+                stageTexturePaths.infoTexturePaths,
               );
               startTransition(() => {
                 setBaseModel(chunk.bundle);
@@ -1531,7 +1544,8 @@ export default function SceneEdit() {
               const nextTextureEntries = collectSceneTextureManagerEntries(
                 streamedBaseModel,
                 nextSubModels,
-                sharedTexturePaths,
+                stageTexturePaths.modelTexturePaths,
+                stageTexturePaths.infoTexturePaths,
               );
               startTransition(() => {
                 setSubModels(nextSubModels);
@@ -2046,9 +2060,15 @@ export default function SceneEdit() {
       toast.error(err instanceof Error ? err.message : "Invalid graphic_param key");
     }
   }, []);
-  const handleAddGraphicParam = useCallback(() => {
+  const handleAddGraphicParam = useCallback((entries: GraphicParam[]) => {
+    if (entries.length === 0) return;
     try {
-      setGraphicParams((prev) => addGraphicParam(prev, "new_param", "0"));
+      setGraphicParams((prev) =>
+        entries.reduce(
+          (nextRows, entry) => addGraphicParam(nextRows, entry.key, entry.value),
+          prev,
+        ),
+      );
       useSceneDirtyStore.getState().markGlobalDirty("graphicParams");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to add graphic_param row");

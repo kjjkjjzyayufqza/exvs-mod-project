@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { exists, mkdir } from "@tauri-apps/plugin-fs";
+import { copyFile, exists, mkdir } from "@tauri-apps/plugin-fs";
 import { appLocalDataDir, dirname, join } from "@tauri-apps/api/path";
 import type { DdsFormat } from "@/lib/ddsFormats";
 
@@ -83,6 +83,23 @@ export async function reencodeNutexbWithFormat(params: {
     convertDir,
     pngPath,
     ddsFormat: ddsFormatToRust(params.ddsFormat),
+  });
+}
+
+export async function replaceNutexbInPlace(params: {
+  sourcePath: string;
+  targetNutexbPath: string;
+  ddsFormat: DdsFormat;
+}): Promise<TextureConvertResult | null> {
+  if (params.sourcePath.toLowerCase().endsWith(".nutexb")) {
+    await copyFile(params.sourcePath, params.targetNutexbPath);
+    return null;
+  }
+
+  return convertPngToNutexb({
+    pngPath: params.sourcePath,
+    outputNutexbPath: params.targetNutexbPath,
+    ddsFormat: params.ddsFormat,
   });
 }
 

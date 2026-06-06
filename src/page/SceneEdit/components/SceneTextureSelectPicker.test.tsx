@@ -13,6 +13,8 @@ function makeEntry(
     id: overrides.id ?? "tex-1",
     filename: overrides.filename ?? "stage_wall_alb.nutexb",
     status: overrides.status ?? "existing",
+    scope: overrides.scope ?? "model",
+    infoCategory: overrides.infoCategory ?? null,
     format: overrides.format ?? "BC7_UNORM",
     width: overrides.width ?? 256,
     height: overrides.height ?? 256,
@@ -171,6 +173,34 @@ describe("SceneTextureSelectPicker", () => {
     });
 
     expect(await screen.findByText("atlas_66bdf54d_0")).toBeInTheDocument();
+  });
+
+  it("does not show info folder textures as model material candidates", async () => {
+    useSceneTextureManagerStore.getState().setEntries([
+      makeEntry({ id: "model", filename: "stage_wall_alb.nutexb" }),
+      makeEntry({
+        id: "info",
+        filename: "fog_lut.nutexb",
+        scope: "info",
+        infoCategory: "fog",
+        nutexbPath: "E:/stage/info/fog/fog_lut.nutexb",
+      }),
+    ]);
+
+    render(
+      <SceneTextureSelectPicker
+        value=""
+        paramId="Texture1"
+        onChange={() => {}}
+      />,
+    );
+
+    act(() => {
+      fireEvent.focus(screen.getByRole("combobox"));
+    });
+
+    expect(await screen.findByText("stage_wall_alb")).toBeInTheDocument();
+    expect(screen.queryByText("fog_lut")).not.toBeInTheDocument();
   });
 
   it("matches and commits the basename when the user enters a full nutexb path", async () => {

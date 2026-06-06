@@ -1,8 +1,13 @@
-import { memo, useDeferredValue, useMemo, useState } from "react";
+import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -33,6 +38,7 @@ import {
   INSPECTOR_SECTION_HEADER,
   INSPECTOR_SELECT_TRIGGER,
   INSPECTOR_VALUE,
+  PROP_BTN,
   PROP_BTN_ICON,
   PROP_INPUT,
   PROP_PANEL,
@@ -43,7 +49,6 @@ import {
   formatGraphicParamLabel,
   graphicParamNumericConfig,
   groupIndexedGraphicParams,
-  isGraphicParamBool,
   rgbPreviewCss,
   type GraphicParam,
   type GraphicParamInspectorRow,
@@ -58,7 +63,7 @@ interface GraphicParamPanelProps {
   appliedKeys: ReadonlySet<string>;
   onValueChange: (index: number, value: string) => void;
   onKeyChange: (index: number, key: string) => void;
-  onAdd: () => void;
+  onAdd: (entries: GraphicParam[]) => void;
   onDelete: (index: number) => void;
   onToggleApplied: (key: string, applied: boolean) => void;
   onApplyAll: () => void;
@@ -68,6 +73,99 @@ interface GraphicParamPanelProps {
 
 const LARGE_CATEGORY_SCROLL_THRESHOLD = 24;
 const LARGE_CATEGORY_MAX_HEIGHT = "max-h-80";
+const DEFAULT_ADD_GROUP_ID = "lighting";
+type GraphicParamAddMode = "scalar" | "rgb";
+
+const GRAPHIC_PARAM_ADD_PRESETS: Record<
+  string,
+  { scalarKey: string; colorStem: string; value: string; note: string }
+> = {
+  lighting: {
+    scalarKey: "light_custom_param",
+    colorStem: "light_custom_color",
+    value: "0",
+    note: "Stage light, sun, shadow, and ambient controls.",
+  },
+  postprocess: {
+    scalarKey: "fog_custom_param",
+    colorStem: "fog_custom_color",
+    value: "0",
+    note: "Fog, bloom, exposure, tone mapping, and screen effects.",
+  },
+  color: {
+    scalarKey: "color_custom_param",
+    colorStem: "color_custom_grade",
+    value: "1",
+    note: "Color grading, curve edit, saturation, and contrast values.",
+  },
+  misc: {
+    scalarKey: "custom_param",
+    colorStem: "custom_color",
+    value: "0",
+    note: "Use only when the key does not belong to a known renderer group.",
+  },
+};
+
+function getGraphicParamAddPreset(groupId: string) {
+  return GRAPHIC_PARAM_ADD_PRESETS[groupId] ?? GRAPHIC_PARAM_ADD_PRESETS.misc;
+}
+
+function normalizeGraphicParamDraftKey(raw: string): string {
+  return raw
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^A-Za-z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase();
+}
+
+function makeUniqueGraphicParamKey(existingKeys: ReadonlySet<string>, baseKey: string): string {
+  if (!baseKey) return "";
+  if (!existingKeys.has(baseKey)) return baseKey;
+  let suffix = 2;
+  while (existingKeys.has(`${baseKey}_${suffix}`)) suffix += 1;
+  return `${baseKey}_${suffix}`;
+}
+
+function makeUniqueGraphicParamStem(existingKeys: ReadonlySet<string>, baseStem: string): string {
+  if (!baseStem) return "";
+  const hasRgb = (stem: string) =>
+    existingKeys.has(`${stem}_r`) ||
+    existingKeys.has(`${stem}_g`) ||
+    existingKeys.has(`${stem}_b`);
+  if (!hasRgb(baseStem)) return baseStem;
+  let suffix = 2;
+  while (hasRgb(`${baseStem}_${suffix}`)) suffix += 1;
+  return `${baseStem}_${suffix}`;
+}
+
+function buildGraphicParamAddEntries(
+  params: readonly GraphicParam[],
+  mode: GraphicParamAddMode,
+  keyDraft: string,
+  valueDraft: string,
+): GraphicParam[] {
+  const existingKeys = new Set(params.map((param) => param.key));
+  const normalizedKey = normalizeGraphicParamDraftKey(keyDraft);
+  if (!normalizedKey) return [];
+
+  if (mode === "rgb") {
+    const stem = makeUniqueGraphicParamStem(existingKeys, normalizedKey.replace(/_[rgb]$/i, ""));
+    if (!stem) return [];
+    return (["r", "g", "b"] as const).map((channel) => ({
+      key: `${stem}_${channel}`,
+      value: valueDraft || "0",
+    }));
+  }
+
+  return [
+    {
+      key: makeUniqueGraphicParamKey(existingKeys, normalizedKey),
+      value: valueDraft || "0",
+    },
+  ];
+}
 
 export function GraphicParamPanel({
   params,
@@ -122,9 +220,15 @@ export function GraphicParamPanel({
     return (
       <div
         data-testid="graphic-param-panel"
-        className="flex min-h-0 flex-col py-2 text-center text-[10px] text-muted-foreground"
+        className={`flex min-h-0 flex-col items-center gap-2 py-3 text-center text-[10px] text-muted-foreground ${PROP_PANEL}`}
       >
-        No parameters
+        <span>No parameters</span>
+        <AddParameterPopover params={params} initialGroupId={DEFAULT_ADD_GROUP_ID} onAdd={onAdd}>
+          <Button type="button" size="sm" variant="outline" className={cn(PROP_BTN, "gap-1")}>
+            <Plus className="h-3.5 w-3.5" />
+            Add parameter
+          </Button>
+        </AddParameterPopover>
       </div>
     );
   }
@@ -178,16 +282,18 @@ export function GraphicParamPanel({
             Clear preview overrides ({appliedCount})
           </TooltipContent>
         </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button type="button" size="sm" variant="outline" className={PROP_BTN_ICON} onClick={onAdd}>
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-[10px]">
-            Add parameter
-          </TooltipContent>
-        </Tooltip>
+        <AddParameterPopover params={params} initialGroupId={DEFAULT_ADD_GROUP_ID} onAdd={onAdd}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={PROP_BTN_ICON}
+            aria-label="Add parameter"
+            title="Add parameter"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+        </AddParameterPopover>
       </div>
 
       <div className="flex items-center justify-between px-0.5 text-[9px] text-muted-foreground tabular-nums">
@@ -218,17 +324,30 @@ export function GraphicParamPanel({
               !collapsed && items.length > LARGE_CATEGORY_SCROLL_THRESHOLD;
             return (
               <section key={cat.id} className={INSPECTOR_SECTION}>
-                <button
-                  type="button"
-                  className={INSPECTOR_SECTION_HEADER}
-                  onClick={() => toggleCategory(cat.id)}
-                >
-                  <ChevronRight
-                    className={cn("h-3 w-3 shrink-0 transition-transform", !collapsed && "rotate-90")}
-                  />
-                  <span className="truncate">{cat.label}</span>
-                  <span className="ml-auto font-mono text-[9px] opacity-60">{items.length}</span>
-                </button>
+                <div className={INSPECTOR_SECTION_HEADER}>
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                    onClick={() => toggleCategory(cat.id)}
+                  >
+                    <ChevronRight
+                      className={cn("h-3 w-3 shrink-0 transition-transform", !collapsed && "rotate-90")}
+                    />
+                    <span className="truncate">{cat.label}</span>
+                    <span className="ml-auto font-mono text-[9px] opacity-60">{items.length}</span>
+                  </button>
+                  <AddParameterPopover params={params} initialGroupId={cat.id} onAdd={onAdd} align="end">
+                    <button
+                      type="button"
+                      className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground opacity-70 hover:bg-background/80 hover:text-foreground hover:opacity-100"
+                      aria-label={`Add ${cat.label} parameter`}
+                      title={`Add ${cat.label} parameter`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </AddParameterPopover>
+                </div>
                 {!collapsed && (
                   <div
                     className={cn(
@@ -261,6 +380,187 @@ export function GraphicParamPanel({
   );
 }
 
+function AddParameterPopover({
+  params,
+  initialGroupId,
+  onAdd,
+  align = "end",
+  children,
+}: {
+  params: readonly GraphicParam[];
+  initialGroupId: string;
+  onAdd: (entries: GraphicParam[]) => void;
+  align?: "start" | "center" | "end";
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const [groupId, setGroupId] = useState(initialGroupId);
+  const [mode, setMode] = useState<GraphicParamAddMode>("scalar");
+  const [keyDraft, setKeyDraft] = useState(() =>
+    getGraphicParamAddPreset(initialGroupId).scalarKey
+  );
+  const [valueDraft, setValueDraft] = useState(() =>
+    getGraphicParamAddPreset(initialGroupId).value
+  );
+
+  const resetDraft = (nextGroupId: string, nextMode: GraphicParamAddMode = "scalar") => {
+    const preset = getGraphicParamAddPreset(nextGroupId);
+    setGroupId(nextGroupId);
+    setMode(nextMode);
+    setKeyDraft(nextMode === "rgb" ? preset.colorStem : preset.scalarKey);
+    setValueDraft(preset.value);
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (nextOpen) resetDraft(initialGroupId);
+  };
+
+  const preset = getGraphicParamAddPreset(groupId);
+  const entries = useMemo(
+    () => buildGraphicParamAddEntries(params, mode, keyDraft, valueDraft),
+    [params, mode, keyDraft, valueDraft],
+  );
+  const canAdd = entries.length > 0;
+
+  const handleSubmit = () => {
+    if (!canAdd) return;
+    onAdd(entries);
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>{children}</PopoverTrigger>
+      <PopoverContent align={align} side="bottom" className="w-72 p-2">
+        <div className="space-y-2">
+          <div className="space-y-0.5">
+            <div className="text-[11px] font-semibold text-foreground">Add parameter</div>
+            <p className="text-[9px] leading-snug text-muted-foreground">
+              Pick a renderer group first. Misc is only for unknown keys.
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+              Group
+            </label>
+            <Select
+              value={groupId}
+              onValueChange={(value) => resetDraft(value, mode)}
+            >
+              <SelectTrigger className={INSPECTOR_SELECT_TRIGGER}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {GRAPHIC_PARAM_CATEGORIES.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id} className="text-[10px]">
+                    {cat.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[9px] leading-snug text-muted-foreground">{preset.note}</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1">
+            {(["scalar", "rgb"] as const).map((nextMode) => (
+              <button
+                key={nextMode}
+                type="button"
+                className={cn(
+                  "h-7 rounded-sm border px-2 text-[10px] font-medium transition-colors",
+                  mode === nextMode
+                    ? "border-primary/45 bg-primary/10 text-primary"
+                    : "border-border/60 bg-muted/15 text-muted-foreground hover:bg-muted/35 hover:text-foreground",
+                )}
+                onClick={() => {
+                  const nextPreset = getGraphicParamAddPreset(groupId);
+                  setMode(nextMode);
+                  setKeyDraft(nextMode === "rgb" ? nextPreset.colorStem : nextPreset.scalarKey);
+                  setValueDraft(nextPreset.value);
+                }}
+              >
+                {nextMode === "scalar" ? "Scalar" : "RGB set"}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-[minmax(0,1fr)_4.5rem] gap-1">
+            <div className="space-y-1">
+              <label className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                {mode === "rgb" ? "Key stem" : "Key"}
+              </label>
+              <Input
+                className={PROP_INPUT}
+                value={keyDraft}
+                spellCheck={false}
+                onChange={(e) => setKeyDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSubmit();
+                }}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                Value
+              </label>
+              <Input
+                className={cn(PROP_INPUT, "text-right")}
+                value={valueDraft}
+                inputMode="decimal"
+                onChange={(e) => setValueDraft(sanitizeDecimalInput(e.target.value))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSubmit();
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-sm border border-border/45 bg-muted/15 px-2 py-1.5">
+            <div className="mb-1 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+              Will create
+            </div>
+            {canAdd ? (
+              <div className="space-y-0.5 font-mono text-[9px] text-foreground/85">
+                {entries.map((entry) => (
+                  <div key={entry.key} className="flex min-w-0 items-center justify-between gap-2">
+                    <span className="truncate">{entry.key}</span>
+                    <span className="shrink-0 text-muted-foreground">{entry.value}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-[9px] text-muted-foreground">Enter a key first.</div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-1">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className={PROP_BTN}
+              onClick={() => setOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className={PROP_BTN}
+              disabled={!canAdd}
+              onClick={handleSubmit}
+            >
+              Add
+            </Button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 interface InspectorRowProps {
   row: GraphicParamInspectorRow;
   editKeys: boolean;
@@ -290,7 +590,6 @@ const ScalarInspectorRow = memo(function ScalarInspectorRow({
   onResetValue,
 }: ScalarRowProps & { applied: boolean }) {
   const slider = graphicParamNumericConfig(p.key, p.value);
-  const isBool = isGraphicParamBool(p.key, p.value);
   const originalValue = initialMap?.get(p.key);
   const valueModified = originalValue !== undefined && p.value !== originalValue;
   const label = formatGraphicParamLabel(p.key);
@@ -322,20 +621,13 @@ const ScalarInspectorRow = memo(function ScalarInspectorRow({
         <ScalarValueControl
           param={p}
           slider={slider}
-          isBool={isBool}
           originalValue={originalValue}
           onValueChange={onValueChange}
         />
-        {slider && !isBool && (
-          <Slider
-            className="h-1 w-full opacity-80 group-hover:opacity-100"
-            value={[slider.value]}
-            min={slider.min}
-            max={slider.max}
-            step={slider.step}
-            onValueChange={(values) =>
-              onValueChange(p.originalIndex, String(values[0] ?? slider.value))
-            }
+        {slider && (
+          <GraphicParamSlider
+            slider={slider}
+            onCommit={(value) => onValueChange(p.originalIndex, String(value))}
           />
         )}
       </div>
@@ -492,51 +784,88 @@ function ApplyPin({
 function ScalarValueControl({
   param,
   slider,
-  isBool,
   originalValue,
   onValueChange,
 }: {
   param: IndexedGraphicParam;
   slider: ReturnType<typeof graphicParamNumericConfig>;
-  isBool: boolean;
   originalValue: string | undefined;
   onValueChange: (index: number, value: string) => void;
 }) {
-  if (isBool) {
-    const on = param.value !== "0" && param.value.toUpperCase() !== "FALSE";
-    return (
-      <Select
-        value={on ? "1" : "0"}
-        onValueChange={(value) => onValueChange(param.originalIndex, value)}
-      >
-        <SelectTrigger className={INSPECTOR_SELECT_TRIGGER}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="1">On</SelectItem>
-          <SelectItem value="0">Off</SelectItem>
-        </SelectContent>
-      </Select>
-    );
-  }
+  const [draft, setDraft] = useState(param.value);
+  const skipBlurCommitRef = useRef(false);
+
+  useEffect(() => {
+    setDraft(param.value);
+  }, [param.value]);
+
+  const commit = () => {
+    if (skipBlurCommitRef.current) {
+      skipBlurCommitRef.current = false;
+      return;
+    }
+    const next = slider
+      ? commitDecimalInput(draft, originalValue ?? param.value)
+      : draft;
+    setDraft(next);
+    if (next !== param.value) {
+      onValueChange(param.originalIndex, next);
+    }
+  };
 
   return (
     <input
       className={INSPECTOR_VALUE}
-      value={param.value}
+      value={draft}
       inputMode={slider ? "decimal" : "text"}
-      title={param.value}
+      title={draft}
       onChange={(e) => {
         const next = slider ? sanitizeDecimalInput(e.target.value) : e.target.value;
-        onValueChange(param.originalIndex, next);
+        setDraft(next);
       }}
-      onBlur={(e) => {
-        if (!slider) return;
-        const next = commitDecimalInput(e.target.value, originalValue ?? param.value);
-        if (next !== param.value) onValueChange(param.originalIndex, next);
-      }}
+      onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") {
+          const target = e.currentTarget;
+          skipBlurCommitRef.current = true;
+          setDraft(param.value);
+          if (document.activeElement === target) {
+            target.blur();
+          } else {
+            skipBlurCommitRef.current = false;
+          }
+        }
+      }}
+    />
+  );
+}
+
+function GraphicParamSlider({
+  slider,
+  onCommit,
+}: {
+  slider: NonNullable<ReturnType<typeof graphicParamNumericConfig>>;
+  onCommit: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState(slider.value);
+
+  useEffect(() => {
+    setDraft(slider.value);
+  }, [slider.value]);
+
+  return (
+    <Slider
+      className="h-1 w-full opacity-80 group-hover:opacity-100"
+      value={[draft]}
+      min={slider.min}
+      max={slider.max}
+      step={slider.step}
+      onValueChange={(values) => setDraft(values[0] ?? slider.value)}
+      onValueCommit={(values) => {
+        const next = values[0] ?? slider.value;
+        setDraft(next);
+        if (next !== slider.value) onCommit(next);
       }}
     />
   );
@@ -555,6 +884,26 @@ function ColorChannelInput({
   onValueChange: (index: number, value: string) => void;
   onKeyChange: (index: number, key: string) => void;
 }) {
+  const originalValue = initialMap?.get(channel.key);
+  const [draft, setDraft] = useState(channel.value);
+  const skipBlurCommitRef = useRef(false);
+
+  useEffect(() => {
+    setDraft(channel.value);
+  }, [channel.value]);
+
+  const commit = () => {
+    if (skipBlurCommitRef.current) {
+      skipBlurCommitRef.current = false;
+      return;
+    }
+    const next = commitDecimalInput(draft, originalValue ?? channel.value);
+    setDraft(next);
+    if (next !== channel.value) {
+      onValueChange(channel.originalIndex, next);
+    }
+  };
+
   if (editKeys) {
     return (
       <Input
@@ -565,21 +914,25 @@ function ColorChannelInput({
     );
   }
 
-  const originalValue = initialMap?.get(channel.key);
   return (
     <input
       className={cn(INSPECTOR_VALUE, "h-5 px-0.5 text-[9px]")}
-      value={channel.value}
+      value={draft}
       inputMode="decimal"
-      onChange={(e) =>
-        onValueChange(channel.originalIndex, sanitizeDecimalInput(e.target.value))
-      }
-      onBlur={(e) => {
-        const next = commitDecimalInput(e.target.value, originalValue ?? channel.value);
-        if (next !== channel.value) onValueChange(channel.originalIndex, next);
-      }}
+      onChange={(e) => setDraft(sanitizeDecimalInput(e.target.value))}
+      onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") {
+          const target = e.currentTarget;
+          skipBlurCommitRef.current = true;
+          setDraft(channel.value);
+          if (document.activeElement === target) {
+            target.blur();
+          } else {
+            skipBlurCommitRef.current = false;
+          }
+        }
       }}
     />
   );

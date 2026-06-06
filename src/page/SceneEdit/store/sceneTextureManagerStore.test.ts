@@ -12,6 +12,8 @@ function makeEntry(
     id: `test_${Math.random().toString(36).slice(2)}`,
     filename: "diffuse.nutexb",
     status: "existing",
+    scope: "model",
+    infoCategory: null,
     format: "BC7_UNORM",
     width: 1024,
     height: 1024,

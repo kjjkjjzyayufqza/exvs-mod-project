@@ -18,7 +18,7 @@ export const GRAPHIC_PARAM_CATEGORIES: GraphicParamCategory[] = [
   {
     id: "postprocess",
     label: "Post Process",
-    match: (k) => /^(bloom_|dof_|fog_|tonemap_|exposure_|vignette_)/.test(k),
+    match: (k) => /^(pfx_|bloom_|dof_|fog_|tonemap_|exposure_|vignette_)/.test(k),
   },
   {
     id: "color",
@@ -97,13 +97,6 @@ export function graphicParamNumericConfig(
     return { value: n, min: 0, max: Math.max(1, n), step: 0.001 };
   }
   return { value: n, min: Math.min(-10000, n), max: Math.max(10000, n), step: 0.1 };
-}
-
-export function isGraphicParamBool(key: string, value: string): boolean {
-  const lower = key.toLowerCase();
-  if (lower.includes("_enable")) return true;
-  const n = Number.parseFloat(value);
-  return (value === "0" || value === "1") && Number.isFinite(n);
 }
 
 function colorStem(key: string, suffix: "_r" | "_g" | "_b"): string | null {

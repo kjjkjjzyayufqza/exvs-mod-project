@@ -7,6 +7,8 @@ function makeEntry(overrides: Partial<TextureManagerEntry> = {}): TextureManager
     id: `test_${Math.random().toString(36).slice(2)}`,
     filename: "test.nutexb",
     status: "existing",
+    scope: "model",
+    infoCategory: null,
     format: "BC7_UNORM",
     width: 512,
     height: 512,
@@ -84,5 +86,27 @@ describe("sceneTextureSaveCollector", () => {
     expect(manifest.existing[0].filename).toBe("existing1.nutexb");
     expect(manifest.added).toHaveLength(1);
     expect(manifest.added[0].filename).toBe("added1.nutexb");
+  });
+
+  it("does not collect info folder textures into the model texture manifest", () => {
+    useSceneTextureManagerStore.getState().setEntries([
+      makeEntry({
+        id: "info1",
+        filename: "fog_lut.nutexb",
+        scope: "info",
+        infoCategory: "fog",
+        nutexbPath: "D:/stage/info/fog/fog_lut.nutexb",
+      }),
+      makeEntry({
+        id: "model1",
+        filename: "wall.nutexb",
+        nutexbPath: "D:/stage/textures/wall.nutexb",
+      }),
+    ]);
+    const manifest = collectTextureSaveManifest();
+    expect(manifest.existing).toEqual([
+      { filename: "wall.nutexb", nutexbPath: "D:/stage/textures/wall.nutexb" },
+    ]);
+    expect(manifest.added).toEqual([]);
   });
 });

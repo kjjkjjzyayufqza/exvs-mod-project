@@ -6,10 +6,12 @@ import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
 import type { SceneTextureDecodeContext } from "../utils/sceneTextureDecode";
 import {
   ensureSceneTextureThumbnailDataUrl,
+  clearSceneTextureThumbnailCache,
   getSceneTextureThumbnailDataUrl,
   lookupSceneTextureData,
   tryCacheThumbnailFromMap,
 } from "../utils/sceneTextureThumbnail";
+import { clearNutexbRgbaCache } from "@/components/ssbh-model-preview/nutexbPreviewCache";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +37,7 @@ import { VirtualizedList } from "./VirtualizedList";
 import {
   convertImageToNutexb,
   exportNutexbToPng,
+  replaceNutexbInPlace,
   reencodeNutexbWithFormat,
 } from "../utils/sceneTextureConvert";
 import {
@@ -48,6 +51,19 @@ import type { DdsFormat } from "./TextureFormatSelect";
 
 const ASYNC_THUMB_CONCURRENCY = 4;
 const TEXTURE_ROW_HEIGHT = 40;
+
+function formatInfoCategory(category: TextureManagerEntry["infoCategory"]): string {
+  switch (category) {
+    case "fog":
+      return "fog";
+    case "light":
+      return "light";
+    case "post_effect":
+      return "post effect";
+    default:
+      return "info";
+  }
+}
 
 interface SceneTextureManagerProps {
   textureDataMap: NutexbTextureDataMap;
@@ -158,6 +174,19 @@ export function SceneTextureManager({
     return entries.filter((e) => e.filename.toLowerCase().includes(q));
   }, [entries, searchQuery]);
 
+  const modelEntries = useMemo(
+    () => filtered.filter((entry) => entry.scope !== "info"),
+    [filtered],
+  );
+  const infoEntries = useMemo(
+    () => filtered.filter((entry) => entry.scope === "info"),
+    [filtered],
+  );
+  const hasInfoEntries = useMemo(
+    () => entries.some((entry) => entry.scope === "info"),
+    [entries],
+  );
+
   const handleAddTexture = useCallback(async () => {
     const selected = await open({
       title: "Add Texture to Scene",
@@ -223,6 +252,8 @@ export function SceneTextureManager({
               id: entryId,
               filename: candidate.nutexbFilename,
               status: "added",
+              scope: "model",
+              infoCategory: null,
               format: "unknown",
               width: 0,
               height: 0,
@@ -237,6 +268,8 @@ export function SceneTextureManager({
               id: entryId,
               filename: candidate.nutexbFilename,
               status: "added",
+              scope: "model",
+              infoCategory: null,
               format: "converting",
               width: 0,
               height: 0,
@@ -285,6 +318,10 @@ export function SceneTextureManager({
 
   const handleDelete = useCallback(
     (entry: TextureManagerEntry) => {
+      if (entry.scope === "info") {
+        toast.info("Info textures are not removed through the model texture list");
+        return;
+      }
       // A texture wired into a numatb material must not be removed — doing so
       // would leave a dangling reference. Removal stays in-memory until the user
       // commits with "save changes" (existing files are deleted from the stage
@@ -396,39 +433,61 @@ export function SceneTextureManager({
         )}
       </div>
 
-      <VirtualizedList
-        items={filtered}
-        rowHeight={TEXTURE_ROW_HEIGHT}
-        getItemKey={(entry) => entry.id}
-        className="flex-1 min-h-0 overflow-auto"
-        emptyState={
+      <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+        {modelEntries.length === 0 && infoEntries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-muted-foreground gap-1">
             <ImageIcon className="h-6 w-6 opacity-40" />
             <p className="text-[10px] opacity-60">
               {searchQuery.trim() ? `No textures match "${searchQuery.trim()}"` : "No textures"}
             </p>
           </div>
-        }
-        renderRow={(entry) => (
-          <TextureRow
-            entry={entry}
-            textureDataMap={textureDataMap}
-            isSelected={entry.id === selectedId}
-            onSelect={() => {
-              setSelectedId(entry.id);
-              if (entry.nutexbPath) {
-                handlePreview(entry);
-              }
-            }}
-            onPreview={() => handlePreview(entry)}
-            onReplace={() => handleReplace(entry)}
-            onDelete={() => handleDelete(entry)}
-            onCopyPath={() => handleCopyPath(entry)}
-            onExport={() => handleExport(entry)}
-            canExport={Boolean(entry.nutexbPath) && !isExporting}
-          />
+        ) : (
+          <>
+            <TextureSection
+              title="Model textures"
+              description="Shared textures folder"
+              entries={modelEntries}
+              textureDataMap={textureDataMap}
+              selectedId={selectedId}
+              onSelect={(entry) => {
+                setSelectedId(entry.id);
+                if (entry.nutexbPath) {
+                  handlePreview(entry);
+                }
+              }}
+              onPreview={handlePreview}
+              onReplace={handleReplace}
+              onDelete={handleDelete}
+              onCopyPath={handleCopyPath}
+              onExport={handleExport}
+              isExporting={isExporting}
+              grow={infoEntries.length === 0}
+            />
+            {(hasInfoEntries || infoEntries.length > 0) && (
+              <TextureSection
+                title="Info textures"
+                description="fog / light / post_effect"
+                entries={infoEntries}
+                textureDataMap={textureDataMap}
+                selectedId={selectedId}
+                onSelect={(entry) => {
+                  setSelectedId(entry.id);
+                  if (entry.nutexbPath) {
+                    handlePreview(entry);
+                  }
+                }}
+                onPreview={handlePreview}
+                onReplace={handleReplace}
+                onDelete={handleDelete}
+                onCopyPath={handleCopyPath}
+                onExport={handleExport}
+                isExporting={isExporting}
+                grow={modelEntries.length === 0}
+              />
+            )}
+          </>
         )}
-      />
+      </div>
 
       {previewEntry && (
         <TexturePreviewModal
@@ -436,7 +495,9 @@ export function SceneTextureManager({
           textureDataMap={textureDataMap}
           decodeContext={decodeContext}
           onClose={() => setPreviewEntry(null)}
-          onFormatApply={handlePreviewFormatApply}
+          onFormatApply={
+            previewEntry.scope === "info" ? undefined : handlePreviewFormatApply
+          }
           isReencoding={isPreviewReencoding}
         />
       )}
@@ -474,6 +535,37 @@ export function SceneTextureManager({
               if (typeof selected !== "string" || !selected.trim()) return;
               const filePath = selected.trim();
               const isNutexb = filePath.toLowerCase().endsWith(".nutexb");
+              if (entry.scope === "info") {
+                if (!entry.nutexbPath) {
+                  toast.error("Info texture has no target path");
+                  return;
+                }
+                replaceNutexbInPlace({
+                  sourcePath: filePath,
+                  targetNutexbPath: entry.nutexbPath,
+                  ddsFormat,
+                })
+                  .then(() => {
+                    invalidateNutexbInternalName(entry.nutexbPath as string);
+                    clearNutexbRgbaCache();
+                    clearSceneTextureThumbnailCache();
+                    replaceEntry(entry.id, {
+                      format: isNutexb ? "unknown" : ddsFormat,
+                      thumbnailDataUrl: null,
+                    });
+                    bumpThumbnailCache();
+                    toast.success(`Replaced ${entry.filename}`);
+                  })
+                  .catch((error) => {
+                    console.error(error);
+                    const message =
+                      error instanceof Error
+                        ? error.message
+                        : "Failed to replace info texture";
+                    toast.error(message);
+                  });
+                return;
+              }
               if (isNutexb) {
                 invalidateNutexbInternalName(filePath);
                 replaceEntry(entry.id, {
@@ -504,6 +596,81 @@ export function SceneTextureManager({
         />
       )}
     </div>
+  );
+}
+
+interface TextureSectionProps {
+  title: string;
+  description: string;
+  entries: TextureManagerEntry[];
+  textureDataMap: NutexbTextureDataMap;
+  selectedId: string | null;
+  onSelect: (entry: TextureManagerEntry) => void;
+  onPreview: (entry: TextureManagerEntry) => void;
+  onReplace: (entry: TextureManagerEntry) => void;
+  onDelete: (entry: TextureManagerEntry) => void;
+  onCopyPath: (entry: TextureManagerEntry) => void;
+  onExport: (entry: TextureManagerEntry) => void;
+  isExporting: boolean;
+  grow: boolean;
+}
+
+function TextureSection({
+  title,
+  description,
+  entries,
+  textureDataMap,
+  selectedId,
+  onSelect,
+  onPreview,
+  onReplace,
+  onDelete,
+  onCopyPath,
+  onExport,
+  isExporting,
+  grow,
+}: TextureSectionProps) {
+  return (
+    <section className={cn("flex min-h-0 flex-col border-b border-border/40", grow ? "flex-1" : "basis-1/2")}>
+      <div className="flex items-center justify-between gap-2 border-b border-border/30 bg-muted/10 px-2 py-1">
+        <div className="min-w-0">
+          <div className="truncate text-[10px] font-semibold text-foreground">
+            {title}
+          </div>
+          <div className="truncate text-[9px] text-muted-foreground">
+            {description}
+          </div>
+        </div>
+        <Badge variant="secondary" className="h-4 shrink-0 px-1 text-[9px] leading-none">
+          {entries.length}
+        </Badge>
+      </div>
+      <VirtualizedList
+        items={entries}
+        rowHeight={TEXTURE_ROW_HEIGHT}
+        getItemKey={(entry) => entry.id}
+        className="flex-1 min-h-0 overflow-auto"
+        emptyState={
+          <div className="flex h-16 items-center justify-center px-2 text-center text-[10px] text-muted-foreground">
+            No matches in this section
+          </div>
+        }
+        renderRow={(entry) => (
+          <TextureRow
+            entry={entry}
+            textureDataMap={textureDataMap}
+            isSelected={entry.id === selectedId}
+            onSelect={() => onSelect(entry)}
+            onPreview={() => onPreview(entry)}
+            onReplace={() => onReplace(entry)}
+            onDelete={() => onDelete(entry)}
+            onCopyPath={() => onCopyPath(entry)}
+            onExport={() => onExport(entry)}
+            canExport={Boolean(entry.nutexbPath) && !isExporting}
+          />
+        )}
+      />
+    </section>
   );
 }
 
@@ -548,6 +715,7 @@ function TextureRow({
         : null;
 
   const isConverting = entry.format === "converting";
+  const isInfoTexture = entry.scope === "info";
 
   return (
     <ContextMenu>
@@ -582,8 +750,8 @@ function TextureRow({
             <span className="text-[10px] text-muted-foreground leading-tight">
               {entry.format !== "unknown" && entry.format !== "pending"
                 ? entry.format
-                : "—"}
-              {dims && ` · ${dims}`}
+                : "-"}
+              {dims && ` / ${dims}`}
             </span>
           </div>
 
@@ -592,7 +760,7 @@ function TextureRow({
               variant={entry.status === "added" ? "default" : "secondary"}
               className="text-[9px] px-1 py-0 leading-tight h-auto"
             >
-              {entry.status}
+              {isInfoTexture ? formatInfoCategory(entry.infoCategory) : entry.status}
             </Badge>
             {entry.referencedBy.length > 0 && (
               <span className="text-[9px] text-muted-foreground/70 font-mono tabular-nums">
@@ -610,15 +778,17 @@ function TextureRow({
         )}
         <ContextMenuItem onClick={onReplace}>Replace</ContextMenuItem>
         <ContextMenuItem onClick={onCopyPath}>Copy Path</ContextMenuItem>
-        <ContextMenuItem
-          onClick={onDelete}
-          disabled={entry.referencedBy.length > 0}
-          className={entry.referencedBy.length > 0 ? undefined : "text-destructive"}
-        >
-          {entry.referencedBy.length > 0
-            ? "Remove (referenced by numatb)"
-            : "Remove"}
-        </ContextMenuItem>
+        {!isInfoTexture && (
+          <ContextMenuItem
+            onClick={onDelete}
+            disabled={entry.referencedBy.length > 0}
+            className={entry.referencedBy.length > 0 ? undefined : "text-destructive"}
+          >
+            {entry.referencedBy.length > 0
+              ? "Remove (referenced by numatb)"
+              : "Remove"}
+          </ContextMenuItem>
+        )}
       </ContextMenuContent>
     </ContextMenu>
   );

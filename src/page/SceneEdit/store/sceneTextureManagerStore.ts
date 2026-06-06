@@ -1,11 +1,15 @@
 import { create } from "zustand";
 
 export type TextureEntryStatus = "existing" | "added";
+export type TextureEntryScope = "model" | "info";
+export type InfoTextureCategory = "fog" | "light" | "post_effect";
 
 export interface TextureManagerEntry {
   id: string;
   filename: string;
   status: TextureEntryStatus;
+  scope: TextureEntryScope;
+  infoCategory: InfoTextureCategory | null;
   format: string;
   width: number;
   height: number;

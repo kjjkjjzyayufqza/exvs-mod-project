@@ -28,6 +28,7 @@ export function collectTextureSaveManifest(): TextureSaveManifest {
   const added: TextureSaveManifest["added"] = [];
 
   for (const entry of state.entries) {
+    if (entry.scope !== "model") continue;
     if (entry.status === "existing" && entry.nutexbPath) {
       existing.push({ filename: entry.filename, nutexbPath: entry.nutexbPath });
     } else if (entry.status === "added") {
