@@ -4,6 +4,7 @@
 use crate::format::fhm2d::SubFileStructureEntry;
 use flate2::write::DeflateEncoder;
 use flate2::Compression;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
@@ -152,6 +153,13 @@ struct CompressedBody {
     is_need_decomp: u32,
 }
 
+struct CompressedPage {
+    page_index: usize,
+    compressed_bytes: Option<Vec<u8>>,
+    raw_start: usize,
+    raw_end: usize,
+}
+
 struct TypeGroup {
     type_id: u32,
     file_indices: Vec<usize>,
@@ -292,21 +300,43 @@ fn compress_file_body(data: &[u8]) -> Result<CompressedBody, String> {
     let page_count = (file_size + PAGE_SIZE - 1) / PAGE_SIZE;
     let bitmap_len = (page_count + 7) / 8;
     let mut bitmap = vec![0u8; bitmap_len];
+    let compressed_pages: Vec<Result<CompressedPage, String>> = (0..page_count)
+        .into_par_iter()
+        .map(|page_idx| {
+            let start = page_idx * PAGE_SIZE;
+            let end = (start + PAGE_SIZE).min(file_size);
+            let page = &data[start..end];
+
+            let compressed = deflate_raw_compress(page)?;
+            if compressed.len() < page.len() {
+                Ok(CompressedPage {
+                    page_index: page_idx,
+                    compressed_bytes: Some(compressed),
+                    raw_start: start,
+                    raw_end: end,
+                })
+            } else {
+                Ok(CompressedPage {
+                    page_index: page_idx,
+                    compressed_bytes: None,
+                    raw_start: start,
+                    raw_end: end,
+                })
+            }
+        })
+        .collect();
+
     let mut body_bytes = Vec::new();
     let mut chunk_sizes = Vec::new();
 
-    for page_idx in 0..page_count {
-        let start = page_idx * PAGE_SIZE;
-        let end = (start + PAGE_SIZE).min(file_size);
-        let page = &data[start..end];
-
-        let compressed = deflate_raw_compress(page)?;
-        if compressed.len() < page.len() {
-            bitmap[page_idx >> 3] |= 1 << (page_idx & 7);
-            chunk_sizes.push(compressed.len() as u32);
-            body_bytes.extend_from_slice(&compressed);
+    for compressed_page in compressed_pages {
+        let compressed_page = compressed_page?;
+        if let Some(compressed_bytes) = compressed_page.compressed_bytes {
+            bitmap[compressed_page.page_index >> 3] |= 1 << (compressed_page.page_index & 7);
+            chunk_sizes.push(compressed_bytes.len() as u32);
+            body_bytes.extend_from_slice(&compressed_bytes);
         } else {
-            body_bytes.extend_from_slice(page);
+            body_bytes.extend_from_slice(&data[compressed_page.raw_start..compressed_page.raw_end]);
         }
     }
 
