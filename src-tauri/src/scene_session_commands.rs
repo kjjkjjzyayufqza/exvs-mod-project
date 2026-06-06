@@ -2073,15 +2073,13 @@ pub async fn scene_generate_hkt_from_mesh(
             mesh.vertices.len(),
             mesh.triangle_count()
         );
-        let authored = crate::collision_mesh::author_collision_shapes(&mesh, &simplify_opts)?;
-        let mesh = authored.to_triangle_mesh();
+        let prepared =
+            crate::havok_collision_encode::prepare_hkt_collision(&mesh, &simplify_opts, 1.0)?;
         eprintln!(
             "[scene_generate_hkt_from_mesh] authored shapes={} preview_tris={}",
-            authored.shape_count(),
-            mesh.triangle_count()
+            prepared.shape_count, prepared.triangle_count
         );
-        let xml = crate::havok_mesh_encode::build_authored_collision_set_xml_faithful(&authored)?;
-        crate::havok_collision_encode::convert_xml_string_to_hkt(&filter_path, &xml)
+        crate::havok_collision_encode::convert_xml_string_to_hkt(&filter_path, &prepared.xml)
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))?

@@ -18,6 +18,13 @@ pub struct HktGenerationResult {
     pub triangle_count: usize,
 }
 
+pub(crate) struct PreparedHktCollision {
+    pub xml: String,
+    pub triangle_count: usize,
+    pub vertex_count: usize,
+    pub shape_count: usize,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HktCollisionPreview {
@@ -367,27 +374,42 @@ pub fn generate_hkt_from_import_path(
     generate_hkt_from_import_scene(scene, filter_manager_exe, options)
 }
 
+pub(crate) fn prepare_hkt_collision(
+    mesh: &crate::collision_mesh::CollisionTriMesh,
+    simplify: &crate::collision_mesh::CollisionSimplifyOptions,
+    tolerance_scale: f64,
+) -> Result<PreparedHktCollision, String> {
+    let authored = author_collision_shapes(mesh, simplify)?;
+    let triangle_count = authored.triangle_count();
+    let vertex_count = authored.vertex_count();
+    let shape_count = authored.shape_count();
+    let xml = build_authored_collision_set_xml_faithful_scaled(&authored, tolerance_scale)?;
+    Ok(PreparedHktCollision {
+        xml,
+        triangle_count,
+        vertex_count,
+        shape_count,
+    })
+}
+
 fn generate_hkt_from_import_scene(
     scene: crate::ssbh_dae::ImportScene,
     filter_manager_exe: &str,
     options: CollisionMeshOptions,
 ) -> Result<HktGenerationResult, String> {
     let merged = bake_and_merge_collision_mesh(&scene, &options)?;
-    let authored = author_collision_shapes(&merged, &options.simplify)?;
-    let mesh = authored.to_triangle_mesh();
+    let prepared = prepare_hkt_collision(&merged, &options.simplify, options.scale_factor)?;
     let preview = HktCollisionPreview {
         render_triangle_count: render_triangle_count_from_scene(&scene),
         merged_triangle_count: merged.triangle_count(),
-        simplified_triangle_count: mesh.triangle_count(),
-        vertex_count: mesh.vertices.len(),
+        simplified_triangle_count: prepared.triangle_count,
+        vertex_count: prepared.vertex_count,
     };
     validate_collision_mesh_for_hkt(&preview, options.simplify.enabled)?;
-    let triangle_count = mesh.triangle_count();
-    let xml = build_authored_collision_set_xml_faithful_scaled(&authored, options.scale_factor)?;
-    let bytes = convert_xml_string_to_hkt(filter_manager_exe, &xml)?;
+    let bytes = convert_xml_string_to_hkt(filter_manager_exe, &prepared.xml)?;
     Ok(HktGenerationResult {
         bytes,
-        triangle_count,
+        triangle_count: prepared.triangle_count,
     })
 }
 
@@ -453,7 +475,7 @@ pub(crate) fn convert_xml_string_to_hkt(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::collision_mesh::CollisionTriMesh;
+    use crate::collision_mesh::{CollisionSimplifyOptions, CollisionTriMesh};
     use crate::havok_mesh_encode::build_mesh_collision_xml;
 
     // Complexity gate disabled — rejection tests commented out alongside validate_collision_mesh_for_hkt.
@@ -618,6 +640,35 @@ mod tests {
         };
         let xml = build_mesh_collision_xml(&mesh).unwrap();
         assert!(!xml.contains(r#"dec="-40.01""#));
+    }
+
+    #[test]
+    fn production_hkt_xml_preserves_upward_plane_winding() {
+        let mesh = CollisionTriMesh {
+            vertices: vec![
+                [-1.0, 0.0, 1.0],
+                [1.0, 0.0, 1.0],
+                [1.0, 0.0, -1.0],
+                [-1.0, 0.0, -1.0],
+            ],
+            indices: vec![0, 1, 2, 2, 3, 0],
+        };
+
+        let prepared = prepare_hkt_collision(&mesh, &CollisionSimplifyOptions::default(), 1.0)
+            .expect("build production HKT XML");
+
+        assert_eq!(prepared.triangle_count, 2);
+        let primitive_start = prepared
+            .xml
+            .find(r#"<field name="primitives">"#)
+            .expect("primitives field");
+        let primitive_xml = &prepared.xml[primitive_start..primitive_start + 1_500];
+        let indices = [0, 1, 2, 3].map(|index| {
+            primitive_xml
+                .find(&format!(r#"<integer value="{index}"/>"#))
+                .expect("quad index")
+        });
+        assert!(indices.windows(2).all(|pair| pair[0] < pair[1]));
     }
 
     fn collect_bigzam_import_files(dir: &std::path::Path) -> Vec<std::path::PathBuf> {

@@ -6,12 +6,8 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use app_lib::collision_mesh::{
-    author_collision_shapes, bake_and_merge_collision_mesh, parse_import_scene_from_path,
-    CollisionMeshOptions,
-};
-use app_lib::havok_cli::{run_filter_manager_with_hko, HavokCliConfig, HKO_WRITE_HKT};
-use app_lib::havok_mesh_encode::build_authored_collision_set_xml_faithful_scaled;
+use app_lib::collision_mesh::CollisionMeshOptions;
+use app_lib::havok_cli::{convert_hkt_bytes_to_xml, generate_hkt_from_import_path, HavokCliConfig};
 
 fn main() {
     let mut args = std::env::args().skip(1);
@@ -52,38 +48,20 @@ fn main() {
     }
 
     let t = Instant::now();
-    let scene = parse_import_scene_from_path(&input).expect("parse import scene");
+    let generated =
+        generate_hkt_from_import_path(&input, &config, options).expect("generate HKT from model");
+    std::fs::write(&output, &generated.bytes).expect("write HKT");
     println!(
-        "parse_ms={} meshes={} bones={}",
+        "hkt_ms={} written={} bytes={} triangles={}",
         t.elapsed().as_millis(),
-        scene.meshes.len(),
-        scene.bones.len()
+        output.display(),
+        generated.bytes.len(),
+        generated.triangle_count
     );
 
     let t = Instant::now();
-    let merged = bake_and_merge_collision_mesh(&scene, &options).expect("bake and merge");
-    println!(
-        "merge_ms={} merged_vertices={} merged_tris={}",
-        t.elapsed().as_millis(),
-        merged.vertices.len(),
-        merged.triangle_count()
-    );
-
-    let t = Instant::now();
-    let authored = author_collision_shapes(&merged, &options.simplify).expect("author collision");
-    println!(
-        "author_ms={} shapes={} vertices={} primitives={} primitive_keys={} preview_tris={}",
-        t.elapsed().as_millis(),
-        authored.shape_count(),
-        authored.vertex_count(),
-        authored.primitive_count(),
-        authored.primitive_key_count(),
-        authored.triangle_count()
-    );
-
-    let t = Instant::now();
-    let xml = build_authored_collision_set_xml_faithful_scaled(&authored, options.scale_factor)
-        .expect("build HKT XML");
+    let xml = convert_hkt_bytes_to_xml(&config.filter_manager_path, &generated.bytes)
+        .expect("decode generated HKT XML");
     let xml_path = output.with_extension("xml");
     std::fs::write(&xml_path, &xml).expect("write XML");
     println!(
@@ -91,21 +69,5 @@ fn main() {
         t.elapsed().as_millis(),
         xml_path.display(),
         xml.len()
-    );
-
-    let t = Instant::now();
-    run_filter_manager_with_hko(
-        &config.filter_manager_path,
-        HKO_WRITE_HKT,
-        &xml_path,
-        &output,
-    )
-    .expect("Havok XML -> HKT conversion");
-    let bytes = std::fs::metadata(&output).map(|m| m.len()).unwrap_or(0);
-    println!(
-        "hkt_ms={} written={} bytes={}",
-        t.elapsed().as_millis(),
-        output.display(),
-        bytes
     );
 }

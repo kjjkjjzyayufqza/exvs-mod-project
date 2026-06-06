@@ -185,3 +185,17 @@ SDK exporter).
 - [x] Rule out XML tag/schema differences as the contact-freeze cause.
 - [ ] Compare and test data-level differences, starting with `convexRadius`,
   `triangleIsInterior`, and collision topology cleanup.
+
+## Single-Plane No-Collision Follow-up (2026-06-06)
+
+- [x] Round-trip the reported HKT to XML and inspect shape/body metadata.
+- [x] Decode its collision geometry and compare it with the source FBX pipeline.
+- [x] Compare the installed HKT against a current-code regeneration.
+- [x] Identify reversed quad winding (`-Y` instead of `+Y`) as the only meaningful
+  payload difference.
+- [x] Generate `map_hit_fixed_winding.hkt` beside the original without overwriting it.
+- [x] User in-game test confirmed the corrected-winding HKT has collision.
+- [x] Add a production regression test for upward plane winding.
+- [x] Unify UI Generate HKT, FBX/DAE generation, Regenerate HKT, and existing-mesh
+  generation on the shared authored collision preparation path.
+- [x] Verify the real `maphkt.fbx` decodes as upward face `f 1 2 3 4`.

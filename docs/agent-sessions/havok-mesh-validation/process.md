@@ -669,3 +669,80 @@ Cleanup:
 - One empty `test/hkt_collision_crash` directory could not be removed because HxD
   process 24060 has that directory as its current working directory.
 - XML comparison artifacts were created outside the repository and removed afterward.
+
+## 2026-06-06 - Single Plane Has No In-Game Collision
+
+Investigated:
+
+- HKT: `0x16F73C97/0/0/base/map_hit.hkt`
+- FBX: `D:/output/minecraft/maphkt.fbx`
+
+Findings:
+
+- The HKT is structurally valid and contains one body, one compressed mesh shape,
+  one section, four vertices, and one quad (two shape keys).
+- Body collision metadata matches the working game sample:
+  `motionType=0`, `collisionFilterInfo=0`, `qualityId=255`, `materialId=0`.
+- The decoded collision is a nearly flat plane at `Y=0`, spanning about
+  `37932 x 37932` units.
+- The installed HKT stores the quad indices as `[0, 3, 2, 1]`, producing a `-Y`
+  face normal.
+- Regenerating from the same FBX with the current code stores `[0, 1, 2, 3]`,
+  producing a `+Y` face normal.
+- The 11 decoded primitives in the working game-simple reference all face upward;
+  their normalized Y components range from approximately `+0.81` to `+0.999`.
+- A structured comparison found no other meaningful data difference besides the
+  primitive winding and insignificant decimal formatting precision.
+
+Conclusion:
+
+- The installed HKT presents the floor from its back face to a player above it.
+  This is the strongest explanation for the file loading without providing
+  collision.
+- A corrected test file was written without replacing the original:
+  `0x16F73C97/0/0/base/map_hit_fixed_winding.hkt`.
+- Temporary OBJ diagnostics written beside the FBX were removed.
+
+## 2026-06-06 - Unified Production HKT Winding Path
+
+User confirmed that the corrected `+Y` winding HKT provides collision in-game.
+
+Implementation:
+
+- Added `havok_collision_encode::prepare_hkt_collision()` as the shared production
+  preparation step:
+  - simplification,
+  - coplanar triangle-to-quad authoring,
+  - shape-key-safe body splitting,
+  - faithful XML generation,
+  - physics tolerance scaling.
+- Routed FBX/DAE import generation and UI Regenerate HKT through this helper.
+- Routed existing-stage `numshb -> HKT` generation through the same helper.
+- Replaced the legacy registered `scene_generate_hkt_from_dae_path` behavior that
+  passed a model directly to Havok Content Tools. It now parses DAE/FBX through the
+  application collision pipeline and writes the generated HKT bytes.
+- Updated `gen_hkt_from_import` to call the same production import generator instead
+  of duplicating parse/bake/author/XML/Havok steps.
+
+Regression coverage:
+
+- Added `production_hkt_xml_preserves_upward_plane_winding`.
+- The test authors two upward-facing XZ triangles and requires the production XML
+  primitive order to remain `[0, 1, 2, 3]`.
+
+Verification:
+
+- RED: test initially failed to compile because the shared production helper did not
+  exist.
+- GREEN: focused winding test passed.
+- `cargo test ... havok_collision_encode --lib`: 8 passed, 3 ignored.
+- `cargo test ... havok_mesh_encode --lib`: 17 passed.
+- `cargo check --lib --bin gen_hkt_from_import`: passed.
+- Explicit `rustfmt --check` on the four modified Rust files: passed.
+- Real `maphkt.fbx` production generation:
+  - HKT size: `19,416` bytes
+  - triangle count: `2`
+  - decoded face: `f 1 2 3 4` (`+Y`)
+- `cargo check --all-targets` remains blocked by pre-existing missing
+  `quad_merge_enabled` fields in `gen_hkt_variants.rs` and `perf_preview_hkt.rs`;
+  these diagnostic bins were not changed as part of this fix.
