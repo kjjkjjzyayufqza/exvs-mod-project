@@ -6,7 +6,7 @@
 //! flat render tessellation collapses to minimal collision triangles while creases
 //! (dissimilar normals) are preserved.
 
-use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use super::types::{
     AuthoredCollisionSet, CollisionPrimitive, CollisionPrimitiveMesh, CollisionSimplifyMode,
@@ -14,7 +14,6 @@ use super::types::{
 };
 
 const DEGENERATE_AREA: f64 = 1e-14;
-const DEFAULT_AUTHORED_SHAPE_MAX_KEYS: u32 = 8_192;
 
 #[derive(Clone, Copy)]
 struct TriInfo {
@@ -807,185 +806,6 @@ fn compact_primitive_mesh(mesh: &CollisionPrimitiveMesh) -> CollisionPrimitiveMe
     }
 }
 
-fn primitive_edges(primitive: CollisionPrimitive) -> Vec<(u32, u32)> {
-    match primitive {
-        CollisionPrimitive::Triangle([a, b, c]) => {
-            vec![
-                canonical_edge(a, b),
-                canonical_edge(b, c),
-                canonical_edge(c, a),
-            ]
-        }
-        CollisionPrimitive::Quad([a, b, c, d]) => vec![
-            canonical_edge(a, b),
-            canonical_edge(b, c),
-            canonical_edge(c, d),
-            canonical_edge(d, a),
-        ],
-    }
-}
-
-fn build_primitive_adjacency(primitives: &[CollisionPrimitive]) -> Vec<Vec<usize>> {
-    let mut edge_map: HashMap<(u32, u32), Vec<usize>> = HashMap::new();
-    for (index, primitive) in primitives.iter().copied().enumerate() {
-        for edge in primitive_edges(primitive) {
-            edge_map.entry(edge).or_default().push(index);
-        }
-    }
-
-    let mut adjacency = vec![Vec::new(); primitives.len()];
-    for owners in edge_map.values() {
-        if owners.len() < 2 {
-            continue;
-        }
-        for &a in owners {
-            for &b in owners {
-                if a != b {
-                    adjacency[a].push(b);
-                }
-            }
-        }
-    }
-    for neighbors in &mut adjacency {
-        neighbors.sort_unstable();
-        neighbors.dedup();
-    }
-    adjacency
-}
-
-fn compact_primitive_subset(
-    mesh: &CollisionPrimitiveMesh,
-    primitive_indices: &[usize],
-) -> CollisionPrimitiveMesh {
-    let primitives = primitive_indices
-        .iter()
-        .map(|&index| mesh.primitives[index])
-        .collect();
-    compact_primitive_mesh(&CollisionPrimitiveMesh {
-        vertices: mesh.vertices.clone(),
-        primitives,
-    })
-}
-
-fn primitive_indices_key_count(mesh: &CollisionPrimitiveMesh, primitive_indices: &[usize]) -> u32 {
-    primitive_indices
-        .iter()
-        .map(|&index| mesh.primitives[index].primitive_key_count())
-        .sum()
-}
-
-fn split_component_by_key_budget(
-    mesh: &CollisionPrimitiveMesh,
-    component: &[usize],
-    adjacency: &[Vec<usize>],
-    max_keys: u32,
-) -> Vec<CollisionPrimitiveMesh> {
-    let mut remaining: BTreeSet<usize> = component.iter().copied().collect();
-    let mut parts = Vec::new();
-
-    while let Some(&seed) = remaining.iter().next() {
-        let mut queue = VecDeque::from([seed]);
-        let mut queued = BTreeSet::from([seed]);
-        let mut part = Vec::new();
-        let mut keys = 0u32;
-
-        while let Some(index) = queue.pop_front() {
-            queued.remove(&index);
-            if !remaining.contains(&index) {
-                continue;
-            }
-            let primitive_keys = mesh.primitives[index].primitive_key_count();
-            if !part.is_empty() && keys + primitive_keys > max_keys {
-                continue;
-            }
-
-            remaining.remove(&index);
-            part.push(index);
-            keys += primitive_keys;
-
-            for &neighbor in &adjacency[index] {
-                if remaining.contains(&neighbor) && !queued.contains(&neighbor) {
-                    queue.push_back(neighbor);
-                    queued.insert(neighbor);
-                }
-            }
-        }
-
-        if part.is_empty() {
-            remaining.remove(&seed);
-            part.push(seed);
-        }
-
-        part.sort_unstable();
-        parts.push(compact_primitive_subset(mesh, &part));
-    }
-
-    parts
-}
-
-fn split_authored_shapes(mesh: &CollisionPrimitiveMesh, max_keys: u32) -> AuthoredCollisionSet {
-    if mesh.primitives.is_empty() {
-        return AuthoredCollisionSet { shapes: Vec::new() };
-    }
-
-    let adjacency = build_primitive_adjacency(&mesh.primitives);
-    let mut visited = vec![false; mesh.primitives.len()];
-    let mut components: Vec<Vec<usize>> = Vec::new();
-
-    for seed in 0..mesh.primitives.len() {
-        if visited[seed] {
-            continue;
-        }
-        let mut component = Vec::new();
-        let mut queue = VecDeque::from([seed]);
-        visited[seed] = true;
-        while let Some(index) = queue.pop_front() {
-            component.push(index);
-            for &neighbor in &adjacency[index] {
-                if !visited[neighbor] {
-                    visited[neighbor] = true;
-                    queue.push_back(neighbor);
-                }
-            }
-        }
-        component.sort_unstable();
-        components.push(component);
-    }
-
-    let mut shapes = Vec::new();
-    let mut packed_components = Vec::new();
-    let mut packed_keys = 0u32;
-
-    for component in components {
-        let key_count = primitive_indices_key_count(mesh, &component);
-        if key_count > max_keys {
-            if !packed_components.is_empty() {
-                shapes.push(compact_primitive_subset(mesh, &packed_components));
-                packed_components.clear();
-                packed_keys = 0;
-            }
-            shapes.extend(split_component_by_key_budget(
-                mesh, &component, &adjacency, max_keys,
-            ));
-            continue;
-        }
-
-        if !packed_components.is_empty() && packed_keys + key_count > max_keys {
-            shapes.push(compact_primitive_subset(mesh, &packed_components));
-            packed_components.clear();
-            packed_keys = 0;
-        }
-        packed_components.extend(component);
-        packed_keys += key_count;
-    }
-
-    if !packed_components.is_empty() {
-        shapes.push(compact_primitive_subset(mesh, &packed_components));
-    }
-
-    AuthoredCollisionSet { shapes }
-}
-
 fn quadify_triangle_mesh(
     mesh: &CollisionTriMesh,
     cos_threshold: f64,
@@ -1181,6 +1001,72 @@ pub fn simplify_collision_mesh(
 /// Build authored collision shapes from a triangle mesh: simplify first, then
 /// preserve real quads where coplanar triangle pairs can be merged, and finally
 /// split the result into multiple shape-sized chunks.
+/// EXVS compressed-mesh shape keys are 15-bit: the runtime computes a contact key as
+/// `sectionIndex * 256 + localKey`, so a single shape may hold at most ~128 sections
+/// (maxKeyValue ≤ 32767). A shape that needs more sections overflows the key space and
+/// crashes the game on first contact. Real multi-body game stages stay well under this
+/// (largest seen: 66 sections / 15 bits). Budgeting primitive keys per shape keeps each
+/// encoded shape's section count (≈ keys/85 worst case) safely below 128.
+const MAX_SHAPE_PRIMITIVE_KEYS: u32 = 6_000;
+
+/// Split an authored mesh into multiple shapes so each stays under the 15-bit shape-key
+/// cap (see [`MAX_SHAPE_PRIMITIVE_KEYS`]). Primitives are ordered spatially by centroid so
+/// each chunk is a compact region, keeping per-shape BVHs tight and the broadphase
+/// efficient. Each chunk's vertices are compacted to only those it references.
+fn split_authored_for_shape_key_limit(
+    mesh: &CollisionPrimitiveMesh,
+) -> Vec<CollisionPrimitiveMesh> {
+    if mesh.primitives.is_empty() {
+        return Vec::new();
+    }
+
+    let centroid = |primitive: &CollisionPrimitive| -> [f64; 3] {
+        let [a, b, c, _] = primitive.indices4();
+        let mut sum = [0.0f64; 3];
+        for index in [a, b, c] {
+            let vertex = mesh.vertices[index as usize];
+            sum[0] += vertex[0];
+            sum[1] += vertex[1];
+            sum[2] += vertex[2];
+        }
+        [sum[0] / 3.0, sum[1] / 3.0, sum[2] / 3.0]
+    };
+
+    let mut order: Vec<usize> = (0..mesh.primitives.len()).collect();
+    order.sort_by(|&a, &b| {
+        let ca = centroid(&mesh.primitives[a]);
+        let cb = centroid(&mesh.primitives[b]);
+        ca[0]
+            .total_cmp(&cb[0])
+            .then(ca[2].total_cmp(&cb[2]))
+            .then(ca[1].total_cmp(&cb[1]))
+    });
+
+    let mut shapes = Vec::new();
+    let mut current: Vec<CollisionPrimitive> = Vec::new();
+    let mut keys = 0u32;
+    for &index in &order {
+        let primitive = mesh.primitives[index];
+        let primitive_keys = primitive.primitive_key_count();
+        if !current.is_empty() && keys + primitive_keys > MAX_SHAPE_PRIMITIVE_KEYS {
+            shapes.push(compact_primitive_mesh(&CollisionPrimitiveMesh {
+                vertices: mesh.vertices.clone(),
+                primitives: std::mem::take(&mut current),
+            }));
+            keys = 0;
+        }
+        current.push(primitive);
+        keys += primitive_keys;
+    }
+    if !current.is_empty() {
+        shapes.push(compact_primitive_mesh(&CollisionPrimitiveMesh {
+            vertices: mesh.vertices.clone(),
+            primitives: current,
+        }));
+    }
+    shapes
+}
+
 pub fn author_collision_shapes(
     mesh: &CollisionTriMesh,
     options: &CollisionSimplifyOptions,
@@ -1195,11 +1081,16 @@ pub fn author_collision_shapes(
     } else {
         simplified.to_primitive_mesh()
     };
-    let mut set = split_authored_shapes(&authored, DEFAULT_AUTHORED_SHAPE_MAX_KEYS);
-    if set.shapes.is_empty() {
-        set.shapes.push(authored);
+    // A compressed-mesh shape key is 15-bit (sectionIndex*256 + localKey, ≤128 sections).
+    // Large maps exceed that in a single shape — test3's ~22k primitives need >170 Havok
+    // sections, far past 128 — and crash on contact. Split into multiple bodies, each under
+    // the cap, exactly like real multi-body game stages. Multi-body is fully supported by
+    // the game (working assets ship 50+ bodies).
+    let mut shapes = split_authored_for_shape_key_limit(&authored);
+    if shapes.is_empty() {
+        shapes.push(authored);
     }
-    Ok(set)
+    Ok(AuthoredCollisionSet { shapes })
 }
 
 /// Simplify by merging coplanar regions (similar face normals), keeping the surface.
@@ -1458,7 +1349,7 @@ mod tests {
     }
 
     #[test]
-    fn split_authored_shapes_packs_disconnected_components() {
+    fn small_mesh_stays_single_shape() {
         let mut vertices = Vec::new();
         let mut primitives = Vec::new();
         for index in 0..20u32 {
@@ -1469,21 +1360,49 @@ mod tests {
             vertices.push([x, 1.0, 0.0]);
             primitives.push(CollisionPrimitive::Triangle([base, base + 1, base + 2]));
         }
+        let mesh = CollisionPrimitiveMesh {
+            vertices,
+            primitives,
+        }
+        .to_triangle_mesh();
 
-        let set = split_authored_shapes(
-            &CollisionPrimitiveMesh {
-                vertices,
-                primitives,
-            },
-            8,
+        let set = author_collision_shapes(&mesh, &CollisionSimplifyOptions::default())
+            .expect("author shapes");
+
+        // 20 keys is far under the per-shape budget, so it stays a single body.
+        assert_eq!(set.shape_count(), 1);
+    }
+
+    #[test]
+    fn large_mesh_splits_under_shape_key_cap() {
+        // More keys than MAX_SHAPE_PRIMITIVE_KEYS must split into multiple shapes, each
+        // under the cap, so no shape exceeds the 15-bit compressed-mesh shape-key space.
+        let count = (MAX_SHAPE_PRIMITIVE_KEYS as usize) + 500;
+        let mut vertices = Vec::new();
+        let mut primitives = Vec::new();
+        for index in 0..count as u32 {
+            let base = vertices.len() as u32;
+            let x = index as f64 * 10.0;
+            vertices.push([x, 0.0, 0.0]);
+            vertices.push([x + 1.0, 0.0, 0.0]);
+            vertices.push([x, 1.0, 0.0]);
+            primitives.push(CollisionPrimitive::Triangle([base, base + 1, base + 2]));
+        }
+        let mesh = CollisionPrimitiveMesh {
+            vertices,
+            primitives,
+        };
+
+        let shapes = split_authored_for_shape_key_limit(&mesh);
+        assert!(
+            shapes.len() >= 2,
+            "must split when over the per-shape key budget"
         );
-
-        assert_eq!(set.shape_count(), 3);
-        assert_eq!(set.primitive_key_count(), 20);
-        assert!(set
-            .shapes
-            .iter()
-            .all(|shape| shape.primitive_key_count() <= 8));
+        for shape in &shapes {
+            assert!(shape.primitive_key_count() <= MAX_SHAPE_PRIMITIVE_KEYS);
+        }
+        let total: usize = shapes.iter().map(|s| s.primitive_count()).sum();
+        assert_eq!(total, count, "split must preserve every primitive");
     }
 
     #[test]

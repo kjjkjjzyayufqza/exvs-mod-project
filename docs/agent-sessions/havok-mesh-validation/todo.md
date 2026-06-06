@@ -10,6 +10,31 @@ Generate a correct `map_hit.hkt` from `numshb -> mesh -> hkt` that does not hang
 - [x] User confirmed manually converting `E:\XB\解包\com\test\_hkt_template_base\base_map_hit_template.xml` to `E:\XB\解包\com\test\_hkt_preview_single\test.hkt` works.
 - [x] User confirmed the latest generated `E:\XB\解包\com\test\_hkt_preview_single\map_hit.hkt` still hangs.
 
+## Contact Crash Follow-up (2026-06-06)
+
+- [x] Compare user failing generated HKT:
+  `E:\XB\解包\com\test\0x16F73C97\0\0\base\map_hit.hkt`.
+- [x] Compare working reference HKT:
+  `E:\XB\解包\com\test\0x7A57BA57\0\0\base\map_hit.hkt`.
+- [x] Check source FBX:
+  `D:\output\minecraft\test3_plane_clear2_small.fbx`.
+- [x] Re-read DSMapStudio builder and BVH implementation.
+- [x] Run HKT -> XML round-trip structure verifier on failing and reference HKT.
+- [x] Identify contact-crash cause:
+  - generated `maxKeyValue` / `triangleIsInterior.numBits` were undersized against
+    Axis4-derived shape keys.
+  - generated simdTree used compact cumulative keys instead of section-indexed
+    Axis4 keys.
+- [x] Patch `src-tauri/src/havok_mesh_encode.rs`.
+- [x] Add focused regression tests for Axis4 max-key and simdTree key/sentinel behavior.
+- [x] Run `cargo fmt --manifest-path src-tauri\Cargo.toml`.
+- [x] Run `cargo test --manifest-path src-tauri\Cargo.toml havok_mesh_encode --lib -- --nocapture`.
+- [x] Regenerate comparable fixed 32k HKT for user testing:
+  `test/hkt_collision_crash/test3_plane_clear2_small_fixed_32k.hkt`.
+- [x] Verify fixed HKT round-trips and fixed XML has `delta=0` for all generated
+  `maxKeyValue` checks.
+- [ ] User in-game test of fixed HKT contact behavior.
+
 ## Phase 1: Baseline And Harness
 
 - [x] Read `AGENTS.md` and `.cursor/rules/custom-rules.mdc`.
@@ -115,7 +140,7 @@ Generate a correct `map_hit.hkt` from `numshb -> mesh -> hkt` that does not hang
 ## Phase 5: Implement And Verify
 
 - [ ] Apply the smallest evidence-backed code fix.
-- [ ] Run `cargo fmt`.
+- [ ] Run formatting only on explicitly modified Rust files; do not run global `cargo fmt`.
 - [ ] Run `cargo test havok_mesh_encode --lib`.
 - [ ] Run `cargo test collect_save_artifacts --lib`.
 - [ ] Regenerate `E:\XB\解包\com\test\_hkt_preview_single\map_hit.hkt`.
@@ -150,3 +175,13 @@ SDK exporter).
 - Unrelated working-tree changes NOT part of this task and left untouched:
   - `src/page/TestEditor/components/ssbh-model-preview/NumatbTemplateEditor*.tsx`
 - Awaiting explicit user go-ahead to commit.
+
+## XML Tag Comparison (2026-06-06)
+
+- [x] Delete generated test artifacts under `test/`.
+- [x] Convert generated, game-complex, and game-simple HKT files outside the repo.
+- [x] Compare XML root tags, element tags, attributes, normalized Havok type schemas,
+  compressed-mesh field order, and value-node tags.
+- [x] Rule out XML tag/schema differences as the contact-freeze cause.
+- [ ] Compare and test data-level differences, starting with `convexRadius`,
+  `triangleIsInterior`, and collision topology cleanup.

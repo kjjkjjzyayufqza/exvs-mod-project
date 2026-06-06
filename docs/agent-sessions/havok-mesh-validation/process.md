@@ -1,5 +1,97 @@
 # Havok Mesh Validation Process
 
+## Contact Crash Follow-up (2026-06-06)
+
+- User reported generated `E:\XB\解包\com\test\0x16F73C97\0\0\base\map_hit.hkt`
+  crashes when the player-controlled unit contacts collision.
+- Input FBX used by the user:
+  `D:\output\minecraft\test3_plane_clear2_small.fbx`.
+- Working reference:
+  `E:\XB\解包\com\test\0x7A57BA57\0\0\base\map_hit.hkt`.
+- Read startup context:
+  - `AGENTS.md`
+  - `.cursor/rules/custom-rules.mdc`
+  - `docs/havok_compressed_mesh_encode.md`
+  - `docs/havok_compressed_mesh_decode.md`
+  - `docs/havok_hkt_to_obj.md`
+- Used DSMapStudio references:
+  - `soulsmods/DSMapStudio/src/HKX2/HKX2/Builders/hknpCollisionMeshBuilder.cs`
+  - `soulsmods/DSMapStudio/src/HKX2/HKX2/Builders/BVH.cs`
+
+### Evidence
+
+- File sizes and hashes:
+  - failing generated HKT: `1662988` bytes,
+    SHA256 `2F12D4F69EC3D1B87A6D6B2281E3EA64C5BEE4D5E8BD481D0537A2339CDB7AA7`
+  - working reference HKT: `348804` bytes,
+    SHA256 `6F7FB8E9E7E7A51909452AB2E9DD5502AD37F64F792B5431C4456A7B00644A32`
+  - source FBX: `5623212` bytes,
+    SHA256 `F0912083B560DE69E16A4BB551812B64AAD935475B9C233953F82116D21E6FF3`
+- `scripts/hkt_struct_verify.ps1` round-tripped both HKT files to XML successfully.
+- Failing generated HKT had 6 `hknpCompressedMeshShapeData` objects. All six had
+  `maxKeyValue` lower than the value derived from Axis4 leaf semantics:
+  - object12: declared `8323`, Axis4-derived `8392`
+  - object13: declared `8803`, Axis4-derived `8853`
+  - object14: declared `8465`, Axis4-derived `8470`
+  - object15: declared `7852`, Axis4-derived `7889`
+  - object16: declared `8614`, Axis4-derived `8665`
+  - object17: declared `3940`, Axis4-derived `3989`
+- Working reference HKT matched exactly:
+  - object164: declared `10461`, Axis4-derived `10461`
+  - object166: declared `19`, Axis4-derived `19`
+- Failing generated simdTree leaf data used compact/cumulative primitive keys:
+  active keys included odd values and maxed around `5999`.
+- Working reference simdTree leaf data used Axis4 shape keys:
+  active keys were even (`sectionIndex * 256 + primitiveIndex * 2`) and inactive
+  lanes used `4294967295`.
+
+### Root Cause
+
+- The encoder correctly wrote Axis4 leaves as `primitiveIndex * 2` and Axis5 leaves as
+  section indices, but `section_indexed_max_key()` and `build_simd_leaves()` still used
+  compact cumulative primitive-key counts (`triangle=1`, `quad=2`).
+- For multi-section meshes with mixed triangles/quads this under-sized:
+  - `maxKeyValue`
+  - `bitsPerKey`
+  - `numShapeKeyBits`
+  - `triangleIsInterior.numBits`
+- It also made simdTree return keys in a different key space than meshTree. The HKT loads
+  and round-trips, but runtime contact can index past `triangleIsInterior` or resolve a
+  simdTree key to the wrong section/local primitive. This matches "loads, then crashes on
+  player collision".
+
+### Fix
+
+- Updated `src-tauri/src/havok_mesh_encode.rs`:
+  - `section_indexed_max_key()` now derives max key from Axis4 local primitive key
+    space: `sectionIndex * 256 + primitiveIndex * 2 (+1 for quad second half)`.
+  - `build_simd_leaves()` now emits section-indexed Axis4 keys.
+  - simdTree inactive lanes now use `u32::MAX` (`4294967295`) instead of `0`.
+- Added regression tests:
+  - `max_key_uses_axis4_primitive_index_space`
+  - `simd_tree_uses_section_indexed_keys_and_inactive_sentinel`
+  - updated `simd_tree_leaf_data_uses_axis4_primitive_keys`
+
+### Verification
+
+- `cargo fmt --manifest-path src-tauri\Cargo.toml`
+  - PASS.
+- `cargo test --manifest-path src-tauri\Cargo.toml havok_mesh_encode --lib -- --nocapture`
+  - PASS: 17 passed.
+- Regenerated a comparable 32k-budget HKT:
+  - command used `HKT_SCALE_FACTOR=0.05` and `HKT_MAX_TARGET_TRIANGLES=32000`
+  - output: `E:\TAURI_PROJECT\test\hkt_collision_crash\test3_plane_clear2_small_fixed_32k.hkt`
+  - size: `1664316` bytes
+  - authoring stats: 6 shapes, 16,705 vertices, 21,767 primitives, 31,778 primitive keys
+- Round-trip verifier on fixed HKT:
+  - PASS: 6 shapes / 6 meshData, no verifier errors.
+- Fixed XML structural check:
+  - every meshData had declared `maxKeyValue == Axis4-derived maxKeyValue` (`delta=0`).
+  - simdTree active keys had `activeOddValues=0`.
+  - simdTree inactive lane sentinel `4294967295` was present.
+- Cleaned large temporary XML artifacts. Kept only the small fixed HKT for user testing:
+  `test/hkt_collision_crash/test3_plane_clear2_small_fixed_32k.hkt`.
+
 ## Goal
 
 Determine whether the current EXVS stage Havok mesh generation path can correctly produce an `hkt` collision file that opens in `C:\Program Files\Havok\HavokContentTools\PreviewTool.exe`, using public GitHub/web references plus the local implementation.
@@ -539,3 +631,41 @@ Fixes:
 
 Tests: `cargo test validate_`, `cargo test havok_mesh_encode::tests`,
 `npx vitest run src/utils/havokXmlParser.test.ts` — all green.
+
+## 2026-06-06 - XML Tag Schema Comparison
+
+Compared the current generated HKT against both game references after converting all
+three files to XML tagfile v3 in the system temporary directory:
+
+- Generated: `0x16F73C97/0/0/base/map_hit.hkt`
+- Game complex: `0x7A57BA57/0/0/base/map_hit.hkt`
+- Game simple: `0x7A57BA57/0/0/017stage017_object_factory01_after/map_hit.hkt`
+
+Results:
+
+- All three roots are exactly `hktagfile version="3"`.
+- All three use the same XML element-name set and the same attribute-name schema.
+- Generated and game-simple files both contain 410 type records and have identical
+  normalized schemas for every common Havok type.
+- The complex game file adds only types needed by its box/convex shapes. The core
+  `hknpShape`, `hknpCompressedMeshShape`, `hknpCompressedMeshShapeData`,
+  `hknpPhysicsSystemData`, and `hknpBodyCinfo` schemas are identical.
+- Compressed-mesh object field names, order, field types, and value-node tags are
+  identical in all three files.
+
+Therefore the contact freeze is not caused by different XML tags or class schemas.
+Relevant data differences remain:
+
+- Generated collision uses six compressed-mesh shapes and 31,778 primitive keys.
+- Generated `convexRadius` is `0.0005`; both game references use `0.01`.
+- Every generated `triangleIsInterior` bit is zero. The game-simple mesh sets 6 of
+  21 bits; the main game-complex mesh sets 2,711 of 10,462 bits.
+- Prior geometry analysis found substantial duplicate, degenerate, and non-manifold
+  topology in the generated collision mesh.
+
+Cleanup:
+
+- Deleted all files under `test/` as requested.
+- One empty `test/hkt_collision_crash` directory could not be removed because HxD
+  process 24060 has that directory as its current working directory.
+- XML comparison artifacts were created outside the repository and removed afterward.

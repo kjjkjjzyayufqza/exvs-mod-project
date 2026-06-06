@@ -10,7 +10,7 @@ use crate::collision_mesh::{
     author_collision_shapes, bake_and_merge_collision_mesh, parse_import_scene_from_bytes,
     CollisionMeshOptions, CollisionTriMesh,
 };
-use crate::havok_mesh_encode::build_authored_collision_set_xml_faithful;
+use crate::havok_mesh_encode::build_authored_collision_set_xml_faithful_scaled;
 
 /// Result of mesh-accurate HKT generation.
 pub struct HktGenerationResult {
@@ -383,7 +383,7 @@ fn generate_hkt_from_import_scene(
     };
     validate_collision_mesh_for_hkt(&preview, options.simplify.enabled)?;
     let triangle_count = mesh.triangle_count();
-    let xml = build_authored_collision_set_xml_faithful(&authored)?;
+    let xml = build_authored_collision_set_xml_faithful_scaled(&authored, options.scale_factor)?;
     let bytes = convert_xml_string_to_hkt(filter_manager_exe, &xml)?;
     Ok(HktGenerationResult {
         bytes,

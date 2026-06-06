@@ -953,8 +953,7 @@ fn rename_numatb_with_maya_nust(
         for e in 0..extra_count {
             let target = numatb_indices[declared_count + e];
             if first_is_nust && extra_count == 1 {
-                subfolder.files[target].file_name =
-                    format!("{}__maya__.numatb", modl.model_name);
+                subfolder.files[target].file_name = format!("{}__maya__.numatb", modl.model_name);
             } else {
                 subfolder.files[target].file_name =
                     format!("{}_{}.numatb", modl.model_name, declared_count + e);
@@ -1030,9 +1029,7 @@ fn classify_content_folders(
     }
 
     if !sky_found {
-        let model_indices: Vec<usize> = (0..nodes.len())
-            .filter(|i| roles[*i].is_none())
-            .collect();
+        let model_indices: Vec<usize> = (0..nodes.len()).filter(|i| roles[*i].is_none()).collect();
         if let Some(&last) = model_indices.last() {
             roles[last] = Some(FolderRole::Sky);
         }
@@ -1274,7 +1271,10 @@ fn collect_nutexb_from_children(
         let is_pure_nutexb = is_numeric
             && !child.files.is_empty()
             && child.children.is_empty()
-            && child.files.iter().all(|f| f.file_type.eq_ignore_ascii_case(".nutexb"));
+            && child
+                .files
+                .iter()
+                .all(|f| f.file_type.eq_ignore_ascii_case(".nutexb"));
         if !is_pure_nutexb {
             collect_nutexb_from_children(&mut child.children, collected, seen);
         }
@@ -1287,7 +1287,10 @@ fn collect_nutexb_from_children(
         let is_pure_nutexb = is_numeric
             && !child.files.is_empty()
             && child.children.is_empty()
-            && child.files.iter().all(|f| f.file_type.eq_ignore_ascii_case(".nutexb"));
+            && child
+                .files
+                .iter()
+                .all(|f| f.file_type.eq_ignore_ascii_case(".nutexb"));
         if is_pure_nutexb {
             for f in &child.files {
                 let key = f.file_name.to_ascii_lowercase();
@@ -1492,7 +1495,10 @@ fn collect_nutexb_matching_refs(
         let is_pure_nutexb = is_numeric
             && !child.files.is_empty()
             && child.children.is_empty()
-            && child.files.iter().all(|f| f.file_type.eq_ignore_ascii_case(".nutexb"));
+            && child
+                .files
+                .iter()
+                .all(|f| f.file_type.eq_ignore_ascii_case(".nutexb"));
         if !is_pure_nutexb {
             collect_nutexb_matching_refs(&mut child.children, referenced_names, collected, seen);
         }
@@ -1505,7 +1511,10 @@ fn collect_nutexb_matching_refs(
         let is_pure_nutexb = is_numeric
             && !child.files.is_empty()
             && child.children.is_empty()
-            && child.files.iter().all(|f| f.file_type.eq_ignore_ascii_case(".nutexb"));
+            && child
+                .files
+                .iter()
+                .all(|f| f.file_type.eq_ignore_ascii_case(".nutexb"));
         if is_pure_nutexb {
             for f in &child.files {
                 // Match by stripping .nutexb from file_name
@@ -2105,10 +2114,16 @@ pub fn load_stage_skeleton_impl(stage_root: &str) -> Result<StageSkeleton, Strin
     let mut object_index = 0usize;
 
     // Count non-special, non-sky model folders to determine sky's forced index.
-    let skel_model_folder_count = entries.iter().filter(|e| {
-        let n = e.file_name().to_string_lossy().to_string();
-        n != STAGE_BASE_NAME && n != STAGE_INFO_NAME && n != STAGE_TEXTURES_NAME && n != STAGE_SKY_NAME
-    }).count();
+    let skel_model_folder_count = entries
+        .iter()
+        .filter(|e| {
+            let n = e.file_name().to_string_lossy().to_string();
+            n != STAGE_BASE_NAME
+                && n != STAGE_INFO_NAME
+                && n != STAGE_TEXTURES_NAME
+                && n != STAGE_SKY_NAME
+        })
+        .count();
 
     for entry in &entries {
         let name = entry.file_name().to_string_lossy().to_string();
@@ -2151,9 +2166,7 @@ pub fn load_stage_skeleton_impl(stage_root: &str) -> Result<StageSkeleton, Strin
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum StageStreamChunk {
     #[serde(rename = "baseModel")]
-    BaseModel {
-        bundle: SsbhModelPreviewBundle,
-    },
+    BaseModel { bundle: SsbhModelPreviewBundle },
     #[serde(rename = "subModel")]
     SubModel {
         folder_name: String,
@@ -2161,10 +2174,7 @@ pub enum StageStreamChunk {
         bundle: SsbhModelPreviewBundle,
     },
     #[serde(rename = "progress")]
-    Progress {
-        loaded: usize,
-        total: usize,
-    },
+    Progress { loaded: usize, total: usize },
     #[serde(rename = "complete")]
     Complete {
         total_models: usize,
@@ -2243,8 +2253,8 @@ pub fn load_stage_bundle_impl(stage_root: &str) -> Result<StageBundle, String> {
     }
 
     // Resolve the info folder dynamically so we can skip it from sub_models.
-    let info_dir_name = find_info_dir(root)
-        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()));
+    let info_dir_name =
+        find_info_dir(root).and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()));
 
     let mut sub_models = Vec::new();
     let mut entries: Vec<_> = fs::read_dir(root)
@@ -2255,13 +2265,16 @@ pub fn load_stage_bundle_impl(stage_root: &str) -> Result<StageBundle, String> {
     entries.sort_by_key(|e| e.file_name());
 
     // Count non-special model folders to determine sky's forced index.
-    let model_folder_count = entries.iter().filter(|e| {
-        let n = e.file_name().to_string_lossy().to_string();
-        n != STAGE_BASE_NAME
-            && n != STAGE_TEXTURES_NAME
-            && Some(n.as_str()) != info_dir_name.as_deref()
-            && n != STAGE_SKY_NAME
-    }).count();
+    let model_folder_count = entries
+        .iter()
+        .filter(|e| {
+            let n = e.file_name().to_string_lossy().to_string();
+            n != STAGE_BASE_NAME
+                && n != STAGE_TEXTURES_NAME
+                && Some(n.as_str()) != info_dir_name.as_deref()
+                && n != STAGE_SKY_NAME
+        })
+        .count();
 
     let mut object_index = 0usize;
     for entry in &entries {
@@ -3384,6 +3397,18 @@ fn info_file_order(name: &str) -> (u8, String) {
     }
 }
 
+/// Returns a sort key for info/ sub-directories matching INFO_SUBFOLDER_NAMES order.
+/// Ensures repack emits sub-folders in the same order as unpack named them.
+fn info_subfolder_order(name: &str) -> (u8, String) {
+    let lower = name.to_ascii_lowercase();
+    for (i, &known) in INFO_SUBFOLDER_NAMES.iter().enumerate() {
+        if lower == known {
+            return (i as u8, String::new());
+        }
+    }
+    (INFO_SUBFOLDER_NAMES.len() as u8, lower)
+}
+
 /// Returns a sort key for content-level directories.
 /// Order: base=0, info=1, sky=3, textures=4 (excluded), everything else=2 (models, alphabetical).
 fn stage_content_dir_order(name: &str) -> (u8, String) {
@@ -3458,12 +3483,7 @@ fn build_exvs_structure_tree(
 }
 
 /// Push a single file as an Item node with the correct EXVS unk2 type tag.
-fn push_exvs_file_item(
-    c: &mut RebuildCollector,
-    file: &Path,
-    root: &Path,
-    folder_name: &str,
-) {
+fn push_exvs_file_item(c: &mut RebuildCollector, file: &Path, root: &Path, folder_name: &str) {
     let ext = ext_of(&file.file_name().unwrap().to_string_lossy());
     let rel = file
         .strip_prefix(root)
@@ -3552,18 +3572,34 @@ fn build_exvs_model_folder(
 
     let numatb_maya: Vec<&PathBuf> = numatb_files
         .iter()
-        .filter(|f| f.file_name().unwrap().to_string_lossy().to_ascii_lowercase().contains("__maya__"))
+        .filter(|f| {
+            f.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .to_ascii_lowercase()
+                .contains("__maya__")
+        })
         .copied()
         .collect();
     let numatb_nust: Vec<&PathBuf> = numatb_files
         .iter()
-        .filter(|f| f.file_name().unwrap().to_string_lossy().to_ascii_lowercase().contains("__nust__"))
+        .filter(|f| {
+            f.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .to_ascii_lowercase()
+                .contains("__nust__")
+        })
         .copied()
         .collect();
     let numatb_other: Vec<&PathBuf> = numatb_files
         .iter()
         .filter(|f| {
-            let n = f.file_name().unwrap().to_string_lossy().to_ascii_lowercase();
+            let n = f
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .to_ascii_lowercase();
             !n.contains("__maya__") && !n.contains("__nust__")
         })
         .copied()
@@ -3619,7 +3655,10 @@ fn build_exvs_model_folder(
         let jnttbl_path = numdlb_files[0].with_file_name(format!("{numdlb_stem}.jnttbl"));
         if !jnttbl_path.exists() {
             if let Err(e) = fs::write(&jnttbl_path, b"") {
-                eprintln!("[build_exvs_model_folder] Failed to auto-create jnttbl {}: {e}", jnttbl_path.display());
+                eprintln!(
+                    "[build_exvs_model_folder] Failed to auto-create jnttbl {}: {e}",
+                    jnttbl_path.display()
+                );
             }
         }
         push_exvs_file_item(c, &jnttbl_path, root, folder_name);
@@ -3676,14 +3715,21 @@ fn build_exvs_directory(
 
     // At the content level (where base/, info/, sky/ exist), enforce
     // the canonical FHM2D ordering: base → info → {models sorted} → sky → textures.
-    let has_base = relevant_dirs
-        .iter()
-        .any(|d| d.file_name().unwrap().to_string_lossy().eq_ignore_ascii_case(STAGE_BASE_NAME));
+    let has_base = relevant_dirs.iter().any(|d| {
+        d.file_name()
+            .unwrap()
+            .to_string_lossy()
+            .eq_ignore_ascii_case(STAGE_BASE_NAME)
+    });
     let relevant_dirs = if has_base {
         let mut sorted: Vec<&PathBuf> = relevant_dirs
             .into_iter()
             .filter(|d| {
-                let name = d.file_name().unwrap().to_string_lossy().to_ascii_lowercase();
+                let name = d
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_ascii_lowercase();
                 if name == STAGE_TEXTURES_NAME {
                     return opts.include_shared_textures;
                 }
@@ -3691,8 +3737,16 @@ fn build_exvs_directory(
             })
             .collect();
         sorted.sort_by(|a, b| {
-            let an = a.file_name().unwrap().to_string_lossy().to_ascii_lowercase();
-            let bn = b.file_name().unwrap().to_string_lossy().to_ascii_lowercase();
+            let an = a
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .to_ascii_lowercase();
+            let bn = b
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .to_ascii_lowercase();
             stage_content_dir_order(&an).cmp(&stage_content_dir_order(&bn))
         });
         sorted
@@ -3706,8 +3760,15 @@ fn build_exvs_directory(
     }
 
     if depth > 0 {
-        let dir_name = dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-        let unk3 = if dir_name.to_ascii_lowercase() == STAGE_TEXTURES_NAME { 64 } else { 0 };
+        let dir_name = dir
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let unk3 = if dir_name.to_ascii_lowercase() == STAGE_TEXTURES_NAME {
+            64
+        } else {
+            0
+        };
         c.push_folder(child_count as i32, unk3);
     }
 
@@ -3730,7 +3791,16 @@ fn build_exvs_directory(
 
     if is_ssbh_folder {
         // SSBH model folder — use canonical EXVS ordering
-        build_exvs_model_folder(c, &files, &tex_container_dirs, &relevant_dirs, root, folder_name, depth, opts);
+        build_exvs_model_folder(
+            c,
+            &files,
+            &tex_container_dirs,
+            &relevant_dirs,
+            root,
+            folder_name,
+            depth,
+            opts,
+        );
     } else {
         // Generic directory.
         // EXVS info/ has a special layout: sub-folders (fog, light) first,
@@ -3745,12 +3815,20 @@ fn build_exvs_directory(
             || INFO_SUBFOLDER_NAMES.contains(&dir_name_lower.as_str());
 
         // Separate post_effect from other subdirs (only matters for info/)
-        let (normal_dirs, post_effect_dirs): (Vec<&PathBuf>, Vec<&PathBuf>) = relevant_dirs
-            .iter()
-            .partition(|d| {
-                let n = d.file_name().unwrap().to_string_lossy().to_ascii_lowercase();
+        let (mut normal_dirs, post_effect_dirs): (Vec<&PathBuf>, Vec<&PathBuf>) =
+            relevant_dirs.iter().partition(|d| {
+                let n = d
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_ascii_lowercase();
                 !(is_info_dir && n == "post_effect")
             });
+
+        if is_info_dir {
+            normal_dirs
+                .sort_by_key(|d| info_subfolder_order(&d.file_name().unwrap().to_string_lossy()));
+        }
 
         // Emit normal sub-dirs first
         for d in &normal_dirs {
@@ -3856,7 +3934,14 @@ fn rebuild_structure_from_scratch(
 
     let mut collector = RebuildCollector::new();
 
-    build_exvs_structure_tree(&mut collector, root, folder_name, &ExvsBuildOpts { include_shared_textures: false });
+    build_exvs_structure_tree(
+        &mut collector,
+        root,
+        folder_name,
+        &ExvsBuildOpts {
+            include_shared_textures: false,
+        },
+    );
 
     let sub_file_data: Vec<RebuildSubFileData> = collector
         .files
@@ -3932,7 +4017,14 @@ fn rebuild_structure_from_scratch_with_shared_textures(
 
     let mut collector = RebuildCollector::new();
 
-    build_exvs_structure_tree(&mut collector, root, folder_name, &ExvsBuildOpts { include_shared_textures: true });
+    build_exvs_structure_tree(
+        &mut collector,
+        root,
+        folder_name,
+        &ExvsBuildOpts {
+            include_shared_textures: true,
+        },
+    );
 
     let sub_file_data: Vec<RebuildSubFileData> = collector
         .files
@@ -4007,10 +4099,7 @@ fn patch_nutexb_urls_in_structure(
             if !is_nutexb {
                 continue;
             }
-            let current_url = entry
-                .get("fileUrl")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let current_url = entry.get("fileUrl").and_then(|v| v.as_str()).unwrap_or("");
             let filename_lower = current_url
                 .replace('\\', "/")
                 .split('/')
@@ -4120,12 +4209,16 @@ fn copy_stage_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
     fs::create_dir_all(dst)
         .map_err(|e| format!("Failed to create temp repack dir {}: {e}", dst.display()))?;
 
-    for entry in fs::read_dir(src)
-        .map_err(|e| format!("Failed to read stage dir {}: {e}", src.display()))?
+    for entry in
+        fs::read_dir(src).map_err(|e| format!("Failed to read stage dir {}: {e}", src.display()))?
     {
         let entry = entry.map_err(|e| format!("Failed to read stage dir entry: {e}"))?;
-        let file_type = entry.file_type()
-            .map_err(|e| format!("Failed to read file type for {}: {e}", entry.path().display()))?;
+        let file_type = entry.file_type().map_err(|e| {
+            format!(
+                "Failed to read file type for {}: {e}",
+                entry.path().display()
+            )
+        })?;
         let dst_path = dst.join(entry.file_name());
 
         if file_type.is_dir() {
@@ -4154,12 +4247,18 @@ pub fn repack_stage_fhm2d_preserving_shared_textures(
 ) -> Result<StageRepackPreserveResult, String> {
     let source_root = Path::new(stage_root);
     if !source_root.is_dir() {
-        return Err(format!("Stage root is not a directory: {}", source_root.display()));
+        return Err(format!(
+            "Stage root is not a directory: {}",
+            source_root.display()
+        ));
     }
 
-    let stage_folder_name = source_root
-        .file_name()
-        .ok_or_else(|| format!("Cannot determine stage folder name: {}", source_root.display()))?;
+    let stage_folder_name = source_root.file_name().ok_or_else(|| {
+        format!(
+            "Cannot determine stage folder name: {}",
+            source_root.display()
+        )
+    })?;
     let temp_dir =
         tempfile::tempdir().map_err(|e| format!("Failed to create temp repack workspace: {e}"))?;
     let temp_stage_root = temp_dir.path().join(stage_folder_name);
@@ -4167,14 +4266,15 @@ pub fn repack_stage_fhm2d_preserving_shared_textures(
     copy_stage_dir_recursive(source_root, &temp_stage_root)?;
 
     if let Some(structure_path) = find_structure_json_path(source_root) {
-        let temp_structure_path = temp_dir.path().join(
-            structure_path.file_name().ok_or_else(|| {
-                format!(
-                    "Cannot determine structure JSON file name: {}",
-                    structure_path.display()
-                )
-            })?
-        );
+        let temp_structure_path =
+            temp_dir
+                .path()
+                .join(structure_path.file_name().ok_or_else(|| {
+                    format!(
+                        "Cannot determine structure JSON file name: {}",
+                        structure_path.display()
+                    )
+                })?);
         fs::copy(&structure_path, &temp_structure_path).map_err(|e| {
             format!(
                 "Failed to copy structure JSON {} to {}: {e}",
@@ -4545,9 +4645,8 @@ pub fn restore_shared_textures(stage_root: &str) -> Result<RestoreSharedResult, 
                     let dest = textures_dir.join(&fname);
                     if seen_names.insert(lower) {
                         if !textures_dir.is_dir() {
-                            fs::create_dir_all(&textures_dir).map_err(|e| {
-                                format!("Failed to create textures/ folder: {e}")
-                            })?;
+                            fs::create_dir_all(&textures_dir)
+                                .map_err(|e| format!("Failed to create textures/ folder: {e}"))?;
                         }
                         fs::copy(&src, &dest).map_err(|e| {
                             format!("Failed to copy {} → {}: {e}", src.display(), dest.display())
@@ -4713,7 +4812,10 @@ fn index_nutexb_folder(textures_dir: &Path) -> Result<BTreeMap<String, PathBuf>,
 
 /// Find all directories that contain `.numatb` files — these are SSBH folders.
 /// Skips `info/`, `textures/`, and hidden directories.
-pub(crate) fn find_ssbh_folders(root: &Path, warnings: &mut Vec<String>) -> Result<Vec<PathBuf>, String> {
+pub(crate) fn find_ssbh_folders(
+    root: &Path,
+    warnings: &mut Vec<String>,
+) -> Result<Vec<PathBuf>, String> {
     let skip_names: HashSet<&str> = [STAGE_INFO_NAME, STAGE_TEXTURES_NAME].into_iter().collect();
     let mut result = Vec::new();
     find_ssbh_folders_recurse(root, root, &skip_names, &mut result, warnings, 0)?;
@@ -4864,9 +4966,9 @@ pub(crate) fn parse_numatb_texture_refs_by_role(
                     let mut cursor = Cursor::new(&data);
                     match ssbh_data::prelude::MatlData::read(&mut cursor) {
                         Ok(matl) => *refs = extract_nutexb_names_from_matl(&matl),
-                        Err(e) => warnings.push(format!(
-                            "Failed to parse numatb '{}': {e}", p.display()
-                        )),
+                        Err(e) => {
+                            warnings.push(format!("Failed to parse numatb '{}': {e}", p.display()))
+                        }
                     }
                 }
                 Err(e) => warnings.push(format!("Failed to read numatb '{}': {e}", p.display())),

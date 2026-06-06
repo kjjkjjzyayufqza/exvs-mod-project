@@ -320,7 +320,6 @@ export function GenerateHktFromModelDialog({
 
   const canApply =
     Boolean(sessionId && targetImportId && sourcePath && sourceName) &&
-    hasValidCachedHkt &&
     !previewLoading &&
     !hktGenerating &&
     !applying &&
@@ -328,25 +327,53 @@ export function GenerateHktFromModelDialog({
 
   const handleApply = async () => {
     if (!sessionId || !targetImportId || !sourcePath || !sourceName) return;
-    const hktToApply = cachedHkt;
-    if (!isCachedHktFromModelValid(hktToApply, sourcePath, previewConfigKey)) {
-      setPreviewError("Preview the current model/settings before applying.");
-      return;
-    }
+
     setApplying(true);
     try {
-      toast.loading(`Applying previewed HKT from ${sourceName}...`, { id: "hkt-from-model" });
+      let hktBytes: number[];
+      let hktXml: string;
+      const usedCachedPreview = isCachedHktFromModelValid(
+        cachedHkt,
+        sourcePath,
+        previewConfigKey,
+      );
+
+      if (usedCachedPreview) {
+        toast.loading(`Applying previewed HKT from ${sourceName}...`, { id: "hkt-from-model" });
+        hktBytes = cachedHkt.hktBytes;
+        hktXml = cachedHkt.hktXml;
+      } else {
+        toast.loading(`Generating HKT from ${sourceName}...`, { id: "hkt-from-model" });
+        setHktGenerating(true);
+        const payload = await sceneGenerateReplacementHktFromDaePath(
+          sourcePath,
+          sourceName,
+          importConfig,
+        );
+        hktBytes = payload.hktBytes;
+        hktXml = payload.hktXml;
+        setCachedHkt({
+          sourcePath,
+          configKey: previewConfigKey,
+          hktBytes: payload.hktBytes,
+          hktXml: payload.hktXml,
+          triangleCount: payload.triangleCount,
+        });
+      }
+
       await sceneApplyReplacementHktBytes(
         sessionId,
         targetImportId,
-        hktToApply.hktBytes,
+        hktBytes,
         sourceName,
-        hktToApply.hktXml,
+        hktXml,
       );
       await onReplaced(targetImportId);
       toast.success(`HKT replaced for ${targetName}`, {
         id: "hkt-from-model",
-        description: `Applied previewed collision from ${sourceName}`,
+        description: usedCachedPreview
+          ? `Applied previewed collision from ${sourceName}`
+          : `Generated and applied collision from ${sourceName}`,
       });
       onOpenChange(false);
     } catch (err) {
@@ -356,14 +383,15 @@ export function GenerateHktFromModelDialog({
       });
     } finally {
       setApplying(false);
+      setHktGenerating(false);
     }
   };
 
   const applyButtonLabel = applying
-    ? "Applying HKT..."
-    : hasValidCachedHkt
-      ? "Generate & Replace HKT"
-      : "Preview First";
+    ? hktGenerating
+      ? "Generating HKT..."
+      : "Applying HKT..."
+    : "Generate & Replace HKT";
 
   return (
     <Dialog
@@ -379,8 +407,9 @@ export function GenerateHktFromModelDialog({
           <DialogDescription className="text-xs">
             Read a fresh DAE or FBX, rebuild a Havok collision shape, and replace the collision for{" "}
             <span className="font-medium text-foreground">{targetName}</span>.
-            Preview generates the HKT once. Generate & Replace applies that previewed HKT from
-            memory and writes map_hit.hkt directly into the open stage folder when one is loaded.
+            Preview is optional. Generate & Replace uses the previewed HKT when one exists;
+            otherwise it generates fresh collision data and writes map_hit.hkt into the open stage
+            folder when one is loaded.
           </DialogDescription>
         </DialogHeader>
 
@@ -506,7 +535,7 @@ export function GenerateHktFromModelDialog({
                   {formatTriangleCount(meshPreview.triangleCount)} triangles, ~
                   {formatTriangleCount(meshPreview.triangleCount * 2)} primitive keys).
                   {hasValidCachedHkt && !previewUsesPreHavokMesh
-                    ? " HKT is cached in memory; Replace will apply this exact preview."
+                    ? " HKT is cached in memory; Generate & Replace will apply this preview."
                     : ""}
                 </p>
               ) : meshPreview && (previewLoading || hktGenerating || objExporting) ? (
@@ -619,7 +648,10 @@ export function GenerateHktFromModelDialog({
         <DialogFooter className="shrink-0 flex-wrap items-center gap-2 border-t border-border/60 px-5 py-3 sm:justify-between">
           <p className="flex min-w-0 flex-1 basis-full items-start gap-1.5 text-pretty text-[11px] leading-snug text-muted-foreground break-words sm:basis-auto">
             <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>Preview generates and caches the HKT. Generate & Replace applies the cached bytes.</span>
+            <span>
+              Preview is optional and caches the HKT. Generate & Replace uses the cache when
+              available, otherwise generates fresh collision data.
+            </span>
           </p>
           <div className="flex shrink-0 items-center gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={applying}>

@@ -11,7 +11,7 @@ use app_lib::collision_mesh::{
     CollisionMeshOptions,
 };
 use app_lib::havok_cli::{run_filter_manager_with_hko, HavokCliConfig, HKO_WRITE_HKT};
-use app_lib::havok_mesh_encode::build_authored_collision_set_xml_faithful;
+use app_lib::havok_mesh_encode::build_authored_collision_set_xml_faithful_scaled;
 
 fn main() {
     let mut args = std::env::args().skip(1);
@@ -35,6 +35,12 @@ fn main() {
 
     let config = HavokCliConfig::detect().expect("Havok Content Tools not found");
     let mut options = CollisionMeshOptions::default();
+    if let Some(scale) = std::env::var("HKT_SCALE_FACTOR")
+        .ok()
+        .and_then(|value| value.parse::<f64>().ok())
+    {
+        options.scale_factor = scale;
+    }
     options.simplify.max_target_triangles = std::env::var("HKT_MAX_TARGET_TRIANGLES")
         .ok()
         .and_then(|value| value.parse::<usize>().ok());
@@ -76,7 +82,8 @@ fn main() {
     );
 
     let t = Instant::now();
-    let xml = build_authored_collision_set_xml_faithful(&authored).expect("build HKT XML");
+    let xml = build_authored_collision_set_xml_faithful_scaled(&authored, options.scale_factor)
+        .expect("build HKT XML");
     let xml_path = output.with_extension("xml");
     std::fs::write(&xml_path, &xml).expect("write XML");
     println!(

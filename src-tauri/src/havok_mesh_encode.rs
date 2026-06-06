@@ -5,10 +5,14 @@
 //! and 21/21/22 shared vertices are byte-identical to the authoritative community
 //! reference, DSMapStudio's `HKX2.Builders.hknpCollisionMeshBuilder` / `BVH.cs`
 //! (`soulsmods/DSMapStudio`, `src/HKX2/HKX2/Builders/`). The shape-key width fields
-//! (`mesh_key_info`) intentionally follow this game's own primitive-key sizing rather
-//! than DSMapStudio's hardcoded `bitsPerKey=5 / maxKeyValue=30` (which targets
-//! FromSoftware titles and is marked `// ?` in that source). The faithful path also
-//! regenerates a compact `simdTree` over authored primitive keys.
+//! (`section_indexed_max_key`) follow this game's section-indexed key space: the runtime
+//! computes a contact shape key as `sectionIndex * 256 + localKey`, so `maxKeyValue`,
+//! `bitsPerKey`, `numShapeKeyBits`, and the `triangleIsInterior` bitfield length must be
+//! sized to that sparse space (DSMapStudio hardcodes `bitsPerKey=5 / maxKeyValue=30` with
+//! `// ?` — those are placeholders, not a real sizing). Getting this wrong does not fail
+//! at load; it crashes the game on first contact via an out-of-bounds triangleIsInterior
+//! read. The faithful path also regenerates a compact `simdTree` over section-indexed
+//! Axis4 primitive keys.
 
 use crate::collision_mesh::{
     simplify_collision_mesh, AuthoredCollisionSet, CollisionPrimitive, CollisionPrimitiveMesh,
@@ -182,20 +186,15 @@ pub fn build_authored_collision_xml_with_template_mode(
 ) -> Result<String, String> {
     let (global_min, global_max) = padded_aabb(mesh)?;
     let build = split_and_encode_sections(mesh, global_min, global_max)?;
-    let total_primitive_keys = build
-        .sections
-        .iter()
-        .flat_map(|section| section.primitives.iter())
-        .map(|primitive| encoded_primitive_key_count(*primitive))
-        .sum();
-    let (shape_key_bits, _, _) = mesh_key_info(total_primitive_keys);
+    let max_key = section_indexed_max_key(&build.sections);
+    let shape_key_bits = key_bits_for_max_key(max_key);
     let mesh_tree = format_mesh_tree_xml(&build, global_min, global_max)?;
     inject_mesh_tree_into_template(
         template_xml,
         &mesh_tree,
         global_min,
         global_max,
-        total_primitive_keys,
+        max_key + 1,
         shape_key_bits,
         replace_mode,
     )
@@ -219,7 +218,21 @@ pub fn build_authored_collision_xml_faithful(
 pub fn build_authored_collision_set_xml_faithful(
     set: &AuthoredCollisionSet,
 ) -> Result<String, String> {
-    build_authored_collision_set_xml_sample_template(set, COLLISION_SAMPLE_TEMPLATE_XML)
+    build_authored_collision_set_xml_sample_template(set, COLLISION_SAMPLE_TEMPLATE_XML, 1.0)
+}
+
+/// Same as [`build_authored_collision_set_xml_faithful`] but scales the template's
+/// absolute physics tolerances by `tolerance_scale` (= the collision `scale_factor`).
+/// Pass `1.0` for unscaled geometry.
+pub fn build_authored_collision_set_xml_faithful_scaled(
+    set: &AuthoredCollisionSet,
+    tolerance_scale: f64,
+) -> Result<String, String> {
+    build_authored_collision_set_xml_sample_template(
+        set,
+        COLLISION_SAMPLE_TEMPLATE_XML,
+        tolerance_scale,
+    )
 }
 
 /// Replace only the shape/data chain of an exported sample template (e.g. the
@@ -244,12 +257,14 @@ pub fn build_authored_collision_xml_sample_template(
             shapes: vec![mesh.clone()],
         },
         template_xml,
+        1.0,
     )
 }
 
 pub fn build_authored_collision_set_xml_sample_template(
     set: &AuthoredCollisionSet,
     template_xml: &str,
+    tolerance_scale: f64,
 ) -> Result<String, String> {
     if set.shapes.is_empty() {
         return Err("Cannot build Havok collision XML with no authored shapes".into());
@@ -309,13 +324,8 @@ pub fn build_authored_collision_set_xml_sample_template(
     for (shape, (shape_id, data_id)) in set.shapes.iter().zip(shape_data_ids.iter()) {
         let (global_min, global_max) = padded_aabb(shape)?;
         let build = split_and_encode_sections(shape, global_min, global_max)?;
-        let total_primitive_keys: u32 = build
-            .sections
-            .iter()
-            .flat_map(|section| section.primitives.iter())
-            .map(|primitive| encoded_primitive_key_count(*primitive))
-            .sum();
-        let (shape_key_bits, _, _) = mesh_key_info(total_primitive_keys);
+        let max_key = section_indexed_max_key(&build.sections);
+        let shape_key_bits = key_bits_for_max_key(max_key);
         let mesh_tree = format_mesh_tree_xml(&build, global_min, global_max)?;
         let simd_tree = format_simd_tree_xml(&build, &simd_nodes_type);
 
@@ -333,7 +343,7 @@ pub fn build_authored_collision_set_xml_sample_template(
             &xml,
             shape_id,
             "triangleIsInterior",
-            &format_triangle_is_interior_xml(total_primitive_keys),
+            &format_triangle_is_interior_xml(max_key + 1),
         )?;
         xml = replace_raw_field_in_object(
             &xml,
@@ -343,7 +353,57 @@ pub fn build_authored_collision_set_xml_sample_template(
         )?;
     }
 
-    clear_connectivity_payload(&xml)
+    let xml = clear_connectivity_payload(&xml)?;
+    Ok(scale_physics_tolerances(&xml, tolerance_scale))
+}
+
+/// Scale the template's absolute physics tolerances to match collision geometry baked
+/// at `tolerance_scale` (= the collision `scale_factor`). The template `convexRadius`
+/// and `weldingTolerance` are calibrated for scale=1.0 game-world geometry; without
+/// this, a small scale_factor leaves them oversized relative to the shrunk mesh and the
+/// runtime collision solver builds degenerate manifolds, crashing the game on contact.
+fn scale_physics_tolerances(xml: &str, tolerance_scale: f64) -> String {
+    if !tolerance_scale.is_finite() || (tolerance_scale - 1.0).abs() < 1e-12 {
+        return xml.to_string();
+    }
+    let xml = scale_real_field_values(xml, "convexRadius", tolerance_scale);
+    scale_real_field_values(&xml, "weldingTolerance", tolerance_scale)
+}
+
+/// Multiply the value of every `<field name="{field}"><real .../></field>` by `factor`,
+/// rewriting both the decimal and hex representations via [`format_real_tag`]. Type-decl
+/// fields (`<field name="X" typeid=.../>`) never match the value-form marker and are
+/// left untouched.
+fn scale_real_field_values(xml: &str, field: &str, factor: f64) -> String {
+    let open = format!(r#"<field name="{field}">"#);
+    let mut out = String::with_capacity(xml.len());
+    let mut search_from = 0usize;
+    while let Some(rel) = xml[search_from..].find(&open) {
+        let after_open = search_from + rel + open.len();
+        out.push_str(&xml[search_from..after_open]);
+        let tail = &xml[after_open..];
+        if let Some(real_end) = tail.find("/>") {
+            let real_chunk = &tail[..real_end + 2];
+            if real_chunk.trim_start().starts_with("<real") {
+                if let Some(dec) = parse_real_dec_attr(real_chunk) {
+                    out.push_str(&format_real_tag(dec * factor));
+                    search_from = after_open + real_end + 2;
+                    continue;
+                }
+            }
+        }
+        search_from = after_open;
+    }
+    out.push_str(&xml[search_from..]);
+    out
+}
+
+/// Parse the `dec="..."` attribute of a `<real .../>` tag.
+fn parse_real_dec_attr(real_tag: &str) -> Option<f64> {
+    const KEY: &str = r#"dec=""#;
+    let start = real_tag.find(KEY)? + KEY.len();
+    let end = real_tag[start..].find('"')? + start;
+    real_tag[start..end].parse::<f64>().ok()
 }
 
 /// ANALYSIS ONLY — not the shipping path. Reduce a collision mesh so it fits into exactly
@@ -556,20 +616,27 @@ fn key_bits_for_max_key(max_key: u32) -> u32 {
     (32 - max_key.max(1).leading_zeros()).max(4)
 }
 
-/// Shape-key width fields, sized to the primitive-key space exactly as the game's own
-/// `hknpCompressedMeshShape` assets are. Verified against real game samples:
-/// the simple sample uses `numPrimitiveKeys=10 / bitsPerKey=4 / maxKeyValue=9`, the
-/// complex sample uses `bitsPerKey=13 / maxKeyValue=5043`.
+/// Maximum shape-key value for a section-indexed `hknpCompressedMeshShape`.
 ///
-/// `numShapeKeyBits`, `bitsPerKey`, and `maxKeyValue` all follow `numPrimitiveKeys`
-/// regardless of how many sections the mesh is split into — the Axis5 mesh-tree leaves
-/// still address section indices separately. The previous section-key sizing produced a
-/// file that was internally inconsistent (e.g. `bitsPerKey=5` declaring 7802 keys); the
-/// game tolerated it but it diverged from every authentic asset.
-fn mesh_key_info(total_primitive_keys: u32) -> (u32, u32, u32) {
-    let max_key = total_primitive_keys.saturating_sub(1).max(1);
-    let bits_per_key = key_bits_for_max_key(max_key);
-    (bits_per_key, max_key, bits_per_key)
+/// The runtime computes a primitive's shape key at contact as
+/// `sectionIndex * 256 + localKey`: each section occupies a fixed 256-key block (8
+/// sub-key bits; a section holds ≤127 primitives → ≤254 keys with quads counting 2),
+/// and `sectionIndex` is the section's array index decoded from its Axis5 mesh-tree leaf.
+/// `maxKeyValue` is therefore the largest such key across all sections, NOT
+/// `numPrimitiveKeys - 1`. Verified against real game `map_hit` assets — e.g. 66 sections
+/// / 11131 keys → maxKeyValue 16815 (= 65*256 + 175), and 41 sections / 6735 keys →
+/// 10461 (= 40*256 + 221). For a single-section mesh this reduces to `numKeys - 1`
+/// (contiguous), which is why the previous contiguous sizing passed on small samples but
+/// produced an undersized `triangleIsInterior` for multi-section maps — the runtime then
+/// indexed that bitfield past its end on first contact and crashed the game.
+fn section_indexed_max_key(sections: &[SectionBuild]) -> u32 {
+    sections
+        .iter()
+        .enumerate()
+        .map(|(index, section)| (index as u32) * 256 + section_axis4_max_key(section))
+        .max()
+        .unwrap_or(0)
+        .max(1)
 }
 
 fn encoded_primitive_key_count(primitive: [u8; 4]) -> u32 {
@@ -580,20 +647,26 @@ fn encoded_primitive_key_count(primitive: [u8; 4]) -> u32 {
     }
 }
 
+fn axis4_primitive_key(local_primitive_index: usize) -> u32 {
+    (local_primitive_index as u32) * 2
+}
+
+fn section_axis4_max_key(section: &SectionBuild) -> u32 {
+    let Some((last_index, last_primitive)) = section.primitives.iter().enumerate().last() else {
+        return 0;
+    };
+    axis4_primitive_key(last_index) + u32::from(last_primitive[2] != last_primitive[3])
+}
+
 fn build_simd_leaves(build: &MeshBuild) -> Vec<SimdLeaf> {
     let mut leaves = Vec::new();
-    let mut primitive_key = 0u32;
-    for section in &build.sections {
-        for (primitive, bounds) in section
-            .primitives
-            .iter()
-            .zip(section.primitive_bounds.iter())
-        {
+    for (section_index, section) in build.sections.iter().enumerate() {
+        for (primitive_index, bounds) in section.primitive_bounds.iter().enumerate() {
+            let key = (section_index as u32) * 256 + axis4_primitive_key(primitive_index);
             leaves.push(SimdLeaf {
                 bounds: *bounds,
-                key: primitive_key,
+                key,
             });
-            primitive_key += encoded_primitive_key_count(*primitive);
         }
     }
     leaves
@@ -644,7 +717,7 @@ fn build_simd_node_recursive(
     let node_index = nodes.len() as u32;
     nodes.push(SimdNode {
         lane_bounds: [None, None, None, None],
-        data: [0, 0, 0, 0],
+        data: [u32::MAX, u32::MAX, u32::MAX, u32::MAX],
         parent,
         is_leaf: indices.len() <= 4,
     });
@@ -945,11 +1018,13 @@ fn split_and_encode_sections(
             .unwrap_or(0);
     }
 
-    Ok(MeshBuild {
+    let build = MeshBuild {
         sections,
         mesh_bvh,
         shared_vertices,
-    })
+    };
+    validate_encoded_mesh_geometry(&build, global_min, global_max)?;
+    Ok(build)
 }
 
 fn codec_parms_for_aabb(min: [f64; 3], max: [f64; 3]) -> [f64; 6] {
@@ -983,6 +1058,98 @@ fn encode_shared_vertex(point: [f64; 3], min: [f64; 3], max: [f64; 3]) -> u64 {
     let y = ((point[1] - min[1]) / sy).clamp(0.0, ((1u64 << 21) - 1) as f64) as u64;
     let z = ((point[2] - min[2]) / sz).clamp(0.0, ((1u64 << 22) - 1) as f64) as u64;
     (x & 0x1F_FFFF) | ((y & 0x1F_FFFF) << 21) | ((z & 0x3F_FFFF) << 42)
+}
+
+fn decode_packed_vertex(value: u32, codec: [f64; 6]) -> [f64; 3] {
+    [
+        codec[0] + (value & 0x7FF) as f64 * codec[3],
+        codec[1] + ((value >> 11) & 0x7FF) as f64 * codec[4],
+        codec[2] + ((value >> 22) & 0x3FF) as f64 * codec[5],
+    ]
+}
+
+fn decode_shared_vertex(value: u64, min: [f64; 3], max: [f64; 3]) -> [f64; 3] {
+    let scale = [
+        (max[0] - min[0]) / ((1u64 << 21) - 1) as f64,
+        (max[1] - min[1]) / ((1u64 << 21) - 1) as f64,
+        (max[2] - min[2]) / ((1u64 << 22) - 1) as f64,
+    ];
+    [
+        min[0] + (value & 0x1F_FFFF) as f64 * scale[0],
+        min[1] + ((value >> 21) & 0x1F_FFFF) as f64 * scale[1],
+        min[2] + ((value >> 42) & 0x3F_FFFF) as f64 * scale[2],
+    ]
+}
+
+fn validate_encoded_mesh_geometry(
+    build: &MeshBuild,
+    global_min: [f64; 3],
+    global_max: [f64; 3],
+) -> Result<(), String> {
+    let shared_step = [
+        (global_max[0] - global_min[0]) / ((1u64 << 21) - 1) as f64,
+        (global_max[1] - global_min[1]) / ((1u64 << 21) - 1) as f64,
+        (global_max[2] - global_min[2]) / ((1u64 << 22) - 1) as f64,
+    ];
+
+    for (section_index, section) in build.sections.iter().enumerate() {
+        for (primitive_index, (primitive, source_bounds)) in section
+            .primitives
+            .iter()
+            .zip(section.primitive_bounds.iter())
+            .enumerate()
+        {
+            let mut decoded_bounds = empty_aabb();
+            for local_index in primitive {
+                let local_index = *local_index as usize;
+                let point = if local_index < section.packed_vertices.len() {
+                    decode_packed_vertex(
+                        section.packed_vertices[local_index],
+                        section.codec_parms,
+                    )
+                } else {
+                    let shared_local_index = local_index - section.packed_vertices.len();
+                    let shared_index = *section
+                        .shared_vertices_index
+                        .get(shared_local_index)
+                        .ok_or_else(|| {
+                            format!(
+                                "Section {section_index} primitive {primitive_index} references missing shared vertex {shared_local_index}"
+                            )
+                        })? as usize;
+                    let encoded = *build.shared_vertices.get(shared_index).ok_or_else(|| {
+                        format!(
+                            "Section {section_index} primitive {primitive_index} references shared vertex {shared_index}, but only {} exist",
+                            build.shared_vertices.len()
+                        )
+                    })?;
+                    decode_shared_vertex(encoded, global_min, global_max)
+                };
+                include_point(&mut decoded_bounds, point);
+            }
+
+            for axis in 0..3 {
+                let tolerance = section.codec_parms[axis + 3]
+                    .abs()
+                    .max(shared_step[axis].abs())
+                    * 1.1
+                    + 1e-6;
+                if (decoded_bounds.min[axis] - source_bounds.min[axis]).abs() > tolerance
+                    || (decoded_bounds.max[axis] - source_bounds.max[axis]).abs() > tolerance
+                {
+                    return Err(format!(
+                        "Encoded collision geometry mismatch at section {section_index}, primitive {primitive_index}, axis {axis}: source [{}, {}], decoded [{}, {}], tolerance {}",
+                        source_bounds.min[axis],
+                        source_bounds.max[axis],
+                        decoded_bounds.min[axis],
+                        decoded_bounds.max[axis],
+                        tolerance
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn format_shared_vertex_integer(value: u64) -> String {
@@ -1375,7 +1542,8 @@ fn format_mesh_tree_xml(
         ));
     }
 
-    let (bits_per_key, max_key, _) = mesh_key_info(total_primitive_keys);
+    let max_key = section_indexed_max_key(sections);
+    let bits_per_key = key_bits_for_max_key(max_key);
 
     Ok(format!(
         r#"<record>
@@ -1439,7 +1607,7 @@ fn inject_mesh_tree_into_template(
     mesh_tree: &str,
     global_min: [f64; 3],
     global_max: [f64; 3],
-    total_prims: u32,
+    tri_interior_num_bits: u32,
     shape_key_bits: u32,
     replace_mode: TemplateReplaceMode,
 ) -> Result<String, String> {
@@ -1449,12 +1617,12 @@ fn inject_mesh_tree_into_template(
             xml = replace_all_named_field_bodies(
                 &xml,
                 "triangleIsInterior",
-                &format_triangle_is_interior_xml(total_prims),
+                &format_triangle_is_interior_xml(tri_interior_num_bits),
             )?;
             patch_num_shape_key_bits(&xml, shape_key_bits, replace_mode)?
         }
         TemplateReplaceMode::Last => {
-            inject_last_body_shape_data(template, mesh_tree, shape_key_bits, total_prims)?
+            inject_last_body_shape_data(template, mesh_tree, shape_key_bits, tri_interior_num_bits)?
         }
     };
 
@@ -1712,7 +1880,7 @@ fn inject_last_body_shape_data(
     template: &str,
     mesh_tree: &str,
     shape_key_bits: u32,
-    total_prims: u32,
+    tri_interior_num_bits: u32,
 ) -> Result<String, String> {
     let shape_id = find_last_body_shape_id(template)?;
     let shape_range = find_object_range(template, &shape_id)?;
@@ -1729,7 +1897,7 @@ fn inject_last_body_shape_data(
         &xml,
         &shape_id,
         "triangleIsInterior",
-        &format_triangle_is_interior_xml(total_prims),
+        &format_triangle_is_interior_xml(tri_interior_num_bits),
     )
 }
 
@@ -1806,8 +1974,8 @@ fn replace_named_field_body_in_object(
     replace_raw_field_in_object(xml, object_id, field_name, &replacement)
 }
 
-fn format_triangle_is_interior_xml(total_prims: u32) -> String {
-    let word_count = total_prims.div_ceil(32).max(1);
+fn format_triangle_is_interior_xml(num_bits: u32) -> String {
+    let word_count = num_bits.div_ceil(32).max(1);
     let mut words = String::new();
     for _ in 0..word_count {
         words.push_str("                  <integer value=\"0\"/>\n");
@@ -1821,7 +1989,7 @@ fn format_triangle_is_interior_xml(total_prims: u32) -> String {
                 <array count="{word_count}" elementtypeid="type36"> <!-- ArrayOf hkUint32 -->
 {words}                </array>
               </field>
-              <field name="numBits"><integer value="{total_prims}"/></field>
+              <field name="numBits"><integer value="{num_bits}"/></field>
             </record>
           </field>
         </record>"#
@@ -2157,17 +2325,36 @@ mod tests {
     }
 
     #[test]
-    fn multi_section_mesh_uses_primitive_key_shape_bits() {
-        // 3901 triangle primitives -> 3901 primitive keys -> 12 bits. The shape-key width
-        // follows the authored primitive-key space (triangles=1, quads=2), not the section count.
+    fn multi_section_mesh_uses_section_indexed_shape_keys() {
+        // 3901 separate triangles split into many sections. The runtime computes a contact
+        // shape key as sectionIndex*256 + localKey, so maxKeyValue follows the sparse
+        // section-indexed space (>= numKeys-1) and bitsPerKey / numShapeKeyBits /
+        // triangleIsInterior.numBits must all be consistent with it. The old contiguous
+        // sizing (maxKeyValue = numKeys-1) under-sized triangleIsInterior and crashed the
+        // game on first contact via an out-of-bounds bitfield read.
         let mesh = separate_triangles_mesh(3901);
         let xml = build_mesh_collision_xml(&mesh).unwrap();
 
-        assert_eq!(mesh_key_info(3901), (12, 3900, 12));
+        let extract = |field: &str| -> u32 {
+            let marker = format!(r#"<field name="{field}"><integer value=""#);
+            let start = xml.find(&marker).expect("field present") + marker.len();
+            let end = xml[start..].find('"').unwrap() + start;
+            xml[start..end].parse().unwrap()
+        };
+
+        let max_key = extract("maxKeyValue");
+        assert!(
+            max_key >= 3900,
+            "section-indexed key space must be at least the contiguous key count"
+        );
+        assert_eq!(extract("bitsPerKey"), key_bits_for_max_key(max_key));
+        assert_eq!(extract("numShapeKeyBits"), key_bits_for_max_key(max_key));
         assert!(xml.contains(r#"<field name="numPrimitiveKeys"><integer value="3901"/></field>"#));
-        assert!(xml.contains(r#"<field name="bitsPerKey"><integer value="12"/></field>"#));
-        assert!(xml.contains(r#"<field name="maxKeyValue"><integer value="3900"/></field>"#));
-        assert!(xml.contains(r#"<field name="numShapeKeyBits"><integer value="12"/></field>"#));
+        // triangleIsInterior must cover the whole sparse key space.
+        assert!(xml.contains(&format!(
+            r#"<field name="numBits"><integer value="{}"/></field>"#,
+            max_key + 1
+        )));
     }
 
     fn separate_triangles_mesh(count: usize) -> CollisionTriMesh {
@@ -2292,7 +2479,7 @@ mod tests {
     }
 
     #[test]
-    fn simd_tree_leaf_data_uses_authored_primitive_keys() {
+    fn simd_tree_leaf_data_uses_axis4_primitive_keys() {
         let mesh = CollisionPrimitiveMesh {
             vertices: vec![
                 [0.0, 0.0, 0.0],
@@ -2316,10 +2503,8 @@ mod tests {
             .flat_map(|section| section.primitives.iter().copied())
             .collect();
         let mut expected_keys = Vec::new();
-        let mut next_key = 0u32;
-        for primitive in encoded_primitives {
-            expected_keys.push(next_key);
-            next_key += encoded_primitive_key_count(primitive);
+        for (index, _primitive) in encoded_primitives.iter().enumerate() {
+            expected_keys.push(axis4_primitive_key(index));
         }
 
         assert_eq!(leaves.len(), 2);
@@ -2328,7 +2513,74 @@ mod tests {
             expected_keys
         );
         assert_eq!(mesh.primitive_key_count(), 3);
-        assert_eq!(next_key, 3);
+    }
+
+    fn dummy_aabb() -> Aabb {
+        Aabb {
+            min: [0.0, 0.0, 0.0],
+            max: [1.0, 1.0, 1.0],
+        }
+    }
+
+    fn dummy_section(primitives: Vec<[u8; 4]>) -> SectionBuild {
+        SectionBuild {
+            codec_parms: [0.0; 6],
+            packed_vertices: Vec::new(),
+            shared_vertices_index: Vec::new(),
+            primitive_bounds: vec![dummy_aabb(); primitives.len()],
+            primitive_key_count: primitives
+                .iter()
+                .map(|primitive| encoded_primitive_key_count(*primitive))
+                .sum(),
+            primitives,
+            min: [0.0, 0.0, 0.0],
+            max: [1.0, 1.0, 1.0],
+            first_packed_vertex_index: 0,
+            first_shared_vertex_index: 0,
+            first_primitive_index: 0,
+            first_data_run_index: 0,
+        }
+    }
+
+    #[test]
+    fn max_key_uses_axis4_primitive_index_space() {
+        let sections = vec![dummy_section(vec![
+            [0, 1, 2, 2],
+            [0, 1, 2, 2],
+            [0, 1, 2, 2],
+        ])];
+        assert_eq!(section_indexed_max_key(&sections), 4);
+
+        let sections = vec![
+            dummy_section(vec![[0, 1, 2, 3], [0, 1, 2, 2]]),
+            dummy_section(vec![[0, 1, 2, 3], [0, 1, 2, 3]]),
+        ];
+        assert_eq!(section_indexed_max_key(&sections), 259);
+    }
+
+    #[test]
+    fn simd_tree_uses_section_indexed_keys_and_inactive_sentinel() {
+        let build = MeshBuild {
+            sections: vec![
+                dummy_section(vec![[0, 1, 2, 3], [0, 1, 2, 2]]),
+                dummy_section(vec![[0, 1, 2, 3]]),
+            ],
+            mesh_bvh: BvhNode::Leaf {
+                bounds: dummy_aabb(),
+                index: 0,
+            },
+            shared_vertices: Vec::new(),
+        };
+
+        let leaves = build_simd_leaves(&build);
+        assert_eq!(
+            leaves.iter().map(|leaf| leaf.key).collect::<Vec<_>>(),
+            vec![0, 2, 256]
+        );
+
+        let nodes = build_simd_tree(&build);
+        let leaf = nodes.iter().find(|node| node.is_leaf).expect("leaf node");
+        assert_eq!(leaf.data, [0, 2, 256, u32::MAX]);
     }
 
     #[test]

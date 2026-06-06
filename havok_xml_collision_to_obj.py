@@ -327,20 +327,21 @@ def decode_packed_vertex(
 
 
 def decode_shared_vertex(packed: int, bounds: Bounds) -> tuple[float, float, float]:
-    max_code = (1 << 21) - 1
-    x_code = packed & max_code
-    y_code = (packed >> 21) & max_code
-    z_code = (packed >> 42) & max_code
+    xy_max_code = (1 << 21) - 1
+    z_max_code = (1 << 22) - 1
+    x_code = packed & xy_max_code
+    y_code = (packed >> 21) & xy_max_code
+    z_code = (packed >> 42) & z_max_code
 
-    def decode_axis(axis: int, code: int) -> float:
+    def decode_axis(axis: int, code: int, max_code: int) -> float:
         return bounds.min[axis] + (
             code * (bounds.max[axis] - bounds.min[axis]) / max_code
         )
 
     return (
-        decode_axis(0, x_code),
-        decode_axis(1, y_code),
-        decode_axis(2, z_code),
+        decode_axis(0, x_code, xy_max_code),
+        decode_axis(1, y_code, xy_max_code),
+        decode_axis(2, z_code, z_max_code),
     )
 
 
