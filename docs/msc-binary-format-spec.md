@@ -113,14 +113,16 @@ The opcode byte layout:
 └─────────┴──────────────┘
 ```
 
-- **Bits 0–6**: Opcode index (`0x00`–`0x4D`).
-- **Bit 7**: Push bit. When set, the instruction's result is pushed onto the evaluation stack.
+- **Bits 0–6**: Opcode index. The current VSAC27 interpreter accepts executable indices through `0x49`, with rejected holes at `0x0C` and `0x37`.
+- **Bit 7**: Result/control bit. For ordinary instructions, it pushes the instruction result onto the evaluation stack. `try` (`0x2E`) uses it as call-return metadata instead.
 
 Parameter bytes follow the opcode byte immediately, encoded in **big-endian**. The parameter format depends on the opcode (see the opcode table below).
 
 ### pushBit Semantics
 
-When bit 7 of the opcode byte is set (`| 0x80`), the result of the instruction is pushed onto the VM's evaluation stack. This is the MSC VM's primary mechanism for passing arguments to subsequent instructions.
+For ordinary instructions, bit 7 (`| 0x80`) sends the instruction's last-result value through the common stack-push path at `0x14030F005`. This is the MSC VM's primary mechanism for composing expressions and passing arguments.
+
+`try` (`0x2E`) is a native exception. The interpreter clears bit 7 while decoding the opcode and stores it in the call frame as a keep-return flag. Therefore `0xAE` does not immediately push a `try` result; it requests that the later callee return value be preserved on the caller stack.
 
 Examples:
 
@@ -128,8 +130,8 @@ Examples:
 |----------|--------|---------|---------|
 | `0x0A` | `0x0A` pushInt | 0 | Push int (result discarded—unusual, typically always has pushBit) |
 | `0x8A` | `0x0A` pushInt | 1 | Push int onto stack |
-| `0x2E` | `0x2E` try | 0 | Set up call frame, no push |
-| `0xAE` | `0x2E` try | 1 | Set up call frame, push result |
+| `0x2E` | `0x2E` try | 0 | Set up a call frame and discard the eventual return value |
+| `0xAE` | `0x2E` try | 1 | Set up a call frame and preserve the eventual return value |
 
 ---
 
@@ -176,7 +178,7 @@ For example, the float `1.0` (IEEE 754 = `0x3F800000`) is encoded as:
 
 (`0x8A` = pushInt with pushBit, followed by `0x3F800000` in BE.)
 
-Decompilers must use heuristics (context from subsequent float-typed opcodes like `addf`, `multf`, etc.) to determine whether a `pushInt` value represents an integer or a float.
+The current VSAC27 interpreter does not expose the historical pymsc float opcode range. Decompilers must infer float interpretation from native handler signatures, variable use, or other executable evidence, not from old `addf`/`multf` mnemonic assignments.
 
 ---
 
@@ -208,12 +210,12 @@ stored_offset = absolute - 0x30
 
 **Pops column**: Number of values consumed from the stack. Notation `B[0]` means "the value of the first parameter byte determines pop count."
 
-**Pushes**: All opcodes push 0 or 1 values. An opcode pushes 1 value only when the pushBit (bit 7) is set on the opcode byte.
+**Pushes**: Ordinary instructions push their result when bit 7 is set. `try` stores that bit as a keep-return flag, and the eventual return operation performs the conditional push.
 
 | Op | Mnemonic | Format | Pops | Description |
 |----|----------|--------|------|-------------|
 | `0x00` | `nop` | `''` | 0 | No operation |
-| `0x01` | `custom_01` | `''` | 0 | EXVS2-specific NOP variant |
+| `0x01` | `abort_01` | `''` | 0 | Native error/abort path; not a NOP |
 | `0x02` | `begin` | `HH` | 0 | Function prologue: argc, localVarCount |
 | `0x03` | `end` | `''` | 0 | Function epilogue |
 | `0x04` | `jump` | `I` | 0 | Unconditional jump to address |
@@ -224,7 +226,7 @@ stored_offset = absolute - 0x30
 | `0x09` | `return_9` | `''` | 0 | Return without value (alt) |
 | `0x0A` | `pushInt` | `I` | 0 | Push 32-bit integer constant |
 | `0x0B` | `pushVar` | `BH` | 0 | Push variable (B=scope: 0=local, 1=global; H=index) |
-| `0x0C` | `error_C` | `''` | 0 | Error / unused |
+| `0x0C` | rejected | `I` in size helper | — | Not an executable interpreter case |
 | `0x0D` | `pushShort` | `H` | 0 | Push 16-bit short constant (space optimization) |
 | `0x0E` | `addi` | `''` | 2 | Integer add |
 | `0x0F` | `subi` | `''` | 2 | Integer subtract |
@@ -262,34 +264,15 @@ stored_offset = absolute - 0x30
 | `0x2F` | `callFunc` | `B` | B[0]+1 | Call function; pops function pointer + B[0] args |
 | `0x30` | `callFunc2` | `B` | B[0]+1 | Call function variant 2 (set_main) |
 | `0x31` | `callFunc3` | `B` | B[0]+1 | Call function variant 3 |
-| `0x32` | `push` | `''` | −1 | Duplicate stack top (net +1) |
-| `0x33` | `pop` | `''` | 1 | Discard stack top |
+| `0x32` | `push` | `''` | 0 | Push the VM's separate last-result value |
+| `0x33` | `pop` | `''` | 1 | Pop stack top into the last-result value |
 | `0x34` | `if` | `I` | 1 | Branch to I if stack top == 0 (false) |
 | `0x35` | `ifNot` | `I` | 1 | Branch to I if stack top != 0 (true) |
 | `0x36` | `else` | `I` | 0 | Unconditional jump (else branch) |
-| `0x37` | `error_37` | `''` | 0 | Error / unused |
-| `0x38` | `intToFloat` | `B` | 0 | Convert int to float at stack depth B |
-| `0x39` | `floatToInt` | `B` | 0 | Convert float to int at stack depth B |
-| `0x3A` | `addf` | `''` | 2 | Float add |
-| `0x3B` | `subf` | `''` | 2 | Float subtract |
-| `0x3C` | `multf` | `''` | 2 | Float multiply |
-| `0x3D` | `divf` | `''` | 2 | Float divide |
-| `0x3E` | `negf` | `''` | 1 | Float negate |
-| `0x3F` | `f++` | `BH` | 0 | Increment float variable |
-| `0x40` | `f--` | `BH` | 0 | Decrement float variable |
-| `0x41` | `floatVarSet` | `BH` | 1 | Assign float to variable |
-| `0x42` | `float+=` | `BH` | 1 | Add-assign float variable |
-| `0x43` | `float-=` | `BH` | 1 | Sub-assign float variable |
-| `0x44` | `float*=` | `BH` | 1 | Mul-assign float variable |
-| `0x45` | `float/=` | `BH` | 1 | Div-assign float variable |
-| `0x46` | `floatEqual` | `''` | 2 | Float equality comparison |
-| `0x47` | `floatNotEqual` | `''` | 2 | Float inequality comparison |
-| `0x48` | `floatLess` | `''` | 2 | Float less than |
-| `0x49` | `floatLessOrEqual` | `''` | 2 | Float less or equal |
-| `0x4A` | `floatGreater` | `''` | 2 | Float greater than |
-| `0x4B` | `floatGreaterOrEqual` | `''` | 2 | Float greater or equal |
-| `0x4C` | `error_4c` | `''` | 0 | Error / unused |
-| `0x4D` | `exit` | `''` | 0 | Exit script execution |
+| `0x37` | rejected | — | — | Not an executable interpreter case |
+| `0x38`–`0x49` | `reserved_XX` | `''` | 0 | One-byte reserved/no-op cases in VSAC27 |
+
+The shared size helper has dormant entries for `0x4A`–`0x4E`, but `sub_14030E270` rejects every opcode above `0x49` before dispatch. Those entries are not part of the executable VSAC27 language.
 
 ---
 
@@ -300,7 +283,8 @@ stored_offset = absolute - 0x30
 | Header uint32 endianness | Little-endian | Big-endian |
 | Opcode parameter endianness | Big-endian | Big-endian |
 | Version bytes (0x08–0x0B) | `0A 21 AF 16` | Different per game |
-| Opcode `0x01` | `custom_01` (NOP variant) | Not present |
+| Opcode `0x01` | Native abort/error path | Not present |
+| Opcode `0x38`–`0x49` | One-byte reserved/no-op | Historical float mnemonic range |
 | Compilation: header writes | LE uint32 | BE uint32 |
 | Compilation: opcode params | BE | BE |
 
