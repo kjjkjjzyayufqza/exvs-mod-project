@@ -4,12 +4,12 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { SeriesData } from "@/models/seriesList";
+import type { SeriesListEntry } from "@/models/seriesListEntry";
 import { cn } from "@/lib/utils";
 import { SeriesCard } from "./SeriesCard";
 
 interface SeriesListProps {
-  seriesData: SeriesData[];
+  seriesData: SeriesListEntry[];
   seriesImageConvertDirPath?: string;
   seriesImageSeriesBaseNameOrder?: Array<string | null>;
   selectedIndex: number;
@@ -18,17 +18,24 @@ interface SeriesListProps {
   onCopy: (index: number) => void;
 }
 
-type SortKey = "none" | "index" | "SeriesId" | "iconFileIndex" | "unk2" | "unk3" | "unk4" | "unk5" | "characterListPosition";
+type SortKey =
+  | "none"
+  | "index"
+  | "entryId"
+  | "iconFileIndex"
+  | "recordLookupId"
+  | "unk0x08"
+  | "displayNameRef"
+  | "characterListPosition";
 
 const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
   { value: "none", label: "No sort" },
   { value: "index", label: "Index (min → max)" },
-  { value: "SeriesId", label: "SeriesId (positive → negative)" },
+  { value: "entryId", label: "Series ID (positive → negative)" },
   { value: "iconFileIndex", label: "iconFileIndex (min → max)" },
-  { value: "unk2", label: "unk2 (min → max)" },
-  { value: "unk3", label: "unk3 (min → max)" },
-  { value: "unk4", label: "unk4 (min → max)" },
-  { value: "unk5", label: "unk5 (min → max)" },
+  { value: "recordLookupId", label: "recordLookupId (min → max)" },
+  { value: "unk0x08", label: "unk0x08 (min → max)" },
+  { value: "displayNameRef", label: "displayNameRef (min → max)" },
   { value: "characterListPosition", label: "characterListPosition (min → max)" },
 ];
 
@@ -56,7 +63,7 @@ export function SeriesList({
     return seriesData
       .map((row, idx) => ({ row, idx }))
       .filter(({ row, idx }) => {
-        const name = row.unkStr1?.Utf8String || "";
+        const name = row.name || "";
         return name.toLowerCase().includes(term) || idx.toString().includes(term);
       });
   }, [seriesData, deferredSearchTerm]);
@@ -64,22 +71,20 @@ export function SeriesList({
   const sortedRows = useMemo(() => {
     if (sortKey === "none") return filteredRows;
 
-    const getValue = (row: SeriesData, idx: number): number | string => {
+    const getValue = (row: SeriesListEntry, idx: number): number | string => {
       switch (sortKey) {
         case "index":
           return idx;
-        case "SeriesId":
-          return row.SeriesId;
+        case "entryId":
+          return row.entryId;
         case "iconFileIndex":
           return row.iconFileIndex;
-        case "unk2":
-          return row.unk2;
-        case "unk3":
-          return row.unk3;
-        case "unk4":
-          return row.unk4;
-        case "unk5":
-          return row.unk5;
+        case "recordLookupId":
+          return row.recordLookupId;
+        case "unk0x08":
+          return row.unk0x08;
+        case "displayNameRef":
+          return row.displayNameRef;
         case "characterListPosition":
           return row.characterListPosition;
         default:
@@ -88,13 +93,13 @@ export function SeriesList({
     };
 
     const isNumberLike = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-    const compare = (a: { row: SeriesData; idx: number }, b: { row: SeriesData; idx: number }) => {
+    const compare = (a: { row: SeriesListEntry; idx: number }, b: { row: SeriesListEntry; idx: number }) => {
       const av = getValue(a.row, a.idx);
       const bv = getValue(b.row, b.idx);
 
       if (isNumberLike(av) && isNumberLike(bv)) {
-        // For SeriesId, sort positive values first, then negative values
-        if (sortKey === "SeriesId") {
+        // For Series ID, sort positive values first, then negative values
+        if (sortKey === "entryId") {
           const aIsPositive = av > 0;
           const bIsPositive = bv > 0;
           

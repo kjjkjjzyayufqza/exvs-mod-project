@@ -3,7 +3,6 @@ import { exists, readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { dirname, join } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { Buffer } from "buffer";
 import { toast } from "sonner";
 import { RefreshCw, Save, Image as ImageIcon, Loader2, Info, FolderOpen } from "lucide-react";
 
@@ -16,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { SeriesList, buildSeriesListBuffer } from "@/models/seriesList";
+import type { SeriesListData } from "@/models/seriesListEntry";
 import { SeriesEditor } from "./series-list/SeriesEditor";
 import { extractA0253FirstFolderSeriesBaseNameOrder } from "./series-list/seriesImage";
 
@@ -30,7 +29,7 @@ type LoadState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error"; filePath: string; message: string }
-  | { status: "ready"; filePath: string; list: SeriesList };
+  | { status: "ready"; filePath: string; list: SeriesListData };
 
 type SeriesImageCountState =
   | { status: "idle"; dirPath: string }
@@ -76,8 +75,10 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
     const filePath = await resolveFilePath();
     setLoadState({ status: "loading" });
     try {
-      const fileData = await readFile(filePath);
-      const list = new SeriesList(Buffer.from(fileData));
+      const list = await invoke<SeriesListData>("parse_typed_param_file", {
+        path: filePath,
+        paramType: "serieslist",
+      });
       setLoadState({ status: "ready", filePath, list });
       resetEditorState();
     } catch (error) {
@@ -126,7 +127,7 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
   }, [folderPath, isActive, loadSeriesImageCount]);
 
   const handleEditorChange = useCallback(
-    (next: SeriesList) => {
+    (next: SeriesListData) => {
       setLoadState((prev) => {
         if (prev.status !== "ready") return prev;
         return { ...prev, list: next };
@@ -140,8 +141,8 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
   const fileMeta = useMemo(() => {
     if (loadState.status !== "ready") return null;
     return {
-      count: loadState.list.SeriesCount,
-      commands: loadState.list.CommandsCount,
+      count: loadState.list.entries.length,
+      commands: loadState.list.header.commandsCount,
     };
   }, [loadState]);
 
@@ -157,18 +158,22 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
         // Ignore backup failures
       }
 
-      const sortedRows = [...loadState.list.SeriesData].sort((a, b) => {
-        const aIsPositive = a.SeriesId >= 0;
-        const bIsPositive = b.SeriesId >= 0;
+      const sortedRows = [...loadState.list.entries].sort((a, b) => {
+        const aIsPositive = a.entryId >= 0;
+        const bIsPositive = b.entryId >= 0;
         if (aIsPositive !== bIsPositive) return aIsPositive ? -1 : 1;
-        return a.SeriesId - b.SeriesId;
+        return a.entryId - b.entryId;
       });
-      const sortedList = Object.assign(Object.create(Object.getPrototypeOf(loadState.list)), loadState.list, {
-        SeriesData: sortedRows,
-        SeriesCount: sortedRows.length,
+      const sortedList: SeriesListData = {
+        ...loadState.list,
+        entries: sortedRows,
+        header: { ...loadState.list.header, entryCount: sortedRows.length },
+      };
+      await invoke("build_typed_param_file", {
+        dataJson: sortedList,
+        outputPath: filePath,
+        paramType: "serieslist",
       });
-      const buffer = buildSeriesListBuffer(sortedList);
-      await writeFile(filePath, buffer);
       toast.success("Saved series_list.bin");
       setHasChanges(false);
       onUnsavedChanges?.(false);

@@ -4,12 +4,12 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import type { SeriesData } from "@/models/seriesList";
+import type { SeriesListEntry } from "@/models/seriesListEntry";
 import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
 import { formatSeriesPngFileNameFromBaseName, resolveMappedSeriesBaseName } from "./seriesImage";
 
 interface SeriesCardProps {
-  series: SeriesData;
+  series: SeriesListEntry;
   index: number;
   seriesImageConvertDirPath?: string;
   seriesImageSeriesBaseNameOrder?: Array<string | null>;
@@ -51,7 +51,7 @@ export function SeriesCard({
         <div className="h-12 w-24 shrink-0 overflow-hidden rounded border bg-black">
           <img
             src={thumbnailSrc}
-            alt={series.unkStr1?.Utf8String || ""}
+            alt={series.name || ""}
             className="h-full w-full object-contain"
             onError={(e) => {
               e.currentTarget.src = "/tauri.svg";
@@ -63,18 +63,18 @@ export function SeriesCard({
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="text-sm font-medium line-clamp-2 wrap-break-word">
-                  {series.unkStr1?.Utf8String || ""}
+                  {series.name || ""}
                 </div>
               </TooltipTrigger>
-              {series.unkStr1?.Utf8String && (
+              {series.name && (
                 <TooltipContent>
-                  <p>{series.unkStr1.Utf8String}</p>
+                  <p>{series.name}</p>
                 </TooltipContent>
               )}
             </Tooltip>
           </TooltipProvider>
           <div className="text-xs text-muted-foreground space-y-0.5">
-            <div>ID: {series.SeriesId}</div>
+            <div>ID: {series.entryId}</div>
             <div>Index: {index}</div>
           </div>
         </div>

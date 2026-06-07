@@ -3,12 +3,12 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import type { StageDataEntry } from "@/models/stageList";
+import type { StageListEntry } from "@/models/stageListEntry";
 import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
 import { formatSeriesPngFileNameFromBaseName, resolveMappedSeriesBaseName } from "../series-list/seriesImage";
 
 interface StageCardProps {
-  stage: StageDataEntry;
+  stage: StageListEntry;
   index: number;
   isSelected: boolean;
   onClick: () => void;
@@ -19,7 +19,7 @@ interface StageCardProps {
 }
 
 export function StageCard({ stage, index, isSelected, onClick, onCopy, onDelete, stageIconConvertDirPath, stageIconBaseNameOrder }: StageCardProps) {
-  const stageName = stage.name?.Utf8String ?? "";
+  const stageName = stage.name ?? "";
   const baseName = resolveMappedSeriesBaseName(stageIconBaseNameOrder, stage.iconIndex ?? 0);
   const fileName = baseName ? formatSeriesPngFileNameFromBaseName(baseName) : null;
   const imageFilePath = (() => {
@@ -63,7 +63,7 @@ export function StageCard({ stage, index, isSelected, onClick, onCopy, onDelete,
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="text-sm font-medium line-clamp-2 wrap-break-word">
-                  {stageName || `Stage ${stage.id ?? index}`}
+                  {stageName || `Stage ${stage.entryId ?? index}`}
                 </div>
               </TooltipTrigger>
               {stageName && (
@@ -75,7 +75,7 @@ export function StageCard({ stage, index, isSelected, onClick, onCopy, onDelete,
           </TooltipProvider>
 
           <div className="text-xs text-muted-foreground space-y-0.5">
-            <div>ID: {stage.id ?? 0}</div>
+            <div>ID: {stage.entryId ?? 0}</div>
             <div>Index: {index}</div>
           </div>
         </div>

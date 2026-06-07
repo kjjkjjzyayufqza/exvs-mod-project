@@ -20,32 +20,31 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { SeriesData } from "@/models/seriesList";
+import type { SeriesListEntry } from "@/models/seriesListEntry";
 import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
 import { formatSeriesPngFileNameFromBaseName, resolveMappedSeriesBaseName } from "./seriesImage";
 import { SeriesImageReplaceDialog } from "./SeriesImageReplaceDialog";
 
 const FormSchema = z.object({
-  SeriesId: z.number().int(),
-  unk2: z.number().int(),
+  entryId: z.number().int(),
+  recordLookupId: z.number().int(),
   iconFileIndex: z.number().int(),
-  unk3: z.number().int(),
+  unk0x08: z.number().int(),
   seriesName: z.string(),
-  unk4: z.number().int(),
-  unk5: z.number().int(),
+  displayNameRef: z.number().int(),
   characterListPosition: z.number().int(),
 });
 
 type FormData = z.infer<typeof FormSchema>;
 
 interface SeriesFormProps {
-  series: SeriesData;
+  series: SeriesListEntry;
   index: number;
   seriesImageConvertDirPath?: string;
   seriesImageSeriesBaseNameOrder?: Array<string | null>;
   onRefreshSeriesImages?: () => Promise<void> | void;
   isSeriesIdTaken?: (nextId: number) => boolean;
-  onChange: (updated: SeriesData) => void;
+  onChange: (updated: SeriesListEntry) => void;
 }
 
 export function SeriesForm({
@@ -63,13 +62,12 @@ export function SeriesForm({
   const form = useForm<FormData>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
-      SeriesId: series.SeriesId,
-      unk2: series.unk2,
+      entryId: series.entryId,
+      recordLookupId: series.recordLookupId,
       iconFileIndex: series.iconFileIndex,
-      unk3: series.unk3,
-      seriesName: series.unkStr1?.Utf8String || "",
-      unk4: series.unk4,
-      unk5: series.unk5,
+      unk0x08: series.unk0x08,
+      seriesName: series.name || "",
+      displayNameRef: series.displayNameRef,
       characterListPosition: series.characterListPosition,
     },
   });
@@ -77,46 +75,41 @@ export function SeriesForm({
   // Sync form values when series data changes
   useEffect(() => {
     form.reset({
-      SeriesId: series.SeriesId,
-      unk2: series.unk2,
+      entryId: series.entryId,
+      recordLookupId: series.recordLookupId,
       iconFileIndex: series.iconFileIndex,
-      unk3: series.unk3,
-      seriesName: series.unkStr1?.Utf8String || "",
-      unk4: series.unk4,
-      unk5: series.unk5,
+      unk0x08: series.unk0x08,
+      seriesName: series.name || "",
+      displayNameRef: series.displayNameRef,
       characterListPosition: series.characterListPosition,
     });
   }, [series, form]);
 
   const onSubmit = useCallback((data: FormData) => {
-    // Validate SeriesId uniqueness
-    if (isSeriesIdTaken?.(data.SeriesId)) {
-      form.setError("SeriesId", {
+    // Validate Series ID uniqueness
+    if (isSeriesIdTaken?.(data.entryId)) {
+      form.setError("entryId", {
         type: "manual",
         message: "Series ID already exists"
       });
       return;
     }
 
-    const updatedSeries: SeriesData = {
+    const updatedSeries: SeriesListEntry = {
       ...series,
-      SeriesId: data.SeriesId,
-      unk2: data.unk2,
+      entryId: data.entryId,
+      recordLookupId: data.recordLookupId,
       iconFileIndex: data.iconFileIndex,
-      unk3: data.unk3,
-      unkStr1: {
-        ...series.unkStr1,
-        Utf8String: data.seriesName,
-      },
-      unk4: data.unk4,
-      unk5: data.unk5,
+      unk0x08: data.unk0x08,
+      name: data.seriesName,
+      displayNameRef: data.displayNameRef,
       characterListPosition: data.characterListPosition,
     };
 
     onChange(updatedSeries);
   }, [form, isSeriesIdTaken, onChange, series]);
 
-  const seriesName = series.unkStr1?.Utf8String || "";
+  const seriesName = series.name || "";
   const baseName = resolveMappedSeriesBaseName(seriesImageSeriesBaseNameOrder, series.iconFileIndex);
   const imageFileName = baseName ? formatSeriesPngFileNameFromBaseName(baseName) : null;
   const imageFilePath = (() => {
@@ -166,7 +159,7 @@ export function SeriesForm({
                   <div className="min-w-0 space-y-2">
                     <CardTitle className="text-lg">Series Details</CardTitle>
                     <div className="text-xs text-muted-foreground">
-                      <div>ID: {series.SeriesId}</div>
+                      <div>ID: {series.entryId}</div>
                       <div>Index: {index}</div>
                       <div>Image: {imageFileName ?? "-"}</div>
                     </div>
@@ -204,7 +197,7 @@ export function SeriesForm({
               <div className="space-y-4">
                 <FormField
                   control={form.control}
-                  name="SeriesId"
+                  name="entryId"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Series ID</FormLabel>
@@ -238,24 +231,6 @@ export function SeriesForm({
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
-                    name="unk2"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>unk2</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            {...field}
-                            onChange={(e) => field.onChange(Number(e.target.value) || 0)}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
                     name="iconFileIndex"
                     render={({ field }) => (
                       <FormItem>
@@ -277,60 +252,6 @@ export function SeriesForm({
 
                   <FormField
                     control={form.control}
-                    name="unk3"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>unk3</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            {...field}
-                            onChange={(e) => field.onChange(Number(e.target.value) || 0)}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="unk4"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>unk4</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            {...field}
-                            onChange={(e) => field.onChange(Number(e.target.value) || 0)}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="unk5"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>unk5</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            {...field}
-                            onChange={(e) => field.onChange(Number(e.target.value) || 0)}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
                     name="characterListPosition"
                     render={({ field }) => (
                       <FormItem>
@@ -345,6 +266,65 @@ export function SeriesForm({
                         <FormDescription>
                           Position/index used for character list ordering.
                         </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="displayNameRef"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>displayNameRef</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Name lookup used by the proficiency (Jukurendo) popup.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="recordLookupId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>recordLookupId</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                          />
+                        </FormControl>
+                        <FormDescription>Record lookup key.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="unk0x08"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>unk0x08</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                          />
+                        </FormControl>
+                        <FormDescription>No IDA reference; meaning unknown.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

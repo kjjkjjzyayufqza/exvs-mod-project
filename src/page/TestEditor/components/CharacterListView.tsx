@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { CharacterIdTable } from "@/models/characterIdTable";
 import type { CharacterListData } from "@/models/characterListEntry";
-import { SeriesList } from "@/models/seriesList";
+import type { SeriesListData } from "@/models/seriesListEntry";
 import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
 import { extractCardIconItems } from "./card-icon-list/cardIconStructure";
 import { buildCardIconPreviewPath } from "./card-icon-list/cardIconUtils";
@@ -187,8 +187,10 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
     setSeriesPickerState({ status: "loading", filePath, convertDirPath });
 
     try {
-      const fileData = await readFile(filePath);
-      const list = new SeriesList(Buffer.from(fileData));
+      const list = await invoke<SeriesListData>("parse_typed_param_file", {
+        path: filePath,
+        paramType: "serieslist",
+      });
 
       const sep = getPathSeparatorFromFileUrl(convertDirPath);
       const structurePath = await resolveSeriesImageStructureJsonPath();
@@ -206,10 +208,10 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
         return convertFileSrc(full);
       };
 
-      const items: SeriesIdPickerItem[] = list.SeriesData.map((s) => ({
-        id: s.SeriesId,
+      const items: SeriesIdPickerItem[] = list.entries.map((s) => ({
+        id: s.entryId,
         iconFileIndex: s.iconFileIndex,
-        label: s.unkStr1?.Utf8String || `Series ${s.SeriesId}`,
+        label: s.name || `Series ${s.entryId}`,
         previewSrc: toPreviewSrc(s.iconFileIndex),
       })).sort((a, b) => {
         if (a.iconFileIndex !== b.iconFileIndex) return a.iconFileIndex - b.iconFileIndex;

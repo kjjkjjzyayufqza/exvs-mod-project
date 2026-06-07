@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from "react";
-import { Buffer } from "buffer";
 import { Plus } from "lucide-react";
 
 import {
@@ -13,16 +12,28 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import type { SeriesData, SeriesList } from "@/models/seriesList";
+import type { SeriesListData, SeriesListEntry } from "@/models/seriesListEntry";
 import { SeriesForm } from "./SeriesForm";
 import { SeriesList as SeriesListComponent } from "./SeriesList";
 
 interface SeriesEditorProps {
-  seriesListData?: SeriesList;
+  seriesListData?: SeriesListData;
   seriesImageConvertDirPath?: string;
   seriesImageSeriesBaseNameOrder?: Array<string | null>;
   onRefreshSeriesImages?: () => Promise<void> | void;
-  onChange: (data: SeriesList) => void;
+  onChange: (data: SeriesListData) => void;
+}
+
+function createEmptySeriesEntry(entryId: number, name: string): SeriesListEntry {
+  return {
+    entryId,
+    recordLookupId: 0,
+    iconFileIndex: 0,
+    unk0x08: 0,
+    name,
+    displayNameRef: 0,
+    characterListPosition: 0,
+  };
 }
 
 export function SeriesEditor({
@@ -39,25 +50,25 @@ export function SeriesEditor({
   const isSeriesIdTaken = useCallback(
     (nextId: number) => {
       if (!seriesListData) return false;
-      return seriesListData.SeriesData.some((s, i) => i !== selectedIndex && s.SeriesId === nextId);
+      return seriesListData.entries.some((s, i) => i !== selectedIndex && s.entryId === nextId);
     },
     [seriesListData, selectedIndex]
   );
 
-  const selectedSeries = useMemo<SeriesData | null>(() => {
+  const selectedSeries = useMemo<SeriesListEntry | null>(() => {
     if (!seriesListData) return null;
     if (selectedIndex < 0) return null;
-    return seriesListData.SeriesData[selectedIndex] ?? null;
+    return seriesListData.entries[selectedIndex] ?? null;
   }, [seriesListData, selectedIndex]);
 
-  const deleteCandidateSeries = useMemo<SeriesData | null>(() => {
+  const deleteCandidateSeries = useMemo<SeriesListEntry | null>(() => {
     if (!seriesListData) return null;
     if (deleteCandidateIndex === null) return null;
-    return seriesListData.SeriesData[deleteCandidateIndex] ?? null;
+    return seriesListData.entries[deleteCandidateIndex] ?? null;
   }, [seriesListData, deleteCandidateIndex]);
 
   const updateList = useCallback(
-    (updater: (prev: SeriesList) => SeriesList) => {
+    (updater: (prev: SeriesListData) => SeriesListData) => {
       if (!seriesListData) return;
       const next = updater(seriesListData);
       onChange(next);
@@ -70,18 +81,15 @@ export function SeriesEditor({
   }, []);
 
   const handleUpdateSeries = useCallback(
-    (updatedSeries: SeriesData) => {
+    (updatedSeries: SeriesListEntry) => {
       if (!seriesListData) return;
       if (selectedIndex < 0) return;
 
       updateList((prevList) => {
-        const nextRows = [...prevList.SeriesData];
+        const nextRows = [...prevList.entries];
         if (!nextRows[selectedIndex]) return prevList;
         nextRows[selectedIndex] = updatedSeries;
-        return Object.assign(Object.create(Object.getPrototypeOf(prevList)), prevList, {
-          SeriesData: nextRows,
-          SeriesCount: nextRows.length,
-        });
+        return { ...prevList, entries: nextRows, header: { ...prevList.header, entryCount: nextRows.length } };
       });
     },
     [seriesListData, selectedIndex, updateList]
@@ -102,11 +110,8 @@ export function SeriesEditor({
     if (deleteCandidateIndex === null) return;
 
     updateList((prevList) => {
-      const nextRows = prevList.SeriesData.filter((_, i) => i !== deleteCandidateIndex);
-      return Object.assign(Object.create(Object.getPrototypeOf(prevList)), prevList, {
-        SeriesData: nextRows,
-        SeriesCount: nextRows.length,
-      });
+      const nextRows = prevList.entries.filter((_, i) => i !== deleteCandidateIndex);
+      return { ...prevList, entries: nextRows, header: { ...prevList.header, entryCount: nextRows.length } };
     });
 
     setSelectedIndex((prev) => {
@@ -121,8 +126,8 @@ export function SeriesEditor({
   const getNextSeriesId = useCallback(
     (options: { preferNegative?: boolean; startFrom?: number }): number => {
       if (!seriesListData) return options.startFrom ?? 1;
-      const rows = seriesListData.SeriesData;
-      const existingIds = new Set(rows.map((s) => (s.SeriesId | 0)));
+      const rows = seriesListData.entries;
+      const existingIds = new Set(rows.map((s) => (s.entryId | 0)));
 
       if (options.startFrom !== undefined) {
         let candidate = options.startFrom;
@@ -133,8 +138,8 @@ export function SeriesEditor({
       }
 
       const preferNegative = options.preferNegative ?? false;
-      const positiveIds = rows.map((s) => (s.SeriesId | 0)).filter((id) => id > 0);
-      const negativeIds = rows.map((s) => (s.SeriesId | 0)).filter((id) => id < 0);
+      const positiveIds = rows.map((s) => (s.entryId | 0)).filter((id) => id > 0);
+      const negativeIds = rows.map((s) => (s.entryId | 0)).filter((id) => id < 0);
       const maxPositive = positiveIds.length > 0 ? Math.max(...positiveIds) : 0;
       const minNegative = negativeIds.length > 0 ? Math.min(...negativeIds) : 0;
 
@@ -153,39 +158,23 @@ export function SeriesEditor({
   const handleCopy = useCallback(
     (index: number) => {
       if (!seriesListData) return;
-      const seriesToCopy = seriesListData.SeriesData[index];
+      const seriesToCopy = seriesListData.entries[index];
       if (!seriesToCopy) return;
 
-      const newSeriesId = getNextSeriesId({ startFrom: seriesToCopy.SeriesId + 1 });
+      const newSeriesId = getNextSeriesId({ startFrom: seriesToCopy.entryId + 1 });
 
-      const clonedSeries: SeriesData = {
-        SeriesId: newSeriesId,
-        iconFileIndex: seriesToCopy.iconFileIndex,
-        unk2: seriesToCopy.unk2,
-        unk3: seriesToCopy.unk3,
-        unk4: seriesToCopy.unk4,
-        unk5: seriesToCopy.unk5,
-        characterListPosition: seriesToCopy.characterListPosition,
-        unkStr1: {
-          Offset: 0,
-          StringBufferData: seriesToCopy.unkStr1?.StringBufferData
-            ? Buffer.from(seriesToCopy.unkStr1.StringBufferData)
-            : Buffer.from([0]),
-          Utf8String: seriesToCopy.unkStr1?.Utf8String
-            ? `${seriesToCopy.unkStr1.Utf8String} Copy`
-            : "Copy",
-        },
+      const clonedSeries: SeriesListEntry = {
+        ...seriesToCopy,
+        entryId: newSeriesId,
+        name: seriesToCopy.name ? `${seriesToCopy.name} Copy` : "Copy",
       };
 
       updateList((prevList) => {
-        const nextRows = [...prevList.SeriesData, clonedSeries];
-        return Object.assign(Object.create(Object.getPrototypeOf(prevList)), prevList, {
-          SeriesData: nextRows,
-          SeriesCount: nextRows.length,
-        });
+        const nextRows = [...prevList.entries, clonedSeries];
+        return { ...prevList, entries: nextRows, header: { ...prevList.header, entryCount: nextRows.length } };
       });
 
-      setSelectedIndex(seriesListData.SeriesData.length);
+      setSelectedIndex(seriesListData.entries.length);
     },
     [seriesListData, getNextSeriesId, updateList]
   );
@@ -194,34 +183,21 @@ export function SeriesEditor({
     if (!seriesListData) return;
 
     const selectedSeriesId =
-      selectedIndex >= 0 ? (seriesListData.SeriesData[selectedIndex]?.SeriesId ?? 0) : 0;
+      selectedIndex >= 0 ? (seriesListData.entries[selectedIndex]?.entryId ?? 0) : 0;
     const preferNegative = selectedSeriesId < 0;
     const newSeriesId = getNextSeriesId({ preferNegative });
 
-    const newSeries: SeriesData = {
-      SeriesId: newSeriesId,
-      iconFileIndex: 0,
-      unk2: 0,
-      unk3: 0,
-      unk4: 0,
-      unk5: 0,
-      characterListPosition: 0,
-      unkStr1: {
-        Offset: 0,
-        StringBufferData: Buffer.from([0]),
-        Utf8String: `New Series ${seriesListData.SeriesData.length + 1}`,
-      },
-    };
+    const newSeries = createEmptySeriesEntry(
+      newSeriesId,
+      `New Series ${seriesListData.entries.length + 1}`
+    );
 
     updateList((prevList) => {
-      const nextRows = [...prevList.SeriesData, newSeries];
-      return Object.assign(Object.create(Object.getPrototypeOf(prevList)), prevList, {
-        SeriesData: nextRows,
-        SeriesCount: nextRows.length,
-      });
+      const nextRows = [...prevList.entries, newSeries];
+      return { ...prevList, entries: nextRows, header: { ...prevList.header, entryCount: nextRows.length } };
     });
 
-    setSelectedIndex(seriesListData.SeriesData.length);
+    setSelectedIndex(seriesListData.entries.length);
   }, [seriesListData, selectedIndex, getNextSeriesId, updateList]);
 
   if (!seriesListData) {
@@ -236,7 +212,7 @@ export function SeriesEditor({
     <div className="flex h-full gap-4 min-h-0">
       <div className="w-1/3 border rounded-lg p-3 overflow-hidden flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-3">
-          <div className="font-semibold text-sm">Series ({seriesListData.SeriesData.length})</div>
+          <div className="font-semibold text-sm">Series ({seriesListData.entries.length})</div>
           <Button size="sm" onClick={handleAdd} className="inline-flex items-center gap-2">
             <Plus className="w-4 h-4" />
             Add
@@ -244,7 +220,7 @@ export function SeriesEditor({
         </div>
 
         <SeriesListComponent
-          seriesData={seriesListData.SeriesData}
+          seriesData={seriesListData.entries}
           seriesImageConvertDirPath={seriesImageConvertDirPath}
           seriesImageSeriesBaseNameOrder={seriesImageSeriesBaseNameOrder}
           selectedIndex={selectedIndex}
@@ -288,7 +264,7 @@ export function SeriesEditor({
             <AlertDialogDescription>
               {deleteCandidateSeries ? (
                 <>
-                  Are you sure you want to delete "{deleteCandidateSeries.unkStr1?.Utf8String || ""}" (index {deleteCandidateIndex})?
+                  Are you sure you want to delete "{deleteCandidateSeries.name || ""}" (index {deleteCandidateIndex})?
                 </>
               ) : (
                 <>Are you sure you want to delete this series? This action cannot be undone.</>

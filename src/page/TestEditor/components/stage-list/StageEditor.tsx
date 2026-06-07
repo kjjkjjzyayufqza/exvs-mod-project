@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from "react";
-import { Buffer } from "buffer";
 import { Plus } from "lucide-react";
 import {
   AlertDialog,
@@ -12,23 +11,36 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import type { StageDataEntry, StageList } from "@/models/stageList";
+import type { StageListData, StageListEntry } from "@/models/stageListEntry";
 import { StageForm } from "./StageForm";
 import { StageList as StageListComponent, type StageListSortKey } from "./StageList";
 import type { StageIconIndexPickerGroup } from "./StageIconIndexPickerPopover";
 
-function createEmptyStage(id: number): StageDataEntry {
+function createEmptyStage(id: number): StageListEntry {
   return {
-    id,
-    unk1: 0, unk2: 0, unk3: 0, unk4: 0, unk5: 0, unk6: 0, vs_s_d: 0, fileName: 0, unk9: 0,
-    vs_s_l: 0, unk11: 0,
-    name: { Offset: 0, StringBufferData: Buffer.from([0]), Utf8String: "" },
-    unk13: 0, unk14: 0, unk15: 0, uniqueIndex: 0, vs_sn: 0, iconIndex: 0,
+    entryId: id,
+    recordLookupId: 0,
+    randomSelectWeightDefault: 0,
+    randomSelectWeightAlt: 0,
+    unk0x0c: 0,
+    seriesAltGroupId: 0,
+    unk0x14: 0,
+    vsSD: 0,
+    fileName: 0,
+    selectOrderAlt: 0,
+    vsSL: 0,
+    seriesDefaultGroupId: 0,
+    name: "",
+    unk0x34: 0,
+    unk0x38: 0,
+    selectOrderDefault: 0,
+    vsSn: 0,
+    iconIndex: 0,
   };
 }
 
 interface StageEditorProps {
-  stageListData?: StageList | null;
+  stageListData?: StageListData | null;
   selectedIndex: number;
   onSelectChange: (index: number) => void;
   sortKey?: StageListSortKey;
@@ -43,7 +55,7 @@ interface StageEditorProps {
   obModPath?: string;
   workspacePath?: string;
   onReveal?: (path: string) => void;
-  onChange: (data: StageList) => void;
+  onChange: (data: StageListData) => void;
   stageIconConvertDirPath?: string;
   stageIconBaseNameOrder?: Array<string | null>;
   stageIconIndexPickerGroups?: StageIconIndexPickerGroup[];
@@ -55,7 +67,7 @@ export function StageEditor({
   stageListData,
   selectedIndex,
   onSelectChange,
-  sortKey = "unk1",
+  sortKey = "recordLookupId",
   onSortKeyChange,
   searchInputValue = "",
   searchTerm = "",
@@ -77,20 +89,20 @@ export function StageEditor({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteCandidateIndex, setDeleteCandidateIndex] = useState<number | null>(null);
 
-  const selectedStage = useMemo<StageDataEntry | null>(() => {
+  const selectedStage = useMemo<StageListEntry | null>(() => {
     if (!stageListData) return null;
     if (selectedIndex < 0) return null;
-    return stageListData.StageData[selectedIndex] ?? null;
+    return stageListData.entries[selectedIndex] ?? null;
   }, [stageListData, selectedIndex]);
 
-  const deleteCandidateStage = useMemo<StageDataEntry | null>(() => {
+  const deleteCandidateStage = useMemo<StageListEntry | null>(() => {
     if (!stageListData) return null;
     if (deleteCandidateIndex === null) return null;
-    return stageListData.StageData[deleteCandidateIndex] ?? null;
+    return stageListData.entries[deleteCandidateIndex] ?? null;
   }, [stageListData, deleteCandidateIndex]);
 
   const updateList = useCallback(
-    (updater: (prev: StageList) => StageList) => {
+    (updater: (prev: StageListData) => StageListData) => {
       if (!stageListData) return;
       const next = updater(stageListData);
       onChange(next);
@@ -103,18 +115,15 @@ export function StageEditor({
   }, [onSelectChange]);
 
   const handleUpdateStage = useCallback(
-    (updatedStage: StageDataEntry) => {
+    (updatedStage: StageListEntry) => {
       if (!stageListData) return;
       if (selectedIndex < 0) return;
 
       updateList((prevList) => {
-        const nextRows = [...prevList.StageData];
+        const nextRows = [...prevList.entries];
         if (!nextRows[selectedIndex]) return prevList;
         nextRows[selectedIndex] = updatedStage;
-        return Object.assign(Object.create(Object.getPrototypeOf(prevList)), prevList, {
-          StageData: nextRows,
-          StageCount: nextRows.length,
-        });
+        return { ...prevList, entries: nextRows, header: { ...prevList.header, entryCount: nextRows.length } };
       });
     },
     [stageListData, selectedIndex, updateList]
@@ -135,11 +144,8 @@ export function StageEditor({
     if (deleteCandidateIndex === null) return;
 
     updateList((prevList) => {
-      const nextRows = prevList.StageData.filter((_, i) => i !== deleteCandidateIndex);
-      return Object.assign(Object.create(Object.getPrototypeOf(prevList)), prevList, {
-        StageData: nextRows,
-        StageCount: nextRows.length,
-      });
+      const nextRows = prevList.entries.filter((_, i) => i !== deleteCandidateIndex);
+      return { ...prevList, entries: nextRows, header: { ...prevList.header, entryCount: nextRows.length } };
     });
 
     const nextIndex =
@@ -154,20 +160,20 @@ export function StageEditor({
   }, [stageListData, closeDeleteDialog, deleteCandidateIndex, selectedIndex, onSelectChange, updateList]);
 
   const getNextId = useCallback(() => {
-    if (!stageListData || stageListData.StageData.length === 0) return 0;
-    const maxId = Math.max(...stageListData.StageData.map((s) => s.id ?? 0), 0);
+    if (!stageListData || stageListData.entries.length === 0) return 0;
+    const maxId = Math.max(...stageListData.entries.map((s) => s.entryId ?? 0), 0);
     return maxId + 1;
   }, [stageListData]);
 
   /**
-   * Next uniqueIndex = max(existing) + 1.
+   * Next selectOrderDefault = max(existing) + 1.
    * Does not reuse gaps; always uses the next value after the current maximum.
    */
-  const getNextUniqueIndex = useCallback(() => {
-    if (!stageListData || stageListData.StageData.length === 0) return 1;
+  const getNextSelectOrder = useCallback(() => {
+    if (!stageListData || stageListData.entries.length === 0) return 1;
     const maxVal = Math.max(
       0,
-      ...stageListData.StageData.map((s) => (typeof s.uniqueIndex === "number" ? s.uniqueIndex : 0))
+      ...stageListData.entries.map((s) => (typeof s.selectOrderDefault === "number" ? s.selectOrderDefault : 0))
     );
     return maxVal + 1;
   }, [stageListData]);
@@ -177,47 +183,35 @@ export function StageEditor({
 
     const newId = getNextId();
     updateList((prevList) => {
-      const nextRows = [...prevList.StageData, createEmptyStage(newId)];
-      return Object.assign(Object.create(Object.getPrototypeOf(prevList)), prevList, {
-        StageData: nextRows,
-        StageCount: nextRows.length,
-      });
+      const nextRows = [...prevList.entries, createEmptyStage(newId)];
+      return { ...prevList, entries: nextRows, header: { ...prevList.header, entryCount: nextRows.length } };
     });
 
-    onSelectChange(stageListData.StageData.length);
+    onSelectChange(stageListData.entries.length);
   }, [stageListData, getNextId, onSelectChange, updateList]);
 
   const handleCopyAsNew = useCallback(
     (index: number) => {
       if (!stageListData) return;
-      const sourceStage = stageListData.StageData[index];
+      const sourceStage = stageListData.entries[index];
       if (!sourceStage) return;
 
       const newId = getNextId();
-      const newUniqueIndex = getNextUniqueIndex();
-      const copiedStage: StageDataEntry = {
+      const newSelectOrder = getNextSelectOrder();
+      const copiedStage: StageListEntry = {
         ...sourceStage,
-        id: newId,
-        uniqueIndex: newUniqueIndex,
-        name: sourceStage.name
-          ? {
-              ...sourceStage.name,
-              StringBufferData: Buffer.from(sourceStage.name.StringBufferData),
-            }
-          : { Offset: 0, StringBufferData: Buffer.from([0]), Utf8String: "" },
+        entryId: newId,
+        selectOrderDefault: newSelectOrder,
       };
 
       updateList((prevList) => {
-        const nextRows = [...prevList.StageData, copiedStage];
-        return Object.assign(Object.create(Object.getPrototypeOf(prevList)), prevList, {
-          StageData: nextRows,
-          StageCount: nextRows.length,
-        });
+        const nextRows = [...prevList.entries, copiedStage];
+        return { ...prevList, entries: nextRows, header: { ...prevList.header, entryCount: nextRows.length } };
       });
 
-      onSelectChange(stageListData.StageData.length);
+      onSelectChange(stageListData.entries.length);
     },
-    [stageListData, getNextId, getNextUniqueIndex, onSelectChange, updateList]
+    [stageListData, getNextId, getNextSelectOrder, onSelectChange, updateList]
   );
 
   if (!stageListData) {
@@ -232,7 +226,7 @@ export function StageEditor({
     <div className="flex h-full gap-4 min-h-0">
       <div className="w-1/3 border rounded-lg p-3 overflow-hidden flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-3">
-          <div className="font-semibold text-sm">Stages ({stageListData.StageData.length})</div>
+          <div className="font-semibold text-sm">Stages ({stageListData.entries.length})</div>
           <Button size="sm" onClick={handleAdd} className="inline-flex items-center gap-2">
             <Plus className="w-4 h-4" />
             Add
@@ -240,7 +234,7 @@ export function StageEditor({
         </div>
 
         <StageListComponent
-          stageData={stageListData.StageData}
+          stageData={stageListData.entries}
           selectedIndex={selectedIndex}
           onSelect={handleSelect}
           onCopy={handleCopyAsNew}

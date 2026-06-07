@@ -3,30 +3,29 @@ import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { StageDataEntry } from "@/models/stageList";
+import type { StageListEntry } from "@/models/stageListEntry";
 import { cn } from "@/lib/utils";
 import { StageCard } from "./StageCard";
 
 export type StageListSortKey =
   | "none"
   | "index"
-  | "id"
-  | "unk1"
-  | "unk2"
-  | "unk3"
-  | "unk4"
-  | "unk5"
-  | "unk6"
-  | "vs_s_d"
+  | "entryId"
+  | "recordLookupId"
+  | "randomSelectWeightDefault"
+  | "randomSelectWeightAlt"
+  | "unk0x0c"
+  | "seriesAltGroupId"
+  | "unk0x14"
+  | "vsSD"
   | "fileName"
-  | "unk9"
-  | "vs_s_l"
-  | "unk11"
-  | "unk13"
-  | "unk14"
-  | "unk15"
-  | "uniqueIndex"
-  | "vs_sn"
+  | "selectOrderAlt"
+  | "vsSL"
+  | "seriesDefaultGroupId"
+  | "unk0x34"
+  | "unk0x38"
+  | "selectOrderDefault"
+  | "vsSn"
   | "iconIndex";
 
 type SortKey = StageListSortKey;
@@ -34,28 +33,27 @@ type SortKey = StageListSortKey;
 const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
   { value: "none", label: "No sort" },
   { value: "index", label: "Index (min → max)" },
-  { value: "id", label: "ID (positive → negative)" },
-  { value: "unk1", label: "unk1 (min → max)" },
-  { value: "unk2", label: "unk2 (min → max)" },
-  { value: "unk3", label: "unk3 (min → max)" },
-  { value: "unk4", label: "unk4 (min → max)" },
-  { value: "unk5", label: "unk5 (min → max)" },
-  { value: "unk6", label: "unk6 (min → max)" },
-  { value: "vs_s_d", label: "vs_s_d (min → max)" },
+  { value: "entryId", label: "ID (positive → negative)" },
+  { value: "recordLookupId", label: "recordLookupId (min → max)" },
+  { value: "randomSelectWeightDefault", label: "randomSelectWeightDefault (min → max)" },
+  { value: "randomSelectWeightAlt", label: "randomSelectWeightAlt (min → max)" },
+  { value: "unk0x0c", label: "unk0x0c (min → max)" },
+  { value: "seriesAltGroupId", label: "seriesAltGroupId (min → max)" },
+  { value: "unk0x14", label: "unk0x14 (min → max)" },
+  { value: "vsSD", label: "vs_s_d (min → max)" },
   { value: "fileName", label: "fileName (min → max)" },
-  { value: "unk9", label: "unk9 (min → max)" },
-  { value: "vs_s_l", label: "vs_s_l (min → max)" },
-  { value: "unk11", label: "unk11 (min → max)" },
-  { value: "unk13", label: "unk13 (min → max)" },
-  { value: "unk14", label: "unk14 (min → max)" },
-  { value: "unk15", label: "unk15 (min → max)" },
-  { value: "uniqueIndex", label: "uniqueIndex (min → max)" },
-  { value: "vs_sn", label: "vs_sn (min → max)" },
+  { value: "selectOrderAlt", label: "selectOrderAlt (min → max)" },
+  { value: "vsSL", label: "vs_s_l (min → max)" },
+  { value: "seriesDefaultGroupId", label: "seriesDefaultGroupId (min → max)" },
+  { value: "unk0x34", label: "unk0x34 (min → max)" },
+  { value: "unk0x38", label: "unk0x38 (min → max)" },
+  { value: "selectOrderDefault", label: "selectOrderDefault (min → max)" },
+  { value: "vsSn", label: "vs_sn (min → max)" },
   { value: "iconIndex", label: "Icon Index (min → max)" },
 ];
 
 interface StageListProps {
-  stageData: StageDataEntry[];
+  stageData: StageListEntry[];
   selectedIndex: number;
   onSelect: (index: number) => void;
   onCopy: (index: number) => void;
@@ -92,7 +90,7 @@ export function StageList({
   const [internalInputValue, setInternalInputValue] = useState("");
   const [internalSearchTerm, setInternalSearchTerm] = useState("");
   const [internalIsComposing, setInternalIsComposing] = useState(false);
-  const [internalSortKey, setInternalSortKey] = useState<SortKey>("unk1");
+  const [internalSortKey, setInternalSortKey] = useState<SortKey>("recordLookupId");
 
   const isControlled =
     onSortKeyChange != null &&
@@ -100,7 +98,7 @@ export function StageList({
     onSearchTermChange != null &&
     onComposingChange != null;
 
-  const sortKey = isControlled ? (controlledSortKey ?? "unk1") : internalSortKey;
+  const sortKey = isControlled ? (controlledSortKey ?? "recordLookupId") : internalSortKey;
   const inputValue = isControlled ? (controlledInputValue ?? "") : internalInputValue;
   const searchTerm = isControlled ? (controlledSearchTerm ?? "") : internalSearchTerm;
   const isComposing = isControlled ? (controlledIsComposing ?? false) : internalIsComposing;
@@ -160,12 +158,12 @@ export function StageList({
       .filter(({ row, idx }) => {
         const parts = [
           idx.toString(),
-          String(row.id ?? ""),
-          String(row.unk1),
-          String(row.unk2),
-          String(row.unk3),
-          String(row.unk4),
-          String(row.name?.Utf8String ?? ""),
+          String(row.entryId ?? ""),
+          String(row.recordLookupId),
+          String(row.randomSelectWeightDefault),
+          String(row.randomSelectWeightAlt),
+          String(row.unk0x0c),
+          String(row.name ?? ""),
         ];
         return parts.some((p) => p.toLowerCase().includes(lower));
       });
@@ -174,44 +172,42 @@ export function StageList({
   const sortedRows = useMemo(() => {
     if (sortKey === "none") return filteredRows;
 
-    const getValue = (row: StageDataEntry, idx: number): number => {
+    const getValue = (row: StageListEntry, idx: number): number => {
       switch (sortKey) {
         case "index":
           return idx;
-        case "id":
-          return row.id ?? 0;
-        case "unk1":
-          return row.unk1 ?? 0;
-        case "unk2":
-          return row.unk2 ?? 0;
-        case "unk3":
-          return row.unk3 ?? 0;
-        case "unk4":
-          return row.unk4 ?? 0;
-        case "unk5":
-          return row.unk5 ?? 0;
-        case "unk6":
-          return row.unk6 ?? 0;
-        case "vs_s_d":
-          return row.vs_s_d ?? 0;
+        case "entryId":
+          return row.entryId ?? 0;
+        case "recordLookupId":
+          return row.recordLookupId ?? 0;
+        case "randomSelectWeightDefault":
+          return row.randomSelectWeightDefault ?? 0;
+        case "randomSelectWeightAlt":
+          return row.randomSelectWeightAlt ?? 0;
+        case "unk0x0c":
+          return row.unk0x0c ?? 0;
+        case "seriesAltGroupId":
+          return row.seriesAltGroupId ?? 0;
+        case "unk0x14":
+          return row.unk0x14 ?? 0;
+        case "vsSD":
+          return row.vsSD ?? 0;
         case "fileName":
           return row.fileName ?? 0;
-        case "unk9":
-          return row.unk9 ?? 0;
-        case "vs_s_l":
-          return row.vs_s_l ?? 0;
-        case "unk11":
-          return row.unk11 ?? 0;
-        case "unk13":
-          return row.unk13 ?? 0;
-        case "unk14":
-          return row.unk14 ?? 0;
-        case "unk15":
-          return row.unk15 ?? 0;
-        case "uniqueIndex":
-          return row.uniqueIndex ?? 0;
-        case "vs_sn":
-          return row.vs_sn ?? 0;
+        case "selectOrderAlt":
+          return row.selectOrderAlt ?? 0;
+        case "vsSL":
+          return row.vsSL ?? 0;
+        case "seriesDefaultGroupId":
+          return row.seriesDefaultGroupId ?? 0;
+        case "unk0x34":
+          return row.unk0x34 ?? 0;
+        case "unk0x38":
+          return row.unk0x38 ?? 0;
+        case "selectOrderDefault":
+          return row.selectOrderDefault ?? 0;
+        case "vsSn":
+          return row.vsSn ?? 0;
         case "iconIndex":
           return row.iconIndex ?? 0;
         default:
@@ -219,11 +215,11 @@ export function StageList({
       }
     };
 
-    const compare = (a: { row: StageDataEntry; idx: number }, b: { row: StageDataEntry; idx: number }) => {
+    const compare = (a: { row: StageListEntry; idx: number }, b: { row: StageListEntry; idx: number }) => {
       const av = getValue(a.row, a.idx);
       const bv = getValue(b.row, b.idx);
 
-      if (sortKey === "id") {
+      if (sortKey === "entryId") {
         const aIsPositive = av >= 0;
         const bIsPositive = bv >= 0;
         if (aIsPositive !== bIsPositive) return aIsPositive ? -1 : 1;

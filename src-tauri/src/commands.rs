@@ -1373,6 +1373,12 @@ fn validate_command_table_file_type(data: &[u8], file_type: &str) -> Result<(), 
         "characterlist" => {
             crate::format::characterlist::parse_characterlist(data)?;
         }
+        "serieslist" => {
+            crate::format::serieslist::parse_serieslist(data)?;
+        }
+        "stagelist" => {
+            crate::format::stagelist::parse_stagelist(data)?;
+        }
         "characterparam" => {
             crate::format::characterparam::parse_characterparam(data)?;
         }
@@ -1481,6 +1487,12 @@ pub fn parse_typed_param_file(path: &str, param_type: &str) -> Result<Value, Str
         "characterlist" => {
             serde_json::to_value(crate::format::characterlist::parse_characterlist(&data)?)
         }
+        "serieslist" => {
+            return crate::format::serieslist::parse_serieslist(&data);
+        }
+        "stagelist" => {
+            return crate::format::stagelist::parse_stagelist(&data);
+        }
         "characterparam" => {
             serde_json::to_value(crate::format::characterparam::parse_characterparam(&data)?)
         }
@@ -1537,6 +1549,8 @@ pub fn build_typed_param_file(
                 serde_json::from_value(data_json).map_err(|e| e.to_string())?;
             crate::format::characterlist::build_characterlist(&d)?
         }
+        "serieslist" => crate::format::serieslist::build_serieslist(&data_json)?,
+        "stagelist" => crate::format::stagelist::build_stagelist(&data_json)?,
         "characterparam" => {
             let d: crate::format::characterparam::CharacterParamData =
                 serde_json::from_value(data_json).map_err(|e| e.to_string())?;

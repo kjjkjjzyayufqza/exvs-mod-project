@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { exists, readFile, readTextFile, writeFile } from "@tauri-apps/plugin-fs";
 import { dirname, join } from "@tauri-apps/api/path";
 import { openPath } from "@tauri-apps/plugin-opener";
@@ -22,9 +22,8 @@ import {
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { StageList, StageListGVS, buildStageListBuffer } from "@/models/stageList";
-import type { StageDataEntry } from "@/models/stageList";
-import { obfEncodeFromUtf8String } from "@/utils/obfString";
+import { StageListGVS } from "@/models/stageList";
+import type { StageListData, StageListEntry } from "@/models/stageListEntry";
 import { useConfigStore } from "@/store/configStore";
 import { StageEditor } from "./stage-list/StageEditor";
 import type { StageListSortKey } from "./stage-list/StageList";
@@ -82,12 +81,6 @@ function parseFileNameHex(hex: string): number {
   return Buffer.from(bytes).readInt32LE(0);
 }
 
-function buildNameData(value: string): { Offset: number; StringBufferData: Buffer; Utf8String: string } {
-  const utf8 = value ?? "";
-  const encoded = Buffer.from(obfEncodeFromUtf8String(utf8));
-  return { Offset: 0, StringBufferData: encoded, Utf8String: utf8 };
-}
-
 interface StageListViewProps {
   folderPath: string;
   isActive: boolean;
@@ -99,7 +92,7 @@ type LoadState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error"; filePath: string; message: string }
-  | { status: "ready"; filePath: string; list: StageList };
+  | { status: "ready"; filePath: string; list: StageListData };
 
 type StageIconState =
   | { status: "idle" }
@@ -125,7 +118,7 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
-  const [sortKey, setSortKey] = useState<StageListSortKey>("unk1");
+  const [sortKey, setSortKey] = useState<StageListSortKey>("recordLookupId");
   const [searchInputValue, setSearchInputValue] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [isComposing, setIsComposing] = useState(false);
@@ -234,12 +227,14 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
     const filePath = await resolveFilePath();
     setLoadState({ status: "loading" });
     try {
-      const fileData = await readFile(filePath);
-      const list = new StageList(Buffer.from(fileData));
+      const list = await invoke<StageListData>("parse_typed_param_file", {
+        path: filePath,
+        paramType: "stagelist",
+      });
       setLoadState({ status: "ready", filePath, list });
       resetEditorState();
       setSelectedIndex((prev) => {
-        const len = list.StageData.length;
+        const len = list.entries.length;
         if (len === 0) return -1;
         return prev < 0 ? prev : Math.min(prev, len - 1);
       });
@@ -277,7 +272,7 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
   }, [folderPath, isActive, loadStageIconCount]);
 
   const handleEditorChange = useCallback(
-    (next: StageList) => {
+    (next: StageListData) => {
       setLoadState((prev) => {
         if (prev.status !== "ready") return prev;
         return { ...prev, list: next };
@@ -300,8 +295,22 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
         // Ignore backup failures
       }
 
-      const buffer = buildStageListBuffer(loadState.list);
-      await writeFile(filePath, buffer);
+      const sortedRows = [...loadState.list.entries].sort((a, b) => {
+        const aIsPositive = (a.entryId ?? 0) >= 0;
+        const bIsPositive = (b.entryId ?? 0) >= 0;
+        if (aIsPositive !== bIsPositive) return aIsPositive ? -1 : 1;
+        return (a.entryId ?? 0) - (b.entryId ?? 0);
+      });
+      const sortedList: StageListData = {
+        ...loadState.list,
+        entries: sortedRows,
+        header: { ...loadState.list.header, entryCount: sortedRows.length },
+      };
+      await invoke("build_typed_param_file", {
+        dataJson: sortedList,
+        outputPath: filePath,
+        paramType: "stagelist",
+      });
       toast.success("Saved stage_list.bin");
       setHasChanges(false);
       onUnsavedChanges?.(false);
@@ -415,7 +424,7 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
     const names = gvsSession
       ? gvsSession.list.StageData.map((entry) => entry.name?.Utf8String ?? "")
       : loadState.status === "ready"
-        ? loadState.list.StageData.map((entry) => entry.name?.Utf8String ?? "")
+        ? loadState.list.entries.map((entry) => entry.name ?? "")
         : [];
 
     if (names.length === 0) {
@@ -530,7 +539,7 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
 
     setIsExporting(true);
     try {
-      const result = await exportStageJsonToFile(loadState.list.StageData);
+      const result = await exportStageJsonToFile(loadState.list.entries);
       if (!result) return;
       toast.success(`Exported ${result.count} stages`);
     } catch (error) {
@@ -599,41 +608,42 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
     if (gvsSession !== null) return;
 
     const list = loadState.list;
-    const sourceStage = list.StageData.find((s) => s.id === DEBUG_SOURCE_ID);
+    const sourceStage = list.entries.find((s) => s.entryId === DEBUG_SOURCE_ID);
     if (!sourceStage) {
       toast.error(`Source stage id ${DEBUG_SOURCE_ID} not found`);
       return;
     }
 
-    const maxId = Math.max(0, ...list.StageData.map((s) => s.id ?? 0));
-    const maxUniqueIndex = Math.max(
+    const maxId = Math.max(0, ...list.entries.map((s) => s.entryId ?? 0));
+    const maxSelectOrder = Math.max(
       0,
-      ...list.StageData.map((s) => (typeof s.uniqueIndex === "number" ? s.uniqueIndex : 0))
+      ...list.entries.map((s) => (typeof s.selectOrderDefault === "number" ? s.selectOrderDefault : 0))
     );
 
-    const newStages: StageDataEntry[] = [];
+    const newStages: StageListEntry[] = [];
     let nextId = maxId + 1;
-    let nextUniqueIndex = maxUniqueIndex + 1;
+    let nextSelectOrder = maxSelectOrder + 1;
 
     for (const entry of DEBUG_BATCH_ENTRIES) {
       const fileNameValue = parseFileNameHex(entry.fileNameHex);
-      const copiedStage: StageDataEntry = {
+      const copiedStage: StageListEntry = {
         ...sourceStage,
-        id: nextId,
-        uniqueIndex: nextUniqueIndex,
-        name: buildNameData(entry.name),
+        entryId: nextId,
+        selectOrderDefault: nextSelectOrder,
+        name: entry.name,
         fileName: fileNameValue,
       };
       newStages.push(copiedStage);
       nextId += 1;
-      nextUniqueIndex += 1;
+      nextSelectOrder += 1;
     }
 
-    const nextRows = [...list.StageData, ...newStages];
-    const nextList = Object.assign(Object.create(Object.getPrototypeOf(list)), list, {
-      StageData: nextRows,
-      StageCount: nextRows.length,
-    });
+    const nextRows = [...list.entries, ...newStages];
+    const nextList: StageListData = {
+      ...list,
+      entries: nextRows,
+      header: { ...list.header, entryCount: nextRows.length },
+    };
 
     handleEditorChange(nextList);
     toast.success(`Added ${newStages.length} debug stages from id ${DEBUG_SOURCE_ID}`);
@@ -662,7 +672,7 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
     }
     if (loadState.status !== "ready") return null;
     return {
-      primary: `Loaded: ${loadState.list.StageCount} stages, ${loadState.list.CommandsCount} commands`,
+      primary: `Loaded: ${loadState.list.entries.length} stages, ${loadState.list.header.commandsCount} commands`,
       secondary: "",
     };
   }, [gvsSession, loadState]);
@@ -786,7 +796,7 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
                   size="sm"
                   variant="outline"
                   onClick={() => void handleExportStageJson()}
-                  disabled={isExporting || isGvsActive || loadState.status !== "ready" || loadState.list.StageData.length === 0}
+                  disabled={isExporting || isGvsActive || loadState.status !== "ready" || loadState.list.entries.length === 0}
                   className="inline-flex items-center gap-2"
                   title={isGvsActive ? "Not available in GVS variant view" : "Export all stages to JSON"}
                 >

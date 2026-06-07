@@ -1,38 +1,38 @@
 import { useCallback, useState } from "react";
-import { Buffer } from "buffer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DualValueProperty } from "@/components/ui/dual-value-property";
 import { StageFileNameStatusIcons } from "./StageFileNameStatusIcons";
 import { StageIconIndexPickerPopover } from "./StageIconIndexPickerPopover";
-import type { StageDataEntry } from "@/models/stageList";
+import type { StageListEntry } from "@/models/stageListEntry";
 import type { StageIconIndexPickerGroup } from "./StageIconIndexPickerPopover";
 
 const NUMERIC_FIELDS = [
-  { name: "id" as const, label: "id" },
+  { name: "entryId" as const, label: "id" },
   { name: "fileName" as const, label: "fileName" },
-  { name: "uniqueIndex" as const, label: "uniqueIndex" },
-  { name: "unk1" as const, label: "unk1" },
-  { name: "unk2" as const, label: "unk2" },
-  { name: "unk3" as const, label: "unk3" },
-  { name: "unk4" as const, label: "unk4" },
-  { name: "unk5" as const, label: "unk5" },
-  { name: "unk6" as const, label: "unk6" },
-  { name: "vs_s_d" as const, label: "vs_s_d (加载背景-黑色)" },
-  { name: "unk9" as const, label: "unk9" },
-  { name: "vs_s_l" as const, label: "vs_s_l (加载背景)" },
-  { name: "unk11" as const, label: "unk11" },
-  { name: "unk13" as const, label: "unk13" },
-  { name: "unk14" as const, label: "unk14" },
-  { name: "unk15" as const, label: "unk15" },
-  { name: "vs_sn" as const, label: "vs_sn (地图名称图片)" },
+  { name: "selectOrderDefault" as const, label: "selectOrderDefault (选关顺序)" },
+  { name: "selectOrderAlt" as const, label: "selectOrderAlt (选关顺序-alt)" },
+  { name: "recordLookupId" as const, label: "recordLookupId" },
+  { name: "randomSelectWeightDefault" as const, label: "randomSelectWeightDefault (随机权重)" },
+  { name: "randomSelectWeightAlt" as const, label: "randomSelectWeightAlt (随机权重-alt)" },
+  { name: "seriesAltGroupId" as const, label: "seriesAltGroupId" },
+  { name: "seriesDefaultGroupId" as const, label: "seriesDefaultGroupId" },
+  { name: "vsSD" as const, label: "vs_s_d (加载背景-黑色)" },
+  { name: "vsSL" as const, label: "vs_s_l (加载背景)" },
+  { name: "vsSn" as const, label: "vs_sn (地图名称图片)" },
+  { name: "unk0x0c" as const, label: "unk0x0c" },
+  { name: "unk0x14" as const, label: "unk0x14" },
+  { name: "unk0x34" as const, label: "unk0x34" },
+  { name: "unk0x38" as const, label: "unk0x38" },
   { name: "iconIndex" as const, label: "Icon Index(同时索引两张图)" },
 ];
 
+const FILE_NAME_FIELDS = new Set(["fileName", "vsSD", "vsSL", "vsSn"]);
+
 interface StageFormProps {
-  stage: StageDataEntry;
+  stage: StageListEntry;
   index: number;
-  onChange: (updated: StageDataEntry) => void;
+  onChange: (updated: StageListEntry) => void;
   obDplCachePath?: string;
   obModPath?: string;
   workspacePath?: string;
@@ -56,7 +56,7 @@ export function StageForm({
 }: StageFormProps) {
   const [stageIconIndexPickerOpen, setStageIconIndexPickerOpen] = useState(false);
   const handleFieldChange = useCallback(
-    (fieldName: keyof StageDataEntry, value: number) => {
+    (fieldName: keyof StageListEntry, value: number) => {
       const updated = { ...stage, [fieldName]: value };
       onChange(updated);
     },
@@ -65,14 +65,7 @@ export function StageForm({
 
   const handleNameChange = useCallback(
     (value: string) => {
-      const nameData = stage.name;
-      const updated = {
-        ...stage,
-        name: nameData
-          ? { ...nameData, Utf8String: value }
-          : { Offset: 0, StringBufferData: Buffer.from([0]), Utf8String: value },
-      };
-      onChange(updated);
+      onChange({ ...stage, name: value });
     },
     [stage, onChange]
   );
@@ -91,7 +84,7 @@ export function StageForm({
         <Input
           id={`name-${index}`}
           type="text"
-          value={stage.name?.Utf8String ?? ""}
+          value={stage.name ?? ""}
           onChange={(e) => handleNameChange(e.target.value)}
           className="h-8"
         />
@@ -102,7 +95,7 @@ export function StageForm({
             key={field.name}
             label={field.label}
             labelExtra={
-              field.name === "fileName" || field.name === "vs_s_d" || field.name === "vs_s_l" || field.name === "vs_sn" ? (
+              FILE_NAME_FIELDS.has(field.name) ? (
                 <StageFileNameStatusIcons
                   fileNameValue={getNumericValue(field.name)}
                   obDplCachePath={obDplCachePath}

@@ -1,29 +1,26 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
-import { Buffer } from "buffer";
 
-import { obfEncodeFromUtf8String } from "@/utils/obfString";
-import type { StageDataEntry, StageList } from "@/models/stageList";
+import type { StageListData, StageListEntry } from "@/models/stageListEntry";
 
 export type StageJsonRow = {
   id: number;
   name: string;
-  unk1: number;
-  unk2: number;
-  unk3: number;
-  unk4: number;
-  unk5: number;
-  unk6: number;
-  vs_s_d: number;
+  recordLookupId: number;
+  randomSelectWeightDefault: number;
+  randomSelectWeightAlt: number;
+  unk0x0c: number;
+  seriesAltGroupId: number;
+  unk0x14: number;
+  vsSD: number;
   fileName: number;
-  unk9: number;
-  vs_s_l: number;
-  unk11: number;
-  unk13: number;
-  unk14: number;
-  unk15: number;
-  uniqueIndex: number;
-  vs_sn: number;
+  selectOrderAlt: number;
+  vsSL: number;
+  seriesDefaultGroupId: number;
+  unk0x34: number;
+  unk0x38: number;
+  selectOrderDefault: number;
+  vsSn: number;
   iconIndex: number;
 };
 
@@ -37,40 +34,35 @@ export interface StageJsonImportPreview {
   rows: StageJsonRow[];
 }
 
-function toStageJsonRow(entry: StageDataEntry): StageJsonRow {
-  const nameStr =
-    entry.name && typeof entry.name === "object" && "Utf8String" in entry.name
-      ? String((entry.name as { Utf8String: string }).Utf8String ?? "")
-      : "";
+function toStageJsonRow(entry: StageListEntry): StageJsonRow {
   return {
-    id: entry.id ?? 0,
-    name: nameStr,
-    unk1: entry.unk1 ?? 0,
-    unk2: entry.unk2 ?? 0,
-    unk3: entry.unk3 ?? 0,
-    unk4: entry.unk4 ?? 0,
-    unk5: entry.unk5 ?? 0,
-    unk6: entry.unk6 ?? 0,
-    vs_s_d: entry.vs_s_d ?? 0,
+    id: entry.entryId ?? 0,
+    name: typeof entry.name === "string" ? entry.name : "",
+    recordLookupId: entry.recordLookupId ?? 0,
+    randomSelectWeightDefault: entry.randomSelectWeightDefault ?? 0,
+    randomSelectWeightAlt: entry.randomSelectWeightAlt ?? 0,
+    unk0x0c: entry.unk0x0c ?? 0,
+    seriesAltGroupId: entry.seriesAltGroupId ?? 0,
+    unk0x14: entry.unk0x14 ?? 0,
+    vsSD: entry.vsSD ?? 0,
     fileName: entry.fileName ?? 0,
-    unk9: entry.unk9 ?? 0,
-    vs_s_l: entry.vs_s_l ?? 0,
-    unk11: entry.unk11 ?? 0,
-    unk13: entry.unk13 ?? 0,
-    unk14: entry.unk14 ?? 0,
-    unk15: entry.unk15 ?? 0,
-    uniqueIndex: entry.uniqueIndex ?? 0,
-    vs_sn: entry.vs_sn ?? 0,
+    selectOrderAlt: entry.selectOrderAlt ?? 0,
+    vsSL: entry.vsSL ?? 0,
+    seriesDefaultGroupId: entry.seriesDefaultGroupId ?? 0,
+    unk0x34: entry.unk0x34 ?? 0,
+    unk0x38: entry.unk0x38 ?? 0,
+    selectOrderDefault: entry.selectOrderDefault ?? 0,
+    vsSn: entry.vsSn ?? 0,
     iconIndex: entry.iconIndex ?? 0,
   };
 }
 
-export function buildStageJsonPayload(entries: StageDataEntry[]): StageJsonRow[] {
+export function buildStageJsonPayload(entries: StageListEntry[]): StageJsonRow[] {
   return entries.map((e) => toStageJsonRow(e));
 }
 
 export async function exportStageJsonToFile(
-  entries: StageDataEntry[],
+  entries: StageListEntry[],
   options?: { defaultFileName?: string }
 ): Promise<{ filePath: string; count: number } | null> {
   const filePath = await save({
@@ -119,23 +111,22 @@ function normalizeImportRow(raw: unknown): StageJsonRow | null {
   return {
     id,
     name: nameStr,
-    unk1: coerceInt(obj.unk1, 0),
-    unk2: coerceInt(obj.unk2, 0),
-    unk3: coerceInt(obj.unk3, 0),
-    unk4: coerceInt(obj.unk4, 0),
-    unk5: coerceInt(obj.unk5, 0),
-    unk6: coerceInt(obj.unk6, 0),
-    vs_s_d: coerceInt(obj.vs_s_d, 0),
+    recordLookupId: coerceInt(obj.recordLookupId, 0),
+    randomSelectWeightDefault: coerceInt(obj.randomSelectWeightDefault, 0),
+    randomSelectWeightAlt: coerceInt(obj.randomSelectWeightAlt, 0),
+    unk0x0c: coerceInt(obj.unk0x0c, 0),
+    seriesAltGroupId: coerceInt(obj.seriesAltGroupId, 0),
+    unk0x14: coerceInt(obj.unk0x14, 0),
+    vsSD: coerceInt(obj.vsSD, 0),
     fileName: coerceInt(obj.fileName, 0),
-    unk9: coerceInt(obj.unk9, 0),
-    vs_s_l: coerceInt(obj.vs_s_l, 0),
-    unk11: coerceInt(obj.unk11, 0),
-    unk13: coerceInt(obj.unk13, 0),
-    unk14: coerceInt(obj.unk14, 0),
-    unk15: coerceInt(obj.unk15, 0),
-    uniqueIndex: coerceInt(obj.uniqueIndex, 0),
-    vs_sn: coerceInt(obj.vs_sn, 0),
-    iconIndex: coerceInt(obj.iconIndex ?? obj.unk18, 0),
+    selectOrderAlt: coerceInt(obj.selectOrderAlt, 0),
+    vsSL: coerceInt(obj.vsSL, 0),
+    seriesDefaultGroupId: coerceInt(obj.seriesDefaultGroupId, 0),
+    unk0x34: coerceInt(obj.unk0x34, 0),
+    unk0x38: coerceInt(obj.unk0x38, 0),
+    selectOrderDefault: coerceInt(obj.selectOrderDefault, 0),
+    vsSn: coerceInt(obj.vsSn, 0),
+    iconIndex: coerceInt(obj.iconIndex, 0),
   };
 }
 
@@ -183,37 +174,34 @@ export async function pickStageJsonImportPreview(): Promise<StageJsonImportPrevi
   };
 }
 
-function buildNameData(value: string): { Offset: number; StringBufferData: Buffer; Utf8String: string } {
-  const utf8 = value ?? "";
-  const encoded = Buffer.from(obfEncodeFromUtf8String(utf8));
-  return { Offset: 0, StringBufferData: encoded, Utf8String: utf8 };
+function rowToEntry(row: StageJsonRow): StageListEntry {
+  return {
+    entryId: row.id,
+    name: row.name,
+    recordLookupId: row.recordLookupId,
+    randomSelectWeightDefault: row.randomSelectWeightDefault,
+    randomSelectWeightAlt: row.randomSelectWeightAlt,
+    unk0x0c: row.unk0x0c,
+    seriesAltGroupId: row.seriesAltGroupId,
+    unk0x14: row.unk0x14,
+    vsSD: row.vsSD,
+    fileName: row.fileName,
+    selectOrderAlt: row.selectOrderAlt,
+    vsSL: row.vsSL,
+    seriesDefaultGroupId: row.seriesDefaultGroupId,
+    unk0x34: row.unk0x34,
+    unk0x38: row.unk0x38,
+    selectOrderDefault: row.selectOrderDefault,
+    vsSn: row.vsSn,
+    iconIndex: row.iconIndex,
+  };
 }
 
-export function applyStageJsonImportToList(currentList: StageList, rows: StageJsonRow[]): StageList {
-  const nextRows: StageDataEntry[] = rows.map((row) => ({
-    id: row.id,
-    name: buildNameData(row.name),
-    unk1: row.unk1,
-    unk2: row.unk2,
-    unk3: row.unk3,
-    unk4: row.unk4,
-    unk5: row.unk5,
-    unk6: row.unk6,
-    vs_s_d: row.vs_s_d,
-    fileName: row.fileName,
-    unk9: row.unk9,
-    vs_s_l: row.vs_s_l,
-    unk11: row.unk11,
-    unk13: row.unk13,
-    unk14: row.unk14,
-    unk15: row.unk15,
-    uniqueIndex: row.uniqueIndex,
-    vs_sn: row.vs_sn,
-    iconIndex: row.iconIndex,
-  }));
-
-  return Object.assign(Object.create(Object.getPrototypeOf(currentList)), currentList, {
-    StageData: nextRows,
-    StageCount: nextRows.length,
-  });
+export function applyStageJsonImportToList(currentList: StageListData, rows: StageJsonRow[]): StageListData {
+  const nextRows: StageListEntry[] = rows.map(rowToEntry);
+  return {
+    ...currentList,
+    entries: nextRows,
+    header: { ...currentList.header, entryCount: nextRows.length },
+  };
 }
