@@ -1,5 +1,6 @@
 use tauri::Manager;
 
+mod console_color;
 mod character_id_preview;
 pub mod collision_mesh;
 mod commands;

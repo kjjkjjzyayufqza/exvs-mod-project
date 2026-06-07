@@ -47,8 +47,7 @@ pub fn repack_fhm2d_from_structure(
 ) -> Result<RepackResult, String> {
     let json_content = fs::read_to_string(structure_json_path)
         .map_err(|e| format!("Failed to read structure json: {e}"))?;
-    let input: InputStructure = serde_json::from_str(&json_content)
-        .map_err(|e| format!("Failed to parse structure json: {e}"))?;
+    let input = parse_input_structure(&json_content)?;
 
     let json_dir = Path::new(structure_json_path)
         .parent()
@@ -89,6 +88,66 @@ pub fn repack_fhm2d_from_structure(
 }
 
 // ── Input Deserialization ───────────────────────────────────────────────────
+
+fn parse_input_structure(json_content: &str) -> Result<InputStructure, String> {
+    let root: serde_json::Value = serde_json::from_str(json_content)
+        .map_err(|e| format!("Failed to parse structure json: {e}"))?;
+
+    if let Some(entries) = root.get("SubFileStructure").and_then(|v| v.as_array()) {
+        warn_legacy_structure_defaults(entries);
+    }
+
+    serde_json::from_value(root)
+        .map_err(|e| format!("Failed to parse structure json: {e}"))
+}
+
+fn warn_legacy_structure_defaults(entries: &[serde_json::Value]) {
+    for (idx, entry) in entries.iter().enumerate() {
+        let entry_type = entry
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("<unknown>");
+        let missing = collect_missing_legacy_structure_fields(entry_type, entry);
+        if missing.is_empty() {
+            continue;
+        }
+        crate::console_color::eprint_warn(
+            "repack_fhm2d",
+            &format!(
+                "SubFileStructure[{idx}] ({entry_type}): missing legacy field(s) [{}]; defaulting to 0 / empty string",
+                missing.join(", ")
+            ),
+        );
+    }
+}
+
+fn collect_missing_legacy_structure_fields(
+    entry_type: &str,
+    entry: &serde_json::Value,
+) -> Vec<&'static str> {
+    let expected: &[&str] = match entry_type {
+        "Folder" => &[
+            "unk1", "folderCount", "unk2", "unk2_1", "unk3", "unk4", "unk5", "unk6",
+        ],
+        "Item" => &[
+            "unk1",
+            "fileIndex",
+            "unk2",
+            "unk2_1",
+            "unk3",
+            "unk4",
+            "originalFileIndex",
+        ],
+        "EndMark" => &["endMarkCount"],
+        _ => return Vec::new(),
+    };
+
+    expected
+        .iter()
+        .filter(|key| entry.get(**key).is_none())
+        .copied()
+        .collect()
+}
 
 fn deserialize_magic_u32<'de, D>(deserializer: D) -> Result<u32, D::Error>
 where
@@ -686,6 +745,41 @@ fn write_output(output_path: &str, data: &[u8], atomic: bool) -> Result<(), Stri
 mod tests {
     use super::*;
 
+
+    #[test]
+    fn test_parse_legacy_structure_json_missing_unk_fields() {
+        let json = r#"{
+            "Magic": -843925575,
+            "UnkCount": 0,
+            "SubFileData": [],
+            "SubFileStructure": [
+                {
+                    "type": "Folder",
+                    "unk1": "00000000",
+                    "folderCount": 1,
+                    "unk2": "00000000",
+                    "unk3": 0,
+                    "unk4": 0,
+                    "unk6": 0
+                },
+                { "type": "EndMark", "endMarkCount": 1 }
+            ]
+        }"#;
+
+        let parsed = parse_input_structure(json).expect("legacy structure json should parse");
+        assert_eq!(parsed.sub_file_structure.len(), 2);
+        match &parsed.sub_file_structure[0] {
+            SubFileStructureEntry::Folder {
+                unk2_1,
+                unk5,
+                ..
+            } => {
+                assert_eq!(*unk2_1, 0);
+                assert_eq!(*unk5, 0);
+            }
+            other => panic!("expected Folder entry, got {other:?}"),
+        }
+    }
 
     #[test]
     fn test_get_file_type_id() {

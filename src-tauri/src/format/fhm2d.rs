@@ -84,33 +84,51 @@ struct OutputSubFileData {
     file_base_name: Option<String>,
 }
 
+// Legacy `_structure.json` files produced by older unpackers may omit some
+// SubFileStructure scalar fields (for example `unk2_1` or `unk5`). Repack
+// defaults missing strings to empty and missing integers to 0 so packing
+// can proceed without manual JSON repair.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all_fields = "camelCase")]
 pub enum SubFileStructureEntry {
     Folder {
+        #[serde(default)]
         unk1: String,
+        #[serde(default)]
         folder_count: i32,
+        #[serde(default)]
         unk2: String,
-        #[serde(rename = "unk2_1")]
+        #[serde(rename = "unk2_1", default)]
         unk2_1: i32,
+        #[serde(default)]
         unk3: i32,
+        #[serde(default)]
         unk4: i32,
+        #[serde(default)]
         unk5: i32,
+        #[serde(default)]
         unk6: i32,
     },
     Item {
+        #[serde(default)]
         unk1: String,
+        #[serde(default)]
         file_index: i32,
+        #[serde(default)]
         unk2: String,
-        #[serde(rename = "unk2_1")]
+        #[serde(rename = "unk2_1", default)]
         unk2_1: i32,
+        #[serde(default)]
         unk3: i32,
+        #[serde(default)]
         unk4: i32,
+        #[serde(default)]
         original_file_index: i32,
         #[serde(rename = "Name", skip_serializing_if = "Option::is_none")]
         display_name: Option<String>,
     },
     EndMark {
+        #[serde(default)]
         end_mark_count: i32,
     },
 }

@@ -548,7 +548,10 @@ pub async fn repack_fhm2d(
     let atomic = atomic_write.unwrap_or(true);
     let app_clone = app.clone();
 
-    eprintln!("[repack_fhm2d] Starting — structure: {structure_json_path}, output: {output_path}");
+    crate::console_color::eprint_info(
+        "repack_fhm2d",
+        &format!("Starting — structure: {structure_json_path}, output: {output_path}"),
+    );
     let t = Instant::now();
     let result = tauri::async_runtime::spawn_blocking(move || {
         crate::format::fhm2d_pack::repack_fhm2d_from_structure(
@@ -563,14 +566,17 @@ pub async fn repack_fhm2d(
     .await
     .map_err(|e| format!("Task join error: {e}"))?;
     match &result {
-        Ok(r) => eprintln!(
-            "[repack_fhm2d] Done in {}ms — {} bytes",
-            t.elapsed().as_millis(),
-            r.output_size
+        Ok(r) => crate::console_color::eprint_success(
+            "repack_fhm2d",
+            &format!(
+                "Done in {}ms — {} bytes",
+                t.elapsed().as_millis(),
+                r.output_size
+            ),
         ),
-        Err(e) => eprintln!(
-            "[repack_fhm2d] Failed in {}ms — {e}",
-            t.elapsed().as_millis()
+        Err(e) => crate::console_color::eprint_error(
+            "repack_fhm2d",
+            &format!("Failed in {}ms — {e}", t.elapsed().as_millis()),
         ),
     }
     result
