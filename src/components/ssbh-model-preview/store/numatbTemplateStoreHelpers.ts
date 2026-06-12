@@ -338,7 +338,7 @@ type PresentTexturePathSlot = TexturePathSlotLookup & {
 };
 
 export function missingTexturePathSlotKey(slot: MissingTexturePathSlotRef): string {
-  return `${slot.profile}:${slot.materialLabel}:${slot.paramId}:${slot.materialIndex}:${slot.attributeIndex}`;
+  return `${slot.profile}:${slot.materialIndex}:${slot.materialLabel}:${slot.paramId}:${slot.textureDataKind}`;
 }
 
 export function resolveTexturePathValueForSlot(
@@ -611,12 +611,13 @@ export interface MissingTexturePathSlotRef {
   textureDataKind: "String" | "String1";
 }
 
-function collectMissingTexturePathSlotRefsImpl(
+function collectTexturePathSlotRefsImpl(
   profile: NumatbProfileKind,
   file: MatlDataJson,
   materialLabelFilter: Set<string> | null,
+  requiredOnly: boolean,
 ): MissingTexturePathSlotRef[] {
-  const missing: MissingTexturePathSlotRef[] = [];
+  const slots: MissingTexturePathSlotRef[] = [];
   const entries = getNumatbEntries(file);
   for (let materialIndex = 0; materialIndex < entries.length; materialIndex += 1) {
     const entry = entries[materialIndex];
@@ -624,38 +625,75 @@ function collectMissingTexturePathSlotRefsImpl(
       continue;
     }
     const seen = new Set<string>();
-    const pushMissing = (
-      paramId: string,
-      attributeIndex: number,
-      textureDataKind: "String" | "String1",
-    ) => {
-      const key = textureSlotMissingKey(paramId, textureDataKind);
+    const pushSlot = (slot: PresentTexturePathSlot) => {
+      const key = textureSlotMissingKey(slot.paramId, slot.textureDataKind);
       if (seen.has(key)) {
         return;
       }
       seen.add(key);
-      missing.push({
+      slots.push({
         profile,
         materialLabel: entry.material_label,
-        paramId,
+        paramId: slot.paramId,
         materialIndex,
-        attributeIndex,
-        value: "",
-        textureDataKind,
+        attributeIndex: slot.attributeIndex,
+        value: slot.path,
+        textureDataKind: slot.textureDataKind,
       });
     };
 
     for (const slot of collectPresentTexturePathSlots(entry)) {
-      if (slot.path) {
+      if (requiredOnly && !isTextureMapPathRequired(entry, slot.paramId, profile)) {
         continue;
       }
-      if (!isTextureMapPathRequired(entry, slot.paramId, profile)) {
-        continue;
-      }
-      pushMissing(slot.paramId, slot.attributeIndex, slot.textureDataKind);
+      pushSlot(slot);
     }
   }
-  return missing;
+  return slots;
+}
+
+export function collectTexturePathSlotRefsForExportSession(
+  mayaFile: MatlDataJson,
+  nustFile: MatlDataJson,
+  options: {
+    writeNumatb: boolean;
+    writeMayaProfile: boolean;
+    materialLabels?: readonly string[];
+  },
+): MissingTexturePathSlotRef[] {
+  const trimmed = (options.materialLabels ?? []).map((label) => label.trim()).filter(Boolean);
+  const labelFilter = trimmed.length > 0 ? new Set(trimmed) : null;
+
+  const slots: MissingTexturePathSlotRef[] = [];
+  if (options.writeMayaProfile) {
+    slots.push(...collectTexturePathSlotRefsImpl("maya", mayaFile, labelFilter, true));
+  }
+  if (options.writeNumatb) {
+    slots.push(...collectTexturePathSlotRefsImpl("nust", nustFile, labelFilter, true));
+  }
+  return slots;
+}
+
+export function collectDeclaredTexturePathSlotRefsForExportSession(
+  mayaFile: MatlDataJson,
+  nustFile: MatlDataJson,
+  options: {
+    writeNumatb: boolean;
+    writeMayaProfile: boolean;
+    materialLabels?: readonly string[];
+  },
+): MissingTexturePathSlotRef[] {
+  const trimmed = (options.materialLabels ?? []).map((label) => label.trim()).filter(Boolean);
+  const labelFilter = trimmed.length > 0 ? new Set(trimmed) : null;
+
+  const slots: MissingTexturePathSlotRef[] = [];
+  if (options.writeMayaProfile) {
+    slots.push(...collectTexturePathSlotRefsImpl("maya", mayaFile, labelFilter, false));
+  }
+  if (options.writeNumatb) {
+    slots.push(...collectTexturePathSlotRefsImpl("nust", nustFile, labelFilter, false));
+  }
+  return slots;
 }
 
 export function collectMissingTexturePathSlotRefsForExportSession(
@@ -671,17 +709,9 @@ export function collectMissingTexturePathSlotRefsForExportSession(
     materialLabels?: readonly string[];
   },
 ): MissingTexturePathSlotRef[] {
-  const trimmed = (options.materialLabels ?? []).map((label) => label.trim()).filter(Boolean);
-  const labelFilter = trimmed.length > 0 ? new Set(trimmed) : null;
-
-  const missing: MissingTexturePathSlotRef[] = [];
-  if (options.writeMayaProfile) {
-    missing.push(...collectMissingTexturePathSlotRefsImpl("maya", mayaFile, labelFilter));
-  }
-  if (options.writeNumatb) {
-    missing.push(...collectMissingTexturePathSlotRefsImpl("nust", nustFile, labelFilter));
-  }
-  return missing;
+  return collectTexturePathSlotRefsForExportSession(mayaFile, nustFile, options).filter(
+    (slot) => !slot.value,
+  );
 }
 
 export function collectMissingTexturePathsForExportSession(

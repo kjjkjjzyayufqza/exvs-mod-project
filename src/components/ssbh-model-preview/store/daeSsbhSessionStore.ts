@@ -157,6 +157,7 @@ function buildInitialState(): DaeSsbhSessionState {
     mirrorTexturePathsAcrossProfiles: true,
     numdlbEntries: [],
     selectedTemplateId: null,
+    numatbProfileReplacementRevision: 0,
     mayaFile: createEmptyNumatbFile(),
     nustFile: createEmptyNumatbFile(),
     lastResult: null,
@@ -251,6 +252,8 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
       resetSession: () => {
         set((state) => ({
           ...buildInitialState(),
+          numatbProfileReplacementRevision:
+            (state.numatbProfileReplacementRevision ?? 0) + 1,
           templateLibrary: state.templateLibrary,
           templatesLoading: state.templatesLoading,
           templateLibraryError: state.templateLibraryError,
@@ -302,6 +305,8 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
           mayaFile: ensured.mayaFile,
           nustFile: ensured.nustFile,
           selectedTemplateId: preserveProfiles ? state.selectedTemplateId : null,
+          numatbProfileReplacementRevision:
+            (state.numatbProfileReplacementRevision ?? 0) + (preserveProfiles ? 0 : 1),
           lastResult: null,
         });
       },
@@ -442,6 +447,8 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
           return {
             mayaFile: ensured.mayaFile,
             nustFile: ensured.nustFile,
+            numatbProfileReplacementRevision:
+              (state.numatbProfileReplacementRevision ?? 0) + 1,
           };
         });
       },
@@ -452,7 +459,15 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
         set({ templatesLoading: true, templateLibraryError: null });
         try {
           const templateLibrary = await loadNumatbTemplateLibrary();
-          set({ templateLibrary, templatesLoading: false });
+          const selectedTemplateId = get().selectedTemplateId;
+          set({
+            templateLibrary,
+            templatesLoading: false,
+            selectedTemplateId:
+              selectedTemplateId && templateLibrary.templates.some((template) => template.id === selectedTemplateId)
+                ? selectedTemplateId
+                : null,
+          });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           set({ templateLibraryError: message, templatesLoading: false });
@@ -471,6 +486,7 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
         set({
           templateLibrary,
           selectedTemplateId: template.id,
+          templateLibraryError: null,
         });
       },
 
@@ -479,6 +495,7 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
         set((state) => ({
           templateLibrary,
           selectedTemplateId: state.selectedTemplateId === templateId ? null : state.selectedTemplateId,
+          templateLibraryError: null,
         }));
       },
 
@@ -495,6 +512,8 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
           selectedTemplateId: templateId,
           mayaFile: ensured.mayaFile,
           nustFile: ensured.nustFile,
+          numatbProfileReplacementRevision:
+            (state.numatbProfileReplacementRevision ?? 0) + 1,
         });
       },
     }),

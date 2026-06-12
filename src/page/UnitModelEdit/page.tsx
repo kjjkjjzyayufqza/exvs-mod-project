@@ -32,11 +32,10 @@ export default function UnitModelEdit() {
           <ResizableHandle withHandle className="w-1 bg-border transition-colors hover:bg-primary/20" />
 
           <ResizablePanel defaultSize={22} minSize={18}>
-            <UnitModelInspectorPanel />
+            <UnitModelInspectorPanel unitRoot={unitRoot} />
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>
     </SsbhModelPreviewProvider>
   );
 }
-

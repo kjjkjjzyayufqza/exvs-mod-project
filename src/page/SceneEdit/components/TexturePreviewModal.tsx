@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState, type ComponentProps } from "react";
+import { useCallback, useEffect, useState, type ComponentProps, type WheelEvent } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { Rnd } from "react-rnd";
-import { Loader2, X } from "lucide-react";
+import { Loader2, RotateCcw, X, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { TextureManagerEntry } from "../store/sceneTextureManagerStore";
 import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
@@ -28,6 +28,9 @@ import {
 
 const VIEWPORT_MARGIN = 32;
 const PREVIEW_MODAL_ID = "texture-preview-modal-layer";
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 8;
+const ZOOM_STEP = 0.12;
 
 function getViewportSize() {
   if (typeof window === "undefined") return { width: 1280, height: 800 };
@@ -56,6 +59,10 @@ function getCenteredModalPosition(size: { width: number; height: number }) {
   };
 }
 
+function clampZoom(value: number): number {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+}
+
 interface TexturePreviewModalProps {
   entry: TextureManagerEntry;
   textureDataMap: NutexbTextureDataMap;
@@ -79,6 +86,7 @@ export function TexturePreviewModal({
   const [ddsFormat, setDdsFormat] = useState<DdsFormat>(DEFAULT_DDS_FORMAT);
   const [detectedFormat, setDetectedFormat] = useState<string | null>(null);
   const [formatLoading, setFormatLoading] = useState(false);
+  const [zoom, setZoom] = useState(1);
   const [modalConstraints, setModalConstraints] = useState(getTexturePreviewModalDimensions);
   const [size, setSize] = useState(() => {
     const dims = getTexturePreviewModalDimensions();
@@ -135,6 +143,8 @@ export function TexturePreviewModal({
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setPreviewDataUrl(null);
+    setZoom(1);
 
     resolveSceneTexturePreviewDataUrl(
       entry.nutexbPath,
@@ -202,6 +212,25 @@ export function TexturePreviewModal({
     onFormatApply(ddsFormat);
   }, [ddsFormat, formatDirty, onFormatApply]);
 
+  const adjustZoom = useCallback((direction: 1 | -1) => {
+    setZoom((prev) => {
+      const factor = 1 + ZOOM_STEP * direction;
+      return clampZoom(direction > 0 ? prev * factor : prev / (1 + ZOOM_STEP));
+    });
+  }, []);
+
+  const resetZoom = useCallback(() => setZoom(1), []);
+
+  const handlePreviewWheel = useCallback(
+    (event: WheelEvent<HTMLDivElement>) => {
+      if (!previewDataUrl || loading) return;
+      event.preventDefault();
+      event.stopPropagation();
+      adjustZoom(event.deltaY < 0 ? 1 : -1);
+    },
+    [adjustZoom, loading, previewDataUrl],
+  );
+
   const previewWidth = loadedRgba?.width ?? entry.width;
   const previewHeight = loadedRgba?.height ?? entry.height;
 
@@ -236,6 +265,42 @@ export function TexturePreviewModal({
                   {previewWidth}×{previewHeight}
                 </span>
               )}
+              <span className="w-9 text-right font-mono text-[10px] text-muted-foreground">
+                {Math.round(zoom * 100)}%
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5"
+                data-no-drag
+                title="Zoom out"
+                onClick={() => adjustZoom(-1)}
+                disabled={isReencoding || !previewDataUrl || zoom <= MIN_ZOOM}
+              >
+                <ZoomOut className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5"
+                data-no-drag
+                title="Reset zoom"
+                onClick={resetZoom}
+                disabled={isReencoding || !previewDataUrl || zoom === 1}
+              >
+                <RotateCcw className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5"
+                data-no-drag
+                title="Zoom in"
+                onClick={() => adjustZoom(1)}
+                disabled={isReencoding || !previewDataUrl || zoom >= MAX_ZOOM}
+              >
+                <ZoomIn className="h-3 w-3" />
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
@@ -249,7 +314,11 @@ export function TexturePreviewModal({
             </div>
           </div>
 
-          <div className="flex flex-1 items-center justify-center bg-[repeating-conic-gradient(#80808020_0%_25%,transparent_0%_50%)] bg-[length:16px_16px] overflow-auto p-2 min-h-0">
+          <div
+            className="flex flex-1 items-center justify-center bg-[repeating-conic-gradient(#80808020_0%_25%,transparent_0%_50%)] bg-[length:16px_16px] overflow-auto p-2 min-h-0"
+            data-no-drag
+            onWheel={handlePreviewWheel}
+          >
             {loading && (
               <div className="flex flex-col items-center gap-2 text-muted-foreground">
                 <Loader2 className="h-6 w-6 animate-spin" />
@@ -260,12 +329,26 @@ export function TexturePreviewModal({
               <span className="text-xs text-destructive">{error}</span>
             )}
             {previewDataUrl && !loading && (
-              <img
-                src={previewDataUrl}
-                alt={entry.filename}
-                className="max-w-full max-h-full object-contain"
-                draggable={false}
-              />
+              <div
+                className="flex items-center justify-center"
+                style={{
+                  minWidth: "100%",
+                  minHeight: "100%",
+                  width: zoom > 1 ? `${zoom * 100}%` : "100%",
+                  height: zoom > 1 ? `${zoom * 100}%` : "100%",
+                }}
+              >
+                <img
+                  src={previewDataUrl}
+                  alt={entry.filename}
+                  className="block object-contain"
+                  style={{
+                    width: zoom > 1 ? "100%" : `${zoom * 100}%`,
+                    height: zoom > 1 ? "100%" : `${zoom * 100}%`,
+                  }}
+                  draggable={false}
+                />
+              </div>
             )}
           </div>
 

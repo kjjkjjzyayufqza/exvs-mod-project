@@ -19,28 +19,25 @@ syscall 以全局 `sys_XX` 命名，不反映 EXVS2 运行时 **script domain、
 
 新管线必须是 **IDA + game exe grounded**，以逆向还原原系统设计为准，而不是倒推现有 decompiler 结构。
 
-## 双层目标（必须分开）
+## 目标形态（单一方向）
 
-### 层 1 — 无损载体（已实现，继续维护）
+**我们要的是 jam1garner / pymsc 那种人类可读的 C 源码**——函数体、`if` / `while` / `switch`、带语义的调用，开发者可以直接打开 `.c` 阅读与 diff。
+
+**明确丢弃、不再作为产品方向维护的中间层：**
+
+- 无损 JSON IR（offset/opcode 字段的序列化载体）
+- `mscsrc`（VM 级、offset 锚定、定宽指令行的文本格式）
+- 以 VM 指令表、字节偏移、stack slot 为主视角的任何「人类可读」投影
+
+上述格式接近底层字节码/虚拟机，适合 roundtrip 编辑，但**不是**我们想要的阅读与协作界面。它们可以作为内部实现细节或历史实验保留，但**不得**再作为对外主 IR 或验收终点。
 
 ```text
 .mscsb / .bscex / .cscex / .dscex
-  <-> 无损 JSON IR
-  <-> mscsrc（VM 级、offset 锚定、可 fail-closed 编辑）
+  -> CFG 栈分析 + IDA ground-truth
+  -> 人类可读 C 源码（jam1garner 风格，IDA 语义增强）
 ```
 
-验收：对语料库 **逐字节** roundtrip；未编辑路径 decode→repack 与原始文件一致。
-
-**这一层不以 C 为权威 IR，不以 jam1garner 语义表为来源。**
-
-### 层 2 — 人类可读投影（本阶段重点，只读）
-
-```text
-无损 JSON IR + IDA ground-truth + CFG 栈分析
-  -> 原生 API 风格的伪 C 源码（只读，不参与 repack）
-```
-
-**只走「原生 API 假名」一种风格**，不要 jam1garner 式全局 `sys_XX` 表，也不要裸 `sys(argc, id)` 作为最终阅读格式。
+与 jam1garner 原版的关键差异：**命名与 syscall 语义必须 IDA + domain grounded**，不能照搬全局 `sys_XX` 表；阅读体验仍应是正常 C，而不是裸 `sys(argc, id)` 或 VM 助记符。
 
 期望阅读形态示例：
 
@@ -62,7 +59,7 @@ void fn_00000068(void) {
 - **未取证不得猜**：输出 `native_call_unresolved(domain, handler_id, subcmd, ...)` 或保留结构化参数，禁止套用全局 syscall 名表。
 - 控制流尽量结构化为 `if` / `while` / `for`；无法可靠还原时允许 `goto fn_0x........`，并标注「CFG 未结构化」。
 
-**层 2 不要求、也不承诺 `伪 C -> MSC` 逐字节回写。** 若需改字节，仍走层 1 的 mscsrc / JSON IR。
+**本阶段以「MSC → 可读 C」为主**；`C → MSC` 重编译（msclang 方向）可后续再做，但不是当前验收前提。
 
 ## IDA 集成
 
@@ -75,19 +72,19 @@ void fn_00000068(void) {
 ## 开发方法
 
 - TDD：`python -m unittest discover -s tests`
-- 还原顺序：loader → `sub_14030DB30`（指令定长）→ `sub_14030E270`（VM）→ offer set / handler 安装 → native 子命令
-- 可检索 jam1garner msc、pymsc、公开 GitHub 了解历史；**新语义仅以 EXVS2 exe + IDA 为准**
+- 还原顺序：loader → 指令解码 → CFG / 栈模拟 → offer set / handler 安装 → native 子命令 → **C 反编译输出**
+- 可检索 jam1garner msc、pymsc、公开 GitHub 了解 **C 反编译形态与阅读惯例**；**新语义仅以 EXVS2 exe + IDA 为准**
 
 ## 非目标
 
+- 不以 JSON IR / mscsrc / VM 级文本作为对外主载体或长期维护目标
 - 不以 C 反编译 IR 为权威（不克隆 pymsc / mscdec 架构）
-- 不用 jam1garner 全局 `sys_XX` 作为默认阅读名
-- 不把「伪 C 投影」当作 repack 输入
+- 不用 jam1garner 全局 `sys_XX` 作为默认阅读名（须 domain-grounded）
 - 不猜测未取证的原生行为
 
 ## 当前优先级
 
-1. 在 `mscflow` / `annotate` 之上新增 **native API 伪 C 只读导出**（新命令，如 `api-projection` 或 `c-read/export`）
+1. 在 `mscflow` / `annotate` 之上新增或强化 **jam1garner 风格可读 C 导出**（如 `c-decompile` / `api-projection`），输出为首要交付物
 2. 扩展 ground-truth：优先 `sys_4B`、`sys_47`、`sys_4F`、`sys_55`，再扩 `sys_53`/`sys_54` 等
-3. 新 exe revision 使用独立 VM profile，不原地篡改 VSAC27 证据
-4. 与 `E:\TAURI_PROJECT\tools\mscdec.py` 输出做**并排对照**，证明 IDA API 名与 binary 表名差异（文档化，不合并两套语义）
+3. 新 exe revision 使用独立 profile，不原地篡改 VSAC27 证据
+4. 与 `E:\TAURI_PROJECT\tools\mscdec.py` 输出做**并排对照**——对齐阅读体验（结构化 C），同时文档化 IDA API 名与 binary 表名差异（不合并两套语义）

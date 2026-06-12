@@ -168,6 +168,8 @@ export type DaeSsbhSessionState = {
   mirrorTexturePathsAcrossProfiles: boolean;
   numdlbEntries: NumdlbMappingRow[];
   selectedTemplateId: string | null;
+  /** Increments whenever the numatb profiles are replaced as a whole. */
+  numatbProfileReplacementRevision: number;
   mayaFile: MatlDataJson;
   nustFile: MatlDataJson;
   lastResult: DaeSsbhConvertExtendedResult | null;

@@ -148,32 +148,25 @@ impl PreviewCollectionStore {
     }
 
     pub fn replace_items(&mut self, source_items: Vec<PreviewCollectionSourceItem>) -> Result<PreviewCollectionSnapshot, String> {
-        // The first loaded item becomes active, mirroring `append_items`. Without an
-        // active instance the viewport cannot bind NUANMB motion or bone manipulation
-        // (both gate on `activePreviewInstanceId`), so a freshly loaded model would
-        // render but neither animate nor expose its skeleton.
         self.items = source_items
             .into_iter()
-            .enumerate()
-            .map(|(index, item)| PreviewCollectionEntry {
+            .map(|item| PreviewCollectionEntry {
                 id: item.id,
                 display_label: item.display_label,
                 modl_path: item.modl_path,
                 visible: true,
                 selected: false,
-                active: index == 0,
+                active: false,
             })
             .collect();
         Ok(self.snapshot())
     }
 
     pub fn append_items(&mut self, source_items: Vec<PreviewCollectionSourceItem>) -> Result<PreviewCollectionSnapshot, String> {
-        let mut last_appended_id: Option<String> = None;
         for item in source_items {
             if self.items.iter().any(|existing| existing.id == item.id) {
                 continue;
             }
-            last_appended_id = Some(item.id.clone());
             self.items.push(PreviewCollectionEntry {
                 id: item.id,
                 display_label: item.display_label,
@@ -182,11 +175,6 @@ impl PreviewCollectionStore {
                 selected: false,
                 active: false,
             });
-        }
-        if let Some(active_id) = last_appended_id {
-            for item in &mut self.items {
-                item.active = item.id == active_id;
-            }
         }
         Ok(self.snapshot())
     }
@@ -423,15 +411,11 @@ mod tests {
     }
 
     #[test]
-    fn collection_replace_activates_first_item() {
+    fn collection_replace_keeps_no_active_item() {
         let mut store = PreviewCollectionStore::default();
         let snapshot = store.replace_items(sample_items()).expect("replace should succeed");
-        assert_eq!(snapshot.active_item_id.as_deref(), Some("inst-a"));
-        assert_eq!(
-            snapshot.items.iter().filter(|item| item.active).count(),
-            1,
-            "exactly one item should be active after replace"
-        );
+        assert_eq!(snapshot.active_item_id, None);
+        assert!(!snapshot.items.iter().any(|item| item.active));
     }
 
     #[test]
@@ -439,6 +423,19 @@ mod tests {
         let mut store = PreviewCollectionStore::default();
         let snapshot = store.replace_items(Vec::new()).expect("replace should succeed");
         assert_eq!(snapshot.active_item_id, None);
+    }
+
+    #[test]
+    fn collection_append_keeps_no_active_item() {
+        let mut store = PreviewCollectionStore::default();
+        let _ = store
+            .append_items(sample_items()[0..1].to_vec())
+            .expect("append should succeed");
+        let snapshot = store
+            .append_items(sample_items()[1..2].to_vec())
+            .expect("append should succeed");
+        assert_eq!(snapshot.active_item_id, None);
+        assert!(!snapshot.items.iter().any(|item| item.active));
     }
 
     #[test]

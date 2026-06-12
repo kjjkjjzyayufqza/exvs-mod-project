@@ -71,6 +71,10 @@ export interface StaticMeshDirectConvertResult {
   warnings: string[];
 }
 
+export interface SceneImportTextureRefValidationResult {
+  unresolvedReferences: string[];
+}
+
 export type StaticMeshImportProgress =
   | { kind: "status"; phase: string; label: string }
   | { kind: "sourceFile"; path: string; bytes: number; format: string }
@@ -473,6 +477,19 @@ export function sceneConvertStaticMeshToStageFilesWithProgress(
     options: params,
     onProgress: channel,
   });
+}
+
+export function sceneValidateImportTextureRefs(params: {
+  stageRoot: string | null;
+  sourcePath: string | null;
+  references: string[];
+}): Promise<SceneImportTextureRefValidationResult> {
+  return invoke<SceneImportTextureRefValidationResult>(
+    "scene_validate_import_texture_refs",
+    {
+      options: params,
+    },
+  );
 }
 
 export interface HavokDataMeta {

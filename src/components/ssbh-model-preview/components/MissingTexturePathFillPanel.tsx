@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,7 @@ interface MissingTexturePathFillPanelProps {
   onFillSlot: (slot: MissingTexturePathSlotRef, basename: string) => void;
   title?: string;
   className?: string;
+  getSlotMessage?: (slot: MissingTexturePathSlotRef) => string | null;
 }
 
 function profileLabel(profile: MissingTexturePathSlotRef["profile"]): string {
@@ -25,6 +26,7 @@ export function MissingTexturePathFillPanel({
   onFillSlot,
   title = "Fill every texture path parameter for profiles you export:",
   className,
+  getSlotMessage,
 }: MissingTexturePathFillPanelProps) {
   const slotEntries = useMemo(
     () =>
@@ -43,20 +45,27 @@ export function MissingTexturePathFillPanel({
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
     () => new Set(slots.map(missingTexturePathSlotKey)),
   );
+  const previousSlotKeysRef = useRef(
+    new Set(slots.map(missingTexturePathSlotKey)),
+  );
   const [bulkValue, setBulkValue] = useState("");
 
   useEffect(() => {
+    const validKeys = new Set(
+      slotKeySignature ? slotKeySignature.split("\0") : [],
+    );
+    const previousSlotKeys = previousSlotKeysRef.current;
     setSelectedKeys((prev) => {
-      const validKeys = new Set(slotEntries.map(({ key }) => key));
       const next = new Set<string>();
-      for (const key of prev) {
-        if (validKeys.has(key)) {
+      for (const key of validKeys) {
+        if (prev.has(key) || !previousSlotKeys.has(key)) {
           next.add(key);
         }
       }
       return next;
     });
-  }, [slotKeySignature, slotEntries]);
+    previousSlotKeysRef.current = validKeys;
+  }, [slotKeySignature]);
 
   if (slots.length === 0) {
     return null;
@@ -156,6 +165,11 @@ export function MissingTexturePathFillPanel({
                 paramId={slot.paramId}
                 onChange={(basename) => onFillSlot(slot, basename)}
               />
+              {getSlotMessage?.(slot) ? (
+                <p className="mt-1 wrap-break-word font-mono text-[9px] leading-tight text-destructive">
+                  {getSlotMessage(slot)}
+                </p>
+              ) : null}
             </div>
           </div>
         ))}

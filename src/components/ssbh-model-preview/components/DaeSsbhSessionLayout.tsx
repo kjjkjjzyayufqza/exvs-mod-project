@@ -12,10 +12,14 @@ import { DialogLastPathKey, getDialogDefaultPath, rememberDialogSelection } from
 import { useSsbhModelPreview } from "../SsbhModelPreviewContext";
 import { ssbhAnalyzeDae, ssbhAnalyzeFbx, ssbhConvertDaeToSsbh, ssbhConvertFbxToSsbh } from "../ssbhDaeIoService";
 import { useStableMissingTextureFillSlots } from "../hooks/useStableMissingTextureFillSlots";
+import { useNumatbTextureReferenceValidation } from "../hooks/useNumatbTextureReferenceValidation";
 import {
   applyTexturePathFillToProfiles,
+  collectDeclaredTexturePathSlotRefsForExportSession,
   collectMissingTexturePathSlotRefsForExportSession,
   collectMissingTexturePathsForExportSession,
+  collectTexturePathSlotRefsForExportSession,
+  missingTexturePathSlotKey,
 } from "../store/numatbTemplateStoreHelpers";
 import { NumdlbMaterialMappingEditor } from "./NumdlbMaterialMappingEditor";
 import { NumatbTemplateEditor } from "./NumatbTemplateEditor";
@@ -36,6 +40,15 @@ export function DaeSsbhSessionLayout() {
   const updateProfileAttribute = useDaeSsbhSessionStore((state) => state.updateProfileAttribute);
   const addProfileAttribute = useDaeSsbhSessionStore((state) => state.addProfileAttribute);
 
+  const currentTextureSlots = useMemo(
+    () =>
+      collectTexturePathSlotRefsForExportSession(session.mayaFile, session.nustFile, {
+        writeNumatb: session.writeNumatb,
+        writeMayaProfile: session.writeMayaProfile,
+      }),
+    [session.mayaFile, session.nustFile, session.writeNumatb, session.writeMayaProfile],
+  );
+
   const liveMissingTextureSlots = useMemo(
     () =>
       collectMissingTexturePathSlotRefsForExportSession(session.mayaFile, session.nustFile, {
@@ -44,11 +57,40 @@ export function DaeSsbhSessionLayout() {
       }),
     [session.mayaFile, session.nustFile, session.writeNumatb, session.writeMayaProfile],
   );
+  const declaredTextureSlots = useMemo(
+    () =>
+      collectDeclaredTexturePathSlotRefsForExportSession(
+        session.mayaFile,
+        session.nustFile,
+        {
+          writeNumatb: session.writeNumatb,
+          writeMayaProfile: session.writeMayaProfile,
+        },
+      ),
+    [session.mayaFile, session.nustFile, session.writeNumatb, session.writeMayaProfile],
+  );
+  const textureReferenceValidation = useNumatbTextureReferenceValidation({
+    enabled: Boolean(session.sourcePath && session.outputDir),
+    sourcePath: session.sourcePath,
+    stageRoot: session.outputDir,
+    slots: declaredTextureSlots,
+  });
+  const textureReferenceIssueMessages = useMemo(
+    () =>
+      new Map(
+        textureReferenceValidation.issues.map((issue) => [
+          missingTexturePathSlotKey(issue.slot),
+          issue.message,
+        ]),
+      ),
+    [textureReferenceValidation.issues],
+  );
 
   const fillTextureSlots = useStableMissingTextureFillSlots(
-    session.sourcePath ?? "",
+    `${session.sourcePath ?? ""}\0${session.numatbProfileReplacementRevision}`,
     session.mayaFile,
     session.nustFile,
+    currentTextureSlots,
     liveMissingTextureSlots,
   );
 
@@ -70,7 +112,12 @@ export function DaeSsbhSessionLayout() {
     session.numdlbEntries.every((row) => row.materialLabel.trim()) &&
     (!session.writeNumdlb || (session.writeNumshb && session.writeNusktb));
 
-  const canExport = baseExportReady && missingTexturePaths.length === 0;
+  const canExport =
+    baseExportReady &&
+    missingTexturePaths.length === 0 &&
+    !textureReferenceValidation.validating &&
+    textureReferenceValidation.issues.length === 0 &&
+    !textureReferenceValidation.error;
 
   const reAnalyze = async () => {
     if (!session.sourcePath) return;
@@ -91,13 +138,28 @@ export function DaeSsbhSessionLayout() {
 
   const convert = async () => {
     if (!session.sourcePath || !session.outputDir) return;
-    if (missingTexturePaths.length > 0) {
-      throw new Error(
-        `Texture path validation failed. Fill every texture path slot (e.g. *Map, Texture1, *CubeMap) for profiles you export:\n${missingTexturePaths.join("\n")}`,
-      );
-    }
-    setBusy("convert");
     try {
+      if (missingTexturePaths.length > 0) {
+        throw new Error(
+          `Texture path validation failed. Fill every texture path slot (e.g. *Map, Texture1, *CubeMap) for profiles you export:\n${missingTexturePaths.join("\n")}`,
+        );
+      }
+      if (textureReferenceValidation.validating) {
+        throw new Error("Texture reference validation is still running");
+      }
+      if (textureReferenceValidation.error) {
+        throw new Error(
+          `Texture reference validation failed: ${textureReferenceValidation.error}`,
+        );
+      }
+      if (textureReferenceValidation.issues.length > 0) {
+        throw new Error(
+          `NUMATB texture references could not be resolved:\n${textureReferenceValidation.issues
+            .map((issue) => `${issue.slot.profile}: ${issue.slot.materialLabel} -> ${issue.slot.paramId}: ${issue.slot.value}`)
+            .join("\n")}`,
+        );
+      }
+      setBusy("convert");
       const params = {
         outputDir: session.outputDir,
         baseFilename: session.outputBaseName.trim(),
@@ -311,6 +373,35 @@ export function DaeSsbhSessionLayout() {
             }}
           />
         ) : null}
+        {textureReferenceValidation.validating ? (
+          <p className="text-[11px] text-muted-foreground">
+            Checking NUMATB texture references...
+          </p>
+        ) : null}
+        {textureReferenceValidation.error ? (
+          <p className="text-[11px] text-destructive">
+            Texture reference validation failed: {textureReferenceValidation.error}
+          </p>
+        ) : null}
+        <MissingTexturePathFillPanel
+          slots={textureReferenceValidation.issues.map((issue) => issue.slot)}
+          title="Fix texture references that cannot be resolved before conversion:"
+          getSlotMessage={(slot) =>
+            textureReferenceIssueMessages.get(missingTexturePathSlotKey(slot)) ?? null
+          }
+          onFillSlot={(slot, basename) => {
+            applyTexturePathFillToProfiles(
+              updateProfileAttribute,
+              addProfileAttribute,
+              () => {
+                const state = useDaeSsbhSessionStore.getState();
+                return { mayaFile: state.mayaFile, nustFile: state.nustFile };
+              },
+              slot,
+              basename,
+            );
+          }}
+        />
       </div>
     </div>
   );

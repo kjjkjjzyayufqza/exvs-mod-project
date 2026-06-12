@@ -59,6 +59,8 @@ function BoneJointHit({
   useCursor(hovered);
   return (
     <mesh
+      renderOrder={30}
+      frustumCulled={false}
       onPointerDown={(e) => {
         e.stopPropagation();
         onSelect(boneIndex);
@@ -77,6 +79,7 @@ function BoneJointHit({
         color={selected ? "#22c55e" : hovered ? "#94a3b8" : "#64748b"}
         transparent
         opacity={selected ? 0.58 : hovered ? 0.4 : 0.26}
+        depthTest={false}
         depthWrite={false}
         toneMapped={false}
       />
@@ -91,6 +94,7 @@ function BoneTree({
   refs,
   selectedBoneIndex,
   jointPickRadius,
+  showJointHandles,
   onSelectBone,
 }: {
   boneIndex: number;
@@ -99,6 +103,7 @@ function BoneTree({
   refs: React.MutableRefObject<(Group | null)[]>;
   selectedBoneIndex: number | null;
   jointPickRadius: number;
+  showJointHandles: boolean;
   onSelectBone: (index: number) => void;
 }) {
   const kids = childrenByParent[boneIndex] ?? [];
@@ -110,12 +115,14 @@ function BoneTree({
       }}
       name={bones[boneIndex]!.name}
     >
-      <BoneJointHit
-        boneIndex={boneIndex}
-        selected={selected}
-        radius={jointPickRadius}
-        onSelect={onSelectBone}
-      />
+      {showJointHandles ? (
+        <BoneJointHit
+          boneIndex={boneIndex}
+          selected={selected}
+          radius={jointPickRadius}
+          onSelect={onSelectBone}
+        />
+      ) : null}
       {kids.map((ci) => (
         <BoneTree
           key={ci}
@@ -125,6 +132,7 @@ function BoneTree({
           refs={refs}
           selectedBoneIndex={selectedBoneIndex}
           jointPickRadius={jointPickRadius}
+          showJointHandles={showJointHandles}
           onSelectBone={onSelectBone}
         />
       ))}
@@ -186,9 +194,11 @@ type BonePreviewRigProps = {
   /** When false, skinning still runs but gizmo, picking, and pose ref sync are disabled (multi-instance preview). */
   isInteractionTarget?: boolean;
   selectedBoneIndex: number | null;
+  bonePointSize: number;
   transformMode: "translate" | "rotate" | "scale";
   poseResetNonce: number;
   showSkeletonLines: boolean;
+  showJointHandles: boolean;
   orbitControlsRef: React.RefObject<OrbitControlsImpl | null>;
   onSelectBone: (index: number) => void;
   bonePoseGetterRef: React.MutableRefObject<(() => Float32Array) | null>;
@@ -212,9 +222,11 @@ export function BonePreviewRig({
   skinningDraws,
   isInteractionTarget = true,
   selectedBoneIndex,
+  bonePointSize,
   transformMode,
   poseResetNonce,
   showSkeletonLines,
+  showJointHandles,
   orbitControlsRef,
   onSelectBone,
   bonePoseGetterRef,
@@ -292,7 +304,9 @@ export function BonePreviewRig({
     needsSkinningUpdateRef.current = true;
   }
 
-  const jointPickRadius = useJointPickRadiusFromBounds(armatureRef, bones, draws, poseResetNonce);
+  const jointPickRadius =
+    useJointPickRadiusFromBounds(armatureRef, bones, draws, poseResetNonce) *
+    Math.max(0.5, Math.min(4, bonePointSize));
 
   const lineSegmentCount = useMemo(() => {
     let c = 0;
@@ -358,6 +372,7 @@ export function BonePreviewRig({
 
   const tcObject: Object3D | null =
     isInteractionTarget &&
+    showJointHandles &&
     !motionPoseActive &&
     selectedBoneIndex !== null &&
     selectedBoneIndex >= 0 &&
@@ -378,6 +393,7 @@ export function BonePreviewRig({
           refs={boneRefs}
           selectedBoneIndex={effectiveSelected}
           jointPickRadius={jointPickRadius}
+          showJointHandles={showJointHandles}
           onSelectBone={onBoneSelect}
         />
       ))}

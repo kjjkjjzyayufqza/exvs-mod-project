@@ -114,6 +114,18 @@ const SSBH_PREVIEW_DEBUG = isSsbhPreviewDebugEnabled(
   import.meta.env.DEV,
 );
 
+let textureDataIdentitySeq = 0;
+const textureDataIdentities = new WeakMap<object, number>();
+
+function textureDataIdentity(data: NutexbTextureData): number {
+  const key = data as object;
+  const existing = textureDataIdentities.get(key);
+  if (existing !== undefined) return existing;
+  textureDataIdentitySeq += 1;
+  textureDataIdentities.set(key, textureDataIdentitySeq);
+  return textureDataIdentitySeq;
+}
+
 function debugLog(message: string, data?: Record<string, unknown>): void {
   if (!SSBH_PREVIEW_DEBUG) {
     return;
@@ -184,6 +196,7 @@ type SsbhModelCanvasProps = {
   previewViewMode: PreviewInstanceViewMode;
   hiddenPreviewInstanceIds: ReadonlySet<string>;
   selectedBoneIndex: number | null;
+  bonePointSize: number;
   boneTransformMode: BoneTransformMode;
   bonePoseResetNonce: number;
   /** Stylized pipeline (bloom + warm lights) inspired by external/water-anime-shader. */
@@ -298,8 +311,8 @@ function AdaptiveCanvasPerformanceController({
   const disableAnimePostFx = shouldDisableSsbhAnimePostFx(previewRenderStyle, current);
 
   useEffect(() => {
-    setDpr(getSsbhAdaptiveDpr(resolvedBaseDpr, current));
-  }, [current, resolvedBaseDpr, setDpr]);
+    setDpr(motionActive ? getSsbhAdaptiveDpr(resolvedBaseDpr, current) : resolvedBaseDpr);
+  }, [current, motionActive, resolvedBaseDpr, setDpr]);
 
   // Keep the drawing buffer at full device resolution across viewport resizes.
   // With a `demand` frameloop, a regressed/low DPR (set during interaction or
@@ -307,11 +320,52 @@ function AdaptiveCanvasPerformanceController({
   // panel or window changes size — nothing repaints until the next interaction.
   // Resizing therefore snaps DPR back to base and forces one fresh frame.
   useEffect(() => {
-    setDpr(resolvedBaseDpr);
-    gl.setPixelRatio(resolvedBaseDpr);
-    gl.setSize(viewportWidth, viewportHeight, false);
-    invalidate();
+    const applyNativeSize = () => {
+      setDpr(resolvedBaseDpr);
+      gl.setPixelRatio(resolvedBaseDpr);
+      gl.setSize(viewportWidth, viewportHeight, false);
+      invalidate();
+    };
+    applyNativeSize();
+    let raf2 = 0;
+    let raf3 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      applyNativeSize();
+      raf2 = requestAnimationFrame(() => {
+        applyNativeSize();
+        raf3 = requestAnimationFrame(applyNativeSize);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+      if (raf3) cancelAnimationFrame(raf3);
+    };
   }, [viewportWidth, viewportHeight, resolvedBaseDpr, gl, setDpr, invalidate]);
+
+  useEffect(() => {
+    const target = gl.domElement.parentElement;
+    if (!target) return;
+    let raf = 0;
+    const applyObservedSize = () => {
+      const width = Math.max(1, Math.round(target.clientWidth));
+      const height = Math.max(1, Math.round(target.clientHeight));
+      setDpr(resolvedBaseDpr);
+      gl.setPixelRatio(resolvedBaseDpr);
+      gl.setSize(width, height, false);
+      invalidate();
+    };
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(applyObservedSize);
+    });
+    observer.observe(target);
+    applyObservedSize();
+    return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
+    };
+  }, [gl, resolvedBaseDpr, setDpr, invalidate]);
 
   useEffect(() => {
     if (!motionActive) {
@@ -334,6 +388,24 @@ function AdaptiveCanvasPerformanceController({
       {previewRenderStyle === "anime" && !disableAnimePostFx ? <AnimePreviewPostFx /> : null}
     </>
   );
+}
+
+function CanvasContentInvalidator({
+  textureDataMap,
+  drawMaterialBindingsByDrawKey,
+}: {
+  textureDataMap: ReadonlyMap<string, NutexbTextureData>;
+  drawMaterialBindingsByDrawKey: ReadonlyMap<string, ResolvedMaterialBinding>;
+}) {
+  const invalidate = useThree((s) => s.invalidate);
+
+  useEffect(() => {
+    invalidate();
+    const raf = requestAnimationFrame(() => invalidate());
+    return () => cancelAnimationFrame(raf);
+  }, [textureDataMap, drawMaterialBindingsByDrawKey, invalidate]);
+
+  return null;
 }
 
 function PreviewUvFlipSync({
@@ -490,7 +562,7 @@ function DrawMeshUnifiedPbr({
     const result: Partial<Record<PbrSlotKind, Texture>> = {};
     if (!binding) return result;
     for (const s of slots) {
-      const poolKey = buildTexturePoolKey(s.path, s.kind, binding, s.data.width, s.data.height);
+      const poolKey = `${buildTexturePoolKey(s.path, s.kind, binding, s.data.width, s.data.height)}|v${textureDataIdentity(s.data)}`;
       result[s.kind] = texturePool.acquire(poolKey, () =>
         createDataTexture(s.data, s.kind, binding, s.path),
       );
@@ -581,17 +653,26 @@ function DrawMeshUnifiedPbr({
   const canUseMetalnessMap = hasCube;
   const effectiveMetalnessMap = canUseMetalnessMap ? byKind.metalnessMap : undefined;
   const effectiveMetalnessValue = canUseMetalnessMap ? metalnessValue : Math.min(metalnessValue, 0.2);
+  const materialTextureKey = slots
+    .map((s) => `${s.kind}:${s.path}:${s.data.width}x${s.data.height}:v${textureDataIdentity(s.data)}`)
+    .sort()
+    .join("|");
   if (materialDebugViewMode === "baseColor") {
     return (
       <DrawMeshContainer draw={draw} ignoreRaycast={ignoreRaycast} skeleton={skeleton}>
-        <meshBasicMaterial map={byKind.map} side={DoubleSide} wireframe={wireframe} />
+        <meshBasicMaterial
+          key={`basic|${materialTextureKey}`}
+          map={byKind.map}
+          side={DoubleSide}
+          wireframe={wireframe}
+        />
       </DrawMeshContainer>
     );
   }
   return (
     <DrawMeshContainer draw={draw} ignoreRaycast={ignoreRaycast} skeleton={skeleton}>
       <meshStandardMaterial
-        key={exvsActive ? "exvs" : "std"}
+        key={`${exvsActive ? "exvs" : "std"}|${materialTextureKey}`}
         map={byKind.map}
         normalMap={activeNormalMap}
         normalScale={activeNormalMap ? new Vector2(1, 1) : undefined}
@@ -865,6 +946,7 @@ const Scene = memo(function Scene({
   previewViewMode,
   hiddenPreviewInstanceIds,
   selectedBoneIndex,
+  bonePointSize,
   boneTransformMode,
   bonePoseResetNonce,
   previewRenderStyle,
@@ -1411,9 +1493,11 @@ const Scene = memo(function Scene({
                   skinningDraws={skinningDraws}
                   isInteractionTarget={isInteractionTarget}
                   selectedBoneIndex={selectedBoneIndex}
+                  bonePointSize={bonePointSize}
                   transformMode={boneTransformMode}
                   poseResetNonce={bonePoseResetNonce}
                   showSkeletonLines={showSkeleton}
+                  showJointHandles={showSkeleton}
                   orbitControlsRef={controlsRef}
                   onSelectBone={onViewportBoneSelect}
                   bonePoseGetterRef={bonePoseGetterRef}
@@ -1573,6 +1657,7 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
     previewInstances: restSceneProps.previewInstances.length,
     activePreviewInstanceId: restSceneProps.activePreviewInstanceId ?? "null",
     selectedBoneIndex: selectedBoneIndex ?? -1,
+    bonePointSize: restSceneProps.bonePointSize,
     previewRenderStyle: restSceneProps.previewRenderStyle,
     visibleKeys: restSceneProps.visibleKeys.size,
     triangleCount: drawComplexity.triangleCount,
@@ -1684,6 +1769,10 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
           perfMonitorOptions={perfMonitorOptions}
           previewRenderStyle={restSceneProps.previewRenderStyle}
           showStats={restSceneProps.showStats}
+        />
+        <CanvasContentInvalidator
+          textureDataMap={restSceneProps.textureDataMap}
+          drawMaterialBindingsByDrawKey={restSceneProps.drawMaterialBindingsByDrawKey}
         />
         <Scene
           {...restSceneProps}

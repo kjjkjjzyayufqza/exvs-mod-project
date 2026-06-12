@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Boxes, FileInput, Loader2, Plus, RotateCw, Save, Search, Trash2 } from "lucide-react";
+import { Boxes, Check, FileInput, Loader2, Plus, RotateCw, Save, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ export function NumatbTemplateEditor({ themeVariant = "default" }: NumatbTemplat
     selectedTemplateId,
     templateLibrary,
     templatesLoading,
+    templateLibraryError,
     loadTemplateLibrary,
     applyTemplateById,
     saveCurrentAsTemplate,
@@ -51,6 +52,7 @@ export function NumatbTemplateEditor({ themeVariant = "default" }: NumatbTemplat
       selectedTemplateId: state.selectedTemplateId,
       templateLibrary: state.templateLibrary,
       templatesLoading: state.templatesLoading,
+      templateLibraryError: state.templateLibraryError,
       loadTemplateLibrary: state.loadTemplateLibrary,
       applyTemplateById: state.applyTemplateById,
       saveCurrentAsTemplate: state.saveCurrentAsTemplate,
@@ -75,9 +77,16 @@ export function NumatbTemplateEditor({ themeVariant = "default" }: NumatbTemplat
   });
   const [templateName, setTemplateName] = useState("");
   const [templateDescription, setTemplateDescription] = useState("");
+  const [templateSaving, setTemplateSaving] = useState(false);
+  const [templateDeleting, setTemplateDeleting] = useState(false);
   const [newMaterialLabel, setNewMaterialLabel] = useState("");
   const [materialQuery, setMaterialQuery] = useState("");
   const materialListScrollRef = useRef<HTMLDivElement>(null);
+  const templateActionBusy = templatesLoading || templateSaving || templateDeleting;
+
+  useEffect(() => {
+    void loadTemplateLibrary();
+  }, [loadTemplateLibrary]);
 
   const activeFile = activeProfile === "maya" ? mayaFile : nustFile;
   const entries = activeFile.entries;
@@ -139,6 +148,54 @@ export function NumatbTemplateEditor({ themeVariant = "default" }: NumatbTemplat
     }
   };
 
+  const handleApplyTemplate = (templateId: string) => {
+    const template = templateLibrary.templates.find((item) => item.id === templateId);
+    if (!template) {
+      toast.error("Template not found");
+      return;
+    }
+    try {
+      applyTemplateById(templateId);
+      setSelectedMaterialByProfile({ maya: 0, nust: 0 });
+      setMaterialQuery("");
+      toast.success(`Applied template "${template.name}"`);
+    } catch (error) {
+      toast.error(String(error));
+    }
+  };
+
+  const handleSaveTemplate = async () => {
+    const name = templateName.trim();
+    if (!name || templateSaving) return;
+    setTemplateSaving(true);
+    try {
+      await saveCurrentAsTemplate({
+        name,
+        description: templateDescription,
+      });
+      toast.success(`Saved template "${name}"`);
+      setTemplateName("");
+      setTemplateDescription("");
+    } catch (error) {
+      toast.error(String(error));
+    } finally {
+      setTemplateSaving(false);
+    }
+  };
+
+  const handleDeleteTemplate = async () => {
+    if (!selectedTemplate || templateDeleting) return;
+    setTemplateDeleting(true);
+    try {
+      await deleteTemplateById(selectedTemplate.id);
+      toast.success(`Deleted template "${selectedTemplate.name}"`);
+    } catch (error) {
+      toast.error(String(error));
+    } finally {
+      setTemplateDeleting(false);
+    }
+  };
+
   return (
     <SsbhEditorThemeScope variant={themeVariant}>
       <div className="space-y-3">
@@ -149,11 +206,11 @@ export function NumatbTemplateEditor({ themeVariant = "default" }: NumatbTemplat
             <select
               className="h-8 w-full rounded-md border border-input bg-background px-2 pr-8 text-[11px] disabled:cursor-not-allowed disabled:opacity-60"
               value={selectedTemplateId ?? ""}
-              disabled={templatesLoading}
+              disabled={templateActionBusy}
               onChange={(event) => {
                 const nextId = event.target.value;
                 if (!nextId) return;
-                applyTemplateById(nextId);
+                handleApplyTemplate(nextId);
               }}
             >
               <option value="">{templatesLoading ? "Loading templates…" : "Select template"}</option>
@@ -167,13 +224,16 @@ export function NumatbTemplateEditor({ themeVariant = "default" }: NumatbTemplat
               <Loader2 className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
             ) : null}
           </div>
+          {templateLibraryError ? (
+            <p className="text-[11px] leading-snug text-destructive">{templateLibraryError}</p>
+          ) : null}
         </div>
         <Button
           type="button"
           variant="outline"
           size="sm"
           className="h-8 text-[10px] uppercase tracking-wide"
-          disabled={templatesLoading}
+          disabled={templateActionBusy}
           onClick={() => void loadTemplateLibrary()}
         >
           {templatesLoading ? (
@@ -182,6 +242,20 @@ export function NumatbTemplateEditor({ themeVariant = "default" }: NumatbTemplat
             <RotateCw className="mr-1 h-3.5 w-3.5" />
           )}
           {templatesLoading ? "Loading" : "Reload"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 text-[10px] uppercase tracking-wide"
+          disabled={templateActionBusy || !selectedTemplate}
+          onClick={() => {
+            if (!selectedTemplate) return;
+            handleApplyTemplate(selectedTemplate.id);
+          }}
+        >
+          <Check className="mr-1 h-3.5 w-3.5" />
+          Apply
         </Button>
         <Button
           type="button"
@@ -198,18 +272,15 @@ export function NumatbTemplateEditor({ themeVariant = "default" }: NumatbTemplat
           variant="outline"
           size="sm"
           className="h-8 text-[10px] uppercase tracking-wide text-destructive"
-          disabled={!selectedTemplate}
-          onClick={() => {
-            if (!selectedTemplate) return;
-            void deleteTemplateById(selectedTemplate.id).then(() => {
-              toast.success(`Deleted template "${selectedTemplate.name}"`);
-            }).catch((error) => {
-              toast.error(String(error));
-            });
-          }}
+          disabled={templateActionBusy || !selectedTemplate}
+          onClick={() => void handleDeleteTemplate()}
         >
-          <Trash2 className="mr-1 h-3.5 w-3.5" />
-          Delete
+          {templateDeleting ? (
+            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Trash2 className="mr-1 h-3.5 w-3.5" />
+          )}
+          {templateDeleting ? "Deleting" : "Delete"}
         </Button>
       </div>
 
@@ -226,24 +297,15 @@ export function NumatbTemplateEditor({ themeVariant = "default" }: NumatbTemplat
           type="button"
           size="sm"
           className="h-8 self-end text-[10px] uppercase tracking-wide"
-          disabled={!templateName.trim()}
-          onClick={() => {
-            void saveCurrentAsTemplate({
-              name: templateName,
-              description: templateDescription,
-            })
-              .then(() => {
-                toast.success(`Saved template "${templateName.trim()}"`);
-                setTemplateName("");
-                setTemplateDescription("");
-              })
-              .catch((error) => {
-                toast.error(String(error));
-              });
-          }}
+          disabled={!templateName.trim() || templateSaving}
+          onClick={() => void handleSaveTemplate()}
         >
-          <Save className="mr-1 h-3.5 w-3.5" />
-          Save Template
+          {templateSaving ? (
+            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Save className="mr-1 h-3.5 w-3.5" />
+          )}
+          {templateSaving ? "Saving" : "Save Template"}
         </Button>
       </div>
 

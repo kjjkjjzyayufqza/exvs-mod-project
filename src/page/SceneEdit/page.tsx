@@ -229,6 +229,7 @@ import { useSceneValidationStore } from "./store/sceneValidationStore";
 import { buildErrorFolderCounts } from "./utils/sceneValidationErrors";
 import { StageValidationErrorDialog } from "./components/StageValidationErrorDialog";
 import {
+  assertSsbhSessionTextureReferencesResolvable,
   buildSsbhSessionImportConfig,
   ensureImportedDaeSessionImport,
   importDaeThroughSceneSession,
@@ -3147,6 +3148,11 @@ export default function SceneEdit() {
             explicitBaseName && entries.length === 1
               ? explicitBaseName
               : sanitizeBaseFilename(entry.fileName);
+          await assertSsbhSessionTextureReferencesResolvable({
+            sessionState,
+            sourcePath: entry.filePath,
+            stageRoot: entry.config.outputDirectory,
+          });
           const importConfig = buildSsbhSessionImportConfig(
             entry.config,
             sessionState,
@@ -3218,6 +3224,11 @@ export default function SceneEdit() {
             explicitBaseName && entries.length === 1
               ? explicitBaseName
               : sanitizeBaseFilename(entry.fileName);
+          await assertSsbhSessionTextureReferencesResolvable({
+            sessionState,
+            sourcePath: entry.filePath,
+            stageRoot,
+          });
           const importConfig = buildSsbhSessionImportConfig(
             entry.config,
             sessionState,
@@ -3394,6 +3405,11 @@ export default function SceneEdit() {
           steps: createStaticMeshImportSteps(entry.fileName, directToDisk),
         });
 
+        await assertSsbhSessionTextureReferencesResolvable({
+          sessionState,
+          sourcePath: entry.filePath,
+          stageRoot,
+        });
         const importConfig = buildSsbhSessionImportConfig(
           entry.config,
           sessionState,

@@ -143,6 +143,7 @@ export function SsbhModelPreviewViewport() {
               previewViewMode={p.previewViewMode}
               hiddenPreviewInstanceIds={p.hiddenPreviewInstanceIds}
               selectedBoneIndex={p.selectedBoneIndex}
+              bonePointSize={p.bonePointSize}
               boneTransformMode={p.boneTransformMode}
               bonePoseResetNonce={p.bonePoseResetNonce}
               previewRenderStyle={p.previewRenderStyle}

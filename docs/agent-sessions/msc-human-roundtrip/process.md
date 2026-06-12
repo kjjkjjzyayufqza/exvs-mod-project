@@ -1,5 +1,166 @@
 # MSC Human Roundtrip Rewrite Process
 
+## 2026-06-12 Readable C Direction Refresh
+
+- Current user objective: follow `task.md` and create at least 20 todo list items in one pass so the work can continue coherently.
+- Re-read `AGENTS.md` and `.cursor/rules/custom-rules.mdc`.
+- Re-read `task.md`. The current product direction is no longer the byte-preserving `mscsrc` carrier. The primary deliverable is jam1garner-style, human-readable C source with IDA/game-exe grounded native names.
+- Read relevant docs:
+  - `docs/msc-binary-format-spec.md`
+  - `docs/exvs2-msc-vm-native-semantics.md`
+  - `docs/exvs-native-truth-mapping-workflow.md`
+- Reused session folder `docs/agent-sessions/msc-human-roundtrip/`.
+- Updated `todo.md` with 29 task items for the readable C direction.
+- Checked CodeGraph for `E:\research\msc_reserch\msc_human_rewrite`; it is not initialized there, so current work will rely on direct project inspection unless the user asks to initialize CodeGraph.
+- Confirmed `E:\research\msc_reserch\msc_human_rewrite` is not a git repository.
+- Confirmed the current implementation still contains `source_text.py`, `semantic_text.py`, `flow_text.py`, `semantics.py`, `stack_analysis.py`, and `function_model.py`; these should be treated as reusable internals, not final output formats.
+
+## 2026-06-12 Readable C Vertical Slice
+
+Implemented the first IDA-grounded readable C projection under
+`E:\research\msc_reserch\msc_human_rewrite`:
+
+- Added `src/exvs2_msc/c_decompile.py`.
+- Added `tests/test_c_decompile.py`.
+- Added `c-decompile` to `src/exvs2_msc/__main__.py`.
+- Exported `dumps_c_decompile` from `src/exvs2_msc/__init__.py`.
+- Updated rewrite docs:
+  - `README.md`
+  - `docs/architecture.md`
+  - `docs/source-text.md`
+  - `docs/flow-text.md`
+
+Current C projection behavior:
+
+- Emits file-level `@domain`, ground-truth file, module, and SHA-256 evidence.
+- Groups scripts as `fn_XXXXXXXX` functions based on the native offset-table
+  function model.
+- Reuses existing domain inheritance and subcommand evidence from
+  `GroundTruth`.
+- Reuses CFG stack analysis for native call arguments.
+- Renders IDA-proven native subcommands as semantic API calls, such as
+  `get_active_shell_entry_id()` and `shell_entry_exists(0x6BAA794A)`.
+- Renders unproven native behavior explicitly as
+  `native_call_unresolved(domain, handler_id, subcmd, ...)`.
+- Uses conservative labels and `goto` statements for unstructured CFG regions.
+
+Commands and outcomes:
+
+- `python -m unittest discover -s tests` before changes: passed 79 tests in
+  76.153s.
+- `python -m unittest discover -s tests -p test_c_decompile.py`: first failed
+  because `exvs2_msc.c_decompile` did not exist, then passed 6 tests in 3.252s.
+- `python -m unittest discover -s tests`: passed 85 tests in 85.802s.
+- `python -m compileall -q src tests`: passed.
+- Real sample C export:
+  - Command:
+    `python -m exvs2_msc c-decompile E:\research\msc_reserch\EXVS2_msc\0x04AD9F33\2.dscex --ground-truth data\ida\vsac27_release_msc_handlers.json --domain "VDK::GAM::CDepictionScript" -o tmp\0x04AD9F33\2.readable.c`
+  - Output lines: 85076.
+  - Output size: 3371488 bytes.
+  - Verified output contains `@domain`, `@evidence`, `get_active_shell_entry_id()`,
+    `shell_entry_exists(0x6BAA794A)`, and `native_call_unresolved(...)`.
+- Tauri comparison output:
+  - Command:
+    `python E:\TAURI_PROJECT\tools\mscdec.py E:\research\msc_reserch\EXVS2_msc\0x04AD9F33\2.dscex -o tmp\0x04AD9F33\2.tauri_mscdec.c`
+  - Output lines: 28600.
+  - Output size: 623183 bytes.
+  - Shape difference: old output uses ordinal `func_N` names and global
+    `sys_XX(...)` calls, for example `sys_47(... sys_4B(0x1) ...)`; new output
+    uses offset-stable `fn_XXXXXXXX`, domain/build evidence comments, resolved
+    semantic names, and explicit unresolved native calls.
+
+Remaining work:
+
+- The current C output is intentionally conservative and noisy. It still needs
+  branch predicate recovery, CFG structuring, output-size reduction, broader
+  handler/subcommand evidence, and more readable snapshots.
+
+## 2026-06-12 Repeated TDD Toolchain Harness
+
+The user requested a 100-item todo list and emphasized repeated TDD, repeated
+jam1garner/legacy decode checks, and repeated `msclang` repack script tests
+rather than fake micro-task splitting.
+
+Actions:
+
+- Expanded `todo.md` with a dedicated `100-Item Repeated TDD Backlog`.
+- Added `src/exvs2_msc/toolchain_regression.py`.
+- Added `tests/test_toolchain_regression.py`.
+- Added the `toolchain-regression` CLI command.
+- Updated `README.md` with the repeated regression command and boundary.
+
+Harness behavior:
+
+- Discovers the 16 real MSC files under `E:\research\msc_reserch\EXVS2_msc`.
+- For each sample, records:
+  - new JSON IR decode/repack byte-exact result;
+  - new IDA-grounded C export result and line/size counts;
+  - legacy `E:\TAURI_PROJECT\tools\mscdec.py` decode status;
+  - legacy `E:\TAURI_PROJECT\tools\msclang.py` compile status;
+  - whether the legacy compiled bytes are byte-exact against the original input.
+- Stores per-sample artifacts under the selected `tmp\toolchain-regression-*`
+  folder and writes a JSON report.
+
+TDD steps and results:
+
+- `python -m unittest discover -s tests -p test_toolchain_regression.py` first
+  failed because `exvs2_msc.toolchain_regression` did not exist.
+- Implemented the harness module.
+- Added a parser test for `toolchain-regression`; it failed until the CLI command
+  was added.
+- Real smoke exposed a relative-output-path bug when calling legacy `mscdec.py`;
+  added a test with relative artifacts path and fixed the harness by resolving
+  `output_dir` before passing paths to legacy tools.
+- Added `legacy_msclang.byte_exact_to_input` after the first real smoke showed a
+  successful old compile can still produce non-byte-exact output.
+
+Commands and outcomes:
+
+- `python -m unittest discover -s tests -p test_toolchain_regression.py`: passed
+  3 tests.
+- `python -m compileall -q src tests`: passed.
+- Single-sample smoke:
+  - Command:
+    `python -m exvs2_msc toolchain-regression E:\research\msc_reserch\EXVS2_msc --ground-truth data\ida\vsac27_release_msc_handlers.json --domain "VDK::GAM::CDepictionScript" --mscdec E:\TAURI_PROJECT\tools\mscdec.py --msclang E:\TAURI_PROJECT\tools\msclang.py --artifacts-dir tmp\toolchain-regression-smoke --limit 1 -o tmp\toolchain-regression-smoke\report.json`
+  - Sample: `0x04AD9F33/0.bscex`.
+  - New roundtrip: byte-exact true.
+  - New C export: 9488 lines, domain/evidence present, unresolved fallback present.
+  - Legacy `mscdec`: returncode 0.
+  - Legacy `msclang`: returncode 0, output size 24400 vs input size 27808,
+    byte-exact false.
+- Full 16-sample corpus harness:
+  - Command:
+    `python -m exvs2_msc toolchain-regression E:\research\msc_reserch\EXVS2_msc --ground-truth data\ida\vsac27_release_msc_handlers.json --domain "VDK::GAM::CDepictionScript" --mscdec E:\TAURI_PROJECT\tools\mscdec.py --msclang E:\TAURI_PROJECT\tools\msclang.py --artifacts-dir tmp\toolchain-regression-full -o tmp\toolchain-regression-full\report.json`
+  - Elapsed: about 32 seconds.
+  - Sample count: 16.
+  - New JSON roundtrip byte-exact: 16/16.
+  - New C export success: 16/16.
+  - Legacy `mscdec` success: 16/16.
+  - Legacy `msclang` success: 16/16.
+  - Legacy `msclang` byte-exact against original input: 5/16.
+  - Non-byte-exact legacy outputs:
+    - `0x04AD9F33/0.bscex`: input 27808, compiled 24400.
+    - `0x04AD9F33/2.dscex`: input 272784, compiled 237856.
+    - `0x693F756D/0.bscex`: input 27232, compiled 24000.
+    - `0x693F756D/2.dscex`: input 318096, compiled 276960.
+    - `0xBDBE6FEA/0.bscex`: input 27808, compiled 24400.
+    - `0xBDBE6FEA/2.dscex`: input 272832, compiled 237872.
+    - `0xBDBE6FEA_test/0.bscex`: input 27808, compiled 24400.
+    - `0xBDBE6FEA_test/2.dscex`: input 272832, compiled 237872.
+    - `0xE20B4862/0.bscex`: input 26960, compiled 23664.
+    - `0xE20B4862/0.native_truth.bscex`: input 26944, compiled 23616.
+    - `0xE20B4862/2.dscex`: input 278992, compiled 242848.
+- `python -m unittest discover -s tests`: passed 88 tests in 81.592s.
+
+Current interpretation:
+
+- Legacy `mscdec`/`msclang` can often complete, but returncode 0 is not enough.
+  Byte equality catches old pipeline lossiness.
+- The new pipeline's byte-preserving parser remains exact across all 16 samples.
+- The new C projection now has a repeated all-corpus smoke gate, but still needs
+  branch predicate recovery and CFG structuring to approach jam1garner-style
+  readability.
+
 ## Context Gathered
 
 - `task.md` asks for a new project rooted at `E:\research\msc_reserch`, not edits to the current Tauri app.
@@ -391,3 +552,74 @@
 - Only `0xE20B4862\0.bscex` has a string table (`stringSize=16`, `stringCount=1`) and covers rare `printf`/`pushShort`.
 - Header `unk` values include more than `0x16/0x00`: observed `0x6C`, `0x6D`, `0x309`, `0x3C1`.
 - Added next-step requirement to cover all 16 samples and the string-table rare-opcode sample in tests.
+
+## Readable C Stack Expression TDD
+
+- User feedback: `tmp\toolchain-regression-full\0x04AD9F33__0_bscex\new_readable.c`
+  was still too VM-trace-like for C/Python/JS programmers. The target shape is
+  closer to jam1garner `mscdec.py` output, but with OB/EXVS2/VSAC domain and
+  IDA-grounded native names.
+- Added failing coverage in `tests/test_c_decompile.py` for `0x04AD9F33\0.bscex`:
+  - no default `pushInt`/`pushVar`/expression opcode comments for simple stack
+    producers;
+  - `setVar` renders `local_0000 = native_call_unresolved(...)` instead of
+    `local_0000 = last_result`;
+  - branch predicate no longer renders `condition_00000041`;
+  - branch predicate uses recovered expression:
+    `if (!(local_0000 != 0x00000000)) goto label_00000056;`.
+- Extended `src/exvs2_msc/stack_analysis.py`:
+  - `StackAnalysisResult` now exposes `instruction_inputs`;
+  - records consumed values for `setVar`, compound assignment, `if`/`ifNot`,
+    and `return_val`;
+  - keeps existing syscall and call-site recovery unchanged.
+- Updated `src/exvs2_msc/c_decompile.py`:
+  - default C output hides pure stack producer comments and `try`/`begin` noise;
+  - assignment, compound assignment, branch, and return rendering consume
+    recovered abstract values;
+  - native/function producers consumed by expressions are rendered inline and
+    skipped as duplicate standalone statements;
+  - resolved IDA native names can now appear inside branch predicates, e.g.
+    `shell_entry_exists(0x6BAA794A)`.
+- Corrected one initial test expectation: the first behaviour branch compares
+  against `0x00000000`, matching legacy readable C's `if (var0 != 0)` shape.
+
+## Verification After Readable C Expression Recovery
+
+- `python -m unittest discover -s tests -p test_c_decompile.py -k behaviour_c_uses_recovered_stack_expressions`:
+  failed first on old VM-trace output, then passed after implementation.
+- `python -m unittest discover -s tests -p test_c_decompile.py`: passed 7 tests.
+- `python -m unittest discover -s tests -p test_stack_analysis.py`: passed 8 tests.
+- `python -m unittest discover -s tests`: passed 89 tests.
+- `python -m compileall -q src tests`: passed.
+- Re-ran full toolchain regression with absolute corpus paths:
+  - command target: `tmp\toolchain-regression-full\report.json`;
+  - samples: `16`;
+  - new JSON roundtrip byte-exact: `16/16`;
+  - new readable C export success: `16/16`;
+  - legacy jam1garner `mscdec.py` decode success: `16/16`;
+  - legacy `msclang.py` repack command success: `16/16`;
+  - legacy `msclang.py` byte-exact to input: `5/16`.
+- Also wrote an isolated validation copy under
+  `tmp\toolchain-regression-readable-20260612\report.json` with the same
+  aggregate results.
+- Note: an intermediate regression run used a relative corpus path and produced
+  invalid legacy decode failures because `mscdec.py` ran under the artifacts
+  directory. The final `toolchain-regression-full` report was regenerated with
+  absolute paths and is the valid report.
+
+## Current Readable C Shape
+
+- The first function in
+  `tmp\toolchain-regression-full\0x04AD9F33__0_bscex\new_readable.c` now starts:
+  - `fn_0000009A();`
+  - `local_0000 = native_call_unresolved("VDK::GAM::CDepictionScript", 0x00, 0x10000, 0x00000000, 0x00000033);`
+  - `if (!(local_0000 != 0x00000000)) goto label_00000056;`
+  - `fn_00005D4A(local_0000);`
+- This removes the previous `pushInt`/`pushVar`/`notEquals` comments and the
+  synthetic `condition_00000041` placeholder from the simple branch.
+- Remaining readable-C work:
+  - structure proven `if`/`else` regions instead of label/goto fallback;
+  - structure loops where CFG proof is unambiguous;
+  - reduce double negations like `if (!(!(expr)))`;
+  - keep expanding IDA-backed native names for unresolved handler/subcommand
+    families.

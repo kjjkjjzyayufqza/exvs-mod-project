@@ -790,6 +790,104 @@ fn resolve_scene_import_texture_ref(
     None
 }
 
+fn collect_matl_json_texture_references(value: &serde_json::Value) -> Vec<String> {
+    let mut references = Vec::new();
+    let Some(entries) = value.get("entries").and_then(serde_json::Value::as_array) else {
+        return references;
+    };
+
+    for entry in entries {
+        for bucket in ["textures", "textures2"] {
+            let Some(rows) = entry.get(bucket).and_then(serde_json::Value::as_array) else {
+                continue;
+            };
+            for row in rows {
+                let Some(reference) = row.get("data").and_then(serde_json::Value::as_str) else {
+                    continue;
+                };
+                let trimmed = reference.trim();
+                if !trimmed.is_empty()
+                    && !references
+                        .iter()
+                        .any(|existing: &String| existing.eq_ignore_ascii_case(trimmed))
+                {
+                    references.push(trimmed.to_string());
+                }
+            }
+        }
+    }
+
+    references
+}
+
+fn collect_ssbh_config_texture_references(
+    ssbh_config: &crate::scene_memory_session::SsbhConvertConfig,
+) -> Vec<String> {
+    let mut references = Vec::new();
+    let mut append_profile = |profile: Option<&serde_json::Value>| {
+        let Some(profile) = profile else {
+            return;
+        };
+        for reference in collect_matl_json_texture_references(profile) {
+            if !references
+                .iter()
+                .any(|existing: &String| existing.eq_ignore_ascii_case(&reference))
+            {
+                references.push(reference);
+            }
+        }
+    };
+
+    if ssbh_config.write_numatb {
+        append_profile(ssbh_config.nust_file.as_ref());
+    }
+    if ssbh_config.write_maya_profile {
+        append_profile(ssbh_config.maya_file.as_ref());
+    }
+    references
+}
+
+fn unresolved_scene_import_texture_refs(
+    stage_root: Option<&str>,
+    source_path: Option<&str>,
+    references: &[String],
+) -> Vec<String> {
+    references
+        .iter()
+        .filter(|reference| {
+            resolve_scene_import_texture_ref(stage_root, source_path, reference).is_none()
+        })
+        .cloned()
+        .collect()
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ValidateSceneImportTextureRefsOptions {
+    pub stage_root: Option<String>,
+    pub source_path: Option<String>,
+    pub references: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SceneImportTextureRefValidationResult {
+    pub unresolved_references: Vec<String>,
+}
+
+#[tauri::command]
+pub fn scene_validate_import_texture_refs(
+    options: ValidateSceneImportTextureRefsOptions,
+) -> SceneImportTextureRefValidationResult {
+    SceneImportTextureRefValidationResult {
+        unresolved_references: unresolved_scene_import_texture_refs(
+            options.stage_root.as_deref(),
+            options.source_path.as_deref(),
+            &options.references,
+        ),
+    }
+}
+
 fn build_scene_import_preview_bundle_from_artifacts(
     session_id: &str,
     import_id: &str,
@@ -2628,6 +2726,25 @@ async fn scene_convert_static_mesh_to_stage_files_impl(
         return Err("base_filename cannot be empty".to_string());
     }
 
+    let texture_references = collect_ssbh_config_texture_references(&ssbh_config);
+    let output_dir_text = output_dir.to_string_lossy();
+    let source_path_text = source_path.to_string_lossy();
+    let unresolved_texture_references = unresolved_scene_import_texture_refs(
+        Some(output_dir_text.as_ref()),
+        Some(source_path_text.as_ref()),
+        &texture_references,
+    );
+    if !unresolved_texture_references.is_empty() {
+        return Err(format!(
+            "NUMATB texture validation failed before conversion. These .nutexb references were not found in the source folder, output stage root, or stage textures folder:\n{}",
+            unresolved_texture_references
+                .iter()
+                .map(|reference| format!("- {reference}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ));
+    }
+
     if options.config.generate_hkt {
         send_static_mesh_status(
             on_progress.as_ref(),
@@ -3177,6 +3294,63 @@ mod tests {
             )
             .is_none(),
             "missing texture refs should stay unresolved"
+        );
+    }
+
+    #[test]
+    fn scene_import_texture_ref_validation_reports_unresolved_references() {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let source_path = temp_dir.path().join("model.fbx");
+        let existing_texture = temp_dir.path().join("existing_texture.nutexb");
+        std::fs::write(&source_path, b"fbx").expect("fbx");
+        std::fs::write(&existing_texture, b"nutexb").expect("nutexb");
+
+        let result = scene_validate_import_texture_refs(ValidateSceneImportTextureRefsOptions {
+            stage_root: None,
+            source_path: Some(source_path.to_string_lossy().to_string()),
+            references: vec![
+                "existing_texture".to_string(),
+                "world_1_test-RGB".to_string(),
+            ],
+        });
+
+        assert_eq!(
+            result.unresolved_references,
+            vec!["world_1_test-RGB".to_string()]
+        );
+    }
+
+    #[test]
+    fn ssbh_config_texture_reference_collection_respects_exported_profiles() {
+        let config = crate::scene_memory_session::SsbhConvertConfig {
+            base_filename: "rock".to_string(),
+            scale_factor: 1.0,
+            up_axis: "y_up".to_string(),
+            flip_uv: false,
+            write_numdlb: true,
+            write_numshb: true,
+            write_nusktb: true,
+            write_numatb: true,
+            write_jnttbl: false,
+            write_maya_profile: false,
+            material_template: None,
+            maya_file: Some(serde_json::json!({
+                "entries": [{
+                    "textures": [{ "param_id": "DiffuseMap", "data": "ignored_maya" }]
+                }]
+            })),
+            nust_file: Some(serde_json::json!({
+                "entries": [{
+                    "textures": [{ "param_id": "BaseColorMap", "data": "rock_color" }],
+                    "textures2": [{ "param_id": "Texture1", "data": "world_1_test-RGB" }]
+                }]
+            })),
+            numdlb_entries: Vec::new(),
+        };
+
+        assert_eq!(
+            collect_ssbh_config_texture_references(&config),
+            vec!["rock_color".to_string(), "world_1_test-RGB".to_string()]
         );
     }
 

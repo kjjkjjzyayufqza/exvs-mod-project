@@ -73,3 +73,199 @@
   - BLOCKED by existing SceneEdit errors:
     `sceneEditRndSizePersistence.test.ts` store typing and `DdsFormat` imports
     from `@/lib/ddsFormats`.
+
+## 2026-06-12 Texture/Preview Pass
+
+### Context Gathered
+
+- Re-read `AGENTS.md`, `.cursor/rules/custom-rules.mdc`, and relevant Scene
+  Editor texture docs/session notes before changing code.
+- Compared Unit Model Editor against Scene Editor texture flow:
+  - Scene uses add/replace/preview/export modals and conversion helpers in
+    `src/page/SceneEdit/components` and `src/page/SceneEdit/utils`.
+  - Unit repack is `_structure.json` driven, so Unit texture edits should update
+    `SubFileData` directly and write/delete files in the selected unit folder.
+- Existing preview issues:
+  - Canvas DPR was reset on resize once, but resizable panel layout can settle
+    after that first frame, leaving a blurry stretched drawing buffer.
+  - Texture decode updates happen while the canvas is in demand frameloop, so a
+    finished decode can need an explicit invalidate.
+  - Bone joint handles were small, depth-tested transparent spheres, making
+    joints inside meshes hard to see and select.
+
+### Implementation Notes
+
+- Added `src-tauri/src/format/unit_model_textures.rs`.
+  - `list_unit_model_textures` reads `_structure.json`, lists `.nutexb`
+    `SubFileData`, resolves disk paths, reads nutexb info, counts
+    `SubFileStructure` item refs, and parses `.numatb` texture refs.
+  - `add_unit_model_nutexb` copies a source `.nutexb` into the unit root and
+    appends a `.nutexb` `SubFileData` entry with a structure-relative `fileUrl`.
+  - `remove_unit_model_nutexb` only removes unreferenced textures and refuses to
+    delete files outside the selected unit root.
+- Registered Unit texture commands in `stage_commands.rs` and `lib.rs`.
+- Added `UnitModelTexturePanel` and `unitModelTextureService`.
+  - Right-side Unit tab now exposes `.nutexb` list view, preview, export PNG,
+    add, replace, remove, refresh, and copy-path actions.
+  - Reuses Scene Editor `TextureAddConfirmModal`, `TextureReplaceModal`,
+    `TexturePreviewModal`, conversion helpers, duplicate analysis, and thumbnail
+    cache.
+  - Texture edits dispatch a local `unit-model-textures-changed` event so the
+    left validation/repack panel clears stale results.
+- Preview fixes:
+  - `AdaptiveCanvasPerformanceController` now reasserts DPR/size over two RAFs
+    after resize.
+  - `CanvasContentInvalidator` invalidates on texture-data/material-binding
+    changes.
+  - Bone joint handles are non-depth-tested, render above mesh, and have a new
+    `bonePointSize` slider in the inspector.
+
+### Verification Log
+
+- `cargo test --lib unit_model_textures --manifest-path src-tauri\Cargo.toml -- --nocapture`
+  - PASS: 2 tests.
+- `cargo test --lib unit_model --manifest-path src-tauri\Cargo.toml -- --nocapture`
+  - PASS: 9 tests, including existing Unit validation/repack smoke coverage and
+    new Unit texture helpers.
+- `cargo check --lib --manifest-path src-tauri\Cargo.toml`
+  - PASS.
+- `npx vitest run src/page/UnitModelEdit/utils/unitModelRepackService.test.ts`
+  - PASS: 7 tests.
+- `npx tsc --noEmit --pretty false`
+  - BLOCKED by pre-existing SceneEdit test type errors:
+    `sceneDaeSessionImport.test.ts` static mesh result/null matl fixtures and
+    `sceneModelReplacePreview.test.ts` `displayLabel`.
+  - Filtered output for Unit/preview files showed no new matching errors.
+- `cargo test unit_model_textures --manifest-path src-tauri\Cargo.toml -- --nocapture`
+  - BLOCKED by unrelated bin target compile errors in `perf_preview_hkt.rs` and
+    `gen_hkt_variants.rs` missing `quad_merge_enabled`.
+- `git diff --check`
+  - PASS; only line-ending warnings from the dirty working tree.
+
+## 2026-06-12 Follow-up Fixes
+
+### Findings
+
+- White-texture-after-load can still happen when a draw gets a partial PBR
+  material before all texture slots decode. Later `map`/slot props update, but
+  Three material recompilation is not guaranteed. Hide/show remounts the mesh,
+  which explains why manual visibility toggling fixes it.
+- The texture pool key did not include decoded content identity. Replacing or
+  reloading a same-path/same-dimension texture could reuse the old GPU texture.
+- Skeleton display only controlled line rendering. Bone joint hit spheres were
+  still rendered by `BonePreviewRig`.
+- Preview collection `replace_items` auto-activated the first item, and
+  `append_items` auto-activated the last appended item.
+- Canvas DPR could still be lowered by the adaptive performance controller after
+  resize, leaving a low-resolution drawing buffer.
+
+### Changes
+
+- Added decoded texture object identity to the texture pool key and material key
+  in `SsbhModelCanvas`.
+- The PBR/basic material key now changes with texture slot paths/data versions,
+  forcing material remount when decoded data arrives.
+- `showSkeleton` now defaults to `false`; reset display settings also restores it
+  to `false`.
+- `BonePreviewRig` keeps internal bone groups for skinning but hides joint
+  handles and TransformControls when Skeleton display is off.
+- Preview collection replacement/append now leaves every item inactive and
+  unselected by default.
+- The canvas DPR controller now uses base DPR whenever motion is not active and
+  adds a ResizeObserver pass over the canvas parent.
+
+### Verification Log
+
+- `cargo test --lib preview_collection --manifest-path src-tauri\Cargo.toml -- --nocapture`
+  - PASS: 7 tests.
+- `cargo test --lib unit_model --manifest-path src-tauri\Cargo.toml -- --nocapture`
+  - PASS: 9 tests.
+- `cargo check --lib --manifest-path src-tauri\Cargo.toml`
+  - PASS.
+- `npx vitest run src/page/UnitModelEdit/utils/unitModelRepackService.test.ts`
+  - PASS: 7 tests.
+- `npx tsc --noEmit --pretty false` filtered for Unit/SSBH preview identifiers
+  - No matching new errors. Full `tsc` remains blocked by existing SceneEdit test
+    type errors.
+
+## 2026-06-12 Texture Detail / AI Payload Follow-up
+
+### Findings
+
+- Unit texture preview reused the 64px thumbnail decode context when opening the
+  detail modal. The shared modal also capped preview PNG generation at 512px, so
+  large textures appeared as a small fixed preview instead of fitting the
+  available detail viewport.
+- Unit texture inventory refresh still selected the first texture when no prior
+  selection survived, which violated the no-default-selection behavior expected
+  for open/load flows.
+- The Unit texture panel had only per-texture export. Batch export should use
+  the Unit `_structure.json` texture inventory instead of recursively exporting
+  every `.nutexb` in the folder.
+- The old AI review payload only copied the validation result. It did not expose
+  validator logic, parsed asset data, preview state, material bindings, texture
+  inventory, or disk assets needed for AI review.
+
+### Changes
+
+- `TexturePreviewModal` now fits the image to the preview viewport at 100%,
+  supports wheel zoom, zoom in/out buttons, and reset.
+- `sceneTextureThumbnail` now allows 4096px preview PNG data URLs for the modal.
+  Unit thumbnails still use the 64px thumbnail context; Unit detail previews use
+  a full-resolution decode context.
+- `UnitModelTexturePanel` now has batch PNG export, clears selection on root
+  change, keeps refresh from auto-selecting the first texture, and no longer
+  renders the bottom `fileIndex/size/format/dimensions` strip.
+- Added `unitModelAiReviewPayload`.
+  - Includes validator rule phases and judgement per phase.
+  - Includes the exact validation result.
+  - Includes structure JSON parse data, Unit texture inventory, preview
+    instances/bundles/draws/material bindings/render settings, decoded texture
+    summaries, and recursive disk asset parse results.
+  - Parses `.numdlb/.numshb/.nusktb/.numatb` with
+    `ssbh_load_ssbh_file_as_json`, `.nutexb` with `nutexb_read_info`,
+    `.jnttbl` with `jnttbl_read_file`, and `.shl` headers in TypeScript.
+- `UnitModelToolsPanel` now auto-runs validation when copying the AI review
+  payload if no validation result exists yet.
+
+### Verification Log
+
+- `cargo check --lib --manifest-path src-tauri\Cargo.toml`
+  - PASS.
+- `npx vitest run src/page/UnitModelEdit/utils/unitModelRepackService.test.ts`
+  - PASS: 7 tests.
+- `npx tsc --noEmit --pretty false` filtered for
+  `UnitModelEdit|TexturePreviewModal|sceneTextureThumbnail`
+  - No matching new errors.
+- Full `npx tsc --noEmit --pretty false`
+  - Still blocked by pre-existing SceneEdit test fixture errors in
+    `sceneDaeSessionImport.test.ts` and `sceneModelReplacePreview.test.ts`.
+- `git diff --check`
+  - PASS; only line-ending warnings from the dirty working tree.
+
+## 2026-06-12 AI Payload Compaction Follow-up
+
+### Changes
+
+- Changed `unitModelAiReviewPayload` to emit review summaries for the largest
+  payload sources instead of raw parsed data.
+- `.numshb` payloads now keep file metadata, object names, subindex,
+  parent-bone names, vertex/index counts, attribute counts, binary slice
+  metadata, and bone influence counts. Raw vertex/index/normal/UV arrays are
+  omitted.
+- `.nusktb`/bundle skeleton data now keeps bone names, parent indices,
+  billboard type, and transform presence. Raw bone transform matrices are
+  omitted.
+- `.jnttbl` payloads now omit the hex dump but keep entries and nusktb probe
+  metadata.
+- Payload version bumped to `3` and includes a `compaction` note describing what
+  was omitted.
+
+### Verification Log
+
+- `npx vitest run src/page/UnitModelEdit/utils/unitModelRepackService.test.ts`
+  - PASS: 7 tests.
+- `npx tsc --noEmit --pretty false` filtered for
+  `unitModelAiReviewPayload|UnitModelEdit|TexturePreviewModal|sceneTextureThumbnail`
+  - No matching new errors. Full `tsc` still has the known unrelated SceneEdit
+    test fixture errors.

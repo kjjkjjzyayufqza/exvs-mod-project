@@ -15,9 +15,12 @@ import {
   copyNumatbProfilesJsonToClipboard,
 } from "@/components/ssbh-model-preview/copyNumatbProfilesJson";
 import { useStableMissingTextureFillSlots } from "@/components/ssbh-model-preview/hooks/useStableMissingTextureFillSlots";
+import type { NumatbTextureReferenceIssue } from "@/components/ssbh-model-preview/hooks/useNumatbTextureReferenceValidation";
 import {
   applyTexturePathFillToProfiles,
   collectMissingTexturePathSlotRefsForExportSession,
+  collectTexturePathSlotRefsForExportSession,
+  missingTexturePathSlotKey,
 } from "@/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
 import type { DaeAnalysisResult } from "./daeImportTypes";
 import { DaeImportPanelSection } from "./daeImportUi";
@@ -26,9 +29,19 @@ interface DaeImportSsbhFullPanelProps {
   analysis: DaeAnalysisResult | null;
   sourcePath: string;
   stageRoot: string | null;
+  textureReferenceIssues?: NumatbTextureReferenceIssue[];
+  textureReferenceValidationError?: string | null;
+  textureReferencesValidating?: boolean;
 }
 
-export function DaeImportSsbhFullPanel({ analysis, sourcePath, stageRoot }: DaeImportSsbhFullPanelProps) {
+export function DaeImportSsbhFullPanel({
+  analysis,
+  sourcePath,
+  stageRoot,
+  textureReferenceIssues = [],
+  textureReferenceValidationError = null,
+  textureReferencesValidating = false,
+}: DaeImportSsbhFullPanelProps) {
   const setSourcePath = useDaeSsbhSessionStore((state) => state.setSourcePath);
   const loadAnalysis = useDaeSsbhSessionStore((state) => state.loadAnalysis);
   const loadTemplateLibrary = useDaeSsbhSessionStore((state) => state.loadTemplateLibrary);
@@ -61,6 +74,15 @@ export function DaeImportSsbhFullPanel({ analysis, sourcePath, stageRoot }: DaeI
   const updateProfileAttribute = useDaeSsbhSessionStore((state) => state.updateProfileAttribute);
   const addProfileAttribute = useDaeSsbhSessionStore((state) => state.addProfileAttribute);
 
+  const currentTextureSlots = useMemo(
+    () =>
+      collectTexturePathSlotRefsForExportSession(session.mayaFile, session.nustFile, {
+        writeNumatb: session.writeNumatb,
+        writeMayaProfile: session.writeMayaProfile,
+      }),
+    [session.mayaFile, session.nustFile, session.writeNumatb, session.writeMayaProfile],
+  );
+
   const liveMissingTextureSlots = useMemo(
     () =>
       collectMissingTexturePathSlotRefsForExportSession(session.mayaFile, session.nustFile, {
@@ -71,15 +93,27 @@ export function DaeImportSsbhFullPanel({ analysis, sourcePath, stageRoot }: DaeI
   );
 
   const fillTextureResetKey = useMemo(
-    () => `${sourcePath}\0${analysis?.geometryNames?.join("\u0001") ?? ""}`,
-    [sourcePath, analysis],
+    () =>
+      `${sourcePath}\0${analysis?.geometryNames?.join("\u0001") ?? ""}\0${session.numatbProfileReplacementRevision}`,
+    [sourcePath, analysis, session.numatbProfileReplacementRevision],
   );
 
   const fillTextureSlots = useStableMissingTextureFillSlots(
     fillTextureResetKey,
     session.mayaFile,
     session.nustFile,
+    currentTextureSlots,
     liveMissingTextureSlots,
+  );
+  const textureReferenceIssueMessages = useMemo(
+    () =>
+      new Map(
+        textureReferenceIssues.map((issue) => [
+          missingTexturePathSlotKey(issue.slot),
+          issue.message,
+        ]),
+      ),
+    [textureReferenceIssues],
   );
 
   const handleCopyNumatbProfilesJson = useCallback(async () => {
@@ -242,6 +276,37 @@ export function DaeImportSsbhFullPanel({ analysis, sourcePath, stageRoot }: DaeI
 
       <MissingTexturePathFillPanel
         slots={fillTextureSlots}
+        onFillSlot={(slot, basename) => {
+          applyTexturePathFillToProfiles(
+            updateProfileAttribute,
+            addProfileAttribute,
+            () => {
+              const state = useDaeSsbhSessionStore.getState();
+              return { mayaFile: state.mayaFile, nustFile: state.nustFile };
+            },
+            slot,
+            basename,
+          );
+        }}
+      />
+      {textureReferencesValidating ? (
+        <p className="text-[11px] text-muted-foreground">
+          Checking NUMATB texture references...
+        </p>
+      ) : null}
+      {textureReferenceValidationError ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
+          <p className="text-[11px] text-destructive">
+            Texture reference validation failed: {textureReferenceValidationError}
+          </p>
+        </div>
+      ) : null}
+      <MissingTexturePathFillPanel
+        slots={textureReferenceIssues.map((issue) => issue.slot)}
+        title="Fix texture references that cannot be resolved before conversion:"
+        getSlotMessage={(slot) =>
+          textureReferenceIssueMessages.get(missingTexturePathSlotKey(slot)) ?? null
+        }
         onFillSlot={(slot, basename) => {
           applyTexturePathFillToProfiles(
             updateProfileAttribute,

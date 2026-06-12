@@ -7,7 +7,7 @@ import {
 } from "./sceneTextureDecode";
 
 const THUMB_MAX_DIM = 64;
-const PREVIEW_MAX_DIM = 512;
+const PREVIEW_MAX_DIM = 4096;
 
 const thumbnailCache = new Map<string, string>();
 const previewCache = new Map<string, string>();

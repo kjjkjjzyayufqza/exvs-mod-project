@@ -329,6 +329,8 @@ export type SsbhModelPreviewContextValue = {
   vertexTriangleStats: { verts: number; tris: number };
   selectedBoneIndex: number | null;
   setSelectedBoneIndex: (v: number | null) => void;
+  bonePointSize: number;
+  setBonePointSize: (v: number) => void;
   boneTransformMode: BoneTransformMode;
   setBoneTransformMode: (v: BoneTransformMode) => void;
   bonePoseResetNonce: number;
@@ -456,7 +458,7 @@ export function SsbhModelPreviewProvider({
 
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
   const [wireframe, setWireframe] = useState(false);
-  const [showSkeleton, setShowSkeleton] = useState(true);
+  const [showSkeleton, setShowSkeleton] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
   const [showAxesGizmo, setShowAxesGizmo] = useState(true);
   const [showStats, setShowStats] = useState(false);
@@ -518,6 +520,7 @@ export function SsbhModelPreviewProvider({
   const [fitRequestId, setFitRequestId] = useState(0);
   const [modelLoadNonce, setModelLoadNonce] = useState(0);
   const [selectedBoneIndex, setSelectedBoneIndex] = useState<number | null>(null);
+  const [bonePointSize, setBonePointSize] = useState(1.4);
   const [boneTransformMode, setBoneTransformMode] = useState<BoneTransformMode>("translate");
   const [bonePoseResetNonce, setBonePoseResetNonce] = useState(0);
   const bonePoseGetterRef = useRef<(() => Float32Array) | null>(null);
@@ -1741,7 +1744,7 @@ export function SsbhModelPreviewProvider({
 
   const resetDisplaySettingsToDefaults = useCallback(() => {
     setWireframe(false);
-    setShowSkeleton(true);
+    setShowSkeleton(false);
     setShowGrid(true);
     setShowAxesGizmo(true);
     setShowStats(false);
@@ -2235,6 +2238,8 @@ export function SsbhModelPreviewProvider({
       vertexTriangleStats,
       selectedBoneIndex,
       setSelectedBoneIndex,
+      bonePointSize,
+      setBonePointSize,
       boneTransformMode,
       setBoneTransformMode,
       bonePoseResetNonce,
@@ -2359,6 +2364,7 @@ export function SsbhModelPreviewProvider({
       hideAllMeshes,
       vertexTriangleStats,
       selectedBoneIndex,
+      bonePointSize,
       boneTransformMode,
       bonePoseResetNonce,
       resetBonePose,

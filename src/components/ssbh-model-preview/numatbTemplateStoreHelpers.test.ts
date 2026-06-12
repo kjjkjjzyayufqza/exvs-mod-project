@@ -7,6 +7,8 @@ import {
   collectMissingTexturePathSlots,
   collectMissingTexturePathsForExportSession,
   collectNumatbEmptyTexturePathErrors,
+  collectDeclaredTexturePathSlotRefsForExportSession,
+  collectTexturePathSlotRefsForExportSession,
   mirrorTexturePathOntoOtherProfile,
   syncProfilesWithMappings,
   upsertProfileEntriesFromTemplate,
@@ -279,6 +281,64 @@ describe("numatb template helpers", () => {
         materialIndex: 0,
         attributeIndex: 0,
         value: "",
+        textureDataKind: "String1",
+      },
+    ]);
+  });
+
+  it("collectTexturePathSlotRefsForExportSession includes filled required slots", () => {
+    const maya = createEmptyNumatbFile();
+    maya.entries.push({
+      material_label: "m1",
+      shader_label: "",
+      textures: [{ param_id: "DiffuseMap", data: "textures/body" }],
+    });
+
+    expect(
+      collectTexturePathSlotRefsForExportSession(maya, createEmptyNumatbFile(), {
+        writeNumatb: false,
+        writeMayaProfile: true,
+      }),
+    ).toEqual([
+      {
+        profile: "maya",
+        materialLabel: "m1",
+        paramId: "DiffuseMap",
+        materialIndex: 0,
+        attributeIndex: 0,
+        value: "textures/body",
+        textureDataKind: "String",
+      },
+    ]);
+  });
+
+  it("collectDeclaredTexturePathSlotRefsForExportSession includes disabled texture rows", () => {
+    const nust = createEmptyNumatbFile();
+    nust.entries.push({
+      material_label: "m1",
+      shader_label: "",
+      textures: [],
+      textures2: [{ param_id: "RoughnessMap", data: "missing_roughness" }],
+      booleans: [{ param_id: "UseRoughnessMap", data: false }],
+    });
+
+    expect(
+      collectDeclaredTexturePathSlotRefsForExportSession(
+        createEmptyNumatbFile(),
+        nust,
+        {
+          writeNumatb: true,
+          writeMayaProfile: false,
+        },
+      ),
+    ).toEqual([
+      {
+        profile: "nust",
+        materialLabel: "m1",
+        paramId: "RoughnessMap",
+        materialIndex: 0,
+        attributeIndex: 1,
+        value: "missing_roughness",
         textureDataKind: "String1",
       },
     ]);

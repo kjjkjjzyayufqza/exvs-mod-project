@@ -8,12 +8,13 @@ import {
 
 /**
  * Keeps missing-texture fill rows visible while the user edits paths in the current model session.
- * Rows are only cleared when `resetKey` changes (e.g. another DAE file / analysis), not when a path is filled.
+ * Filled rows stay visible, while replaced profiles and no-longer-valid slots are removed.
  */
 export function useStableMissingTextureFillSlots(
   resetKey: string,
   mayaFile: MatlDataJson,
   nustFile: MatlDataJson,
+  currentSlots: MissingTexturePathSlotRef[],
   liveMissing: MissingTexturePathSlotRef[],
 ): MissingTexturePathSlotRef[] {
   const [stableSlots, setStableSlots] = useState<MissingTexturePathSlotRef[]>([]);
@@ -24,13 +25,22 @@ export function useStableMissingTextureFillSlots(
 
   useEffect(() => {
     setStableSlots((previous) => {
-      const merged = new Map(previous.map((slot) => [missingTexturePathSlotKey(slot), slot]));
+      const currentByKey = new Map(
+        currentSlots.map((slot) => [missingTexturePathSlotKey(slot), slot]),
+      );
+      const merged = new Map<string, MissingTexturePathSlotRef>();
+      for (const slot of previous) {
+        const current = currentByKey.get(missingTexturePathSlotKey(slot));
+        if (current) {
+          merged.set(missingTexturePathSlotKey(current), current);
+        }
+      }
       for (const slot of liveMissing) {
         merged.set(missingTexturePathSlotKey(slot), slot);
       }
       return Array.from(merged.values());
     });
-  }, [liveMissing]);
+  }, [currentSlots, liveMissing]);
 
   return useMemo(
     () =>

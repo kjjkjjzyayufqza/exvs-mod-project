@@ -1,5 +1,6 @@
 import type { DaeSsbhSessionState } from "@/components/ssbh-model-preview/daeSsbhTypes";
 import type { MatlDataJson } from "@/components/ssbh-model-preview/types";
+import { collectDeclaredTexturePathSlotRefsForExportSession } from "@/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
 import type { ImportedDaeObject } from "../components/MapViewport";
 import type { DaeImportConfig } from "../components/dae-import/daeImportTypes";
 import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
@@ -14,11 +15,69 @@ import {
   sceneGetImportConfig,
   sceneImportDaeFromPath,
   sceneImportDaeFromPathWithProgress,
+  sceneValidateImportTextureRefs,
   type ImportConfig,
   type ImportResult,
   type StaticMeshDirectConvertResult,
   type StaticMeshImportProgress,
 } from "./sceneSessionService";
+
+function normalizeTextureReference(value: string): string {
+  return value.trim().replace(/\.nutexb$/i, "").toLowerCase();
+}
+
+export async function assertSsbhSessionTextureReferencesResolvable(params: {
+  sessionState: Pick<
+    DaeSsbhSessionState,
+    "writeNumatb" | "writeMayaProfile" | "mayaFile" | "nustFile"
+  >;
+  sourcePath: string;
+  stageRoot: string | null;
+}): Promise<void> {
+  const slots = collectDeclaredTexturePathSlotRefsForExportSession(
+    params.sessionState.mayaFile,
+    params.sessionState.nustFile,
+    {
+      writeNumatb: params.sessionState.writeNumatb,
+      writeMayaProfile: params.sessionState.writeMayaProfile,
+    },
+  ).filter((slot) => slot.value.trim());
+  if (slots.length === 0) {
+    return;
+  }
+
+  const references = Array.from(
+    new Map(
+      slots.map((slot) => [
+        normalizeTextureReference(slot.value),
+        slot.value.trim(),
+      ]),
+    ).values(),
+  );
+  const result = await sceneValidateImportTextureRefs({
+    stageRoot: params.stageRoot,
+    sourcePath: params.sourcePath,
+    references,
+  });
+  const unresolved = new Set(
+    result.unresolvedReferences.map(normalizeTextureReference),
+  );
+  const issues = slots.filter((slot) =>
+    unresolved.has(normalizeTextureReference(slot.value)),
+  );
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `NUMATB texture validation failed. Select existing .nutexb files for:\n${issues
+      .map(
+        (slot) =>
+          `- ${slot.profile === "maya" ? "Maya" : "Nust"} / ${slot.materialLabel} / ${slot.paramId}: ${slot.value}`,
+      )
+      .join("\n")}`,
+  );
+}
 
 /**
  * Strip `.nutexb` suffix from all texture data paths in a MatlDataJson.

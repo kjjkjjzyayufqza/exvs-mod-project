@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Boxes, Copy, FileInput, Loader2, Plus, RotateCw, Save, Search, Trash2 } from "lucide-react";
+import { Boxes, Check, Copy, FileInput, Loader2, Plus, RotateCw, Save, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -61,36 +61,32 @@ export function NumatbTemplateEditorModalBody({
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [templateLibrary, setTemplateLibrary] = useState<NumatbTemplateLibrary>({ version: 1, templates: [] });
   const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templateLibraryError, setTemplateLibraryError] = useState<string | null>(null);
+  const [templateSaving, setTemplateSaving] = useState(false);
+  const [templateDeleting, setTemplateDeleting] = useState(false);
+  const templateActionBusy = templatesLoading || templateSaving || templateDeleting;
 
-  const loadTemplateLibrary = async () => {
+  const loadTemplateLibrary = useCallback(async () => {
     setTemplatesLoading(true);
+    setTemplateLibraryError(null);
     try {
       const lib = await loadNumatbTemplateLibrary();
       setTemplateLibrary(lib);
+      setSelectedTemplateId((current) =>
+        current && lib.templates.some((template) => template.id === current) ? current : null,
+      );
     } catch (error) {
-      toast.error(String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      setTemplateLibraryError(message);
+      toast.error(`Failed to load numatb templates: ${message}`);
     } finally {
       setTemplatesLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    setTemplatesLoading(true);
-    void loadNumatbTemplateLibrary()
-      .then((lib) => {
-        if (!cancelled) setTemplateLibrary(lib);
-      })
-      .catch((error) => {
-        if (!cancelled) toast.error(String(error));
-      })
-      .finally(() => {
-        if (!cancelled) setTemplatesLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    void loadTemplateLibrary();
+  }, [loadTemplateLibrary]);
 
   useEffect(() => {
     if (defaultActiveProfile !== undefined) {
@@ -166,6 +162,54 @@ export function NumatbTemplateEditorModalBody({
     onChange({ ...bundle, mirrorTexturePathsAcrossProfiles: value });
   };
 
+  const handleApplyTemplate = (templateId: string) => {
+    const template = templateLibrary.templates.find((item) => item.id === templateId);
+    if (!template) {
+      setSelectedTemplateId(null);
+      toast.error("Template not found");
+      return;
+    }
+    onChange(applyTemplateToBundle(bundle, template.mayaFile, template.nustFile));
+    setSelectedTemplateId(templateId);
+    setSelectedMaterialByProfile({ maya: 0, nust: 0 });
+    setMaterialQuery("");
+    toast.success(`Applied template "${template.name}"`);
+  };
+
+  const handleSaveTemplate = async () => {
+    const name = templateName.trim();
+    if (disabled || !name || templateSaving) return;
+    const created = createTemplateFromBundle({ name, description: templateDescription });
+    setTemplateSaving(true);
+    try {
+      const lib = await upsertNumatbTemplate(created);
+      setTemplateLibrary(lib);
+      setSelectedTemplateId(created.id);
+      setTemplateName("");
+      setTemplateDescription("");
+      toast.success(`Saved template "${created.name}"`);
+    } catch (error) {
+      toast.error(String(error));
+    } finally {
+      setTemplateSaving(false);
+    }
+  };
+
+  const handleDeleteTemplate = async () => {
+    if (disabled || !selectedTemplate || templateDeleting) return;
+    setTemplateDeleting(true);
+    try {
+      const lib = await deleteNumatbTemplate(selectedTemplate.id);
+      setTemplateLibrary(lib);
+      setSelectedTemplateId(null);
+      toast.success(`Deleted template "${selectedTemplate.name}"`);
+    } catch (error) {
+      toast.error(String(error));
+    } finally {
+      setTemplateDeleting(false);
+    }
+  };
+
   const createTemplateFromBundle = (
     payload: { name: string; description: string; sourceFileName?: string | null },
   ): NumatbTemplateDefinition => {
@@ -188,15 +232,15 @@ export function NumatbTemplateEditorModalBody({
           <div className="relative">
             <select
               className="h-8 w-full rounded-md border border-input bg-background px-2 pr-8 text-[11px] disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={disabled || templatesLoading}
+              disabled={disabled || templateActionBusy}
               value={selectedTemplateId ?? ""}
               onChange={(event) => {
                 const nextId = event.target.value;
-                if (!nextId) return;
-                const template = templateLibrary.templates.find((item) => item.id === nextId);
-                if (!template) return;
-                onChange(applyTemplateToBundle(bundle, template.mayaFile, template.nustFile));
-                setSelectedTemplateId(nextId);
+                if (!nextId) {
+                  setSelectedTemplateId(null);
+                  return;
+                }
+                handleApplyTemplate(nextId);
               }}
             >
               <option value="">{templatesLoading ? "Loading templates…" : "Select template"}</option>
@@ -210,13 +254,16 @@ export function NumatbTemplateEditorModalBody({
               <Loader2 className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
             ) : null}
           </div>
+          {templateLibraryError ? (
+            <p className="text-[11px] leading-snug text-destructive">{templateLibraryError}</p>
+          ) : null}
         </div>
         <Button
           type="button"
           variant="outline"
           size="sm"
           className="h-8 text-[10px] uppercase tracking-wide"
-          disabled={disabled || templatesLoading}
+          disabled={disabled || templateActionBusy}
           onClick={() => void loadTemplateLibrary()}
         >
           {templatesLoading ? (
@@ -225,6 +272,20 @@ export function NumatbTemplateEditorModalBody({
             <RotateCw className="mr-1 h-3.5 w-3.5" />
           )}
           {templatesLoading ? "Loading" : "Reload"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 text-[10px] uppercase tracking-wide"
+          disabled={disabled || templateActionBusy || !selectedTemplate}
+          onClick={() => {
+            if (!selectedTemplate) return;
+            handleApplyTemplate(selectedTemplate.id);
+          }}
+        >
+          <Check className="mr-1 h-3.5 w-3.5" />
+          Apply
         </Button>
         <Button
           type="button"
@@ -257,22 +318,15 @@ export function NumatbTemplateEditorModalBody({
           variant="outline"
           size="sm"
           className="h-8 text-[10px] uppercase tracking-wide text-destructive"
-          disabled={disabled || !selectedTemplate}
-          onClick={() => {
-            if (!selectedTemplate) return;
-            void deleteNumatbTemplate(selectedTemplate.id)
-              .then((lib) => {
-                setTemplateLibrary(lib);
-                setSelectedTemplateId(null);
-                toast.success(`Deleted template "${selectedTemplate.name}"`);
-              })
-              .catch((error) => {
-                toast.error(String(error));
-              });
-          }}
+          disabled={disabled || templateActionBusy || !selectedTemplate}
+          onClick={() => void handleDeleteTemplate()}
         >
-          <Trash2 className="mr-1 h-3.5 w-3.5" />
-          Delete
+          {templateDeleting ? (
+            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Trash2 className="mr-1 h-3.5 w-3.5" />
+          )}
+          {templateDeleting ? "Deleting" : "Delete"}
         </Button>
       </div>
 
@@ -299,24 +353,15 @@ export function NumatbTemplateEditorModalBody({
           type="button"
           size="sm"
           className="h-8 self-end text-[10px] uppercase tracking-wide"
-          disabled={disabled || !templateName.trim()}
-          onClick={() => {
-            const created = createTemplateFromBundle({ name: templateName, description: templateDescription });
-            void upsertNumatbTemplate(created)
-              .then((lib) => {
-                setTemplateLibrary(lib);
-                setSelectedTemplateId(created.id);
-                setTemplateName("");
-                setTemplateDescription("");
-                toast.success("Saved template");
-              })
-              .catch((error) => {
-                toast.error(String(error));
-              });
-          }}
+          disabled={disabled || !templateName.trim() || templateSaving}
+          onClick={() => void handleSaveTemplate()}
         >
-          <Save className="mr-1 h-3.5 w-3.5" />
-          Save Template
+          {templateSaving ? (
+            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Save className="mr-1 h-3.5 w-3.5" />
+          )}
+          {templateSaving ? "Saving" : "Save Template"}
         </Button>
       </div>
 

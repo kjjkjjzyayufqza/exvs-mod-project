@@ -106,4 +106,30 @@ describe("MissingTexturePathFillPanel", () => {
     fireEvent.click(screen.getByLabelText("Select all texture path slots"));
     expect(screen.getByRole("button", { name: "Apply to selected (2)" })).toBeInTheDocument();
   });
+
+  it("selects newly added slots when the profile structure changes", () => {
+    const { rerender } = render(
+      <MissingTexturePathFillPanel slots={[slotA]} onFillSlot={vi.fn()} />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Select DiffuseMap"));
+    rerender(
+      <MissingTexturePathFillPanel slots={[slotA, slotB]} onFillSlot={vi.fn()} />,
+    );
+
+    expect(screen.getByLabelText("Select DiffuseMap")).not.toBeChecked();
+    expect(screen.getByLabelText("Select Texture1")).toBeChecked();
+  });
+
+  it("renders a slot-specific validation message", () => {
+    render(
+      <MissingTexturePathFillPanel
+        slots={[slotA]}
+        onFillSlot={vi.fn()}
+        getSlotMessage={() => "Not found: missing_texture.nutexb"}
+      />,
+    );
+
+    expect(screen.getByText("Not found: missing_texture.nutexb")).toBeInTheDocument();
+  });
 });

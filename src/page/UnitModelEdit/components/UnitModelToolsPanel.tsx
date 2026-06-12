@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { AlertTriangle, CheckCircle2, ClipboardCopy, FolderOpen, Info, PackageCheck, RefreshCw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardCopy, FolderOpen, Info, Loader2, PackageCheck, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -10,13 +10,14 @@ import { cn } from "@/lib/utils";
 import { useConfigStore } from "@/store/configStore";
 import { useSsbhModelPreview } from "@/components/ssbh-model-preview/SsbhModelPreviewPanel";
 import {
-  formatUnitModelReviewPayload,
   getBaseName,
   inferUnitModelStructurePath,
   validateUnitModelForRepack,
   type UnitModelRepackResult,
   type UnitModelValidationResult,
 } from "../utils/unitModelRepackService";
+import { buildUnitModelAiReviewPayload } from "../utils/unitModelAiReviewPayload";
+import { listUnitModelTextures, type UnitModelTextureInventory } from "../utils/unitModelTextureService";
 import { UnitModelRepackDialog } from "./UnitModelRepackDialog";
 
 type Props = {
@@ -56,8 +57,17 @@ export function UnitModelToolsPanel({ unitRoot, onUnitRootChange }: Props) {
   const folderName = useMemo(() => (activeRoot ? getBaseName(activeRoot) : ""), [activeRoot]);
   const [validation, setValidation] = useState<UnitModelValidationResult | null>(null);
   const [lastRepack, setLastRepack] = useState<UnitModelRepackResult | null>(null);
-  const [busy, setBusy] = useState<"pick" | "validate" | null>(null);
+  const [busy, setBusy] = useState<"pick" | "validate" | "copy" | null>(null);
   const [repackDialogOpen, setRepackDialogOpen] = useState(false);
+
+  useEffect(() => {
+    const onTexturesChanged = () => {
+      setValidation(null);
+      setLastRepack(null);
+    };
+    window.addEventListener("unit-model-textures-changed", onTexturesChanged);
+    return () => window.removeEventListener("unit-model-textures-changed", onTexturesChanged);
+  }, []);
 
   const hasErrors = Boolean(validation && validation.errors.length > 0);
   const statusLabel = validation ? (validation.valid ? "Ready to repack" : "Blocked") : "Not validated";
@@ -128,16 +138,42 @@ export function UnitModelToolsPanel({ unitRoot, onUnitRootChange }: Props) {
   };
 
   const copyReviewPayload = async () => {
+    if (!activeRoot || !structurePath) {
+      toast.error("No unit model folder selected");
+      return;
+    }
+    setBusy("copy");
     try {
-      await writeText(
-        formatUnitModelReviewPayload(validation, {
-          outputPath: lastRepack?.outputPath ?? null,
-          activeModelRoot: activeRoot ?? null,
-        }),
-      );
+      let validationForPayload = validation;
+      if (!validationForPayload) {
+        validationForPayload = await validateUnitModelForRepack(activeRoot, structurePath);
+        setValidation(validationForPayload);
+      }
+
+      let textureInventory: UnitModelTextureInventory | null = null;
+      try {
+        textureInventory = await listUnitModelTextures(activeRoot, structurePath);
+      } catch (error) {
+        toast.error("Texture inventory failed; copying available payload", {
+          description: String(error),
+        });
+      }
+
+      const payload = await buildUnitModelAiReviewPayload({
+        activeModelRoot: activeRoot,
+        structurePath,
+        validation: validationForPayload,
+        lastRepack,
+        preview,
+        textureInventory,
+      });
+
+      await writeText(payload);
       toast.success("Copied unit model review payload");
     } catch (error) {
       toast.error("Failed to copy review payload", { description: String(error) });
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -218,9 +254,13 @@ export function UnitModelToolsPanel({ unitRoot, onUnitRootChange }: Props) {
               variant="outline"
               className="w-full"
               onClick={() => void copyReviewPayload()}
-              disabled={!activeRoot}
+              disabled={!activeRoot || busy !== null}
             >
-              <ClipboardCopy className="mr-2 h-4 w-4" />
+              {busy === "copy" ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <ClipboardCopy className="mr-2 h-4 w-4" />
+              )}
               Copy AI review payload
             </Button>
           </section>

@@ -18,7 +18,11 @@ import type {
 } from "./daeImportTypes";
 import { isHktGenerationAvailable } from "./daeImportDefaults";
 import { useDaeSsbhSessionStore } from "@/components/ssbh-model-preview/store/daeSsbhSessionStore";
-import { collectMissingTexturePathsForExportSession } from "@/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
+import {
+  collectDeclaredTexturePathSlotRefsForExportSession,
+  collectMissingTexturePathsForExportSession,
+} from "@/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
+import { useNumatbTextureReferenceValidation } from "@/components/ssbh-model-preview/hooks/useNumatbTextureReferenceValidation";
 import {
   DaeImportBoolField,
   DaeImportFieldRow,
@@ -190,6 +194,30 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
     })),
   );
 
+  const declaredTextureSlots = useMemo(
+    () =>
+      collectDeclaredTexturePathSlotRefsForExportSession(
+        ssbhSession.mayaFile,
+        ssbhSession.nustFile,
+        {
+          writeNumatb: ssbhSession.writeNumatb,
+          writeMayaProfile: ssbhSession.writeMayaProfile,
+        },
+      ),
+    [
+      ssbhSession.mayaFile,
+      ssbhSession.nustFile,
+      ssbhSession.writeMayaProfile,
+      ssbhSession.writeNumatb,
+    ],
+  );
+  const textureReferenceValidation = useNumatbTextureReferenceValidation({
+    enabled: primaryMode === "ssbh",
+    sourcePath: entry.filePath,
+    stageRoot: config.directToDisk ? config.outputDirectory : stageRoot,
+    slots: declaredTextureSlots,
+  });
+
   const ssbhReady = useMemo(() => {
     if (primaryMode !== "ssbh") return true;
     if (!ssbhSession.outputBaseName.trim()) return false;
@@ -203,8 +231,13 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
         writeMayaProfile: ssbhSession.writeMayaProfile,
       },
     );
-    return missing.length === 0;
-  }, [primaryMode, ssbhSession]);
+    return (
+      missing.length === 0 &&
+      !textureReferenceValidation.validating &&
+      textureReferenceValidation.issues.length === 0 &&
+      !textureReferenceValidation.error
+    );
+  }, [primaryMode, ssbhSession, textureReferenceValidation]);
 
   const updateConfig = (partial: Partial<DaeImportConfig>) => {
     onConfigChange(entry.importId, { ...config, ...partial });
@@ -390,6 +423,9 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
               analysis={entry.analysis}
               sourcePath={entry.filePath}
               stageRoot={stageRoot}
+              textureReferenceIssues={textureReferenceValidation.issues}
+              textureReferenceValidationError={textureReferenceValidation.error}
+              textureReferencesValidating={textureReferenceValidation.validating}
             />
           )}
         </div>

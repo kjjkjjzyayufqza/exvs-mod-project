@@ -5,9 +5,11 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SsbhDaeExchangePanel } from "@/components/ssbh-model-preview/SsbhDaeExchangePanel";
 import { SsbhModelPreviewInspector } from "@/components/ssbh-model-preview/SsbhModelPreviewPanel";
 import { SsbhModelPreviewMotionPanel } from "@/components/ssbh-model-preview/SsbhModelPreviewMotionPanel";
+import { UnitModelTexturePanel } from "./UnitModelTexturePanel";
 
 const TAB_ITEMS = [
   { name: "Model Preview", value: "modelPreview" },
+  { name: "Textures", value: "textures" },
   { name: "Motion", value: "motion" },
   { name: "COLLADA (.dae)", value: "daeExchange" },
 ] as const;
@@ -15,7 +17,11 @@ const TAB_ITEMS = [
 type TabValue = (typeof TAB_ITEMS)[number]["value"];
 const TAB_STRIP_SCROLL_EPSILON_px = 2;
 
-export function UnitModelInspectorPanel() {
+type Props = {
+  unitRoot: string | null;
+};
+
+export function UnitModelInspectorPanel({ unitRoot }: Props) {
   const [activeTab, setActiveTab] = useState<TabValue>("modelPreview");
   const tabStripRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -61,6 +67,8 @@ export function UnitModelInspectorPanel() {
     switch (activeTab) {
       case "modelPreview":
         return <SsbhModelPreviewInspector />;
+      case "textures":
+        return <UnitModelTexturePanel unitRoot={unitRoot} />;
       case "motion":
         return <SsbhModelPreviewMotionPanel />;
       case "daeExchange":
@@ -119,4 +127,3 @@ export function UnitModelInspectorPanel() {
     </div>
   );
 }
-

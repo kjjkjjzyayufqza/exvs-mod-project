@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
 import { DialogLastPathKey, getDialogDefaultPath, rememberDialogSelection } from "@/utils/dialogLastPath";
 import { MayaSection } from "./MayaInspectorSection";
 import {
@@ -873,6 +874,25 @@ export function SsbhModelPreviewInspector() {
               </ToggleGroup>
             </div>
           ) : null}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-[10px] text-muted-foreground">Joint size</Label>
+              <span className="font-mono text-[10px] text-muted-foreground">{p.bonePointSize.toFixed(1)}x</span>
+            </div>
+            <Slider
+              value={[p.bonePointSize]}
+              min={0.5}
+              max={4}
+              step={0.1}
+              disabled={bones.length === 0}
+              onValueChange={(value) => {
+                const next = value[0];
+                if (typeof next === "number" && Number.isFinite(next)) {
+                  p.setBonePointSize(next);
+                }
+              }}
+            />
+          </div>
           <div className="flex flex-col gap-1.5">
             <Label className="text-[10px] text-muted-foreground">Gizmo mode</Label>
             <ToggleGroup
