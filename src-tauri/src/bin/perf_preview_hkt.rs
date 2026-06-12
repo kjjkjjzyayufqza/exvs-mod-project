@@ -165,6 +165,7 @@ fn main() {
             max_target_triangles: Some(target),
             mode: CollisionSimplifyMode::ShapePreserving,
             hull_target_faces: None,
+            quad_merge_enabled: false,
         };
         let t = Instant::now();
         match simplify_collision_mesh(&merged, &review_opts) {

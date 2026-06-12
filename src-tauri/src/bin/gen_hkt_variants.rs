@@ -205,6 +205,7 @@ fn main() {
             max_target_triangles: Some(50_000),
             mode: CollisionSimplifyMode::ShapePreserving,
             hull_target_faces: None,
+            quad_merge_enabled: false,
         },
     )
     .expect("V2_low simplify failed");
