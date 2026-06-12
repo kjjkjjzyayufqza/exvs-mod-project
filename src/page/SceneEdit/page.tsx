@@ -179,9 +179,13 @@ import {
   buildSaveResultSummary,
   type SaveChangePreview,
 } from "./utils/sceneSaveConfirm";
-import { DaeImportConfigModal } from "./components/dae-import/DaeImportConfigModal";
+import {
+  DaeImportConfigModal,
+  type DaeImportWorkflowMode,
+} from "./components/dae-import/DaeImportConfigModal";
 import type { DaeImportEntry, HavokInstallInfo } from "./components/dae-import/daeImportTypes";
 import {
+  createBatchDaeImportConfig,
   createDefaultDaeImportConfig,
   detectStaticMeshImportFormat,
   sanitizeBaseFilename,
@@ -666,6 +670,8 @@ export default function SceneEdit() {
 
   const [daeImportEntries, setDaeImportEntries] = useState<DaeImportEntry[]>([]);
   const [showDaeImportModal, setShowDaeImportModal] = useState(false);
+  const [daeImportWorkflowMode, setDaeImportWorkflowMode] =
+    useState<DaeImportWorkflowMode>("standard");
   const [modelReplacements, setModelReplacements] = useState<ModelReplacement[]>([]);
   const [replaceTarget, setReplaceTarget] = useState<ModelReplaceTargetInfo | null>(null);
   const [havokInfo, setHavokInfo] = useState<HavokInstallInfo | null>(null);
@@ -3024,6 +3030,7 @@ export default function SceneEdit() {
     });
 
     setDaeImportEntries(entries);
+    setDaeImportWorkflowMode("standard");
     setShowDaeImportModal(true);
 
     for (let i = 0; i < entries.length; i++) {
@@ -3051,6 +3058,81 @@ export default function SceneEdit() {
             idx === i
               ? { ...e, analyzing: false, analyzeError: String(err) }
               : e,
+          ),
+        );
+      }
+    }
+  }, [stageRoot]);
+
+  const handleBatchImportDae = useCallback(async () => {
+    const selected = await open({
+      multiple: true,
+      filters: [{ name: "Static Mesh", extensions: ["dae", "fbx"] }],
+      defaultPath: await getStoredDialogDefaultPath(SCENE_IMPORT_DAE_CONFIG_DIALOG_PATH_KEY),
+    });
+    if (!selected) return;
+    const paths = Array.isArray(selected) ? selected : [selected];
+    const lastPath = paths[paths.length - 1];
+    if (lastPath) {
+      await rememberStoredDialogSelection(
+        SCENE_IMPORT_DAE_CONFIG_DIALOG_PATH_KEY,
+        lastPath,
+        "file",
+      );
+    }
+
+    const entries: DaeImportEntry[] = paths.map((filePath) => {
+      const fileName = filePath.split(/[/\\]/).pop() ?? "model.dae";
+      const baseName = sanitizeBaseFilename(fileName);
+      return {
+        importId: `batch_ssbh_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        fileName,
+        filePath,
+        sourceFormat: detectStaticMeshImportFormat(fileName),
+        analysis: null,
+        config: createBatchDaeImportConfig(baseName, stageRoot),
+        analyzing: true,
+        analyzeError: null,
+      };
+    });
+
+    setReplaceTarget(null);
+    setDaeImportEntries(entries);
+    setDaeImportWorkflowMode("batchDisk");
+    setShowDaeImportModal(true);
+
+    for (let i = 0; i < entries.length; i++) {
+      try {
+        const analysis =
+          entries[i].sourceFormat === "fbx"
+            ? await invoke("ssbh_analyze_fbx", { fbxPath: entries[i].filePath })
+            : await invoke("ssbh_analyze_dae", { daePath: entries[i].filePath });
+        const typedAnalysis = analysis as DaeImportEntry["analysis"];
+        setDaeImportEntries((prev) =>
+          prev.map((candidate) =>
+            candidate.importId === entries[i].importId && typedAnalysis
+              ? {
+                  ...candidate,
+                  analysis: typedAnalysis,
+                  config: syncDaeImportConfigUpAxisFromAnalysis(
+                    candidate.config,
+                    typedAnalysis,
+                  ),
+                  analyzing: false,
+                }
+              : candidate,
+          ),
+        );
+      } catch (error) {
+        setDaeImportEntries((prev) =>
+          prev.map((candidate) =>
+            candidate.importId === entries[i].importId
+              ? {
+                  ...candidate,
+                  analyzing: false,
+                  analyzeError: error instanceof Error ? error.message : String(error),
+                }
+              : candidate,
           ),
         );
       }
@@ -3127,7 +3209,10 @@ export default function SceneEdit() {
   );
 
   const processSsbhSessionImport = useCallback(
-    async (entries: DaeImportEntry[]) => {
+    async (
+      entries: DaeImportEntry[],
+      options?: { requireHkt?: boolean },
+    ) => {
       const sessionState = useDaeSsbhSessionStore.getState();
       const directEntries = entries.filter((entry) => entry.config.directToDisk);
       const previewEntries = entries.filter((entry) => !entry.config.directToDisk);
@@ -3157,6 +3242,7 @@ export default function SceneEdit() {
             entry.config,
             sessionState,
             baseFilename,
+            entry.analysis,
           );
           const result = await sceneConvertStaticMeshToStageFilesWithProgress(
             {
@@ -3166,6 +3252,12 @@ export default function SceneEdit() {
             },
             handleStaticMeshProgress,
           );
+          if (options?.requireHkt && !result.hktGenerated) {
+            throw new Error(
+              result.warnings.find((warning) => /hkt/i.test(warning)) ??
+                "HKT generation did not produce map_hit.hkt",
+            );
+          }
           applyStaticMeshProgressUpdate({
             step: "done",
             label: "Direct-to-disk static mesh conversion completed",
@@ -3233,6 +3325,7 @@ export default function SceneEdit() {
             entry.config,
             sessionState,
             baseFilename,
+            entry.analysis,
           );
           const result = await importDaeThroughSceneSession({
             sessionId: activeSessionId,
@@ -4282,6 +4375,7 @@ export default function SceneEdit() {
           onSaveFolder={handleSaveFolder}
           onSaveFhm2d={handleSaveFhm2d}
           onImportDaeWithConfig={handleImportDae}
+          onBatchImportDaeWithConfig={handleBatchImportDae}
           onExportSelectedDae={handleExportSelectedDae}
           onExportHktToObj={() => void handleExportHktToObj()}
           canSave={!!stageName && !isMemoryImport}
@@ -4788,12 +4882,29 @@ export default function SceneEdit() {
             entries={daeImportEntries}
             havokInfo={havokInfo}
             stageRoot={stageRoot}
+            workflowMode={daeImportWorkflowMode}
             replaceFolderName={replaceTarget?.folderName ?? null}
             onConfigChange={(importId, config) => {
               setDaeImportEntries((prev) =>
-                prev.map((e) =>
-                  e.importId === importId ? { ...e, config } : e,
-                ),
+                prev.map((entry) => {
+                  if (daeImportWorkflowMode !== "batchDisk") {
+                    return entry.importId === importId ? { ...entry, config } : entry;
+                  }
+                  return {
+                    ...entry,
+                    config: {
+                      ...config,
+                      loadToScene: false,
+                      convertToSsbh: true,
+                      generateHkt: true,
+                      directToDisk: true,
+                      ssbhConfig: {
+                        ...config.ssbhConfig,
+                        baseFilename: entry.config.ssbhConfig.baseFilename,
+                      },
+                    },
+                  };
+                }),
               );
             }}
             onImport={async () => {
@@ -4809,9 +4920,32 @@ export default function SceneEdit() {
                 return;
               }
 
-              setShowDaeImportModal(false);
               const entriesToProcess = [...daeImportEntries];
+              const workflowMode = daeImportWorkflowMode;
+
+              if (workflowMode === "batchDisk") {
+                const sessionState = useDaeSsbhSessionStore.getState();
+                try {
+                  for (const entry of entriesToProcess) {
+                    await assertSsbhSessionTextureReferencesResolvable({
+                      sessionState,
+                      sourcePath: entry.filePath,
+                      stageRoot: entry.config.outputDirectory,
+                    });
+                  }
+                } catch (error) {
+                  toast.error(
+                    `Batch texture validation failed: ${
+                      error instanceof Error ? error.message : String(error)
+                    }`,
+                  );
+                  return;
+                }
+              }
+
+              setShowDaeImportModal(false);
               setDaeImportEntries([]);
+              setDaeImportWorkflowMode("standard");
 
               const previewOnly = entriesToProcess.every(
                 (entry) =>
@@ -4850,16 +4984,22 @@ export default function SceneEdit() {
                 return;
               }
 
-              if (!sceneSessionId && !stageRoot) {
+              const needsMemorySession = entriesToProcess.some(
+                (entry) => !entry.config.directToDisk,
+              );
+              if (needsMemorySession && !sceneSessionId && !stageRoot) {
                 const sid = await sceneSessionCreate({ type: "new" });
                 setSceneSessionId(sid);
               }
-              await processSsbhSessionImport(entriesToProcess);
+              await processSsbhSessionImport(entriesToProcess, {
+                requireHkt: workflowMode === "batchDisk",
+              });
             }}
             onCancel={() => {
               setShowDaeImportModal(false);
               setDaeImportEntries([]);
               setReplaceTarget(null);
+              setDaeImportWorkflowMode("standard");
             }}
           />
         )}

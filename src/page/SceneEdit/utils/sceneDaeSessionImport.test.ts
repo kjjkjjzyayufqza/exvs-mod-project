@@ -131,6 +131,50 @@ describe("buildSsbhSessionImportConfig", () => {
     expect(importConfig.ssbhConfig?.numdlbEntries).toEqual(numdlbEntries);
   });
 
+  it("remaps batch geometry names while preserving configured material labels", () => {
+    const daeConfig = createDefaultDaeImportConfig("second_model");
+    const importConfig = buildSsbhSessionImportConfig(
+      daeConfig,
+      {
+        outputBaseName: "first_model",
+        scaleFactorText: "1",
+        upAxis: "y_up",
+        flipUv: false,
+        writeNumdlb: true,
+        writeNumshb: true,
+        writeNusktb: true,
+        writeNumatb: true,
+        writeMayaProfile: true,
+        mayaFile: createImportedDaeMaterialProfile(),
+        nustFile: createImportedDaeMaterialProfile(),
+        numdlbEntries: [
+          {
+            meshObjectName: "first_geometry",
+            meshObjectSubindex: 0,
+            materialLabel: "customBatchMaterial",
+          },
+        ],
+      },
+      "second_model",
+      {
+        geometryNames: ["second_body", "second_detail"],
+      },
+    );
+
+    expect(importConfig.ssbhConfig?.numdlbEntries).toEqual([
+      {
+        meshObjectName: "second_body",
+        meshObjectSubindex: 0,
+        materialLabel: "customBatchMaterial",
+      },
+      {
+        meshObjectName: "second_detail",
+        meshObjectSubindex: 0,
+        materialLabel: "customBatchMaterial",
+      },
+    ]);
+  });
+
   it("falls back to scale factor 1 when scale text is invalid", () => {
     const daeConfig = createDefaultDaeImportConfig("sample_mesh");
     const importConfig = buildSsbhSessionImportConfig(

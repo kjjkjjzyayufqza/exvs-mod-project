@@ -19,6 +19,7 @@ import {
   SlidersHorizontal,
   MoreHorizontal,
   Boxes,
+  Files,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,6 +57,7 @@ interface MapToolbarProps {
   onSaveFolder: () => void;
   onSaveFhm2d: () => void;
   onImportDaeWithConfig: () => void;
+  onBatchImportDaeWithConfig: () => void;
   onExportSelectedDae: () => void;
   onExportHktToObj: () => void;
   canSave: boolean;
@@ -96,6 +98,7 @@ export function MapToolbar({
   onSaveFolder,
   onSaveFhm2d,
   onImportDaeWithConfig,
+  onBatchImportDaeWithConfig,
   onExportSelectedDae,
   onExportHktToObj,
   canSave,
@@ -221,6 +224,24 @@ export function MapToolbar({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom">Import DAE / FBX</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={onBatchImportDaeWithConfig}
+            disabled={isLoading}
+            aria-label="Batch import static meshes to disk"
+          >
+            <Files className="h-3.5 w-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          Batch import DAE / FBX to disk with HKT
+        </TooltipContent>
       </Tooltip>
 
       <Tooltip>

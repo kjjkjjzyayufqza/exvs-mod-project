@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createBatchDaeImportConfig,
   createDefaultDaeImportConfig,
   detectStaticMeshImportFormat,
   isHktGenerationAvailable,
@@ -15,6 +16,18 @@ describe("daeImportDefaults", () => {
     expect(config.ssbhConfig.baseFilename).toBe("model_a");
     expect((config.ssbhConfig as { flipUv?: boolean }).flipUv).toBe(false);
     expect("hktConfig" in config).toBe(false);
+  });
+
+  it("creates batch config that always writes to disk and generates HKT", () => {
+    const config = createBatchDaeImportConfig("model_a", "E:\\stage");
+
+    expect(config).toMatchObject({
+      loadToScene: false,
+      convertToSsbh: true,
+      generateHkt: true,
+      directToDisk: true,
+      outputDirectory: "E:\\stage",
+    });
   });
 
   it("detects static mesh import formats", () => {

@@ -1,6 +1,13 @@
 import { memo, useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
 import { createPortal } from "react-dom";
-import { Box, FolderOpen, X } from "lucide-react";
+import {
+  AlertCircle,
+  Box,
+  CheckCircle2,
+  FolderOpen,
+  Loader2,
+  X,
+} from "lucide-react";
 import { Rnd } from "react-rnd";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useShallow } from "zustand/react/shallow";
@@ -37,6 +44,7 @@ import {
 import { clampRndSizeToConstraints } from "../sceneEditRndModalUtils";
 
 export type DaeImportPrimaryMode = "preview" | "ssbh";
+export type DaeImportWorkflowMode = "standard" | "batchDisk";
 
 const VIEWPORT_MARGIN = 48;
 const SSBH_MAX_WIDTH = 1080;
@@ -132,6 +140,7 @@ interface DaeImportConfigModalProps {
   entries: DaeImportEntry[];
   havokInfo: HavokInstallInfo | null;
   stageRoot: string | null;
+  workflowMode?: DaeImportWorkflowMode;
   /** When set, out-of-scene writes go to `{stageRoot}/{replaceFolderName}/0/...` only. */
   replaceFolderName?: string | null;
   onConfigChange: (importId: string, config: DaeImportConfig) => void;
@@ -149,6 +158,7 @@ interface DaeImportConfigModalBodyProps {
   config: DaeImportConfig;
   havokInfo: HavokInstallInfo | null;
   stageRoot: string | null;
+  workflowMode: DaeImportWorkflowMode;
   replaceFolderName?: string | null;
   onConfigChange: (importId: string, config: DaeImportConfig) => void;
   onImport: () => void;
@@ -162,12 +172,14 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
   config,
   havokInfo,
   stageRoot,
+  workflowMode,
   replaceFolderName,
   onConfigChange,
   onImport,
   onCancel,
   onDragHandlePointerDownCapture,
 }: DaeImportConfigModalBodyProps) {
+  const batchDiskMode = workflowMode === "batchDisk";
   const primaryMode = getPrimaryMode(config);
   const hktAvailable = isHktGenerationAvailable(havokInfo);
   const [hktValidationError, setHktValidationError] = useState<string | null>(null);
@@ -256,9 +268,16 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
     Boolean(hktValidationError) &&
     (config.directToDisk || primaryMode === "ssbh");
 
+  const allEntriesReady = entries.every(
+    (candidate) =>
+      !candidate.analyzing &&
+      !candidate.analyzeError &&
+      (candidate.analysis?.canConvert ?? false),
+  );
   const canImport =
-    !entry.analyzing &&
+    (batchDiskMode ? allEntriesReady : !entry.analyzing) &&
     !blockedByHkt &&
+    (!batchDiskMode || hktAvailable) &&
     (config.directToDisk
       ? Boolean(config.outputDirectory) && (entry.analysis?.canConvert ?? false) && ssbhReady
       : primaryMode === "preview"
@@ -286,11 +305,13 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
           </div>
           <div className="min-w-0">
             <h2 id="dae-import-modal-title" className="truncate text-sm font-semibold">
-              Import Static Mesh
+              {batchDiskMode ? "Batch Import Static Mesh" : "Import Static Mesh"}
             </h2>
             <p className="truncate text-xs text-muted-foreground">
-              {entry.fileName}
-              {entries.length > 1 ? ` · +${entries.length - 1} more` : ""}
+              {batchDiskMode
+                ? `${entries.length} FBX/DAE file${entries.length === 1 ? "" : "s"} to disk`
+                : entry.fileName}
+              {!batchDiskMode && entries.length > 1 ? ` · +${entries.length - 1} more` : ""}
             </p>
           </div>
         </div>
@@ -315,43 +336,109 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
             analyzeError={entry.analyzeError}
           />
 
-          <DaeImportSection title="Import Options">
-            <DaeImportFieldRow label="Import Mode">
-              <Tabs
-                value={primaryMode}
-                onValueChange={(value) => {
-                  if (value === "preview" || value === "ssbh") {
-                    setPrimaryMode(value);
-                  }
-                }}
-              >
-                <TabsList className="h-8 w-full">
-                  <TabsTrigger
-                    value="preview"
-                    className="flex-1 text-[11px]"
-                    disabled={config.directToDisk}
-                  >
-                    Preview
-                  </TabsTrigger>
-                  <TabsTrigger value="ssbh" className="flex-1 text-[11px]">
-                    Convert SSBH
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </DaeImportFieldRow>
+          {batchDiskMode ? (
+            <DaeImportSection title={`Batch Sources (${entries.length})`}>
+              <div className="max-h-36 space-y-1 overflow-y-auto px-1">
+                {entries.map((candidate) => {
+                  const failed =
+                    Boolean(candidate.analyzeError) ||
+                    (candidate.analysis !== null && !candidate.analysis.canConvert);
+                  return (
+                    <div
+                      key={candidate.importId}
+                      className="flex min-w-0 items-center justify-between gap-3 rounded border px-2 py-1.5 text-[11px]"
+                    >
+                      <span className="min-w-0 truncate font-mono" title={candidate.filePath}>
+                        {candidate.fileName}
+                      </span>
+                      <span
+                        className={cn(
+                          "inline-flex shrink-0 items-center gap-1",
+                          candidate.analyzing
+                            ? "text-sky-500"
+                            : failed
+                              ? "text-destructive"
+                              : "text-emerald-500",
+                        )}
+                      >
+                        {candidate.analyzing ? (
+                          <>
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Analyzing
+                          </>
+                        ) : failed ? (
+                          <>
+                            <AlertCircle className="h-3 w-3" />
+                            Invalid
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="h-3 w-3" />
+                            Ready
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </DaeImportSection>
+          ) : null}
 
-            <DaeImportBoolField
-              label="Out-of-scene conversion"
-              hint="Write files to disk and skip viewport loading"
-              checked={config.directToDisk}
-              onCheckedChange={(checked) =>
-                updateConfig({
-                  directToDisk: checked,
-                  loadToScene: !checked && primaryMode === "preview",
-                  convertToSsbh: checked ? true : config.convertToSsbh,
-                })
-              }
-            />
+          <DaeImportSection title="Import Options">
+            {batchDiskMode ? (
+              <>
+                <DaeImportFieldRow label="Import Mode">
+                  <span className="text-right text-[11px] font-medium">
+                    Direct-to-disk batch
+                  </span>
+                </DaeImportFieldRow>
+                <DaeImportFieldRow label="HKT Collision">
+                  <span className="text-right text-[11px] font-medium">
+                    Required for every file
+                  </span>
+                </DaeImportFieldRow>
+              </>
+            ) : (
+              <>
+                <DaeImportFieldRow label="Import Mode">
+                  <Tabs
+                    value={primaryMode}
+                    onValueChange={(value) => {
+                      if (value === "preview" || value === "ssbh") {
+                        setPrimaryMode(value);
+                      }
+                    }}
+                  >
+                    <TabsList className="h-8 w-full">
+                      <TabsTrigger
+                        value="preview"
+                        className="flex-1 text-[11px]"
+                        disabled={config.directToDisk}
+                      >
+                        Preview
+                      </TabsTrigger>
+                      <TabsTrigger value="ssbh" className="flex-1 text-[11px]">
+                        Convert SSBH
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </DaeImportFieldRow>
+
+                <DaeImportBoolField
+                  label="Out-of-scene conversion"
+                  hint="Write files to disk and skip viewport loading"
+                  checked={config.directToDisk}
+                  onCheckedChange={(checked) =>
+                    updateConfig({
+                      directToDisk: checked,
+                      loadToScene: !checked && primaryMode === "preview",
+                      convertToSsbh: checked ? true : config.convertToSsbh,
+                    })
+                  }
+                />
+              </>
+            )}
 
             {config.directToDisk && (
               <DaeImportFieldRow
@@ -394,17 +481,19 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
               </DaeImportFieldRow>
             )}
 
-            <DaeImportBoolField
-              label="Generate HKT Collision"
-              hint={
-                hktAvailable
-                  ? "Uses Havok tools with automatic profile selection"
-                  : "Havok tools are not available on this machine"
-              }
-              checked={config.generateHkt}
-              disabled={!hktAvailable}
-              onCheckedChange={(checked) => updateConfig({ generateHkt: checked })}
-            />
+            {!batchDiskMode ? (
+              <DaeImportBoolField
+                label="Generate HKT Collision"
+                hint={
+                  hktAvailable
+                    ? "Uses Havok tools with automatic profile selection"
+                    : "Havok tools are not available on this machine"
+                }
+                checked={config.generateHkt}
+                disabled={!hktAvailable}
+                onCheckedChange={(checked) => updateConfig({ generateHkt: checked })}
+              />
+            ) : null}
           </DaeImportSection>
 
           {config.generateHkt && (
@@ -423,6 +512,8 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
               analysis={entry.analysis}
               sourcePath={entry.filePath}
               stageRoot={stageRoot}
+              directToDisk={config.directToDisk}
+              batchCount={batchDiskMode ? entries.length : 1}
               textureReferenceIssues={textureReferenceValidation.issues}
               textureReferenceValidationError={textureReferenceValidation.error}
               textureReferencesValidating={textureReferenceValidation.validating}
@@ -435,7 +526,9 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
             Cancel
           </Button>
           <Button type="button" size="sm" onClick={onImport} disabled={!canImport}>
-            {config.directToDisk
+            {batchDiskMode
+              ? `Convert ${entries.length} File${entries.length === 1 ? "" : "s"} to Disk`
+              : config.directToDisk
               ? "Convert to Disk"
               : primaryMode === "ssbh"
                 ? "Convert to SSBH"
@@ -451,6 +544,7 @@ export function DaeImportConfigModal({
   entries,
   havokInfo,
   stageRoot,
+  workflowMode = "standard",
   replaceFolderName,
   onConfigChange,
   onImport,
@@ -580,6 +674,7 @@ export function DaeImportConfigModal({
           config={config}
           havokInfo={havokInfo}
           stageRoot={stageRoot}
+          workflowMode={workflowMode}
           replaceFolderName={replaceFolderName}
           onConfigChange={onConfigChange}
           onImport={onImport}

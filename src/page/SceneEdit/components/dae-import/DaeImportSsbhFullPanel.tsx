@@ -32,6 +32,8 @@ interface DaeImportSsbhFullPanelProps {
   textureReferenceIssues?: NumatbTextureReferenceIssue[];
   textureReferenceValidationError?: string | null;
   textureReferencesValidating?: boolean;
+  directToDisk?: boolean;
+  batchCount?: number;
 }
 
 export function DaeImportSsbhFullPanel({
@@ -41,6 +43,8 @@ export function DaeImportSsbhFullPanel({
   textureReferenceIssues = [],
   textureReferenceValidationError = null,
   textureReferencesValidating = false,
+  directToDisk = false,
+  batchCount = 1,
 }: DaeImportSsbhFullPanelProps) {
   const setSourcePath = useDaeSsbhSessionStore((state) => state.setSourcePath);
   const loadAnalysis = useDaeSsbhSessionStore((state) => state.loadAnalysis);
@@ -150,18 +154,29 @@ export function DaeImportSsbhFullPanel({
     <div className="space-y-3 p-4">
       <DaeImportPanelSection title="Output">
         <p className="text-[11px] text-muted-foreground">
-          SSBH files are kept in memory until you save the stage folder
-          {stageRoot ? ` (${stageRoot})` : ""}.
+          {directToDisk
+            ? batchCount > 1
+              ? `These SSBH and NUMATB settings are shared by all ${batchCount} files. Each model is written directly to its own disk folder.`
+              : "SSBH files are written directly to the selected disk folder."
+            : `SSBH files are kept in memory until you save the stage folder${
+                stageRoot ? ` (${stageRoot})` : ""
+              }.`}
         </p>
         <div className="grid gap-2 md:grid-cols-2">
-          <div className="space-y-1 md:col-span-2">
-            <Label className="text-[11px] text-muted-foreground">Model folder name</Label>
-            <Input
-              value={session.outputBaseName}
-              onChange={(e) => session.setOutputBaseName(e.target.value)}
-              className="h-8 text-[11px]"
-            />
-          </div>
+          {batchCount > 1 ? (
+            <p className="md:col-span-2 text-[11px] text-muted-foreground">
+              Each output folder uses its source FBX/DAE filename.
+            </p>
+          ) : (
+            <div className="space-y-1 md:col-span-2">
+              <Label className="text-[11px] text-muted-foreground">Model folder name</Label>
+              <Input
+                value={session.outputBaseName}
+                onChange={(e) => session.setOutputBaseName(e.target.value)}
+                className="h-8 text-[11px]"
+              />
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label className="text-[11px] text-muted-foreground">Scale</Label>

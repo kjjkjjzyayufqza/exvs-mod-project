@@ -188,8 +188,29 @@ export function buildSsbhSessionImportConfig(
     | "numdlbEntries"
   >,
   baseFilename: string,
+  analysis?: { geometryNames: readonly string[] } | null,
 ): ImportConfig {
   const scaleFactor = Number(sessionState.scaleFactorText);
+  const configuredMappings = sessionState.numdlbEntries;
+  const fallbackMaterialLabel =
+    configuredMappings.find((entry) => entry.materialLabel.trim())?.materialLabel.trim() ||
+    "pbr1Mtl";
+  const mappingsByGeometry = new Map(
+    configuredMappings.map((entry) => [
+      `${entry.meshObjectName}\0${entry.meshObjectSubindex}`,
+      entry.materialLabel,
+    ]),
+  );
+  const numdlbEntries = analysis
+    ? analysis.geometryNames.map((meshObjectName, index) => ({
+        meshObjectName,
+        meshObjectSubindex: 0,
+        materialLabel:
+          mappingsByGeometry.get(`${meshObjectName}\0${0}`)?.trim() ||
+          configuredMappings[index]?.materialLabel.trim() ||
+          fallbackMaterialLabel,
+      }))
+    : configuredMappings;
   return {
     loadToScene: false,
     convertToSsbh: true,
@@ -209,7 +230,7 @@ export function buildSsbhSessionImportConfig(
       materialTemplate: daeConfig.ssbhConfig.materialTemplate || null,
       mayaFile: sessionState.writeMayaProfile ? stripNutexbFromMatl(sessionState.mayaFile) : null,
       nustFile: sessionState.writeNumatb ? stripNutexbFromMatl(sessionState.nustFile) : null,
-      numdlbEntries: sessionState.numdlbEntries,
+      numdlbEntries,
     },
   };
 }

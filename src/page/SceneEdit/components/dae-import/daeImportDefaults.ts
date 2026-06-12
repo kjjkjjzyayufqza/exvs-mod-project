@@ -34,6 +34,20 @@ export function createDefaultDaeImportConfig(
   };
 }
 
+export function createBatchDaeImportConfig(
+  baseFilename: string,
+  outputDirectory: string | null,
+): DaeImportConfig {
+  return {
+    ...createDefaultDaeImportConfig(baseFilename),
+    loadToScene: false,
+    convertToSsbh: true,
+    generateHkt: true,
+    directToDisk: true,
+    outputDirectory,
+  };
+}
+
 export function sanitizeBaseFilename(fileName: string): string {
   return (
     fileName
