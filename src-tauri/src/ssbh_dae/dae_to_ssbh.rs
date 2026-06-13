@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use serde::Serialize;
-use ssbh_data::mesh_data::{AttributeData, MeshData, MeshObjectData, VectorData};
+use ssbh_data::mesh_data::{AttributeData, MeshData, MeshObjectData, MeshWriteProfile, VectorData};
 use ssbh_data::modl_data::{ModlData, ModlEntryData};
 use ssbh_data::skel_data::{BillboardType, BoneData, SkelData};
 use std::collections::HashSet;
@@ -95,8 +95,10 @@ pub fn convert_import_scene_to_ssbh_files(
         let mesh_path = config
             .output_directory
             .join(format!("{}.numshb", config.base_filename));
+        // EXVS2 exports use the canonical profile, which omits the unused
+        // all-zero dummy vertex buffer 2 the same way StudioSB writes meshes.
         mesh_data
-            .write_to_file(&mesh_path)
+            .write_to_file_with_profile(&mesh_path, MeshWriteProfile::Vs2Canonical)
             .map_err(|e| anyhow!("Failed to write mesh: {}", e))?;
         converted_files.numshb_path = Some(mesh_path);
     }
@@ -902,5 +904,89 @@ mod tests {
                 .all(|entry| entry.material_label == "StoneMaterial"),
             "all split parts should inherit the original mesh material mapping"
         );
+    }
+
+    #[test]
+    fn exported_numshb_uses_canonical_profile_without_dummy_buffer2() {
+        use ssbh_lib::formats::mesh::Mesh;
+
+        let output = tempdir().expect("temp dir");
+        let scene = ImportScene {
+            meshes: vec![make_mesh_with_unique_triangle_vertices("SmallMesh", 4)],
+            materials: Vec::new(),
+            bones: Vec::new(),
+            up_axis: super::super::import_scene::UpAxisConversion::NoConversion,
+        };
+        let config = DaeConvertConfig {
+            output_directory: output.path().to_path_buf(),
+            base_filename: "canonical_profile_test".to_string(),
+            scale_factor: 1.0,
+            up_axis_conversion: super::super::import_scene::UpAxisConversion::NoConversion,
+            flip_uv: false,
+            include_geometry_names: Vec::new(),
+            write_numdlb: false,
+            write_numshb: true,
+            write_nusktb: false,
+            modl_entries: Vec::new(),
+        };
+
+        let (files, stats) =
+            convert_import_scene_to_ssbh_files(&scene, &config).expect("conversion");
+        let numshb_path = files.numshb_path.as_ref().expect("numshb path");
+
+        // The canonical EXVS2 profile omits the unused dummy vertex buffer 2.
+        let mesh = Mesh::from_file(numshb_path).expect("parse numshb");
+        let inner = match &mesh {
+            Mesh::V8(inner) => inner,
+            _ => panic!("EXVS2 exports must stay mesh v1.8"),
+        };
+        assert_eq!(0, inner.buffer_sizes.elements[2]);
+        assert_eq!(0, inner.vertex_buffers.elements[2].elements.len());
+        for object in &inner.objects.elements {
+            assert_eq!(32, object.stride2);
+            assert_eq!(object.vertex_buffer1_offset, object.vertex_buffer2_offset);
+            assert!(
+                object.attributes.elements.iter().all(|a| a.buffer_index < 2),
+                "no attribute may reference the omitted buffer"
+            );
+        }
+
+        // The exported file must preserve the pre-write mesh semantics.
+        let expected = convert_meshes_to_ssbh(&scene.meshes, &config).expect("expected mesh data");
+        let reparsed = MeshData::from_file(numshb_path).expect("reparse numshb");
+        assert_eq!(expected.objects.len(), reparsed.objects.len());
+        assert_eq!(stats.mesh_objects, reparsed.objects.len());
+        for (expected_object, actual_object) in expected.objects.iter().zip(reparsed.objects.iter())
+        {
+            assert_eq!(expected_object.name, actual_object.name);
+            assert_eq!(expected_object.subindex, actual_object.subindex);
+            assert_eq!(expected_object.vertex_indices, actual_object.vertex_indices);
+
+            let groups = [
+                (&expected_object.positions, &actual_object.positions),
+                (&expected_object.normals, &actual_object.normals),
+                (&expected_object.binormals, &actual_object.binormals),
+                (&expected_object.tangents, &actual_object.tangents),
+                (
+                    &expected_object.texture_coordinates,
+                    &actual_object.texture_coordinates,
+                ),
+                (&expected_object.color_sets, &actual_object.color_sets),
+            ];
+            for (expected_attributes, actual_attributes) in groups {
+                assert_eq!(expected_attributes.len(), actual_attributes.len());
+                for (expected_attribute, actual_attribute) in
+                    expected_attributes.iter().zip(actual_attributes.iter())
+                {
+                    // Mesh v1.8 regenerates attribute names, so compare the data only.
+                    assert_eq!(
+                        format!("{:?}", expected_attribute.data),
+                        format!("{:?}", actual_attribute.data),
+                        "attribute data changed for object '{}'",
+                        expected_object.name
+                    );
+                }
+            }
+        }
     }
 }
