@@ -339,6 +339,42 @@ describe("buildDrawListFromBundle", () => {
     expect(geom?.getAttribute("uv2")?.array).toEqual(geom?.getAttribute("uv")?.array);
   });
 
+  it("keeps non-skinned geometry indexed (shared vertices, no de-index expansion)", () => {
+    const modl: ModlDataJson = {
+      entries: [
+        { mesh_object_name: "quad", mesh_object_subindex: 0, material_label: "mat_quad" },
+      ],
+    };
+    // A quad: 4 unique vertices, 6 indices (two triangles reuse two corners).
+    const mesh: MeshDataJson = {
+      major_version: 1,
+      minor_version: 10,
+      is_vs2: true,
+      objects: [
+        {
+          name: "quad",
+          subindex: 0,
+          parent_bone_name: "",
+          __bin: {
+            positions: new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0]),
+            normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]),
+            uv0: new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]),
+            uv1: null,
+            indices: new Uint32Array([0, 1, 2, 0, 2, 3]),
+          },
+        },
+      ],
+    };
+
+    const draws = buildDrawListFromBundle(modl, mesh, null);
+    const geom = draws[0]?.geometry;
+    // Indexed geometry preserves the 4 logical vertices instead of expanding to 6.
+    expect(geom?.getAttribute("position")?.count).toBe(4);
+    expect(geom?.getIndex()?.count).toBe(6);
+    // Non-skinned meshes carry no CPU-skin payload.
+    expect(draws[0]?.skin).toBeNull();
+  });
+
   it("writes skinIndex and skinWeight attributes for skinned draws", () => {
     const modl: ModlDataJson = {
       entries: [

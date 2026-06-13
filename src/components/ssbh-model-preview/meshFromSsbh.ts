@@ -1083,6 +1083,41 @@ function buildGeometryForObject(
       ? buildLogicalSkinTable(logicalCount, obj.bone_influences, skel, obj.parent_bone_name)
       : null;
 
+  // Fast path for static (non-skinned) meshes — the overwhelming majority of
+  // stage/map geometry. Reference the already-decoded typed arrays directly as an
+  // INDEXED BufferGeometry instead of running an O(indexCount) de-index loop that
+  // re-boxes millions of floats through plain JS arrays on the main thread. The
+  // binary blob delivered over IPC is already in an ArrayBuffer, so this is just
+  // attribute wrapping — it removes the dominant cost of opening large maps.
+  if (!logicalSkin) {
+    const geom = new BufferGeometry();
+    geom.setAttribute("position", new BufferAttribute(positions, 3));
+    geom.setIndex(
+      new BufferAttribute(
+        indices instanceof Uint32Array ? indices : new Uint32Array(indices),
+        1,
+      ),
+    );
+    if (normals && normals.length === positions.length) {
+      geom.setAttribute("normal", new BufferAttribute(normals, 3));
+    } else {
+      geom.computeVertexNormals();
+    }
+    if (uvs && uvs.length === logicalCount * 2) {
+      geom.setAttribute("uv", new BufferAttribute(uvs, 2));
+      // AO in MeshStandardMaterial reads uv2; duplicate uv when a second channel is absent.
+      geom.setAttribute(
+        "uv2",
+        new BufferAttribute(
+          uvs2 && uvs2.length === logicalCount * 2 ? uvs2 : uvs.slice(),
+          2,
+        ),
+      );
+    }
+    ensureBoundsTree(geom);
+    return { geometry: geom, skin: null };
+  }
+
   const pos: number[] = [];
   const nrm: number[] = [];
   const uv: number[] = [];
