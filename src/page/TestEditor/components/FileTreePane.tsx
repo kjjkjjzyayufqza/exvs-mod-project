@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
-import { repackFolderUsingStructure } from "@/utils/repackRunner";
+import { repackFolderUsingStructureToModFolder } from "@/utils/repackRunner";
 import { normalizePackFolderName } from "../utils/packName";
 import { removeMatchingModVgsht2 } from "../utils/modVgsht2";
 import {
@@ -286,6 +286,11 @@ function FileTreePaneImpl({
 
   const handleConfirmRepack = useCallback(async () => {
     if (!repackTarget) return;
+    const modDir = modFolderPath?.trim();
+    if (!modDir) {
+      toast.error("Configure OB Mod path in Config before repacking");
+      return;
+    }
     setRepackRunning(true);
     try {
       const folderExists = await exists(repackTarget.inputFolderPath);
@@ -296,27 +301,30 @@ function FileTreePaneImpl({
       if (!structureOk) {
         throw new Error("Structure JSON file is missing");
       }
-      await repackFolderUsingStructure({
+      const repackResult = await repackFolderUsingStructureToModFolder({
         structurePath: repackTarget.structurePath,
         inputFolderPath: repackTarget.inputFolderPath,
+        modFolderPath: modDir,
       });
       const entryName = repackTarget.folderName;
-      if (repackRemoveVgsht2InMod && modFolderPath) {
+      if (repackRemoveVgsht2InMod) {
         try {
-          const removed = await removeMatchingModVgsht2(modFolderPath, entryName);
+          const removed = await removeMatchingModVgsht2(modDir, entryName);
           if (removed) {
-            toast.success(`Repacked ${entryName}, removed mod/${entryName}.vgsht2`);
+            toast.success(`Repacked to mod: ${repackResult.outputPath}`, {
+              description: `Removed ${entryName}.vgsht2`,
+            });
           } else {
-            toast.success(`Repacked ${entryName}`);
+            toast.success(`Repacked to mod: ${repackResult.outputPath}`);
           }
         } catch (removeErr) {
           console.error(`Failed to remove mod/${entryName}.vgsht2`, removeErr);
           toast.error(
-            `Repacked ${entryName} but failed to remove .vgsht2: ${(removeErr as Error).message}`
+            `Repacked to mod but failed to remove .vgsht2: ${(removeErr as Error).message}`,
           );
         }
       } else {
-        toast.success(`Repacked ${entryName}`);
+        toast.success(`Repacked to mod: ${repackResult.outputPath}`);
       }
       onFolderRepacked?.(entryName);
     } catch (error) {
@@ -459,9 +467,13 @@ function FileTreePaneImpl({
                 Runs the same repack as <span className="font-medium text-foreground">Repack Changes</span> for folder{" "}
                 <code className="rounded bg-muted px-1 py-0.5 text-foreground">{repackTarget?.folderName ?? "—"}</code>{" "}
                 using its <code className="rounded bg-muted px-1 py-0.5 text-foreground">_structure.json</code>. Output
-                is produced next to the workspace (same <code className="rounded bg-muted px-1 py-0.5">com</code> path
-                rules as the toolbar flow).
+                is written to the OB Mod folder as <code className="rounded bg-muted px-1 py-0.5">0xHASH.fhm2d</code>.
               </p>
+              {!modFolderPath?.trim() ? (
+                <p className="text-amber-600 dark:text-amber-500">
+                  OB Mod path is not configured. Set it in Config before repacking.
+                </p>
+              ) : null}
               {hasUnsavedChanges && repackTarget && currentJsonPath === repackTarget.structurePath ? (
                 <p className="text-amber-600 dark:text-amber-500">
                   This structure file is open with unsaved changes. Save in the editor first if you need those edits in
@@ -476,8 +488,8 @@ function FileTreePaneImpl({
                   className="mt-0.5"
                 />
                 <span>
-                  Remove matching <code className="rounded bg-muted px-1 py-0.5">.vgsht2</code> in OB Mod folder when
-                  configured (same option as Repack Changes).
+                  After repack, remove matching <code className="rounded bg-muted px-1 py-0.5">.vgsht2</code> in the same
+                  OB Mod folder.
                 </span>
               </label>
             </div>
@@ -485,7 +497,11 @@ function FileTreePaneImpl({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={repackRunning}>Cancel</AlertDialogCancel>
-          <Button type="button" disabled={repackRunning || !repackTarget} onClick={() => void handleConfirmRepack()}>
+          <Button
+            type="button"
+            disabled={repackRunning || !repackTarget || !modFolderPath?.trim()}
+            onClick={() => void handleConfirmRepack()}
+          >
             {repackRunning ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

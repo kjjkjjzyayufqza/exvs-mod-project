@@ -40,18 +40,26 @@ function getParentDir(normalizedPath: string): string {
   return segments.slice(0, -1).join("\\");
 }
 
+function trimTrailingSeparators(path: string): string {
+  return path.replace(/[\\/]+$/g, "");
+}
+
+export function buildRepackOutputPath(structurePath: string, outputDir: string): string {
+  const normalizedOutputDir = trimTrailingSeparators(toWindowsPath(outputDir));
+  const packStem = getPackStemFromStructurePath(structurePath);
+  return `${normalizedOutputDir}\\${packStem}.fhm2d`;
+}
+
 export async function repackFolderUsingStructure({
   structurePath,
   inputFolderPath,
-}: RepackParams): Promise<void> {
-  const normalizedStructure = toWindowsPath(structurePath);
+}: RepackParams): Promise<RepackResult> {
   const normalizedInput = toWindowsPath(inputFolderPath);
   const parentDir = getParentDir(normalizedInput);
-  const packStem = getPackStemFromStructurePath(normalizedStructure);
-  const outputPath = `${parentDir}\\${packStem}.fhm2d`;
+  const outputPath = buildRepackOutputPath(structurePath, parentDir);
 
-  await invoke<RepackResult>("repack_fhm2d", {
-    structureJsonPath: normalizedStructure,
+  return await invoke<RepackResult>("repack_fhm2d", {
+    structureJsonPath: toWindowsPath(structurePath),
     outputPath,
     atomicWrite: true,
   });
@@ -61,16 +69,33 @@ export async function repackFolderUsingStructureToDir({
   structurePath,
   inputFolderPath,
   outputDir,
-}: RepackToDirParams): Promise<void> {
-  const normalizedStructure = toWindowsPath(structurePath);
-  const normalizedOutputDir = toWindowsPath(outputDir);
-  const packStem = getPackStemFromStructurePath(normalizedStructure);
-  const outputPath = `${normalizedOutputDir}\\${packStem}.fhm2d`;
+}: RepackToDirParams): Promise<RepackResult> {
+  const outputPath = buildRepackOutputPath(structurePath, outputDir);
 
-  await invoke<RepackResult>("repack_fhm2d", {
-    structureJsonPath: normalizedStructure,
+  return await invoke<RepackResult>("repack_fhm2d", {
+    structureJsonPath: toWindowsPath(structurePath),
     outputPath,
     atomicWrite: true,
+  });
+}
+
+/**
+ * Repack a workspace hash folder into the configured OB Mod directory
+ * (e.g. data\x64\mod\0xCE74091E.fhm2d). Used by Test Editor "Repack Changes".
+ */
+export async function repackFolderUsingStructureToModFolder({
+  structurePath,
+  inputFolderPath,
+  modFolderPath,
+}: RepackParams & { modFolderPath: string }): Promise<RepackResult> {
+  const trimmedMod = modFolderPath.trim();
+  if (!trimmedMod) {
+    throw new Error("OB Mod folder is not configured. Set it in Config before repacking.");
+  }
+  return repackFolderUsingStructureToDir({
+    structurePath,
+    inputFolderPath,
+    outputDir: trimmedMod,
   });
 }
 

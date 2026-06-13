@@ -25,6 +25,7 @@ import { Progress } from "@/components/ui/progress";
 import { StageListGVS } from "@/models/stageList";
 import type { StageListData, StageListEntry } from "@/models/stageListEntry";
 import { useConfigStore } from "@/store/configStore";
+import { useResourceRegistry } from "@/hooks/useResourceRegistry";
 import { StageEditor } from "./stage-list/StageEditor";
 import type { StageListSortKey } from "./stage-list/StageList";
 import { StageGvsViewer, type StageListGvsSortKey } from "./stage-list/StageGvsViewer";
@@ -108,6 +109,7 @@ interface GvsSession {
 
 export default function StageListView({ folderPath, isActive, onUnsavedChanges, onRevealTreeFolder }: StageListViewProps) {
   const getSetting = useConfigStore((s) => s.getSetting);
+  const resourceRegistry = useResourceRegistry(folderPath || null);
   const [obDplCachePath, setObDplCachePath] = useState("");
   const [obModPath, setObModPath] = useState("");
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
@@ -118,7 +120,7 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
-  const [sortKey, setSortKey] = useState<StageListSortKey>("recordLookupId");
+  const [sortKey, setSortKey] = useState<StageListSortKey>("selectOrderDefault");
   const [searchInputValue, setSearchInputValue] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [isComposing, setIsComposing] = useState(false);
@@ -915,6 +917,7 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
               stageIconIndexPickerError={
                 stageIconState.status === "error" ? stageIconState.message : null
               }
+              resourceRegistry={resourceRegistry}
             />
           )}
         </CardContent>

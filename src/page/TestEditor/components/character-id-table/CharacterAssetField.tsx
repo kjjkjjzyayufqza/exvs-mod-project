@@ -45,6 +45,10 @@ import { extractAsset, getExtractOutputFolderCollisionInfo } from "./extractFhm2
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { copyAssetAsNew } from "./copyAssetAsNew";
 import { removeAssetWorkspace } from "./removeAssetWorkspace";
+import { crc32Ieee } from "@/utils/crc32Ieee";
+import type { UseResourceRegistryResult } from "@/hooks/useResourceRegistry";
+import { UNIT_FIELD_KEY_TO_SLOT } from "@/services/resourceRegistry/types";
+import { ResourceSeedField } from "../resource-registry/ResourceSeedField";
 
 function normalizePathKey(s: string): string {
   return s.trim().replace(/\\/g, "/").toLowerCase();
@@ -56,34 +60,22 @@ interface CharacterAssetFieldProps {
   projectRootDir: string;
   /** Extract output folder from settings: same layout as workspace root */
   extractOutputPath: string;
+  /** OB dplcache path for CRC32 collision checks */
+  obDplCachePath: string;
   /** OB mod folder (e.g. data\x64\mod): packaged .fhm2d */
   obModPath: string;
+  resourceRegistry?: UseResourceRegistryResult;
   onReveal?: (path: string) => void;
   onFieldUpdate?: (fieldKey: string, newValue: number) => void;
-}
-
-/** IEEE CRC32 over UTF-8 bytes; returns unsigned 32-bit value. */
-function crc32IeeeUint32(input: string): number {
-  const bytes = new TextEncoder().encode(input);
-  let crc = 0xffffffff;
-  for (let i = 0; i < bytes.length; i++) {
-    crc ^= bytes[i];
-    for (let j = 0; j < 8; j++) {
-      if ((crc & 1) !== 0) {
-        crc = (crc >>> 1) ^ 0xedb88320;
-      } else {
-        crc >>>= 1;
-      }
-    }
-  }
-  return (~crc) >>> 0;
 }
 
 export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   asset,
   projectRootDir,
   extractOutputPath,
+  obDplCachePath,
   obModPath,
+  resourceRegistry,
   onReveal,
   onFieldUpdate,
 }) => {
@@ -104,10 +96,8 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   const [extractCollisionPath, setExtractCollisionPath] = useState("");
   const trimmedSeed = copySeed.trim();
   const copySeedCrcPreview = useMemo(() => {
-    const u = crc32IeeeUint32(trimmedSeed);
-    const hex = `0x${u.toString(16).toUpperCase().padStart(8, "0")}`;
-    const int32 = u | 0;
-    return { hex, int32 };
+    const crc = crc32Ieee(trimmedSeed);
+    return { hex: crc.hashHex, int32: crc.hashInt32 };
   }, [trimmedSeed]);
 
   const canRemoveWorkspace = Boolean(projectRootDir?.trim());
@@ -398,6 +388,23 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
                 </div>
               </div>
             </div>
+
+            {resourceRegistry ? (
+              <div className="pt-2 border-t">
+                <ResourceSeedField
+                  category="unit"
+                  slot={UNIT_FIELD_KEY_TO_SLOT[asset.fieldKey] ?? asset.fieldKey.toLowerCase()}
+                  label={`Set ${asset.fieldKey} from seed`}
+                  compact
+                  currentHashInt32={asset.rawValue}
+                  obDplCachePath={obDplCachePath}
+                  obModPath={obModPath}
+                  workspacePath={projectRootDir}
+                  registry={resourceRegistry}
+                  onApplyHash={(hashInt32) => onFieldUpdate?.(asset.fieldKey, hashInt32)}
+                />
+              </div>
+            ) : null}
 
             <div className="flex flex-col gap-2 pt-2 border-t">
               <div className="flex items-center gap-2 w-full min-w-0">

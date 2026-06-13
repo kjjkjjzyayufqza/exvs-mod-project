@@ -15,6 +15,7 @@ import type { StageListData, StageListEntry } from "@/models/stageListEntry";
 import { StageForm } from "./StageForm";
 import { StageList as StageListComponent, type StageListSortKey } from "./StageList";
 import type { StageIconIndexPickerGroup } from "./StageIconIndexPickerPopover";
+import type { UseResourceRegistryResult } from "@/hooks/useResourceRegistry";
 
 function createEmptyStage(id: number): StageListEntry {
   return {
@@ -61,13 +62,14 @@ interface StageEditorProps {
   stageIconIndexPickerGroups?: StageIconIndexPickerGroup[];
   stageIconIndexPickerLoading?: boolean;
   stageIconIndexPickerError?: string | null;
+  resourceRegistry?: UseResourceRegistryResult;
 }
 
 export function StageEditor({
   stageListData,
   selectedIndex,
   onSelectChange,
-  sortKey = "recordLookupId",
+  sortKey = "selectOrderDefault",
   onSortKeyChange,
   searchInputValue = "",
   searchTerm = "",
@@ -85,6 +87,7 @@ export function StageEditor({
   stageIconIndexPickerGroups = [],
   stageIconIndexPickerLoading = false,
   stageIconIndexPickerError = null,
+  resourceRegistry,
 }: StageEditorProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteCandidateIndex, setDeleteCandidateIndex] = useState<number | null>(null);
@@ -265,6 +268,7 @@ export function StageEditor({
             stageIconIndexPickerGroups={stageIconIndexPickerGroups}
             stageIconIndexPickerLoading={stageIconIndexPickerLoading}
             stageIconIndexPickerError={stageIconIndexPickerError}
+            resourceRegistry={resourceRegistry}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">

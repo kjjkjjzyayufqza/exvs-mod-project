@@ -1,11 +1,16 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DualValueProperty } from "@/components/ui/dual-value-property";
 import { StageFileNameStatusIcons } from "./StageFileNameStatusIcons";
 import { StageIconIndexPickerPopover } from "./StageIconIndexPickerPopover";
+import { StageSaveToRegistryButton } from "./StageSaveToRegistryButton";
+import { ResourceSeedField } from "../resource-registry/ResourceSeedField";
+import type { UseResourceRegistryResult } from "@/hooks/useResourceRegistry";
 import type { StageListEntry } from "@/models/stageListEntry";
 import type { StageIconIndexPickerGroup } from "./StageIconIndexPickerPopover";
+import { STAGE_HASH_SLOTS } from "@/services/resourceRegistry/types";
+import { defaultStageSlotSeed, type StageHashSlot } from "@/services/resourceRegistry/stageRegistrySync";
 
 const NUMERIC_FIELDS = [
   { name: "entryId" as const, label: "id" },
@@ -40,6 +45,7 @@ interface StageFormProps {
   stageIconIndexPickerGroups?: StageIconIndexPickerGroup[];
   stageIconIndexPickerLoading?: boolean;
   stageIconIndexPickerError?: string | null;
+  resourceRegistry?: UseResourceRegistryResult;
 }
 
 export function StageForm({
@@ -53,8 +59,40 @@ export function StageForm({
   stageIconIndexPickerGroups = [],
   stageIconIndexPickerLoading = false,
   stageIconIndexPickerError = null,
+  resourceRegistry,
 }: StageFormProps) {
   const [stageIconIndexPickerOpen, setStageIconIndexPickerOpen] = useState(false);
+  const [slotSeeds, setSlotSeeds] = useState<Partial<Record<StageHashSlot, string>>>({});
+
+  useEffect(() => {
+    if (!resourceRegistry) {
+      setSlotSeeds({});
+      return;
+    }
+    const next: Partial<Record<StageHashSlot, string>> = {};
+    for (const slot of STAGE_HASH_SLOTS) {
+      const hashInt32 = stage[slot] ?? 0;
+      if (!hashInt32) {
+        continue;
+      }
+      const known = resourceRegistry.lookupMergedByHash("stage", slot, hashInt32);
+      const draft = known?.seed || defaultStageSlotSeed(stage, slot);
+      next[slot] = draft;
+    }
+    setSlotSeeds(next);
+  }, [
+    resourceRegistry,
+    stage.entryId,
+    stage.fileName,
+    stage.vsSD,
+    stage.vsSL,
+    stage.vsSn,
+  ]);
+
+  const handleSlotSeedChange = useCallback((slot: StageHashSlot, seed: string) => {
+    setSlotSeeds((prev) => ({ ...prev, [slot]: seed }));
+  }, []);
+
   const handleFieldChange = useCallback(
     (fieldName: keyof StageListEntry, value: number) => {
       const updated = { ...stage, [fieldName]: value };
@@ -78,7 +116,26 @@ export function StageForm({
 
   return (
     <div className="space-y-4">
-      <div className="text-sm font-medium text-muted-foreground">Stage #{index}</div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-muted-foreground">Stage #{index}</div>
+          {stage.name?.trim() ? (
+            <div className="text-sm font-semibold truncate">{stage.name}</div>
+          ) : null}
+          <div className="text-[11px] font-mono text-muted-foreground tabular-nums">
+            ID: {stage.entryId}
+          </div>
+        </div>
+        {resourceRegistry ? (
+          <StageSaveToRegistryButton
+            stage={stage}
+            index={index}
+            workspacePath={workspacePath}
+            resourceRegistry={resourceRegistry}
+            slotSeeds={slotSeeds}
+          />
+        ) : null}
+      </div>
       <div className="space-y-1.5">
         <Label htmlFor={`name-${index}`} className="text-xs">name</Label>
         <Input
@@ -139,6 +196,31 @@ export function StageForm({
           />
         ))}
       </div>
+
+      {resourceRegistry ? (
+        <div className="space-y-2 border-t pt-3">
+          <div className="text-xs font-medium text-muted-foreground">Resource seeds (CRC32)</div>
+          <div className="grid grid-cols-1 gap-2">
+            {(["fileName", "vsSD", "vsSL", "vsSn"] as const).map((slot) => (
+              <ResourceSeedField
+                key={slot}
+                category="stage"
+                slot={slot}
+                label={slot}
+                compact
+                currentHashInt32={getNumericValue(slot)}
+                initialSeed={slotSeeds[slot] ?? defaultStageSlotSeed(stage, slot)}
+                obDplCachePath={obDplCachePath}
+                obModPath={obModPath}
+                workspacePath={workspacePath}
+                registry={resourceRegistry}
+                onApplyHash={(hashInt32) => handleFieldChange(slot, hashInt32)}
+                onSeedChange={(seed) => handleSlotSeedChange(slot, seed)}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -90,7 +90,7 @@ export function StageList({
   const [internalInputValue, setInternalInputValue] = useState("");
   const [internalSearchTerm, setInternalSearchTerm] = useState("");
   const [internalIsComposing, setInternalIsComposing] = useState(false);
-  const [internalSortKey, setInternalSortKey] = useState<SortKey>("recordLookupId");
+  const [internalSortKey, setInternalSortKey] = useState<SortKey>("selectOrderDefault");
 
   const isControlled =
     onSortKeyChange != null &&
@@ -98,7 +98,7 @@ export function StageList({
     onSearchTermChange != null &&
     onComposingChange != null;
 
-  const sortKey = isControlled ? (controlledSortKey ?? "recordLookupId") : internalSortKey;
+  const sortKey = isControlled ? (controlledSortKey ?? "selectOrderDefault") : internalSortKey;
   const inputValue = isControlled ? (controlledInputValue ?? "") : internalInputValue;
   const searchTerm = isControlled ? (controlledSearchTerm ?? "") : internalSearchTerm;
   const isComposing = isControlled ? (controlledIsComposing ?? false) : internalIsComposing;

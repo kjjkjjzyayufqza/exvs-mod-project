@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { repackFolderUsingStructure } from "@/utils/repackRunner";
+import { repackFolderUsingStructureToModFolder } from "@/utils/repackRunner";
 import { normalizePackFolderName } from "../utils/packName";
 import { removeMatchingModVgsht2 } from "../utils/modVgsht2";
 
@@ -100,37 +100,45 @@ export default function ListeningRepackDialog({
       onComplete?.();
       return;
     }
+    const modDir = modFolderPath?.trim();
+    if (!modDir) {
+      toast.error("Configure OB Mod path in Config before repacking");
+      return;
+    }
     setIsRunning(true);
     try {
       for (const entry of selectedEntries) {
         try {
           const inputFolderPath = await join(rootDir, entry.name);
-          await repackFolderUsingStructure({
+          const repackResult = await repackFolderUsingStructureToModFolder({
             structurePath: entry.structurePath,
             inputFolderPath,
+            modFolderPath: modDir,
           });
-          if (removeVgsht2InMod && modFolderPath) {
+          if (removeVgsht2InMod) {
             try {
-              const removed = await removeMatchingModVgsht2(modFolderPath, entry.name);
+              const removed = await removeMatchingModVgsht2(modDir, entry.name);
               if (removed) {
-                toast.success(`Repacked ${entry.name}, removed mod/${entry.name}.vgsht2`);
+                toast.success(`Repacked to mod: ${repackResult.outputPath}`, {
+                  description: `Removed ${entry.name}.vgsht2`,
+                });
               } else {
-                toast.success(`Repacked ${entry.name}`);
+                toast.success(`Repacked to mod: ${repackResult.outputPath}`);
               }
             } catch (removeErr) {
               console.error(`Failed to remove mod/${entry.name}.vgsht2`, removeErr);
               toast.error(
-                `Repacked ${entry.name} but failed to remove .vgsht2: ${(removeErr as Error).message}`
+                `Repacked to mod but failed to remove .vgsht2: ${(removeErr as Error).message}`,
               );
             }
           } else {
-            toast.success(`Repacked ${entry.name}`);
+            toast.success(`Repacked to mod: ${repackResult.outputPath}`);
           }
           onFolderRepacked(entry.name);
         } catch (error) {
           console.error(`Repack failed for ${entry.name}`, error);
           toast.error(
-            `Repack failed for ${entry.name}: ${(error as Error).message}`
+            `Repack failed for ${entry.name}: ${(error as Error).message}`,
           );
         }
       }
@@ -156,10 +164,16 @@ export default function ListeningRepackDialog({
         <DialogHeader>
           <DialogTitle>Repack Changes</DialogTitle>
           <DialogDescription>
-            Folders with detected changes will be repacked using their <code>_structure.json</code>.
+            Folders with detected changes will be repacked into the OB Mod folder as{" "}
+            <code>0xHASH.fhm2d</code> using each pack&apos;s <code>_structure.json</code>.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 min-h-0 flex-1 overflow-hidden">
+          {!modFolderPath?.trim() ? (
+            <p className="text-sm text-amber-600 dark:text-amber-500">
+              OB Mod path is not configured. Set it in Config before repacking.
+            </p>
+          ) : null}
           <label className="flex items-center gap-2 text-sm cursor-pointer">
             <Checkbox
               checked={removeVgsht2InMod}
@@ -167,7 +181,9 @@ export default function ListeningRepackDialog({
               onCheckedChange={(checked) => setRemoveVgsht2InMod(Boolean(checked))}
             />
             <span>
-              Remove matching <code>.vgsht2</code> in OB Mod folder (e.g. pack <code>0x49235031.fhm2d</code> → remove <code>0x49235031.vgsht2</code>). Requires OB Mod path in Config.
+              After repack, remove matching <code>.vgsht2</code> in the same OB Mod folder (e.g. pack{" "}
+              <code>0x49235031.fhm2d</code> → remove <code>0x49235031.vgsht2</code>). Requires OB Mod path in
+              Config.
             </span>
           </label>
           {isLoading ? (
@@ -208,7 +224,7 @@ export default function ListeningRepackDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isRunning}>
             Cancel
           </Button>
-          <Button onClick={handleConfirm} disabled={isRunning || selectedEntries.length === 0}>
+          <Button onClick={handleConfirm} disabled={isRunning || selectedEntries.length === 0 || !modFolderPath?.trim()}>
             {isRunning ? "Repacking..." : "Repack"}
           </Button>
         </DialogFooter>

@@ -1,22 +1,10 @@
 import type { JnttblEditorDocument } from "./jnttblIoService";
 
-/**
- * IEEE CRC32 over UTF-8 bytes (matches `crc32_ieee` in Rust / CharacterAssetField).
- */
+import { crc32IeeeUint32 } from "@/utils/crc32Ieee";
+
+/** @deprecated Use crc32IeeeUint32 from @/utils/crc32Ieee */
 export function crc32IeeeU32Utf8String(input: string): number {
-  const bytes = new TextEncoder().encode(input);
-  let crc = 0xffffffff;
-  for (let i = 0; i < bytes.length; i++) {
-    crc ^= bytes[i]!;
-    for (let j = 0; j < 8; j++) {
-      if ((crc & 1) !== 0) {
-        crc = (crc >>> 1) ^ 0xedb88320;
-      } else {
-        crc >>>= 1;
-      }
-    }
-  }
-  return (~crc) >>> 0;
+  return crc32IeeeUint32(input);
 }
 
 function randomSalt(): string {
