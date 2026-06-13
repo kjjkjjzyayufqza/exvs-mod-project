@@ -194,6 +194,14 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
     }
   }, [config.generateHkt]);
 
+  // Batch import defaults HKT generation on; if Havok is unavailable, force it off
+  // so the import is not blocked and still runs as a pure SSBH conversion.
+  useEffect(() => {
+    if (!hktAvailable && config.generateHkt) {
+      onConfigChange(entry.importId, { ...config, generateHkt: false });
+    }
+  }, [hktAvailable, config, entry.importId, onConfigChange]);
+
   const ssbhSession = useDaeSsbhSessionStore(
     useShallow((state) => ({
       outputBaseName: state.outputBaseName,
@@ -277,7 +285,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
   const canImport =
     (batchDiskMode ? allEntriesReady : !entry.analyzing) &&
     !blockedByHkt &&
-    (!batchDiskMode || hktAvailable) &&
+    (!config.generateHkt || hktAvailable) &&
     (config.directToDisk
       ? Boolean(config.outputDirectory) && (entry.analysis?.canConvert ?? false) && ssbhReady
       : primaryMode === "preview"
@@ -387,18 +395,11 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
 
           <DaeImportSection title="Import Options">
             {batchDiskMode ? (
-              <>
-                <DaeImportFieldRow label="Import Mode">
-                  <span className="text-right text-[11px] font-medium">
-                    Direct-to-disk batch
-                  </span>
-                </DaeImportFieldRow>
-                <DaeImportFieldRow label="HKT Collision">
-                  <span className="text-right text-[11px] font-medium">
-                    Required for every file
-                  </span>
-                </DaeImportFieldRow>
-              </>
+              <DaeImportFieldRow label="Import Mode">
+                <span className="text-right text-[11px] font-medium">
+                  Direct-to-disk batch
+                </span>
+              </DaeImportFieldRow>
             ) : (
               <>
                 <DaeImportFieldRow label="Import Mode">
@@ -481,19 +482,19 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
               </DaeImportFieldRow>
             )}
 
-            {!batchDiskMode ? (
-              <DaeImportBoolField
-                label="Generate HKT Collision"
-                hint={
-                  hktAvailable
-                    ? "Uses Havok tools with automatic profile selection"
-                    : "Havok tools are not available on this machine"
-                }
-                checked={config.generateHkt}
-                disabled={!hktAvailable}
-                onCheckedChange={(checked) => updateConfig({ generateHkt: checked })}
-              />
-            ) : null}
+            <DaeImportBoolField
+              label="Generate HKT Collision"
+              hint={
+                hktAvailable
+                  ? batchDiskMode
+                    ? "Generate Havok collision per file (default: shape-preserving, most compact)"
+                    : "Uses Havok tools with automatic profile selection"
+                  : "Havok tools are not available on this machine"
+              }
+              checked={config.generateHkt}
+              disabled={!hktAvailable}
+              onCheckedChange={(checked) => updateConfig({ generateHkt: checked })}
+            />
           </DaeImportSection>
 
           {config.generateHkt && (

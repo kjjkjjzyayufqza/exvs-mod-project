@@ -3209,10 +3209,7 @@ export default function SceneEdit() {
   );
 
   const processSsbhSessionImport = useCallback(
-    async (
-      entries: DaeImportEntry[],
-      options?: { requireHkt?: boolean },
-    ) => {
+    async (entries: DaeImportEntry[]) => {
       const sessionState = useDaeSsbhSessionStore.getState();
       const directEntries = entries.filter((entry) => entry.config.directToDisk);
       const previewEntries = entries.filter((entry) => !entry.config.directToDisk);
@@ -3252,7 +3249,7 @@ export default function SceneEdit() {
             },
             handleStaticMeshProgress,
           );
-          if (options?.requireHkt && !result.hktGenerated) {
+          if (entry.config.generateHkt && !result.hktGenerated) {
             throw new Error(
               result.warnings.find((warning) => /hkt/i.test(warning)) ??
                 "HKT generation did not produce map_hit.hkt",
@@ -4896,7 +4893,6 @@ export default function SceneEdit() {
                       ...config,
                       loadToScene: false,
                       convertToSsbh: true,
-                      generateHkt: true,
                       directToDisk: true,
                       ssbhConfig: {
                         ...config.ssbhConfig,
@@ -4991,9 +4987,7 @@ export default function SceneEdit() {
                 const sid = await sceneSessionCreate({ type: "new" });
                 setSceneSessionId(sid);
               }
-              await processSsbhSessionImport(entriesToProcess, {
-                requireHkt: workflowMode === "batchDisk",
-              });
+              await processSsbhSessionImport(entriesToProcess);
             }}
             onCancel={() => {
               setShowDaeImportModal(false);

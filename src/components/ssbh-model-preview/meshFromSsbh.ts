@@ -1,4 +1,5 @@
 import { BufferAttribute, BufferGeometry } from "three";
+import { ensureBoundsTree } from "@/utils/threeMeshBvh";
 import type {
   BoneJson,
   BuiltMeshDraw,
@@ -1152,6 +1153,10 @@ function buildGeometryForObject(
       gpuAttributesReady: true,
     };
   }
+
+  // Build the BVH up front so the first viewport pick is already accelerated;
+  // geometries are memoized per bundle, so this runs once per mesh on load.
+  ensureBoundsTree(geom);
 
   return { geometry: geom, skin };
 }

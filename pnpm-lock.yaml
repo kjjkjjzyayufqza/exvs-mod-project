@@ -224,6 +224,9 @@ importers:
       three:
         specifier: ^0.184.0
         version: 0.184.0
+      three-mesh-bvh:
+        specifier: ^0.9.10
+        version: 0.9.10(three@0.184.0)
       three-stdlib:
         specifier: ^2.36.1
         version: 2.36.1(three@0.184.0)
@@ -2808,6 +2811,11 @@ packages:
 
   three-mesh-bvh@0.8.3:
     resolution: {integrity: sha512-4G5lBaF+g2auKX3P0yqx+MJC6oVt6sB5k+CchS6Ob0qvH0YIhuUk1eYr7ktsIpY+albCqE80/FVQGV190PmiAg==}
+    peerDependencies:
+      three: '>= 0.159.0'
+
+  three-mesh-bvh@0.9.10:
+    resolution: {integrity: sha512-UOlTgPIeqUURcwaG8knxvBaruwZlC4X3/WSHEFO7rYvMVv/YNUrkfFEszvfj36pXV88dCHoHNnIp0PifkirnTQ==}
     peerDependencies:
       three: '>= 0.159.0'
 
@@ -5458,6 +5466,10 @@ snapshots:
       three: 0.184.0
 
   three-mesh-bvh@0.8.3(three@0.184.0):
+    dependencies:
+      three: 0.184.0
+
+  three-mesh-bvh@0.9.10(three@0.184.0):
     dependencies:
       three: 0.184.0
 
