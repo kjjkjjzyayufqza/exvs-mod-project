@@ -26,6 +26,8 @@ export interface UnitModelTreeNode {
   role?: UnitModelFolderRole;
   fileIndex?: number;
   fileType?: string;
+  /** On-disk path relative to the `_structure.json` directory. Item nodes only. */
+  fileUrl?: string;
   unk2?: string;
   unk3?: number;
   unk5?: number;
@@ -197,6 +199,7 @@ function toTreeNode(
   path: string,
   lookup: Map<number, string>,
   baseNames: Map<number, string>,
+  fileUrls: Map<number, string>,
   isRoot: boolean,
 ): UnitModelTreeNode {
   if (node.kind === "item") {
@@ -207,6 +210,7 @@ function toTreeNode(
       label,
       fileIndex: node.fileIndex,
       fileType: lookup.get(node.fileIndex) ?? "",
+      fileUrl: fileUrls.get(node.fileIndex),
       unk2: node.unk2,
       unk3: node.unk3,
     };
@@ -217,7 +221,7 @@ function toTreeNode(
   if (role === "model-group") label = modelGroupName(node, lookup, baseNames);
 
   const children = node.children.map((c, idx) =>
-    toTreeNode(c, `${path}/${idx}`, lookup, baseNames, false),
+    toTreeNode(c, `${path}/${idx}`, lookup, baseNames, fileUrls, false),
   );
 
   return {
@@ -261,12 +265,14 @@ export function buildUnitModelStructureTree(structureJson: unknown): UnitModelSt
   }));
   const extByIndex = new Map<number, string>();
   const baseNameByIndex = new Map<number, string>();
+  const fileUrlByIndex = new Map<number, string>();
   for (const d of data) {
     extByIndex.set(d.fileIndex, extensionOf(d.fileType, d.fileUrl ?? "", d.fileBaseName ?? ""));
     baseNameByIndex.set(
       d.fileIndex,
       d.fileBaseName ?? (d.fileUrl ? basename(d.fileUrl) : `#${d.fileIndex}`),
     );
+    if (d.fileUrl) fileUrlByIndex.set(d.fileIndex, d.fileUrl);
   }
 
   const tokens = tokenize(subFileStructure);
@@ -276,7 +282,7 @@ export function buildUnitModelStructureTree(structureJson: unknown): UnitModelSt
     throw new Error("SubFileStructure root must be a single folder");
   }
 
-  const root = toTreeNode(top[0], "root", extByIndex, baseNameByIndex, true);
+  const root = toTreeNode(top[0], "root", extByIndex, baseNameByIndex, fileUrlByIndex, true);
   const textureCount = data.filter((d) => extByIndex.get(d.fileIndex) === ".nutexb").length;
 
   return {
