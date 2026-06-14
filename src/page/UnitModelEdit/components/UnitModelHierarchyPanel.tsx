@@ -1,12 +1,19 @@
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { UnitModelModelManagerPanel } from "./UnitModelModelManagerPanel";
 import { UnitModelStructureTreeView } from "./UnitModelStructureTreeView";
+import type { UnitModelTreeNode } from "../utils/unitModelStructureTree";
 
 type UnitModelHierarchyPanelProps = {
   structureJson: unknown | null;
   structureJsonPath?: string | null;
   modelRoot?: string | null;
   onMutated?: () => void;
+  onOpenEditor?: (node: UnitModelTreeNode) => void;
+  onRevealNode?: (node: UnitModelTreeNode) => void;
+  onCopyNodePath?: (node: UnitModelTreeNode) => void;
+  onShowTextureInPanel?: (node: UnitModelTreeNode) => void;
+  editingPaths?: ReadonlySet<string>;
+  modifiedPaths?: ReadonlySet<string>;
 };
 
 /**
@@ -18,6 +25,12 @@ export function UnitModelHierarchyPanel({
   structureJsonPath,
   modelRoot,
   onMutated,
+  onOpenEditor,
+  onRevealNode,
+  onCopyNodePath,
+  onShowTextureInPanel,
+  editingPaths,
+  modifiedPaths,
 }: UnitModelHierarchyPanelProps) {
   return (
     <ResizablePanelGroup orientation="vertical" className="h-full min-h-0">
@@ -26,6 +39,12 @@ export function UnitModelHierarchyPanel({
           structureJson={structureJson}
           structureJsonPath={structureJsonPath}
           className="h-full border-r-0"
+          onOpenEditor={onOpenEditor}
+          onRevealNode={onRevealNode}
+          onCopyNodePath={onCopyNodePath}
+          onShowTextureInPanel={onShowTextureInPanel}
+          editingPaths={editingPaths}
+          modifiedPaths={modifiedPaths}
         />
       </ResizablePanel>
 
