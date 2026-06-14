@@ -14,6 +14,11 @@ import { NuhlpbEditorModalHost } from "./NuhlpbEditorModalHost";
 import { NumatbEditorModalHost } from "./NumatbEditorModalHost";
 import { JnttblEditorModalHost } from "./JnttblEditorModalHost";
 import type { SsbhFileEditorHostProps } from "./useSsbhFileEditorSessions";
+import type { ModalViewportSuspendInteraction } from "./SsbhEditorModalWindowShell";
+
+type SsbhFileEditorHostsProps = SsbhFileEditorHostProps & {
+  viewportSuspend?: ModalViewportSuspendInteraction;
+};
 
 type GuardDialogProps = {
   label: string;
@@ -64,7 +69,13 @@ function GuardDialog({
  * plus their dirty-guard dialogs, driven by `useSsbhFileEditorSessions().hostProps`.
  * Mount once per page that opens SSBH file editors.
  */
-export function SsbhFileEditorHosts({ numdlb, nuhlpb, numatb, jnttbl }: SsbhFileEditorHostProps) {
+export function SsbhFileEditorHosts({
+  numdlb,
+  nuhlpb,
+  numatb,
+  jnttbl,
+  viewportSuspend,
+}: SsbhFileEditorHostsProps) {
   return (
     <>
       <NumdlbEditorModalHost
@@ -75,6 +86,7 @@ export function SsbhFileEditorHosts({ numdlb, nuhlpb, numatb, jnttbl }: SsbhFile
         onDraftChange={numdlb.onDraftChange}
         onSave={numdlb.onSave}
         onReset={numdlb.onReset}
+        viewportSuspend={viewportSuspend}
       />
       <GuardDialog
         label="NUMDLB"
@@ -93,6 +105,7 @@ export function SsbhFileEditorHosts({ numdlb, nuhlpb, numatb, jnttbl }: SsbhFile
         onDraftChange={nuhlpb.onDraftChange}
         onSave={nuhlpb.onSave}
         onReset={nuhlpb.onReset}
+        viewportSuspend={viewportSuspend}
       />
       <GuardDialog
         label="NUHLPB"
@@ -111,6 +124,7 @@ export function SsbhFileEditorHosts({ numdlb, nuhlpb, numatb, jnttbl }: SsbhFile
         onDraftChange={numatb.onDraftChange}
         onSave={numatb.onSave}
         onReset={numatb.onReset}
+        viewportSuspend={viewportSuspend}
       />
       <GuardDialog
         label="NUMATB"
@@ -130,6 +144,7 @@ export function SsbhFileEditorHosts({ numdlb, nuhlpb, numatb, jnttbl }: SsbhFile
         onDraftChange={jnttbl.onDraftChange}
         onSave={jnttbl.onSave}
         onReset={jnttbl.onReset}
+        viewportSuspend={viewportSuspend}
       />
       <GuardDialog
         label="JNTT"

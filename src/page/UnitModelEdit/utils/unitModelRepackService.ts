@@ -31,7 +31,7 @@ export interface UnitModelRepackResult {
   outputSize: number;
 }
 
-function trimTrailingSeparators(path: string): string {
+export function trimTrailingSeparators(path: string): string {
   return path.replace(/[\\/]+$/g, "");
 }
 

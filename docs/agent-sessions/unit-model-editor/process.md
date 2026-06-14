@@ -269,3 +269,136 @@
   `unitModelAiReviewPayload|UnitModelEdit|TexturePreviewModal|sceneTextureThumbnail`
   - No matching new errors. Full `tsc` still has the known unrelated SceneEdit
     test fixture errors.
+
+## 2026-06-14 Modal Shell Cleanup
+
+### Findings
+
+- The SSBH file editors in Unit Model Editor already use the shared
+  `useSsbhFileEditorSessions` + `SsbhFileEditorHosts` path.
+- The remaining old Unit Model modal artifact was
+  `UnitModelFloatingModalShell`, used only by `UnitModelDaeExchangeModal`.
+- The shared `SceneEditRndModalShell` already supports host-specific viewport
+  suspend injection through `viewportSuspend`, so Unit Model does not need its
+  own duplicate shell.
+
+### Changes
+
+- Replaced `UnitModelDaeExchangeModal`'s `UnitModelFloatingModalShell` usage
+  with `SceneEditRndModalShell`.
+- Injected Unit Model's `onViewportSuspendChange` behavior through
+  `viewportSuspend`, with cleanup on unmount so the viewport cannot stay
+  suspended if the modal closes during pointer interaction.
+- Deleted `src/page/UnitModelEdit/components/UnitModelFloatingModalShell.tsx`.
+
+### Verification Log
+
+- `rg -n "UnitModelFloatingModalShell|FloatingModalShell" src docs`
+  - PASS: no matches.
+- `pnpm vitest run src/page/UnitModelEdit/utils/unitModelNodePaths.test.ts src/page/UnitModelEdit/utils/unitModelStructureTree.test.ts src/components/ssbh-model-preview/useSsbhFileEditorSessions.test.ts src/page/SceneEdit/components/SceneEditRndModalShell.test.tsx`
+  - PASS: 4 files, 16 tests.
+- `pnpm tsc --noEmit --pretty false`
+  - BLOCKED by existing unrelated errors in SceneEdit/resourceRegistry test
+    fixtures; no errors matched `UnitModelDaeExchangeModal`,
+    `UnitModelFloatingModalShell`, or `SceneEditRndModalShell`.
+- `pnpm eslint ...`
+  - NOT RUN: project has no `eslint` command or dependency configured.
+
+## 2026-06-14 SSBH File Editor RND Cleanup
+
+### Findings
+
+- Unit Model tree double-click/right-click opens `.numatb`, `.numdlb`,
+  `.nuhlpb`, and `.jnttbl` through the shared `SsbhFileEditorHosts` path.
+- Those editor windows still used the legacy `useDraggableModal` hook and
+  hand-written fixed-width `Card` shells, so double-clicking a `.numatb` node
+  produced the old floating window instead of the resizable RND modal shell.
+- `JnttblEditorModalWindow` and `EffectProjectEditorModalWindow` also had old
+  DOM z-layer setter plumbing. They now keep compatibility with the existing
+  host/session code while rendering through the RND shell.
+- The Unit Model structure tree row already handled click/double-click/context
+  menu interactions, but the row/button classes did not force `cursor-pointer`.
+
+### Changes
+
+- Added `SsbhEditorModalWindowShell`, a shared wrapper around
+  `SceneEditRndModalShell` with per-editor dimensions and persisted RND size
+  keys.
+- Replaced legacy draggable shells in:
+  - `NumatbEditorModalWindow`
+  - `NumdlbEditorModalWindow`
+  - `NuhlpbEditorModalWindow`
+  - `JnttblEditorModalWindow`
+  - `EffectProjectEditorModalWindow`
+- Threaded optional `viewportSuspend` through the SSBH editor hosts and passed a
+  callback-backed Unit Model viewport suspend interaction from `page.tsx`.
+- Added optional `closeDisabled` to `SceneEditRndModalShell` so migrated editor
+  windows keep the old "cannot close while saving" behavior.
+- Added explicit `cursor-pointer` classes to interactive Unit Model structure
+  tree rows and row buttons.
+
+### Verification Log
+
+- `rg -n "useDraggableModal|FloatingModalShell|style=\\{\\{ position: ['\\\"]absolute|pointer-events-auto w-\\[" src\\components\\ssbh-model-preview src\\page\\UnitModelEdit`
+  - PASS: no matches.
+- `pnpm vitest run src/page/UnitModelEdit/utils/unitModelNodePaths.test.ts src/page/UnitModelEdit/utils/unitModelStructureTree.test.ts src/components/ssbh-model-preview/useSsbhFileEditorSessions.test.ts src/page/SceneEdit/components/SceneEditRndModalShell.test.tsx`
+  - PASS: 4 files, 16 tests.
+- `pnpm vitest run src/components/ssbh-model-preview`
+  - PASS: 24 files, 116 tests.
+- `pnpm tsc --noEmit --pretty false`
+  - BLOCKED by existing unrelated errors in
+    `src/page/SceneEdit/utils/sceneDaeSessionImport.test.ts`,
+    `src/page/SceneEdit/utils/sceneModelReplacePreview.test.ts`, and
+    `src/services/resourceRegistry/stageRegistrySync.test.ts`.
+- `pnpm tsc --noEmit --pretty false 2>&1 | Select-String -Pattern "ssbh-model-preview|UnitModelEdit|SceneEditRndModalShell|NumatbEditorModalWindow|NumdlbEditorModalWindow|NuhlpbEditorModalWindow|JnttblEditorModalWindow|EffectProjectEditorModalWindow"`
+  - PASS: no matching new errors for touched files.
+- `git diff --check`
+  - PASS: no whitespace errors; only existing line-ending warnings from the
+    dirty working tree.
+
+## 2026-06-14 NUMATB Drag Performance
+
+### Findings
+
+- Browser logs showed `pointerdown` / `pointerup` handlers taking about 150ms
+  while dragging the NUMATB editor.
+- The immediate cause was not RND's drag math. SSBH editor drag events were
+  wired to Unit Model's `setDaeModalViewportSuspend`, which changes
+  `previewSuspended` on `SsbhModelPreviewProvider`.
+- `previewSuspended` is part of the large preview context value, so every
+  pointerdown/up on an editor drag forced provider/context consumers to update.
+  With a large NUMATB form mounted under the same tree, that made drag start and
+  drag end block the UI.
+- NUMATB already virtualizes the material list, but the selected material's
+  attribute editor renders all attributes. That remains a possible follow-up for
+  editing latency, but it is not required to remove the pointerdown/up stalls.
+
+### Changes
+
+- `SsbhEditorModalWindowShell` now uses a no-op viewport suspend interaction
+  unless a host explicitly passes one. This keeps SSBH file editor dragging out
+  of the Scene/UnitModel viewport-suspend store/state path by default.
+- `UnitModelEditWorkspace` no longer passes the state-backed
+  `useCallbackModalViewportSuspendInteraction(setDaeModalViewportSuspend)` into
+  `SsbhFileEditorHosts`; the DAE exchange modal still uses viewport suspend.
+- Added `skipActivate` plumbing from SSBH editor hosts to the RND shell. A window
+  that is already topmost for its editor type does not schedule another z-index
+  raise on drag start, avoiding redundant heavy editor rerenders.
+
+### Verification Log
+
+- `rg -n "useCallbackModalViewportSuspendInteraction|ssbhEditorViewportSuspend|viewportSuspend=\\{ssbhEditorViewportSuspend\\}|NOOP_VIEWPORT_SUSPEND|skipActivate" src\\components\\ssbh-model-preview src\\page\\UnitModelEdit\\page.tsx`
+  - PASS: Unit Model no longer passes `ssbhEditorViewportSuspend`; no-op suspend
+    and `skipActivate` are present in SSBH editor shell/hosts.
+- `pnpm vitest run src/page/UnitModelEdit/utils/unitModelNodePaths.test.ts src/page/UnitModelEdit/utils/unitModelStructureTree.test.ts src/components/ssbh-model-preview/useSsbhFileEditorSessions.test.ts src/page/SceneEdit/components/SceneEditRndModalShell.test.tsx`
+  - PASS: 4 files, 16 tests.
+- `pnpm vitest run src/components/ssbh-model-preview`
+  - PASS: 24 files, 116 tests.
+- `pnpm tsc --noEmit --pretty false`
+  - BLOCKED by existing unrelated test fixture errors in SceneEdit and
+    resourceRegistry.
+- `pnpm tsc --noEmit --pretty false 2>&1 | Select-String -Pattern "ssbh-model-preview|UnitModelEdit|SceneEditRndModalShell|NumatbEditorModalWindow|NumdlbEditorModalWindow|NuhlpbEditorModalWindow|JnttblEditorModalWindow|EffectProjectEditorModalWindow"`
+  - PASS: no matching new errors for touched files.
+- `git diff --check`
+  - PASS: no whitespace errors; only existing line-ending warnings from the
+    dirty working tree.

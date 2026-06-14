@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { NumatbEditorModalWindow, type NumatbEditorWindowSession } from "./NumatbEditorModalWindow";
 import type { NumatbModalBundle } from "./numatbEditorUtils";
+import type { ModalViewportSuspendInteraction } from "./SsbhEditorModalWindowShell";
 
 type NumatbEditorModalHostProps = {
   sessions: NumatbEditorWindowSession[];
@@ -11,6 +12,7 @@ type NumatbEditorModalHostProps = {
   onDraftChange: (sessionId: string, next: NumatbModalBundle) => void;
   onSave: (sessionId: string) => void;
   onReset: (sessionId: string) => void;
+  viewportSuspend?: ModalViewportSuspendInteraction;
 };
 
 export function NumatbEditorModalHost({
@@ -21,9 +23,14 @@ export function NumatbEditorModalHost({
   onDraftChange,
   onSave,
   onReset,
+  viewportSuspend,
 }: NumatbEditorModalHostProps) {
   const sorted = useMemo(
     () => [...sessions].sort((a, b) => a.zIndex - b.zIndex),
+    [sessions],
+  );
+  const topZIndex = useMemo(
+    () => Math.max(...sessions.map((session) => session.zIndex)),
     [sessions],
   );
 
@@ -43,6 +50,8 @@ export function NumatbEditorModalHost({
             onDraftChange={(next) => onDraftChange(session.id, next)}
             onSave={() => onSave(session.id)}
             onReset={() => onReset(session.id)}
+            skipActivate={session.zIndex >= topZIndex}
+            viewportSuspend={viewportSuspend}
           />
         ))}
       </div>

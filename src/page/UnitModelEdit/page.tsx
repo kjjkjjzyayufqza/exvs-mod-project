@@ -241,7 +241,6 @@ function UnitModelEditWorkspace({
     },
     [workspace.structurePath, structureJson, editors],
   );
-
   const { defaultLayout: persistedLayout, onLayoutChanged } = useDefaultLayout({
     id: "unit-model-edit-layout",
     panelIds: [...UNIT_MODEL_EDIT_PANEL_IDS],

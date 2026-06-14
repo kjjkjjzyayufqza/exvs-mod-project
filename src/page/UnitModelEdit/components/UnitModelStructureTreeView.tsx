@@ -129,14 +129,14 @@ function TreeRow({
     <div
       className={cn(
         "group flex items-center gap-1.5 rounded-md py-1 pr-1.5 transition-colors",
-        "hover:bg-muted/60",
+        "cursor-pointer hover:bg-muted/60",
         isSelected && "bg-primary/10 text-primary",
       )}
       style={{ paddingLeft: `${depth * 14 + 4}px` }}
     >
       <button
         type="button"
-        className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left"
         onClick={() => {
           if (isFolder) toggle(node.id);
           onSelectNode?.(node);

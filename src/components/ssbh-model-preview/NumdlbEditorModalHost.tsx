@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { NumdlbEditorModalWindow, type NumdlbEditorWindowSession } from "./NumdlbEditorModalWindow";
 import type { NumdlbReadResult } from "./ssbhDaeIoService";
+import type { ModalViewportSuspendInteraction } from "./SsbhEditorModalWindowShell";
 
 type NumdlbEditorModalHostProps = {
   sessions: NumdlbEditorWindowSession[];
@@ -11,6 +12,7 @@ type NumdlbEditorModalHostProps = {
   onDraftChange: (sessionId: string, next: NumdlbReadResult) => void;
   onSave: (sessionId: string) => void;
   onReset: (sessionId: string) => void;
+  viewportSuspend?: ModalViewportSuspendInteraction;
 };
 
 export function NumdlbEditorModalHost({
@@ -21,9 +23,14 @@ export function NumdlbEditorModalHost({
   onDraftChange,
   onSave,
   onReset,
+  viewportSuspend,
 }: NumdlbEditorModalHostProps) {
   const sorted = useMemo(
     () => [...sessions].sort((a, b) => a.zIndex - b.zIndex),
+    [sessions],
+  );
+  const topZIndex = useMemo(
+    () => Math.max(...sessions.map((session) => session.zIndex)),
     [sessions],
   );
 
@@ -44,6 +51,8 @@ export function NumdlbEditorModalHost({
             onDraftChange={(next) => onDraftChange(session.id, next)}
             onSave={() => onSave(session.id)}
             onReset={() => onReset(session.id)}
+            skipActivate={session.zIndex >= topZIndex}
+            viewportSuspend={viewportSuspend}
           />
         ))}
       </div>

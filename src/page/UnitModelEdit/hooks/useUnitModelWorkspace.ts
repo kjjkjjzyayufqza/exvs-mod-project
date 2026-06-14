@@ -7,13 +7,12 @@ import { useConfigStore } from "@/store/configStore";
 import { useSsbhModelPreview } from "@/components/ssbh-model-preview/SsbhModelPreviewPanel";
 import {
   getBaseName,
-  getParentDir,
   inferUnitModelStructurePath,
   validateUnitModelForRepack,
   type UnitModelRepackResult,
   type UnitModelValidationResult,
 } from "../utils/unitModelRepackService";
-import { extractUnitModelToFolder } from "../utils/unitModelExtractService";
+import { type UnitModelExtractResult } from "../utils/unitModelExtractService";
 import { buildUnitModelAiReviewPayload } from "../utils/unitModelAiReviewPayload";
 import { listUnitModelTextures, type UnitModelTextureInventory } from "../utils/unitModelTextureService";
 
@@ -44,6 +43,7 @@ export function useUnitModelWorkspace(unitRoot: string | null, onUnitRootChange:
   const [lastRepack, setLastRepack] = useState<UnitModelRepackResult | null>(null);
   const [busy, setBusy] = useState<UnitModelWorkspaceBusy>(null);
   const [repackDialogOpen, setRepackDialogOpen] = useState(false);
+  const [extractDialogOpen, setExtractDialogOpen] = useState(false);
 
   useEffect(() => {
     const onTexturesChanged = () => {
@@ -78,27 +78,19 @@ export function useUnitModelWorkspace(unitRoot: string | null, onUnitRootChange:
     }
   };
 
-  const extractFromFhm2d = async () => {
+  const openExtractDialog = () => {
+    setExtractDialogOpen(true);
+  };
+
+  const handleExtracted = async (result: UnitModelExtractResult) => {
     setBusy("extract");
     try {
-      const selected = await open({
-        multiple: false,
-        defaultPath: preview.workspaceRoot ?? undefined,
-        filters: [{ name: "FHM2D", extensions: ["fhm2d"] }],
-      });
-      if (typeof selected !== "string" || !selected.trim()) return;
-      const stem = getBaseName(selected).replace(/\.fhm2d$/i, "");
-      const outRoot = `${getParentDir(selected)}\\${stem}`;
-      const result = await extractUnitModelToFolder(selected, outRoot);
       onUnitRootChange(result.modelRoot);
       await preview.loadModelAt(result.modelRoot);
       setValidation(null);
       setLastRepack(null);
-      toast.success("Extracted unit model to folders", {
-        description: `${result.modelCount} models, ${result.totalFiles} files`,
-      });
     } catch (error) {
-      toast.error("Failed to extract unit model", { description: String(error) });
+      toast.error("Failed to load extracted unit model", { description: String(error) });
     } finally {
       setBusy(null);
     }
@@ -207,11 +199,14 @@ export function useUnitModelWorkspace(unitRoot: string | null, onUnitRootChange:
     isBusy,
     repackDialogOpen,
     setRepackDialogOpen,
+    extractDialogOpen,
+    setExtractDialogOpen,
+    handleExtracted,
     setLastRepack,
     hasErrors,
     statusLabel,
     pickUnitFolder,
-    extractFromFhm2d,
+    openExtractDialog,
     useLoadedRoot,
     runValidation,
     openRepackDialog,

@@ -1,15 +1,23 @@
-import { useCallback, useId } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { createPortal } from "react-dom";
 import { FileBox } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SsbhDaeExchangePanel } from "@/components/ssbh-model-preview/SsbhDaeExchangePanel";
+import { SceneEditRndModalShell } from "@/page/SceneEdit/components/SceneEditRndModalShell";
 import {
+  SCENE_EDIT_RND_DRAG_HANDLE,
   SCENE_EDIT_RND_VIEWPORT_MARGIN,
   SSBH_MAX_WIDTH,
   type SceneEditRndModalDimensions,
 } from "@/page/SceneEdit/components/sceneEditRndModalUtils";
 import { UNIT_MODEL_EDIT_RND_SIZE_KEYS } from "../utils/unitModelEditorSettings";
-import { UnitModelFloatingModalShell } from "./UnitModelFloatingModalShell";
 
 const UNIT_MODEL_DAE_MODAL_LAYER_ID = "unit-model-dae-exchange-modal-layer";
 
@@ -44,6 +52,43 @@ export function UnitModelDaeExchangeModal({
 }: UnitModelDaeExchangeModalProps) {
   const titleId = useId();
   const getDimensions = useCallback(() => getDaeExchangeModalDimensions(), []);
+  const activeSuspendRef = useRef(false);
+  const viewportSuspend = useMemo(
+    () => ({
+      startViewportSuspend: () => {
+        if (activeSuspendRef.current) return;
+        activeSuspendRef.current = true;
+        onViewportSuspendChange?.(true);
+      },
+      stopViewportSuspend: () => {
+        if (!activeSuspendRef.current) return;
+        activeSuspendRef.current = false;
+        onViewportSuspendChange?.(false);
+      },
+      onDragHandlePointerDownCapture: (event: ReactPointerEvent) => {
+        if (event.button !== 0) return;
+        if (
+          event.target instanceof HTMLElement &&
+          (event.target.closest("button") ||
+            event.target.closest(`.${SCENE_EDIT_RND_DRAG_HANDLE}`) === null)
+        ) {
+          return;
+        }
+        if (activeSuspendRef.current) return;
+        activeSuspendRef.current = true;
+        onViewportSuspendChange?.(true);
+      },
+    }),
+    [onViewportSuspendChange],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (!activeSuspendRef.current) return;
+      activeSuspendRef.current = false;
+      onViewportSuspendChange?.(false);
+    };
+  }, [onViewportSuspendChange]);
 
   if (!open || typeof document === "undefined") {
     return null;
@@ -58,24 +103,26 @@ export function UnitModelDaeExchangeModal({
   }
 
   return createPortal(
-    <UnitModelFloatingModalShell
+    <SceneEditRndModalShell
       cascadeIndex={0}
       zIndex={1}
       titleId={titleId}
       title="DAE / FBX to SSBH"
       subtitle="Import static mesh, configure materials, export SSBH bundle"
       headerIcon={<FileBox className="h-4 w-4 text-primary" />}
+      onActivate={() => {}}
       onClose={onClose}
       getDimensions={getDimensions}
       sizeStorageKey={UNIT_MODEL_EDIT_RND_SIZE_KEYS.daeExchange}
-      onViewportSuspendChange={onViewportSuspendChange}
+      skipActivate
+      viewportSuspend={viewportSuspend}
     >
       <ScrollArea className="h-full min-h-0">
         <div className="p-4">
           <SsbhDaeExchangePanel />
         </div>
       </ScrollArea>
-    </UnitModelFloatingModalShell>,
+    </SceneEditRndModalShell>,
     modalLayer,
   );
 }

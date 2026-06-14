@@ -1,12 +1,59 @@
 import { invoke } from "@tauri-apps/api/core";
 
-import { toWindowsPath } from "./unitModelRepackService";
+import { getBaseName, toWindowsPath, trimTrailingSeparators } from "./unitModelRepackService";
 
 export interface UnitModelExtractResult {
   modelRoot: string;
   structureJsonPath: string;
   totalFiles: number;
   modelCount: number;
+}
+
+export interface UnitModelExtractCollisionInfo {
+  outRoot: string;
+  folderExists: boolean;
+}
+
+export function inferFhm2dStem(sourcePath: string): string {
+  return getBaseName(sourcePath).replace(/\.fhm2d$/i, "");
+}
+
+/**
+ * Unit Model Editor output directory: use the editor override when set,
+ * otherwise fall back to the global Extract Output Path from Config.
+ */
+export function resolveUnitModelOutputDirectory(
+  unitModelOutputPath: string,
+  extractOutputPath: string,
+): string {
+  const override = unitModelOutputPath.trim();
+  if (override) return override;
+  return extractOutputPath.trim();
+}
+
+export function buildUnitModelExtractOutRoot(outputDirectory: string, stem: string): string {
+  const dir = trimTrailingSeparators(toWindowsPath(outputDirectory.trim()));
+  const name = stem.trim();
+  if (!dir) {
+    throw new Error("Output directory is required.");
+  }
+  if (!name) {
+    throw new Error("FHM2D stem is required.");
+  }
+  return `${dir}\\${name}`;
+}
+
+export async function getUnitModelExtractCollisionInfo(
+  outputDirectory: string,
+  sourcePath: string,
+): Promise<UnitModelExtractCollisionInfo> {
+  const stem = inferFhm2dStem(sourcePath);
+  const outRoot = buildUnitModelExtractOutRoot(outputDirectory, stem);
+  if (!outputDirectory.trim()) {
+    return { outRoot, folderExists: false };
+  }
+  const folderExists = await invoke<boolean>("path_exists", { path: outRoot });
+  return { outRoot, folderExists };
 }
 
 /**

@@ -1,9 +1,11 @@
+import { useMemo } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   EffectProjectEditorModalWindow,
   type EffectProjectEditorWindowSession,
 } from "./EffectProjectEditorModalWindow";
 import type { EffectProjectEditorDocument } from "./effectProjectEditorUtils";
+import type { ModalViewportSuspendInteraction } from "./SsbhEditorModalWindowShell";
 
 type Props = {
   sessions: EffectProjectEditorWindowSession[];
@@ -14,6 +16,7 @@ type Props = {
   onDraftChange: (sessionId: string, next: EffectProjectEditorDocument) => void;
   onSave: (sessionId: string, document: EffectProjectEditorDocument) => void;
   onReset: (sessionId: string) => void;
+  viewportSuspend?: ModalViewportSuspendInteraction;
 };
 
 export function EffectProjectEditorModalHost({
@@ -25,7 +28,13 @@ export function EffectProjectEditorModalHost({
   onDraftChange,
   onSave,
   onReset,
+  viewportSuspend,
 }: Props) {
+  const topZIndex = useMemo(
+    () => Math.max(...sessions.map((session) => session.zIndex)),
+    [sessions],
+  );
+
   if (sessions.length === 0) return null;
 
   return (
@@ -43,6 +52,8 @@ export function EffectProjectEditorModalHost({
             onDraftChange={(next) => onDraftChange(session.id, next)}
             onSave={(document) => onSave(session.id, document)}
             onReset={() => onReset(session.id)}
+            skipActivate={session.zIndex >= topZIndex}
+            viewportSuspend={viewportSuspend}
           />
         ))}
       </div>

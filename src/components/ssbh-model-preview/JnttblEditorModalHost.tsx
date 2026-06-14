@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { JnttblEditorModalWindow, type JnttblEditorWindowSession } from "./JnttblEditorModalWindow";
 import type { JnttblEditorDocument } from "./jnttblIoService";
+import type { ModalViewportSuspendInteraction } from "./SsbhEditorModalWindowShell";
 
 type JnttblEditorModalHostProps = {
   sessions: JnttblEditorWindowSession[];
@@ -11,6 +13,7 @@ type JnttblEditorModalHostProps = {
   onDraftChange: (sessionId: string, next: JnttblEditorDocument) => void;
   onSave: (sessionId: string) => void;
   onReset: (sessionId: string) => void;
+  viewportSuspend?: ModalViewportSuspendInteraction;
 };
 
 export function JnttblEditorModalHost({
@@ -22,7 +25,13 @@ export function JnttblEditorModalHost({
   onDraftChange,
   onSave,
   onReset,
+  viewportSuspend,
 }: JnttblEditorModalHostProps) {
+  const topZIndex = useMemo(
+    () => Math.max(...sessions.map((session) => session.zIndex)),
+    [sessions],
+  );
+
   if (sessions.length === 0) return null;
 
   return (
@@ -40,6 +49,8 @@ export function JnttblEditorModalHost({
             onDraftChange={(next) => onDraftChange(session.id, next)}
             onSave={() => onSave(session.id)}
             onReset={() => onReset(session.id)}
+            skipActivate={session.zIndex >= topZIndex}
+            viewportSuspend={viewportSuspend}
           />
         ))}
       </div>

@@ -10,6 +10,7 @@ export interface ConfigState {
   obDplCachePath?: string;
   obModPath?: string;
   extractOutputPath?: string;
+  unitModelOutputPath?: string;
   imgToNutexbOutputPath?: string;
   repackInputPath?: string;
   sceneEditGizmoSize?: number;

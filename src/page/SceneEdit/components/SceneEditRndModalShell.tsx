@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useState, type ComponentProps, type MouseEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type ComponentProps,
+  type MouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import { Rnd } from "react-rnd";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,8 +23,19 @@ import {
 import {
   persistSceneEditRndSize,
   resolveSceneEditRndInitialSize,
-  type SceneEditRndSizeStorageKey,
 } from "./sceneEditRndSizePersistence";
+
+/**
+ * Pluggable "pause the host 3D viewport during a modal pointer interaction"
+ * contract. Defaults to the Scene Editor store-backed hook; other hosts (e.g.
+ * the Unit Model Editor) inject a callback-backed implementation so the shell
+ * stays decoupled from any single viewport store.
+ */
+export type ModalViewportSuspendInteraction = {
+  startViewportSuspend: () => void;
+  stopViewportSuspend: () => void;
+  onDragHandlePointerDownCapture: (event: ReactPointerEvent) => void;
+};
 
 type SceneEditRndModalShellProps = {
   cascadeIndex: number;
@@ -27,9 +46,12 @@ type SceneEditRndModalShellProps = {
   headerIcon: ReactNode;
   onActivate: () => void;
   onClose: () => void;
+  closeDisabled?: boolean;
   getDimensions: () => SceneEditRndModalDimensions;
-  sizeStorageKey?: SceneEditRndSizeStorageKey;
+  sizeStorageKey?: string;
   skipActivate?: boolean;
+  /** Inject a host-specific viewport-suspend interaction. Defaults to the Scene store hook. */
+  viewportSuspend?: ModalViewportSuspendInteraction;
   children: ReactNode;
   footer?: ReactNode;
 };
@@ -43,14 +65,17 @@ export function SceneEditRndModalShell({
   headerIcon,
   onActivate,
   onClose,
+  closeDisabled = false,
   getDimensions,
   sizeStorageKey,
   skipActivate = false,
+  viewportSuspend,
   children,
   footer,
 }: SceneEditRndModalShellProps) {
+  const sceneViewportSuspend = useSceneModalViewportSuspendInteraction();
   const { startViewportSuspend, stopViewportSuspend, onDragHandlePointerDownCapture } =
-    useSceneModalViewportSuspendInteraction();
+    viewportSuspend ?? sceneViewportSuspend;
   const [constraints, setConstraints] = useState(getDimensions);
   const [size, setSize] = useState(() => {
     const dims = getDimensions();
@@ -205,6 +230,7 @@ export function SceneEditRndModalShell({
               className="h-7 w-7 shrink-0 rounded-full hover:bg-destructive/10 hover:text-destructive"
               data-no-drag
               onClick={onClose}
+              disabled={closeDisabled}
               aria-label="Close"
             >
               <X className="h-4 w-4" />

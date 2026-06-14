@@ -17,6 +17,9 @@ export const UNIT_MODEL_EDIT_RND_SIZE_KEYS = {
   daeExchange: "unit-model-edit.rnd-size.dae-exchange",
 } as const;
 
+export const UNIT_MODEL_EXTRACT_SOURCE_DIALOG_PATH_KEY = "unitModelEdit.extractFhm2dSource";
+export const UNIT_MODEL_OUTPUT_PATH_SETTING_KEY = "unitModelOutputPath";
+
 export type UnitModelEditRndSizeStorageKey =
   (typeof UNIT_MODEL_EDIT_RND_SIZE_KEYS)[keyof typeof UNIT_MODEL_EDIT_RND_SIZE_KEYS];
 

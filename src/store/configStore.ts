@@ -35,6 +35,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   obDplCachePath: "",
   obModPath: "",
   extractOutputPath: "",
+  unitModelOutputPath: "",
   imgToNutexbOutputPath: "",
   repackInputPath: "",
   sceneEditGizmoSize: DEFAULT_SCENE_GIZMO_SIZE,
@@ -49,6 +50,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     const obDplCachePath = await _store.get("obDplCachePath") || "";
     const obModPath = await _store.get("obModPath") || "";
     const extractOutputPath = await _store.get("extractOutputPath") || "";
+    const unitModelOutputPath = await _store.get("unitModelOutputPath") || "";
     const imgToNutexbOutputPath = await _store.get("imgToNutexbOutputPath") || "";
     const repackInputPath = await _store.get("repackInputPath") || "";
     const sceneEditGizmoSize = normalizeSceneGizmoSize(
@@ -63,6 +65,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       obDplCachePath: obDplCachePath as string,
       obModPath: obModPath as string,
       extractOutputPath: extractOutputPath as string,
+      unitModelOutputPath: unitModelOutputPath as string,
       imgToNutexbOutputPath: imgToNutexbOutputPath as string,
       repackInputPath: repackInputPath as string,
       sceneEditGizmoSize,
@@ -91,6 +94,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     if (key === "obDplCachePath") set({ obDplCachePath: String(value ?? "") });
     if (key === "obModPath") set({ obModPath: String(value ?? "") });
     if (key === "extractOutputPath") set({ extractOutputPath: String(value ?? "") });
+    if (key === "unitModelOutputPath") set({ unitModelOutputPath: String(value ?? "") });
     if (key === "imgToNutexbOutputPath") set({ imgToNutexbOutputPath: String(value ?? "") });
     if (key === "repackInputPath") set({ repackInputPath: String(value ?? "") });
     if (key === SCENE_GIZMO_SIZE_SETTING_KEY) set({ sceneEditGizmoSize: normalizeSceneGizmoSize(value) });

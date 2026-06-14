@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { NuhlpbEditorModalWindow, type NuhlpbEditorWindowSession } from "./NuhlpbEditorModalWindow";
 import type { NuhlpbReadResult } from "./ssbhDaeIoService";
+import type { ModalViewportSuspendInteraction } from "./SsbhEditorModalWindowShell";
 
 type NuhlpbEditorModalHostProps = {
   sessions: NuhlpbEditorWindowSession[];
@@ -11,6 +12,7 @@ type NuhlpbEditorModalHostProps = {
   onDraftChange: (sessionId: string, next: NuhlpbReadResult) => void;
   onSave: (sessionId: string) => void;
   onReset: (sessionId: string) => void;
+  viewportSuspend?: ModalViewportSuspendInteraction;
 };
 
 export function NuhlpbEditorModalHost({
@@ -21,9 +23,14 @@ export function NuhlpbEditorModalHost({
   onDraftChange,
   onSave,
   onReset,
+  viewportSuspend,
 }: NuhlpbEditorModalHostProps) {
   const sorted = useMemo(
     () => [...sessions].sort((a, b) => a.zIndex - b.zIndex),
+    [sessions],
+  );
+  const topZIndex = useMemo(
+    () => Math.max(...sessions.map((session) => session.zIndex)),
     [sessions],
   );
 
@@ -43,6 +50,8 @@ export function NuhlpbEditorModalHost({
             onDraftChange={(next) => onDraftChange(session.id, next)}
             onSave={() => onSave(session.id)}
             onReset={() => onReset(session.id)}
+            skipActivate={session.zIndex >= topZIndex}
+            viewportSuspend={viewportSuspend}
           />
         ))}
       </div>

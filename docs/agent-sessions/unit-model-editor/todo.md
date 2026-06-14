@@ -32,6 +32,30 @@ Resolve the unrelated SceneEdit TypeScript errors before expecting full-project
 - [ ] Full `npx tsc --noEmit` is still blocked by unrelated SceneEdit test type errors.
 - [ ] Full `cargo test` is still blocked by unrelated bin target `CollisionSimplifyOptions` initializer errors.
 
+## 2026-06-14 Modal Shell Cleanup
+
+- [x] Replace the remaining Unit Model Editor floating modal shell usage with the shared resizable RND modal shell.
+- [x] Remove `UnitModelFloatingModalShell`.
+- [x] Confirm no `UnitModelFloatingModalShell` / `FloatingModalShell` references remain under `src/` or `docs/`.
+- [x] Run targeted Vitest coverage for Unit Model path/tree helpers, shared SSBH editor dispatch, and shared RND shell.
+- [x] Run full `tsc --noEmit` and confirm failures are limited to existing unrelated test fixture errors.
+
+## 2026-06-14 SSBH File Editor RND Cleanup
+
+- [x] Replace legacy draggable SSBH file editor windows with the shared resizable RND modal shell.
+- [x] Cover Unit Model double-click/right-click `.numatb`, `.numdlb`, `.nuhlpb`, and `.jnttbl` editor hosts.
+- [x] Pass Unit Model viewport suspend behavior into SSBH editor host windows.
+- [x] Remove old draggable editor-window usage under `src/components/ssbh-model-preview`.
+- [x] Make interactive Unit Model structure tree rows use a pointer cursor.
+- [x] Run targeted Vitest and TypeScript verification checks.
+
+## 2026-06-14 NUMATB Drag Performance
+
+- [x] Identify pointerdown/pointerup stall source in Unit Model NUMATB editor dragging.
+- [x] Stop SSBH editor drag pointer events from toggling Unit Model provider state.
+- [x] Skip redundant activate/z-index updates for already-topmost editor windows.
+- [x] Run targeted SSBH/Unit Model tests and filtered TypeScript checks.
+
 ## 2026-06-12 Follow-up Fixes
 
 - [x] Force material remount when decoded texture data arrives so white meshes do not require hide/show.
