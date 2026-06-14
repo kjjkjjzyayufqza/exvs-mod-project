@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { join } from "@tauri-apps/api/path";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
@@ -69,6 +69,10 @@ type Props = {
   unitRoot: string | null;
   /** When true, fills the parent panel (left Textures tab) instead of a fixed min height card. */
   embedded?: boolean;
+  /** When set, scroll to + highlight the texture with this filename (basename, case-insensitive). */
+  focusTextureFilename?: string | null;
+  /** Open the numatb that references a texture, given a numatb basename (from `referencedBy`). */
+  onOpenReferencingNumatb?: (numatbBasename: string) => void;
 };
 
 function inferLoadedRoot(preview: ReturnType<typeof useSsbhModelPreview>): string | null {
@@ -94,7 +98,13 @@ function emitUnitTexturesChanged(): void {
   window.dispatchEvent(new CustomEvent(UNIT_TEXTURES_CHANGED_EVENT));
 }
 
-export function UnitModelTexturePanel({ unitRoot, embedded = false }: Props) {
+export function UnitModelTexturePanel({
+  unitRoot,
+  embedded = false,
+  focusTextureFilename = null,
+  onOpenReferencingNumatb,
+}: Props) {
+  const focusKey = (focusTextureFilename ?? "").toLowerCase();
   const preview = useSsbhModelPreview();
   const loadedRoot = inferLoadedRoot(preview);
   const activeRoot = unitRoot ?? loadedRoot;
@@ -611,6 +621,7 @@ export function UnitModelTexturePanel({ unitRoot, embedded = false }: Props) {
                 key={texture.id}
                 texture={texture}
                 selected={selectedTexture?.id === texture.id}
+                focused={focusKey.length > 0 && texture.filename.toLowerCase() === focusKey}
                 textureDataMap={textureDataMap}
                 onSelect={() => setSelectedId(texture.id)}
                 onPreview={() => openPreview(texture)}
@@ -618,6 +629,7 @@ export function UnitModelTexturePanel({ unitRoot, embedded = false }: Props) {
                 onReplace={() => setReplaceTarget(unitTextureToManagerEntry(texture))}
                 onRemove={() => void handleRemoveTexture(texture)}
                 onCopyPath={() => void copyPath(texture)}
+                onOpenReferencingNumatb={onOpenReferencingNumatb}
                 busy={busy !== null}
               />
             ))}
@@ -670,6 +682,7 @@ export function UnitModelTexturePanel({ unitRoot, embedded = false }: Props) {
 function UnitTextureRow({
   texture,
   selected,
+  focused = false,
   textureDataMap,
   onSelect,
   onPreview,
@@ -677,10 +690,12 @@ function UnitTextureRow({
   onReplace,
   onRemove,
   onCopyPath,
+  onOpenReferencingNumatb,
   busy,
 }: {
   texture: UnitModelTextureEntry;
   selected: boolean;
+  focused?: boolean;
   textureDataMap: NutexbTextureDataMap;
   onSelect: () => void;
   onPreview: () => void;
@@ -688,8 +703,10 @@ function UnitTextureRow({
   onReplace: () => void;
   onRemove: () => void;
   onCopyPath: () => void;
+  onOpenReferencingNumatb?: (numatbBasename: string) => void;
   busy: boolean;
 }) {
+  const rowRef = useRef<HTMLDivElement>(null);
   const thumbnailDataUrl = getSceneTextureThumbnailDataUrl(texture.path, textureDataMap);
   const loadedData = lookupSceneTextureData(textureDataMap, texture.path);
   const dims =
@@ -698,11 +715,17 @@ function UnitTextureRow({
       : textureDims(texture);
   const referenced = texture.structureRefCount > 0 || texture.numatbReferenceCount > 0;
 
+  useEffect(() => {
+    if (focused) rowRef.current?.scrollIntoView({ block: "center" });
+  }, [focused]);
+
   return (
     <div
+      ref={rowRef}
       className={cn(
         "flex min-w-0 cursor-pointer items-center gap-2 px-2 py-1.5 transition-colors",
         selected ? "bg-accent text-accent-foreground" : "hover:bg-muted/35",
+        focused && "ring-2 ring-inset ring-amber-500/70",
         !texture.exists && "bg-destructive/5",
       )}
       onClick={onSelect}
@@ -733,6 +756,25 @@ function UnitTextureRow({
         {texture.internalName && texture.internalName !== texture.filename.replace(/\.nutexb$/i, "") ? (
           <div className="truncate font-mono text-[9px] text-muted-foreground" title={texture.internalName}>
             {texture.internalName}
+          </div>
+        ) : null}
+        {selected && onOpenReferencingNumatb && texture.referencedBy.length > 0 ? (
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            <span className="text-[9px] text-muted-foreground">used by</span>
+            {texture.referencedBy.map((mat) => (
+              <button
+                key={mat}
+                type="button"
+                className="rounded bg-muted px-1 py-0.5 font-mono text-[9px] text-muted-foreground transition-colors hover:bg-primary/15 hover:text-primary"
+                title={`Open ${mat}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenReferencingNumatb(mat);
+                }}
+              >
+                {mat}
+              </button>
+            ))}
           </div>
         ) : null}
       </div>
