@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useDaeSsbhSessionStore } from "@/components/ssbh-model-preview/store/daeSsbhSessionStore";
 import { DaeImportSsbhFullPanel } from "./DaeImportSsbhFullPanel";
@@ -95,5 +95,45 @@ describe("DaeImportSsbhFullPanel", () => {
     fireEvent.click(flipUvCheckbox);
 
     expect(useDaeSsbhSessionStore.getState().flipUv).toBe(true);
+  });
+
+  it("locks every required Unit model output on", async () => {
+    useDaeSsbhSessionStore.setState({
+      writeNumdlb: false,
+      writeNumshb: false,
+      writeNusktb: false,
+      writeNumatb: false,
+      writeMayaProfile: false,
+    });
+
+    render(
+      <DaeImportSsbhFullPanel
+        analysis={analysis}
+        sourcePath={analysis.daePath}
+        stageRoot="E:\\unit\\0"
+        directToDisk
+        unitModelMode
+      />,
+    );
+
+    await waitFor(() => {
+      const state = useDaeSsbhSessionStore.getState();
+      expect(state.writeNumdlb).toBe(true);
+      expect(state.writeNumshb).toBe(true);
+      expect(state.writeNusktb).toBe(true);
+      expect(state.writeNumatb).toBe(true);
+      expect(state.writeMayaProfile).toBe(true);
+    });
+
+    for (const name of [
+      ".numdlb",
+      ".numshb",
+      ".nusktb",
+      "__nust__.numatb",
+      "__maya__.numatb",
+      ".jnttbl",
+    ]) {
+      expect(screen.getByRole("checkbox", { name })).toBeDisabled();
+    }
   });
 });

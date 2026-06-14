@@ -1,9 +1,12 @@
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useRef, useState, useTransition } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Search } from "lucide-react";
 import { formatHash } from "@/models/commandTable";
 import { filterTypedParamEntryRows } from "../../param-editor/paramEntryUtils";
 import type { TypedParamEntry } from "../../param-editor/typedParamTypes";
 import type { EditorEntryRow } from "./types";
+
+const ENTRY_ROW_HEIGHT = 40;
 
 interface EntryListPanelProps {
   entries: TypedParamEntry[];
@@ -23,11 +26,19 @@ export function EntryListPanel({
   const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState("");
   const [isPending, startTransition] = useTransition();
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   const filteredRows = useMemo(
     () => filterTypedParamEntryRows(entries, search),
     [entries, search],
   );
+  const getListScrollElement = useCallback(() => listRef.current, []);
+  const rowVirtualizer = useVirtualizer({
+    count: filteredRows.length,
+    getScrollElement: getListScrollElement,
+    estimateSize: () => ENTRY_ROW_HEIGHT,
+    overscan: 12,
+  });
 
   return (
     <div
@@ -57,35 +68,43 @@ export function EntryListPanel({
           />
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {filteredRows.length === 0 ? (
           <div className="flex h-28 items-center justify-center px-3 text-center text-xs text-muted-foreground">
             No entries match.
           </div>
         ) : (
-          filteredRows.map(({ entry, index, entryId }) => (
-            <button
-              key={`${index}-${entryId}`}
-              type="button"
-              className={`flex w-full flex-col border-b border-border/40 px-3 py-2 text-left text-xs transition-colors hover:bg-muted/50 ${
-                selectedIndex === index
-                  ? "border-l-2 border-l-primary bg-primary/10"
-                  : "border-l-2 border-l-transparent"
-              }`}
-              onClick={() => onSelect(index)}
-            >
-              <div className="flex items-center justify-between">
-                <span className="truncate font-mono font-medium">
-                  {renderLabel
-                    ? renderLabel({ entry, index, entryId })
-                    : formatHash(entryId)}
-                </span>
-                <span className="font-mono text-[10px] text-muted-foreground">
-                  #{index}
-                </span>
-              </div>
-            </button>
-          ))
+          <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const row = filteredRows[virtualRow.index];
+              if (!row) return null;
+              const { entry, index, entryId } = row;
+              return (
+                <button
+                  key={`${index}-${entryId}`}
+                  type="button"
+                  className={`absolute left-0 top-0 flex w-full flex-col border-b border-border/40 px-3 py-2 text-left text-xs transition-colors hover:bg-muted/50 ${
+                    selectedIndex === index
+                      ? "border-l-2 border-l-primary bg-primary/10"
+                      : "border-l-2 border-l-transparent"
+                  }`}
+                  style={{ height: virtualRow.size, transform: `translateY(${virtualRow.start}px)` }}
+                  onClick={() => onSelect(index)}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="truncate font-mono font-medium">
+                      {renderLabel
+                        ? renderLabel({ entry, index, entryId })
+                        : formatHash(entryId)}
+                    </span>
+                    <span className="font-mono text-[10px] text-muted-foreground">
+                      #{index}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>

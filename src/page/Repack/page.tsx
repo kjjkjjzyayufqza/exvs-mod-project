@@ -3,11 +3,11 @@ import { Button } from "@/components/ui/button";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { Label } from "@/components/ui/label";
 import { Plus, RefreshCw, Download, Upload, FileCode } from "lucide-react";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Tree } from "react-arborist";
 import { NodePropertiesPanel } from "./components/NodePropertiesPanel";
 import { CustomTreeNode } from "@/components/CustomTreeNode";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import type { NodeApi } from "react-arborist";
@@ -22,6 +22,12 @@ import {
 import { useRepackStore } from "@/store/repackStore";
 import { repackTemplates, updateRepackTemplates, type RepackTemplate } from "@/models/repackTemplateJson";
 
+const REPACK_TEMPLATE_MODAL_DIMENSIONS = {
+  width: 920,
+  height: 620,
+  minWidth: 700,
+  minHeight: 440,
+};
 
 export default function RepackPage() {
   const {
@@ -998,31 +1004,30 @@ export default function RepackPage() {
               </div>
             </PopoverContent>
           </Popover>
-          <Dialog open={isTemplateDialogOpen} onOpenChange={(open) => {
-            if (open) {
-              // Update templates with current dynamic indices before showing dialog
+          <Button
+            disabled={!selectedItem || selectedItem.data?.type !== 'Folder'}
+            variant="outline"
+            size="sm"
+            onClick={() => {
               updateRepackTemplates(getMaxAvailableIndex, getMaxAvailableFileIndex);
-            }
-            setIsTemplateDialogOpen(open);
-          }}>
-            <DialogTrigger asChild>
-              <Button
-                disabled={!selectedItem || selectedItem.data?.type !== 'Folder'}
-                variant="outline"
-                size="sm"
-              >
-                <FileCode className="h-4 w-4 mr-2" />
-                Add Template
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl">
-              <DialogHeader>
-                <DialogTitle>Select Template</DialogTitle>
-                <DialogDescription>
-                  Choose a template to add to the selected folder. Make sure you have selected a folder in the project structure first.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 py-4">
+              setIsTemplateDialogOpen(true);
+            }}
+          >
+            <FileCode className="h-4 w-4 mr-2" />
+            Add Template
+          </Button>
+          {isTemplateDialogOpen ? (
+            <AppRndModalShell
+              titleId="repack-template-picker-title"
+              title="Select Template"
+              subtitle="Choose a template to add to the selected folder."
+              headerIcon={<FileCode className="h-5 w-5 text-primary" />}
+              dimensions={REPACK_TEMPLATE_MODAL_DIMENSIONS}
+              storageKey="app.rnd-size.repack-template-picker"
+              onClose={() => setIsTemplateDialogOpen(false)}
+            >
+              <div className="min-h-0 flex-1 overflow-y-auto p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {repackTemplates.map((template, index) => (
                   <Card
                     key={index}
@@ -1040,8 +1045,9 @@ export default function RepackPage() {
                   </Card>
                 ))}
               </div>
-            </DialogContent>
-          </Dialog>
+              </div>
+            </AppRndModalShell>
+          ) : null}
         </div>
 
 
@@ -1129,4 +1135,4 @@ export default function RepackPage() {
       </div>
     </div>
   );
-} 
+}

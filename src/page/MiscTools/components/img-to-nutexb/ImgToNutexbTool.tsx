@@ -1,25 +1,25 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, X, FileImage, FolderOpen, Settings } from "lucide-react";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog";
+import { Upload, X, FolderOpen, Settings, ImagePlus, Loader2 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { readFile } from "@tauri-apps/plugin-fs";
 import { basename, join } from "@tauri-apps/api/path";
 import { ImageFormat, useNutexbStore } from "../../../../store/nutexbStore";
 import { useConfigStore } from "../../../../store/configStore";
 import { toast } from "sonner";
+import { VirtualizedSelectedFileList } from "../VirtualizedSelectedFileList";
+
+const IMG_TO_NUTEXB_DIMENSIONS = {
+  width: 860,
+  height: 800,
+  minWidth: 620,
+  minHeight: 560,
+};
 
 interface ImgToNutexbToolProps {
   onClose?: () => void;
@@ -27,13 +27,11 @@ interface ImgToNutexbToolProps {
 
 export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
   const [selectedImagePaths, setSelectedImagePaths] = useState<string[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<{[key: string]: string}>({});
   const [fileNames, setFileNames] = useState<{[key: string]: {baseName: string, displayName: string}}>({});
   const [isDragOver, setIsDragOver] = useState(false);
   const [outputPath, setOutputPath] = useState<string>("");
   const [isOpen, setIsOpen] = useState(false);
   const [conversionProgress, setConversionProgress] = useState<{ current: number; total: number; currentFile?: string; failedFiles: string[] } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
     selectedFormat,
@@ -130,72 +128,21 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
     }
   };
 
-  // Process selected image files with optimized preview loading
+  // Process selected image file metadata without copying image bytes into JS.
   const handleImageFiles = async (imagePaths: string[]) => {
     try {
       setSelectedImagePaths(imagePaths);
 
-      // Generate file names and load previews for all files
-      const names: {[key: string]: {baseName: string, displayName: string}} = {};
-
-      // First pass: generate file names (fast)
-      for (const imagePath of imagePaths) {
-        try {
+      const nameEntries = await Promise.all(
+        imagePaths.map(async (imagePath) => {
           const fullFileName = await basename(imagePath);
-          const baseName = fullFileName.replace(/\.[^/.]+$/, ""); // Remove extension
-
-          names[imagePath] = {
-            baseName: baseName,
-            displayName: fullFileName
-          };
-        } catch (error) {
-          console.error(`Error processing filename for ${imagePath}:`, error);
-        }
-      }
-
-      setFileNames(names);
-
-      // Second pass: load previews in batches to avoid overwhelming the system
-      const batchSize = 10; // Process 10 previews at a time
-      const previews: {[key: string]: string} = {};
-
-      for (let i = 0; i < imagePaths.length; i += batchSize) {
-        const batch = imagePaths.slice(i, i + batchSize);
-        const batchPromises = batch.map(async (imagePath) => {
-          try {
-            // Load compressed preview (limit size for performance)
-            const imageBytes = await readFile(imagePath);
-
-            // For previews, limit the size and use a more efficient encoding
-            // Only create preview for the first 50KB to keep it lightweight
-            const maxPreviewSize = 50 * 1024; // 50KB limit
-            const previewBytes = imageBytes.length > maxPreviewSize
-              ? imageBytes.slice(0, maxPreviewSize)
-              : imageBytes;
-
-            const base64 = btoa(
-              Array.from(new Uint8Array(previewBytes))
-                .map(b => String.fromCharCode(b))
-                .join('')
-            );
-            previews[imagePath] = `data:image/png;base64,${base64}`;
-          } catch (error) {
-            console.error(`Error loading preview for ${imagePath}:`, error);
-            // Use a placeholder for failed previews
-            previews[imagePath] = '';
-          }
-        });
-
-        await Promise.all(batchPromises);
-
-        // Update previews incrementally to show progress
-        setImagePreviews(prev => ({ ...prev, ...previews }));
-
-        // Small delay to prevent UI blocking
-        if (i + batchSize < imagePaths.length) {
-          await new Promise(resolve => setTimeout(resolve, 10));
-        }
-      }
+          return [
+            imagePath,
+            { baseName: fullFileName.replace(/\.[^/.]+$/, ""), displayName: fullFileName },
+          ] as const;
+        }),
+      );
+      setFileNames(Object.fromEntries(nameEntries));
     } catch (error) {
       console.error("Error processing image files:", error);
       toast.error("Failed to process image files");
@@ -292,7 +239,6 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
   // Reset form
   const handleReset = () => {
     setSelectedImagePaths([]);
-    setImagePreviews({});
     setFileNames({});
     setConversionProgress(null);
     resetConversion();
@@ -302,11 +248,6 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
     if (imagePath) {
       // Remove specific image
       setSelectedImagePaths(prev => prev.filter(path => path !== imagePath));
-      setImagePreviews(prev => {
-        const newPreviews = {...prev};
-        delete newPreviews[imagePath];
-        return newPreviews;
-      });
       setFileNames(prev => {
         const newNames = {...prev};
         delete newNames[imagePath];
@@ -315,15 +256,26 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
     } else {
       // Remove all images
       setSelectedImagePaths([]);
-      setImagePreviews({});
       setFileNames({});
     }
   };
 
-  if (isConverting || conversionProgress) {
-    return (
-      <div className="flex flex-col items-center justify-center p-8 space-y-4">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+  const selectedFileItems = useMemo(
+    () =>
+      selectedImagePaths.map((imagePath) => {
+        const fileInfo = fileNames[imagePath];
+        return {
+          path: imagePath,
+          title: fileInfo?.displayName || imagePath.split(/[/\\]/).pop() || imagePath,
+          description: `${fileInfo?.baseName ?? ""} → ${fileInfo?.baseName ?? ""}.nutexb`,
+        };
+      }),
+    [fileNames, selectedImagePaths],
+  );
+
+  const progressContent = isConverting || conversionProgress ? (
+      <div className="flex flex-1 flex-col items-center justify-center space-y-4 p-8">
+        <Loader2 className="h-8 w-8 animate-spin" />
         {conversionProgress ? (
           <div className="w-full max-w-md space-y-2">
             <div className="text-center">
@@ -352,24 +304,26 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
           <span className="text-muted-foreground">Converting image to nutexb...</span>
         )}
       </div>
-    );
-  }
+  ) : null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="w-full">
-          Open Image to Nutexb
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Image to Nutexb Converter</DialogTitle>
-          <DialogDescription>
-            Convert image files to nutexb format with custom output directory. Select images and configure conversion options.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-6">
+    <>
+      <Button variant="outline" className="w-full" onClick={() => setIsOpen(true)}>
+        Open Image to Nutexb
+      </Button>
+      {isOpen ? (
+        <AppRndModalShell
+          titleId="image-to-nutexb-title"
+          title="Image to Nutexb Converter"
+          subtitle="Batch convert image files to nutexb"
+          headerIcon={<ImagePlus className="h-5 w-5 text-primary" />}
+          dimensions={IMG_TO_NUTEXB_DIMENSIONS}
+          storageKey="app.rnd-size.image-to-nutexb"
+          onClose={() => setIsOpen(false)}
+          closeDisabled={isConverting || Boolean(conversionProgress)}
+        >
+          {progressContent ?? (
+            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4">
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-sm text-red-600">{error}</p>
@@ -442,49 +396,11 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <div className="grid grid-cols-1 gap-3 max-h-60 overflow-y-auto">
-            {selectedImagePaths.map((imagePath, index) => {
-              const fileInfo = fileNames[imagePath];
-              const hasPreview = imagePreviews[imagePath] !== undefined;
-              const previewLoaded = imagePreviews[imagePath] !== '';
-
-              return (
-                <div key={imagePath} className="flex items-center gap-3 p-2 border rounded-lg">
-                  <div className="w-12 h-12 bg-muted rounded overflow-hidden flex-shrink-0 flex items-center justify-center">
-                    {hasPreview ? (
-                      previewLoaded ? (
-                        <img
-                          src={imagePreviews[imagePath]}
-                          alt={`Preview ${index + 1}`}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-4 h-4 border border-gray-300 rounded-full border-t-transparent animate-spin"></div>
-                      )
-                    ) : (
-                      <FileImage className="w-6 h-6 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{fileInfo?.displayName || imagePath.split(/[/\\]/).pop()}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Base name: {fileInfo?.baseName} → {fileInfo?.baseName}.nutexb
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {index + 1} of {selectedImagePaths.length}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleRemoveImage(imagePath)}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
+          <VirtualizedSelectedFileList
+            items={selectedFileItems}
+            onRemove={(path) => handleRemoveImage(path)}
+            showPreview
+          />
         </Card>
       )}
 
@@ -555,9 +471,11 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
           </div>
         </>
       )}
-        </div>
-      </DialogContent>
-    </Dialog>
+            </div>
+          )}
+        </AppRndModalShell>
+      ) : null}
+    </>
   );
 }
 

@@ -3,12 +3,13 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { basename, join } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
-import { Loader2, Trash2, X } from "lucide-react";
+import { ImagePlus, Loader2, Trash2, X } from "lucide-react";
 
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DDS_FORMATS } from "@/lib/ddsFormats";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Progress } from "@/components/ui/progress";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { appendCardIconToStructureJson } from "./cardIconStructure";
 
@@ -37,6 +37,14 @@ type BatchItem = {
   progress: number;
   message?: string;
   result?: ReplaceSummary;
+};
+
+const BATCH_ADD_ROW_ESTIMATE_SIZE = 152;
+const CARD_ICON_ADD_MODAL_DIMENSIONS = {
+  width: 1020,
+  height: 820,
+  minWidth: 760,
+  minHeight: 600,
 };
 
 interface CardIconAddDialogProps {
@@ -127,6 +135,7 @@ export function CardIconAddDialog({
   const [existingNamesLower, setExistingNamesLower] = useState<Set<string>>(() => new Set());
   const [isBatchRunning, setIsBatchRunning] = useState(false);
   const stopBatchRef = useRef(false);
+  const batchListRef = useRef<HTMLDivElement | null>(null);
 
   const trimmedName = nameInput.trim();
   const isNameValid = Boolean(trimmedName) && !containsInvalidFileChars(trimmedName);
@@ -193,6 +202,14 @@ export function CardIconAddDialog({
     const running = batchItems.filter((e) => e.status === "processing").length;
     return { total, success, failed, skipped, cancelled, running };
   }, [batchItems]);
+  const getBatchListScrollElement = useCallback(() => batchListRef.current, []);
+  const batchRowVirtualizer = useVirtualizer({
+    count: batchItems.length,
+    getScrollElement: getBatchListScrollElement,
+    getItemKey: (index) => batchItems[index]?.id ?? index,
+    estimateSize: () => BATCH_ADD_ROW_ESTIMATE_SIZE,
+    overscan: 6,
+  });
 
   const canStartBatch = useMemo(() => {
     if (isBatchRunning || isCreating) return false;
@@ -491,21 +508,23 @@ export function CardIconAddDialog({
   );
 
   return (
-    <Dialog open={openState} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline" disabled={disabled}>
-          Add
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[980px]">
-        <DialogHeader>
-          <DialogTitle>Add Card Icon</DialogTitle>
-          <DialogDescription>
-            Creates nutexb from PNG and appends items to <span className="font-mono">{hash}_structure.json</span>.
-          </DialogDescription>
-        </DialogHeader>
-
-        <Tabs value={mode} onValueChange={(v) => setMode(v as "single" | "batch")} className="w-full">
+    <>
+      <Button size="sm" variant="outline" disabled={disabled} onClick={() => handleOpenChange(true)}>
+        Add
+      </Button>
+      {openState ? (
+        <AppRndModalShell
+          titleId="card-icon-add-title"
+          title="Add Card Icon"
+          subtitle={`Creates nutexb from PNG and appends items to ${hash}_structure.json.`}
+          headerIcon={<ImagePlus className="h-5 w-5 text-primary" />}
+          dimensions={CARD_ICON_ADD_MODAL_DIMENSIONS}
+          storageKey="app.rnd-size.card-icon-add"
+          onClose={() => handleOpenChange(false)}
+          closeDisabled={isCreating || isBatchRunning}
+        >
+          <div className="min-h-0 flex-1 overflow-y-auto p-6">
+            <Tabs value={mode} onValueChange={(v) => setMode(v as "single" | "batch")} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="single" disabled={isBatchRunning}>
               Single
@@ -605,7 +624,7 @@ export function CardIconAddDialog({
               {!isNameValid && trimmedName && <div className="text-sm text-destructive">Name contains invalid characters.</div>}
 
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setOpenState(false)} disabled={isCreating || isBatchRunning}>
+                <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isCreating || isBatchRunning}>
                   Cancel
                 </Button>
                 <Button onClick={() => void handleApply()} disabled={!canApply || isBatchRunning}>
@@ -649,22 +668,28 @@ export function CardIconAddDialog({
               </div>
 
               <div className="border rounded-md">
-                <ScrollArea className="h-[360px]">
-                  <div className="p-2 space-y-2">
+                <div ref={batchListRef} className="h-[360px] overflow-auto">
+                  <div className="relative w-full p-2" style={{ height: batchRowVirtualizer.getTotalSize() }}>
                     {batchItems.length === 0 ? (
                       <div className="p-3 text-sm text-muted-foreground">No files selected.</div>
                     ) : (
-                      batchItems.map((it, idx) => {
+                      batchRowVirtualizer.getVirtualItems().map((virtualRow) => {
+                        const it = batchItems[virtualRow.index];
+                        if (!it) return null;
+                        const idx = virtualRow.index;
                         const issue = batchNameIssues.get(it.id);
                         const isSelected = it.id === selectedBatchId;
                         const target = `${it.nameInput.trim() || "(empty)"}.nutexb`;
                         return (
                           <div
                             key={it.id}
+                            ref={batchRowVirtualizer.measureElement}
+                            data-index={virtualRow.index}
                             className={[
-                              "rounded-md border p-3 cursor-pointer transition-colors",
+                              "absolute left-2 top-0 w-[calc(100%-1rem)] rounded-md border p-3 cursor-pointer transition-colors",
                               isSelected ? "border-primary bg-primary/5" : "hover:bg-muted/50",
                             ].join(" ")}
+                            style={{ transform: `translateY(${virtualRow.start}px)` }}
                             onClick={() => setSelectedBatchId(it.id)}
                             role="button"
                             tabIndex={0}
@@ -720,7 +745,7 @@ export function CardIconAddDialog({
                       })
                     )}
                   </div>
-                </ScrollArea>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-1">
@@ -729,7 +754,7 @@ export function CardIconAddDialog({
                     Stop
                   </Button>
                 ) : (
-                  <Button variant="outline" onClick={() => setOpenState(false)}>
+                  <Button variant="outline" onClick={() => handleOpenChange(false)}>
                     Close
                   </Button>
                 )}
@@ -740,8 +765,10 @@ export function CardIconAddDialog({
             </TabsContent>
           </div>
         </div>
-        </Tabs>
-      </DialogContent>
-    </Dialog>
+            </Tabs>
+          </div>
+        </AppRndModalShell>
+      ) : null}
+    </>
   );
 }

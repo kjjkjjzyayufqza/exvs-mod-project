@@ -1,13 +1,6 @@
 import { useEffect, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -25,6 +18,13 @@ import {
   rememberStoredDialogSelection,
 } from "@/utils/dialogDefaultPathStore";
 import { SCENE_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY } from "../utils/sceneEditorSettings";
+
+const DAE_EXPORT_DIMENSIONS = {
+  width: 520,
+  height: 570,
+  minWidth: 440,
+  minHeight: 480,
+};
 
 export type ModelExportFormat = "dae" | "fbx";
 
@@ -104,22 +104,29 @@ export function DaeExportDialog({
     });
   };
 
-  return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onCancel(); }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Download className="h-4 w-4" />
-            Export Model
-          </DialogTitle>
-          <DialogDescription>
-            {targets.length === 1
-              ? targets[0].name
-              : `${targets.length} objects selected`}
-          </DialogDescription>
-        </DialogHeader>
+  if (!open) return null;
 
-        <div className="space-y-4 py-2">
+  return (
+    <AppRndModalShell
+      titleId="dae-export-dialog-title"
+      title="Export Model"
+      subtitle={targets.length === 1 ? targets[0].name : `${targets.length} objects selected`}
+      headerIcon={<Download className="h-5 w-5 text-primary" />}
+      dimensions={DAE_EXPORT_DIMENSIONS}
+      storageKey="app.rnd-size.dae-export"
+      onClose={onCancel}
+      footer={
+        <div className="flex justify-end gap-2 p-3">
+          <Button variant="outline" size="sm" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={submit} disabled={!canExport}>
+            Export
+          </Button>
+        </div>
+      }
+    >
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
           <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs space-y-1">
             {ssbhCount > 0 && (
               <p className="text-muted-foreground">
@@ -213,17 +220,7 @@ export function DaeExportDialog({
               </Label>
             </div>
           )}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" size="sm" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={submit} disabled={!canExport}>
-            Export
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </AppRndModalShell>
   );
 }

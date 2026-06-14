@@ -1,9 +1,9 @@
 use tauri::Manager;
 
-mod console_color;
 mod character_id_preview;
 pub mod collision_mesh;
 mod commands;
+mod console_color;
 mod fhm2d_memory_preview;
 pub mod format;
 pub mod havok_cli;
@@ -152,6 +152,7 @@ pub fn run() {
             stage_commands::extract_unit_model_fhm2d_to_folder,
             stage_commands::remove_unit_model_model,
             stage_commands::add_unit_model_model,
+            stage_commands::validate_unit_model_source_folder,
             scene_session_commands::scene_session_create,
             scene_session_commands::scene_session_destroy,
             scene_session_commands::scene_session_is_dirty,
@@ -179,6 +180,7 @@ pub fn run() {
             scene_session_commands::scene_get_import_config,
             scene_session_commands::scene_convert_static_mesh_to_stage_files,
             scene_session_commands::scene_convert_static_mesh_to_stage_files_streamed,
+            scene_session_commands::unit_model_import_static_mesh,
             scene_session_commands::scene_validate_import_texture_refs,
             scene_session_commands::scene_get_havok_meta,
             scene_session_commands::scene_list_havok_meta,

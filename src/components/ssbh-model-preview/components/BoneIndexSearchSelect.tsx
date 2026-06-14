@@ -40,30 +40,36 @@ export function BoneIndexSearchSelect({
   const triggerId = `${instanceId}-bone-trigger`;
   const fallbackNumId = `${instanceId}-bone-index-num`;
 
-  const options = useMemo(() => {
-    if (!boneNames?.length) return [];
-    const q = deferredQuery.trim().toLowerCase();
-    const all = boneNames.map((name, index) => ({ index, name }));
-    if (!q) {
-      return all.slice(0, MAX_OPTIONS_WITHOUT_QUERY);
+  const { options, filteredSearchTruncated } = useMemo(() => {
+    if (!boneNames?.length) {
+      return { options: [], filteredSearchTruncated: false };
     }
-    const filtered = all.filter(
-      ({ index, name }) => `${index}`.includes(q) || name.toLowerCase().includes(q),
-    );
-    return filtered.slice(0, MAX_OPTIONS_FILTERED);
+    const q = deferredQuery.trim().toLowerCase();
+    if (!q) {
+      return {
+        options: boneNames
+          .slice(0, MAX_OPTIONS_WITHOUT_QUERY)
+          .map((name, index) => ({ index, name })),
+        filteredSearchTruncated: false,
+      };
+    }
+
+    const matches: Array<{ index: number; name: string }> = [];
+    let truncated = false;
+    for (let index = 0; index < boneNames.length; index += 1) {
+      const name = boneNames[index];
+      if (!`${index}`.includes(q) && !name.toLowerCase().includes(q)) continue;
+      if (matches.length >= MAX_OPTIONS_FILTERED) {
+        truncated = true;
+        break;
+      }
+      matches.push({ index, name });
+    }
+    return { options: matches, filteredSearchTruncated: truncated };
   }, [boneNames, deferredQuery]);
 
   const totalBones = boneNames?.length ?? 0;
   const qTrim = deferredQuery.trim().toLowerCase();
-
-  const filteredSearchTruncated = useMemo(() => {
-    if (!boneNames?.length || !qTrim) return false;
-    const n = boneNames.filter(
-      (name, index) =>
-        `${index}`.includes(qTrim) || name.toLowerCase().includes(qTrim),
-    ).length;
-    return n > MAX_OPTIONS_FILTERED;
-  }, [boneNames, qTrim]);
 
   const label = useMemo(() => {
     if (!boneNames?.length) return `${value}`;

@@ -8,16 +8,9 @@ import { Buffer } from "buffer";
 import { toast } from "sonner";
 import { Download, Upload, RefreshCw, Save, Info, FolderOpen } from "lucide-react";
 
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { CharacterIdTable } from "@/models/characterIdTable";
 import type { CharacterListData } from "@/models/characterListEntry";
 import type { SeriesListData } from "@/models/seriesListEntry";
@@ -39,9 +32,11 @@ import { CHARACTERLIST_STRING_FIELDS } from "@/models/characterListEntry";
 import {
   checkStringCoverage,
   getDefaultRanges,
-  getSuggestedJapaneseReplacement,
-  type MissingCodepoint,
 } from "@/utils/exvsStringAllowedRanges";
+import {
+  FontCoverageErrorDialog,
+  type FontCoverageError,
+} from "./character-list/FontCoverageErrorDialog";
 
 interface CharacterListViewProps {
   folderPath: string;
@@ -49,6 +44,20 @@ interface CharacterListViewProps {
   onUnsavedChanges?: (hasChanges: boolean) => void;
   onJumpToCharacterIdTable?: (characterId: number) => void;
 }
+
+const CHARACTER_LIST_INFO_MODAL_DIMENSIONS = {
+  width: 520,
+  height: 360,
+  minWidth: 420,
+  minHeight: 280,
+};
+
+const CHARACTER_LIST_IMPORT_MODAL_DIMENSIONS = {
+  width: 720,
+  height: 560,
+  minWidth: 560,
+  minHeight: 420,
+};
 
 type LoadState =
   | { status: "idle" }
@@ -93,9 +102,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
   const [importPreview, setImportPreview] = useState<CharaJsonImportPreview | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [fontCoverageErrorDialogOpen, setFontCoverageErrorDialogOpen] = useState(false);
-  const [fontCoverageErrors, setFontCoverageErrors] = useState<
-    Array<{ characterId: number; fieldName: string; fieldLabel: string; missing: MissingCodepoint[] }>
-  >([]);
+  const [fontCoverageErrors, setFontCoverageErrors] = useState<FontCoverageError[]>([]);
   const [editorResetKey, setEditorResetKey] = useState(0);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [characterIdTableIdSet, setCharacterIdTableIdSet] = useState<Set<number> | null>(null);
@@ -377,7 +384,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
   const handleSaveFile = useCallback(async () => {
     if (loadState.status !== "ready") return;
     const ranges = getDefaultRanges();
-    const errors: Array<{ characterId: number; fieldName: string; fieldLabel: string; missing: MissingCodepoint[] }> = [];
+    const errors: FontCoverageError[] = [];
 
     for (const entry of loadState.list.entries) {
       const rec = entry as unknown as Record<string, unknown>;
@@ -706,133 +713,95 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
         </CardContent>
       </Card>
 
-      <Dialog open={isInfoDialogOpen} onOpenChange={setIsInfoDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Info</DialogTitle>
-            <DialogDescription asChild>
-              <div className="space-y-2 pt-2">
-                <p>1. 自动加载0xb7367090\series_list.bin</p>
-                <p>2. 图片mapping自0xA0253AA0\__convert</p>
-                <p>3. 图片透过0xA0253AA0_structure.json来mapping原有顺序</p>
-              </div>
-            </DialogDescription>
-          </DialogHeader>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={isImportDialogOpen}
-        onOpenChange={(open) => {
-          if (open) {
-            setIsImportDialogOpen(true);
-            return;
-          }
-          setIsImportDialogOpen(false);
-          setImportPreview(null);
-        }}
-      >
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Import Chara JSON</DialogTitle>
-            <DialogDescription>
-              {importPreview ? (
-                <>
-                  <div className="mt-2 space-y-1">
-                    <div className="break-all">File: {importPreview.filePath}</div>
-                    <div>
-                      Total: {importPreview.totalCount} · Valid: {importPreview.validCount} · Invalid: {importPreview.invalidCount}
-                      {importPreview.duplicateIds.length > 0 ? ` · Duplicates: ${importPreview.duplicateIds.length}` : ""}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>No file selected</>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          {importPreview && (
-            <div className="space-y-2">
-              <div className="text-sm font-medium">IDs to import ({importPreview.ids.length})</div>
-              <div className="max-h-56 overflow-auto border rounded-md p-2 text-xs font-mono whitespace-pre-wrap">
-                {importPreview.ids.slice(0, 500).join(", ")}
-                {importPreview.ids.length > 500 ? `\n... and ${importPreview.ids.length - 500} more` : ""}
-              </div>
-              {importPreview.duplicateIds.length > 0 && (
-                <div className="text-xs text-muted-foreground">
-                  Duplicate IDs detected (will be imported as-is): {importPreview.duplicateIds.slice(0, 100).join(", ")}
-                  {importPreview.duplicateIds.length > 100 ? ` ... and ${importPreview.duplicateIds.length - 100} more` : ""}
-                </div>
-              )}
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsImportDialogOpen(false);
-                setImportPreview(null);
-              }}
-              disabled={isImporting}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void handleConfirmImport()}
-              disabled={!importPreview || importPreview.validCount === 0 || isImporting}
-              className="inline-flex items-center gap-2"
-            >
-              Import
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={fontCoverageErrorDialogOpen} onOpenChange={setFontCoverageErrorDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Font Coverage Errors</DialogTitle>
-            <DialogDescription asChild>
-              <p>
-                The following characters are not in the game font set and will render as &quot;*&quot;.
-                Consider replacing with Japanese equivalents (e.g. 産 instead of 產).
-              </p>
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex-1 min-h-0 overflow-auto space-y-3">
-            {fontCoverageErrors.map((err, idx) => (
-              <div key={idx} className="border rounded-md p-3 text-sm space-y-2">
-                <div className="font-medium">
-                  Character ID {err.characterId} · {err.fieldLabel}
-                </div>
-                <div className="text-xs text-muted-foreground space-y-1">
-                  {err.missing.map((m) => {
-                    const suggested = getSuggestedJapaneseReplacement(m.cp);
-                    return (
-                      <div key={m.cp}>
-                        {m.char} ({m.hex})
-                        {suggested ? ` → suggest: ${suggested}` : ""}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+      {isInfoDialogOpen ? (
+        <AppRndModalShell
+          titleId="character-list-info-title"
+          title="Info"
+          headerIcon={<Info className="h-5 w-5 text-primary" />}
+          dimensions={CHARACTER_LIST_INFO_MODAL_DIMENSIONS}
+          storageKey="app.rnd-size.character-list-info"
+          onClose={() => setIsInfoDialogOpen(false)}
+        >
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-6 text-sm text-muted-foreground">
+            <p>1. 自动加载0xb7367090\series_list.bin</p>
+            <p>2. 图片mapping自0xA0253AA0\__convert</p>
+            <p>3. 图片透过0xA0253AA0_structure.json来mapping原有顺序</p>
           </div>
+        </AppRndModalShell>
+      ) : null}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setFontCoverageErrorDialogOpen(false)}>
-              Close
-            </Button>
-            <Button onClick={() => void handleForceSave()}>
-              Force Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {isImportDialogOpen ? (
+        <AppRndModalShell
+          titleId="character-list-import-title"
+          title="Import Chara JSON"
+          subtitle={importPreview ? `Valid ${importPreview.validCount} / ${importPreview.totalCount}` : "No file selected"}
+          headerIcon={<Upload className="h-5 w-5 text-primary" />}
+          dimensions={CHARACTER_LIST_IMPORT_MODAL_DIMENSIONS}
+          storageKey="app.rnd-size.character-list-import"
+          onClose={() => {
+            setIsImportDialogOpen(false);
+            setImportPreview(null);
+          }}
+          closeDisabled={isImporting}
+          footer={
+            <div className="flex justify-end gap-2 bg-background px-6 py-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsImportDialogOpen(false);
+                  setImportPreview(null);
+                }}
+                disabled={isImporting}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => void handleConfirmImport()}
+                disabled={!importPreview || importPreview.validCount === 0 || isImporting}
+                className="inline-flex items-center gap-2"
+              >
+                Import
+              </Button>
+            </div>
+          }
+        >
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
+            {importPreview ? (
+              <>
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <div className="break-all">File: {importPreview.filePath}</div>
+                  <div>
+                    Total: {importPreview.totalCount} · Valid: {importPreview.validCount} · Invalid: {importPreview.invalidCount}
+                    {importPreview.duplicateIds.length > 0 ? ` · Duplicates: ${importPreview.duplicateIds.length}` : ""}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">IDs to import ({importPreview.ids.length})</div>
+                  <div className="max-h-56 overflow-auto rounded-md border p-2 font-mono text-xs whitespace-pre-wrap">
+                    {importPreview.ids.slice(0, 500).join(", ")}
+                    {importPreview.ids.length > 500 ? `\n... and ${importPreview.ids.length - 500} more` : ""}
+                  </div>
+                  {importPreview.duplicateIds.length > 0 ? (
+                    <div className="text-xs text-muted-foreground">
+                      Duplicate IDs detected (will be imported as-is): {importPreview.duplicateIds.slice(0, 100).join(", ")}
+                      {importPreview.duplicateIds.length > 100 ? ` ... and ${importPreview.duplicateIds.length - 100} more` : ""}
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-muted-foreground">No file selected</div>
+            )}
+          </div>
+        </AppRndModalShell>
+      ) : null}
+
+      <FontCoverageErrorDialog
+        open={fontCoverageErrorDialogOpen}
+        errors={fontCoverageErrors}
+        onClose={() => setFontCoverageErrorDialogOpen(false)}
+        onForceSave={() => void handleForceSave()}
+      />
     </div>
   );
 }

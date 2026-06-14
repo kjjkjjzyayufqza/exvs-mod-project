@@ -3,10 +3,11 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { join } from "@tauri-apps/api/path";
 import { exists } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
+import { ImageIcon } from "lucide-react";
 
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -20,6 +21,13 @@ type ReplaceSummary = {
   outputNutexbPath: string;
   previewPngPath: string;
   nutexbName: string;
+};
+
+const CARD_ICON_REPLACE_MODAL_DIMENSIONS = {
+  width: 860,
+  height: 680,
+  minWidth: 700,
+  minHeight: 520,
 };
 
 interface CardIconReplaceDialogProps {
@@ -159,21 +167,23 @@ export function CardIconReplaceDialog({
   ]);
 
   return (
-    <Dialog open={openState} onOpenChange={setOpenState}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline" disabled={!canEdit}>
-          {triggerLabel}
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[840px]">
-        <DialogHeader>
-          <DialogTitle>Replace Card Icon</DialogTitle>
-          <DialogDescription>
-            Replaces the selected nutexb and refreshes the preview PNG under <span className="font-mono">__convert</span>.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid grid-cols-2 gap-6">
+    <>
+      <Button size="sm" variant="outline" disabled={!canEdit} onClick={() => setOpenState(true)}>
+        {triggerLabel}
+      </Button>
+      {openState ? (
+        <AppRndModalShell
+          titleId="card-icon-replace-title"
+          title="Replace Card Icon"
+          subtitle="Replaces the selected nutexb and refreshes the __convert preview PNG."
+          headerIcon={<ImageIcon className="h-5 w-5 text-primary" />}
+          dimensions={CARD_ICON_REPLACE_MODAL_DIMENSIONS}
+          storageKey="app.rnd-size.card-icon-replace"
+          onClose={() => setOpenState(false)}
+          closeDisabled={isReplacing}
+        >
+          <div className="min-h-0 flex-1 overflow-y-auto p-6">
+            <div className="grid grid-cols-2 gap-6">
           <div className="space-y-3">
             <Label>Preview</Label>
             <Card className="overflow-hidden min-h-[360px]">
@@ -264,8 +274,10 @@ export function CardIconReplaceDialog({
               </Button>
             </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+            </div>
+          </div>
+        </AppRndModalShell>
+      ) : null}
+    </>
   );
 }

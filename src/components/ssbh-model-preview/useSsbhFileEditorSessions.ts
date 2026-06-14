@@ -38,13 +38,19 @@ import {
   type NumdlbReadResult,
   type NuhlpbReadResult,
 } from "./ssbhDaeIoService";
-import { ensureMatlDataSerdeFields, type NumatbProfileKind } from "./daeSsbhTypes";
+import {
+  ensureMatlDataSerdeFields,
+  type MatlDataJson,
+  type NumatbProfileKind,
+} from "./daeSsbhTypes";
 import type { NumatbEditorWindowSession } from "./NumatbEditorModalWindow";
 import {
-  buildNumatbModalBundleFromLoadedFile,
+  buildNumatbModalBundleFromProfiles,
   cloneNumatbBundle,
+  deriveNumatbSisterPathCandidates,
   detectNumatbProfileFromPath,
   type NumatbModalBundle,
+  type NumatbProfilePaths,
 } from "./numatbEditorUtils";
 
 export type SsbhEditorKind = "numdlb" | "numatb" | "nuhlpb" | "jnttbl";
@@ -68,6 +74,37 @@ export interface UseSsbhFileEditorSessionsOptions {
 
 function normalizePathKey(path: string): string {
   return path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+}
+
+async function loadNumatbProfileBundle(
+  filePath: string,
+  primaryProfile: NumatbProfileKind,
+): Promise<{ bundle: NumatbModalBundle; profilePaths: NumatbProfilePaths }> {
+  const primaryFile = await ssbhTemplateReadNumatb(filePath);
+  const sisterProfile: NumatbProfileKind = primaryProfile === "maya" ? "nust" : "maya";
+  const sisterCandidates = deriveNumatbSisterPathCandidates(filePath, sisterProfile);
+  let sisterFile: MatlDataJson | null = null;
+  let sisterPath = sisterCandidates[0] ?? null;
+
+  for (const candidate of sisterCandidates) {
+    try {
+      sisterFile = await ssbhTemplateReadNumatb(candidate);
+      sisterPath = candidate;
+      break;
+    } catch {
+      // Scene Editor treats a missing sister profile as an empty profile.
+    }
+  }
+
+  const profilePaths: NumatbProfilePaths =
+    primaryProfile === "maya"
+      ? { maya: filePath, nust: sisterPath }
+      : { maya: sisterPath, nust: filePath };
+  const bundle = buildNumatbModalBundleFromProfiles(
+    primaryProfile === "maya" ? primaryFile : sisterFile,
+    primaryProfile === "nust" ? primaryFile : sisterFile,
+  );
+  return { bundle, profilePaths };
 }
 
 export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOptions = {}) {
@@ -681,6 +718,16 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
         id,
         filePath,
         primaryProfile,
+        profilePaths:
+          primaryProfile === "maya"
+            ? {
+                maya: filePath,
+                nust: deriveNumatbSisterPathCandidates(filePath, "nust")[0] ?? null,
+              }
+            : {
+                maya: deriveNumatbSisterPathCandidates(filePath, "maya")[0] ?? null,
+                nust: filePath,
+              },
         loading: true,
         saving: false,
         loadError: null,
@@ -689,15 +736,22 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
         isDirty: false,
         zIndex: nextZ,
       };
-      void ssbhTemplateReadNumatb(filePath)
-        .then((data) => {
-          const bundle = buildNumatbModalBundleFromLoadedFile(data, primaryProfile);
+      void loadNumatbProfileBundle(filePath, primaryProfile)
+        .then(({ bundle, profilePaths }) => {
           const base = cloneNumatbBundle(bundle);
           const draft = cloneNumatbBundle(bundle);
           setNumatbSessions((p) =>
             p.map((s) =>
               s.id === id
-                ? { ...s, loading: false, loadError: null, baseData: base, draftData: draft, isDirty: false }
+                ? {
+                    ...s,
+                    profilePaths,
+                    loading: false,
+                    loadError: null,
+                    baseData: base,
+                    draftData: draft,
+                    isDirty: false,
+                  }
                 : s,
             ),
           );
@@ -731,13 +785,31 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
     if (!snapshot?.draftData) return;
     const draft = snapshot.draftData;
     const path = snapshot.filePath;
-    const matl =
-      snapshot.primaryProfile === "maya"
-        ? ensureMatlDataSerdeFields(draft.mayaFile)
-        : ensureMatlDataSerdeFields(draft.nustFile);
+    const profilePaths =
+      snapshot.profilePaths ??
+      (snapshot.primaryProfile === "maya"
+        ? { maya: path, nust: null }
+        : { maya: null, nust: path });
     setNumatbSessions((prev) => prev.map((x) => (x.id === sessionId ? { ...x, saving: true } : x)));
     try {
-      await ssbhTemplateWriteNumatb(path, matl);
+      const writes: Promise<void>[] = [];
+      if (profilePaths.maya && draft.mayaFile.entries.length > 0) {
+        writes.push(
+          ssbhTemplateWriteNumatb(
+            profilePaths.maya,
+            ensureMatlDataSerdeFields(draft.mayaFile),
+          ),
+        );
+      }
+      if (profilePaths.nust && draft.nustFile.entries.length > 0) {
+        writes.push(
+          ssbhTemplateWriteNumatb(
+            profilePaths.nust,
+            ensureMatlDataSerdeFields(draft.nustFile),
+          ),
+        );
+      }
+      await Promise.all(writes);
       const savedBundle = cloneNumatbBundle(draft);
       setNumatbSessions((prev) =>
         prev.map((s) =>
@@ -775,14 +847,21 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
     });
     if (!fp) return;
     try {
-      const data = await ssbhTemplateReadNumatb(fp);
-      const bundle = buildNumatbModalBundleFromLoadedFile(data, profile);
+      const { bundle, profilePaths } = await loadNumatbProfileBundle(fp, profile);
       const base = cloneNumatbBundle(bundle);
       const draft = cloneNumatbBundle(bundle);
       setNumatbSessions((prev) =>
         prev.map((s) =>
           s.id === sessionId
-            ? { ...s, loading: false, loadError: null, baseData: base, draftData: draft, isDirty: false }
+            ? {
+                ...s,
+                profilePaths,
+                loading: false,
+                loadError: null,
+                baseData: base,
+                draftData: draft,
+                isDirty: false,
+              }
             : s,
         ),
       );

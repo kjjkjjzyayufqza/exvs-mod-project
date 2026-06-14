@@ -1,4 +1,6 @@
-import { useMemo, useState, useTransition } from "react"
+import { useVirtualizer } from "@tanstack/react-virtual"
+import { useCallback, useMemo, useRef, useState, useTransition } from "react"
+import { createPortal } from "react-dom"
 import { open } from "@tauri-apps/plugin-dialog"
 import { invoke } from "@tauri-apps/api/core"
 import { exists, mkdir, readDir, readFile, readTextFile, writeFile, writeTextFile } from "@tauri-apps/plugin-fs"
@@ -8,24 +10,16 @@ import JsonView from "@uiw/react-json-view"
 import { vscodeTheme } from "@uiw/react-json-view/vscode"
 import { Loader2, FileJson2, FolderOpen, ListTree, RefreshCcw, Copy } from "lucide-react"
 import { toast } from "sonner"
+import { AppRndModalShell } from "@/components/AppRndModalShell"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { Textarea } from "@/components/ui/textarea"
 import { useConfigStore } from "@/store/configStore"
 import { repackFolderUsingStructureToDir } from "@/utils/repackRunner"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import {
   createGvsMapToVs2Package,
   extractOnlyGraphicParamFile,
@@ -65,6 +59,25 @@ type ShellExecOutput = {
   stderr: string
 }
 
+const GVS_TOOL_DIMENSIONS = {
+  width: 1320,
+  height: 820,
+  minWidth: 820,
+  minHeight: 560,
+}
+const GVS_LOG_DIMENSIONS = {
+  width: 820,
+  height: 620,
+  minWidth: 520,
+  minHeight: 380,
+}
+const GVS_REPORT_DIMENSIONS = {
+  width: 1040,
+  height: 720,
+  minWidth: 640,
+  minHeight: 420,
+}
+
 export function GvsMapToVs2Tool() {
   const [isOpen, setIsOpen] = useState(false)
   const [selectedBinPaths, setSelectedBinPaths] = useState<string[]>([])
@@ -87,6 +100,8 @@ export function GvsMapToVs2Tool() {
   const [isLoadingDetail, setIsLoadingDetail] = useState(false)
   const [isPending, startTransition] = useTransition()
   const { obModPath, getSetting } = useConfigStore()
+  const recordsListRef = useRef<HTMLDivElement | null>(null)
+  const reportListRef = useRef<HTMLDivElement | null>(null)
 
   const isAnyDebugExtracting = isDebugGraphicParamExtracting || isDebugNumatbExtracting
   const canRunStep1 = selectedBinPaths.length > 0 && outputDir.trim().length > 0 && !isConverting && !isAnyDebugExtracting && !isFixingNumatb && !isPacking
@@ -144,6 +159,22 @@ export function GvsMapToVs2Tool() {
       }, 0),
     [records]
   )
+  const getRecordsScrollElement = useCallback(() => recordsListRef.current, [])
+  const recordsVirtualizer = useVirtualizer({
+    count: records.length,
+    getScrollElement: getRecordsScrollElement,
+    estimateSize: () => 168,
+    getItemKey: (index) => records[index]?.inputPath ?? index,
+    overscan: 6,
+  })
+  const getReportScrollElement = useCallback(() => reportListRef.current, [])
+  const reportVirtualizer = useVirtualizer({
+    count: step2ReportRecords.length,
+    getScrollElement: getReportScrollElement,
+    estimateSize: () => 280,
+    getItemKey: (index) => step2ReportRecords[index]?.inputPath ?? index,
+    overscan: 4,
+  })
 
   const getObModOutputName = (sourceBinName: string): string => {
     const raw = sourceBinName.replace(/\.bin$/i, "").replace(/^0x/i, "")
@@ -1277,22 +1308,32 @@ export function GvsMapToVs2Tool() {
     })
     setProgress({ current: 0, total: 0, currentFile: "" })
   }
+  const handleClose = useCallback(() => {
+    if (isConverting || isAnyDebugExtracting || isFixingNumatb || isPacking) {
+      return
+    }
+    setIsStep21DialogOpen(false)
+    setIsStep2ReportDialogOpen(false)
+    setIsOpen(false)
+  }, [isAnyDebugExtracting, isConverting, isFixingNumatb, isPacking])
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="w-full">
-          Open GVS Map to VS2
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-7xl h-[88vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle>GVS Map to VS2</DialogTitle>
-          <DialogDescription>
-            Step1 extracts data, Step2 fixes numatb, Step3 packs output to obModPath.
-          </DialogDescription>
-        </DialogHeader>
-
+    <>
+      <Button variant="outline" className="w-full" onClick={() => setIsOpen(true)}>
+        Open GVS Map to VS2
+      </Button>
+      {isOpen ? (
+        <AppRndModalShell
+          titleId="gvs-map-to-vs2-title"
+          title="GVS Map to VS2"
+          subtitle="Step1 extracts data, Step2 fixes numatb, Step3 packs output to obModPath"
+          headerIcon={<ListTree className="h-4 w-4" />}
+          dimensions={GVS_TOOL_DIMENSIONS}
+          storageKey="gvs-map-to-vs2-dialog-size"
+          closeDisabled={isConverting || isAnyDebugExtracting || isFixingNumatb || isPacking}
+          onClose={handleClose}
+        >
+          <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
           <div className="md:col-span-7 flex items-center gap-2">
             <Input
@@ -1386,67 +1427,90 @@ export function GvsMapToVs2Tool() {
           </Card>
         )}
 
-        <Dialog open={isStep21DialogOpen} onOpenChange={setIsStep21DialogOpen}>
-          <DialogContent className="max-w-3xl">
-            <DialogHeader>
-              <DialogTitle>Step2.1 Graphic Param URL Log</DialogTitle>
-              <DialogDescription>
-                把这个内容复制给AI，叫AI参考side7的graphic_param进行改动
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Button variant="outline" onClick={() => void runGraphicParamScan()} disabled={isScanningGraphicParam}>
-                  {isScanningGraphicParam ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Scanning...
-                    </>
-                  ) : (
-                    "Re-scan"
-                  )}
-                </Button>
-                <Button variant="outline" onClick={() => void handleCopyGraphicParamLog()}>
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copy
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => void handleConvertGraphicParamToCsv()}
-                  disabled={isScanningGraphicParam || isConvertingGraphicParamCsv}
-                >
-                  {isConvertingGraphicParamCsv ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Converting...
-                    </>
-                  ) : (
-                    "Convert to CSV"
-                  )}
-                </Button>
-              </div>
-              <Textarea
-                value={graphicParamLogText}
-                readOnly
-                className="min-h-[360px] font-mono text-xs"
-                placeholder="Scan result will appear here. One file path per line."
-              />
-            </div>
-          </DialogContent>
-        </Dialog>
+        {isStep21DialogOpen
+          ? createPortal(
+              <AppRndModalShell
+                titleId="gvs-graphic-param-log-title"
+                title="Step2.1 Graphic Param URL Log"
+                subtitle="Copy this log when comparing graphic_param data"
+                headerIcon={<FileJson2 className="h-4 w-4" />}
+                dimensions={GVS_LOG_DIMENSIONS}
+                storageKey="gvs-graphic-param-log-dialog-size"
+                closeDisabled={isScanningGraphicParam || isConvertingGraphicParamCsv}
+                onClose={() => setIsStep21DialogOpen(false)}
+              >
+                <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={() => void runGraphicParamScan()} disabled={isScanningGraphicParam}>
+                      {isScanningGraphicParam ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Scanning...
+                        </>
+                      ) : (
+                        "Re-scan"
+                      )}
+                    </Button>
+                    <Button variant="outline" onClick={() => void handleCopyGraphicParamLog()}>
+                      <Copy className="h-4 w-4 mr-2" />
+                      Copy
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => void handleConvertGraphicParamToCsv()}
+                      disabled={isScanningGraphicParam || isConvertingGraphicParamCsv}
+                    >
+                      {isConvertingGraphicParamCsv ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Converting...
+                        </>
+                      ) : (
+                        "Convert to CSV"
+                      )}
+                    </Button>
+                  </div>
+                  <Textarea
+                    value={graphicParamLogText}
+                    readOnly
+                    className="min-h-0 flex-1 resize-none font-mono text-xs"
+                    placeholder="Scan result will appear here. One file path per line."
+                  />
+                </div>
+              </AppRndModalShell>,
+              document.body,
+            )
+          : null}
 
-        <Dialog open={isStep2ReportDialogOpen} onOpenChange={setIsStep2ReportDialogOpen}>
-          <DialogContent className="max-w-5xl">
-            <DialogHeader>
-              <DialogTitle>Step2 Detailed Error Report</DialogTitle>
-              <DialogDescription>
-                Per-file failure details for Step2 numatb fix.
-              </DialogDescription>
-            </DialogHeader>
-            <ScrollArea className="max-h-[70vh] border rounded-md">
-              <div className="p-3 space-y-3 text-sm">
-                {step2ReportRecords.map((record) => (
-                  <Card key={`step2-report-${record.inputPath}`} className="p-3 space-y-2">
+        {isStep2ReportDialogOpen
+          ? createPortal(
+              <AppRndModalShell
+                titleId="gvs-step2-report-title"
+                title="Step2 Detailed Error Report"
+                subtitle="Per-file failure details for Step2 NUMATB migration"
+                headerIcon={<FileJson2 className="h-4 w-4" />}
+                dimensions={GVS_REPORT_DIMENSIONS}
+                storageKey="gvs-step2-report-dialog-size"
+                onClose={() => setIsStep2ReportDialogOpen(false)}
+              >
+                <div className="flex min-h-0 flex-1 flex-col p-4">
+                  <div
+                    ref={reportListRef}
+                    className="min-h-0 flex-1 overflow-auto rounded-md border overscroll-contain"
+                  >
+              <div className="relative w-full" style={{ height: reportVirtualizer.getTotalSize() }}>
+                {reportVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const record = step2ReportRecords[virtualRow.index]
+                  if (!record) return null
+                  return (
+                    <div
+                      key={virtualRow.key}
+                      ref={reportVirtualizer.measureElement}
+                      data-index={virtualRow.index}
+                      className="absolute left-0 top-0 w-full p-3 pb-0"
+                      style={{ transform: `translateY(${virtualRow.start}px)` }}
+                    >
+                      <Card className="p-3 space-y-2 text-sm">
                     <div className="flex items-center justify-between gap-2">
                       <div className="font-medium truncate pr-2">{record.fileName}</div>
                       <Badge variant="destructive">{record.numatbStatus}</Badge>
@@ -1523,17 +1587,22 @@ export function GvsMapToVs2Tool() {
                         {record.fixedNumatbFiles.join(", ")}
                       </div>
                     )}
-                  </Card>
-                ))}
+                      </Card>
+                    </div>
+                  )
+                })}
                 {step2ReportRecords.length === 0 && (
-                  <div className="text-muted-foreground">
+                  <div className="p-3 text-muted-foreground">
                     No Step2 details yet. Run Step2 first.
                   </div>
                 )}
               </div>
-            </ScrollArea>
-          </DialogContent>
-        </Dialog>
+                  </div>
+                </div>
+              </AppRndModalShell>,
+              document.body,
+            )
+          : null}
 
         {progress.total > 0 && (
           <Card className="p-3">
@@ -1555,11 +1624,23 @@ export function GvsMapToVs2Tool() {
               <div className="font-medium">Selected BIN Files</div>
               <Badge variant="outline">{records.length}</Badge>
             </div>
-            <ScrollArea className="flex-1 border rounded-md">
-              <div className="p-2 space-y-2">
-                {records.map((item) => (
+            <div
+              ref={recordsListRef}
+              className="min-h-0 flex-1 overflow-auto rounded-md border overscroll-contain"
+            >
+              <div className="relative w-full" style={{ height: recordsVirtualizer.getTotalSize() }}>
+                {recordsVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const item = records[virtualRow.index]
+                  if (!item) return null
+                  return (
+                  <div
+                    key={virtualRow.key}
+                    ref={recordsVirtualizer.measureElement}
+                    data-index={virtualRow.index}
+                    className="absolute left-0 top-0 w-full p-2 pb-0"
+                    style={{ transform: `translateY(${virtualRow.start}px)` }}
+                  >
                   <button
-                    key={item.inputPath}
                     className={`w-full text-left p-2 rounded border ${selectedJsonPath === item.outputJsonPath ? "border-primary bg-muted" : "border-border"}`}
                     onClick={() => {
                       if (item.status !== "success" || !item.outputJsonPath) {
@@ -1641,14 +1722,16 @@ export function GvsMapToVs2Tool() {
                       </div>
                     )}
                   </button>
-                ))}
+                  </div>
+                  )
+                })}
                 {records.length === 0 && (
                   <div className="text-sm text-muted-foreground p-2">
                     No selected files yet
                   </div>
                 )}
               </div>
-            </ScrollArea>
+            </div>
           </Card>
 
           <Card className="col-span-8 p-3 min-h-0 flex flex-col">
@@ -1656,7 +1739,7 @@ export function GvsMapToVs2Tool() {
               <ListTree className="h-4 w-4" />
               <div className="font-medium">Detail</div>
             </div>
-            <ScrollArea className="flex-1 border rounded-md">
+            <div className="min-h-0 flex-1 overflow-auto rounded-md border">
               <div className="p-2 text-sm">
                 {selectedJsonData ? (
                   <JsonView
@@ -1672,10 +1755,12 @@ export function GvsMapToVs2Tool() {
                   </div>
                 )}
               </div>
-            </ScrollArea>
+            </div>
           </Card>
         </div>
-      </DialogContent>
-    </Dialog>
+          </div>
+        </AppRndModalShell>
+      ) : null}
+    </>
   )
 }

@@ -25,6 +25,7 @@ vi.mock("react-rnd", () => ({
     className,
     bounds,
     cancel,
+    position,
     onDragStart,
   }: {
     children: React.ReactNode;
@@ -32,6 +33,7 @@ vi.mock("react-rnd", () => ({
     className?: string;
     bounds?: string;
     cancel?: string;
+    position?: { x: number; y: number };
     onDragStart?: () => void;
   }) => (
     <div
@@ -39,6 +41,7 @@ vi.mock("react-rnd", () => ({
       data-drag-handle={dragHandleClassName}
       data-bounds={bounds}
       data-cancel={cancel}
+      data-position={position ? `${position.x},${position.y}` : ""}
       className={className}
       onDragStart={onDragStart}
     >
@@ -223,5 +226,26 @@ describe("SceneEditRndModalShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses a custom initial position when supplied", () => {
+    render(
+      <SceneEditRndModalShell
+        cascadeIndex={0}
+        zIndex={100}
+        titleId="test-title"
+        title="Centered modal"
+        subtitle="Custom position"
+        onActivate={() => {}}
+        onClose={() => {}}
+        getDimensions={getEffectDetailViewModalDimensions}
+        getInitialPosition={() => ({ x: 240, y: 160 })}
+        headerIcon={<span />}
+      >
+        <div>Body content</div>
+      </SceneEditRndModalShell>,
+    );
+
+    expect(screen.getByTestId("scene-edit-rnd")).toHaveAttribute("data-position", "240,160");
   });
 });

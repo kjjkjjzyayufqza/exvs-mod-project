@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useCallback, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -37,6 +38,57 @@ function Metric({ label, value }: { label: string; value: string | number }) {
     <div className="rounded-md border bg-muted/20 px-2 py-1.5">
       <div className="text-[10px] text-muted-foreground">{label}</div>
       <div className="font-mono text-sm font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function ValidationIssueList({ errors }: { errors: UnitModelValidationResult["errors"] }) {
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const getScrollElement = useCallback(() => listRef.current, []);
+  const rowVirtualizer = useVirtualizer({
+    count: errors.length,
+    getScrollElement,
+    estimateSize: () => 92,
+    getItemKey: (index) => {
+      const error = errors[index];
+      return error ? `${error.phase}:${error.model ?? ""}:${error.path ?? ""}:${index}` : index;
+    },
+    overscan: 8,
+  });
+
+  return (
+    <div ref={listRef} className="h-[min(36vh,320px)] overflow-auto overscroll-contain">
+      <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
+        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+          const error = errors[virtualRow.index];
+          if (!error) return null;
+
+          return (
+            <div
+              key={virtualRow.key}
+              ref={rowVirtualizer.measureElement}
+              data-index={virtualRow.index}
+              className="absolute left-0 top-0 w-full pb-2"
+              style={{ transform: `translateY(${virtualRow.start}px)` }}
+            >
+              <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-destructive">{error.phase}</span>
+                  {error.model ? (
+                    <span className="truncate font-mono text-muted-foreground">{error.model}</span>
+                  ) : null}
+                </div>
+                <p className="mt-1">{error.message}</p>
+                {error.path ? (
+                  <p className="mt-1 break-all font-mono text-[10px] leading-snug text-muted-foreground">
+                    {error.path}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -154,27 +206,7 @@ export function UnitModelPropertiesPanel({
 
               {validation?.errors.length ? (
                 <MayaSection title="Issues" defaultOpen>
-                  <div className="space-y-2">
-                    {validation.errors.map((error, index) => (
-                      <div
-                        key={`${error.phase}-${index}`}
-                        className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px]"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-destructive">{error.phase}</span>
-                          {error.model ? (
-                            <span className="truncate font-mono text-muted-foreground">{error.model}</span>
-                          ) : null}
-                        </div>
-                        <p className="mt-1">{error.message}</p>
-                        {error.path ? (
-                          <p className="mt-1 break-all font-mono text-[10px] leading-snug text-muted-foreground">
-                            {error.path}
-                          </p>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
+                  <ValidationIssueList errors={validation.errors} />
                 </MayaSection>
               ) : validation ? (
                 <MayaSection title="Issues">

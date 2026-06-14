@@ -4,11 +4,11 @@ import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { dirname, join } from "@tauri-apps/api/path";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { Buffer } from "buffer";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -54,6 +54,12 @@ type LoadState =
 
 const CLIPBOARD_PREFIX = "CHARACTER_ID_TABLE_FIELDS_V1";
 const REQUIRED_FIELD_KEYS = ["Model", "Effect", "Sound", "Param", "Msc", "Motion"] as const;
+const CHARACTER_ID_IMPORT_MODAL_DIMENSIONS = {
+    width: 720,
+    height: 560,
+    minWidth: 560,
+    minHeight: 420,
+};
 
 type ClipboardPayload = {
     version: 1;
@@ -1280,73 +1286,70 @@ export default function CharacterIdTableView({
                 </AlertDialogContent>
             </AlertDialog>
 
-            <Dialog
-                open={isImportDialogOpen}
-                onOpenChange={(open) => {
-                    if (open) {
-                        setIsImportDialogOpen(true);
-                        return;
-                    }
-                    setIsImportDialogOpen(false);
-                    setImportPreview(null);
-                }}
-            >
-                <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                        <DialogTitle>Import Character ID Table JSON</DialogTitle>
-                        <DialogDescription>
-                            {importPreview ? (
-                                <>
-                                    <div className="mt-2 space-y-1">
-                                        <div className="break-all">File: {importPreview.filePath}</div>
-                                        <div>
-                                            Total: {importPreview.totalCount} · Valid: {importPreview.validCount} · Invalid: {importPreview.invalidCount}
-                                            {importPreview.duplicateIds.length > 0 ? ` · Duplicates: ${importPreview.duplicateIds.length}` : ""}
-                                        </div>
-                                    </div>
-                                </>
-                            ) : (
-                                <>No file selected</>
-                            )}
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    {importPreview && (
-                        <div className="space-y-2">
-                            <div className="text-sm font-medium">IDs to import ({importPreview.ids.length})</div>
-                            <div className="max-h-56 overflow-auto border rounded-md p-2 text-xs font-mono whitespace-pre-wrap">
-                                {importPreview.ids.slice(0, 500).join(", ")}
-                                {importPreview.ids.length > 500 ? `\n... and ${importPreview.ids.length - 500} more` : ""}
-                            </div>
-                            {importPreview.duplicateIds.length > 0 && (
-                                <div className="text-xs text-muted-foreground">
-                                    Duplicate IDs detected (will be imported as-is): {importPreview.duplicateIds.slice(0, 100).join(", ")}
-                                    {importPreview.duplicateIds.length > 100 ? ` ... and ${importPreview.duplicateIds.length - 100} more` : ""}
-                                </div>
-                            )}
+            {isImportDialogOpen ? (
+                <AppRndModalShell
+                    titleId="character-id-import-title"
+                    title="Import Character ID Table JSON"
+                    subtitle={importPreview ? `Valid ${importPreview.validCount} / ${importPreview.totalCount}` : "No file selected"}
+                    headerIcon={<Upload className="h-5 w-5 text-primary" />}
+                    dimensions={CHARACTER_ID_IMPORT_MODAL_DIMENSIONS}
+                    storageKey="app.rnd-size.character-id-import"
+                    onClose={() => {
+                        setIsImportDialogOpen(false);
+                        setImportPreview(null);
+                    }}
+                    closeDisabled={isImporting}
+                    footer={
+                        <div className="flex justify-end gap-2 bg-background px-6 py-4">
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setIsImportDialogOpen(false);
+                                    setImportPreview(null);
+                                }}
+                                disabled={isImporting}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={() => void handleConfirmImport()}
+                                disabled={!importPreview || importPreview.validCount === 0 || isImporting}
+                            >
+                                Import
+                            </Button>
                         </div>
-                    )}
-
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => {
-                                setIsImportDialogOpen(false);
-                                setImportPreview(null);
-                            }}
-                            disabled={isImporting}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={() => void handleConfirmImport()}
-                            disabled={!importPreview || importPreview.validCount === 0 || isImporting}
-                        >
-                            Import
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                    }
+                >
+                    <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
+                        {importPreview ? (
+                            <>
+                                <div className="space-y-1 text-sm text-muted-foreground">
+                                    <div className="break-all">File: {importPreview.filePath}</div>
+                                    <div>
+                                        Total: {importPreview.totalCount} · Valid: {importPreview.validCount} · Invalid: {importPreview.invalidCount}
+                                        {importPreview.duplicateIds.length > 0 ? ` · Duplicates: ${importPreview.duplicateIds.length}` : ""}
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <div className="text-sm font-medium">IDs to import ({importPreview.ids.length})</div>
+                                    <div className="max-h-56 overflow-auto rounded-md border p-2 font-mono text-xs whitespace-pre-wrap">
+                                        {importPreview.ids.slice(0, 500).join(", ")}
+                                        {importPreview.ids.length > 500 ? `\n... and ${importPreview.ids.length - 500} more` : ""}
+                                    </div>
+                                    {importPreview.duplicateIds.length > 0 ? (
+                                        <div className="text-xs text-muted-foreground">
+                                            Duplicate IDs detected (will be imported as-is): {importPreview.duplicateIds.slice(0, 100).join(", ")}
+                                            {importPreview.duplicateIds.length > 100 ? ` ... and ${importPreview.duplicateIds.length - 100} more` : ""}
+                                        </div>
+                                    ) : null}
+                                </div>
+                            </>
+                        ) : (
+                            <div className="text-sm text-muted-foreground">No file selected</div>
+                        )}
+                    </div>
+                </AppRndModalShell>
+            ) : null}
         </div>
     );
 }

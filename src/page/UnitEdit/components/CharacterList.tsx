@@ -1,7 +1,7 @@
-import { FC, useState, useMemo } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { FC, useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
 import { CharacterDataOB } from "../../../models/characterListOB";
 import { CharacterCard } from "./CharacterCard";
-import { ScrollArea } from "../../../components/ui/scroll-area";
 import { Input } from "../../../components/ui/input";
 import { Search } from "lucide-react";
 
@@ -21,35 +21,48 @@ export const CharacterList: FC<CharacterListProps> = ({
   onCopy,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  // Filter characters based on search term
   const filteredCharacters = useMemo(() => {
-    if (!searchTerm.trim()) {
+    const normalizedSearchTerm = deferredSearchTerm.trim();
+    if (!normalizedSearchTerm) {
       return characters.map((character, index) => ({ character, originalIndex: index }));
     }
 
     return characters
       .map((character, index) => ({ character, originalIndex: index }))
-      .filter(({ character }) => 
-        character.CharacterId.toString().includes(searchTerm.trim())
+      .filter(({ character }) =>
+        character.CharacterId.toString().includes(normalizedSearchTerm)
       );
-  }, [characters, searchTerm]);
+  }, [characters, deferredSearchTerm]);
 
-  const handleSelect = (character: CharacterDataOB, originalIndex: number) => {
+  const getScrollElement = useCallback(() => scrollRef.current, []);
+  const rowVirtualizer = useVirtualizer({
+    count: filteredCharacters.length,
+    getScrollElement,
+    estimateSize: () => 94,
+    getItemKey: (index) => {
+      const item = filteredCharacters[index];
+      return item ? `${item.character.CharacterId}-${item.originalIndex}` : index;
+    },
+    overscan: 8,
+  });
+
+  const handleSelect = useCallback((character: CharacterDataOB, originalIndex: number) => {
     onSelect(character, originalIndex);
-  };
+  }, [onSelect]);
 
-  const handleDelete = (originalIndex: number) => {
+  const handleDelete = useCallback((originalIndex: number) => {
     onDelete(originalIndex);
-  };
+  }, [onDelete]);
 
-  const handleCopy = (originalIndex: number) => {
+  const handleCopy = useCallback((originalIndex: number) => {
     onCopy(originalIndex);
-  };
+  }, [onCopy]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Search Box */}
       <div className="relative mb-4 flex-shrink-0">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
         <Input
@@ -60,39 +73,50 @@ export const CharacterList: FC<CharacterListProps> = ({
         />
       </div>
 
-      {/* Results Info */}
       {searchTerm.trim() && (
         <div className="text-sm text-muted-foreground mb-2 flex-shrink-0">
           Found {filteredCharacters.length} of {characters.length} characters
         </div>
       )}
 
-      {/* Character List */}
-      <ScrollArea className="flex-1 min-h-0">
-        <div className="space-y-2 pr-3 py-2 px-1">
-          {filteredCharacters.length > 0 ? (
-            filteredCharacters.map(({ character, originalIndex }) => (
-              <CharacterCard
-                key={`${character.CharacterId}-${originalIndex}`}
-                character={character}
-                index={originalIndex}
-                isSelected={originalIndex === selectedIndex}
-                onClick={() => handleSelect(character, originalIndex)}
-                onDelete={() => handleDelete(originalIndex)}
-                onCopy={() => handleCopy(originalIndex)}
-              />
-            ))
-          ) : searchTerm.trim() ? (
-            <div className="text-center text-muted-foreground py-8">
-              No characters found matching "{searchTerm}"
-            </div>
-          ) : (
-            <div className="text-center text-muted-foreground py-8">
-              No characters available
-            </div>
-          )}
+      {filteredCharacters.length > 0 ? (
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto overscroll-contain">
+          <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const item = filteredCharacters[virtualRow.index];
+              if (!item) return null;
+              const { character, originalIndex } = item;
+
+              return (
+                <div
+                  key={virtualRow.key}
+                  ref={rowVirtualizer.measureElement}
+                  data-index={virtualRow.index}
+                  className="absolute left-0 top-0 w-full px-1 pb-2 pr-3"
+                  style={{ transform: `translateY(${virtualRow.start}px)` }}
+                >
+                  <CharacterCard
+                    character={character}
+                    index={originalIndex}
+                    isSelected={originalIndex === selectedIndex}
+                    onClick={() => handleSelect(character, originalIndex)}
+                    onDelete={() => handleDelete(originalIndex)}
+                    onCopy={() => handleCopy(originalIndex)}
+                  />
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </ScrollArea>
+      ) : searchTerm.trim() ? (
+        <div className="py-8 text-center text-muted-foreground">
+          No characters found matching "{searchTerm}"
+        </div>
+      ) : (
+        <div className="py-8 text-center text-muted-foreground">
+          No characters available
+        </div>
+      )}
     </div>
   );
 };

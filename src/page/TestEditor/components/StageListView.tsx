@@ -8,17 +8,10 @@ import { Buffer } from "buffer";
 import { toast } from "sonner";
 import { RefreshCw, Save, FolderOpen, Info, Upload, Download, Image, Bug } from "lucide-react";
 
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -50,6 +43,36 @@ import { buildCardIconPreviewPath } from "./card-icon-list/cardIconUtils";
 const STAGE_LIST_HASH = "0xCE74091E";
 const STAGE_ICON_HASH = "0x3CC8B10B";
 const STAGE_ICON_SECONDARY_HASH = "0x0CEE3991";
+const STAGE_INFO_MODAL_DIMENSIONS = {
+  width: 560,
+  height: 380,
+  minWidth: 440,
+  minHeight: 300,
+};
+const STAGE_GVS_LOAD_MODAL_DIMENSIONS = {
+  width: 640,
+  height: 460,
+  minWidth: 520,
+  minHeight: 360,
+};
+const STAGE_GVS_ASSET_MODAL_DIMENSIONS = {
+  width: 920,
+  height: 760,
+  minWidth: 720,
+  minHeight: 540,
+};
+const STAGE_GVS_BIN_STATUS_MODAL_DIMENSIONS = {
+  width: 900,
+  height: 640,
+  minWidth: 660,
+  minHeight: 460,
+};
+const STAGE_IMPORT_MODAL_DIMENSIONS = {
+  width: 720,
+  height: 560,
+  minWidth: 560,
+  minHeight: 420,
+};
 
 const DEBUG_SOURCE_ID = 2111950077;
 
@@ -923,32 +946,46 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
         </CardContent>
       </Card>
 
-      <Dialog open={isInfoDialogOpen} onOpenChange={setIsInfoDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Info</DialogTitle>
-            <DialogDescription asChild>
-              <div className="space-y-2 pt-2">
-                <p>Auto-loads {STAGE_LIST_HASH}/stage_list.bin from the selected folder.</p>
-                <p>Each stage entry has fields including iconIndex for the Stage Icon List.</p>
-                <p>Use FHM2D Init to extract stage_list.bin from the source fhm2d file.</p>
-                <p>Gvs Load loads a variant file with magic A9 B8 AB CE in a separate read-only viewer.</p>
-              </div>
-            </DialogDescription>
-          </DialogHeader>
-        </DialogContent>
-      </Dialog>
+      {isInfoDialogOpen ? (
+        <AppRndModalShell
+          titleId="stage-list-info-title"
+          title="Info"
+          headerIcon={<Info className="h-5 w-5 text-primary" />}
+          dimensions={STAGE_INFO_MODAL_DIMENSIONS}
+          storageKey="app.rnd-size.stage-list-info"
+          onClose={() => setIsInfoDialogOpen(false)}
+        >
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-6 text-sm text-muted-foreground">
+            <p>Auto-loads {STAGE_LIST_HASH}/stage_list.bin from the selected folder.</p>
+            <p>Each stage entry has fields including iconIndex for the Stage Icon List.</p>
+            <p>Use FHM2D Init to extract stage_list.bin from the source fhm2d file.</p>
+            <p>Gvs Load loads a variant file with magic A9 B8 AB CE in a separate read-only viewer.</p>
+          </div>
+        </AppRndModalShell>
+      ) : null}
 
-      <Dialog open={isGvsDialogOpen} onOpenChange={setIsGvsDialogOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Load Stage List GVS Variant</DialogTitle>
-            <DialogDescription>
-              Select the GVS `stage_list.bin` variant and a search directory, then apply it to the Stage List viewer.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 pt-2">
+      {isGvsDialogOpen ? (
+        <AppRndModalShell
+          titleId="stage-gvs-load-title"
+          title="Load Stage List GVS Variant"
+          subtitle="Select a GVS stage_list.bin variant and a search directory."
+          headerIcon={<FolderOpen className="h-5 w-5 text-primary" />}
+          dimensions={STAGE_GVS_LOAD_MODAL_DIMENSIONS}
+          storageKey="app.rnd-size.stage-gvs-load"
+          onClose={() => setIsGvsDialogOpen(false)}
+          closeDisabled={isApplyingGvs}
+          footer={
+            <div className="flex justify-end gap-2 bg-background px-6 py-4">
+              <Button variant="outline" onClick={() => setIsGvsDialogOpen(false)} disabled={isApplyingGvs}>
+                Cancel
+              </Button>
+              <Button onClick={() => void handleApplyGvsVariant()} disabled={isApplyingGvs}>
+                Apply
+              </Button>
+            </div>
+          }
+        >
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
             <div className="space-y-2">
               <Label htmlFor="gvs-bin-path">GVS stage_list.bin</Label>
               <FilePathInput
@@ -982,32 +1019,49 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
               />
             </div>
           </div>
+        </AppRndModalShell>
+      ) : null}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsGvsDialogOpen(false)} disabled={isApplyingGvs}>
-              Cancel
-            </Button>
-            <Button onClick={() => void handleApplyGvsVariant()} disabled={isApplyingGvs}>
-              Apply
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isGvsAssetDialogOpen} onOpenChange={setIsGvsAssetDialogOpen}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Extract All Image Assets</DialogTitle>
-            <DialogDescription asChild>
-              <div className="space-y-1">
-                <div>This operation automatically extracts nutexb assets and converts them to PNG in the selected output directory.</div>
-                <div>PNG file names use the internal nutexb names, not the nutexb index names.</div>
-                <div>Temporary files are written under `_gvs_extract_temp` inside the output directory.</div>
-              </div>
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
+      {isGvsAssetDialogOpen ? (
+        <AppRndModalShell
+          titleId="stage-gvs-asset-extract-title"
+          title="Extract All Image Assets"
+          subtitle="Extracts nutexb assets and converts them to PNG."
+          headerIcon={<Image className="h-5 w-5 text-primary" />}
+          dimensions={STAGE_GVS_ASSET_MODAL_DIMENSIONS}
+          storageKey="app.rnd-size.stage-gvs-asset-extract"
+          onClose={() => setIsGvsAssetDialogOpen(false)}
+          closeDisabled={isExtractingGvsAssets}
+          footer={
+            <div className="flex flex-wrap justify-end gap-2 bg-background px-6 py-4">
+              <Button variant="outline" onClick={() => setIsGvsAssetDialogOpen(false)} disabled={isExtractingGvsAssets}>
+                Close
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setIsGvsBinStatusDialogOpen(true)}
+                disabled={isCollectingGvsAssetBins || gvsAssetBinEntries.length === 0}
+              >
+                Bin Extraction Status
+              </Button>
+              <Button
+                onClick={() => void handleExtractAllGvsImageAssets()}
+                disabled={
+                  isExtractingGvsAssets ||
+                  isCollectingGvsAssetBins ||
+                  gvsAssetBinEntries.filter((entry) => entry.exists).length === 0
+                }
+              >
+                Start Extract and Convert
+              </Button>
+            </div>
+          }
+        >
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
+            <div className="space-y-1 text-xs text-muted-foreground">
+              <div>PNG file names use the internal nutexb names, not the nutexb index names.</div>
+              <div>Temporary files are written under `_gvs_extract_temp` inside the output directory.</div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="gvs-asset-output-dir">Output Directory</Label>
               <FilePathInput
@@ -1072,45 +1126,21 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
               </div>
             </div>
           </div>
+        </AppRndModalShell>
+      ) : null}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsGvsAssetDialogOpen(false)} disabled={isExtractingGvsAssets}>
-              Close
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setIsGvsBinStatusDialogOpen(true)}
-              disabled={isCollectingGvsAssetBins || gvsAssetBinEntries.length === 0}
-            >
-              Bin Extraction Status
-            </Button>
-            <Button
-              onClick={() => void handleExtractAllGvsImageAssets()}
-              disabled={
-                isExtractingGvsAssets ||
-                isCollectingGvsAssetBins ||
-                gvsAssetBinEntries.filter((entry) => entry.exists).length === 0
-              }
-            >
-              Start Extract and Convert
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isGvsBinStatusDialogOpen} onOpenChange={setIsGvsBinStatusDialogOpen}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Bin Extraction Status</DialogTitle>
-            <DialogDescription asChild>
-              <div className="space-y-1">
-                <div>Indexed BIN paths are resolved from GVS hash fields.</div>
-                <div>This view already excludes missing BIN paths.</div>
-              </div>
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3">
+      {isGvsBinStatusDialogOpen ? (
+        <AppRndModalShell
+          titleId="stage-gvs-bin-status-title"
+          title="Bin Extraction Status"
+          subtitle="Indexed BIN paths are resolved from GVS hash fields."
+          headerIcon={<Image className="h-5 w-5 text-primary" />}
+          dimensions={STAGE_GVS_BIN_STATUS_MODAL_DIMENSIONS}
+          storageKey="app.rnd-size.stage-gvs-bin-status"
+          onClose={() => setIsGvsBinStatusDialogOpen(false)}
+        >
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-6">
+            <div className="text-xs text-muted-foreground">This view already excludes missing BIN paths.</div>
             <div className="text-sm text-muted-foreground">
               Total Existing BIN files: {gvsAssetBinEntries.length}
             </div>
@@ -1122,77 +1152,74 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
                 : "No indexed BIN paths collected"}
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </AppRndModalShell>
+      ) : null}
 
-      <Dialog
-        open={isImportDialogOpen}
-        onOpenChange={(open) => {
-          if (open) {
-            setIsImportDialogOpen(true);
-            return;
-          }
-          setIsImportDialogOpen(false);
-          setImportPreview(null);
-        }}
-      >
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Import Stage List JSON</DialogTitle>
-            <DialogDescription>
-              {importPreview ? (
-                <>
-                  <div className="mt-2 space-y-1">
-                    <div className="break-all">File: {importPreview.filePath}</div>
-                    <div>
-                      Total: {importPreview.totalCount} · Valid: {importPreview.validCount} · Invalid: {importPreview.invalidCount}
-                      {importPreview.duplicateIds.length > 0 ? ` · Duplicates: ${importPreview.duplicateIds.length}` : ""}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>No file selected</>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          {importPreview && (
-            <div className="space-y-2">
-              <div className="text-sm font-medium">IDs to import ({importPreview.ids.length})</div>
-              <div className="max-h-56 overflow-auto border rounded-md p-2 text-xs font-mono whitespace-pre-wrap">
-                {importPreview.ids.slice(0, 500).join(", ")}
-                {importPreview.ids.length > 500 ? `\n... and ${importPreview.ids.length - 500} more` : ""}
-              </div>
-              {importPreview.duplicateIds.length > 0 && (
-                <div className="text-xs text-muted-foreground">
-                  Duplicate IDs detected (will be imported as-is): {importPreview.duplicateIds.slice(0, 100).join(", ")}
-                  {importPreview.duplicateIds.length > 100 ? ` ... and ${importPreview.duplicateIds.length - 100} more` : ""}
-                </div>
-              )}
+      {isImportDialogOpen ? (
+        <AppRndModalShell
+          titleId="stage-list-import-title"
+          title="Import Stage List JSON"
+          subtitle={importPreview ? `Valid ${importPreview.validCount} / ${importPreview.totalCount}` : "No file selected"}
+          headerIcon={<Upload className="h-5 w-5 text-primary" />}
+          dimensions={STAGE_IMPORT_MODAL_DIMENSIONS}
+          storageKey="app.rnd-size.stage-list-import"
+          onClose={() => {
+            setIsImportDialogOpen(false);
+            setImportPreview(null);
+          }}
+          closeDisabled={isImporting}
+          footer={
+            <div className="flex justify-end gap-2 bg-background px-6 py-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsImportDialogOpen(false);
+                  setImportPreview(null);
+                }}
+                disabled={isImporting}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => void handleConfirmImport()}
+                disabled={!importPreview || importPreview.validCount === 0 || isImporting}
+                className="inline-flex items-center gap-2"
+              >
+                Import
+              </Button>
             </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsImportDialogOpen(false);
-                setImportPreview(null);
-              }}
-              disabled={isImporting}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void handleConfirmImport()}
-              disabled={!importPreview || importPreview.validCount === 0 || isImporting}
-              className="inline-flex items-center gap-2"
-            >
-              Import
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          }
+        >
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
+            {importPreview ? (
+              <>
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <div className="break-all">File: {importPreview.filePath}</div>
+                  <div>
+                    Total: {importPreview.totalCount} · Valid: {importPreview.validCount} · Invalid: {importPreview.invalidCount}
+                    {importPreview.duplicateIds.length > 0 ? ` · Duplicates: ${importPreview.duplicateIds.length}` : ""}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">IDs to import ({importPreview.ids.length})</div>
+                  <div className="max-h-56 overflow-auto rounded-md border p-2 font-mono text-xs whitespace-pre-wrap">
+                    {importPreview.ids.slice(0, 500).join(", ")}
+                    {importPreview.ids.length > 500 ? `\n... and ${importPreview.ids.length - 500} more` : ""}
+                  </div>
+                  {importPreview.duplicateIds.length > 0 ? (
+                    <div className="text-xs text-muted-foreground">
+                      Duplicate IDs detected (will be imported as-is): {importPreview.duplicateIds.slice(0, 100).join(", ")}
+                      {importPreview.duplicateIds.length > 100 ? ` ... and ${importPreview.duplicateIds.length - 100} more` : ""}
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-muted-foreground">No file selected</div>
+            )}
+          </div>
+        </AppRndModalShell>
+      ) : null}
     </div>
   );
 }

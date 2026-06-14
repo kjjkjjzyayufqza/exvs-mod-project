@@ -8,13 +8,11 @@ import type {
 } from "../components/detail-view/sceneDetailViewTypes";
 import { SSBH_MODEL_ROLES } from "../components/detail-view/sceneDetailViewTypes";
 import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
-import type { NumatbModalBundle } from "@/components/ssbh-model-preview/numatbEditorUtils";
 import {
-  detectNumatbProfileFromPath,
-  deriveNumatbSisterPath,
+  buildNumatbModalBundleFromProfiles,
+  resolveNumatbProfilePaths,
+  type NumatbModalBundle,
 } from "@/components/ssbh-model-preview/numatbEditorUtils";
-import { createEmptyNumatbFile } from "@/components/ssbh-model-preview/daeSsbhTypes";
-import type { NumatbPathsByProfile } from "../components/detail-view/sceneDetailViewTypes";
 import {
   ssbhReadNumdlbMapping,
   ssbhWriteNumdlbMapping,
@@ -34,19 +32,6 @@ import {
   modelTabLoadingField,
   shouldLoadModelTab,
 } from "../utils/sceneDetailViewTabPolicy";
-
-function resolveNumatbProfilePaths(matlPaths: string[]): NumatbPathsByProfile {
-  let maya: string | null = null;
-  let nust: string | null = null;
-  for (const p of matlPaths) {
-    const profile = detectNumatbProfileFromPath(p);
-    if (profile === "maya" && !maya) maya = p;
-    if (profile === "nust" && !nust) nust = p;
-  }
-  if (nust && !maya) maya = deriveNumatbSisterPath(nust, "maya");
-  if (maya && !nust) nust = deriveNumatbSisterPath(maya, "nust");
-  return { maya, nust };
-}
 
 function numdlbFromPreviewBundle(bundle: SsbhModelPreviewBundle): NumdlbReadResult {
   const modl = bundle.modl as {
@@ -77,12 +62,11 @@ function numdlbFromPreviewBundle(bundle: SsbhModelPreviewBundle): NumdlbReadResu
 
 function numatbFromPreviewBundle(bundle: SsbhModelPreviewBundle): NumatbModalBundle {
   const profiles = bundle.matlProfiles;
-  const matl = (bundle.matl as MatlDataJson | null) ?? createEmptyNumatbFile();
-  return {
-    mayaFile: (profiles?.maya as MatlDataJson | null) ?? matl,
-    nustFile: (profiles?.nust as MatlDataJson | null) ?? matl,
-    mirrorTexturePathsAcrossProfiles: true,
-  };
+  const matl = (bundle.matl as MatlDataJson | null) ?? null;
+  return buildNumatbModalBundleFromProfiles(
+    (profiles?.maya as MatlDataJson | null) ?? matl,
+    (profiles?.nust as MatlDataJson | null) ?? matl,
+  );
 }
 
 let sessionCounter = 0;
@@ -200,8 +184,8 @@ export function useSceneDetailView(bundleLookup: DetailViewBundleLookup) {
             );
             return;
           }
-          let mayaFile = createEmptyNumatbFile();
-          let nustFile = createEmptyNumatbFile();
+          let mayaFile: MatlDataJson | null = null;
+          let nustFile: MatlDataJson | null = null;
 
           if (resolvedPaths.nust) {
             try { nustFile = await ssbhTemplateReadNumatb(resolvedPaths.nust); } catch { /* file may not exist */ }
@@ -210,11 +194,7 @@ export function useSceneDetailView(bundleLookup: DetailViewBundleLookup) {
             try { mayaFile = await ssbhTemplateReadNumatb(resolvedPaths.maya); } catch { /* file may not exist */ }
           }
 
-          const numatbBundle: NumatbModalBundle = {
-            mayaFile,
-            nustFile,
-            mirrorTexturePathsAcrossProfiles: true,
-          };
+          const numatbBundle = buildNumatbModalBundleFromProfiles(mayaFile, nustFile);
           setSessions((prev) =>
             prev.map((s) =>
               s.id === sessionId && s.modelData

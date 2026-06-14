@@ -34,6 +34,7 @@ interface DaeImportSsbhFullPanelProps {
   textureReferencesValidating?: boolean;
   directToDisk?: boolean;
   batchCount?: number;
+  unitModelMode?: boolean;
 }
 
 export function DaeImportSsbhFullPanel({
@@ -45,6 +46,7 @@ export function DaeImportSsbhFullPanel({
   textureReferencesValidating = false,
   directToDisk = false,
   batchCount = 1,
+  unitModelMode = false,
 }: DaeImportSsbhFullPanelProps) {
   const setSourcePath = useDaeSsbhSessionStore((state) => state.setSourcePath);
   const loadAnalysis = useDaeSsbhSessionStore((state) => state.loadAnalysis);
@@ -56,6 +58,16 @@ export function DaeImportSsbhFullPanel({
   useEffect(() => {
     void loadTemplateLibrary();
   }, [loadTemplateLibrary]);
+
+  useEffect(() => {
+    if (!unitModelMode) return;
+    const state = useDaeSsbhSessionStore.getState();
+    state.setWriteNumdlb(true);
+    state.setWriteNumshb(true);
+    state.setWriteNusktb(true);
+    state.setWriteNumatb(true);
+    state.setWriteMayaProfile(true);
+  }, [sourcePath, unitModelMode]);
 
   useEffect(() => {
     if (!analysis?.canConvert) {
@@ -154,7 +166,9 @@ export function DaeImportSsbhFullPanel({
     <div className="space-y-3 p-4">
       <DaeImportPanelSection title="Output">
         <p className="text-[11px] text-muted-foreground">
-          {directToDisk
+          {unitModelMode
+            ? `Generated model files are registered under the Unit model models folder${stageRoot ? ` (${stageRoot})` : ""}. Referenced textures are deduplicated into its shared texture pool.`
+            : directToDisk
             ? batchCount > 1
               ? `These SSBH and NUMATB settings are shared by all ${batchCount} files. Each model is written directly to its own disk folder.`
               : "SSBH files are written directly to the selected disk folder."
@@ -235,29 +249,59 @@ export function DaeImportSsbhFullPanel({
       <DaeImportPanelSection title="Output Files">
         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
           <label className="flex cursor-pointer items-center gap-2 text-[11px]">
-            <Checkbox checked={session.writeNumdlb} onCheckedChange={(c) => session.setWriteNumdlb(c === true)} />
+            <Checkbox
+              checked={session.writeNumdlb}
+              disabled={unitModelMode}
+              onCheckedChange={(c) => session.setWriteNumdlb(c === true)}
+            />
             .numdlb
           </label>
           <label className="flex cursor-pointer items-center gap-2 text-[11px]">
-            <Checkbox checked={session.writeNumshb} onCheckedChange={(c) => session.setWriteNumshb(c === true)} />
+            <Checkbox
+              checked={session.writeNumshb}
+              disabled={unitModelMode}
+              onCheckedChange={(c) => session.setWriteNumshb(c === true)}
+            />
             .numshb
           </label>
           <label className="flex cursor-pointer items-center gap-2 text-[11px]">
-            <Checkbox checked={session.writeNusktb} onCheckedChange={(c) => session.setWriteNusktb(c === true)} />
+            <Checkbox
+              checked={session.writeNusktb}
+              disabled={unitModelMode}
+              onCheckedChange={(c) => session.setWriteNusktb(c === true)}
+            />
             .nusktb
           </label>
           <label className="flex cursor-pointer items-center gap-2 text-[11px]">
-            <Checkbox checked={session.writeNumatb} onCheckedChange={(c) => session.setWriteNumatb(c === true)} />
+            <Checkbox
+              checked={session.writeNumatb}
+              disabled={unitModelMode}
+              onCheckedChange={(c) => session.setWriteNumatb(c === true)}
+            />
             __nust__.numatb
           </label>
           <label className="flex cursor-pointer items-center gap-2 text-[11px]">
-            <Checkbox checked={session.writeMayaProfile} onCheckedChange={(c) => session.setWriteMayaProfile(c === true)} />
+            <Checkbox
+              checked={session.writeMayaProfile}
+              disabled={unitModelMode}
+              onCheckedChange={(c) => session.setWriteMayaProfile(c === true)}
+            />
             __maya__.numatb
           </label>
-          <label className="flex cursor-pointer items-center gap-2 text-[11px]">
-            <Checkbox checked={session.writeLog} onCheckedChange={(c) => session.setWriteLog(c === true)} />
-            Write log
-          </label>
+          {unitModelMode ? (
+            <label className="flex cursor-pointer items-center gap-2 text-[11px]">
+              <Checkbox checked disabled />
+              .jnttbl
+            </label>
+          ) : (
+            <label className="flex cursor-pointer items-center gap-2 text-[11px]">
+              <Checkbox
+                checked={session.writeLog}
+                onCheckedChange={(c) => session.setWriteLog(c === true)}
+              />
+              Write log
+            </label>
+          )}
         </div>
       </DaeImportPanelSection>
 

@@ -402,3 +402,84 @@
 - `git diff --check`
   - PASS: no whitespace errors; only existing line-ending warnings from the
     dirty working tree.
+
+## 2026-06-14 NUMATB Profile Loading Parity
+
+### Findings
+
+- Unit Model and Scene Editor render the same shared NUMATB editor body and RND
+  modal shell.
+- Their loading models differ:
+  - Scene Editor resolves maya/nust paths and reads both files into one
+    `NumatbModalBundle`.
+  - `useSsbhFileEditorSessions` reads only the clicked file and initializes the
+    other profile with `createEmptyNumatbFile()`.
+- The same single-profile assumption is present in Unit Model reload and save:
+  reload discards the sister profile, while save writes only the clicked
+  profile and then marks the complete two-profile draft clean.
+- `unit-model-structure-tree.json` contains 67 NUMATB files for 23 model groups:
+  each group has a maya file, a base nust file, and an `_m001__nust__` variant.
+  Opening an `_m001__nust__` file therefore needs a fallback from the
+  non-existent `_m001__maya__` name to the base `__maya__` profile.
+
+### Changes
+
+- Keep the shared NUMATB editor UI and RND shell.
+- Changed the canonical shared file-session hook to load, reload, and save both
+  profile paths using Scene Editor semantics.
+- Preserve the clicked profile as the initially active tab.
+- Added an `_mNNN__nust__` to base `__maya__` fallback for Unit Model variants.
+- Moved the profile path resolver and two-profile bundle builder into
+  `numatbEditorUtils.ts`; Scene Editor and Unit Model now use the same helpers.
+- Added profile paths to shared NUMATB sessions so save writes both loaded
+  profiles instead of marking an unwritten sister draft clean.
+
+### Verification Log
+
+- Real sample `E:\XB\解包\com\file\0xEE39E2DD`
+  - 67 NUMATB files: 23 maya, 44 nust, 0 empty files.
+- Regression test before fix:
+  - 3 failures: sister profile empty, `_m001` maya fallback missing, save wrote
+    only one profile.
+- `pnpm vitest run src/components/ssbh-model-preview/useSsbhFileEditorSessions.test.ts src/page/SceneEdit/hooks/useSceneDetailView.test.tsx`
+  - PASS: 2 files, 7 tests.
+- `pnpm vitest run src/components/ssbh-model-preview`
+  - PASS: 24 files, 119 tests.
+- `pnpm vitest run src/page/UnitModelEdit/utils/unitModelNodePaths.test.ts src/page/UnitModelEdit/utils/unitModelStructureTree.test.ts`
+  - PASS: 2 files, 6 tests.
+- `pnpm tsc --noEmit --pretty false`
+  - BLOCKED only by existing unrelated SceneEdit/resourceRegistry test fixture
+    errors; no errors matched the changed NUMATB files.
+- `git diff --check`
+  - PASS: no whitespace errors; only existing line-ending warnings.
+
+## 2026-06-14 NUMATB AI Copy Action
+
+### Finding
+
+- `NumatbTemplateEditorModalBody` only renders its Copy JSON button when
+  `onCopyProfilesJson` is provided.
+- Scene Detail View provides the callback and builds a full two-profile
+  clipboard payload.
+- `NumatbEditorModalWindow`, used by Unit Model Editor and other windowed file
+  sessions, did not provide the callback, so the button was absent from the DOM.
+
+### Changes
+
+- Added the same full maya/nust clipboard export to the shared window component.
+- Uses the current draft bundle, not a fresh single-file disk read.
+- Includes both resolved profile paths and a model name derived from the NUMATB
+  basename for AI analysis context.
+
+### Verification Log
+
+- Regression test before fix:
+  - FAIL: `Copy NUMATB profiles as JSON` was absent from the window DOM.
+- `pnpm vitest run src/components/ssbh-model-preview/NumatbEditorModalWindow.test.tsx src/components/ssbh-model-preview/copyNumatbProfilesJson.test.ts src/components/ssbh-model-preview/useSsbhFileEditorSessions.test.ts`
+  - PASS: 3 files, 10 tests.
+- `pnpm vitest run src/components/ssbh-model-preview`
+  - PASS: 25 files, 120 tests.
+- Filtered `pnpm tsc --noEmit --pretty false`
+  - PASS: no errors matched the changed NUMATB window/session files.
+- `git diff --check`
+  - PASS: no whitespace errors; only existing line-ending warnings.

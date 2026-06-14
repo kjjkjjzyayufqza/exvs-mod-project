@@ -1,23 +1,15 @@
 import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { join } from "@tauri-apps/api/path";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
-import { Loader2, Search } from "lucide-react";
+import { Images, Loader2, Search } from "lucide-react";
 
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -31,6 +23,13 @@ import { splitPathSegments } from "@/lib/fhm2d_fileUrlUtils";
 import type { CardIconItem } from "./cardIconStructure";
 
 type ReplacePixelSource = "nutexb" | "convertPng";
+const BATCH_REPLACE_ROW_HEIGHT = 36;
+const CARD_ICON_BATCH_REPLACE_MODAL_DIMENSIONS = {
+  width: 620,
+  height: 760,
+  minWidth: 520,
+  minHeight: 560,
+};
 
 function resolveFullPath(folderPath: string, fileUrl: string): Promise<string> {
   const segments = splitPathSegments(fileUrl);
@@ -68,6 +67,7 @@ export function CardIconBatchReplaceDialog({
   } | null>(null);
 
   const lastAnchorFilteredIndexRef = useRef<number | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   const deferredSearchTerm = useDeferredValue(searchTerm);
 
@@ -88,6 +88,13 @@ export function CardIconBatchReplaceDialog({
       );
     });
   }, [itemsWithFileUrl, deferredSearchTerm]);
+  const getListScrollElement = useCallback(() => listRef.current, []);
+  const rowVirtualizer = useVirtualizer({
+    count: filteredItems.length,
+    getScrollElement: getListScrollElement,
+    estimateSize: () => BATCH_REPLACE_ROW_HEIGHT,
+    overscan: 10,
+  });
 
   const selectAll = useCallback(() => {
     setSelectedIds(new Set(filteredItems.map((it) => it.itemIndex)));
@@ -226,22 +233,42 @@ export function CardIconBatchReplaceDialog({
   const selectedCount = selectedIds.size;
 
   return (
-    <Dialog open={openState} onOpenChange={setOpenState}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline" disabled={disabled || itemsWithFileUrl.length === 0}>
-          {triggerLabel}
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[520px]">
-        <DialogHeader>
-          <DialogTitle>Replace Format (DDS)</DialogTitle>
-          <DialogDescription>
-            Pick where pixel data comes from, then a DDS format. Output always writes the on-disk nutexb and refreshes
-            the matching PNG under __convert.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
+    <>
+      <Button size="sm" variant="outline" disabled={disabled || itemsWithFileUrl.length === 0} onClick={() => setOpenState(true)}>
+        {triggerLabel}
+      </Button>
+      {openState ? (
+        <AppRndModalShell
+          titleId="card-icon-batch-replace-title"
+          title="Replace Format (DDS)"
+          subtitle="Writes the on-disk nutexb and refreshes the matching __convert PNG."
+          headerIcon={<Images className="h-5 w-5 text-primary" />}
+          dimensions={CARD_ICON_BATCH_REPLACE_MODAL_DIMENSIONS}
+          storageKey="app.rnd-size.card-icon-batch-replace"
+          onClose={() => setOpenState(false)}
+          closeDisabled={isReplacing}
+          footer={
+            <div className="flex flex-wrap justify-end gap-2 bg-background px-6 py-4">
+              <Button variant="outline" onClick={() => setOpenState(false)} disabled={isReplacing}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => void handleReplace()}
+                disabled={selectedCount === 0 || isReplacing}
+              >
+                {isReplacing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Replacing...
+                  </>
+                ) : (
+                  `Replace ${selectedCount} image(s)`
+                )}
+              </Button>
+            </div>
+          }
+        >
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1">
               <Label>Pixel source</Label>
@@ -318,38 +345,45 @@ export function CardIconBatchReplaceDialog({
               Click a row to toggle. Hold <kbd className="rounded border border-border bg-muted px-1 py-0.5 text-[10px] font-mono">Shift</kbd> and click another row to select all items in between in the current list.
             </p>
 
-            <ScrollArea className="h-[240px] rounded-md border border-border p-2">
-              <div className="space-y-1">
-                {filteredItems.map((item, filteredIndex) => (
-                  <div
-                    key={item.itemIndex}
-                    className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/50 cursor-pointer select-none"
-                    onMouseDownCapture={(e) =>
-                      handleListRowMouseDownCapture(e, filteredIndex, item.itemIndex)
-                    }
-                  >
-                    <Checkbox
-                      id={`batch-replace-${item.itemIndex}`}
-                      checked={selectedIds.has(item.itemIndex)}
-                      onCheckedChange={() =>
-                        handleCheckboxCheckedChange(filteredIndex, item.itemIndex)
-                      }
-                      disabled={isReplacing}
-                    />
-                    <span className="text-sm font-normal cursor-pointer truncate flex-1 min-w-0 text-foreground">
-                      {item.name ?? `#${item.itemIndex}`}
-                    </span>
-                  </div>
-                ))}
-                {filteredItems.length === 0 && (
-                  <div className="text-center text-muted-foreground py-6 text-sm">
-                    {searchTerm.trim()
-                      ? `No icons found matching "${searchTerm.trim()}"`
-                      : "No images available"}
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
+            <div ref={listRef} className="h-[240px] overflow-auto rounded-md border border-border p-2">
+              {filteredItems.length === 0 ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  {searchTerm.trim()
+                    ? `No icons found matching "${searchTerm.trim()}"`
+                    : "No images available"}
+                </div>
+              ) : (
+                <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
+                  {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                    const item = filteredItems[virtualRow.index];
+                    if (!item) return null;
+                    const filteredIndex = virtualRow.index;
+                    return (
+                      <div
+                        key={item.itemIndex}
+                        className="absolute left-0 top-0 flex w-full cursor-pointer select-none items-center gap-2 rounded px-2 py-1.5 hover:bg-muted/50"
+                        style={{ height: virtualRow.size, transform: `translateY(${virtualRow.start}px)` }}
+                        onMouseDownCapture={(e) =>
+                          handleListRowMouseDownCapture(e, filteredIndex, item.itemIndex)
+                        }
+                      >
+                        <Checkbox
+                          id={`batch-replace-${item.itemIndex}`}
+                          checked={selectedIds.has(item.itemIndex)}
+                          onCheckedChange={() =>
+                            handleCheckboxCheckedChange(filteredIndex, item.itemIndex)
+                          }
+                          disabled={isReplacing}
+                        />
+                        <span className="min-w-0 flex-1 cursor-pointer truncate text-sm font-normal text-foreground">
+                          {item.name ?? `#${item.itemIndex}`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             {replaceProgress && (
               <div className="space-y-2 pt-2">
@@ -369,26 +403,8 @@ export function CardIconBatchReplaceDialog({
             )}
           </div>
         </div>
-
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => setOpenState(false)} disabled={isReplacing}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => void handleReplace()}
-            disabled={selectedCount === 0 || isReplacing}
-          >
-            {isReplacing ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Replacing...
-              </>
-            ) : (
-              `Replace ${selectedCount} image(s)`
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </AppRndModalShell>
+      ) : null}
+    </>
   );
 }

@@ -1025,3 +1025,14 @@ pub async fn add_unit_model_model(
     .map_err(|e| format!("Task join error: {e}"))??;
     Ok(result)
 }
+
+#[tauri::command]
+pub async fn validate_unit_model_source_folder(
+    source_dir: String,
+) -> Result<unit_model_models::UnitModelSourceValidation, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        unit_model_models::validate_unit_model_source_folder(&source_dir)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}

@@ -6,7 +6,8 @@ import {
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowDown,
   ArrowUp,
@@ -41,6 +42,9 @@ interface ResourceRegistryDataTableProps {
   rows: MergedRegistryEntry[];
   actions: ResourceRegistryTableActions;
 }
+
+const VIRTUALIZE_ROW_THRESHOLD = 80;
+const ROW_HEIGHT_ESTIMATE = 40;
 
 function SortIcon({ sorted }: { sorted: false | "asc" | "desc" }) {
   if (sorted === "asc") return <ArrowUp className="ml-1 h-3 w-3" />;
@@ -222,56 +226,94 @@ export function ResourceRegistryDataTable({ rows, actions }: ResourceRegistryDat
     getRowId: (row) => `${row.sourceLayer}-${row.id}`,
   });
 
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const getScrollElement = useCallback(() => scrollRef.current, []);
+  const tableRows = table.getRowModel().rows;
+  const shouldVirtualize = tableRows.length > VIRTUALIZE_ROW_THRESHOLD;
+  const rowVirtualizer = useVirtualizer({
+    count: tableRows.length,
+    getScrollElement,
+    estimateSize: () => ROW_HEIGHT_ESTIMATE,
+    overscan: 12,
+  });
+  const virtualRows = shouldVirtualize ? rowVirtualizer.getVirtualItems() : [];
+  const firstVirtualRow = virtualRows[0];
+  const lastVirtualRow = virtualRows[virtualRows.length - 1];
+  const paddingTop = firstVirtualRow?.start ?? 0;
+  const paddingBottom =
+    lastVirtualRow === undefined
+      ? 0
+      : Math.max(0, rowVirtualizer.getTotalSize() - lastVirtualRow.end);
+  const renderedRows = shouldVirtualize
+    ? virtualRows
+        .map((virtualRow) => tableRows[virtualRow.index])
+        .filter((row): row is (typeof tableRows)[number] => row !== undefined)
+    : tableRows;
+
   return (
-    <Table>
-      <TableHeader className="sticky top-0 z-10 bg-background">
-        {table.getHeaderGroups().map((headerGroup) => (
-          <TableRow key={headerGroup.id}>
-            {headerGroup.headers.map((header) => (
-              <TableHead
-                key={header.id}
-                style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
-                className="h-8 px-2 text-[11px]"
-              >
-                {header.isPlaceholder ? null : header.column.getCanSort() ? (
-                  <button
-                    type="button"
-                    className={cn(
-                      "flex items-center font-medium hover:text-foreground",
-                      header.column.getIsSorted() ? "text-foreground" : "",
-                    )}
-                    onClick={header.column.getToggleSortingHandler()}
-                  >
-                    {flexRender(header.column.columnDef.header, header.getContext())}
-                    <SortIcon sorted={header.column.getIsSorted()} />
-                  </button>
-                ) : (
-                  flexRender(header.column.columnDef.header, header.getContext())
-                )}
-              </TableHead>
-            ))}
-          </TableRow>
-        ))}
-      </TableHeader>
-      <TableBody>
-        {table.getRowModel().rows.length === 0 ? (
-          <TableRow>
-            <TableCell colSpan={columns.length} className="h-24 text-center text-sm text-muted-foreground">
-              No entries match the current filters.
-            </TableCell>
-          </TableRow>
-        ) : (
-          table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id} className="hover:bg-muted/30">
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id} className="py-1.5 px-2 align-top">
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
+    <div ref={scrollRef} className="h-full min-h-[240px] overflow-auto">
+      <Table>
+        <TableHeader className="sticky top-0 z-10 bg-background">
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id}>
+              {headerGroup.headers.map((header) => (
+                <TableHead
+                  key={header.id}
+                  style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
+                  className="h-8 px-2 text-[11px]"
+                >
+                  {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                    <button
+                      type="button"
+                      className={cn(
+                        "flex cursor-pointer items-center font-medium hover:text-foreground",
+                        header.column.getIsSorted() ? "text-foreground" : "",
+                      )}
+                      onClick={header.column.getToggleSortingHandler()}
+                    >
+                      {flexRender(header.column.columnDef.header, header.getContext())}
+                      <SortIcon sorted={header.column.getIsSorted()} />
+                    </button>
+                  ) : (
+                    flexRender(header.column.columnDef.header, header.getContext())
+                  )}
+                </TableHead>
               ))}
             </TableRow>
-          ))
-        )}
-      </TableBody>
-    </Table>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {tableRows.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={columns.length} className="h-24 text-center text-sm text-muted-foreground">
+                No entries match the current filters.
+              </TableCell>
+            </TableRow>
+          ) : (
+            <>
+              {paddingTop > 0 ? (
+                <TableRow aria-hidden="true">
+                  <TableCell colSpan={columns.length} className="p-0" style={{ height: paddingTop }} />
+                </TableRow>
+              ) : null}
+              {renderedRows.map((row) => (
+                <TableRow key={row.id} className="hover:bg-muted/30">
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id} className="py-1.5 px-2 align-top">
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+              {paddingBottom > 0 ? (
+                <TableRow aria-hidden="true">
+                  <TableCell colSpan={columns.length} className="p-0" style={{ height: paddingBottom }} />
+                </TableRow>
+              ) : null}
+            </>
+          )}
+        </TableBody>
+      </Table>
+    </div>
   );
 }

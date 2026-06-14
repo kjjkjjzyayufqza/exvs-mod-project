@@ -1,10 +1,12 @@
 use serde::{Deserialize, Serialize};
+use ssbh_data::prelude::*;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tauri::{ipc::Channel, Emitter, State};
 
 use crate::format::fhm2d_stage;
 use crate::havok_cli;
+use crate::jnttbl_format::{serialize_jnttbl, JnttblDocument, JnttblEntry};
 use crate::scene_memory_session::{
     GraphicParam, HavokCollisionData, ImportConfig, PlacementEntry, SceneMemorySession,
     SceneSessionState, SceneSource, SsbhArtifactPaths, SsbhArtifacts,
@@ -1875,6 +1877,14 @@ fn convert_import_path_to_ssbh_artifact_paths(
     source_path: &Path,
     ssbh_config: &crate::scene_memory_session::SsbhConvertConfig,
 ) -> Result<SsbhArtifactPaths, String> {
+    convert_import_path_to_ssbh_artifact_paths_with_geometry(source_path, ssbh_config, &[])
+}
+
+fn convert_import_path_to_ssbh_artifact_paths_with_geometry(
+    source_path: &Path,
+    ssbh_config: &crate::scene_memory_session::SsbhConvertConfig,
+    include_geometry_names: &[String],
+) -> Result<SsbhArtifactPaths, String> {
     import_extension_from_path(source_path)?;
     let temp_dir = tempfile::Builder::new()
         .prefix("scene-import-ssbh-")
@@ -1892,7 +1902,7 @@ fn convert_import_path_to_ssbh_artifact_paths(
         scale_factor: ssbh_config.scale_factor as f32,
         up_axis_conversion: up_axis,
         flip_uv: ssbh_config.flip_uv,
-        include_geometry_names: Vec::new(),
+        include_geometry_names: include_geometry_names.to_vec(),
         write_numdlb: ssbh_config.write_numdlb,
         write_numshb: ssbh_config.write_numshb,
         write_nusktb: ssbh_config.write_nusktb,
@@ -2678,6 +2688,301 @@ pub struct StaticMeshDirectConvertResult {
     pub warnings: Vec<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitModelStaticMeshImportOptions {
+    pub model_root: String,
+    pub structure_json_path: Option<String>,
+    pub source_path: String,
+    pub config: ImportConfig,
+    pub include_geometry_names: Vec<String>,
+}
+
+fn required_unit_model_ssbh_config(
+    config: &ImportConfig,
+) -> Result<crate::scene_memory_session::SsbhConvertConfig, String> {
+    if !config.convert_to_ssbh {
+        return Err("Unit model import requires SSBH conversion.".to_string());
+    }
+    if config.generate_hkt {
+        return Err("Unit model import does not generate stage HKT collision.".to_string());
+    }
+    let ssbh = config
+        .ssbh_config
+        .clone()
+        .ok_or_else(|| "Unit model import requires SSBH conversion settings.".to_string())?;
+    let required = [
+        (ssbh.write_numdlb, ".numdlb"),
+        (ssbh.write_numshb, ".numshb"),
+        (ssbh.write_nusktb, ".nusktb"),
+        (ssbh.write_numatb, "__nust__.numatb"),
+        (ssbh.write_maya_profile, "__maya__.numatb"),
+        (ssbh.write_jnttbl, ".jnttbl"),
+    ];
+    let disabled = required
+        .into_iter()
+        .filter_map(|(enabled, label)| (!enabled).then_some(label))
+        .collect::<Vec<_>>();
+    if !disabled.is_empty() {
+        return Err(format!(
+            "Unit model import requires all model outputs. Enable: {}.",
+            disabled.join(", ")
+        ));
+    }
+    Ok(ssbh)
+}
+
+fn copy_required_artifact(
+    source: &Option<PathBuf>,
+    destination: &Path,
+    label: &str,
+) -> Result<(), String> {
+    let source = source
+        .as_ref()
+        .filter(|path| path.is_file())
+        .ok_or_else(|| {
+            format!("SSBH conversion did not generate the required {label} artifact.")
+        })?;
+    std::fs::copy(source, destination).map_err(|e| {
+        format!(
+            "Failed to stage generated {label} {} -> {}: {e}",
+            source.display(),
+            destination.display()
+        )
+    })?;
+    Ok(())
+}
+
+fn write_identity_jnttbl_for_nusktb(nusktb_path: &Path, output_path: &Path) -> Result<(), String> {
+    let skel = SkelData::from_file(nusktb_path).map_err(|e| {
+        format!(
+            "Failed to read generated nusktb {}: {e}",
+            nusktb_path.display()
+        )
+    })?;
+    let bone_count = u32::try_from(skel.bones.len())
+        .map_err(|_| "Generated skeleton has too many bones for JNTT.".to_string())?;
+    let document = JnttblDocument {
+        version: 1,
+        bone_count,
+        flag: 0,
+        entries: (0..bone_count)
+            .map(|index| JnttblEntry {
+                hash_id: index,
+                bone_index: index,
+            })
+            .collect(),
+    };
+    let bytes = serialize_jnttbl(&document)?;
+    std::fs::write(output_path, bytes).map_err(|e| {
+        format!(
+            "Failed to write generated jnttbl {}: {e}",
+            output_path.display()
+        )
+    })
+}
+
+fn staged_texture_filename(reference: &str) -> Result<String, String> {
+    let normalized = reference.trim().replace('\\', "/");
+    let basename = normalized
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .next_back()
+        .ok_or_else(|| format!("Invalid empty texture reference: {reference:?}"))?;
+    if basename.to_ascii_lowercase().ends_with(".nutexb") {
+        Ok(basename.to_string())
+    } else {
+        Ok(format!("{basename}.nutexb"))
+    }
+}
+
+fn stage_unit_model_source_folder(
+    staging: &Path,
+    base: &str,
+    artifacts: &SsbhArtifactPaths,
+    resolved_textures: &[(String, PathBuf)],
+) -> Result<usize, String> {
+    copy_required_artifact(
+        &artifacts.numdlb,
+        &staging.join(format!("{base}.numdlb")),
+        "numdlb",
+    )?;
+    copy_required_artifact(
+        &artifacts.numshb,
+        &staging.join(format!("{base}.numshb")),
+        "numshb",
+    )?;
+    copy_required_artifact(
+        &artifacts.nusktb,
+        &staging.join(format!("{base}.nusktb")),
+        "nusktb",
+    )?;
+    copy_required_artifact(
+        &artifacts.numatb,
+        &staging.join(format!("{base}__nust__.numatb")),
+        "Nust numatb",
+    )?;
+    copy_required_artifact(
+        &artifacts.maya_numatb,
+        &staging.join(format!("{base}__maya__.numatb")),
+        "Maya numatb",
+    )?;
+    write_identity_jnttbl_for_nusktb(
+        &staging.join(format!("{base}.nusktb")),
+        &staging.join(format!("{base}.jnttbl")),
+    )?;
+
+    let mut staged_texture_targets = std::collections::HashMap::new();
+    for (reference, resolved_path) in resolved_textures {
+        let filename = staged_texture_filename(reference)?;
+        let key = filename.to_ascii_lowercase();
+        if let Some(previous) = staged_texture_targets.insert(key, resolved_path) {
+            if previous != resolved_path {
+                return Err(format!(
+                    "Multiple texture references resolve to different files with the same basename '{}'.",
+                    filename
+                ));
+            }
+            continue;
+        }
+        std::fs::copy(resolved_path, staging.join(&filename)).map_err(|e| {
+            format!(
+                "Failed to stage texture {} as {}: {e}",
+                resolved_path.display(),
+                filename
+            )
+        })?;
+    }
+    Ok(6 + staged_texture_targets.len())
+}
+
+#[tauri::command]
+pub async fn unit_model_import_static_mesh(
+    options: UnitModelStaticMeshImportOptions,
+    on_progress: Channel<StaticMeshImportProgress>,
+) -> Result<crate::format::unit_model_models::UnitModelMutationResult, String> {
+    let source_path = PathBuf::from(options.source_path.trim());
+    if !source_path.is_file() {
+        return Err(format!(
+            "Static mesh file not found: {}",
+            source_path.display()
+        ));
+    }
+    let model_root = PathBuf::from(options.model_root.trim());
+    if !model_root.is_dir() {
+        return Err(format!(
+            "Unit model root not found: {}",
+            model_root.display()
+        ));
+    }
+    let ssbh_config = required_unit_model_ssbh_config(&options.config)?;
+    let base = ssbh_config.base_filename.trim().to_string();
+    if base.is_empty() {
+        return Err("Unit model base filename cannot be empty.".to_string());
+    }
+    if Path::new(&base).file_name().and_then(|name| name.to_str()) != Some(base.as_str()) {
+        return Err("Unit model base filename cannot contain path separators.".to_string());
+    }
+    if options.include_geometry_names.is_empty() {
+        return Err("Unit model import must include at least one geometry.".to_string());
+    }
+
+    send_static_mesh_status(
+        Some(&on_progress),
+        "read",
+        "Checking selected unit model source...",
+    );
+    let (source_ext, _) =
+        send_static_mesh_source_progress(Some(&on_progress), &source_path, "read")?;
+    let source_format = static_mesh_format_label(source_ext);
+
+    let texture_references = collect_ssbh_config_texture_references(&ssbh_config);
+    let mut resolved_textures = Vec::new();
+    for reference in &texture_references {
+        let resolved = resolve_scene_import_texture_ref(
+            Some(options.model_root.trim()),
+            Some(options.source_path.trim()),
+            reference,
+        )
+        .ok_or_else(|| {
+            format!(
+                "NUMATB texture reference '{reference}' was not found beside the source file or in the Unit model texture pool."
+            )
+        })?;
+        resolved_textures.push((
+            reference.clone(),
+            PathBuf::from(resolved.replace('/', std::path::MAIN_SEPARATOR_STR)),
+        ));
+    }
+
+    send_static_mesh_progress(
+        Some(&on_progress),
+        StaticMeshImportProgress::ConvertStarted {
+            format: source_format,
+            source_name: static_mesh_source_name(&source_path),
+            base_filename: base.clone(),
+        },
+    );
+
+    let source_for_convert = source_path.clone();
+    let model_root_text = options.model_root.clone();
+    let structure_json_path = options.structure_json_path.clone();
+    let ssbh_for_convert = ssbh_config.clone();
+    let include_geometry_names = options.include_geometry_names.clone();
+    let progress_for_task = on_progress.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let artifacts = convert_import_path_to_ssbh_artifact_paths_with_geometry(
+            &source_for_convert,
+            &ssbh_for_convert,
+            &include_geometry_names,
+        )?;
+        let artifact_root = artifacts.root_dir.clone();
+        let operation = (|| {
+            send_static_mesh_progress(
+                Some(&progress_for_task),
+                StaticMeshImportProgress::ConvertFinished {
+                    total_bytes: artifacts.payload_bytes(),
+                    file_count: artifacts.file_count() + 1,
+                },
+            );
+            let staging_root = tempfile::Builder::new()
+                .prefix("unit-model-import-")
+                .tempdir()
+                .map_err(|e| format!("Failed to create Unit model import staging folder: {e}"))?;
+            let staging = staging_root.path();
+            let staged_file_count =
+                stage_unit_model_source_folder(staging, &base, &artifacts, &resolved_textures)?;
+
+            send_static_mesh_progress(
+                Some(&progress_for_task),
+                StaticMeshImportProgress::WriteStarted {
+                    output_dir: model_root_text.clone(),
+                    base_filename: base.clone(),
+                },
+            );
+            let mutation = crate::format::unit_model_models::add_unit_model_model(
+                &model_root_text,
+                structure_json_path.as_deref(),
+                staging.to_string_lossy().as_ref(),
+            )?;
+            send_static_mesh_progress(
+                Some(&progress_for_task),
+                StaticMeshImportProgress::WriteFinished {
+                    file_count: staged_file_count + 1,
+                },
+            );
+            Ok::<_, String>(mutation)
+        })();
+        let _ = std::fs::remove_dir_all(artifact_root);
+        operation
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+
+    send_static_mesh_progress(Some(&on_progress), StaticMeshImportProgress::Complete);
+    Ok(result)
+}
+
 #[tauri::command]
 pub async fn scene_convert_static_mesh_to_stage_files(
     options: StaticMeshDirectConvertOptions,
@@ -3067,8 +3372,10 @@ pub fn scene_list_imports(
 mod tests {
     use super::*;
     use crate::scene_memory_session::{
-        HktSimplifyConfig, ImportConfig, SceneSessionState, SceneSource, StageBundleMemory,
+        HktSimplifyConfig, ImportConfig, SceneSessionState, SceneSource, SsbhConvertConfig,
+        StageBundleMemory,
     };
+    use ssbh_data::hlpb_data::HlpbData;
     use std::collections::HashMap;
 
     const STAGE_ROOT: &str = r"E:\XB\解包\com\test\0x4D1F5138\0\0";
@@ -3108,6 +3415,20 @@ mod tests {
         visit(root, root, &mut out);
         out.sort();
         out
+    }
+
+    fn copy_dir_recursive(source: &Path, destination: &Path) {
+        std::fs::create_dir_all(destination).unwrap();
+        for entry in std::fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            let source_path = entry.path();
+            let destination_path = destination.join(entry.file_name());
+            if source_path.is_dir() {
+                copy_dir_recursive(&source_path, &destination_path);
+            } else {
+                std::fs::copy(source_path, destination_path).unwrap();
+            }
+        }
     }
 
     #[test]
@@ -4483,5 +4804,88 @@ mod tests {
             "[OK] Full lifecycle: create -> load stage -> import DAE -> convert -> save ({} files) -> clean -> destroy",
             save_artifacts.len()
         );
+    }
+
+    #[test]
+    fn unit_model_real_dae_pipeline_when_samples_are_present() {
+        let package_root = Path::new(r"E:\XB\解包\com\file\0xAF73362C");
+        let package_structure = Path::new(r"E:\XB\解包\com\file\0xAF73362C_structure.json");
+        let dae_path = Path::new(r"D:\output\exvs2\zabanya\backpack_up.dae");
+        if !package_root.is_dir() || !package_structure.is_file() || !dae_path.is_file() {
+            eprintln!("[SKIP] Unit model or DAE real sample is not present.");
+            return;
+        }
+
+        let analysis = crate::ssbh_dae::analyze_dae_path(dae_path).unwrap();
+        assert!(analysis.can_convert, "{:?}", analysis.blocking_errors);
+        let base = "codex_unit_import_test";
+        let ssbh_config = SsbhConvertConfig {
+            base_filename: base.to_string(),
+            scale_factor: 1.0,
+            up_axis: "y_up".to_string(),
+            flip_uv: false,
+            write_numdlb: true,
+            write_numshb: true,
+            write_nusktb: true,
+            write_numatb: true,
+            write_jnttbl: true,
+            write_maya_profile: true,
+            material_template: Some("default".to_string()),
+            maya_file: Some(default_session_maya_matl_json()),
+            nust_file: Some(default_session_nust_matl_json()),
+            numdlb_entries: analysis
+                .geometry_names
+                .iter()
+                .map(|name| crate::ssbh_dae::ModlEntryConfig {
+                    mesh_object_name: name.clone(),
+                    mesh_object_subindex: 0,
+                    material_label: "pbr1Mtl".to_string(),
+                })
+                .collect(),
+        };
+        let artifacts = convert_import_path_to_ssbh_artifact_paths_with_geometry(
+            dae_path,
+            &ssbh_config,
+            &analysis.geometry_names,
+        )
+        .unwrap();
+        let artifact_root = artifacts.root_dir.clone();
+        let staging = tempfile::tempdir().unwrap();
+        let staged_count =
+            stage_unit_model_source_folder(staging.path(), base, &artifacts, &[]).unwrap();
+        assert_eq!(staged_count, 6);
+        crate::format::unit_model_models::validate_unit_model_source_folder(
+            staging.path().to_string_lossy().as_ref(),
+        )
+        .unwrap();
+
+        let package_copy = tempfile::tempdir().unwrap();
+        let copied_root = package_copy.path().join("0xAF73362C");
+        let copied_structure = package_copy.path().join("0xAF73362C_structure.json");
+        copy_dir_recursive(package_root, &copied_root);
+        std::fs::copy(package_structure, &copied_structure).unwrap();
+        let result = crate::format::unit_model_models::add_unit_model_model(
+            copied_root.to_string_lossy().as_ref(),
+            Some(copied_structure.to_string_lossy().as_ref()),
+            staging.path().to_string_lossy().as_ref(),
+        )
+        .unwrap();
+        let _ = std::fs::remove_dir_all(artifact_root);
+
+        assert_eq!(result.model_count, 15);
+        for name in [
+            format!("models/{base}/{base}.numdlb"),
+            format!("models/{base}/{base}.numshb"),
+            format!("models/{base}/{base}.nusktb"),
+            format!("models/{base}/{base}.jnttbl"),
+            format!("models/{base}/{base}__maya__.numatb"),
+            format!("models/{base}/{base}__nust__.numatb"),
+            format!("nuhlpb/{base}.nuhlpb"),
+        ] {
+            assert!(copied_root.join(name).is_file());
+        }
+        let hlpb = HlpbData::from_file(copied_root.join(format!("nuhlpb/{base}.nuhlpb"))).unwrap();
+        assert!(hlpb.aim_constraints.is_empty());
+        assert!(hlpb.orient_constraints.is_empty());
     }
 }

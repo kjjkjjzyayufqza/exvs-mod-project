@@ -1,14 +1,15 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { AlertTriangle } from "lucide-react";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { SeedSuggestion } from "@/services/resourceRegistry/suggestUniqueSeed";
+
+const RESOURCE_SEED_COLLISION_MODAL_DIMENSIONS = {
+  width: 560,
+  height: 500,
+  minWidth: 460,
+  minHeight: 380,
+};
 
 interface ResourceSeedCollisionDialogProps {
   open: boolean;
@@ -40,18 +41,36 @@ export function ResourceSeedCollisionDialog({
   onApplyOriginal,
   onApplySuggested,
 }: ResourceSeedCollisionDialogProps) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Resource hash collision</DialogTitle>
-          <DialogDescription>
-            MOD or workspace already has assets for this CRC32. Confirm before applying the hash to
-            the param field. This is a resource path hash (CRC32 of seed), not a param field-key hash.
-          </DialogDescription>
-        </DialogHeader>
+  if (!open) return null;
 
-        <div className="space-y-3 text-sm">
+  return (
+    <AppRndModalShell
+      titleId="resource-seed-collision-title"
+      title="Resource hash collision"
+      subtitle="Confirm this CRC32 before applying it to the param field."
+      headerIcon={<AlertTriangle className="h-5 w-5 text-amber-600" />}
+      dimensions={RESOURCE_SEED_COLLISION_MODAL_DIMENSIONS}
+      storageKey="app.rnd-size.resource-seed-collision"
+      onClose={() => onOpenChange(false)}
+      footer={
+        <div className="flex flex-wrap justify-end gap-2 bg-background px-6 py-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          {suggested && suggested.isClear && suggested.seed !== original.seed ? (
+            <Button onClick={onApplySuggested}>Apply suggested</Button>
+          ) : null}
+          <Button variant={suggested?.isClear ? "secondary" : "default"} onClick={onApplyOriginal}>
+            Apply current
+          </Button>
+        </div>
+      }
+    >
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-6 text-sm">
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          MOD or workspace already has assets for this CRC32. This is a resource path hash (CRC32 of seed), not a
+          param field-key hash.
+        </p>
           <div className="rounded-md border p-3 space-y-2">
             <div className="font-medium">Current seed</div>
             <div className="font-mono text-xs break-all">{original.seed}</div>
@@ -78,19 +97,6 @@ export function ResourceSeedCollisionDialog({
             </p>
           ) : null}
         </div>
-
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          {suggested && suggested.isClear && suggested.seed !== original.seed ? (
-            <Button onClick={onApplySuggested}>Apply suggested</Button>
-          ) : null}
-          <Button variant={suggested?.isClear ? "secondary" : "default"} onClick={onApplyOriginal}>
-            Apply current
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </AppRndModalShell>
   );
 }

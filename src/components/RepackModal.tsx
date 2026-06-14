@@ -1,9 +1,8 @@
-import { useState, useRef } from "react";
-import Draggable from "react-draggable";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { Label } from "@/components/ui/label";
-import { X } from "lucide-react";
+import { Archive } from "lucide-react";
 import { readTextFile, readDir } from "@tauri-apps/plugin-fs";
 import { dirname } from "@tauri-apps/api/path";
 import { toast } from "sonner";
@@ -11,17 +10,24 @@ import { useConfigStore } from "@/store/configStore";
 import { useRepackStore } from "@/store/repackStore";
 import { convertSubFileStructureToTreeData } from "@/lib/utils";
 import { repackFolderUsingStructure } from "@/utils/repackRunner";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 
 interface RepackModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+const REPACK_MODAL_DIMENSIONS = {
+  width: 500,
+  height: 310,
+  minWidth: 440,
+  minHeight: 280,
+};
+
 export default function RepackModal({ isOpen, onClose }: RepackModalProps) {
   const { repackInputPath } = useConfigStore();
   const { exportProjectData } = useRepackStore();
   const [isRepacking, setIsRepacking] = useState(false);
-  const nodeRef = useRef(null);
 
   // Handle import operation
   const handleRepack = async () => {
@@ -175,33 +181,16 @@ export default function RepackModal({ isOpen, onClose }: RepackModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed left-0 right-0 bottom-0 top-[var(--layout-topbar-height)] z-[var(--z-modal)] pointer-events-none flex items-center justify-center">
-      <Draggable
-        nodeRef={nodeRef}
-        handle=".drag-handle"
-        bounds="parent"
-        defaultPosition={{ x: 0, y: 0 }}
-      >
-        <div
-          ref={nodeRef}
-          className="pointer-events-auto"
-          style={{ width: "500px" }}
-        >
-          <div className="bg-background border border-border rounded-lg shadow-2xl">
-            {/* Title bar - draggable area */}
-            <div className="drag-handle flex items-center justify-between px-4 py-3 border-b border-border cursor-move bg-muted/50">
-              <h2 className="text-lg font-semibold">Repack</h2>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={onClose}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Content */}
+    <AppRndModalShell
+      titleId="repack-modal-title"
+      title="Repack"
+      subtitle="Rebuild a folder using its structure JSON"
+      headerIcon={<Archive className="h-5 w-5 text-primary" />}
+      dimensions={REPACK_MODAL_DIMENSIONS}
+      storageKey="app.rnd-size.repack"
+      onClose={onClose}
+      closeDisabled={isRepacking}
+    >
             <div className="p-6 space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="repack-folder">Input Folder</Label>
@@ -235,10 +224,6 @@ export default function RepackModal({ isOpen, onClose }: RepackModalProps) {
                 </Button>
               </div>
             </div>
-          </div>
-        </div>
-      </Draggable>
-    </div>
+    </AppRndModalShell>
   );
 }
-

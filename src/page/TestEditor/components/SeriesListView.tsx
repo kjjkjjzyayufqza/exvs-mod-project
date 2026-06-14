@@ -6,15 +6,9 @@ import { openPath } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
 import { RefreshCw, Save, Image as ImageIcon, Loader2, Info, FolderOpen } from "lucide-react";
 
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import type { SeriesListData } from "@/models/seriesListEntry";
 import { SeriesEditor } from "./series-list/SeriesEditor";
 import { extractA0253FirstFolderSeriesBaseNameOrder } from "./series-list/seriesImage";
@@ -24,6 +18,13 @@ interface SeriesListViewProps {
   isActive: boolean;
   onUnsavedChanges?: (hasChanges: boolean) => void;
 }
+
+const SERIES_LIST_INFO_MODAL_DIMENSIONS = {
+  width: 520,
+  height: 360,
+  minWidth: 420,
+  minHeight: 280,
+};
 
 type LoadState =
   | { status: "idle" }
@@ -403,20 +404,22 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
         </CardContent>
       </Card>
 
-      <Dialog open={isInfoDialogOpen} onOpenChange={setIsInfoDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Info</DialogTitle>
-            <DialogDescription asChild>
-              <div className="space-y-2 pt-2">
-                <p>1. 自动加载0xb7367090\series_list.bin</p>
-                <p>2. 图片mapping自0xA0253AA0\__convert</p>
-                <p>3. 图片透过0xA0253AA0_structure.json来mapping原有顺序</p>
-              </div>
-            </DialogDescription>
-          </DialogHeader>
-        </DialogContent>
-      </Dialog>
+      {isInfoDialogOpen ? (
+        <AppRndModalShell
+          titleId="series-list-info-title"
+          title="Info"
+          headerIcon={<Info className="h-5 w-5 text-primary" />}
+          dimensions={SERIES_LIST_INFO_MODAL_DIMENSIONS}
+          storageKey="app.rnd-size.series-list-info"
+          onClose={() => setIsInfoDialogOpen(false)}
+        >
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-6 text-sm text-muted-foreground">
+            <p>1. 自动加载0xb7367090\series_list.bin</p>
+            <p>2. 图片mapping自0xA0253AA0\__convert</p>
+            <p>3. 图片透过0xA0253AA0_structure.json来mapping原有顺序</p>
+          </div>
+        </AppRndModalShell>
+      ) : null}
     </div>
   );
 }

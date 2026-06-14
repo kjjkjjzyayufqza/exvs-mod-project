@@ -2,18 +2,16 @@
 
 #![allow(dead_code)]
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use ssbh_data::{
-    mesh_data::{BoneInfluence, VertexWeight},
-};
+use ssbh_data::mesh_data::{BoneInfluence, VertexWeight};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use xmltree::Element;
 
 pub use super::import_scene::{
-    validate_import_scene, ImportBone, ImportBoneInfluence, ImportMaterial, ImportMesh, ImportScene,
-    ImportVertexWeight, UpAxisConversion,
+    validate_import_scene, ImportBone, ImportBoneInfluence, ImportMaterial, ImportMesh,
+    ImportScene, ImportVertexWeight, UpAxisConversion,
 };
 
 /// Backward-compatible type aliases for the DAE XML parser.
@@ -115,7 +113,12 @@ pub fn parse_dae_file(file_path: &Path) -> Result<ImportScene> {
         for (i, m) in scene.meshes.iter().enumerate() {
             eprintln!(
                 "[dae_parse]   mesh[{}] name={} verts={} indices={} normals={} uvs={}",
-                i, m.name, m.vertices.len(), m.indices.len(), m.normals.len(), m.uvs.len()
+                i,
+                m.name,
+                m.vertices.len(),
+                m.indices.len(),
+                m.normals.len(),
+                m.uvs.len()
             );
         }
     } else {
@@ -134,7 +137,11 @@ pub fn parse_dae_file(file_path: &Path) -> Result<ImportScene> {
         apply_bind_poses_to_bones(&mut scene.bones, &bind_poses);
         for (i, m) in scene.meshes.iter().enumerate() {
             if !m.bone_influences.is_empty() {
-                let total_weights: usize = m.bone_influences.iter().map(|bi| bi.vertex_weights.len()).sum();
+                let total_weights: usize = m
+                    .bone_influences
+                    .iter()
+                    .map(|bi| bi.vertex_weights.len())
+                    .sum();
                 eprintln!(
                     "[dae_parse]   mesh[{}] name={} bone_influence_groups={} total_vertex_weights={}",
                     i, m.name, m.bone_influences.len(), total_weights
@@ -147,7 +154,10 @@ pub fn parse_dae_file(file_path: &Path) -> Result<ImportScene> {
 
     if let Some(lib_visual_scenes) = find_child(&root, "library_visual_scenes") {
         scene.bones = parse_bone_hierarchy_from_visual_scenes(lib_visual_scenes)?;
-        eprintln!("[dae_parse] parsed {} bones from visual_scenes", scene.bones.len());
+        eprintln!(
+            "[dae_parse] parsed {} bones from visual_scenes",
+            scene.bones.len()
+        );
         // Re-apply bind poses since parse_bone_hierarchy_from_visual_scenes creates fresh bones without IBM
         if !bind_poses.is_empty() {
             apply_bind_poses_to_bones(&mut scene.bones, &bind_poses);
@@ -157,7 +167,10 @@ pub fn parse_dae_file(file_path: &Path) -> Result<ImportScene> {
     if scene.bones.is_empty() {
         if let Some(lib_nodes) = find_child(&root, "library_nodes") {
             scene.bones = parse_bone_hierarchy_from_nodes(lib_nodes)?;
-            eprintln!("[dae_parse] parsed {} bones from library_nodes", scene.bones.len());
+            eprintln!(
+                "[dae_parse] parsed {} bones from library_nodes",
+                scene.bones.len()
+            );
             if !bind_poses.is_empty() {
                 apply_bind_poses_to_bones(&mut scene.bones, &bind_poses);
             }
@@ -165,8 +178,14 @@ pub fn parse_dae_file(file_path: &Path) -> Result<ImportScene> {
     }
 
     if !scene.bones.is_empty() {
-        eprintln!("[dae_parse] bone names (first 10): {:?}",
-            scene.bones.iter().take(10).map(|b| &b.name).collect::<Vec<_>>()
+        eprintln!(
+            "[dae_parse] bone names (first 10): {:?}",
+            scene
+                .bones
+                .iter()
+                .take(10)
+                .map(|b| &b.name)
+                .collect::<Vec<_>>()
         );
     }
 
@@ -177,18 +196,25 @@ pub fn parse_dae_file(file_path: &Path) -> Result<ImportScene> {
         if mesh.vertices.len() != pre_verts || mesh.indices.len() != pre_indices {
             eprintln!(
                 "[dae_parse] optimize mesh[{}] name={}: verts {} -> {} indices {} -> {}",
-                i, mesh.name, pre_verts, mesh.vertices.len(), pre_indices, mesh.indices.len()
+                i,
+                mesh.name,
+                pre_verts,
+                mesh.vertices.len(),
+                pre_indices,
+                mesh.indices.len()
             );
         }
     }
 
     eprintln!(
         "[dae_parse] done: {} meshes, {} materials, {} bones, up_axis={:?}",
-        scene.meshes.len(), scene.materials.len(), scene.bones.len(), scene.up_axis
+        scene.meshes.len(),
+        scene.materials.len(),
+        scene.bones.len(),
+        scene.up_axis
     );
     Ok(scene)
 }
-
 
 /// Result of DAE conversion operation
 #[derive(Debug, Default)]
@@ -249,7 +275,10 @@ fn get_element_text(element: &Element) -> Option<String> {
 }
 
 fn find_all_children<'a>(element: &'a Element, name: &str) -> Vec<&'a Element> {
-    element.children.iter().filter_map(|node| {
+    element
+        .children
+        .iter()
+        .filter_map(|node| {
         if let xmltree::XMLNode::Element(child) = node {
             if child.name == name {
                 Some(child)
@@ -259,7 +288,8 @@ fn find_all_children<'a>(element: &'a Element, name: &str) -> Vec<&'a Element> {
         } else {
             None
         }
-    }).collect()
+        })
+        .collect()
 }
 
 fn parse_materials_from_xml(lib_materials: &Element) -> Result<Vec<DaeMaterial>> {
@@ -281,16 +311,17 @@ fn parse_materials_from_xml(lib_materials: &Element) -> Result<Vec<DaeMaterial>>
     Ok(materials)
 }
 
-fn parse_geometries_from_xml(lib_geometries: &Element, geometry_id_to_index_map: &mut HashMap<String, usize>) -> Result<Vec<DaeMesh>> {
+fn parse_geometries_from_xml(
+    lib_geometries: &Element,
+    geometry_id_to_index_map: &mut HashMap<String, usize>,
+) -> Result<Vec<DaeMesh>> {
     let mut meshes = Vec::new();
     let mut name_counts: HashMap<String, usize> = HashMap::new();
 
     for geometry_elem in find_all_children(lib_geometries, "geometry") {
         if let Some(id) = geometry_elem.attributes.get("id") {
             if let Some(mesh_elem) = find_child(geometry_elem, "mesh") {
-                let raw_name = geometry_elem.attributes.get("name")
-                    .unwrap_or(id)
-                    .clone();
+                let raw_name = geometry_elem.attributes.get("name").unwrap_or(id).clone();
 
                 let count = name_counts.entry(raw_name.clone()).or_insert(0);
                 let mesh_name = if *count == 0 {
@@ -304,7 +335,12 @@ fn parse_geometries_from_xml(lib_geometries: &Element, geometry_id_to_index_map:
                 };
                 *count += 1;
 
-                eprintln!("[dae_parse] geometry id={} -> mesh_name={} (index={})", id, mesh_name, meshes.len());
+                eprintln!(
+                    "[dae_parse] geometry id={} -> mesh_name={} (index={})",
+                    id,
+                    mesh_name,
+                    meshes.len()
+                );
                 geometry_id_to_index_map.insert(id.clone(), meshes.len());
 
                 let vertices = extract_vertices_from_xml_mesh(mesh_elem)?;
@@ -314,7 +350,11 @@ fn parse_geometries_from_xml(lib_geometries: &Element, geometry_id_to_index_map:
 
                 eprintln!(
                     "[dae_parse] geometry '{}': {} verts, {} normals, {} uvs, {} indices",
-                    mesh_name, vertices.len(), normals.len(), uvs.len(), indices.len()
+                    mesh_name,
+                    vertices.len(),
+                    normals.len(),
+                    uvs.len(),
+                    indices.len()
                 );
 
                 let dae_mesh = DaeMesh {
@@ -346,11 +386,18 @@ fn parse_controllers_and_apply_to_meshes(
     eprintln!("[dae_parse] processing {} controllers", controllers.len());
 
     for controller_elem in controllers {
-        let ctrl_id = controller_elem.attributes.get("id").map(|s| s.as_str()).unwrap_or("<no-id>");
+        let ctrl_id = controller_elem
+            .attributes
+            .get("id")
+            .map(|s| s.as_str())
+            .unwrap_or("<no-id>");
         if let Some(skin_elem) = find_child(controller_elem, "skin") {
             if let Some(source_attr) = skin_elem.attributes.get("source") {
                 let geometry_id = source_attr.trim_start_matches('#');
-                eprintln!("[dae_parse] controller '{}' skin source -> geometry_id='{}'", ctrl_id, geometry_id);
+                eprintln!(
+                    "[dae_parse] controller '{}' skin source -> geometry_id='{}'",
+                    ctrl_id, geometry_id
+                );
 
                 if let Some(&mesh_idx) = geometry_id_to_index_map.get(geometry_id) {
                     if let Some(mesh) = meshes.get_mut(mesh_idx) {
@@ -360,7 +407,10 @@ fn parse_controllers_and_apply_to_meshes(
                         );
                         parse_skin_data_to_mesh(skin_elem, mesh, bind_poses)?;
                     } else {
-                        eprintln!("[dae_parse] mesh_idx={} out of bounds for controller '{}'", mesh_idx, ctrl_id);
+                        eprintln!(
+                            "[dae_parse] mesh_idx={} out of bounds for controller '{}'",
+                            mesh_idx, ctrl_id
+                        );
                     }
                 } else {
                     eprintln!(
@@ -374,7 +424,10 @@ fn parse_controllers_and_apply_to_meshes(
     Ok(())
 }
 
-fn apply_bind_poses_to_bones(bones: &mut [ImportBone], bind_poses: &HashMap<String, [[f32; 4]; 4]>) {
+fn apply_bind_poses_to_bones(
+    bones: &mut [ImportBone],
+    bind_poses: &HashMap<String, [[f32; 4]; 4]>,
+) {
     for bone in bones.iter_mut() {
         if bone.inverse_bind_matrix.is_none() {
             if let Some(ibm) = bind_poses.get(&bone.name) {
@@ -428,7 +481,10 @@ fn parse_skin_data_to_mesh(
             if source_id.contains("joints") || source_id.contains("Joint") {
                 if let Some(name_array) = find_child(source_elem, "Name_array") {
                     if let Some(names_text) = get_element_text(name_array) {
-                        joint_names = names_text.split_whitespace().map(|s| s.to_string()).collect();
+                        joint_names = names_text
+                            .split_whitespace()
+                            .map(|s| s.to_string())
+                            .collect();
                     }
                 }
             } else if source_id.contains("bind_poses") || source_id.contains("Bind") {
@@ -456,11 +512,16 @@ fn parse_skin_data_to_mesh(
 
     eprintln!(
         "[dae_parse] skin data for mesh '{}': {} joint_names, {} weight_values",
-        mesh.name, joint_names.len(), weights.len()
+        mesh.name,
+        joint_names.len(),
+        weights.len()
     );
 
     if joint_names.is_empty() || weights.is_empty() {
-        eprintln!("[dae_parse] skipping skinning for mesh '{}': empty joints or weights", mesh.name);
+        eprintln!(
+            "[dae_parse] skipping skinning for mesh '{}': empty joints or weights",
+            mesh.name
+        );
         return Ok(());
     }
 
@@ -471,10 +532,22 @@ fn parse_skin_data_to_mesh(
             if let Ok(vertex_count) = count_attr.parse::<usize>() {
                 eprintln!(
                     "[dae_parse] vertex_weights count={} for mesh '{}' (mesh verts={})",
-                    vertex_count, mesh.name, mesh.vertices.len()
+                    vertex_count,
+                    mesh.name,
+                    mesh.vertices.len()
                 );
-                parse_vertex_weights_data(vertex_weights_elem, mesh, &joint_names, &weights, vertex_count)?;
-                let total_weights: usize = mesh.bone_influences.iter().map(|bi| bi.vertex_weights.len()).sum();
+                parse_vertex_weights_data(
+                    vertex_weights_elem,
+                    mesh,
+                    &joint_names,
+                    &weights,
+                    vertex_count,
+                )?;
+                let total_weights: usize = mesh
+                    .bone_influences
+                    .iter()
+                    .map(|bi| bi.vertex_weights.len())
+                    .sum();
                 eprintln!(
                     "[dae_parse] skinning applied to mesh '{}': {} bone groups, {} total vertex weights",
                     mesh.name, mesh.bone_influences.len(), total_weights
@@ -482,7 +555,10 @@ fn parse_skin_data_to_mesh(
             }
         }
     } else {
-        eprintln!("[dae_parse] no vertex_weights element found for mesh '{}'", mesh.name);
+        eprintln!(
+            "[dae_parse] no vertex_weights element found for mesh '{}'",
+            mesh.name
+        );
     }
 
     Ok(())
@@ -561,7 +637,6 @@ fn parse_vertex_weights_data(
         })
         .collect();
     
-    
     Ok(())
 }
 
@@ -581,8 +656,11 @@ fn extract_vertices_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 3]>> 
                         for source_elem in find_all_children(mesh_elem, "source") {
                             if let Some(id) = source_elem.attributes.get("id") {
                                 if id == source_id {
-                                    if let Some(float_array_elem) = find_child(source_elem, "float_array") {
-                                        if let Some(data_text) = get_element_text(float_array_elem) {
+                                    if let Some(float_array_elem) =
+                                        find_child(source_elem, "float_array")
+                                    {
+                                        if let Some(data_text) = get_element_text(float_array_elem)
+                                        {
                                             let values: Result<Vec<f32>, _> = data_text
                                                 .split_whitespace()
                                                 .map(|s| s.parse())
@@ -591,7 +669,8 @@ fn extract_vertices_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 3]>> 
                                             if let Ok(values) = values {
                                                 for chunk in values.chunks(3) {
                                                     if chunk.len() >= 3 {
-                                                        vertices.push([chunk[0], chunk[1], chunk[2]]);
+                                                        vertices
+                                                            .push([chunk[0], chunk[1], chunk[2]]);
                                                     }
                                                 }
                                             }
@@ -625,8 +704,11 @@ fn extract_normals_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 3]>> {
                         for source_elem in find_all_children(mesh_elem, "source") {
                             if let Some(id) = source_elem.attributes.get("id") {
                                 if id == source_id {
-                                    if let Some(float_array_elem) = find_child(source_elem, "float_array") {
-                                        if let Some(data_text) = get_element_text(float_array_elem) {
+                                    if let Some(float_array_elem) =
+                                        find_child(source_elem, "float_array")
+                                    {
+                                        if let Some(data_text) = get_element_text(float_array_elem)
+                                        {
                                             let values: Result<Vec<f32>, _> = data_text
                                                 .split_whitespace()
                                                 .map(|s| s.parse())
@@ -635,7 +717,8 @@ fn extract_normals_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 3]>> {
                                             if let Ok(values) = values {
                                                 for chunk in values.chunks(3) {
                                                     if chunk.len() >= 3 {
-                                                        normals.push([chunk[0], chunk[1], chunk[2]]);
+                                                        normals
+                                                            .push([chunk[0], chunk[1], chunk[2]]);
                                                     }
                                                 }
                                             }
@@ -663,18 +746,23 @@ fn extract_normals_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 3]>> {
                 if name.contains("Nrm") || name.contains("Normal") || name.contains("normal") {
                     if let Some(float_array_elem) = find_child(source_elem, "float_array") {
                         if let Some(data_text) = get_element_text(float_array_elem) {
-                            let values: Result<Vec<f32>, _> = data_text
-                                .split_whitespace()
-                                .map(|s| s.parse())
-                                .collect();
+                            let values: Result<Vec<f32>, _> =
+                                data_text.split_whitespace().map(|s| s.parse()).collect();
                             
                             if let Ok(values) = values {
                                 // Check if stride is 3 from technique_common/accessor
                                 let mut stride = 3; // Default to 3 for normals
-                                if let Some(technique_elem) = find_child(source_elem, "technique_common") {
-                                    if let Some(accessor_elem) = find_child(technique_elem, "accessor") {
-                                        if let Some(stride_attr) = accessor_elem.attributes.get("stride") {
-                                            if let Ok(parsed_stride) = stride_attr.parse::<usize>() {
+                                if let Some(technique_elem) =
+                                    find_child(source_elem, "technique_common")
+                                {
+                                    if let Some(accessor_elem) =
+                                        find_child(technique_elem, "accessor")
+                                    {
+                                        if let Some(stride_attr) =
+                                            accessor_elem.attributes.get("stride")
+                                        {
+                                            if let Ok(parsed_stride) = stride_attr.parse::<usize>()
+                                            {
                                                 stride = parsed_stride;
                                             }
                                         }
@@ -715,8 +803,11 @@ fn extract_uvs_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 2]>> {
                         for source_elem in find_all_children(mesh_elem, "source") {
                             if let Some(id) = source_elem.attributes.get("id") {
                                 if id == source_id {
-                                    if let Some(float_array_elem) = find_child(source_elem, "float_array") {
-                                        if let Some(data_text) = get_element_text(float_array_elem) {
+                                    if let Some(float_array_elem) =
+                                        find_child(source_elem, "float_array")
+                                    {
+                                        if let Some(data_text) = get_element_text(float_array_elem)
+                                        {
                                             let values: Result<Vec<f32>, _> = data_text
                                                 .split_whitespace()
                                                 .map(|s| s.parse())
@@ -750,21 +841,30 @@ fn extract_uvs_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 2]>> {
         for source_elem in find_all_children(mesh_elem, "source") {
             if let Some(name) = source_elem.attributes.get("name") {
                 // Check if source name contains UV indicators
-                if name.contains("UV") || name.contains("TexCoord") || name.contains("TextureCoordinate") || name.contains("uv") {
+                if name.contains("UV")
+                    || name.contains("TexCoord")
+                    || name.contains("TextureCoordinate")
+                    || name.contains("uv")
+                {
                     if let Some(float_array_elem) = find_child(source_elem, "float_array") {
                         if let Some(data_text) = get_element_text(float_array_elem) {
-                            let values: Result<Vec<f32>, _> = data_text
-                                .split_whitespace()
-                                .map(|s| s.parse())
-                                .collect();
+                            let values: Result<Vec<f32>, _> =
+                                data_text.split_whitespace().map(|s| s.parse()).collect();
                             
                             if let Ok(values) = values {
                                 // Check if stride is 2 from technique_common/accessor
                                 let mut stride = 2; // Default to 2 for UVs
-                                if let Some(technique_elem) = find_child(source_elem, "technique_common") {
-                                    if let Some(accessor_elem) = find_child(technique_elem, "accessor") {
-                                        if let Some(stride_attr) = accessor_elem.attributes.get("stride") {
-                                            if let Ok(parsed_stride) = stride_attr.parse::<usize>() {
+                                if let Some(technique_elem) =
+                                    find_child(source_elem, "technique_common")
+                                {
+                                    if let Some(accessor_elem) =
+                                        find_child(technique_elem, "accessor")
+                                    {
+                                        if let Some(stride_attr) =
+                                            accessor_elem.attributes.get("stride")
+                                        {
+                                            if let Ok(parsed_stride) = stride_attr.parse::<usize>()
+                                            {
                                                 stride = parsed_stride;
                                             }
                                         }
@@ -813,10 +913,8 @@ fn extract_indices_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<u32>> {
         
         if let Some(p_elem) = find_child(triangles_elem, "p") {
             if let Some(data_text) = get_element_text(p_elem) {
-                let values: Result<Vec<u32>, _> = data_text
-                    .split_whitespace()
-                    .map(|s| s.parse())
-                    .collect();
+                let values: Result<Vec<u32>, _> =
+                    data_text.split_whitespace().map(|s| s.parse()).collect();
                 
                 if let Ok(values) = values {
                     if stride > 0 {
@@ -875,7 +973,10 @@ fn optimize_mesh_data(mesh: &mut DaeMesh) {
     }
 
     if used_indices.is_empty() {
-        eprintln!("[dae_parse] optimize '{}': no valid indices remain", mesh.name);
+        eprintln!(
+            "[dae_parse] optimize '{}': no valid indices remain",
+            mesh.name
+        );
         mesh.indices.clear();
         return;
     }
@@ -945,11 +1046,14 @@ fn optimize_mesh_data(mesh: &mut DaeMesh) {
             );
         }
     }
-    mesh.bone_influences.retain(|inf| !inf.vertex_weights.is_empty());
+    mesh.bone_influences
+        .retain(|inf| !inf.vertex_weights.is_empty());
     if mesh.bone_influences.len() < pre_bone_groups {
         eprintln!(
             "[dae_parse] optimize '{}': bone groups {} -> {} after remap",
-            mesh.name, pre_bone_groups, mesh.bone_influences.len()
+            mesh.name,
+            pre_bone_groups,
+            mesh.bone_influences.len()
         );
     }
 
@@ -997,14 +1101,12 @@ fn align_attribute_data(mesh: &mut DaeMesh) {
             mesh.uvs.truncate(vertex_count);
         }
     }
-    
 }
 
-
-
-
 /// Convert DAE bone influences to SSBH bone influences
-pub fn convert_dae_bone_influences_to_ssbh(dae_influences: &[DaeBoneInfluence]) -> Vec<BoneInfluence> {
+pub fn convert_dae_bone_influences_to_ssbh(
+    dae_influences: &[DaeBoneInfluence],
+) -> Vec<BoneInfluence> {
     let mut ssbh_influences = Vec::new();
     
     for dae_influence in dae_influences {
@@ -1030,7 +1132,9 @@ pub fn convert_dae_bone_influences_to_ssbh(dae_influences: &[DaeBoneInfluence]) 
 
 // Helper functions for coordinate and data transformations
 pub fn apply_transforms(vertices: &[[f32; 3]], config: &DaeConvertConfig) -> Vec<[f32; 3]> {
-    vertices.iter().map(|v| {
+    vertices
+        .iter()
+        .map(|v| {
         let mut transformed = *v;
         
         // Apply scale factor
@@ -1045,18 +1149,21 @@ pub fn apply_transforms(vertices: &[[f32; 3]], config: &DaeConvertConfig) -> Vec
                 let temp = transformed[1];
                 transformed[1] = transformed[2];
                 transformed[2] = -temp;
-            },
+                }
             UpAxisConversion::YUp | UpAxisConversion::NoConversion => {
                 // No conversion needed
-            },
+                }
         }
         
         transformed
-    }).collect()
+        })
+        .collect()
 }
 
 pub fn apply_normal_transforms(normals: &[[f32; 3]], config: &DaeConvertConfig) -> Vec<[f32; 3]> {
-    normals.iter().map(|n| {
+    normals
+        .iter()
+        .map(|n| {
         let mut transformed = *n;
         
         // Apply coordinate system conversion (no scaling for normals)
@@ -1065,12 +1172,13 @@ pub fn apply_normal_transforms(normals: &[[f32; 3]], config: &DaeConvertConfig) 
                 let temp = transformed[1];
                 transformed[1] = transformed[2];
                 transformed[2] = -temp;
-            },
-            UpAxisConversion::YUp | UpAxisConversion::NoConversion => {},
+                }
+                UpAxisConversion::YUp | UpAxisConversion::NoConversion => {}
         }
         
         transformed
-    }).collect()
+        })
+        .collect()
 }
 
 /// Parse bone hierarchy from library_visual_scenes
@@ -1105,21 +1213,27 @@ fn parse_node_hierarchy(
 ) -> Result<()> {
     if let Some(node_id) = node.attributes.get("id") {
         // Check if this is a bone/joint node
-        let node_type = node.attributes.get("type").map(|s| s.as_str()).unwrap_or("");
+        let node_type = node
+            .attributes
+            .get("type")
+            .map(|s| s.as_str())
+            .unwrap_or("");
         let node_name = node.attributes.get("name").unwrap_or(node_id);
         let node_sid = node.attributes.get("sid").map(|s| s.as_str()).unwrap_or("");
         
-        let is_bone = node_type == "JOINT" || 
-                     node_id.to_lowercase().contains("bone") || 
-                     node_id.to_lowercase().contains("joint") ||
-                     node_name.to_lowercase().contains("bone") ||
-                     node_name.to_lowercase().contains("joint") ||
-                     node_sid.to_lowercase().contains("bone") ||
-                     node_sid.to_lowercase().contains("joint");
+        let is_bone = node_type == "JOINT"
+            || node_id.to_lowercase().contains("bone")
+            || node_id.to_lowercase().contains("joint")
+            || node_name.to_lowercase().contains("bone")
+            || node_name.to_lowercase().contains("joint")
+            || node_sid.to_lowercase().contains("bone")
+            || node_sid.to_lowercase().contains("joint");
         
         if is_bone || parent_index.is_some() {
             // Use 'name' attribute if available, otherwise fall back to 'id'
-            let bone_name = node.attributes.get("name")
+            let bone_name = node
+                .attributes
+                .get("name")
                 .or_else(|| node.attributes.get("sid"))
                 .unwrap_or(node_id)
                 .clone();
@@ -1204,8 +1318,9 @@ fn parse_node_transform(node: &Element) -> [[f32; 4]; 4] {
 /// Parse matrix values from text
 fn parse_matrix_values(text: &str) -> Result<Vec<f32>> {
     text.split_whitespace()
-        .map(|s| s.parse::<f32>().map_err(|e| anyhow!("Failed to parse float: {}", e)))
+        .map(|s| {
+            s.parse::<f32>()
+                .map_err(|e| anyhow!("Failed to parse float: {}", e))
+        })
         .collect()
 }
-
-

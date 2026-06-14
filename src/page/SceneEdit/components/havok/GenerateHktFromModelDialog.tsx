@@ -12,14 +12,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -69,6 +62,13 @@ interface GenerateHktFromModelDialogProps {
   /** Invoked after a successful generate + replace so the scene can refresh HKT data. */
   onReplaced: (targetImportId: string) => void | Promise<void>;
 }
+
+const GENERATE_HKT_FROM_MODEL_MODAL_DIMENSIONS = {
+  width: 1040,
+  height: 820,
+  minWidth: 760,
+  minHeight: 560,
+};
 
 function fileNameFromPath(path: string): string {
   return path.split(/[/\\]/).pop() ?? path;
@@ -393,26 +393,58 @@ export function GenerateHktFromModelDialog({
       : "Applying HKT..."
     : "Generate & Replace HKT";
 
-  return (
-    <Dialog
-      open={isOpen}
-      onOpenChange={(next) => (!applying && !objExporting ? onOpenChange(next) : undefined)}
-    >
-      <DialogContent className="flex max-h-[min(90dvh,900px)] max-w-5xl flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="space-y-1 border-b border-border/60 px-5 py-4">
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <Sparkles className="h-4 w-4 text-emerald-400" />
-            Generate HKT from New Model
-          </DialogTitle>
-          <DialogDescription className="text-xs">
-            Read a fresh DAE or FBX, rebuild a Havok collision shape, and replace the collision for{" "}
-            <span className="font-medium text-foreground">{targetName}</span>.
-            Preview is optional. Generate & Replace uses the previewed HKT when one exists;
-            otherwise it generates fresh collision data and writes map_hit.hkt into the open stage
-            folder when one is loaded.
-          </DialogDescription>
-        </DialogHeader>
+  if (!isOpen) return null;
 
+  return (
+    <AppRndModalShell
+      titleId="generate-hkt-from-model-title"
+      title="Generate HKT from New Model"
+      subtitle={`Replace collision for ${targetName}`}
+      headerIcon={<Sparkles className="h-5 w-5 text-emerald-400" />}
+      dimensions={GENERATE_HKT_FROM_MODEL_MODAL_DIMENSIONS}
+      storageKey="app.rnd-size.generate-hkt-from-model"
+      onClose={() => {
+        if (!applying && !objExporting) {
+          onOpenChange(false);
+        }
+      }}
+      closeDisabled={applying || objExporting}
+      footer={
+        <div className="flex flex-wrap items-center gap-2 bg-background px-5 py-3 sm:justify-between">
+          <p className="flex min-w-0 flex-1 basis-full items-start gap-1.5 text-pretty text-[11px] leading-snug text-muted-foreground break-words sm:basis-auto">
+            <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              Preview is optional and caches the HKT. Generate & Replace uses the cache when
+              available, otherwise generates fresh collision data.
+            </span>
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={applying}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleApply()}
+              disabled={!canApply}
+              className={cn("transition-transform active:translate-y-px")}
+            >
+              {applying ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Replace className="mr-2 h-4 w-4" />
+              )}
+              {applyButtonLabel}
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <p className="shrink-0 border-b border-border/60 px-5 py-3 text-xs text-muted-foreground">
+          Read a fresh DAE or FBX, rebuild a Havok collision shape, and replace the collision for{" "}
+          <span className="font-medium text-foreground">{targetName}</span>. Generate & Replace uses the previewed HKT
+          when one exists; otherwise it generates fresh collision data and writes map_hit.hkt into the open stage folder
+          when one is loaded.
+        </p>
         <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
           {/* Controls */}
           <ScrollArea className="min-h-0 min-w-0 border-b border-border/60 lg:max-h-none lg:border-b-0 lg:border-r">
@@ -644,34 +676,7 @@ export function GenerateHktFromModelDialog({
             ) : null}
           </div>
         </div>
-
-        <DialogFooter className="shrink-0 flex-wrap items-center gap-2 border-t border-border/60 px-5 py-3 sm:justify-between">
-          <p className="flex min-w-0 flex-1 basis-full items-start gap-1.5 text-pretty text-[11px] leading-snug text-muted-foreground break-words sm:basis-auto">
-            <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>
-              Preview is optional and caches the HKT. Generate & Replace uses the cache when
-              available, otherwise generates fresh collision data.
-            </span>
-          </p>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={applying}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void handleApply()}
-              disabled={!canApply}
-              className={cn("transition-transform active:translate-y-px")}
-            >
-              {applying ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Replace className="mr-2 h-4 w-4" />
-              )}
-              {applyButtonLabel}
-            </Button>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </AppRndModalShell>
   );
 }

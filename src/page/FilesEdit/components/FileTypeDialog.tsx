@@ -1,139 +1,104 @@
-import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileImage, Plus } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { useState, type ReactElement } from "react";
+import { Slot } from "@radix-ui/react-slot";
+import { FileImage } from "lucide-react";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
+import { cn } from "@/lib/utils";
 import { NutexbImportPanel } from "./NutexbImportPanel";
 
 interface FileTypeDialogProps {
   onFileTypeSelect: (fileType: string) => void;
-  children: React.ReactNode;
+  children: ReactElement;
   currentDirectory?: string;
 }
+
+const FILE_TYPE_DIMENSIONS = {
+  width: 1000,
+  height: 700,
+  minWidth: 720,
+  minHeight: 520,
+};
+
+const FILE_TYPES = [
+  {
+    id: "nutexb",
+    name: "Nutexb Texture",
+    description: "Convert image files to nutexb texture format",
+    icon: FileImage,
+    supported: true,
+  },
+] as const;
 
 export function FileTypeDialog({ onFileTypeSelect, children, currentDirectory }: FileTypeDialogProps) {
   const [open, setOpen] = useState(false);
   const [selectedFileType, setSelectedFileType] = useState<string | null>(null);
-
-  const handleFileTypeSelect = (fileType: string) => {
-    setSelectedFileType(fileType);
-  };
-
-  const handleImportComplete = (filePath: string) => {
-    onFileTypeSelect(selectedFileType!);
-    setSelectedFileType(null);
-    setOpen(false);
-  };
 
   const handleClose = () => {
     setSelectedFileType(null);
     setOpen(false);
   };
 
-  const fileTypes = [
-    {
-      id: "nutexb",
-      name: "Nutexb Texture",
-      description: "Convert image files to nutexb texture format",
-      icon: FileImage,
-      supported: true,
-    },
-  ];
-
-  const renderContent = () => {
-    if (!selectedFileType) {
-      return (
-        <div className="flex items-center justify-center h-full">
-          <div className="text-center text-muted-foreground">
-            <FileImage className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p className="text-lg font-medium">Select a file type</p>
-            <p className="text-sm">Choose from the list on the left to get started</p>
-          </div>
-        </div>
-      );
-    }
-
-    switch (selectedFileType) {
-      case "nutexb":
-        return (
-          <div className="h-full">
-            <NutexbImportPanel
-              currentDirectory={currentDirectory}
-              onImportComplete={handleImportComplete}
-              onClose={handleClose}
-            />
-          </div>
-        );
-      default:
-        return (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center text-muted-foreground">
-              <Plus className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium">Coming Soon</p>
-              <p className="text-sm">This file type is not yet supported</p>
-            </div>
-          </div>
-        );
-    }
+  const handleImportComplete = () => {
+    if (selectedFileType) onFileTypeSelect(selectedFileType);
+    handleClose();
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {children}
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[1000px] max-h-[80vh]">
-        <DialogHeader>
-          <DialogTitle>Add New File</DialogTitle>
-        </DialogHeader>
-        <div className="grid grid-cols-12 gap-4 h-[600px]">
-          {/* Left sidebar - File types */}
-          <div className="col-span-4 border-r pr-4">
-            <div className="mb-4">
-              <p className="text-sm font-medium text-foreground">Choose file type</p>
-              <p className="text-xs text-muted-foreground mt-1">Select the type of file you want to create</p>
-            </div>
-            <ScrollArea className="h-[500px]">
-              <div className="space-y-2">
-                {fileTypes.map((fileType) => (
-                  <Card
+    <>
+      <Slot onClick={() => setOpen(true)}>{children}</Slot>
+
+      {open ? (
+        <AppRndModalShell
+          titleId="file-type-dialog-title"
+          title="Add New File"
+          subtitle={selectedFileType ? "Configure and create the selected file" : "Choose a file type"}
+          headerIcon={<FileImage className="h-5 w-5 text-primary" />}
+          dimensions={FILE_TYPE_DIMENSIONS}
+          storageKey="app.rnd-size.file-type-dialog"
+          onClose={handleClose}
+        >
+          <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)]">
+            <aside className="min-h-0 overflow-y-auto border-r p-3">
+              <div className="space-y-1">
+                {FILE_TYPES.map((fileType) => (
+                  <button
                     key={fileType.id}
-                    className={`cursor-pointer transition-all ${selectedFileType === fileType.id
-                        ? 'border-blue-500 bg-primary/10 shadow-sm'
-                        : 'hover:shadow-sm hover:border-gray-300'
-                      } ${fileType.supported ? '' : 'opacity-50 cursor-not-allowed'}`}
-                    onClick={() => fileType.supported && handleFileTypeSelect(fileType.id)}
+                    type="button"
+                    disabled={!fileType.supported}
+                    className={cn(
+                      "flex w-full cursor-pointer items-start gap-3 rounded-md border p-3 text-left transition-colors hover:bg-accent",
+                      selectedFileType === fileType.id && "border-primary bg-primary/10",
+                      !fileType.supported && "cursor-not-allowed opacity-50",
+                    )}
+                    onClick={() => setSelectedFileType(fileType.id)}
                   >
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        <div className={`p-2 rounded-lg ${selectedFileType === fileType.id ? 'bg-blue-100' : 'bg-muted/50'
-                          }`}>
-                          <fileType.icon className={`h-4 w-4 ${selectedFileType === fileType.id ? 'text-blue-600' : 'text-muted-foreground'
-                            }`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm">{fileType.name}</p>
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                            {fileType.description}
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                    <fileType.icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">{fileType.name}</span>
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        {fileType.description}
+                      </span>
+                    </span>
+                  </button>
                 ))}
               </div>
-            </ScrollArea>
-          </div>
+            </aside>
 
-          {/* Right content area */}
-          <div className="col-span-8">
-            <ScrollArea className="h-[550px]">
-              {renderContent()}
-            </ScrollArea>
+            <main className="min-h-0 overflow-y-auto p-4">
+              {selectedFileType === "nutexb" ? (
+                <NutexbImportPanel
+                  currentDirectory={currentDirectory}
+                  onImportComplete={handleImportComplete}
+                  onClose={handleClose}
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-muted-foreground">
+                  <FileImage className="h-10 w-10 opacity-40" />
+                </div>
+              )}
+            </main>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </AppRndModalShell>
+      ) : null}
+    </>
   );
-} 
+}

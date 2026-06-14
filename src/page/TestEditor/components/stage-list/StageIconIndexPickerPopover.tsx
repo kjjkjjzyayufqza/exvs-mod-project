@@ -1,9 +1,13 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
 import { SkipForward, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+
+const PICKER_ROW_HEIGHT = 112;
+const NUMERIC_QUERY_PATTERN = /^\d+$/;
 
 export type StageIconIndexPickerItem = {
   index: number;
@@ -35,6 +39,7 @@ export function StageIconIndexPickerPopover(props: {
   const setOpen = onOpenChange ?? setOpenInternal;
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   const groupedMap = useMemo(() => {
     return groups.map((group) => {
@@ -56,20 +61,55 @@ export function StageIconIndexPickerPopover(props: {
     return max;
   }, [groups]);
 
+  const searchableIndexLabels = useMemo(() => {
+    const labelsByIndex = new Map<number, string[]>();
+    for (const group of groups) {
+      for (const item of group.items) {
+        const name = item.name?.trim().toLowerCase();
+        if (!name) continue;
+        const labels = labelsByIndex.get(item.index);
+        if (labels) {
+          labels.push(name);
+        } else {
+          labelsByIndex.set(item.index, [name]);
+        }
+      }
+    }
+    return Array.from(labelsByIndex.entries()).map(([index, labels]) => ({
+      index,
+      labelText: labels.join("\n"),
+    }));
+  }, [groups]);
+
   const filteredIndexes = useMemo(() => {
     if (maxIndex < 0) return [];
-    const allIndexes = Array.from({ length: maxIndex + 1 }, (_, idx) => idx);
     const q = deferredQuery.trim().toLowerCase();
-    if (!q) return allIndexes;
-    return allIndexes.filter((idx) => {
-      if (String(idx).includes(q)) return true;
-      for (const group of groupedMap) {
-        const label = group.byIndex.get(idx)?.name ?? "";
-        if (label.toLowerCase().includes(q)) return true;
+    if (!q) return null;
+    const matches = new Set<number>();
+    if (NUMERIC_QUERY_PATTERN.test(q)) {
+      for (let idx = 0; idx <= maxIndex; idx += 1) {
+        if (String(idx).includes(q)) {
+          matches.add(idx);
+        }
       }
-      return false;
-    });
-  }, [deferredQuery, groupedMap, maxIndex]);
+    }
+    for (const row of searchableIndexLabels) {
+      if (row.labelText.includes(q)) {
+        matches.add(row.index);
+      }
+    }
+    return Array.from(matches).sort((left, right) => left - right);
+  }, [deferredQuery, maxIndex, searchableIndexLabels]);
+
+  const rowCount = filteredIndexes?.length ?? Math.max(0, maxIndex + 1);
+  const getListScrollElement = useCallback(() => listRef.current, []);
+  const rowVirtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: getListScrollElement,
+    estimateSize: () => PICKER_ROW_HEIGHT,
+    getItemKey: (rowIndex) => filteredIndexes?.[rowIndex] ?? rowIndex,
+    overscan: 6,
+  });
 
   const selectedRows = useMemo(() => {
     if (selectedValue === undefined) return [];
@@ -151,6 +191,7 @@ export function StageIconIndexPickerPopover(props: {
                     alt={row.item?.name ?? "(empty)"}
                     className="h-9 w-16 rounded bg-black object-contain shrink-0"
                     loading="lazy"
+                    decoding="async"
                     onError={(e) => {
                       e.currentTarget.src = "/tauri.svg";
                     }}
@@ -173,46 +214,58 @@ export function StageIconIndexPickerPopover(props: {
             className="h-8"
           />
 
-          <div className="h-[600px] overflow-auto pr-1 border rounded-md">
-            {filteredIndexes.length === 0 ? (
+          <div ref={listRef} className="h-[600px] overflow-auto border rounded-md overscroll-contain">
+            {rowCount === 0 ? (
               <div className="text-xs text-muted-foreground py-6 text-center">No results.</div>
             ) : (
-              <div className="p-2 space-y-2">
-                {filteredIndexes.map((idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className={`w-full rounded-md border px-2 py-2 text-left hover:bg-accent/30 ${idx === selectedValue ? "border-primary bg-primary/10" : ""}`}
-                    onClick={() => {
-                      onSelect(idx);
-                      setOpen(false);
-                    }}
-                  >
-                    <div className="text-xs text-muted-foreground font-mono mb-2">Index: {idx}</div>
-                    <div className="flex gap-2 min-h-0">
-                      {groupedMap.map((group) => {
-                        const item = group.byIndex.get(idx);
-                        return (
-                          <div key={group.key} className="flex-1 min-w-0 flex items-center gap-2 rounded-md border px-2 py-2">
-                            <img
-                              src={item?.previewSrc ?? "/tauri.svg"}
-                              alt={item?.name ?? "(empty)"}
-                              className="h-10 w-20 rounded bg-black object-contain shrink-0"
-                              loading="lazy"
-                              onError={(e) => {
-                                e.currentTarget.src = "/tauri.svg";
-                              }}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="text-xs text-muted-foreground">{group.title}</div>
-                              <div className="text-sm font-medium truncate">{item?.name ?? "(empty)"}</div>
-                            </div>
-                          </div>
-                        );
-                      })}
+              <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
+                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const idx = filteredIndexes?.[virtualRow.index] ?? virtualRow.index;
+                  return (
+                    <div
+                      key={virtualRow.key}
+                      className="absolute left-0 top-0 w-full px-2 pb-2"
+                      style={{
+                        height: virtualRow.size,
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className={`h-[104px] w-full rounded-md border px-2 py-2 text-left hover:bg-accent/30 ${idx === selectedValue ? "border-primary bg-primary/10" : ""}`}
+                        onClick={() => {
+                          onSelect(idx);
+                          setOpen(false);
+                        }}
+                      >
+                        <div className="text-xs text-muted-foreground font-mono mb-2">Index: {idx}</div>
+                        <div className="flex gap-2 min-h-0">
+                          {groupedMap.map((group) => {
+                            const item = group.byIndex.get(idx);
+                            return (
+                              <div key={group.key} className="flex-1 min-w-0 flex items-center gap-2 rounded-md border px-2 py-2">
+                                <img
+                                  src={item?.previewSrc ?? "/tauri.svg"}
+                                  alt={item?.name ?? "(empty)"}
+                                  className="h-10 w-20 rounded bg-black object-contain shrink-0"
+                                  loading="lazy"
+                                  decoding="async"
+                                  onError={(e) => {
+                                    e.currentTarget.src = "/tauri.svg";
+                                  }}
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-xs text-muted-foreground">{group.title}</div>
+                                  <div className="text-sm font-medium truncate">{item?.name ?? "(empty)"}</div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </button>
                     </div>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

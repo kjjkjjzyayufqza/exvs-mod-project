@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Settings2 } from "lucide-react";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+
+const SETTINGS_DIMENSIONS = {
+  width: 500,
+  height: 360,
+  minWidth: 420,
+  minHeight: 300,
+};
 
 type SettingsDialogProps = {
   open: boolean;
@@ -41,16 +43,19 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     setTheme(checked ? "dark" : "light");
   };
 
+  if (!open) return null;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Settings</DialogTitle>
-          <DialogDescription>
-            Application preferences including appearance.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-2">
+    <AppRndModalShell
+      titleId="settings-dialog-title"
+      title="Settings"
+      subtitle="Application preferences"
+      headerIcon={<Settings2 className="h-5 w-5 text-primary" />}
+      dimensions={SETTINGS_DIMENSIONS}
+      storageKey="app.rnd-size.settings"
+      onClose={() => onOpenChange(false)}
+    >
+      <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4">
           {mounted ? (
             <>
               <div className="flex items-center justify-between gap-4">
@@ -87,8 +92,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               Loading appearance settings…
             </p>
           )}
-        </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </AppRndModalShell>
   );
 }

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   AlertCircle,
@@ -6,13 +6,10 @@ import {
   CheckCircle2,
   FolderOpen,
   Loader2,
-  X,
 } from "lucide-react";
-import { Rnd } from "react-rnd";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { DaeImportAnalysisPanel } from "./DaeImportAnalysisPanel";
@@ -35,20 +32,14 @@ import {
   DaeImportFieldRow,
   DaeImportSection,
 } from "./daeImportUi";
-import { useSceneModalViewportSuspendInteraction } from "../../hooks/useSceneModalViewportSuspendInteraction";
-import {
-  SCENE_EDIT_RND_SIZE_KEYS,
-  persistSceneEditRndSize,
-  resolveSceneEditRndInitialSize,
-} from "../sceneEditRndSizePersistence";
-import { clampRndSizeToConstraints } from "../sceneEditRndModalUtils";
+import { SCENE_EDIT_RND_SIZE_KEYS } from "../sceneEditRndSizePersistence";
+import { SceneEditRndModalShell } from "../SceneEditRndModalShell";
 
 export type DaeImportPrimaryMode = "preview" | "ssbh";
-export type DaeImportWorkflowMode = "standard" | "batchDisk";
+export type DaeImportWorkflowMode = "standard" | "batchDisk" | "unitModel";
 
 const VIEWPORT_MARGIN = 48;
 const SSBH_MAX_WIDTH = 1080;
-const DAE_IMPORT_MODAL_HANDLE = "dae-import-modal-handle";
 const DAE_IMPORT_MODAL_LAYER_ID = "dae-import-modal-layer";
 
 interface DaeImportModalDimensions {
@@ -129,13 +120,6 @@ function getDaeImportSizeStorageKey(mode: DaeImportPrimaryMode) {
     : SCENE_EDIT_RND_SIZE_KEYS.daeImportPreview;
 }
 
-function resolveDaeImportModalSize(
-  mode: DaeImportPrimaryMode,
-  dims: DaeImportModalDimensions,
-) {
-  return resolveSceneEditRndInitialSize(getDaeImportSizeStorageKey(mode), dims);
-}
-
 interface DaeImportConfigModalProps {
   entries: DaeImportEntry[];
   havokInfo: HavokInstallInfo | null;
@@ -163,7 +147,6 @@ interface DaeImportConfigModalBodyProps {
   onConfigChange: (importId: string, config: DaeImportConfig) => void;
   onImport: () => void;
   onCancel: () => void;
-  onDragHandlePointerDownCapture?: (event: React.PointerEvent) => void;
 }
 
 const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
@@ -177,9 +160,9 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
   onConfigChange,
   onImport,
   onCancel,
-  onDragHandlePointerDownCapture,
 }: DaeImportConfigModalBodyProps) {
   const batchDiskMode = workflowMode === "batchDisk";
+  const unitModelMode = workflowMode === "unitModel";
   const primaryMode = getPrimaryMode(config);
   const hktAvailable = isHktGenerationAvailable(havokInfo);
   const [hktValidationError, setHktValidationError] = useState<string | null>(null);
@@ -293,50 +276,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
         : (entry.analysis?.canConvert ?? false) && ssbhReady);
 
   return (
-    <Card
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="dae-import-modal-title"
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border bg-background shadow-2xl"
-    >
-      <div
-        className={cn(
-          "flex shrink-0 items-center justify-between border-b bg-linear-to-r from-muted/80 to-muted/40 px-4 py-3 select-none",
-          DAE_IMPORT_MODAL_HANDLE,
-          "cursor-grab active:cursor-grabbing",
-        )}
-        onPointerDownCapture={onDragHandlePointerDownCapture}
-      >
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-            <Box className="h-4 w-4 text-primary" />
-          </div>
-          <div className="min-w-0">
-            <h2 id="dae-import-modal-title" className="truncate text-sm font-semibold">
-              {batchDiskMode ? "Batch Import Static Mesh" : "Import Static Mesh"}
-            </h2>
-            <p className="truncate text-xs text-muted-foreground">
-              {batchDiskMode
-                ? `${entries.length} FBX/DAE file${entries.length === 1 ? "" : "s"} to disk`
-                : entry.fileName}
-              {!batchDiskMode && entries.length > 1 ? ` · +${entries.length - 1} more` : ""}
-            </p>
-          </div>
-        </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0 rounded-full hover:bg-destructive/10 hover:text-destructive"
-          data-no-drag
-          onClick={onCancel}
-          aria-label="Close import dialog"
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-
-      <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+    <div className="flex h-full min-h-0 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto">
           <DaeImportAnalysisPanel
             analysis={entry.analysis}
@@ -394,7 +334,13 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
           ) : null}
 
           <DaeImportSection title="Import Options">
-            {batchDiskMode ? (
+            {unitModelMode ? (
+              <DaeImportFieldRow label="Import Mode">
+                <span className="text-right text-[11px] font-medium">
+                  Add to Unit model package
+                </span>
+              </DaeImportFieldRow>
+            ) : batchDiskMode ? (
               <DaeImportFieldRow label="Import Mode">
                 <span className="text-right text-[11px] font-medium">
                   Direct-to-disk batch
@@ -441,7 +387,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
               </>
             )}
 
-            {config.directToDisk && (
+            {config.directToDisk && !unitModelMode && (
               <DaeImportFieldRow
                 label="Output Directory"
                 hint={
@@ -482,22 +428,24 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
               </DaeImportFieldRow>
             )}
 
-            <DaeImportBoolField
-              label="Generate HKT Collision"
-              hint={
-                hktAvailable
-                  ? batchDiskMode
-                    ? "Generate Havok collision per file (default: shape-preserving, most compact)"
-                    : "Uses Havok tools with automatic profile selection"
-                  : "Havok tools are not available on this machine"
-              }
-              checked={config.generateHkt}
-              disabled={!hktAvailable}
-              onCheckedChange={(checked) => updateConfig({ generateHkt: checked })}
-            />
+            {!unitModelMode ? (
+              <DaeImportBoolField
+                label="Generate HKT Collision"
+                hint={
+                  hktAvailable
+                    ? batchDiskMode
+                      ? "Generate Havok collision per file (default: shape-preserving, most compact)"
+                      : "Uses Havok tools with automatic profile selection"
+                    : "Havok tools are not available on this machine"
+                }
+                checked={config.generateHkt}
+                disabled={!hktAvailable}
+                onCheckedChange={(checked) => updateConfig({ generateHkt: checked })}
+              />
+            ) : null}
           </DaeImportSection>
 
-          {config.generateHkt && (
+          {config.generateHkt && !unitModelMode && (
             <DaeImportHktConfigPanel
               havokInfo={havokInfo}
               config={config}
@@ -515,6 +463,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
               stageRoot={stageRoot}
               directToDisk={config.directToDisk}
               batchCount={batchDiskMode ? entries.length : 1}
+              unitModelMode={unitModelMode}
               textureReferenceIssues={textureReferenceValidation.issues}
               textureReferenceValidationError={textureReferenceValidation.error}
               textureReferencesValidating={textureReferenceValidation.validating}
@@ -527,7 +476,9 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
             Cancel
           </Button>
           <Button type="button" size="sm" onClick={onImport} disabled={!canImport}>
-            {batchDiskMode
+            {unitModelMode
+              ? "Add Unit Model"
+              : batchDiskMode
               ? `Convert ${entries.length} File${entries.length === 1 ? "" : "s"} to Disk`
               : config.directToDisk
               ? "Convert to Disk"
@@ -536,8 +487,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
                 : "Import"}
           </Button>
         </div>
-      </CardContent>
-    </Card>
+    </div>
   );
 });
 
@@ -551,123 +501,51 @@ export function DaeImportConfigModal({
   onImport,
   onCancel,
 }: DaeImportConfigModalProps) {
-  const { startViewportSuspend, stopViewportSuspend, onDragHandlePointerDownCapture } =
-    useSceneModalViewportSuspendInteraction();
-  const [position, setPosition] = useState(() => {
-    const dims = getDaeImportModalDimensions("preview");
-    const size = resolveDaeImportModalSize("preview", dims);
-    return clampModalPosition(getCenteredModalPosition(size), size);
-  });
-  const [size, setSize] = useState(() => {
-    const dims = getDaeImportModalDimensions("preview");
-    return resolveDaeImportModalSize("preview", dims);
-  });
-  const [modeConstraints, setModeConstraints] = useState(() =>
-    getDaeImportModalDimensions("preview"),
-  );
-
   const entry = entries[0];
   const config = entry?.config;
-
-  useEffect(() => {
-    if (!entry || !config) return;
-    const primaryMode = getPrimaryMode(config);
-    const dims = getDaeImportModalDimensions(primaryMode);
-    const nextSize = resolveDaeImportModalSize(primaryMode, dims);
-    setModeConstraints(dims);
-    setSize(nextSize);
-    setPosition(clampModalPosition(getCenteredModalPosition(nextSize), nextSize));
-  }, [entry, config?.convertToSsbh, config?.loadToScene]);
-
-  useEffect(() => {
-    const onResize = () => {
-      if (!config) return;
-      const primaryMode = getPrimaryMode(config);
-      const dims = getDaeImportModalDimensions(primaryMode);
-      setModeConstraints(dims);
-      setSize((prev) => {
-        const next = clampRndSizeToConstraints(prev, dims);
-        setPosition((pos) => clampModalPosition(pos, next));
-        return next;
-      });
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [config?.convertToSsbh, config?.loadToScene]);
-
-  const handleDragStart = useCallback(() => {
-    startViewportSuspend();
-  }, [startViewportSuspend]);
-
-  const handleDragStop = useCallback(
-    (...args: Parameters<NonNullable<ComponentProps<typeof Rnd>["onDragStop"]>>) => {
-      stopViewportSuspend();
-      const data = args[1];
-      setPosition({ x: data.x, y: data.y });
-    },
-    [stopViewportSuspend],
+  const primaryMode = config ? getPrimaryMode(config) : "preview";
+  const getDimensions = useCallback(
+    () => getDaeImportModalDimensions(primaryMode),
+    [primaryMode],
   );
-
-  const handleResizeStart = useCallback(() => {
-    startViewportSuspend();
-  }, [startViewportSuspend]);
-
-  const handleResizeStop = useCallback(
-    (...args: Parameters<NonNullable<ComponentProps<typeof Rnd>["onResizeStop"]>>) => {
-      stopViewportSuspend();
-      const ref = args[2];
-      const nextPosition = args[4];
-      if (!config) return;
-      const primaryMode = getPrimaryMode(config);
-      const dims = getDaeImportModalDimensions(primaryMode);
-      const nextSize = persistSceneEditRndSize(
-        getDaeImportSizeStorageKey(primaryMode),
-        { width: ref.offsetWidth, height: ref.offsetHeight },
-        dims,
-      );
-      setSize(nextSize);
-      setPosition(nextPosition);
-    },
-    [config, stopViewportSuspend],
+  const getInitialPosition = useCallback(
+    (modalSize: { width: number; height: number }) =>
+      clampModalPosition(getCenteredModalPosition(modalSize), modalSize),
+    [],
   );
 
   if (!entry || !config) return null;
+  const batchDiskMode = workflowMode === "batchDisk";
+  const unitModelMode = workflowMode === "unitModel";
+  const title = unitModelMode
+    ? "Import Unit Model"
+    : batchDiskMode
+      ? "Batch Import Static Mesh"
+      : "Import Static Mesh";
+  const subtitle = unitModelMode
+    ? `${entry.fileName} to Unit model package`
+    : batchDiskMode
+    ? `${entries.length} FBX/DAE file${entries.length === 1 ? "" : "s"} to disk`
+    : `${entry.fileName}${entries.length > 1 ? ` · +${entries.length - 1} more` : ""}`;
 
   const modalLayer = (
     <div
       id={DAE_IMPORT_MODAL_LAYER_ID}
       className="pointer-events-none fixed inset-x-0 bottom-0 top-[var(--layout-topbar-height)] z-[var(--z-modal-nested)]"
     >
-      <Rnd
-        size={size}
-        position={position}
-        bounds="parent"
-        minWidth={modeConstraints.minWidth}
-        minHeight={modeConstraints.minHeight}
-        maxWidth={modeConstraints.maxWidth}
-        maxHeight={modeConstraints.maxHeight}
-        dragHandleClassName={DAE_IMPORT_MODAL_HANDLE}
-        cancel="button, input, textarea, select, label, a, [data-no-drag]"
-        enableResizing={{
-          top: false,
-          right: true,
-          bottom: true,
-          left: false,
-          topRight: false,
-          bottomRight: true,
-          bottomLeft: false,
-          topLeft: false,
-        }}
-        resizeHandleStyles={{
-          right: { width: 8, right: 0 },
-          bottom: { height: 8, bottom: 0 },
-          bottomRight: { width: 12, height: 12, right: 0, bottom: 0 },
-        }}
-        className="pointer-events-auto"
-        onDragStart={handleDragStart}
-        onDragStop={handleDragStop}
-        onResizeStart={handleResizeStart}
-        onResizeStop={handleResizeStop}
+      <SceneEditRndModalShell
+        cascadeIndex={0}
+        zIndex={1}
+        titleId="dae-import-modal-title"
+        title={title}
+        subtitle={subtitle}
+        headerIcon={<Box className="h-4 w-4 text-primary" />}
+        onActivate={() => {}}
+        onClose={onCancel}
+        getDimensions={getDimensions}
+        getInitialPosition={getInitialPosition}
+        sizeStorageKey={getDaeImportSizeStorageKey(primaryMode)}
+        skipActivate
       >
         <DaeImportConfigModalBody
           entry={entry}
@@ -680,9 +558,8 @@ export function DaeImportConfigModal({
           onConfigChange={onConfigChange}
           onImport={onImport}
           onCancel={onCancel}
-          onDragHandlePointerDownCapture={onDragHandlePointerDownCapture}
         />
-      </Rnd>
+      </SceneEditRndModalShell>
     </div>
   );
 

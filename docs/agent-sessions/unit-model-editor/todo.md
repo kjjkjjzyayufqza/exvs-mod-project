@@ -56,6 +56,21 @@ Resolve the unrelated SceneEdit TypeScript errors before expecting full-project
 - [x] Skip redundant activate/z-index updates for already-topmost editor windows.
 - [x] Run targeted SSBH/Unit Model tests and filtered TypeScript checks.
 
+## 2026-06-14 NUMATB Profile Loading Parity
+
+- [x] Compare Unit Model and Scene Editor NUMATB window/loading implementations.
+- [x] Inspect `unit-model-structure-tree.json` profile naming and pairing variants.
+- [x] Add failing regression coverage for dual maya/nust loading and saving.
+- [x] Make the shared Unit Model NUMATB session use Scene Editor dual-profile semantics.
+- [x] Run targeted tests and TypeScript verification.
+
+## 2026-06-14 NUMATB AI Copy Action
+
+- [x] Identify why the shared window hides the Copy JSON icon.
+- [x] Add a window-level regression test for full maya/nust clipboard export.
+- [x] Restore the copy action in windowed NUMATB editors.
+- [x] Run targeted tests and TypeScript verification.
+
 ## 2026-06-12 Follow-up Fixes
 
 - [x] Force material remount when decoded texture data arrives so white meshes do not require hide/show.

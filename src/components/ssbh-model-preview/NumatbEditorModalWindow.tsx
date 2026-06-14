@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FileJson, Layers, Loader2, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { join } from "@tauri-apps/api/path";
@@ -7,7 +7,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { NumatbProfileKind } from "./daeSsbhTypes";
 import { NumatbTemplateEditorModalBody } from "./NumatbTemplateEditorModalBody";
-import type { NumatbModalBundle } from "./numatbEditorUtils";
+import type { NumatbModalBundle, NumatbProfilePaths } from "./numatbEditorUtils";
+import {
+  buildNumatbClipboardExportPayload,
+  copyNumatbProfilesJsonToClipboard,
+} from "./copyNumatbProfilesJson";
 import { ssbhLoadSsbhFileAsJson } from "./ssbhDaeIoService";
 import {
   isSsbhEditorDialogActive,
@@ -19,6 +23,7 @@ export type NumatbEditorWindowSession = {
   id: string;
   filePath: string;
   primaryProfile: NumatbProfileKind;
+  profilePaths?: NumatbProfilePaths;
   loading: boolean;
   saving: boolean;
   loadError: string | null;
@@ -31,6 +36,13 @@ export type NumatbEditorWindowSession = {
 function fileBasename(path: string): string {
   const seg = path.replace(/\\/g, "/").split("/").filter((x) => x.length > 0).pop();
   return seg ?? path;
+}
+
+function modelNameFromNumatbPath(path: string): string {
+  return fileBasename(path)
+    .replace(/\.numatb$/i, "")
+    .replace(/_m\d+(?=__(?:maya|nust)__$)/i, "")
+    .replace(/__(?:maya|nust)__$/i, "");
 }
 
 type NumatbEditorModalWindowProps = {
@@ -86,6 +98,19 @@ export function NumatbEditorModalWindow({
 
   const title = fileBasename(session.filePath);
   const [jsonExportBusy, setJsonExportBusy] = useState(false);
+  const copyProfilesJson = useCallback(async () => {
+    const draft = session.draftData;
+    if (!draft) return;
+    await copyNumatbProfilesJsonToClipboard(
+      buildNumatbClipboardExportPayload({
+        modelName: modelNameFromNumatbPath(session.filePath),
+        numatbPaths: session.profilePaths,
+        mirrorTexturePathsAcrossProfiles: draft.mirrorTexturePathsAcrossProfiles,
+        mayaProfile: draft.mayaFile,
+        nustProfile: draft.nustFile,
+      }),
+    );
+  }, [session.draftData, session.filePath, session.profilePaths]);
 
   const exportNumatbJsonToDirectory = async () => {
     const src = session.filePath.trim();
@@ -224,6 +249,7 @@ export function NumatbEditorModalWindow({
               onChange={onDraftChange}
               disabled={session.saving}
               defaultActiveProfile={session.primaryProfile}
+              onCopyProfilesJson={copyProfilesJson}
             />
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Loader2 } from "lucide-react";
@@ -7,6 +7,8 @@ import { resourceDir } from "@tauri-apps/api/path";
 import { useConfigStore } from "../../store/configStore";
 import { ExtractFHMData, ExtractType, Fhm2d_type_format } from "../../models/fhm2d";
 import { toast } from "sonner";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { cn } from "@/lib/utils";
 
 // Define the UnitData interface based on the sample provided
 interface UnitData {
@@ -27,10 +29,11 @@ interface UnitData {
 
 export default function UnitList() {
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearchQuery = useDeferredValue(searchQuery.trim().toLowerCase());
   const [units, setUnits] = useState<UnitData[]>([]);
-  const [filteredUnits, setFilteredUnits] = useState<UnitData[]>([]);
   const [selectedUnit, setSelectedUnit] = useState<UnitData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const listRef = useRef<HTMLDivElement | null>(null);
   const obDplCachePath = useConfigStore(state => state.obDplCachePath);
   const extractOutputPath = useConfigStore(state => state.extractOutputPath);
 
@@ -43,7 +46,6 @@ export default function UnitList() {
         const fileData = await readFile(resourcePath + "/tools/ob_unit.json");
         const data = JSON.parse(new TextDecoder().decode(fileData)) as UnitData[];
         setUnits(data);
-        setFilteredUnits(data);
       } catch (error) {
         console.error("Error loading unit data:", error);
       } finally {
@@ -54,58 +56,33 @@ export default function UnitList() {
     loadUnitData();
   }, []);
 
-  // Filter units based on search query
-  useEffect(() => {
-    if (searchQuery.trim() === "") {
-      setFilteredUnits(units);
-    } else {
-      const query = searchQuery.toLowerCase();
-      const filtered = units.filter(unit => {
-        // Search by Unit ID
-        if (unit.unitId.toString().toLowerCase().includes(query)) {
-          return true;
-        }
+  const filteredUnits = useMemo(() => {
+    if (!deferredSearchQuery) return units;
+    return units.filter(unit => {
+      return (
+        unit.unitId.toString().includes(deferredSearchQuery) ||
+        unit.modelFileName.toLowerCase().includes(deferredSearchQuery) ||
+        unit.aleoFileName.toLowerCase().includes(deferredSearchQuery) ||
+        unit.nu3bankFileName.toLowerCase().includes(deferredSearchQuery) ||
+        unit.ammoFileName.toLowerCase().includes(deferredSearchQuery) ||
+        unit.mscFileName.toLowerCase().includes(deferredSearchQuery) ||
+        unit.animeFileName.toLowerCase().includes(deferredSearchQuery)
+      );
+    });
+  }, [deferredSearchQuery, units]);
 
-        // Search by Model File Name
-        if (unit.modelFileName.toLowerCase().includes(query)) {
-          return true;
-        }
-
-        // Search by Aleo File Name
-        if (unit.aleoFileName.toLowerCase().includes(query)) {
-          return true;
-        }
-
-        // Search by Nu3bank File Name
-        if (unit.nu3bankFileName.toLowerCase().includes(query)) {
-          return true;
-        }
-
-        // Search by Ammo File Name
-        if (unit.ammoFileName.toLowerCase().includes(query)) {
-          return true;
-        }
-
-        // Search by MSC File Name
-        if (unit.mscFileName.toLowerCase().includes(query)) {
-          return true;
-        }
-
-        // Search by Anime File Name
-        if (unit.animeFileName.toLowerCase().includes(query)) {
-          return true;
-        }
-
-        return false;
-      });
-      setFilteredUnits(filtered);
-    }
-  }, [searchQuery, units]);
+  const getScrollElement = useCallback(() => listRef.current, []);
+  const rowVirtualizer = useVirtualizer({
+    count: filteredUnits.length,
+    getScrollElement,
+    estimateSize: () => 48,
+    overscan: 12,
+  });
 
   // Handle unit selection
-  const handleUnitSelect = (unit: UnitData) => {
+  const handleUnitSelect = useCallback((unit: UnitData) => {
     setSelectedUnit(unit);
-  };
+  }, []);
 
   // Handle extract button click for specific file type
   const handleExtract = async (fileType: string, fileName: string) => {
@@ -170,24 +147,43 @@ export default function UnitList() {
               Loading units...
             </div>
           ) : (
-            <div className="space-y-2 overflow-auto max-h-[60vh]">
+            <div ref={listRef} className="h-[60vh] overflow-auto pr-1">
               {filteredUnits.length === 0 ? (
                 <div className="flex items-center justify-center h-32 text-muted-foreground">
                   No units found
                 </div>
               ) : (
-                filteredUnits.map((unit, index) => (
-                  <div
-                    key={index}
-                    className={`flex justify-between items-center p-3 hover:bg-muted/80 rounded-md transition-colors border cursor-pointer ${selectedUnit?.unitId === unit.unitId ? "bg-primary/10 border-primary/30" : ""
-                      }`}
-                    onClick={() => handleUnitSelect(unit)}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <span className="font-medium">ID: {unit.unitId}</span>
-                    </div>
-                  </div>
-                ))
+                <div
+                  className="relative w-full"
+                  style={{ height: rowVirtualizer.getTotalSize() }}
+                >
+                  {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                    const unit = filteredUnits[virtualRow.index];
+                    if (!unit) return null;
+                    const selected = selectedUnit?.unitId === unit.unitId;
+                    return (
+                      <div
+                        key={unit.unitId}
+                        className="absolute left-0 top-0 w-full pr-1"
+                        style={{
+                          height: virtualRow.size,
+                          transform: `translateY(${virtualRow.start}px)`,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className={cn(
+                            "flex h-10 w-full cursor-pointer items-center justify-between rounded-md border p-3 text-left transition-colors hover:bg-muted/80",
+                            selected && "border-primary/30 bg-primary/10",
+                          )}
+                          onClick={() => handleUnitSelect(unit)}
+                        >
+                          <span className="font-medium">ID: {unit.unitId}</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           )}

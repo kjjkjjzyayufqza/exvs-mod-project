@@ -22,6 +22,11 @@ export type NumatbModalBundle = {
   mirrorTexturePathsAcrossProfiles: boolean;
 };
 
+export type NumatbProfilePaths = {
+  maya: string | null;
+  nust: string | null;
+};
+
 function cloneStructured<T>(data: T): T {
   return structuredClone(data);
 }
@@ -72,17 +77,72 @@ export function deriveNumatbSisterPath(
   return normalized.slice(0, idx) + replacement + normalized.slice(idx + marker.length);
 }
 
+export function deriveNumatbSisterPathCandidates(
+  filePath: string,
+  targetProfile: NumatbProfileKind,
+): string[] {
+  const normalized = filePath.replace(/\\/g, "/");
+  const direct = deriveNumatbSisterPath(normalized, targetProfile);
+  const candidates = direct ? [direct] : [];
+
+  if (targetProfile === "maya" && detectNumatbProfileFromPath(normalized) === "nust") {
+    const baseVariantPath = normalized.replace(/_m\d+(?=__nust__)/i, "");
+    if (baseVariantPath !== normalized) {
+      const baseMayaPath = deriveNumatbSisterPath(baseVariantPath, "maya");
+      if (baseMayaPath && !candidates.some((path) => path.toLowerCase() === baseMayaPath.toLowerCase())) {
+        candidates.push(baseMayaPath);
+      }
+    }
+  }
+
+  return candidates;
+}
+
+function isVariantNustPath(filePath: string): boolean {
+  const base = filePath.replace(/\\/g, "/").split("/").pop() ?? filePath;
+  return /_m\d+__nust__\.numatb$/i.test(base);
+}
+
+export function resolveNumatbProfilePaths(matlPaths: string[]): NumatbProfilePaths {
+  let maya: string | null = null;
+  let nust: string | null = null;
+  for (const path of matlPaths) {
+    const profile = detectNumatbProfileFromPath(path);
+    if (profile === "maya" && !maya) {
+      maya = path;
+    }
+    if (profile === "nust" && (!nust || (isVariantNustPath(nust) && !isVariantNustPath(path)))) {
+      nust = path;
+    }
+  }
+  if (nust && !maya) {
+    maya = deriveNumatbSisterPathCandidates(nust, "maya")[0] ?? null;
+  }
+  if (maya && !nust) {
+    nust = deriveNumatbSisterPathCandidates(maya, "nust")[0] ?? null;
+  }
+  return { maya, nust };
+}
+
+export function buildNumatbModalBundleFromProfiles(
+  mayaFile: MatlDataJson | null | undefined,
+  nustFile: MatlDataJson | null | undefined,
+): NumatbModalBundle {
+  return {
+    mayaFile: normalizeMatlDataJson(mayaFile ?? createEmptyNumatbFile()),
+    nustFile: normalizeMatlDataJson(nustFile ?? createEmptyNumatbFile()),
+    mirrorTexturePathsAcrossProfiles: true,
+  };
+}
+
 export function buildNumatbModalBundleFromLoadedFile(
   matl: MatlDataJson,
   primaryProfile: NumatbProfileKind,
 ): NumatbModalBundle {
-  const normalized = normalizeMatlDataJson(matl);
-  const empty = createEmptyNumatbFile();
-  return {
-    mayaFile: primaryProfile === "maya" ? normalized : empty,
-    nustFile: primaryProfile === "nust" ? normalized : empty,
-    mirrorTexturePathsAcrossProfiles: true,
-  };
+  return buildNumatbModalBundleFromProfiles(
+    primaryProfile === "maya" ? matl : null,
+    primaryProfile === "nust" ? matl : null,
+  );
 }
 
 export function applySetMirror(bundle: NumatbModalBundle, value: boolean): NumatbModalBundle {

@@ -1,6 +1,6 @@
 import { FileEdit, FolderOpen, Image } from "lucide-react";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -9,13 +9,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useState, useEffect } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
 import { FileDialog } from './FileDialog';
 import { NutexbDialog } from './NutexbDialog';
 import { FileInfo as NumatbFileInfo } from "../../../store/numatbStore";
-import { FileInfo as NutexbFileInfo, useNutexbStore } from "../../../store/nutexbStore";
-import { readDir } from "@tauri-apps/plugin-fs";
+import { FileInfo as NutexbFileInfo } from "../../../store/nutexbStore";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { filterFiles } from "./fileListUtils";
 
 // Extend FileInfo to include possible properties
 interface ExtendedFileInfo extends NumatbFileInfo, NutexbFileInfo {
@@ -41,58 +42,39 @@ const FILE_TYPES = [
   { value: "numshb", label: ".numshb" }
 ];
 
+const FILE_ROW_HEIGHT = 72;
+const FILE_EDITOR_DIMENSIONS = {
+  width: 1000,
+  height: 720,
+  minWidth: 640,
+  minHeight: 420,
+};
+
 export function FileList({ files, isLoading, folderPath, onFileSelect, resetConversion }: FileListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [fileType, setFileType] = useState("all");
-  const [localFiles, setLocalFiles] = useState<FileInfo[]>(files);
-  const getFileInfos = useNutexbStore((e) => e.getFileInfos);
+  const [editingFile, setEditingFile] = useState<FileInfo | null>(null);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    setLocalFiles(files);
-  }, [files]);
+  const filteredFiles = useMemo(
+    () => filterFiles(files, deferredSearchQuery, fileType),
+    [deferredSearchQuery, fileType, files],
+  );
 
-  const handleSearch = async (query: string, type: string = fileType) => {
-    setSearchQuery(query);
+  const getScrollElement = useCallback(() => scrollRef.current, []);
+  const rowVirtualizer = useVirtualizer({
+    count: filteredFiles.length,
+    getScrollElement,
+    estimateSize: () => FILE_ROW_HEIGHT,
+    getItemKey: (index) => filteredFiles[index]?.path ?? filteredFiles[index]?.name ?? index,
+    overscan: 8,
+  });
 
-    if (!folderPath) return;
-
-    try {
-      const entries = await readDir(folderPath);
-      const filteredEntries = entries
-        .filter((entry) => {
-          const matchesSearch = entry.name?.toLowerCase().includes(query.toLowerCase());
-          const matchesType = type === "all" || entry.name?.endsWith(`.${type}`);
-          return entry.isFile && matchesSearch && matchesType;
-        })
-        .map(entry => ({
-          name: entry.name || "",
-          path: folderPath + "/" + entry.name
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-
-      // 保留原有的nutexb预览和字符串信息
-      const enrichedEntries = filteredEntries.map(filteredFile => {
-        const originalFile = files.find(f => f.name === filteredFile.name);
-        if (originalFile) {
-          return {
-            ...filteredFile,
-            previewPath: originalFile.previewPath,
-            string: originalFile.string
-          };
-        }
-        return filteredFile;
-      });
-
-      setLocalFiles(enrichedEntries);
-    } catch (error) {
-      console.error("Error reading directory:", error);
-    }
-  };
-
-  const handleFileTypeChange = (type: string) => {
-    setFileType(type);
-    handleSearch(searchQuery, type);
-  };
+  const closeEditor = useCallback(() => {
+    setEditingFile(null);
+    resetConversion();
+  }, [resetConversion]);
 
   if (isLoading) {
     return (
@@ -117,10 +99,10 @@ export function FileList({ files, isLoading, folderPath, onFileSelect, resetConv
         <Input
           placeholder="Search files..."
           value={searchQuery}
-          onChange={(e) => handleSearch(e.target.value)}
+          onChange={(e) => setSearchQuery(e.target.value)}
           className="flex-1"
         />
-        <Select value={fileType} onValueChange={handleFileTypeChange}>
+        <Select value={fileType} onValueChange={setFileType}>
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="File type" />
           </SelectTrigger>
@@ -133,67 +115,87 @@ export function FileList({ files, isLoading, folderPath, onFileSelect, resetConv
           </SelectContent>
         </Select>
       </div>
-      <div className="space-y-2 overflow-auto max-h-[60vh]">
-        {localFiles.map((file: FileInfo, index: number) => (
-          <div
-            key={index}
-            className="flex justify-between items-center p-3 hover:bg-muted/50 rounded-md transition-colors border"
-          >
-            <div className="flex items-center space-x-3">
-              {file.previewPath ? (
-                <div className="w-xs flex items-center justify-center overflow-hidden rounded-sm">
-                  <img 
-                    src={convertFileSrc(file.previewPath)} 
-                    alt="Preview" 
-                    className="h-full object-cover"
-                    onError={(e) => {
-                      // Hide the broken image
-                      e.currentTarget.style.display = 'none';
-                      
-                      // Create an error indicator safely
-                      const parent = e.currentTarget.parentElement;
-                      if (parent) {
-                        const errorIcon = document.createElement('span');
-                        errorIcon.className = "h-4 w-4 text-muted-foreground";
-                        errorIcon.textContent = "!";
-                        parent.appendChild(errorIcon);
-                      }
-                    }}
-                  />
+      {filteredFiles.length === 0 ? (
+        <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+          No files match the current filters
+        </div>
+      ) : (
+        <div ref={scrollRef} className="h-[60vh] min-h-48 overflow-auto overscroll-contain">
+          <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const file = filteredFiles[virtualRow.index];
+              if (!file) return null;
+              const isEditable = file.name.endsWith('.numatb') || file.name.endsWith('.nutexb');
+
+              return (
+                <div
+                  key={virtualRow.key}
+                  className="absolute left-0 top-0 w-full pb-2"
+                  style={{
+                    height: virtualRow.size,
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <div className="flex h-16 items-center justify-between gap-3 rounded-md border p-3 transition-colors hover:bg-muted/50">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      {file.previewPath ? (
+                        <div className="flex h-10 w-14 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
+                          <img
+                            src={convertFileSrc(file.previewPath)}
+                            alt=""
+                            className="h-full w-full object-cover"
+                            onError={(event) => {
+                              event.currentTarget.hidden = true;
+                            }}
+                          />
+                        </div>
+                      ) : file.name.endsWith('.nutexb') ? (
+                        <Image className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      ) : (
+                        <FileEdit className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                    </div>
+                    {file.string ? (
+                      <span className="max-w-[35%] truncate text-sm text-muted-foreground">{file.string}</span>
+                    ) : null}
+                    {isEditable ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 hover:bg-muted"
+                        onClick={() => {
+                          onFileSelect(file);
+                          setEditingFile(file);
+                        }}
+                      >
+                        Edit
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
-              ) : file.name.endsWith('.nutexb') ? (
-                <Image className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <FileEdit className="h-4 w-4 text-muted-foreground" />
-              )}
-              <span className="truncate">{file.name}</span>
-            </div>
-            {file.string && (
-              <div className="flex items-center space-x-3">
-                <span className="truncate">{file.string}</span>
-              </div>
-            )}
-            {(file.name.endsWith('.numatb') || file.name.endsWith('.nutexb')) && (
-              <Dialog onOpenChange={(open) => !open && resetConversion()}>
-                <DialogTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="hover:bg-muted"
-                    onClick={() => onFileSelect(file)}
-                  >
-                    Edit
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[1000px] max-h-[80vh] overflow-y-auto">
-                  {file.name.endsWith('.numatb') && <FileDialog file={file} />}
-                  {file.name.endsWith('.nutexb') && <NutexbDialog file={file} />}
-                </DialogContent>
-              </Dialog>
-            )}
+              );
+            })}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {editingFile ? (
+        <AppRndModalShell
+          titleId="files-edit-file-editor-title"
+          title={`Edit ${editingFile.name}`}
+          subtitle={editingFile.name.endsWith(".numatb") ? "Material editor" : "Texture editor"}
+          headerIcon={<FileEdit className="h-5 w-5" />}
+          dimensions={FILE_EDITOR_DIMENSIONS}
+          storageKey="files-edit-file-editor-size"
+          onClose={closeEditor}
+        >
+          <div className="min-h-0 flex-1 overflow-auto p-4">
+          {editingFile?.name.endsWith('.numatb') ? <FileDialog file={editingFile} /> : null}
+          {editingFile?.name.endsWith('.nutexb') ? <NutexbDialog file={editingFile} /> : null}
+          </div>
+        </AppRndModalShell>
+      ) : null}
     </div>
   );
 }

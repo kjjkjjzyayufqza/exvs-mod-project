@@ -97,8 +97,7 @@ fn parse_input_structure(json_content: &str) -> Result<InputStructure, String> {
         warn_legacy_structure_defaults(entries);
     }
 
-    serde_json::from_value(root)
-        .map_err(|e| format!("Failed to parse structure json: {e}"))
+    serde_json::from_value(root).map_err(|e| format!("Failed to parse structure json: {e}"))
 }
 
 fn warn_legacy_structure_defaults(entries: &[serde_json::Value]) {
@@ -127,7 +126,14 @@ fn collect_missing_legacy_structure_fields(
 ) -> Vec<&'static str> {
     let expected: &[&str] = match entry_type {
         "Folder" => &[
-            "unk1", "folderCount", "unk2", "unk2_1", "unk3", "unk4", "unk5", "unk6",
+            "unk1",
+            "folderCount",
+            "unk2",
+            "unk2_1",
+            "unk3",
+            "unk4",
+            "unk5",
+            "unk6",
         ],
         "Item" => &[
             "unk1",
@@ -439,10 +445,7 @@ fn flatten_sorted_order(type_groups: &[TypeGroup]) -> Vec<usize> {
         .collect()
 }
 
-fn build_file_index_remap(
-    files: &[ProcessedFile],
-    sorted_order: &[usize],
-) -> HashMap<i32, i32> {
+fn build_file_index_remap(files: &[ProcessedFile], sorted_order: &[usize]) -> HashMap<i32, i32> {
     let mut map = HashMap::new();
     for (packed_idx, &array_idx) in sorted_order.iter().enumerate() {
         map.insert(files[array_idx].file_index, packed_idx as i32);
@@ -532,7 +535,12 @@ fn build_meta_blob(
     // ── FileTypeEntry[] (each 0x20 bytes) ──
     for group in type_groups {
         let total_origin_size = calc_type_group_total_size(group, files, global_last);
-        write_file_type_entry(&mut meta, group.type_id, total_origin_size, group.file_indices.len() as u32);
+        write_file_type_entry(
+            &mut meta,
+            group.type_id,
+            total_origin_size,
+            group.file_indices.len() as u32,
+        );
     }
 
     // ── PerFileIndexEntry[] (each 0x0C bytes) ──
@@ -542,7 +550,12 @@ fn build_meta_blob(
 
     // ── SubEntryHeader[] ──
     for (packed_idx, &file_idx) in sorted_order.iter().enumerate() {
-        write_sub_entry_header(&mut meta, &files[file_idx], start_offsets[file_idx], packed_idx as u32);
+        write_sub_entry_header(
+            &mut meta,
+            &files[file_idx],
+            start_offsets[file_idx],
+            packed_idx as u32,
+        );
     }
 
     // ── Patch SubFileStructure offset at meta[0x10] ──
@@ -579,7 +592,12 @@ fn calc_type_group_total_size(
     }
 }
 
-fn write_file_type_entry(meta: &mut Vec<u8>, type_id: u32, total_origin_size: u32, file_count: u32) {
+fn write_file_type_entry(
+    meta: &mut Vec<u8>,
+    type_id: u32,
+    total_origin_size: u32,
+    file_count: u32,
+) {
     push_u32_le(meta, type_id);
     meta.extend_from_slice(&[0u8; 12]);
     push_u32_le(meta, total_origin_size);
@@ -614,7 +632,12 @@ fn write_per_file_index_entries(
     }
 }
 
-fn write_sub_entry_header(meta: &mut Vec<u8>, file: &ProcessedFile, start_offset: u32, packed_index: u32) {
+fn write_sub_entry_header(
+    meta: &mut Vec<u8>,
+    file: &ProcessedFile,
+    start_offset: u32,
+    packed_index: u32,
+) {
     let body = &file.body;
 
     push_u32_le(meta, 0);
@@ -745,7 +768,6 @@ fn write_output(output_path: &str, data: &[u8], atomic: bool) -> Result<(), Stri
 mod tests {
     use super::*;
 
-
     #[test]
     fn test_parse_legacy_structure_json_missing_unk_fields() {
         let json = r#"{
@@ -769,11 +791,7 @@ mod tests {
         let parsed = parse_input_structure(json).expect("legacy structure json should parse");
         assert_eq!(parsed.sub_file_structure.len(), 2);
         match &parsed.sub_file_structure[0] {
-            SubFileStructureEntry::Folder {
-                unk2_1,
-                unk5,
-                ..
-            } => {
+            SubFileStructureEntry::Folder { unk2_1, unk5, .. } => {
                 assert_eq!(*unk2_1, 0);
                 assert_eq!(*unk5, 0);
             }
@@ -975,12 +993,22 @@ mod tests {
         crate::format::fhm2d::extract_fhm2d_to_folder_impl(
             fhm2d_path.to_str().unwrap(),
             extract_dir.to_str().unwrap(),
-            None, None, false,
-        ).unwrap();
+            None,
+            None,
+            false,
+        )
+        .unwrap();
 
         let structure_json_path = format!("{}_structure.json", extract_dir.to_str().unwrap());
-        assert!(Path::new(&structure_json_path).exists(), "structure.json must exist");
-        eprintln!("  Extracted to {} with structure at {}", extract_dir.display(), structure_json_path);
+        assert!(
+            Path::new(&structure_json_path).exists(),
+            "structure.json must exist"
+        );
+        eprintln!(
+            "  Extracted to {} with structure at {}",
+            extract_dir.display(),
+            structure_json_path
+        );
 
         // Phase 2: Read original structure and verify stage layout
         eprintln!("Phase 2: Verifying stage structure...");
@@ -990,11 +1018,15 @@ mod tests {
         let orig_file_count = sub_file_data.len();
         eprintln!("  SubFileData entries: {}", orig_file_count);
 
-        let file_types: std::collections::HashSet<String> = sub_file_data.iter()
+        let file_types: std::collections::HashSet<String> = sub_file_data
+            .iter()
             .filter_map(|e| e["fileType"].as_str().map(|s| s.to_string()))
             .collect();
         eprintln!("  File types found: {:?}", file_types);
-        assert!(file_types.contains(".nutexb"), "stage should contain .nutexb textures");
+        assert!(
+            file_types.contains(".nutexb"),
+            "stage should contain .nutexb textures"
+        );
 
         // Phase 3: Modify a .bin file (CSV files are packed as .bin in FHM2D)
         eprintln!("Phase 3: Simulating content modification...");
@@ -1007,16 +1039,25 @@ mod tests {
         let modification_marker = b"RUST_TEST_MARKER_12345\n";
         let target_entry = bin_entry.unwrap_or_else(|| &sub_file_data[0]);
         let modified_file_url = target_entry["fileUrl"].as_str().unwrap().to_string();
-        let target_full_path = Path::new(&structure_json_path).parent().unwrap()
+        let target_full_path = Path::new(&structure_json_path)
+            .parent()
+            .unwrap()
             .join(&modified_file_url);
-        eprintln!("  Modifying: {} (type: {})", modified_file_url,
-            target_entry["fileType"].as_str().unwrap_or("?"));
+        eprintln!(
+            "  Modifying: {} (type: {})",
+            modified_file_url,
+            target_entry["fileType"].as_str().unwrap_or("?")
+        );
         let original_content = fs::read(&target_full_path).unwrap();
         let mut new_content = modification_marker.to_vec();
         new_content.extend_from_slice(&original_content);
         fs::write(&target_full_path, &new_content).unwrap();
-        eprintln!("  Added {} bytes prefix (original: {} bytes, new: {} bytes)",
-            modification_marker.len(), original_content.len(), new_content.len());
+        eprintln!(
+            "  Added {} bytes prefix (original: {} bytes, new: {} bytes)",
+            modification_marker.len(),
+            original_content.len(),
+            new_content.len()
+        );
 
         // Phase 4: Repack the modified folder
         eprintln!("Phase 4: Repacking modified folder...");
@@ -1024,65 +1065,105 @@ mod tests {
         let repack_result = repack_fhm2d_from_structure(
             &structure_json_path,
             repacked_path.to_str().unwrap(),
-            false, None,
-        ).unwrap();
-        eprintln!("  Repacked: {} files, {} bytes", repack_result.total_files, repack_result.output_size);
+            false,
+            None,
+        )
+        .unwrap();
+        eprintln!(
+            "  Repacked: {} files, {} bytes",
+            repack_result.total_files, repack_result.output_size
+        );
 
         // Phase 5: Extract the repacked FHM2D and verify modification persisted
         eprintln!("Phase 5: Extracting repacked FHM2D...");
         let repacked_bytes = fs::read(&repacked_path).unwrap();
-        let re_extract = crate::format::fhm2d::extract_fhm2d_to_memory_impl(
-            &repacked_bytes, "repacked", None,
-        ).unwrap();
+        let re_extract =
+            crate::format::fhm2d::extract_fhm2d_to_memory_impl(&repacked_bytes, "repacked", None)
+                .unwrap();
 
-        assert_eq!(re_extract.files.len(), orig_file_count,
-            "repacked file count must match original");
+        assert_eq!(
+            re_extract.files.len(),
+            orig_file_count,
+            "repacked file count must match original"
+        );
 
         // Find the modified CSV in the re-extraction
-        let csv_file_index = sub_file_data.iter()
-            .find(|e| e["fileUrl"].as_str().map_or(false, |u| u == modified_file_url))
+        let csv_file_index = sub_file_data
+            .iter()
+            .find(|e| {
+                e["fileUrl"]
+                    .as_str()
+                    .map_or(false, |u| u == modified_file_url)
+            })
             .and_then(|e| e["fileIndex"].as_i64())
             .unwrap() as i32;
 
-        let re_extracted_csv = re_extract.files.iter()
+        let re_extracted_csv = re_extract
+            .files
+            .iter()
             .find(|f| f.file_index == csv_file_index)
             .expect("modified CSV should exist in re-extracted files");
 
-        assert!(re_extracted_csv.data.starts_with(modification_marker),
+        assert!(
+            re_extracted_csv.data.starts_with(modification_marker),
             "Modified CSV should start with our marker. First 30 bytes: {:?}",
-            &re_extracted_csv.data[..re_extracted_csv.data.len().min(30)]);
-        eprintln!("  Modification verified in re-extracted file (index {})", csv_file_index);
+            &re_extracted_csv.data[..re_extracted_csv.data.len().min(30)]
+        );
+        eprintln!(
+            "  Modification verified in re-extracted file (index {})",
+            csv_file_index
+        );
 
         // Phase 6: Verify all other files are byte-exact with original extraction
         eprintln!("Phase 6: Verifying all other files unchanged...");
         let orig_bytes = fs::read(&fhm2d_path).unwrap();
-        let orig_extract = crate::format::fhm2d::extract_fhm2d_to_memory_impl(
-            &orig_bytes, "original", None,
-        ).unwrap();
+        let orig_extract =
+            crate::format::fhm2d::extract_fhm2d_to_memory_impl(&orig_bytes, "original", None)
+                .unwrap();
 
         let mut unchanged_count = 0;
         let mut changed_count = 0;
         for orig_file in &orig_extract.files {
-            let re_file = re_extract.files.iter()
+            let re_file = re_extract
+                .files
+                .iter()
                 .find(|f| f.file_index == orig_file.file_index)
                 .expect("every original file should exist in repacked");
 
             if orig_file.file_index == csv_file_index {
-                assert_ne!(orig_file.data, re_file.data,
-                    "modified CSV should differ from original");
+                assert_ne!(
+                    orig_file.data, re_file.data,
+                    "modified CSV should differ from original"
+                );
                 changed_count += 1;
             } else {
-                assert_eq!(orig_file.data, re_file.data,
-                    "file index {} should be byte-exact", orig_file.file_index);
+                assert_eq!(
+                    orig_file.data, re_file.data,
+                    "file index {} should be byte-exact",
+                    orig_file.file_index
+                );
                 unchanged_count += 1;
             }
         }
-        eprintln!("  {} files unchanged (byte-exact), {} files modified (expected)", unchanged_count, changed_count);
+        eprintln!(
+            "  {} files unchanged (byte-exact), {} files modified (expected)",
+            unchanged_count, changed_count
+        );
 
         eprintln!("\n=== Stage map content modification roundtrip: PASS ===");
-        eprintln!("  Original: {} files, {} bytes", orig_file_count, orig_bytes.len());
-        eprintln!("  Repacked: {} files, {} bytes", repack_result.total_files, repack_result.output_size);
-        eprintln!("  Modification: {} persisted correctly through repack cycle", modified_file_url);
+        eprintln!(
+            "  Original: {} files, {} bytes",
+            orig_file_count,
+            orig_bytes.len()
+        );
+        eprintln!(
+            "  Repacked: {} files, {} bytes",
+            repack_result.total_files, repack_result.output_size
+        );
+        eprintln!(
+            "  Modification: {} persisted correctly through repack cycle",
+            modified_file_url
+        );
     }
 
     #[test]
@@ -1095,16 +1176,36 @@ mod tests {
         }
 
         let game_exts: std::collections::HashSet<&str> = [
-            ".bin", ".csv", ".hkt", ".jnttbl", ".numatb", ".numdlb", ".numshb",
-            ".nuanmb", ".nudnbb", ".nufxlb", ".nuhlpb", ".nurpdb", ".nushdb",
-            ".nus3bank", ".nusktb", ".nutexb", ".spbin",
-        ].into_iter().collect();
+            ".bin",
+            ".csv",
+            ".hkt",
+            ".jnttbl",
+            ".numatb",
+            ".numdlb",
+            ".numshb",
+            ".nuanmb",
+            ".nudnbb",
+            ".nufxlb",
+            ".nuhlpb",
+            ".nurpdb",
+            ".nushdb",
+            ".nus3bank",
+            ".nusktb",
+            ".nutexb",
+            ".spbin",
+        ]
+        .into_iter()
+        .collect();
 
         eprintln!("Phase 1: Scanning stage folder and building TS-style structure JSON...");
         let pack_root = Path::new(r"E:\XB\解包\com\test\16F73C97");
         let pack_folder_name = "16F73C97";
 
-        fn scan_files(dir: &Path, root: &Path, exts: &std::collections::HashSet<&str>) -> Vec<(String, String)> {
+        fn scan_files(
+            dir: &Path,
+            root: &Path,
+            exts: &std::collections::HashSet<&str>,
+        ) -> Vec<(String, String)> {
             let mut result = Vec::new();
             if let Ok(entries) = fs::read_dir(dir) {
                 for entry in entries.flatten() {
@@ -1112,12 +1213,16 @@ mod tests {
                     if path.is_dir() {
                         result.extend(scan_files(&path, root, exts));
                     } else if path.is_file() {
-                        let ext = path.extension()
+                        let ext = path
+                            .extension()
                             .map(|e| format!(".{}", e.to_string_lossy().to_lowercase()))
                             .unwrap_or_default();
                         if exts.contains(ext.as_str()) {
-                            let rel = path.strip_prefix(root).unwrap()
-                                .to_string_lossy().replace('\\', "/");
+                            let rel = path
+                                .strip_prefix(root)
+                                .unwrap()
+                                .to_string_lossy()
+                                .replace('\\', "/");
                             result.push((rel, ext));
                         }
                     }
@@ -1130,9 +1235,13 @@ mod tests {
         files.sort_by(|a, b| a.0.cmp(&b.0));
         eprintln!("  Found {} game-ready files", files.len());
 
-        let sub_file_data: Vec<serde_json::Value> = files.iter().enumerate().map(|(i, (rel, ext))| {
+        let sub_file_data: Vec<serde_json::Value> = files
+            .iter()
+            .enumerate()
+            .map(|(i, (rel, ext))| {
             let file_url = format!("{}/{}", pack_folder_name, rel);
-            let base_name = Path::new(rel).file_stem()
+                let base_name = Path::new(rel)
+                    .file_stem()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_default();
             serde_json::json!({
@@ -1142,25 +1251,28 @@ mod tests {
                 "fileUrl": file_url,
                 "fileBaseName": base_name,
             })
-        }).collect();
+            })
+            .collect();
 
-        fn build_tree(
-            files: &[(usize, Vec<String>)],
-        ) -> Vec<serde_json::Value> {
+        fn build_tree(files: &[(usize, Vec<String>)]) -> Vec<serde_json::Value> {
             use std::collections::BTreeMap;
             struct TreeNode {
                 folders: BTreeMap<String, TreeNode>,
                 files: Vec<(usize, String)>,
             }
 
-            let mut root = TreeNode { folders: BTreeMap::new(), files: Vec::new() };
+            let mut root = TreeNode {
+                folders: BTreeMap::new(),
+                files: Vec::new(),
+            };
             for (idx, parts) in files {
                 let file_name = parts.last().unwrap().clone();
                 let dirs = &parts[..parts.len()-1];
                 let mut cursor = &mut root;
                 for d in dirs {
                     cursor = cursor.folders.entry(d.clone()).or_insert_with(|| TreeNode {
-                        folders: BTreeMap::new(), files: Vec::new(),
+                        folders: BTreeMap::new(),
+                        files: Vec::new(),
                     });
                 }
                 cursor.files.push((*idx, file_name));
@@ -1210,7 +1322,9 @@ mod tests {
             result
         }
 
-        let indexed_parts: Vec<(usize, Vec<String>)> = files.iter().enumerate()
+        let indexed_parts: Vec<(usize, Vec<String>)> = files
+            .iter()
+            .enumerate()
             .map(|(i, (rel, _))| (i, rel.split('/').map(String::from).collect()))
             .collect();
         let sub_file_structure = build_tree(&indexed_parts);
@@ -1226,7 +1340,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let work = tmp.path().to_path_buf();
         let struct_path = work.join("0x16F73C97_structure.json");
-        fs::write(&struct_path, serde_json::to_string_pretty(&structure).unwrap()).unwrap();
+        fs::write(
+            &struct_path,
+            serde_json::to_string_pretty(&structure).unwrap(),
+        )
+        .unwrap();
 
         let symlink_target = work.join(pack_folder_name);
         #[cfg(windows)]
@@ -1254,23 +1372,38 @@ mod tests {
         let repack_result = repack_fhm2d_from_structure(
             struct_path.to_str().unwrap(),
             repacked_path.to_str().unwrap(),
-            false, None,
-        ).unwrap();
-        eprintln!("  Repacked: {} files, {} bytes", repack_result.total_files, repack_result.output_size);
+            false,
+            None,
+        )
+        .unwrap();
+        eprintln!(
+            "  Repacked: {} files, {} bytes",
+            repack_result.total_files, repack_result.output_size
+        );
 
         eprintln!("Phase 3: Extracting repacked FHM2D and verifying...");
         let repacked_bytes = fs::read(&repacked_path).unwrap();
         let re_extract = crate::format::fhm2d::extract_fhm2d_to_memory_impl(
-            &repacked_bytes, "frontend_repacked", None,
-        ).unwrap();
-        assert_eq!(re_extract.files.len(), files.len(),
-            "repacked file count must match scanned files");
+            &repacked_bytes,
+            "frontend_repacked",
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            re_extract.files.len(),
+            files.len(),
+            "repacked file count must match scanned files"
+        );
 
         let mut size_sum = 0u64;
         let mut empty_files = Vec::new();
         for file in &re_extract.files {
             if file.data.is_empty() {
-                empty_files.push((file.file_index, file.file_type.clone(), file.file_url.clone()));
+                empty_files.push((
+                    file.file_index,
+                    file.file_type.clone(),
+                    file.file_url.clone(),
+                ));
             }
             size_sum += file.data.len() as u64;
         }
@@ -1278,22 +1411,40 @@ mod tests {
             eprintln!("  Empty files ({}):", empty_files.len());
             for (idx, ft, url) in &empty_files {
                 let is_expected = ft == ".bin" || ft == ".csv";
-                eprintln!("    index={}, type={}, url={} {}", idx, ft, url,
-                    if is_expected { "(expected)" } else { "(UNEXPECTED)" });
+                eprintln!(
+                    "    index={}, type={}, url={} {}",
+                    idx,
+                    ft,
+                    url,
+                    if is_expected {
+                        "(expected)"
+                    } else {
+                        "(UNEXPECTED)"
             }
+                );
         }
-        eprintln!("  Verified: {} files extracted, total decompressed data: {} bytes",
-            re_extract.files.len(), size_sum);
+        }
+        eprintln!(
+            "  Verified: {} files extracted, total decompressed data: {} bytes",
+            re_extract.files.len(),
+            size_sum
+        );
 
-        let file_types: std::collections::HashSet<String> = re_extract.files.iter()
-            .map(|f| f.file_type.clone()).collect();
+        let file_types: std::collections::HashSet<String> = re_extract
+            .files
+            .iter()
+            .map(|f| f.file_type.clone())
+            .collect();
         eprintln!("  File types in repacked: {:?}", file_types);
         assert!(file_types.contains(".nutexb"), "must contain .nutexb");
         assert!(file_types.contains(".numatb"), "must contain .numatb");
         assert!(file_types.contains(".numshb"), "must contain .numshb");
 
         eprintln!("\n=== Frontend structure JSON → Rust repack → extract: PASS ===");
-        eprintln!("  {} files from named-folder stage successfully packed and verified", files.len());
+        eprintln!(
+            "  {} files from named-folder stage successfully packed and verified",
+            files.len()
+        );
     }
 
     #[test]
@@ -1318,9 +1469,13 @@ mod tests {
             let extract_dir = work.join("extracted");
             fs::create_dir_all(&extract_dir).unwrap();
             let _ext_result = crate::format::fhm2d::extract_fhm2d_to_folder_impl(
-                fhm2d_path, extract_dir.to_str().unwrap(),
-                None, None, false,
-            ).unwrap();
+                fhm2d_path,
+                extract_dir.to_str().unwrap(),
+                None,
+                None,
+                false,
+            )
+            .unwrap();
 
             let structure_json_path = format!("{}_structure.json", extract_dir.to_str().unwrap());
 
@@ -1328,37 +1483,58 @@ mod tests {
             let repack_result = repack_fhm2d_from_structure(
                 &structure_json_path,
                 repacked_path.to_str().unwrap(),
-                false, None,
-            ).unwrap();
+                false,
+                None,
+            )
+            .unwrap();
 
             let orig_bytes = fs::read(path).unwrap();
             let repacked_bytes = fs::read(&repacked_path).unwrap();
 
             let orig_extract = crate::format::fhm2d::extract_fhm2d_to_memory_impl(
-                &orig_bytes, &format!("{name}_orig"), None,
-            ).unwrap();
+                &orig_bytes,
+                &format!("{name}_orig"),
+                None,
+            )
+            .unwrap();
             let re_extract = crate::format::fhm2d::extract_fhm2d_to_memory_impl(
-                &repacked_bytes, &format!("{name}_repacked"), None,
-            ).unwrap();
+                &repacked_bytes,
+                &format!("{name}_repacked"),
+                None,
+            )
+            .unwrap();
 
-            assert_eq!(orig_extract.files.len(), re_extract.files.len(),
-                "{name}: file count mismatch");
+            assert_eq!(
+                orig_extract.files.len(),
+                re_extract.files.len(),
+                "{name}: file count mismatch"
+            );
 
             let mut all_match = true;
             for orig in &orig_extract.files {
-                let repacked = re_extract.files.iter()
+                let repacked = re_extract
+                    .files
+                    .iter()
                     .find(|f| f.file_index == orig.file_index)
                     .unwrap_or_else(|| panic!("{name}: missing file index {}", orig.file_index));
                 if orig.data != repacked.data {
-                    eprintln!("  DIFF at index {}: orig {} bytes vs repacked {} bytes",
-                        orig.file_index, orig.data.len(), repacked.data.len());
+                    eprintln!(
+                        "  DIFF at index {}: orig {} bytes vs repacked {} bytes",
+                        orig.file_index,
+                        orig.data.len(),
+                        repacked.data.len()
+                    );
                     all_match = false;
                 }
             }
 
             assert!(all_match, "{name}: some files differ after roundtrip");
-            eprintln!("  [{name}] PASS: {} files, orig {} bytes → repacked {} bytes",
-                repack_result.total_files, orig_bytes.len(), repacked_bytes.len());
+            eprintln!(
+                "  [{name}] PASS: {} files, orig {} bytes → repacked {} bytes",
+                repack_result.total_files,
+                orig_bytes.len(),
+                repacked_bytes.len()
+            );
         }
     }
 
@@ -1399,7 +1575,13 @@ mod tests {
         let orig_meta = decompress(&orig_bytes[0x30..0x30+orig_meta_comp_size]);
         let repack_meta = decompress(&repack_bytes[0x30..0x30+repack_meta_comp_size]);
 
-        assert_eq!(orig_meta.len(), repack_meta.len(), "Meta sizes differ: orig={} repack={}", orig_meta.len(), repack_meta.len());
+        assert_eq!(
+            orig_meta.len(),
+            repack_meta.len(),
+            "Meta sizes differ: orig={} repack={}",
+            orig_meta.len(),
+            repack_meta.len()
+        );
 
         let mut diffs = Vec::new();
         for i in 0..orig_meta.len() {
@@ -1410,10 +1592,18 @@ mod tests {
         if !diffs.is_empty() {
             eprintln!("Found {} byte differences in meta:", diffs.len());
             for (off, o, r) in diffs.iter().take(30) {
-                eprintln!("  offset 0x{:04X}: orig=0x{:02X} repack=0x{:02X}", off, o, r);
+                eprintln!(
+                    "  offset 0x{:04X}: orig=0x{:02X} repack=0x{:02X}",
+                    off, o, r
+                );
             }
         }
-        assert_eq!(diffs.len(), 0, "Meta blobs differ at {} positions", diffs.len());
+        assert_eq!(
+            diffs.len(),
+            0,
+            "Meta blobs differ at {} positions",
+            diffs.len()
+        );
 
         let _ = fs::remove_file(output_path);
     }

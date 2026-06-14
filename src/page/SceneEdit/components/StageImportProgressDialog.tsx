@@ -1,13 +1,14 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Progress } from "@/components/ui/progress";
 import { AlertTriangle, CheckCircle2, Loader2, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const STAGE_IMPORT_PROGRESS_DIMENSIONS = {
+  width: 520,
+  height: 480,
+  minWidth: 440,
+  minHeight: 360,
+};
 
 export interface ImportStep {
   step: string;
@@ -23,6 +24,7 @@ interface StageImportProgressDialogProps {
   progress: number;
   steps: ImportStep[];
   onClose?: () => void;
+  title?: string;
 }
 
 function formatElapsed(ms: number): string {
@@ -77,30 +79,25 @@ export function StageImportProgressDialog({
   progress,
   steps,
   onClose,
+  title = "Importing Stage",
 }: StageImportProgressDialogProps) {
   const activeStep = steps.find((s) => s.status === "active");
   const isBusy = steps.some((step) => step.status === "active");
 
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next && !isBusy) onClose?.();
-      }}
-    >
-      <DialogContent
-        className="max-w-md"
-        hideCloseButton={isBusy}
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-      >
-        <DialogHeader>
-          <DialogTitle>Importing Stage</DialogTitle>
-          <DialogDescription>
-            {activeStep?.label ?? "Preparing..."}
-          </DialogDescription>
-        </DialogHeader>
+  if (!open) return null;
 
+  return (
+    <AppRndModalShell
+      titleId="stage-import-progress-title"
+      title={title}
+      subtitle={activeStep?.label ?? "Preparing..."}
+      headerIcon={<Loader2 className={cn("h-5 w-5 text-primary", isBusy && "animate-spin")} />}
+      dimensions={STAGE_IMPORT_PROGRESS_DIMENSIONS}
+      storageKey="app.rnd-size.stage-import-progress"
+      onClose={() => onClose?.()}
+      closeDisabled={isBusy}
+    >
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
         <Progress value={progress} className="h-2" />
 
         <div className="space-y-0.5 mt-2">
@@ -108,7 +105,7 @@ export function StageImportProgressDialog({
             <StepRow key={step.step} step={step} />
           ))}
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </AppRndModalShell>
   );
 }

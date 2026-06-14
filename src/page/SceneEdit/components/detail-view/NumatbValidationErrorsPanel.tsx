@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useCallback, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AlertTriangle, Check, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { NumatbEmptyTexturePathError } from "@/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
+
+const ERROR_ROW_HEIGHT = 28;
 
 type NumatbValidationErrorsPanelProps = {
   errors: NumatbEmptyTexturePathError[];
@@ -15,6 +18,18 @@ type NumatbValidationErrorsPanelProps = {
  */
 export function NumatbValidationErrorsPanel({ errors }: NumatbValidationErrorsPanelProps) {
   const [copied, setCopied] = useState(false);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const getListScrollElement = useCallback(() => listRef.current, []);
+  const errorVirtualizer = useVirtualizer({
+    count: errors.length,
+    getScrollElement: getListScrollElement,
+    estimateSize: () => ERROR_ROW_HEIGHT,
+    getItemKey: (index) => {
+      const error = errors[index];
+      return error ? `${error.profile}:${error.materialLabel}:${error.paramId}:${index}` : index;
+    },
+    overscan: 8,
+  });
 
   if (errors.length === 0) {
     return null;
@@ -52,16 +67,26 @@ export function NumatbValidationErrorsPanel({ errors }: NumatbValidationErrorsPa
           {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
         </Button>
       </div>
-      <ul className="max-h-32 space-y-1 overflow-auto px-3 py-2">
-        {errors.map((error, index) => (
-          <li
-            key={`${error.profile}:${error.materialLabel}:${error.paramId}:${index}`}
-            className="font-mono text-[10px] leading-snug text-destructive"
-          >
-            {error.message}
-          </li>
-        ))}
-      </ul>
+      <div ref={listRef} className="max-h-32 overflow-auto px-3 py-2">
+        <div className="relative w-full" style={{ height: errorVirtualizer.getTotalSize() }}>
+          {errorVirtualizer.getVirtualItems().map((virtualRow) => {
+            const error = errors[virtualRow.index];
+            if (!error) return null;
+            return (
+              <div
+                key={virtualRow.key}
+                className="absolute left-0 top-0 w-full pr-1 font-mono text-[10px] leading-snug text-destructive"
+                style={{
+                  height: virtualRow.size,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                {error.message}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

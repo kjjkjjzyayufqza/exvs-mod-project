@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, FolderOutput, Loader2, PackageOpen } from "lucide-react";
 import { toast } from "sonner";
 
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,14 +14,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { useConfigStore } from "@/store/configStore";
@@ -36,6 +29,13 @@ import {
   resolveUnitModelOutputDirectory,
   type UnitModelExtractResult,
 } from "../utils/unitModelExtractService";
+
+const UNIT_MODEL_EXTRACT_DIMENSIONS = {
+  width: 620,
+  height: 680,
+  minWidth: 520,
+  minHeight: 500,
+};
 
 type UnitModelExtractDialogProps = {
   open: boolean;
@@ -155,17 +155,33 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(next) => (!isExtracting ? onOpenChange(next) : undefined)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Extract .fhm2d to folders</DialogTitle>
-            <DialogDescription>
-              Choose a unit-model archive and an output directory. The editor writes a renamed layout
-              folder plus a sibling <code>_structure.json</code>.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
+      {open ? (
+        <AppRndModalShell
+          titleId="unit-model-extract-title"
+          title="Extract .fhm2d to folders"
+          subtitle="Choose a unit-model archive and output directory"
+          headerIcon={<PackageOpen className="h-5 w-5 text-primary" />}
+          dimensions={UNIT_MODEL_EXTRACT_DIMENSIONS}
+          storageKey="app.rnd-size.unit-model-extract"
+          onClose={() => onOpenChange(false)}
+          closeDisabled={isExtracting}
+          footer={
+            <div className="flex justify-end gap-2 p-3">
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isExtracting}>
+                Cancel
+              </Button>
+              <Button onClick={handleExtractClick} disabled={!canExtract}>
+                {isExtracting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <PackageOpen className="mr-2 h-4 w-4" />
+                )}
+                {isExtracting ? "Extracting..." : folderExists ? "Extract and overwrite" : "Extract"}
+              </Button>
+            </div>
+          }
+        >
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
             <div className="space-y-2">
               <Label htmlFor="unit-model-extract-source">Source .fhm2d</Label>
               <FilePathInput
@@ -246,22 +262,8 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
               </div>
             ) : null}
           </div>
-
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isExtracting}>
-              Cancel
-            </Button>
-            <Button onClick={handleExtractClick} disabled={!canExtract}>
-              {isExtracting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <PackageOpen className="mr-2 h-4 w-4" />
-              )}
-              {isExtracting ? "Extracting..." : folderExists ? "Extract and overwrite" : "Extract"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </AppRndModalShell>
+      ) : null}
 
       <AlertDialog open={overwriteOpen} onOpenChange={(next) => (!isExtracting ? setOverwriteOpen(next) : undefined)}>
         <AlertDialogContent>

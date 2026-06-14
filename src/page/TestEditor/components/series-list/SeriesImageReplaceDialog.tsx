@@ -3,10 +3,11 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { dirname, join } from "@tauri-apps/api/path";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
+import { ImageIcon } from "lucide-react";
 
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FilePathInput } from "@/components/ui/filePathInput";
@@ -30,6 +31,12 @@ type ReplaceSummary = {
 };
 
 type SeriesImageTab = "replace" | "add";
+const SERIES_IMAGE_REPLACE_MODAL_DIMENSIONS = {
+  width: 960,
+  height: 780,
+  minWidth: 740,
+  minHeight: 560,
+};
 
 interface SeriesImageReplaceDialogProps {
   iconFileIndex: number;
@@ -346,18 +353,28 @@ export function SeriesImageReplaceDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
-      <DialogContent className="sm:max-w-[920px]">
-        <DialogHeader>
-          <DialogTitle>Replace Series Image</DialogTitle>
-          <DialogDescription>
-            Replace an existing nutexb or add a new slot (writes nutexb first, then updates{" "}
-            <span className="font-mono">0xA0253AA0_structure.json</span> for Add).
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid grid-cols-2 gap-6">
+    <>
+      {trigger ? (
+        <span className="inline-flex" onClick={() => setOpen(true)}>
+          {trigger}
+        </span>
+      ) : null}
+      {open ? (
+        <AppRndModalShell
+          titleId="series-image-replace-title"
+          title="Replace Series Image"
+          subtitle="Replace an existing nutexb or add a new slot."
+          headerIcon={<ImageIcon className="h-5 w-5 text-primary" />}
+          dimensions={SERIES_IMAGE_REPLACE_MODAL_DIMENSIONS}
+          storageKey="app.rnd-size.series-image-replace"
+          onClose={() => setOpen(false)}
+          closeDisabled={isReplacing || isAppending}
+        >
+          <div className="min-h-0 flex-1 overflow-y-auto p-6">
+            <p className="mb-4 text-xs text-muted-foreground">
+              Add writes nutexb first, then updates <span className="font-mono">0xA0253AA0_structure.json</span>.
+            </p>
+            <div className="grid grid-cols-2 gap-6">
           <div className="space-y-3">
             <Label>Preview</Label>
             {previewZoom}
@@ -468,7 +485,9 @@ export function SeriesImageReplaceDialog({
             </Tabs>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+          </div>
+        </AppRndModalShell>
+      ) : null}
+    </>
   );
 }

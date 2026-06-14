@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { join } from "@tauri-apps/api/path";
 import { exists } from "@tauri-apps/plugin-fs";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PackageCheck } from "lucide-react";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { repackFolderUsingStructureToModFolder } from "@/utils/repackRunner";
 import { normalizePackFolderName } from "../utils/packName";
@@ -28,6 +29,12 @@ type FolderEntry = {
 };
 
 const LABEL_MISSING = "Missing structure file";
+const LISTENING_REPACK_DIMENSIONS = {
+  width: 640,
+  height: 620,
+  minWidth: 440,
+  minHeight: 360,
+};
 
 export default function ListeningRepackDialog({
   open,
@@ -42,8 +49,10 @@ export default function ListeningRepackDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [removeVgsht2InMod, setRemoveVgsht2InMod] = useState(true);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
       if (!open || !rootDir || dirtyFolders.length === 0) {
         setEntries([]);
@@ -51,40 +60,58 @@ export default function ListeningRepackDialog({
       }
       setIsLoading(true);
       try {
-        const next: FolderEntry[] = [];
         const seen = new Set<string>();
+        const names: string[] = [];
         for (const rawName of dirtyFolders) {
           const name = normalizePackFolderName(rawName);
           if (!name || seen.has(name)) {
             continue;
           }
           seen.add(name);
-          const structurePath = await join(rootDir, `${name}_structure.json`);
-          const structureExists = await exists(structurePath);
-          next.push({
-            name,
-            structurePath,
-            exists: structureExists,
-            selected: structureExists,
-          });
+          names.push(name);
         }
-        setEntries(next);
+        const next = await Promise.all(
+          names.map(async (name): Promise<FolderEntry> => {
+            const structurePath = await join(rootDir, `${name}_structure.json`);
+            const structureExists = await exists(structurePath);
+            return {
+              name,
+              structurePath,
+              exists: structureExists,
+              selected: structureExists,
+            };
+          }),
+        );
+        if (!cancelled) setEntries(next);
       } catch (error) {
         console.error("Failed to prepare repack list", error);
-        toast.error("Failed to prepare repack list");
-        setEntries([]);
+        if (!cancelled) {
+          toast.error("Failed to prepare repack list");
+          setEntries([]);
+        }
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
 
-    load();
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, [open, rootDir, dirtyFolders]);
 
   const selectedEntries = useMemo(
     () => entries.filter((entry) => entry.exists && entry.selected),
     [entries]
   );
+  const getScrollElement = useCallback(() => listRef.current, []);
+  const rowVirtualizer = useVirtualizer({
+    count: entries.length,
+    getScrollElement,
+    estimateSize: () => 68,
+    getItemKey: (index) => entries[index]?.name ?? index,
+    overscan: 8,
+  });
 
   const toggleSelection = (name: string, checked: boolean) => {
     setEntries((prev) =>
@@ -149,54 +176,74 @@ export default function ListeningRepackDialog({
     }
   };
 
-  const handleClose = (nextOpen: boolean) => {
-    if (!nextOpen && !isRunning) {
+  const handleClose = useCallback(() => {
+    if (!isRunning) {
       onOpenChange(false);
       onComplete?.();
-    } else {
-      onOpenChange(nextOpen);
     }
-  };
+  }, [isRunning, onComplete, onOpenChange]);
+
+  if (!open) return null;
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Repack Changes</DialogTitle>
-          <DialogDescription>
-            Folders with detected changes will be repacked into the OB Mod folder as{" "}
-            <code>0xHASH.fhm2d</code> using each pack&apos;s <code>_structure.json</code>.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3 min-h-0 flex-1 overflow-hidden">
-          {!modFolderPath?.trim() ? (
-            <p className="text-sm text-amber-600 dark:text-amber-500">
-              OB Mod path is not configured. Set it in Config before repacking.
-            </p>
-          ) : null}
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <Checkbox
-              checked={removeVgsht2InMod}
-              disabled={isRunning}
-              onCheckedChange={(checked) => setRemoveVgsht2InMod(Boolean(checked))}
-            />
-            <span>
-              After repack, remove matching <code>.vgsht2</code> in the same OB Mod folder (e.g. pack{" "}
-              <code>0x49235031.fhm2d</code> → remove <code>0x49235031.vgsht2</code>). Requires OB Mod path in
-              Config.
-            </span>
-          </label>
-          {isLoading ? (
-            <div className="text-sm text-muted-foreground">Preparing list...</div>
-          ) : entries.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No folders to repack.</div>
-          ) : (
-            <ScrollArea className="h-full pr-4">
-              <div className="space-y-2">
-                {entries.map((entry) => (
+    <AppRndModalShell
+      titleId="listening-repack-title"
+      title="Repack Changes"
+      subtitle="Repack changed folders into the configured OB Mod folder"
+      headerIcon={<PackageCheck className="h-4 w-4" />}
+      dimensions={LISTENING_REPACK_DIMENSIONS}
+      storageKey="listening-repack-dialog-size"
+      closeDisabled={isRunning}
+      onClose={handleClose}
+      footer={
+        <div className="flex justify-end gap-2 px-4 py-3">
+          <Button variant="outline" onClick={handleClose} disabled={isRunning}>
+            Cancel
+          </Button>
+          <Button onClick={handleConfirm} disabled={isRunning || selectedEntries.length === 0 || !modFolderPath?.trim()}>
+            {isRunning ? "Repacking..." : "Repack"}
+          </Button>
+        </div>
+      }
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+        <p className="text-sm text-muted-foreground">
+          Folders are packed as <code>0xHASH.fhm2d</code> using each pack&apos;s <code>_structure.json</code>.
+        </p>
+        {!modFolderPath?.trim() ? (
+          <p className="text-sm text-amber-600 dark:text-amber-500">
+            OB Mod path is not configured. Set it in Config before repacking.
+          </p>
+        ) : null}
+        <label className="flex cursor-pointer items-center gap-2 text-sm">
+          <Checkbox
+            checked={removeVgsht2InMod}
+            disabled={isRunning}
+            onCheckedChange={(checked) => setRemoveVgsht2InMod(Boolean(checked))}
+          />
+          <span>
+            After repack, remove matching <code>.vgsht2</code> in the same OB Mod folder (e.g. pack{" "}
+            <code>0x49235031.fhm2d</code> → remove <code>0x49235031.vgsht2</code>). Requires OB Mod path in
+            Config.
+          </span>
+        </label>
+        {isLoading ? (
+          <div className="text-sm text-muted-foreground">Preparing list...</div>
+        ) : entries.length === 0 ? (
+          <div className="text-sm text-muted-foreground">No folders to repack.</div>
+        ) : (
+          <div ref={listRef} className="min-h-0 flex-1 overflow-auto overscroll-contain">
+            <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const entry = entries[virtualRow.index];
+                if (!entry) return null;
+                return (
                   <label
-                    key={entry.name}
-                    className="flex items-center gap-3 rounded-md border p-2 text-sm"
+                    key={virtualRow.key}
+                    ref={rowVirtualizer.measureElement}
+                    data-index={virtualRow.index}
+                    className="absolute left-0 top-0 flex w-full cursor-pointer items-center gap-3 rounded-md border p-2 text-sm"
+                    style={{ transform: `translateY(${virtualRow.start}px)` }}
                   >
                     <Checkbox
                       checked={entry.selected}
@@ -207,28 +254,20 @@ export default function ListeningRepackDialog({
                     />
                     <div className="flex flex-col">
                       <span className="font-medium">{entry.name}</span>
-                      <span className="text-xs text-muted-foreground break-all">
+                      <span className="break-all text-xs text-muted-foreground">
                         {entry.structurePath}
                       </span>
-                      {!entry.exists && (
+                      {!entry.exists ? (
                         <span className="text-xs text-yellow-600">{LABEL_MISSING}</span>
-                      )}
+                      ) : null}
                     </div>
                   </label>
-                ))}
-              </div>
-            </ScrollArea>
-          )}
-        </div>
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isRunning}>
-            Cancel
-          </Button>
-          <Button onClick={handleConfirm} disabled={isRunning || selectedEntries.length === 0 || !modFolderPath?.trim()}>
-            {isRunning ? "Repacking..." : "Repack"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </AppRndModalShell>
   );
 }

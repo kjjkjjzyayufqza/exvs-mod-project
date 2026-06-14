@@ -26,15 +26,9 @@ import {
   useTransition,
 } from "react";
 import { toast } from "sonner";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -70,6 +64,12 @@ import {
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
 
 const MEMORY_PREVIEW_BUNDLE_BUILD_CONCURRENCY = 3;
+const MEMORY_PREVIEW_DIMENSIONS = {
+  width: 1460,
+  height: 860,
+  minWidth: 920,
+  minHeight: 620,
+};
 
 type MemoryWorkspaceProgress = {
   stage: "build-bundles";
@@ -620,31 +620,23 @@ export function Fhm2dMemoryPreviewModal() {
     [buildSelectedBundles, closeModal, p],
   );
 
+  if (!p.memoryPreviewModalOpen) {
+    return null;
+  }
+
   return (
-    <Dialog
-      open={p.memoryPreviewModalOpen}
-      onOpenChange={(openState) => {
-        if (!openState) {
-          closeModal();
-          return;
-        }
-        p.setMemoryPreviewModalOpen(openState);
-      }}
+    <AppRndModalShell
+      titleId="memory-preview-workspace-title"
+      title="Memory Preview Workspace"
+      subtitle="Inspect and edit an FHM2D package in memory"
+      headerIcon={<FileArchive className="h-5 w-5 text-primary" />}
+      dimensions={MEMORY_PREVIEW_DIMENSIONS}
+      storageKey="app.rnd-size.memory-preview-workspace"
+      onClose={closeModal}
+      closeDisabled={busy || isPending || Boolean(workspaceProgress)}
     >
-      <DialogContent className="h-[min(88vh,860px)] max-w-[min(100vw-32px,1460px)] gap-0 overflow-hidden p-0">
-        <DialogHeader className="shrink-0 border-b bg-muted/35 py-4 pl-6 pr-14 sm:pr-16">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <DialogTitle className="flex items-center gap-2 text-base">
-                <FileArchive className="h-4.5 w-4.5 text-primary" />
-                Memory Preview Workspace
-              </DialogTitle>
-              <DialogDescription className="max-w-3xl text-[11px] leading-relaxed">
-                Load an FHM2D package into memory, inspect the virtual file tree, rename entries without touching disk,
-                then apply selected .numdlb candidates to the 3D preview.
-              </DialogDescription>
-            </div>
-            <div className="flex flex-wrap justify-end gap-2">
+      <div className="shrink-0 border-b bg-muted/20 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-end gap-2">
               <Button type="button" size="sm" onClick={() => void openFhm2dFile()} disabled={busy}>
                 <FileArchive className="mr-1.5 h-3.5 w-3.5" />
                 Open FHM2D
@@ -699,22 +691,21 @@ export function Fhm2dMemoryPreviewModal() {
                 <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                 Clear Session
               </Button>
-            </div>
+        </div>
+        {session ? (
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
+            <span>Source: {session.sourceName}</span>
+            <span>Format: {session.format ?? "auto"}</span>
+            <span>Rename rev: {session.renameRevision}</span>
+            <span>{session.previewCandidates.length} preview candidates</span>
+            {session.namingWarning ? (
+              <span className="text-amber-600 dark:text-amber-400">Naming warning present</span>
+            ) : null}
           </div>
-          {session ? (
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
-              <span>Source: {session.sourceName}</span>
-              <span>Format: {session.format ?? "auto"}</span>
-              <span>Rename rev: {session.renameRevision}</span>
-              <span>{session.previewCandidates.length} preview candidates</span>
-              {session.namingWarning ? (
-                <span className="text-amber-600 dark:text-amber-400">Naming warning present</span>
-              ) : null}
-            </div>
-          ) : null}
-        </DialogHeader>
+        ) : null}
+      </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-[minmax(300px,1.1fr)_minmax(360px,1fr)_minmax(360px,1.1fr)]">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(300px,1.1fr)_minmax(360px,1fr)_minmax(360px,1.1fr)]">
           <section className="flex min-h-0 flex-col border-r">
             <div className="shrink-0 border-b px-4 py-3">
               <div className="mb-2 flex items-center gap-2">
@@ -1216,16 +1207,15 @@ export function Fhm2dMemoryPreviewModal() {
           </section>
         </div>
 
-        {(busy || isPending || workspaceProgress) && (
-          <div className="border-t bg-muted/25 px-4 py-2 text-[10px] text-muted-foreground">
-            {workspaceProgress
-              ? `Building memory preview bundles ${workspaceProgress.done}/${workspaceProgress.total}${
-                  workspaceProgress.currentLabel ? ` · ${workspaceProgress.currentLabel}` : ""
-                }`
-              : "Working in memory workspace…"}
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+      {(busy || isPending || workspaceProgress) && (
+        <div className="border-t bg-muted/25 px-4 py-2 text-[10px] text-muted-foreground">
+          {workspaceProgress
+            ? `Building memory preview bundles ${workspaceProgress.done}/${workspaceProgress.total}${
+                workspaceProgress.currentLabel ? ` · ${workspaceProgress.currentLabel}` : ""
+              }`
+            : "Working in memory workspace…"}
+        </div>
+      )}
+    </AppRndModalShell>
   );
 }

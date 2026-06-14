@@ -1,23 +1,24 @@
-import { useState, useCallback, useRef } from "react";
+import { useMemo, useState } from "react";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Upload, X, FileImage, Loader2, Settings, FolderOpen } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Upload, X, Loader2, Settings, FolderOpen, Scaling } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { basename, dirname, join, resourceDir } from "@tauri-apps/api/path";
 import { Command } from "@tauri-apps/plugin-shell";
 import { exists } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
+import { VirtualizedSelectedFileList } from "../VirtualizedSelectedFileList";
+
+const IMAGE_RESIZE_DIMENSIONS = {
+  width: 720,
+  height: 760,
+  minWidth: 560,
+  minHeight: 520,
+};
 
 interface ImageResizeToolProps {
   onClose?: () => void;
@@ -33,7 +34,6 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
   const [outputDirectory, setOutputDirectory] = useState<string | null>(null);
   const [isResizing, setIsResizing] = useState(false);
   const [resizeProgress, setResizeProgress] = useState<{ current: number; total: number; currentFile?: string; failedFiles: string[] } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Handle file selection
   const handleFileSelect = async () => {
@@ -63,26 +63,15 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
     try {
       setSelectedImagePaths(imagePaths);
 
-      // Generate file names for all files
-      const names: {[key: string]: {baseName: string, displayName: string, extension: string}} = {};
-
-      for (const imagePath of imagePaths) {
-        try {
+      const nameEntries = await Promise.all(
+        imagePaths.map(async (imagePath) => {
           const fullFileName = await basename(imagePath);
           const extension = fullFileName.substring(fullFileName.lastIndexOf('.'));
           const baseName = fullFileName.replace(extension, "");
-
-          names[imagePath] = {
-            baseName: baseName,
-            displayName: fullFileName,
-            extension: extension
-          };
-        } catch (error) {
-          console.error(`Error processing filename for ${imagePath}:`, error);
-        }
-      }
-
-      setFileNames(names);
+          return [imagePath, { baseName, displayName: fullFileName, extension }] as const;
+        }),
+      );
+      setFileNames(Object.fromEntries(nameEntries));
     } catch (error) {
       console.error("Error processing image files:", error);
       toast.error("Failed to process image files");
@@ -258,9 +247,24 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
     }
   };
 
-  if (isResizing || resizeProgress) {
-    return (
-      <div className="flex flex-col items-center justify-center p-8 space-y-4">
+  const selectedFileItems = useMemo(
+    () =>
+      selectedImagePaths.map((imagePath) => {
+        const fileInfo = fileNames[imagePath];
+        const outputName = overwriteOriginal
+          ? fileInfo?.displayName
+          : `${fileInfo?.baseName}_cov${fileInfo?.extension}`;
+        return {
+          path: imagePath,
+          title: fileInfo?.displayName || imagePath.split(/[/\\]/).pop() || imagePath,
+          description: `${outputName ?? ""}${outputDirectory ? " → selected folder" : " → next to source"}`,
+        };
+      }),
+    [fileNames, outputDirectory, overwriteOriginal, selectedImagePaths],
+  );
+
+  const progressContent = isResizing || resizeProgress ? (
+      <div className="flex flex-1 flex-col items-center justify-center space-y-4 p-8">
         <Loader2 className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
         {resizeProgress ? (
           <div className="w-full max-w-md space-y-2">
@@ -290,24 +294,26 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
           <span className="text-muted-foreground">Resizing images...</span>
         )}
       </div>
-    );
-  }
+  ) : null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="w-full">
-          Open Image Resizer
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>PNG Image Resizer</DialogTitle>
-          <DialogDescription>
-            Resize image files to specified dimensions using ImageMagick.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-6">
+    <>
+      <Button variant="outline" className="w-full" onClick={() => setIsOpen(true)}>
+        Open Image Resizer
+      </Button>
+      {isOpen ? (
+        <AppRndModalShell
+          titleId="image-resizer-title"
+          title="PNG Image Resizer"
+          subtitle="Resize image files with ImageMagick"
+          headerIcon={<Scaling className="h-5 w-5 text-primary" />}
+          dimensions={IMAGE_RESIZE_DIMENSIONS}
+          storageKey="app.rnd-size.image-resizer"
+          onClose={() => setIsOpen(false)}
+          closeDisabled={isResizing || Boolean(resizeProgress)}
+        >
+          {progressContent ?? (
+            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4">
 
           {/* File Selection Area */}
           {selectedImagePaths.length === 0 ? (
@@ -343,37 +349,11 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
                   <X className="h-4 w-4" />
                 </Button>
               </div>
-              <div className="grid grid-cols-1 gap-3 max-h-40 overflow-y-auto">
-                {selectedImagePaths.map((imagePath, index) => {
-                  const fileInfo = fileNames[imagePath];
-
-                  return (
-                    <div key={imagePath} className="flex items-center gap-3 p-2 border rounded-lg">
-                      <div className="w-8 h-8 bg-muted rounded overflow-hidden flex-shrink-0 flex items-center justify-center">
-                        <FileImage className="w-4 h-4 text-muted-foreground" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{fileInfo?.displayName || imagePath.split(/[/\\]/).pop()}</p>
-                        <p className="text-xs text-muted-foreground truncate" title={
-                          outputDirectory
-                            ? `${outputDirectory} (${overwriteOriginal ? fileInfo?.displayName : `${fileInfo?.baseName}_cov${fileInfo?.extension}`})`
-                            : undefined
-                        }>
-                          Output file: {overwriteOriginal ? fileInfo?.displayName : `${fileInfo?.baseName}_cov${fileInfo?.extension}`}
-                          {outputDirectory ? " → selected folder" : " → next to source"}
-                        </p>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemoveImage(imagePath)}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
+              <VirtualizedSelectedFileList
+                items={selectedFileItems}
+                onRemove={(path) => handleRemoveImage(path)}
+                height={176}
+              />
             </Card>
           )}
 
@@ -498,8 +478,10 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
               </div>
             </>
           )}
-        </div>
-      </DialogContent>
-    </Dialog>
+            </div>
+          )}
+        </AppRndModalShell>
+      ) : null}
+    </>
   );
 }

@@ -3,6 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import {
+  Database,
   Download,
   Loader2,
   Plus,
@@ -10,6 +11,7 @@ import {
   Search,
   Upload,
 } from "lucide-react";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,14 +24,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,6 +53,12 @@ interface ResourceRegistryViewProps {
 }
 
 const CATEGORIES: ResourceRegistryCategory[] = ["stage", "unit", "prop", "custom"];
+const REGISTRY_EDITOR_MODAL_DIMENSIONS = {
+  width: 560,
+  height: 620,
+  minWidth: 480,
+  minHeight: 480,
+};
 
 export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceRegistryViewProps) {
   const registry = useResourceRegistry(folderPath || null);
@@ -365,7 +365,7 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
       </Card>
 
       <Card className="flex-1 min-h-0 flex flex-col">
-        <CardContent className="p-0 flex-1 min-h-0 overflow-auto">
+        <CardContent className="p-0 flex-1 min-h-0 overflow-hidden">
           {visibleEntries.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground space-y-3">
               <p>No registry entries match your filters.</p>
@@ -389,90 +389,94 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
         </CardContent>
       </Card>
 
-      <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editing ? "Edit registry entry" : "New registry entry"}</DialogTitle>
-            <DialogDescription>
-              Seed string is hashed with IEEE CRC32 to produce the int32 resource value.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
+      {editorOpen ? (
+        <AppRndModalShell
+          titleId="resource-registry-entry-editor-title"
+          title={editing ? "Edit registry entry" : "New registry entry"}
+          subtitle="Seed string is hashed with IEEE CRC32 to produce the int32 resource value."
+          headerIcon={<Database className="h-5 w-5 text-primary" />}
+          dimensions={REGISTRY_EDITOR_MODAL_DIMENSIONS}
+          storageKey="app.rnd-size.resource-registry-entry-editor"
+          onClose={() => setEditorOpen(false)}
+          footer={
+            <div className="flex justify-end gap-2 bg-background px-6 py-4">
+              <Button variant="outline" onClick={() => setEditorOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={() => void handleSaveEntry()}>Save</Button>
+            </div>
+          }
+        >
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-6">
             <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Category</Label>
+                  <Select value={formCategory} onValueChange={(v) => setFormCategory(v as ResourceRegistryCategory)}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Slot</Label>
+                  <Input
+                    value={formSlot}
+                    onChange={(e) => setFormSlot(e.target.value)}
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
+              </div>
               <div className="space-y-1">
-                <Label className="text-xs">Category</Label>
-                <Select value={formCategory} onValueChange={(v) => setFormCategory(v as ResourceRegistryCategory)}>
+                <Label className="text-xs">Seed</Label>
+                <Input
+                  value={formSeed}
+                  onChange={(e) => setFormSeed(e.target.value)}
+                  className="h-8 text-xs font-mono"
+                />
+                {formPreview ? (
+                  <p className="text-[10px] font-mono text-muted-foreground">
+                    {formPreview.hashHex} · int32 {formPreview.hashInt32}
+                  </p>
+                ) : null}
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Display name (optional)</Label>
+                <Input
+                  value={formDisplayName}
+                  onChange={(e) => setFormDisplayName(e.target.value)}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Notes (optional)</Label>
+                <Textarea
+                  value={formNotes}
+                  onChange={(e) => setFormNotes(e.target.value)}
+                  className="text-xs min-h-[72px]"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Save target</Label>
+                <Select value={formTarget} onValueChange={(v) => setFormTarget(v as "workspace" | "global")}>
                   <SelectTrigger className="h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {CATEGORIES.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
-                        {cat}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="workspace">Workspace registry</SelectItem>
+                    <SelectItem value="global">Global registry</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Slot</Label>
-                <Input
-                  value={formSlot}
-                  onChange={(e) => setFormSlot(e.target.value)}
-                  className="h-8 text-xs font-mono"
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Seed</Label>
-              <Input
-                value={formSeed}
-                onChange={(e) => setFormSeed(e.target.value)}
-                className="h-8 text-xs font-mono"
-              />
-              {formPreview ? (
-                <p className="text-[10px] font-mono text-muted-foreground">
-                  {formPreview.hashHex} · int32 {formPreview.hashInt32}
-                </p>
-              ) : null}
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Display name (optional)</Label>
-              <Input
-                value={formDisplayName}
-                onChange={(e) => setFormDisplayName(e.target.value)}
-                className="h-8 text-xs"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Notes (optional)</Label>
-              <Textarea
-                value={formNotes}
-                onChange={(e) => setFormNotes(e.target.value)}
-                className="text-xs min-h-[72px]"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Save target</Label>
-              <Select value={formTarget} onValueChange={(v) => setFormTarget(v as "workspace" | "global")}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="workspace">Workspace registry</SelectItem>
-                  <SelectItem value="global">Global registry</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditorOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={() => void handleSaveEntry()}>Save</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </AppRndModalShell>
+      ) : null}
 
       <AlertDialog open={deleteId != null} onOpenChange={(open) => !open && setDeleteId(null)}>
         <AlertDialogContent>

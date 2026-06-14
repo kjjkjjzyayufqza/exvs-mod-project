@@ -1,15 +1,15 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Loader2, Circle, XCircle, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+
+const SAVE_PROGRESS_DIMENSIONS = {
+  width: 540,
+  height: 520,
+  minWidth: 440,
+  minHeight: 380,
+};
 
 export type SaveStepStatus = "pending" | "running" | "done" | "error";
 
@@ -114,24 +114,39 @@ export function SaveProgressDialog({
           ? "One or more steps failed."
           : "Preparing...");
 
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next && canClose) onClose();
-      }}
-    >
-      <DialogContent
-        className="max-w-md"
-        hideCloseButton={!canClose}
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-      >
-        <DialogHeader>
-          <DialogTitle>{displayTitle}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
+  if (!open) return null;
 
+  return (
+    <AppRndModalShell
+      titleId="save-progress-title"
+      title={displayTitle}
+      subtitle={description}
+      headerIcon={
+        hasError ? (
+          <XCircle className="h-5 w-5 text-destructive" />
+        ) : allDone ? (
+          <CheckCircle2 className="h-5 w-5 text-green-500" />
+        ) : (
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+        )
+      }
+      dimensions={SAVE_PROGRESS_DIMENSIONS}
+      storageKey="app.rnd-size.save-progress"
+      onClose={onClose}
+      closeDisabled={!canClose}
+      footer={
+        <div className="flex justify-end p-3">
+          <Button
+            variant={hasError ? "destructive" : "default"}
+            disabled={!canClose}
+            onClick={onClose}
+          >
+            {canClose ? "Close" : "Processing..."}
+          </Button>
+        </div>
+      }
+    >
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
         {hasCompletionSummary && (
           <div className="rounded border bg-muted/30 p-3 max-h-40 overflow-y-auto">
             <ul className="space-y-1 text-sm text-muted-foreground list-disc ml-4">
@@ -149,17 +164,7 @@ export function SaveProgressDialog({
             <SaveStepRow key={step.id} step={step} />
           ))}
         </div>
-
-        <DialogFooter>
-          <Button
-            variant={hasError ? "destructive" : "default"}
-            disabled={!canClose}
-            onClick={onClose}
-          >
-            {canClose ? "Close" : "Processing..."}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </AppRndModalShell>
   );
 }

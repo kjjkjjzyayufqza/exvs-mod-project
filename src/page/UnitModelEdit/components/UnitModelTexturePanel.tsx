@@ -1,4 +1,14 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { invoke } from "@tauri-apps/api/core";
 import { join } from "@tauri-apps/api/path";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
@@ -64,6 +74,7 @@ import { getBaseName, inferUnitModelStructurePath } from "../utils/unitModelRepa
 
 const ASYNC_THUMB_CONCURRENCY = 4;
 const UNIT_TEXTURES_CHANGED_EVENT = "unit-model-textures-changed";
+const UNIT_TEXTURE_ROW_ESTIMATE_SIZE = 64;
 
 type Props = {
   unitRoot: string | null;
@@ -137,6 +148,8 @@ export function UnitModelTexturePanel({
   const [convertProgress, setConvertProgress] = useState<{ done: number; total: number } | null>(null);
   const [batchExportProgress, setBatchExportProgress] = useState<{ done: number; total: number } | null>(null);
   const [, bumpThumbnailCache] = useReducer((value: number) => value + 1, 0);
+  const textureListRef = useRef<HTMLDivElement | null>(null);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
   const managerEntries = useMemo<TextureManagerEntry[]>(
     () => inventory?.textures.map(unitTextureToManagerEntry) ?? [],
@@ -148,7 +161,7 @@ export function UnitModelTexturePanel({
   );
   const filteredTextures = useMemo(() => {
     const textures = inventory?.textures ?? [];
-    const q = searchQuery.trim().toLowerCase();
+    const q = deferredSearchQuery.trim().toLowerCase();
     if (!q) return textures;
     return textures.filter((texture) => {
       return (
@@ -157,7 +170,24 @@ export function UnitModelTexturePanel({
         texture.referencedBy.some((ref) => ref.toLowerCase().includes(q))
       );
     });
-  }, [inventory, searchQuery]);
+  }, [deferredSearchQuery, inventory]);
+  const getTextureListScrollElement = useCallback(() => textureListRef.current, []);
+  const textureRowVirtualizer = useVirtualizer({
+    count: filteredTextures.length,
+    getScrollElement: getTextureListScrollElement,
+    getItemKey: (index) => filteredTextures[index]?.id ?? index,
+    estimateSize: () => UNIT_TEXTURE_ROW_ESTIMATE_SIZE,
+    overscan: 8,
+  });
+  const focusedTextureIndex = useMemo(() => {
+    if (!focusKey) return -1;
+    return filteredTextures.findIndex((texture) => texture.filename.toLowerCase() === focusKey);
+  }, [filteredTextures, focusKey]);
+
+  useEffect(() => {
+    if (focusedTextureIndex < 0) return;
+    textureRowVirtualizer.scrollToIndex(focusedTextureIndex, { align: "center" });
+  }, [focusedTextureIndex, textureRowVirtualizer]);
 
   const refreshInventory = useCallback(async () => {
     if (!activeRoot || !structurePath) {
@@ -597,7 +627,7 @@ export function UnitModelTexturePanel({
         ) : null}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={textureListRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {noRoot ? (
           <div className="flex h-32 flex-col items-center justify-center gap-1 text-muted-foreground">
             <ImageIcon className="h-6 w-6 opacity-40" />
@@ -615,24 +645,35 @@ export function UnitModelTexturePanel({
             <span className="text-[11px]">{searchQuery.trim() ? "No matching textures" : "No .nutexb entries"}</span>
           </div>
         ) : (
-          <div className="divide-y divide-border/50">
-            {filteredTextures.map((texture) => (
-              <UnitTextureRow
-                key={texture.id}
-                texture={texture}
-                selected={selectedTexture?.id === texture.id}
-                focused={focusKey.length > 0 && texture.filename.toLowerCase() === focusKey}
-                textureDataMap={textureDataMap}
-                onSelect={() => setSelectedId(texture.id)}
-                onPreview={() => openPreview(texture)}
-                onExport={() => void handleExportTexture(texture)}
-                onReplace={() => setReplaceTarget(unitTextureToManagerEntry(texture))}
-                onRemove={() => void handleRemoveTexture(texture)}
-                onCopyPath={() => void copyPath(texture)}
-                onOpenReferencingNumatb={onOpenReferencingNumatb}
-                busy={busy !== null}
-              />
-            ))}
+          <div className="relative w-full" style={{ height: textureRowVirtualizer.getTotalSize() }}>
+            {textureRowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const texture = filteredTextures[virtualRow.index];
+              if (!texture) return null;
+              return (
+                <div
+                  key={texture.id}
+                  ref={textureRowVirtualizer.measureElement}
+                  data-index={virtualRow.index}
+                  className="absolute left-0 top-0 w-full border-b border-border/50"
+                  style={{ transform: `translateY(${virtualRow.start}px)` }}
+                >
+                  <UnitTextureRow
+                    texture={texture}
+                    selected={selectedTexture?.id === texture.id}
+                    focused={focusKey.length > 0 && texture.filename.toLowerCase() === focusKey}
+                    textureDataMap={textureDataMap}
+                    onSelect={() => setSelectedId(texture.id)}
+                    onPreview={() => openPreview(texture)}
+                    onExport={() => void handleExportTexture(texture)}
+                    onReplace={() => setReplaceTarget(unitTextureToManagerEntry(texture))}
+                    onRemove={() => void handleRemoveTexture(texture)}
+                    onCopyPath={() => void copyPath(texture)}
+                    onOpenReferencingNumatb={onOpenReferencingNumatb}
+                    busy={busy !== null}
+                  />
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -706,7 +747,6 @@ function UnitTextureRow({
   onOpenReferencingNumatb?: (numatbBasename: string) => void;
   busy: boolean;
 }) {
-  const rowRef = useRef<HTMLDivElement>(null);
   const thumbnailDataUrl = getSceneTextureThumbnailDataUrl(texture.path, textureDataMap);
   const loadedData = lookupSceneTextureData(textureDataMap, texture.path);
   const dims =
@@ -715,13 +755,8 @@ function UnitTextureRow({
       : textureDims(texture);
   const referenced = texture.structureRefCount > 0 || texture.numatbReferenceCount > 0;
 
-  useEffect(() => {
-    if (focused) rowRef.current?.scrollIntoView({ block: "center" });
-  }, [focused]);
-
   return (
     <div
-      ref={rowRef}
       className={cn(
         "flex min-w-0 cursor-pointer items-center gap-2 px-2 py-1.5 transition-colors",
         selected ? "bg-accent text-accent-foreground" : "hover:bg-muted/35",

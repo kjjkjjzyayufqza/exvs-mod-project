@@ -1,14 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
@@ -118,6 +110,12 @@ function formatTreeText(tree: VirtualTreeFolder): string {
 /** py-0.5 + text-sm / text-xs rows with h-3.5 icons */
 const TREE_ROW_HEIGHT = 24;
 const TREE_INDENT_PX = 16;
+const STAGE_PREVIEW_DIMENSIONS = {
+  width: 760,
+  height: 680,
+  minWidth: 480,
+  minHeight: 380,
+};
 
 type FlatTreeRow =
   | { kind: "folder"; key: string; depth: number; folder: VirtualTreeFolder; folderPath: string }
@@ -299,8 +297,17 @@ function WarningsBlock({ warnings }: { warnings: string[] }) {
 
   if (warnings.length === 0) return null;
 
-  const errors = warnings.filter((w) => w.startsWith("[ERROR]"));
-  const warns = warnings.filter((w) => !w.startsWith("[ERROR]"));
+  const warningRows = useMemo(
+    () =>
+      warnings.map((warning, index) => ({
+        key: `${warning.startsWith("[ERROR]") ? "error" : "warning"}:${index}`,
+        level: warning.startsWith("[ERROR]") ? ("error" as const) : ("warning" as const),
+        message: warning.replace(/^\[ERROR]\s*/, ""),
+      })),
+    [warnings],
+  );
+  const errorCount = warningRows.filter((row) => row.level === "error").length;
+  const warningCount = warningRows.length - errorCount;
 
   return (
     <div
@@ -308,18 +315,18 @@ function WarningsBlock({ warnings }: { warnings: string[] }) {
       onClick={() => setExpanded((v) => !v)}
     >
       <div className="flex items-center gap-2 px-3 py-2 text-sm">
-        {errors.length > 0 ? (
+        {errorCount > 0 ? (
           <XCircle className="h-4 w-4 text-destructive shrink-0" />
         ) : (
           <AlertTriangle className="h-4 w-4 text-yellow-500 shrink-0" />
         )}
         <span className="font-medium">
-          {errors.length > 0 && (
-            <span className="text-destructive">{errors.length} error(s)</span>
+          {errorCount > 0 && (
+            <span className="text-destructive">{errorCount} error(s)</span>
           )}
-          {errors.length > 0 && warns.length > 0 && ", "}
-          {warns.length > 0 && (
-            <span className="text-yellow-500">{warns.length} warning(s)</span>
+          {errorCount > 0 && warningCount > 0 && ", "}
+          {warningCount > 0 && (
+            <span className="text-yellow-500">{warningCount} warning(s)</span>
           )}
         </span>
         <div className="ml-auto flex items-center gap-1">
@@ -346,18 +353,23 @@ function WarningsBlock({ warnings }: { warnings: string[] }) {
         </div>
       </div>
       {expanded && (
-        <ScrollArea className="max-h-[20vh] px-3 pb-2">
-          <div className="space-y-0.5">
-            {errors.map((w, i) => (
-              <div key={`e-${i}`} className="text-xs text-destructive font-medium">
-                {w.replace(/^\[ERROR]\s*/, "")}
-              </div>
-            ))}
-            {warns.map((w, i) => (
-              <div key={`w-${i}`} className="text-xs text-foreground/70">{w}</div>
-            ))}
-          </div>
-        </ScrollArea>
+        <VirtualizedList
+          items={warningRows}
+          rowHeight={24}
+          getItemKey={(row) => row.key}
+          className="max-h-[20vh] overflow-y-auto px-3 pb-2"
+          renderRow={(row) => (
+            <div
+              className={cn(
+                "truncate text-xs leading-6",
+                row.level === "error" ? "font-medium text-destructive" : "text-foreground/70",
+              )}
+              title={row.message}
+            >
+              {row.message}
+            </div>
+          )}
+        />
       )}
     </div>
   );
@@ -381,16 +393,30 @@ export function StageRenamePreviewDialog({
     void copyTextToClipboard(formatTreeText(tree), "Copied folder tree to clipboard");
   }, [tree]);
 
-  return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v && !isLoadingBundle) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Stage Structure Preview</DialogTitle>
-          <DialogDescription>
-            FHM2D internal folder structure with semantic rename.
-          </DialogDescription>
-        </DialogHeader>
+  if (!open) return null;
 
+  return (
+    <AppRndModalShell
+      titleId="stage-structure-preview-title"
+      title="Stage Structure Preview"
+      subtitle="FHM2D internal folder structure with semantic rename"
+      headerIcon={<Folder className="h-4 w-4 text-amber-400" />}
+      dimensions={STAGE_PREVIEW_DIMENSIONS}
+      storageKey="stage-structure-preview-dialog-size"
+      closeDisabled={isLoadingBundle}
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2 px-4 py-3">
+          <Button variant="outline" onClick={onClose} disabled={isLoadingBundle}>
+            Close
+          </Button>
+          <Button onClick={onLoad} disabled={isLoadingBundle}>
+            {isLoadingBundle ? "Loading..." : "Load into Scene"}
+          </Button>
+        </div>
+      }
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="secondary" className="font-mono text-xs">
             {sourceName}
@@ -432,16 +458,7 @@ export function StageRenamePreviewDialog({
             {tree ? <VirtualizedTreePreview tree={tree} /> : null}
           </div>
         </div>
-
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={onClose} disabled={isLoadingBundle}>
-            Close
-          </Button>
-          <Button onClick={onLoad} disabled={isLoadingBundle}>
-            {isLoadingBundle ? "Loading..." : "Load into Scene"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </AppRndModalShell>
   );
 }

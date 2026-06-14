@@ -1,4 +1,5 @@
-import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -73,6 +74,7 @@ interface GraphicParamPanelProps {
 
 const LARGE_CATEGORY_SCROLL_THRESHOLD = 24;
 const LARGE_CATEGORY_MAX_HEIGHT = "max-h-80";
+const GRAPHIC_PARAM_ROW_ESTIMATE_PX = 34;
 const DEFAULT_ADD_GROUP_ID = "lighting";
 type GraphicParamAddMode = "scalar" | "rgb";
 
@@ -320,8 +322,6 @@ export function GraphicParamPanel({
             const items = grouped.get(cat.id);
             if (!items || items.length === 0) return null;
             const collapsed = collapsedCategories.has(cat.id);
-            const useBoundedScroll =
-              !collapsed && items.length > LARGE_CATEGORY_SCROLL_THRESHOLD;
             return (
               <section key={cat.id} className={INSPECTOR_SECTION}>
                 <div className={INSPECTOR_SECTION_HEADER}>
@@ -349,33 +349,108 @@ export function GraphicParamPanel({
                   </AddParameterPopover>
                 </div>
                 {!collapsed && (
-                  <div
-                    className={cn(
-                      "divide-y divide-border/25 py-0.5",
-                      useBoundedScroll && `${LARGE_CATEGORY_MAX_HEIGHT} overflow-y-auto overscroll-contain`,
-                    )}
-                  >
-                    {items.map((row) => (
-                      <InspectorRow
-                        key={row.id}
-                        row={row}
-                        editKeys={editKeys}
-                        appliedKeys={appliedKeys}
-                        initialMap={initialMap}
-                        onValueChange={onValueChange}
-                        onKeyChange={onKeyChange}
-                        onDelete={onDelete}
-                        onToggleApplied={onToggleApplied}
-                        onResetValue={onResetValue}
-                      />
-                    ))}
-                  </div>
+                  <GraphicParamCategoryRows
+                    items={items}
+                    editKeys={editKeys}
+                    appliedKeys={appliedKeys}
+                    initialMap={initialMap}
+                    onValueChange={onValueChange}
+                    onKeyChange={onKeyChange}
+                    onDelete={onDelete}
+                    onToggleApplied={onToggleApplied}
+                    onResetValue={onResetValue}
+                  />
                 )}
               </section>
             );
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function GraphicParamCategoryRows({
+  items,
+  editKeys,
+  appliedKeys,
+  initialMap,
+  onValueChange,
+  onKeyChange,
+  onDelete,
+  onToggleApplied,
+  onResetValue,
+}: {
+  items: GraphicParamInspectorRow[];
+  editKeys: boolean;
+  appliedKeys: ReadonlySet<string>;
+  initialMap: Map<string, string> | null;
+  onValueChange: (index: number, value: string) => void;
+  onKeyChange: (index: number, key: string) => void;
+  onDelete: (index: number) => void;
+  onToggleApplied: (key: string, applied: boolean) => void;
+  onResetValue: (index: number) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const getScrollElement = useCallback(() => scrollRef.current, []);
+  const shouldVirtualize = items.length > LARGE_CATEGORY_SCROLL_THRESHOLD;
+  const rowVirtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement,
+    estimateSize: () => GRAPHIC_PARAM_ROW_ESTIMATE_PX,
+    overscan: 8,
+  });
+
+  if (!shouldVirtualize) {
+    return (
+      <div className="divide-y divide-border/25 py-0.5">
+        {items.map((row) => (
+          <InspectorRow
+            key={row.id}
+            row={row}
+            editKeys={editKeys}
+            appliedKeys={appliedKeys}
+            initialMap={initialMap}
+            onValueChange={onValueChange}
+            onKeyChange={onKeyChange}
+            onDelete={onDelete}
+            onToggleApplied={onToggleApplied}
+            onResetValue={onResetValue}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={scrollRef} className={cn(LARGE_CATEGORY_MAX_HEIGHT, "overflow-y-auto overscroll-contain py-0.5")}>
+      <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
+        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+          const row = items[virtualRow.index];
+          if (!row) return null;
+          return (
+            <div
+              key={row.id}
+              ref={rowVirtualizer.measureElement}
+              data-index={virtualRow.index}
+              className="absolute left-0 top-0 w-full border-b border-border/25"
+              style={{ transform: `translateY(${virtualRow.start}px)` }}
+            >
+              <InspectorRow
+                row={row}
+                editKeys={editKeys}
+                appliedKeys={appliedKeys}
+                initialMap={initialMap}
+                onValueChange={onValueChange}
+                onKeyChange={onKeyChange}
+                onDelete={onDelete}
+                onToggleApplied={onToggleApplied}
+                onResetValue={onResetValue}
+              />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

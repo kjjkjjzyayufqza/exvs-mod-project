@@ -3,6 +3,7 @@ import { exists, readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { dirname, join } from "@tauri-apps/api/path";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { Buffer } from "buffer";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +20,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Save, RefreshCw, Plus, Trash2, Search, Copy, Download, Upload, FolderOpen } from "lucide-react";
 import {
@@ -38,6 +38,12 @@ import {
 } from "./character-cost/CharacterCostJson";
 
 const COST_PACK_FOLDER = "0xFF832E7F";
+const CHARACTER_COST_IMPORT_MODAL_DIMENSIONS = {
+  width: 520,
+  height: 420,
+  minWidth: 440,
+  minHeight: 320,
+};
 
 const COST_FILES = {
   playable: "foroutgamecharacterparam_playable.bin",
@@ -786,31 +792,40 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
         </div>
       </Tabs>
 
-      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Import character cost JSON?</DialogTitle>
-            <DialogDescription>
-              This replaces all rows in the current file ({COST_FILES[subTab]}) with valid entries from the JSON file.
-            </DialogDescription>
-          </DialogHeader>
-          {importPreview && (
-            <div className="text-sm space-y-1">
-              <div>Valid rows: {importPreview.validCount}</div>
-              <div>Invalid / skipped: {importPreview.invalidCount}</div>
-              {importPreview.duplicateIds.length > 0 && (
-                <div className="text-amber-600">Duplicate IDs in file: {importPreview.duplicateIds.join(", ")}</div>
-              )}
+      {isImportDialogOpen ? (
+        <AppRndModalShell
+          titleId="character-cost-import-title"
+          title="Import character cost JSON?"
+          subtitle={`Replace rows in ${COST_FILES[subTab]}.`}
+          headerIcon={<Upload className="h-5 w-5 text-primary" />}
+          dimensions={CHARACTER_COST_IMPORT_MODAL_DIMENSIONS}
+          storageKey="app.rnd-size.character-cost-import"
+          onClose={() => setIsImportDialogOpen(false)}
+          footer={
+            <div className="flex justify-end gap-2 bg-background px-6 py-4">
+              <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleConfirmImport}>Apply import</Button>
             </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleConfirmImport}>Apply import</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          }
+        >
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-6 text-sm">
+            <p className="text-muted-foreground">
+              This replaces all rows in the current file with valid entries from the JSON file.
+            </p>
+            {importPreview ? (
+              <div className="space-y-1">
+                <div>Valid rows: {importPreview.validCount}</div>
+                <div>Invalid / skipped: {importPreview.invalidCount}</div>
+                {importPreview.duplicateIds.length > 0 ? (
+                  <div className="text-amber-600">Duplicate IDs in file: {importPreview.duplicateIds.join(", ")}</div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </AppRndModalShell>
+      ) : null}
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>

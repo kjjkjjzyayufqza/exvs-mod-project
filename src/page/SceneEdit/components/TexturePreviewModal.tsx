@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState, type ComponentProps, type WheelEvent } from "react";
+import { useCallback, useEffect, useState, type WheelEvent } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { Rnd } from "react-rnd";
-import { Loader2, RotateCcw, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Image, Loader2, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import type { TextureManagerEntry } from "../store/sceneTextureManagerStore";
 import type { NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
@@ -19,45 +19,17 @@ import {
   normalizeDdsFormat,
   resolveDetectedDdsFormat,
 } from "../utils/sceneTextureDdsFormat";
-import { clampRndSizeToConstraints } from "./sceneEditRndModalUtils";
-import {
-  SCENE_EDIT_RND_SIZE_KEYS,
-  persistSceneEditRndSize,
-  resolveSceneEditRndInitialSize,
-} from "./sceneEditRndSizePersistence";
+import { SCENE_EDIT_RND_SIZE_KEYS } from "./sceneEditRndSizePersistence";
 
-const VIEWPORT_MARGIN = 32;
-const PREVIEW_MODAL_ID = "texture-preview-modal-layer";
+const TEXTURE_PREVIEW_DIMENSIONS = {
+  width: 560,
+  height: 520,
+  minWidth: 280,
+  minHeight: 260,
+};
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 8;
 const ZOOM_STEP = 0.12;
-
-function getViewportSize() {
-  if (typeof window === "undefined") return { width: 1280, height: 800 };
-  return { width: window.innerWidth, height: window.innerHeight };
-}
-
-function getTexturePreviewModalDimensions() {
-  const { width: vw, height: vh } = getViewportSize();
-  const width = Math.min(560, vw - VIEWPORT_MARGIN * 2);
-  const height = Math.min(520, vh - VIEWPORT_MARGIN * 2);
-  return {
-    width,
-    height,
-    minWidth: 280,
-    minHeight: 260,
-    maxWidth: vw - VIEWPORT_MARGIN,
-    maxHeight: vh - VIEWPORT_MARGIN,
-  };
-}
-
-function getCenteredModalPosition(size: { width: number; height: number }) {
-  const { width: vw, height: vh } = getViewportSize();
-  return {
-    x: Math.round((vw - size.width) / 2),
-    y: Math.round((vh - size.height) / 2),
-  };
-}
 
 function clampZoom(value: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
@@ -87,46 +59,6 @@ export function TexturePreviewModal({
   const [detectedFormat, setDetectedFormat] = useState<string | null>(null);
   const [formatLoading, setFormatLoading] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const [modalConstraints, setModalConstraints] = useState(getTexturePreviewModalDimensions);
-  const [size, setSize] = useState(() => {
-    const dims = getTexturePreviewModalDimensions();
-    return resolveSceneEditRndInitialSize(SCENE_EDIT_RND_SIZE_KEYS.texturePreview, dims);
-  });
-  const [position, setPosition] = useState(() => {
-    const dims = getTexturePreviewModalDimensions();
-    const initialSize = resolveSceneEditRndInitialSize(
-      SCENE_EDIT_RND_SIZE_KEYS.texturePreview,
-      dims,
-    );
-    return getCenteredModalPosition(initialSize);
-  });
-
-  useEffect(() => {
-    const onResize = () => {
-      const dims = getTexturePreviewModalDimensions();
-      setModalConstraints(dims);
-      setSize((prev) => clampRndSizeToConstraints(prev, dims));
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  const handleResizeStop = useCallback(
-    (...args: Parameters<NonNullable<ComponentProps<typeof Rnd>["onResizeStop"]>>) => {
-      const ref = args[2];
-      const nextPosition = args[4];
-      const dims = getTexturePreviewModalDimensions();
-      const nextSize = persistSceneEditRndSize(
-        SCENE_EDIT_RND_SIZE_KEYS.texturePreview,
-        { width: ref.offsetWidth, height: ref.offsetHeight },
-        dims,
-      );
-      setModalConstraints(dims);
-      setSize(nextSize);
-      setPosition(nextPosition);
-    },
-    [],
-  );
 
   const loadedData = entry.nutexbPath
     ? lookupSceneTextureData(textureDataMap, entry.nutexbPath)
@@ -234,32 +166,8 @@ export function TexturePreviewModal({
   const previewWidth = loadedRgba?.width ?? entry.width;
   const previewHeight = loadedRgba?.height ?? entry.height;
 
-  const content = (
-    <div
-      id={PREVIEW_MODAL_ID}
-      className="fixed inset-x-0 bottom-0 top-[var(--layout-topbar-height)] z-[var(--z-modal)] pointer-events-none"
-    >
-      <Rnd
-        size={size}
-        position={position}
-        minWidth={modalConstraints.minWidth}
-        minHeight={modalConstraints.minHeight}
-        maxWidth={modalConstraints.maxWidth}
-        maxHeight={modalConstraints.maxHeight}
-        dragHandleClassName="texture-preview-drag-handle"
-        cancel="button, input, textarea, select, label, a, [data-no-drag]"
-        bounds="window"
-        className="pointer-events-auto"
-        style={{ zIndex: 60 }}
-        onDragStop={(_event, data) => setPosition({ x: data.x, y: data.y })}
-        onResizeStop={handleResizeStop}
-      >
-        <div className="flex flex-col h-full bg-background border border-border rounded-lg shadow-xl overflow-hidden">
-          <div className="texture-preview-drag-handle flex items-center justify-between px-3 py-1.5 bg-muted/40 border-b cursor-move select-none shrink-0">
-            <span className="text-xs font-medium truncate mr-2">
-              {entry.filename}
-            </span>
-            <div className="flex items-center gap-1.5 shrink-0">
+  const headerActions = (
+    <>
               {previewWidth > 0 && previewHeight > 0 && (
                 <span className="text-[10px] text-muted-foreground font-mono">
                   {previewWidth}×{previewHeight}
@@ -301,19 +209,21 @@ export function TexturePreviewModal({
               >
                 <ZoomIn className="h-3 w-3" />
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5"
-                data-no-drag
-                onClick={onClose}
-                disabled={isReencoding}
-              >
-                <X className="h-3 w-3" />
-              </Button>
-            </div>
-          </div>
+    </>
+  );
 
+  const content = (
+    <AppRndModalShell
+      titleId="texture-preview-modal-title"
+      title={entry.filename}
+      subtitle="Texture preview and DDS format"
+      headerIcon={<Image className="h-4 w-4 text-primary" />}
+      headerActions={headerActions}
+      dimensions={TEXTURE_PREVIEW_DIMENSIONS}
+      storageKey={SCENE_EDIT_RND_SIZE_KEYS.texturePreview}
+      onClose={onClose}
+      closeDisabled={isReencoding}
+    >
           <div
             className="flex flex-1 items-center justify-center bg-[repeating-conic-gradient(#80808020_0%_25%,transparent_0%_50%)] bg-[length:16px_16px] overflow-auto p-2 min-h-0"
             data-no-drag
@@ -390,9 +300,7 @@ export function TexturePreviewModal({
               </Button>
             )}
           </div>
-        </div>
-      </Rnd>
-    </div>
+    </AppRndModalShell>
   );
 
   return createPortal(content, document.body);

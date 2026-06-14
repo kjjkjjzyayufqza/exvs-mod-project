@@ -13,18 +13,11 @@ import {
   Copy,
   Trash2,
 } from "lucide-react";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,6 +42,13 @@ import { crc32Ieee } from "@/utils/crc32Ieee";
 import type { UseResourceRegistryResult } from "@/hooks/useResourceRegistry";
 import { UNIT_FIELD_KEY_TO_SLOT } from "@/services/resourceRegistry/types";
 import { ResourceSeedField } from "../resource-registry/ResourceSeedField";
+
+const COPY_AS_NEW_MODAL_DIMENSIONS = {
+  width: 520,
+  height: 420,
+  minWidth: 440,
+  minHeight: 320,
+};
 
 function normalizePathKey(s: string): string {
   return s.trim().replace(/\\/g, "/").toLowerCase();
@@ -583,16 +583,28 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={copyDialogOpen} onOpenChange={setCopyDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Copy as New</DialogTitle>
-            <DialogDescription>
-              Enter a seed string. The app will compute CRC32 and create a new asset folder and structure JSON.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3">
+      {copyDialogOpen ? (
+        <AppRndModalShell
+          titleId={`copy-as-new-${asset.fieldKey}-title`}
+          title="Copy as New"
+          subtitle="Compute CRC32 and create a new asset folder and structure JSON."
+          headerIcon={<Copy className="h-5 w-5 text-primary" />}
+          dimensions={COPY_AS_NEW_MODAL_DIMENSIONS}
+          storageKey="app.rnd-size.character-asset-copy-as-new"
+          onClose={() => setCopyDialogOpen(false)}
+          closeDisabled={isCopyingAsNew}
+          footer={
+            <div className="flex justify-end gap-2 bg-background px-6 py-4">
+              <Button variant="outline" onClick={() => setCopyDialogOpen(false)} disabled={isCopyingAsNew}>
+                Cancel
+              </Button>
+              <Button onClick={() => void handleConfirmCopyAsNew()} disabled={isCopyingAsNew || !trimmedSeed}>
+                {isCopyingAsNew ? "Copying..." : "Copy as New"}
+              </Button>
+            </div>
+          }
+        >
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-6">
             <div className="space-y-1">
               <Label htmlFor={`copy-seed-${asset.fieldKey}`}>Seed String</Label>
               <Input
@@ -617,17 +629,8 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
               </div>
             </div>
           </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCopyDialogOpen(false)} disabled={isCopyingAsNew}>
-              Cancel
-            </Button>
-            <Button onClick={() => void handleConfirmCopyAsNew()} disabled={isCopyingAsNew || !trimmedSeed}>
-              {isCopyingAsNew ? "Copying..." : "Copy as New"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </AppRndModalShell>
+      ) : null}
     </div>
   );
 };

@@ -1,5 +1,4 @@
 import { useState, useCallback, memo } from "react";
-import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +12,14 @@ import { FileInfo, useNumatbStore, getParamType, ParamDataType, COMMON_ATTRIBUTE
 
 interface FileDialogProps {
   file: FileInfo;
+}
+
+function FileEditorHeading({ name }: { name: string }) {
+  return (
+    <div className="mb-4">
+      <h2 className="text-lg font-semibold tracking-tight">Edit {name}</h2>
+    </div>
+  );
 }
 
 // Component for adding new attributes
@@ -518,10 +525,8 @@ export function FileDialog({ file }: FileDialogProps) {
 
   if (isConverting) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <DialogHeader>
-          <DialogTitle>Edit {file.name}</DialogTitle>
-        </DialogHeader>
+      <div className="flex flex-col items-center justify-center p-8">
+        <FileEditorHeading name={file.name} />
         <div className="flex items-center space-x-3">
           <Loader2 className="animate-spin h-5 w-5" />
           <span>Converting file...</span>
@@ -533,9 +538,7 @@ export function FileDialog({ file }: FileDialogProps) {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center p-8 space-y-4">
-        <DialogHeader>
-          <DialogTitle>Edit {file.name}</DialogTitle>
-        </DialogHeader>
+        <FileEditorHeading name={file.name} />
         <span className="text-red-600">{error}</span>
         <Button
           variant="outline"
@@ -560,9 +563,7 @@ export function FileDialog({ file }: FileDialogProps) {
 
     return (
       <>
-        <DialogHeader>
-          <DialogTitle>Edit {file.name}</DialogTitle>
-        </DialogHeader>
+        <FileEditorHeading name={file.name} />
         
         <div className="space-y-3">
           {/* Action buttons */}
@@ -725,9 +726,7 @@ export function FileDialog({ file }: FileDialogProps) {
 
   return (
     <div>
-      <DialogHeader>
-        <DialogTitle>Edit {file.name}</DialogTitle>
-      </DialogHeader>
+      <FileEditorHeading name={file.name} />
       <div className="flex items-center justify-center h-32 text-muted-foreground">
         No data to display
       </div>

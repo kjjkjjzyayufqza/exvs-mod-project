@@ -1,57 +1,32 @@
-import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Rnd } from "react-rnd";
-import { AlertTriangle, ImageIcon, Loader2, X } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { AlertTriangle, ImageIcon, Images, Loader2 } from "lucide-react";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { TextureFormatSelect, type DdsFormat } from "./TextureFormatSelect";
 import { DEFAULT_DDS_FORMAT } from "../utils/sceneTextureDdsFormat";
 import { isImageFile } from "@/page/TestEditor/components/ImagePreview";
-import { clampRndSizeToConstraints } from "./sceneEditRndModalUtils";
-import {
-  SCENE_EDIT_RND_SIZE_KEYS,
-  persistSceneEditRndSize,
-  resolveSceneEditRndInitialSize,
-} from "./sceneEditRndSizePersistence";
+import { SCENE_EDIT_RND_SIZE_KEYS } from "./sceneEditRndSizePersistence";
 import {
   describeDuplicate,
   type AnalyzedAddCandidate,
 } from "../utils/sceneTextureAddPlan";
 
-const VIEWPORT_MARGIN = 32;
+const TEXTURE_ADD_MODAL_DIMENSIONS = {
+  width: 560,
+  height: 620,
+  minWidth: 420,
+  minHeight: 360,
+};
+const CANDIDATE_ROW_HEIGHT = 52;
 
 export interface TextureAddSelection {
   candidate: AnalyzedAddCandidate;
   ddsFormat: DdsFormat;
-}
-
-function getViewportSize() {
-  if (typeof window === "undefined") return { width: 1280, height: 800 };
-  return { width: window.innerWidth, height: window.innerHeight };
-}
-
-function getTextureAddConfirmModalDimensions() {
-  const { width: vw, height: vh } = getViewportSize();
-  const width = Math.min(560, vw - VIEWPORT_MARGIN * 2);
-  const height = Math.min(620, vh - VIEWPORT_MARGIN * 2);
-  return {
-    width,
-    height,
-    minWidth: 420,
-    minHeight: 360,
-    maxWidth: vw - VIEWPORT_MARGIN,
-    maxHeight: vh - VIEWPORT_MARGIN,
-  };
-}
-
-function getCenteredModalPosition(size: { width: number; height: number }) {
-  const { width: vw, height: vh } = getViewportSize();
-  return {
-    x: Math.round((vw - size.width) / 2),
-    y: Math.round((vh - size.height) / 2),
-  };
 }
 
 interface TextureAddConfirmModalProps {
@@ -75,30 +50,7 @@ export function TextureAddConfirmModal({
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [formats, setFormats] = useState<Record<string, DdsFormat>>({});
   const [bulkFormat, setBulkFormat] = useState<DdsFormat>(DEFAULT_DDS_FORMAT);
-
-  const [modalConstraints, setModalConstraints] = useState(getTextureAddConfirmModalDimensions);
-  const [size, setSize] = useState(() => {
-    const dims = getTextureAddConfirmModalDimensions();
-    return resolveSceneEditRndInitialSize(SCENE_EDIT_RND_SIZE_KEYS.textureAddConfirm, dims);
-  });
-  const [position, setPosition] = useState(() => {
-    const dims = getTextureAddConfirmModalDimensions();
-    const initialSize = resolveSceneEditRndInitialSize(
-      SCENE_EDIT_RND_SIZE_KEYS.textureAddConfirm,
-      dims,
-    );
-    return getCenteredModalPosition(initialSize);
-  });
-
-  useEffect(() => {
-    const onResize = () => {
-      const dims = getTextureAddConfirmModalDimensions();
-      setModalConstraints(dims);
-      setSize((prev) => clampRndSizeToConstraints(prev, dims));
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
+  const candidateListRef = useRef<HTMLDivElement | null>(null);
 
   // Keep per-row selection in sync with the candidate list. Duplicates can never
   // be checked; non-duplicate rows default to checked and preserve prior choices
@@ -124,23 +76,6 @@ export function TextureAddConfirmModal({
     });
   }, [candidates]);
 
-  const handleResizeStop = useCallback(
-    (...args: Parameters<NonNullable<ComponentProps<typeof Rnd>["onResizeStop"]>>) => {
-      const ref = args[2];
-      const nextPosition = args[4];
-      const dims = getTextureAddConfirmModalDimensions();
-      const nextSize = persistSceneEditRndSize(
-        SCENE_EDIT_RND_SIZE_KEYS.textureAddConfirm,
-        { width: ref.offsetWidth, height: ref.offsetHeight },
-        dims,
-      );
-      setModalConstraints(dims);
-      setSize(nextSize);
-      setPosition(nextPosition);
-    },
-    [],
-  );
-
   const selectableIds = useMemo(
     () => candidates.filter((c) => !c.duplicate).map((c) => c.id),
     [candidates],
@@ -162,6 +97,14 @@ export function TextureAddConfirmModal({
   }, [selectableIds.length, selectedCount]);
 
   const busy = analyzing || isConverting;
+  const getCandidateListScrollElement = useCallback(() => candidateListRef.current, []);
+  const candidateVirtualizer = useVirtualizer({
+    count: candidates.length,
+    getScrollElement: getCandidateListScrollElement,
+    getItemKey: (index) => candidates[index]?.id ?? index,
+    estimateSize: () => CANDIDATE_ROW_HEIGHT,
+    overscan: 8,
+  });
 
   const toggleAll = useCallback(
     (value: boolean) => {
@@ -193,40 +136,56 @@ export function TextureAddConfirmModal({
     onConfirm(selections);
   }, [candidates, checked, formats, onConfirm]);
 
-  const content = (
-    <div className="fixed inset-x-0 bottom-0 top-[var(--layout-topbar-height)] z-[var(--z-modal)] pointer-events-none">
-      <Rnd
-        size={size}
-        position={position}
-        minWidth={modalConstraints.minWidth}
-        minHeight={modalConstraints.minHeight}
-        maxWidth={modalConstraints.maxWidth}
-        maxHeight={modalConstraints.maxHeight}
-        dragHandleClassName="texture-add-confirm-drag-handle"
-        cancel="button, input, textarea, select, label, a, [data-no-drag]"
-        bounds="window"
-        className="pointer-events-auto"
-        style={{ zIndex: 60 }}
-        onDragStop={(_event, data) => setPosition({ x: data.x, y: data.y })}
-        onResizeStop={handleResizeStop}
+  const footer = (
+    <div className="flex items-center gap-2 bg-muted/20 px-3 py-2">
+      <span className="mr-auto text-[10px] text-muted-foreground">
+        {analyzing
+          ? "Checking for duplicate names..."
+          : duplicateCount > 0
+            ? `${duplicateCount} duplicate(s) skipped`
+            : "No duplicates"}
+      </span>
+      <Button
+        variant="outline"
+        size="sm"
+        className="text-xs"
+        onClick={onClose}
+        disabled={isConverting}
       >
-        <div className="flex flex-col h-full bg-background border border-border rounded-lg shadow-xl overflow-hidden">
-          <div className="texture-add-confirm-drag-handle flex items-center justify-between px-3 py-1.5 bg-muted/40 border-b cursor-move select-none shrink-0">
-            <span className="text-xs font-medium truncate mr-2">
-              Add textures ({candidates.length})
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-5 w-5"
-              data-no-drag
-              onClick={onClose}
-              disabled={isConverting}
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          </div>
+        Cancel
+      </Button>
+      <Button
+        size="sm"
+        className="min-w-[150px] text-xs"
+        onClick={handleConfirm}
+        disabled={busy || selectedCount === 0}
+      >
+        {isConverting ? (
+          <>
+            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+            {convertProgress
+              ? `Converting ${convertProgress.done}/${convertProgress.total}...`
+              : "Converting..."}
+          </>
+        ) : (
+          `Confirm & Convert (${selectedCount})`
+        )}
+      </Button>
+    </div>
+  );
 
+  const content = (
+    <AppRndModalShell
+      titleId="texture-add-confirm-modal-title"
+      title={`Add textures (${candidates.length})`}
+      subtitle="Review duplicates and conversion formats"
+      headerIcon={<Images className="h-4 w-4 text-primary" />}
+      dimensions={TEXTURE_ADD_MODAL_DIMENSIONS}
+      storageKey={SCENE_EDIT_RND_SIZE_KEYS.textureAddConfirm}
+      onClose={onClose}
+      closeDisabled={isConverting}
+      footer={footer}
+    >
           {/* Bulk toolbar */}
           <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/20 shrink-0">
             <label className="flex items-center gap-1.5 text-[11px] select-none cursor-pointer">
@@ -271,63 +230,38 @@ export function TextureAddConfirmModal({
           </div>
 
           {/* Candidate list */}
-          <div className="flex-1 min-h-0 overflow-auto">
-            {candidates.map((candidate) => (
-              <CandidateRow
-                key={candidate.id}
-                candidate={candidate}
-                checked={!!checked[candidate.id]}
-                format={formats[candidate.id] ?? DEFAULT_DDS_FORMAT}
-                disabled={busy}
-                onToggle={(value) =>
-                  setChecked((prev) => ({ ...prev, [candidate.id]: value }))
-                }
-                onFormatChange={(value) =>
-                  setFormats((prev) => ({ ...prev, [candidate.id]: value }))
-                }
-              />
-            ))}
+          <div ref={candidateListRef} className="min-h-0 flex-1 overflow-auto overscroll-contain">
+            <div className="relative w-full" style={{ height: candidateVirtualizer.getTotalSize() }}>
+              {candidateVirtualizer.getVirtualItems().map((virtualRow) => {
+                const candidate = candidates[virtualRow.index];
+                if (!candidate) return null;
+                return (
+                  <div
+                    key={candidate.id}
+                    className="absolute left-0 top-0 w-full"
+                    style={{
+                      height: virtualRow.size,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <CandidateRow
+                      candidate={candidate}
+                      checked={!!checked[candidate.id]}
+                      format={formats[candidate.id] ?? DEFAULT_DDS_FORMAT}
+                      disabled={busy}
+                      onToggle={(value) =>
+                        setChecked((prev) => ({ ...prev, [candidate.id]: value }))
+                      }
+                      onFormatChange={(value) =>
+                        setFormats((prev) => ({ ...prev, [candidate.id]: value }))
+                      }
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
-
-          {/* Footer */}
-          <div className="flex items-center gap-2 px-3 py-2 border-t bg-muted/20 shrink-0">
-            <span className="text-[10px] text-muted-foreground mr-auto">
-              {analyzing
-                ? "Checking for duplicate names..."
-                : duplicateCount > 0
-                  ? `${duplicateCount} duplicate(s) skipped`
-                  : "No duplicates"}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs"
-              onClick={onClose}
-              disabled={isConverting}
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              className="text-xs min-w-[150px]"
-              onClick={handleConfirm}
-              disabled={busy || selectedCount === 0}
-            >
-              {isConverting ? (
-                <>
-                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                  {convertProgress
-                    ? `Converting ${convertProgress.done}/${convertProgress.total}...`
-                    : "Converting..."}
-                </>
-              ) : (
-                `Confirm & Convert (${selectedCount})`
-              )}
-            </Button>
-          </div>
-        </div>
-      </Rnd>
-    </div>
+    </AppRndModalShell>
   );
 
   return createPortal(content, document.body);
@@ -361,7 +295,7 @@ function CandidateRow({
   return (
     <div
       className={cn(
-        "flex items-center gap-2 px-3 py-1.5 border-b border-border/30",
+        "flex h-full items-center gap-2 border-b border-border/30 px-3 py-1.5",
         isDuplicate ? "bg-destructive/5 opacity-70" : "hover:bg-muted/30",
       )}
     >

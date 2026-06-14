@@ -48,6 +48,7 @@ type SceneEditRndModalShellProps = {
   onClose: () => void;
   closeDisabled?: boolean;
   getDimensions: () => SceneEditRndModalDimensions;
+  getInitialPosition?: (size: { width: number; height: number }) => { x: number; y: number };
   sizeStorageKey?: string;
   skipActivate?: boolean;
   /** Inject a host-specific viewport-suspend interaction. Defaults to the Scene store hook. */
@@ -67,6 +68,7 @@ export function SceneEditRndModalShell({
   onClose,
   closeDisabled = false,
   getDimensions,
+  getInitialPosition,
   sizeStorageKey,
   skipActivate = false,
   viewportSuspend,
@@ -84,7 +86,7 @@ export function SceneEditRndModalShell({
   const [position, setPosition] = useState(() => {
     const dims = getDimensions();
     const initialSize = resolveSceneEditRndInitialSize(sizeStorageKey, dims);
-    return getSceneEditCascadePosition(initialSize, cascadeIndex);
+    return getInitialPosition?.(initialSize) ?? getSceneEditCascadePosition(initialSize, cascadeIndex);
   });
 
   useEffect(() => {
@@ -94,10 +96,10 @@ export function SceneEditRndModalShell({
       const next = sizeStorageKey
         ? resolveSceneEditRndInitialSize(sizeStorageKey, dims)
         : clampRndSizeToConstraints(prev, dims);
-      setPosition(getSceneEditCascadePosition(next, cascadeIndex));
+      setPosition(getInitialPosition?.(next) ?? getSceneEditCascadePosition(next, cascadeIndex));
       return next;
     });
-  }, [cascadeIndex, getDimensions, sizeStorageKey]);
+  }, [cascadeIndex, getDimensions, getInitialPosition, sizeStorageKey]);
 
   useEffect(() => {
     const onResize = () => {

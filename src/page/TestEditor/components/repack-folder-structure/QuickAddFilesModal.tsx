@@ -1,19 +1,22 @@
-import { useCallback, useId, useMemo, useState } from "react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FolderOpen, Trash2 } from "lucide-react";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { buildFileUrl, splitPathSegments } from "@/lib/fhm2d_fileUrlUtils";
+
+const QUICK_ADD_ROW_HEIGHT = 49;
+const QUICK_ADD_MODAL_DIMENSIONS = {
+  width: 720,
+  height: 720,
+  minWidth: 600,
+  minHeight: 500,
+};
 
 const FILE_TYPE_OPTIONS = [
   { value: ".nushdb", label: ".nushdb" },
@@ -88,8 +91,16 @@ export function QuickAddFilesModal({ open: dialogOpen, onOpenChange, onConfirm }
   const [shareFileIndexAcrossFolders, setShareFileIndexAcrossFolders] = useState(false);
   const [fileUrlPrefix, setFileUrlPrefix] = useState("");
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
+  const rowsViewportRef = useRef<HTMLDivElement | null>(null);
 
   const canConfirm = rows.length > 0;
+  const getRowsViewport = useCallback(() => rowsViewportRef.current, []);
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: getRowsViewport,
+    estimateSize: () => QUICK_ADD_ROW_HEIGHT,
+    overscan: 10,
+  });
 
   const resetWhenClosed = useCallback(() => {
     setRows([]);
@@ -206,13 +217,45 @@ export function QuickAddFilesModal({ open: dialogOpen, onOpenChange, onConfirm }
     onOpenChange(false);
   }, [onConfirm, onOpenChange, resetWhenClosed, rows, shareFileIndexAcrossFolders, fileUrlPrefix]);
 
+  if (!dialogOpen) return null;
+
   return (
-    <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="grid max-h-[min(90vh,720px)] grid-rows-[auto_minmax(0,1fr)_auto_auto] gap-0 overflow-hidden p-0 sm:max-w-[640px]">
-        <DialogHeader className="shrink-0 border-b px-6 py-4">
-          <DialogTitle>Quick Add files</DialogTitle>
-        </DialogHeader>
-        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto px-6 py-4 [scrollbar-gutter:stable]">
+    <AppRndModalShell
+      titleId="quick-add-files-title"
+      title="Quick Add files"
+      subtitle={`${rows.length} selected file${rows.length === 1 ? "" : "s"}`}
+      headerIcon={<FolderOpen className="h-5 w-5 text-primary" />}
+      dimensions={QUICK_ADD_MODAL_DIMENSIONS}
+      storageKey="app.rnd-size.quick-add-files"
+      onClose={() => handleOpenChange(false)}
+      footer={
+        <div className="bg-background">
+          <div className="px-6 py-3">
+            <label className="flex items-start gap-2 rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+              <Checkbox
+                checked={shareFileIndexAcrossFolders}
+                onCheckedChange={(checked) => setShareFileIndexAcrossFolders(checked === true)}
+              />
+              <span className="space-y-0.5">
+                <span className="block text-xs font-medium leading-tight">Share one SubFileData across selected folders</span>
+                <span className="block text-[11px] leading-snug text-muted-foreground">
+                  Each selected file uses one shared fileIndex, and every selected folder references that same file.
+                </span>
+              </span>
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 border-t px-6 py-4">
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="button" disabled={!canConfirm} onClick={handleConfirm}>
+              Confirm
+            </Button>
+          </div>
+        </div>
+      }
+    >
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-4 [scrollbar-gutter:stable]">
           <div className="flex flex-wrap items-end gap-3">
             <Button type="button" variant="outline" size="sm" onClick={() => void pickFiles()}>
               <FolderOpen className="mr-2 h-4 w-4" />
@@ -273,87 +316,74 @@ export function QuickAddFilesModal({ open: dialogOpen, onOpenChange, onConfirm }
             {rows.length === 0 ? (
               <p className="text-sm text-muted-foreground">No files selected. Use Select files to choose one or more files.</p>
             ) : (
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full text-left text-xs">
-                  <thead className="sticky top-0 bg-muted/80 backdrop-blur">
-                    <tr className="border-b">
-                      <th className="w-10 px-2 py-2">
-                        <Checkbox
-                          checked={allSelected ? true : someSelected ? "indeterminate" : false}
-                          onCheckedChange={(v) => toggleSelectAll(v === true)}
-                          aria-label="Select all rows"
-                        />
-                      </th>
-                      <th className="px-3 py-2 font-medium">File name</th>
-                      <th className="px-3 py-2 font-medium">File type</th>
-                      <th className="w-16 px-3 py-2 font-medium" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row, index) => (
-                      <tr key={`${row.path}:${index}`} className="border-b border-border/60 bg-background">
-                        <td className="px-2 py-2 align-middle">
-                          <Checkbox
-                            checked={selectedPaths.has(row.path)}
-                            onCheckedChange={(v) => toggleRowSelected(row.path, v === true)}
-                            aria-label={`Select ${row.name}`}
-                          />
-                        </td>
-                        <td className="max-w-0 px-3 py-2">
-                          <span className="block truncate font-mono" title={row.path}>
-                            {row.name}
-                          </span>
-                        </td>
-                        <td className="max-w-[200px] px-3 py-2">
-                          <Select value={row.fileType} onValueChange={(v) => setRowType(index, v)}>
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {FILE_TYPE_OPTIONS.map((opt) => (
-                                <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                                  {opt.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="px-3 py-2">
-                          <Button type="button" variant="ghost" size="sm" className="h-8 text-[10px]" onClick={() => removeRow(index)}>
-                            Remove
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="overflow-hidden rounded-md border text-left text-xs">
+                <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_12rem_5rem] border-b bg-muted/80 backdrop-blur">
+                  <div className="px-2 py-2">
+                    <Checkbox
+                      checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                      onCheckedChange={(v) => toggleSelectAll(v === true)}
+                      aria-label="Select all rows"
+                    />
+                  </div>
+                  <div className="px-3 py-2 font-medium">File name</div>
+                  <div className="px-3 py-2 font-medium">File type</div>
+                  <div className="px-3 py-2 font-medium" />
+                </div>
+                <div ref={rowsViewportRef} className="max-h-[min(42vh,360px)] overflow-auto">
+                  <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
+                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                      const row = rows[virtualRow.index];
+                      if (!row) return null;
+                      const index = virtualRow.index;
+                      return (
+                        <div
+                          key={`${row.path}:${index}`}
+                          className="absolute left-0 top-0 grid w-full grid-cols-[2.5rem_minmax(0,1fr)_12rem_5rem] items-center border-b border-border/60 bg-background"
+                          style={{
+                            height: virtualRow.size,
+                            transform: `translateY(${virtualRow.start}px)`,
+                          }}
+                        >
+                          <div className="px-2 py-2">
+                            <Checkbox
+                              checked={selectedPaths.has(row.path)}
+                              onCheckedChange={(v) => toggleRowSelected(row.path, v === true)}
+                              aria-label={`Select ${row.name}`}
+                            />
+                          </div>
+                          <div className="min-w-0 px-3 py-2">
+                            <span className="block truncate font-mono" title={row.path}>
+                              {row.name}
+                            </span>
+                          </div>
+                          <div className="px-3 py-2">
+                            <Select value={row.fileType} onValueChange={(v) => setRowType(index, v)}>
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {FILE_TYPE_OPTIONS.map((opt) => (
+                                  <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                                    {opt.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="px-3 py-2">
+                            <Button type="button" variant="ghost" size="sm" className="h-8 text-[10px]" onClick={() => removeRow(index)}>
+                              Remove
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             )}
           </div>
         </div>
-        <div className="shrink-0 border-t border-border/60 bg-background px-6 py-3">
-          <label className="flex items-start gap-2 rounded-md border border-border/60 bg-muted/20 px-3 py-2">
-            <Checkbox
-              checked={shareFileIndexAcrossFolders}
-              onCheckedChange={(checked) => setShareFileIndexAcrossFolders(checked === true)}
-            />
-            <span className="space-y-0.5">
-              <span className="block text-xs font-medium leading-tight">Share one SubFileData across selected folders</span>
-              <span className="block text-[11px] leading-snug text-muted-foreground">
-                Each selected file uses one shared fileIndex, and every selected folder references that same file.
-              </span>
-            </span>
-          </label>
-        </div>
-        <DialogFooter className="shrink-0 border-t bg-background px-6 py-4">
-          <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button type="button" disabled={!canConfirm} onClick={handleConfirm}>
-            Confirm
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </AppRndModalShell>
   );
 }

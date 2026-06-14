@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,6 +21,8 @@ import {
   ssbhEditorPortalThemeClass,
   useSsbhEditorTheme,
 } from "./ssbhEditorTheme";
+
+const ATTRIBUTE_ROW_ESTIMATE_SIZE = 72;
 
 type NumatbMaterialEntryEditorProps = {
   entry: MatlEntryJson | null;
@@ -242,6 +245,7 @@ export function NumatbMaterialEntryEditor({
 }: NumatbMaterialEntryEditorProps) {
   const themeVariant = useSsbhEditorTheme();
   const selectContentClass = ssbhEditorPortalThemeClass(themeVariant);
+  const attributeListScrollRef = useRef<HTMLDivElement | null>(null);
   const [newParamId, setNewParamId] = useState("");
   const [newParamKind, setNewParamKind] = useState<NumatbAttributeDataKind>("String");
 
@@ -254,6 +258,14 @@ export function NumatbMaterialEntryEditor({
     const existing = new Set(flatAttributes.map((attribute) => attribute.param_id));
     return COMMON_NUMATB_PARAM_IDS.filter((paramId) => !existing.has(paramId));
   }, [flatAttributes]);
+
+  const getAttributeListScrollElement = useCallback(() => attributeListScrollRef.current, []);
+  const attributeRowVirtualizer = useVirtualizer({
+    count: flatAttributes.length,
+    getScrollElement: getAttributeListScrollElement,
+    estimateSize: () => ATTRIBUTE_ROW_ESTIMATE_SIZE,
+    overscan: 10,
+  });
 
   if (!entry) {
     return <div className="flex items-center justify-center py-8 text-[11px] text-muted-foreground">Select a material entry to edit.</div>;
@@ -337,41 +349,49 @@ export function NumatbMaterialEntryEditor({
         {flatAttributes.length === 0 ? (
           <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">This material has no attributes yet.</div>
         ) : (
-          <div className="divide-y">
-            {flatAttributes.map((attribute, attributeIndex) => {
-              const kind = getNumatbAttributeKind(attribute.param.data);
-              return (
-                <div
-                  key={`${attribute.param_id}:${attributeIndex}`}
-                  className="grid grid-cols-[minmax(0,180px)_minmax(0,7rem)_minmax(0,1fr)_auto] items-start gap-2 px-3 py-3"
-                >
-                  <div className="min-w-0">
-                    <div className="wrap-break-word font-mono text-[11px]" title={attribute.param_id}>
-                      {attribute.param_id}
+          <div ref={attributeListScrollRef} className="max-h-[min(52vh,520px)] overflow-auto overscroll-contain">
+            <div className="relative w-full" style={{ height: attributeRowVirtualizer.getTotalSize() }}>
+              {attributeRowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const attribute = flatAttributes[virtualRow.index];
+                if (!attribute) return null;
+                const attributeIndex = virtualRow.index;
+                const kind = getNumatbAttributeKind(attribute.param.data);
+                return (
+                  <div
+                    key={`${attribute.param_id}:${attributeIndex}`}
+                    ref={attributeRowVirtualizer.measureElement}
+                    data-index={virtualRow.index}
+                    className="absolute left-0 top-0 grid w-full grid-cols-[minmax(0,180px)_minmax(0,7rem)_minmax(0,1fr)_auto] items-start gap-2 border-b px-3 py-3"
+                    style={{ transform: `translateY(${virtualRow.start}px)` }}
+                  >
+                    <div className="min-w-0">
+                      <div className="wrap-break-word font-mono text-[11px]" title={attribute.param_id}>
+                        {attribute.param_id}
+                      </div>
+                    </div>
+                    <div className="min-w-0 wrap-break-word text-[11px] text-muted-foreground">{kind}</div>
+                    <div className="min-w-0">
+                      <AttributeValueEditor
+                        attribute={attribute}
+                        paramId={attribute.param_id}
+                        onChange={(nextData) => onUpdateAttribute(attributeIndex, nextData)}
+                      />
+                    </div>
+                    <div className="flex w-8 shrink-0 justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 px-0 text-destructive"
+                        onClick={() => onRemoveAttribute(attributeIndex)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="min-w-0 wrap-break-word text-[11px] text-muted-foreground">{kind}</div>
-                  <div className="min-w-0">
-                    <AttributeValueEditor
-                      attribute={attribute}
-                      paramId={attribute.param_id}
-                      onChange={(nextData) => onUpdateAttribute(attributeIndex, nextData)}
-                    />
-                  </div>
-                  <div className="flex w-8 shrink-0 justify-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 px-0 text-destructive"
-                      onClick={() => onRemoveAttribute(attributeIndex)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

@@ -1,18 +1,19 @@
 import { useState } from "react"
+import { FileJson } from "lucide-react"
+import { useShallow } from "zustand/react/shallow"
+import { AppRndModalShell } from "@/components/AppRndModalShell"
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog"
 import { FolderSelector } from "./components/FolderSelector"
 import { ProjectStructure } from "./components/ProjectStructure"
 import { useTemplateStore } from "@/store/templateStore"
 import { writeTextFile } from "@tauri-apps/plugin-fs"
+
+const TEMPLATE_GENERATOR_DIMENSIONS = {
+    width: 1200,
+    height: 820,
+    minWidth: 760,
+    minHeight: 540,
+}
 
 export function TemplateJsonGenerator() {
     const [isOpen, setIsOpen] = useState(false)
@@ -23,17 +24,28 @@ export function TemplateJsonGenerator() {
         setIsLoading,
         files,
         setFiles,
-        nutexbFiles,
         setNutexbFiles,
         completeProjectData,
         setCompleteProjectData,
         setSettings,
         settings,
         treeData,
-        selectedItem,
-        copiedItem,
-        resetAll
-    } = useTemplateStore()
+    } = useTemplateStore(
+        useShallow((state) => ({
+            selectedFolder: state.selectedFolder,
+            setSelectedFolder: state.setSelectedFolder,
+            isLoading: state.isLoading,
+            setIsLoading: state.setIsLoading,
+            files: state.files,
+            setFiles: state.setFiles,
+            setNutexbFiles: state.setNutexbFiles,
+            completeProjectData: state.completeProjectData,
+            setCompleteProjectData: state.setCompleteProjectData,
+            setSettings: state.setSettings,
+            settings: state.settings,
+            treeData: state.treeData,
+        })),
+    )
 
     const handleSettingChange = (key: keyof typeof settings, value: string) => {
         setSettings({ ...settings, [key]: value })
@@ -180,11 +192,6 @@ export function TemplateJsonGenerator() {
                         // Get fileIndex from the unified mapping
                         const fileIndex = fileIndexMap.get(node.data.fileUrl || node.name)!
 
-                        // Find corresponding file info
-                        const fileInfo = files.find(f =>
-                            f.path.replace(/\\/g, '/') === (node.data.fileUrl || '').replace(/\\/g, '/')
-                        )
-
                         subFileData.push({
                             index: sequentialIndex,
                             fileType: node.data.fileType || '.bin',
@@ -233,26 +240,22 @@ export function TemplateJsonGenerator() {
     }
 
     return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-                <Button variant="outline" className="w-full">
-                    Open Template JSON Generator
-                </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[1200px] max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle>Template JSON Generator</DialogTitle>
-                    <DialogDescription>
-                        Generate template JSON files by scanning a folder structure. Only files within the /data directory will be processed.
-                    </DialogDescription>
-                </DialogHeader>
-
-                <Tabs defaultValue="modal" className="w-full">
-                    <TabsList className="grid w-full grid-cols-1">
-                        <TabsTrigger value="modal">Modal</TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="modal" className="space-y-4">
+        <>
+            <Button variant="outline" className="w-full" onClick={() => setIsOpen(true)}>
+                Open Template JSON Generator
+            </Button>
+            {isOpen ? (
+                <AppRndModalShell
+                    titleId="template-json-generator-title"
+                    title="Template JSON Generator"
+                    subtitle="Generate data.json from a selected project folder"
+                    headerIcon={<FileJson className="h-5 w-5 text-primary" />}
+                    dimensions={TEMPLATE_GENERATOR_DIMENSIONS}
+                    storageKey="app.rnd-size.template-json-generator"
+                    onClose={() => setIsOpen(false)}
+                    closeDisabled={isLoading}
+                >
+                    <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
                         <FolderSelector
                             selectedFolder={selectedFolder}
                             setSelectedFolder={setSelectedFolder}
@@ -272,9 +275,9 @@ export function TemplateJsonGenerator() {
                             onGenerateJson={handleGenerateJson}
                             mode="Model"
                         />
-                    </TabsContent>
-                </Tabs>
-            </DialogContent>
-        </Dialog>
+                    </div>
+                </AppRndModalShell>
+            ) : null}
+        </>
     )
 }

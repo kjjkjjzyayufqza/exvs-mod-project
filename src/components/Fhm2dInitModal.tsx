@@ -1,6 +1,5 @@
 import { useRef, useState, useMemo, useEffect } from "react";
 import {
-    X,
     Loader2,
     FolderOpen,
     FolderOutput,
@@ -30,17 +29,17 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Card, CardContent } from "@/components/ui/card";
+import { CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Progress } from "@/components/ui/progress";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { useConfigStore } from "@/store/configStore";
 import { IOReadFile } from "@/IO/fileSystem";
 import { ExtractFHMData, ExtractType, Fhm2d_type_format } from "@/models/fhm2d";
 import { cn } from "@/lib/utils";
-import { useDraggableModal } from "@/hooks/useDraggableModal";
 
 interface Fhm2dInitModalProps {
     isOpen: boolean;
@@ -93,6 +92,12 @@ const FHM2D_ITEMS: InitListItem[] = [
 ];
 
 const HISTORY_KEY = "fhm2d_extraction_history_v1";
+const FHM2D_INIT_MODAL_DIMENSIONS = {
+    width: 720,
+    height: 680,
+    minWidth: 600,
+    minHeight: 540,
+};
 
 function buildHashFileName(hash: string): string {
     const trimmed = hash.trim();
@@ -160,7 +165,6 @@ function getFormatBadgeColor(formatLabel: string): string {
 }
 
 export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps) {
-    const { nodeRef, handleProps } = useDraggableModal();
     const searchInputRef = useRef<HTMLInputElement>(null);
 
     // Core states
@@ -499,40 +503,17 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
 
     return (
         <TooltipProvider delayDuration={100}>
-            <div className="fixed inset-x-0 bottom-0 top-[var(--layout-topbar-height)] z-[var(--z-modal)]">
-                <div
-                    ref={nodeRef}
-                    className="w-[720px] max-w-[95vw]"
-                    style={{ position: 'absolute' }}
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    <Card className="border shadow-2xl overflow-hidden">
-                        {/* Header */}
-                        <div
-                            {...handleProps}
-                            className="flex items-center justify-between px-5 py-4 border-b bg-linear-to-r from-muted/80 to-muted/40"
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 shadow-sm">
-                                    <FileCode2 className="h-5 w-5 text-primary" />
-                                </div>
-                                <div>
-                                    <h2 className="text-base font-semibold">FHM2D Init</h2>
-                                    <p className="text-xs text-muted-foreground">Extract game data files</p>
-                                </div>
-                            </div>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 rounded-full hover:bg-destructive/10 hover:text-destructive transition-colors"
-                                onClick={onClose}
-                                disabled={isExtracting}
-                            >
-                                <X className="h-4 w-4" />
-                            </Button>
-                        </div>
-
-                        <CardContent className="p-0">
+            <AppRndModalShell
+                titleId="fhm2d-init-modal-title"
+                title="FHM2D Init"
+                subtitle="Extract game data files"
+                headerIcon={<FileCode2 className="h-5 w-5 text-primary" />}
+                dimensions={FHM2D_INIT_MODAL_DIMENSIONS}
+                storageKey="app.rnd-size.fhm2d-init"
+                onClose={onClose}
+                closeDisabled={isExtracting}
+            >
+                <CardContent className="flex min-h-0 flex-1 flex-col p-0">
                             {/* Folder Configuration Section */}
                             <div className="px-5 py-4 space-y-4 bg-muted/20">
                                 <div className="grid grid-cols-2 gap-4">
@@ -736,8 +717,8 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                             </div>
 
                             {/* FHM2D List Section */}
-                            <div className="px-5 py-4">
-                                <ScrollArea className="h-[320px] rounded-lg border bg-muted/5">
+                            <div className="min-h-0 flex-1 px-5 py-4">
+                                <ScrollArea className="h-full rounded-lg border bg-muted/5">
                                     <div className="p-3 space-y-2">
                                         {filteredItems.length === 0 ? (
                                             <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
@@ -999,9 +980,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                 </Button>
                             </div>
                         </CardContent>
-                    </Card>
-                </div>
-            </div>
+            </AppRndModalShell>
         </TooltipProvider>
     );
 }

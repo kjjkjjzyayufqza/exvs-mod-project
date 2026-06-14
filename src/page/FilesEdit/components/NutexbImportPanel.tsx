@@ -1,14 +1,13 @@
 import { useState, useCallback, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Upload, X, FileImage } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { readFile } from "@tauri-apps/plugin-fs";
 import { basename, join, dirname } from "@tauri-apps/api/path";
 import { ImageFormat, useNutexbStore } from "../../../store/nutexbStore";
 import { toast } from "sonner";
@@ -25,10 +24,9 @@ export function NutexbImportPanel({
   onClose
 }: NutexbImportPanelProps) {
   const [selectedImagePaths, setSelectedImagePaths] = useState<string[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<{[key: string]: string}>({});
   const [fileNames, setFileNames] = useState<{[key: string]: {baseName: string, displayName: string}}>({});
   const [isDragOver, setIsDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageListRef = useRef<HTMLDivElement>(null);
 
   const { 
     selectedFormat, 
@@ -40,6 +38,13 @@ export function NutexbImportPanel({
     convertImageToNutexb,
     resetConversion
   } = useNutexbStore();
+  const imageListVirtualizer = useVirtualizer({
+    count: selectedImagePaths.length,
+    getScrollElement: () => imageListRef.current,
+    estimateSize: () => 72,
+    getItemKey: (index) => selectedImagePaths[index] ?? index,
+    overscan: 4,
+  });
 
   // Handle file drop
   const handleDrop = useCallback(async (e: React.DragEvent) => {
@@ -100,36 +105,20 @@ export function NutexbImportPanel({
     try {
       setSelectedImagePaths(imagePaths);
 
-      // Generate file names and load previews for all files
-      const previews: {[key: string]: string} = {};
-      const names: {[key: string]: {baseName: string, displayName: string}} = {};
-
-      for (const imagePath of imagePaths) {
-        try {
-          // Generate file names
+      const nameEntries = await Promise.all(
+        imagePaths.map(async (imagePath) => {
           const fullFileName = await basename(imagePath);
-          const baseName = fullFileName.replace(/\.[^/.]+$/, ""); // Remove extension
-
-          names[imagePath] = {
-            baseName: baseName,
-            displayName: fullFileName
-          };
-
-          // Load image preview
-          const imageBytes = await readFile(imagePath);
-          const base64 = btoa(
-            Array.from(new Uint8Array(imageBytes))
-              .map(b => String.fromCharCode(b))
-              .join('')
-          );
-          previews[imagePath] = `data:image/png;base64,${base64}`;
-        } catch (error) {
-          console.error(`Error loading preview for ${imagePath}:`, error);
-        }
-      }
-
+          return [
+            imagePath,
+            {
+              baseName: fullFileName.replace(/\.[^/.]+$/, ""),
+              displayName: fullFileName,
+            },
+          ] as const;
+        }),
+      );
+      const names = Object.fromEntries(nameEntries);
       setFileNames(names);
-      setImagePreviews(previews);
     } catch (error) {
       console.error("Error processing image files:", error);
       toast.error("Failed to process image files");
@@ -181,7 +170,6 @@ export function NutexbImportPanel({
   // Reset form
   const handleReset = () => {
     setSelectedImagePaths([]);
-    setImagePreviews({});
     setFileNames({});
     resetConversion();
   };
@@ -190,11 +178,6 @@ export function NutexbImportPanel({
     if (imagePath) {
       // Remove specific image
       setSelectedImagePaths(prev => prev.filter(path => path !== imagePath));
-      setImagePreviews(prev => {
-        const newPreviews = {...prev};
-        delete newPreviews[imagePath];
-        return newPreviews;
-      });
       setFileNames(prev => {
         const newNames = {...prev};
         delete newNames[imagePath];
@@ -203,7 +186,6 @@ export function NutexbImportPanel({
     } else {
       // Remove all images
       setSelectedImagePaths([]);
-      setImagePreviews({});
       setFileNames({});
     }
   };
@@ -268,39 +250,58 @@ export function NutexbImportPanel({
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <div className="grid grid-cols-1 gap-3 max-h-60 overflow-y-auto">
-              {selectedImagePaths.map((imagePath, index) => {
-                const fileInfo = fileNames[imagePath];
-                return (
-                  <div key={imagePath} className="flex items-center gap-3 p-2 border rounded-lg">
-                    <div className="w-12 h-12 bg-muted rounded overflow-hidden flex-shrink-0">
-                      {imagePreviews[imagePath] && (
-                        <img
-                          src={imagePreviews[imagePath]}
-                          alt={`Preview ${index + 1}`}
-                          className="w-full h-full object-cover"
-                        />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{fileInfo?.displayName || imagePath.split(/[/\\]/).pop()}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Base name: {fileInfo?.baseName} → {fileInfo?.baseName}.nutexb
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {index + 1} of {selectedImagePaths.length}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRemoveImage(imagePath)}
+            <div ref={imageListRef} className="h-60 overflow-y-auto overscroll-contain">
+              <div
+                className="relative w-full"
+                style={{ height: `${imageListVirtualizer.getTotalSize()}px` }}
+              >
+                {imageListVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const imagePath = selectedImagePaths[virtualRow.index];
+                  const fileInfo = fileNames[imagePath];
+                  return (
+                    <div
+                      key={virtualRow.key}
+                      className="absolute left-0 top-0 w-full pb-2"
+                      style={{
+                        height: `${virtualRow.size}px`,
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
                     >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                );
-              })}
+                      <div className="flex h-16 items-center gap-3 rounded-md border p-2">
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded bg-muted">
+                          <img
+                            src={convertFileSrc(imagePath)}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">
+                            {fileInfo?.displayName || imagePath.split(/[/\\]/).pop()}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {fileInfo?.baseName} → {fileInfo?.baseName}.nutexb
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {virtualRow.index + 1} of {selectedImagePaths.length}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          aria-label="Remove image"
+                          onClick={() => handleRemoveImage(imagePath)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </Card>
         )}
@@ -375,4 +376,4 @@ export function NutexbImportPanel({
       </div>
     </div>
   );
-} 
+}

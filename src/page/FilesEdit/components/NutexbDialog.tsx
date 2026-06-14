@@ -1,4 +1,3 @@
-import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
@@ -12,6 +11,14 @@ import { readFile } from "@tauri-apps/plugin-fs";
 
 interface NutexbDialogProps {
   file: FileInfo;
+}
+
+function NutexbEditorHeading({ name }: { name: string }) {
+  return (
+    <div className="mb-4">
+      <h2 className="text-lg font-semibold tracking-tight">Edit {name}</h2>
+    </div>
+  );
 }
 
 export function NutexbDialog({ file }: NutexbDialogProps) {
@@ -59,10 +66,8 @@ export function NutexbDialog({ file }: NutexbDialogProps) {
 
   if (isConverting) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <DialogHeader>
-          <DialogTitle>Edit {file.name}</DialogTitle>
-        </DialogHeader>
+      <div className="flex flex-col items-center justify-center p-8">
+        <NutexbEditorHeading name={file.name} />
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
         <span className="ml-3">Converting file...</span>
       </div>
@@ -72,9 +77,7 @@ export function NutexbDialog({ file }: NutexbDialogProps) {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center p-8 space-y-4">
-        <DialogHeader>
-          <DialogTitle>Edit {file.name}</DialogTitle>
-        </DialogHeader>
+        <NutexbEditorHeading name={file.name} />
         <span className="text-red-600">{error}</span>
         <Button
           variant="outline"
@@ -92,9 +95,7 @@ export function NutexbDialog({ file }: NutexbDialogProps) {
 
     return (
       <>
-        <DialogHeader>
-          <DialogTitle>Edit {file.name}</DialogTitle>
-        </DialogHeader>
+        <NutexbEditorHeading name={file.name} />
         <div className="space-y-6">
           {/* Metadata section */}
           <Card className="p-4 grid grid-cols-5">
@@ -259,9 +260,7 @@ export function NutexbDialog({ file }: NutexbDialogProps) {
 
   return (
     <div>
-      <DialogHeader>
-        <DialogTitle>Edit {file.name}</DialogTitle>
-      </DialogHeader>
+      <NutexbEditorHeading name={file.name} />
       <div className="flex items-center justify-center h-32 text-muted-foreground">
         No data to display
       </div>

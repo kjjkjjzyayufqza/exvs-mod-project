@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Pause, Play, RotateCcw, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +9,89 @@ import { cn } from "@/lib/utils";
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
 import type { MotionBoneLocal } from "./motionPreviewTypes";
 import type { SkelDataJson } from "./types";
+
+const MAX_RENDERED_BONE_KEYS = 400;
+
+type TimelineMark = {
+  frame: number;
+  left: number;
+  major: boolean;
+};
+
+const TimelineRuler = memo(function TimelineRuler({ marks }: { marks: TimelineMark[] }) {
+  return (
+    <div className="relative h-5 border-b border-border/60 bg-background/80">
+      {marks.map((mark) => (
+        <span
+          key={`ruler-${mark.frame}`}
+          className={cn("absolute bottom-0 block w-px bg-border/80", mark.major ? "h-5" : "h-2")}
+          style={{ left: `${mark.left}%` }}
+        />
+      ))}
+      {marks
+        .filter((mark) => mark.major)
+        .map((mark) => (
+          <span
+            key={`label-${mark.frame}`}
+            className="pointer-events-none absolute top-0 -translate-x-1/2 px-1 font-mono text-[9px] text-muted-foreground"
+            style={{ left: `${mark.left}%` }}
+          >
+            {mark.frame}
+          </span>
+        ))}
+    </div>
+  );
+});
+
+const TimelineMajorGrid = memo(function TimelineMajorGrid({ marks }: { marks: TimelineMark[] }) {
+  return (
+    <>
+      {marks
+        .filter((mark) => mark.major)
+        .map((mark) => (
+          <span
+            key={`grid-${mark.frame}`}
+            className="pointer-events-none absolute bottom-0 top-0 block w-px bg-border/35"
+            style={{ left: `${mark.left}%` }}
+          />
+        ))}
+    </>
+  );
+});
+
+const BoneKeyMarkers = memo(function BoneKeyMarkers({
+  frames,
+  safeMax,
+}: {
+  frames: number[];
+  safeMax: number;
+}) {
+  const percents = useMemo(
+    () => frames.map((frame) => clamp01(frame / safeMax) * 100),
+    [frames, safeMax],
+  );
+  return (
+    <>
+      {percents.slice(0, -1).map((left, index) => (
+        <span
+          key={`segment-${frames[index]}-${frames[index + 1]}`}
+          className="pointer-events-none absolute top-1/2 block h-px -translate-y-1/2 bg-primary/55"
+          style={{
+            left: `${left}%`,
+            width: `${Math.max(0.1, percents[index + 1] - left)}%`,
+          }}
+        />
+      ))}
+      {percents.map((left, index) => (
+        <span
+          key={`key-${frames[index]}`}
+          className="pointer-events-none absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-primary/80 bg-primary/30 shadow-[0_0_0_1px_rgba(0,0,0,0.15)]"
+          style={{ left: `${left}%` }}
+        />
+      ))}
+    </>
+  );
+});
 
 function clampFrame(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) {
@@ -157,7 +241,8 @@ export function SsbhModelViewportTimeline({
   const [scrubFrame, setScrubFrame] = useState<number | null>(null);
   const [boneFilter, setBoneFilter] = useState("");
   const skel = p.bundle?.skel ? (p.bundle.skel as SkelDataJson) : null;
-  const boneNames = skel?.bones.map((b) => b.name) ?? [];
+  const boneNames = useMemo(() => skel?.bones.map((bone) => bone.name) ?? [], [skel]);
+  const deferredBoneFilter = useDeferredValue(boneFilter);
   const [selectedBoneIndex, setSelectedBoneIndex] = useState<number>(0);
   const [, setPlaybackUiTick] = useState(0);
   const playheadRef = useRef(p.motionFrame);
@@ -166,6 +251,7 @@ export function SsbhModelViewportTimeline({
   const activeMin = rangeEnabled ? Math.min(rangeIn, rangeOut) : 0;
   const activeMax = rangeEnabled ? Math.max(rangeIn, rangeOut) : maxFrame;
   const timelineTrackRef = useRef<HTMLDivElement | null>(null);
+  const boneRowsRef = useRef<HTMLDivElement | null>(null);
   const activePointerIdRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -271,11 +357,23 @@ export function SsbhModelViewportTimeline({
   }, [maxFrame]);
 
   const filteredBoneRows = useMemo(() => {
-    const q = boneFilter.trim().toLowerCase();
-    return boneNames
-      .map((name, index) => ({ name, index }))
-      .filter((row) => q.length === 0 || row.name.toLowerCase().includes(q));
-  }, [boneNames, boneFilter]);
+    const q = deferredBoneFilter.trim().toLowerCase();
+    const rows: Array<{ name: string; index: number }> = [];
+    for (let index = 0; index < boneNames.length; index += 1) {
+      const name = boneNames[index];
+      if (!q || name.toLowerCase().includes(q)) {
+        rows.push({ name, index });
+      }
+    }
+    return rows;
+  }, [boneNames, deferredBoneFilter]);
+  const boneRowVirtualizer = useVirtualizer({
+    count: filteredBoneRows.length,
+    getScrollElement: () => boneRowsRef.current,
+    estimateSize: () => 28,
+    getItemKey: (index) => filteredBoneRows[index]?.index ?? index,
+    overscan: 6,
+  });
 
   const currentBoneLocal = useMemo(() => {
     if (!p.motionClip || boneNames.length === 0) {
@@ -328,12 +426,17 @@ export function SsbhModelViewportTimeline({
     return out;
   }, [p.motionClip, selectedBoneIndex]);
 
-  const boneKeyframePercents = useMemo(() => {
-    if (timelineScale.safeMax <= 0) {
-      return [] as number[];
+  const renderedBoneKeyframes = useMemo(() => {
+    if (boneKeyframes.length <= MAX_RENDERED_BONE_KEYS) return boneKeyframes;
+    const sampled: number[] = [];
+    const lastIndex = boneKeyframes.length - 1;
+    for (let index = 0; index < MAX_RENDERED_BONE_KEYS; index += 1) {
+      const sourceIndex = Math.round((index / (MAX_RENDERED_BONE_KEYS - 1)) * lastIndex);
+      const frame = boneKeyframes[sourceIndex];
+      if (sampled[sampled.length - 1] !== frame) sampled.push(frame);
     }
-    return boneKeyframes.map((frame) => clamp01(frame / timelineScale.safeMax) * 100);
-  }, [boneKeyframes, timelineScale.safeMax]);
+    return sampled;
+  }, [boneKeyframes]);
 
   const scrubToClientX = (clientX: number): number => {
     const el = timelineTrackRef.current;
@@ -557,40 +660,10 @@ export function SsbhModelViewportTimeline({
           }}
           title={hasMotion ? "Drag playhead to scrub frames" : "Load motion to enable timeline"}
         >
-          <div className="relative h-5 border-b border-border/60 bg-background/80">
-            {timelineScale.marks.map((mark) => (
-              <span
-                key={`ruler-${mark.frame}`}
-                className={cn(
-                  "absolute bottom-0 block w-px bg-border/80",
-                  mark.major ? "h-5" : "h-2",
-                )}
-                style={{ left: `${mark.left}%` }}
-              />
-            ))}
-            {timelineScale.marks
-              .filter((mark) => mark.major)
-              .map((mark) => (
-                <span
-                  key={`label-${mark.frame}`}
-                  className="pointer-events-none absolute top-0 -translate-x-1/2 px-1 font-mono text-[9px] text-muted-foreground"
-                  style={{ left: `${mark.left}%` }}
-                >
-                  {mark.frame}
-                </span>
-              ))}
-          </div>
+          <TimelineRuler marks={timelineScale.marks} />
           <div className="relative h-8 bg-background/40">
             <span className="pointer-events-none absolute left-0 right-0 top-1/2 block h-px -translate-y-1/2 bg-border/70" />
-            {timelineScale.marks
-              .filter((mark) => mark.major)
-              .map((mark) => (
-                <span
-                  key={`grid-${mark.frame}`}
-                  className="pointer-events-none absolute bottom-0 top-0 block w-px bg-border/35"
-                  style={{ left: `${mark.left}%` }}
-                />
-              ))}
+            <TimelineMajorGrid marks={timelineScale.marks} />
             {rangeEnabled ? (
               <span
                 className="pointer-events-none absolute bottom-0 top-0 bg-primary/10"
@@ -600,23 +673,7 @@ export function SsbhModelViewportTimeline({
                 }}
               />
             ) : null}
-            {boneKeyframePercents.slice(0, -1).map((left, index) => (
-              <span
-                key={`segment-${boneKeyframes[index]}-${boneKeyframes[index + 1]}`}
-                className="pointer-events-none absolute top-1/2 block h-px -translate-y-1/2 bg-primary/55"
-                style={{
-                  left: `${left}%`,
-                  width: `${Math.max(0.1, boneKeyframePercents[index + 1] - left)}%`,
-                }}
-              />
-            ))}
-            {boneKeyframePercents.map((left, index) => (
-              <span
-                key={`key-${boneKeyframes[index]}`}
-                className="pointer-events-none absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-primary/80 bg-primary/30 shadow-[0_0_0_1px_rgba(0,0,0,0.15)]"
-                style={{ left: `${left}%` }}
-              />
-            ))}
+            <BoneKeyMarkers frames={renderedBoneKeyframes} safeMax={timelineScale.safeMax} />
           </div>
           <div
             className="pointer-events-none absolute bottom-0 top-0 z-10 w-[2px] bg-primary shadow-[0_0_0_1px_rgba(0,0,0,0.3)]"
@@ -766,22 +823,33 @@ export function SsbhModelViewportTimeline({
               onChange={(e) => setBoneFilter(e.target.value)}
               disabled={boneNames.length === 0}
             />
-            <div className="max-h-[180px] overflow-y-auto rounded border border-border/50 p-1">
+            <div ref={boneRowsRef} className="h-[180px] overflow-y-auto rounded border border-border/50 p-1">
               {filteredBoneRows.length > 0 ? (
-                filteredBoneRows.map((row) => (
-                  <button
-                    key={`${row.index}-${row.name}`}
-                    type="button"
-                    className={cn(
-                      "block w-full rounded px-2 py-1 text-left text-[11px]",
-                      row.index === selectedBoneIndex ? "bg-primary/20 text-foreground" : "hover:bg-muted/60",
-                    )}
-                    onClick={() => setSelectedBoneIndex(row.index)}
-                  >
-                    <span className="font-mono text-[10px] text-muted-foreground">{row.index}</span>{" "}
-                    <span>{row.name}</span>
-                  </button>
-                ))
+                <div
+                  className="relative w-full"
+                  style={{ height: `${boneRowVirtualizer.getTotalSize()}px` }}
+                >
+                  {boneRowVirtualizer.getVirtualItems().map((virtualRow) => {
+                    const row = filteredBoneRows[virtualRow.index];
+                    return (
+                      <button
+                        key={virtualRow.key}
+                        type="button"
+                        className={cn(
+                          "absolute left-0 top-0 block h-7 w-full rounded px-2 py-1 text-left text-[11px]",
+                          row.index === selectedBoneIndex
+                            ? "bg-primary/20 text-foreground"
+                            : "hover:bg-muted/60",
+                        )}
+                        style={{ transform: `translateY(${virtualRow.start}px)` }}
+                        onClick={() => setSelectedBoneIndex(row.index)}
+                      >
+                        <span className="font-mono text-[10px] text-muted-foreground">{row.index}</span>{" "}
+                        <span>{row.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               ) : (
                 <div className="px-2 py-1 text-[11px] text-muted-foreground">No matching bones</div>
               )}

@@ -1,12 +1,5 @@
 import { useMemo, useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, PackageCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -16,6 +9,13 @@ import {
   validateUnitModelForRepack,
   type UnitModelRepackResult,
 } from "../utils/unitModelRepackService";
+
+const UNIT_MODEL_REPACK_DIMENSIONS = {
+  width: 560,
+  height: 440,
+  minWidth: 480,
+  minHeight: 360,
+};
 
 type UnitModelRepackDialogProps = {
   open: boolean;
@@ -86,18 +86,31 @@ export function UnitModelRepackDialog({
     }
   };
 
-  return (
-    <Dialog open={open} onOpenChange={(next) => (!isRunning ? onOpenChange(next) : undefined)}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Repack Changes</DialogTitle>
-          <DialogDescription>
-            The unit model folder is validated and repacked using its <code>_structure.json</code> into the
-            configured OB Mod folder.
-          </DialogDescription>
-        </DialogHeader>
+  if (!open) return null;
 
-        <div className="space-y-3">
+  return (
+    <AppRndModalShell
+      titleId="unit-model-repack-title"
+      title="Repack Changes"
+      subtitle="Validate and repack the unit model into the configured OB Mod folder"
+      headerIcon={<PackageCheck className="h-5 w-5 text-primary" />}
+      dimensions={UNIT_MODEL_REPACK_DIMENSIONS}
+      storageKey="app.rnd-size.unit-model-repack"
+      onClose={() => onOpenChange(false)}
+      closeDisabled={isRunning}
+      footer={
+        <div className="flex justify-end gap-2 p-3">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isRunning}>
+            Cancel
+          </Button>
+          <Button onClick={() => void handleConfirm()} disabled={!canRepack}>
+            <PackageCheck className="mr-2 h-4 w-4" />
+            {isRunning ? "Repacking..." : "Repack"}
+          </Button>
+        </div>
+      }
+    >
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
           <div className="rounded-md border p-2.5 text-sm">
             <div className="font-medium">{folderName || "Unit model"}</div>
             <div className="mt-1 break-all font-mono text-xs text-muted-foreground">
@@ -121,18 +134,7 @@ export function UnitModelRepackDialog({
               </div>
             )}
           </div>
-        </div>
-
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isRunning}>
-            Cancel
-          </Button>
-          <Button onClick={() => void handleConfirm()} disabled={!canRepack}>
-            <PackageCheck className="mr-2 h-4 w-4" />
-            {isRunning ? "Repacking..." : "Repack"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </AppRndModalShell>
   );
 }
