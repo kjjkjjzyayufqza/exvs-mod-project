@@ -262,18 +262,28 @@ pub fn validate_unit_model_for_repack(
         );
     }
 
+    // The SHLL header count is NOT a per-model count: real packages declare one 0x20 entry per
+    // shader/material slot, so the value legitimately exceeds the model-group count (e.g. 0xABE08869
+    // declares 12 for 8 models). Surface a mismatch as an informational warning instead of blocking
+    // repack. Model add/remove never rewrites shl shader bindings (see decision #6); the operator
+    // edits shl manually when needed.
     if let Some(shl_model_count) = summary.shl_declared_model_count {
-        if shl_model_count != summary.model_count {
+        if shl_model_count < summary.model_count {
             push_error(
                 &mut errors,
                 "shl",
                 None,
                 format!(
-                    "SHL model count mismatch: .shl declares {shl_model_count} models, but structure has {} model groups.",
+                    "SHL declares only {shl_model_count} shader slots but the structure has {} model groups; the shell is missing entries.",
                     summary.model_count
                 ),
                 Some(model_root_path),
             );
+        } else if shl_model_count != summary.model_count {
+            warnings.push(format!(
+                "SHL declares {shl_model_count} shader slots for {} model groups (shader slots are per-material, not per-model).",
+                summary.model_count
+            ));
         }
     }
 
@@ -620,15 +630,16 @@ fn validate_model_group(
         .iter()
         .filter(|child| is_texture_container_node(child, data_by_index))
         .collect();
-    if texture_containers.len() != 2 {
+    // Real unit packages carry one texture container per numatb variant (commonly 2-3 per model:
+    // __maya__, optional m001__nust__, __nust__). Each container is paired with the numatb that
+    // follows it (validated in validate_numatb_container_pairing), so require at least one rather
+    // than a fixed count.
+    if texture_containers.is_empty() {
         push_model_error(
             errors,
             "textures",
             &model_name,
-            format!(
-                "Expected exactly 2 texture container folders, found {}.",
-                texture_containers.len()
-            ),
+            "Expected at least one texture container folder, found none.".to_string(),
             None::<&Path>,
         );
     }
@@ -803,12 +814,14 @@ fn validate_texture_container(
             None::<&Path>,
         );
     }
-    if unk3 != 32 || unk5 != 1 {
+    // unk3 marks a texture container (always 32). unk5 is the material-variant index that mirrors
+    // the paired numatb's unk3 (observed values 1 and 2 in real packages), so accept any unk5 >= 1.
+    if unk3 != 32 || unk5 < 1 {
         push_model_error(
             errors,
             "unk",
             model_name,
-            format!("Texture container must use unk3=32 and unk5=1, got unk3={unk3}, unk5={unk5}."),
+            format!("Texture container must use unk3=32 and unk5>=1, got unk3={unk3}, unk5={unk5}."),
             None::<&Path>,
         );
     }
@@ -1522,7 +1535,7 @@ mod tests {
 
         assert_eq!(result.summary.model_count, 1);
         assert!(result.errors.iter().any(|e| {
-            e.phase == "textures" && e.message.contains("found 0")
+            e.phase == "textures" && e.message.contains("found none")
         }));
     }
 }

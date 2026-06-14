@@ -168,8 +168,15 @@ Keep `0xAF73362C` passing.
    mismatch, never auto-edit the 0x20-byte shader-binding entries).
 7. UI = extend **UnitModelEdit** with a structured **Model Manager** (reuse scene DAE +
    texture modals); not the generic free-form tree editor.
-8. Fidelity = **unchanged extract→repack byte-identical** (roundtrip gate on `0xABE08869`);
-   edited packages only need game-valid (pass validator + load).
+8. Fidelity = **logical/content roundtrip** + game-valid. ⚠️ **REVISED after probe
+   (2026-06-14): byte-identical is INFEASIBLE.** The production repack
+   (`repack_fhm2d_from_structure`) recompresses payloads with zstd params that differ from
+   the game originals — verified: `0xABE08869` source 17,681,692 B → repacked 17,767,421 B
+   (+85 KB ≈ +0.5%, first diff at header offset 16). The repacked file is still the app's
+   normal repack output and game-valid. **Gate = content equality:** extract→repack→
+   re-extract yields **identical decoded payloads + identical `SubFileStructure`**. (If true
+   byte-parity is ever required, the pack pipeline would need to store & re-emit original
+   compressed payload blocks instead of recompressing — out of scope here.)
 
 ---
 
@@ -334,10 +341,34 @@ camelCase args over IPC; `Result<T, String>`; `format!` error context; no fallba
 | `UnitModelEdit/components/UnitModelModelManagerPanel.tsx` | CREATE | model list + add(DAE)/replace/remove/reorder; reuse `SceneEdit/components/dae-import/*` dialog |
 | `UnitModelEdit/components/UnitModelTexturePanel.tsx` | UPDATE | dedup/refcount-aware list; reuse scene texture add/replace/preview |
 | `UnitModelEdit/components/UnitModelToolsPanel.tsx` | UPDATE | "Extract from .fhm2d" + "Validate & Repack" entry points |
-| `UnitModelEdit/page.tsx` | UPDATE | mount Model Manager; wire extract/validate/repack; invalidate validation cache on edit |
+| `UnitModelEdit/components/UnitModelStructureTreeView.tsx` | CREATE | **left-side tree view** of the whole `_structure.json` + folder structure (Scene-Editor parity, see §9.1) |
+| `UnitModelEdit/utils/unitModelStructureTree.ts` | CREATE | parse `_structure.json` → renderable tree model (folders/items/refs); pure + unit-tested |
+| `src/components/CopyInfoToAiButton.tsx` | CREATE | **reusable "Copy info to AI" button** (see §9.2); dropped into many panels |
+| `UnitModelEdit/page.tsx` | UPDATE | mount tree view (left) + Model Manager; wire extract/validate/repack; invalidate validation cache on edit |
 
 Invalidate cached validation/repack result after any edit (pattern already in
 `unit-model-editor/todo.md`). All edits → `regenerateStructure` → re-`validate` → enable repack.
+
+### 9.1 Left-side structure tree view (required)
+Mirror Scene Editor's structure viewer (`SceneEdit/components/ExvsStructureViewer.tsx`,
+`StructureInspectorPanel.tsx`; tree component reuse from `SceneEdit/components/StageHierarchyTree.tsx`
+or `TestEditor/components/RepackFolderStructureView.tsx` for the visuals — read-only here, NOT the
+editable repack tree). Renders the canonical tree: root → models/<model>/{nusktb, container→numatb,
+numshb, numdlb, jnttbl} / textures / weapon_icon / ragdoll / nuhlpb / nudnbb / control bins. Each
+node shows `fileIndex`, type, unk tags, and (for nutexb container items) the shared-pool target.
+Selecting a node cross-highlights the matching Model Manager / Texture panel entry. The tree is fed
+by `unitModelStructureTree.ts` parsing the live `_structure.json` (re-read after every regenerate).
+**Apply the `design-taste-frontend` skill** for the panel layout/visual design (it is a primary
+surface, not a default shadcn tree).
+
+### 9.2 "Copy info to AI" buttons (required, pervasive)
+A reusable `CopyInfoToAiButton` placed on many surfaces (structure tree node/root, each model row,
+texture row, validation panel, repack result). It serializes the relevant context to a structured,
+LLM-friendly payload (JSON + short prose header) and writes to clipboard. Extend the existing
+"Copy AI review payload" pattern (`formatUnitModelReviewPayload` in `unitModelRepackService.ts:132`
++ `unitModelAiReviewPayload.ts`) into a shared builder so every button reuses the same payload
+shape: `{ kind, scope, activeModelRoot, selection, structureJson|subset, validation, textureInventory,
+parsedAssets, notes }`. Buttons accept a `buildPayload()` thunk so each host supplies only its slice.
 
 ---
 

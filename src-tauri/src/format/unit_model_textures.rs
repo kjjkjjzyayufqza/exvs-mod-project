@@ -78,7 +78,12 @@ pub fn add_unit_model_nutexb(
     let filename = sanitize_nutexb_filename(target_filename)?;
     ensure_texture_filename_available(&doc.sub_file_data, &filename)?;
 
-    let target = model_root_path.join(&filename);
+    // Place added textures in the shared, deduped `textures/` pool that the folder layout uses.
+    // fileUrl is derived from the physical path, so the repack tree stays consistent.
+    let textures_dir = model_root_path.join("textures");
+    fs::create_dir_all(&textures_dir)
+        .map_err(|e| format!("Failed to create textures dir {}: {e}", textures_dir.display()))?;
+    let target = textures_dir.join(&filename);
     if target.exists() {
         return Err(format!("Target texture already exists on disk: {}", target.display()));
     }

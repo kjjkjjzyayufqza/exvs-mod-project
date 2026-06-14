@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { AlertTriangle, CheckCircle2, ClipboardCopy, FolderOpen, Info, Loader2, PackageCheck, RefreshCw } from "lucide-react";
+import { AlertTriangle, Boxes, CheckCircle2, ClipboardCopy, FolderOpen, Info, Loader2, PackageCheck, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -11,11 +11,13 @@ import { useConfigStore } from "@/store/configStore";
 import { useSsbhModelPreview } from "@/components/ssbh-model-preview/SsbhModelPreviewPanel";
 import {
   getBaseName,
+  getParentDir,
   inferUnitModelStructurePath,
   validateUnitModelForRepack,
   type UnitModelRepackResult,
   type UnitModelValidationResult,
 } from "../utils/unitModelRepackService";
+import { extractUnitModelToFolder } from "../utils/unitModelExtractService";
 import { buildUnitModelAiReviewPayload } from "../utils/unitModelAiReviewPayload";
 import { listUnitModelTextures, type UnitModelTextureInventory } from "../utils/unitModelTextureService";
 import { UnitModelRepackDialog } from "./UnitModelRepackDialog";
@@ -57,7 +59,7 @@ export function UnitModelToolsPanel({ unitRoot, onUnitRootChange }: Props) {
   const folderName = useMemo(() => (activeRoot ? getBaseName(activeRoot) : ""), [activeRoot]);
   const [validation, setValidation] = useState<UnitModelValidationResult | null>(null);
   const [lastRepack, setLastRepack] = useState<UnitModelRepackResult | null>(null);
-  const [busy, setBusy] = useState<"pick" | "validate" | "copy" | null>(null);
+  const [busy, setBusy] = useState<"pick" | "extract" | "validate" | "copy" | null>(null);
   const [repackDialogOpen, setRepackDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -87,6 +89,32 @@ export function UnitModelToolsPanel({ unitRoot, onUnitRootChange }: Props) {
       setLastRepack(null);
     } catch (error) {
       toast.error("Failed to open unit model folder", { description: String(error) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const extractFromFhm2d = async () => {
+    setBusy("extract");
+    try {
+      const selected = await open({
+        multiple: false,
+        defaultPath: preview.workspaceRoot ?? undefined,
+        filters: [{ name: "FHM2D", extensions: ["fhm2d"] }],
+      });
+      if (typeof selected !== "string" || !selected.trim()) return;
+      const stem = getBaseName(selected).replace(/\.fhm2d$/i, "");
+      const outRoot = `${getParentDir(selected)}\\${stem}`;
+      const result = await extractUnitModelToFolder(selected, outRoot);
+      onUnitRootChange(result.modelRoot);
+      await preview.loadModelAt(result.modelRoot);
+      setValidation(null);
+      setLastRepack(null);
+      toast.success("Extracted unit model to folders", {
+        description: `${result.modelCount} models, ${result.totalFiles} files`,
+      });
+    } catch (error) {
+      toast.error("Failed to extract unit model", { description: String(error) });
     } finally {
       setBusy(null);
     }
@@ -208,6 +236,22 @@ export function UnitModelToolsPanel({ unitRoot, onUnitRootChange }: Props) {
       <ScrollArea className="min-h-0 flex-1">
         <div className="space-y-3 p-3">
           <section className="space-y-2 border-b pb-3">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="w-full"
+              onClick={() => void extractFromFhm2d()}
+              disabled={busy !== null}
+              title="Extract a unit-model .fhm2d into the renamed/regrouped/deduped folder layout"
+            >
+              {busy === "extract" ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Boxes className="mr-2 h-4 w-4" />
+              )}
+              Extract .fhm2d to folders
+            </Button>
             <div className="grid grid-cols-2 gap-2">
               <Button type="button" size="sm" onClick={() => void pickUnitFolder()} disabled={busy !== null}>
                 <FolderOpen className="mr-2 h-4 w-4" />

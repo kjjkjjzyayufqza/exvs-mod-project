@@ -20,6 +20,8 @@ pub mod projectile_depiction_table;
 pub mod serieslist;
 pub mod speedparam;
 pub mod stagelist;
+pub mod unit_model_extract;
+pub mod unit_model_models;
 pub mod unit_model_textures;
 pub mod unit_model_validate;
 pub mod vernier_table;

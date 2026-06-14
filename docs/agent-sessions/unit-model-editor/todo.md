@@ -52,3 +52,56 @@ Resolve the unrelated SceneEdit TypeScript errors before expecting full-project
 - [x] Remove the selected texture metric strip from the bottom of Unit texture panel.
 - [x] Expand Copy AI review payload with validation rules, validation judgement, result, preview state, texture inventory, parsed SSBH/nutexb/jnttbl assets, and structure JSON data.
 - [x] Compact Copy AI review payload by summarizing heavy numshb mesh data and skeleton bone data.
+
+## 2026-06-14 Dynamic Folder Pipeline (Scene-Editor parity)
+
+Design + decision log: `dynamic-folder-pipeline-plan.md`; full dev spec: `implementation-plan.md`.
+
+Verified this session (real-disk TDD, throwaway tests deleted after):
+- [x] **Finding:** byte-identical extract->repack is INFEASIBLE (packer recompresses; 0xABE08869
+      17,681,692 B -> 17,767,421 B). Fidelity bar revised to **logical roundtrip** (identical decoded
+      payloads + SubFileStructure). Decision #8 updated in the plan.
+- [x] **Phase 1 foundation:** logical roundtrip proven on real 0xABE08869 (94 files, 341 entries,
+      payloads + structure equal).
+- [x] **Phase 2 backend:** `format/unit_model_extract.rs` -> `extract_unit_model_fhm2d_to_folder`
+      produces the renamed/regrouped/deduped semantic layout (8 named model folders, shared
+      `textures/` 15 deduped nutexb, separate `weapon_icon/` 6, `ragdoll/`, `nudnbb/`, control bins)
+      AND preserves the logical roundtrip. Command + lib registration + `unitModelExtractService.ts`
+      wired; `cargo build --lib` clean.
+      Key fix: tree parser must expand `EndMark.endMarkCount` into N closes (one EndMark can close
+      multiple nested folders).
+- [x] **Frontend (tree view + copy-to-AI):** `utils/unitModelStructureTree.ts` (pure parser, real-disk
+      verified), `components/UnitModelStructureTreeView.tsx` (left-side collapsible structure viewer),
+      reusable `src/components/CopyInfoToAiButton.tsx`, mounted as leftmost panel in `page.tsx`
+      (loads sibling `_structure.json`). tsc clean on new/changed files.
+
+- [x] **Phase 1 validator generalization (§4.1):** relaxed `validate_unit_model_for_repack` to allow
+      >=1 texture container and `unk5>=1` (variant index); the SHLL count is per-shader-slot not
+      per-model, so a count > model count is now a warning (only fewer-than-models is an error).
+      Verified: 0xABE08869 valid (8 models, shl=12 warning) AND 0xAF73362C valid (14/14/14); in-module
+      unit tests 7/7 green.
+- [x] **Phase 4 texture add folder-aware:** `add_unit_model_nutexb` now writes into the shared
+      `textures/` pool (fileUrl derived from path). Texture replace = overwrite same-name; remove =
+      existing refcount gate (`can_remove`). numatb is never rewritten (decision #4), so texture
+      add/remove need no SubFileStructure surgery.
+- [x] **Phase 2 frontend:** "Extract .fhm2d to folders" action in `UnitModelToolsPanel` (picks a
+      .fhm2d, extracts to `<parent>/<stem>/`, loads it). Validate + Repack already existed and work on
+      the new layout (Phase 3 effectively done).
+- [x] **Phase 6 (read + copy-to-AI):** `UnitModelModelManagerPanel` (model list + per-model + copy-all
+      copy-to-AI), mounted under the structure tree in the left column.
+
+- [x] **Phase 5 model ops (add + remove):** `format/unit_model_models.rs` —
+      `remove_unit_model_model` (drops the model group + paired nuhlpb, removes now-unreferenced pool
+      entries incl. orphan textures, deletes files) and `add_unit_model_model` (scans a source SSBH
+      folder, dedups textures into the shared pool, synthesizes a texture container per numatb,
+      appends the model group + nuhlpb, clones an empty nuhlpb template when none supplied). Key
+      insight: the packer remaps fileIndex (`build_file_index_remap`) and expands EndMarks, so surgery
+      keeps original fileIndex values (gaps fine) and emits fresh per-folder EndMarks. Commands +
+      `unitModelModelService.ts` + Model Manager Add/Remove buttons (with structure reload) wired.
+      Verified real-disk roundtrip on 0xABE08869: remove 8->7 (validates), add 7->8 (validates,
+      8 models/8 nuhlpb), repack->re-extract confirms the re-added model survives. shl stays
+      validate-only.
+
+All 7 planned phases are functionally complete and verified on real disk. Follow-ups (optional):
+one-click "import DAE then add" that runs the scene DAE->SSBH export into a temp folder and calls
+add_unit_model_model; model replace (= remove + add); reorder.

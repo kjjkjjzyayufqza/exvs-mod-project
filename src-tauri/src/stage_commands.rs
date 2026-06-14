@@ -10,6 +10,8 @@ use crate::fhm2d_memory_preview::Fhm2dMemorySessionState;
 use crate::format::fhm2d::{extract_fhm2d_to_memory_impl, InMemoryFhm2dExtraction};
 use crate::format::fhm2d_stage;
 use crate::format::fhm2d_stage_validate;
+use crate::format::unit_model_extract;
+use crate::format::unit_model_models;
 use crate::format::unit_model_textures;
 use crate::format::unit_model_validate;
 
@@ -968,6 +970,55 @@ pub async fn remove_unit_model_nutexb(
             &model_root,
             structure_json_path.as_deref(),
             file_index,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn extract_unit_model_fhm2d_to_folder(
+    source_path: String,
+    out_root: String,
+) -> Result<unit_model_extract::UnitModelExtractResult, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_extract::extract_unit_model_fhm2d_to_folder_impl(&source_path, &out_root)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn remove_unit_model_model(
+    model_root: String,
+    structure_json_path: Option<String>,
+    model_name: String,
+) -> Result<unit_model_models::UnitModelMutationResult, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_models::remove_unit_model_model(
+            &model_root,
+            structure_json_path.as_deref(),
+            &model_name,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn add_unit_model_model(
+    model_root: String,
+    structure_json_path: Option<String>,
+    source_dir: String,
+) -> Result<unit_model_models::UnitModelMutationResult, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_models::add_unit_model_model(
+            &model_root,
+            structure_json_path.as_deref(),
+            &source_dir,
         )
     })
     .await
