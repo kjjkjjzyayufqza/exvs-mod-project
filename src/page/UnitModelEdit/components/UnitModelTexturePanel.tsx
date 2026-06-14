@@ -67,6 +67,8 @@ const UNIT_TEXTURES_CHANGED_EVENT = "unit-model-textures-changed";
 
 type Props = {
   unitRoot: string | null;
+  /** When true, fills the parent panel (left Textures tab) instead of a fixed min height card. */
+  embedded?: boolean;
 };
 
 function inferLoadedRoot(preview: ReturnType<typeof useSsbhModelPreview>): string | null {
@@ -92,7 +94,7 @@ function emitUnitTexturesChanged(): void {
   window.dispatchEvent(new CustomEvent(UNIT_TEXTURES_CHANGED_EVENT));
 }
 
-export function UnitModelTexturePanel({ unitRoot }: Props) {
+export function UnitModelTexturePanel({ unitRoot, embedded = false }: Props) {
   const preview = useSsbhModelPreview();
   const loadedRoot = inferLoadedRoot(preview);
   const activeRoot = unitRoot ?? loadedRoot;
@@ -507,7 +509,12 @@ export function UnitModelTexturePanel({ unitRoot }: Props) {
   const noRoot = !activeRoot || !structurePath;
 
   return (
-    <div className="flex min-h-[520px] flex-col rounded-md border bg-background">
+    <div
+      className={cn(
+        "flex flex-col bg-background",
+        embedded ? "h-full min-h-0" : "min-h-[520px] rounded-md border",
+      )}
+    >
       <div className="flex items-center gap-2 border-b bg-muted/20 px-2 py-2">
         <div className="relative min-w-0 flex-1">
           <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />

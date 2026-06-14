@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SsbhDaeExchangePanel } from "@/components/ssbh-model-preview/SsbhDaeExchangePanel";
 import { SsbhModelPreviewInspector } from "@/components/ssbh-model-preview/SsbhModelPreviewPanel";
 import { SsbhModelPreviewMotionPanel } from "@/components/ssbh-model-preview/SsbhModelPreviewMotionPanel";
 import { UnitModelTexturePanel } from "./UnitModelTexturePanel";
@@ -11,7 +10,6 @@ const TAB_ITEMS = [
   { name: "Model Preview", value: "modelPreview" },
   { name: "Textures", value: "textures" },
   { name: "Motion", value: "motion" },
-  { name: "COLLADA (.dae)", value: "daeExchange" },
 ] as const;
 
 type TabValue = (typeof TAB_ITEMS)[number]["value"];
@@ -71,8 +69,6 @@ export function UnitModelInspectorPanel({ unitRoot }: Props) {
         return <UnitModelTexturePanel unitRoot={unitRoot} />;
       case "motion":
         return <SsbhModelPreviewMotionPanel />;
-      case "daeExchange":
-        return <SsbhDaeExchangePanel />;
     }
   };
 

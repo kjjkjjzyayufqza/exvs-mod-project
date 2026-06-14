@@ -47,7 +47,17 @@ function meshFileStem(meshPath: string): string {
   return i > 0 ? seg.slice(0, i) : seg;
 }
 
-export function SsbhModelPreviewInspector() {
+export type SsbhModelPreviewInspectorLayout = "padded" | "flush";
+
+type SsbhModelPreviewInspectorProps = {
+  /** padded: bleed into a parent with horizontal padding (-mx-4). flush: stay within narrow side panels. */
+  layout?: SsbhModelPreviewInspectorLayout;
+};
+
+export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPreviewInspectorProps) {
+  const isFlush = layout === "flush";
+  const pairGridClass = isFlush ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2";
+  const tripleGridClass = isFlush ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-3";
   const p = useSsbhModelPreview();
   const skeletonToggleEnabled = hasAnyPreviewSkeleton(p.previewInstances);
   const [boneListMode, setBoneListMode] = useState<"active" | "all">("active");
@@ -209,7 +219,12 @@ export function SsbhModelPreviewInspector() {
   }, [activeBundle, scopedDraws, activeMatlLookup]);
 
   return (
-    <div className="-mx-4 flex min-w-0 flex-col border-t bg-background/50">
+    <div
+      className={cn(
+        "flex min-w-0 flex-col border-t bg-background/50",
+        isFlush ? "w-full max-w-full overflow-hidden" : "-mx-4",
+      )}
+    >
       {p.loading || p.textureDecoding ? (
         <div
           className="border-b border-border/60 bg-muted/25 px-3 py-1.5 text-[10px] text-muted-foreground"
@@ -232,7 +247,7 @@ export function SsbhModelPreviewInspector() {
       {p.previewInstances.length > 0 ? (
         <MayaSection title="Collection" icon={<Layout className="h-3.5 w-3.5" />}>
           <div className="flex flex-col gap-3">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className={cn("grid gap-2", pairGridClass)}>
               <div className="flex flex-col gap-1.5">
                 <Label className="text-[10px] text-muted-foreground">View range</Label>
                 <ToggleGroup
@@ -330,8 +345,8 @@ export function SsbhModelPreviewInspector() {
         </MayaSection>
       ) : null}
       <MayaSection title="Display Settings" icon={<Settings2 className="h-3.5 w-3.5" />}>
-        <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5 sm:col-span-2">
+        <div className={cn("grid gap-x-4 gap-y-2", pairGridClass)}>
+          <div className={cn("flex flex-col gap-1.5", !isFlush && "sm:col-span-2")}>
             <Label className="text-[11px] text-muted-foreground" title="Bloom + warm key lights (water-anime-shader style)">
               Preview render style
             </Label>
@@ -408,7 +423,7 @@ export function SsbhModelPreviewInspector() {
           ) : (
             <p className="text-[10px] text-muted-foreground">Load a model in the viewport to enable export.</p>
           )}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className={cn("grid grid-cols-1 gap-3", !isFlush && "sm:grid-cols-2")}>
             <div className="flex flex-col gap-1.5">
               <Label className="text-[11px] text-muted-foreground">Scale</Label>
               <Input
@@ -595,7 +610,12 @@ export function SsbhModelPreviewInspector() {
                 Load none
               </Button>
             </div>
-            <div className="grid max-h-[200px] grid-cols-1 gap-x-3 gap-y-1.5 overflow-y-auto overflow-x-hidden pr-0.5 sm:grid-cols-2">
+            <div
+              className={cn(
+                "grid max-h-[200px] grid-cols-1 gap-x-3 gap-y-1.5 overflow-y-auto overflow-x-hidden pr-0.5",
+                !isFlush && "sm:grid-cols-2",
+              )}
+            >
               {TEXTURE_PREVIEW_SLOT_META.map(({ key, label }) => (
                 <label
                   key={key}
@@ -723,7 +743,7 @@ export function SsbhModelPreviewInspector() {
               className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
             />
           </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className={cn("grid gap-2", tripleGridClass)}>
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
                 <Label className="text-[11px] text-muted-foreground">Light X</Label>
