@@ -116,6 +116,12 @@ const TestEditorPage = () => {
   const [isRepackDialogOpen, setIsRepackDialogOpen] = useState(false);
   const [obModPath, setObModPath] = useState("");
   const isPageActive = useTestEditorPageActive();
+  // NOTE: This inline SSBH editor session management is LEGACY. The canonical,
+  // reusable implementation now lives in
+  // `@/components/ssbh-model-preview/useSsbhFileEditorSessions` + `SsbhFileEditorHosts`
+  // (used by the Unit Model Editor). For the unit-model flow this inline copy is
+  // deprecated; new consumers MUST use the shared hook. TestEditor is intentionally
+  // left on this copy to avoid a risky refactor -- migrate when convenient.
   const [numdlbSessions, setNumdlbSessions] = useState<NumdlbEditorWindowSession[]>([]);
   const numdlbZIndexRef = useRef(1000);
   const numdlbSessionsRef = useRef(numdlbSessions);
