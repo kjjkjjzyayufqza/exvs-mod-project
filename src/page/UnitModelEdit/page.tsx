@@ -32,12 +32,14 @@ import { useUnitModelWorkspace } from "./hooks/useUnitModelWorkspace";
 import {
   UNIT_MODEL_EDIT_DEFAULT_LAYOUT,
   UNIT_MODEL_EDIT_PANEL_IDS,
+  UNIT_MODEL_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY,
   UNIT_MODEL_HIERARCHY_TAB_BADGE,
   UNIT_MODEL_HIERARCHY_TAB_TRIGGER,
   UNIT_MODEL_HIERARCHY_TABS_LIST,
 } from "./utils/unitModelEditorSettings";
 import { listUnitModelTextures } from "./utils/unitModelTextureService";
 import { getParentDir, inferUnitModelStructurePath } from "./utils/unitModelRepackService";
+import { rememberStoredDialogSelection } from "@/utils/dialogDefaultPathStore";
 import { normalizeComparePath, resolveUnitModelNodeAbsPath } from "./utils/unitModelNodePaths";
 import { buildUnitModelStructureTree, type UnitModelTreeNode } from "./utils/unitModelStructureTree";
 import { useSsbhFileEditorSessions } from "@/components/ssbh-model-preview/useSsbhFileEditorSessions";
@@ -155,12 +157,18 @@ function UnitModelEditWorkspace({
       if (lower.endsWith(".numatb") || lower.endsWith(".numdlb")) {
         // Material / model-mapping edits change what the preview renders.
         schedulePreviewReload();
+        workspace.markValidationStale();
       }
     },
-    [toRelKey, schedulePreviewReload],
+    [toRelKey, schedulePreviewReload, workspace.markValidationStale],
   );
 
   const editors = useSsbhFileEditorSessions({ onSaved: handleEditorSaved });
+
+  const handleStructureMutated = useCallback(() => {
+    onStructureMutated();
+    workspace.markValidationStale();
+  }, [onStructureMutated, workspace.markValidationStale]);
 
   // Editor `editingPaths` are absolute; the tree compares relative fileUrls.
   const editingRelPaths = useMemo(() => {
@@ -295,6 +303,11 @@ function UnitModelEditWorkspace({
           exportTextures: config.exportTextures,
         },
       );
+      await rememberStoredDialogSelection(
+        UNIT_MODEL_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY,
+        config.outputDirectory,
+        "directory",
+      );
     },
     [daeExportDialog.targets],
   );
@@ -306,6 +319,7 @@ function UnitModelEditWorkspace({
         statusLabel={workspace.statusLabel}
         hasErrors={workspace.hasErrors}
         validationValid={Boolean(workspace.validation?.valid)}
+        isValidating={workspace.isValidating}
         busy={workspace.busy}
         canUseLoadedRoot={Boolean(workspace.loadedRoot)}
         canOperateOnRoot={Boolean(workspace.activeRoot)}
@@ -366,7 +380,7 @@ function UnitModelEditWorkspace({
                   structureJson={structureJson}
                   structureJsonPath={workspace.structurePath}
                   modelRoot={workspace.activeRoot}
-                  onMutated={onStructureMutated}
+                  onMutated={handleStructureMutated}
                   onOpenEditor={handleOpenEditor}
                   onRevealNode={handleRevealNode}
                   onCopyNodePath={handleCopyNodePath}
@@ -418,7 +432,7 @@ function UnitModelEditWorkspace({
             lastRepack={workspace.lastRepack}
             onValidate={() => void workspace.runValidation()}
             onOpenOutput={() => void workspace.openOutputInExplorer()}
-            isValidating={workspace.busy === "validate"}
+            isValidating={workspace.isValidating}
           />
         </ResizablePanel>
       </ResizablePanelGroup>
@@ -432,6 +446,7 @@ function UnitModelEditWorkspace({
       <DaeExportDialog
         open={daeExportDialog.open}
         targets={daeExportDialog.targets}
+        outputDialogPathKey={UNIT_MODEL_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY}
         onExport={(config) => void handleDaeExport(config)}
         onCancel={() => setDaeExportDialog((prev) => ({ ...prev, open: false }))}
       />
@@ -443,6 +458,9 @@ function UnitModelEditWorkspace({
         structurePath={workspace.structurePath}
         modFolder={workspace.obModPath}
         folderName={workspace.folderName}
+        validation={workspace.validation}
+        isValidating={workspace.isValidating}
+        onValidationResult={workspace.acceptValidationResult}
         onRepacked={workspace.setLastRepack}
       />
 

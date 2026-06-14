@@ -222,7 +222,7 @@ pub fn validate_unit_model_for_repack(
         &data_by_index,
         json_dir,
         &mut summary,
-        &mut errors,
+        &mut warnings,
     );
 
     let mut model_ord = 0usize;
@@ -269,16 +269,10 @@ pub fn validate_unit_model_for_repack(
     // edits shl manually when needed.
     if let Some(shl_model_count) = summary.shl_declared_model_count {
         if shl_model_count < summary.model_count {
-            push_error(
-                &mut errors,
-                "shl",
-                None,
-                format!(
-                    "SHL declares only {shl_model_count} shader slots but the structure has {} model groups; the shell is missing entries.",
-                    summary.model_count
-                ),
-                Some(model_root_path),
-            );
+            warnings.push(format!(
+                "Legacy SHL declares only {shl_model_count} shader slots but the structure has {} model groups; the shell may be stale.",
+                summary.model_count
+            ));
         } else if shl_model_count != summary.model_count {
             warnings.push(format!(
                 "SHL declares {shl_model_count} shader slots for {} model groups (shader slots are per-material, not per-model).",
@@ -1045,7 +1039,7 @@ fn validate_shl_files(
     data_by_index: &HashMap<i32, &InputSubFileData>,
     json_dir: &Path,
     summary: &mut UnitModelValidationSummary,
-    errors: &mut Vec<UnitModelValidationError>,
+    warnings: &mut Vec<String>,
 ) {
     let shl_items: Vec<&StructureNode> = all_items
         .iter()
@@ -1062,16 +1056,10 @@ fn validate_shl_files(
         .collect();
 
     if shl_items.len() != 1 {
-        push_error(
-            errors,
-            "shl",
-            None,
-            format!(
-                "Expected exactly 1 shell_*.shl file, found {}.",
-                shl_items.len()
-            ),
-            None::<&Path>,
-        );
+        warnings.push(format!(
+            "Legacy SHL check: expected exactly 1 shell_*.shl file, found {}.",
+            shl_items.len()
+        ));
     }
 
     for item in shl_items {
@@ -1081,11 +1069,18 @@ fn validate_shl_files(
         let Some(file) = data_by_index.get(&file_index) else {
             continue;
         };
-        validate_referenced_file_exists("unit", file, json_dir, errors);
         let path = resolve_file_path(json_dir, &file.file_url);
+        if !path.is_file() {
+            warnings.push(format!(
+                "Legacy SHL referenced but missing on disk: {} (resolved: {})",
+                file.file_url,
+                path.display()
+            ));
+            continue;
+        }
         match read_shl_model_count(&path) {
             Ok(count) => summary.shl_declared_model_count = Some(count),
-            Err(e) => push_error(errors, "shl", None, e, Some(&path)),
+            Err(e) => warnings.push(format!("Legacy SHL read warning: {e}")),
         }
     }
 }
@@ -1357,6 +1352,51 @@ mod tests {
 
         assert_eq!(actual_ext(&jnttbl), ".jnttbl");
         assert_eq!(actual_ext(&shl), ".shl");
+    }
+
+    #[test]
+    fn missing_legacy_shl_reference_is_warning_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let shl = InputSubFileData {
+            index: 0,
+            file_type: ".bin".into(),
+            file_index: 7,
+            file_url: r".\0xA258a522\shell_015gndmuc_004deltpl_001.shl".into(),
+            file_base_name: None,
+        };
+        let mut data_by_index = HashMap::new();
+        data_by_index.insert(shl.file_index, &shl);
+        let shl_item = StructureNode::Item {
+            entry_index: 0,
+            file_index: shl.file_index,
+            unk2: "00000000".into(),
+            unk3: 0,
+            display_name: None,
+        };
+        let all_items = vec![&shl_item];
+        let mut summary = UnitModelValidationSummary {
+            model_count: 0,
+            numatb_count: 0,
+            nuhlpb_count: 0,
+            shl_count: 0,
+            shl_declared_model_count: None,
+            texture_reference_count: 0,
+        };
+        let mut warnings = Vec::new();
+
+        validate_shl_files(
+            &all_items,
+            &data_by_index,
+            tmp.path(),
+            &mut summary,
+            &mut warnings,
+        );
+
+        assert!(summary.shl_declared_model_count.is_none());
+        assert!(warnings.iter().any(|warning| {
+            warning.contains("Legacy SHL referenced but missing on disk")
+                && warning.contains("shell_015gndmuc_004deltpl_001.shl")
+        }));
     }
 
     #[test]

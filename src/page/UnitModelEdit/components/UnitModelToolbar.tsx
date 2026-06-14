@@ -33,6 +33,7 @@ type UnitModelToolbarProps = {
   statusLabel: string;
   hasErrors: boolean;
   validationValid: boolean;
+  isValidating: boolean;
   busy: UnitModelWorkspaceBusy;
   canUseLoadedRoot: boolean;
   canOperateOnRoot: boolean;
@@ -61,6 +62,7 @@ export function UnitModelToolbar({
   statusLabel,
   hasErrors,
   validationValid,
+  isValidating,
   busy,
   canUseLoadedRoot,
   canOperateOnRoot,
@@ -123,10 +125,10 @@ export function UnitModelToolbar({
             size="icon"
             className="h-6 w-6"
             onClick={onValidate}
-            disabled={!canOperateOnRoot || isBusy}
+            disabled={!canOperateOnRoot || isBusy || isValidating}
             aria-label="Validate unit model"
           >
-            {busy === "validate" ? (
+            {busy === "validate" || isValidating ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <RefreshCw className="h-3.5 w-3.5" />
@@ -265,6 +267,7 @@ export function UnitModelToolbar({
           variant="outline"
           className={cn(
             "h-5 shrink-0 px-1.5 text-[9px] font-normal",
+            isValidating && "border-primary/40 text-primary",
             validationValid && "border-emerald-500/40 text-emerald-600",
             hasErrors && "border-destructive/40 text-destructive",
           )}

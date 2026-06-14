@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { useConfigStore } from "@/store/configStore";
 import {
+  UNIT_MODEL_EXTRACT_OUTPUT_DIALOG_PATH_KEY,
   UNIT_MODEL_EXTRACT_SOURCE_DIALOG_PATH_KEY,
   UNIT_MODEL_OUTPUT_PATH_SETTING_KEY,
 } from "../utils/unitModelEditorSettings";
@@ -218,7 +219,7 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
                   kind: "folder",
                   title: "Select unit-model extract output folder",
                   defaultPath: resolvedDefaultOutput || extractOutputPath || undefined,
-                  defaultPathKey: UNIT_MODEL_OUTPUT_PATH_SETTING_KEY,
+                  defaultPathKey: UNIT_MODEL_EXTRACT_OUTPUT_DIALOG_PATH_KEY,
                 }}
               />
               <p className="text-xs text-muted-foreground">

@@ -105,7 +105,7 @@ export async function repackValidatedUnitModelFolder(
   structureJsonPath = inferUnitModelStructurePath(modelRoot),
 ): Promise<UnitModelRepackResult> {
   const outputPath = inferUnitModelOutputPath(modelRoot, structureJsonPath);
-  return await invoke<UnitModelRepackResult>("repack_fhm2d", {
+  return await invoke<UnitModelRepackResult>("repack_unit_model_fhm2d", {
     structureJsonPath: toWindowsPath(structureJsonPath),
     outputPath,
     atomicWrite: true,
@@ -122,7 +122,7 @@ export async function repackValidatedUnitModelFolderToModFolder(
   structureJsonPath: string,
 ): Promise<UnitModelRepackResult> {
   const outputPath = inferUnitModelModOutputPath(modFolder, structureJsonPath);
-  return await invoke<UnitModelRepackResult>("repack_fhm2d", {
+  return await invoke<UnitModelRepackResult>("repack_unit_model_fhm2d", {
     structureJsonPath: toWindowsPath(structureJsonPath),
     outputPath,
     atomicWrite: true,

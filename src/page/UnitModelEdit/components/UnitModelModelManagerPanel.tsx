@@ -24,6 +24,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import {
+  getStoredDialogDefaultPath,
+  rememberStoredDialogSelection,
+} from "@/utils/dialogDefaultPathStore";
 import { DaeImportConfigModal } from "@/page/SceneEdit/components/dae-import/DaeImportConfigModal";
 import {
   createDefaultDaeImportConfig,
@@ -56,6 +60,10 @@ import {
   removeUnitModelModel,
   validateUnitModelSourceFolder,
 } from "../utils/unitModelModelService";
+import {
+  UNIT_MODEL_ADD_SSBH_FOLDER_DIALOG_PATH_KEY,
+  UNIT_MODEL_IMPORT_STATIC_MESH_DIALOG_PATH_KEY,
+} from "../utils/unitModelEditorSettings";
 
 interface UnitModelModelManagerPanelProps {
   structureJson: unknown | null;
@@ -248,8 +256,17 @@ export function UnitModelModelManagerPanel({
         directory: true,
         multiple: false,
         title: "Select prepared Unit model SSBH folder",
+        defaultPath:
+          (await getStoredDialogDefaultPath(UNIT_MODEL_ADD_SSBH_FOLDER_DIALOG_PATH_KEY)) ??
+          modelRoot ??
+          undefined,
       });
       if (typeof source !== "string" || !source.trim()) return;
+      await rememberStoredDialogSelection(
+        UNIT_MODEL_ADD_SSBH_FOLDER_DIALOG_PATH_KEY,
+        source,
+        "directory",
+      );
       const validation = await validateUnitModelSourceFolder(source);
       const result = await addUnitModelModel(modelRoot, source, structureJsonPath);
       toast.success(`Model '${validation.modelName}' added`, {
@@ -277,9 +294,18 @@ export function UnitModelModelManagerPanel({
         multiple: false,
         title: "Select FBX or DAE for Unit model import",
         filters: [{ name: "Static Mesh", extensions: ["fbx", "dae"] }],
+        defaultPath:
+          (await getStoredDialogDefaultPath(UNIT_MODEL_IMPORT_STATIC_MESH_DIALOG_PATH_KEY)) ??
+          modelRoot ??
+          undefined,
       });
       const filePath = Array.isArray(selected) ? selected[0] : selected;
       if (!filePath) return;
+      await rememberStoredDialogSelection(
+        UNIT_MODEL_IMPORT_STATIC_MESH_DIALOG_PATH_KEY,
+        filePath,
+        "file",
+      );
       const fileName = filePath.split(/[/\\]/).pop() ?? "model.dae";
       const baseFilename = sanitizeBaseFilename(fileName);
       const config = createDefaultDaeImportConfig(baseFilename);

@@ -1,9 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { confirm, open } from "@tauri-apps/plugin-dialog";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
 import { useConfigStore } from "@/store/configStore";
+import {
+  getStoredDialogDefaultPath,
+  rememberStoredDialogSelection,
+} from "@/utils/dialogDefaultPathStore";
+import { UNIT_MODEL_OPEN_FOLDER_DIALOG_PATH_KEY } from "../utils/unitModelEditorSettings";
 import { useSsbhModelPreview } from "@/components/ssbh-model-preview/SsbhModelPreviewPanel";
 import {
   getBaseName,
@@ -15,8 +20,16 @@ import {
 import { type UnitModelExtractResult } from "../utils/unitModelExtractService";
 import { buildUnitModelAiReviewPayload } from "../utils/unitModelAiReviewPayload";
 import { listUnitModelTextures, type UnitModelTextureInventory } from "../utils/unitModelTextureService";
+import {
+  analyzeUnitModelFolderMigration,
+  migrateUnitModelFolderLayout,
+} from "../utils/unitModelMigrationService";
 
-export type UnitModelWorkspaceBusy = "pick" | "extract" | "validate" | "copy" | null;
+export type UnitModelWorkspaceBusy = "pick" | "extract" | "migrate" | "validate" | "copy" | null;
+
+type RunValidationOptions = {
+  silent?: boolean;
+};
 
 function inferLoadedRoot(preview: ReturnType<typeof useSsbhModelPreview>): string | null {
   const active = preview.previewInstances.find((inst) => inst.id === preview.activePreviewInstanceId);
@@ -40,36 +53,161 @@ export function useUnitModelWorkspace(unitRoot: string | null, onUnitRootChange:
   }, [activeRoot]);
   const folderName = useMemo(() => (activeRoot ? getBaseName(activeRoot) : ""), [activeRoot]);
   const [validation, setValidation] = useState<UnitModelValidationResult | null>(null);
+  const [validationRefreshTick, setValidationRefreshTick] = useState(0);
+  const [isValidating, setIsValidating] = useState(false);
   const [lastRepack, setLastRepack] = useState<UnitModelRepackResult | null>(null);
   const [busy, setBusy] = useState<UnitModelWorkspaceBusy>(null);
   const [repackDialogOpen, setRepackDialogOpen] = useState(false);
   const [extractDialogOpen, setExtractDialogOpen] = useState(false);
+  const validationRequestIdRef = useRef(0);
 
-  useEffect(() => {
-    const onTexturesChanged = () => {
-      setValidation(null);
-      setLastRepack(null);
-    };
-    window.addEventListener("unit-model-textures-changed", onTexturesChanged);
-    return () => window.removeEventListener("unit-model-textures-changed", onTexturesChanged);
+  const markValidationStale = useCallback(() => {
+    validationRequestIdRef.current += 1;
+    setValidation(null);
+    setIsValidating(false);
+    setLastRepack(null);
+    setValidationRefreshTick((tick) => tick + 1);
   }, []);
 
+  const acceptValidationResult = useCallback((result: UnitModelValidationResult) => {
+    validationRequestIdRef.current += 1;
+    setIsValidating(false);
+    setValidation(result);
+  }, []);
+
+  useEffect(() => {
+    const onTexturesChanged = () => markValidationStale();
+    window.addEventListener("unit-model-textures-changed", onTexturesChanged);
+    return () => window.removeEventListener("unit-model-textures-changed", onTexturesChanged);
+  }, [markValidationStale]);
+
   const hasErrors = Boolean(validation && validation.errors.length > 0);
-  const statusLabel = validation ? (validation.valid ? "Ready to repack" : "Blocked") : "Not validated";
+  const statusLabel = isValidating
+    ? "Checking..."
+    : validation
+      ? validation.valid
+        ? "Ready to repack"
+        : `${validation.errors.length} issue(s)`
+      : activeRoot
+        ? "Pending validation"
+        : "No folder";
   const isBusy = busy !== null;
+
+  const runValidation = useCallback(
+    async (options: RunValidationOptions = {}) => {
+      const silent = options.silent === true;
+      if (!activeRoot || !structurePath) {
+        setValidation(null);
+        if (!silent) {
+          toast.error("No unit model folder selected");
+        }
+        return null;
+      }
+
+      const requestId = validationRequestIdRef.current + 1;
+      validationRequestIdRef.current = requestId;
+      setIsValidating(true);
+      if (!silent) {
+        setBusy("validate");
+      }
+
+      try {
+        const result = await validateUnitModelForRepack(activeRoot, structurePath);
+        if (requestId !== validationRequestIdRef.current) {
+          return null;
+        }
+        setValidation(result);
+        if (!silent) {
+          if (result.valid) {
+            toast.success("Unit model validation passed");
+          } else {
+            toast.error("Unit model validation failed", {
+              description: `${result.errors.length} issue(s) must be fixed before repack`,
+            });
+          }
+        }
+        return result;
+      } catch (error) {
+        if (requestId === validationRequestIdRef.current && !silent) {
+          toast.error("Validation command failed", { description: String(error) });
+        }
+        return null;
+      } finally {
+        if (requestId === validationRequestIdRef.current) {
+          setIsValidating(false);
+        }
+        if (!silent) {
+          setBusy((current) => (current === "validate" ? null : current));
+        }
+      }
+    },
+    [activeRoot, structurePath],
+  );
+
+  useEffect(() => {
+    if (!activeRoot || !structurePath) {
+      validationRequestIdRef.current += 1;
+      setValidation(null);
+      setIsValidating(false);
+      return;
+    }
+    setValidation(null);
+    void runValidation({ silent: true });
+  }, [activeRoot, structurePath, validationRefreshTick, runValidation]);
 
   const pickUnitFolder = async () => {
     setBusy("pick");
     try {
+      const storedDefault = await getStoredDialogDefaultPath(UNIT_MODEL_OPEN_FOLDER_DIALOG_PATH_KEY);
       const selected = await open({
         directory: true,
         multiple: false,
-        defaultPath: activeRoot ?? preview.workspaceRoot ?? undefined,
+        title: "Open unit model folder",
+        defaultPath: storedDefault ?? activeRoot ?? preview.workspaceRoot ?? undefined,
       });
       if (typeof selected !== "string" || !selected.trim()) return;
-      onUnitRootChange(selected);
-      await preview.loadModelAt(selected);
-      setValidation(null);
+      await rememberStoredDialogSelection(
+        UNIT_MODEL_OPEN_FOLDER_DIALOG_PATH_KEY,
+        selected,
+        "directory",
+      );
+      let rootToLoad = selected;
+      const migration = await analyzeUnitModelFolderMigration(selected);
+      if (migration.canMigrate && migration.state === "legacy") {
+        const ok = await confirm(
+          [
+            "This looks like an older Unit Model extract.",
+            "",
+            `Models: ${migration.modelCount}`,
+            `Files to regroup: ${migration.plannedFileMoves}`,
+            "",
+            "Migrate it to the current Unit Model folder layout before loading?",
+          ].join("\n"),
+          {
+            title: "Migrate Unit Model folder",
+            kind: "warning",
+          },
+        );
+        if (ok) {
+          setBusy("migrate");
+          const result = await migrateUnitModelFolderLayout(selected, migration.structureJsonPath);
+          rootToLoad = result.modelRoot;
+          toast.success("Unit model folder migrated", {
+            description: `${result.updatedFileUrls} fileUrl(s) updated. Backup: ${
+              result.backupStructureJsonPath ?? "none"
+            }`,
+          });
+          for (const warning of result.warnings.slice(0, 3)) {
+            toast.warning("Migration warning", { description: warning });
+          }
+        } else {
+          toast.message("Opened without migration", {
+            description: "Some Unit Model edit operations expect the current folder layout.",
+          });
+        }
+      }
+      onUnitRootChange(rootToLoad);
+      await preview.loadModelAt(rootToLoad);
       setLastRepack(null);
     } catch (error) {
       toast.error("Failed to open unit model folder", { description: String(error) });
@@ -87,7 +225,6 @@ export function useUnitModelWorkspace(unitRoot: string | null, onUnitRootChange:
     try {
       onUnitRootChange(result.modelRoot);
       await preview.loadModelAt(result.modelRoot);
-      setValidation(null);
       setLastRepack(null);
     } catch (error) {
       toast.error("Failed to load extracted unit model", { description: String(error) });
@@ -100,31 +237,6 @@ export function useUnitModelWorkspace(unitRoot: string | null, onUnitRootChange:
     if (!loadedRoot) return;
     onUnitRootChange(loadedRoot);
     toast.success("Using loaded model root");
-  };
-
-  const runValidation = async () => {
-    if (!activeRoot || !structurePath) {
-      toast.error("No unit model folder selected");
-      return null;
-    }
-    setBusy("validate");
-    try {
-      const result = await validateUnitModelForRepack(activeRoot, structurePath);
-      setValidation(result);
-      if (result.valid) {
-        toast.success("Unit model validation passed");
-      } else {
-        toast.error("Unit model validation failed", {
-          description: `${result.errors.length} issue(s) must be fixed before repack`,
-        });
-      }
-      return result;
-    } catch (error) {
-      toast.error("Validation command failed", { description: String(error) });
-      return null;
-    } finally {
-      setBusy(null);
-    }
   };
 
   const openRepackDialog = () => {
@@ -150,8 +262,7 @@ export function useUnitModelWorkspace(unitRoot: string | null, onUnitRootChange:
     try {
       let validationForPayload = validation;
       if (!validationForPayload) {
-        validationForPayload = await validateUnitModelForRepack(activeRoot, structurePath);
-        setValidation(validationForPayload);
+        validationForPayload = await runValidation({ silent: true });
       }
 
       let textureInventory: UnitModelTextureInventory | null = null;
@@ -196,6 +307,7 @@ export function useUnitModelWorkspace(unitRoot: string | null, onUnitRootChange:
     validation,
     lastRepack,
     busy,
+    isValidating,
     isBusy,
     repackDialogOpen,
     setRepackDialogOpen,
@@ -203,8 +315,10 @@ export function useUnitModelWorkspace(unitRoot: string | null, onUnitRootChange:
     setExtractDialogOpen,
     handleExtracted,
     setLastRepack,
+    acceptValidationResult,
     hasErrors,
     statusLabel,
+    markValidationStale,
     pickUnitFolder,
     openExtractDialog,
     useLoadedRoot,

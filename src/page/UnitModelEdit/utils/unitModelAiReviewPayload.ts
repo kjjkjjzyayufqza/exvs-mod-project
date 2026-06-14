@@ -82,8 +82,8 @@ const UNIT_MODEL_VALIDATION_RULES = [
   {
     phase: "shl",
     checks: [
-      "Exactly one shell_*.shl file must exist.",
-      "The .shl header must use SHLL magic and declare the same model count as the structure.",
+      "Legacy shell_*.shl entries are reported as warnings only.",
+      "Missing or stale .shl files do not block Unit Model validation because they are not part of the native Unit folder layout.",
     ],
   },
   {

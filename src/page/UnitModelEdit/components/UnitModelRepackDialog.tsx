@@ -1,13 +1,14 @@
 import { useMemo, useState } from "react";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, PackageCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, PackageCheck } from "lucide-react";
 import { toast } from "sonner";
 import {
   inferUnitModelModOutputPath,
   repackValidatedUnitModelFolderToModFolder,
   validateUnitModelForRepack,
   type UnitModelRepackResult,
+  type UnitModelValidationResult,
 } from "../utils/unitModelRepackService";
 
 const UNIT_MODEL_REPACK_DIMENSIONS = {
@@ -24,6 +25,9 @@ type UnitModelRepackDialogProps = {
   structurePath: string | null;
   modFolder: string;
   folderName: string;
+  validation: UnitModelValidationResult | null;
+  isValidating: boolean;
+  onValidationResult: (result: UnitModelValidationResult) => void;
   onRepacked: (result: UnitModelRepackResult) => void;
 };
 
@@ -39,6 +43,9 @@ export function UnitModelRepackDialog({
   structurePath,
   modFolder,
   folderName,
+  validation,
+  isValidating,
+  onValidationResult,
   onRepacked,
 }: UnitModelRepackDialogProps) {
   const [isRunning, setIsRunning] = useState(false);
@@ -53,7 +60,8 @@ export function UnitModelRepackDialog({
     }
   }, [modFolderConfigured, modFolder, structurePath]);
 
-  const canRepack = Boolean(modelRoot && structurePath && destination) && !isRunning;
+  const canRepack =
+    Boolean(modelRoot && structurePath && destination && validation?.valid) && !isRunning && !isValidating;
 
   const handleConfirm = async () => {
     if (!modelRoot || !structurePath) {
@@ -68,10 +76,12 @@ export function UnitModelRepackDialog({
     }
     setIsRunning(true);
     try {
-      const validation = await validateUnitModelForRepack(modelRoot, structurePath);
-      if (!validation.valid) {
+      const latestValidation = await validateUnitModelForRepack(modelRoot, structurePath);
+      onValidationResult(latestValidation);
+      if (!latestValidation.valid) {
+        const firstIssue = latestValidation.errors[0]?.message;
         toast.error("Repack blocked by validation", {
-          description: `${validation.errors.length} issue(s) must be fixed first`,
+          description: firstIssue ?? `${latestValidation.errors.length} issue(s) must be fixed first`,
         });
         return;
       }
@@ -111,30 +121,114 @@ export function UnitModelRepackDialog({
       }
     >
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-          <div className="rounded-md border p-2.5 text-sm">
-            <div className="font-medium">{folderName || "Unit model"}</div>
-            <div className="mt-1 break-all font-mono text-xs text-muted-foreground">
-              {structurePath ?? "No structure JSON resolved"}
-            </div>
+        <div className="rounded-md border p-2.5 text-sm">
+          <div className="font-medium">{folderName || "Unit model"}</div>
+          <div className="mt-1 break-all font-mono text-xs text-muted-foreground">
+            {structurePath ?? "No structure JSON resolved"}
           </div>
+        </div>
 
-          <div className="rounded-md border p-2.5 text-sm">
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Destination (OB Mod folder)
-            </div>
-            {modFolderConfigured && destination ? (
-              <div className="mt-1 break-all font-mono text-xs">{destination}</div>
-            ) : (
-              <div className="mt-1 flex items-start gap-2 text-xs text-destructive">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <span>
-                  OB Mod path is not configured. Open <span className="font-medium">Config</span> and set the
-                  OB Mod folder before repacking.
-                </span>
-              </div>
-            )}
+        <div className="rounded-md border p-2.5 text-sm">
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Destination (OB Mod folder)
           </div>
+          {modFolderConfigured && destination ? (
+            <div className="mt-1 break-all font-mono text-xs">{destination}</div>
+          ) : (
+            <div className="mt-1 flex items-start gap-2 text-xs text-destructive">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                OB Mod path is not configured. Open <span className="font-medium">Config</span> and set the OB Mod
+                folder before repacking.
+              </span>
+            </div>
+          )}
+        </div>
+
+        <ValidationGate validation={validation} isValidating={isValidating} />
       </div>
     </AppRndModalShell>
+  );
+}
+
+function ValidationGate({
+  validation,
+  isValidating,
+}: {
+  validation: UnitModelValidationResult | null;
+  isValidating: boolean;
+}) {
+  if (isValidating) {
+    return (
+      <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-primary">
+        <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
+        <div>
+          <div className="font-semibold">Checking validation before repack</div>
+          <div className="mt-1 text-primary/80">The Repack button is enabled after validation passes.</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!validation) {
+    return (
+      <div className="flex items-start gap-2 rounded-md border bg-muted/20 p-2.5 text-xs text-muted-foreground">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div>
+          <div className="font-semibold text-foreground">Waiting for validation</div>
+          <div className="mt-1">Validation runs automatically after opening or editing a Unit Model folder.</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (validation.errors.length === 0) {
+    return (
+      <div className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2.5 text-xs text-emerald-600">
+        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+        <div>
+          <div className="font-semibold">Validation passed</div>
+          {validation.warnings.length ? (
+            <div className="mt-1 text-emerald-700/80 dark:text-emerald-400/80">
+              {validation.warnings.length} warning(s) will be kept as non-blocking notes.
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2.5 text-xs">
+      <div className="flex items-start gap-2 text-destructive">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div>
+          <div className="font-semibold">Repack blocked by {validation.errors.length} issue(s)</div>
+          <div className="mt-1 text-destructive/80">Fix these issues in the Unit Model structure before repacking.</div>
+        </div>
+      </div>
+      <div className="mt-2 space-y-1.5">
+        {validation.errors.slice(0, 5).map((issue, index) => (
+          <div
+            key={`${issue.phase}:${issue.model ?? ""}:${issue.path ?? ""}:${index}`}
+            className="rounded border bg-background/80 p-2"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-semibold text-destructive">{issue.phase}</span>
+              {issue.model ? <span className="truncate font-mono text-muted-foreground">{issue.model}</span> : null}
+            </div>
+            <div className="mt-1 text-foreground">{issue.message}</div>
+            {issue.path ? (
+              <div className="mt-1 break-all font-mono text-[10px] text-muted-foreground">{issue.path}</div>
+            ) : null}
+          </div>
+        ))}
+        {validation.errors.length > 5 ? (
+          <div className="text-[11px] text-muted-foreground">
+            Showing 5 of {validation.errors.length}. See the right Details panel for the full list.
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }

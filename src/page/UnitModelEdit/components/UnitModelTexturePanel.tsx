@@ -31,6 +31,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import {
+  getStoredDialogDefaultPath,
+  rememberStoredDialogSelection,
+} from "@/utils/dialogDefaultPathStore";
 import { useSsbhModelPreview } from "@/components/ssbh-model-preview/SsbhModelPreviewPanel";
 import { clearNutexbRgbaCache } from "@/components/ssbh-model-preview/nutexbPreviewCache";
 import {
@@ -71,6 +75,12 @@ import {
   type UnitModelTextureInventory,
 } from "../utils/unitModelTextureService";
 import { getBaseName, inferUnitModelStructurePath } from "../utils/unitModelRepackService";
+import {
+  UNIT_MODEL_ADD_TEXTURE_DIALOG_PATH_KEY,
+  UNIT_MODEL_BATCH_EXPORT_TEXTURES_DIALOG_PATH_KEY,
+  UNIT_MODEL_EXPORT_TEXTURE_DIALOG_PATH_KEY,
+  UNIT_MODEL_REPLACE_TEXTURE_DIALOG_PATH_KEY,
+} from "../utils/unitModelEditorSettings";
 
 const ASYNC_THUMB_CONCURRENCY = 4;
 const UNIT_TEXTURES_CHANGED_EVENT = "unit-model-textures-changed";
@@ -293,10 +303,18 @@ export function UnitModelTexturePanel({
       title: "Add unit texture",
       multiple: true,
       filters: [{ name: "Textures", extensions: ["nutexb", "png", "dds", "tga"] }],
+      defaultPath:
+        (await getStoredDialogDefaultPath(UNIT_MODEL_ADD_TEXTURE_DIALOG_PATH_KEY)) ??
+        activeRoot ??
+        undefined,
     });
     if (!selected) return;
     const paths = Array.isArray(selected) ? selected : [selected];
     if (paths.length === 0) return;
+    const firstPath = paths[0];
+    if (firstPath) {
+      await rememberStoredDialogSelection(UNIT_MODEL_ADD_TEXTURE_DIALOG_PATH_KEY, firstPath, "file");
+    }
 
     const files: RawAddFile[] = paths.map((path) => ({
       sourcePath: path,
@@ -379,8 +397,17 @@ export function UnitModelTexturePanel({
         title: `Replace ${entry.filename}`,
         multiple: false,
         filters: [{ name: "Textures", extensions: ["nutexb", "png", "dds", "tga"] }],
+        defaultPath:
+          (await getStoredDialogDefaultPath(UNIT_MODEL_REPLACE_TEXTURE_DIALOG_PATH_KEY)) ??
+          activeRoot ??
+          undefined,
       });
       if (typeof selected !== "string" || !selected.trim()) return;
+      await rememberStoredDialogSelection(
+        UNIT_MODEL_REPLACE_TEXTURE_DIALOG_PATH_KEY,
+        selected.trim(),
+        "file",
+      );
       setBusy("replace");
       try {
         await replaceNutexbInPlace({
@@ -399,7 +426,7 @@ export function UnitModelTexturePanel({
         setBusy(null);
       }
     },
-    [refreshInventory, reloadPreviewAfterDiskChange],
+    [refreshInventory, reloadPreviewAfterDiskChange, activeRoot],
   );
 
   const handleRemoveTexture = useCallback(
@@ -445,6 +472,7 @@ export function UnitModelTexturePanel({
       const output = await exportNutexbToPng({
         nutexbPath: texture.path,
         suggestedFilename: texture.filename.replace(/\.nutexb$/i, ".png"),
+        dialogPathKey: UNIT_MODEL_EXPORT_TEXTURE_DIALOG_PATH_KEY,
       });
       if (output) toast.success(`Exported ${getBaseName(output)}`);
     } catch (error) {
@@ -465,10 +493,16 @@ export function UnitModelTexturePanel({
       title: "Batch export unit textures",
       directory: true,
       multiple: false,
+      defaultPath: await getStoredDialogDefaultPath(UNIT_MODEL_BATCH_EXPORT_TEXTURES_DIALOG_PATH_KEY),
     });
     if (typeof selected !== "string" || !selected.trim()) return;
 
     const outputDir = selected.trim();
+    await rememberStoredDialogSelection(
+      UNIT_MODEL_BATCH_EXPORT_TEXTURES_DIALOG_PATH_KEY,
+      outputDir,
+      "directory",
+    );
     const usedNames = new Map<string, number>();
     const outputNameForTexture = (texture: UnitModelTextureEntry) => {
       const baseName = texture.filename.replace(/\.nutexb$/i, ".png");

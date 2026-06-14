@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -38,6 +38,68 @@ function Metric({ label, value }: { label: string; value: string | number }) {
     <div className="rounded-md border bg-muted/20 px-2 py-1.5">
       <div className="text-[10px] text-muted-foreground">{label}</div>
       <div className="font-mono text-sm font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function ValidationStatusBanner({
+  unitRoot,
+  validation,
+  isValidating,
+}: {
+  unitRoot: string | null;
+  validation: UnitModelValidationResult | null;
+  isValidating: boolean;
+}) {
+  if (!unitRoot) {
+    return (
+      <div className="rounded-md border bg-muted/20 p-2 text-[11px] text-muted-foreground">
+        Open or extract a unit model folder to start validation.
+      </div>
+    );
+  }
+
+  if (isValidating) {
+    return (
+      <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2 text-[11px] text-primary">
+        <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin" />
+        <div>
+          <div className="font-semibold">Checking unit model</div>
+          <div className="mt-0.5 text-primary/80">Validation refreshes after folder load and Unit Model edits.</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!validation) {
+    return (
+      <div className="rounded-md border bg-muted/20 p-2 text-[11px] text-muted-foreground">
+        Validation runs automatically when a unit folder is opened or edited. Use Run to refresh it now.
+      </div>
+    );
+  }
+
+  if (validation.errors.length > 0) {
+    return (
+      <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-[11px] text-destructive">
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <div>
+          <div className="font-semibold">Repack blocked by {validation.errors.length} validation issue(s)</div>
+          <div className="mt-0.5 text-destructive/80">Fix the issue list below before repacking.</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2 text-[11px] text-emerald-600">
+      <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <div>
+        <div className="font-semibold">Ready to repack</div>
+        <div className="mt-0.5 text-emerald-700/80 dark:text-emerald-400/80">
+          Required files and texture references passed validation.
+        </div>
+      </div>
     </div>
   );
 }
@@ -174,20 +236,19 @@ export function UnitModelPropertiesPanel({
                   </Button>
                 }
               >
-                {validation ? (
-                  <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-                    <Metric label="Models" value={validation.summary.modelCount} />
-                    <Metric label="NUMATB" value={validation.summary.numatbCount} />
-                    <Metric label="NUHLPB" value={validation.summary.nuhlpbCount} />
-                    <Metric label="SHL files" value={validation.summary.shlCount} />
-                    <Metric label="SHL models" value={validation.summary.shlDeclaredModelCount ?? "-"} />
-                    <Metric label="Texture refs" value={validation.summary.textureReferenceCount} />
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-muted-foreground">
-                    Run validation from the toolbar to inspect required files and texture references.
-                  </p>
-                )}
+                <div className="space-y-2">
+                  <ValidationStatusBanner unitRoot={unitRoot} validation={validation} isValidating={isValidating} />
+                  {validation ? (
+                    <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                      <Metric label="Models" value={validation.summary.modelCount} />
+                      <Metric label="NUMATB" value={validation.summary.numatbCount} />
+                      <Metric label="NUHLPB" value={validation.summary.nuhlpbCount} />
+                      <Metric label="SHL files" value={validation.summary.shlCount} />
+                      <Metric label="SHL models" value={validation.summary.shlDeclaredModelCount ?? "-"} />
+                      <Metric label="Texture refs" value={validation.summary.textureReferenceCount} />
+                    </div>
+                  ) : null}
+                </div>
               </MayaSection>
 
               {lastRepack ? (
@@ -205,12 +266,24 @@ export function UnitModelPropertiesPanel({
               ) : null}
 
               {validation?.errors.length ? (
-                <MayaSection title="Issues" defaultOpen>
+                <MayaSection title={`Issues (${validation.errors.length})`} defaultOpen>
                   <ValidationIssueList errors={validation.errors} />
                 </MayaSection>
               ) : validation ? (
                 <MayaSection title="Issues">
                   <p className="text-[11px] text-emerald-600">No blocking validation issues.</p>
+                </MayaSection>
+              ) : null}
+
+              {validation?.warnings.length ? (
+                <MayaSection title={`Warnings (${validation.warnings.length})`}>
+                  <div className="space-y-1.5 text-[11px]">
+                    {validation.warnings.map((warning, index) => (
+                      <div key={`${warning}:${index}`} className="rounded-md border bg-muted/20 p-2">
+                        {warning}
+                      </div>
+                    ))}
+                  </div>
                 </MayaSection>
               ) : null}
 

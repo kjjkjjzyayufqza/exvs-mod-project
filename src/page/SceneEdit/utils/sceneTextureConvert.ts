@@ -3,6 +3,10 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { copyFile, exists, mkdir } from "@tauri-apps/plugin-fs";
 import { appLocalDataDir, dirname, join } from "@tauri-apps/api/path";
 import type { DdsFormat } from "@/lib/ddsFormats";
+import {
+  getStoredDialogDefaultPath,
+  rememberStoredDialogSelection,
+} from "@/utils/dialogDefaultPathStore";
 
 /** Mirrors Rust sanitize_file_name for __convert PNG export paths. */
 function sanitizeFileName(input: string): string {
@@ -128,14 +132,25 @@ function defaultPngExportName(nutexbPath: string): string {
 export async function exportNutexbToPng(params: {
   nutexbPath: string;
   suggestedFilename?: string;
+  /** When set, remembers the last export directory under `dialogDefaultPath`. */
+  dialogPathKey?: string;
 }): Promise<string | null> {
   const suggested =
     params.suggestedFilename?.trim() ||
     defaultPngExportName(params.nutexbPath);
 
+  let defaultPath = suggested;
+  if (params.dialogPathKey) {
+    const storedDir = await getStoredDialogDefaultPath(params.dialogPathKey);
+    if (storedDir) {
+      const fileName = suggested.split(/[/\\]/).pop() ?? suggested;
+      defaultPath = await join(storedDir, fileName);
+    }
+  }
+
   const outputPath = await save({
     title: "Export nutexb to PNG",
-    defaultPath: suggested,
+    defaultPath,
     filters: [{ name: "PNG", extensions: ["png"] }],
   });
 
@@ -143,12 +158,17 @@ export async function exportNutexbToPng(params: {
     return null;
   }
 
+  const trimmedOutput = outputPath.trim();
   await invoke("nutexb_export_png", {
     inputPath: params.nutexbPath,
-    outputPath: outputPath.trim(),
+    outputPath: trimmedOutput,
   });
 
-  return outputPath.trim();
+  if (params.dialogPathKey) {
+    await rememberStoredDialogSelection(params.dialogPathKey, trimmedOutput, "file");
+  }
+
+  return trimmedOutput;
 }
 
 export async function importPngAsNutexb(params: {

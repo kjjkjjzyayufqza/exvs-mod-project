@@ -48,6 +48,8 @@ interface DaeExportDialogProps {
   targets: DaeExportTarget[];
   onExport: (config: DaeExportConfig) => void;
   onCancel: () => void;
+  /** Tauri `dialogDefaultPath` key for the output folder picker. */
+  outputDialogPathKey?: string;
 }
 
 export function DaeExportDialog({
@@ -55,6 +57,7 @@ export function DaeExportDialog({
   targets,
   onExport,
   onCancel,
+  outputDialogPathKey = SCENE_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY,
 }: DaeExportDialogProps) {
   const [scaleFactor, setScaleFactor] = useState(1.0);
   const [upAxis, setUpAxis] = useState<"y_up" | "z_up">("y_up");
@@ -71,23 +74,23 @@ export function DaeExportDialog({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    getStoredDialogDefaultPath(SCENE_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY).then((path) => {
+    getStoredDialogDefaultPath(outputDialogPathKey).then((path) => {
       if (!cancelled && path) setOutputDirectory(path);
     });
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, outputDialogPathKey]);
 
   const chooseOutputDirectory = async () => {
     const selected = await openDialog({
       directory: true,
       title: "Select model export folder",
-      defaultPath: outputDirectory || (await getStoredDialogDefaultPath(SCENE_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY)),
+      defaultPath: outputDirectory || (await getStoredDialogDefaultPath(outputDialogPathKey)),
     });
     if (typeof selected !== "string" || !selected.trim()) return;
     setOutputDirectory(selected);
-    await rememberStoredDialogSelection(SCENE_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY, selected, "directory");
+    await rememberStoredDialogSelection(outputDialogPathKey, selected, "directory");
   };
 
   const submit = () => {

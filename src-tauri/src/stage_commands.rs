@@ -11,7 +11,9 @@ use crate::format::fhm2d::{extract_fhm2d_to_memory_impl, InMemoryFhm2dExtraction
 use crate::format::fhm2d_stage;
 use crate::format::fhm2d_stage_validate;
 use crate::format::unit_model_extract;
+use crate::format::unit_model_migrate;
 use crate::format::unit_model_models;
+use crate::format::unit_model_repack;
 use crate::format::unit_model_textures;
 use crate::format::unit_model_validate;
 
@@ -586,6 +588,50 @@ pub async fn repack_fhm2d(
 }
 
 #[tauri::command]
+pub async fn repack_unit_model_fhm2d(
+    app: AppHandle,
+    structure_json_path: String,
+    output_path: String,
+    atomic_write: Option<bool>,
+) -> Result<crate::format::fhm2d_pack::RepackResult, String> {
+    let atomic = atomic_write.unwrap_or(true);
+    let app_clone = app.clone();
+
+    crate::console_color::eprint_info(
+        "repack_unit_model_fhm2d",
+        &format!("Starting — structure: {structure_json_path}, output: {output_path}"),
+    );
+    let t = Instant::now();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_repack::repack_unit_model_from_structure(
+            &structure_json_path,
+            &output_path,
+            atomic,
+            Some(&|progress| {
+                let _ = app_clone.emit("repack-fhm2d-progress", progress.clone());
+            }),
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?;
+    match &result {
+        Ok(r) => crate::console_color::eprint_success(
+            "repack_unit_model_fhm2d",
+            &format!(
+                "Done in {}ms — {} bytes",
+                t.elapsed().as_millis(),
+                r.output_size
+            ),
+        ),
+        Err(e) => crate::console_color::eprint_error(
+            "repack_unit_model_fhm2d",
+            &format!("Failed in {}ms — {e}", t.elapsed().as_millis()),
+        ),
+    }
+    result
+}
+
+#[tauri::command]
 pub async fn repack_stage_fhm2d_preserving_shared_textures(
     app: AppHandle,
     stage_root: String,
@@ -984,6 +1030,38 @@ pub async fn extract_unit_model_fhm2d_to_folder(
 ) -> Result<unit_model_extract::UnitModelExtractResult, String> {
     let result = tauri::async_runtime::spawn_blocking(move || {
         unit_model_extract::extract_unit_model_fhm2d_to_folder_impl(&source_path, &out_root)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn analyze_unit_model_folder_migration(
+    model_root: String,
+    structure_json_path: Option<String>,
+) -> Result<unit_model_migrate::UnitModelMigrationAnalysis, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_migrate::analyze_unit_model_folder_migration(
+            &model_root,
+            structure_json_path.as_deref(),
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn migrate_unit_model_folder_layout(
+    model_root: String,
+    structure_json_path: Option<String>,
+) -> Result<unit_model_migrate::UnitModelMigrationResult, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_migrate::migrate_unit_model_folder_layout(
+            &model_root,
+            structure_json_path.as_deref(),
+        )
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))??;
