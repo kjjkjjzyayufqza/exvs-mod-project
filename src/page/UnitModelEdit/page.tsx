@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import { exists, readTextFile } from "@tauri-apps/plugin-fs";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { toast } from "sonner";
 
 import { useIsKeepAliveRouteActive } from "@/layout/KeepAliveContext";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -22,6 +25,7 @@ import { UnitModelDaeExchangeModal } from "./components/UnitModelDaeExchangeModa
 import { UnitModelHierarchyPanel } from "./components/UnitModelHierarchyPanel";
 import { UnitModelPropertiesPanel } from "./components/UnitModelPropertiesPanel";
 import { UnitModelRepackDialog } from "./components/UnitModelRepackDialog";
+import { UnitModelExtractDialog } from "./components/UnitModelExtractDialog";
 import { UnitModelTexturePanel } from "./components/UnitModelTexturePanel";
 import { UnitModelToolbar } from "./components/UnitModelToolbar";
 import { useUnitModelWorkspace } from "./hooks/useUnitModelWorkspace";
@@ -33,7 +37,11 @@ import {
   UNIT_MODEL_HIERARCHY_TABS_LIST,
 } from "./utils/unitModelEditorSettings";
 import { listUnitModelTextures } from "./utils/unitModelTextureService";
-import { inferUnitModelStructurePath } from "./utils/unitModelRepackService";
+import { getParentDir, inferUnitModelStructurePath } from "./utils/unitModelRepackService";
+import { normalizeComparePath, resolveUnitModelNodeAbsPath } from "./utils/unitModelNodePaths";
+import { buildUnitModelStructureTree, type UnitModelTreeNode } from "./utils/unitModelStructureTree";
+import { useSsbhFileEditorSessions } from "@/components/ssbh-model-preview/useSsbhFileEditorSessions";
+import { SsbhFileEditorHosts } from "@/components/ssbh-model-preview/SsbhFileEditorHosts";
 
 function UnitModelEditWorkspace({
   unitRoot,
@@ -89,6 +97,150 @@ function UnitModelEditWorkspace({
     window.addEventListener("unit-model-textures-changed", onTexturesChanged);
     return () => window.removeEventListener("unit-model-textures-changed", onTexturesChanged);
   }, [workspace.activeRoot, workspace.structurePath]);
+
+  // --- SSBH file editing (numatb / numdlb / nuhlpb / jnttbl) ------------------
+  const [modifiedPaths, setModifiedPaths] = useState<Set<string>>(new Set());
+  const [focusTextureFilename, setFocusTextureFilename] = useState<string | null>(null);
+  const previewReloadTimer = useRef<number | null>(null);
+
+  // Clear "modified this session" markers when the workspace root changes.
+  useEffect(() => {
+    setModifiedPaths(new Set());
+  }, [workspace.activeRoot]);
+
+  useEffect(
+    () => () => {
+      if (previewReloadTimer.current) window.clearTimeout(previewReloadTimer.current);
+    },
+    [],
+  );
+
+  // Normalized key of the `_structure.json` directory; node fileUrls are relative to it.
+  const structureDirKey = useMemo(
+    () => (workspace.structurePath ? normalizeComparePath(getParentDir(workspace.structurePath)) : null),
+    [workspace.structurePath],
+  );
+
+  const toRelKey = useCallback(
+    (absPath: string): string | null => {
+      if (!structureDirKey) return null;
+      const key = normalizeComparePath(absPath);
+      const prefix = `${structureDirKey}/`;
+      return key.startsWith(prefix) ? key.slice(prefix.length) : null;
+    },
+    [structureDirKey],
+  );
+
+  const schedulePreviewReload = useCallback(() => {
+    const root = workspace.activeRoot;
+    if (!root) return;
+    if (previewReloadTimer.current) window.clearTimeout(previewReloadTimer.current);
+    previewReloadTimer.current = window.setTimeout(() => {
+      void preview.loadModelAt(root);
+    }, 200);
+  }, [preview, workspace.activeRoot]);
+
+  const handleEditorSaved = useCallback(
+    (savedAbsPath: string) => {
+      const rel = toRelKey(savedAbsPath);
+      if (rel) {
+        setModifiedPaths((prev) => {
+          if (prev.has(rel)) return prev;
+          const next = new Set(prev);
+          next.add(rel);
+          return next;
+        });
+      }
+      const lower = savedAbsPath.toLowerCase();
+      if (lower.endsWith(".numatb") || lower.endsWith(".numdlb")) {
+        // Material / model-mapping edits change what the preview renders.
+        schedulePreviewReload();
+      }
+    },
+    [toRelKey, schedulePreviewReload],
+  );
+
+  const editors = useSsbhFileEditorSessions({ onSaved: handleEditorSaved });
+
+  // Editor `editingPaths` are absolute; the tree compares relative fileUrls.
+  const editingRelPaths = useMemo(() => {
+    const set = new Set<string>();
+    for (const abs of editors.editingPaths) {
+      const rel = toRelKey(abs);
+      if (rel) set.add(rel);
+    }
+    return set;
+  }, [editors.editingPaths, toRelKey]);
+
+  const handleOpenEditor = useCallback(
+    (node: UnitModelTreeNode) => {
+      if (!workspace.structurePath || !node.fileUrl) return;
+      const abs = resolveUnitModelNodeAbsPath(workspace.structurePath, node.fileUrl);
+      if (!editors.openEditorForPath(abs)) {
+        toast.message(`No editor available for ${node.label}`);
+      }
+    },
+    [workspace.structurePath, editors],
+  );
+
+  const handleRevealNode = useCallback(
+    (node: UnitModelTreeNode) => {
+      if (!workspace.structurePath || !node.fileUrl) return;
+      void revealItemInDir(resolveUnitModelNodeAbsPath(workspace.structurePath, node.fileUrl));
+    },
+    [workspace.structurePath],
+  );
+
+  const handleCopyNodePath = useCallback(
+    (node: UnitModelTreeNode) => {
+      if (!workspace.structurePath || !node.fileUrl) return;
+      void writeText(resolveUnitModelNodeAbsPath(workspace.structurePath, node.fileUrl)).then(
+        () => toast.success("Copied path"),
+        (error) => toast.error("Failed to copy path", { description: String(error) }),
+      );
+    },
+    [workspace.structurePath],
+  );
+
+  const handleShowTextureInPanel = useCallback((node: UnitModelTreeNode) => {
+    const ref = node.fileUrl ?? node.label;
+    const name = ref.replace(/\\/g, "/").split("/").pop() ?? node.label;
+    setLeftTab("textures");
+    setFocusTextureFilename(name);
+  }, []);
+
+  const handleOpenReferencingNumatb = useCallback(
+    (numatbBasename: string) => {
+      if (!workspace.structurePath || structureJson == null) return;
+      let tree: ReturnType<typeof buildUnitModelStructureTree> | null = null;
+      try {
+        tree = buildUnitModelStructureTree(structureJson);
+      } catch {
+        tree = null;
+      }
+      if (!tree) return;
+      const target = numatbBasename.toLowerCase();
+      const stack: UnitModelTreeNode[] = [tree.root];
+      let foundUrl: string | null = null;
+      while (stack.length > 0) {
+        const n = stack.pop()!;
+        if (n.kind === "item" && n.fileUrl) {
+          const base = (n.fileUrl.replace(/\\/g, "/").split("/").pop() ?? "").toLowerCase();
+          if (base === target) {
+            foundUrl = n.fileUrl;
+            break;
+          }
+        }
+        for (const c of n.children ?? []) stack.push(c);
+      }
+      if (foundUrl) {
+        editors.openEditorForPath(resolveUnitModelNodeAbsPath(workspace.structurePath, foundUrl));
+      } else {
+        toast.message(`Could not locate "${numatbBasename}" in the structure`);
+      }
+    },
+    [workspace.structurePath, structureJson, editors],
+  );
 
   const { defaultLayout: persistedLayout, onLayoutChanged } = useDefaultLayout({
     id: "unit-model-edit-layout",
@@ -160,7 +312,7 @@ function UnitModelEditWorkspace({
         canOperateOnRoot={Boolean(workspace.activeRoot)}
         canExportDae={Boolean(activeExportRoot)}
         onOpenFolder={() => void workspace.pickUnitFolder()}
-        onExtractFhm2d={() => void workspace.extractFromFhm2d()}
+        onExtractFhm2d={() => workspace.openExtractDialog()}
         onUseLoadedRoot={workspace.useLoadedRoot}
         onValidate={() => void workspace.runValidation()}
         onRepack={workspace.openRepackDialog}
@@ -216,10 +368,21 @@ function UnitModelEditWorkspace({
                   structureJsonPath={workspace.structurePath}
                   modelRoot={workspace.activeRoot}
                   onMutated={onStructureMutated}
+                  onOpenEditor={handleOpenEditor}
+                  onRevealNode={handleRevealNode}
+                  onCopyNodePath={handleCopyNodePath}
+                  onShowTextureInPanel={handleShowTextureInPanel}
+                  editingPaths={editingRelPaths}
+                  modifiedPaths={modifiedPaths}
                 />
               </TabsContent>
               <TabsContent value="textures" className="mt-0 min-h-0 flex-1 overflow-hidden">
-                <UnitModelTexturePanel unitRoot={workspace.activeRoot} embedded />
+                <UnitModelTexturePanel
+                  unitRoot={workspace.activeRoot}
+                  embedded
+                  focusTextureFilename={leftTab === "textures" ? focusTextureFilename : null}
+                  onOpenReferencingNumatb={handleOpenReferencingNumatb}
+                />
               </TabsContent>
             </Tabs>
           </div>
@@ -283,6 +446,14 @@ function UnitModelEditWorkspace({
         folderName={workspace.folderName}
         onRepacked={workspace.setLastRepack}
       />
+
+      <UnitModelExtractDialog
+        open={workspace.extractDialogOpen}
+        onOpenChange={workspace.setExtractDialogOpen}
+        onExtracted={(result) => workspace.handleExtracted(result)}
+      />
+
+      <SsbhFileEditorHosts {...editors.hostProps} />
     </>
   );
 }
