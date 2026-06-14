@@ -200,6 +200,7 @@ type BonePreviewRigProps = {
   showSkeletonLines: boolean;
   showJointHandles: boolean;
   orbitControlsRef: React.RefObject<OrbitControlsImpl | null>;
+  gizmoDraggingRef?: React.RefObject<boolean>;
   onSelectBone: (index: number) => void;
   bonePoseGetterRef: React.MutableRefObject<(() => Float32Array) | null>;
   bonePoseApplyNonce: number;
@@ -228,6 +229,7 @@ export function BonePreviewRig({
   showSkeletonLines,
   showJointHandles,
   orbitControlsRef,
+  gizmoDraggingRef,
   onSelectBone,
   bonePoseGetterRef,
   bonePoseApplyNonce,
@@ -409,6 +411,7 @@ export function BonePreviewRig({
           mode={transformMode}
           onMouseDown={() => {
             tcDragRef.current = true;
+            if (gizmoDraggingRef) gizmoDraggingRef.current = true;
             needsSkinningUpdateRef.current = true;
             tcDragStartPoseRef.current = new Float32Array(encodeBonePose(boneRefs.current, bones.length));
             const oc = orbitControlsRef.current;
@@ -416,6 +419,7 @@ export function BonePreviewRig({
           }}
           onMouseUp={() => {
             tcDragRef.current = false;
+            if (gizmoDraggingRef) gizmoDraggingRef.current = false;
             needsSkinningUpdateRef.current = true;
             const oc = orbitControlsRef.current;
             if (oc) oc.enabled = true;

@@ -10,7 +10,12 @@ import { Fhm2dMemoryPreviewModal } from "./Fhm2dMemoryPreviewModal";
 import { shouldRenderPreviewSkeletonLines } from "./ssbhPreviewSkeletonVisibility";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
-export function SsbhModelPreviewViewport() {
+export function SsbhModelPreviewViewport({
+  viewportControls = "unreal",
+}: {
+  /** Match Scene Editor when "unreal"; legacy Blender orbit when "default". */
+  viewportControls?: "default" | "unreal";
+}) {
   const p = useSsbhModelPreview();
   const motionScrubFrameRef = useRef<number | null>(null);
   const [motionScrubbing, setMotionScrubbing] = useState(false);
@@ -40,6 +45,31 @@ export function SsbhModelPreviewViewport() {
     },
     [p],
   );
+
+  const handleViewportSelectInstance = useCallback(
+    (id: string | null) => {
+      if (id) {
+        p.setActivePreviewInstanceId(id);
+        return;
+      }
+      p.setActivePreviewInstanceId(null);
+      p.setSelectedBoneIndex(null);
+    },
+    [p],
+  );
+
+  const handleViewportSelectInstances = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) {
+        p.setActivePreviewInstanceId(null);
+        p.setSelectedBoneIndex(null);
+        return;
+      }
+      p.setActivePreviewInstanceId(ids[ids.length - 1] ?? null);
+    },
+    [p],
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 shrink-0 px-1">
@@ -168,6 +198,9 @@ export function SsbhModelPreviewViewport() {
               motionApplyLighting={p.motionApplyLighting}
               motionForceVisibleDuringPlayback={p.motionForceVisibleDuringPlayback}
               modelAttachments={p.modelAttachments}
+              viewportControls={viewportControls}
+              onViewportSelectInstance={handleViewportSelectInstance}
+              onViewportSelectInstances={handleViewportSelectInstances}
             />
             <SsbhModelPreviewLoadingOverlay readingBundle={p.loading} textureDecode={p.textureDecodeProgress} />
           </div>

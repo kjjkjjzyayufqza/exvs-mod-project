@@ -46,6 +46,19 @@ import {
 } from "three";
 import type { BufferGeometry, Texture } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { StageOrbitControls } from "@/components/viewport/StageOrbitControls";
+import { ViewportMarqueeOverlay } from "@/components/viewport/ViewportMarqueeOverlay";
+import { ViewportSelectionController } from "@/components/viewport/ViewportSelectionController";
+import {
+  runViewportObjectPick,
+  type SelectableNodeRegistry,
+  type ViewportPickRefs,
+} from "@/components/viewport/viewportPick";
+import type {
+  ScreenRect,
+  ViewportMultiSelectHandler,
+  ViewportSelectHandler,
+} from "@/components/viewport/viewportInteraction";
 import { animeExvsOnBeforeCompile, createAnimeExvsUniforms } from "./animeExvsMeshStandard";
 import { AnimePreviewPostFx } from "./AnimePreviewPostFx";
 import { BonePreviewRig } from "./BonePreviewRig";
@@ -223,6 +236,10 @@ type SsbhModelCanvasProps = {
   motionApplyLighting: boolean;
   motionForceVisibleDuringPlayback: boolean;
   modelAttachments: readonly PreviewModelAttachment[];
+  /** default: Blender-style orbit (LMB rotate). unreal: Scene Editor bindings (LMB marquee, RMB orbit). */
+  viewportControls?: "default" | "unreal";
+  onViewportSelectInstance?: ViewportSelectHandler;
+  onViewportSelectInstances?: ViewportMultiSelectHandler;
 };
 
 function MotionCameraController({
@@ -966,6 +983,11 @@ const Scene = memo(function Scene({
   motionApplyLighting,
   motionForceVisibleDuringPlayback,
   modelAttachments,
+  viewportControls = "default",
+  onViewportSelectInstance,
+  onViewportSelectInstances,
+  viewportPickRefs,
+  onMarqueeRectChange,
 }: Omit<
   SsbhModelCanvasProps,
   | "previewSuspended"
@@ -973,7 +995,24 @@ const Scene = memo(function Scene({
   | "onBoneTransformHotkey"
   | "onUndoBonePose"
   | "onRedoBonePose"
-> & { texturePool: SceneTexturePool }) {
+  | "viewportControls"
+  | "onViewportSelectInstance"
+  | "onViewportSelectInstances"
+> & {
+  texturePool: SceneTexturePool;
+  viewportControls?: "default" | "unreal";
+  onViewportSelectInstance?: ViewportSelectHandler;
+  onViewportSelectInstances?: ViewportMultiSelectHandler;
+  viewportPickRefs: ViewportPickRefs & {
+    selectableNodesRef: RefObject<SelectableNodeRegistry>;
+    orbitActiveRef: RefObject<boolean>;
+    rightMouseDownRef: RefObject<boolean>;
+    gizmoDraggingRef: RefObject<boolean>;
+    clickGestureRef: RefObject<{ x: number; y: number } | null>;
+    marqueeActiveRef: RefObject<boolean>;
+  };
+  onMarqueeRectChange: (rect: ScreenRect | null) => void;
+}) {
   const modelRootRef = useRef<Group>(null);
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const camera = useThree((s) => s.camera);
@@ -1018,6 +1057,22 @@ const Scene = memo(function Scene({
     regress();
     invalidate();
   }, [regress, invalidate]);
+
+  const isUnrealViewport = viewportControls === "unreal";
+  const unrealSelectionEnabled =
+    isUnrealViewport && Boolean(onViewportSelectInstance && onViewportSelectInstances);
+
+  const handleInstanceViewportClick = useCallback(
+    (instanceId: string) => (e: { stopPropagation: () => void; nativeEvent: MouseEvent }) => {
+      e.stopPropagation();
+      if (!unrealSelectionEnabled || !onViewportSelectInstance) return;
+      runViewportObjectPick(e.nativeEvent, instanceId, onViewportSelectInstance, {
+        clickPickSelectionEnabled: true,
+        refs: viewportPickRefs,
+      });
+    },
+    [unrealSelectionEnabled, onViewportSelectInstance, viewportPickRefs],
+  );
 
   const singleInstance = previewInstances.length <= 1;
   const visibleInstances = useMemo(() => {
@@ -1477,11 +1532,16 @@ const Scene = memo(function Scene({
             <group
               key={inst.id}
               position={pos}
+              onClick={unrealSelectionEnabled ? handleInstanceViewportClick(inst.id) : undefined}
               ref={(el) => {
                 if (el) {
                   instanceGroupRefs.current.set(inst.id, el);
+                  if (isUnrealViewport) {
+                    viewportPickRefs.selectableNodesRef.current.set(inst.id, el);
+                  }
                 } else {
                   instanceGroupRefs.current.delete(inst.id);
+                  viewportPickRefs.selectableNodesRef.current.delete(inst.id);
                 }
               }}
             >
@@ -1499,6 +1559,7 @@ const Scene = memo(function Scene({
                   showSkeletonLines={showSkeleton}
                   showJointHandles={showSkeleton}
                   orbitControlsRef={controlsRef}
+                  gizmoDraggingRef={viewportPickRefs.gizmoDraggingRef}
                   onSelectBone={onViewportBoneSelect}
                   bonePoseGetterRef={bonePoseGetterRef}
                   bonePoseApplyNonce={bonePoseApplyNonce}
@@ -1539,22 +1600,45 @@ const Scene = memo(function Scene({
         })}
       </group>
 
-      <OrbitControls
-        ref={controlsRef}
-        makeDefault
-        minDistance={0.08}
-        maxDistance={5e6}
-        enableDamping
-        dampingFactor={0.06}
-        screenSpacePanning
-        zoomSpeed={0.85}
-        rotateSpeed={0.65}
-        panSpeed={0.65}
-        minPolarAngle={0.05}
-        maxPolarAngle={Math.PI - 0.05}
-        onStart={handlePerformanceInteraction}
-        onChange={handlePerformanceInteraction}
-      />
+      {isUnrealViewport ? (
+        <>
+          {unrealSelectionEnabled ? (
+            <ViewportSelectionController
+              enabled
+              selectableNodesRef={viewportPickRefs.selectableNodesRef}
+              orbitActiveRef={viewportPickRefs.orbitActiveRef}
+              gizmoDraggingRef={viewportPickRefs.gizmoDraggingRef}
+              onSelectNode={onViewportSelectInstance!}
+              onSelectNodes={onViewportSelectInstances!}
+              onMarqueeRectChange={onMarqueeRectChange}
+              clickGestureRef={viewportPickRefs.clickGestureRef}
+              marqueeActiveRef={viewportPickRefs.marqueeActiveRef}
+            />
+          ) : null}
+          <StageOrbitControls
+            controlsRef={controlsRef}
+            orbitActiveRef={viewportPickRefs.orbitActiveRef}
+            rightMouseDownRef={viewportPickRefs.rightMouseDownRef}
+          />
+        </>
+      ) : (
+        <OrbitControls
+          ref={controlsRef}
+          makeDefault
+          minDistance={0.08}
+          maxDistance={5e6}
+          enableDamping
+          dampingFactor={0.06}
+          screenSpacePanning
+          zoomSpeed={0.85}
+          rotateSpeed={0.65}
+          panSpeed={0.65}
+          minPolarAngle={0.05}
+          maxPolarAngle={Math.PI - 0.05}
+          onStart={handlePerformanceInteraction}
+          onChange={handlePerformanceInteraction}
+        />
+      )}
 
       <MotionCameraController
         enabled={!anyMotionPlaying && motionApplyCamera && Boolean(activeMotionSample?.camera)}
@@ -1588,7 +1672,15 @@ const Scene = memo(function Scene({
 });
 
 export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCanvasProps) {
-  const { background, previewSuspended = false, motionScrubbing, ...sceneProps } = props;
+  const {
+    background,
+    previewSuspended = false,
+    motionScrubbing,
+    viewportControls = "default",
+    onViewportSelectInstance,
+    onViewportSelectInstances,
+    ...sceneProps
+  } = props;
   const {
     onViewportBoneSelectionClear,
     onBoneTransformHotkey,
@@ -1596,6 +1688,25 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
     onRedoBonePose,
     ...restSceneProps
   } = sceneProps;
+  const isUnrealViewport = viewportControls === "unreal";
+  const [marqueeRect, setMarqueeRect] = useState<ScreenRect | null>(null);
+  const orbitActiveRef = useRef(false);
+  const rightMouseDownRef = useRef(false);
+  const clickGestureRef = useRef<{ x: number; y: number } | null>(null);
+  const marqueeActiveRef = useRef(false);
+  const gizmoDraggingRef = useRef(false);
+  const selectableNodesRef = useRef<SelectableNodeRegistry>(new Map());
+  const viewportPickRefs = useMemo(
+    () => ({
+      orbitActiveRef,
+      rightMouseDownRef,
+      clickGestureRef,
+      marqueeActiveRef,
+      gizmoDraggingRef,
+      selectableNodesRef,
+    }),
+    [],
+  );
   const { previewInstances, activePreviewInstanceId } = restSceneProps;
   // Shared GPU texture pool for the whole canvas — decoded nutexb DataTextures are
   // deduped by content key across draws/instances (scene-editor core path).
@@ -1743,8 +1854,12 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
       onPointerDown={(ev) => {
         ev.currentTarget.focus();
       }}
+      onContextMenu={(ev) => {
+        if (isUnrealViewport) ev.preventDefault();
+      }}
       onKeyDown={handleCanvasKeyDown}
     >
+      {isUnrealViewport ? <ViewportMarqueeOverlay rect={marqueeRect} /> : null}
       <Canvas
         className="h-full w-full touch-none"
         frameloop={previewSuspended ? "never" : anyMotionPlaying || motionScrubbing ? "always" : "demand"}
@@ -1757,11 +1872,15 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
         performance={adaptivePerformanceOptions}
         dpr={canvasPerformanceProfile.dpr}
         camera={{ position: [2.4, 1.6, 2.8], fov: 50, near: 0.02, far: 5e6 }}
-        onPointerMissed={() => {
-          if (selectedBoneIndex !== null) {
-            onViewportBoneSelectionClear();
-          }
-        }}
+        onPointerMissed={
+          isUnrealViewport
+            ? undefined
+            : () => {
+                if (selectedBoneIndex !== null) {
+                  onViewportBoneSelectionClear();
+                }
+              }
+        }
       >
         <AdaptiveCanvasPerformanceController
           baseDprRange={canvasPerformanceProfile.dpr}
@@ -1779,6 +1898,11 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
           background={background}
           motionScrubbing={motionScrubbing}
           texturePool={texturePool}
+          viewportControls={viewportControls}
+          onViewportSelectInstance={onViewportSelectInstance}
+          onViewportSelectInstances={onViewportSelectInstances}
+          viewportPickRefs={viewportPickRefs}
+          onMarqueeRectChange={setMarqueeRect}
         />
       </Canvas>
     </div>

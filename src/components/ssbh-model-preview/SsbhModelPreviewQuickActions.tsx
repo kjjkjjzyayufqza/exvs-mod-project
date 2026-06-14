@@ -304,8 +304,8 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
                 </p>
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
                   Focus this toolbar (Tab), then <span className="text-foreground font-medium">F</span> fit camera,{" "}
-                  <span className="text-foreground font-medium">R</span> reload model. In the viewport: left-drag orbit,
-                  scroll zoom, right-drag pan.
+                  <span className="text-foreground font-medium">R</span> reload model. Viewport: LMB marquee select,
+                  RMB orbit, MMB pan, scroll zoom. Hold RMB + WASD/QE to fly. Alt+LMB orbit.
                 </p>
               </div>
             </div>
