@@ -243,6 +243,20 @@ function countModels(node: UnitModelTreeNode): number {
 }
 
 /**
+ * Collect model-group folder labels in structure (DFS) order. The position in this list is the
+ * `folder_index` used by `shell_*.shl` records, so it resolves a SHL slot to its model name.
+ */
+export function collectModelGroupNames(node: UnitModelTreeNode): string[] {
+  const out: string[] = [];
+  const walk = (n: UnitModelTreeNode) => {
+    if (n.role === "model-group") out.push(n.label);
+    for (const c of n.children ?? []) walk(c);
+  };
+  walk(node);
+  return out;
+}
+
+/**
  * Build the renderable structure tree from a parsed `_structure.json` object.
  * Throws on malformed input (missing or non-array SubFileStructure / SubFileData).
  */

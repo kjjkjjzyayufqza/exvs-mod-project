@@ -9,6 +9,7 @@ import {
   FolderPlus,
   Loader2,
   Plus,
+  Replace,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -57,12 +58,21 @@ import { buildUnitModelStructureTree, type UnitModelTreeNode } from "../utils/un
 import {
   addUnitModelModel,
   importUnitModelStaticMesh,
+  previewUnitModelModelReplacement,
   removeUnitModelModel,
+  replaceUnitModelModel,
   validateUnitModelSourceFolder,
+  type UnitModelReplacePreview,
+  type UnitModelSourceValidation,
 } from "../utils/unitModelModelService";
+import { listUnitModelTextures } from "../utils/unitModelTextureService";
+import { UnitModelAddFolderModal } from "./UnitModelAddFolderModal";
+import { UnitModelReplaceFolderModal } from "./UnitModelReplaceFolderModal";
+import type { UnitModelSourceTexturePlan } from "./UnitModelSourceValidationPreview";
 import {
   UNIT_MODEL_ADD_SSBH_FOLDER_DIALOG_PATH_KEY,
   UNIT_MODEL_IMPORT_STATIC_MESH_DIALOG_PATH_KEY,
+  UNIT_MODEL_REPLACE_SSBH_FOLDER_DIALOG_PATH_KEY,
 } from "../utils/unitModelEditorSettings";
 
 interface UnitModelModelManagerPanelProps {
@@ -220,10 +230,35 @@ function collectModels(root: UnitModelTreeNode): UnitModelTreeNode[] {
   return (models?.children ?? []).filter((c) => c.role === "model-group");
 }
 
+function buildSourceTexturePlan(
+  validation: UnitModelSourceValidation,
+  poolTextureNames: ReadonlySet<string>,
+): UnitModelSourceTexturePlan {
+  const sourceNames = new Set(validation.sourceTexturesFound.map((name) => name.toLowerCase()));
+  const copiedFromSource: string[] = [];
+  const reusedFromPool: string[] = [];
+  const missing: string[] = [];
+  for (const reference of validation.textureReferences) {
+    const key = reference.toLowerCase();
+    if (poolTextureNames.has(key)) {
+      reusedFromPool.push(reference);
+    } else if (sourceNames.has(key)) {
+      copiedFromSource.push(reference);
+    } else {
+      missing.push(reference);
+    }
+  }
+  return {
+    referenced: validation.textureReferences,
+    copiedFromSource,
+    reusedFromPool,
+    missing,
+  };
+}
+
 /**
- * Structured list of the package's models (one folder per model), each with its file types and a
- * "Copy info to AI" affordance. Read surface for now; add / replace / remove model operations are
- * the documented Phase 5 continuation (DAE->SSBH import + structure-tree surgery + count sync).
+ * Structured list of the package's models (one folder per model), with add, replace, remove, and
+ * "Copy info to AI" affordances backed by the Unit model structure mutation commands.
  */
 export function UnitModelModelManagerPanel({
   structureJson,
@@ -235,6 +270,15 @@ export function UnitModelModelManagerPanel({
   className,
 }: UnitModelModelManagerPanelProps) {
   const [busy, setBusy] = useState<string | null>(null);
+  const [addFolderPreview, setAddFolderPreview] = useState<{
+    source: string;
+    validation: UnitModelSourceValidation;
+    texturePlan: UnitModelSourceTexturePlan;
+  } | null>(null);
+  const [replaceFolderPreview, setReplaceFolderPreview] = useState<{
+    source: string;
+    preview: UnitModelReplacePreview;
+  } | null>(null);
   const [importEntries, setImportEntries] = useState<DaeImportEntry[]>([]);
   const [showImportConfig, setShowImportConfig] = useState(false);
   const [importProgress, setImportProgress] = useState<UnitImportProgressState>({
@@ -268,6 +312,26 @@ export function UnitModelModelManagerPanel({
         "directory",
       );
       const validation = await validateUnitModelSourceFolder(source);
+      const inventory = await listUnitModelTextures(modelRoot, structureJsonPath);
+      const poolNames = new Set(inventory.textures.map((texture) => texture.filename.toLowerCase()));
+      const texturePlan = buildSourceTexturePlan(validation, poolNames);
+      setAddFolderPreview({ source, validation, texturePlan });
+    } catch (error) {
+      toast.error("Prepared model folder is invalid", { description: String(error) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleConfirmAddFolder = async () => {
+    if (!modelRoot || !structureJsonPath || !addFolderPreview) return;
+    const { source, validation, texturePlan } = addFolderPreview;
+    if (texturePlan.missing.length > 0) {
+      toast.error("Cannot add model while material textures are missing.");
+      return;
+    }
+    setBusy("add-folder");
+    try {
       const result = await addUnitModelModel(modelRoot, source, structureJsonPath);
       toast.success(`Model '${validation.modelName}' added`, {
         description: `${result.modelCount} models, ${result.totalFiles} files. Empty NUHLPB created automatically.`,
@@ -275,9 +339,10 @@ export function UnitModelModelManagerPanel({
       if (validation.ignoredSourceNuhlpb) {
         toast.info("The source NUHLPB was ignored; a new empty NUHLPB was created.");
       }
+      setAddFolderPreview(null);
       onMutated?.();
     } catch (error) {
-      toast.error("Prepared model folder is invalid", { description: String(error) });
+      toast.error("Failed to add model", { description: String(error) });
     } finally {
       setBusy(null);
     }
@@ -483,6 +548,74 @@ export function UnitModelModelManagerPanel({
     }
   };
 
+  const handleReplaceFolder = async (label: string) => {
+    if (!modelRoot || !structureJsonPath) {
+      toast.error("Open or extract a unit-model folder first.");
+      return;
+    }
+    setBusy(`replace:${label}`);
+    try {
+      const source = await open({
+        directory: true,
+        multiple: false,
+        title: `Select replacement SSBH folder for ${label}`,
+        defaultPath:
+          (await getStoredDialogDefaultPath(UNIT_MODEL_REPLACE_SSBH_FOLDER_DIALOG_PATH_KEY)) ??
+          modelRoot ??
+          undefined,
+      });
+      if (typeof source !== "string" || !source.trim()) return;
+      await rememberStoredDialogSelection(
+        UNIT_MODEL_REPLACE_SSBH_FOLDER_DIALOG_PATH_KEY,
+        source,
+        "directory",
+      );
+      const preview = await previewUnitModelModelReplacement(
+        modelRoot,
+        label,
+        source,
+        structureJsonPath,
+      );
+      setReplaceFolderPreview({ source, preview });
+    } catch (error) {
+      toast.error("Prepared replacement folder is invalid", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleConfirmReplaceFolder = async () => {
+    if (!modelRoot || !structureJsonPath || !replaceFolderPreview) return;
+    const { source, preview } = replaceFolderPreview;
+    if (preview.blockers.length > 0) {
+      toast.error("Cannot replace model while blockers remain.");
+      return;
+    }
+    const targetName = preview.target.modelName;
+    setBusy(`replace:${targetName}`);
+    try {
+      const result = await replaceUnitModelModel(
+        modelRoot,
+        targetName,
+        source,
+        structureJsonPath,
+      );
+      toast.success(`Model '${targetName}' replaced`, {
+        description: `${result.modelCount} models, ${result.totalFiles} files. ${result.removedFiles.length} old file(s) removed.`,
+      });
+      setReplaceFolderPreview(null);
+      onMutated?.();
+    } catch (error) {
+      toast.error("Failed to replace model", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const parsed = useMemo<{ models: ModelSummary[]; error: string | null }>(() => {
     if (structureJson == null) return { models: [], error: null };
     try {
@@ -497,6 +630,12 @@ export function UnitModelModelManagerPanel({
       return { models: [], error: error instanceof Error ? error.message : String(error) };
     }
   }, [structureJson]);
+
+  const addFolderDuplicate =
+    addFolderPreview != null &&
+    parsed.models.some(
+      (m) => m.label.toLowerCase() === addFolderPreview.validation.modelName.toLowerCase(),
+    );
 
   return (
     <div className={cn("flex h-full min-h-0 flex-col bg-card/40", className)}>
@@ -615,22 +754,40 @@ export function UnitModelModelManagerPanel({
                     })}
                   />
                   {canMutate ? (
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6 text-muted-foreground opacity-0 transition-colors hover:text-red-600 group-hover:opacity-100 focus-visible:opacity-100 dark:hover:text-red-400"
-                      disabled={busy !== null}
-                      onClick={() => void handleRemove(model.label)}
-                      title={`Remove ${model.label}`}
-                      aria-label={`Remove ${model.label}`}
-                    >
-                      {busy === `remove:${model.label}` ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                      )}
-                    </Button>
+                    <>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6 text-muted-foreground opacity-0 transition-colors hover:text-primary group-hover:opacity-100 focus-visible:opacity-100"
+                        disabled={busy !== null}
+                        onClick={() => void handleReplaceFolder(model.label)}
+                        title={`Replace ${model.label}`}
+                        aria-label={`Replace ${model.label}`}
+                      >
+                        {busy === `replace:${model.label}` ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                        ) : (
+                          <Replace className="h-3.5 w-3.5" aria-hidden />
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6 text-muted-foreground opacity-0 transition-colors hover:text-red-600 group-hover:opacity-100 focus-visible:opacity-100 dark:hover:text-red-400"
+                        disabled={busy !== null}
+                        onClick={() => void handleRemove(model.label)}
+                        title={`Remove ${model.label}`}
+                        aria-label={`Remove ${model.label}`}
+                      >
+                        {busy === `remove:${model.label}` ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                        )}
+                      </Button>
+                    </>
                   ) : null}
                 </li>
               );
@@ -645,6 +802,22 @@ export function UnitModelModelManagerPanel({
           </div>
         )}
       </ScrollArea>
+      <UnitModelAddFolderModal
+        open={addFolderPreview !== null}
+        validation={addFolderPreview?.validation ?? null}
+        duplicateName={addFolderDuplicate}
+        texturePlan={addFolderPreview?.texturePlan ?? null}
+        busy={busy === "add-folder"}
+        onConfirm={() => void handleConfirmAddFolder()}
+        onCancel={() => setAddFolderPreview(null)}
+      />
+      <UnitModelReplaceFolderModal
+        open={replaceFolderPreview !== null}
+        preview={replaceFolderPreview?.preview ?? null}
+        busy={busy === `replace:${replaceFolderPreview?.preview.target.modelName ?? ""}`}
+        onConfirm={() => void handleConfirmReplaceFolder()}
+        onCancel={() => setReplaceFolderPreview(null)}
+      />
       {showImportConfig && importEntries.length > 0 ? (
         <DaeImportConfigModal
           entries={importEntries}

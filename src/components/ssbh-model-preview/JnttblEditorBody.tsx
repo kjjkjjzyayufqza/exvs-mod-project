@@ -483,7 +483,7 @@ export function JnttblEditorBody({
           </div>
           <div
             ref={entryScrollRef}
-            className="max-h-[min(55vh,480px)] overflow-auto overscroll-contain"
+            className="max-h-[min(72vh,760px)] overflow-auto overscroll-contain"
           >
             {entries.length === 0 ? (
               <p className="px-3 py-6 text-center text-[11px] text-muted-foreground">No entries. Add a row.</p>

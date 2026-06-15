@@ -217,13 +217,7 @@ pub fn validate_unit_model_for_repack(
     summary.shl_count = count_items_by_ext(&all_items, &data_by_index, ".shl");
 
     validate_nuhlpb_files(&all_items, &data_by_index, json_dir, &mut errors);
-    validate_shl_files(
-        &all_items,
-        &data_by_index,
-        json_dir,
-        &mut summary,
-        &mut warnings,
-    );
+    validate_legacy_root_files(&input.sub_file_data, json_dir, &mut summary, &mut warnings);
 
     let mut model_ord = 0usize;
     for node in forest.iter() {
@@ -815,7 +809,9 @@ fn validate_texture_container(
             errors,
             "unk",
             model_name,
-            format!("Texture container must use unk3=32 and unk5>=1, got unk3={unk3}, unk5={unk5}."),
+            format!(
+                "Texture container must use unk3=32 and unk5>=1, got unk3={unk3}, unk5={unk5}."
+            ),
             None::<&Path>,
         );
     }
@@ -1034,48 +1030,46 @@ fn validate_nuhlpb_files(
     }
 }
 
-fn validate_shl_files(
-    all_items: &[&StructureNode],
-    data_by_index: &HashMap<i32, &InputSubFileData>,
+fn validate_legacy_root_files(
+    sub_file_data: &[InputSubFileData],
     json_dir: &Path,
     summary: &mut UnitModelValidationSummary,
     warnings: &mut Vec<String>,
 ) {
-    let shl_items: Vec<&StructureNode> = all_items
+    let shl_files: Vec<&InputSubFileData> = sub_file_data
         .iter()
-        .copied()
-        .filter(|item| {
-            let Some((_, file_index, _, _, _)) = item.item_attrs() else {
-                return false;
-            };
-            data_by_index
-                .get(&file_index)
-                .map(|file| actual_ext(file) == ".shl")
-                .unwrap_or(false)
-        })
+        .filter(|file| is_legacy_root_control_file(file) && actual_ext(file) == ".shl")
         .collect();
 
-    if shl_items.len() != 1 {
+    if shl_files.len() != 1 {
         warnings.push(format!(
             "Legacy SHL check: expected exactly 1 shell_*.shl file, found {}.",
-            shl_items.len()
+            shl_files.len()
         ));
     }
 
-    for item in shl_items {
-        let Some((_, file_index, _, _, _)) = item.item_attrs() else {
-            continue;
-        };
-        let Some(file) = data_by_index.get(&file_index) else {
-            continue;
-        };
+    for file in sub_file_data
+        .iter()
+        .filter(|file| is_legacy_root_control_file(file))
+    {
         let path = resolve_file_path(json_dir, &file.file_url);
         if !path.is_file() {
-            warnings.push(format!(
-                "Legacy SHL referenced but missing on disk: {} (resolved: {})",
-                file.file_url,
-                path.display()
-            ));
+            if actual_ext(file) == ".shl" {
+                warnings.push(format!(
+                    "Legacy SHL referenced but missing on disk: {} (resolved: {})",
+                    file.file_url,
+                    path.display()
+                ));
+            } else {
+                warnings.push(format!(
+                    "Legacy root file referenced but missing on disk: {} (resolved: {})",
+                    file.file_url,
+                    path.display()
+                ));
+            }
+            continue;
+        }
+        if actual_ext(file) != ".shl" {
             continue;
         }
         match read_shl_model_count(&path) {
@@ -1255,6 +1249,22 @@ fn actual_ext(file: &InputSubFileData) -> String {
     file.file_type.to_ascii_lowercase()
 }
 
+fn is_legacy_root_control_file(file: &InputSubFileData) -> bool {
+    let cleaned = file.file_url.replace('\\', "/");
+    let segments: Vec<&str> = cleaned
+        .split('/')
+        .filter(|segment| !segment.is_empty() && *segment != ".")
+        .collect();
+    if segments.len() != 2 {
+        return false;
+    }
+    let name = segments[1].to_ascii_lowercase();
+    name.starts_with("characterid_")
+        || name.starts_with("shell_")
+        || name.starts_with("vernier_table_")
+        || name.starts_with("effect_project_")
+}
+
 fn file_basename(file_url: &str) -> String {
     file_url
         .replace('\\', "/")
@@ -1355,48 +1365,40 @@ mod tests {
     }
 
     #[test]
-    fn missing_legacy_shl_reference_is_warning_only() {
-        let tmp = tempfile::tempdir().unwrap();
-        let shl = InputSubFileData {
-            index: 0,
-            file_type: ".bin".into(),
-            file_index: 7,
-            file_url: r".\0xA258a522\shell_015gndmuc_004deltpl_001.shl".into(),
-            file_base_name: None,
-        };
-        let mut data_by_index = HashMap::new();
-        data_by_index.insert(shl.file_index, &shl);
-        let shl_item = StructureNode::Item {
-            entry_index: 0,
-            file_index: shl.file_index,
-            unk2: "00000000".into(),
-            unk3: 0,
-            display_name: None,
-        };
-        let all_items = vec![&shl_item];
-        let mut summary = UnitModelValidationSummary {
-            model_count: 0,
-            numatb_count: 0,
-            nuhlpb_count: 0,
-            shl_count: 0,
-            shl_declared_model_count: None,
-            texture_reference_count: 0,
-        };
-        let mut warnings = Vec::new();
+    fn real_sample_0xa258a522_reports_missing_legacy_root_files_as_warnings_when_present() {
+        let model_root = Path::new(r"E:\XB\解包\com\file\0xA258a522");
+        let structure = Path::new(r"E:\XB\解包\com\file\0xA258a522_structure.json");
+        if !model_root.exists() || !structure.exists() {
+            eprintln!("SKIP: real unit model sample 0xA258a522 is not present.");
+            return;
+        }
 
-        validate_shl_files(
-            &all_items,
-            &data_by_index,
-            tmp.path(),
-            &mut summary,
-            &mut warnings,
+        let result = validate_unit_model_for_repack(
+            model_root.to_str().unwrap(),
+            Some(structure.to_str().unwrap()),
         );
+        let expected_missing = [
+            "characterid_015gndmuc_004deltpl_001.bin",
+            "shell_015gndmuc_004deltpl_001.shl",
+            "vernier_table_015gndmuc_004deltpl_001.bin",
+            "effect_project_015gndmuc_004deltpl_001.bin",
+        ];
 
-        assert!(summary.shl_declared_model_count.is_none());
-        assert!(warnings.iter().any(|warning| {
-            warning.contains("Legacy SHL referenced but missing on disk")
-                && warning.contains("shell_015gndmuc_004deltpl_001.shl")
-        }));
+        for name in expected_missing {
+            assert!(
+                !result
+                    .errors
+                    .iter()
+                    .any(|error| error.message.contains(name)),
+                "missing legacy root file should not block validation ({name}): errors={}",
+                serde_json::to_string_pretty(&result.errors).unwrap()
+            );
+            assert!(
+                result.warnings.iter().any(|warning| warning.contains(name)),
+                "missing legacy root file should surface as warning ({name}): warnings={}",
+                serde_json::to_string_pretty(&result.warnings).unwrap()
+            );
+        }
     }
 
     #[test]
@@ -1574,8 +1576,9 @@ mod tests {
         );
 
         assert_eq!(result.summary.model_count, 1);
-        assert!(result.errors.iter().any(|e| {
-            e.phase == "textures" && e.message.contains("found none")
-        }));
+        assert!(result
+            .errors
+            .iter()
+            .any(|e| { e.phase == "textures" && e.message.contains("found none") }));
     }
 }

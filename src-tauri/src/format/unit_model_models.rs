@@ -184,6 +184,73 @@ pub struct UnitModelSourceValidation {
     pub ignored_source_nuhlpb: bool,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitModelReplacePreview {
+    pub source: UnitModelSourceValidation,
+    pub target: UnitModelReplaceTargetPreview,
+    pub compatibility: UnitModelReplaceCompatibility,
+    pub textures: UnitModelReplaceTexturePlan,
+    pub warnings: Vec<String>,
+    pub blockers: Vec<String>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitModelReplaceTargetPreview {
+    pub model_name: String,
+    pub model_index: usize,
+    pub numdlb_path: Option<String>,
+    pub numshb_path: Option<String>,
+    pub nusktb_path: Option<String>,
+    pub jnttbl_path: Option<String>,
+    pub numatb_paths: Vec<String>,
+    pub nuhlpb_path: Option<String>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitModelReplaceCompatibility {
+    pub skeleton: UnitModelSkeletonCompatibility,
+    pub jnttbl: UnitModelJnttblCompatibility,
+    pub materials: UnitModelMaterialCompatibility,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitModelSkeletonCompatibility {
+    pub source_bone_count: usize,
+    pub target_bone_count: usize,
+    pub matching_bone_names: usize,
+    pub missing_in_source: Vec<String>,
+    pub new_in_source: Vec<String>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitModelJnttblCompatibility {
+    pub source_bone_count: u32,
+    pub target_bone_count: Option<u32>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitModelMaterialCompatibility {
+    pub kept_labels: Vec<String>,
+    pub removed_labels: Vec<String>,
+    pub added_labels: Vec<String>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitModelReplaceTexturePlan {
+    pub referenced: Vec<String>,
+    pub copied_from_source: Vec<String>,
+    pub reused_from_pool: Vec<String>,
+    pub missing: Vec<String>,
+    pub orphaned_after_replace: Vec<String>,
+}
+
 fn ext_lower(path: &Path) -> String {
     path.extension()
         .and_then(|e| e.to_str())
@@ -231,7 +298,7 @@ fn scan_source_model(source_dir: &Path) -> Result<SourceModel, String> {
                 "Source model folder must contain exactly one {extension} file, found {}.",
                 files.len()
             )),
-    }
+        }
     };
 
     let numdlb = exactly_one(".numdlb")?;
@@ -349,7 +416,217 @@ pub fn validate_unit_model_source_folder(
     let source_path = PathBuf::from(source_dir.trim());
     let source = scan_source_model(&source_path)?;
     validate_source_model_contents(&source)?;
+    build_source_validation_report(&source_path, &source)
+}
 
+pub fn preview_unit_model_model_replacement(
+    model_root: &str,
+    structure_json_path: Option<&str>,
+    target_model_name: &str,
+    source_dir: &str,
+) -> Result<UnitModelReplacePreview, String> {
+    let root_path = validate_dir(model_root)?;
+    let structure_path = resolve_structure_path(&root_path, structure_json_path)?;
+    let json_dir = structure_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .to_path_buf();
+    let target_name = target_model_name.trim().to_string();
+    if target_name.is_empty() {
+        return Err("Target model name cannot be empty.".to_string());
+    }
+
+    let source_path = PathBuf::from(source_dir.trim());
+    let source = scan_source_model(&source_path)?;
+    validate_source_model_contents(&source)?;
+    let source_report = build_source_validation_report(&source_path, &source)?;
+
+    let raw = fs::read_to_string(&structure_path).map_err(|e| {
+        format!(
+            "Failed to read structure JSON {}: {e}",
+            structure_path.display()
+        )
+    })?;
+    let value: Value = serde_json::from_str(&raw).map_err(|e| {
+        format!(
+            "Failed to parse structure JSON {}: {e}",
+            structure_path.display()
+        )
+    })?;
+    let sub_file_data = value
+        .get("SubFileData")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "Structure JSON missing SubFileData array".to_string())?
+        .clone();
+    let sub_file_structure: Vec<SubFileStructureEntry> = serde_json::from_value(
+        value
+            .get("SubFileStructure")
+            .cloned()
+            .ok_or_else(|| "Structure JSON missing SubFileStructure".to_string())?,
+    )
+    .map_err(|e| format!("Failed to parse SubFileStructure: {e}"))?;
+    let ext_by_index = build_ext_by_index(&sub_file_data);
+    let mut root = parse_root(&sub_file_structure)?;
+
+    let (model_index, target_files, target_texture_refs) = {
+        let models = find_models_container(&mut root, &ext_by_index)
+            .ok_or_else(|| "Could not locate the models container in the structure.".to_string())?;
+        let index = models
+            .iter()
+            .position(|mg| {
+                folder_has_direct_ext(mg, ".numdlb", &ext_by_index)
+                    && model_group_name(mg, &ext_by_index).as_deref() == Some(target_name.as_str())
+            })
+            .ok_or_else(|| format!("Model '{target_name}' was not found in the structure."))?;
+        let group = &models[index];
+        (
+            index,
+            direct_file_indices_by_ext(group, &ext_by_index),
+            count_texture_references_in_node(group, &ext_by_index),
+        )
+    };
+
+    let target_numdlb = first_path_for_ext(&target_files, ".numdlb", &sub_file_data, &json_dir);
+    let target_numshb = first_path_for_ext(&target_files, ".numshb", &sub_file_data, &json_dir);
+    let target_nusktb = first_path_for_ext(&target_files, ".nusktb", &sub_file_data, &json_dir);
+    let target_jnttbl = first_path_for_ext(&target_files, ".jnttbl", &sub_file_data, &json_dir);
+    let target_numatbs = paths_for_ext(&target_files, ".numatb", &sub_file_data, &json_dir);
+    let target_nuhlpb = find_named_nuhlpb_path(
+        &root,
+        &ext_by_index,
+        &sub_file_data,
+        &json_dir,
+        &target_name,
+    );
+
+    let source_bone_names = read_skel_bone_names(&source.nusktb)?;
+    let target_nusktb_path = target_nusktb
+        .as_ref()
+        .ok_or_else(|| format!("Target model '{target_name}' is missing a .nusktb item."))?;
+    let target_bone_names = read_skel_bone_names(target_nusktb_path)?;
+    let skeleton = compare_bone_names(&source_bone_names, &target_bone_names);
+
+    let source_jnttbl_count = read_jnttbl_bone_count(&source.jnttbl)?;
+    let target_jnttbl_count = match target_jnttbl.as_ref() {
+        Some(path) => Some(read_jnttbl_bone_count(path)?),
+        None => None,
+    };
+
+    let source_materials = material_labels_from_numatbs(&source.numatbs)?;
+    let target_materials = material_labels_from_numatbs(&target_numatbs)?;
+    let (kept_labels, removed_labels, added_labels) =
+        diff_ordered_labels(&target_materials, &source_materials);
+
+    let texture_index = texture_index_by_name(&sub_file_data);
+    let textures = build_replace_texture_plan(
+        &source_path,
+        &source_report.texture_references,
+        &texture_index,
+    );
+    let referenced_counts = count_references_by_index(&root);
+    let incoming_reused_indices: HashSet<i32> = textures
+        .reused_from_pool
+        .iter()
+        .filter_map(|name| texture_index.get(&name.to_ascii_lowercase()).copied())
+        .collect();
+    let orphaned_after_replace = target_texture_refs
+        .iter()
+        .filter_map(|(file_index, target_count)| {
+            if incoming_reused_indices.contains(file_index) {
+                return None;
+            }
+            let total_count = referenced_counts.get(file_index).copied().unwrap_or(0);
+            if total_count != *target_count {
+                return None;
+            }
+            file_url_for_index(&sub_file_data, *file_index).map(|file_url| file_basename(&file_url))
+        })
+        .collect::<Vec<_>>();
+    let textures = UnitModelReplaceTexturePlan {
+        orphaned_after_replace,
+        ..textures
+    };
+
+    let mut warnings = Vec::new();
+    if !source.model_name.eq_ignore_ascii_case(&target_name) {
+        warnings.push(format!(
+            "Source model '{}' will be imported as target model '{}'.",
+            source.model_name, target_name
+        ));
+    }
+    if !skeleton.missing_in_source.is_empty() || !skeleton.new_in_source.is_empty() {
+        warnings.push(format!(
+            "Skeleton differs: target has {} bones, source has {} bones.",
+            skeleton.target_bone_count, skeleton.source_bone_count
+        ));
+    }
+    if target_jnttbl_count != Some(source_jnttbl_count) {
+        warnings.push(format!(
+            "JNTT bone count differs: target {:?}, source {}.",
+            target_jnttbl_count, source_jnttbl_count
+        ));
+    }
+    if !removed_labels.is_empty() || !added_labels.is_empty() {
+        warnings.push(format!(
+            "Material labels differ: {} removed, {} added.",
+            removed_labels.len(),
+            added_labels.len()
+        ));
+    }
+    if source_report.ignored_source_nuhlpb {
+        warnings.push("Source NUHLPB is ignored; the target NUHLPB will be kept.".to_string());
+    }
+    if !textures.orphaned_after_replace.is_empty() {
+        warnings.push(format!(
+            "{} old texture(s) may be removed because no remaining model references them.",
+            textures.orphaned_after_replace.len()
+        ));
+    }
+
+    let blockers = textures
+        .missing
+        .iter()
+        .map(|name| {
+            format!(
+                "Texture '{name}' is referenced by the source NUMATB files but is missing from both the source folder and package texture pool."
+            )
+        })
+        .collect();
+
+    Ok(UnitModelReplacePreview {
+        source: source_report,
+        target: UnitModelReplaceTargetPreview {
+            model_name: target_name,
+            model_index,
+            numdlb_path: target_numdlb.map(path_to_string),
+            numshb_path: target_numshb.map(path_to_string),
+            nusktb_path: target_nusktb.map(path_to_string),
+            jnttbl_path: target_jnttbl.map(path_to_string),
+            numatb_paths: target_numatbs.into_iter().map(path_to_string).collect(),
+            nuhlpb_path: target_nuhlpb.map(path_to_string),
+        },
+        compatibility: UnitModelReplaceCompatibility {
+            skeleton,
+            jnttbl: UnitModelJnttblCompatibility {
+                source_bone_count: source_jnttbl_count,
+                target_bone_count: target_jnttbl_count,
+            },
+            materials: UnitModelMaterialCompatibility {
+                kept_labels,
+                removed_labels,
+                added_labels,
+            },
+        },
+        textures,
+        warnings,
+        blockers,
+    })
+}
+
+fn build_source_validation_report(
+    source_path: &Path,
+    source: &SourceModel,
+) -> Result<UnitModelSourceValidation, String> {
     let mut texture_references = Vec::new();
     let mut seen = HashSet::new();
     for numatb in &source.numatbs {
@@ -367,12 +644,12 @@ pub fn validate_unit_model_source_folder(
 
     Ok(UnitModelSourceValidation {
         source_dir: source_path.to_string_lossy().to_string(),
-        model_name: source.model_name,
+        model_name: source.model_name.clone(),
         required_files: [
-            source.numdlb,
-            source.numshb,
-            source.nusktb,
-            source.jnttbl,
+            source.numdlb.clone(),
+            source.numshb.clone(),
+            source.nusktb.clone(),
+            source.jnttbl.clone(),
             source.numatbs[0].clone(),
             source.numatbs[1].clone(),
         ]
@@ -613,11 +890,11 @@ pub fn add_unit_model_model(
 
     // Helper that copies a model file and registers a fresh pool entry.
     let add_pool_file = |src: &Path,
-                             rel_dir: &str,
-                             file_type: &str,
-                             sub_file_data: &mut Vec<Value>,
-                             copies: &mut Vec<(PathBuf, PathBuf)>,
-                             next_file_index: &mut i32|
+                         rel_dir: &str,
+                         file_type: &str,
+                         sub_file_data: &mut Vec<Value>,
+                         copies: &mut Vec<(PathBuf, PathBuf)>,
+                         next_file_index: &mut i32|
      -> Result<i32, String> {
         let filename = src
             .file_name()
@@ -832,6 +1109,408 @@ pub fn add_unit_model_model(
     })
 }
 
+/// Replace an existing model's geometry/material/skeleton in place from a prepared SSBH folder.
+///
+/// Reference-safe: the target model's NAME and POSITION (folder_index) are preserved, so every
+/// shl/vernier/effect_project reference (by folder_index + name-hash model_id) stays valid. The new
+/// numdlb is written as `<oldName>.numdlb` with `model_name = oldName`; the other new files keep
+/// their own names (the new numdlb's internal references already point at them). The model's existing
+/// NUHLPB is left untouched. Textures are re-deduped into the shared pool and the target's now
+/// orphaned textures are dropped. Rollback-safe (old model files are staged aside, new files copied,
+/// structure committed atomically; any failure restores the originals).
+pub fn replace_unit_model_model(
+    model_root: &str,
+    structure_json_path: Option<&str>,
+    target_model_name: &str,
+    source_dir: &str,
+) -> Result<UnitModelMutationResult, String> {
+    let root_path = validate_dir(model_root)?;
+    let structure_path = resolve_structure_path(&root_path, structure_json_path)?;
+    let json_dir = structure_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .to_path_buf();
+    let out_name = root_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| format!("Invalid model root: {}", root_path.display()))?
+        .to_string();
+
+    let old_name = target_model_name.trim().to_string();
+    if old_name.is_empty() {
+        return Err("Target model name cannot be empty.".to_string());
+    }
+
+    let source = scan_source_model(Path::new(source_dir.trim()))?;
+    validate_source_model_contents(&source)?;
+
+    let raw = fs::read_to_string(&structure_path).map_err(|e| {
+        format!(
+            "Failed to read structure JSON {}: {e}",
+            structure_path.display()
+        )
+    })?;
+    let mut value: Value = serde_json::from_str(&raw).map_err(|e| {
+        format!(
+            "Failed to parse structure JSON {}: {e}",
+            structure_path.display()
+        )
+    })?;
+    let mut sub_file_data = value
+        .get("SubFileData")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "Structure JSON missing SubFileData array".to_string())?
+        .clone();
+    let sub_file_structure: Vec<SubFileStructureEntry> = serde_json::from_value(
+        value
+            .get("SubFileStructure")
+            .cloned()
+            .ok_or_else(|| "Structure JSON missing SubFileStructure".to_string())?,
+    )
+    .map_err(|e| format!("Failed to parse SubFileStructure: {e}"))?;
+
+    let ext_by_index = build_ext_by_index(&sub_file_data);
+    let mut root = parse_root(&sub_file_structure)?;
+
+    // Locate the target model group's position inside the models container.
+    let target_idx = {
+        let models = find_models_container(&mut root, &ext_by_index)
+            .ok_or_else(|| "Could not locate the models container in the structure.".to_string())?;
+        models
+            .iter()
+            .position(|mg| {
+                folder_has_direct_ext(mg, ".numdlb", &ext_by_index)
+                    && model_group_name(mg, &ext_by_index).as_deref() == Some(old_name.as_str())
+            })
+            .ok_or_else(|| format!("Model '{old_name}' was not found in the structure."))?
+    };
+
+    // The target group's direct model files (nusktb/numshb/numdlb/jnttbl/numatb) — staged aside on
+    // commit so they no longer collide (the new numdlb reuses `<oldName>.numdlb`) and stale files go.
+    let old_model_file_urls: Vec<String> = {
+        let models = find_models_container(&mut root, &ext_by_index)
+            .ok_or_else(|| "Could not locate the models container in the structure.".to_string())?;
+        let mut urls = Vec::new();
+        if let Node::Folder { children, .. } = &models[target_idx] {
+            for child in children {
+                if let Node::Item { file_index, .. } = child {
+                    if let Some(url) = sub_file_data
+                        .iter()
+                        .find(|e| {
+                            e.get("fileIndex").and_then(Value::as_i64) == Some(*file_index as i64)
+                        })
+                        .and_then(|e| e.get("fileUrl"))
+                        .and_then(Value::as_str)
+                    {
+                        urls.push(url.to_string());
+                    }
+                }
+            }
+        }
+        urls
+    };
+
+    // Rewrite the new numdlb's identity to the old name (kept as `<oldName>.numdlb`).
+    let numdlb_temp = tempfile::tempdir()
+        .map_err(|e| format!("Failed to create temp dir for numdlb rewrite: {e}"))?;
+    let rewritten_numdlb = numdlb_temp.path().join(format!("{old_name}.numdlb"));
+    {
+        let mut modl = ModlData::from_file(&source.numdlb)
+            .map_err(|e| format!("Failed to read numdlb {}: {e}", source.numdlb.display()))?;
+        modl.model_name = old_name.clone();
+        modl.write_to_file(&rewritten_numdlb)
+            .map_err(|e| format!("Failed to write rewritten numdlb: {e}"))?;
+    }
+
+    // Append fresh pool entries + plan copies (under models\<oldName>\), deduping textures.
+    let mut next_file_index = sub_file_data
+        .iter()
+        .filter_map(|e| e.get("fileIndex").and_then(Value::as_i64))
+        .max()
+        .unwrap_or(-1) as i32;
+    let mut copies: Vec<(PathBuf, PathBuf)> = Vec::new();
+    let mut tex_index: HashMap<String, i32> = sub_file_data
+        .iter()
+        .filter(|e| {
+            e.get("fileUrl")
+                .and_then(Value::as_str)
+                .map(|u| file_basename(u).to_ascii_lowercase().ends_with(".nutexb"))
+                .unwrap_or(false)
+        })
+        .filter_map(|e| {
+            let idx = e.get("fileIndex").and_then(Value::as_i64)? as i32;
+            let url = e.get("fileUrl").and_then(Value::as_str)?;
+            Some((file_basename(url).to_ascii_lowercase(), idx))
+        })
+        .collect();
+
+    let make_url = |rel: &str| format!(".\\{out_name}\\{}", rel.replace('/', "\\"));
+    let model_rel_dir = format!("models\\{old_name}");
+
+    let add_pool_file = |src: &Path,
+                         rel_dir: &str,
+                         file_type: &str,
+                         sub_file_data: &mut Vec<Value>,
+                         copies: &mut Vec<(PathBuf, PathBuf)>,
+                         next_file_index: &mut i32|
+     -> Result<i32, String> {
+        let filename = src
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| format!("Invalid source file: {}", src.display()))?
+            .to_string();
+        *next_file_index += 1;
+        let fi = *next_file_index;
+        let url = make_url(&format!("{rel_dir}/{filename}"));
+        let dst = root_path.join(rel_dir.replace('\\', "/")).join(&filename);
+        copies.push((src.to_path_buf(), dst));
+        sub_file_data.push(json!({
+            "index": sub_file_data.len(),
+            "fileType": file_type,
+            "fileIndex": fi,
+            "fileUrl": url,
+            "fileBaseName": stem(&filename),
+        }));
+        Ok(fi)
+    };
+
+    let nusktb_fi = add_pool_file(
+        &source.nusktb,
+        &model_rel_dir,
+        ".nusktb",
+        &mut sub_file_data,
+        &mut copies,
+        &mut next_file_index,
+    )?;
+    let numshb_fi = add_pool_file(
+        &source.numshb,
+        &model_rel_dir,
+        ".numshb",
+        &mut sub_file_data,
+        &mut copies,
+        &mut next_file_index,
+    )?;
+    let numdlb_fi = add_pool_file(
+        &rewritten_numdlb,
+        &model_rel_dir,
+        ".numdlb",
+        &mut sub_file_data,
+        &mut copies,
+        &mut next_file_index,
+    )?;
+    let jnttbl_fi = add_pool_file(
+        &source.jnttbl,
+        &model_rel_dir,
+        ".jnttbl",
+        &mut sub_file_data,
+        &mut copies,
+        &mut next_file_index,
+    )?;
+
+    let mut group_children: Vec<Node> = Vec::new();
+    group_children.push(Node::Item {
+        entry: make_item(nusktb_fi, "10000000", 0, &source.model_name),
+        file_index: nusktb_fi,
+        name: Some(source.model_name.clone()),
+    });
+    for (i, numatb_path) in source.numatbs.iter().enumerate() {
+        let variant = (i + 1) as i32;
+        let refs = numatb_texture_refs(numatb_path)?;
+        let mut container_children = Vec::new();
+        for tex_name in &refs {
+            let key = tex_name.to_ascii_lowercase();
+            let fi = if let Some(existing) = tex_index.get(&key) {
+                *existing
+            } else {
+                let src_tex = Path::new(source_dir.trim()).join(tex_name);
+                if !src_tex.is_file() {
+                    return Err(format!(
+                        "numatb '{}' references texture '{}' which is not in the pool or source folder.",
+                        numatb_path.display(),
+                        tex_name
+                    ));
+                }
+                let fi = add_pool_file(
+                    &src_tex,
+                    "textures",
+                    ".nutexb",
+                    &mut sub_file_data,
+                    &mut copies,
+                    &mut next_file_index,
+                )?;
+                tex_index.insert(key, fi);
+                fi
+            };
+            container_children.push(Node::Item {
+                entry: make_item(fi, "00000000", 0, &stem(tex_name)),
+                file_index: fi,
+                name: Some(stem(tex_name)),
+            });
+        }
+        group_children.push(Node::Folder {
+            entry: make_folder(32, variant),
+            children: container_children,
+        });
+        let numatb_filename = numatb_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("model.numatb");
+        let numatb_fi = add_pool_file(
+            numatb_path,
+            &model_rel_dir,
+            ".numatb",
+            &mut sub_file_data,
+            &mut copies,
+            &mut next_file_index,
+        )?;
+        group_children.push(Node::Item {
+            entry: make_item(numatb_fi, "21000000", variant, &stem(numatb_filename)),
+            file_index: numatb_fi,
+            name: Some(stem(numatb_filename)),
+        });
+    }
+    group_children.push(Node::Item {
+        entry: make_item(numshb_fi, "30000000", 0, &source.model_name),
+        file_index: numshb_fi,
+        name: Some(source.model_name.clone()),
+    });
+    // The numdlb item name carries the model identity (model_group_name + the shl name-hash), so it
+    // MUST stay the old name even though the file came from a differently named source folder.
+    group_children.push(Node::Item {
+        entry: make_item(numdlb_fi, "40000000", 0, &old_name),
+        file_index: numdlb_fi,
+        name: Some(old_name.clone()),
+    });
+    group_children.push(Node::Item {
+        entry: make_item(jnttbl_fi, "50000000", 0, &source.model_name),
+        file_index: jnttbl_fi,
+        name: Some(source.model_name.clone()),
+    });
+
+    // Swap the target group's children in place, keeping its folder entry + position (folder_index).
+    {
+        let models = find_models_container(&mut root, &ext_by_index)
+            .ok_or_else(|| "Could not locate the models container in the structure.".to_string())?;
+        if let Node::Folder { children, .. } = &mut models[target_idx] {
+            *children = group_children;
+        }
+    }
+
+    // Re-serialize and filter SubFileData to referenced indices (drops the old model files and any
+    // now-orphaned textures); reindex the positional `index`.
+    let mut new_structure = Vec::new();
+    serialize_node(&root, &mut new_structure);
+    let referenced = collect_referenced_indices(&new_structure);
+    let mut removed_files = Vec::new();
+    let mut new_sub_file_data: Vec<Value> = Vec::with_capacity(sub_file_data.len());
+    for entry in &sub_file_data {
+        let file_index = entry
+            .get("fileIndex")
+            .and_then(Value::as_i64)
+            .map(|v| v as i32);
+        match file_index {
+            Some(idx) if referenced.contains(&idx) => {
+                let mut kept = entry.clone();
+                if let Some(obj) = kept.as_object_mut() {
+                    obj.insert("index".to_string(), json!(new_sub_file_data.len()));
+                }
+                new_sub_file_data.push(kept);
+            }
+            _ => {
+                if let Some(url) = entry.get("fileUrl").and_then(Value::as_str) {
+                    removed_files.push(url.to_string());
+                }
+            }
+        }
+    }
+    // URLs still referenced after the swap (e.g. the new `<oldName>.numdlb`, which shares the old
+    // numdlb URL) must never be deleted even though the OLD entry contributes the same URL.
+    let kept_urls: HashSet<String> = new_sub_file_data
+        .iter()
+        .filter_map(|e| e.get("fileUrl").and_then(Value::as_str))
+        .map(|s| s.to_ascii_lowercase())
+        .collect();
+
+    let final_ext = build_ext_by_index(&new_sub_file_data);
+    let model_count = count_model_groups(&root, &final_ext);
+
+    let structure_value = serde_json::to_value(&new_structure)
+        .map_err(|e| format!("Failed to serialize SubFileStructure: {e}"))?;
+    {
+        let obj = value
+            .as_object_mut()
+            .ok_or_else(|| "Structure JSON root must be an object".to_string())?;
+        obj.insert(
+            "Fhm2dTotalCount".to_string(),
+            json!(new_sub_file_data.len()),
+        );
+        obj.insert(
+            "SubFileData".to_string(),
+            Value::Array(new_sub_file_data.clone()),
+        );
+        obj.insert("SubFileStructure".to_string(), structure_value);
+    }
+    let serialized = serde_json::to_string_pretty(&value)
+        .map_err(|e| format!("Failed to serialize structure JSON: {e}"))?;
+
+    // ---- atomic commit (rollback-safe) ----
+    let backup_dir =
+        tempfile::tempdir().map_err(|e| format!("Failed to create backup temp dir: {e}"))?;
+    let mut backups: Vec<(PathBuf, PathBuf)> = Vec::new();
+    for url in &old_model_file_urls {
+        let cleaned = url.replace('\\', "/");
+        let cleaned = cleaned.trim_start_matches("./");
+        let orig = json_dir.join(cleaned);
+        if orig.is_file() {
+            let fname = orig
+                .file_name()
+                .ok_or_else(|| format!("Invalid old model file path: {}", orig.display()))?
+                .to_os_string();
+            let bak = backup_dir.path().join(&fname);
+            if let Err(e) = fs::rename(&orig, &bak) {
+                restore_backups(&backups);
+                return Err(format!(
+                    "Failed to stage old model file {}: {e}",
+                    orig.display()
+                ));
+            }
+            backups.push((orig, bak));
+        }
+    }
+    let created = match copy_files_with_rollback(&copies) {
+        Ok(c) => c,
+        Err(e) => {
+            restore_backups(&backups);
+            return Err(e);
+        }
+    };
+    if let Err(error) = replace_structure_json(&structure_path, &format!("{serialized}\n")) {
+        cleanup_created_files(&created);
+        restore_backups(&backups);
+        return Err(error);
+    }
+    for url in &removed_files {
+        if kept_urls.contains(&url.to_ascii_lowercase()) {
+            continue;
+        }
+        delete_pool_file_if_safe(&root_path, &json_dir, url);
+    }
+
+    Ok(UnitModelMutationResult {
+        model_root: root_path.to_string_lossy().to_string(),
+        structure_json_path: structure_path.to_string_lossy().to_string(),
+        model_count,
+        total_files: new_sub_file_data.len(),
+        removed_files,
+    })
+}
+
+fn restore_backups(backups: &[(PathBuf, PathBuf)]) {
+    for (orig, bak) in backups {
+        let _ = fs::rename(bak, orig);
+    }
+}
+
 fn write_empty_nuhlpb(path: &Path) -> Result<(), String> {
     let hlpb = HlpbData {
         major_version: 1,
@@ -977,6 +1656,287 @@ fn file_basename(file_url: &str) -> String {
         .last()
         .unwrap_or(file_url)
         .to_string()
+}
+
+fn direct_file_indices_by_ext(
+    node: &Node,
+    ext_by_index: &HashMap<i32, String>,
+) -> HashMap<String, Vec<i32>> {
+    let mut out: HashMap<String, Vec<i32>> = HashMap::new();
+    let Node::Folder { children, .. } = node else {
+        return out;
+    };
+    for child in children {
+        let Node::Item { file_index, .. } = child else {
+            continue;
+        };
+        if let Some(ext) = ext_by_index.get(file_index) {
+            out.entry(ext.clone()).or_default().push(*file_index);
+        }
+    }
+    out
+}
+
+fn count_texture_references_in_node(
+    node: &Node,
+    ext_by_index: &HashMap<i32, String>,
+) -> HashMap<i32, usize> {
+    fn walk(node: &Node, ext_by_index: &HashMap<i32, String>, out: &mut HashMap<i32, usize>) {
+        match node {
+            Node::Item { file_index, .. } => {
+                if ext_by_index.get(file_index).map(String::as_str) == Some(".nutexb") {
+                    *out.entry(*file_index).or_insert(0) += 1;
+                }
+            }
+            Node::Folder { children, .. } => {
+                for child in children {
+                    walk(child, ext_by_index, out);
+                }
+            }
+        }
+    }
+    let mut out = HashMap::new();
+    walk(node, ext_by_index, &mut out);
+    out
+}
+
+fn count_references_by_index(root: &Node) -> HashMap<i32, usize> {
+    fn walk(node: &Node, out: &mut HashMap<i32, usize>) {
+        match node {
+            Node::Item { file_index, .. } => {
+                *out.entry(*file_index).or_insert(0) += 1;
+            }
+            Node::Folder { children, .. } => {
+                for child in children {
+                    walk(child, out);
+                }
+            }
+        }
+    }
+    let mut out = HashMap::new();
+    walk(root, &mut out);
+    out
+}
+
+fn first_path_for_ext(
+    direct_files: &HashMap<String, Vec<i32>>,
+    ext: &str,
+    sub_file_data: &[Value],
+    json_dir: &Path,
+) -> Option<PathBuf> {
+    direct_files
+        .get(ext)
+        .and_then(|indices| indices.first())
+        .and_then(|file_index| path_for_index(sub_file_data, *file_index, json_dir))
+}
+
+fn paths_for_ext(
+    direct_files: &HashMap<String, Vec<i32>>,
+    ext: &str,
+    sub_file_data: &[Value],
+    json_dir: &Path,
+) -> Vec<PathBuf> {
+    direct_files
+        .get(ext)
+        .into_iter()
+        .flat_map(|indices| indices.iter())
+        .filter_map(|file_index| path_for_index(sub_file_data, *file_index, json_dir))
+        .collect()
+}
+
+fn path_for_index(sub_file_data: &[Value], file_index: i32, json_dir: &Path) -> Option<PathBuf> {
+    file_url_for_index(sub_file_data, file_index)
+        .map(|file_url| resolve_pool_file_path(json_dir, &file_url))
+}
+
+fn file_url_for_index(sub_file_data: &[Value], file_index: i32) -> Option<String> {
+    sub_file_data
+        .iter()
+        .find(|entry| entry.get("fileIndex").and_then(Value::as_i64) == Some(file_index as i64))
+        .and_then(|entry| entry.get("fileUrl"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
+}
+
+fn resolve_pool_file_path(json_dir: &Path, file_url: &str) -> PathBuf {
+    let cleaned = file_url.replace('\\', "/");
+    let cleaned = cleaned.trim_start_matches("./");
+    json_dir.join(cleaned)
+}
+
+fn find_named_nuhlpb_path(
+    root: &Node,
+    ext_by_index: &HashMap<i32, String>,
+    sub_file_data: &[Value],
+    json_dir: &Path,
+    target_name: &str,
+) -> Option<PathBuf> {
+    fn walk(
+        node: &Node,
+        ext_by_index: &HashMap<i32, String>,
+        sub_file_data: &[Value],
+        json_dir: &Path,
+        target_name: &str,
+    ) -> Option<PathBuf> {
+        match node {
+            Node::Item {
+                file_index, name, ..
+            } => {
+                let is_nuhlpb = ext_by_index.get(file_index).map(String::as_str) == Some(".nuhlpb");
+                if is_nuhlpb && name.as_deref() == Some(target_name) {
+                    path_for_index(sub_file_data, *file_index, json_dir)
+                } else {
+                    None
+                }
+            }
+            Node::Folder { children, .. } => children
+                .iter()
+                .find_map(|child| walk(child, ext_by_index, sub_file_data, json_dir, target_name)),
+        }
+    }
+    walk(root, ext_by_index, sub_file_data, json_dir, target_name)
+}
+
+fn read_skel_bone_names(path: &Path) -> Result<Vec<String>, String> {
+    let skel = SkelData::from_file(path)
+        .map_err(|e| format!("Failed to parse nusktb {}: {e}", path.display()))?;
+    Ok(skel.bones.into_iter().map(|bone| bone.name).collect())
+}
+
+fn read_jnttbl_bone_count(path: &Path) -> Result<u32, String> {
+    let bytes =
+        fs::read(path).map_err(|e| format!("Failed to read jnttbl {}: {e}", path.display()))?;
+    Ok(parse_jnttbl_bytes(&bytes)
+        .map_err(|e| format!("Failed to parse jnttbl {}: {e}", path.display()))?
+        .bone_count)
+}
+
+fn material_labels_from_numatbs(paths: &[PathBuf]) -> Result<Vec<String>, String> {
+    let mut labels = Vec::new();
+    let mut seen = HashSet::new();
+    for path in paths {
+        let matl = MatlData::from_file(path)
+            .map_err(|e| format!("Failed to parse numatb {}: {e}", path.display()))?;
+        for entry in matl.entries {
+            let label = entry.material_label.trim().to_string();
+            if !label.is_empty() && seen.insert(label.to_ascii_lowercase()) {
+                labels.push(label);
+            }
+        }
+    }
+    Ok(labels)
+}
+
+fn compare_bone_names(
+    source_bone_names: &[String],
+    target_bone_names: &[String],
+) -> UnitModelSkeletonCompatibility {
+    let source_keys: HashSet<String> = source_bone_names
+        .iter()
+        .map(|name| name.to_ascii_lowercase())
+        .collect();
+    let target_keys: HashSet<String> = target_bone_names
+        .iter()
+        .map(|name| name.to_ascii_lowercase())
+        .collect();
+    let missing_in_source = target_bone_names
+        .iter()
+        .filter(|name| !source_keys.contains(&name.to_ascii_lowercase()))
+        .cloned()
+        .collect::<Vec<_>>();
+    let new_in_source = source_bone_names
+        .iter()
+        .filter(|name| !target_keys.contains(&name.to_ascii_lowercase()))
+        .cloned()
+        .collect::<Vec<_>>();
+    UnitModelSkeletonCompatibility {
+        source_bone_count: source_bone_names.len(),
+        target_bone_count: target_bone_names.len(),
+        matching_bone_names: target_bone_names
+            .len()
+            .saturating_sub(missing_in_source.len()),
+        missing_in_source,
+        new_in_source,
+    }
+}
+
+fn diff_ordered_labels(
+    target: &[String],
+    source: &[String],
+) -> (Vec<String>, Vec<String>, Vec<String>) {
+    let target_keys: HashSet<String> = target
+        .iter()
+        .map(|label| label.to_ascii_lowercase())
+        .collect();
+    let source_keys: HashSet<String> = source
+        .iter()
+        .map(|label| label.to_ascii_lowercase())
+        .collect();
+    let kept = target
+        .iter()
+        .filter(|label| source_keys.contains(&label.to_ascii_lowercase()))
+        .cloned()
+        .collect();
+    let removed = target
+        .iter()
+        .filter(|label| !source_keys.contains(&label.to_ascii_lowercase()))
+        .cloned()
+        .collect();
+    let added = source
+        .iter()
+        .filter(|label| !target_keys.contains(&label.to_ascii_lowercase()))
+        .cloned()
+        .collect();
+    (kept, removed, added)
+}
+
+fn texture_index_by_name(sub_file_data: &[Value]) -> HashMap<String, i32> {
+    sub_file_data
+        .iter()
+        .filter(|entry| {
+            entry
+                .get("fileUrl")
+                .and_then(Value::as_str)
+                .map(|url| file_basename(url).to_ascii_lowercase().ends_with(".nutexb"))
+                .unwrap_or(false)
+        })
+        .filter_map(|entry| {
+            let idx = entry.get("fileIndex").and_then(Value::as_i64)? as i32;
+            let url = entry.get("fileUrl").and_then(Value::as_str)?;
+            Some((file_basename(url).to_ascii_lowercase(), idx))
+        })
+        .collect()
+}
+
+fn build_replace_texture_plan(
+    source_path: &Path,
+    references: &[String],
+    texture_index: &HashMap<String, i32>,
+) -> UnitModelReplaceTexturePlan {
+    let mut copied_from_source = Vec::new();
+    let mut reused_from_pool = Vec::new();
+    let mut missing = Vec::new();
+    for reference in references {
+        let key = reference.to_ascii_lowercase();
+        if texture_index.contains_key(&key) {
+            reused_from_pool.push(reference.clone());
+        } else if source_path.join(reference).is_file() {
+            copied_from_source.push(reference.clone());
+        } else {
+            missing.push(reference.clone());
+        }
+    }
+    UnitModelReplaceTexturePlan {
+        referenced: references.to_vec(),
+        copied_from_source,
+        reused_from_pool,
+        missing,
+        orphaned_after_replace: Vec::new(),
+    }
+}
+
+fn path_to_string(path: PathBuf) -> String {
+    path.to_string_lossy().to_string()
 }
 
 fn tokenize(entries: &[SubFileStructureEntry]) -> Vec<Tok> {
@@ -1359,5 +2319,290 @@ mod tests {
 
         assert_eq!(validation.model_name, base);
         assert_eq!(validation.required_files.len(), 6);
+    }
+
+    fn write_min_source(dir: &Path, base: &str) {
+        use crate::jnttbl_format::{serialize_jnttbl, JnttblDocument};
+        ModlData {
+            major_version: 1,
+            minor_version: 0,
+            model_name: base.to_string(),
+            skeleton_file_name: format!("{base}.nusktb"),
+            material_file_names: vec![format!("{base}__maya__.numatb")],
+            animation_file_name: None,
+            mesh_file_name: format!("{base}.numshb"),
+            entries: Vec::new(),
+        }
+        .write_to_file(dir.join(format!("{base}.numdlb")))
+        .unwrap();
+        MeshData {
+            major_version: 1,
+            minor_version: 10,
+            objects: Vec::new(),
+            is_vs2: false,
+        }
+        .write_to_file(dir.join(format!("{base}.numshb")))
+        .unwrap();
+        SkelData {
+            major_version: 1,
+            minor_version: 0,
+            bones: Vec::new(),
+        }
+        .write_to_file(dir.join(format!("{base}.nusktb")))
+        .unwrap();
+        for profile in ["maya", "nust"] {
+            MatlData {
+                major_version: 1,
+                minor_version: 6,
+                entries: Vec::new(),
+            }
+            .write_to_file(dir.join(format!("{base}__{profile}__.numatb")))
+            .unwrap();
+        }
+        let jnttbl = serialize_jnttbl(&JnttblDocument {
+            version: 1,
+            bone_count: 0,
+            flag: 0,
+            entries: Vec::new(),
+        })
+        .unwrap();
+        fs::write(dir.join(format!("{base}.jnttbl")), jnttbl).unwrap();
+    }
+
+    struct ReplaceFixture {
+        root: PathBuf,
+        structure_path: PathBuf,
+        alpha_dir: PathBuf,
+        nuhlpb_dir: PathBuf,
+    }
+
+    fn write_replace_fixture(parent: &Path) -> ReplaceFixture {
+        let out_name = "PKG";
+        let root = parent.join(out_name);
+        let alpha_dir = root.join("models").join("alpha");
+        let nuhlpb_dir = root.join("nuhlpb");
+        fs::create_dir_all(&alpha_dir).unwrap();
+        fs::create_dir_all(&nuhlpb_dir).unwrap();
+        write_min_source(&alpha_dir, "alpha");
+        write_empty_nuhlpb(&nuhlpb_dir.join("alpha.nuhlpb")).unwrap();
+
+        let url = |rel: &str| format!(".\\{out_name}\\{}", rel.replace('/', "\\"));
+        let sub_file_data = json!([
+            { "index": 0, "fileType": ".nusktb", "fileIndex": 0, "fileUrl": url("models/alpha/alpha.nusktb"), "fileBaseName": "alpha" },
+            { "index": 1, "fileType": ".numshb", "fileIndex": 1, "fileUrl": url("models/alpha/alpha.numshb"), "fileBaseName": "alpha" },
+            { "index": 2, "fileType": ".numdlb", "fileIndex": 2, "fileUrl": url("models/alpha/alpha.numdlb"), "fileBaseName": "alpha" },
+            { "index": 3, "fileType": ".jnttbl", "fileIndex": 3, "fileUrl": url("models/alpha/alpha.jnttbl"), "fileBaseName": "alpha" },
+            { "index": 4, "fileType": ".numatb", "fileIndex": 4, "fileUrl": url("models/alpha/alpha__maya__.numatb"), "fileBaseName": "alpha__maya__" },
+            { "index": 5, "fileType": ".numatb", "fileIndex": 5, "fileUrl": url("models/alpha/alpha__nust__.numatb"), "fileBaseName": "alpha__nust__" },
+            { "index": 6, "fileType": ".nuhlpb", "fileIndex": 6, "fileUrl": url("nuhlpb/alpha.nuhlpb"), "fileBaseName": "alpha" },
+        ]);
+
+        let group = Node::Folder {
+            entry: make_folder(0, 0),
+            children: vec![
+                Node::Item {
+                    entry: make_item(0, "10000000", 0, "alpha"),
+                    file_index: 0,
+                    name: Some("alpha".into()),
+                },
+                Node::Folder {
+                    entry: make_folder(32, 1),
+                    children: vec![],
+                },
+                Node::Item {
+                    entry: make_item(4, "21000000", 1, "alpha__maya__"),
+                    file_index: 4,
+                    name: Some("alpha__maya__".into()),
+                },
+                Node::Folder {
+                    entry: make_folder(32, 2),
+                    children: vec![],
+                },
+                Node::Item {
+                    entry: make_item(5, "21000000", 2, "alpha__nust__"),
+                    file_index: 5,
+                    name: Some("alpha__nust__".into()),
+                },
+                Node::Item {
+                    entry: make_item(1, "30000000", 0, "alpha"),
+                    file_index: 1,
+                    name: Some("alpha".into()),
+                },
+                Node::Item {
+                    entry: make_item(2, "40000000", 0, "alpha"),
+                    file_index: 2,
+                    name: Some("alpha".into()),
+                },
+                Node::Item {
+                    entry: make_item(3, "50000000", 0, "alpha"),
+                    file_index: 3,
+                    name: Some("alpha".into()),
+                },
+            ],
+        };
+        let models = Node::Folder {
+            entry: make_folder(0, 0),
+            children: vec![group],
+        };
+        let nuhlpb = Node::Folder {
+            entry: make_folder(0, 0),
+            children: vec![Node::Item {
+                entry: make_item(6, "00000000", 0, "alpha"),
+                file_index: 6,
+                name: Some("alpha".into()),
+            }],
+        };
+        let root_node = Node::Folder {
+            entry: make_folder(0, 0),
+            children: vec![models, nuhlpb],
+        };
+        let mut structure = Vec::new();
+        serialize_node(&root_node, &mut structure);
+        let structure_value = serde_json::to_value(&structure).unwrap();
+
+        let value = json!({
+            "Magic": 10,
+            "Fhm2dTotalCount": 7,
+            "SubFileData": sub_file_data,
+            "SubFileStructure": structure_value,
+        });
+        let structure_path = parent.join(format!("{out_name}_structure.json"));
+        fs::write(
+            &structure_path,
+            serde_json::to_string_pretty(&value).unwrap(),
+        )
+        .unwrap();
+
+        ReplaceFixture {
+            root,
+            structure_path,
+            alpha_dir,
+            nuhlpb_dir,
+        }
+    }
+
+    #[test]
+    fn replace_preserves_name_position_and_swaps_files() {
+        let parent = tempfile::tempdir().unwrap();
+        let fixture = write_replace_fixture(parent.path());
+        let beta = tempfile::tempdir().unwrap();
+        write_min_source(beta.path(), "beta");
+
+        let result = replace_unit_model_model(
+            fixture.root.to_string_lossy().as_ref(),
+            Some(fixture.structure_path.to_string_lossy().as_ref()),
+            "alpha",
+            beta.path().to_string_lossy().as_ref(),
+        )
+        .expect("replace should succeed");
+
+        assert_eq!(result.model_count, 1, "model count unchanged");
+
+        // Identity preserved: numdlb keeps the old name + old internal model_name.
+        assert!(
+            fixture.alpha_dir.join("alpha.numdlb").is_file(),
+            "numdlb keeps old name"
+        );
+        let modl = ModlData::from_file(fixture.alpha_dir.join("alpha.numdlb")).unwrap();
+        assert_eq!(
+            modl.model_name, "alpha",
+            "numdlb model_name forced to old name"
+        );
+
+        // New files placed under the same model folder; old non-numdlb files removed.
+        assert!(
+            fixture.alpha_dir.join("beta.numshb").is_file(),
+            "new numshb copied in"
+        );
+        assert!(
+            fixture.alpha_dir.join("beta.nusktb").is_file(),
+            "new nusktb copied in"
+        );
+        assert!(
+            !fixture.alpha_dir.join("alpha.numshb").is_file(),
+            "old numshb removed"
+        );
+        assert!(
+            !fixture.alpha_dir.join("alpha.nusktb").is_file(),
+            "old nusktb removed"
+        );
+
+        // NUHLPB untouched.
+        assert!(
+            fixture.nuhlpb_dir.join("alpha.nuhlpb").is_file(),
+            "nuhlpb preserved"
+        );
+
+        // Structure still names the model "alpha" at one model group.
+        let raw = fs::read_to_string(&fixture.structure_path).unwrap();
+        let v: Value = serde_json::from_str(&raw).unwrap();
+        let sfd = v.get("SubFileData").and_then(Value::as_array).unwrap();
+        let ext = build_ext_by_index(sfd);
+        let sfs: Vec<SubFileStructureEntry> =
+            serde_json::from_value(v.get("SubFileStructure").cloned().unwrap()).unwrap();
+        let reparsed = parse_root(&sfs).unwrap();
+        assert!(
+            count_model_named(&reparsed, "alpha", &ext),
+            "model still named alpha"
+        );
+        assert_eq!(
+            count_model_groups(&reparsed, &ext),
+            1,
+            "still one model group"
+        );
+    }
+
+    #[test]
+    fn preview_replacement_preserves_target_identity_and_reports_compatibility() {
+        let parent = tempfile::tempdir().unwrap();
+        let fixture = write_replace_fixture(parent.path());
+        let beta = tempfile::tempdir().unwrap();
+        write_min_source(beta.path(), "beta");
+
+        let preview = preview_unit_model_model_replacement(
+            fixture.root.to_string_lossy().as_ref(),
+            Some(fixture.structure_path.to_string_lossy().as_ref()),
+            "alpha",
+            beta.path().to_string_lossy().as_ref(),
+        )
+        .expect("preview should succeed");
+
+        assert_eq!(preview.target.model_name, "alpha");
+        assert_eq!(preview.target.model_index, 0);
+        assert_eq!(preview.source.model_name, "beta");
+        assert!(preview.target.nuhlpb_path.is_some(), "target nuhlpb found");
+        assert_eq!(preview.compatibility.skeleton.source_bone_count, 0);
+        assert_eq!(preview.compatibility.skeleton.target_bone_count, 0);
+        assert!(preview.blockers.is_empty(), "no missing textures expected");
+        assert!(
+            preview
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("Source model 'beta'")),
+            "source/target identity warning expected"
+        );
+    }
+
+    #[test]
+    fn replace_texture_plan_reuses_pool_before_source_folder() {
+        let source = tempfile::tempdir().unwrap();
+        fs::write(source.path().join("source_only.nutexb"), b"stub").unwrap();
+        fs::write(source.path().join("shared.nutexb"), b"stub").unwrap();
+        let mut texture_index = HashMap::new();
+        texture_index.insert("shared.nutexb".to_string(), 42);
+
+        let plan = build_replace_texture_plan(
+            source.path(),
+            &[
+                "shared.nutexb".to_string(),
+                "source_only.nutexb".to_string(),
+                "missing.nutexb".to_string(),
+            ],
+            &texture_index,
+        );
+
+        assert_eq!(plan.reused_from_pool, vec!["shared.nutexb"]);
+        assert_eq!(plan.copied_from_source, vec!["source_only.nutexb"]);
+        assert_eq!(plan.missing, vec!["missing.nutexb"]);
     }
 }

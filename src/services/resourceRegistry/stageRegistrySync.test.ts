@@ -62,8 +62,18 @@ describe("stageRegistrySync", () => {
         iconIndex: 0,
       },
       [
-        { slot: "fileName", seed: "stage_a", hashInt32: 200 },
-        { slot: "vsSD", seed: "stage_b", hashInt32: 100 },
+        {
+          slot: "fileName",
+          seed: "stage_a",
+          hashInt32: 200,
+          seedVerified: false,
+        },
+        {
+          slot: "vsSD",
+          seed: "stage_b",
+          hashInt32: 100,
+          seedVerified: false,
+        },
       ],
     );
     expect(entries).toHaveLength(2);

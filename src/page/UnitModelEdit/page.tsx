@@ -41,7 +41,11 @@ import { listUnitModelTextures } from "./utils/unitModelTextureService";
 import { getParentDir, inferUnitModelStructurePath } from "./utils/unitModelRepackService";
 import { rememberStoredDialogSelection } from "@/utils/dialogDefaultPathStore";
 import { normalizeComparePath, resolveUnitModelNodeAbsPath } from "./utils/unitModelNodePaths";
-import { buildUnitModelStructureTree, type UnitModelTreeNode } from "./utils/unitModelStructureTree";
+import {
+  buildUnitModelStructureTree,
+  collectModelGroupNames,
+  type UnitModelTreeNode,
+} from "./utils/unitModelStructureTree";
 import { useSsbhFileEditorSessions } from "@/components/ssbh-model-preview/useSsbhFileEditorSessions";
 import { SsbhFileEditorHosts } from "@/components/ssbh-model-preview/SsbhFileEditorHosts";
 
@@ -179,6 +183,16 @@ function UnitModelEditWorkspace({
     }
     return set;
   }, [editors.editingPaths, toRelKey]);
+
+  // Structure-ordered model folder names; the index is the `folder_index` used by SHL records.
+  const shlModelFolderNames = useMemo(() => {
+    if (structureJson == null) return undefined;
+    try {
+      return collectModelGroupNames(buildUnitModelStructureTree(structureJson).root);
+    } catch {
+      return undefined;
+    }
+  }, [structureJson]);
 
   const handleOpenEditor = useCallback(
     (node: UnitModelTreeNode) => {
@@ -470,7 +484,7 @@ function UnitModelEditWorkspace({
         onExtracted={(result) => workspace.handleExtracted(result)}
       />
 
-      <SsbhFileEditorHosts {...editors.hostProps} />
+      <SsbhFileEditorHosts {...editors.hostProps} shlModelFolderNames={shlModelFolderNames} />
     </>
   );
 }

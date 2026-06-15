@@ -15,8 +15,15 @@ Before making code, asset, documentation, or command changes:
 1. Read `AGENTS.md`.
 2. Search `docs/` for Markdown files related to the user's task.
 3. Read the relevant specifications before editing.
-4. For multi-step tasks, create or update `docs/agent-sessions/<topic>/todo.md`
-   and `docs/agent-sessions/<topic>/process.md`.
+4. Use **Superpowers skills** as the AI task manager (see `AGENTS.md` →
+   "AI Task Management"). Invoke `using-superpowers` first; follow process
+   skills (`brainstorming`, `writing-plans`, `systematic-debugging`,
+   `test-driven-development`, `verification-before-completion`, etc.) as the
+   task requires. Use `TodoWrite` for skill checklists.
+
+Legacy per-topic note folders under `docs/` are a **separate, older workflow**
+(auxiliary reference only). Do not treat them as the primary task manager;
+do not create or update them unless the user explicitly requests it.
 
 ## Development Rules
 

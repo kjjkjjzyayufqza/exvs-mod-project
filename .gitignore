@@ -23,3 +23,11 @@ tmp/
 *.njsproj
 *.sln
 *.sw?
+
+# CodeGraph local runtime (machine-specific; see .codegraph/.gitignore)
+.codegraph/daemon.pid
+.codegraph/*.db
+.codegraph/*.db-wal
+.codegraph/*.db-shm
+.codegraph/*.log
+.codegraph/cache/

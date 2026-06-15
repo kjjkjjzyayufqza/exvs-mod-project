@@ -52,16 +52,28 @@ import {
   type NumatbModalBundle,
   type NumatbProfilePaths,
 } from "./numatbEditorUtils";
+import type { ShlEditorWindowSession } from "./ShlEditorModalWindow";
+import { assertShlValidForSave, cloneShlFileData, isShlDraftDirty } from "./shlEditorUtils";
+import { shlReadFile, shlWriteFile, type ShlFileData } from "./shlIoService";
+import type { VernierEditorWindowSession } from "./VernierEditorModalWindow";
+import { cloneVernierData, isVernierDraftDirty } from "./vernierEditorUtils";
+import { vernierReadFile, vernierWriteFile, type TypedParamFile } from "./vernierIoService";
 
-export type SsbhEditorKind = "numdlb" | "numatb" | "nuhlpb" | "jnttbl";
+export type SsbhEditorKind = "numdlb" | "numatb" | "nuhlpb" | "jnttbl" | "shl" | "vernier";
 
-/** Map a file path to its editor kind by extension, or null when unsupported. */
+/**
+ * Map a file path to its editor kind. SSBH formats dispatch by extension; the `vernier_table`
+ * control bin is name-based (it ships as `vernier_table_*.bin` or `.vgsht2`).
+ */
 export function ssbhEditorKindForPath(filePath: string): SsbhEditorKind | null {
   const lower = filePath.toLowerCase();
   if (lower.endsWith(".numdlb")) return "numdlb";
   if (lower.endsWith(".numatb")) return "numatb";
   if (lower.endsWith(".nuhlpb")) return "nuhlpb";
   if (lower.endsWith(".jnttbl")) return "jnttbl";
+  if (lower.endsWith(".shl")) return "shl";
+  const base = lower.replace(/\\/g, "/").split("/").pop() ?? lower;
+  if (base.includes("vernier_table")) return "vernier";
   return null;
 }
 
@@ -928,6 +940,360 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
     }
   }, [numatbGuard, saveNumatbSession, reloadNumatbSession]);
 
+  // ------------------------------------------------------------------- shl ----
+  const [shlSessions, setShlSessions] = useState<ShlEditorWindowSession[]>([]);
+  const shlZIndexRef = useRef(5000);
+  const shlSessionsRef = useRef(shlSessions);
+  shlSessionsRef.current = shlSessions;
+  const [shlGuard, setShlGuard] = useState<SsbhFileEditorGuard>(null);
+
+  const openShlSession = useCallback((filePath: string) => {
+    const normalized = normalizePathKey(filePath);
+    setShlSessions((prev) => {
+      const existing = prev.find((s) => normalizePathKey(s.filePath) === normalized);
+      if (existing) {
+        const nextZ = ++shlZIndexRef.current;
+        return prev.map((s) => (s.id === existing.id ? { ...s, zIndex: nextZ } : s));
+      }
+      const id = crypto.randomUUID();
+      const nextZ = ++shlZIndexRef.current;
+      const newSession: ShlEditorWindowSession = {
+        id,
+        filePath,
+        loading: true,
+        saving: false,
+        loadError: null,
+        baseData: null,
+        draftData: null,
+        zIndex: nextZ,
+      };
+      void shlReadFile(filePath)
+        .then((data) => {
+          const base = cloneShlFileData(data);
+          const draft = cloneShlFileData(data);
+          setShlSessions((p) =>
+            p.map((s) =>
+              s.id === id
+                ? { ...s, loading: false, loadError: null, baseData: base, draftData: draft }
+                : s,
+            ),
+          );
+        })
+        .catch((err) => {
+          setShlSessions((p) =>
+            p.map((s) => (s.id === id ? { ...s, loading: false, loadError: String(err) } : s)),
+          );
+        });
+      return [...prev, newSession];
+    });
+  }, []);
+
+  const activateShlSession = useCallback((sessionId: string) => {
+    setShlSessions((prev) => {
+      const nextZ = ++shlZIndexRef.current;
+      return prev.map((s) => (s.id === sessionId ? { ...s, zIndex: nextZ } : s));
+    });
+  }, []);
+
+  const updateShlDraft = useCallback((sessionId: string, next: ShlFileData) => {
+    setShlSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, draftData: next } : s)));
+  }, []);
+
+  const saveShlSession = useCallback(async (sessionId: string) => {
+    const snapshot = shlSessionsRef.current.find((x) => x.id === sessionId);
+    if (!snapshot?.draftData) return;
+    try {
+      assertShlValidForSave(snapshot.draftData);
+    } catch (e) {
+      toast.error(String(e));
+      return;
+    }
+    const draft = snapshot.draftData;
+    const path = snapshot.filePath;
+    setShlSessions((prev) => prev.map((x) => (x.id === sessionId ? { ...x, saving: true } : x)));
+    try {
+      await shlWriteFile({ filePath: path, file: draft });
+      const saved = cloneShlFileData(draft);
+      setShlSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionId ? { ...s, saving: false, baseData: saved, draftData: saved } : s,
+        ),
+      );
+      toast.success("Saved SHL");
+      onSavedRef.current?.(path);
+    } catch (e) {
+      toast.error(String(e));
+      setShlSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, saving: false } : s)));
+    }
+  }, []);
+
+  const resetShlSession = useCallback((sessionId: string) => {
+    setShlSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== sessionId || !s.baseData) return s;
+        return { ...s, draftData: cloneShlFileData(s.baseData) };
+      }),
+    );
+  }, []);
+
+  const reloadShlSession = useCallback(async (sessionId: string) => {
+    let fp = "";
+    setShlSessions((prev) => {
+      const s = prev.find((x) => x.id === sessionId);
+      if (!s) return prev;
+      fp = s.filePath;
+      return prev.map((x) => (x.id === sessionId ? { ...x, loading: true, loadError: null } : x));
+    });
+    if (!fp) return;
+    try {
+      const data = await shlReadFile(fp);
+      const base = cloneShlFileData(data);
+      const draft = cloneShlFileData(data);
+      setShlSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionId
+            ? { ...s, loading: false, loadError: null, baseData: base, draftData: draft }
+            : s,
+        ),
+      );
+      toast.success("Reloaded SHL from disk");
+    } catch (e) {
+      const msg = String(e);
+      setShlSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, loading: false, loadError: msg } : s)),
+      );
+      toast.error(msg);
+    }
+  }, []);
+
+  const requestCloseShlSession = useCallback((sessionId: string) => {
+    const s = shlSessionsRef.current.find((x) => x.id === sessionId);
+    if (!s) return;
+    if (isShlDraftDirty(s.baseData, s.draftData)) {
+      setShlGuard({ sessionId, action: "close" });
+      return;
+    }
+    setShlSessions((prev) => prev.filter((x) => x.id !== sessionId));
+  }, []);
+
+  const requestReloadShlSession = useCallback(
+    (sessionId: string) => {
+      const s = shlSessionsRef.current.find((x) => x.id === sessionId);
+      if (!s) return;
+      if (isShlDraftDirty(s.baseData, s.draftData)) {
+        setShlGuard({ sessionId, action: "reload" });
+        return;
+      }
+      void reloadShlSession(sessionId);
+    },
+    [reloadShlSession],
+  );
+
+  const dismissShlGuard = useCallback(() => setShlGuard(null), []);
+
+  const discardShlGuard = useCallback(() => {
+    setShlGuard((g) => {
+      if (!g) return null;
+      const { sessionId, action } = g;
+      if (action === "close") {
+        setShlSessions((prev) => prev.filter((x) => x.id !== sessionId));
+      } else {
+        void reloadShlSession(sessionId);
+      }
+      return null;
+    });
+  }, [reloadShlSession]);
+
+  const saveAndFinishShlGuard = useCallback(async () => {
+    if (!shlGuard) return;
+    const { sessionId, action } = shlGuard;
+    await saveShlSession(sessionId);
+    const s = shlSessionsRef.current.find((x) => x.id === sessionId);
+    if (!s) return;
+    if (isShlDraftDirty(s.baseData, s.draftData)) return;
+    setShlGuard(null);
+    if (action === "close") {
+      setShlSessions((prev) => prev.filter((x) => x.id !== sessionId));
+    } else {
+      void reloadShlSession(sessionId);
+    }
+  }, [shlGuard, saveShlSession, reloadShlSession]);
+
+  // --------------------------------------------------------------- vernier ----
+  const [vernierSessions, setVernierSessions] = useState<VernierEditorWindowSession[]>([]);
+  const vernierZIndexRef = useRef(6000);
+  const vernierSessionsRef = useRef(vernierSessions);
+  vernierSessionsRef.current = vernierSessions;
+  const [vernierGuard, setVernierGuard] = useState<SsbhFileEditorGuard>(null);
+
+  const openVernierSession = useCallback((filePath: string) => {
+    const normalized = normalizePathKey(filePath);
+    setVernierSessions((prev) => {
+      const existing = prev.find((s) => normalizePathKey(s.filePath) === normalized);
+      if (existing) {
+        const nextZ = ++vernierZIndexRef.current;
+        return prev.map((s) => (s.id === existing.id ? { ...s, zIndex: nextZ } : s));
+      }
+      const id = crypto.randomUUID();
+      const nextZ = ++vernierZIndexRef.current;
+      const newSession: VernierEditorWindowSession = {
+        id,
+        filePath,
+        loading: true,
+        saving: false,
+        loadError: null,
+        baseData: null,
+        draftData: null,
+        zIndex: nextZ,
+      };
+      void vernierReadFile(filePath)
+        .then((data) => {
+          const base = cloneVernierData(data);
+          const draft = cloneVernierData(data);
+          setVernierSessions((p) =>
+            p.map((s) =>
+              s.id === id
+                ? { ...s, loading: false, loadError: null, baseData: base, draftData: draft }
+                : s,
+            ),
+          );
+        })
+        .catch((err) => {
+          setVernierSessions((p) =>
+            p.map((s) => (s.id === id ? { ...s, loading: false, loadError: String(err) } : s)),
+          );
+        });
+      return [...prev, newSession];
+    });
+  }, []);
+
+  const activateVernierSession = useCallback((sessionId: string) => {
+    setVernierSessions((prev) => {
+      const nextZ = ++vernierZIndexRef.current;
+      return prev.map((s) => (s.id === sessionId ? { ...s, zIndex: nextZ } : s));
+    });
+  }, []);
+
+  const updateVernierDraft = useCallback((sessionId: string, next: TypedParamFile) => {
+    setVernierSessions((prev) =>
+      prev.map((s) => (s.id === sessionId ? { ...s, draftData: next } : s)),
+    );
+  }, []);
+
+  const saveVernierSession = useCallback(async (sessionId: string) => {
+    const snapshot = vernierSessionsRef.current.find((x) => x.id === sessionId);
+    if (!snapshot?.draftData) return;
+    const draft = snapshot.draftData;
+    const path = snapshot.filePath;
+    setVernierSessions((prev) => prev.map((x) => (x.id === sessionId ? { ...x, saving: true } : x)));
+    try {
+      await vernierWriteFile({ filePath: path, data: draft });
+      const saved = cloneVernierData(draft);
+      setVernierSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionId ? { ...s, saving: false, baseData: saved, draftData: saved } : s,
+        ),
+      );
+      toast.success("Saved vernier table");
+      onSavedRef.current?.(path);
+    } catch (e) {
+      toast.error(String(e));
+      setVernierSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, saving: false } : s)));
+    }
+  }, []);
+
+  const resetVernierSession = useCallback((sessionId: string) => {
+    setVernierSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== sessionId || !s.baseData) return s;
+        return { ...s, draftData: cloneVernierData(s.baseData) };
+      }),
+    );
+  }, []);
+
+  const reloadVernierSession = useCallback(async (sessionId: string) => {
+    let fp = "";
+    setVernierSessions((prev) => {
+      const s = prev.find((x) => x.id === sessionId);
+      if (!s) return prev;
+      fp = s.filePath;
+      return prev.map((x) => (x.id === sessionId ? { ...x, loading: true, loadError: null } : x));
+    });
+    if (!fp) return;
+    try {
+      const data = await vernierReadFile(fp);
+      const base = cloneVernierData(data);
+      const draft = cloneVernierData(data);
+      setVernierSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionId
+            ? { ...s, loading: false, loadError: null, baseData: base, draftData: draft }
+            : s,
+        ),
+      );
+      toast.success("Reloaded vernier table from disk");
+    } catch (e) {
+      const msg = String(e);
+      setVernierSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, loading: false, loadError: msg } : s)),
+      );
+      toast.error(msg);
+    }
+  }, []);
+
+  const requestCloseVernierSession = useCallback((sessionId: string) => {
+    const s = vernierSessionsRef.current.find((x) => x.id === sessionId);
+    if (!s) return;
+    if (isVernierDraftDirty(s.baseData, s.draftData)) {
+      setVernierGuard({ sessionId, action: "close" });
+      return;
+    }
+    setVernierSessions((prev) => prev.filter((x) => x.id !== sessionId));
+  }, []);
+
+  const requestReloadVernierSession = useCallback(
+    (sessionId: string) => {
+      const s = vernierSessionsRef.current.find((x) => x.id === sessionId);
+      if (!s) return;
+      if (isVernierDraftDirty(s.baseData, s.draftData)) {
+        setVernierGuard({ sessionId, action: "reload" });
+        return;
+      }
+      void reloadVernierSession(sessionId);
+    },
+    [reloadVernierSession],
+  );
+
+  const dismissVernierGuard = useCallback(() => setVernierGuard(null), []);
+
+  const discardVernierGuard = useCallback(() => {
+    setVernierGuard((g) => {
+      if (!g) return null;
+      const { sessionId, action } = g;
+      if (action === "close") {
+        setVernierSessions((prev) => prev.filter((x) => x.id !== sessionId));
+      } else {
+        void reloadVernierSession(sessionId);
+      }
+      return null;
+    });
+  }, [reloadVernierSession]);
+
+  const saveAndFinishVernierGuard = useCallback(async () => {
+    if (!vernierGuard) return;
+    const { sessionId, action } = vernierGuard;
+    await saveVernierSession(sessionId);
+    const s = vernierSessionsRef.current.find((x) => x.id === sessionId);
+    if (!s) return;
+    if (isVernierDraftDirty(s.baseData, s.draftData)) return;
+    setVernierGuard(null);
+    if (action === "close") {
+      setVernierSessions((prev) => prev.filter((x) => x.id !== sessionId));
+    } else {
+      void reloadVernierSession(sessionId);
+    }
+  }, [vernierGuard, saveVernierSession, reloadVernierSession]);
+
   // -------------------------------------------------------------- dispatch ----
   const openEditorForPath = useCallback(
     (filePath: string): boolean => {
@@ -948,9 +1314,24 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
         openJnttblSession(filePath);
         return true;
       }
+      if (kind === "shl") {
+        openShlSession(filePath);
+        return true;
+      }
+      if (kind === "vernier") {
+        openVernierSession(filePath);
+        return true;
+      }
       return false;
     },
-    [openNumdlbSession, openNumatbSession, openNuhlpbSession, openJnttblSession],
+    [
+      openNumdlbSession,
+      openNumatbSession,
+      openNuhlpbSession,
+      openJnttblSession,
+      openShlSession,
+      openVernierSession,
+    ],
   );
 
   const editingPaths = useMemo(() => {
@@ -967,8 +1348,14 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
     for (const s of numatbSessions) {
       if (s.isDirty) set.add(normalizePathKey(s.filePath));
     }
+    for (const s of shlSessions) {
+      if (isShlDraftDirty(s.baseData, s.draftData)) set.add(normalizePathKey(s.filePath));
+    }
+    for (const s of vernierSessions) {
+      if (isVernierDraftDirty(s.baseData, s.draftData)) set.add(normalizePathKey(s.filePath));
+    }
     return set;
-  }, [numdlbSessions, nuhlpbSessions, jnttblSessions, numatbSessions]);
+  }, [numdlbSessions, nuhlpbSessions, jnttblSessions, numatbSessions, shlSessions, vernierSessions]);
 
   const hostProps = {
     numdlb: {
@@ -1036,6 +1423,38 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
       onGuardDiscard: discardJnttblGuard,
       onGuardSave: saveAndFinishJnttblGuard,
     },
+    shl: {
+      sessions: shlSessions,
+      onActivateSession: activateShlSession,
+      onCloseRequest: requestCloseShlSession,
+      onReloadRequest: requestReloadShlSession,
+      onDraftChange: updateShlDraft,
+      onSave: saveShlSession,
+      onReset: resetShlSession,
+      guard: shlGuard,
+      onGuardOpenChange: (open: boolean) => {
+        if (!open) setShlGuard(null);
+      },
+      onGuardCancel: dismissShlGuard,
+      onGuardDiscard: discardShlGuard,
+      onGuardSave: saveAndFinishShlGuard,
+    },
+    vernier: {
+      sessions: vernierSessions,
+      onActivateSession: activateVernierSession,
+      onCloseRequest: requestCloseVernierSession,
+      onReloadRequest: requestReloadVernierSession,
+      onDraftChange: updateVernierDraft,
+      onSave: saveVernierSession,
+      onReset: resetVernierSession,
+      guard: vernierGuard,
+      onGuardOpenChange: (open: boolean) => {
+        if (!open) setVernierGuard(null);
+      },
+      onGuardCancel: dismissVernierGuard,
+      onGuardDiscard: discardVernierGuard,
+      onGuardSave: saveAndFinishVernierGuard,
+    },
   };
 
   return {
@@ -1045,6 +1464,8 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
     openNumatb: openNumatbSession,
     openNuhlpb: openNuhlpbSession,
     openJnttbl: openJnttblSession,
+    openShl: openShlSession,
+    openVernier: openVernierSession,
     /** Normalized-lowercase paths of editors with unsaved edits. */
     editingPaths,
     /** Props bundle consumed by <SsbhFileEditorHosts/>. */

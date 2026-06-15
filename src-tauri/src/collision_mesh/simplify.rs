@@ -1125,8 +1125,10 @@ fn shape_preserving_simplify(
     }
 
     let mut out_indices: Vec<u32> = Vec::new();
-    for tri_indices in regions.values() {
-        let region_tris: Vec<TriInfo> = tri_indices.iter().map(|&i| tris[i]).collect();
+    let mut region_ids: Vec<usize> = regions.keys().copied().collect();
+    region_ids.sort_unstable();
+    for region_id in region_ids {
+        let region_tris: Vec<TriInfo> = regions[&region_id].iter().map(|&i| tris[i]).collect();
         for tri in retriangulate_region(&welded.vertices, &region_tris) {
             out_indices.extend_from_slice(&tri);
         }

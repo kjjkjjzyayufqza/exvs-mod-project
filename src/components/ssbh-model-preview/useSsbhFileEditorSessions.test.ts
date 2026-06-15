@@ -60,15 +60,24 @@ describe("ssbhEditorKindForPath", () => {
     expect(ssbhEditorKindForPath("a/b.numatb")).toBe("numatb");
     expect(ssbhEditorKindForPath("a/b.nuhlpb")).toBe("nuhlpb");
     expect(ssbhEditorKindForPath("a/b.jnttbl")).toBe("jnttbl");
+    expect(ssbhEditorKindForPath("a/shell_x.shl")).toBe("shl");
+  });
+
+  it("dispatches vernier_table by name (ships as .bin or .vgsht2)", () => {
+    expect(ssbhEditorKindForPath("pkg/vernier_table_033gndage_001.bin")).toBe("vernier");
+    expect(ssbhEditorKindForPath("a\\b\\vernier_table_x.vgsht2")).toBe("vernier");
   });
 
   it("is case-insensitive", () => {
     expect(ssbhEditorKindForPath("A\\B.NUMATB")).toBe("numatb");
+    expect(ssbhEditorKindForPath("PKG\\VERNIER_TABLE_X.BIN")).toBe("vernier");
   });
 
   it("returns null for unsupported files", () => {
     expect(ssbhEditorKindForPath("a/b.nutexb")).toBeNull();
     expect(ssbhEditorKindForPath("a/b.bin")).toBeNull();
+    expect(ssbhEditorKindForPath("pkg/effect_project_x.bin")).toBeNull();
+    expect(ssbhEditorKindForPath("pkg/characterid_x.bin")).toBeNull();
     expect(ssbhEditorKindForPath("")).toBeNull();
   });
 });

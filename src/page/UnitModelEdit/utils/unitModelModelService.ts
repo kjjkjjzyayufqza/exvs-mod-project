@@ -24,6 +24,47 @@ export interface UnitModelSourceValidation {
   ignoredSourceNuhlpb: boolean;
 }
 
+export interface UnitModelReplacePreview {
+  source: UnitModelSourceValidation;
+  target: {
+    modelName: string;
+    modelIndex: number;
+    numdlbPath: string | null;
+    numshbPath: string | null;
+    nusktbPath: string | null;
+    jnttblPath: string | null;
+    numatbPaths: string[];
+    nuhlpbPath: string | null;
+  };
+  compatibility: {
+    skeleton: {
+      sourceBoneCount: number;
+      targetBoneCount: number;
+      matchingBoneNames: number;
+      missingInSource: string[];
+      newInSource: string[];
+    };
+    jnttbl: {
+      sourceBoneCount: number;
+      targetBoneCount: number | null;
+    };
+    materials: {
+      keptLabels: string[];
+      removedLabels: string[];
+      addedLabels: string[];
+    };
+  };
+  textures: {
+    referenced: string[];
+    copiedFromSource: string[];
+    reusedFromPool: string[];
+    missing: string[];
+    orphanedAfterReplace: string[];
+  };
+  warnings: string[];
+  blockers: string[];
+}
+
 /**
  * Remove a whole model (its model-file folder + paired nuhlpb) from the package, dropping any pool
  * entries that become unreferenced (model files and now-orphaned textures) and rewriting
@@ -71,6 +112,63 @@ export async function addUnitModelModel(
   return await invoke<UnitModelMutationResult>("add_unit_model_model", {
     modelRoot: toWindowsPath(trimmedRoot),
     structureJsonPath: structureJsonPath ? toWindowsPath(structureJsonPath) : null,
+    sourceDir: toWindowsPath(trimmedSource),
+  });
+}
+
+/**
+ * Replace an existing model's geometry/material/skeleton in place from a prepared SSBH folder,
+ * preserving the target model's name and position so shl/vernier/effect_project references stay
+ * valid, and keeping its existing NUHLPB. `targetModelName` is the model's numdlb display name.
+ */
+export async function replaceUnitModelModel(
+  modelRoot: string,
+  targetModelName: string,
+  sourceDir: string,
+  structureJsonPath?: string,
+): Promise<UnitModelMutationResult> {
+  const trimmedRoot = modelRoot.trim();
+  const trimmedName = targetModelName.trim();
+  const trimmedSource = sourceDir.trim();
+  if (!trimmedRoot) {
+    throw new Error("Unit model root is required.");
+  }
+  if (!trimmedName) {
+    throw new Error("Target model name is required.");
+  }
+  if (!trimmedSource) {
+    throw new Error("Source model folder is required.");
+  }
+  return await invoke<UnitModelMutationResult>("replace_unit_model_model", {
+    modelRoot: toWindowsPath(trimmedRoot),
+    structureJsonPath: structureJsonPath ? toWindowsPath(structureJsonPath) : null,
+    targetModelName: trimmedName,
+    sourceDir: toWindowsPath(trimmedSource),
+  });
+}
+
+export async function previewUnitModelModelReplacement(
+  modelRoot: string,
+  targetModelName: string,
+  sourceDir: string,
+  structureJsonPath?: string,
+): Promise<UnitModelReplacePreview> {
+  const trimmedRoot = modelRoot.trim();
+  const trimmedName = targetModelName.trim();
+  const trimmedSource = sourceDir.trim();
+  if (!trimmedRoot) {
+    throw new Error("Unit model root is required.");
+  }
+  if (!trimmedName) {
+    throw new Error("Target model name is required.");
+  }
+  if (!trimmedSource) {
+    throw new Error("Source model folder is required.");
+  }
+  return await invoke<UnitModelReplacePreview>("preview_unit_model_model_replacement", {
+    modelRoot: toWindowsPath(trimmedRoot),
+    structureJsonPath: structureJsonPath ? toWindowsPath(structureJsonPath) : null,
+    targetModelName: trimmedName,
     sourceDir: toWindowsPath(trimmedSource),
   });
 }

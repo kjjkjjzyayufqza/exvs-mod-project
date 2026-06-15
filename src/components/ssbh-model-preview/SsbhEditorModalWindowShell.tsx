@@ -10,7 +10,14 @@ import {
 
 export type { ModalViewportSuspendInteraction };
 
-type SsbhEditorModalKind = "numdlb" | "nuhlpb" | "numatb" | "jnttbl" | "effectProject";
+type SsbhEditorModalKind =
+  | "numdlb"
+  | "nuhlpb"
+  | "numatb"
+  | "jnttbl"
+  | "effectProject"
+  | "shl"
+  | "vernier";
 
 const NOOP_VIEWPORT_SUSPEND: ModalViewportSuspendInteraction = {
   startViewportSuspend: () => {},
@@ -68,6 +75,22 @@ const SIZE_CONFIGS: Record<SsbhEditorModalKind, SizeConfig> = {
     maxWidth: 1040,
     maxHeight: 860,
   },
+  shl: {
+    widthRatio: 0.62,
+    heightRatio: 0.72,
+    minWidth: 600,
+    minHeight: 340,
+    maxWidth: 1000,
+    maxHeight: 800,
+  },
+  vernier: {
+    widthRatio: 0.72,
+    heightRatio: 0.82,
+    minWidth: 640,
+    minHeight: 420,
+    maxWidth: 1080,
+    maxHeight: 860,
+  },
 };
 
 const SIZE_KEYS: Record<SsbhEditorModalKind, string> = {
@@ -76,6 +99,8 @@ const SIZE_KEYS: Record<SsbhEditorModalKind, string> = {
   numatb: "ssbh-file-editor.rnd-size.numatb",
   jnttbl: "ssbh-file-editor.rnd-size.jnttbl",
   effectProject: "ssbh-file-editor.rnd-size.effect-project",
+  shl: "ssbh-file-editor.rnd-size.shl",
+  vernier: "ssbh-file-editor.rnd-size.vernier",
 };
 
 function getViewportSize() {

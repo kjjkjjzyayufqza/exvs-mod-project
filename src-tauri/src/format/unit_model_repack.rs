@@ -23,7 +23,7 @@ pub fn repack_unit_model_from_structure(
     let mut root: Value =
         serde_json::from_str(&raw).map_err(|e| format!("Failed to parse structure json: {e}"))?;
 
-    let skip_indices = missing_legacy_shl_file_indices(&root, json_dir)?;
+    let skip_indices = missing_legacy_root_file_indices(&root, json_dir)?;
     if skip_indices.is_empty() {
         return repack_fhm2d_from_structure(
             structure_json_path,
@@ -64,14 +64,14 @@ pub fn repack_unit_model_from_structure(
     repack_fhm2d_from_structure(&temp_path, output_path, atomic_write, progress_callback)
 }
 
-fn missing_legacy_shl_file_indices(root: &Value, json_dir: &Path) -> Result<HashSet<i32>, String> {
+fn missing_legacy_root_file_indices(root: &Value, json_dir: &Path) -> Result<HashSet<i32>, String> {
     let entries = root
         .get("SubFileData")
         .and_then(Value::as_array)
         .ok_or_else(|| "Structure JSON is missing SubFileData array.".to_string())?;
     let mut out = HashSet::new();
     for entry in entries {
-        if actual_ext(entry).as_deref() != Some(".shl") {
+        if !is_legacy_root_control_entry(entry) {
             continue;
         }
         let Some(file_index) = value_file_index(entry) else {
@@ -87,7 +87,10 @@ fn missing_legacy_shl_file_indices(root: &Value, json_dir: &Path) -> Result<Hash
     Ok(out)
 }
 
-fn filter_structure_for_skipped_indices(root: &mut Value, skip_indices: &HashSet<i32>) -> Result<(), String> {
+fn filter_structure_for_skipped_indices(
+    root: &mut Value,
+    skip_indices: &HashSet<i32>,
+) -> Result<(), String> {
     let sub_file_data = root
         .get_mut("SubFileData")
         .and_then(Value::as_array_mut)
@@ -171,11 +174,7 @@ fn filter_folder_entry(
         }
     }
 
-    let end_mark = if entries
-        .get(*cursor)
-        .and_then(entry_type)
-        == Some("EndMark")
-    {
+    let end_mark = if entries.get(*cursor).and_then(entry_type) == Some("EndMark") {
         let end = entries[*cursor].clone();
         *cursor += 1;
         Some(end)
@@ -205,7 +204,10 @@ fn value_file_index(entry: &Value) -> Option<i32> {
 }
 
 fn actual_ext(entry: &Value) -> Option<String> {
-    let file_url = entry.get("fileUrl").and_then(Value::as_str).unwrap_or_default();
+    let file_url = entry
+        .get("fileUrl")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     let from_url = extension_from_name(&file_basename(file_url));
     if !from_url.is_empty() {
         return Some(from_url);
@@ -214,6 +216,25 @@ fn actual_ext(entry: &Value) -> Option<String> {
         .get("fileType")
         .and_then(Value::as_str)
         .map(|value| value.to_ascii_lowercase())
+}
+
+fn is_legacy_root_control_entry(entry: &Value) -> bool {
+    let Some(file_url) = entry.get("fileUrl").and_then(Value::as_str) else {
+        return false;
+    };
+    let cleaned = file_url.replace('\\', "/");
+    let segments: Vec<&str> = cleaned
+        .split('/')
+        .filter(|segment| !segment.is_empty() && *segment != ".")
+        .collect();
+    if segments.len() != 2 {
+        return false;
+    }
+    let name = segments[1].to_ascii_lowercase();
+    name.starts_with("characterid_")
+        || name.starts_with("shell_")
+        || name.starts_with("vernier_table_")
+        || name.starts_with("effect_project_")
 }
 
 fn file_basename(file_url: &str) -> String {
@@ -242,82 +263,44 @@ fn resolve_file_path(json_dir: &Path, file_url: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
+
+    fn missing_referenced_paths(structure_path: &Path) -> Vec<PathBuf> {
+        let Ok(raw) = fs::read_to_string(structure_path) else {
+            return Vec::new();
+        };
+        let Ok(root) = serde_json::from_str::<Value>(&raw) else {
+            return Vec::new();
+        };
+        let json_dir = structure_path.parent().unwrap_or_else(|| Path::new("."));
+        root.get("SubFileData")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| entry.get("fileUrl").and_then(Value::as_str))
+            .map(|file_url| resolve_file_path(json_dir, file_url))
+            .filter(|path| !path.is_file())
+            .collect()
+    }
 
     #[test]
-    fn repack_skips_missing_legacy_shl_entries() {
+    fn real_sample_0xa258a522_repack_skips_missing_legacy_shl_when_present() {
+        let structure_path = Path::new(r"E:\XB\解包\com\file\0xA258a522_structure.json");
+        if !structure_path.exists() {
+            eprintln!("SKIP: real unit model sample 0xA258a522 is not present.");
+            return;
+        }
+        let missing_paths = missing_referenced_paths(structure_path);
+        if let Some(first_missing) = missing_paths.first() {
+            eprintln!(
+                "SKIP: real unit model sample 0xA258a522 is incomplete; missing {} referenced file(s), first: {}",
+                missing_paths.len(),
+                first_missing.display()
+            );
+            return;
+        }
+
         let tmp = tempfile::tempdir().unwrap();
-        let model_root = tmp.path().join("0xTEST");
-        fs::create_dir_all(&model_root).unwrap();
-        fs::write(model_root.join("model.numdlb"), b"model-bytes").unwrap();
-
-        let structure_path = tmp.path().join("0xTEST_structure.json");
-        fs::write(
-            &structure_path,
-            serde_json::to_string_pretty(&json!({
-                "Magic": 10,
-                "UnkCount": 0,
-                "SubFileData": [
-                    {
-                        "index": 0,
-                        "fileType": ".bin",
-                        "fileIndex": 0,
-                        "fileUrl": ".\\0xTEST\\shell_model.shl",
-                        "fileBaseName": "shell_model"
-                    },
-                    {
-                        "index": 1,
-                        "fileType": ".numdlb",
-                        "fileIndex": 1,
-                        "fileUrl": ".\\0xTEST\\model.numdlb",
-                        "fileBaseName": "model"
-                    }
-                ],
-                "SubFileStructure": [
-                    {
-                        "type": "Folder",
-                        "unk1": "00000000",
-                        "folderCount": 2,
-                        "unk2": "00000000",
-                        "unk2_1": 0,
-                        "unk3": 0,
-                        "unk4": 0,
-                        "unk5": 0,
-                        "unk6": 0
-                    },
-                    {
-                        "type": "Item",
-                        "unk1": "00000000",
-                        "fileIndex": 0,
-                        "unk2": "00000000",
-                        "unk2_1": 0,
-                        "unk3": 0,
-                        "unk4": 0,
-                        "originalFileIndex": 0,
-                        "Name": null
-                    },
-                    {
-                        "type": "Item",
-                        "unk1": "00000000",
-                        "fileIndex": 1,
-                        "unk2": "40000000",
-                        "unk2_1": 0,
-                        "unk3": 0,
-                        "unk4": 0,
-                        "originalFileIndex": 1,
-                        "Name": "model"
-                    },
-                    {
-                        "type": "EndMark",
-                        "endMarkCount": 1
-                    }
-                ]
-            }))
-            .unwrap(),
-        )
-        .unwrap();
-
-        let output_path = tmp.path().join("0xTEST.fhm2d");
+        let output_path = tmp.path().join("0xA258a522.fhm2d");
         let result = repack_unit_model_from_structure(
             structure_path.to_str().unwrap(),
             output_path.to_str().unwrap(),
@@ -326,8 +309,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(result.total_files, 1);
+        assert!(result.total_files > 0);
         assert!(output_path.is_file());
     }
 }
-

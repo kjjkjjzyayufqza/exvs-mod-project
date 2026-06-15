@@ -31,8 +31,13 @@ pub struct UnitModelExtractResult {
 
 /// Parsed view of the flat `SubFileStructure` as a nested tree.
 enum TreeNode {
-    Folder { unk3: i32, children: Vec<TreeNode> },
-    Item { file_index: i32, name: Option<String> },
+    Folder {
+        children: Vec<TreeNode>,
+    },
+    Item {
+        file_index: i32,
+        name: Option<String>,
+    },
 }
 
 /// Extract a unit-model `.fhm2d` into the renamed/regrouped/deduped folder layout at `out_root`.
@@ -43,8 +48,8 @@ pub fn extract_unit_model_fhm2d_to_folder_impl(
     source_path: &str,
     out_root: &str,
 ) -> Result<UnitModelExtractResult, String> {
-    let bytes = fs::read(source_path)
-        .map_err(|e| format!("Failed to read fhm2d {source_path}: {e}"))?;
+    let bytes =
+        fs::read(source_path).map_err(|e| format!("Failed to read fhm2d {source_path}: {e}"))?;
     let out_root_path = PathBuf::from(out_root.trim());
     let out_name = out_root_path
         .file_name()
@@ -155,8 +160,11 @@ fn count_models(placements: &HashMap<i32, String>) -> usize {
 /// Token form of `SubFileStructure`: each `EndMark{count}` is expanded into `count` `End` tokens,
 /// because one EndMark entry can close multiple nested folders at once (mirrors `build_parse_tree`).
 enum Token {
-    Folder { unk3: i32 },
-    Item { file_index: i32, name: Option<String> },
+    Folder,
+    Item {
+        file_index: i32,
+        name: Option<String>,
+    },
     End,
 }
 
@@ -181,7 +189,7 @@ fn expand_tokens(entries: &[SubFileStructureEntry]) -> Vec<Token> {
     let mut tokens = Vec::with_capacity(entries.len());
     for entry in entries {
         match entry {
-            SubFileStructureEntry::Folder { unk3, .. } => tokens.push(Token::Folder { unk3: *unk3 }),
+            SubFileStructureEntry::Folder { .. } => tokens.push(Token::Folder),
             SubFileStructureEntry::Item {
                 file_index,
                 display_name,
@@ -204,11 +212,10 @@ fn parse_level(tokens: &[Token], cursor: &mut usize) -> Vec<TreeNode> {
     let mut out = Vec::new();
     while *cursor < tokens.len() {
         match &tokens[*cursor] {
-            Token::Folder { unk3 } => {
-                let unk3 = *unk3;
+            Token::Folder => {
                 *cursor += 1;
                 let children = parse_level(tokens, cursor);
-                out.push(TreeNode::Folder { unk3, children });
+                out.push(TreeNode::Folder { children });
             }
             Token::Item { file_index, name } => {
                 out.push(TreeNode::Item {
@@ -274,9 +281,8 @@ fn classify_placements(
                         assign_all_items(child, "nudnbb", &mut out);
                     }
                     GroupRole::Unknown => {
-                        warnings.push(
-                            "Unclassified root folder placed at layout root.".to_string(),
-                        );
+                        warnings
+                            .push("Unclassified root folder placed at layout root.".to_string());
                         assign_all_items(child, "", &mut out);
                     }
                 }
@@ -299,7 +305,10 @@ fn classify_placements(
         if !out.contains_key(file_index) {
             warnings.push(format!(
                 "fileIndex {file_index} ({}) could not be classified; placed at root.",
-                file_ext_by_index.get(file_index).cloned().unwrap_or_default()
+                file_ext_by_index
+                    .get(file_index)
+                    .cloned()
+                    .unwrap_or_default()
             ));
             out.insert(*file_index, String::new());
         }

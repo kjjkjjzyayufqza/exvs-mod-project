@@ -25,6 +25,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 import {
   importUnitModelStaticMesh,
+  previewUnitModelModelReplacement,
   validateUnitModelSourceFolder,
 } from "./unitModelModelService";
 
@@ -50,6 +51,67 @@ describe("unitModelModelService", () => {
     expect(mocks.invokeMock).toHaveBeenCalledWith(
       "validate_unit_model_source_folder",
       { sourceDir: "E:\\source" },
+    );
+  });
+
+  it("previews prepared-folder replacement through the dry-run command", async () => {
+    mocks.invokeMock.mockResolvedValue({
+      source: {
+        sourceDir: "E:\\source",
+        modelName: "source_body",
+        requiredFiles: [],
+        textureReferences: [],
+        sourceTexturesFound: [],
+        textureReferencesNotInSource: [],
+        ignoredSourceNuhlpb: false,
+      },
+      target: {
+        modelName: "target_body",
+        modelIndex: 2,
+        numdlbPath: null,
+        numshbPath: null,
+        nusktbPath: null,
+        jnttblPath: null,
+        numatbPaths: [],
+        nuhlpbPath: null,
+      },
+      compatibility: {
+        skeleton: {
+          sourceBoneCount: 0,
+          targetBoneCount: 0,
+          matchingBoneNames: 0,
+          missingInSource: [],
+          newInSource: [],
+        },
+        jnttbl: { sourceBoneCount: 0, targetBoneCount: 0 },
+        materials: { keptLabels: [], removedLabels: [], addedLabels: [] },
+      },
+      textures: {
+        referenced: [],
+        copiedFromSource: [],
+        reusedFromPool: [],
+        missing: [],
+        orphanedAfterReplace: [],
+      },
+      warnings: [],
+      blockers: [],
+    });
+
+    await previewUnitModelModelReplacement(
+      "E:/unit/0",
+      "target_body",
+      "E:/source",
+      "E:/unit/0_structure.json",
+    );
+
+    expect(mocks.invokeMock).toHaveBeenCalledWith(
+      "preview_unit_model_model_replacement",
+      {
+        modelRoot: "E:\\unit\\0",
+        structureJsonPath: "E:\\unit\\0_structure.json",
+        targetModelName: "target_body",
+        sourceDir: "E:\\source",
+      },
     );
   });
 

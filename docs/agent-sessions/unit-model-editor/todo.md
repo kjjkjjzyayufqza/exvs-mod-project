@@ -29,8 +29,54 @@ Resolve the unrelated SceneEdit TypeScript errors before expecting full-project
 
 ## Remaining Follow-up
 
-- [ ] Full `npx tsc --noEmit` is still blocked by unrelated SceneEdit test type errors.
-- [ ] Full `cargo test` is still blocked by unrelated bin target `CollisionSimplifyOptions` initializer errors.
+- [x] Full `npx tsc --noEmit` is no longer blocked by unrelated SceneEdit/resourceRegistry test type errors.
+- [x] Full `cargo test --manifest-path src-tauri/Cargo.toml` is no longer blocked by unrelated Rust test failures.
+
+## 2026-06-15 Control-bin editors (jnttbl / shell / vernier)
+
+Goal: bring jnttbl / shell / vernier editors into the Unit Model Editor, referencing the
+legacy TestEditor implementations, all on the shared resizable `SsbhEditorModalWindowShell`.
+Decisions: shell = reverse SHLL now + full editor; vernier = reuse typed-param table + modernise.
+
+Shell (`.shl`) backend:
+- [x] Reverse-engineer SHLL format from real samples + IDA; write analysis doc
+      (`docs/agent-sessions/unit-model-editor/shl-format-analysis.md`).
+- [x] `src-tauri/src/format/shl.rs`: `parse_shl` / `build_shl` (byte-faithful) + structs.
+- [x] Byte-roundtrip + json-roundtrip + CRUD tests over real samples — all pass.
+- [x] IPC `parse_shl_file` / `build_shl_file` wired into `lib.rs`; `cargo check` clean.
+
+Frontend:
+- [x] Shell editor: `shlIoService` + `shlEditorUtils` (+tests) + `ShlEditorBody` (record table,
+      type select, model select by folder, LE model-id field, add/remove) + `ShlEditorModalWindow`
+      + `ShlEditorModalHost`, wired into `useSsbhFileEditorSessions` (`shl` kind/dispatch/session/
+      guard) + `SsbhEditorModalWindowShell` (size) + `SsbhFileEditorHosts`. `.shl` editability is
+      automatic via `ssbhEditorKindForPath` in the structure tree.
+- [x] Resolve `model_id` -> model name via `folder_index`: `collectModelGroupNames` (structure
+      order) passed as `shlModelFolderNames` from the Unit Model page.
+- [x] Verify: vitest (16 passed: shlEditorUtils + dispatch) + `tsc --noEmit` (0 errors in touched
+      files; 8 pre-existing SceneEdit test errors remain, unrelated).
+- [x] Vernier editor: `vernierIoService` + `vernierEditorUtils` (+tests) reuse the generic typed-param
+      IPC (`param_type="vernier_table"`) and `TypedParamDataPanel` table verbatim, wrapped by
+      `VernierEditorBody` + `VernierEditorModalWindow` + `VernierEditorModalHost` on the shared shell.
+      Hook gains a `vernier` kind; `ssbhEditorKindForPath` dispatches `vernier_table_*` by NAME
+      (ships as `.bin`/`.vgsht2`, not a unique ext), so the structure tree gets "Edit VERNIER…" free.
+- [x] jnttbl: already on the shared shell; polished the entry table to grow with the resizable
+      window (`max-h` cap 480 -> 760) for parity with the shell/vernier editors.
+- [x] Verify: vitest 21 passed (shl/vernier utils + dispatch + Numatb window) + `tsc --noEmit`
+      (0 errors in touched files; 8 pre-existing SceneEdit test errors remain, unrelated).
+
+## 2026-06-15 Add Folder + Replace Model UX Design
+
+- [x] Refresh `add-replace-model-design.md` against current code reality.
+- [x] Document prepared SSBH folder validation requirements.
+- [x] Design pool-aware Add preview behavior.
+- [x] Design reference-preserving Replace flow and target identity rules.
+- [x] Define backend replacement preview response shape.
+- [x] Define frontend modal/panel changes and verification plan.
+- [x] Implement pool-aware Add preview.
+- [x] Implement replacement preview command.
+- [x] Wire Replace row action and confirmation modal.
+- [x] Add Rust/frontend tests for replacement preview and commit safety.
 
 ## 2026-06-14 Modal Shell Cleanup
 

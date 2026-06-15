@@ -22,6 +22,7 @@ export const UNIT_MODEL_OPEN_FOLDER_DIALOG_PATH_KEY = "unitModelEdit.openFolder"
 export const UNIT_MODEL_EXTRACT_SOURCE_DIALOG_PATH_KEY = "unitModelEdit.extractFhm2dSource";
 export const UNIT_MODEL_EXTRACT_OUTPUT_DIALOG_PATH_KEY = "unitModelEdit.extractFhm2dOutput";
 export const UNIT_MODEL_ADD_SSBH_FOLDER_DIALOG_PATH_KEY = "unitModelEdit.addSsbhFolder";
+export const UNIT_MODEL_REPLACE_SSBH_FOLDER_DIALOG_PATH_KEY = "unitModelEdit.replaceSsbhFolder";
 export const UNIT_MODEL_IMPORT_STATIC_MESH_DIALOG_PATH_KEY = "unitModelEdit.importStaticMesh";
 export const UNIT_MODEL_ADD_TEXTURE_DIALOG_PATH_KEY = "unitModelEdit.addTexture";
 export const UNIT_MODEL_REPLACE_TEXTURE_DIALOG_PATH_KEY = "unitModelEdit.replaceTexture";

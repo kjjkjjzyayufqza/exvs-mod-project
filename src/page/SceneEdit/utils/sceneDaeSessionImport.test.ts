@@ -335,16 +335,36 @@ describe("writeModelReplacementToDisk", () => {
     vi.clearAllMocks();
     mockExecuteDelete.mockResolvedValue(undefined);
     mockSceneConvertStaticMeshToStageFilesWithProgress.mockResolvedValue({
+      sourcePath: "E:/models/base.dae",
+      outputDir: "E:/stage/0/0",
       filesWritten: ["base/0/base.numdlb"],
       modelDir: "E:/stage/0/0/base",
+      baseFilename: "base",
+      ssbhGenerated: true,
+      hktGenerated: false,
+      hktDetail: null,
       warnings: [],
     });
   });
 
   it("writes converted SSBH files under stageRoot without pre-deleting the folder", async () => {
+    const emptyNumatb = createEmptyNumatbFile();
     const importConfig = buildSsbhSessionImportConfig(
       createDefaultDaeImportConfig("base"),
-      { outputBaseName: "", scaleFactorText: "1", upAxis: "y_up", flipUv: false, writeNumdlb: true, writeNumshb: true, writeNusktb: true, writeNumatb: true, writeMayaProfile: false, mayaFile: null, nustFile: null, numdlbEntries: [] },
+      {
+        outputBaseName: "",
+        scaleFactorText: "1",
+        upAxis: "y_up",
+        flipUv: false,
+        writeNumdlb: true,
+        writeNumshb: true,
+        writeNusktb: true,
+        writeNumatb: true,
+        writeMayaProfile: false,
+        mayaFile: emptyNumatb,
+        nustFile: emptyNumatb,
+        numdlbEntries: [],
+      },
       "base",
     );
 
@@ -369,6 +389,7 @@ describe("writeModelReplacementToDisk", () => {
   });
 
   it("removes only the legacy named subfolder after a successful write", async () => {
+    const emptyNumatb = createEmptyNumatbFile();
     const importConfig = buildSsbhSessionImportConfig(
       createDefaultDaeImportConfig("base"),
       {
@@ -381,8 +402,8 @@ describe("writeModelReplacementToDisk", () => {
         writeNusktb: true,
         writeNumatb: true,
         writeMayaProfile: false,
-        mayaFile: null,
-        nustFile: null,
+        mayaFile: emptyNumatb,
+        nustFile: emptyNumatb,
         numdlbEntries: [],
       },
       "base",

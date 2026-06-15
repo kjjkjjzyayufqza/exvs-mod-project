@@ -1,5 +1,8 @@
-use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use crate::format::param_bin_format::{
+    build_param_binary, read_param_binary, ParamBinaryFile, ParamBinaryHeader, ParamFieldSpec,
+};
 use encoding_rs::GBK;
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -17,9 +20,6 @@ use std::{
 use tauri::{
     ipc::{Channel, InvokeBody, Response},
     AppHandle, Emitter, State,
-};
-use crate::format::param_bin_format::{
-    build_param_binary, read_param_binary, ParamBinaryFile, ParamBinaryHeader, ParamFieldSpec,
 };
 
 #[tauri::command]
@@ -128,7 +128,9 @@ pub fn exec_process_with_output(
 }
 
 #[tauri::command]
-pub fn nutexb_preview_file_identity(path: String) -> Result<crate::nutexb_lib::NutexbPreviewFileIdentity, String> {
+pub fn nutexb_preview_file_identity(
+    path: String,
+) -> Result<crate::nutexb_lib::NutexbPreviewFileIdentity, String> {
     crate::nutexb_lib::nutexb_preview_file_identity(&path)
 }
 
@@ -183,7 +185,10 @@ pub fn nutexb_png_bytes(input_path: String) -> Result<Response, String> {
 /// Skips PNG encode/decode round-trip for faster preview pipeline.
 /// Optional `max_dimension` caps the longest edge via Lanczos3 downsampling.
 #[tauri::command]
-pub async fn nutexb_rgba_bytes(input_path: String, max_dimension: Option<u32>) -> Result<Response, String> {
+pub async fn nutexb_rgba_bytes(
+    input_path: String,
+    max_dimension: Option<u32>,
+) -> Result<Response, String> {
     let (w, h, rgba) = tauri::async_runtime::spawn_blocking(move || {
         crate::nutexb_lib::nutexb_to_rgba_from_path(&input_path, max_dimension)
     })
@@ -239,10 +244,7 @@ pub enum NutexbStreamChunk {
         crc32: u32,
     },
     #[serde(rename = "identityError")]
-    IdentityError {
-        path: String,
-        message: String,
-    },
+    IdentityError { path: String, message: String },
     #[serde(rename = "progress")]
     Progress {
         done: usize,
@@ -296,10 +298,7 @@ pub async fn nutexb_stream_identities(
                     });
                 }
                 Err(e) => {
-                    let _ = on_chunk.send(NutexbStreamChunk::IdentityError {
-                        path,
-                        message: e,
-                    });
+                    let _ = on_chunk.send(NutexbStreamChunk::IdentityError { path, message: e });
                 }
             }
         }
@@ -467,9 +466,7 @@ pub async fn write_files_batch_base64(
     }
     const MAX_FILES_PER_INVOKE: usize = 512;
     if files.len() > MAX_FILES_PER_INVOKE {
-        return Err(format!(
-            "files.len() must be <= {MAX_FILES_PER_INVOKE}"
-        ));
+        return Err(format!("files.len() must be <= {MAX_FILES_PER_INVOKE}"));
     }
     tauri::async_runtime::spawn_blocking(move || {
         use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
@@ -565,7 +562,10 @@ pub async fn copy_asset_as_new(
             return Err(format!("Source folder not found: {}", old_folder.display()));
         }
         if !old_struct.is_file() {
-            return Err(format!("Source structure JSON not found: {}", old_struct.display()));
+            return Err(format!(
+                "Source structure JSON not found: {}",
+                old_struct.display()
+            ));
         }
         if new_folder.exists() || new_struct.exists() {
             return Err(format!("Target already exists: {}", new_hash_hex));
@@ -639,19 +639,13 @@ fn remove_asset_hash_folder_pair(root: &Path, normalized_hash: &str) -> Result<b
     let struct_json = root.join(format!("{normalized_hash}_structure.json"));
     let mut did_any = false;
     if asset_folder.is_dir() {
-        fs::remove_dir_all(&asset_folder).map_err(|e| {
-            format!(
-                "Failed to remove folder {}: {}",
-                asset_folder.display(),
-                e
-            )
-        })?;
+        fs::remove_dir_all(&asset_folder)
+            .map_err(|e| format!("Failed to remove folder {}: {}", asset_folder.display(), e))?;
         did_any = true;
     }
     if struct_json.is_file() {
-        fs::remove_file(&struct_json).map_err(|e| {
-            format!("Failed to remove {}: {}", struct_json.display(), e)
-        })?;
+        fs::remove_file(&struct_json)
+            .map_err(|e| format!("Failed to remove {}: {}", struct_json.display(), e))?;
         did_any = true;
     }
     Ok(did_any)
@@ -675,7 +669,10 @@ fn remove_mod_fhm2d_file(mod_dir: &Path, normalized_hash: &str) -> Result<bool, 
 }
 
 #[tauri::command]
-pub async fn remove_asset_workspace(hash_hex: String, targets: RemoveAssetTargets) -> Result<(), String> {
+pub async fn remove_asset_workspace(
+    hash_hex: String,
+    targets: RemoveAssetTargets,
+) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let normalized = normalize_hash_hex(&hash_hex)?;
 
@@ -721,7 +718,10 @@ pub async fn remove_asset_workspace(hash_hex: String, targets: RemoveAssetTarget
         if let Some(mod_s) = mod_trimmed {
             let mod_dir = PathBuf::from(mod_s);
             if !mod_dir.is_dir() {
-                return Err(format!("Mod directory does not exist: {}", mod_dir.display()));
+                return Err(format!(
+                    "Mod directory does not exist: {}",
+                    mod_dir.display()
+                ));
             }
             if !remove_mod_fhm2d_file(&mod_dir, &normalized)? {
                 return Err(format!(
@@ -820,7 +820,8 @@ pub async fn watch_folder(
         .map_err(|e| e.to_string())?;
 
     let canonical_for_loop = canonical.clone();
-    let handle = thread::spawn(move || watch_loop(app_handle, rx, stop_flag_clone, canonical_for_loop));
+    let handle =
+        thread::spawn(move || watch_loop(app_handle, rx, stop_flag_clone, canonical_for_loop));
 
     let active = ActiveWatcher {
         _watcher: watcher,
@@ -1135,8 +1136,11 @@ fn replace_file_url_hash(
             for (key, child) in map.iter_mut() {
                 if key == "fileUrl" {
                     if let Value::String(original) = child {
-                        let replaced =
-                            replace_ascii_case_insensitive(original.as_str(), old_hash_hex, new_hash_hex);
+                        let replaced = replace_ascii_case_insensitive(
+                            original.as_str(),
+                            old_hash_hex,
+                            new_hash_hex,
+                        );
                         if replaced != *original {
                             *original = replaced;
                             *updated_count += 1;
@@ -1244,7 +1248,12 @@ pub fn parse_command_table_file(path: &str, file_type: &str) -> Result<Value, St
                     entry_index, spec.entry_offset
                 ));
             }
-            let bytes = [raw[offset], raw[offset + 1], raw[offset + 2], raw[offset + 3]];
+            let bytes = [
+                raw[offset],
+                raw[offset + 1],
+                raw[offset + 2],
+                raw[offset + 3],
+            ];
             let value_uint = u32::from_le_bytes(bytes);
             let value_int = i32::from_le_bytes(bytes);
             let value_float = f32::from_le_bytes(bytes);
@@ -1478,9 +1487,7 @@ pub fn build_command_table_file(
 pub fn parse_typed_param_file(path: &str, param_type: &str) -> Result<Value, String> {
     let data = fs::read(path).map_err(|e| format!("Failed to read file: {e}"))?;
     let v: Value = match param_type {
-        "armsparam" => {
-            serde_json::to_value(crate::format::armsparam::parse_armsparam(&data)?)
-        }
+        "armsparam" => serde_json::to_value(crate::format::armsparam::parse_armsparam(&data)?),
         "bulletparam" => {
             serde_json::to_value(crate::format::bulletparam::parse_bulletparam(&data)?)
         }
@@ -1496,9 +1503,7 @@ pub fn parse_typed_param_file(path: &str, param_type: &str) -> Result<Value, Str
         "characterparam" => {
             serde_json::to_value(crate::format::characterparam::parse_characterparam(&data)?)
         }
-        "grapparam" => {
-            serde_json::to_value(crate::format::grapparam::parse_grapparam(&data)?)
-        }
+        "grapparam" => serde_json::to_value(crate::format::grapparam::parse_grapparam(&data)?),
         "hitgroupiddef" => {
             serde_json::to_value(crate::format::hitgroupiddef::parse_hitgroupiddef(&data)?)
         }
@@ -1508,9 +1513,7 @@ pub fn parse_typed_param_file(path: &str, param_type: &str) -> Result<Value, Str
         "projectile_depiction_table" => serde_json::to_value(
             crate::format::projectile_depiction_table::parse_projectile_depiction_table(&data)?,
         ),
-        "speedparam" => {
-            serde_json::to_value(crate::format::speedparam::parse_speedparam(&data)?)
-        }
+        "speedparam" => serde_json::to_value(crate::format::speedparam::parse_speedparam(&data)?),
         "effect_project" => {
             serde_json::to_value(crate::format::effect_project::parse_effect_project(&data)?)
         }
@@ -1610,5 +1613,20 @@ pub fn build_chrsysparam_file(file_json: Value, output_path: &str) -> Result<(),
     let file: crate::format::chrsysparam::ChrSysParamFile =
         serde_json::from_value(file_json).map_err(|e| format!("Deserialize failed: {e}"))?;
     let bytes = crate::format::chrsysparam::build_chrsysparam(&file)?;
+    fs::write(output_path, &bytes).map_err(|e| format!("Write failed: {e}"))
+}
+
+#[tauri::command]
+pub fn parse_shl_file(path: &str) -> Result<Value, String> {
+    let data = fs::read(path).map_err(|e| format!("Failed to read file: {e}"))?;
+    let parsed = crate::format::shl::parse_shl(&data)?;
+    serde_json::to_value(&parsed).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[tauri::command]
+pub fn build_shl_file(file_json: Value, output_path: &str) -> Result<(), String> {
+    let file: crate::format::shl::ShlFile =
+        serde_json::from_value(file_json).map_err(|e| format!("Deserialize failed: {e}"))?;
+    let bytes = crate::format::shl::build_shl(&file)?;
     fs::write(output_path, &bytes).map_err(|e| format!("Write failed: {e}"))
 }

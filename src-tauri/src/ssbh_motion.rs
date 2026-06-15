@@ -1412,7 +1412,10 @@ mod normalize_frame_tests {
                                 rotation: Vector4::new(0.0, 0.0, 0.0, 1.0),
                                 scale: Vector3::new(1.0, 1.0, 1.0),
                             }]),
-                            transform_flags: TransformFlags::default(),
+                            transform_flags: TransformFlags {
+                                override_translation: true,
+                                ..TransformFlags::default()
+                            },
                         },
                     ],
                 }],
@@ -1445,7 +1448,10 @@ mod normalize_frame_tests {
                             rotation: Vector4::new(0.0, 0.0, 0.0, 1.0),
                             scale: Vector3::new(1.0, 1.0, 1.0),
                         }]),
-                        transform_flags: TransformFlags::default(),
+                        transform_flags: TransformFlags {
+                            override_translation: true,
+                            ..TransformFlags::default()
+                        },
                     }],
                 }],
             }],

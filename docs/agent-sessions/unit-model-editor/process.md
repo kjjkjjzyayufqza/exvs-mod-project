@@ -483,3 +483,158 @@
   - PASS: no errors matched the changed NUMATB window/session files.
 - `git diff --check`
   - PASS: no whitespace errors; only existing line-ending warnings.
+
+## 2026-06-15 Add Folder + Replace Model UX Design Refresh
+
+### Context Gathered
+
+- Re-read `AGENTS.md` and `.cursor/rules/custom-rules.mdc`.
+- Searched `docs/` for unit model, replace, folder, NUMDLB, JNTTBL, and NUMATB
+  references.
+- Read the existing `docs/agent-sessions/unit-model-editor/add-replace-model-design.md`.
+- Read `docs/superpowers/specs/2026-06-14-unit-model-editor-ssbh-file-editing-design.md`.
+- Read `docs/checklist/repack-stage-fhm2d-checklist.md` for SSBH item ordering and
+  required file/type-tag context.
+- Used CodeGraph to inspect `UnitModelModelManagerPanel`,
+  `UnitModelSourceValidationPreview`, `validate_unit_model_source_folder`,
+  `add_unit_model_model`, and `replace_unit_model_model`.
+- Applied the `frontend-design-direction` skill for the UI direction: dense,
+  quiet, scannable production tooling using existing shadcn/lucide patterns.
+
+### Findings
+
+- The old add/replace design doc was stale: it said replace did not exist, but
+  `replace_unit_model_model` is already implemented and registered through Tauri.
+- The existing frontend exposes add-from-FBX/DAE, add-from-folder preview, and
+  remove. A replace row action/modal is not wired in `UnitModelModelManagerPanel`.
+- Source folder validation requires exactly one NUMDLB, NUMSHB, NUSKTB, JNTTBL,
+  and exactly two NUMATB files (`__maya__` and `__nust__`), with parse checks and
+  `jnttbl.bone_count == nusktb.bones.len()`.
+- Existing source validation reports texture refs found in the source folder vs
+  missing from source, but does not itself resolve whether missing refs already
+  exist in the package shared texture pool.
+- Backend replace preserves the target model group position, rewrites the new
+  NUMDLB `model_name` to the target name, swaps model group children in place,
+  dedupes/copies textures, filters old unreferenced files, and keeps target
+  NUHLPB.
+
+### Design Decisions
+
+- Treat Add as a non-destructive validate -> preview -> commit flow.
+- Treat Replace as an in-place content swap, never remove+append.
+- Preserve target model identity and order during Replace.
+- Add a backend replacement preview command so skeleton/material/texture diffs
+  are computed consistently with Rust parsing and pool resolution.
+- Keep target NUHLPB by default in phase 1; show a prominent warning when the
+  source skeleton differs. Optional future mode can add keep/reset/auto.
+- Block commits only on hard invalidity; skeleton/material differences are
+  warnings because intentional replacements can change them.
+
+### Artifact
+
+- Updated `docs/agent-sessions/unit-model-editor/add-replace-model-design.md`
+  with the refreshed product/technical design, backend preview shape, UI plan,
+  mutation safety rules, tests, and implementation phases.
+
+## 2026-06-15 Add Folder + Replace Model Implementation
+
+### Changes
+
+- Added Rust replacement preview DTOs and
+  `preview_unit_model_model_replacement` in
+  `src-tauri/src/format/unit_model_models.rs`.
+- The preview reuses the prepared-folder source validation, locates the target
+  model group from `_structure.json`, preserves target identity/order in the
+  report, compares skeleton bone names, JNTTBL counts, and material labels, and
+  computes a pool-aware texture commit plan.
+- Registered the preview command in `stage_commands.rs` and `lib.rs`.
+- Added `previewUnitModelModelReplacement` and matching TypeScript response
+  types in `unitModelModelService.ts`.
+- Made Add folder preview pool-aware by querying the package texture inventory:
+  material refs already in the shared pool are shown as reused, refs present only
+  in the source folder are shown as copied, and refs missing from both are hard
+  blockers.
+- Added the row-level Replace action in `UnitModelModelManagerPanel`.
+- Added `UnitModelReplaceFolderModal` with target lock, source validation,
+  skeleton/material/texture diff sections, warnings, blockers, and disabled
+  confirmation while blockers remain.
+- Shared `UnitModelSourceValidationPreview` between Add and Replace, with mode
+  specific NUHLPB copy/keep text.
+- Added Rust tests for replacement preview identity/compatibility and texture
+  pool preference, and frontend service test coverage for the preview IPC call.
+
+### Verification Log
+
+- `cargo test --manifest-path src-tauri/Cargo.toml unit_model_models --lib`
+  - PASS: 10 tests.
+  - Existing warnings remain in `unit_model_repack.rs` for unused helper
+    functions.
+- `npm test -- src/page/UnitModelEdit/utils/unitModelModelService.test.ts`
+  - PASS: 1 file, 3 tests.
+- `npx vite build`
+  - PASS: production client build completed.
+- `npx tsc --noEmit`
+  - BLOCKED by existing unrelated test fixture errors in
+    `src/page/SceneEdit/utils/sceneDaeSessionImport.test.ts`,
+    `src/page/SceneEdit/utils/sceneModelReplacePreview.test.ts`, and
+    `src/services/resourceRegistry/stageRegistrySync.test.ts`.
+- `git diff --check`
+  - PASS: no whitespace errors; only existing line-ending warnings from the
+    dirty working tree.
+
+### Notes
+
+- During verification, a broad `rustfmt` invocation briefly formatted unrelated
+  Rust modules through `lib.rs`; those unrelated formatting-only edits were
+  reverted with a scoped reverse patch. The remaining dirty files match the
+  prior working-tree scope plus this Add/Replace implementation.
+- Full app typecheck still needs the unrelated SceneEdit/resourceRegistry test
+  fixture cleanup listed in `todo.md`.
+
+## 2026-06-16 Verification Gate Cleanup
+
+### Changes
+
+- Updated stale TypeScript test fixtures that were blocking full project
+  typecheck:
+  - `sceneDaeSessionImport.test.ts` now returns the full
+    `StaticMeshDirectConvertResult` mock shape and passes non-null empty NUMATB
+    profiles into `buildSsbhSessionImportConfig`.
+  - `sceneModelReplacePreview.test.ts` now matches the current
+    `SsbhModelPreviewBundle` shape (`modl`, `skel`, `matl`, `textureResolve`)
+    and no longer sets the removed bundle-level `displayLabel`.
+  - `stageRegistrySync.test.ts` now includes `seedVerified` on
+    `StageRegistrySlotInput` fixtures.
+- Fixed two `ssbh_motion` regression tests by making their translation override
+  intent explicit. Current runtime semantics keep skeleton/rest translation when
+  `override_translation=false`; these tests are about track/name mapping, so the
+  transform tracks now set `override_translation=true`.
+- Made the optional real-sample Unit Model repack smoke skip when the local
+  `0xA258a522_structure.json` exists but referenced files are incomplete. This
+  keeps full `cargo test` independent from partially copied local samples while
+  still running the smoke when the sample tree is complete.
+- Stabilized the HKT XML winding regression by making
+  `shape_preserving_simplify` iterate coplanar region IDs in sorted order.
+  A full rerun had exposed nondeterministic output from `HashMap::values()`
+  in `production_hkt_xml_preserves_upward_plane_winding`.
+- Checked the user-reported test cleanup state: no tracked `.test.ts` or
+  `.test.tsx` files are deleted. The only staged deletion currently visible is
+  `.codegraph/daemon.pid`.
+
+### Verification Log
+
+- `npx tsc --noEmit --pretty false`
+  - PASS.
+- `npm test -- src/page/SceneEdit/utils/sceneDaeSessionImport.test.ts src/page/SceneEdit/utils/sceneModelReplacePreview.test.ts src/services/resourceRegistry/stageRegistrySync.test.ts src/page/UnitModelEdit/utils/unitModelModelService.test.ts`
+  - PASS: 4 files, 27 tests.
+- Targeted Rust reruns:
+  - `cargo test --manifest-path src-tauri/Cargo.toml ssbh_motion::normalize_frame_tests::animate_skel_cpu_maps_transform_track_by_name_not_first_track --lib`
+  - `cargo test --manifest-path src-tauri/Cargo.toml ssbh_motion::normalize_frame_tests::animate_skel_cpu_maps_namespaced_node_names_to_skeleton_names --lib`
+  - `cargo test --manifest-path src-tauri/Cargo.toml format::unit_model_repack::tests::real_sample_0xa258a522_repack_skips_missing_legacy_shl_when_present --lib`
+  - `cargo test --manifest-path src-tauri/Cargo.toml havok_collision_encode::tests::production_hkt_xml_preserves_upward_plane_winding --lib -- --nocapture`
+  - PASS: each targeted test passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml`
+  - PASS: 320 passed, 0 failed, 10 ignored in the main lib test target; all bin/example/doc test phases and the ignored-only stage bundle target completed successfully.
+  - Remaining output is warning-only: existing unused helper/import/variable/dead-code warnings.
+- `git diff --check`
+  - PASS: no whitespace errors; only existing line-ending warnings from the dirty working tree.

@@ -13,11 +13,15 @@ import { NumdlbEditorModalHost } from "./NumdlbEditorModalHost";
 import { NuhlpbEditorModalHost } from "./NuhlpbEditorModalHost";
 import { NumatbEditorModalHost } from "./NumatbEditorModalHost";
 import { JnttblEditorModalHost } from "./JnttblEditorModalHost";
+import { ShlEditorModalHost } from "./ShlEditorModalHost";
+import { VernierEditorModalHost } from "./VernierEditorModalHost";
 import type { SsbhFileEditorHostProps } from "./useSsbhFileEditorSessions";
 import type { ModalViewportSuspendInteraction } from "./SsbhEditorModalWindowShell";
 
 type SsbhFileEditorHostsProps = SsbhFileEditorHostProps & {
   viewportSuspend?: ModalViewportSuspendInteraction;
+  /** Structure-JSON model folder names in order; index = folder_index. Enables SHL model resolution. */
+  shlModelFolderNames?: string[];
 };
 
 type GuardDialogProps = {
@@ -65,16 +69,19 @@ function GuardDialog({
 }
 
 /**
- * Renders the four windowed SSBH file editors (numdlb / nuhlpb / numatb / jnttbl)
- * plus their dirty-guard dialogs, driven by `useSsbhFileEditorSessions().hostProps`.
- * Mount once per page that opens SSBH file editors.
+ * Renders the windowed SSBH/control-bin file editors (numdlb / nuhlpb / numatb / jnttbl / shl /
+ * vernier) plus their dirty-guard dialogs, driven by `useSsbhFileEditorSessions().hostProps`.
+ * Mount once per page that opens these file editors.
  */
 export function SsbhFileEditorHosts({
   numdlb,
   nuhlpb,
   numatb,
   jnttbl,
+  shl,
+  vernier,
   viewportSuspend,
+  shlModelFolderNames,
 }: SsbhFileEditorHostsProps) {
   return (
     <>
@@ -153,6 +160,45 @@ export function SsbhFileEditorHosts({
         onGuardCancel={jnttbl.onGuardCancel}
         onGuardDiscard={jnttbl.onGuardDiscard}
         onGuardSave={jnttbl.onGuardSave}
+      />
+
+      <ShlEditorModalHost
+        sessions={shl.sessions}
+        onActivateSession={shl.onActivateSession}
+        onCloseRequest={shl.onCloseRequest}
+        onReloadRequest={shl.onReloadRequest}
+        onDraftChange={shl.onDraftChange}
+        onSave={shl.onSave}
+        onReset={shl.onReset}
+        viewportSuspend={viewportSuspend}
+        modelFolderNames={shlModelFolderNames}
+      />
+      <GuardDialog
+        label="SHL"
+        guard={shl.guard}
+        onGuardOpenChange={shl.onGuardOpenChange}
+        onGuardCancel={shl.onGuardCancel}
+        onGuardDiscard={shl.onGuardDiscard}
+        onGuardSave={shl.onGuardSave}
+      />
+
+      <VernierEditorModalHost
+        sessions={vernier.sessions}
+        onActivateSession={vernier.onActivateSession}
+        onCloseRequest={vernier.onCloseRequest}
+        onReloadRequest={vernier.onReloadRequest}
+        onDraftChange={vernier.onDraftChange}
+        onSave={vernier.onSave}
+        onReset={vernier.onReset}
+        viewportSuspend={viewportSuspend}
+      />
+      <GuardDialog
+        label="vernier"
+        guard={vernier.guard}
+        onGuardOpenChange={vernier.onGuardOpenChange}
+        onGuardCancel={vernier.onGuardCancel}
+        onGuardDiscard={vernier.onGuardDiscard}
+        onGuardSave={vernier.onGuardSave}
       />
     </>
   );

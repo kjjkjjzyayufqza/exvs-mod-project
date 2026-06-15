@@ -12,12 +12,15 @@ function makePreviewBundle(): SsbhModelPreviewBundle {
     meshPath: "E:/stage/0/0/base/0/base.numshb",
     skelPath: null,
     matlPaths: [],
+    modl: {},
     textureRefs: [],
     resolvedNutexbPaths: [],
+    textureResolve: [],
     mesh: { binary: true, geometryId: "geom-base-replace" },
+    skel: null,
+    matl: null,
     warnings: [],
     sourceKind: "memory",
-    displayLabel: "base",
   };
 }
 

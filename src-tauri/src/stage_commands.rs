@@ -230,9 +230,7 @@ pub async fn load_stage_bundle(stage_root: String) -> Result<fhm2d_stage::StageB
 }
 
 #[tauri::command]
-pub async fn stage_load_skeleton(
-    stage_root: String,
-) -> Result<fhm2d_stage::StageSkeleton, String> {
+pub async fn stage_load_skeleton(stage_root: String) -> Result<fhm2d_stage::StageSkeleton, String> {
     eprintln!("[stage_load_skeleton] Loading skeleton: {stage_root}");
     let t = Instant::now();
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -270,9 +268,7 @@ pub async fn stage_load_model_slot_bundle(
         return Err("folder_name cannot be empty".to_string());
     }
 
-    eprintln!(
-        "[stage_load_model_slot_bundle] stage_root={stage_root} folder_name={folder_name}"
-    );
+    eprintln!("[stage_load_model_slot_bundle] stage_root={stage_root} folder_name={folder_name}");
     let t = Instant::now();
 
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -418,9 +414,7 @@ pub async fn stage_stream_bundles(
         total_models: loaded,
         elapsed_ms,
     });
-    eprintln!(
-        "[stage_stream_bundles] Complete — {loaded} models in {elapsed_ms}ms"
-    );
+    eprintln!("[stage_stream_bundles] Complete — {loaded} models in {elapsed_ms}ms");
     Ok(())
 }
 
@@ -448,69 +442,67 @@ pub async fn preview_stage_fhm2d_rename(
 
     let source_name_clone = source_name.clone();
     let app_clone = app.clone();
-    let spawn_outcome =
-        tauri::async_runtime::spawn_blocking(move || {
-            let t0 = Instant::now();
-            let bytes =
-                std::fs::read(&path).map_err(|e| format!("Failed to read FHM2D file: {e}"))?;
-            let file_size = bytes.len();
-            let read_ms = t0.elapsed().as_millis() as u64;
-            stage_log(&format!("read done: {file_size} bytes, {read_ms}ms"));
+    let spawn_outcome = tauri::async_runtime::spawn_blocking(move || {
+        let t0 = Instant::now();
+        let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read FHM2D file: {e}"))?;
+        let file_size = bytes.len();
+        let read_ms = t0.elapsed().as_millis() as u64;
+        stage_log(&format!("read done: {file_size} bytes, {read_ms}ms"));
 
-            emit_progress(
-                &app_clone,
-                "extract",
-                "Decompressing FHM2D...",
-                25,
-                Some(read_ms),
-            );
-            let t1 = Instant::now();
+        emit_progress(
+            &app_clone,
+            "extract",
+            "Decompressing FHM2D...",
+            25,
+            Some(read_ms),
+        );
+        let t1 = Instant::now();
 
-            let extraction = extract_fhm2d_to_memory_impl(&bytes, &source_name_clone, None)?;
-            let extract_ms = t1.elapsed().as_millis() as u64;
-            stage_log(&format!(
-                "extract done: {} files, {extract_ms}ms",
-                extraction.files.len()
-            ));
+        let extraction = extract_fhm2d_to_memory_impl(&bytes, &source_name_clone, None)?;
+        let extract_ms = t1.elapsed().as_millis() as u64;
+        stage_log(&format!(
+            "extract done: {} files, {extract_ms}ms",
+            extraction.files.len()
+        ));
 
-            emit_progress(
-                &app_clone,
-                "tree",
-                "Parsing folder structure...",
-                60,
-                Some(extract_ms),
-            );
-            let t2 = Instant::now();
+        emit_progress(
+            &app_clone,
+            "tree",
+            "Parsing folder structure...",
+            60,
+            Some(extract_ms),
+        );
+        let t2 = Instant::now();
 
-            let (tree, warnings) = fhm2d_stage::stage_rename_in_memory_numatb_based(
-                &extraction.files,
-                &extraction.sub_file_structure,
-            )?;
+        let (tree, warnings) = fhm2d_stage::stage_rename_in_memory_numatb_based(
+            &extraction.files,
+            &extraction.sub_file_structure,
+        )?;
 
-            let rename_ms = t2.elapsed().as_millis() as u64;
-            stage_log(&format!(
-                "tree done: {} children, {} warnings, {rename_ms}ms",
-                tree.children.len(),
-                warnings.len()
-            ));
+        let rename_ms = t2.elapsed().as_millis() as u64;
+        stage_log(&format!(
+            "tree done: {} children, {} warnings, {rename_ms}ms",
+            tree.children.len(),
+            warnings.len()
+        ));
 
-            let total_files = extraction.files.len();
-            let total_size_bytes: usize = extraction.files.iter().map(|f| f.data.len()).sum();
+        let total_files = extraction.files.len();
+        let total_size_bytes: usize = extraction.files.iter().map(|f| f.data.len()).sum();
 
-            emit_progress(&app_clone, "done", "Complete", 100, Some(rename_ms));
+        emit_progress(&app_clone, "done", "Complete", 100, Some(rename_ms));
 
-            let preview = fhm2d_stage::StageRenamePreviewResult {
-                tree: tree.clone(),
-                warnings: warnings.clone(),
-                source_name: source_name_clone.clone(),
-                total_files,
-                total_size_bytes,
-            };
+        let preview = fhm2d_stage::StageRenamePreviewResult {
+            tree: tree.clone(),
+            warnings: warnings.clone(),
+            source_name: source_name_clone.clone(),
+            total_files,
+            total_size_bytes,
+        };
 
-            Ok::<_, String>((preview, extraction, tree, warnings))
-        })
-        .await
-        .map_err(|e| e.to_string())?;
+        Ok::<_, String>((preview, extraction, tree, warnings))
+    })
+    .await
+    .map_err(|e| e.to_string())?;
     let (result, extraction, tree_clone, warnings_clone) = match spawn_outcome {
         Ok(v) => v,
         Err(e) => {
@@ -975,10 +967,7 @@ pub async fn list_unit_model_textures(
     structure_json_path: Option<String>,
 ) -> Result<unit_model_textures::UnitModelTextureInventory, String> {
     let result = tauri::async_runtime::spawn_blocking(move || {
-        unit_model_textures::list_unit_model_textures(
-            &model_root,
-            structure_json_path.as_deref(),
-        )
+        unit_model_textures::list_unit_model_textures(&model_root, structure_json_path.as_deref())
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))??;
@@ -1096,6 +1085,46 @@ pub async fn add_unit_model_model(
         unit_model_models::add_unit_model_model(
             &model_root,
             structure_json_path.as_deref(),
+            &source_dir,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn replace_unit_model_model(
+    model_root: String,
+    structure_json_path: Option<String>,
+    target_model_name: String,
+    source_dir: String,
+) -> Result<unit_model_models::UnitModelMutationResult, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_models::replace_unit_model_model(
+            &model_root,
+            structure_json_path.as_deref(),
+            &target_model_name,
+            &source_dir,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn preview_unit_model_model_replacement(
+    model_root: String,
+    structure_json_path: Option<String>,
+    target_model_name: String,
+    source_dir: String,
+) -> Result<unit_model_models::UnitModelReplacePreview, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_models::preview_unit_model_model_replacement(
+            &model_root,
+            structure_json_path.as_deref(),
+            &target_model_name,
             &source_dir,
         )
     })

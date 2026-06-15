@@ -18,6 +18,7 @@ pub mod param_bin_format;
 pub mod param_entry_schema;
 pub mod projectile_depiction_table;
 pub mod serieslist;
+pub mod shl;
 pub mod speedparam;
 pub mod stagelist;
 pub mod unit_model_extract;
