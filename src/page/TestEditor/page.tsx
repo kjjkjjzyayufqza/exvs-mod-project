@@ -18,6 +18,7 @@ import {
   applyPayloadQueue,
   filterTree,
   findNode,
+  findTreeNodeByPath,
   getDirtyFolderNameFromPath,
   normalizeTree,
   type RawTreeNode,
@@ -105,6 +106,8 @@ const TestEditorPage = () => {
   const getSetting = useConfigStore((s) => s.getSetting);
   const [treeData, setTreeData] = useState<TestTreeNode[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [pendingRevealPath, setPendingRevealPath] = useState<string | null>(null);
+  const pendingRevealRefreshAttemptedRef = useRef(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentDir, setCurrentDir] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -168,33 +171,6 @@ const TestEditorPage = () => {
     action: "close" | "reload";
   } | null>(null);
   const effectProjectAuxiliaryCacheRef = useRef(new EffectProjectAuxiliaryCacheService());
-
-  const revealInTreeByPath = useCallback((targetPath: string) => {
-    // 1. Clear search term
-    setSearchTerm("");
-
-    // 2. Find node in full treeData
-    const findNodeByPath = (nodes: TestTreeNode[], path: string): TestTreeNode | null => {
-      const normalizedTarget = path.replace(/\\/g, "/").toLowerCase();
-      for (const node of nodes) {
-        const normalizedNodePath = node.path.replace(/\\/g, "/").toLowerCase();
-        if (normalizedNodePath === normalizedTarget && node.isDir) return node;
-        if (node.children) {
-          const found = findNodeByPath(node.children, path);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-
-    const node = findNodeByPath(treeData, targetPath);
-    if (node) {
-      setSelectedId(node.id);
-      toast.success(`Revealed folder: ${node.name}`);
-    } else {
-      toast.error("Folder not found in current workspace root");
-    }
-  }, [treeData]);
 
   const flushQueuedPayloads = useCallback((queued: FolderChangePayload[]) => {
     if (!queued.length) return;
@@ -264,6 +240,38 @@ const TestEditorPage = () => {
     }
   }, [currentDir]);
 
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+
+  const revealInTreeByPath = useCallback((targetPath: string) => {
+    const trimmed = targetPath.trim();
+    if (!trimmed) return;
+    setSearchTerm("");
+    pendingRevealRefreshAttemptedRef.current = false;
+    setPendingRevealPath(trimmed);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingRevealPath || !currentDir) return;
+    if (deferredSearchTerm.trim()) return;
+
+    const node = findTreeNodeByPath(treeData, pendingRevealPath, currentDir);
+    if (node) {
+      setSelectedId(node.id);
+      setPendingRevealPath(null);
+      toast.success(`Revealed folder: ${node.name}`);
+      return;
+    }
+
+    if (!pendingRevealRefreshAttemptedRef.current) {
+      pendingRevealRefreshAttemptedRef.current = true;
+      void refreshFolder();
+      return;
+    }
+
+    setPendingRevealPath(null);
+    toast.error("Folder not found in current workspace root");
+  }, [pendingRevealPath, deferredSearchTerm, treeData, currentDir, refreshFolder]);
+
   useEffect(() => {
     const hydrate = async () => {
       if (!store) return;
@@ -287,7 +295,6 @@ const TestEditorPage = () => {
     currentDir || undefined
   );
   const { viewOptions, setViewOptions } = useFileTreeViewOptions(currentDir || undefined);
-  const deferredSearchTerm = useDeferredValue(searchTerm);
   const fileTreeData = useMemo(
     () =>
       sortTreeByStarOrder(

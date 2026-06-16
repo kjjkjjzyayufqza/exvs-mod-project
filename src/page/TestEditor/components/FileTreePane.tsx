@@ -135,10 +135,20 @@ function FileTreePaneImpl({
       return;
     }
     const timer = setTimeout(() => {
-      treeRef.current.scrollTo(selectedId, "center");
-    }, 50);
+      const tree = treeRef.current;
+      if (!tree) return;
+      const node = tree.get(selectedId);
+      if (node) {
+        let current = node;
+        while (current.parent) {
+          current.parent.open();
+          current = current.parent;
+        }
+      }
+      tree.scrollTo(selectedId, "center");
+    }, 100);
     return () => clearTimeout(timer);
-  }, [selectedId]);
+  }, [selectedId, data]);
 
   const dirtyTopLevelSet = useMemo(() => new Set(dirtyTopLevelFolderNames), [dirtyTopLevelFolderNames]);
 

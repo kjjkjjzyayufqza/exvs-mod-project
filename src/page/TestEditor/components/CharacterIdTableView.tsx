@@ -35,6 +35,7 @@ import { useConfigStore } from "@/store/configStore";
 import { useResourceRegistry } from "@/hooks/useResourceRegistry";
 import { AssetRefInfo, getAssetRefInfo } from "./character-id-table/assetRef";
 import { CharacterAssetField } from "./character-id-table/CharacterAssetField";
+import { filterCharacterIdTableRows } from "./character-id-table/characterIdTableSearch";
 import { extractAsset } from "./character-id-table/extractFhm2d";
 
 interface CharacterIdTableViewProps {
@@ -204,11 +205,7 @@ export default function CharacterIdTableView({
     }, [loadState]);
 
     const filteredRows = useMemo(() => {
-        const term = deferredSearchTerm.trim();
-        if (!term) return tableData.map((row, idx) => ({ row, idx }));
-        return tableData
-            .map((row, idx) => ({ row, idx }))
-            .filter(({ row }) => row.CharacterId.toString().includes(term));
+        return filterCharacterIdTableRows(tableData, deferredSearchTerm);
     }, [deferredSearchTerm, tableData]);
 
     const selectedRow = useMemo(() => {
@@ -842,7 +839,7 @@ export default function CharacterIdTableView({
                             <div className="relative mb-3">
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                                 <Input
-                                    placeholder="Search by Character ID..."
+                                    placeholder="Search all fields (decimal or hex)..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     className="pl-10"
@@ -915,7 +912,9 @@ export default function CharacterIdTableView({
                                 </div>
                                 {filteredRows.length === 0 && (
                                     <div className="text-center text-muted-foreground py-8 text-sm">
-                                        No rows found
+                                        {deferredSearchTerm.trim()
+                                            ? `No rows found matching "${deferredSearchTerm.trim()}"`
+                                            : "No rows found"}
                                     </div>
                                 )}
                             </div>

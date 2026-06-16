@@ -64,6 +64,10 @@ pub fn repack_unit_model_from_structure(
     repack_fhm2d_from_structure(&temp_path, output_path, atomic_write, progress_callback)
 }
 
+/// Collect the `fileIndex` of any *legacy root control bin* (characterid / shell / vernier_table
+/// / effect_project) that is missing on disk. These are shared/deduped and may legitimately be
+/// absent; they are filtered out so the repack can proceed. Every other referenced file is a hard
+/// requirement and a missing one fails the repack (see `load_and_compress_files`).
 fn missing_legacy_root_file_indices(root: &Value, json_dir: &Path) -> Result<HashSet<i32>, String> {
     let entries = root
         .get("SubFileData")

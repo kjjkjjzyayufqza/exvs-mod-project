@@ -218,13 +218,6 @@ struct CompressedBody {
     is_need_decomp: u32,
 }
 
-struct CompressedPage {
-    page_index: usize,
-    compressed_bytes: Option<Vec<u8>>,
-    raw_start: usize,
-    raw_end: usize,
-}
-
 struct TypeGroup {
     type_id: u32,
     file_indices: Vec<usize>,
@@ -365,58 +358,63 @@ fn compress_file_body(data: &[u8]) -> Result<CompressedBody, String> {
     let page_count = (file_size + PAGE_SIZE - 1) / PAGE_SIZE;
     let bitmap_len = (page_count + 7) / 8;
     let mut bitmap = vec![0u8; bitmap_len];
-    let compressed_pages: Vec<Result<CompressedPage, String>> = (0..page_count)
+
+    // Deflate every 64 KiB page in parallel; keep each page's compressed bytes so the
+    // raw-vs-compressed decision (and the all-incompressible fallback below) can reuse them.
+    let deflated: Vec<Vec<u8>> = (0..page_count)
         .into_par_iter()
         .map(|page_idx| {
             let start = page_idx * PAGE_SIZE;
             let end = (start + PAGE_SIZE).min(file_size);
-            let page = &data[start..end];
-
-            let compressed = deflate_raw_compress(page)?;
-            if compressed.len() < page.len() {
-                Ok(CompressedPage {
-                    page_index: page_idx,
-                    compressed_bytes: Some(compressed),
-                    raw_start: start,
-                    raw_end: end,
-                })
-            } else {
-                Ok(CompressedPage {
-                    page_index: page_idx,
-                    compressed_bytes: None,
-                    raw_start: start,
-                    raw_end: end,
-                })
-            }
+            deflate_raw_compress(&data[start..end])
         })
-        .collect();
+        .collect::<Result<_, _>>()?;
 
+    // Per page: store the compressed bytes when they shrink the page, otherwise store it raw.
     let mut body_bytes = Vec::new();
     let mut chunk_sizes = Vec::new();
-
-    for compressed_page in compressed_pages {
-        let compressed_page = compressed_page?;
-        if let Some(compressed_bytes) = compressed_page.compressed_bytes {
-            bitmap[compressed_page.page_index >> 3] |= 1 << (compressed_page.page_index & 7);
-            chunk_sizes.push(compressed_bytes.len() as u32);
-            body_bytes.extend_from_slice(&compressed_bytes);
+    for page_idx in 0..page_count {
+        let start = page_idx * PAGE_SIZE;
+        let end = (start + PAGE_SIZE).min(file_size);
+        let page = &data[start..end];
+        if deflated[page_idx].len() < page.len() {
+            bitmap[page_idx >> 3] |= 1 << (page_idx & 7);
+            chunk_sizes.push(deflated[page_idx].len() as u32);
+            body_bytes.extend_from_slice(&deflated[page_idx]);
         } else {
-            body_bytes.extend_from_slice(&data[compressed_page.raw_start..compressed_page.raw_end]);
+            body_bytes.extend_from_slice(page);
+        }
+    }
+
+    // Compatibility fallback chosen on 2026-06-17 while diagnosing the user-reported
+    // 0xA258A522 Unit Model Editor repack failure. The old OK package and the Node
+    // `compression.js` packer stored the small JNTT control files 149.bin/150.bin
+    // as compressed chunks, because Node zlib shrank them. miniz_oxide did not
+    // shrink the same bytes, so the previous Rust logic emitted
+    // chunk_count == 0 / is_need_decomp == 0 for those files, matching the bad
+    // package layout. This is a defensive compatibility strategy, not a proven
+    // universal format rule; replace it if native-loader evidence proves plain
+    // zero-chunk payloads are valid for all affected file classes.
+    if chunk_sizes.is_empty() {
+        body_bytes.clear();
+        for byte in bitmap.iter_mut() {
+            *byte = 0;
+        }
+        for page_idx in 0..page_count {
+            bitmap[page_idx >> 3] |= 1 << (page_idx & 7);
+            chunk_sizes.push(deflated[page_idx].len() as u32);
+            body_bytes.extend_from_slice(&deflated[page_idx]);
         }
     }
 
     let chunk_count = chunk_sizes.len() as u32;
-    let is_need_decomp = if chunk_count > 0 { 1 } else { 0 };
-    if chunk_count == 0 {
-        bitmap.clear();
-    }
 
     Ok(CompressedBody {
         body_bytes,
         bitmap,
         chunk_sizes,
         chunk_count,
-        is_need_decomp,
+        is_need_decomp: 1,
     })
 }
 
@@ -916,6 +914,26 @@ mod tests {
         assert_eq!(body.bitmap.len(), 1);
         assert_eq!(body.bitmap[0] & 1, 1);
         assert_eq!(body.chunk_sizes.len(), 1);
+    }
+
+    #[test]
+    fn test_incompressible_small_payload_forces_compressed_chunk() {
+        let data = [
+            0x4A, 0x4E, 0x54, 0x54, 0x01, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x90,
+            0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
+            0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x57, 0xD8, 0xA3, 0x43, 0x02, 0x00, 0x00,
+            0x00, 0x90, 0x27, 0xFB, 0x6C, 0x03, 0x00, 0x00, 0x00, 0x55, 0x0D, 0xDB, 0xD7,
+            0x04, 0x00, 0x00, 0x00, 0x7B, 0xC0, 0x03, 0x01, 0x05, 0x00, 0x00, 0x00, 0x36,
+            0x30, 0xD4, 0x2D, 0x06, 0x00, 0x00, 0x00, 0xA4, 0xFF, 0x42, 0xD5, 0x07, 0x00,
+            0x00, 0x00,
+        ];
+        let body = compress_file_body(&data).unwrap();
+        assert_eq!(body.is_need_decomp, 1);
+        assert_eq!(body.chunk_count, 1);
+        assert_eq!(body.bitmap, vec![1]);
+        assert_eq!(body.chunk_sizes.len(), 1);
+        assert_eq!(body.body_bytes.len(), body.chunk_sizes[0] as usize);
+        assert!(body.body_bytes.len() > data.len());
     }
 
     #[test]

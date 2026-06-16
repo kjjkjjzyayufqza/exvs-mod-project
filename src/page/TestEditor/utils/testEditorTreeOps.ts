@@ -48,6 +48,71 @@ export function findNode(nodes: TestTreeNode[], id: string | null): TestTreeNode
   return null;
 }
 
+export function normalizePathForTreeMatch(input: string): string {
+  return input
+    .trim()
+    .replace(/^\\\\\?\\/, "")
+    .replace(/\\/g, "/")
+    .replace(/\/+$/, "")
+    .toLowerCase();
+}
+
+export function findTreeNodeByPath(
+  nodes: TestTreeNode[],
+  targetPath: string,
+  rootDir?: string,
+): TestTreeNode | null {
+  const normalizedTarget = normalizePathForTreeMatch(targetPath);
+  if (!normalizedTarget) return null;
+
+  const walk = (items: TestTreeNode[]): TestTreeNode | null => {
+    for (const node of items) {
+      if (!node.isDir) continue;
+      if (normalizePathForTreeMatch(node.path) === normalizedTarget) return node;
+      if (node.children?.length) {
+        const found = walk(node.children);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const direct = walk(nodes);
+  if (direct) return direct;
+
+  if (!rootDir) return null;
+  const normalizedRoot = normalizePathForTreeMatch(rootDir);
+  if (!normalizedTarget.startsWith(`${normalizedRoot}/`) && normalizedTarget !== normalizedRoot) {
+    return null;
+  }
+
+  const folderName = targetPath.replace(/[\\/]+$/, "").split(/[/\\]/).pop();
+  if (!folderName) return null;
+  const normalizedFolder = folderName.toLowerCase();
+
+  const walkByName = (items: TestTreeNode[]): TestTreeNode | null => {
+    for (const node of items) {
+      if (!node.isDir) continue;
+      if (node.name.toLowerCase() !== normalizedFolder) {
+        if (node.children?.length) {
+          const found = walkByName(node.children);
+          if (found) return found;
+        }
+        continue;
+      }
+      const normalizedNodePath = normalizePathForTreeMatch(node.path);
+      if (normalizedNodePath.startsWith(normalizedRoot)) return node;
+      if (node.children?.length) {
+        const found = walkByName(node.children);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  return walkByName(nodes);
+}
+
 function removeNode(nodes: TestTreeNode[], targetId: string): TestTreeNode[] {
   let changed = false;
   const filtered = nodes

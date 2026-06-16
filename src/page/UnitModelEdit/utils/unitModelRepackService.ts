@@ -61,6 +61,18 @@ export function inferUnitModelStructurePath(modelRoot: string): string {
   return `${parent}\\${name}_structure.json`;
 }
 
+/**
+ * Game pack files use a lowercase `0x` prefix followed by UPPERCASE hex digits (e.g.
+ * `0xA258A522.fhm2d`, matching the originals under `data\x64`). The unpacker occasionally emits a
+ * lowercase structure-JSON name (e.g. `0xa258a522_structure.json`), which would otherwise produce
+ * a lowercase pack the loader does not recognize. Normalize a hash-shaped stem to that canonical
+ * casing; non-hash stems are returned unchanged.
+ */
+export function normalizeUnitModelPackStem(stem: string): string {
+  const match = /^0x([0-9a-f]+)$/i.exec(stem.trim());
+  return match ? `0x${match[1].toUpperCase()}` : stem;
+}
+
 export function inferUnitModelOutputPath(modelRoot: string, structurePath?: string): string {
   const normalizedRoot = trimTrailingSeparators(toWindowsPath(modelRoot));
   const parent = getParentDir(normalizedRoot);
@@ -69,7 +81,7 @@ export function inferUnitModelOutputPath(modelRoot: string, structurePath?: stri
   if (!parent || !stem) {
     throw new Error(`Cannot infer output path from model root: ${modelRoot}`);
   }
-  return `${parent}\\${stem}.fhm2d`;
+  return `${parent}\\${normalizeUnitModelPackStem(stem)}.fhm2d`;
 }
 
 /**
@@ -87,7 +99,7 @@ export function inferUnitModelModOutputPath(modFolder: string, structurePath: st
   if (!stem) {
     throw new Error(`Cannot infer pack name from structure path: ${structurePath}`);
   }
-  return `${normalizedModFolder}\\${stem}.fhm2d`;
+  return `${normalizedModFolder}\\${normalizeUnitModelPackStem(stem)}.fhm2d`;
 }
 
 export async function validateUnitModelForRepack(

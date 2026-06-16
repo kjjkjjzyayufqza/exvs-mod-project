@@ -1,0 +1,65 @@
+files
+026gnbelt_003delatkai_001
+Referenced file is missing on disk: .\0xa258a522\026gnbelt_003delatkai_001.jnttbl
+
+E:\XB\解包\com\file\0xa258a522/026gnbelt_003delatkai_001.jnttbl
+
+files
+delatkai_body_trans
+Referenced file is missing on disk: .\0xa258a522\delatkai_body_trans.jnttbl
+
+E:\XB\解包\com\file\0xa258a522/delatkai_body_trans.jnttbl
+
+files
+015gndmuc_004deltpl_001_wep_bsaber00
+Referenced file is missing on disk: .\0xA258a522\015gndmuc_004deltpl_001_wep_bsaber00.jnttbl
+
+E:\XB\解包\com\file\0xA258a522/015gndmuc_004deltpl_001_wep_bsaber00.jnttbl
+
+files
+015gndmuc_004deltpl_001_wep_brifle00
+Referenced file is missing on disk: .\0xA258a522\015gndmuc_004deltpl_001_wep_brifle00.jnttbl
+
+E:\XB\解包\com\file\0xA258a522/015gndmuc_004deltpl_001_wep_brifle00.jnttbl
+
+files
+015gndmuc_004deltpl_001_wep_magazine00
+Referenced file is missing on disk: .\0xA258a522\015gndmuc_004deltpl_001_wep_magazine00.jnttbl
+
+E:\XB\解包\com\file\0xA258a522/015gndmuc_004deltpl_001_wep_magazine00.jnttbl
+
+files
+delatkai_shield
+Referenced file is missing on disk: .\0xA258a522\015gndmuc_004deltpl_001_wep_shield00.jnttbl
+
+E:\XB\解包\com\file\0xA258a522/015gndmuc_004deltpl_001_wep_shield00.jnttbl
+
+files
+015gndmuc_004deltpl_001_wep_grenade00
+Referenced file is missing on disk: .\0xA258a522\015gndmuc_004deltpl_001_wep_grenade00.jnttbl
+
+E:\XB\解包\com\file\0xA258a522/015gndmuc_004deltpl_001_wep_grenade00.jnttbl
+
+files
+015gndmuc_004deltpl_001_wep_handl_ngr00
+Referenced file is missing on disk: .\0xA258a522\015gndmuc_004deltpl_001_wep_handl_ngr00.jnttbl
+
+E:\XB\解包\com\file\0xA258a522/015gndmuc_004deltpl_001_wep_handl_ngr00.jnttbl
+
+files
+015gndmuc_004deltpl_001_wep_handl_rlx00
+Referenced file is missing on disk: .\0xA258a522\015gndmuc_004deltpl_001_wep_handl_rlx00.jnttbl
+
+E:\XB\解包\com\file\0xA258a522/015gndmuc_004deltpl_001_wep_handl_rlx00.jnttbl
+
+files
+015gndmuc_004deltpl_001_unicorn00
+Referenced file is missing on disk: .\0xA258a522\015gndmuc_004deltpl_001_unicorn00.jnttbl
+
+E:\XB\解包\com\file\0xA258a522/015gndmuc_004deltpl_001_unicorn00.jnttbl
+
+files
+015gndmuc_004deltpl_001_unicorn01
+Referenced file is missing on disk: .\0xA258a522\015gndmuc_004deltpl_001_unicorn01.jnttbl
+
+E:\XB\解包\com\file\0xA258a522/015gndmuc_004deltpl_001_unicorn01.jnttbl

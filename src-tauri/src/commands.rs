@@ -1618,6 +1618,19 @@ pub fn build_chrsysparam_file(file_json: Value, output_path: &str) -> Result<(),
 
 #[tauri::command]
 pub fn parse_shl_file(path: &str) -> Result<Value, String> {
+    // A `shell_*.shl` is a legacy root control bin that is not part of the native Unit
+    // folder layout: unpackers frequently deduplicate the shared shell across packages and
+    // leave a dangling reference in this package's structure tree. Validation reports this as
+    // a warning and repack skips it, so surface a clear, actionable message here instead of a
+    // raw "os error 2" when the editor tries to open a shell that was never extracted.
+    if !Path::new(path).is_file() {
+        return Err(format!(
+            "Shell control file not found on disk: {path}. This shell_*.shl is referenced by the \
+             structure tree but is not present in this unit-model folder (legacy/shared shell files \
+             can be deduplicated across packages and may not be extracted here), so it cannot be \
+             opened for editing."
+        ));
+    }
     let data = fs::read(path).map_err(|e| format!("Failed to read file: {e}"))?;
     let parsed = crate::format::shl::parse_shl(&data)?;
     serde_json::to_value(&parsed).map_err(|e| format!("Serialize failed: {e}"))
@@ -1629,4 +1642,54 @@ pub fn build_shl_file(file_json: Value, output_path: &str) -> Result<(), String>
         serde_json::from_value(file_json).map_err(|e| format!("Deserialize failed: {e}"))?;
     let bytes = crate::format::shl::build_shl(&file)?;
     fs::write(output_path, &bytes).map_err(|e| format!("Write failed: {e}"))
+}
+
+#[cfg(test)]
+mod shl_command_tests {
+    use super::*;
+    use crate::format::shl::{ShlFile, ShlRecord};
+
+    #[test]
+    fn parse_shl_file_reports_missing_shell_clearly() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("shell_missing.shl");
+        let path = missing.to_string_lossy().to_string();
+
+        let err = parse_shl_file(&path).expect_err("missing shell must fail");
+
+        // Actionable message, not the raw OS "file not found" surfaced to the editor.
+        assert!(err.contains("not found on disk"), "unexpected message: {err}");
+        assert!(err.contains(&path), "message must name the path: {err}");
+        assert!(
+            !err.to_ascii_lowercase().contains("os error"),
+            "must not leak the raw OS error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_shl_file_parses_an_existing_shell() {
+        let dir = tempfile::tempdir().unwrap();
+        let shl_path = dir.path().join("shell_sample.shl");
+        let bytes = crate::format::shl::build_shl(&ShlFile {
+            version: 0x64,
+            reserved08: 0,
+            records: vec![ShlRecord {
+                model_id: 0x1234_5678,
+                model_type: 0,
+                folder_index: 2,
+                unk1: 0,
+                slot_index: 1,
+            }],
+            trailing_data: Vec::new(),
+            source_records_raw: Vec::new(),
+        })
+        .unwrap();
+        fs::write(&shl_path, &bytes).unwrap();
+
+        let value = parse_shl_file(&shl_path.to_string_lossy()).expect("valid shell must parse");
+        let record = &value["records"][0];
+        assert_eq!(record["modelId"].as_u64(), Some(0x1234_5678));
+        assert_eq!(record["folderIndex"].as_u64(), Some(2));
+        assert_eq!(record["slotIndex"].as_u64(), Some(1));
+    }
 }

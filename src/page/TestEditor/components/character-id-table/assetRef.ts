@@ -1,5 +1,5 @@
 import { join } from '@tauri-apps/api/path';
-import { exists } from '@tauri-apps/plugin-fs';
+import { exists, readDir } from '@tauri-apps/plugin-fs';
 
 /**
  * Converts an int32 value to a standard 8-character uppercase hex string with '0x' prefix.
@@ -35,6 +35,22 @@ async function resolveFhm2dPath(baseDir: string, hashHex: string): Promise<strin
   return sourceUpper;
 }
 
+async function resolveWorkspaceFolderPath(baseDir: string, hashHex: string): Promise<string> {
+  if (!baseDir) return '';
+  const fallback = await join(baseDir, hashHex);
+  try {
+    if (!(await exists(fallback))) return fallback;
+    const entries = await readDir(baseDir);
+    const match = entries.find(
+      (entry) => entry.isDirectory && entry.name.toLowerCase() === hashHex.toLowerCase(),
+    );
+    if (match) return await join(baseDir, match.name);
+  } catch {
+    return fallback;
+  }
+  return fallback;
+}
+
 export async function getAssetRefInfo(
   fieldKey: string,
   value: number,
@@ -57,8 +73,8 @@ export async function getAssetRefInfo(
   const sourceFilePath = await resolveFhm2dPath(obDplCachePath, hashHex);
   const modFilePath = await resolveFhm2dPath(obModPath, hashHex);
   
-  // Workspace: {currentDir}\0x{HEX}
-  const workspaceFolderPath = currentDir ? await join(currentDir, hashHex) : '';
+  // Workspace: {currentDir}\0x{HEX} — use on-disk folder casing for tree reveal.
+  const workspaceFolderPath = currentDir ? await resolveWorkspaceFolderPath(currentDir, hashHex) : '';
 
   return {
     fieldKey,

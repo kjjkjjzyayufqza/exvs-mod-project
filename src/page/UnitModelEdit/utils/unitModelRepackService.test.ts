@@ -5,6 +5,7 @@ import {
   inferUnitModelModOutputPath,
   inferUnitModelOutputPath,
   inferUnitModelStructurePath,
+  normalizeUnitModelPackStem,
   toWindowsPath,
 } from "./unitModelRepackService";
 
@@ -58,6 +59,32 @@ describe("unitModelRepackService path helpers", () => {
     expect(() =>
       inferUnitModelModOutputPath("", "E:\\XB\\com\\0x49235031_structure.json"),
     ).toThrow(/OB Mod folder is not configured/);
+  });
+
+  it("normalizes a lowercase hash stem to the game's uppercase-hex pack name", () => {
+    expect(normalizeUnitModelPackStem("0xa258a522")).toBe("0xA258A522");
+    // Already-uppercase and the lowercase `0x` prefix are preserved.
+    expect(normalizeUnitModelPackStem("0xAF73362C")).toBe("0xAF73362C");
+    // Non-hash stems are left untouched.
+    expect(normalizeUnitModelPackStem("custom_model")).toBe("custom_model");
+  });
+
+  it("emits an uppercase-hex pack name for a lowercase structure json (mod folder)", () => {
+    expect(
+      inferUnitModelModOutputPath(
+        "E:\\OBHK0.3_v27\\data\\x64\\mod",
+        "E:\\XB\\解包\\com\\file\\0xa258a522_structure.json",
+      ),
+    ).toBe("E:\\OBHK0.3_v27\\data\\x64\\mod\\0xA258A522.fhm2d");
+  });
+
+  it("emits an uppercase-hex pack name for a lowercase structure json (sibling output)", () => {
+    expect(
+      inferUnitModelOutputPath(
+        "E:\\XB\\解包\\com\\file\\0xa258a522",
+        "E:\\XB\\解包\\com\\file\\0xa258a522_structure.json",
+      ),
+    ).toBe("E:\\XB\\解包\\com\\file\\0xA258A522.fhm2d");
   });
 });
 
