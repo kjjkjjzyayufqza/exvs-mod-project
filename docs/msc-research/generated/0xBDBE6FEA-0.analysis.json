@@ -1,0 +1,8694 @@
+{
+  "schema": "exvs.msc.c_static_analysis.v0",
+  "generatedAt": "2026-06-17T16:57:37.703134+00:00",
+  "sourcePath": "E:\\XB\\解包\\com\\file\\0xBDBE6FEA\\0.c",
+  "stats": {
+    "lineCount": 3525,
+    "functionCount": 145,
+    "voidFunctionCount": 54,
+    "intFunctionCount": 91,
+    "actionFunctionCount": 0,
+    "sha256": "9EC31CCB370770863F2FB020A8CFA699DFE53D1ED76636F5BDCC136314AF26C0",
+    "byteLength": 65722
+  },
+  "summary": {
+    "buckets": {
+      "func_1..99": {
+        "functionCount": 99,
+        "lineCount": 2322,
+        "startLine": 110,
+        "endLine": 2440,
+        "syscalls": {
+          "sys_0": 174,
+          "sys_1": 53
+        }
+      },
+      "main": {
+        "functionCount": 1,
+        "lineCount": 9,
+        "startLine": 2274,
+        "endLine": 2282,
+        "syscalls": {
+          "sys_2": 3
+        }
+      },
+      "func_100..199": {
+        "functionCount": 45,
+        "lineCount": 1085,
+        "startLine": 2441,
+        "endLine": 3525,
+        "syscalls": {
+          "sys_0": 30,
+          "sys_1": 22
+        }
+      }
+    },
+    "syscallTotals": {
+      "sys_0": 204,
+      "sys_1": 75,
+      "sys_2": 3
+    },
+    "syscallSubcommands": {
+      "sys_0": {
+        "0x10000": 115,
+        "0x60000": 15,
+        "0x20000": 12,
+        "0x6000e": 5,
+        "0xc0000": 5,
+        "0x90000": 4,
+        "0xd0001": 4,
+        "0xd000b": 4,
+        "0x30000": 3,
+        "0x50001": 3,
+        "0x6000d": 3,
+        "0xc0001": 3,
+        "0x10001": 2,
+        "0x10002": 2,
+        "0x10003": 2,
+        "0x40000": 2,
+        "0x50003": 2,
+        "0x7000b": 2,
+        "0x7000c": 2,
+        "0xc0004": 2,
+        "0x1000a": 1,
+        "0x3000a": 1,
+        "0x50000": 1,
+        "0x50002": 1,
+        "0x60007": 1,
+        "0x70002": 1,
+        "0x7000d": 1,
+        "0x90002": 1,
+        "0x90003": 1,
+        "0xb0001": 1,
+        "0xc0002": 1,
+        "0xf0000": 1
+      },
+      "sys_1": {
+        "0x10000": 52,
+        "0x10002": 19,
+        "0x10001": 2,
+        "0xb0006": 1,
+        "0xb000a": 1
+      },
+      "sys_2": {
+        "0": 3
+      }
+    },
+    "syscallHotspots": {
+      "sys_0": [
+        {
+          "function": "func_4",
+          "line": 207,
+          "count": 39,
+          "topSubcommands": {
+            "0x10000": 39
+          }
+        },
+        {
+          "function": "func_143",
+          "line": 3349,
+          "count": 26,
+          "topSubcommands": {
+            "0x90000": 4,
+            "0xd0001": 4,
+            "0xd000b": 4,
+            "0x10000": 3,
+            "0x60000": 3
+          }
+        },
+        {
+          "function": "func_2",
+          "line": 137,
+          "count": 13,
+          "topSubcommands": {
+            "0x20000": 12,
+            "0x6000d": 1
+          }
+        },
+        {
+          "function": "func_5",
+          "line": 260,
+          "count": 7,
+          "topSubcommands": {
+            "0x50001": 3,
+            "0x50000": 1,
+            "0x60007": 1,
+            "0x7000b": 1,
+            "0x7000c": 1
+          }
+        },
+        {
+          "function": "func_15",
+          "line": 610,
+          "count": 6,
+          "topSubcommands": {
+            "0x10000": 6
+          }
+        },
+        {
+          "function": "func_7",
+          "line": 329,
+          "count": 5,
+          "topSubcommands": {
+            "0x50003": 2,
+            "0x50002": 1,
+            "0x7000b": 1,
+            "0x7000c": 1
+          }
+        },
+        {
+          "function": "func_92",
+          "line": 2283,
+          "count": 5,
+          "topSubcommands": {
+            "0x10000": 4,
+            "0xb0001": 1
+          }
+        },
+        {
+          "function": "func_34",
+          "line": 1190,
+          "count": 4,
+          "topSubcommands": {
+            "0x10000": 4
+          }
+        },
+        {
+          "function": "func_78",
+          "line": 1981,
+          "count": 4,
+          "topSubcommands": {
+            "0x60000": 1,
+            "0x6000e": 1,
+            "0xc0000": 1,
+            "0xc0001": 1
+          }
+        },
+        {
+          "function": "func_97",
+          "line": 2393,
+          "count": 4,
+          "topSubcommands": {
+            "0x40000": 2,
+            "0x70002": 1,
+            "0x7000d": 1
+          }
+        },
+        {
+          "function": "func_9",
+          "line": 401,
+          "count": 3,
+          "topSubcommands": {
+            "0x10000": 2,
+            "0xc0002": 1
+          }
+        },
+        {
+          "function": "func_21",
+          "line": 818,
+          "count": 3,
+          "topSubcommands": {
+            "0x10000": 3
+          }
+        },
+        {
+          "function": "func_27",
+          "line": 973,
+          "count": 3,
+          "topSubcommands": {
+            "0x10000": 2,
+            "0x30000": 1
+          }
+        },
+        {
+          "function": "func_39",
+          "line": 1258,
+          "count": 3,
+          "topSubcommands": {
+            "0x10000": 3
+          }
+        },
+        {
+          "function": "func_41",
+          "line": 1327,
+          "count": 3,
+          "topSubcommands": {
+            "0x10000": 1,
+            "0x30000": 1,
+            "0x3000a": 1
+          }
+        },
+        {
+          "function": "func_77",
+          "line": 1957,
+          "count": 3,
+          "topSubcommands": {
+            "0x10000": 3
+          }
+        },
+        {
+          "function": "func_84",
+          "line": 2223,
+          "count": 3,
+          "topSubcommands": {
+            "0x10000": 1,
+            "0x10002": 1,
+            "0x10003": 1
+          }
+        },
+        {
+          "function": "func_11",
+          "line": 497,
+          "count": 2,
+          "topSubcommands": {
+            "0x10000": 1,
+            "0x10001": 1
+          }
+        },
+        {
+          "function": "func_12",
+          "line": 516,
+          "count": 2,
+          "topSubcommands": {
+            "0x10002": 1,
+            "0x10003": 1
+          }
+        },
+        {
+          "function": "func_20",
+          "line": 805,
+          "count": 2,
+          "topSubcommands": {
+            "0x10000": 2
+          }
+        }
+      ],
+      "sys_1": [
+        {
+          "function": "func_13",
+          "line": 541,
+          "count": 31,
+          "topSubcommands": {
+            "0x10000": 31
+          }
+        },
+        {
+          "function": "func_144",
+          "line": 3504,
+          "count": 18,
+          "topSubcommands": {
+            "0x10002": 18
+          }
+        },
+        {
+          "function": "func_10",
+          "line": 483,
+          "count": 10,
+          "topSubcommands": {
+            "0x10000": 10
+          }
+        },
+        {
+          "function": "func_6",
+          "line": 313,
+          "count": 5,
+          "topSubcommands": {
+            "0x10000": 4,
+            "0x10001": 1
+          }
+        },
+        {
+          "function": "func_134",
+          "line": 3299,
+          "count": 4,
+          "topSubcommands": {
+            "0x10000": 4
+          }
+        },
+        {
+          "function": "func_92",
+          "line": 2283,
+          "count": 3,
+          "topSubcommands": {
+            "0x10000": 2,
+            "0x10001": 1
+          }
+        },
+        {
+          "function": "func_98",
+          "line": 2417,
+          "count": 2,
+          "topSubcommands": {
+            "0xb0006": 1,
+            "0xb000a": 1
+          }
+        },
+        {
+          "function": "func_8",
+          "line": 368,
+          "count": 1,
+          "topSubcommands": {
+            "0x10000": 1
+          }
+        },
+        {
+          "function": "func_83",
+          "line": 2213,
+          "count": 1,
+          "topSubcommands": {
+            "0x10002": 1
+          }
+        }
+      ],
+      "sys_2": [
+        {
+          "function": "main",
+          "line": 2274,
+          "count": 3,
+          "topSubcommands": {
+            "0": 3
+          }
+        }
+      ]
+    },
+    "globalWriteHotspots": {
+      "global83": 44,
+      "global2": 15,
+      "global51": 14,
+      "global52": 13,
+      "global55": 12,
+      "global74": 8,
+      "global49": 7,
+      "global57": 7,
+      "global50": 6,
+      "global105": 6,
+      "global106": 6,
+      "global107": 5,
+      "global43": 4,
+      "global48": 4,
+      "global59": 4,
+      "global64": 4,
+      "global76": 4,
+      "global77": 4,
+      "global79": 4,
+      "global4": 3,
+      "global22": 3,
+      "global40": 3,
+      "global53": 3,
+      "global54": 3,
+      "global56": 3,
+      "global60": 3,
+      "global63": 3,
+      "global67": 3,
+      "global62": 3,
+      "global61": 3,
+      "global68": 3,
+      "global70": 3,
+      "global72": 3,
+      "global78": 3,
+      "global82": 3,
+      "global101": 3,
+      "global103": 3,
+      "global1": 2,
+      "global3": 2,
+      "global5": 2,
+      "global6": 2,
+      "global8": 2,
+      "global10": 2,
+      "global11": 2,
+      "global12": 2,
+      "global15": 2,
+      "global16": 2,
+      "global17": 2,
+      "global18": 2,
+      "global19": 2,
+      "global20": 2,
+      "global23": 2,
+      "global24": 2,
+      "global25": 2,
+      "global26": 2,
+      "global38": 2,
+      "global41": 2,
+      "global42": 2,
+      "global45": 2,
+      "global46": 2
+    },
+    "longestFunctions": [
+      {
+        "name": "func_143",
+        "lineCount": 155,
+        "startLine": 3349
+      },
+      {
+        "name": "func_104",
+        "lineCount": 132,
+        "startLine": 2563
+      },
+      {
+        "name": "func_15",
+        "lineCount": 123,
+        "startLine": 610
+      },
+      {
+        "name": "func_79",
+        "lineCount": 109,
+        "startLine": 2005
+      },
+      {
+        "name": "func_113",
+        "lineCount": 103,
+        "startLine": 3035
+      },
+      {
+        "name": "func_106",
+        "lineCount": 85,
+        "startLine": 2745
+      },
+      {
+        "name": "func_81",
+        "lineCount": 83,
+        "startLine": 2119
+      },
+      {
+        "name": "func_9",
+        "lineCount": 82,
+        "startLine": 401
+      },
+      {
+        "name": "func_112",
+        "lineCount": 76,
+        "startLine": 2959
+      },
+      {
+        "name": "func_2",
+        "lineCount": 63,
+        "startLine": 137
+      },
+      {
+        "name": "func_29",
+        "lineCount": 63,
+        "startLine": 1017
+      },
+      {
+        "name": "func_42",
+        "lineCount": 63,
+        "startLine": 1348
+      },
+      {
+        "name": "func_4",
+        "lineCount": 53,
+        "startLine": 207
+      },
+      {
+        "name": "func_5",
+        "lineCount": 53,
+        "startLine": 260
+      },
+      {
+        "name": "func_39",
+        "lineCount": 53,
+        "startLine": 1258
+      },
+      {
+        "name": "func_30",
+        "lineCount": 52,
+        "startLine": 1080
+      },
+      {
+        "name": "func_105",
+        "lineCount": 50,
+        "startLine": 2695
+      },
+      {
+        "name": "func_107",
+        "lineCount": 50,
+        "startLine": 2830
+      },
+      {
+        "name": "func_102",
+        "lineCount": 44,
+        "startLine": 2502
+      },
+      {
+        "name": "func_93",
+        "lineCount": 43,
+        "startLine": 2315
+      },
+      {
+        "name": "func_101",
+        "lineCount": 42,
+        "startLine": 2460
+      },
+      {
+        "name": "func_7",
+        "lineCount": 39,
+        "startLine": 329
+      },
+      {
+        "name": "func_24",
+        "lineCount": 39,
+        "startLine": 889
+      },
+      {
+        "name": "func_68",
+        "lineCount": 39,
+        "startLine": 1788
+      },
+      {
+        "name": "func_13",
+        "lineCount": 35,
+        "startLine": 541
+      },
+      {
+        "name": "func_27",
+        "lineCount": 35,
+        "startLine": 973
+      },
+      {
+        "name": "func_14",
+        "lineCount": 34,
+        "startLine": 576
+      },
+      {
+        "name": "func_8",
+        "lineCount": 33,
+        "startLine": 368
+      },
+      {
+        "name": "func_33",
+        "lineCount": 32,
+        "startLine": 1158
+      },
+      {
+        "name": "func_74",
+        "lineCount": 32,
+        "startLine": 1903
+      },
+      {
+        "name": "func_92",
+        "lineCount": 32,
+        "startLine": 2283
+      },
+      {
+        "name": "func_72",
+        "lineCount": 30,
+        "startLine": 1864
+      },
+      {
+        "name": "func_22",
+        "lineCount": 29,
+        "startLine": 846
+      },
+      {
+        "name": "func_48",
+        "lineCount": 29,
+        "startLine": 1462
+      },
+      {
+        "name": "func_50",
+        "lineCount": 29,
+        "startLine": 1500
+      },
+      {
+        "name": "func_64",
+        "lineCount": 29,
+        "startLine": 1728
+      },
+      {
+        "name": "func_21",
+        "lineCount": 28,
+        "startLine": 818
+      },
+      {
+        "name": "func_26",
+        "lineCount": 28,
+        "startLine": 945
+      },
+      {
+        "name": "func_58",
+        "lineCount": 27,
+        "startLine": 1638
+      },
+      {
+        "name": "func_108",
+        "lineCount": 27,
+        "startLine": 2880
+      }
+    ]
+  },
+  "functions": [
+    {
+      "name": "func_0",
+      "returnType": "void",
+      "signature": "void func_0()",
+      "startLine": 110,
+      "endLine": 128,
+      "lineCount": 19,
+      "calls": [
+        "func_1",
+        "func_103",
+        "func_120",
+        "func_138",
+        "func_3",
+        "func_6"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x33"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global0"
+      ],
+      "constants": [
+        "0x33",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_1",
+      "returnType": "void",
+      "signature": "void func_1()",
+      "startLine": 129,
+      "endLine": 136,
+      "lineCount": 8,
+      "calls": [
+        "func_2"
+      ],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global1",
+          "operator": "=",
+          "value": "global2"
+        },
+        {
+          "global": "global3",
+          "operator": "=",
+          "value": "global4"
+        },
+        {
+          "global": "global5",
+          "operator": "=",
+          "value": "global6"
+        }
+      ],
+      "globalReads": [
+        "global2",
+        "global4",
+        "global6"
+      ],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_2",
+      "returnType": "void",
+      "signature": "void func_2()",
+      "startLine": 137,
+      "endLine": 199,
+      "lineCount": 63,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 13,
+          "subcommands": {
+            "0x20000": 12,
+            "0x6000d": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x20000",
+              "args": [
+                "0x20000",
+                "0x2"
+              ]
+            },
+            {
+              "subcmd": "0x20000",
+              "args": [
+                "0x20000",
+                "0x3"
+              ]
+            },
+            {
+              "subcmd": "0x20000",
+              "args": [
+                "0x20000",
+                "0x4"
+              ]
+            },
+            {
+              "subcmd": "0x20000",
+              "args": [
+                "0x20000",
+                "0x5"
+              ]
+            },
+            {
+              "subcmd": "0x20000",
+              "args": [
+                "0x20000",
+                "0x8"
+              ]
+            },
+            {
+              "subcmd": "0x20000",
+              "args": [
+                "0x20000",
+                "0x6"
+              ]
+            },
+            {
+              "subcmd": "0x20000",
+              "args": [
+                "0x20000",
+                "0x7"
+              ]
+            },
+            {
+              "subcmd": "0x20000",
+              "args": [
+                "0x20000",
+                "0x9"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global2",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global2",
+          "operator": "|=",
+          "value": "0x4"
+        },
+        {
+          "global": "global2",
+          "operator": "|=",
+          "value": "0x8"
+        },
+        {
+          "global": "global2",
+          "operator": "|=",
+          "value": "0x10"
+        },
+        {
+          "global": "global2",
+          "operator": "|=",
+          "value": "0x20"
+        },
+        {
+          "global": "global2",
+          "operator": "|=",
+          "value": "0x100"
+        },
+        {
+          "global": "global2",
+          "operator": "|=",
+          "value": "0x40"
+        },
+        {
+          "global": "global2",
+          "operator": "|=",
+          "value": "0x80"
+        },
+        {
+          "global": "global2",
+          "operator": "|=",
+          "value": "0x200"
+        },
+        {
+          "global": "global2",
+          "operator": "|=",
+          "value": "0x400"
+        },
+        {
+          "global": "global2",
+          "operator": "|=",
+          "value": "0x800"
+        },
+        {
+          "global": "global2",
+          "operator": "|=",
+          "value": "0x1000"
+        },
+        {
+          "global": "global2",
+          "operator": "|=",
+          "value": "0x2000"
+        },
+        {
+          "global": "global4",
+          "operator": "=",
+          "value": "~global1 & global2"
+        },
+        {
+          "global": "global6",
+          "operator": "=",
+          "value": "~global2 & global1"
+        },
+        {
+          "global": "global2",
+          "operator": "|=",
+          "value": "0x2"
+        },
+        {
+          "global": "global4",
+          "operator": "=",
+          "value": "0"
+        }
+      ],
+      "globalReads": [
+        "global1"
+      ],
+      "constants": [
+        "0x2",
+        "0x3",
+        "0x4",
+        "0x5",
+        "0x6",
+        "0x7",
+        "0x8",
+        "0x9",
+        "0xa",
+        "0xb",
+        "0xc",
+        "0xd",
+        "0x10",
+        "0x20",
+        "0x3c",
+        "0x40",
+        "0x80",
+        "0x100",
+        "0x200",
+        "0x400",
+        "0x800",
+        "0x1000",
+        "0x2000",
+        "0x20000",
+        "0x6000d"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_3",
+      "returnType": "void",
+      "signature": "void func_3()",
+      "startLine": 200,
+      "endLine": 206,
+      "lineCount": 7,
+      "calls": [
+        "func_4"
+      ],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global7",
+          "operator": "=",
+          "value": "global8"
+        },
+        {
+          "global": "global9",
+          "operator": "=",
+          "value": "global10"
+        }
+      ],
+      "globalReads": [
+        "global10",
+        "global8"
+      ],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_4",
+      "returnType": "void",
+      "signature": "void func_4()",
+      "startLine": 207,
+      "endLine": 259,
+      "lineCount": 53,
+      "calls": [
+        "func_132",
+        "func_5"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 39,
+          "subcommands": {
+            "0x10000": 39
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x1"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x4"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x5"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0xc"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0xd"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0xa"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0xb"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global8",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0)"
+        },
+        {
+          "global": "global10",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x1)"
+        },
+        {
+          "global": "global11",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x4)"
+        },
+        {
+          "global": "global12",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x5)"
+        },
+        {
+          "global": "global13",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0xc)"
+        },
+        {
+          "global": "global14",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0xd)"
+        },
+        {
+          "global": "global15",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0xa)"
+        },
+        {
+          "global": "global16",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0xb)"
+        },
+        {
+          "global": "global17",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x36)"
+        },
+        {
+          "global": "global18",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0xe)"
+        },
+        {
+          "global": "global19",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x2f)"
+        },
+        {
+          "global": "global20",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x6)"
+        },
+        {
+          "global": "global21",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0xf)"
+        },
+        {
+          "global": "global22",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x12)"
+        },
+        {
+          "global": "global23",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x1e)"
+        },
+        {
+          "global": "global24",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x1f)"
+        },
+        {
+          "global": "global25",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x20)"
+        },
+        {
+          "global": "global26",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x21)"
+        },
+        {
+          "global": "global27",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x15)"
+        },
+        {
+          "global": "global28",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x35)"
+        },
+        {
+          "global": "global29",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x3b)"
+        },
+        {
+          "global": "global30",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x3c)"
+        },
+        {
+          "global": "global31",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x3a)"
+        },
+        {
+          "global": "global32",
+          "operator": "=",
+          "value": "((global28 | global29) ^ global30) & global30"
+        },
+        {
+          "global": "global33",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x16)"
+        },
+        {
+          "global": "global34",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x18)"
+        },
+        {
+          "global": "global35",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x19)"
+        },
+        {
+          "global": "global36",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x3e)"
+        },
+        {
+          "global": "global37",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x30)"
+        },
+        {
+          "global": "global38",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x32)"
+        },
+        {
+          "global": "global39",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x17)"
+        },
+        {
+          "global": "global40",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x22)"
+        },
+        {
+          "global": "global40",
+          "operator": "|=",
+          "value": "0x8000"
+        },
+        {
+          "global": "global41",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x23)"
+        },
+        {
+          "global": "global42",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x25)"
+        },
+        {
+          "global": "global43",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x29)"
+        },
+        {
+          "global": "global44",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x2a)"
+        },
+        {
+          "global": "global45",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x2e)"
+        },
+        {
+          "global": "global46",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x37)"
+        },
+        {
+          "global": "global47",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0, 0x3f)"
+        }
+      ],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x4",
+        "0x5",
+        "0x6",
+        "0xa",
+        "0xb",
+        "0xc",
+        "0xd",
+        "0xe",
+        "0xf",
+        "0x12",
+        "0x15",
+        "0x16",
+        "0x17",
+        "0x18",
+        "0x19",
+        "0x1e",
+        "0x1f",
+        "0x20",
+        "0x21",
+        "0x22",
+        "0x23",
+        "0x25",
+        "0x29",
+        "0x2a",
+        "0x2e",
+        "0x2f",
+        "0x30",
+        "0x32",
+        "0x35",
+        "0x36",
+        "0x37",
+        "0x38",
+        "0x3a",
+        "0x3b",
+        "0x3c",
+        "0x3e",
+        "0x3f",
+        "0x8000",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_5",
+      "returnType": "int",
+      "signature": "int func_5(int arg0, int arg1)",
+      "startLine": 260,
+      "endLine": 312,
+      "lineCount": 53,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 7,
+          "subcommands": {
+            "0x50001": 3,
+            "0x50000": 1,
+            "0x60007": 1,
+            "0x7000b": 1,
+            "0x7000c": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x50000",
+              "args": [
+                "0x50000"
+              ]
+            },
+            {
+              "subcmd": "0x50001",
+              "args": [
+                "0x50001",
+                "0x3",
+                "var4"
+              ]
+            },
+            {
+              "subcmd": "0x50001",
+              "args": [
+                "0x50001",
+                "0",
+                "arg1"
+              ]
+            },
+            {
+              "subcmd": "0x60007",
+              "args": [
+                "0x60007",
+                "var5",
+                "0x720584ba"
+              ]
+            },
+            {
+              "subcmd": "0x50001",
+              "args": [
+                "0x50001",
+                "0x4",
+                "arg1"
+              ]
+            },
+            {
+              "subcmd": "0x7000c",
+              "args": [
+                "0x7000c",
+                "var7"
+              ]
+            },
+            {
+              "subcmd": "0x7000b",
+              "args": [
+                "0x7000b",
+                "var7"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x2",
+        "0x3",
+        "0x4",
+        "0x50000",
+        "0x50001",
+        "0x60007",
+        "0x7000b",
+        "0x7000c",
+        "0x720584ba",
+        "0xffffffff"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_6",
+      "returnType": "void",
+      "signature": "void func_6()",
+      "startLine": 313,
+      "endLine": 328,
+      "lineCount": 16,
+      "calls": [
+        "func_118",
+        "func_131",
+        "func_7",
+        "func_81"
+      ],
+      "syscalls": {
+        "sys_1": {
+          "count": 5,
+          "subcommands": {
+            "0x10000": 4,
+            "0x10001": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x7",
+                "global2"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x8",
+                "global4"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x9",
+                "global6"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x1b",
+                "var0"
+              ]
+            },
+            {
+              "subcmd": "0x10001",
+              "args": [
+                "0x10001",
+                "0x1",
+                "0",
+                "global48"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global48",
+          "operator": "=",
+          "value": "func_81(var1, var2)"
+        }
+      ],
+      "globalReads": [
+        "global2",
+        "global27",
+        "global28",
+        "global4",
+        "global6"
+      ],
+      "constants": [
+        "0x1",
+        "0x7",
+        "0x8",
+        "0x9",
+        "0x1b",
+        "0x10000",
+        "0x10001"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": [
+          {
+            "domain": "0x10001",
+            "group": "0x1",
+            "slot": "0",
+            "value": "global48"
+          }
+        ]
+      }
+    },
+    {
+      "name": "func_7",
+      "returnType": "int",
+      "signature": "int func_7(int arg0, int arg1)",
+      "startLine": 329,
+      "endLine": 367,
+      "lineCount": 39,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 5,
+          "subcommands": {
+            "0x50003": 2,
+            "0x50002": 1,
+            "0x7000b": 1,
+            "0x7000c": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x50002",
+              "args": [
+                "0x50002"
+              ]
+            },
+            {
+              "subcmd": "0x50003",
+              "args": [
+                "0x50003",
+                "0x1",
+                "var3"
+              ]
+            },
+            {
+              "subcmd": "0x7000c",
+              "args": [
+                "0x7000c",
+                "var4"
+              ]
+            },
+            {
+              "subcmd": "0x7000b",
+              "args": [
+                "0x7000b",
+                "var4"
+              ]
+            },
+            {
+              "subcmd": "0x50003",
+              "args": [
+                "0x50003",
+                "0",
+                "var3"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global20"
+      ],
+      "constants": [
+        "0x1",
+        "0x3",
+        "0x50002",
+        "0x50003",
+        "0x7000b",
+        "0x7000c"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_8",
+      "returnType": "void",
+      "signature": "void func_8()",
+      "startLine": 368,
+      "endLine": 400,
+      "lineCount": 33,
+      "calls": [
+        "func_10",
+        "func_134",
+        "func_139",
+        "func_140",
+        "func_9"
+      ],
+      "syscalls": {
+        "sys_1": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x31",
+                "global48"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global49",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global50",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global51",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global52",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global53",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global54",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global55",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global56",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global49",
+          "operator": "=",
+          "value": "global57"
+        },
+        {
+          "global": "global50",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global57",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global51",
+          "operator": "=",
+          "value": "global58"
+        },
+        {
+          "global": "global52",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global58",
+          "operator": "=",
+          "value": "0"
+        }
+      ],
+      "globalReads": [
+        "global46",
+        "global48"
+      ],
+      "constants": [
+        "0x31",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_9",
+      "returnType": "void",
+      "signature": "void func_9()",
+      "startLine": 401,
+      "endLine": 482,
+      "lineCount": 82,
+      "calls": [
+        "func_11",
+        "func_119",
+        "func_120",
+        "func_129",
+        "func_130",
+        "func_132",
+        "func_41",
+        "func_42",
+        "func_79",
+        "func_87"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 3,
+          "subcommands": {
+            "0x10000": 2,
+            "0xc0002": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0xc0002",
+              "args": [
+                "0xc0002"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xc"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x1d"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global53",
+          "operator": "|=",
+          "value": "0x1"
+        },
+        {
+          "global": "global59",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global60",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global49",
+          "operator": "=",
+          "value": "var0"
+        },
+        {
+          "global": "global50",
+          "operator": "=",
+          "value": "var2"
+        },
+        {
+          "global": "global51",
+          "operator": "=",
+          "value": "0xfffffffe"
+        },
+        {
+          "global": "global52",
+          "operator": "=",
+          "value": "var4"
+        },
+        {
+          "global": "global51",
+          "operator": "=",
+          "value": "0xffffffff"
+        },
+        {
+          "global": "global52",
+          "operator": "=",
+          "value": "0x5"
+        },
+        {
+          "global": "global49",
+          "operator": "=",
+          "value": "var0"
+        },
+        {
+          "global": "global50",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global51",
+          "operator": "=",
+          "value": "0xfffffffe"
+        },
+        {
+          "global": "global52",
+          "operator": "=",
+          "value": "0xa"
+        }
+      ],
+      "globalReads": [
+        "global14",
+        "global20",
+        "global21",
+        "global43",
+        "global46"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x5",
+        "0xa",
+        "0xc",
+        "0x1d",
+        "0x400",
+        "0x10000",
+        "0xc0002",
+        "0xfffffffe",
+        "0xffffffff"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_10",
+      "returnType": "void",
+      "signature": "void func_10()",
+      "startLine": 483,
+      "endLine": 496,
+      "lineCount": 14,
+      "calls": [],
+      "syscalls": {
+        "sys_1": {
+          "count": 10,
+          "subcommands": {
+            "0x10000": 10
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x10",
+                "global49"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x11",
+                "global51"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x13",
+                "global50"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x14",
+                "global52"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x1c",
+                "global61"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x1d",
+                "global43"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x1a",
+                "global62"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x27",
+                "global53"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global43",
+        "global49",
+        "global50",
+        "global51",
+        "global52",
+        "global53",
+        "global54",
+        "global55",
+        "global61",
+        "global62"
+      ],
+      "constants": [
+        "0x10",
+        "0x11",
+        "0x13",
+        "0x14",
+        "0x1a",
+        "0x1c",
+        "0x1d",
+        "0x27",
+        "0x28",
+        "0x34",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_11",
+      "returnType": "void",
+      "signature": "void func_11()",
+      "startLine": 497,
+      "endLine": 515,
+      "lineCount": 19,
+      "calls": [
+        "func_87"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 2,
+          "subcommands": {
+            "0x10000": 1,
+            "0x10001": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x1"
+              ]
+            },
+            {
+              "subcmd": "0x10001",
+              "args": [
+                "0x10001",
+                "0",
+                "0"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global49",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0x1, 0x1)"
+        },
+        {
+          "global": "global50",
+          "operator": "=",
+          "value": "0"
+        }
+      ],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x10000",
+        "0x10001"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_12",
+      "returnType": "void",
+      "signature": "void func_12()",
+      "startLine": 516,
+      "endLine": 540,
+      "lineCount": 25,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 2,
+          "subcommands": {
+            "0x10002": 1,
+            "0x10003": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10003",
+              "args": [
+                "0x10003",
+                "0",
+                "global8"
+              ]
+            },
+            {
+              "subcmd": "0x10002",
+              "args": [
+                "0x10002",
+                "0",
+                "global8"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global59",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global49",
+          "operator": "=",
+          "value": "var1"
+        },
+        {
+          "global": "global50",
+          "operator": "=",
+          "value": "global59"
+        }
+      ],
+      "globalReads": [
+        "global13",
+        "global8"
+      ],
+      "constants": [
+        "0x10002",
+        "0x10003"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_13",
+      "returnType": "void",
+      "signature": "void func_13()",
+      "startLine": 541,
+      "endLine": 575,
+      "lineCount": 35,
+      "calls": [],
+      "syscalls": {
+        "sys_1": {
+          "count": 31,
+          "subcommands": {
+            "0x10000": 31
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0",
+                "0xc858da63"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x1",
+                "0x4cdc9902"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x2",
+                "0x6d00aeaa"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x3",
+                "0x9cf36e1b"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x4",
+                "0x868ec571"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x5",
+                "0xa8ab2ac9"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x6",
+                "0x4de2206b"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x7",
+                "0x41443ba0"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x3",
+        "0x4",
+        "0x5",
+        "0x6",
+        "0x7",
+        "0x8",
+        "0x9",
+        "0xa",
+        "0xb",
+        "0xc",
+        "0xd",
+        "0xe",
+        "0xf",
+        "0x10",
+        "0x17",
+        "0x18",
+        "0x19",
+        "0x1a",
+        "0x1d",
+        "0x1e",
+        "0x1f",
+        "0x20",
+        "0x21",
+        "0x22",
+        "0x23",
+        "0x24",
+        "0x25",
+        "0x28",
+        "0x10000",
+        "0x14b0aea3",
+        "0x16d0093c",
+        "0x1ad4e055",
+        "0x27786a84",
+        "0x41443ba0",
+        "0x450c6ce4",
+        "0x4cdc9902",
+        "0x4de2206b",
+        "0x506ac760",
+        "0x676aca0b",
+        "0x679f48c2",
+        "0x68790b03",
+        "0x6d00aeaa",
+        "0x77b100ff",
+        "0x868ec571",
+        "0x86d45295",
+        "0x900ab393",
+        "0x901c3623",
+        "0x910f3fa7",
+        "0x9475130e",
+        "0x9cf36e1b",
+        "0xa02d57dc",
+        "0xa8ab2ac9",
+        "0xb28c1647",
+        "0xc858da63",
+        "0xdabb0543",
+        "0xeee34191",
+        "0xef809e66",
+        "0xf32aa1ba",
+        "0xf5f21169",
+        "0xff098547"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_14",
+      "returnType": "void",
+      "signature": "void func_14()",
+      "startLine": 576,
+      "endLine": 609,
+      "lineCount": 34,
+      "calls": [
+        "func_83"
+      ],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x3",
+        "0x4",
+        "0x5",
+        "0x6",
+        "0x7",
+        "0x8",
+        "0x9",
+        "0xa",
+        "0xb",
+        "0xc",
+        "0xd",
+        "0xe",
+        "0xf",
+        "0x10",
+        "0x17",
+        "0x18",
+        "0x19",
+        "0x1a",
+        "0x1d",
+        "0x1e",
+        "0x1f",
+        "0x20",
+        "0x21",
+        "0x23",
+        "0x24",
+        "0x25",
+        "0x28"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_15",
+      "returnType": "int",
+      "signature": "int func_15()",
+      "startLine": 610,
+      "endLine": 732,
+      "lineCount": 123,
+      "calls": [
+        "func_43",
+        "func_47",
+        "func_49",
+        "func_53",
+        "func_55",
+        "func_84",
+        "func_88"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 6,
+          "subcommands": {
+            "0x10000": 6
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x18"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x18"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x19"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x1a"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xa"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x2"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global51",
+          "operator": "=",
+          "value": "0xfffffffe"
+        },
+        {
+          "global": "global52",
+          "operator": "=",
+          "value": "0x5"
+        },
+        {
+          "global": "global51",
+          "operator": "=",
+          "value": "0xfffffffe"
+        },
+        {
+          "global": "global52",
+          "operator": "=",
+          "value": "0x5"
+        },
+        {
+          "global": "global51",
+          "operator": "=",
+          "value": "0xfffffffe"
+        },
+        {
+          "global": "global52",
+          "operator": "=",
+          "value": "0x5"
+        },
+        {
+          "global": "global51",
+          "operator": "=",
+          "value": "0xfffffffe"
+        },
+        {
+          "global": "global52",
+          "operator": "=",
+          "value": "0x5"
+        },
+        {
+          "global": "global51",
+          "operator": "=",
+          "value": "0xfffffffe"
+        },
+        {
+          "global": "global52",
+          "operator": "=",
+          "value": "0x5"
+        }
+      ],
+      "globalReads": [
+        "global10",
+        "global11",
+        "global16",
+        "global20",
+        "global45"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x5",
+        "0xa",
+        "0x18",
+        "0x19",
+        "0x1a",
+        "0x4000",
+        "0x10000",
+        "0x40000",
+        "0x200000",
+        "0x1000000",
+        "0xfffffffe"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_16",
+      "returnType": "int",
+      "signature": "int func_16()",
+      "startLine": 733,
+      "endLine": 750,
+      "lineCount": 18,
+      "calls": [
+        "func_43",
+        "func_47",
+        "func_55"
+      ],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_17",
+      "returnType": "int",
+      "signature": "int func_17()",
+      "startLine": 751,
+      "endLine": 764,
+      "lineCount": 14,
+      "calls": [
+        "func_18"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x4"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15"
+      ],
+      "constants": [
+        "0x1",
+        "0x4",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_18",
+      "returnType": "int",
+      "signature": "int func_18()",
+      "startLine": 765,
+      "endLine": 782,
+      "lineCount": 18,
+      "calls": [
+        "func_45",
+        "func_47",
+        "func_55"
+      ],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_19",
+      "returnType": "int",
+      "signature": "int func_19()",
+      "startLine": 783,
+      "endLine": 804,
+      "lineCount": 22,
+      "calls": [
+        "func_43",
+        "func_47",
+        "func_55"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x2"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_20",
+      "returnType": "int",
+      "signature": "int func_20()",
+      "startLine": 805,
+      "endLine": 817,
+      "lineCount": 13,
+      "calls": [
+        "func_85"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 2,
+          "subcommands": {
+            "0x10000": 2
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x2"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x8"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x8",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_21",
+      "returnType": "int",
+      "signature": "int func_21()",
+      "startLine": 818,
+      "endLine": 845,
+      "lineCount": 28,
+      "calls": [
+        "func_119",
+        "func_51",
+        "func_85"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 3,
+          "subcommands": {
+            "0x10000": 3
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xa"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x8"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xa"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15",
+        "global18",
+        "global45"
+      ],
+      "constants": [
+        "0x1",
+        "0x8",
+        "0xa",
+        "0x10",
+        "0x10000",
+        "0x20000",
+        "0x20000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_22",
+      "returnType": "int",
+      "signature": "int func_22()",
+      "startLine": 846,
+      "endLine": 874,
+      "lineCount": 29,
+      "calls": [
+        "func_51",
+        "func_55",
+        "func_71",
+        "func_85"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 2,
+          "subcommands": {
+            "0x10000": 2
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xa"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x9"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15",
+        "global45"
+      ],
+      "constants": [
+        "0x1",
+        "0x9",
+        "0xa",
+        "0x10",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_23",
+      "returnType": "int",
+      "signature": "int func_23()",
+      "startLine": 875,
+      "endLine": 888,
+      "lineCount": 14,
+      "calls": [
+        "func_24"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xa"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15"
+      ],
+      "constants": [
+        "0x1",
+        "0xa",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_24",
+      "returnType": "int",
+      "signature": "int func_24()",
+      "startLine": 889,
+      "endLine": 927,
+      "lineCount": 39,
+      "calls": [
+        "func_49",
+        "func_53",
+        "func_55",
+        "func_71"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 2,
+          "subcommands": {
+            "0x10000": 2
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x9"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xa"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global0",
+        "global18",
+        "global19",
+        "global45",
+        "global8"
+      ],
+      "constants": [
+        "0x1",
+        "0x9",
+        "0xa",
+        "0x10",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_25",
+      "returnType": "int",
+      "signature": "int func_25()",
+      "startLine": 928,
+      "endLine": 944,
+      "lineCount": 17,
+      "calls": [
+        "func_55"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x2"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15",
+        "global18"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_26",
+      "returnType": "int",
+      "signature": "int func_26()",
+      "startLine": 945,
+      "endLine": 972,
+      "lineCount": 28,
+      "calls": [
+        "func_49",
+        "func_58",
+        "func_61",
+        "func_71"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xd"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15",
+        "global18"
+      ],
+      "constants": [
+        "0x1",
+        "0xd",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_27",
+      "returnType": "int",
+      "signature": "int func_27()",
+      "startLine": 973,
+      "endLine": 1007,
+      "lineCount": 35,
+      "calls": [
+        "func_49",
+        "func_58",
+        "func_61"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 3,
+          "subcommands": {
+            "0x10000": 2,
+            "0x30000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x30000",
+              "args": [
+                "0x30000"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x2"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xa"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15",
+        "global18"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0xa",
+        "0x10000",
+        "0x30000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_28",
+      "returnType": "int",
+      "signature": "int func_28()",
+      "startLine": 1008,
+      "endLine": 1016,
+      "lineCount": 9,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xf"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15"
+      ],
+      "constants": [
+        "0x1",
+        "0xf",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_29",
+      "returnType": "int",
+      "signature": "int func_29()",
+      "startLine": 1017,
+      "endLine": 1079,
+      "lineCount": 63,
+      "calls": [
+        "func_47",
+        "func_49",
+        "func_55",
+        "func_65"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xa"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global63",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global63",
+          "operator": "=",
+          "value": "0x1"
+        },
+        {
+          "global": "global55",
+          "operator": "|=",
+          "value": "0x200"
+        }
+      ],
+      "globalReads": [
+        "global15",
+        "global18",
+        "global19",
+        "global2",
+        "global20",
+        "global45",
+        "global7",
+        "global8"
+      ],
+      "constants": [
+        "0x1",
+        "0xa",
+        "0x20",
+        "0x80",
+        "0x100",
+        "0x200",
+        "0x10000",
+        "0x1000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_30",
+      "returnType": "int",
+      "signature": "int func_30()",
+      "startLine": 1080,
+      "endLine": 1131,
+      "lineCount": 52,
+      "calls": [
+        "func_47",
+        "func_49",
+        "func_53",
+        "func_55"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 2,
+          "subcommands": {
+            "0x10000": 2
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xa"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x2"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15",
+        "global18",
+        "global19",
+        "global20"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0xa",
+        "0x10000",
+        "0x1000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_31",
+      "returnType": "int",
+      "signature": "int func_31()",
+      "startLine": 1132,
+      "endLine": 1140,
+      "lineCount": 9,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x1e"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15"
+      ],
+      "constants": [
+        "0x1",
+        "0x1e",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_32",
+      "returnType": "int",
+      "signature": "int func_32()",
+      "startLine": 1141,
+      "endLine": 1157,
+      "lineCount": 17,
+      "calls": [
+        "func_69"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x1f"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15",
+        "global18"
+      ],
+      "constants": [
+        "0x1",
+        "0x1f",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_33",
+      "returnType": "int",
+      "signature": "int func_33()",
+      "startLine": 1158,
+      "endLine": 1189,
+      "lineCount": 32,
+      "calls": [
+        "func_47",
+        "func_49",
+        "func_55",
+        "func_67"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xa"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15",
+        "global18",
+        "global20"
+      ],
+      "constants": [
+        "0x1",
+        "0xa",
+        "0x10000",
+        "0x1000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_34",
+      "returnType": "int",
+      "signature": "int func_34()",
+      "startLine": 1190,
+      "endLine": 1210,
+      "lineCount": 21,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 4,
+          "subcommands": {
+            "0x10000": 4
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x18"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xe"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xa"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x2"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15",
+        "global20",
+        "global45"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0xa",
+        "0xe",
+        "0x18",
+        "0x10000",
+        "0x200000",
+        "0x800000",
+        "0x1000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_35",
+      "returnType": "int",
+      "signature": "int func_35()",
+      "startLine": 1211,
+      "endLine": 1224,
+      "lineCount": 14,
+      "calls": [
+        "func_73"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x18"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15"
+      ],
+      "constants": [
+        "0x1",
+        "0x18",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_36",
+      "returnType": "int",
+      "signature": "int func_36()",
+      "startLine": 1225,
+      "endLine": 1234,
+      "lineCount": 10,
+      "calls": [
+        "func_73"
+      ],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_37",
+      "returnType": "int",
+      "signature": "int func_37()",
+      "startLine": 1235,
+      "endLine": 1243,
+      "lineCount": 9,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xa"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15"
+      ],
+      "constants": [
+        "0x1",
+        "0xa",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_38",
+      "returnType": "int",
+      "signature": "int func_38()",
+      "startLine": 1244,
+      "endLine": 1257,
+      "lineCount": 14,
+      "calls": [
+        "func_49",
+        "func_75"
+      ],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_39",
+      "returnType": "int",
+      "signature": "int func_39()",
+      "startLine": 1258,
+      "endLine": 1310,
+      "lineCount": 53,
+      "calls": [
+        "func_43",
+        "func_47",
+        "func_49",
+        "func_53",
+        "func_55",
+        "func_88"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 3,
+          "subcommands": {
+            "0x10000": 3
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x18"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xa"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x2"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15",
+        "global18",
+        "global20",
+        "global45"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0xa",
+        "0x18",
+        "0x10000",
+        "0x200000",
+        "0x1000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_40",
+      "returnType": "int",
+      "signature": "int func_40()",
+      "startLine": 1311,
+      "endLine": 1326,
+      "lineCount": 16,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 2,
+          "subcommands": {
+            "0x10000": 2
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x18"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xa"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global15",
+        "global45"
+      ],
+      "constants": [
+        "0x1",
+        "0xa",
+        "0x18",
+        "0x10000",
+        "0x200000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_41",
+      "returnType": "int",
+      "signature": "int func_41()",
+      "startLine": 1327,
+      "endLine": 1347,
+      "lineCount": 21,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 3,
+          "subcommands": {
+            "0x10000": 1,
+            "0x30000": 1,
+            "0x3000a": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x30000",
+              "args": [
+                "0x30000"
+              ]
+            },
+            {
+              "subcmd": "0x3000a",
+              "args": [
+                "0x3000a"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xa"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global20"
+      ],
+      "constants": [
+        "0x1",
+        "0xa",
+        "0x10000",
+        "0x30000",
+        "0x3000a",
+        "0x800000",
+        "0x1000300"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_42",
+      "returnType": "int",
+      "signature": "int func_42()",
+      "startLine": 1348,
+      "endLine": 1410,
+      "lineCount": 63,
+      "calls": [
+        "func_59",
+        "func_63",
+        "func_67",
+        "func_77"
+      ],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global18",
+        "global20",
+        "global35",
+        "global36",
+        "global37",
+        "global44",
+        "global45"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x4",
+        "0x1c000",
+        "0x200000",
+        "0x800080",
+        "0x1000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_43",
+      "returnType": "int",
+      "signature": "int func_43()",
+      "startLine": 1411,
+      "endLine": 1419,
+      "lineCount": 9,
+      "calls": [
+        "func_44"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x3"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x3",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_44",
+      "returnType": "int",
+      "signature": "int func_44()",
+      "startLine": 1420,
+      "endLine": 1433,
+      "lineCount": 14,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global55",
+          "operator": "|=",
+          "value": "0x10"
+        }
+      ],
+      "globalReads": [
+        "global2",
+        "global20"
+      ],
+      "constants": [
+        "0x1",
+        "0x10",
+        "0x3c",
+        "0x1000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_45",
+      "returnType": "int",
+      "signature": "int func_45()",
+      "startLine": 1434,
+      "endLine": 1443,
+      "lineCount": 10,
+      "calls": [
+        "func_46"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x5"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global55",
+          "operator": "|=",
+          "value": "0x10"
+        }
+      ],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x5",
+        "0x10",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_46",
+      "returnType": "int",
+      "signature": "int func_46()",
+      "startLine": 1444,
+      "endLine": 1452,
+      "lineCount": 9,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global2"
+      ],
+      "constants": [
+        "0x1",
+        "0x3c"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_47",
+      "returnType": "int",
+      "signature": "int func_47(int arg0)",
+      "startLine": 1453,
+      "endLine": 1461,
+      "lineCount": 9,
+      "calls": [
+        "func_48"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x6"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x6",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_48",
+      "returnType": "int",
+      "signature": "int func_48(int arg0)",
+      "startLine": 1462,
+      "endLine": 1490,
+      "lineCount": 29,
+      "calls": [
+        "func_119",
+        "func_82",
+        "func_85"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x60000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x60000",
+              "args": [
+                "0x60000"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global55",
+          "operator": "|=",
+          "value": "0x80"
+        }
+      ],
+      "globalReads": [
+        "global0"
+      ],
+      "constants": [
+        "0x1",
+        "0x6",
+        "0x80",
+        "0x60000",
+        "0x10000000",
+        "0x20000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_49",
+      "returnType": "int",
+      "signature": "int func_49(int arg0)",
+      "startLine": 1491,
+      "endLine": 1499,
+      "lineCount": 9,
+      "calls": [
+        "func_50"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x7"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x7",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_50",
+      "returnType": "int",
+      "signature": "int func_50(int arg0)",
+      "startLine": 1500,
+      "endLine": 1528,
+      "lineCount": 29,
+      "calls": [
+        "func_119",
+        "func_82",
+        "func_85"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x60000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x60000",
+              "args": [
+                "0x60000"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global55",
+          "operator": "|=",
+          "value": "0x80"
+        }
+      ],
+      "globalReads": [
+        "global0"
+      ],
+      "constants": [
+        "0x1",
+        "0x7",
+        "0x80",
+        "0x60000",
+        "0x10000000",
+        "0x20000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_51",
+      "returnType": "int",
+      "signature": "int func_51()",
+      "startLine": 1529,
+      "endLine": 1537,
+      "lineCount": 9,
+      "calls": [
+        "func_52"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x9"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x9",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_52",
+      "returnType": "int",
+      "signature": "int func_52()",
+      "startLine": 1538,
+      "endLine": 1553,
+      "lineCount": 16,
+      "calls": [
+        "func_119"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x60000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x60000",
+              "args": [
+                "0x60000"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global18"
+      ],
+      "constants": [
+        "0x1",
+        "0x60000",
+        "0x20000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_53",
+      "returnType": "int",
+      "signature": "int func_53()",
+      "startLine": 1554,
+      "endLine": 1562,
+      "lineCount": 9,
+      "calls": [
+        "func_54"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xb"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0xb",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_54",
+      "returnType": "int",
+      "signature": "int func_54()",
+      "startLine": 1563,
+      "endLine": 1575,
+      "lineCount": 13,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x30000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x30000",
+              "args": [
+                "0x30000"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global51"
+      ],
+      "constants": [
+        "0x1",
+        "0x30000",
+        "0xffffffff"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_55",
+      "returnType": "int",
+      "signature": "int func_55()",
+      "startLine": 1576,
+      "endLine": 1591,
+      "lineCount": 16,
+      "calls": [
+        "func_122",
+        "func_126",
+        "func_56",
+        "func_57",
+        "func_88"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xc"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global64",
+          "operator": "=",
+          "value": "func_57(global2)"
+        }
+      ],
+      "globalReads": [
+        "global2",
+        "global20"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0xc",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_56",
+      "returnType": "int",
+      "signature": "int func_56()",
+      "startLine": 1592,
+      "endLine": 1611,
+      "lineCount": 20,
+      "calls": [
+        "func_121",
+        "func_82"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x60000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x60000",
+              "args": [
+                "0x60000"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global55",
+          "operator": "|=",
+          "value": "0x20"
+        }
+      ],
+      "globalReads": [
+        "global2"
+      ],
+      "constants": [
+        "0x1",
+        "0xc",
+        "0x20",
+        "0x3c",
+        "0x60000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_57",
+      "returnType": "int",
+      "signature": "int func_57(int arg0)",
+      "startLine": 1612,
+      "endLine": 1637,
+      "lineCount": 26,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 2,
+          "subcommands": {
+            "0x6000e": 1,
+            "0xc0000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0xc0000",
+              "args": [
+                "0xc0000"
+              ]
+            },
+            {
+              "subcmd": "0x6000e",
+              "args": [
+                "0x6000e",
+                "0xd027304f"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x4",
+        "0x8",
+        "0x10",
+        "0x20",
+        "0x3c",
+        "0x6000e",
+        "0xc0000",
+        "0xd027304f",
+        "0xffffffdf",
+        "0xfffffffb"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_58",
+      "returnType": "int",
+      "signature": "int func_58()",
+      "startLine": 1638,
+      "endLine": 1664,
+      "lineCount": 27,
+      "calls": [
+        "func_57"
+      ],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global2",
+        "global64"
+      ],
+      "constants": [
+        "0x1",
+        "0x4",
+        "0x8",
+        "0x10",
+        "0x20"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_59",
+      "returnType": "int",
+      "signature": "int func_59()",
+      "startLine": 1665,
+      "endLine": 1676,
+      "lineCount": 12,
+      "calls": [
+        "func_122",
+        "func_126",
+        "func_57",
+        "func_60"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xc"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global64",
+          "operator": "=",
+          "value": "func_57(global2)"
+        }
+      ],
+      "globalReads": [
+        "global2"
+      ],
+      "constants": [
+        "0x1",
+        "0xc",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_60",
+      "returnType": "int",
+      "signature": "int func_60()",
+      "startLine": 1677,
+      "endLine": 1696,
+      "lineCount": 20,
+      "calls": [
+        "func_56"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 2,
+          "subcommands": {
+            "0x6000e": 1,
+            "0xc0000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0xc0000",
+              "args": [
+                "0xc0000"
+              ]
+            },
+            {
+              "subcmd": "0x6000e",
+              "args": [
+                "0x6000e",
+                "0xee5887da"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global20",
+        "global43",
+        "global45"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x6000e",
+        "0xc0000",
+        "0x1000000",
+        "0xee5887da"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_61",
+      "returnType": "int",
+      "signature": "int func_61()",
+      "startLine": 1697,
+      "endLine": 1708,
+      "lineCount": 12,
+      "calls": [
+        "func_122",
+        "func_126",
+        "func_57",
+        "func_62"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xc"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global64",
+          "operator": "=",
+          "value": "func_57(global2)"
+        }
+      ],
+      "globalReads": [
+        "global2"
+      ],
+      "constants": [
+        "0x1",
+        "0xc",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_62",
+      "returnType": "int",
+      "signature": "int func_62()",
+      "startLine": 1709,
+      "endLine": 1717,
+      "lineCount": 9,
+      "calls": [
+        "func_56"
+      ],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global20"
+      ],
+      "constants": [
+        "0x3"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_63",
+      "returnType": "int",
+      "signature": "int func_63()",
+      "startLine": 1718,
+      "endLine": 1727,
+      "lineCount": 10,
+      "calls": [
+        "func_129",
+        "func_64"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xe"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0xe",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_64",
+      "returnType": "int",
+      "signature": "int func_64()",
+      "startLine": 1728,
+      "endLine": 1756,
+      "lineCount": 29,
+      "calls": [
+        "func_127",
+        "func_128",
+        "func_82"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x60000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x60000",
+              "args": [
+                "0x60000"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global55",
+          "operator": "|=",
+          "value": "0x100"
+        },
+        {
+          "global": "global55",
+          "operator": "|=",
+          "value": "0x4000"
+        }
+      ],
+      "globalReads": [
+        "global20",
+        "global45"
+      ],
+      "constants": [
+        "0x1",
+        "0x3",
+        "0xe",
+        "0x100",
+        "0x4000",
+        "0x60000",
+        "0x1000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_65",
+      "returnType": "int",
+      "signature": "int func_65()",
+      "startLine": 1757,
+      "endLine": 1765,
+      "lineCount": 9,
+      "calls": [
+        "func_66"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x10"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x10",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_66",
+      "returnType": "int",
+      "signature": "int func_66()",
+      "startLine": 1766,
+      "endLine": 1777,
+      "lineCount": 12,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x60000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x60000",
+              "args": [
+                "0x60000"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global2"
+      ],
+      "constants": [
+        "0x1",
+        "0xbc",
+        "0x60000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_67",
+      "returnType": "int",
+      "signature": "int func_67()",
+      "startLine": 1778,
+      "endLine": 1787,
+      "lineCount": 10,
+      "calls": [
+        "func_120",
+        "func_68"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x1d"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x1d",
+        "0x10000",
+        "0x40000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_68",
+      "returnType": "int",
+      "signature": "int func_68()",
+      "startLine": 1788,
+      "endLine": 1826,
+      "lineCount": 39,
+      "calls": [
+        "func_119",
+        "func_82"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 2,
+          "subcommands": {
+            "0x60000": 1,
+            "0x6000d": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x60000",
+              "args": [
+                "0x60000"
+              ]
+            },
+            {
+              "subcmd": "0x6000d",
+              "args": [
+                "0x6000d"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global55",
+          "operator": "|=",
+          "value": "0x800"
+        }
+      ],
+      "globalReads": [
+        "global20",
+        "global34"
+      ],
+      "constants": [
+        "0x1",
+        "0x3",
+        "0x1d",
+        "0x80",
+        "0x800",
+        "0x60000",
+        "0x6000d",
+        "0x40000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_69",
+      "returnType": "int",
+      "signature": "int func_69()",
+      "startLine": 1827,
+      "endLine": 1835,
+      "lineCount": 9,
+      "calls": [
+        "func_70"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x1f"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x1f",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_70",
+      "returnType": "int",
+      "signature": "int func_70()",
+      "startLine": 1836,
+      "endLine": 1851,
+      "lineCount": 16,
+      "calls": [
+        "func_133"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x60000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x60000",
+              "args": [
+                "0x60000"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global2"
+      ],
+      "constants": [
+        "0x1",
+        "0x4",
+        "0x1000",
+        "0x60000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_71",
+      "returnType": "int",
+      "signature": "int func_71()",
+      "startLine": 1852,
+      "endLine": 1863,
+      "lineCount": 12,
+      "calls": [
+        "func_122",
+        "func_125",
+        "func_126",
+        "func_72"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x17"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global59",
+          "operator": "=",
+          "value": "func_125()"
+        }
+      ],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x17",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_72",
+      "returnType": "int",
+      "signature": "int func_72()",
+      "startLine": 1864,
+      "endLine": 1893,
+      "lineCount": 30,
+      "calls": [
+        "func_119",
+        "func_124",
+        "func_82",
+        "func_87",
+        "func_88"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x60000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x60000",
+              "args": [
+                "0x60000"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global55",
+          "operator": "|=",
+          "value": "0x1000"
+        }
+      ],
+      "globalReads": [
+        "global16",
+        "global20"
+      ],
+      "constants": [
+        "0x1",
+        "0x3",
+        "0x17",
+        "0x1000",
+        "0x60000",
+        "0x1000000",
+        "0x20000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_73",
+      "returnType": "int",
+      "signature": "int func_73()",
+      "startLine": 1894,
+      "endLine": 1902,
+      "lineCount": 9,
+      "calls": [
+        "func_74"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x19"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x19",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_74",
+      "returnType": "int",
+      "signature": "int func_74()",
+      "startLine": 1903,
+      "endLine": 1934,
+      "lineCount": 32,
+      "calls": [
+        "func_119",
+        "func_87",
+        "func_88"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x60000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x60000",
+              "args": [
+                "0x60000"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global16",
+        "global2",
+        "global20",
+        "global45"
+      ],
+      "constants": [
+        "0x1",
+        "0x3",
+        "0x3c",
+        "0x400",
+        "0x20000",
+        "0x60000",
+        "0x200000",
+        "0x20000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_75",
+      "returnType": "int",
+      "signature": "int func_75()",
+      "startLine": 1935,
+      "endLine": 1943,
+      "lineCount": 9,
+      "calls": [
+        "func_76"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xa"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0xa",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_76",
+      "returnType": "int",
+      "signature": "int func_76()",
+      "startLine": 1944,
+      "endLine": 1956,
+      "lineCount": 13,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x60000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x60000",
+              "args": [
+                "0x60000"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global20"
+      ],
+      "constants": [
+        "0x1",
+        "0x60000",
+        "0x80000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_77",
+      "returnType": "void",
+      "signature": "void func_77()",
+      "startLine": 1957,
+      "endLine": 1980,
+      "lineCount": 24,
+      "calls": [
+        "func_120",
+        "func_78"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 3,
+          "subcommands": {
+            "0x10000": 3
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x18"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0xa"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x2"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global0",
+          "operator": "=",
+          "value": "0xf"
+        },
+        {
+          "global": "global60",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global59",
+          "operator": "=",
+          "value": "0x1"
+        }
+      ],
+      "globalReads": [
+        "global20"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0xa",
+        "0xf",
+        "0x18",
+        "0x4000",
+        "0x10000",
+        "0x1000000",
+        "0x10000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_78",
+      "returnType": "int",
+      "signature": "int func_78()",
+      "startLine": 1981,
+      "endLine": 2004,
+      "lineCount": 24,
+      "calls": [
+        "func_128"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 4,
+          "subcommands": {
+            "0x60000": 1,
+            "0x6000e": 1,
+            "0xc0000": 1,
+            "0xc0001": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x60000",
+              "args": [
+                "0x60000"
+              ]
+            },
+            {
+              "subcmd": "0xc0000",
+              "args": [
+                "0xc0000"
+              ]
+            },
+            {
+              "subcmd": "0x6000e",
+              "args": [
+                "0x6000e",
+                "0xc4f363c"
+              ]
+            },
+            {
+              "subcmd": "0xc0001",
+              "args": [
+                "0xc0001"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global2",
+        "global20",
+        "global45"
+      ],
+      "constants": [
+        "0x1",
+        "0x3",
+        "0x3c",
+        "0x60000",
+        "0x6000e",
+        "0xc0000",
+        "0xc0001",
+        "0x1000000",
+        "0xc4f363c"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_79",
+      "returnType": "void",
+      "signature": "void func_79()",
+      "startLine": 2005,
+      "endLine": 2113,
+      "lineCount": 109,
+      "calls": [
+        "func_120"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 2,
+          "subcommands": {
+            "0x10001": 1,
+            "0x6000d": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x6000d",
+              "args": [
+                "0x6000d"
+              ]
+            },
+            {
+              "subcmd": "0x10001",
+              "args": [
+                "0x10001",
+                "0",
+                "0x1"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global51",
+          "operator": "=",
+          "value": "0xffffffff"
+        },
+        {
+          "global": "global52",
+          "operator": "=",
+          "value": "0xffffffff"
+        },
+        {
+          "global": "global65",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global65",
+          "operator": "=",
+          "value": "0x1"
+        },
+        {
+          "global": "global60",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global67",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global56",
+          "operator": "=",
+          "value": "0x1"
+        },
+        {
+          "global": "global51",
+          "operator": "=",
+          "value": "global25"
+        },
+        {
+          "global": "global52",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global62",
+          "operator": "=",
+          "value": "global26"
+        },
+        {
+          "global": "global61",
+          "operator": "=",
+          "value": "global23"
+        },
+        {
+          "global": "global43",
+          "operator": "=",
+          "value": "global24"
+        },
+        {
+          "global": "global55",
+          "operator": "|=",
+          "value": "0x1"
+        },
+        {
+          "global": "global48",
+          "operator": "&=",
+          "value": "0x4"
+        },
+        {
+          "global": "global48",
+          "operator": "=",
+          "value": "var1"
+        },
+        {
+          "global": "global51",
+          "operator": "=",
+          "value": "global25"
+        },
+        {
+          "global": "global52",
+          "operator": "=",
+          "value": "global60"
+        },
+        {
+          "global": "global62",
+          "operator": "=",
+          "value": "global26"
+        },
+        {
+          "global": "global61",
+          "operator": "=",
+          "value": "global23"
+        },
+        {
+          "global": "global43",
+          "operator": "=",
+          "value": "global24"
+        }
+      ],
+      "globalReads": [
+        "global14",
+        "global16",
+        "global18",
+        "global20",
+        "global22",
+        "global23",
+        "global24",
+        "global25",
+        "global26",
+        "global33",
+        "global37",
+        "global38",
+        "global47",
+        "global66"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x3",
+        "0x4",
+        "0x5",
+        "0xb",
+        "0xc",
+        "0xd",
+        "0x64",
+        "0x800",
+        "0x10001",
+        "0x18000",
+        "0x3c7ff",
+        "0x6000d",
+        "0x800080",
+        "0xffffffff"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_80",
+      "returnType": "void",
+      "signature": "void func_80()",
+      "startLine": 2114,
+      "endLine": 2118,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_81",
+      "returnType": "int",
+      "signature": "int func_81(int arg0, int arg1)",
+      "startLine": 2119,
+      "endLine": 2201,
+      "lineCount": 83,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global14",
+        "global31",
+        "global62"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x4",
+        "0x8",
+        "0xb",
+        "0xc",
+        "0xd",
+        "0x10",
+        "0x20",
+        "0x3c",
+        "0x40",
+        "0x80",
+        "0x100",
+        "0x200",
+        "0x400",
+        "0x800",
+        "0x1000",
+        "0x2000",
+        "0x80000001",
+        "0x80000002",
+        "0x80000004",
+        "0x80000008",
+        "0x80000010",
+        "0x80000020",
+        "0x80000040",
+        "0x80000080",
+        "0x80000100",
+        "0x80000200",
+        "0x80000400",
+        "0x80000800",
+        "0x80001000",
+        "0x80002000",
+        "0xfffffffd"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_82",
+      "returnType": "int",
+      "signature": "int func_82(int arg0)",
+      "startLine": 2202,
+      "endLine": 2212,
+      "lineCount": 11,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 2,
+          "subcommands": {
+            "0x10000": 1,
+            "0x1000a": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "arg0"
+              ]
+            },
+            {
+              "subcmd": "0x1000a",
+              "args": [
+                "0x1000a",
+                "0x2",
+                "var1"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x10000",
+        "0x1000a"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_83",
+      "returnType": "void",
+      "signature": "void func_83(int arg0, int arg1)",
+      "startLine": 2213,
+      "endLine": 2222,
+      "lineCount": 10,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "arg0"
+              ]
+            }
+          ]
+        },
+        "sys_1": {
+          "count": 1,
+          "subcommands": {
+            "0x10002": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10002",
+              "args": [
+                "0x10002",
+                "0",
+                "var2",
+                "arg1"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x10000",
+        "0x10002"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_84",
+      "returnType": "int",
+      "signature": "int func_84(int arg0)",
+      "startLine": 2223,
+      "endLine": 2236,
+      "lineCount": 14,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 3,
+          "subcommands": {
+            "0x10000": 1,
+            "0x10002": 1,
+            "0x10003": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "arg0"
+              ]
+            },
+            {
+              "subcmd": "0x10003",
+              "args": [
+                "0x10003",
+                "0",
+                "var1"
+              ]
+            },
+            {
+              "subcmd": "0x10002",
+              "args": [
+                "0x10002",
+                "0",
+                "var1"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x10000",
+        "0x10002",
+        "0x10003"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_85",
+      "returnType": "int",
+      "signature": "int func_85()",
+      "startLine": 2237,
+      "endLine": 2248,
+      "lineCount": 12,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global20",
+        "global62"
+      ],
+      "constants": [
+        "0x1",
+        "0x8",
+        "0x9"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_86",
+      "returnType": "int",
+      "signature": "int func_86(int arg0)",
+      "startLine": 2249,
+      "endLine": 2253,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x7",
+        "0x9"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_87",
+      "returnType": "int",
+      "signature": "int func_87()",
+      "startLine": 2254,
+      "endLine": 2258,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global22",
+        "global51",
+        "global56",
+        "global61"
+      ],
+      "constants": [
+        "0x1",
+        "0x3",
+        "0xfffffffe",
+        "0xffffffff"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_88",
+      "returnType": "int",
+      "signature": "int func_88()",
+      "startLine": 2259,
+      "endLine": 2263,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global22",
+        "global51",
+        "global56",
+        "global61"
+      ],
+      "constants": [
+        "0x4",
+        "0xfffffffe",
+        "0xffffffff"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_89",
+      "returnType": "void",
+      "signature": "void func_89()",
+      "startLine": 2264,
+      "endLine": 2268,
+      "lineCount": 5,
+      "calls": [
+        "func_141"
+      ],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_90",
+      "returnType": "void",
+      "signature": "void func_90()",
+      "startLine": 2269,
+      "endLine": 2273,
+      "lineCount": 5,
+      "calls": [
+        "func_142"
+      ],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "main",
+      "returnType": "void",
+      "signature": "void main()",
+      "startLine": 2274,
+      "endLine": 2282,
+      "lineCount": 9,
+      "calls": [
+        "func_92"
+      ],
+      "syscalls": {
+        "sys_2": {
+          "count": 3,
+          "subcommands": {
+            "0": 3
+          },
+          "examples": [
+            {
+              "subcmd": "0",
+              "args": [
+                "0",
+                "0x2",
+                "func_8"
+              ]
+            },
+            {
+              "subcmd": "0",
+              "args": [
+                "0",
+                "0x3",
+                "func_89"
+              ]
+            },
+            {
+              "subcmd": "0",
+              "args": [
+                "0",
+                "0x4",
+                "func_90"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x2",
+        "0x3",
+        "0x4"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_92",
+      "returnType": "void",
+      "signature": "void func_92()",
+      "startLine": 2283,
+      "endLine": 2314,
+      "lineCount": 32,
+      "calls": [
+        "func_135",
+        "func_144",
+        "func_93"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 5,
+          "subcommands": {
+            "0x10000": 4,
+            "0xb0001": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0xb0001",
+              "args": [
+                "0xb0001"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x28"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x24"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x25"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x20"
+              ]
+            }
+          ]
+        },
+        "sys_1": {
+          "count": 3,
+          "subcommands": {
+            "0x10000": 2,
+            "0x10001": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x4",
+                "0x1"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x5",
+                "0x1"
+              ]
+            },
+            {
+              "subcmd": "0x10001",
+              "args": [
+                "0x10001",
+                "0",
+                "0x1",
+                "func_143"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global57",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0x1, 0x28)"
+        },
+        {
+          "global": "global57",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0x1, 0x24)"
+        },
+        {
+          "global": "global57",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0x1, 0x25)"
+        },
+        {
+          "global": "global57",
+          "operator": "=",
+          "value": "sys_0(0x10000, 0x1, 0x20)"
+        }
+      ],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x3",
+        "0x4",
+        "0x5",
+        "0x6",
+        "0x7",
+        "0x8",
+        "0x20",
+        "0x24",
+        "0x25",
+        "0x28",
+        "0x10000",
+        "0x10001",
+        "0xb0001"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": [
+          {
+            "domain": "0x10001",
+            "group": "0",
+            "slot": "0x1",
+            "value": "func_143"
+          }
+        ]
+      }
+    },
+    {
+      "name": "func_93",
+      "returnType": "void",
+      "signature": "void func_93()",
+      "startLine": 2315,
+      "endLine": 2357,
+      "lineCount": 43,
+      "calls": [
+        "func_102"
+      ],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global2",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global4",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global6",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global1",
+          "operator": "=",
+          "value": "global2"
+        },
+        {
+          "global": "global3",
+          "operator": "=",
+          "value": "global4"
+        },
+        {
+          "global": "global5",
+          "operator": "=",
+          "value": "global6"
+        },
+        {
+          "global": "global8",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global10",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global49",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global51",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global11",
+          "operator": "=",
+          "value": "0x1"
+        },
+        {
+          "global": "global12",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global15",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global16",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global17",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global57",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global58",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global20",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global18",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global19",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global48",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global62",
+          "operator": "=",
+          "value": "0x1f"
+        },
+        {
+          "global": "global61",
+          "operator": "=",
+          "value": "0xffffffff"
+        },
+        {
+          "global": "global43",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global53",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global38",
+          "operator": "=",
+          "value": "0x1869f"
+        },
+        {
+          "global": "global54",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global64",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global40",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global41",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global42",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global63",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global45",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global46",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global67",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global0",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global66",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global56",
+          "operator": "=",
+          "value": "0"
+        }
+      ],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x1f",
+        "0x1869f",
+        "0xffffffff"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_94",
+      "returnType": "void",
+      "signature": "void func_94()",
+      "startLine": 2358,
+      "endLine": 2364,
+      "lineCount": 7,
+      "calls": [
+        "func_0",
+        "func_136",
+        "func_137"
+      ],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_95",
+      "returnType": "void",
+      "signature": "void func_95(int arg0, int arg1, int arg2, int arg3)",
+      "startLine": 2365,
+      "endLine": 2380,
+      "lineCount": 16,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global22",
+          "operator": "=",
+          "value": "0x2"
+        },
+        {
+          "global": "global22",
+          "operator": "=",
+          "value": "0x1"
+        },
+        {
+          "global": "global25",
+          "operator": "=",
+          "value": "arg0"
+        },
+        {
+          "global": "global23",
+          "operator": "=",
+          "value": "arg1"
+        },
+        {
+          "global": "global24",
+          "operator": "=",
+          "value": "arg2"
+        },
+        {
+          "global": "global26",
+          "operator": "=",
+          "value": "arg3"
+        }
+      ],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x800"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_96",
+      "returnType": "int",
+      "signature": "int func_96(int arg0)",
+      "startLine": 2381,
+      "endLine": 2392,
+      "lineCount": 12,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global40",
+        "global41"
+      ],
+      "constants": [
+        "0x1",
+        "0x8000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_97",
+      "returnType": "int",
+      "signature": "int func_97(int arg0)",
+      "startLine": 2393,
+      "endLine": 2416,
+      "lineCount": 24,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 4,
+          "subcommands": {
+            "0x40000": 2,
+            "0x70002": 1,
+            "0x7000d": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x70002",
+              "args": [
+                "0x70002"
+              ]
+            },
+            {
+              "subcmd": "0x40000",
+              "args": [
+                "0x40000",
+                "0x3",
+                "var1"
+              ]
+            },
+            {
+              "subcmd": "0x7000d",
+              "args": [
+                "0x7000d"
+              ]
+            },
+            {
+              "subcmd": "0x40000",
+              "args": [
+                "0x40000",
+                "0x5"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global20"
+      ],
+      "constants": [
+        "0x1",
+        "0x3",
+        "0x5",
+        "0x64",
+        "0x40000",
+        "0x70002",
+        "0x7000d"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_98",
+      "returnType": "void",
+      "signature": "void func_98(int arg0)",
+      "startLine": 2417,
+      "endLine": 2433,
+      "lineCount": 17,
+      "calls": [],
+      "syscalls": {
+        "sys_1": {
+          "count": 2,
+          "subcommands": {
+            "0xb0006": 1,
+            "0xb000a": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0xb000a",
+              "args": [
+                "0xb000a"
+              ]
+            },
+            {
+              "subcmd": "0xb0006",
+              "args": [
+                "0xb0006"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global54",
+          "operator": "=",
+          "value": "0x80000000 | arg0"
+        },
+        {
+          "global": "global67",
+          "operator": "=",
+          "value": "0x1"
+        }
+      ],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x7",
+        "0xb0006",
+        "0xb000a",
+        "0x80000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_99",
+      "returnType": "int",
+      "signature": "int func_99(int arg0, int arg1, int arg2)",
+      "startLine": 2434,
+      "endLine": 2440,
+      "lineCount": 7,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x2",
+                "var3"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x2",
+        "0x3",
+        "0x8",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_100",
+      "returnType": "int",
+      "signature": "int func_100(int arg0)",
+      "startLine": 2441,
+      "endLine": 2459,
+      "lineCount": 19,
+      "calls": [
+        "func_101",
+        "func_99"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0x10000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x2",
+                "0x81"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global2",
+        "global39"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x3",
+        "0x81",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_101",
+      "returnType": "int",
+      "signature": "int func_101(int arg0)",
+      "startLine": 2460,
+      "endLine": 2501,
+      "lineCount": 42,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x2",
+        "0x4",
+        "0x8",
+        "0x10",
+        "0x14",
+        "0x17",
+        "0x18",
+        "0x19",
+        "0x1a",
+        "0x1b",
+        "0x1c",
+        "0x1d",
+        "0x1e",
+        "0x1f",
+        "0x20",
+        "0x24",
+        "0x28",
+        "0x3e"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_102",
+      "returnType": "void",
+      "signature": "void func_102()",
+      "startLine": 2502,
+      "endLine": 2545,
+      "lineCount": 44,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global68",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global69",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global70",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global71",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global72",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global73",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global74",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global75",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global76",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global77",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global78",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global79",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global80",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global81",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global82",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global83",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global84",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global85",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global86",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global87",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global88",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global89",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global90",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global91",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global92",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global93",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global94",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global95",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global96",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global97",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global98",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global99",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global100",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global101",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global102",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global103",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global104",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global105",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global106",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global107",
+          "operator": "=",
+          "value": "0"
+        }
+      ],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_103",
+      "returnType": "void",
+      "signature": "void func_103()",
+      "startLine": 2546,
+      "endLine": 2562,
+      "lineCount": 17,
+      "calls": [
+        "func_104",
+        "func_105",
+        "func_106",
+        "func_107",
+        "func_108",
+        "func_109",
+        "func_112",
+        "func_113"
+      ],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global106",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global85",
+          "operator": "=",
+          "value": "global83"
+        },
+        {
+          "global": "global83",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global84",
+          "operator": "=",
+          "value": "global83"
+        },
+        {
+          "global": "global107",
+          "operator": "=",
+          "value": "0"
+        }
+      ],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_104",
+      "returnType": "void",
+      "signature": "void func_104()",
+      "startLine": 2563,
+      "endLine": 2694,
+      "lineCount": 132,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x1"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x2"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x4"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x8"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x10"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x20"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x40"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x80"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x100"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x200"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x400"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x800"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x1000"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x2000"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x10000000"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x40000000"
+        }
+      ],
+      "globalReads": [
+        "global100",
+        "global101",
+        "global85",
+        "global86",
+        "global87",
+        "global88",
+        "global89",
+        "global90",
+        "global91",
+        "global92",
+        "global93",
+        "global94",
+        "global95",
+        "global96",
+        "global97",
+        "global98",
+        "global99"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x4",
+        "0x8",
+        "0x10",
+        "0x20",
+        "0x40",
+        "0x80",
+        "0x100",
+        "0x200",
+        "0x400",
+        "0x800",
+        "0x1000",
+        "0x2000",
+        "0x10000000",
+        "0x40000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_105",
+      "returnType": "void",
+      "signature": "void func_105()",
+      "startLine": 2695,
+      "endLine": 2744,
+      "lineCount": 50,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global83",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global83",
+          "operator": "&=",
+          "value": "0x400"
+        },
+        {
+          "global": "global83",
+          "operator": "&=",
+          "value": "0xffffcfff"
+        },
+        {
+          "global": "global83",
+          "operator": "&=",
+          "value": "0xffffd7ff"
+        },
+        {
+          "global": "global83",
+          "operator": "&=",
+          "value": "0xffffe7ff"
+        },
+        {
+          "global": "global83",
+          "operator": "&=",
+          "value": "0xffffff80"
+        },
+        {
+          "global": "global83",
+          "operator": "&=",
+          "value": "0xcffffffe"
+        },
+        {
+          "global": "global83",
+          "operator": "&=",
+          "value": "0xcfffff81"
+        },
+        {
+          "global": "global82",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global83",
+          "operator": "&=",
+          "value": "0xdfffffff"
+        }
+      ],
+      "globalReads": [
+        "global105",
+        "global81"
+      ],
+      "constants": [
+        "0x80",
+        "0x100",
+        "0x200",
+        "0x400",
+        "0x800",
+        "0x1000",
+        "0x2000",
+        "0x10000000",
+        "0xcfffff81",
+        "0xcffffffe",
+        "0xdfffffff",
+        "0xffffcfff",
+        "0xffffd7ff",
+        "0xffffe7ff",
+        "0xffffff80"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_106",
+      "returnType": "void",
+      "signature": "void func_106()",
+      "startLine": 2745,
+      "endLine": 2829,
+      "lineCount": 85,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global74",
+          "operator": "=",
+          "value": "global70 & global4"
+        },
+        {
+          "global": "global74",
+          "operator": "=",
+          "value": "0x28"
+        },
+        {
+          "global": "global74",
+          "operator": "=",
+          "value": "0x18"
+        },
+        {
+          "global": "global74",
+          "operator": "=",
+          "value": "0x24"
+        },
+        {
+          "global": "global74",
+          "operator": "=",
+          "value": "0x14"
+        },
+        {
+          "global": "global75",
+          "operator": "=",
+          "value": "0xe"
+        },
+        {
+          "global": "global70",
+          "operator": "=",
+          "value": "global4 & 0x3c"
+        },
+        {
+          "global": "global71",
+          "operator": "=",
+          "value": "0xe"
+        },
+        {
+          "global": "global72",
+          "operator": "=",
+          "value": "global68 & global4"
+        },
+        {
+          "global": "global73",
+          "operator": "=",
+          "value": "0xe"
+        },
+        {
+          "global": "global76",
+          "operator": "=",
+          "value": "global72"
+        },
+        {
+          "global": "global68",
+          "operator": "=",
+          "value": "global6 & 0x3c"
+        },
+        {
+          "global": "global69",
+          "operator": "=",
+          "value": "0x8"
+        },
+        {
+          "global": "global72",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global76",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global70",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global74",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global68",
+          "operator": "=",
+          "value": "0"
+        }
+      ],
+      "globalReads": [
+        "global4",
+        "global6"
+      ],
+      "constants": [
+        "0x8",
+        "0xe",
+        "0x14",
+        "0x18",
+        "0x24",
+        "0x28",
+        "0x3c"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_107",
+      "returnType": "void",
+      "signature": "void func_107()",
+      "startLine": 2830,
+      "endLine": 2879,
+      "lineCount": 50,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x1"
+        },
+        {
+          "global": "global86",
+          "operator": "=",
+          "value": "0x6"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x2"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x4"
+        },
+        {
+          "global": "global88",
+          "operator": "=",
+          "value": "0x6"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x8"
+        },
+        {
+          "global": "global89",
+          "operator": "=",
+          "value": "0x6"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x10"
+        },
+        {
+          "global": "global90",
+          "operator": "=",
+          "value": "0x6"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x20"
+        },
+        {
+          "global": "global91",
+          "operator": "=",
+          "value": "0x6"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x40"
+        },
+        {
+          "global": "global92",
+          "operator": "=",
+          "value": "0x6"
+        },
+        {
+          "global": "global87",
+          "operator": "=",
+          "value": "0x6"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x10000000"
+        },
+        {
+          "global": "global100",
+          "operator": "=",
+          "value": "0x6"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x20000000"
+        }
+      ],
+      "globalReads": [
+        "global107",
+        "global2",
+        "global3",
+        "global42"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x4",
+        "0x6",
+        "0x8",
+        "0x10",
+        "0x20",
+        "0x40",
+        "0x80",
+        "0x100",
+        "0x10000000",
+        "0x20000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_108",
+      "returnType": "void",
+      "signature": "void func_108()",
+      "startLine": 2880,
+      "endLine": 2906,
+      "lineCount": 27,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global77",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global78",
+          "operator": "=",
+          "value": "0x8"
+        },
+        {
+          "global": "global77",
+          "operator": "=",
+          "value": "func_0"
+        }
+      ],
+      "globalReads": [
+        "global4"
+      ],
+      "constants": [
+        "0x8",
+        "0x80"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_109",
+      "returnType": "void",
+      "signature": "void func_109()",
+      "startLine": 2907,
+      "endLine": 2919,
+      "lineCount": 13,
+      "calls": [
+        "func_110",
+        "func_111"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 1,
+          "subcommands": {
+            "0xf0000": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0xf0000",
+              "args": [
+                "0xf0000",
+                "0x3"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global104",
+          "operator": "=",
+          "value": "sys_0(0xf0000, 0x3)"
+        }
+      ],
+      "globalReads": [],
+      "constants": [
+        "0x3",
+        "0xf0000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_110",
+      "returnType": "void",
+      "signature": "void func_110()",
+      "startLine": 2920,
+      "endLine": 2941,
+      "lineCount": 22,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global79",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global79",
+          "operator": "=",
+          "value": "func_0"
+        },
+        {
+          "global": "global79",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x40000000"
+        },
+        {
+          "global": "global101",
+          "operator": "=",
+          "value": "func_0"
+        }
+      ],
+      "globalReads": [
+        "global2",
+        "global4"
+      ],
+      "constants": [
+        "0x4",
+        "0x8",
+        "0xc",
+        "0x30",
+        "0x40000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_111",
+      "returnType": "void",
+      "signature": "void func_111()",
+      "startLine": 2942,
+      "endLine": 2958,
+      "lineCount": 17,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global80",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x40000000"
+        },
+        {
+          "global": "global101",
+          "operator": "=",
+          "value": "func_0"
+        }
+      ],
+      "globalReads": [
+        "global2"
+      ],
+      "constants": [
+        "0x2",
+        "0x1000",
+        "0x40000000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_112",
+      "returnType": "void",
+      "signature": "void func_112()",
+      "startLine": 2959,
+      "endLine": 3034,
+      "lineCount": 76,
+      "calls": [
+        "func_116"
+      ],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global105",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global105",
+          "operator": "|=",
+          "value": "0x400"
+        },
+        {
+          "global": "global106",
+          "operator": "=",
+          "value": "global4 & 0x1c0"
+        },
+        {
+          "global": "global105",
+          "operator": "|=",
+          "value": "0x80"
+        },
+        {
+          "global": "global106",
+          "operator": "=",
+          "value": "global4 & 0x140"
+        },
+        {
+          "global": "global105",
+          "operator": "|=",
+          "value": "0x100"
+        },
+        {
+          "global": "global106",
+          "operator": "=",
+          "value": "global4 & 0x180"
+        },
+        {
+          "global": "global105",
+          "operator": "|=",
+          "value": "0x200"
+        },
+        {
+          "global": "global106",
+          "operator": "=",
+          "value": "global4 & 0xc0"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x400"
+        },
+        {
+          "global": "global96",
+          "operator": "=",
+          "value": "0x6"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x80"
+        },
+        {
+          "global": "global93",
+          "operator": "=",
+          "value": "0x6"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x100"
+        },
+        {
+          "global": "global94",
+          "operator": "=",
+          "value": "0x6"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "0x200"
+        },
+        {
+          "global": "global95",
+          "operator": "=",
+          "value": "0x6"
+        }
+      ],
+      "globalReads": [
+        "global4"
+      ],
+      "constants": [
+        "0x1",
+        "0x6",
+        "0x80",
+        "0xc0",
+        "0x100",
+        "0x140",
+        "0x180",
+        "0x1c0",
+        "0x200",
+        "0x400"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_113",
+      "returnType": "void",
+      "signature": "void func_113()",
+      "startLine": 3035,
+      "endLine": 3137,
+      "lineCount": 103,
+      "calls": [],
+      "syscalls": {
+        "sys_0": {
+          "count": 2,
+          "subcommands": {
+            "0x90002": 1,
+            "0x90003": 1
+          },
+          "examples": [
+            {
+              "subcmd": "0x90002",
+              "args": [
+                "0x90002",
+                "var1"
+              ]
+            },
+            {
+              "subcmd": "0x90003",
+              "args": [
+                "0x90003",
+                "var1"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [
+        {
+          "global": "global103",
+          "operator": "=",
+          "value": "0"
+        },
+        {
+          "global": "global103",
+          "operator": "|=",
+          "value": "0x1 << var1"
+        },
+        {
+          "global": "global83",
+          "operator": "|=",
+          "value": "var3"
+        },
+        {
+          "global": "global97",
+          "operator": "=",
+          "value": "0x6"
+        },
+        {
+          "global": "global98",
+          "operator": "=",
+          "value": "0x6"
+        },
+        {
+          "global": "global99",
+          "operator": "=",
+          "value": "0x6"
+        }
+      ],
+      "globalReads": [
+        "global20",
+        "global4",
+        "global43",
+        "global6",
+        "global62"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x3",
+        "0x4",
+        "0x5",
+        "0x6",
+        "0x40",
+        "0x80",
+        "0x100",
+        "0x800",
+        "0x1000",
+        "0x2000",
+        "0x4000",
+        "0x90002",
+        "0x90003"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_114",
+      "returnType": "int",
+      "signature": "int func_114(int arg0, int arg1)",
+      "startLine": 3138,
+      "endLine": 3162,
+      "lineCount": 25,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global107",
+        "global2",
+        "global3",
+        "global4"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x5c0"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_115",
+      "returnType": "int",
+      "signature": "int func_115(int arg0)",
+      "startLine": 3163,
+      "endLine": 3179,
+      "lineCount": 17,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global2"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x3c"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_116",
+      "returnType": "int",
+      "signature": "int func_116(int arg0, int arg1)",
+      "startLine": 3180,
+      "endLine": 3197,
+      "lineCount": 18,
+      "calls": [
+        "func_114",
+        "func_115"
+      ],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x2",
+        "0x3c",
+        "0x5c0"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_117",
+      "returnType": "int",
+      "signature": "int func_117(int arg0)",
+      "startLine": 3198,
+      "endLine": 3202,
+      "lineCount": 5,
+      "calls": [
+        "func_116"
+      ],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x400"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_118",
+      "returnType": "int",
+      "signature": "int func_118()",
+      "startLine": 3203,
+      "endLine": 3207,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global83"
+      ],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_119",
+      "returnType": "int",
+      "signature": "int func_119(int arg0)",
+      "startLine": 3208,
+      "endLine": 3212,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global83"
+      ],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_120",
+      "returnType": "void",
+      "signature": "void func_120(int arg0)",
+      "startLine": 3213,
+      "endLine": 3233,
+      "lineCount": 21,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global82",
+          "operator": "=",
+          "value": "0x6"
+        },
+        {
+          "global": "global83",
+          "operator": "&=",
+          "value": "~arg0"
+        },
+        {
+          "global": "global107",
+          "operator": "|=",
+          "value": "0x100"
+        },
+        {
+          "global": "global107",
+          "operator": "|=",
+          "value": "0x40"
+        },
+        {
+          "global": "global107",
+          "operator": "|=",
+          "value": "0x80"
+        }
+      ],
+      "globalReads": [
+        "global106"
+      ],
+      "constants": [
+        "0x6",
+        "0x40",
+        "0x80",
+        "0x100",
+        "0x4581",
+        "0x86fe",
+        "0x10300",
+        "0x10700"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_121",
+      "returnType": "int",
+      "signature": "int func_121()",
+      "startLine": 3234,
+      "endLine": 3238,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global76"
+      ],
+      "constants": [
+        "0x3c"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_122",
+      "returnType": "void",
+      "signature": "void func_122()",
+      "startLine": 3239,
+      "endLine": 3243,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global76",
+          "operator": "=",
+          "value": "0"
+        }
+      ],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_123",
+      "returnType": "int",
+      "signature": "int func_123()",
+      "startLine": 3244,
+      "endLine": 3248,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global70"
+      ],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_124",
+      "returnType": "int",
+      "signature": "int func_124()",
+      "startLine": 3249,
+      "endLine": 3253,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global74"
+      ],
+      "constants": [
+        "0x3c"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_125",
+      "returnType": "int",
+      "signature": "int func_125()",
+      "startLine": 3254,
+      "endLine": 3258,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global74"
+      ],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_126",
+      "returnType": "void",
+      "signature": "void func_126()",
+      "startLine": 3259,
+      "endLine": 3263,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global74",
+          "operator": "=",
+          "value": "0"
+        }
+      ],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_127",
+      "returnType": "int",
+      "signature": "int func_127()",
+      "startLine": 3264,
+      "endLine": 3268,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global4",
+        "global77"
+      ],
+      "constants": [
+        "0x80"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_128",
+      "returnType": "int",
+      "signature": "int func_128()",
+      "startLine": 3269,
+      "endLine": 3273,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global78"
+      ],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_129",
+      "returnType": "void",
+      "signature": "void func_129()",
+      "startLine": 3274,
+      "endLine": 3278,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global78",
+          "operator": "=",
+          "value": "0"
+        }
+      ],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_130",
+      "returnType": "void",
+      "signature": "void func_130()",
+      "startLine": 3279,
+      "endLine": 3283,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global77",
+          "operator": "=",
+          "value": "0"
+        }
+      ],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_131",
+      "returnType": "int",
+      "signature": "int func_131()",
+      "startLine": 3284,
+      "endLine": 3288,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global103"
+      ],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_132",
+      "returnType": "void",
+      "signature": "void func_132(int arg0)",
+      "startLine": 3289,
+      "endLine": 3293,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global81",
+          "operator": "=",
+          "value": "arg0"
+        }
+      ],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_133",
+      "returnType": "int",
+      "signature": "int func_133()",
+      "startLine": 3294,
+      "endLine": 3298,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [
+        "global104"
+      ],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_134",
+      "returnType": "void",
+      "signature": "void func_134()",
+      "startLine": 3299,
+      "endLine": 3306,
+      "lineCount": 8,
+      "calls": [],
+      "syscalls": {
+        "sys_1": {
+          "count": 4,
+          "subcommands": {
+            "0x10000": 4
+          },
+          "examples": [
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x2b",
+                "global83"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x24",
+                "global84"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x2c",
+                "global76"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0",
+                "0x2d",
+                "global78"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global76",
+        "global78",
+        "global83",
+        "global84"
+      ],
+      "constants": [
+        "0x24",
+        "0x2b",
+        "0x2c",
+        "0x2d",
+        "0x10000"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_135",
+      "returnType": "void",
+      "signature": "void func_135()",
+      "startLine": 3307,
+      "endLine": 3313,
+      "lineCount": 7,
+      "calls": [
+        "func_13",
+        "func_14"
+      ],
+      "syscalls": {},
+      "globalWrites": [
+        {
+          "global": "global57",
+          "operator": "=",
+          "value": "0x6d00aeaa"
+        }
+      ],
+      "globalReads": [],
+      "constants": [
+        "0x6d00aeaa"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_136",
+      "returnType": "void",
+      "signature": "void func_136()",
+      "startLine": 3314,
+      "endLine": 3318,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_137",
+      "returnType": "void",
+      "signature": "void func_137()",
+      "startLine": 3319,
+      "endLine": 3323,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_138",
+      "returnType": "void",
+      "signature": "void func_138()",
+      "startLine": 3324,
+      "endLine": 3328,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_139",
+      "returnType": "void",
+      "signature": "void func_139()",
+      "startLine": 3329,
+      "endLine": 3333,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_140",
+      "returnType": "void",
+      "signature": "void func_140()",
+      "startLine": 3334,
+      "endLine": 3338,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_141",
+      "returnType": "void",
+      "signature": "void func_141()",
+      "startLine": 3339,
+      "endLine": 3343,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_142",
+      "returnType": "void",
+      "signature": "void func_142()",
+      "startLine": 3344,
+      "endLine": 3348,
+      "lineCount": 5,
+      "calls": [],
+      "syscalls": {},
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_143",
+      "returnType": "void",
+      "signature": "void func_143()",
+      "startLine": 3349,
+      "endLine": 3503,
+      "lineCount": 155,
+      "calls": [
+        "func_95",
+        "func_96",
+        "func_98"
+      ],
+      "syscalls": {
+        "sys_0": {
+          "count": 26,
+          "subcommands": {
+            "0x90000": 4,
+            "0xd0001": 4,
+            "0xd000b": 4,
+            "0x10000": 3,
+            "0x60000": 3,
+            "0x6000e": 2,
+            "0xc0000": 2,
+            "0xc0001": 2,
+            "0xc0004": 2
+          },
+          "examples": [
+            {
+              "subcmd": "0xc0000",
+              "args": [
+                "0xc0000"
+              ]
+            },
+            {
+              "subcmd": "0xc0004",
+              "args": [
+                "0xc0004"
+              ]
+            },
+            {
+              "subcmd": "0x6000e",
+              "args": [
+                "0x6000e",
+                "0x66ac58f4"
+              ]
+            },
+            {
+              "subcmd": "0xc0001",
+              "args": [
+                "0xc0001"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x11"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x12"
+              ]
+            },
+            {
+              "subcmd": "0x10000",
+              "args": [
+                "0x10000",
+                "0x1",
+                "0x13"
+              ]
+            },
+            {
+              "subcmd": "0x90000",
+              "args": [
+                "0x90000",
+                "0x2"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [
+        "global2",
+        "global20",
+        "global48",
+        "global8"
+      ],
+      "constants": [
+        "0x1",
+        "0x2",
+        "0x3",
+        "0x4",
+        "0x5",
+        "0x6",
+        "0x7",
+        "0x8",
+        "0x9",
+        "0xa",
+        "0xb",
+        "0x10",
+        "0x11",
+        "0x12",
+        "0x13",
+        "0x20",
+        "0x30",
+        "0x3c",
+        "0x40",
+        "0x80",
+        "0x100",
+        "0x200",
+        "0x400",
+        "0x401",
+        "0x800",
+        "0x4000",
+        "0x10000",
+        "0x60000",
+        "0x6000e",
+        "0x90000",
+        "0xc0000",
+        "0xc0001",
+        "0xc0004",
+        "0xd0001",
+        "0xd000b",
+        "0x100002",
+        "0xe962048",
+        "0x178d1109",
+        "0x193fe550",
+        "0x1b89c323",
+        "0x23df217e",
+        "0x31f61d6c",
+        "0x3470c0cf",
+        "0x3ac14535",
+        "0x427fe876",
+        "0x58cc87ce",
+        "0x66ac58f4",
+        "0x6ab12717",
+        "0x6ab85f0d",
+        "0x700bb2c6",
+        "0x7158fa47",
+        "0x8ae55bb1",
+        "0x91ce1efc",
+        "0x99a7a777",
+        "0x9c05b42d",
+        "0xa1635c24",
+        "0xa2236f44",
+        "0xf48d2d49"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    },
+    {
+      "name": "func_144",
+      "returnType": "void",
+      "signature": "void func_144()",
+      "startLine": 3504,
+      "endLine": 3525,
+      "lineCount": 22,
+      "calls": [],
+      "syscalls": {
+        "sys_1": {
+          "count": 18,
+          "subcommands": {
+            "0x10002": 18
+          },
+          "examples": [
+            {
+              "subcmd": "0x10002",
+              "args": [
+                "0x10002",
+                "0x1",
+                "0",
+                "0"
+              ]
+            },
+            {
+              "subcmd": "0x10002",
+              "args": [
+                "0x10002",
+                "0x1",
+                "0xeb859f06",
+                "func_64"
+              ]
+            },
+            {
+              "subcmd": "0x10002",
+              "args": [
+                "0x10002",
+                "0x1",
+                "0xdfdddbd4",
+                "func_66"
+              ]
+            },
+            {
+              "subcmd": "0x10002",
+              "args": [
+                "0x10002",
+                "0x1",
+                "0xf364ad72",
+                "func_78"
+              ]
+            },
+            {
+              "subcmd": "0x10002",
+              "args": [
+                "0x10002",
+                "0x1",
+                "0x991b7b74",
+                "func_60"
+              ]
+            },
+            {
+              "subcmd": "0x10002",
+              "args": [
+                "0x10002",
+                "0x1",
+                "0x37b84dbd",
+                "func_68"
+              ]
+            },
+            {
+              "subcmd": "0x10002",
+              "args": [
+                "0x10002",
+                "0x1",
+                "0x3e0096f",
+                "func_70"
+              ]
+            },
+            {
+              "subcmd": "0x10002",
+              "args": [
+                "0x10002",
+                "0x1",
+                "0xccdd2bf8",
+                "func_48"
+              ]
+            }
+          ]
+        }
+      },
+      "globalWrites": [],
+      "globalReads": [],
+      "constants": [
+        "0x1",
+        "0x10002",
+        "0x3e0096f",
+        "0xadde518",
+        "0x250281ce",
+        "0x2968a90b",
+        "0x37b84dbd",
+        "0x954fc358",
+        "0x95c66b59",
+        "0x991b7b74",
+        "0xa117878a",
+        "0xa19e2f8b",
+        "0xb1e88fbf",
+        "0xccdd2bf8",
+        "0xdfdddbd4",
+        "0xe164cefc",
+        "0xe6a04351",
+        "0xeb859f06",
+        "0xf364ad72"
+      ],
+      "registry": {
+        "actionHandlers": [],
+        "sys1_10001": []
+      }
+    }
+  ]
+}

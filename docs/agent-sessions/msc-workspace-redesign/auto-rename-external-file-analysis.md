@@ -3,6 +3,16 @@
 Goal: determine how the "new" MSC auto-rename works and what external file it should reference,
 grounded in the actual EXVS2 resource dump at `e:\XB\解包\vs2\x64`.
 
+## Related research
+
+- [MSC research index](../../msc-research/README.md)
+- [Dynamic naming and JSON overlay design](../../msc-research/dynamic-naming-overlay.md)
+- [`func_1044` slot callback evidence atlas](../../msc-research/func1044-slot-callback-atlas.md)
+- [`func_1044` simulated rename output](../../msc-research/func1044-simulated-renames.md)
+
+The `func_1044` pair is the concrete slot-callback case study for the generic Auto Rename
+constraints documented here.
+
 ## Two distinct auto-rename systems
 
 | | OLD (0.bin -> 2.bin) | NEW (hash dispatch) |

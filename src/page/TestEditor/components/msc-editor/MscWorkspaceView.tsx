@@ -84,6 +84,22 @@ const FILE_TYPES = [
   { value: "dscex", label: ".dscex" },
 ] as const;
 
+const EXVS_MAPPING_FILE_ID_PATTERN = /^0x[0-9a-fA-F]{8}$/;
+
+function getMscScriptFileIdFromFolderPath(folderPath: string | null): string | null {
+  if (!folderPath) return null;
+  const normalizedPath = folderPath.replace(/\\/g, "/").replace(/\/+$/, "");
+  const folderName = normalizedPath.split("/").pop();
+  if (!folderName || !EXVS_MAPPING_FILE_ID_PATTERN.test(folderName)) return null;
+  return `0x${folderName.slice(2).toUpperCase()}`;
+}
+
+function buildOptionalExvsMappingArgs(mappingPath: string | null): string[] {
+  // --exvsMapping is still an experimental native-truth symbol/relocation layer.
+  // Most MSC repacks can compile without it, so a missing per-script mapping must not block repack.
+  return mappingPath ? ["--exvsMapping", mappingPath] : [];
+}
+
 function matchesFileType(fileName: string, type: string): boolean {
   const lower = fileName.toLowerCase();
   if (type === "all") return true;
@@ -130,14 +146,26 @@ export default function MscWorkspaceView({
     return resourcePath;
   }, []);
 
-  const resolveExvsMappingPath = useCallback(async () => {
+  const resolveOptionalExvsMappingPath = useCallback(async () => {
+    const scriptFileId = getMscScriptFileIdFromFolderPath(mscFolderPath);
+    if (!scriptFileId) return null;
+
+    const resourcePath = await resourceDir();
     const exeDir = await resolveTauriExeDir();
-    const mappingPath = await join(exeDir, "tools", "mappings", "exvs_0xF1EF3B32.native_truth.json");
-    if (!(await exists(mappingPath))) {
-      throw new Error(`MSC workspace: EXVS mapping file not found: ${mappingPath}`);
+    const mappingFileName = `exvs_${scriptFileId}.native_truth.json`;
+    const candidatePaths = [
+      await join(resourcePath, "tools", "mappings", mappingFileName),
+      await join(exeDir, "tools", "mappings", mappingFileName),
+      await join(resourcePath, "tools", mappingFileName),
+      await join(exeDir, "tools", mappingFileName),
+    ];
+
+    for (const mappingPath of Array.from(new Set(candidatePaths))) {
+      if (await exists(mappingPath)) return mappingPath;
     }
-    return mappingPath;
-  }, [resolveTauriExeDir]);
+
+    return null;
+  }, [mscFolderPath, resolveTauriExeDir]);
 
   const fetchFiles = useCallback(async () => {
     if (!mscFolderPath) return;
@@ -231,7 +259,7 @@ export default function MscWorkspaceView({
       const outputPath = getMscConvertOutputPath(inputPath);
       const logPath = getMscConvertLogPath(inputPath);
       const resourcePath = await resourceDir();
-      const exvsMappingPath = await resolveExvsMappingPath();
+      const exvsMappingPath = await resolveOptionalExvsMappingPath();
 
       const command = await Command.create("exec-python", [
         resourcePath + "/tools/mscdec.py",
@@ -240,8 +268,7 @@ export default function MscWorkspaceView({
         outputPath,
         "-log",
         logPath,
-        "--exvsMapping",
-        exvsMappingPath,
+        ...buildOptionalExvsMappingArgs(exvsMappingPath),
       ]).execute();
 
       if (command.code !== 0) {
@@ -281,7 +308,7 @@ export default function MscWorkspaceView({
 
       return `${file.name} converted to C`;
     },
-    [resolveExvsMappingPath],
+    [resolveOptionalExvsMappingPath],
   );
 
   /** Recompile one C file back to its source pack extension. Throws on tool failure. */
@@ -290,7 +317,7 @@ export default function MscWorkspaceView({
       const inputPath = file.path;
       const outputPath = getMscRepackOutputPath(inputPath);
       const resourcePath = await resourceDir();
-      const exvsMappingPath = await resolveExvsMappingPath();
+      const exvsMappingPath = await resolveOptionalExvsMappingPath();
 
       const command = await Command.create(
         "exec-python",
@@ -300,8 +327,7 @@ export default function MscWorkspaceView({
           "-o",
           outputPath,
           "-i",
-          "--exvsMapping",
-          exvsMappingPath,
+          ...buildOptionalExvsMappingArgs(exvsMappingPath),
         ],
         { encoding: "utf-8" },
       ).execute();
@@ -311,7 +337,7 @@ export default function MscWorkspaceView({
       }
       return `${file.name} to ${outputPath.replace(/^.*[\\/]/, "")}`;
     },
-    [resolveExvsMappingPath],
+    [resolveOptionalExvsMappingPath],
   );
 
   const handleConvertOne = useCallback(
