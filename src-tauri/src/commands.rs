@@ -774,6 +774,116 @@ pub async fn remove_asset_workspace(
         .map_err(|e| e.to_string())?
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveLegacyWorkspaceContentResult {
+    pub source_folder_path: String,
+    pub source_structure_json_path: String,
+    pub configured_folder_path: String,
+    pub configured_structure_json_path: String,
+}
+
+fn move_legacy_workspace_content_impl(
+    legacy_asset_root_dir: &Path,
+    configured_asset_root_dir: &Path,
+    hash_hex: &str,
+) -> Result<MoveLegacyWorkspaceContentResult, String> {
+    if !legacy_asset_root_dir.is_dir() {
+        return Err(format!(
+            "Legacy asset root directory does not exist: {}",
+            legacy_asset_root_dir.display()
+        ));
+    }
+
+    let normalized_hash = normalize_hash_hex(hash_hex)?;
+    let source_folder = legacy_asset_root_dir.join(&normalized_hash);
+    let source_struct = legacy_asset_root_dir.join(format!("{normalized_hash}_structure.json"));
+    let configured_folder = configured_asset_root_dir.join(&normalized_hash);
+    let configured_struct =
+        configured_asset_root_dir.join(format!("{normalized_hash}_structure.json"));
+
+    if source_folder == configured_folder || source_struct == configured_struct {
+        return Err("Legacy and configured workspace paths are identical".to_string());
+    }
+    if !source_folder.is_dir() {
+        return Err(format!(
+            "Legacy pack folder not found: {}",
+            source_folder.display()
+        ));
+    }
+    if !source_struct.is_file() {
+        return Err(format!(
+            "Legacy structure JSON not found: {}",
+            source_struct.display()
+        ));
+    }
+    if configured_folder.exists() {
+        return Err(format!(
+            "Configured pack folder already exists: {}",
+            configured_folder.display()
+        ));
+    }
+    if configured_struct.exists() {
+        return Err(format!(
+            "Configured structure JSON already exists: {}",
+            configured_struct.display()
+        ));
+    }
+
+    fs::create_dir_all(configured_asset_root_dir).map_err(|e| {
+        format!(
+            "Failed to create configured asset root {}: {}",
+            configured_asset_root_dir.display(),
+            e
+        )
+    })?;
+
+    fs::rename(&source_folder, &configured_folder).map_err(|e| {
+        format!(
+            "Failed to move legacy pack folder {} -> {}: {}",
+            source_folder.display(),
+            configured_folder.display(),
+            e
+        )
+    })?;
+
+    if let Err(error) = fs::rename(&source_struct, &configured_struct) {
+        if configured_folder.exists() && !source_folder.exists() {
+            let _ = fs::rename(&configured_folder, &source_folder);
+        }
+        return Err(format!(
+            "Failed to move legacy structure JSON {} -> {}: {}",
+            source_struct.display(),
+            configured_struct.display(),
+            error
+        ));
+    }
+
+    Ok(MoveLegacyWorkspaceContentResult {
+        source_folder_path: normalize_path(&source_folder),
+        source_structure_json_path: normalize_path(&source_struct),
+        configured_folder_path: normalize_path(&configured_folder),
+        configured_structure_json_path: normalize_path(&configured_struct),
+    })
+}
+
+#[tauri::command]
+pub async fn move_legacy_workspace_content(
+    legacy_asset_root_dir: String,
+    configured_asset_root_dir: String,
+    hash_hex: String,
+) -> Result<MoveLegacyWorkspaceContentResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        move_legacy_workspace_content_impl(
+            &PathBuf::from(legacy_asset_root_dir),
+            &PathBuf::from(configured_asset_root_dir),
+            &hash_hex,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestTreeNode {
@@ -1775,6 +1885,163 @@ mod character_asset_command_tests {
             .path()
             .join("0xBDBE6FEA_structure.json")
             .exists());
+    }
+
+    #[test]
+    fn move_legacy_workspace_content_moves_real_pack_pair_to_configured_route() {
+        let workspace = tempfile::tempdir().unwrap();
+        let legacy_root = workspace.path();
+        let configured_root = workspace.path().join("012list");
+        seed_pack_pair(legacy_root, "0x036B9E67");
+
+        let result =
+            move_legacy_workspace_content_impl(legacy_root, &configured_root, "0x036B9E67")
+                .unwrap();
+
+        assert!(!legacy_root.join("0x036B9E67").exists());
+        assert!(!legacy_root.join("0x036B9E67_structure.json").exists());
+        assert!(configured_root.join("0x036B9E67").is_dir());
+        assert!(configured_root.join("0x036B9E67_structure.json").is_file());
+        assert!(configured_root.join("0x036B9E67/asset.bin").is_file());
+        assert_eq!(
+            result.configured_folder_path,
+            normalize_path(&configured_root.join("0x036B9E67"))
+        );
+    }
+
+    #[test]
+    fn move_legacy_workspace_content_moves_all_fixed_content_packs_on_unicode_paths() {
+        let workspace = tempfile::tempdir().unwrap();
+        let legacy_root = workspace.path().join("解包").join("com").join("file");
+        fs::create_dir_all(&legacy_root).unwrap();
+        let content_routes = [
+            ("0x036B9E67", "012list"),
+            ("0xDFD38C70", "012list"),
+            ("0xB7367090", "012list"),
+            ("0xFF832E7F", "041cpm"),
+            ("0x49235031", "009gui"),
+            ("0xA0253AA0", "009gui"),
+            ("0xCE74091E", "012list"),
+            ("0x3CC8B10B", "009gui"),
+            ("0x0CEE3991", "009gui"),
+        ];
+
+        for (hash_hex, _) in content_routes {
+            seed_pack_pair(&legacy_root, hash_hex);
+        }
+
+        for (hash_hex, route_prefix) in content_routes {
+            let configured_root = legacy_root.join(route_prefix);
+            let result =
+                move_legacy_workspace_content_impl(&legacy_root, &configured_root, hash_hex)
+                    .unwrap();
+
+            assert!(!legacy_root.join(hash_hex).exists());
+            assert!(!legacy_root
+                .join(format!("{hash_hex}_structure.json"))
+                .exists());
+            assert_eq!(
+                fs::read(configured_root.join(hash_hex).join("asset.bin")).unwrap(),
+                b"asset"
+            );
+            assert_eq!(
+                fs::read_to_string(configured_root.join(format!("{hash_hex}_structure.json")))
+                    .unwrap(),
+                format!(r#"{{"fileUrl":"{hash_hex}/asset.bin"}}"#)
+            );
+            assert_eq!(
+                result.configured_folder_path,
+                normalize_path(&configured_root.join(hash_hex))
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "requires TEST_EDITOR_LEGACY_FIXTURE_ROOT"]
+    fn move_legacy_workspace_content_moves_copied_real_workspace_packs() {
+        fn recursive_file_stats(root: &Path) -> (usize, u64) {
+            let mut count = 0;
+            let mut bytes = 0;
+            for entry in fs::read_dir(root).unwrap() {
+                let entry = entry.unwrap();
+                let path = entry.path();
+                if path.is_dir() {
+                    let (child_count, child_bytes) = recursive_file_stats(&path);
+                    count += child_count;
+                    bytes += child_bytes;
+                } else {
+                    count += 1;
+                    bytes += entry.metadata().unwrap().len();
+                }
+            }
+            (count, bytes)
+        }
+
+        let fixture_root = PathBuf::from(
+            std::env::var("TEST_EDITOR_LEGACY_FIXTURE_ROOT")
+                .expect("TEST_EDITOR_LEGACY_FIXTURE_ROOT must point to a flat workspace root"),
+        );
+        let workspace = tempfile::tempdir().unwrap();
+        let legacy_root = workspace.path().join("解包").join("com").join("file");
+        fs::create_dir_all(&legacy_root).unwrap();
+        let fixture_cases = [
+            ("0xDFD38C70", "012list"),
+            ("0xB7367090", "012list"),
+            ("0xFF832E7F", "041cpm"),
+            ("0xCE74091E", "012list"),
+            ("0x3CC8B10B", "009gui"),
+        ];
+
+        for (hash_hex, route_prefix) in fixture_cases {
+            let source_folder = fixture_root.join(hash_hex);
+            let source_struct = fixture_root.join(format!("{hash_hex}_structure.json"));
+            assert!(
+                source_folder.is_dir() && source_struct.is_file(),
+                "real fixture pair is missing for {hash_hex}"
+            );
+
+            let copied_folder = legacy_root.join(hash_hex);
+            let copied_struct = legacy_root.join(format!("{hash_hex}_structure.json"));
+            copy_dir_recursive(&source_folder, &copied_folder).unwrap();
+            fs::copy(&source_struct, &copied_struct).unwrap();
+            let expected_folder_stats = recursive_file_stats(&copied_folder);
+            let expected_struct_bytes = fs::read(&copied_struct).unwrap();
+
+            let configured_root = legacy_root.join(route_prefix);
+            move_legacy_workspace_content_impl(&legacy_root, &configured_root, hash_hex).unwrap();
+
+            assert_eq!(
+                recursive_file_stats(&configured_root.join(hash_hex)),
+                expected_folder_stats
+            );
+            assert_eq!(
+                fs::read(configured_root.join(format!("{hash_hex}_structure.json"))).unwrap(),
+                expected_struct_bytes
+            );
+            assert!(source_folder.is_dir());
+            assert!(source_struct.is_file());
+        }
+    }
+
+    #[test]
+    fn move_legacy_workspace_content_rejects_existing_configured_target() {
+        let workspace = tempfile::tempdir().unwrap();
+        let legacy_root = workspace.path();
+        let configured_root = workspace.path().join("012list");
+        seed_pack_pair(legacy_root, "0x036B9E67");
+        seed_pack_pair(&configured_root, "0x036B9E67");
+
+        let err = move_legacy_workspace_content_impl(legacy_root, &configured_root, "0x036B9E67")
+            .expect_err("existing configured target must block migration");
+
+        assert!(
+            err.contains("Configured pack folder already exists"),
+            "unexpected error: {err}"
+        );
+        assert!(legacy_root.join("0x036B9E67").is_dir());
+        assert!(legacy_root.join("0x036B9E67_structure.json").is_file());
+        assert!(configured_root.join("0x036B9E67").is_dir());
+        assert!(configured_root.join("0x036B9E67_structure.json").is_file());
     }
 }
 

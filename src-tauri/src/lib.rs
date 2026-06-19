@@ -94,6 +94,7 @@ pub fn run() {
             commands::card_icon_batch_replace_with_dds_format,
             commands::copy_asset_as_new,
             commands::remove_asset_workspace,
+            commands::move_legacy_workspace_content,
             commands::write_files_batch_base64,
             commands::extract_fhm2d_to_folder,
             character_id_preview::character_id_memory_preview_rows,

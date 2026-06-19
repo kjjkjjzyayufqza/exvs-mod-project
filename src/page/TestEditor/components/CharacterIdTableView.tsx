@@ -40,6 +40,7 @@ import { extractAsset } from "./character-id-table/extractFhm2d";
 import { resolveFhm2dPackPaths } from "@/services/testEditorWorkspace/paths";
 import { resolveWorkspaceContent } from "@/services/testEditorWorkspace/contentCatalog";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
+import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
 
 interface CharacterIdTableViewProps {
     folderPath: string;
@@ -850,12 +851,17 @@ export default function CharacterIdTableView({
                             <div className="text-xs text-muted-foreground mt-1">
                                 Loaded: {loadState.table.CharacterCount} rows
                             </div>
-                            {!loadState.writable ? (
-                                <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300">
-                                    Legacy flat workspace content is read-only. Writes target{" "}
-                                    <span className="font-mono break-all">{loadState.configuredFilePath}</span>.
-                                </div>
-                            ) : null}
+                            <LegacyWorkspaceMoveNotice
+                                workspaceRoot={folderPath}
+                                workspaceDocument={workspaceDocument}
+                                contentId="character-id-table"
+                                sourceLayout={loadState.sourceLayout}
+                                configuredPath={loadState.configuredFilePath}
+                                onMoved={() =>
+                                    load({ preserveSelectionId: selectedRow?.CharacterId ?? null })
+                                }
+                                className="mt-2"
+                            />
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                             <Button size="sm" variant="outline" onClick={() => void load()} className="inline-flex items-center gap-2">

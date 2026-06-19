@@ -38,6 +38,7 @@ import {
 } from "./character-cost/CharacterCostJson";
 import { resolveWorkspaceContent } from "@/services/testEditorWorkspace/contentCatalog";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
+import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
 
 const CHARACTER_COST_IMPORT_MODAL_DIMENSIONS = {
   width: 520,
@@ -254,6 +255,16 @@ export default function CharacterCostView({
     if (selectedIndex < 0) return null;
     return tableData[selectedIndex] ?? null;
   }, [selectedIndex, tableData]);
+
+  const handleLegacyContentMoved = useCallback(async () => {
+    const preserveSelectionId = selectedRow?.CharacterId ?? null;
+    lastLoadKeyRef.current = { playable: "", boss: "", zako: "" };
+    setPanelState(emptyPanels());
+    setDirty(emptyDirty());
+    setSelectedIndexByTab(emptySelected());
+    setNewRowIndicesByTab(emptyNewRowIndices());
+    await loadPanel(subTab, { preserveSelectionId });
+  }, [loadPanel, selectedRow?.CharacterId, subTab]);
 
   const estimateRowSize = useCallback(() => 52, []);
   const rowVirtualizer = useVirtualizer({
@@ -637,12 +648,15 @@ export default function CharacterCostView({
                     {COST_FILES[subTab]} — {loadState.table.CharacterCount} rows · CommandsCount{" "}
                     {loadState.table.CommandsCount}
                   </div>
-                  {!loadState.writable ? (
-                    <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300">
-                      Legacy flat workspace content is read-only. Writes target{" "}
-                      <span className="font-mono break-all">{loadState.configuredFilePath}</span>.
-                    </div>
-                  ) : null}
+                  <LegacyWorkspaceMoveNotice
+                    workspaceRoot={folderPath}
+                    workspaceDocument={workspaceDocument}
+                    contentId="character-cost"
+                    sourceLayout={loadState.sourceLayout}
+                    configuredPath={loadState.configuredFilePath}
+                    onMoved={handleLegacyContentMoved}
+                    className="mt-2"
+                  />
                 </div>
                 <div className="flex flex-wrap items-center gap-2 shrink-0 justify-end">
                   <Button size="sm" variant="outline" onClick={() => void loadPanel(subTab)} className="inline-flex items-center gap-2">

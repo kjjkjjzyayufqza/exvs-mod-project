@@ -17,6 +17,7 @@ import {
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 import { SeriesEditor } from "./series-list/SeriesEditor";
 import { extractA0253FirstFolderSeriesBaseNameOrder } from "./series-list/seriesImage";
+import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
 
 interface SeriesListViewProps {
   folderPath: string;
@@ -426,12 +427,15 @@ export default function SeriesListView({
                   Loaded: {fileMeta.count} series, {fileMeta.commands} commands
                 </div>
               )}
-              {!loadState.writable ? (
-                <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300">
-                  Legacy flat workspace content is read-only. Writes target{" "}
-                  <span className="font-mono break-all">{loadState.configuredFilePath}</span>.
-                </div>
-              ) : null}
+              <LegacyWorkspaceMoveNotice
+                workspaceRoot={folderPath}
+                workspaceDocument={workspaceDocument}
+                contentId="series-list"
+                sourceLayout={loadState.sourceLayout}
+                configuredPath={loadState.configuredFilePath}
+                onMoved={load}
+                className="mt-2"
+              />
               <div className="text-xs text-muted-foreground break-all mt-2 flex items-center gap-1">
                 Series Image List: {seriesImageCountState.dirPath || "-"}
                 {seriesImageCountState.dirPath && (
@@ -456,6 +460,17 @@ export default function SeriesListView({
                       ? "Failed"
                       : "-"}
               </div>
+              {seriesImageCountState.status === "ready" ? (
+                <LegacyWorkspaceMoveNotice
+                  workspaceRoot={folderPath}
+                  workspaceDocument={workspaceDocument}
+                  contentId="series-icons"
+                  sourceLayout={seriesImageCountState.sourceLayout}
+                  configuredPath={seriesImageCountState.configuredStructureJsonPath}
+                  onMoved={loadSeriesImageCount}
+                  className="mt-2"
+                />
+              ) : null}
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <Button size="sm" variant="outline" onClick={() => void load()} className="inline-flex items-center gap-2">

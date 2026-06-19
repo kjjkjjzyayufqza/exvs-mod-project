@@ -19,6 +19,7 @@ import { CardIconList } from "./card-icon-list/CardIconList";
 import { CardIconAddDialog } from "./card-icon-list/CardIconAddDialog";
 import { CardIconBatchReplaceDialog } from "./card-icon-list/CardIconBatchReplaceDialog";
 import { extractCardIconItems, removeCardIconFromStructureJson } from "./card-icon-list/cardIconStructure";
+import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
 
 interface NutexbIconListViewProps {
   folderPath: string;
@@ -721,12 +722,14 @@ export function NutexbIconListView({
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground">Loaded: {meta?.count ?? 0} icons</div>
-                {!loadState.writable ? (
-                  <div className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300">
-                    Legacy flat workspace content is read-only. Writes target{" "}
-                    <span className="font-mono break-all">{loadState.configuredFilePath}</span>.
-                  </div>
-                ) : null}
+                <LegacyWorkspaceMoveNotice
+                  workspaceRoot={folderPath}
+                  workspaceDocument={workspaceDocument}
+                  contentId={contentId}
+                  sourceLayout={loadState.sourceLayout}
+                  configuredPath={loadState.configuredFilePath}
+                  onMoved={() => load({ preserveSelection: true })}
+                />
               </div>
               <div className="flex-1 min-w-0 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -747,11 +750,15 @@ export function NutexbIconListView({
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground">Loaded: {secondaryMeta?.count ?? 0} icons</div>
-                {secondaryLoadState.status === "ready" && !secondaryLoadState.writable ? (
-                  <div className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300">
-                    Legacy flat workspace content is read-only. Writes target{" "}
-                    <span className="font-mono break-all">{secondaryLoadState.configuredFilePath}</span>.
-                  </div>
+                {secondaryLoadState.status === "ready" && secondaryContentId ? (
+                  <LegacyWorkspaceMoveNotice
+                    workspaceRoot={folderPath}
+                    workspaceDocument={workspaceDocument}
+                    contentId={secondaryContentId}
+                    sourceLayout={secondaryLoadState.sourceLayout}
+                    configuredPath={secondaryLoadState.configuredFilePath}
+                    onMoved={() => loadSecondary({ preserveSelection: true })}
+                  />
                 ) : null}
               </div>
               </div>
@@ -774,12 +781,15 @@ export function NutexbIconListView({
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">Loaded: {meta?.count ?? 0} icons</div>
-                {!loadState.writable ? (
-                  <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300">
-                    Legacy flat workspace content is read-only. Writes target{" "}
-                    <span className="font-mono break-all">{loadState.configuredFilePath}</span>.
-                  </div>
-                ) : null}
+                <LegacyWorkspaceMoveNotice
+                  workspaceRoot={folderPath}
+                  workspaceDocument={workspaceDocument}
+                  contentId={contentId}
+                  sourceLayout={loadState.sourceLayout}
+                  configuredPath={loadState.configuredFilePath}
+                  onMoved={() => load({ preserveSelection: true })}
+                  className="mt-2"
+                />
                 <div className="text-xs text-muted-foreground break-all flex items-center gap-1 mt-2">
                   Convert Dir: {meta?.convertDirPath ?? "-"}
                   {meta?.convertDirPath && (

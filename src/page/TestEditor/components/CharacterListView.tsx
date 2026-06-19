@@ -42,6 +42,7 @@ import {
   type WorkspaceContentId,
 } from "@/services/testEditorWorkspace/contentCatalog";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
+import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
 
 interface CharacterListViewProps {
   folderPath: string;
@@ -694,12 +695,15 @@ export default function CharacterListView({
                   Loaded: {fileMeta.count} characters, {fileMeta.commands} commands
                 </div>
               )}
-              {!loadState.writable ? (
-                <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300">
-                  Legacy flat workspace content is read-only. Writes target{" "}
-                  <span className="font-mono break-all">{loadState.configuredFilePath}</span>.
-                </div>
-              ) : null}
+              <LegacyWorkspaceMoveNotice
+                workspaceRoot={folderPath}
+                workspaceDocument={workspaceDocument}
+                contentId="character-list"
+                sourceLayout={loadState.sourceLayout}
+                configuredPath={loadState.configuredFilePath}
+                onMoved={handleReloadAll}
+                className="mt-2"
+              />
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <Button size="sm" variant="outline" onClick={handleReloadAll} className="inline-flex items-center gap-2">

@@ -45,6 +45,7 @@ import {
 } from "@/services/testEditorWorkspace/contentCatalog";
 import { resolveWorkspaceRouteRoot } from "@/services/testEditorWorkspace/paths";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
+import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
 
 const STAGE_LIST_HASH = "0xCE74091E";
 const STAGE_INFO_MODAL_DIMENSIONS = {
@@ -887,11 +888,16 @@ export default function StageListView({
                   {fileMeta.secondary ? <div className="text-xs text-muted-foreground mt-1 break-all">{fileMeta.secondary}</div> : null}
                 </>
               )}
-              {!isGvsActive && loadState.status === "ready" && !loadState.writable ? (
-                <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300">
-                  Legacy flat workspace content is read-only. Writes target{" "}
-                  <span className="font-mono break-all">{loadState.configuredFilePath}</span>.
-                </div>
+              {!isGvsActive && loadState.status === "ready" ? (
+                <LegacyWorkspaceMoveNotice
+                  workspaceRoot={folderPath}
+                  workspaceDocument={workspaceDocument}
+                  contentId="stage-list"
+                  sourceLayout={loadState.sourceLayout}
+                  configuredPath={loadState.configuredFilePath}
+                  onMoved={load}
+                  className="mt-2"
+                />
               ) : null}
             </div>
             <div className="flex flex-col items-end gap-2 shrink-0">
