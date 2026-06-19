@@ -27,3 +27,13 @@ export interface ParsedWorkspaceDocument {
   issues: WorkspaceValidationIssue[];
   source: "defaults" | "workspace";
 }
+
+export interface WorkspacePackIdentity {
+  packKey: string;
+  routeId: WorkspaceAssetRouteId | null;
+  prefix: string;
+  hashFolderName: string;
+  folderPath: string;
+  structureJsonPath: string;
+  sourceLayout: "configured" | "legacy";
+}
