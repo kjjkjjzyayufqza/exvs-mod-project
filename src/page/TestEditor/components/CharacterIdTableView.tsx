@@ -1,7 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { exists, readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { dirname, join } from "@tauri-apps/api/path";
+import { dirname } from "@tauri-apps/api/path";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { Buffer } from "buffer";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
@@ -38,6 +38,7 @@ import { CharacterAssetField } from "./character-id-table/CharacterAssetField";
 import { filterCharacterIdTableRows } from "./character-id-table/characterIdTableSearch";
 import { extractAsset } from "./character-id-table/extractFhm2d";
 import { resolveFhm2dPackPaths } from "@/services/testEditorWorkspace/paths";
+import { resolveWorkspaceContent } from "@/services/testEditorWorkspace/contentCatalog";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 
 interface CharacterIdTableViewProps {
@@ -54,7 +55,14 @@ type LoadState =
     | { status: "idle" }
     | { status: "loading" }
     | { status: "error"; filePath: string; message: string }
-    | { status: "ready"; filePath: string; table: CharacterIdTable };
+    | {
+        status: "ready";
+        filePath: string;
+        configuredFilePath: string;
+        sourceLayout: "configured" | "legacy" | "missing";
+        writable: boolean;
+        table: CharacterIdTable;
+    };
 
 const CLIPBOARD_PREFIX = "CHARACTER_ID_TABLE_FIELDS_V1";
 const REQUIRED_FIELD_KEYS = ["Model", "Effect", "Sound", "Param", "Msc", "Motion"] as const;
@@ -155,9 +163,13 @@ export default function CharacterIdTableView({
         onUnsavedChanges?.(false);
     }, [onUnsavedChanges]);
 
-    const resolveFilePath = useCallback(async () => {
-        return await join(folderPath, "0x036B9E67", "character_id_table.bin");
-    }, [folderPath]);
+    const resolveTableContent = useCallback(async () => {
+        return await resolveWorkspaceContent(
+            folderPath,
+            workspaceDocument,
+            "character-id-table",
+        );
+    }, [folderPath, workspaceDocument]);
 
     const load = useCallback(async (options?: { preserveSelectionId?: number | null }) => {
         if (!folderPath) {
@@ -166,14 +178,31 @@ export default function CharacterIdTableView({
             return;
         }
 
-        const filePath = await resolveFilePath();
+        const content = await resolveTableContent();
+        const filePath = content.existing?.filePath ?? content.configured.filePath;
+        if (!filePath || !content.configured.filePath) {
+            setLoadState({
+                status: "error",
+                filePath: content.configured.folderPath,
+                message: "Character ID table content path is not configured",
+            });
+            resetEditorState();
+            return;
+        }
         setLoadState({ status: "loading" });
         try {
             console.log("filePath", filePath);
             const fileData = await readFile(filePath);
             const table = new CharacterIdTable(Buffer.from(fileData));
             console.log("table", table);
-            setLoadState({ status: "ready", filePath, table });
+            setLoadState({
+                status: "ready",
+                filePath,
+                configuredFilePath: content.configured.filePath,
+                sourceLayout: content.sourceLayout,
+                writable: content.writable,
+                table,
+            });
             if (options?.preserveSelectionId !== undefined && options?.preserveSelectionId !== null) {
                 const nextIndex = table.CharacterData.findIndex((row) => row.CharacterId === options.preserveSelectionId);
                 setSelectedIndex(nextIndex);
@@ -193,15 +222,16 @@ export default function CharacterIdTableView({
             setLoadState({ status: "error", filePath, message: error instanceof Error ? error.message : "Unknown error" });
             resetEditorState();
         }
-    }, [folderPath, onUnsavedChanges, resetEditorState, resolveFilePath]);
+    }, [folderPath, onUnsavedChanges, resetEditorState, resolveTableContent]);
 
     useEffect(() => {
         if (!isActive) return;
-        const key = `${folderPath}::characteridtable`;
+        const listRoute = workspaceDocument.assetRoutes["list.character"];
+        const key = `${folderPath}::characteridtable::${workspaceDocument.legacyReadFallback}::${listRoute?.prefix ?? ""}`;
         if (key === lastLoadedKeyRef.current) return;
         lastLoadedKeyRef.current = key;
         void load();
-    }, [folderPath, isActive, load]);
+    }, [folderPath, isActive, load, workspaceDocument]);
 
     const tableData = useMemo(() => {
         if (loadState.status !== "ready") return [];
@@ -350,7 +380,7 @@ export default function CharacterIdTableView({
     }, []);
 
     const updateSelectedRowField = useCallback((key: keyof CharacterIdTableData, value: number) => {
-        if (loadState.status !== "ready") return;
+        if (loadState.status !== "ready" || !loadState.writable) return;
         if (selectedIndex < 0) return;
 
         updateTable((prevTable) => {
@@ -372,14 +402,14 @@ export default function CharacterIdTableView({
 
         setHasChanges(true);
         onUnsavedChanges?.(true);
-    }, [loadState.status, onUnsavedChanges, selectedIndex, updateTable]);
+    }, [loadState, onUnsavedChanges, selectedIndex, updateTable]);
 
     const handleAssetFieldUpdate = useCallback((fieldKey: string, newValue: number) => {
         updateSelectedRowField(fieldKey as keyof CharacterIdTableData, newValue);
     }, [updateSelectedRowField]);
 
     const updateSelectedRowFields = useCallback((fields: ClipboardPayload["fields"]) => {
-        if (loadState.status !== "ready") return;
+        if (loadState.status !== "ready" || !loadState.writable) return;
         if (selectedIndex < 0) return;
 
         updateTable((prevTable) => {
@@ -401,10 +431,11 @@ export default function CharacterIdTableView({
 
         setHasChanges(true);
         onUnsavedChanges?.(true);
-    }, [loadState.status, onUnsavedChanges, selectedIndex, updateTable]);
+    }, [loadState, onUnsavedChanges, selectedIndex, updateTable]);
 
     const handleDelete = useCallback(
         (index: number) => {
+            if (loadState.status !== "ready" || !loadState.writable) return;
             updateTable((prevTable) => {
                 const nextRows = prevTable.CharacterData.filter((_, i) => i !== index);
                 const next = Object.assign(Object.create(Object.getPrototypeOf(prevTable)), prevTable, {
@@ -423,7 +454,7 @@ export default function CharacterIdTableView({
                 setSelectedIndex((v) => v - 1);
             }
         },
-        [onUnsavedChanges, selectedIndex, updateTable]
+        [loadState, onUnsavedChanges, selectedIndex, updateTable]
     );
 
     const openDeleteDialog = useCallback((index: number) => {
@@ -522,6 +553,7 @@ export default function CharacterIdTableView({
     }, [closePasteDialog, pasteCandidate, updateSelectedRowFields]);
 
     const handleAdd = useCallback(() => {
+        if (loadState.status !== "ready" || !loadState.writable) return;
         updateTable((prevTable) => {
             const maxId = Math.max(...prevTable.CharacterData.map((r) => r.CharacterId), 0);
             const newRow: CharacterIdTableData = {
@@ -545,9 +577,10 @@ export default function CharacterIdTableView({
         onUnsavedChanges?.(true);
 
         setSelectedIndex(tableData.length);
-    }, [onUnsavedChanges, tableData.length, updateTable]);
+    }, [loadState, onUnsavedChanges, tableData.length, updateTable]);
 
     const handleCopy = useCallback((index: number) => {
+        if (loadState.status !== "ready" || !loadState.writable) return;
         updateTable((prevTable) => {
             const sourceRow = prevTable.CharacterData[index];
             if (!sourceRow) return prevTable;
@@ -567,10 +600,14 @@ export default function CharacterIdTableView({
         setSelectedIndex(newIndex);
         setHasChanges(true);
         onUnsavedChanges?.(true);
-    }, [onUnsavedChanges, tableData.length, updateTable]);
+    }, [loadState, onUnsavedChanges, tableData.length, updateTable]);
 
     const handleSaveFile = useCallback(async () => {
         if (loadState.status !== "ready") return;
+        if (!loadState.writable) {
+            toast.error("Legacy flat workspace content is read-only");
+            return;
+        }
         const filePath = loadState.filePath;
         try {
             const backupPath = filePath.replace(/\.bin$/i, "_bak.bin");
@@ -652,7 +689,7 @@ export default function CharacterIdTableView({
     }, [isExporting, loadState]);
 
     const handlePickImportJson = useCallback(async () => {
-        if (loadState.status !== "ready") return;
+        if (loadState.status !== "ready" || !loadState.writable) return;
         if (isImporting) return;
 
         setIsImporting(true);
@@ -677,7 +714,7 @@ export default function CharacterIdTableView({
     }, [isImporting, loadState]);
 
     const handleConfirmImport = useCallback(() => {
-        if (loadState.status !== "ready") return;
+        if (loadState.status !== "ready" || !loadState.writable) return;
         if (!importPreview) return;
         if (isImporting) return;
 
@@ -813,6 +850,12 @@ export default function CharacterIdTableView({
                             <div className="text-xs text-muted-foreground mt-1">
                                 Loaded: {loadState.table.CharacterCount} rows
                             </div>
+                            {!loadState.writable ? (
+                                <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300">
+                                    Legacy flat workspace content is read-only. Writes target{" "}
+                                    <span className="font-mono break-all">{loadState.configuredFilePath}</span>.
+                                </div>
+                            ) : null}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                             <Button size="sm" variant="outline" onClick={() => void load()} className="inline-flex items-center gap-2">
@@ -823,7 +866,7 @@ export default function CharacterIdTableView({
                                 size="sm"
                                 variant="outline"
                                 onClick={() => void handlePickImportJson()}
-                                disabled={isImporting || isExporting}
+                                disabled={!loadState.writable || isImporting || isExporting}
                                 className="inline-flex items-center gap-2"
                                 title="Import character id table from JSON"
                             >
@@ -841,7 +884,7 @@ export default function CharacterIdTableView({
                                 <Download className="w-4 h-4" />
                                 Export JSON
                             </Button>
-                            <Button size="sm" onClick={() => void handleSaveFile()} disabled={!hasChanges} className="inline-flex items-center gap-2">
+                            <Button size="sm" onClick={() => void handleSaveFile()} disabled={!loadState.writable || !hasChanges} className="inline-flex items-center gap-2">
                                 <Save className="w-4 h-4" />
                                 Save File
                             </Button>
@@ -854,7 +897,7 @@ export default function CharacterIdTableView({
                         <div className="w-1/3 border rounded-lg p-3 overflow-hidden flex flex-col min-h-0">
                             <div className="flex items-center justify-between mb-3">
                                 <div className="font-semibold text-sm">Rows ({tableData.length})</div>
-                                <Button size="sm" onClick={handleAdd} className="inline-flex items-center gap-2">
+                                <Button size="sm" onClick={handleAdd} disabled={!loadState.writable} className="inline-flex items-center gap-2">
                                     <Plus className="w-4 h-4" />
                                     Add
                                 </Button>
@@ -912,6 +955,7 @@ export default function CharacterIdTableView({
                                                                 e.stopPropagation();
                                                                 handleCopy(idx);
                                                             }}
+                                                            disabled={!loadState.writable}
                                                             title="Copy as new"
                                                         >
                                                             <Copy className="w-4 h-4" />
@@ -924,6 +968,7 @@ export default function CharacterIdTableView({
                                                                 e.stopPropagation();
                                                                 openDeleteDialog(idx);
                                                             }}
+                                                            disabled={!loadState.writable}
                                                             title="Delete"
                                                         >
                                                             <Trash2 className="w-4 h-4" />
@@ -962,7 +1007,7 @@ export default function CharacterIdTableView({
                                             size="sm"
                                             variant="outline"
                                             onClick={() => void handlePasteRequest()}
-                                            disabled={!clipboardPayload || clipboardPayload.sourceCharacterId === selectedRow.CharacterId}
+                                            disabled={!loadState.writable || !clipboardPayload || clipboardPayload.sourceCharacterId === selectedRow.CharacterId}
                                         >
                                             <Clipboard className="w-4 h-4 mr-2" />
                                             Paste fields
@@ -985,7 +1030,7 @@ export default function CharacterIdTableView({
                                                 label="Character ID"
                                                 value={selectedRow.CharacterId}
                                                 property="CharacterId"
-                                                editable
+                                                editable={loadState.writable}
                                                 editingProperty={null}
                                                 editValue=""
                                                 validationError=""
@@ -1004,7 +1049,7 @@ export default function CharacterIdTableView({
                                                     label="Model"
                                                     value={selectedRow.Model}
                                                     property="Model"
-                                                    editable
+                                                    editable={loadState.writable}
                                                     variant="compact"
                                                     editingProperty={null}
                                                     editValue=""
@@ -1034,7 +1079,7 @@ export default function CharacterIdTableView({
                                                     label="Effect"
                                                     value={selectedRow.Effect}
                                                     property="Effect"
-                                                    editable
+                                                    editable={loadState.writable}
                                                     variant="compact"
                                                     editingProperty={null}
                                                     editValue=""
@@ -1064,7 +1109,7 @@ export default function CharacterIdTableView({
                                                     label="Sound"
                                                     value={selectedRow.Sound}
                                                     property="Sound"
-                                                    editable
+                                                    editable={loadState.writable}
                                                     variant="compact"
                                                     editingProperty={null}
                                                     editValue=""
@@ -1094,7 +1139,7 @@ export default function CharacterIdTableView({
                                                     label="Param"
                                                     value={selectedRow.Param}
                                                     property="Param"
-                                                    editable
+                                                    editable={loadState.writable}
                                                     variant="compact"
                                                     editingProperty={null}
                                                     editValue=""
@@ -1124,7 +1169,7 @@ export default function CharacterIdTableView({
                                                     label="MSC"
                                                     value={selectedRow.Msc}
                                                     property="Msc"
-                                                    editable
+                                                    editable={loadState.writable}
                                                     variant="compact"
                                                     editingProperty={null}
                                                     editValue=""
@@ -1154,7 +1199,7 @@ export default function CharacterIdTableView({
                                                     label="Motion"
                                                     value={selectedRow.Motion}
                                                     property="Motion"
-                                                    editable
+                                                    editable={loadState.writable}
                                                     variant="compact"
                                                     editingProperty={null}
                                                     editValue=""
