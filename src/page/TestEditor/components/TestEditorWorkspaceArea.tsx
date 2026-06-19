@@ -5,6 +5,7 @@ import MainView from "./MainView";
 import InfoPanel from "./InfoPanel";
 import { FileTreePane } from "./FileTreePane";
 import { TestEditorWorkspacePanels } from "./TestEditorWorkspacePanels";
+import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 
 type Props = {
   folderStoreKey: string;
@@ -35,6 +36,7 @@ type Props = {
   onRevealTreeFolder: (path: string) => void;
   selectedNode: TestTreeNode | null;
   onOpenAsEffectProject?: (filePath: string) => void;
+  workspaceDocument: TestEditorWorkspaceDocument;
 };
 
 export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
@@ -66,6 +68,7 @@ export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
   onRevealTreeFolder,
   selectedNode,
   onOpenAsEffectProject,
+  workspaceDocument,
 }: Props) {
   return (
     <TestEditorWorkspacePanels
@@ -104,6 +107,7 @@ export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
           onMscWorkspaceFolderChange={onMscWorkspaceFolderChange}
           onUnsavedChanges={onUnsavedChanges}
           onRevealTreeFolder={onRevealTreeFolder}
+          workspaceDocument={workspaceDocument}
         />
       }
       right={<InfoPanel selected={selectedNode} />}

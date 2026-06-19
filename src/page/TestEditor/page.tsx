@@ -1570,6 +1570,7 @@ const TestEditorPage = () => {
           onRevealTreeFolder={revealInTreeByPath}
           selectedNode={selectedNode}
           onOpenAsEffectProject={openEffectProjectSession}
+          workspaceDocument={workspaceLayout.document}
         />
       </div>
 

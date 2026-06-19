@@ -37,6 +37,7 @@ import { AssetRefInfo, getAssetRefInfo } from "./character-id-table/assetRef";
 import { CharacterAssetField } from "./character-id-table/CharacterAssetField";
 import { filterCharacterIdTableRows } from "./character-id-table/characterIdTableSearch";
 import { extractAsset } from "./character-id-table/extractFhm2d";
+import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 
 interface CharacterIdTableViewProps {
     folderPath: string;
@@ -45,6 +46,7 @@ interface CharacterIdTableViewProps {
     onRevealTreeFolder?: (path: string) => void;
     pendingSelectCharacterId?: number | null;
     onConsumePendingSelect?: () => void;
+    workspaceDocument: TestEditorWorkspaceDocument;
 }
 
 type LoadState =
@@ -100,6 +102,7 @@ export default function CharacterIdTableView({
     onRevealTreeFolder,
     pendingSelectCharacterId,
     onConsumePendingSelect,
+    workspaceDocument,
 }: CharacterIdTableViewProps) {
     const pendingFromParentRef = useRef<number | null>(null);
     pendingFromParentRef.current = pendingSelectCharacterId ?? null;
@@ -235,12 +238,19 @@ export default function CharacterIdTableView({
             const refs: Record<string, AssetRefInfo> = {};
             for (const key of REQUIRED_FIELD_KEYS) {
                 const val = (selectedRow as any)[key];
-                refs[key] = await getAssetRefInfo(key, val, obDplCachePath, obModPath, folderPath);
+                refs[key] = await getAssetRefInfo({
+                    fieldKey: key,
+                    value: val,
+                    obDplCachePath,
+                    obModPath,
+                    workspaceRoot: folderPath,
+                    workspaceDocument,
+                });
             }
             setResolvedAssetRefs(refs);
         };
         resolve();
-    }, [selectedRow, obDplCachePath, obModPath, folderPath]);
+    }, [selectedRow, obDplCachePath, obModPath, folderPath, workspaceDocument]);
 
     const handleExtractAll = useCallback(async () => {
         if (!selectedRow || isExtractingAll) return;

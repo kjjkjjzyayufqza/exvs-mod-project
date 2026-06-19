@@ -22,6 +22,7 @@ import { GrapEditorView } from "./param-editors/grap-editor/GrapEditorView";
 import { DepictionEditorView } from "./param-editors/depiction-editor/DepictionEditorView";
 import { HitGroupEditorView } from "./param-editors/hitgroup-editor/HitGroupEditorView";
 import { InteractionEditorView } from "./param-editors/interaction-editor/InteractionEditorView";
+import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 
 type StageTab = {
   name: string;
@@ -38,6 +39,7 @@ interface MainViewProps {
   onMscWorkspaceFolderChange?: (path: string | null) => void;
   onUnsavedChanges?: (hasChanges: boolean) => void;
   onRevealTreeFolder?: (path: string) => void;
+  workspaceDocument: TestEditorWorkspaceDocument;
 }
 
 const TAB_STRIP_SCROLL_EPSILON_px = 2;
@@ -61,6 +63,7 @@ const tabs: StageTab[] = [
         folderPath={props.folderPath ?? ""}
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDocument={props.workspaceDocument}
       />
     ),
   },
@@ -202,6 +205,7 @@ const MainView = ({
   onMscWorkspaceFolderChange,
   onUnsavedChanges,
   onRevealTreeFolder,
+  workspaceDocument,
 }: MainViewProps) => {
   const initialTab = tabs[0]?.value ?? "folder-structure";
   const [activeTab, setActiveTab] = useState<string>(initialTab);
@@ -360,6 +364,7 @@ const MainView = ({
               onRevealTreeFolder={props.onRevealTreeFolder}
               pendingSelectCharacterId={pendingCharacterIdTableSelection}
               onConsumePendingSelect={handleConsumePendingCharacterIdTableSelection}
+              workspaceDocument={props.workspaceDocument}
             />
           ),
         };
@@ -510,6 +515,7 @@ const MainView = ({
       onMscWorkspaceFolderChange,
       onUnsavedChanges,
       onRevealTreeFolder,
+      workspaceDocument,
     };
     if (tab.render) return tab.render(props);
     return tab.content ?? null;
