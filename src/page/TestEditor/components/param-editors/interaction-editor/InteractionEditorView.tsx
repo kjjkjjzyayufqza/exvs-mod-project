@@ -16,10 +16,12 @@ const PARAM_TYPE = "interactionid";
 
 interface InteractionEditorViewProps {
   onUnsavedChanges?: (dirty: boolean) => void;
+  workspaceDefaultPath?: string;
 }
 
 export function InteractionEditorView({
   onUnsavedChanges,
+  workspaceDefaultPath,
 }: InteractionEditorViewProps) {
   const [filePath, setFilePath] = useState("");
   const [loading, setLoading] = useState(false);
@@ -93,6 +95,7 @@ export function InteractionEditorView({
             kind: "file",
             title: "Select interactionid file",
             filters: [{ name: "Param", extensions: ["bin"] }],
+            defaultPath: workspaceDefaultPath,
           }}
           onPickedValue={(v) => {
             const p = Array.isArray(v) ? v[0] : v;

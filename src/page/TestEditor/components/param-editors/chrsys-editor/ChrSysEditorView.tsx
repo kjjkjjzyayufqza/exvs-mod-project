@@ -14,9 +14,10 @@ const STORE_KEY = "paramEditors.v2.fp.chrsysparam";
 
 interface ChrSysEditorViewProps {
   onUnsavedChanges?: (dirty: boolean) => void;
+  workspaceDefaultPath?: string;
 }
 
-export function ChrSysEditorView({ onUnsavedChanges }: ChrSysEditorViewProps) {
+export function ChrSysEditorView({ onUnsavedChanges, workspaceDefaultPath }: ChrSysEditorViewProps) {
   const [filePath, setFilePath] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -86,6 +87,7 @@ export function ChrSysEditorView({ onUnsavedChanges }: ChrSysEditorViewProps) {
             filters: [
               { name: "ChrSysParam", extensions: ["csyspm"] },
             ],
+            defaultPath: workspaceDefaultPath,
           }}
           onPickedValue={(v) => {
             const p = Array.isArray(v) ? v[0] : v;

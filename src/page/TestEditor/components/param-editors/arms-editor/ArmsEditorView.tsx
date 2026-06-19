@@ -17,9 +17,10 @@ const PARAM_TYPE = "armsparam";
 
 interface ArmsEditorViewProps {
   onUnsavedChanges?: (dirty: boolean) => void;
+  workspaceDefaultPath?: string;
 }
 
-export function ArmsEditorView({ onUnsavedChanges }: ArmsEditorViewProps) {
+export function ArmsEditorView({ onUnsavedChanges, workspaceDefaultPath }: ArmsEditorViewProps) {
   const [filePath, setFilePath] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -88,6 +89,7 @@ export function ArmsEditorView({ onUnsavedChanges }: ArmsEditorViewProps) {
             kind: "file",
             title: "Select armsparam file",
             filters: [{ name: "Param", extensions: ["bin"] }],
+            defaultPath: workspaceDefaultPath,
           }}
           onPickedValue={(v) => {
             const p = Array.isArray(v) ? v[0] : v;

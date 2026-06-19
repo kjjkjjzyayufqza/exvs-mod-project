@@ -35,6 +35,7 @@ function controllerFixture(
     document: DEFAULT_TEST_EDITOR_WORKSPACE,
     source: "defaults",
     issues: [],
+    routeRoots: {},
     isLoading: false,
     isSaving: false,
     error: null,

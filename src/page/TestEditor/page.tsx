@@ -1549,6 +1549,7 @@ const TestEditorPage = () => {
           selectedNode={selectedNode}
           onOpenAsEffectProject={openEffectProjectSession}
           workspaceDocument={workspaceLayout.document}
+          workspaceRouteRoots={workspaceLayout.routeRoots}
         />
       </div>
 

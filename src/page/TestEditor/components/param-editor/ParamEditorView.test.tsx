@@ -6,6 +6,9 @@ import ParamEditorView from "./ParamEditorView"
 const invokeMock = vi.fn()
 const getSettingMock = vi.fn()
 const onTypedChangeMock = vi.fn()
+const { filePathInputPropsMock } = vi.hoisted(() => ({
+  filePathInputPropsMock: vi.fn(),
+}))
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (command: string, args: unknown) => invokeMock(command, args),
@@ -31,16 +34,21 @@ vi.mock("@/components/ui/filePathInput", () => ({
   FilePathInput: ({
     value,
     onChange,
+    picker,
   }: {
     value: string
     onChange: (event: { target: { value: string } }) => void
-  }) => (
-    <input
-      aria-label="File"
-      value={value}
-      onChange={(event) => onChange({ target: { value: event.target.value } })}
-    />
-  ),
+    picker?: { defaultPath?: string }
+  }) => {
+    filePathInputPropsMock({ value, picker })
+    return (
+      <input
+        aria-label="File"
+        value={value}
+        onChange={(event) => onChange({ target: { value: event.target.value } })}
+      />
+    )
+  },
 }))
 
 vi.mock("@/components/ui/select", () => ({
@@ -100,6 +108,7 @@ describe("ParamEditorView table type changes", () => {
     invokeMock.mockReset()
     getSettingMock.mockReset()
     onTypedChangeMock.mockReset()
+    filePathInputPropsMock.mockReset()
     getSettingMock.mockResolvedValue("E:\\params\\armsparam.bin")
     invokeMock.mockResolvedValue({
       entries: [{ entryId: 1, value: 1 }],
@@ -135,5 +144,23 @@ describe("ParamEditorView table type changes", () => {
     expect(screen.getByLabelText("Table type")).toHaveValue("bulletparam")
     expect(screen.queryByText("Make dirty")).not.toBeInTheDocument()
     expect(onUnsavedChanges).toHaveBeenLastCalledWith(false)
+  })
+
+  it("passes the workspace route root as the file picker default path", async () => {
+    render(
+      <ParamEditorView
+        onUnsavedChanges={() => {}}
+        workspaceDefaultPath="E:/workspace/041cpm"
+      />,
+    )
+
+    await waitFor(() => expect(screen.getByLabelText("File")).toHaveValue("E:\\params\\armsparam.bin"))
+    expect(filePathInputPropsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        picker: expect.objectContaining({
+          defaultPath: "E:/workspace/041cpm",
+        }),
+      }),
+    )
   })
 })

@@ -35,6 +35,7 @@ type Props = {
   selectedNode: TestTreeNode | null;
   onOpenAsEffectProject?: (filePath: string) => void;
   workspaceDocument: TestEditorWorkspaceDocument;
+  workspaceRouteRoots: Record<string, string>;
 };
 
 export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
@@ -65,6 +66,7 @@ export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
   selectedNode,
   onOpenAsEffectProject,
   workspaceDocument,
+  workspaceRouteRoots,
 }: Props) {
   return (
     <TestEditorWorkspacePanels
@@ -103,6 +105,7 @@ export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
           onUnsavedChanges={onUnsavedChanges}
           onRevealTreeFolder={onRevealTreeFolder}
           workspaceDocument={workspaceDocument}
+          workspaceRouteRoots={workspaceRouteRoots}
         />
       }
       right={<InfoPanel selected={selectedNode} />}

@@ -29,6 +29,7 @@ const SPEED_OPTIONS = [0.25, 0.5, 1, 2, 4];
 
 interface BulletEditorViewProps {
   onUnsavedChanges?: (dirty: boolean) => void;
+  workspaceDefaultPath?: string;
 }
 
 function TimelineBar() {
@@ -176,7 +177,7 @@ function TimelineBar() {
   );
 }
 
-export function BulletEditorView({ onUnsavedChanges }: BulletEditorViewProps) {
+export function BulletEditorView({ onUnsavedChanges, workspaceDefaultPath }: BulletEditorViewProps) {
   const [filePath, setFilePath] = useState("");
   const [armsFilePath, setArmsFilePath] = useState("");
   const [loading, setLoading] = useState(false);
@@ -302,6 +303,7 @@ export function BulletEditorView({ onUnsavedChanges }: BulletEditorViewProps) {
             kind: "file",
             title: "Select bulletparam file",
             filters: [{ name: "Param", extensions: ["bin"] }],
+            defaultPath: workspaceDefaultPath,
           }}
           onPickedValue={(v) => {
             const p = Array.isArray(v) ? v[0] : v;
@@ -321,6 +323,7 @@ export function BulletEditorView({ onUnsavedChanges }: BulletEditorViewProps) {
             kind: "file",
             title: "Select armsparam file for shooting loop",
             filters: [{ name: "Param", extensions: ["bin"] }],
+            defaultPath: workspaceDefaultPath,
           }}
           onPickedValue={(v) => {
             const p = Array.isArray(v) ? v[0] : v;

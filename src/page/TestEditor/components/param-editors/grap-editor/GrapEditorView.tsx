@@ -18,9 +18,10 @@ const PARAM_TYPE = "grapparam";
 
 interface GrapEditorViewProps {
   onUnsavedChanges?: (dirty: boolean) => void;
+  workspaceDefaultPath?: string;
 }
 
-export function GrapEditorView({ onUnsavedChanges }: GrapEditorViewProps) {
+export function GrapEditorView({ onUnsavedChanges, workspaceDefaultPath }: GrapEditorViewProps) {
   const [filePath, setFilePath] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -93,6 +94,7 @@ export function GrapEditorView({ onUnsavedChanges }: GrapEditorViewProps) {
             kind: "file",
             title: "Select grapparam file",
             filters: [{ name: "Param", extensions: ["bin"] }],
+            defaultPath: workspaceDefaultPath,
           }}
           onPickedValue={(v) => {
             const p = Array.isArray(v) ? v[0] : v;

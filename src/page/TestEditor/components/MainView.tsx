@@ -40,6 +40,7 @@ interface MainViewProps {
   onUnsavedChanges?: (hasChanges: boolean) => void;
   onRevealTreeFolder?: (path: string) => void;
   workspaceDocument: TestEditorWorkspaceDocument;
+  workspaceRouteRoots: Record<string, string>;
 }
 
 const TAB_STRIP_SCROLL_EPSILON_px = 2;
@@ -149,58 +150,109 @@ const tabs: StageTab[] = [
         onMscFolderChange={props.onMscWorkspaceFolderChange}
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDefaultPath={props.workspaceRouteRoots["msc.workspace"]}
       />
     ),
   },
   {
     name: "Param Editor",
     value: "param-editor",
-    render: (props: MainViewProps) => <ParamEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+    render: (props: MainViewProps) => (
+      <ParamEditorView
+        onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDefaultPath={props.workspaceRouteRoots["unit.param"]}
+      />
+    ),
   },
   {
     name: "Bullet Editor",
     value: "bullet-editor",
-    render: (props: MainViewProps) => <BulletEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+    render: (props: MainViewProps) => (
+      <BulletEditorView
+        onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDefaultPath={props.workspaceRouteRoots["unit.param"]}
+      />
+    ),
   },
   {
     name: "Arms Editor",
     value: "arms-editor",
-    render: (props: MainViewProps) => <ArmsEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+    render: (props: MainViewProps) => (
+      <ArmsEditorView
+        onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDefaultPath={props.workspaceRouteRoots["unit.param"]}
+      />
+    ),
   },
   {
     name: "Speed Editor",
     value: "speed-editor",
-    render: (props: MainViewProps) => <SpeedEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+    render: (props: MainViewProps) => (
+      <SpeedEditorView
+        onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDefaultPath={props.workspaceRouteRoots["unit.param"]}
+      />
+    ),
   },
   {
     name: "Character Editor",
     value: "character-editor",
-    render: (props: MainViewProps) => <CharacterEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+    render: (props: MainViewProps) => (
+      <CharacterEditorView
+        onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDefaultPath={props.workspaceRouteRoots["unit.param"]}
+      />
+    ),
   },
   {
     name: "ChrSys Editor",
     value: "chrsys-editor",
-    render: (props: MainViewProps) => <ChrSysEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+    render: (props: MainViewProps) => (
+      <ChrSysEditorView
+        onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDefaultPath={props.workspaceRouteRoots["unit.param"]}
+      />
+    ),
   },
   {
     name: "Grap Editor",
     value: "grap-editor",
-    render: (props: MainViewProps) => <GrapEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+    render: (props: MainViewProps) => (
+      <GrapEditorView
+        onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDefaultPath={props.workspaceRouteRoots["unit.param"]}
+      />
+    ),
   },
   {
     name: "Depiction Editor",
     value: "depiction-editor",
-    render: (props: MainViewProps) => <DepictionEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+    render: (props: MainViewProps) => (
+      <DepictionEditorView
+        onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDefaultPath={props.workspaceRouteRoots["unit.param"]}
+      />
+    ),
   },
   {
     name: "HitGroup Editor",
     value: "hitgroup-editor",
-    render: (props: MainViewProps) => <HitGroupEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+    render: (props: MainViewProps) => (
+      <HitGroupEditorView
+        onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDefaultPath={props.workspaceRouteRoots["unit.param"]}
+      />
+    ),
   },
   {
     name: "Interaction Editor",
     value: "interaction-editor",
-    render: (props: MainViewProps) => <InteractionEditorView onUnsavedChanges={props.onUnsavedChanges} />,
+    render: (props: MainViewProps) => (
+      <InteractionEditorView
+        onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDefaultPath={props.workspaceRouteRoots["unit.param"]}
+      />
+    ),
   },
 ];
 
@@ -212,6 +264,7 @@ const MainView = ({
   onUnsavedChanges,
   onRevealTreeFolder,
   workspaceDocument,
+  workspaceRouteRoots,
 }: MainViewProps) => {
   const initialTab = tabs[0]?.value ?? "folder-structure";
   const [activeTab, setActiveTab] = useState<string>(initialTab);
@@ -472,6 +525,7 @@ const MainView = ({
               onMscFolderChange={props.onMscWorkspaceFolderChange}
               isActive={activeTab === "msc-workspace"}
               onUnsavedChanges={handleMscWorkspaceUnsaved}
+              workspaceDefaultPath={props.workspaceRouteRoots["msc.workspace"]}
             />
           ),
         };
@@ -480,7 +534,12 @@ const MainView = ({
       if (tab.value === "param-editor") {
         return {
           ...tab,
-          render: (props: MainViewProps) => <ParamEditorView onUnsavedChanges={handleParamEditorUnsaved} />,
+          render: (props: MainViewProps) => (
+            <ParamEditorView
+              onUnsavedChanges={handleParamEditorUnsaved}
+              workspaceDefaultPath={props.workspaceRouteRoots["unit.param"]}
+            />
+          ),
         };
       }
 
@@ -528,6 +587,7 @@ const MainView = ({
       onUnsavedChanges,
       onRevealTreeFolder,
       workspaceDocument,
+      workspaceRouteRoots,
     };
     if (tab.render) return tab.render(props);
     return tab.content ?? null;

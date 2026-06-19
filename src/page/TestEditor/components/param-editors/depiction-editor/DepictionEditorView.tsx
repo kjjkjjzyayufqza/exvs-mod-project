@@ -18,10 +18,12 @@ const PARAM_TYPE = "projectile_depiction_table";
 
 interface DepictionEditorViewProps {
   onUnsavedChanges?: (dirty: boolean) => void;
+  workspaceDefaultPath?: string;
 }
 
 export function DepictionEditorView({
   onUnsavedChanges,
+  workspaceDefaultPath,
 }: DepictionEditorViewProps) {
   const [filePath, setFilePath] = useState("");
   const [loading, setLoading] = useState(false);
@@ -104,6 +106,7 @@ export function DepictionEditorView({
             kind: "file",
             title: "Select projectile depiction table",
             filters: [{ name: "Param", extensions: ["bin"] }],
+            defaultPath: workspaceDefaultPath,
           }}
           onPickedValue={(v) => {
             const p = Array.isArray(v) ? v[0] : v;

@@ -18,10 +18,12 @@ const PARAM_TYPE = "characterparam";
 
 interface CharacterEditorViewProps {
   onUnsavedChanges?: (dirty: boolean) => void;
+  workspaceDefaultPath?: string;
 }
 
 export function CharacterEditorView({
   onUnsavedChanges,
+  workspaceDefaultPath,
 }: CharacterEditorViewProps) {
   const [filePath, setFilePath] = useState("");
   const [loading, setLoading] = useState(false);
@@ -108,6 +110,7 @@ export function CharacterEditorView({
             kind: "file",
             title: "Select characterparam file",
             filters: [{ name: "Param", extensions: ["bin"] }],
+            defaultPath: workspaceDefaultPath,
           }}
           onPickedValue={(v) => {
             const p = Array.isArray(v) ? v[0] : v;

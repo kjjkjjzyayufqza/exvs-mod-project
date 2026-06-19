@@ -17,9 +17,10 @@ const PARAM_TYPE = "speedparam";
 
 interface SpeedEditorViewProps {
   onUnsavedChanges?: (dirty: boolean) => void;
+  workspaceDefaultPath?: string;
 }
 
-export function SpeedEditorView({ onUnsavedChanges }: SpeedEditorViewProps) {
+export function SpeedEditorView({ onUnsavedChanges, workspaceDefaultPath }: SpeedEditorViewProps) {
   const [filePath, setFilePath] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -88,6 +89,7 @@ export function SpeedEditorView({ onUnsavedChanges }: SpeedEditorViewProps) {
             kind: "file",
             title: "Select speedparam file",
             filters: [{ name: "Param", extensions: ["bin"] }],
+            defaultPath: workspaceDefaultPath,
           }}
           onPickedValue={(v) => {
             const p = Array.isArray(v) ? v[0] : v;

@@ -24,7 +24,13 @@ import type { ChrSysParamFile } from "./chrSysTypes"
 import { PARAM_KINDS, type ParamKindId, resolveTypedFileTypeForPath, getParamKind } from "./paramKinds"
 import { TypedParamDataPanel } from "./TypedParamDataPanel"
 import type { TypedParamFile } from "./typedParamTypes"
-export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges?: (hasChanges: boolean) => void }) {
+
+interface ParamEditorViewProps {
+  onUnsavedChanges?: (hasChanges: boolean) => void
+  workspaceDefaultPath?: string
+}
+
+export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath }: ParamEditorViewProps) {
   const [kindId, setKindId] = useState<ParamKindId>("armsparam" as ParamKindId)
   const [currentPath, setCurrentPath] = useState("")
   const getSetting = useConfigStore((s) => s.getSetting)
@@ -264,6 +270,7 @@ export default function ParamEditorView({ onUnsavedChanges }: { onUnsavedChanges
                 kind: "file",
                 title: "Select param file",
                 filters: [{ name: "Param", extensions: ["bin", "csyspm", "vgsht2"] }],
+                defaultPath: workspaceDefaultPath,
               }}
               onPickedValue={(v) => {
                 const p = Array.isArray(v) ? v[0] : v

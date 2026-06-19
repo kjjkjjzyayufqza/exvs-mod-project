@@ -60,6 +60,7 @@ interface MscWorkspaceViewProps {
   onMscFolderChange?: (path: string | null) => void;
   isActive: boolean;
   onUnsavedChanges?: (hasChanges: boolean) => void;
+  workspaceDefaultPath?: string;
 }
 
 type BatchKind = "decompile" | "repack";
@@ -124,6 +125,7 @@ export default function MscWorkspaceView({
   mscFolderPath,
   onMscFolderChange,
   isActive,
+  workspaceDefaultPath,
 }: MscWorkspaceViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [fileType, setFileType] = useState<string>("all");
@@ -218,7 +220,11 @@ export default function MscWorkspaceView({
   const handlePickFolder = async () => {
     try {
       setIsPickingFolder(true);
-      const selected = await open({ directory: true, multiple: false });
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        defaultPath: workspaceDefaultPath,
+      });
       if (!selected || Array.isArray(selected)) return;
       const ok = await folderContainsMscScriptFiles(selected);
       if (!ok) {

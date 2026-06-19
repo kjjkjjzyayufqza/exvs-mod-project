@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { join } from "@tauri-apps/api/path";
 import {
   loadTestEditorWorkspace,
   saveTestEditorWorkspace,
@@ -7,13 +8,14 @@ import {
   type TestEditorWorkspaceDocument,
   type WorkspaceValidationIssue,
 } from "@/services/testEditorWorkspace/types";
-import { parseWorkspaceDocument } from "@/services/testEditorWorkspace/validation";
+import { normalizeWorkspacePrefix, parseWorkspaceDocument } from "@/services/testEditorWorkspace/validation";
 
 export interface UseTestEditorWorkspaceResult {
   workspaceRoot: string;
   document: TestEditorWorkspaceDocument;
   source: "defaults" | "workspace";
   issues: WorkspaceValidationIssue[];
+  routeRoots: Record<string, string>;
   isLoading: boolean;
   isSaving: boolean;
   error: string | null;
@@ -22,6 +24,12 @@ export interface UseTestEditorWorkspaceResult {
 }
 
 const DEFAULT_PARSED_WORKSPACE = parseWorkspaceDocument();
+
+async function resolveRouteRoot(workspaceRoot: string, prefix: string): Promise<string> {
+  const normalizedPrefix = normalizeWorkspacePrefix(prefix);
+  if (!normalizedPrefix) return workspaceRoot;
+  return join(workspaceRoot, ...normalizedPrefix.split("/"));
+}
 
 export function useTestEditorWorkspace(
   workspaceRoot: string | null | undefined,
@@ -37,6 +45,7 @@ export function useTestEditorWorkspace(
   const [issues, setIssues] = useState<WorkspaceValidationIssue[]>(
     DEFAULT_PARSED_WORKSPACE.issues,
   );
+  const [routeRoots, setRouteRoots] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +81,38 @@ export function useTestEditorWorkspace(
     void reload();
   }, [reload]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const resolveRouteRoots = async () => {
+      if (!resolvedWorkspaceRoot.trim()) {
+        setRouteRoots({});
+        return;
+      }
+
+      try {
+        const entries = await Promise.all(
+          Object.entries(document.assetRoutes).map(async ([routeId, route]) => [
+            routeId,
+            await resolveRouteRoot(resolvedWorkspaceRoot, route.prefix),
+          ] as const),
+        );
+        if (!cancelled) {
+          setRouteRoots(Object.fromEntries(entries));
+        }
+      } catch (err) {
+        console.error("Failed to resolve TestEditor workspace route roots", err);
+        if (!cancelled) {
+          setRouteRoots({});
+        }
+      }
+    };
+
+    void resolveRouteRoots();
+    return () => {
+      cancelled = true;
+    };
+  }, [document, resolvedWorkspaceRoot]);
+
   const save = useCallback(
     async (nextDocument: TestEditorWorkspaceDocument) => {
       setIsSaving(true);
@@ -97,6 +138,7 @@ export function useTestEditorWorkspace(
     document,
     source,
     issues,
+    routeRoots,
     isLoading,
     isSaving,
     error,

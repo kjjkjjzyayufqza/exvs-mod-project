@@ -16,10 +16,12 @@ const PARAM_TYPE = "hitgroupiddef";
 
 interface HitGroupEditorViewProps {
   onUnsavedChanges?: (dirty: boolean) => void;
+  workspaceDefaultPath?: string;
 }
 
 export function HitGroupEditorView({
   onUnsavedChanges,
+  workspaceDefaultPath,
 }: HitGroupEditorViewProps) {
   const [filePath, setFilePath] = useState("");
   const [loading, setLoading] = useState(false);
@@ -93,6 +95,7 @@ export function HitGroupEditorView({
             kind: "file",
             title: "Select hitgroupiddef file",
             filters: [{ name: "Param", extensions: ["bin"] }],
+            defaultPath: workspaceDefaultPath,
           }}
           onPickedValue={(v) => {
             const p = Array.isArray(v) ? v[0] : v;
