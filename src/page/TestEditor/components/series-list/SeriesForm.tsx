@@ -40,7 +40,10 @@ type FormData = z.infer<typeof FormSchema>;
 interface SeriesFormProps {
   series: SeriesListEntry;
   index: number;
+  editable?: boolean;
   seriesImageConvertDirPath?: string;
+  seriesImageStructureJsonPath?: string;
+  seriesImageWritable?: boolean;
   seriesImageSeriesBaseNameOrder?: Array<string | null>;
   onRefreshSeriesImages?: () => Promise<void> | void;
   isSeriesIdTaken?: (nextId: number) => boolean;
@@ -50,7 +53,10 @@ interface SeriesFormProps {
 export function SeriesForm({
   series,
   index,
+  editable = true,
   seriesImageConvertDirPath,
+  seriesImageStructureJsonPath,
+  seriesImageWritable = false,
   seriesImageSeriesBaseNameOrder,
   onRefreshSeriesImages,
   isSeriesIdTaken,
@@ -169,6 +175,8 @@ export function SeriesForm({
                     onOpenChange={setSeriesImageDialogOpen}
                     iconFileIndex={series.iconFileIndex}
                     seriesImageConvertDirPath={seriesImageConvertDirPath}
+                    seriesImageStructureJsonPath={seriesImageStructureJsonPath}
+                    seriesImageWritable={seriesImageWritable}
                     seriesImageSeriesBaseNameOrder={seriesImageSeriesBaseNameOrder}
                     onRefreshSeriesImages={onRefreshSeriesImages}
                     onApplied={(nextIconFileIndex) => {
@@ -180,6 +188,7 @@ export function SeriesForm({
                         type="button"
                         variant="default"
                         size="sm"
+                        disabled={!editable}
                         className="shrink-0 font-semibold shadow-sm gap-2"
                       >
                         <ImageIcon className="w-4 h-4 shrink-0" />
@@ -194,7 +203,7 @@ export function SeriesForm({
 
           <CardContent className="flex-1 min-h-0">
             <ScrollArea className="h-full pr-4">
-              <div className="space-y-4">
+              <fieldset disabled={!editable} className="space-y-4">
                 <FormField
                   control={form.control}
                   name="entryId"
@@ -331,10 +340,10 @@ export function SeriesForm({
                   />
                 </div>
 
-                <Button type="submit" disabled={!form.formState.isDirty} className="w-full mt-4">
+                <Button type="submit" disabled={!editable || !form.formState.isDirty} className="w-full mt-4">
                   Save Changes
                 </Button>
-              </div>
+              </fieldset>
             </ScrollArea>
           </CardContent>
         </Card>

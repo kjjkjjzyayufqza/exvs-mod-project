@@ -12,6 +12,7 @@ interface SeriesListProps {
   seriesData: SeriesListEntry[];
   seriesImageConvertDirPath?: string;
   seriesImageSeriesBaseNameOrder?: Array<string | null>;
+  editable?: boolean;
   selectedIndex: number;
   onSelect: (index: number) => void;
   onDelete: (index: number) => void;
@@ -43,6 +44,7 @@ export function SeriesList({
   seriesData,
   seriesImageConvertDirPath,
   seriesImageSeriesBaseNameOrder,
+  editable = true,
   selectedIndex,
   onSelect,
   onDelete,
@@ -205,6 +207,7 @@ export function SeriesList({
                   index={idx}
                   seriesImageConvertDirPath={seriesImageConvertDirPath}
                   seriesImageSeriesBaseNameOrder={seriesImageSeriesBaseNameOrder}
+                  editable={editable}
                   isSelected={idx === selectedIndex}
                   onClick={() => onSelect(idx)}
                   onDelete={() => onDelete(idx)}

@@ -10,6 +10,11 @@ import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { SeriesListData } from "@/models/seriesListEntry";
+import {
+  resolveWorkspaceContent,
+  type WorkspaceContentId,
+} from "@/services/testEditorWorkspace/contentCatalog";
+import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 import { SeriesEditor } from "./series-list/SeriesEditor";
 import { extractA0253FirstFolderSeriesBaseNameOrder } from "./series-list/seriesImage";
 
@@ -17,6 +22,7 @@ interface SeriesListViewProps {
   folderPath: string;
   isActive: boolean;
   onUnsavedChanges?: (hasChanges: boolean) => void;
+  workspaceDocument: TestEditorWorkspaceDocument;
 }
 
 const SERIES_LIST_INFO_MODAL_DIMENSIONS = {
@@ -30,15 +36,36 @@ type LoadState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error"; filePath: string; message: string }
-  | { status: "ready"; filePath: string; list: SeriesListData };
+  | {
+      status: "ready";
+      filePath: string;
+      configuredFilePath: string;
+      sourceLayout: "configured" | "legacy" | "missing";
+      writable: boolean;
+      list: SeriesListData;
+    };
 
 type SeriesImageCountState =
-  | { status: "idle"; dirPath: string }
-  | { status: "loading"; dirPath: string }
-  | { status: "error"; dirPath: string; message: string }
-  | { status: "ready"; dirPath: string; count: number; seriesBaseNameOrder: Array<string | null> };
+  | { status: "idle"; dirPath: string; structureJsonPath: string; writable: boolean }
+  | { status: "loading"; dirPath: string; structureJsonPath: string; writable: boolean }
+  | { status: "error"; dirPath: string; structureJsonPath: string; writable: boolean; message: string }
+  | {
+      status: "ready";
+      dirPath: string;
+      structureJsonPath: string;
+      configuredStructureJsonPath: string;
+      sourceLayout: "configured" | "legacy" | "missing";
+      writable: boolean;
+      count: number;
+      seriesBaseNameOrder: Array<string | null>;
+    };
 
-export default function SeriesListView({ folderPath, isActive, onUnsavedChanges }: SeriesListViewProps) {
+export default function SeriesListView({
+  folderPath,
+  isActive,
+  onUnsavedChanges,
+  workspaceDocument,
+}: SeriesListViewProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [hasChanges, setHasChanges] = useState(false);
   const [isRefreshingNutexb, setIsRefreshingNutexb] = useState(false);
@@ -46,20 +73,37 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
   const [seriesImageCountState, setSeriesImageCountState] = useState<SeriesImageCountState>({
     status: "idle",
     dirPath: "",
+    structureJsonPath: "",
+    writable: false,
   });
   const lastLoadedKeyRef = useRef<string>("");
 
-  const resolveFilePath = useCallback(async () => {
-    return await join(folderPath, "0xb7367090", "series_list.bin");
-  }, [folderPath]);
+  const resolveContent = useCallback(
+    async (id: WorkspaceContentId) => {
+      return await resolveWorkspaceContent(folderPath, workspaceDocument, id);
+    },
+    [folderPath, workspaceDocument],
+  );
 
-  const resolveSeriesImageConvertDir = useCallback(async () => {
-    return await join(folderPath, "0xA0253AA0", "__convert");
-  }, [folderPath]);
+  const resolveContentFilePath = useCallback(
+    async (id: WorkspaceContentId) => {
+      const content = await resolveContent(id);
+      return {
+        content,
+        filePath: content.existing?.filePath ?? content.configured.filePath,
+      };
+    },
+    [resolveContent],
+  );
 
-  const resolveSeriesImageStructureJsonPath = useCallback(async () => {
-    return await join(folderPath, "0xA0253AA0_structure.json");
-  }, [folderPath]);
+  const resolveContentPackPaths = useCallback(
+    async (id: WorkspaceContentId) => {
+      const content = await resolveContent(id);
+      const pack = content.existing ?? content.configured;
+      return { content, pack };
+    },
+    [resolveContent],
+  );
 
   const resetEditorState = useCallback(() => {
     setHasChanges(false);
@@ -73,53 +117,94 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
       return;
     }
 
-    const filePath = await resolveFilePath();
+    const { content, filePath } = await resolveContentFilePath("series-list");
+    if (!filePath) {
+      setLoadState({ status: "error", filePath: "", message: "Series list content path is not configured" });
+      resetEditorState();
+      return;
+    }
+
     setLoadState({ status: "loading" });
     try {
       const list = await invoke<SeriesListData>("parse_typed_param_file", {
         path: filePath,
         paramType: "serieslist",
       });
-      setLoadState({ status: "ready", filePath, list });
+      setLoadState({
+        status: "ready",
+        filePath,
+        configuredFilePath: content.configured.filePath ?? "",
+        sourceLayout: content.sourceLayout,
+        writable: content.writable,
+        list,
+      });
       resetEditorState();
     } catch (error) {
       console.error(error);
       setLoadState({ status: "error", filePath, message: error instanceof Error ? error.message : "Unknown error" });
       resetEditorState();
     }
-  }, [folderPath, resetEditorState, resolveFilePath]);
+  }, [folderPath, resetEditorState, resolveContentFilePath]);
 
   useEffect(() => {
     if (!isActive) return;
-    const key = `${folderPath}::serieslist`;
+    const key = [
+      folderPath,
+      workspaceDocument.assetRoutes["list.series"]?.prefix ?? "",
+      workspaceDocument.legacyReadFallback ? "legacy-on" : "legacy-off",
+      "serieslist",
+    ].join("::");
     if (key === lastLoadedKeyRef.current) return;
     lastLoadedKeyRef.current = key;
     void load();
-  }, [folderPath, isActive, load]);
+  }, [folderPath, isActive, load, workspaceDocument]);
 
   const loadSeriesImageCount = useCallback(async () => {
     if (!folderPath) {
-      setSeriesImageCountState({ status: "error", dirPath: "", message: "Folder path is empty" });
+      setSeriesImageCountState({
+        status: "error",
+        dirPath: "",
+        structureJsonPath: "",
+        writable: false,
+        message: "Folder path is empty",
+      });
       return;
     }
 
-    const dirPath = await resolveSeriesImageConvertDir();
-    setSeriesImageCountState({ status: "loading", dirPath });
+    const { content, pack } = await resolveContentPackPaths("series-icons");
+    const dirPath = await join(pack.folderPath, "__convert");
+    const structurePath = pack.structureJsonPath;
+    setSeriesImageCountState({
+      status: "loading",
+      dirPath,
+      structureJsonPath: structurePath,
+      writable: content.writable,
+    });
     try {
-      const structurePath = await resolveSeriesImageStructureJsonPath();
       const raw = await readFile(structurePath);
       const text = new TextDecoder().decode(raw);
       const json = JSON.parse(text);
       const seriesBaseNameOrder = extractA0253FirstFolderSeriesBaseNameOrder(json);
-      setSeriesImageCountState({ status: "ready", dirPath, count: seriesBaseNameOrder.length, seriesBaseNameOrder });
+      setSeriesImageCountState({
+        status: "ready",
+        dirPath,
+        structureJsonPath: structurePath,
+        configuredStructureJsonPath: content.configured.structureJsonPath,
+        sourceLayout: content.sourceLayout,
+        writable: content.writable,
+        count: seriesBaseNameOrder.length,
+        seriesBaseNameOrder,
+      });
     } catch (error) {
       setSeriesImageCountState({
         status: "error",
         dirPath,
+        structureJsonPath: structurePath,
+        writable: content.writable,
         message: error instanceof Error ? error.message : "Unknown error",
       });
     }
-  }, [folderPath, resolveSeriesImageConvertDir, resolveSeriesImageStructureJsonPath]);
+  }, [folderPath, resolveContentPackPaths]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -129,6 +214,7 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
 
   const handleEditorChange = useCallback(
     (next: SeriesListData) => {
+      if (loadState.status !== "ready" || !loadState.writable) return;
       setLoadState((prev) => {
         if (prev.status !== "ready") return prev;
         return { ...prev, list: next };
@@ -136,7 +222,7 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
       setHasChanges(true);
       onUnsavedChanges?.(true);
     },
-    [onUnsavedChanges]
+    [loadState, onUnsavedChanges]
   );
 
   const fileMeta = useMemo(() => {
@@ -149,6 +235,10 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
 
   const handleSaveFile = useCallback(async () => {
     if (loadState.status !== "ready") return;
+    if (!loadState.writable) {
+      toast.error("Legacy flat workspace content is read-only");
+      return;
+    }
     const filePath = loadState.filePath;
     try {
       const backupPath = filePath.replace(/\.bin$/i, "_bak.bin");
@@ -193,7 +283,12 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
 
     try {
       setIsRefreshingNutexb(true);
-      const seriesImageDir = await join(folderPath, "0xA0253AA0");
+      const content = await resolveContent("series-icons");
+      if (!content.writable) {
+        toast.error("Series icon content is not writable at the configured workspace route");
+        return;
+      }
+      const seriesImageDir = content.configured.folderPath;
       const result = await invoke<{ converted: number; failed: number; skipped: number }>(
         "nutexb_batch_export_png",
         {
@@ -213,7 +308,7 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
     } finally {
       setIsRefreshingNutexb(false);
     }
-  }, [folderPath, loadSeriesImageCount]);
+  }, [folderPath, loadSeriesImageCount, resolveContent]);
 
   const handleOpenPath = useCallback(async (rawPath: string) => {
     try {
@@ -331,6 +426,12 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
                   Loaded: {fileMeta.count} series, {fileMeta.commands} commands
                 </div>
               )}
+              {!loadState.writable ? (
+                <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300">
+                  Legacy flat workspace content is read-only. Writes target{" "}
+                  <span className="font-mono break-all">{loadState.configuredFilePath}</span>.
+                </div>
+              ) : null}
               <div className="text-xs text-muted-foreground break-all mt-2 flex items-center gap-1">
                 Series Image List: {seriesImageCountState.dirPath || "-"}
                 {seriesImageCountState.dirPath && (
@@ -365,7 +466,7 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
                 size="sm"
                 variant="outline"
                 onClick={() => void handleRefreshNutexb()}
-                disabled={isRefreshingNutexb || !folderPath}
+                disabled={isRefreshingNutexb || !folderPath || !seriesImageCountState.writable}
                 className="inline-flex items-center gap-2"
               >
                 {isRefreshingNutexb ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
@@ -383,7 +484,7 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
               <Button
                 size="sm"
                 onClick={() => void handleSaveFile()}
-                disabled={!hasChanges}
+                disabled={!loadState.writable || !hasChanges}
                 className="inline-flex items-center gap-2"
               >
                 <Save className="w-4 h-4" />
@@ -396,7 +497,10 @@ export default function SeriesListView({ folderPath, isActive, onUnsavedChanges 
         <CardContent className="flex-1 min-h-0 p-0">
           <SeriesEditor
             seriesListData={loadState.list}
+            editable={loadState.writable}
             seriesImageConvertDirPath={seriesImageCountState.dirPath}
+            seriesImageStructureJsonPath={seriesImageCountState.structureJsonPath}
+            seriesImageWritable={seriesImageCountState.writable}
             seriesImageSeriesBaseNameOrder={seriesImageCountState.status === "ready" ? seriesImageCountState.seriesBaseNameOrder : []}
             onRefreshSeriesImages={loadSeriesImageCount}
             onChange={handleEditorChange}

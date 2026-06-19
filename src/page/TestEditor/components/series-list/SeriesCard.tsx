@@ -13,6 +13,7 @@ interface SeriesCardProps {
   index: number;
   seriesImageConvertDirPath?: string;
   seriesImageSeriesBaseNameOrder?: Array<string | null>;
+  editable?: boolean;
   isSelected: boolean;
   onClick: () => void;
   onDelete: () => void;
@@ -24,6 +25,7 @@ export function SeriesCard({
   index,
   seriesImageConvertDirPath,
   seriesImageSeriesBaseNameOrder,
+  editable = true,
   isSelected,
   onClick,
   onDelete,
@@ -85,8 +87,10 @@ export function SeriesCard({
           variant="ghost"
           size="sm"
           className="text-primary hover:text-primary hover:bg-primary/10 p-0"
+          disabled={!editable}
           onClick={(e) => {
             e.stopPropagation();
+            if (!editable) return;
             onCopy();
           }}
           title="Copy as new"
@@ -97,8 +101,10 @@ export function SeriesCard({
           variant="ghost"
           size="sm"
           className="text-destructive hover:text-destructive hover:bg-destructive/10 p-0"
+          disabled={!editable}
           onClick={(e) => {
             e.stopPropagation();
+            if (!editable) return;
             onDelete();
           }}
           title="Delete"

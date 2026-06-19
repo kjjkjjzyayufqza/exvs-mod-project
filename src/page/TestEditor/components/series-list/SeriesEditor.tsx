@@ -18,7 +18,10 @@ import { SeriesList as SeriesListComponent } from "./SeriesList";
 
 interface SeriesEditorProps {
   seriesListData?: SeriesListData;
+  editable?: boolean;
   seriesImageConvertDirPath?: string;
+  seriesImageStructureJsonPath?: string;
+  seriesImageWritable?: boolean;
   seriesImageSeriesBaseNameOrder?: Array<string | null>;
   onRefreshSeriesImages?: () => Promise<void> | void;
   onChange: (data: SeriesListData) => void;
@@ -38,7 +41,10 @@ function createEmptySeriesEntry(entryId: number, name: string): SeriesListEntry 
 
 export function SeriesEditor({
   seriesListData,
+  editable = true,
   seriesImageConvertDirPath,
+  seriesImageStructureJsonPath,
+  seriesImageWritable = false,
   seriesImageSeriesBaseNameOrder,
   onRefreshSeriesImages,
   onChange,
@@ -96,9 +102,10 @@ export function SeriesEditor({
   );
 
   const openDeleteDialog = useCallback((index: number) => {
+    if (!editable) return;
     setDeleteCandidateIndex(index);
     setDeleteDialogOpen(true);
-  }, []);
+  }, [editable]);
 
   const closeDeleteDialog = useCallback(() => {
     setDeleteDialogOpen(false);
@@ -106,6 +113,7 @@ export function SeriesEditor({
   }, []);
 
   const confirmDelete = useCallback(() => {
+    if (!editable) return;
     if (!seriesListData) return;
     if (deleteCandidateIndex === null) return;
 
@@ -121,7 +129,7 @@ export function SeriesEditor({
     });
 
     closeDeleteDialog();
-  }, [seriesListData, closeDeleteDialog, deleteCandidateIndex, updateList]);
+  }, [editable, seriesListData, closeDeleteDialog, deleteCandidateIndex, updateList]);
 
   const getNextSeriesId = useCallback(
     (options: { preferNegative?: boolean; startFrom?: number }): number => {
@@ -157,6 +165,7 @@ export function SeriesEditor({
 
   const handleCopy = useCallback(
     (index: number) => {
+      if (!editable) return;
       if (!seriesListData) return;
       const seriesToCopy = seriesListData.entries[index];
       if (!seriesToCopy) return;
@@ -176,10 +185,11 @@ export function SeriesEditor({
 
       setSelectedIndex(seriesListData.entries.length);
     },
-    [seriesListData, getNextSeriesId, updateList]
+    [editable, seriesListData, getNextSeriesId, updateList]
   );
 
   const handleAdd = useCallback(() => {
+    if (!editable) return;
     if (!seriesListData) return;
 
     const selectedSeriesId =
@@ -198,7 +208,7 @@ export function SeriesEditor({
     });
 
     setSelectedIndex(seriesListData.entries.length);
-  }, [seriesListData, selectedIndex, getNextSeriesId, updateList]);
+  }, [editable, seriesListData, selectedIndex, getNextSeriesId, updateList]);
 
   if (!seriesListData) {
     return (
@@ -213,7 +223,7 @@ export function SeriesEditor({
       <div className="w-1/3 border rounded-lg p-3 overflow-hidden flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-3">
           <div className="font-semibold text-sm">Series ({seriesListData.entries.length})</div>
-          <Button size="sm" onClick={handleAdd} className="inline-flex items-center gap-2">
+          <Button size="sm" onClick={handleAdd} disabled={!editable} className="inline-flex items-center gap-2">
             <Plus className="w-4 h-4" />
             Add
           </Button>
@@ -223,6 +233,7 @@ export function SeriesEditor({
           seriesData={seriesListData.entries}
           seriesImageConvertDirPath={seriesImageConvertDirPath}
           seriesImageSeriesBaseNameOrder={seriesImageSeriesBaseNameOrder}
+          editable={editable}
           selectedIndex={selectedIndex}
           onSelect={handleSelect}
           onDelete={openDeleteDialog}
@@ -235,7 +246,10 @@ export function SeriesEditor({
           <SeriesForm
             series={selectedSeries}
             index={selectedIndex}
+            editable={editable}
             seriesImageConvertDirPath={seriesImageConvertDirPath}
+            seriesImageStructureJsonPath={seriesImageStructureJsonPath}
+            seriesImageWritable={seriesImageWritable}
             seriesImageSeriesBaseNameOrder={seriesImageSeriesBaseNameOrder}
             onRefreshSeriesImages={onRefreshSeriesImages}
             isSeriesIdTaken={isSeriesIdTaken}
@@ -273,7 +287,7 @@ export function SeriesEditor({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={closeDeleteDialog}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction onClick={confirmDelete} disabled={!editable} className="bg-red-600 hover:bg-red-700">
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

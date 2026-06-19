@@ -98,6 +98,7 @@ const tabs: StageTab[] = [
         folderPath={props.folderPath ?? ""}
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDocument={props.workspaceDocument}
       />
     ),
   },
@@ -407,6 +408,7 @@ const MainView = ({
               folderPath={props.folderPath ?? ""}
               isActive={activeTab === "series-list"}
               onUnsavedChanges={handleSeriesListUnsaved}
+              workspaceDocument={props.workspaceDocument}
             />
           ),
         };

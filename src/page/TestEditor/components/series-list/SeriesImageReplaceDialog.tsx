@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { dirname, join } from "@tauri-apps/api/path";
+import { dirname } from "@tauri-apps/api/path";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 import { ImageIcon } from "lucide-react";
@@ -41,6 +41,8 @@ const SERIES_IMAGE_REPLACE_MODAL_DIMENSIONS = {
 interface SeriesImageReplaceDialogProps {
   iconFileIndex: number;
   seriesImageConvertDirPath?: string;
+  seriesImageStructureJsonPath?: string;
+  seriesImageWritable?: boolean;
   seriesImageSeriesBaseNameOrder?: Array<string | null>;
   onRefreshSeriesImages?: () => Promise<void> | void;
   onApplied: (nextIconFileIndex: number) => void;
@@ -53,6 +55,8 @@ interface SeriesImageReplaceDialogProps {
 export function SeriesImageReplaceDialog({
   iconFileIndex,
   seriesImageConvertDirPath,
+  seriesImageStructureJsonPath,
+  seriesImageWritable = false,
   seriesImageSeriesBaseNameOrder,
   onRefreshSeriesImages,
   onApplied,
@@ -101,6 +105,7 @@ export function SeriesImageReplaceDialog({
 
   const validationErrorReplace = useMemo(() => {
     if (!seriesImageConvertDirPath) return "Series image convert folder is not available";
+    if (!seriesImageWritable) return "Series image pack is read-only";
     if (!baseName) {
       const max =
         seriesImageSeriesBaseNameOrder && seriesImageSeriesBaseNameOrder.length > 0
@@ -110,7 +115,7 @@ export function SeriesImageReplaceDialog({
     }
     if (strictMsIndex === null) return `Unsupported series Name "${baseName}" for replace (backend expects "ser_ms_###")`;
     return "";
-  }, [baseName, seriesImageConvertDirPath, seriesImageSeriesBaseNameOrder, strictMsIndex]);
+  }, [baseName, seriesImageConvertDirPath, seriesImageSeriesBaseNameOrder, seriesImageWritable, strictMsIndex]);
 
   const nextSerMsIndex = useMemo(
     () => computeNextSerMsIndex(seriesImageSeriesBaseNameOrder),
@@ -124,11 +129,13 @@ export function SeriesImageReplaceDialog({
 
   const validationErrorAdd = useMemo(() => {
     if (!seriesImageConvertDirPath) return "Series image convert folder is not available";
+    if (!seriesImageStructureJsonPath) return "Series image structure JSON is not available";
+    if (!seriesImageWritable) return "Series image pack is read-only";
     if (nextSerMsIndex === null) return "No available ser_ms index (max 999)";
     return "";
-  }, [nextSerMsIndex, seriesImageConvertDirPath]);
+  }, [nextSerMsIndex, seriesImageConvertDirPath, seriesImageStructureJsonPath, seriesImageWritable]);
 
-  const canEdit = Boolean(seriesImageConvertDirPath);
+  const canEdit = Boolean(seriesImageConvertDirPath && seriesImageWritable);
   const canReplaceApply =
     canEdit &&
     Boolean(pngPath) &&
@@ -213,6 +220,10 @@ export function SeriesImageReplaceDialog({
       toast.error("Series image convert folder is not available");
       return;
     }
+    if (!seriesImageStructureJsonPath) {
+      toast.error("Series image structure JSON is not available");
+      return;
+    }
     if (!pngPath) {
       toast.error("Please select a PNG file");
       return;
@@ -225,8 +236,7 @@ export function SeriesImageReplaceDialog({
     setIsAppending(true);
     try {
       const seriesImageDir = await dirname(seriesImageConvertDirPath);
-      const projectRootDir = await dirname(seriesImageDir);
-      const structurePath = await join(projectRootDir, "0xA0253AA0_structure.json");
+      const structurePath = seriesImageStructureJsonPath;
 
       const structRaw = await readFile(structurePath);
       const structText = new TextDecoder().decode(structRaw);
@@ -274,7 +284,7 @@ export function SeriesImageReplaceDialog({
     } finally {
       setIsAppending(false);
     }
-  }, [nextSerMsIndex, onApplied, onRefreshSeriesImages, pngPath, seriesImageConvertDirPath, setOpen, validationErrorAdd]);
+  }, [nextSerMsIndex, onApplied, onRefreshSeriesImages, pngPath, seriesImageConvertDirPath, seriesImageStructureJsonPath, setOpen, validationErrorAdd]);
 
   const previewZoom = (
     <Card className="overflow-hidden transform-3d min-h-[440px]" style={{ willChange: "transform" }}>
