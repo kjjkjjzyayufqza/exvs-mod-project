@@ -140,6 +140,16 @@ Project skills (domain):
 
 - Communicate with the user in Chinese; write code and comments in English.
 - Do not leave `TODO` / `FIXME` markers in code.
+- When modifying MSC decompiled `X.c` files, wrap every AI-added or AI-modified
+  code block with the required `// AI decision (YYYY-MM-DD): ...` and
+  `// End, origin is ...` comments. See
+  `docs/msc-research/msc-ai-edit-block-rule.md`. Verify with
+  `python .\tools\check_msc_ai_blocks.py "<modified X.c>"`.
+- When adding symbols to MSC decompiled `X.c` files, work as a reverse engineer:
+  preserve existing decompiler names when reading old code, but never invent new
+  opaque names like `global777` / `var42` for AI-added state. Use semantic names
+  grounded in proven evidence, and record uncertain meanings in the AI block
+  origin or semantic overlay.
 - Do not start dev servers unless the user explicitly asks.
 - Prefer reusing existing utility functions, components, and data models.
 - Each `page` component should have a corresponding `components/` directory.

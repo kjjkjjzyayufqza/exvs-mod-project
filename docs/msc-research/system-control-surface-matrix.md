@@ -8,6 +8,10 @@ E:\XB\解包\com\file\0xBDBE6FEA\2.c
 
 当前仓库生成的结构化分析记录这份 `2.c` 约 29664 行、1047 个函数。这里的目标不是把 1047 个 `func_N` 一次性改名，而是建立一张可复用的“控制面矩阵”：每个玩家能感知的系统，都要能追到脚本层、资源层、native syscall 层和实机验证点。
 
+如果 AI 修改 MSC `X.c` 反编译文件，必须使用
+[MSC AI 修改块注释规范](./msc-ai-edit-block-rule.md)：每个 AI 新增或修改代码块都用
+`// AI decision ...` 开头，并用 `// End, origin is ...` 结束。
+
 如果当前问题已经落到资源数值，例如普通 BD / step、boost、射击伤害、弹体 hitbox、格斗追踪，直接看 [MSC 资源层 patch 指南：BD / step / boost / 射击 / 格斗该改哪些表](./resource-control-surface-for-modders.md)。
 
 这页适合回答这些问题：
@@ -82,6 +86,29 @@ readSpeedParam(global142, air_dash_duration_frame)
 | `0x5e8caf43` | `air_dash_duration_frame` | `command_mapping.md`，`param_field_analysis.md` |
 
 这意味着“人手看 MSC”只能做到第一层定位；真正解释移动、boost、落地、BD、step 参数，必须把 MSC syscall 与资源字段映射合并。后续 TestEditor 的 auto rename / overlay 应该支持这种跨层显示，例如把 `sys_0(0x60006, global142, 0x5e8caf43)` 注释为 `speedparam[global142].air_dash_duration_frame`。
+
+同一类反思也适用于 `sys_1(0x60008, hash)`，但它不是 `speedparam`：
+
+```c
+sys_1(0x60008, 0x1b12ae7d)
+```
+
+在 Delta Kai clone 的当前参数包中，`0x1b12ae7d` 是
+`characterparam.bin` 的 entry id：
+
+| MSC 片段 | 资源层解释 | 证据 |
+|---|---|---|
+| `0x60008` | characterparam entry selector | `0x08248A8D/characterparam.bin` entry id 命中 |
+| `0x1b12ae7d` | `ORDER_0` | kind-7 action label 解码 |
+| resource label | `CHR_015GNDMUC_004DELTPL_001` | kind-7 resource label 解码 |
+
+这说明 `0x60006` 和 `0x60008` 都长得像 `0x6000*` 系统号，但语义不同：
+
+- `sys_0(0x60006,row,field)` 是读 speedparam 字段。
+- `sys_1(0x60008,entry)` 是切 / 写 characterparam 角色系统 entry。
+
+因此自动 overlay 不能只按 selector 前缀粗暴命名；必须结合读写方向、
+参数个数、当前 Param 包里的 entry id 和字段 hash。
 
 ## 1. 统一分层
 

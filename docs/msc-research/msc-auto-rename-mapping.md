@@ -34,19 +34,113 @@ native-truth 辅助层；TestEditor 的 Auto Rename 应该在编辑器自己的 
 | `docs/msc-research/dynamic-naming-overlay.md` | 解释为什么不能持久绑定 `func_N`，以及 overlay / resolved view 的总体方案。 |
 | `docs/msc-research/func1044-simulated-renames.md` | `func_1044` slot callback 的 Auto Rename 期望输出。 |
 
-## 三层 Mapping
+## 多层 Mapping
 
-MSC Auto Rename 至少要区分三张表。
+MSC Auto Rename 至少要区分这些语义层。
 
 | 层 | 典型形态 | 推荐符号前缀 | 说明 |
 |---|---|---|---|
 | action hash registry | `func_241(actionHash, callback)` | `ACTION_*` | 玩家输入 / 状态选择后的 action handler。 |
+| lifecycle / init function | `func_1 -> func_877 -> func_1042` | `INIT_*` | 启动链、机体表现层初始化、注册表铺设；不是玩家动作。 |
 | slot callback registry | `sys_1(0x10001, 0x2, slot, callback)` | `SLOT_CB_*` | action handler 内部请求的表现 slot callback。 |
 | motion/resource registry | `sys_1(0x10001, 0x3/0x4, slot, hash)` | `RESOURCE_*` 或仅保留 hash | slot callback 最终选择的 motion / resource hash。 |
+| weapon slot binding | `sys_4F(0xb, slot, armsEntryHash)` | `WEAPON_SLOT_*` | 当前形态的武装槽位到 `armsparam` entry 的绑定。 |
 
 不要把 slot callback 直接命名成 action。一个 action handler 可能经过多个阶段，
 也可能复用同一个 slot callback；反过来，同一个 slot callback 也可能被多个
 slot 或多个 action 复用。
+
+同理，不要把启动初始化函数命名成 `ACTION_*`。例如 `func_877` 在
+`func_1 -> func_877` 启动链上执行，它不是德尔塔改飞机模式，也不是某个武装输入；
+它是本机体 shell、weapon slot、默认 loadout、action/resource registry 的铺设入口。
+
+## ArmsParam Label 证据层
+
+`sys_4F(0xb, slot, armsEntryHash)` 是当前最直接的武装槽位绑定证据。
+Auto Rename 不应该只显示裸 hash，而应该在当前 workspace 的 param 包里查
+`armsparam.bin`，再解 `kind=7` 的 label 字段：
+
+| armsparam field | hash | 作用 |
+|---|---:|---|
+| `action_label_offset` | `0xE6213731` | 指向 obfuscated action label，例如 `GUN_..._ASSIST`。 |
+| `resource_label_offset` | `0xF3C4CAE9` | 指向 obfuscated resource label，例如 `CHR_...`。 |
+
+解码规则已经存在于项目里：
+
+```text
+src-tauri/src/format/obf_string.rs
+src/utils/obfString.ts
+```
+
+因此 rename utility 的实现方向应该是：
+
+1. 扫描 `2.c` 的 `sys_4F(0xb, slot, armsEntryHash)`。
+2. 在当前 unit param 包的 `armsparam.bin` 中用 `entry_id == armsEntryHash` 查 row。
+3. 读取 `0xE6213731` / `0xF3C4CAE9` 的绝对文件 offset。
+4. 用 obfuscated string codec 解出 action/resource label。
+5. 在 TestEditor resolved view 里显示 slot 注释或 overlay 名称。
+
+示例输出风格：
+
+```c
+sys_4F(0xb, 0x2, WEAPON_SLOT_2_ASSIST); //GUN_015GNDMUC_004DELTPL_001_ASSIST
+```
+
+或者在不替换参数名时保守显示：
+
+```c
+sys_4F(0xb, 0x2, 0xa8e202bf); //slot2: GUN_015GNDMUC_004DELTPL_001_ASSIST
+```
+
+注意：不要把 param 包文件夹 hash 当作 arms entry id。比如：
+
+| 机体 / 包 | param 包 | arms entry | 解码 label | 说明 |
+|---|---:|---:|---|---|
+| Delta Kai clone | `0x08248A8D` | `0xa8e202bf` | `GUN_015GNDMUC_004DELTPL_001_ASSIST` | 普通形态 slot 2 是 assist。 |
+| Sazabi | `0xB9859587` | `0x44e2365f` | `GUN_017GYAKCH_002SAZABI_001_FUNNEL` | 真 funnel 的 arms entry。 |
+| RX-78-2 | `0xA3D57845` | `0x8880b9cf` | `GUN_001GUNDAM_001GUNDAM_001_ASSIST` | armsparam 中存在 assist entry，但脚本 slot 绑定仍要以当前 `2.c` 为准。 |
+
+这个 evidence layer 只负责“武装槽位是什么”。它不能直接证明 `sys_51`
+最终生成哪个 projectile / UnitTask；当前自动 rename 先停在 MSC 层：
+slot 绑定、arms entry label、`sys_4F` 扣槽、`sys_51` type/index。
+真实发射实体先用代码注释记录为后续工作，不把 bulletparam 当作当前
+auto rename 的输入源。
+
+## `sys_1(0x60008, hash)`：characterparam entry selector
+
+Delta Kai clone 的 slot 2 研究补了一条重要映射：
+
+```c
+sys_1(0x60008, 0x1b12ae7d);
+```
+
+`0x1b12ae7d` 不应直接当作神秘动作 hash。当前证据显示它是当前 Param 包
+`characterparam.bin` 的 entry id。自动 overlay 应该这样解析：
+
+1. 用当前 unit 的 Param 包找到 `characterparam.bin`。
+2. 扫描 entry id 列表，找 `entry_id == 0x1b12ae7d`。
+3. 读取该 entry 的 `0xE6213731` / `0xF3C4CAE9`。
+4. 用 obfuscated string codec 解出 action/resource label。
+5. 在 resolved view 中显示角色系统 selector 的含义。
+
+示例：
+
+```c
+sys_1(0x60008, CHARACTER_ORDER_0); //ORDER_0 / CHR_015GNDMUC_004DELTPL_001
+```
+
+Delta Kai clone 当前 `0x08248A8D/characterparam.bin` 的证据：
+
+| entry id | action label | resource label |
+|---:|---|---|
+| `0x1b12ae7d` | `ORDER_0` | `CHR_015GNDMUC_004DELTPL_001` |
+| `0x6c159eeb` | `ORDER_1` | `CHR_015GNDMUC_004DELTPL_001` |
+| `0xf51ccf51` | `ORDER_2` | `CHR_015GNDMUC_004DELTPL_001` |
+
+这条 overlay 对 modding 很重要：外层 custom unit 可以叫
+`026gnbelt_003delatkai_001`，但如果 `characterparam` 内部 label 还是
+`CHR_015GNDMUC_004DELTPL_001`，native assist gate / 资源身份可能仍按原机体
+处理。单看 `2.c` 看不出这个错位。
 
 ## 当前旧 Rename 规则
 
@@ -102,6 +196,21 @@ func_241(0x12345678, ACTION_AC_SPECIAL_SHOT_LOCK_SWITCH); //特射 换锁分支
     "packHash": "0xBDBE6FEA",
     "scriptIndex": 2
   },
+  "lifecycleFunctions": [
+    {
+      "currentFunction": "func_877",
+      "semanticId": "depiction.unitShellResourceInitializer",
+      "symbol": "INIT_UNIT_SHELL_RESOURCE_ACTION_TABLES",
+      "displayNameCn": "本机 shell / 武装槽 / 默认外观 / action-resource 表初始化",
+      "confidence": "high",
+      "evidence": {
+        "calledFrom": "func_1",
+        "mustCall": ["func_887", "func_1042"],
+        "mustWrite": ["global20", "global170", "global1"],
+        "mustContain": ["sys_4B(0,", "sys_4F(0xb,"]
+      }
+    }
+  ],
   "actions": [
     {
       "actionHash": "0x9475130e",
@@ -141,6 +250,35 @@ func_241(0x12345678, ACTION_AC_SPECIAL_SHOT_LOCK_SWITCH); //特射 换锁分支
 常量集合和行为证据。
 
 ## 当前确认示例
+
+### 启动初始化链
+
+`func_877` 的推荐 rename：
+
+```c
+void INIT_UNIT_SHELL_RESOURCE_ACTION_TABLES()
+```
+
+中文显示：
+
+```text
+本机 shell / 武装槽 / 默认外观 / action-resource 表初始化
+```
+
+证据：
+
+| 当前符号 | 建议 symbol | semanticId | 中文注释 | 证据 |
+|---|---|---|---|---|
+| `func_877` | `INIT_UNIT_SHELL_RESOURCE_ACTION_TABLES` | `depiction.unitShellResourceInitializer` | 本机 shell / 武装槽 / 默认外观 / action-resource 表初始化 | `func_1 -> func_877`，`sys_4B(0,0xab9c3043)`，`global20=sys_4B(1)`，`sys_4F(0xb,0/1/2,...)`，`global170=0`，`func_887()`，`func_1042()`，`global1=func_878`。 |
+
+保守短名可以是：
+
+```c
+void INIT_UNIT_SHELL_RESOURCE_TABLES()
+```
+
+但当前更推荐长名，因为它明确包含 `func_1042()` 注册 action/resource tables，
+能避免误读成“只挂模型 shell”。
 
 ### 通用武装输入
 

@@ -4,6 +4,10 @@
 
 MSC 是 EXVS 的脚本字节码层（VM 层），不是原始源码；`2.c` 是反编译后的 C 风格中间表示，不是游戏原始 C 源。
 
+AI 修改 MSC 反编译 `X.c` 文件时，必须按
+[`msc-ai-edit-block-rule.md`](./msc-research/msc-ai-edit-block-rule.md)
+使用 `// AI decision ...` 到 `// End, origin is ...` 的成对 AI block。
+
 ---
 
 ## Short Overview

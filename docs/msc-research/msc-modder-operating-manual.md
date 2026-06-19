@@ -18,6 +18,11 @@ E:\XB\解包\com\file\0xBDBE6FEA\2.c
 
 如果当前问题是“我需要看到真实源码证据，而不是只看结论”，直接看 [2.c 源码证据走读：从 `func_1` 证明到可改点](./2c-source-proof-walkthrough-for-modders.md)。它把 `main/func_1/func_4/func_44/func_1043/ACTION_*` 的行号、代码形状和模组可改点串在一起。
 
+如果 AI 帮你改 MSC `X.c`，所有 AI 新增或 AI 修改过的代码都必须用
+`// AI decision (YYYY-MM-DD): ...` 和 `// End, origin is ...` 成对包住。
+具体格式见 [MSC AI 修改块注释规范](./msc-ai-edit-block-rule.md)。AI 新增状态名
+必须像逆向标签一样有意义；不要新增 `global777` 这种只能让人类更难读的占位名。
+
 先把 `2.c` 当成一台机器，不要当成 1,047 个孤立函数。你每次只需要回答四个问题：
 
 | 问题 | 人话 | 常见证据 |
@@ -495,6 +500,7 @@ cancel 恢复
 | 只改 camera preset hash | 可能残留镜头 | 同时找 `sys_53(0x5)` |
 | 只改 `sys_4F` hash | projectile 可能还受 arms/bullet/hitgroup 控制 | 同时查资源 |
 | 把 `func_N` 当跨版本名字 | 函数编号会随反编译和 offset 变化 | 用 semanticId + evidence shape |
+| AI 新增 `global777` 这类状态名 | 编译可能通过，但人类不知道它代表哪个系统 | 用证据命名，例如 `deltaKaiFunnelShell0IsOut` |
 
 ## 7. 新样本迁移规则
 

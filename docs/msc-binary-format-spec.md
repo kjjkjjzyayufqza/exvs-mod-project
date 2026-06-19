@@ -28,6 +28,11 @@ MSC (Motion Script Code) is a bytecode format used by EXVS2 Over Boost to drive 
 
 All multi-byte integers in the **header** are **little-endian (LE)**. All multi-byte integers in **opcode parameters** (the script body) are **big-endian (BE)**.
 
+When editing decompiled MSC `X.c` files, AI-added or AI-modified code must be
+marked with paired AI block comments:
+`// AI decision (YYYY-MM-DD): ...` through `// End, origin is ...`.
+See `docs/msc-research/msc-ai-edit-block-rule.md`.
+
 ---
 
 ## File Layout

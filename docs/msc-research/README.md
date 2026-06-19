@@ -19,6 +19,11 @@ E:\XB\解包\com\file\0xBDBE6FEA\2.c
 
 如果只想先读一份，先看 [MSC 模组开发操作手册：从 29664 行 `2.c` 读到可改点](./msc-modder-operating-manual.md)。它把 `func_1`、`func_4`、action registry、dispatch、runtime setup、segment output、BD / movement、镜头、射击、格斗、shell 放进同一套操作协议。
 
+如果当前问题是“AI 帮我改了 MSC `X.c`，怎么标记哪些代码是 AI patch”，先看
+[MSC AI 修改块注释规范](./msc-ai-edit-block-rule.md)。任何 AI 新增或修改过的
+MSC `X.c` 代码都必须用 `// AI decision ...` 和 `// End, origin is ...` 成对包住。
+AI 新增符号还必须使用逆向语义名，不能新建 `global777` 这类无意义名字。
+
 如果当前问题是“这个玩家系统到底在哪一层控制，应该改资源、脚本 segment 还是 native syscall”，看 [MSC 系统控制面矩阵：BD / 移动 / 镜头 / 动作 / 射击 / 格斗怎么改](./system-control-surface-matrix.md)。它把每个系统拆成玩家语义、`2.c` 控制面、资源层、syscall 层、patch 点和实机验证。
 
 如果当前问题是“我怎么从真实 `2.c` 行号证明这些结论”，看 [2.c 源码证据走读：从 `func_1` 证明到可改点](./2c-source-proof-walkthrough-for-modders.md)。它按 `main/func_1/func_4/func_44/func_1043/ACTION_*` 的真实代码形状，逐步追到主射 `sys_4F`、特射 `sys_51`、特格 `sys_46`、格斗 `func_532/535/536` 和镜头 `sys_53`。
@@ -28,6 +33,8 @@ E:\XB\解包\com\file\0xBDBE6FEA\2.c
 如果当前问题是“普通 BD、step、boost、射击伤害、弹体 hitbox、格斗追踪这些该改脚本还是资源”，看 [MSC 资源层 patch 指南：BD / step / boost / 射击 / 格斗该改哪些表](./resource-control-surface-for-modders.md)。它把 `speed_param`、`arms_param`、`bullet_param`、`character_param` 和 `0.c/2.c` 调用链对齐。
 
 如果当前问题是“Delta Plus 主射为什么 2 连射、为什么空弹后手动换弹，以及怎样改成 RX-78-2 那样单发 + 自动回弹”，看 [Delta Plus 主射调用链与 RX-78-2 风格自动回弹方案](./delta-plus-main-shot-rx78-style-auto-reload.md)。它把 wiki 行为、`0.c` 空弹分支、`2.c` 主射/换弹 action、RX 对比和 patch 步骤放在同一页。
+
+如果当前问题是“右边第三槽为什么红、特射援护/浮游炮怎样扣槽、Delta Kai clone 后 slot 2 为什么不可用、背包浮游炮怎么发射和锁定”，看 [Delta Kai 浮游炮 / 援护 slot 2 调用链研究](./delta-kai-funnel-assist-slot2.md)。它把 `0.c` 输入 gate、`2.c` 特射 `sys_51`、slot 2 armsparam、HUD 红槽维护和 `connect funnel to backpack` 的风险放在同一页。
 
 如果正在盯着某个 `func_N` 不知道能不能改，看 [2.c 关键函数职责表：给模组 patch 用的工作名](./2c-key-function-atlas-for-patching.md)。它按可改性 A/B/C/D/N 标记关键函数，告诉你哪些是 action-local patch 点，哪些只是 init / dispatch / shared runtime。
 
