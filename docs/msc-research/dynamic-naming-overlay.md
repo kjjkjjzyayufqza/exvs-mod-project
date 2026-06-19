@@ -18,6 +18,8 @@ resolved view               每次对当前样本重新匹配后的可读结果
 ## 具体案例与相关入口
 
 - [MSC Research 阅读入口](./README.md)
+- [MSC Auto Rename Mapping](./msc-auto-rename-mapping.md)：专门记录
+  `ACTION_A_SHOT); //射击` 这类 TestEditor MSC Auto Rename 显示规则。
 - [`func_1044` slot callback 全链路逆向](./func1044-slot-callback-atlas.md)：保存
   slot callback 的输入、action、handler、resource 证据。
 - [`func_1044` 模拟重命名稿](./func1044-simulated-renames.md)：展示同一批证据在
@@ -66,6 +68,7 @@ docs/msc-research/
   shell-loadout-func-887-888.md
   notion-msc-cross-reference.md
   dynamic-naming-overlay.md
+  msc-auto-rename-mapping.md
   generated/
     0xBDBE6FEA-2.analysis.json
   overlays/
@@ -305,6 +308,10 @@ func_241(0xf48d2d49, ACTION_A_SHOT); //射击
 Auto Rename / semantic overlay 这条链，具体模拟结果见
 [`func_1044` 模拟重命名稿](./func1044-simulated-renames.md)。
 
+MSC 专属 mapping 的维护入口是 [MSC Auto Rename Mapping](./msc-auto-rename-mapping.md)。
+`command_mapping.md` 只作为 param/native command 字段参考，不负责 action hash 或
+slot callback 的语义命名。
+
 这种改写方式应该分成两层处理：
 
 | 层 | 来源 | 作用 |
@@ -453,7 +460,7 @@ func_241(actionHash, callback)
 ```c
 func_241(0x9475130e, ACTION_TRANSFORM_DASH_ENTRY); //变形突入 / 飞机模式入口
 func_241(0x77b100ff, ACTION_PLANE_FLIGHT_LOOP); //飞机模式持续飞行控制
-func_241(0xa02d57dc, ACTION_TRANSFORM_FLIGHT_RELATED); //变形/飞行相关动作候选
+func_241(0xa02d57dc, ACTION_TRANSFORM_RELEASE); //变形解除 / 恢复普通形态
 ```
 
 如果当前机体禁用了 action，则保留禁用事实，不要强行替换成可执行 `ACTION_*`：
@@ -461,7 +468,7 @@ func_241(0xa02d57dc, ACTION_TRANSFORM_FLIGHT_RELATED); //变形/飞行相关动�
 ```c
 func_241(0x9475130e, 0); //disabled: 变形突入 / 飞机模式入口
 func_241(0x77b100ff, 0); //disabled: 飞机模式持续飞行控制
-func_241(0xa02d57dc, 0); //disabled: 变形/飞行相关动作候选
+func_241(0xa02d57dc, 0); //disabled: 变形解除 / 恢复普通形态
 ```
 
 ### 当前确认的变形 action 族
@@ -472,7 +479,7 @@ func_241(0xa02d57dc, 0); //disabled: 变形/飞行相关动作候选
 |---|---|---|---|---|---|
 | `0x9475130e` | `ACTION_TRANSFORM_DASH_ENTRY` | 变形突入 / 飞机模式入口 | `func_450` | `0` disabled | high |
 | `0x77b100ff` | `ACTION_PLANE_FLIGHT_LOOP` | 飞机模式持续飞行控制 | `func_452` | `0` disabled | high |
-| `0xa02d57dc` | `ACTION_TRANSFORM_FLIGHT_RELATED` | 变形/飞行相关动作候选 | `func_464` | `0` disabled | medium |
+| `0xa02d57dc` | `ACTION_TRANSFORM_RELEASE` | 变形解除 / 恢复普通形态 | `func_464` | `0` disabled | high |
 
 证据：
 

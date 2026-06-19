@@ -19,6 +19,10 @@ use crate::format::param_entry_schema::{
 // Tags: [D:range] = data range from binary files, [D:dist] = value distribution
 //
 // 46/48 confirmed plausible by data patterns. See xDocs/command_system_research/characterparam_naming_audit_20260426.md
+// AI decision (2026-06-19): keep these JSON field names for compatibility only.
+// Delta Plus type 1 uses script-driven manual reload, while RX-78-2 type 2 uses
+// field 0xA502BCF2=180 for a 3-second reload with 0xAB9AEF6C=0. The previous UI
+// enum labels are therefore not native-confirmed semantics.
 pub const ARMSPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x020A35DD, 1, "is_enabled"),                // [D:0~1] 237 disabled entries
     (0x02D35F32, 1, "unk_04_reserved"),           // [D:0~1] only 8/1431 non-zero — purpose unknown

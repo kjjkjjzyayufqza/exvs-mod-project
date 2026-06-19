@@ -14,6 +14,9 @@
   调用链与行为证据来源。
 - [动态命名与 JSON overlay 方案](./dynamic-naming-overlay.md)：跨版本 semantic ID、
   generated facts、overlay 和 resolved view 的总体设计。
+- [MSC Auto Rename Mapping](./msc-auto-rename-mapping.md)：专门记录
+  `ACTION_*`、`SLOT_CB_*` 和中文注释的 TestEditor 显示规则，避免误改
+  `command_mapping.md`。
 - [结构化分析 JSON 工作流](./generated-analysis-workflow.md)：生成当前样本事实层。
 - [MSC Auto-Rename 外部文件分析](../agent-sessions/msc-workspace-redesign/auto-rename-external-file-analysis.md)：
   现有 TestEditor rename 路径与 action hash 来源限制。

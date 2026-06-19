@@ -52,7 +52,6 @@ export {
   type ReloadType,
   type ActionTimeline,
   type ReloadTimeline,
-  type WeaponDpsInfo,
   RELOAD_TYPE_LABELS,
   RELOAD_TYPE_DESCRIPTIONS,
   CHARGE_WEAPON_TYPE_LABELS,
@@ -63,9 +62,6 @@ export {
   BULLET_TYPE_LABELS,
   getActionTimeline,
   getReloadTimeline,
-  getEffectiveReloadFrames,
-  simulateAmmoTimeline,
-  calculateWeaponDps,
 } from "./reloadSystem";
 
 export {

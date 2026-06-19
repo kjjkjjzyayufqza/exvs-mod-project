@@ -12,6 +12,8 @@ slot callback，重点是 `func_850..876` 在游戏里具体负责什么。
   TestEditor Auto Rename 的完整期望显示结果。
 - [动态命名与 JSON overlay 方案](./dynamic-naming-overlay.md)：说明为什么不能把
   `func_N` 当作跨版本主键。
+- [MSC Auto Rename Mapping](./msc-auto-rename-mapping.md)：记录 `ACTION_*` /
+  `SLOT_CB_*` 显示规则，以及为什么这类命名不写进 `command_mapping.md`。
 - [MSC Auto-Rename 外部文件分析](../agent-sessions/msc-workspace-redesign/auto-rename-external-file-analysis.md)：
   记录现有 rename utility、action hash 来源和外部 mapping 边界。
 

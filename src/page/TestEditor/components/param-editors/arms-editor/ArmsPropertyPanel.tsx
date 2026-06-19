@@ -8,6 +8,8 @@ interface ArmsPropertyPanelProps {
   onFieldChange: (key: string, value: number) => void;
 }
 
+// AI decision (2026-06-19): retain JSON keys for save compatibility, but mark
+// reload names unverified because current IDA-derived labels conflict with fixtures.
 const ARMS_GROUPS: Record<string, string[]> = {
   State: [
     "isEnabled",
@@ -23,7 +25,7 @@ const ARMS_GROUPS: Record<string, string[]> = {
     "shotType",
     "bulletType",
   ],
-  Reload: [
+  "Reload (Unverified)": [
     "reloadType",
     "reloadTimeTotal",
     "reloadStartFrame",

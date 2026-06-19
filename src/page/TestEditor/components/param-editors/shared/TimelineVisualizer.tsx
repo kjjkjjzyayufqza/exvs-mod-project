@@ -211,37 +211,17 @@ export function buildReloadTimeline(
   reloadType: number,
   reloadTimeTotal: number,
   reloadPerShotFrame: number,
-  ammoCount: number,
+  _ammoCount: number,
   overheatFrame: number,
   chargeFrame: number,
 ): TimelineSegment[] {
-  switch (reloadType) {
-    case 0:
-      return [
-        { label: "Reload", frames: reloadTimeTotal, color: "#64748b" },
-      ];
-    case 1: {
-      const totalReload = reloadPerShotFrame * Math.max(1, ammoCount);
-      return [
-        {
-          label: "Per-shot reload",
-          frames: totalReload,
-          color: "#64748b",
-          tooltip: `${reloadPerShotFrame}f × ${ammoCount} rounds`,
-        },
-      ];
-    }
-    case 2:
-      return [
-        { label: "Overheat cooldown", frames: overheatFrame, color: "#dc2626" },
-      ];
-    case 3:
-      return [
-        { label: "Charge", frames: chargeFrame, color: "#2563eb" },
-      ];
-    default:
-      return [
-        { label: "Reload", frames: reloadTimeTotal, color: "#64748b" },
-      ];
-  }
+  // AI decision (2026-06-19): do not convert enum values into behavior until
+  // native branches are proven. Render non-zero raw frame fields independently.
+  const tooltip = `Raw field; reload type ${reloadType}`;
+  return [
+    { label: "0x103171AE", frames: reloadTimeTotal, color: "#64748b", tooltip },
+    { label: "0xA502BCF2", frames: reloadPerShotFrame, color: "#2563eb", tooltip },
+    { label: "0xAB9AEF6C", frames: overheatFrame, color: "#dc2626", tooltip },
+    { label: "0xABC33F14", frames: chargeFrame, color: "#16a34a", tooltip },
+  ].filter((segment) => segment.frames > 0);
 }

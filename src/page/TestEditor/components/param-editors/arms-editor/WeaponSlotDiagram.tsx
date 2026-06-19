@@ -17,10 +17,11 @@ interface StatBar {
 }
 
 export function WeaponSlotDiagram({ entry }: WeaponSlotDiagramProps) {
+  // AI decision (2026-06-19): omit inferred reload duration. RX-78-2 reloads
+  // in 180f, but the previously graphed reloadTimeTotal field contains 40.
   const stats: StatBar[] = [
     { label: "Damage", value: num(entry, "damage"), max: 500, color: "#ef4444" },
     { label: "Ammo", value: num(entry, "ammoCount"), max: 20, color: "#3b82f6" },
-    { label: "Reload", value: num(entry, "reloadTimeTotal"), max: 600, color: "#22c55e" },
     { label: "Startup", value: num(entry, "startupFrame"), max: 60, color: "#f59e0b" },
     { label: "Active", value: num(entry, "activeFrame"), max: 120, color: "#8b5cf6" },
     { label: "Recovery", value: num(entry, "recoveryFrame"), max: 60, color: "#ec4899" },

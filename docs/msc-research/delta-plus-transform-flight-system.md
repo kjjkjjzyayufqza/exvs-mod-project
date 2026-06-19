@@ -203,6 +203,141 @@ else if (arg0 == 0x7)
 
 证据：`2.c:29304-29317`。
 
+### `sys_1(0x10001, 0x3/0x4, 0x1/0x13, 0xa8c15086)` 的当前解释
+
+这四行不是输入判定，也不是把 action hash 直接改掉。它们是在飞机形态进入时临时改写 `0x10001` 下的 motion resource registry：
+
+```c
+sys_1(0x10001, 0x3, 0x1, 0xa8c15086);
+sys_1(0x10001, 0x4, 0x1, 0xa8c15086);
+sys_1(0x10001, 0x3, 0x13, 0xa8c15086);
+sys_1(0x10001, 0x4, 0x13, 0xa8c15086);
+```
+
+四个参数的人话含义：
+
+| 参数 | 当前解释 | 证据 |
+|---|---|---|
+| `0x10001` | Delta Plus 的动作/表现 registry namespace。它下面至少有 callback 表、motion hash 表、其它资源表。 | `func_69` 用 `sys_0(0x10001,0x2,slot)` 取 callback；`func_79` 用 `sys_0(0x10001,0x3+global170,motionSlot)` 取 motion hash。 |
+| `0x3` / `0x4` | 两个 motion hash bank。`func_79` 实际读取 `0x3 + global170`，所以 `global170=0` 读 bank `0x3`，`global170=1` 读 bank `0x4`。 | `2.c:3402-3420`。 |
+| `0x1` / `0x13` | motion resource slot，不是 callback slot。`func_74(slot, blend)` 最终把这个 slot 解析成 motion hash，再交给 `func_308` 播放。 | `func_74 -> func_79 -> sys_0(...0x3+global170,slot) -> func_308`，`2.c:3377-3420`。 |
+| `0xa8c15086` | 飞机形态用的 motion hash。普通表里它原本只挂在 motion slot `0x37`，进入飞机时被临时复制到 `0x1` 和 `0x13`。 | `2.c:29578`、`2.c:29628`、`2.c:29309-29312`。 |
+
+这组覆盖的意义是：飞机模型已经由 `sys_4B(0,0xcb05586)` 激活后，某些基础 motion slot 不能再播放人形 MS 的普通动作，否则会出现“飞机壳播放人形待机/下落/恢复 motion”的错位。因此脚本把两个常用基础槽同时指向飞机 motion hash `0xa8c15086`。
+
+和普通表对比：
+
+| motion slot | 普通 bank `0x3` | 普通 bank `0x4` | 飞机进入后 |
+|---|---:|---:|---:|
+| `0x1` | `0x0d2b43c0` | `0xe244d122` | `0xa8c15086` |
+| `0x13` | `0xc0ef4b31` | `0x2f80d9d3` | `0xa8c15086` |
+| `0x37` | `0xa8c15086` | `0xa8c15086` | 不改，作为普通表里的飞机进入 motion slot 保留 |
+
+游戏角度的推断：
+
+- motion slot `0x1` 会在基础状态切换中被使用，例如 `func_48/50` 在 `global24 & 0x1000000` 成立时播放 `func_74(0x1, ...)`。这很像“当前特殊移动/空中状态下的基础姿态槽”。
+- motion slot `0x13` 是空中 fallback / fall loop 相关资源。`func1044-slot-callback-atlas.md` 已把 callback `func_858` 归到空中 neutral/下落 motion，并指出它播放 resource index `0x13`。
+- 变形解除 callback `func_872` 在恢复普通装配后也会立刻 `func_74(0x13, 0x1e)`，这说明 `0x13` 是飞机模式退出后最容易接回的空中落点槽。
+- 进入飞机形态时把 `0x1` 和 `0x13` 都改成 `0xa8c15086`，最像是在保证“基础姿态”和“空中下落/回落姿态”都落到飞机模式 motion，而不是普通 MS motion。
+
+这组覆盖可以理解成一个“飞机形态安全网”：
+
+```text
+active model 已经切成飞机壳
+  -> 任意上级动作如果请求 base/special posture slot 0x1
+  -> 或请求 air neutral/fall slot 0x13
+  -> 都会得到同一个飞机 motion hash 0xa8c15086
+```
+
+如果不做这件事，持续飞行、变形解除、被中断后的空中 fallback 都可能通过共通动作逻辑请求到普通 MS 的 `0x1` 或 `0x13`，造成飞机模型接人形 idle/fall motion。这里不是在创建新 action，而是在飞机形态期间改写“已有动作槽的资源答案”。
+
+逆向角度的关键点：
+
+- `0x10001/0x2` 是 slot callback 表，`0x10001/0x3` 和 `0x10001/0x4` 是 motion hash 表。不能因为第三个参数数字相同就把它们混成一张表。
+- `func_1038` 退出飞机时调用 `func_1045()`，说明 `func_1037` 的四个 `sys_1` 是临时覆盖，不是永久初始化。
+- `func_79` 如果当前 bank 查不到 hash，会 fallback 到 bank `0x3`。所以 `func_1037` 同时写 `0x3` 和 `0x4`，是在避免 `global170` 处于任意 bank 时读回普通 motion。
+- 跨机体证据也支持这个模式。`0x0888D09D/2.c` 的形态切换函数同样会在进入形态时改写 `0x10001/0x3` 的 `0x1` 和 `0x13`，退出时再改回普通 hash。德尔塔 Plus 多写了 `0x4`，是因为它的 `func_1045` 明确维护了两套 motion bank。
+
+当前建议命名：
+
+```text
+sys_1(0x10001, motionBank, motionSlot, motionHash)
+
+0x10001 = depiction/action registry namespace
+0x3     = normal stance motion bank
+0x4     = alternate stance motion bank selected by global170
+0x1     = base/special posture motion slot, exact official name unknown
+0x13    = air neutral/fall-loop motion slot
+0xa8c15086 = plane-form fallback/flight posture motion hash
+```
+
+### `func_1037` 里的四个 `sys_4F`
+
+`func_1037` 的四个 `sys_4F` 和上面的 motion registry 覆盖是同一阶段发生的，但控制面不同：`sys_1` 改“模型要播放哪个 motion hash”，`sys_4F` 改“表现/武装/HUD resource entry 如何配置”。
+
+```c
+sys_4F(0xb, 0, 0x377d1397, 0x1486a84f, 0x4);
+sys_4F(0xb, 0x1, 0xf100a0da);
+sys_4F(0xb, 0x2, 0x1799c911);
+sys_4F(0x16, 0x2, 0);
+```
+
+当前拆解：
+
+| 调用 | 当前解释 | 对照证据 |
+|---|---|---|
+| `sys_4F(0xb,0,0x377d1397,0x1486a84f,0x4)` | 把 presentation/resource entry `0` 切到飞机资源 `0x377d1397`，并携带普通资源 `0x1486a84f` 与 mode `0x4` 做成对切换。 | 出生/普通模式初始化为 `sys_4F(0xb,0,0x1486a84f)`；退出飞机时反向写 `sys_4F(0xb,0,0x1486a84f,0x377d1397,0x4)`。 |
+| `sys_4F(0xb,0x1,0xf100a0da)` | 把 entry `1` 直接切到飞机形态资源。 | 普通模式 entry `1` 是 `0x10b251b4`，退出时恢复。 |
+| `sys_4F(0xb,0x2,0x1799c911)` | 把 entry `2` 直接切到飞机形态资源。 | 普通模式 entry `2` 是 `0xa8e202bf`，退出时在 `global775==0` 时恢复。 |
+| `sys_4F(0x16,0x2,0)` | 对 entry `2` 写一个布尔 flag 为 `0`。native 侧已确认 `0x16` 写 byte `322`。游戏侧更像禁用/隐藏 entry `2` 的某种 HUD 或资源状态。 | `func_1040` 在普通形态下每帧按 `0xd0001/0xd000b` 状态重算 `sys_4F(0x16,0x2,0/1)`；飞机形态 `global143==1` 时跳过该重算。 |
+
+其中 `sys_4F(0xb,...)` 的 native 资料已经把 subcmd `0x0B` 收窄为“带 mode 映射的 entry 配置动作”，不是实际开火。脚本侧也支持这个结论：`func_877` 出生初始化、`func_1037` 进入飞机、`func_1038` 退出飞机都会写 `sys_4F(0xb,...)`，而真正发射武装更常见的是 `sys_4F(0, slot, weaponHash)`。
+
+`mode=0x4` 的模式名还没有恢复，但脚本形态很清楚：它在多个机体中成对出现，并且进入 / 退出时第三、第四参数反向交换。例如：
+
+```text
+Delta Plus:
+  enter: sys_4F(0xb, 0, 0x377d1397, 0x1486a84f, 0x4)
+  exit:  sys_4F(0xb, 0, 0x1486a84f, 0x377d1397, 0x4)
+
+0x0888D09D:
+  enter: sys_4F(0xb, 0, 0xd55d6f97, 0x4e28047f, 0x4)
+  exit:  sys_4F(0xb, 0, 0x4e28047f, 0xd55d6f97, 0x4)
+
+0x878E6255:
+  enter: sys_4F(0xb, 0, 0x81edb193, 0xc871f33d, 0x4)
+  exit:  sys_4F(0xb, 0, 0xc871f33d, 0x81edb193, 0x4)
+```
+
+所以当前更稳的解释不是“播放某个武装”，而是“把某个 presentation / weapon entry 从旧资源切到新资源，同时告诉 native 旧资源是谁”。`0x4` 很可能是这种双 hash 切换的模式编号；至于是 crossfade、replace-with-pair、还是 alternate-resource transition，需要 native 或实机继续证实。
+
+entry `2` 的证据更像特射 / assist / 武装槽维护：
+
+- 普通初始化把 entry `2` 设为 `0xa8e202bf`。
+- `func_1026` 会 `sys_4F(0x7, 0x2, 0x1)`，native 侧已把 `0x7` 收窄为 slot gauge / ammo count 主动扣减；同一个函数又恢复 `sys_4F(0xb, 0x2, 0xa8e202bf)`。
+- `func_1040` 用 `sys_0(0x90000,0x2,0)`、`0xd0001/0xd000b` 维护 `sys_4F(0x15/0x16,0x2,...)`。
+- RX-78-2 没有飞机变形，但它的 `func_1055` 仍然用同一组 `0x15/0x16, entry 2` 逻辑维护 `0xd0001/0xd000b` 与 `0x90000`。这说明 `0x15/0x16` 是通用武装/assist entry 状态维护，不是德尔塔 Plus 飞机专属。
+
+`global775` 是 entry `2` 的一个特殊恢复保护。`func_1025` 设置 `global775=1` 后调用形态退出，并在自己的流程里保持 `sys_4F(0x16,0x2,0)`；后续 `func_1026` 又显式扣 entry `2` 计量并恢复 `0xa8e202bf`。因此 `func_1038` 只有在 `global775==0` 时才自动恢复 entry `2`，避免打断这个特殊武装/换锁/派生流程。
+
+这四条的游戏侧合并解释：
+
+```text
+进入飞机模式
+  -> 切 active shell 到飞机模型
+  -> 把基础/空中 fallback motion slot 改成飞机 motion
+  -> 把 0/1/2 三个 presentation/resource entry 改成飞机模式资源
+  -> entry 0 使用双 hash mode=0x4 做普通/飞机资源对切
+  -> entry 1/2 直接替换为飞机形态资源
+  -> 固定关闭 entry 2 的 byte322 flag，暂停普通形态下的通用 entry 2 状态维护
+```
+
+仍不确定的部分：
+
+- `0x377d1397 / 0xf100a0da / 0x1799c911` 的原始资源名还没有从资源表恢复。
+- `sys_4F(0xb,...,mode=0x4)` 的 mode `0x4` 在 native 层只知道会经过 `sub_140684EC0()` 映射，还不能命名为具体的“crossfade/replace/alternate”。
+- `sys_4F(0x15,0x2,...)` 写 byte `318`，`sys_4F(0x16,0x2,...)` 写 byte `322`。两者都是 entry flag；游戏侧很像 HUD / ammo / assist availability 状态，但真实 UI 名还不能硬定。
+
 退出飞机形态的核心写入点是 `func_1038`：
 
 - `sys_4B(0, 0xab9c3043)`：恢复普通模型/形态资源。
