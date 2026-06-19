@@ -48,7 +48,7 @@ const CARD_ICON_ADD_MODAL_DIMENSIONS = {
 };
 
 interface CardIconAddDialogProps {
-  folderPath: string;
+  packFolderPath: string;
   hash: string;
   convertDirPath: string;
   structurePath: string;
@@ -114,7 +114,7 @@ function validateName(name: string): string | null {
 }
 
 export function CardIconAddDialog({
-  folderPath,
+  packFolderPath,
   hash,
   convertDirPath,
   structurePath,
@@ -213,13 +213,13 @@ export function CardIconAddDialog({
 
   const canStartBatch = useMemo(() => {
     if (isBatchRunning || isCreating) return false;
-    if (!folderPath || !convertDirPath || !structurePath) return false;
+    if (!packFolderPath || !convertDirPath || !structurePath) return false;
     if (batchItems.length === 0) return false;
     return batchNameIssues.size === 0;
-  }, [batchItems.length, batchNameIssues.size, convertDirPath, folderPath, isBatchRunning, isCreating, structurePath]);
+  }, [batchItems.length, batchNameIssues.size, convertDirPath, isBatchRunning, isCreating, packFolderPath, structurePath]);
 
   const handleApply = useCallback(async () => {
-    if (!folderPath) {
+    if (!packFolderPath) {
       toast.error("Folder path is empty");
       return;
     }
@@ -254,7 +254,7 @@ export function CardIconAddDialog({
         defaultFileUrlPrefix,
       });
 
-      const nutexbPath = await join(folderPath, hash, `${trimmedName}.nutexb`);
+      const nutexbPath = await join(packFolderPath, `${trimmedName}.nutexb`);
       if (!nutexbPath) {
         toast.error("Failed to resolve target nutexb path");
         return;
@@ -280,7 +280,7 @@ export function CardIconAddDialog({
     } finally {
       setIsCreating(false);
     }
-  }, [convertDirPath, ddsFormat, folderPath, isNameValid, onAdded, pngPath, structurePath, trimmedName]);
+  }, [convertDirPath, ddsFormat, isNameValid, onAdded, packFolderPath, pngPath, structurePath, trimmedName]);
 
   const canApply = Boolean(pngPath) && isNameValid && !isCreating;
 
@@ -291,7 +291,7 @@ export function CardIconAddDialog({
 
   const handlePickBatchPngs = useCallback(async () => {
     if (isBatchRunning || isCreating) return;
-    if (!folderPath) {
+    if (!packFolderPath) {
       toast.error("Folder path is empty");
       return;
     }
@@ -343,7 +343,7 @@ export function CardIconAddDialog({
       console.error(error);
       toast.error("Failed to select files");
     }
-  }, [folderPath, isBatchRunning, isCreating, loadExistingNameSet, selectedBatchId]);
+  }, [isBatchRunning, isCreating, loadExistingNameSet, packFolderPath, selectedBatchId]);
 
   const handleUpdateBatchName = useCallback(
     (id: string, value: string) => {
@@ -422,7 +422,7 @@ export function CardIconAddDialog({
 
         setBatchItems((prev) => prev.map((e) => (e.id === it.id ? { ...e, status: "processing", progress: 10, message: undefined } : e)));
 
-        const nutexbPath = await join(folderPath, hash, `${trimmed}.nutexb`);
+        const nutexbPath = await join(packFolderPath, `${trimmed}.nutexb`);
         if (!nutexbPath) {
           setBatchItems((prev) =>
             prev.map((e) =>
@@ -482,7 +482,7 @@ export function CardIconAddDialog({
     } finally {
       setIsBatchRunning(false);
     }
-  }, [batchItems, canStartBatch, convertDirPath, ddsFormat, folderPath, hash, onAdded, structurePath]);
+  }, [batchItems, canStartBatch, convertDirPath, ddsFormat, hash, onAdded, packFolderPath, structurePath]);
 
   const handleOpenChange = useCallback(
     (next: boolean) => {

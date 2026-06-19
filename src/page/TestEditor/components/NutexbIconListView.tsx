@@ -636,7 +636,7 @@ export function NutexbIconListView({
             disabled={!loadState.writable}
           />
           <CardIconAddDialog
-            folderPath={loadState.routeRootPath}
+            packFolderPath={loadState.rootDirPath}
             hash={normalizedHash}
             convertDirPath={loadState.convertDirPath}
             structurePath={loadState.filePath}
@@ -679,7 +679,7 @@ export function NutexbIconListView({
           disabled={secondaryLoadState.status !== "ready" || !secondaryLoadState.writable}
         />
         <CardIconAddDialog
-          folderPath={secondaryLoadState.status === "ready" ? secondaryLoadState.routeRootPath : ""}
+          packFolderPath={secondaryLoadState.status === "ready" ? secondaryLoadState.rootDirPath : ""}
           hash={normalizedSecondaryHash}
           convertDirPath={secondaryLoadState.status === "ready" ? secondaryLoadState.convertDirPath : ""}
           structurePath={secondaryLoadState.status === "ready" ? secondaryLoadState.filePath : ""}
