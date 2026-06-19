@@ -5,7 +5,7 @@ import { SIDEBAR_ROUTE_URLS } from "./sidebarRouteUrls"
 // Pages are code-split via React.lazy so the initial app shell loads without
 // pulling every page (and heavy deps like three.js) into the first bundle.
 // KeepAliveOutlet renders each element inside a Suspense boundary.
-const MainPage = lazy(() => import("../page/Main/page"))
+const MainPage = lazy(() => import("../page/Main/Page"))
 const ExtractFilePage = lazy(() => import("../page/Extract/page"))
 const RepackPage = lazy(() => import("../page/Repack/page"))
 const UnitEdit = lazy(() => import("../page/UnitEdit/page"))
