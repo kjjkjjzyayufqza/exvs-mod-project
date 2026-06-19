@@ -37,12 +37,18 @@ import {
   FontCoverageErrorDialog,
   type FontCoverageError,
 } from "./character-list/FontCoverageErrorDialog";
+import {
+  resolveWorkspaceContent,
+  type WorkspaceContentId,
+} from "@/services/testEditorWorkspace/contentCatalog";
+import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 
 interface CharacterListViewProps {
   folderPath: string;
   isActive: boolean;
   onUnsavedChanges?: (hasChanges: boolean) => void;
   onJumpToCharacterIdTable?: (characterId: number) => void;
+  workspaceDocument: TestEditorWorkspaceDocument;
 }
 
 const CHARACTER_LIST_INFO_MODAL_DIMENSIONS = {
@@ -63,7 +69,14 @@ type LoadState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error"; filePath: string; message: string }
-  | { status: "ready"; filePath: string; list: CharacterListData };
+  | {
+      status: "ready";
+      filePath: string;
+      configuredFilePath: string;
+      sourceLayout: "configured" | "legacy" | "missing";
+      writable: boolean;
+      list: CharacterListData;
+    };
 
 type SeriesPickerState =
   | { status: "idle"; filePath: string; convertDirPath: string }
@@ -83,7 +96,13 @@ type CardIconMapState =
       pickerItems: Array<{ index: number; name: string | null; previewSrc: string }>;
     };
 
-export default function CharacterListView({ folderPath, isActive, onUnsavedChanges, onJumpToCharacterIdTable }: CharacterListViewProps) {
+export default function CharacterListView({
+  folderPath,
+  isActive,
+  onUnsavedChanges,
+  onJumpToCharacterIdTable,
+  workspaceDocument,
+}: CharacterListViewProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [seriesPickerState, setSeriesPickerState] = useState<SeriesPickerState>({
     status: "idle",
@@ -109,33 +128,32 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
   const [characterIdTableIdsError, setCharacterIdTableIdsError] = useState<string | null>(null);
   const lastLoadedKeyRef = useRef<string>("");
 
-  const resolveFilePath = useCallback(async () => {
-    return await join(folderPath, "0xDFD38C70", "character_list.bin");
-  }, [folderPath]);
+  const resolveContent = useCallback(
+    async (id: WorkspaceContentId) => {
+      return await resolveWorkspaceContent(folderPath, workspaceDocument, id);
+    },
+    [folderPath, workspaceDocument],
+  );
 
-  const resolveCharacterIdTablePath = useCallback(async () => {
-    return await join(folderPath, "0x036B9E67", "character_id_table.bin");
-  }, [folderPath]);
+  const resolveContentFilePath = useCallback(
+    async (id: WorkspaceContentId) => {
+      const content = await resolveContent(id);
+      return {
+        content,
+        filePath: content.existing?.filePath ?? content.configured.filePath,
+      };
+    },
+    [resolveContent],
+  );
 
-  const resolveSeriesListFilePath = useCallback(async () => {
-    return await join(folderPath, "0xb7367090", "series_list.bin");
-  }, [folderPath]);
-
-  const resolveSeriesImageConvertDir = useCallback(async () => {
-    return await join(folderPath, "0xA0253AA0", "__convert");
-  }, [folderPath]);
-
-  const resolveSeriesImageStructureJsonPath = useCallback(async () => {
-    return await join(folderPath, "0xA0253AA0_structure.json");
-  }, [folderPath]);
-
-  const resolveCardIconStructureJsonPath = useCallback(async () => {
-    return await join(folderPath, "0x49235031_structure.json");
-  }, [folderPath]);
-
-  const resolveCardIconConvertDir = useCallback(async () => {
-    return await join(folderPath, "0x49235031", "__convert");
-  }, [folderPath]);
+  const resolveContentPackPaths = useCallback(
+    async (id: WorkspaceContentId) => {
+      const content = await resolveContent(id);
+      const pack = content.existing ?? content.configured;
+      return { content, pack };
+    },
+    [resolveContent],
+  );
 
   const resetEditorState = useCallback(() => {
     setHasChanges(false);
@@ -151,7 +169,10 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
     setCharacterIdTableIdSet(null);
     setCharacterIdTableIdsError(null);
     try {
-      const filePath = await resolveCharacterIdTablePath();
+      const { filePath } = await resolveContentFilePath("character-id-table");
+      if (!filePath) {
+        throw new Error("Character ID table content path is not configured");
+      }
       const fileData = await readFile(filePath);
       const table = new CharacterIdTable(Buffer.from(fileData));
       setCharacterIdTableIdSet(new Set(table.CharacterData.map((r) => r.CharacterId)));
@@ -161,7 +182,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
       setCharacterIdTableIdSet(null);
       setCharacterIdTableIdsError(error instanceof Error ? error.message : "Unknown error");
     }
-  }, [folderPath, resolveCharacterIdTablePath]);
+  }, [folderPath, resolveContentFilePath]);
 
   const load = useCallback(async () => {
     if (!folderPath) {
@@ -170,18 +191,34 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
       return;
     }
 
-    const filePath = await resolveFilePath();
+    const { content, filePath } = await resolveContentFilePath("character-list");
+    if (!filePath || !content.configured.filePath) {
+      setLoadState({
+        status: "error",
+        filePath: content.configured.folderPath,
+        message: "Character list content path is not configured",
+      });
+      resetEditorState();
+      return;
+    }
     setLoadState({ status: "loading" });
     try {
       const list = await invoke<CharacterListData>("parse_typed_param_file", { path: filePath, paramType: "characterlist" });
-      setLoadState({ status: "ready", filePath, list });
+      setLoadState({
+        status: "ready",
+        filePath,
+        configuredFilePath: content.configured.filePath,
+        sourceLayout: content.sourceLayout,
+        writable: content.writable,
+        list,
+      });
       resetEditorState();
     } catch (error) {
       console.error(error);
       setLoadState({ status: "error", filePath, message: error instanceof Error ? error.message : "Unknown error" });
       resetEditorState();
     }
-  }, [folderPath, resetEditorState, resolveFilePath]);
+  }, [folderPath, resetEditorState, resolveContentFilePath]);
 
   const loadSeriesPicker = useCallback(async () => {
     if (!folderPath) {
@@ -189,8 +226,13 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
       return;
     }
 
-    const filePath = await resolveSeriesListFilePath();
-    const convertDirPath = await resolveSeriesImageConvertDir();
+    const { filePath } = await resolveContentFilePath("series-list");
+    const { pack: seriesIconsPack } = await resolveContentPackPaths("series-icons");
+    if (!filePath) {
+      setSeriesPickerState({ status: "error", filePath: "", convertDirPath: "", message: "Series list content path is not configured" });
+      return;
+    }
+    const convertDirPath = await join(seriesIconsPack.folderPath, "__convert");
     setSeriesPickerState({ status: "loading", filePath, convertDirPath });
 
     try {
@@ -200,7 +242,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
       });
 
       const sep = getPathSeparatorFromFileUrl(convertDirPath);
-      const structurePath = await resolveSeriesImageStructureJsonPath();
+      const structurePath = seriesIconsPack.structureJsonPath;
       const structRaw = await readFile(structurePath);
       const structText = new TextDecoder().decode(structRaw);
       const structJson = JSON.parse(structText);
@@ -235,7 +277,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
         message: error instanceof Error ? error.message : "Unknown error",
       });
     }
-  }, [folderPath, resolveSeriesImageConvertDir, resolveSeriesImageStructureJsonPath, resolveSeriesListFilePath]);
+  }, [folderPath, resolveContentFilePath, resolveContentPackPaths]);
 
   const loadCardIconMap = useCallback(async () => {
     if (!folderPath) {
@@ -243,8 +285,9 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
       return;
     }
 
-    const filePath = await resolveCardIconStructureJsonPath();
-    const convertDirPath = await resolveCardIconConvertDir();
+    const { pack: cardIconsPack } = await resolveContentPackPaths("card-icons");
+    const filePath = cardIconsPack.structureJsonPath;
+    const convertDirPath = await join(cardIconsPack.folderPath, "__convert");
     setCardIconMapState({ status: "loading", filePath, convertDirPath });
 
     try {
@@ -268,18 +311,25 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
         message: error instanceof Error ? error.message : "Unknown error",
       });
     }
-  }, [folderPath, resolveCardIconConvertDir, resolveCardIconStructureJsonPath]);
+  }, [folderPath, resolveContentPackPaths]);
 
   useEffect(() => {
     if (!isActive) return;
-    const key = `${folderPath}::characterlist`;
+    const routeKey = [
+      workspaceDocument.legacyReadFallback,
+      workspaceDocument.assetRoutes["list.character"]?.prefix ?? "",
+      workspaceDocument.assetRoutes["list.series"]?.prefix ?? "",
+      workspaceDocument.assetRoutes["gui.series-icons"]?.prefix ?? "",
+      workspaceDocument.assetRoutes["gui.card-icons"]?.prefix ?? "",
+    ].join("|");
+    const key = `${folderPath}::characterlist::${routeKey}`;
     if (key === lastLoadedKeyRef.current) return;
     lastLoadedKeyRef.current = key;
     void load();
     void loadSeriesPicker();
     void loadCardIconMap();
     void loadCharacterIdTableIds();
-  }, [folderPath, isActive, load, loadCardIconMap, loadCharacterIdTableIds, loadSeriesPicker]);
+  }, [folderPath, isActive, load, loadCardIconMap, loadCharacterIdTableIds, loadSeriesPicker, workspaceDocument]);
 
   useEffect(() => {
     if (loadState.status !== "ready") return;
@@ -292,6 +342,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
 
   const handleEditorChange = useCallback(
     (next: CharacterListData) => {
+      if (loadState.status !== "ready" || !loadState.writable) return;
       setLoadState((prev) => {
         if (prev.status !== "ready") return prev;
         return { ...prev, list: next };
@@ -299,7 +350,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
       setHasChanges(true);
       onUnsavedChanges?.(true);
     },
-    [onUnsavedChanges]
+    [loadState, onUnsavedChanges]
   );
 
   const handleEditorSelectChange = useCallback((index: number) => {
@@ -346,6 +397,10 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
 
   const performSave = useCallback(async () => {
     if (loadState.status !== "ready") return;
+    if (!loadState.writable) {
+      toast.error("Legacy flat workspace content is read-only");
+      return;
+    }
     const filePath = loadState.filePath;
     try {
       const backupPath = filePath.replace(/\.bin$/i, "_bak.bin");
@@ -441,7 +496,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
   }, [isExporting, loadState]);
 
   const handlePickImportCharaJson = useCallback(async () => {
-    if (loadState.status !== "ready") return;
+    if (loadState.status !== "ready" || !loadState.writable) return;
     if (isImporting) return;
 
     setIsImporting(true);
@@ -466,7 +521,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
   }, [isImporting, loadState]);
 
   const handleConfirmImport = useCallback(async () => {
-    if (loadState.status !== "ready") return;
+    if (loadState.status !== "ready" || !loadState.writable) return;
     if (!importPreview) return;
     if (isImporting) return;
 
@@ -639,6 +694,12 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
                   Loaded: {fileMeta.count} characters, {fileMeta.commands} commands
                 </div>
               )}
+              {!loadState.writable ? (
+                <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300">
+                  Legacy flat workspace content is read-only. Writes target{" "}
+                  <span className="font-mono break-all">{loadState.configuredFilePath}</span>.
+                </div>
+              ) : null}
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <Button size="sm" variant="outline" onClick={handleReloadAll} className="inline-flex items-center gap-2">
@@ -649,7 +710,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
                 size="sm"
                 variant="outline"
                 onClick={() => void handlePickImportCharaJson()}
-                disabled={isImporting}
+                disabled={!loadState.writable || isImporting}
                 className="inline-flex items-center gap-2"
                 title="Import characters from JSON"
               >
@@ -679,7 +740,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
               <Button
                 size="sm"
                 onClick={() => void handleSaveFile()}
-                disabled={!hasChanges}
+                disabled={!loadState.writable || !hasChanges}
                 className="inline-flex items-center gap-2"
               >
                 <Save className="w-4 h-4" />
@@ -757,7 +818,7 @@ export default function CharacterListView({ folderPath, isActive, onUnsavedChang
               </Button>
               <Button
                 onClick={() => void handleConfirmImport()}
-                disabled={!importPreview || importPreview.validCount === 0 || isImporting}
+                disabled={!loadState.writable || !importPreview || importPreview.validCount === 0 || isImporting}
                 className="inline-flex items-center gap-2"
               >
                 Import

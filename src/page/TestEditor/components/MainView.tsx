@@ -86,6 +86,7 @@ const tabs: StageTab[] = [
         folderPath={props.folderPath ?? ""}
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDocument={props.workspaceDocument}
       />
     ),
   },
@@ -392,6 +393,7 @@ const MainView = ({
               isActive={activeTab === "character-list"}
               onUnsavedChanges={handleCharacterListUnsaved}
               onJumpToCharacterIdTable={handleJumpToCharacterIdTable}
+              workspaceDocument={props.workspaceDocument}
             />
           ),
         };
