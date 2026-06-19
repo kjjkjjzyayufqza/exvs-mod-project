@@ -16,6 +16,7 @@ import { StageForm } from "./StageForm";
 import { StageList as StageListComponent, type StageListSortKey } from "./StageList";
 import type { StageIconIndexPickerGroup } from "./StageIconIndexPickerPopover";
 import type { UseResourceRegistryResult } from "@/hooks/useResourceRegistry";
+import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 
 function createEmptyStage(id: number): StageListEntry {
   return {
@@ -55,7 +56,9 @@ interface StageEditorProps {
   onComposingChange?: (value: boolean) => void;
   obDplCachePath?: string;
   obModPath?: string;
-  workspacePath?: string;
+  workspaceRootPath?: string;
+  stageModelRouteRootPath?: string;
+  workspaceDocument?: TestEditorWorkspaceDocument;
   onReveal?: (path: string) => void;
   onChange: (data: StageListData) => void;
   stageIconConvertDirPath?: string;
@@ -81,7 +84,9 @@ export function StageEditor({
   onComposingChange,
   obDplCachePath = "",
   obModPath = "",
-  workspacePath = "",
+  workspaceRootPath = "",
+  stageModelRouteRootPath = "",
+  workspaceDocument,
   onReveal,
   onChange,
   stageIconConvertDirPath,
@@ -271,7 +276,9 @@ export function StageEditor({
             onChange={handleUpdateStage}
             obDplCachePath={obDplCachePath}
             obModPath={obModPath}
-            workspacePath={workspacePath}
+            workspaceRootPath={workspaceRootPath}
+            stageModelRouteRootPath={stageModelRouteRootPath}
+            workspaceDocument={workspaceDocument}
             onReveal={onReveal}
             stageIconIndexPickerGroups={stageIconIndexPickerGroups}
             stageIconIndexPickerLoading={stageIconIndexPickerLoading}

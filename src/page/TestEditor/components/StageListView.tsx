@@ -1025,7 +1025,9 @@ export default function StageListView({
               onComposingChange={setIsComposing}
               obDplCachePath={obDplCachePath}
               obModPath={obModPath}
-              workspacePath={stageModelRouteRootPath || folderPath}
+              workspaceRootPath={folderPath}
+              stageModelRouteRootPath={stageModelRouteRootPath || folderPath}
+              workspaceDocument={workspaceDocument}
               onReveal={onRevealTreeFolder}
               onChange={handleEditorChange}
               stageIconConvertDirPath={stageIconConvertDirPath}

@@ -51,4 +51,33 @@ describe("probeResourcePaths", () => {
     expect(existsMock).toHaveBeenCalledWith("E:/workspace/custom-chara/0xBDBE6FEA");
     expect(existsMock).not.toHaveBeenCalledWith("E:/workspace/0xBDBE6FEA");
   });
+
+  it("uses the workspace document stage model route prefix for stage assets", async () => {
+    const workspaceDocument: TestEditorWorkspaceDocument = {
+      ...DEFAULT_TEST_EDITOR_WORKSPACE,
+      legacyReadFallback: false,
+      assetRoutes: {
+        ...DEFAULT_TEST_EDITOR_WORKSPACE.assetRoutes,
+        "stage.model": {
+          ...DEFAULT_TEST_EDITOR_WORKSPACE.assetRoutes["stage.model"],
+          prefix: "custom-stage",
+        },
+      },
+    };
+    existsMock.mockImplementation(async (path: string) => path === "E:/workspace/custom-stage/0xBDBE6FEA");
+
+    const probe = await probeResourcePaths({
+      category: "stage",
+      slot: "fileName",
+      hashInt32: -1111592982,
+      obDplCachePath: "E:/OB/dplcache",
+      obModPath: "E:/OB/mod",
+      workspacePath: "E:/workspace",
+      workspaceDocument,
+    });
+
+    expect(probe.workspaceExists).toBe(true);
+    expect(existsMock).toHaveBeenCalledWith("E:/workspace/custom-stage/0xBDBE6FEA");
+    expect(existsMock).not.toHaveBeenCalledWith("E:/workspace/0xBDBE6FEA");
+  });
 });

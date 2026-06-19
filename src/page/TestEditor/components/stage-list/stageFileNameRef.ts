@@ -20,17 +20,17 @@ async function resolveFhm2dPath(baseDir: string, hashHex: string): Promise<strin
 
 /**
  * Resolves OB/MOD/WS paths for stage fileName (int32 hash).
- * Same path pattern as Character ID Table: OB/MOD use .fhm2d, WS uses folder.
+ * OB/MOD use .fhm2d, WS uses a folder under the resolved stage model route root.
  */
 export async function getStageFileNamePaths(
   fileNameValue: number,
   obDplCachePath: string,
   obModPath: string,
-  workspacePath: string
+  stageModelRouteRootPath: string
 ): Promise<StageFileNamePaths> {
   const hashHex = int32ToHashHex(fileNameValue);
   const obFilePath = await resolveFhm2dPath(obDplCachePath, hashHex);
   const modFilePath = await resolveFhm2dPath(obModPath, hashHex);
-  const wsFolderPath = workspacePath ? await join(workspacePath, hashHex) : "";
+  const wsFolderPath = stageModelRouteRootPath ? await join(stageModelRouteRootPath, hashHex) : "";
   return { obFilePath, modFilePath, wsFolderPath, hashHex };
 }

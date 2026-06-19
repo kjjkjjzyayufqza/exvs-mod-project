@@ -11,6 +11,7 @@ import type { StageListEntry } from "@/models/stageListEntry";
 import type { StageIconIndexPickerGroup } from "./StageIconIndexPickerPopover";
 import { STAGE_HASH_SLOTS } from "@/services/resourceRegistry/types";
 import { defaultStageSlotSeed, type StageHashSlot } from "@/services/resourceRegistry/stageRegistrySync";
+import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 
 const NUMERIC_FIELDS = [
   { name: "entryId" as const, label: "id" },
@@ -41,7 +42,9 @@ interface StageFormProps {
   onChange: (updated: StageListEntry) => void;
   obDplCachePath?: string;
   obModPath?: string;
-  workspacePath?: string;
+  workspaceRootPath?: string;
+  stageModelRouteRootPath?: string;
+  workspaceDocument?: TestEditorWorkspaceDocument;
   onReveal?: (path: string) => void;
   stageIconIndexPickerGroups?: StageIconIndexPickerGroup[];
   stageIconIndexPickerLoading?: boolean;
@@ -56,7 +59,9 @@ export function StageForm({
   onChange,
   obDplCachePath = "",
   obModPath = "",
-  workspacePath = "",
+  workspaceRootPath = "",
+  stageModelRouteRootPath = "",
+  workspaceDocument,
   onReveal,
   stageIconIndexPickerGroups = [],
   stageIconIndexPickerLoading = false,
@@ -134,7 +139,7 @@ export function StageForm({
           <StageSaveToRegistryButton
             stage={stage}
             index={index}
-            workspacePath={workspacePath}
+            workspacePath={workspaceRootPath}
             resourceRegistry={resourceRegistry}
             slotSeeds={slotSeeds}
           />
@@ -162,7 +167,7 @@ export function StageForm({
                   fileNameValue={getNumericValue(field.name)}
                   obDplCachePath={obDplCachePath}
                   obModPath={obModPath}
-                  workspacePath={workspacePath}
+                  workspacePath={stageModelRouteRootPath}
                   onReveal={onReveal}
                 />
               ) : field.name === "iconIndex" ? (
@@ -217,7 +222,8 @@ export function StageForm({
                 initialSeed={slotSeeds[slot] ?? defaultStageSlotSeed(stage, slot)}
                 obDplCachePath={obDplCachePath}
                 obModPath={obModPath}
-                workspacePath={workspacePath}
+                workspacePath={workspaceRootPath}
+                workspaceDocument={workspaceDocument}
                 registry={resourceRegistry}
                 onApplyHash={(hashInt32) => handleFieldChange(slot, hashInt32)}
                 onSeedChange={(seed) => handleSlotSeedChange(slot, seed)}

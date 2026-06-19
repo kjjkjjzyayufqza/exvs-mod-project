@@ -1,6 +1,7 @@
 import { exists } from "@tauri-apps/plugin-fs";
 import { getAssetRefInfo, int32ToHashHex } from "@/page/TestEditor/components/character-id-table/assetRef";
 import { getStageFileNamePaths } from "@/page/TestEditor/components/stage-list/stageFileNameRef";
+import { resolveWorkspaceRouteRoot } from "@/services/testEditorWorkspace/paths";
 import type { ResourceRegistryCategory } from "./types";
 import { UNIT_SLOT_TO_FIELD_KEY } from "./types";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
@@ -25,11 +26,14 @@ export async function probeResourcePaths(params: {
   const { category, slot, hashInt32, obDplCachePath, obModPath, workspacePath, workspaceDocument } = params;
 
   if (category === "stage") {
+    const stageRouteRoot = workspaceDocument
+      ? await resolveWorkspaceRouteRoot(workspacePath, workspaceDocument, "stage.model")
+      : workspacePath;
     const paths = await getStageFileNamePaths(
       hashInt32,
       obDplCachePath,
       obModPath,
-      workspacePath,
+      stageRouteRoot,
     );
     const [obExists, modExists, workspaceExists] = await Promise.all([
       paths.obFilePath ? exists(paths.obFilePath) : Promise.resolve(false),
