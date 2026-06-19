@@ -12,6 +12,7 @@ import {
   Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -22,8 +23,8 @@ import {
 import type { TestTreeNode } from "../types";
 import { normalizePathForStar } from "../utils/fileTreeStars";
 import {
-  isWorkspaceDirectChildFolder,
-  parseRootStructureJsonRepackTarget,
+  normalizeStructureJsonPathKey,
+  parseWorkspacePackNodeTarget,
   STRUCTURE_JSON_SUFFIX,
 } from "./fileTreeNodeRowUtils";
 
@@ -32,14 +33,13 @@ export type FileTreeNodeRowContext = {
   jsonPathHighlightSet: ReadonlySet<string>;
   hasUnsavedChanges: boolean;
   currentDir: string | undefined;
-  dirtyTopLevelSet: ReadonlySet<string>;
+  workspaceDocument: TestEditorWorkspaceDocument;
+  dirtyPackKeys: ReadonlySet<string>;
   starredPathSet: ReadonlySet<string>;
-  structureJsonExistsAtWorkspaceRoot: Record<string, boolean>;
+  structureJsonPathKeys: ReadonlySet<string>;
   onToggleStar: (path: string) => void;
-  resolveTopLevelName: (nodePath: string) => string | null;
   onUserSelectInTree: () => void;
-  openRepackDialogForFileNode: (node: TestTreeNode) => void | Promise<void>;
-  openRepackDialogForFolderNode: (node: TestTreeNode) => void | Promise<void>;
+  openRepackDialogForNode: (node: TestTreeNode) => void | Promise<void>;
   handleOpenNodePath: (node: TestTreeNode) => void | Promise<void>;
   handleOpenNodeFolder: (node: TestTreeNode) => void | Promise<void>;
   onOpenAsEffectProject?: (filePath: string) => void;
@@ -62,14 +62,13 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
     jsonPathHighlightSet,
     hasUnsavedChanges,
     currentDir,
-    dirtyTopLevelSet,
+    workspaceDocument,
+    dirtyPackKeys,
     starredPathSet,
-    structureJsonExistsAtWorkspaceRoot,
+    structureJsonPathKeys,
     onToggleStar,
-    resolveTopLevelName,
     onUserSelectInTree,
-    openRepackDialogForFileNode,
-    openRepackDialogForFolderNode,
+    openRepackDialogForNode,
     handleOpenNodePath,
     handleOpenNodeFolder,
     onOpenAsEffectProject,
@@ -95,23 +94,20 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
   const depth = node.level;
   const indentPadding = depth * 12;
 
-  const topLevelName = resolveTopLevelName(node.data.path);
-  const isTopLevelDirty = Boolean(topLevelName && dirtyTopLevelSet.has(topLevelName));
+  const packTarget = parseWorkspacePackNodeTarget(node.data, currentDir, workspaceDocument);
+  const isPackDirty = Boolean(packTarget && dirtyPackKeys.has(packTarget.packKey));
   const isStarred = starredPathSet.has(normalizePathForStar(node.data.path));
 
   const extLabel = !isDir ? fileExtensionSuffix(node.data.name) : null;
-  const structureRepackTarget = !isDir
-    ? parseRootStructureJsonRepackTarget(node.data.name, node.data.path, currentDir)
-    : null;
 
-  const isDirectWorkspaceFolder = isDir && isWorkspaceDirectChildFolder(node.data, currentDir);
-  const folderStructureExists = isDirectWorkspaceFolder
-    ? structureJsonExistsAtWorkspaceRoot[node.data.name]
-    : undefined;
+  const folderStructureExists =
+    isDir && packTarget
+      ? structureJsonPathKeys.has(normalizeStructureJsonPathKey(packTarget.structureJsonPath))
+      : undefined;
   const folderRepackReady = folderStructureExists === true;
-  const folderRepackDisabled = isDirectWorkspaceFolder && !folderRepackReady;
+  const folderRepackDisabled = isDir && Boolean(packTarget) && !folderRepackReady;
 
-  const hasRepackItems = Boolean(structureRepackTarget) || isDirectWorkspaceFolder;
+  const hasRepackItems = Boolean(packTarget);
   const isBinFile = !isDir && node.data.name.toLowerCase().endsWith(".bin");
   const canOpenEffectProject = isBinFile && typeof onOpenAsEffectProject === "function";
 
@@ -141,11 +137,11 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
           onDoubleClick={() => isDir && node.toggle()}
           title={node.data.name}
         >
-          {isTopLevelDirty && (
+          {isPackDirty && (
             <span
               className="h-2 w-2 shrink-0 rounded-full bg-yellow-400"
-              aria-label="Folder changed"
-              title="Folder changed"
+              aria-label="Pack changed"
+              title="Pack changed"
             />
           )}
           <div
@@ -250,19 +246,10 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
           </ContextMenuItem>
         ) : null}
         {hasRepackItems ? <ContextMenuSeparator /> : null}
-        {structureRepackTarget && (
-          <ContextMenuItem
-            onClick={() => void openRepackDialogForFileNode(node.data)}
-            className="flex items-center gap-2"
-          >
-            <Package className="h-4 w-4" />
-            <span>Repack</span>
-          </ContextMenuItem>
-        )}
-        {isDirectWorkspaceFolder && (
+        {packTarget && (
           <ContextMenuItem
             disabled={folderRepackDisabled}
-            onClick={() => void openRepackDialogForFolderNode(node.data)}
+            onClick={() => void openRepackDialogForNode(node.data)}
             className={cn("flex flex-col items-stretch gap-0.5 py-2", folderRepackDisabled && "cursor-not-allowed")}
           >
             <span className="flex items-center gap-2">
@@ -272,7 +259,7 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
             {folderRepackDisabled ? (
               <span className="pl-6 text-[10px] leading-snug text-muted-foreground">
                 {folderStructureExists === false
-                  ? `No ${node.data.name}${STRUCTURE_JSON_SUFFIX} at workspace root`
+                  ? `No ${packTarget.hashFolderName}${STRUCTURE_JSON_SUFFIX} beside folder`
                   : "Checking structure file…"}
               </span>
             ) : null}

@@ -19,7 +19,7 @@ import {
   filterTree,
   findNode,
   findTreeNodeByPath,
-  getDirtyFolderNameFromPath,
+  getDirtyPackFromPath,
   normalizeTree,
   type RawTreeNode,
 } from "./utils/testEditorTreeOps";
@@ -30,7 +30,6 @@ import { useConfigStore } from "@/store/configStore";
 import { TestEditorToolbar } from "./components/TestEditorToolbar";
 import ListeningRepackDialog from "./components/ListeningRepackDialog";
 import { folderContainsMscScriptFiles } from "./utils/mscWorkspaceUtils";
-import { normalizePackFolderName } from "./utils/packName";
 import { applyFileTreeViewSort } from "./utils/fileTreeViewSort";
 import { sortTreeByStarOrder, useFileTreeStarOrder } from "./utils/fileTreeStars";
 import { useFileTreeViewOptions } from "./hooks/useFileTreeViewOptions";
@@ -99,6 +98,7 @@ import {
   EffectProjectAuxiliaryCacheService,
   createIdleAuxiliarySnapshot,
 } from "@/components/ssbh-model-preview/effectProjectAuxiliaryCache";
+import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 
 const WATCH_COMMAND = "watch_folder";
 const TEST_EDITOR_FOLDER_STORE_KEY = "testEditorFolder";
@@ -117,12 +117,17 @@ const TestEditorPage = () => {
   const [pendingJsonPath, setPendingJsonPath] = useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
-  const [dirtyFolders, setDirtyFolders] = useState<Set<string>>(new Set());
+  const [dirtyPacks, setDirtyPacks] = useState<Map<string, WorkspacePackIdentity>>(() => new Map());
   const [isRepackDialogOpen, setIsRepackDialogOpen] = useState(false);
   const [isWorkspaceLayoutOpen, setIsWorkspaceLayoutOpen] = useState(false);
   const [obModPath, setObModPath] = useState("");
   const isPageActive = useTestEditorPageActive();
   const workspaceLayout = useTestEditorWorkspace(currentDir || null);
+  const workspaceDocumentRef = useRef<TestEditorWorkspaceDocument>(workspaceLayout.document);
+  useEffect(() => {
+    workspaceDocumentRef.current = workspaceLayout.document;
+    setDirtyPacks(new Map());
+  }, [workspaceLayout.document]);
   // NOTE: This inline SSBH editor session management is LEGACY. The canonical,
   // reusable implementation now lives in
   // `@/components/ssbh-model-preview/useSsbhFileEditorSessions` + `SsbhFileEditorHosts`
@@ -182,20 +187,21 @@ const TestEditorPage = () => {
       setTreeData((prev) => applyPayloadQueue(prev, queued));
     });
 
-    const nextDirty = new Set<string>();
+    const nextDirty = new Map<string, WorkspacePackIdentity>();
+    const workspaceDocument = workspaceDocumentRef.current;
     queued.forEach((payload) => {
       payload.ops?.forEach((op) => {
         const isDir = (op.node as { isDir?: boolean; is_dir?: boolean }).isDir ?? (op.node as { is_dir?: boolean }).is_dir;
-        const name = getDirtyFolderNameFromPath(op.node.path, currentDir, isDir);
-        if (!name) return;
-        nextDirty.add(name);
+        const pack = getDirtyPackFromPath(op.node.path, currentDir, isDir, workspaceDocument);
+        if (!pack) return;
+        nextDirty.set(pack.packKey, pack);
       });
     });
 
     if (nextDirty.size > 0) {
-      setDirtyFolders((prev) => {
-        const merged = new Set(prev);
-        nextDirty.forEach((name) => merged.add(name));
+      setDirtyPacks((prev) => {
+        const merged = new Map(prev);
+        nextDirty.forEach((pack) => merged.set(pack.packKey, pack));
         return merged;
       });
     }
@@ -210,7 +216,7 @@ const TestEditorPage = () => {
       const initial = await invoke<RawTreeNode[]>(WATCH_COMMAND, { path: directoryPath });
       setTreeData(normalizeTree(initial ?? []));
       setSelectedId(null);
-      setDirtyFolders(new Set());
+      setDirtyPacks(new Map());
       setNumdlbSessions([]);
       setNumdlbGuard(null);
       setNuhlpbSessions([]);
@@ -307,34 +313,9 @@ const TestEditorPage = () => {
       ),
     [treeData, deferredSearchTerm, starOrder, viewOptions],
   );
-  const workspaceTopLevelFolderNames = useMemo(
-    () => treeData.filter((n) => n.isDir).map((n) => n.name),
-    [treeData]
-  );
-  const workspaceRootStructureJsonNames = useMemo(
-    () =>
-      treeData
-        .filter((n) => !n.isDir && n.name.toLowerCase().endsWith("_structure.json"))
-        .map((n) => n.name),
-    [treeData],
-  );
-
-  const fileTreeStructureScanKey = useMemo(() => {
-    const dirs = treeData
-      .filter((n) => n.isDir)
-      .map((n) => n.name)
-      .sort()
-      .join("\0");
-    const rootStructureJson = treeData
-      .filter((n) => !n.isDir && n.name.toLowerCase().endsWith("_structure.json"))
-      .map((n) => n.name.toLowerCase())
-      .sort()
-      .join("\0");
-    return `${dirs}|${rootStructureJson}`;
-  }, [treeData]);
   const selectedNode = useMemo(() => findNode(treeData, selectedId), [treeData, selectedId]);
   const [mscWorkspaceFolderPath, setMscWorkspaceFolderPath] = useState<string | null>(null);
-  const dirtyFolderList = useMemo(() => Array.from(dirtyFolders), [dirtyFolders]);
+  const dirtyPackList = useMemo(() => Array.from(dirtyPacks.values()), [dirtyPacks]);
 
   useEffect(() => {
     let cancelled = false;
@@ -360,7 +341,7 @@ const TestEditorPage = () => {
       cancelled = true;
     };
   }, [selectedNode]);
-  const hasDirtyFolders = dirtyFolderList.length > 0;
+  const hasDirtyFolders = dirtyPackList.length > 0;
 
   const handleDiscardChanges = useCallback(() => {
     if (pendingJsonPath) {
@@ -394,12 +375,11 @@ const TestEditorPage = () => {
     setShowUnsavedDialog(false);
   }, []);
 
-  const handleRepackSuccess = useCallback((folderName: string) => {
-    const normalizedFolderName = normalizePackFolderName(folderName);
-    setDirtyFolders((prev) => {
-      if (!prev.has(normalizedFolderName)) return prev;
-      const next = new Set(prev);
-      next.delete(normalizedFolderName);
+  const handleRepackSuccess = useCallback((packKey: string) => {
+    setDirtyPacks((prev) => {
+      if (!prev.has(packKey)) return prev;
+      const next = new Map(prev);
+      next.delete(packKey);
       return next;
     });
   }, []);
@@ -1536,7 +1516,7 @@ const TestEditorPage = () => {
         onRefresh={refreshFolder}
         onOpenWorkspaceLayout={() => setIsWorkspaceLayoutOpen(true)}
         onRepack={() => setIsRepackDialogOpen(true)}
-        onClearDirty={() => setDirtyFolders(new Set())}
+        onClearDirty={() => setDirtyPacks(new Map())}
       />
       </div>
 
@@ -1554,12 +1534,10 @@ const TestEditorPage = () => {
           isLoading={isLoading}
           selectedJsonPath={selectedJsonPath}
           hasUnsavedChanges={hasUnsavedChanges}
-          dirtyFolderList={dirtyFolderList}
-          workspaceTopLevelFolderNames={workspaceTopLevelFolderNames}
-          workspaceRootStructureJsonNames={workspaceRootStructureJsonNames}
-          fileTreeStructureScanKey={fileTreeStructureScanKey}
+          workspaceTreeData={treeData}
+          dirtyPacks={dirtyPackList}
           obModPath={obModPath}
-          onFolderRepacked={handleRepackSuccess}
+          onPackRepacked={handleRepackSuccess}
           starredPathSet={starredPathSet}
           onToggleStar={toggleStar}
           viewOptions={viewOptions}
@@ -1577,10 +1555,9 @@ const TestEditorPage = () => {
       <ListeningRepackDialog
         open={isRepackDialogOpen}
         onOpenChange={setIsRepackDialogOpen}
-        rootDir={currentDir}
-        dirtyFolders={dirtyFolderList}
+        dirtyPacks={dirtyPackList}
         modFolderPath={obModPath || undefined}
-        onFolderRepacked={handleRepackSuccess}
+        onPackRepacked={handleRepackSuccess}
         onComplete={handleRepackComplete}
       />
 

@@ -1,28 +1,28 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { join } from "@tauri-apps/api/path";
 import { exists } from "@tauri-apps/plugin-fs";
 import { PackageCheck } from "lucide-react";
+import type { WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { repackFolderUsingStructureToModFolder } from "@/utils/repackRunner";
-import { normalizePackFolderName } from "../utils/packName";
 import { removeMatchingModVgsht2 } from "../utils/modVgsht2";
 
 type ListeningRepackDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  rootDir: string;
-  dirtyFolders: string[];
+  dirtyPacks: WorkspacePackIdentity[];
   modFolderPath?: string;
-  onFolderRepacked: (folderName: string) => void;
+  onPackRepacked: (packKey: string) => void;
   onComplete?: () => void;
 };
 
-type FolderEntry = {
-  name: string;
+type PackEntry = {
+  packKey: string;
+  hashFolderName: string;
+  folderPath: string;
   structurePath: string;
   exists: boolean;
   selected: boolean;
@@ -39,13 +39,12 @@ const LISTENING_REPACK_DIMENSIONS = {
 export default function ListeningRepackDialog({
   open,
   onOpenChange,
-  rootDir,
-  dirtyFolders,
+  dirtyPacks,
   modFolderPath,
-  onFolderRepacked,
+  onPackRepacked,
   onComplete,
 }: ListeningRepackDialogProps) {
-  const [entries, setEntries] = useState<FolderEntry[]>([]);
+  const [entries, setEntries] = useState<PackEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [removeVgsht2InMod, setRemoveVgsht2InMod] = useState(true);
@@ -54,29 +53,29 @@ export default function ListeningRepackDialog({
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      if (!open || !rootDir || dirtyFolders.length === 0) {
+      if (!open || dirtyPacks.length === 0) {
         setEntries([]);
         return;
       }
       setIsLoading(true);
       try {
         const seen = new Set<string>();
-        const names: string[] = [];
-        for (const rawName of dirtyFolders) {
-          const name = normalizePackFolderName(rawName);
-          if (!name || seen.has(name)) {
+        const packs: WorkspacePackIdentity[] = [];
+        for (const pack of dirtyPacks) {
+          if (!pack.packKey || seen.has(pack.packKey)) {
             continue;
           }
-          seen.add(name);
-          names.push(name);
+          seen.add(pack.packKey);
+          packs.push(pack);
         }
         const next = await Promise.all(
-          names.map(async (name): Promise<FolderEntry> => {
-            const structurePath = await join(rootDir, `${name}_structure.json`);
-            const structureExists = await exists(structurePath);
+          packs.map(async (pack): Promise<PackEntry> => {
+            const structureExists = await exists(pack.structureJsonPath);
             return {
-              name,
-              structurePath,
+              packKey: pack.packKey,
+              hashFolderName: pack.hashFolderName,
+              folderPath: pack.folderPath,
+              structurePath: pack.structureJsonPath,
               exists: structureExists,
               selected: structureExists,
             };
@@ -98,7 +97,7 @@ export default function ListeningRepackDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, rootDir, dirtyFolders]);
+  }, [open, dirtyPacks]);
 
   const selectedEntries = useMemo(
     () => entries.filter((entry) => entry.exists && entry.selected),
@@ -109,14 +108,14 @@ export default function ListeningRepackDialog({
     count: entries.length,
     getScrollElement,
     estimateSize: () => 68,
-    getItemKey: (index) => entries[index]?.name ?? index,
+    getItemKey: (index) => entries[index]?.packKey ?? index,
     overscan: 8,
   });
 
-  const toggleSelection = (name: string, checked: boolean) => {
+  const toggleSelection = (packKey: string, checked: boolean) => {
     setEntries((prev) =>
       prev.map((entry) =>
-        entry.name === name ? { ...entry, selected: checked } : entry
+        entry.packKey === packKey ? { ...entry, selected: checked } : entry
       )
     );
   };
@@ -136,24 +135,23 @@ export default function ListeningRepackDialog({
     try {
       for (const entry of selectedEntries) {
         try {
-          const inputFolderPath = await join(rootDir, entry.name);
           const repackResult = await repackFolderUsingStructureToModFolder({
             structurePath: entry.structurePath,
-            inputFolderPath,
+            inputFolderPath: entry.folderPath,
             modFolderPath: modDir,
           });
           if (removeVgsht2InMod) {
             try {
-              const removed = await removeMatchingModVgsht2(modDir, entry.name);
+              const removed = await removeMatchingModVgsht2(modDir, entry.hashFolderName);
               if (removed) {
                 toast.success(`Repacked to mod: ${repackResult.outputPath}`, {
-                  description: `Removed ${entry.name}.vgsht2`,
+                  description: `Removed ${entry.hashFolderName}.vgsht2`,
                 });
               } else {
                 toast.success(`Repacked to mod: ${repackResult.outputPath}`);
               }
             } catch (removeErr) {
-              console.error(`Failed to remove mod/${entry.name}.vgsht2`, removeErr);
+              console.error(`Failed to remove mod/${entry.hashFolderName}.vgsht2`, removeErr);
               toast.error(
                 `Repacked to mod but failed to remove .vgsht2: ${(removeErr as Error).message}`,
               );
@@ -161,11 +159,11 @@ export default function ListeningRepackDialog({
           } else {
             toast.success(`Repacked to mod: ${repackResult.outputPath}`);
           }
-          onFolderRepacked(entry.name);
+          onPackRepacked(entry.packKey);
         } catch (error) {
-          console.error(`Repack failed for ${entry.name}`, error);
+          console.error(`Repack failed for ${entry.packKey}`, error);
           toast.error(
-            `Repack failed for ${entry.name}: ${(error as Error).message}`,
+            `Repack failed for ${entry.packKey}: ${(error as Error).message}`,
           );
         }
       }
@@ -189,7 +187,7 @@ export default function ListeningRepackDialog({
     <AppRndModalShell
       titleId="listening-repack-title"
       title="Repack Changes"
-      subtitle="Repack changed folders into the configured OB Mod folder"
+      subtitle="Repack changed packs into the configured OB Mod folder"
       headerIcon={<PackageCheck className="h-4 w-4" />}
       dimensions={LISTENING_REPACK_DIMENSIONS}
       storageKey="listening-repack-dialog-size"
@@ -208,7 +206,7 @@ export default function ListeningRepackDialog({
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
         <p className="text-sm text-muted-foreground">
-          Folders are packed as <code>0xHASH.fhm2d</code> using each pack&apos;s <code>_structure.json</code>.
+          Packs are written as <code>0xHASH.fhm2d</code> using each pack&apos;s <code>_structure.json</code>.
         </p>
         {!modFolderPath?.trim() ? (
           <p className="text-sm text-amber-600 dark:text-amber-500">
@@ -249,11 +247,11 @@ export default function ListeningRepackDialog({
                       checked={entry.selected}
                       disabled={!entry.exists || isRunning}
                       onCheckedChange={(checked) =>
-                        toggleSelection(entry.name, Boolean(checked))
+                        toggleSelection(entry.packKey, Boolean(checked))
                       }
                     />
                     <div className="flex flex-col">
-                      <span className="font-medium">{entry.name}</span>
+                      <span className="font-medium">{entry.packKey}</span>
                       <span className="break-all text-xs text-muted-foreground">
                         {entry.structurePath}
                       </span>

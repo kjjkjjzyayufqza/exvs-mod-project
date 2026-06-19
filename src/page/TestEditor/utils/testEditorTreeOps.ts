@@ -1,4 +1,5 @@
-import { normalizePackFolderName } from "./packName";
+import { classifyWorkspacePackPath } from "@/services/testEditorWorkspace/packIdentity";
+import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import type { FolderChangePayload, TestTreeNode } from "../types";
 
 type RawTreeNode = Partial<TestTreeNode> & {
@@ -210,51 +211,18 @@ export function filterTree(nodes: TestTreeNode[], term: string): TestTreeNode[] 
   return walk(nodes, false);
 }
 
-function normalizeSlashes(input: string): string {
-  return input.replace(/\\/g, "/");
-}
-
-export function getTopLevelFolderName(
+export function getDirtyPackFromPath(
   nodePath: string,
   rootPath: string,
-  isDir?: boolean,
-): string | null {
-  if (!nodePath || !rootPath) return null;
-  const normalizedRoot = normalizeSlashes(rootPath).replace(/\/+$/, "");
-  const normalizedNode = normalizeSlashes(nodePath);
-  if (!normalizedNode.startsWith(normalizedRoot)) return null;
-  const relative = normalizedNode.slice(normalizedRoot.length).replace(/^\/+/, "");
-  if (!relative) return null;
-  const segments = relative.split("/");
-  if (segments.length === 1 && !relative.includes("/")) {
-    return isDir === false ? null : segments[0];
-  }
-  return segments[0] ?? null;
-}
-
-export function getDirtyFolderNameFromPath(
-  nodePath: string,
-  rootPath: string,
-  isDir?: boolean,
-): string | null {
-  const topLevel = getTopLevelFolderName(nodePath, rootPath, isDir);
-  if (topLevel) return normalizePackFolderName(topLevel);
-
-  if (isDir === false && nodePath && rootPath) {
-    const normalizedRoot = normalizeSlashes(rootPath).replace(/\/+$/, "");
-    const normalizedNode = normalizeSlashes(nodePath);
-    if (!normalizedNode.startsWith(normalizedRoot)) return null;
-    const relative = normalizedNode.slice(normalizedRoot.length).replace(/^\/+/, "");
-    if (!relative || relative.includes("/")) return null;
-    const lower = relative.toLowerCase();
-    const suffix = "_structure.json";
-    if (!lower.endsWith(suffix)) return null;
-    const base = relative.slice(0, -suffix.length);
-    if (!base) return null;
-    return normalizePackFolderName(base);
-  }
-
-  return null;
+  nodeIsDirectory: boolean | undefined,
+  document: TestEditorWorkspaceDocument,
+): WorkspacePackIdentity | null {
+  return classifyWorkspacePackPath({
+    workspaceRoot: rootPath,
+    nodePath,
+    nodeIsDirectory,
+    document,
+  });
 }
 
 export type { RawTreeNode };

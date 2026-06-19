@@ -5,7 +5,7 @@ import MainView from "./MainView";
 import InfoPanel from "./InfoPanel";
 import { FileTreePane } from "./FileTreePane";
 import { TestEditorWorkspacePanels } from "./TestEditorWorkspacePanels";
-import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
+import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 
 type Props = {
   folderStoreKey: string;
@@ -20,12 +20,10 @@ type Props = {
   isLoading: boolean;
   selectedJsonPath: string | null;
   hasUnsavedChanges: boolean;
-  dirtyFolderList: string[];
-  workspaceTopLevelFolderNames: string[];
-  workspaceRootStructureJsonNames: string[];
-  fileTreeStructureScanKey: string;
+  workspaceTreeData: TestTreeNode[];
+  dirtyPacks: WorkspacePackIdentity[];
   obModPath: string;
-  onFolderRepacked: (folderName: string) => void;
+  onPackRepacked: (packKey: string) => void;
   starredPathSet: Set<string>;
   onToggleStar: (path: string) => void;
   viewOptions: FileTreeViewOptions;
@@ -52,12 +50,10 @@ export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
   isLoading,
   selectedJsonPath,
   hasUnsavedChanges,
-  dirtyFolderList,
-  workspaceTopLevelFolderNames,
-  workspaceRootStructureJsonNames,
-  fileTreeStructureScanKey,
+  workspaceTreeData,
+  dirtyPacks,
   obModPath,
-  onFolderRepacked,
+  onPackRepacked,
   starredPathSet,
   onToggleStar,
   viewOptions,
@@ -75,6 +71,7 @@ export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
       left={
         <FileTreePane
           data={fileTreeData}
+          workspaceTreeData={workspaceTreeData}
           onSelect={onFileSelect}
           selectedId={selectedId}
           searchTerm={searchTerm}
@@ -86,12 +83,10 @@ export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
           currentDir={currentDir}
           currentJsonPath={selectedJsonPath}
           hasUnsavedChanges={hasUnsavedChanges}
-          dirtyTopLevelFolderNames={dirtyFolderList}
-          workspaceTopLevelFolderNames={workspaceTopLevelFolderNames}
-          workspaceRootStructureJsonNames={workspaceRootStructureJsonNames}
-          fileTreeStructureScanKey={fileTreeStructureScanKey}
+          workspaceDocument={workspaceDocument}
+          dirtyPacks={dirtyPacks}
           modFolderPath={obModPath || undefined}
-          onFolderRepacked={onFolderRepacked}
+          onPackRepacked={onPackRepacked}
           starredPathSet={starredPathSet}
           onToggleStar={onToggleStar}
           viewOptions={viewOptions}

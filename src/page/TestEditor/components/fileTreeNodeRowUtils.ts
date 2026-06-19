@@ -1,38 +1,87 @@
+import { classifyWorkspacePackPath } from "@/services/testEditorWorkspace/packIdentity";
+import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import type { TestTreeNode } from "../types";
-import { normalizePackFolderName } from "../utils/packName";
 
 export const STRUCTURE_JSON_SUFFIX = "_structure.json";
 
-/** Workspace root direct child folder only (same packs as Repack Changes). */
-export function isWorkspaceDirectChildFolder(
-  node: TestTreeNode,
-  rootDir: string | undefined,
-): boolean {
-  if (!node.isDir || !rootDir) return false;
-  const normalize = (input: string) => input.replace(/\\/g, "/");
-  const normalizedRoot = normalize(rootDir).replace(/\/+$/, "");
-  const normalizedNode = normalize(node.path).replace(/\/+$/, "");
-  if (!normalizedNode.startsWith(normalizedRoot)) return false;
-  const relative = normalizedNode.slice(normalizedRoot.length).replace(/^\/+/, "");
-  return Boolean(relative && !relative.includes("/"));
+export function normalizeStructureJsonPathKey(path: string): string {
+  return path.trim().replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 }
 
-/** Root-level *_structure.json only; matches Repack Changes folder naming. */
-export function parseRootStructureJsonRepackTarget(
-  fileName: string,
-  filePath: string,
-  rootDir: string | undefined,
-): { folderName: string; structurePath: string } | null {
-  if (!rootDir) return null;
+function parentPathOf(rawPath: string): string | null {
+  const trimmed = rawPath.replace(/[\\/]+$/, "");
+  const lastSlash = trimmed.lastIndexOf("/");
+  const lastBackslash = trimmed.lastIndexOf("\\");
+  const idx = Math.max(lastSlash, lastBackslash);
+  if (idx < 0) return null;
+
+  const parent = trimmed.slice(0, idx);
+  if (/^[a-zA-Z]:$/.test(parent)) return `${parent}\\`;
+  if (parent === "" && trimmed.startsWith("/")) return "/";
+  return parent;
+}
+
+function joinSiblingPath(parentPath: string, fileName: string): string {
+  const separator = parentPath.includes("\\") ? "\\" : "/";
+  return `${parentPath.replace(/[\\/]+$/, "")}${separator}${fileName}`;
+}
+
+function structureBaseName(fileName: string): string | null {
   const lower = fileName.toLowerCase();
   if (!lower.endsWith(STRUCTURE_JSON_SUFFIX)) return null;
-  const normalize = (input: string) => input.replace(/\\/g, "/");
-  const normalizedRoot = normalize(rootDir).replace(/\/+$/, "");
-  const normalizedNode = normalize(filePath);
-  if (!normalizedNode.startsWith(normalizedRoot)) return null;
-  const relative = normalizedNode.slice(normalizedRoot.length).replace(/^\/+/, "");
-  if (!relative || relative.includes("/")) return null;
-  const folderName = fileName.slice(0, fileName.length - STRUCTURE_JSON_SUFFIX.length);
-  if (!folderName) return null;
-  return { folderName: normalizePackFolderName(folderName), structurePath: filePath };
+  const base = fileName.slice(0, fileName.length - STRUCTURE_JSON_SUFFIX.length);
+  return base || null;
+}
+
+export function parseWorkspacePackNodeTarget(
+  node: TestTreeNode,
+  workspaceRoot: string | undefined,
+  document: TestEditorWorkspaceDocument,
+): WorkspacePackIdentity | null {
+  if (!workspaceRoot) return null;
+
+  if (node.isDir) {
+    const identity = classifyWorkspacePackPath({
+      workspaceRoot,
+      nodePath: node.path,
+      nodeIsDirectory: true,
+      document,
+    });
+    if (!identity) return null;
+    return normalizeStructureJsonPathKey(identity.folderPath) === normalizeStructureJsonPathKey(node.path)
+      ? identity
+      : null;
+  }
+
+  const baseName = structureBaseName(node.name);
+  if (!baseName) return null;
+  const parentPath = parentPathOf(node.path);
+  if (!parentPath) return null;
+  const syntheticFolderPath = joinSiblingPath(parentPath, baseName);
+  const identity = classifyWorkspacePackPath({
+    workspaceRoot,
+    nodePath: syntheticFolderPath,
+    nodeIsDirectory: true,
+    document,
+  });
+  if (!identity) return null;
+  return normalizeStructureJsonPathKey(identity.structureJsonPath) === normalizeStructureJsonPathKey(node.path)
+    ? identity
+    : null;
+}
+
+export function collectStructureJsonPathKeys(nodes: TestTreeNode[]): Set<string> {
+  const out = new Set<string>();
+  const visit = (items: TestTreeNode[]) => {
+    items.forEach((node) => {
+      if (!node.isDir && node.name.toLowerCase().endsWith(STRUCTURE_JSON_SUFFIX)) {
+        out.add(normalizeStructureJsonPathKey(node.path));
+      }
+      if (node.children?.length) {
+        visit(node.children);
+      }
+    });
+  };
+  visit(nodes);
+  return out;
 }
