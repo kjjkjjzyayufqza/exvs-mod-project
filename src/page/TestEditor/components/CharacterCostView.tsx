@@ -36,8 +36,9 @@ import {
   pickCharacterCostImportPreview,
   type CharacterCostImportPreview,
 } from "./character-cost/CharacterCostJson";
+import { resolveWorkspaceContent } from "@/services/testEditorWorkspace/contentCatalog";
+import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 
-const COST_PACK_FOLDER = "0xFF832E7F";
 const CHARACTER_COST_IMPORT_MODAL_DIMENSIONS = {
   width: 520,
   height: 420,
@@ -57,13 +58,21 @@ interface CharacterCostViewProps {
   folderPath: string;
   isActive: boolean;
   onUnsavedChanges?: (hasChanges: boolean) => void;
+  workspaceDocument: TestEditorWorkspaceDocument;
 }
 
 type LoadState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error"; filePath: string; message: string }
-  | { status: "ready"; filePath: string; table: CharacterCost };
+  | {
+      status: "ready";
+      filePath: string;
+      configuredFilePath: string;
+      sourceLayout: "configured" | "legacy" | "missing";
+      writable: boolean;
+      table: CharacterCost;
+    };
 
 function emptyPanels(): Record<CharacterCostSubTab, LoadState> {
   return {
@@ -99,7 +108,12 @@ function shiftNewIndicesAfterDelete(indices: Set<number>, deletedIndex: number):
   return next;
 }
 
-export default function CharacterCostView({ folderPath, isActive, onUnsavedChanges }: CharacterCostViewProps) {
+export default function CharacterCostView({
+  folderPath,
+  isActive,
+  onUnsavedChanges,
+  workspaceDocument,
+}: CharacterCostViewProps) {
   const [subTab, setSubTab] = useState<CharacterCostSubTab>("playable");
   const [panelState, setPanelState] = useState<Record<CharacterCostSubTab, LoadState>>(emptyPanels);
   const [dirty, setDirty] = useState<Record<CharacterCostSubTab, boolean>>(emptyDirty);
@@ -139,9 +153,15 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
 
   const resolveFilePath = useCallback(
     async (tab: CharacterCostSubTab) => {
-      return await join(folderPath, COST_PACK_FOLDER, COST_FILES[tab]);
+      const content = await resolveWorkspaceContent(folderPath, workspaceDocument, "character-cost");
+      const pack = content.existing ?? content.configured;
+      return {
+        content,
+        filePath: await join(pack.folderPath, COST_FILES[tab]),
+        configuredFilePath: await join(content.configured.folderPath, COST_FILES[tab]),
+      };
     },
-    [folderPath]
+    [folderPath, workspaceDocument]
   );
 
   const loadPanel = useCallback(
@@ -155,12 +175,22 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
         return;
       }
 
-      const filePath = await resolveFilePath(tab);
+      const { content, filePath, configuredFilePath } = await resolveFilePath(tab);
       setPanelState((prev) => ({ ...prev, [tab]: { status: "loading" } }));
       try {
         const fileData = await readFile(filePath);
         const table = new CharacterCost(Buffer.from(fileData));
-        setPanelState((prev) => ({ ...prev, [tab]: { status: "ready", filePath, table } }));
+        setPanelState((prev) => ({
+          ...prev,
+          [tab]: {
+            status: "ready",
+            filePath,
+            configuredFilePath,
+            sourceLayout: content.sourceLayout,
+            writable: content.writable,
+            table,
+          },
+        }));
         setNewRowIndicesByTab((prev) => ({ ...prev, [tab]: new Set() }));
         if (options?.preserveSelectionId !== undefined && options?.preserveSelectionId !== null) {
           const idx = table.CharacterData.findIndex((row) => row.CharacterId === options.preserveSelectionId);
@@ -191,11 +221,16 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
 
   useEffect(() => {
     if (!isActive || !folderPath) return;
-    const key = `${folderPath}::${subTab}`;
+    const key = [
+      folderPath,
+      workspaceDocument.assetRoutes["param.for-outgame"]?.prefix ?? "",
+      workspaceDocument.legacyReadFallback ? "legacy-on" : "legacy-off",
+      subTab,
+    ].join("::");
     if (lastLoadKeyRef.current[subTab] === key) return;
     lastLoadKeyRef.current[subTab] = key;
     void loadPanel(subTab);
-  }, [folderPath, isActive, subTab, loadPanel]);
+  }, [folderPath, isActive, subTab, loadPanel, workspaceDocument]);
 
   useEffect(() => {
     const anyDirty = dirty.playable || dirty.boss || dirty.zako;
@@ -232,13 +267,15 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
     (updater: (prev: CharacterCost) => CharacterCost) => {
       setPanelState((prev) => {
         const cur = prev[subTab];
-        if (cur.status !== "ready") return prev;
+        if (cur.status !== "ready" || !cur.writable) return prev;
         const nextTable = updater(cur.table);
         return { ...prev, [subTab]: { ...cur, table: nextTable } };
       });
-      setDirty((d) => ({ ...d, [subTab]: true }));
+      if (panelState[subTab].status === "ready" && panelState[subTab].writable) {
+        setDirty((d) => ({ ...d, [subTab]: true }));
+      }
     },
-    [subTab]
+    [panelState, subTab]
   );
 
   const handleSelect = useCallback(
@@ -250,7 +287,7 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
 
   const updateSelectedRowField = useCallback(
     (key: keyof CharacterCostData, value: number) => {
-      if (loadState.status !== "ready") return;
+      if (loadState.status !== "ready" || !loadState.writable) return;
       if (selectedIndex < 0) return;
 
       updateTable((prevTable) => {
@@ -275,6 +312,7 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
 
   const handleDelete = useCallback(
     (index: number) => {
+      if (loadState.status !== "ready" || !loadState.writable) return;
       updateTable((prevTable) => {
         const nextRows = prevTable.CharacterData.filter((_, i) => i !== index);
         const next = Object.assign(Object.create(Object.getPrototypeOf(prevTable)), prevTable, {
@@ -295,11 +333,11 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
         setSelectedIndexByTab((prev) => ({ ...prev, [subTab]: selectedIndex - 1 }));
       }
     },
-    [selectedIndex, subTab, updateTable]
+    [loadState, selectedIndex, subTab, updateTable]
   );
 
   const handleAdd = useCallback(() => {
-    if (loadState.status !== "ready") return;
+    if (loadState.status !== "ready" || !loadState.writable) return;
     const newRowIndex = loadState.table.CharacterData.length;
     updateTable((prevTable) => {
       const maxId = Math.max(...prevTable.CharacterData.map((r) => r.CharacterId), 0);
@@ -325,7 +363,7 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
 
   const handleCopyRow = useCallback(
     (index: number) => {
-      if (loadState.status !== "ready") return;
+      if (loadState.status !== "ready" || !loadState.writable) return;
       const newRowIndex = loadState.table.CharacterData.length;
       updateTable((prevTable) => {
         const sourceRow = prevTable.CharacterData[index];
@@ -353,6 +391,10 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
 
   const handleSaveFile = useCallback(async () => {
     if (loadState.status !== "ready") return;
+    if (!loadState.writable) {
+      toast.error("Legacy flat workspace content is read-only");
+      return;
+    }
     const filePath = loadState.filePath;
     try {
       const backupPath = filePath.replace(/\.bin$/i, "_bak.bin");
@@ -421,6 +463,10 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
 
   const handlePickImportJson = useCallback(async () => {
     if (loadState.status !== "ready") return;
+    if (!loadState.writable) {
+      toast.error("Legacy flat workspace content is read-only");
+      return;
+    }
     if (isImporting) return;
     setIsImporting(true);
     try {
@@ -443,6 +489,10 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
 
   const handleConfirmImport = useCallback(() => {
     if (loadState.status !== "ready") return;
+    if (!loadState.writable) {
+      toast.error("Legacy flat workspace content is read-only");
+      return;
+    }
     if (!importPreview) return;
     try {
       const nextTable = applyCharacterCostImport(loadState.table, importPreview.rows);
@@ -465,9 +515,10 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
   }, [importPreview, loadState, subTab]);
 
   const openDeleteDialog = useCallback((index: number) => {
+    if (loadState.status !== "ready" || !loadState.writable) return;
     setDeleteCandidateIndex(index);
     setDeleteDialogOpen(true);
-  }, []);
+  }, [loadState]);
 
   const confirmDelete = useCallback(() => {
     if (deleteCandidateIndex === null) return;
@@ -586,6 +637,12 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
                     {COST_FILES[subTab]} — {loadState.table.CharacterCount} rows · CommandsCount{" "}
                     {loadState.table.CommandsCount}
                   </div>
+                  {!loadState.writable ? (
+                    <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300">
+                      Legacy flat workspace content is read-only. Writes target{" "}
+                      <span className="font-mono break-all">{loadState.configuredFilePath}</span>.
+                    </div>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 shrink-0 justify-end">
                   <Button size="sm" variant="outline" onClick={() => void loadPanel(subTab)} className="inline-flex items-center gap-2">
@@ -596,7 +653,7 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
                     size="sm"
                     variant="outline"
                     onClick={() => void handlePickImportJson()}
-                    disabled={isImporting || isExporting}
+                    disabled={!loadState.writable || isImporting || isExporting}
                     className="inline-flex items-center gap-2"
                   >
                     <Upload className="w-4 h-4" />
@@ -612,7 +669,12 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
                     <Download className="w-4 h-4" />
                     Export JSON
                   </Button>
-                  <Button size="sm" onClick={() => void handleSaveFile()} disabled={!hasChanges} className="inline-flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => void handleSaveFile()}
+                    disabled={!loadState.writable || !hasChanges}
+                    className="inline-flex items-center gap-2"
+                  >
                     <Save className="w-4 h-4" />
                     Save File
                   </Button>
@@ -625,7 +687,7 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
                 <div className="w-1/3 border rounded-lg p-3 overflow-hidden flex flex-col min-h-0">
                   <div className="flex items-center justify-between mb-3 shrink-0">
                     <div className="font-semibold text-sm">Rows ({tableData.length})</div>
-                    <Button size="sm" onClick={handleAdd} className="inline-flex items-center gap-2">
+                    <Button size="sm" onClick={handleAdd} disabled={!loadState.writable} className="inline-flex items-center gap-2">
                       <Plus className="w-4 h-4" />
                       Add
                     </Button>
@@ -689,8 +751,10 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
                                   variant="ghost"
                                   size="sm"
                                   className="text-primary hover:text-primary hover:bg-primary/10"
+                                  disabled={!loadState.writable}
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    if (!loadState.writable) return;
                                     handleCopyRow(idx);
                                   }}
                                   title="Copy as new"
@@ -701,8 +765,10 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
                                   variant="ghost"
                                   size="sm"
                                   className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  disabled={!loadState.writable}
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    if (!loadState.writable) return;
                                     openDeleteDialog(idx);
                                   }}
                                   title="Delete"
@@ -734,7 +800,7 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
                             label="Character ID"
                             value={selectedRow.CharacterId}
                             property="CharacterId"
-                            editable
+                            editable={loadState.writable}
                             editingProperty={null}
                             editValue=""
                             validationError=""
@@ -751,7 +817,7 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
                             label="Cost"
                             value={selectedRow.Cost}
                             property="Cost"
-                            editable
+                            editable={loadState.writable}
                             variant="compact"
                             editingProperty={null}
                             editValue=""
@@ -767,7 +833,7 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
                             label="HP"
                             value={selectedRow.Hp}
                             property="Hp"
-                            editable
+                            editable={loadState.writable}
                             variant="compact"
                             editingProperty={null}
                             editValue=""
@@ -806,7 +872,9 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
               <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleConfirmImport}>Apply import</Button>
+              <Button onClick={handleConfirmImport} disabled={!loadState.writable}>
+                Apply import
+              </Button>
             </div>
           }
         >
@@ -835,7 +903,9 @@ export default function CharacterCostView({ folderPath, isActive, onUnsavedChang
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+            <AlertDialogAction onClick={confirmDelete} disabled={!loadState.writable}>
+              Delete
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
