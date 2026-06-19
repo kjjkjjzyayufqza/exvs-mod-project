@@ -34,6 +34,8 @@ import { normalizePackFolderName } from "./utils/packName";
 import { applyFileTreeViewSort } from "./utils/fileTreeViewSort";
 import { sortTreeByStarOrder, useFileTreeStarOrder } from "./utils/fileTreeStars";
 import { useFileTreeViewOptions } from "./hooks/useFileTreeViewOptions";
+import { useTestEditorWorkspace } from "@/hooks/useTestEditorWorkspace";
+import { WorkspaceLayoutDialog } from "./components/workspace-layout/WorkspaceLayoutDialog";
 import { NumdlbEditorModalHost } from "@/components/ssbh-model-preview/NumdlbEditorModalHost";
 import type { NumdlbEditorWindowSession } from "@/components/ssbh-model-preview/NumdlbEditorModalWindow";
 import {
@@ -117,8 +119,10 @@ const TestEditorPage = () => {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [dirtyFolders, setDirtyFolders] = useState<Set<string>>(new Set());
   const [isRepackDialogOpen, setIsRepackDialogOpen] = useState(false);
+  const [isWorkspaceLayoutOpen, setIsWorkspaceLayoutOpen] = useState(false);
   const [obModPath, setObModPath] = useState("");
   const isPageActive = useTestEditorPageActive();
+  const workspaceLayout = useTestEditorWorkspace(currentDir || null);
   // NOTE: This inline SSBH editor session management is LEGACY. The canonical,
   // reusable implementation now lives in
   // `@/components/ssbh-model-preview/useSsbhFileEditorSessions` + `SsbhFileEditorHosts`
@@ -1530,6 +1534,7 @@ const TestEditorPage = () => {
         hasDirtyFolders={hasDirtyFolders}
         onPickFolder={loadFolder}
         onRefresh={refreshFolder}
+        onOpenWorkspaceLayout={() => setIsWorkspaceLayoutOpen(true)}
         onRepack={() => setIsRepackDialogOpen(true)}
         onClearDirty={() => setDirtyFolders(new Set())}
       />
@@ -1576,6 +1581,12 @@ const TestEditorPage = () => {
         modFolderPath={obModPath || undefined}
         onFolderRepacked={handleRepackSuccess}
         onComplete={handleRepackComplete}
+      />
+
+      <WorkspaceLayoutDialog
+        open={isWorkspaceLayoutOpen}
+        controller={workspaceLayout}
+        onOpenChange={setIsWorkspaceLayoutOpen}
       />
 
       <AlertDialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
