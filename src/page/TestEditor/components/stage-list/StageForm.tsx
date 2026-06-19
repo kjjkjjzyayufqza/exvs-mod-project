@@ -167,7 +167,7 @@ export function StageForm({
                   fileNameValue={getNumericValue(field.name)}
                   obDplCachePath={obDplCachePath}
                   obModPath={obModPath}
-                  workspacePath={stageModelRouteRootPath}
+                  stageModelRouteRootPath={stageModelRouteRootPath}
                   onReveal={onReveal}
                 />
               ) : field.name === "iconIndex" ? (

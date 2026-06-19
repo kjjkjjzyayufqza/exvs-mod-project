@@ -11,7 +11,7 @@ interface StageFileNameStatusIconsProps {
   fileNameValue: number;
   obDplCachePath: string;
   obModPath: string;
-  workspacePath: string;
+  stageModelRouteRootPath: string;
   onReveal?: (path: string) => void;
 }
 
@@ -54,7 +54,7 @@ export function StageFileNameStatusIcons({
   fileNameValue,
   obDplCachePath,
   obModPath,
-  workspacePath,
+  stageModelRouteRootPath,
   onReveal,
 }: StageFileNameStatusIconsProps) {
   const [paths, setPaths] = useState<{
@@ -75,14 +75,19 @@ export function StageFileNameStatusIcons({
         setWsExists(false);
         return;
       }
-      const p = await getStageFileNamePaths(fileNameValue, obDplCachePath, obModPath, workspacePath);
+      const p = await getStageFileNamePaths(
+        fileNameValue,
+        obDplCachePath,
+        obModPath,
+        stageModelRouteRootPath,
+      );
       setPaths({ obFilePath: p.obFilePath, modFilePath: p.modFilePath, wsFolderPath: p.wsFolderPath });
       setObExists(p.obFilePath ? await exists(p.obFilePath) : false);
       setModExists(p.modFilePath ? await exists(p.modFilePath) : false);
       setWsExists(p.wsFolderPath ? await exists(p.wsFolderPath) : false);
     };
     void run();
-  }, [fileNameValue, obDplCachePath, obModPath, workspacePath]);
+  }, [fileNameValue, obDplCachePath, obModPath, stageModelRouteRootPath]);
 
   const handleOpenObFolder = async () => {
     if (!paths?.obFilePath) return;
