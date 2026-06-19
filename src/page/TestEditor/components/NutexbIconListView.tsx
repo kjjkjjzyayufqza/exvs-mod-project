@@ -9,6 +9,12 @@ import { RefreshCw, Image as ImageIcon, Loader2, FolderOpen } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import {
+  getWorkspaceContentDescriptor,
+  resolveWorkspaceContent,
+  type WorkspaceContentId,
+} from "@/services/testEditorWorkspace/contentCatalog";
+import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 import { CardIconList } from "./card-icon-list/CardIconList";
 import { CardIconAddDialog } from "./card-icon-list/CardIconAddDialog";
 import { CardIconBatchReplaceDialog } from "./card-icon-list/CardIconBatchReplaceDialog";
@@ -16,6 +22,8 @@ import { extractCardIconItems, removeCardIconFromStructureJson } from "./card-ic
 
 interface NutexbIconListViewProps {
   folderPath: string;
+  workspaceDocument: TestEditorWorkspaceDocument;
+  contentId: WorkspaceContentId;
   hash: string;
   title: string;
   isActive: boolean;
@@ -24,13 +32,24 @@ interface NutexbIconListViewProps {
   layout?: "single" | "dual";
   /** When layout is "dual", the right column loads from this hash (e.g. "0x0CEE3991"). */
   secondaryHash?: string;
+  secondaryContentId?: WorkspaceContentId;
 }
 
 type LoadState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error"; filePath: string; message: string }
-  | { status: "ready"; filePath: string; items: ReturnType<typeof extractCardIconItems>; convertDirPath: string };
+  | {
+      status: "ready";
+      filePath: string;
+      configuredFilePath: string;
+      routeRootPath: string;
+      rootDirPath: string;
+      items: ReturnType<typeof extractCardIconItems>;
+      convertDirPath: string;
+      sourceLayout: "configured" | "legacy" | "missing";
+      writable: boolean;
+    };
 
 interface LoadOptions {
   silent?: boolean;
@@ -45,15 +64,24 @@ function normalizeHash(hash: string): string {
 
 export function NutexbIconListView({
   folderPath,
+  workspaceDocument,
+  contentId,
   hash,
   title,
   isActive,
   onUnsavedChanges,
   layout = "single",
   secondaryHash,
+  secondaryContentId,
 }: NutexbIconListViewProps) {
-  const normalizedHash = normalizeHash(hash);
-  const normalizedSecondaryHash = secondaryHash ? normalizeHash(secondaryHash) : "";
+  const primaryDescriptor = getWorkspaceContentDescriptor(contentId);
+  const secondaryDescriptor = secondaryContentId ? getWorkspaceContentDescriptor(secondaryContentId) : null;
+  const normalizedHash = normalizeHash(primaryDescriptor.hashHex || hash);
+  const normalizedSecondaryHash = secondaryDescriptor
+    ? normalizeHash(secondaryDescriptor.hashHex)
+    : secondaryHash
+      ? normalizeHash(secondaryHash)
+      : "";
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [secondaryLoadState, setSecondaryLoadState] = useState<LoadState>({ status: "idle" });
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -73,17 +101,18 @@ export function NutexbIconListView({
     return `itemIndex:${item.itemIndex}`;
   }, []);
 
-  const resolveStructurePath = useCallback(async () => {
-    return await join(folderPath, `${normalizedHash}_structure.json`);
-  }, [folderPath, normalizedHash]);
-
-  const resolveRootDir = useCallback(async () => {
-    return await join(folderPath, normalizedHash);
-  }, [folderPath, normalizedHash]);
-
-  const resolveConvertDir = useCallback(async () => {
-    return await join(folderPath, normalizedHash, "__convert");
-  }, [folderPath, normalizedHash]);
+  const resolveContentPack = useCallback(
+    async (id: WorkspaceContentId) => {
+      const content = await resolveWorkspaceContent(folderPath, workspaceDocument, id);
+      const pack = content.existing ?? content.configured;
+      return {
+        content,
+        pack,
+        convertDirPath: await join(pack.folderPath, "__convert"),
+      };
+    },
+    [folderPath, workspaceDocument],
+  );
 
   const load = useCallback(async (options?: LoadOptions) => {
     if (!folderPath) {
@@ -97,7 +126,8 @@ export function NutexbIconListView({
         ? getItemStableKey(loadState.items.find((it) => it.itemIndex === selectedIndex) ?? null)
         : null;
 
-    const filePath = await resolveStructurePath();
+    const { content, pack, convertDirPath } = await resolveContentPack(contentId);
+    const filePath = pack.structureJsonPath;
     if (!options?.silent) {
       setLoadState({ status: "loading" });
     }
@@ -118,8 +148,17 @@ export function NutexbIconListView({
         ...item,
         fileUrl: item.fileIndex !== null && fileUrlMap.has(item.fileIndex) ? fileUrlMap.get(item.fileIndex) : undefined,
       }));
-      const convertDirPath = await resolveConvertDir();
-      setLoadState({ status: "ready", filePath, items: enrichedItems, convertDirPath });
+      setLoadState({
+        status: "ready",
+        filePath,
+        configuredFilePath: content.configured.structureJsonPath,
+        routeRootPath: pack.routeRootPath,
+        rootDirPath: pack.folderPath,
+        items: enrichedItems,
+        convertDirPath,
+        sourceLayout: content.sourceLayout,
+        writable: content.writable,
+      });
       if (selectedKey) {
         const matched = enrichedItems.find((item) => getItemStableKey(item) === selectedKey);
         if (matched) {
@@ -131,22 +170,10 @@ export function NutexbIconListView({
       console.error(error);
       setLoadState({ status: "error", filePath, message: error instanceof Error ? error.message : "Unknown error" });
     }
-  }, [folderPath, getItemStableKey, loadState, onUnsavedChanges, resolveConvertDir, resolveStructurePath, selectedIndex]);
-
-  const resolveSecondaryStructurePath = useCallback(async () => {
-    return await join(folderPath, `${normalizedSecondaryHash}_structure.json`);
-  }, [folderPath, normalizedSecondaryHash]);
-
-  const resolveSecondaryRootDir = useCallback(async () => {
-    return await join(folderPath, normalizedSecondaryHash);
-  }, [folderPath, normalizedSecondaryHash]);
-
-  const resolveSecondaryConvertDir = useCallback(async () => {
-    return await join(folderPath, normalizedSecondaryHash, "__convert");
-  }, [folderPath, normalizedSecondaryHash]);
+  }, [contentId, folderPath, getItemStableKey, loadState, onUnsavedChanges, resolveContentPack, selectedIndex]);
 
   const loadSecondary = useCallback(async (options?: LoadOptions) => {
-    if (!folderPath || !normalizedSecondaryHash) return;
+    if (!folderPath || !normalizedSecondaryHash || !secondaryContentId) return;
 
     const preserveSelection = options?.preserveSelection === true;
     const selectedKey =
@@ -156,7 +183,8 @@ export function NutexbIconListView({
           )
         : null;
 
-    const filePath = await resolveSecondaryStructurePath();
+    const { content, pack, convertDirPath } = await resolveContentPack(secondaryContentId);
+    const filePath = pack.structureJsonPath;
     if (!options?.silent) {
       setSecondaryLoadState({ status: "loading" });
     }
@@ -177,8 +205,17 @@ export function NutexbIconListView({
         ...item,
         fileUrl: item.fileIndex !== null && fileUrlMap.has(item.fileIndex) ? fileUrlMap.get(item.fileIndex) : undefined,
       }));
-      const convertDirPath = await resolveSecondaryConvertDir();
-      setSecondaryLoadState({ status: "ready", filePath, items: enrichedItems, convertDirPath });
+      setSecondaryLoadState({
+        status: "ready",
+        filePath,
+        configuredFilePath: content.configured.structureJsonPath,
+        routeRootPath: pack.routeRootPath,
+        rootDirPath: pack.folderPath,
+        items: enrichedItems,
+        convertDirPath,
+        sourceLayout: content.sourceLayout,
+        writable: content.writable,
+      });
       if (selectedKey) {
         const matched = enrichedItems.find((item) => getItemStableKey(item) === selectedKey);
         if (matched) {
@@ -197,27 +234,48 @@ export function NutexbIconListView({
     folderPath,
     getItemStableKey,
     normalizedSecondaryHash,
-    resolveSecondaryConvertDir,
-    resolveSecondaryStructurePath,
+    resolveContentPack,
+    secondaryContentId,
     secondaryLoadState,
     secondarySelectedIndex,
   ]);
 
   useEffect(() => {
     if (!isActive) return;
-    const key = `${folderPath}::${normalizedHash}::nutexbiconlist`;
+    const key = [
+      folderPath,
+      contentId,
+      workspaceDocument.assetRoutes[primaryDescriptor.routeId]?.prefix ?? "",
+      workspaceDocument.legacyReadFallback ? "legacy-on" : "legacy-off",
+      "nutexbiconlist",
+    ].join("::");
     if (key === lastLoadedKeyRef.current) return;
     lastLoadedKeyRef.current = key;
     void load();
-  }, [folderPath, normalizedHash, isActive, load]);
+  }, [contentId, folderPath, isActive, load, primaryDescriptor.routeId, workspaceDocument]);
 
   useEffect(() => {
-    if (!isActive || layout !== "dual" || !normalizedSecondaryHash) return;
-    const key = `${folderPath}::${normalizedSecondaryHash}::nutexbiconlist-secondary`;
+    if (!isActive || layout !== "dual" || !normalizedSecondaryHash || !secondaryContentId || !secondaryDescriptor) return;
+    const key = [
+      folderPath,
+      secondaryContentId,
+      workspaceDocument.assetRoutes[secondaryDescriptor.routeId]?.prefix ?? "",
+      workspaceDocument.legacyReadFallback ? "legacy-on" : "legacy-off",
+      "nutexbiconlist-secondary",
+    ].join("::");
     if (key === lastSecondaryLoadedKeyRef.current) return;
     lastSecondaryLoadedKeyRef.current = key;
     void loadSecondary();
-  }, [folderPath, normalizedSecondaryHash, isActive, layout, loadSecondary]);
+  }, [
+    folderPath,
+    normalizedSecondaryHash,
+    isActive,
+    layout,
+    loadSecondary,
+    secondaryContentId,
+    secondaryDescriptor,
+    workspaceDocument,
+  ]);
 
   useEffect(() => {
     if (loadState.status !== "ready") return;
@@ -260,11 +318,16 @@ export function NutexbIconListView({
       toast.error("Folder path is empty");
       return;
     }
+    if (loadState.status !== "ready") return;
+    if (!loadState.writable) {
+      toast.error("Legacy flat workspace content is read-only");
+      return;
+    }
     if (isRefreshingNutexb) return;
 
     try {
       setIsRefreshingNutexb(true);
-      const rootDir = await resolveRootDir();
+      const rootDir = loadState.rootDirPath;
       const result = await invoke<{ converted: number; failed: number; skipped: number }>(
         "nutexb_batch_export_png",
         {
@@ -284,15 +347,20 @@ export function NutexbIconListView({
     } finally {
       setIsRefreshingNutexb(false);
     }
-  }, [folderPath, isRefreshingNutexb, load, resolveRootDir]);
+  }, [folderPath, isRefreshingNutexb, load, loadState]);
 
   const handleRefreshNutexbSecondary = useCallback(async () => {
     if (!folderPath || !normalizedSecondaryHash) return;
+    if (secondaryLoadState.status !== "ready") return;
+    if (!secondaryLoadState.writable) {
+      toast.error("Legacy flat workspace content is read-only");
+      return;
+    }
     if (isRefreshingNutexbSecondary) return;
 
     try {
       setIsRefreshingNutexbSecondary(true);
-      const rootDir = await resolveSecondaryRootDir();
+      const rootDir = secondaryLoadState.rootDirPath;
       const result = await invoke<{ converted: number; failed: number; skipped: number }>(
         "nutexb_batch_export_png",
         {
@@ -312,17 +380,22 @@ export function NutexbIconListView({
     } finally {
       setIsRefreshingNutexbSecondary(false);
     }
-  }, [folderPath, normalizedSecondaryHash, isRefreshingNutexbSecondary, loadSecondary, resolveSecondaryRootDir]);
+  }, [folderPath, normalizedSecondaryHash, isRefreshingNutexbSecondary, loadSecondary, secondaryLoadState]);
 
   const handleRemoveItem = useCallback(async (item: { itemIndex: number; fileIndex: number | null; fileUrl?: string | null }) => {
     if (!folderPath) {
       toast.error("Folder path is empty");
       return;
     }
+    if (loadState.status !== "ready") return;
+    if (!loadState.writable) {
+      toast.error("Legacy flat workspace content is read-only");
+      return;
+    }
     if (isUpdating) return;
     setIsUpdating(true);
     try {
-      const structurePath = await resolveStructurePath();
+      const structurePath = loadState.filePath;
       const raw = await readTextFile(structurePath);
       const json = JSON.parse(raw);
       const { nextStructJson } = removeCardIconFromStructureJson(json, {
@@ -339,14 +412,19 @@ export function NutexbIconListView({
     } finally {
       setIsUpdating(false);
     }
-  }, [folderPath, isUpdating, load, resolveStructurePath]);
+  }, [folderPath, isUpdating, load, loadState]);
 
   const handleRemoveItemSecondary = useCallback(async (item: { itemIndex: number; fileIndex: number | null; fileUrl?: string | null }) => {
     if (!folderPath || !normalizedSecondaryHash) return;
+    if (secondaryLoadState.status !== "ready") return;
+    if (!secondaryLoadState.writable) {
+      toast.error("Legacy flat workspace content is read-only");
+      return;
+    }
     if (isUpdating) return;
     setIsUpdating(true);
     try {
-      const structurePath = await resolveSecondaryStructurePath();
+      const structurePath = secondaryLoadState.filePath;
       const raw = await readTextFile(structurePath);
       const json = JSON.parse(raw);
       const { nextStructJson } = removeCardIconFromStructureJson(json, {
@@ -363,7 +441,7 @@ export function NutexbIconListView({
     } finally {
       setIsUpdating(false);
     }
-  }, [folderPath, normalizedSecondaryHash, isUpdating, loadSecondary, resolveSecondaryStructurePath]);
+  }, [folderPath, normalizedSecondaryHash, isUpdating, loadSecondary, secondaryLoadState]);
 
   const applyMoveInMemory = useCallback((items: Array<{ itemIndex: number; fileIndex: number | null; name: string | null; fileUrl?: string | null }>, fromIndex: number, toIndex: number) => {
     const total = items.length;
@@ -378,6 +456,7 @@ export function NutexbIconListView({
 
   const handleMoveItem = useCallback((fromIndex: number, toIndex: number) => {
     if (loadState.status !== "ready") return;
+    if (!loadState.writable) return;
     const total = loadState.items.length;
     const nextFrom = Math.max(0, Math.min(total - 1, Math.trunc(fromIndex)));
     const nextTo = Math.max(0, Math.min(total - 1, Math.trunc(toIndex)));
@@ -401,6 +480,7 @@ export function NutexbIconListView({
 
   const handleMoveItemSecondary = useCallback((fromIndex: number, toIndex: number) => {
     if (secondaryLoadState.status !== "ready") return;
+    if (!secondaryLoadState.writable) return;
     const total = secondaryLoadState.items.length;
     const nextFrom = Math.max(0, Math.min(total - 1, Math.trunc(fromIndex)));
     const nextTo = Math.max(0, Math.min(total - 1, Math.trunc(toIndex)));
@@ -540,7 +620,7 @@ export function NutexbIconListView({
             size="sm"
             variant="outline"
             onClick={() => void handleRefreshNutexb()}
-            disabled={isRefreshingNutexb || !folderPath}
+            disabled={isRefreshingNutexb || !folderPath || !loadState.writable}
             className="inline-flex items-center gap-2"
             title="第一组 Refresh Nutexb"
           >
@@ -548,19 +628,21 @@ export function NutexbIconListView({
             Refresh Nutexb
           </Button>
           <CardIconBatchReplaceDialog
-            folderPath={folderPath}
+            folderPath={loadState.routeRootPath}
             convertDirPath={loadState.convertDirPath}
             items={loadState.items}
             onApplied={load}
             triggerLabel="Replace Format"
+            disabled={!loadState.writable}
           />
           <CardIconAddDialog
-            folderPath={folderPath}
+            folderPath={loadState.routeRootPath}
             hash={normalizedHash}
             convertDirPath={loadState.convertDirPath}
             structurePath={loadState.filePath}
             nextIndex={loadState.items.length}
             onAdded={load}
+            disabled={!loadState.writable}
           />
         </div>
       );
@@ -575,7 +657,13 @@ export function NutexbIconListView({
           size="sm"
           variant="outline"
           onClick={() => void handleRefreshNutexbSecondary()}
-          disabled={isRefreshingNutexbSecondary || !folderPath || !normalizedSecondaryHash}
+          disabled={
+            isRefreshingNutexbSecondary ||
+            !folderPath ||
+            !normalizedSecondaryHash ||
+            secondaryLoadState.status !== "ready" ||
+            !secondaryLoadState.writable
+          }
           className="inline-flex items-center gap-2"
           title="第二组 Refresh Nutexb"
         >
@@ -583,21 +671,21 @@ export function NutexbIconListView({
           Refresh Nutexb
         </Button>
         <CardIconBatchReplaceDialog
-          folderPath={folderPath}
+          folderPath={secondaryLoadState.status === "ready" ? secondaryLoadState.routeRootPath : ""}
           convertDirPath={secondaryLoadState.status === "ready" ? secondaryLoadState.convertDirPath : ""}
           items={secondaryLoadState.status === "ready" ? secondaryLoadState.items : []}
           onApplied={loadSecondary}
           triggerLabel="Replace Format"
-          disabled={secondaryLoadState.status !== "ready"}
+          disabled={secondaryLoadState.status !== "ready" || !secondaryLoadState.writable}
         />
         <CardIconAddDialog
-          folderPath={folderPath}
+          folderPath={secondaryLoadState.status === "ready" ? secondaryLoadState.routeRootPath : ""}
           hash={normalizedSecondaryHash}
           convertDirPath={secondaryLoadState.status === "ready" ? secondaryLoadState.convertDirPath : ""}
           structurePath={secondaryLoadState.status === "ready" ? secondaryLoadState.filePath : ""}
           nextIndex={secondaryLoadState.status === "ready" ? secondaryLoadState.items.length : 0}
           onAdded={loadSecondary}
-          disabled={secondaryLoadState.status !== "ready"}
+          disabled={secondaryLoadState.status !== "ready" || !secondaryLoadState.writable}
         />
       </div>
     );
@@ -633,6 +721,12 @@ export function NutexbIconListView({
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground">Loaded: {meta?.count ?? 0} icons</div>
+                {!loadState.writable ? (
+                  <div className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300">
+                    Legacy flat workspace content is read-only. Writes target{" "}
+                    <span className="font-mono break-all">{loadState.configuredFilePath}</span>.
+                  </div>
+                ) : null}
               </div>
               <div className="flex-1 min-w-0 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -653,6 +747,12 @@ export function NutexbIconListView({
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground">Loaded: {secondaryMeta?.count ?? 0} icons</div>
+                {secondaryLoadState.status === "ready" && !secondaryLoadState.writable ? (
+                  <div className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300">
+                    Legacy flat workspace content is read-only. Writes target{" "}
+                    <span className="font-mono break-all">{secondaryLoadState.configuredFilePath}</span>.
+                  </div>
+                ) : null}
               </div>
               </div>
             </div>
@@ -674,6 +774,12 @@ export function NutexbIconListView({
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">Loaded: {meta?.count ?? 0} icons</div>
+                {!loadState.writable ? (
+                  <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300">
+                    Legacy flat workspace content is read-only. Writes target{" "}
+                    <span className="font-mono break-all">{loadState.configuredFilePath}</span>.
+                  </div>
+                ) : null}
                 <div className="text-xs text-muted-foreground break-all flex items-center gap-1 mt-2">
                   Convert Dir: {meta?.convertDirPath ?? "-"}
                   {meta?.convertDirPath && (
@@ -699,8 +805,9 @@ export function NutexbIconListView({
               <div className="flex-1 min-w-0 flex flex-col min-h-0">
                 <CardIconList
                   items={loadState.items}
-                  folderPath={folderPath}
+                  folderPath={loadState.routeRootPath}
                   convertDirPath={loadState.convertDirPath}
+                  editable={loadState.writable}
                   selectedIndex={selectedIndex}
                   onSelect={setSelectedIndex}
                   onReplaced={() => load({ silent: true, preserveSelection: true })}
@@ -715,8 +822,9 @@ export function NutexbIconListView({
                 {secondaryLoadState.status === "ready" ? (
                   <CardIconList
                     items={secondaryLoadState.items}
-                    folderPath={folderPath}
+                    folderPath={secondaryLoadState.routeRootPath}
                     convertDirPath={secondaryLoadState.convertDirPath}
+                    editable={secondaryLoadState.writable}
                     selectedIndex={secondarySelectedIndex}
                     onSelect={setSecondarySelectedIndex}
                     onReplaced={() => loadSecondary({ silent: true, preserveSelection: true })}
@@ -746,8 +854,9 @@ export function NutexbIconListView({
             <div className="flex-1 min-h-0 flex flex-col overflow-hidden p-0">
               <CardIconList
                 items={loadState.items}
-                folderPath={folderPath}
+                folderPath={loadState.routeRootPath}
                 convertDirPath={loadState.convertDirPath}
+                editable={loadState.writable}
                 selectedIndex={selectedIndex}
                 onSelect={setSelectedIndex}
                 onReplaced={load}

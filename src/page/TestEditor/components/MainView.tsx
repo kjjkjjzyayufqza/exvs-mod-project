@@ -110,6 +110,7 @@ const tabs: StageTab[] = [
         folderPath={props.folderPath ?? ""}
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDocument={props.workspaceDocument}
       />
     ),
   },
@@ -121,6 +122,7 @@ const tabs: StageTab[] = [
         folderPath={props.folderPath ?? ""}
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDocument={props.workspaceDocument}
       />
     ),
   },
@@ -422,6 +424,7 @@ const MainView = ({
               folderPath={props.folderPath ?? ""}
               isActive={activeTab === "card-icon-list"}
               onUnsavedChanges={props.onUnsavedChanges}
+              workspaceDocument={props.workspaceDocument}
             />
           ),
         };
@@ -435,6 +438,7 @@ const MainView = ({
               folderPath={props.folderPath ?? ""}
               isActive={activeTab === "stage-icon-list"}
               onUnsavedChanges={handleStageIconListUnsaved}
+              workspaceDocument={props.workspaceDocument}
             />
           ),
         };

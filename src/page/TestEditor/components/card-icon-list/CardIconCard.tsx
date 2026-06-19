@@ -13,6 +13,7 @@ interface CardIconCardProps {
   item: CardIconItem;
   convertDirPath?: string;
   folderPath: string;
+  editable?: boolean;
   isSelected: boolean;
   onClick: () => void;
   onEdit: () => void;
@@ -30,6 +31,7 @@ export function CardIconCard({
   item,
   convertDirPath,
   folderPath,
+  editable = true,
   isSelected,
   onClick,
   onEdit,
@@ -79,6 +81,7 @@ export function CardIconCard({
   }, [item.itemIndex, parseAndClamp]);
 
   const handleSave = useCallback(() => {
+    if (!editable) return;
     const next = parseAndClamp();
     if (next === null) {
       setMoveToValue(String(item.itemIndex));
@@ -87,7 +90,7 @@ export function CardIconCard({
     setMoveToValue(String(next));
     if (next === item.itemIndex) return;
     onMove(next);
-  }, [item.itemIndex, onMove, parseAndClamp]);
+  }, [editable, item.itemIndex, onMove, parseAndClamp]);
 
   return (
     <div
@@ -130,7 +133,7 @@ export function CardIconCard({
                 }
               }}
               onBlur={() => normalizeInputValue()}
-              disabled={isUpdating}
+              disabled={isUpdating || !editable}
               inputMode="numeric"
               className="h-6 w-16 text-xs"
               aria-label="Move card icon to index"
@@ -139,7 +142,7 @@ export function CardIconCard({
               size="sm"
               variant="outline"
               className="h-7 px-2 text-xs"
-              disabled={isUpdating || (parseAndClamp() ?? item.itemIndex) === item.itemIndex}
+              disabled={isUpdating || !editable || (parseAndClamp() ?? item.itemIndex) === item.itemIndex}
               onClick={(e) => {
                 e.stopPropagation();
                 handleSave();
@@ -167,6 +170,7 @@ export function CardIconCard({
             selectedItem={item}
             onApplied={onReplaced}
             triggerLabel="Edit Image"
+            disabled={!editable}
           />
         </div>
         <div
@@ -174,7 +178,7 @@ export function CardIconCard({
             e.stopPropagation();
           }}
         >
-          <CardIconRemoveDialog item={item} onConfirm={onRemove} />
+          <CardIconRemoveDialog item={item} onConfirm={onRemove} disabled={!editable} />
         </div>
       </div>
     </div>

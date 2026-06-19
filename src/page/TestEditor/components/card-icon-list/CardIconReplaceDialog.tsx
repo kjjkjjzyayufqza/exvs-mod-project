@@ -36,6 +36,7 @@ interface CardIconReplaceDialogProps {
   selectedItem: CardIconItem | null;
   onApplied: () => Promise<void> | void;
   triggerLabel?: string;
+  disabled?: boolean;
 }
 
 function resolveFullPath(folderPath: string, fileUrl: string): Promise<string> {
@@ -50,6 +51,7 @@ export function CardIconReplaceDialog({
   selectedItem,
   onApplied,
   triggerLabel = "Edit Image",
+  disabled = false,
 }: CardIconReplaceDialogProps) {
   const [openState, setOpenState] = useState(false);
   const [pngPath, setPngPath] = useState("");
@@ -58,7 +60,7 @@ export function CardIconReplaceDialog({
   const [isReplacing, setIsReplacing] = useState(false);
 
   const targetFileUrl = selectedItem?.fileUrl ?? "";
-  const canEdit = Boolean(folderPath && convertDirPath && targetFileUrl);
+  const canEdit = Boolean(!disabled && folderPath && convertDirPath && targetFileUrl);
   const defaultPreviewPngPath = useMemo(() => {
     if (!selectedItem?.name) return "";
     return buildCardIconPreviewPath(convertDirPath, selectedItem.name) ?? "";

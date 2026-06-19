@@ -15,14 +15,15 @@ import type { CardIconItem } from "./cardIconStructure";
 interface CardIconRemoveDialogProps {
   item: CardIconItem;
   onConfirm: () => void;
+  disabled?: boolean;
 }
 
-export function CardIconRemoveDialog({ item, onConfirm }: CardIconRemoveDialogProps) {
+export function CardIconRemoveDialog({ item, onConfirm, disabled = false }: CardIconRemoveDialogProps) {
   const label = item.name ?? "(empty)";
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button size="sm" variant="outline">
+        <Button size="sm" variant="outline" disabled={disabled}>
           Remove
         </Button>
       </AlertDialogTrigger>
@@ -35,7 +36,7 @@ export function CardIconRemoveDialog({ item, onConfirm }: CardIconRemoveDialogPr
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm} className="bg-red-600 hover:bg-red-700">
+          <AlertDialogAction onClick={onConfirm} disabled={disabled} className="bg-red-600 hover:bg-red-700">
             Remove
           </AlertDialogAction>
         </AlertDialogFooter>

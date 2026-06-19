@@ -11,6 +11,7 @@ interface CardIconListProps {
   items: CardIconItem[];
   folderPath: string;
   convertDirPath?: string;
+  editable?: boolean;
   selectedIndex: number;
   onSelect: (index: number) => void;
   onReplaced: () => Promise<void> | void;
@@ -26,6 +27,7 @@ export function CardIconList({
   items,
   folderPath,
   convertDirPath,
+  editable = true,
   selectedIndex,
   onSelect,
   onReplaced,
@@ -115,6 +117,7 @@ export function CardIconList({
                   item={item}
                   folderPath={folderPath}
                   convertDirPath={convertDirPath}
+                  editable={editable}
                   isSelected={item.itemIndex === selectedIndex}
                   onClick={() => onSelect(item.itemIndex)}
                   onEdit={() => onSelect(item.itemIndex)}
