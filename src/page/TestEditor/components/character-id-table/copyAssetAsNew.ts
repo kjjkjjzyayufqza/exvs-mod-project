@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export type CopyAssetAsNewParams = {
-  projectRootDir: string;
+  sourceAssetRootDir: string;
+  destinationAssetRootDir: string;
   oldHashHex: string;
   seed: string;
   fieldKey: string;
@@ -17,7 +18,8 @@ export type CopyAssetAsNewResult = {
 
 export async function copyAssetAsNew(params: CopyAssetAsNewParams): Promise<CopyAssetAsNewResult> {
   return await invoke<CopyAssetAsNewResult>("copy_asset_as_new", {
-    projectRootDir: params.projectRootDir,
+    sourceAssetRootDir: params.sourceAssetRootDir,
+    destinationAssetRootDir: params.destinationAssetRootDir,
     oldHashHex: params.oldHashHex,
     seed: params.seed,
     fieldKey: params.fieldKey,

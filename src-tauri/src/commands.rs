@@ -531,96 +531,119 @@ pub struct CopyAssetAsNewResult {
     pub updated_file_url_count: usize,
 }
 
+fn copy_asset_as_new_impl(
+    source_asset_root_dir: &Path,
+    destination_asset_root_dir: &Path,
+    old_hash_hex: &str,
+    seed: &str,
+) -> Result<CopyAssetAsNewResult, String> {
+    if !source_asset_root_dir.is_dir() {
+        return Err(format!(
+            "Source asset root directory does not exist: {}",
+            source_asset_root_dir.display()
+        ));
+    }
+    if !destination_asset_root_dir.is_dir() {
+        return Err(format!(
+            "Destination asset root directory does not exist: {}",
+            destination_asset_root_dir.display()
+        ));
+    }
+
+    let normalized_old_hash = normalize_hash_hex(old_hash_hex)?;
+    let new_crc_u32 = crc32_ieee(seed.as_bytes());
+    let new_hash_hex = format!("0x{:08X}", new_crc_u32);
+    let new_raw_value = new_crc_u32 as i32;
+
+    if new_hash_hex.eq_ignore_ascii_case(&normalized_old_hash) {
+        return Err("Computed hash equals the source hash; use a different seed".to_string());
+    }
+
+    let old_folder = source_asset_root_dir.join(&normalized_old_hash);
+    let old_struct = source_asset_root_dir.join(format!("{normalized_old_hash}_structure.json"));
+    let new_folder = destination_asset_root_dir.join(&new_hash_hex);
+    let new_struct = destination_asset_root_dir.join(format!("{new_hash_hex}_structure.json"));
+
+    if !old_folder.is_dir() {
+        return Err(format!("Source folder not found: {}", old_folder.display()));
+    }
+    if !old_struct.is_file() {
+        return Err(format!(
+            "Source structure JSON not found: {}",
+            old_struct.display()
+        ));
+    }
+    if new_folder.exists() || new_struct.exists() {
+        return Err(format!("Target already exists: {}", new_hash_hex));
+    }
+
+    let old_struct_text = fs::read_to_string(&old_struct).map_err(|e| {
+        format!(
+            "Failed to read source structure JSON {}: {}",
+            old_struct.display(),
+            e
+        )
+    })?;
+    let mut struct_value: Value = serde_json::from_str(&old_struct_text).map_err(|e| {
+        format!(
+            "Failed to parse source structure JSON {}: {}",
+            old_struct.display(),
+            e
+        )
+    })?;
+
+    let mut updated_file_url_count = 0usize;
+    replace_file_url_hash(
+        &mut struct_value,
+        &normalized_old_hash,
+        &new_hash_hex,
+        &mut updated_file_url_count,
+    );
+
+    let serialized = serde_json::to_string_pretty(&struct_value)
+        .map_err(|e| format!("Failed to serialize new structure JSON: {e}"))?;
+    fs::write(&new_struct, serialized).map_err(|e| {
+        format!(
+            "Failed to write new structure JSON {}: {}",
+            new_struct.display(),
+            e
+        )
+    })?;
+
+    if let Err(copy_err) = copy_dir_recursive(&old_folder, &new_folder) {
+        let _ = cleanup_artifacts(&new_struct, &new_folder);
+        return Err(format!(
+            "Failed to copy source folder {} -> {}: {}",
+            old_folder.display(),
+            new_folder.display(),
+            copy_err
+        ));
+    }
+
+    Ok(CopyAssetAsNewResult {
+        new_hash_hex,
+        new_raw_value,
+        new_folder_path: normalize_path(&new_folder),
+        new_structure_json_path: normalize_path(&new_struct),
+        updated_file_url_count,
+    })
+}
+
 #[tauri::command]
 pub async fn copy_asset_as_new(
-    project_root_dir: String,
+    source_asset_root_dir: String,
+    destination_asset_root_dir: String,
     old_hash_hex: String,
     seed: String,
     _field_key: String,
 ) -> Result<CopyAssetAsNewResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let root = PathBuf::from(project_root_dir);
-        if !root.is_dir() {
-            return Err("Project root directory does not exist".to_string());
-        }
-
-        let normalized_old_hash = normalize_hash_hex(&old_hash_hex)?;
-        let new_crc_u32 = crc32_ieee(seed.as_bytes());
-        let new_hash_hex = format!("0x{:08X}", new_crc_u32);
-        let new_raw_value = new_crc_u32 as i32;
-
-        if new_hash_hex.eq_ignore_ascii_case(&normalized_old_hash) {
-            return Err("Computed hash equals the source hash; use a different seed".to_string());
-        }
-
-        let old_folder = root.join(&normalized_old_hash);
-        let old_struct = root.join(format!("{normalized_old_hash}_structure.json"));
-        let new_folder = root.join(&new_hash_hex);
-        let new_struct = root.join(format!("{new_hash_hex}_structure.json"));
-
-        if !old_folder.is_dir() {
-            return Err(format!("Source folder not found: {}", old_folder.display()));
-        }
-        if !old_struct.is_file() {
-            return Err(format!(
-                "Source structure JSON not found: {}",
-                old_struct.display()
-            ));
-        }
-        if new_folder.exists() || new_struct.exists() {
-            return Err(format!("Target already exists: {}", new_hash_hex));
-        }
-
-        let old_struct_text = fs::read_to_string(&old_struct).map_err(|e| {
-            format!(
-                "Failed to read source structure JSON {}: {}",
-                old_struct.display(),
-                e
-            )
-        })?;
-        let mut struct_value: Value = serde_json::from_str(&old_struct_text).map_err(|e| {
-            format!(
-                "Failed to parse source structure JSON {}: {}",
-                old_struct.display(),
-                e
-            )
-        })?;
-
-        let mut updated_file_url_count = 0usize;
-        replace_file_url_hash(
-            &mut struct_value,
-            &normalized_old_hash,
-            &new_hash_hex,
-            &mut updated_file_url_count,
-        );
-
-        let serialized = serde_json::to_string_pretty(&struct_value)
-            .map_err(|e| format!("Failed to serialize new structure JSON: {e}"))?;
-        fs::write(&new_struct, serialized).map_err(|e| {
-            format!(
-                "Failed to write new structure JSON {}: {}",
-                new_struct.display(),
-                e
-            )
-        })?;
-
-        if let Err(copy_err) = copy_dir_recursive(&old_folder, &new_folder) {
-            let _ = cleanup_artifacts(&new_struct, &new_folder);
-            return Err(format!(
-                "Failed to copy source folder {} -> {}: {}",
-                old_folder.display(),
-                new_folder.display(),
-                copy_err
-            ));
-        }
-
-        Ok(CopyAssetAsNewResult {
-            new_hash_hex,
-            new_raw_value,
-            new_folder_path: normalize_path(&new_folder),
-            new_structure_json_path: normalize_path(&new_struct),
-            updated_file_url_count,
-        })
+        copy_asset_as_new_impl(
+            &PathBuf::from(source_asset_root_dir),
+            &PathBuf::from(destination_asset_root_dir),
+            &old_hash_hex,
+            &seed,
+        )
     })
     .await
     .map_err(|e| e.to_string())?
@@ -629,8 +652,8 @@ pub async fn copy_asset_as_new(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoveAssetTargets {
-    pub workspace_root: Option<String>,
-    pub extract_output_root: Option<String>,
+    pub workspace_asset_root: Option<String>,
+    pub extract_output_asset_root: Option<String>,
     pub mod_directory: Option<String>,
 }
 
@@ -668,74 +691,87 @@ fn remove_mod_fhm2d_file(mod_dir: &Path, normalized_hash: &str) -> Result<bool, 
     Ok(removed)
 }
 
+fn remove_asset_workspace_impl(hash_hex: &str, targets: RemoveAssetTargets) -> Result<(), String> {
+    let normalized = normalize_hash_hex(hash_hex)?;
+
+    let mut root_paths: Vec<PathBuf> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for opt in [
+        &targets.workspace_asset_root,
+        &targets.extract_output_asset_root,
+    ] {
+        if let Some(s) = opt {
+            let t = s.trim();
+            if t.is_empty() {
+                continue;
+            }
+            let p = PathBuf::from(t);
+            let key = p.to_string_lossy().to_ascii_lowercase();
+            if seen.insert(key) {
+                root_paths.push(p);
+            }
+        }
+    }
+
+    let mod_trimmed = targets
+        .mod_directory
+        .as_ref()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    if root_paths.is_empty() && mod_trimmed.is_none() {
+        return Err("Select at least one removal target".to_string());
+    }
+
+    let mut removed_any = false;
+    let mut skipped_targets: Vec<String> = Vec::new();
+
+    for root in &root_paths {
+        if !root.is_dir() {
+            skipped_targets.push(format!("missing directory {}", root.display()));
+            continue;
+        }
+        if remove_asset_hash_folder_pair(root, &normalized)? {
+            removed_any = true;
+        } else {
+            skipped_targets.push(format!("no folder pair under {}", root.display()));
+        }
+    }
+
+    if let Some(mod_s) = mod_trimmed {
+        let mod_dir = PathBuf::from(mod_s);
+        if !mod_dir.is_dir() {
+            skipped_targets.push(format!("missing mod directory {}", mod_dir.display()));
+        } else if remove_mod_fhm2d_file(&mod_dir, &normalized)? {
+            removed_any = true;
+        } else {
+            skipped_targets.push(format!("no packaged .fhm2d under {}", mod_dir.display()));
+        }
+    }
+
+    if !removed_any {
+        let detail = if skipped_targets.is_empty() {
+            String::new()
+        } else {
+            format!(": {}", skipped_targets.join("; "))
+        };
+        return Err(format!(
+            "Nothing to remove for {} in selected targets{}",
+            normalized, detail
+        ));
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn remove_asset_workspace(
     hash_hex: String,
     targets: RemoveAssetTargets,
 ) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let normalized = normalize_hash_hex(&hash_hex)?;
-
-        let mut root_paths: Vec<PathBuf> = Vec::new();
-        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-        for opt in [&targets.workspace_root, &targets.extract_output_root] {
-            if let Some(s) = opt {
-                let t = s.trim();
-                if t.is_empty() {
-                    continue;
-                }
-                let p = PathBuf::from(t);
-                let key = p.to_string_lossy().to_ascii_lowercase();
-                if seen.insert(key) {
-                    root_paths.push(p);
-                }
-            }
-        }
-
-        let mod_trimmed = targets
-            .mod_directory
-            .as_ref()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty());
-
-        if root_paths.is_empty() && mod_trimmed.is_none() {
-            return Err("Select at least one removal target".to_string());
-        }
-
-        for root in &root_paths {
-            if !root.is_dir() {
-                return Err(format!("Directory does not exist: {}", root.display()));
-            }
-            if !remove_asset_hash_folder_pair(root, &normalized)? {
-                return Err(format!(
-                    "Nothing to remove under {} for {}",
-                    root.display(),
-                    normalized
-                ));
-            }
-        }
-
-        if let Some(mod_s) = mod_trimmed {
-            let mod_dir = PathBuf::from(mod_s);
-            if !mod_dir.is_dir() {
-                return Err(format!(
-                    "Mod directory does not exist: {}",
-                    mod_dir.display()
-                ));
-            }
-            if !remove_mod_fhm2d_file(&mod_dir, &normalized)? {
-                return Err(format!(
-                    "Packaged .fhm2d not found under {} for {}",
-                    mod_dir.display(),
-                    normalized
-                ));
-            }
-        }
-
-        Ok(())
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || remove_asset_workspace_impl(&hash_hex, targets))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[derive(Clone, Serialize)]
@@ -1645,6 +1681,104 @@ pub fn build_shl_file(file_json: Value, output_path: &str) -> Result<(), String>
 }
 
 #[cfg(test)]
+mod character_asset_command_tests {
+    use super::*;
+
+    fn seed_pack_pair(asset_root: &Path, hash_hex: &str) {
+        let folder = asset_root.join(hash_hex);
+        fs::create_dir_all(&folder).unwrap();
+        fs::write(folder.join("asset.bin"), b"asset").unwrap();
+        fs::write(
+            asset_root.join(format!("{hash_hex}_structure.json")),
+            format!(r#"{{"fileUrl":"{hash_hex}/asset.bin"}}"#),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn copy_asset_as_new_can_read_legacy_and_write_configured() {
+        let legacy = tempfile::tempdir().unwrap();
+        let configured = tempfile::tempdir().unwrap();
+        seed_pack_pair(legacy.path(), "0xBDBE6FEA");
+
+        let result = copy_asset_as_new_impl(
+            legacy.path(),
+            configured.path(),
+            "0xBDBE6FEA",
+            "custom_seed",
+        )
+        .unwrap();
+
+        assert!(configured.path().join(&result.new_hash_hex).is_dir());
+        assert!(configured
+            .path()
+            .join(format!("{}_structure.json", result.new_hash_hex))
+            .is_file());
+        assert!(!legacy.path().join(&result.new_hash_hex).exists());
+    }
+
+    #[test]
+    fn remove_asset_workspace_uses_resolved_asset_roots() {
+        let workspace_asset_root = tempfile::tempdir().unwrap();
+        let output_asset_root = tempfile::tempdir().unwrap();
+        seed_pack_pair(workspace_asset_root.path(), "0xBDBE6FEA");
+        seed_pack_pair(output_asset_root.path(), "0xBDBE6FEA");
+
+        remove_asset_workspace_impl(
+            "0xBDBE6FEA",
+            RemoveAssetTargets {
+                workspace_asset_root: Some(
+                    workspace_asset_root.path().to_string_lossy().to_string(),
+                ),
+                extract_output_asset_root: Some(
+                    output_asset_root.path().to_string_lossy().to_string(),
+                ),
+                mod_directory: None,
+            },
+        )
+        .unwrap();
+
+        assert!(!workspace_asset_root.path().join("0xBDBE6FEA").exists());
+        assert!(!workspace_asset_root
+            .path()
+            .join("0xBDBE6FEA_structure.json")
+            .exists());
+        assert!(!output_asset_root.path().join("0xBDBE6FEA").exists());
+        assert!(!output_asset_root
+            .path()
+            .join("0xBDBE6FEA_structure.json")
+            .exists());
+    }
+
+    #[test]
+    fn remove_asset_workspace_succeeds_when_one_selected_root_is_missing() {
+        let workspace_asset_root = tempfile::tempdir().unwrap();
+        let missing_output_asset_root = workspace_asset_root.path().join("missing-output-root");
+        seed_pack_pair(workspace_asset_root.path(), "0xBDBE6FEA");
+
+        remove_asset_workspace_impl(
+            "0xBDBE6FEA",
+            RemoveAssetTargets {
+                workspace_asset_root: Some(
+                    workspace_asset_root.path().to_string_lossy().to_string(),
+                ),
+                extract_output_asset_root: Some(
+                    missing_output_asset_root.to_string_lossy().to_string(),
+                ),
+                mod_directory: None,
+            },
+        )
+        .unwrap();
+
+        assert!(!workspace_asset_root.path().join("0xBDBE6FEA").exists());
+        assert!(!workspace_asset_root
+            .path()
+            .join("0xBDBE6FEA_structure.json")
+            .exists());
+    }
+}
+
+#[cfg(test)]
 mod shl_command_tests {
     use super::*;
     use crate::format::shl::{ShlFile, ShlRecord};
@@ -1658,7 +1792,10 @@ mod shl_command_tests {
         let err = parse_shl_file(&path).expect_err("missing shell must fail");
 
         // Actionable message, not the raw OS "file not found" surfaced to the editor.
-        assert!(err.contains("not found on disk"), "unexpected message: {err}");
+        assert!(
+            err.contains("not found on disk"),
+            "unexpected message: {err}"
+        );
         assert!(err.contains(&path), "message must name the path: {err}");
         assert!(
             !err.to_ascii_lowercase().contains("os error"),

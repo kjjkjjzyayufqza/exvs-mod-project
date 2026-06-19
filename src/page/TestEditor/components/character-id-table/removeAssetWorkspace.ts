@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export type RemoveAssetTargets = {
-  workspaceRoot?: string;
-  extractOutputRoot?: string;
+  workspaceAssetRoot?: string;
+  extractOutputAssetRoot?: string;
   modDirectory?: string;
 };
 

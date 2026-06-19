@@ -44,6 +44,7 @@ import { UNIT_FIELD_KEY_TO_SLOT } from "@/services/resourceRegistry/types";
 import { ResourceSeedField } from "../resource-registry/ResourceSeedField";
 import {
   resolveFhm2dPackPaths,
+  resolveWorkspaceRouteRoot,
   type ResolvedFhm2dPackPaths,
 } from "@/services/testEditorWorkspace/paths";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
@@ -102,13 +103,16 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   const [extractOverwriteOpen, setExtractOverwriteOpen] = useState(false);
   const [extractCollisionPath, setExtractCollisionPath] = useState("");
   const [pendingExtractTarget, setPendingExtractTarget] = useState<ResolvedFhm2dPackPaths | null>(null);
+  const workspaceAssetRootPath =
+    asset.workspacePack.existing?.routeRootPath ?? asset.workspacePack.configured.routeRootPath;
   const trimmedSeed = copySeed.trim();
   const copySeedCrcPreview = useMemo(() => {
     const crc = crc32Ieee(trimmedSeed);
     return { hex: crc.hashHex, int32: crc.hashInt32 };
   }, [trimmedSeed]);
 
-  const canRemoveWorkspace = Boolean(projectRootDir?.trim());
+  const canCopyAsNew = Boolean(asset.workspacePack.existing && asset.workspacePack.configured.routeRootPath.trim());
+  const canRemoveWorkspace = Boolean(projectRootDir?.trim() && workspaceAssetRootPath.trim());
   const canRemoveExtract = Boolean(extractOutputPath?.trim());
   const canRemoveMod = Boolean(obModPath?.trim());
   const extractOutputSameAsWorkspace =
@@ -254,15 +258,20 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
       toast.error("Please enter a seed string");
       return;
     }
-    if (!projectRootDir) {
-      toast.error("Project root path is not configured");
+    if (!asset.workspacePack.existing) {
+      toast.error("Workspace asset source was not found");
+      return;
+    }
+    if (!asset.workspacePack.configured.routeRootPath.trim()) {
+      toast.error("Workspace asset destination is not configured");
       return;
     }
 
     setIsCopyingAsNew(true);
     try {
       const result = await copyAssetAsNew({
-        projectRootDir,
+        sourceAssetRootDir: asset.workspacePack.existing.routeRootPath,
+        destinationAssetRootDir: asset.workspacePack.configured.routeRootPath,
         oldHashHex: asset.hashHex,
         seed: trimmedSeed,
         fieldKey: asset.fieldKey,
@@ -300,11 +309,14 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
 
     setIsRemoving(true);
     try {
+      const extractOutputAssetRoot = takeExtract
+        ? await resolveWorkspaceRouteRoot(extractOutputPath, workspaceDocument, asset.routeId)
+        : undefined;
       await removeAssetWorkspace({
         hashHex: asset.hashHex,
         targets: {
-          workspaceRoot: takeWorkspace ? projectRootDir : undefined,
-          extractOutputRoot: takeExtract ? extractOutputPath : undefined,
+          workspaceAssetRoot: takeWorkspace ? workspaceAssetRootPath : undefined,
+          extractOutputAssetRoot,
           modDirectory: takeMod ? obModPath : undefined,
         },
       });
@@ -483,7 +495,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
                 size="sm"
                 className="w-full justify-start gap-2"
                 onClick={() => setCopyDialogOpen(true)}
-                disabled={!workspaceExists}
+                disabled={!workspaceExists || !canCopyAsNew}
               >
                 <Copy className="h-3.5 w-3.5" />
                 Copy as New
@@ -528,7 +540,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
                     />
                     <span className="min-w-0 flex-1">
                       <span className="font-medium text-foreground">Test Editor workspace</span>
-                      <span className="block break-all font-mono text-xs">{projectRootDir || "(not set)"}</span>
+                      <span className="block break-all font-mono text-xs">{canRemoveWorkspace ? workspaceAssetRootPath : "(not set)"}</span>
                       <span className="block text-[11px]">Remove {asset.hashHex} folder and {asset.hashHex}_structure.json</span>
                     </span>
                   </label>
