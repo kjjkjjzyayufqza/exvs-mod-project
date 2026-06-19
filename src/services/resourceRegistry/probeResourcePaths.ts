@@ -3,6 +3,7 @@ import { getAssetRefInfo, int32ToHashHex } from "@/page/TestEditor/components/ch
 import { getStageFileNamePaths } from "@/page/TestEditor/components/stage-list/stageFileNameRef";
 import type { ResourceRegistryCategory } from "./types";
 import { UNIT_SLOT_TO_FIELD_KEY } from "./types";
+import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 
 export interface ResourcePathProbe {
   hashInt32: number;
@@ -19,8 +20,9 @@ export async function probeResourcePaths(params: {
   obDplCachePath: string;
   obModPath: string;
   workspacePath: string;
+  workspaceDocument?: TestEditorWorkspaceDocument;
 }): Promise<ResourcePathProbe> {
-  const { category, slot, hashInt32, obDplCachePath, obModPath, workspacePath } = params;
+  const { category, slot, hashInt32, obDplCachePath, obModPath, workspacePath, workspaceDocument } = params;
 
   if (category === "stage") {
     const paths = await getStageFileNamePaths(
@@ -39,13 +41,22 @@ export async function probeResourcePaths(params: {
 
   if (category === "unit") {
     const fieldKey = UNIT_SLOT_TO_FIELD_KEY[slot] ?? slot;
-    const info = await getAssetRefInfo(
-      fieldKey,
-      hashInt32,
-      obDplCachePath,
-      obModPath,
-      workspacePath,
-    );
+    const info = workspaceDocument
+      ? await getAssetRefInfo({
+          fieldKey,
+          value: hashInt32,
+          obDplCachePath,
+          obModPath,
+          workspaceRoot: workspacePath,
+          workspaceDocument,
+        })
+      : await getAssetRefInfo(
+          fieldKey,
+          hashInt32,
+          obDplCachePath,
+          obModPath,
+          workspacePath,
+        );
     const [obExists, modExists, workspaceExists] = await Promise.all([
       info.sourceFilePath ? exists(info.sourceFilePath) : Promise.resolve(false),
       info.modFilePath ? exists(info.modFilePath) : Promise.resolve(false),

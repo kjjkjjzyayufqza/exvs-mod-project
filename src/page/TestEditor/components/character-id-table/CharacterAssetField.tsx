@@ -446,6 +446,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
                   obDplCachePath={obDplCachePath}
                   obModPath={obModPath}
                   workspacePath={projectRootDir}
+                  workspaceDocument={workspaceDocument}
                   registry={resourceRegistry}
                   onApplyHash={(hashInt32) => onFieldUpdate?.(asset.fieldKey, hashInt32)}
                 />

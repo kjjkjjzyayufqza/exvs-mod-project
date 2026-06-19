@@ -21,6 +21,7 @@ import {
 import type { ResourceRegistryCategory } from "@/services/resourceRegistry/types";
 import type { UseResourceRegistryResult } from "@/hooks/useResourceRegistry";
 import { ResourceSeedCollisionDialog } from "./ResourceSeedCollisionDialog";
+import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 
 interface ResourceSeedFieldProps {
   category: ResourceRegistryCategory;
@@ -30,6 +31,7 @@ interface ResourceSeedFieldProps {
   obDplCachePath: string;
   obModPath: string;
   workspacePath: string;
+  workspaceDocument?: TestEditorWorkspaceDocument;
   registry: UseResourceRegistryResult;
   onApplyHash: (hashInt32: number) => void;
   onSeedChange?: (seed: string) => void;
@@ -45,6 +47,7 @@ export function ResourceSeedField({
   obDplCachePath,
   obModPath,
   workspacePath,
+  workspaceDocument,
   registry,
   onApplyHash,
   onSeedChange,
@@ -93,9 +96,10 @@ export function ResourceSeedField({
       obDplCachePath,
       obModPath,
       workspacePath,
+      workspaceDocument,
       maxAttempts: 99,
     }),
-    [category, slot, obDplCachePath, obModPath, workspacePath],
+    [category, slot, obDplCachePath, obModPath, workspacePath, workspaceDocument],
   );
 
   const applySuggestion = useCallback(

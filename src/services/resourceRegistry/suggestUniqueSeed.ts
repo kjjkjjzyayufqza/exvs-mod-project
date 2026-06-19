@@ -1,6 +1,7 @@
 import { crc32Ieee } from "@/utils/crc32Ieee";
 import { isApplyCollision, probeResourcePaths } from "./probeResourcePaths";
 import type { ResourceRegistryCategory, ResourceRegistrySlot } from "./types";
+import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 
 export interface SuggestUniqueSeedParams {
   baseSeed: string;
@@ -9,6 +10,7 @@ export interface SuggestUniqueSeedParams {
   obDplCachePath: string;
   obModPath: string;
   workspacePath: string;
+  workspaceDocument?: TestEditorWorkspaceDocument;
   maxAttempts?: number;
 }
 
@@ -55,6 +57,7 @@ export async function suggestUniqueSeed(
       obDplCachePath: params.obDplCachePath,
       obModPath: params.obModPath,
       workspacePath: params.workspacePath,
+      workspaceDocument: params.workspaceDocument,
     });
     const isClear = !isApplyCollision(probe);
     const row: SeedSuggestion = {
@@ -90,6 +93,7 @@ export async function evaluateSeed(params: SuggestUniqueSeedParams & { seed: str
     obDplCachePath: params.obDplCachePath,
     obModPath: params.obModPath,
     workspacePath: params.workspacePath,
+    workspaceDocument: params.workspaceDocument,
   });
   return {
     seed,
