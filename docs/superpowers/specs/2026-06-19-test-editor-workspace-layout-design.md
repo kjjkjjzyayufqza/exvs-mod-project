@@ -179,18 +179,16 @@ The application owns a default catalog independent of the persisted document:
 | `unit.msc` | `040msc` | Character ID `Msc` |
 | `unit.param` | `041cpm` | Character ID `Param` |
 | `unit.sound` | `090sound` | Character ID `Sound` |
-| `list.character-id` | `041cpm/character_id` | Character ID table package |
-| `param.arms` | `041cpm/arms_param` | Arms editor |
-| `param.bullet` | `041cpm/bullet_param` | Bullet editor |
-| `param.character` | `041cpm/character_param` | Character param editor |
-| `param.chrsys` | `041cpm/chrsys` | Character system editor |
-| `param.grap` | `041cpm/grap_param` | Grab editor |
-| `param.hitgroup` | `041cpm/hitgroup` | Hit group editor |
-| `param.interaction` | `041cpm/interaction` | Interaction editor |
-| `param.shell` | `041cpm/shell` | Shell data |
-| `param.speed` | `041cpm/speed_param` | Speed editor |
+| `list.character` | `012list` | Character ID and character list packages |
+| `list.series` | `012list` | Series list package |
+| `list.stage` | `012list` | Stage list package |
+| `gui.card-icons` | `009gui` | Character card icon package |
+| `gui.series-icons` | `009gui` | Series icon package |
+| `gui.stage-icons` | `009gui` | Stage icon packages |
+| `param.for-outgame` | `041cpm` | Character cost package |
+| `msc.workspace` | `040msc` | Extracted MSC packages |
 
-Only routes whose current package semantics are verified are activated during migration. The catalog may contain future route definitions without changing consumers prematurely.
+Only routes whose current package semantics are verified are activated during migration. The reference game's second-level folders such as `arms_param` and `character_list` describe the original unpacked resource organization; they are not imposed on this hash-pack workspace. Param visual editors resolve files inside the selected character's `unit.param` hash package rather than creating top-level `041cpm/arms_param` routes.
 
 Persisted entries override matching defaults. Missing entries inherit defaults. This keeps documents concise while allowing every prefix to be customized.
 
