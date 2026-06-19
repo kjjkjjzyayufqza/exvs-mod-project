@@ -42,6 +42,11 @@ import { crc32Ieee } from "@/utils/crc32Ieee";
 import type { UseResourceRegistryResult } from "@/hooks/useResourceRegistry";
 import { UNIT_FIELD_KEY_TO_SLOT } from "@/services/resourceRegistry/types";
 import { ResourceSeedField } from "../resource-registry/ResourceSeedField";
+import {
+  resolveFhm2dPackPaths,
+  type ResolvedFhm2dPackPaths,
+} from "@/services/testEditorWorkspace/paths";
+import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 
 const COPY_AS_NEW_MODAL_DIMENSIONS = {
   width: 520,
@@ -64,6 +69,7 @@ interface CharacterAssetFieldProps {
   obDplCachePath: string;
   /** OB mod folder (e.g. data\x64\mod): packaged .fhm2d */
   obModPath: string;
+  workspaceDocument: TestEditorWorkspaceDocument;
   resourceRegistry?: UseResourceRegistryResult;
   onReveal?: (path: string) => void;
   onFieldUpdate?: (fieldKey: string, newValue: number) => void;
@@ -75,6 +81,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   extractOutputPath,
   obDplCachePath,
   obModPath,
+  workspaceDocument,
   resourceRegistry,
   onReveal,
   onFieldUpdate,
@@ -94,6 +101,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   const [writeMetaBin, setWriteMetaBin] = useState(false);
   const [extractOverwriteOpen, setExtractOverwriteOpen] = useState(false);
   const [extractCollisionPath, setExtractCollisionPath] = useState("");
+  const [pendingExtractTarget, setPendingExtractTarget] = useState<ResolvedFhm2dPackPaths | null>(null);
   const trimmedSeed = copySeed.trim();
   const copySeedCrcPreview = useMemo(() => {
     const crc = crc32Ieee(trimmedSeed);
@@ -138,9 +146,21 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     checkExists();
   }, [asset.sourceFilePath, asset.workspaceFolderPath, asset.modFilePath]);
 
-  const runExtract = async () => {
+  const resolveExtractTarget = async () => {
+    if (!extractOutputPath.trim()) {
+      throw new Error("Extract output path not configured");
+    }
+    return resolveFhm2dPackPaths(
+      extractOutputPath,
+      workspaceDocument,
+      asset.routeId,
+      asset.hashHex,
+    );
+  };
+
+  const runExtract = async (target: ResolvedFhm2dPackPaths) => {
     setIsExtracting(true);
-    const result = await extractAsset(asset, extractOutputPath, { writeMetaBin });
+    const result = await extractAsset(asset, target, { writeMetaBin });
     setIsExtracting(false);
 
     if (result.success) {
@@ -161,7 +181,12 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
           },
         });
       }
-      setWorkspaceExists(true);
+      if (
+        result.path &&
+        normalizePathKey(result.path) === normalizePathKey(asset.workspacePack.configured.folderPath)
+      ) {
+        setWorkspaceExists(true);
+      }
     } else {
       toast.error(result.error || "Extraction failed");
     }
@@ -171,21 +196,30 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     if (isExtracting) {
       return;
     }
-    const { targetDir, folderExists } = await getExtractOutputFolderCollisionInfo(
-      extractOutputPath,
-      asset.hashHex
-    );
+    let target: ResolvedFhm2dPackPaths;
+    try {
+      target = await resolveExtractTarget();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    const { targetDir, folderExists } = await getExtractOutputFolderCollisionInfo(target);
     if (folderExists) {
       setExtractCollisionPath(targetDir);
+      setPendingExtractTarget(target);
       setExtractOverwriteOpen(true);
       return;
     }
-    await runExtract();
+    await runExtract(target);
   };
 
   const handleConfirmExtractOverwrite = () => {
     setExtractOverwriteOpen(false);
-    void runExtract();
+    const target = pendingExtractTarget;
+    setPendingExtractTarget(null);
+    if (target) {
+      void runExtract(target);
+    }
   };
 
   const handleOpenSourceFolder = async () => {

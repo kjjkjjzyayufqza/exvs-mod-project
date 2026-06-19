@@ -37,6 +37,7 @@ import { AssetRefInfo, getAssetRefInfo } from "./character-id-table/assetRef";
 import { CharacterAssetField } from "./character-id-table/CharacterAssetField";
 import { filterCharacterIdTableRows } from "./character-id-table/characterIdTableSearch";
 import { extractAsset } from "./character-id-table/extractFhm2d";
+import { resolveFhm2dPackPaths } from "@/services/testEditorWorkspace/paths";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 
 interface CharacterIdTableViewProps {
@@ -254,17 +255,30 @@ export default function CharacterIdTableView({
 
     const handleExtractAll = useCallback(async () => {
         if (!selectedRow || isExtractingAll) return;
+        if (!extractOutputPath.trim()) {
+            toast.error("Extract output path not configured");
+            return;
+        }
         setIsExtractingAll(true);
-        
+
         const results = [];
-        for (const key of REQUIRED_FIELD_KEYS) {
-            const asset = resolvedAssetRefs[key];
-            if (asset && asset.rawValue !== 0) {
-                results.push(await extractAsset(asset, extractOutputPath));
+        try {
+            for (const key of REQUIRED_FIELD_KEYS) {
+                const asset = resolvedAssetRefs[key];
+                if (asset && asset.rawValue !== 0) {
+                    const target = await resolveFhm2dPackPaths(
+                        extractOutputPath,
+                        workspaceDocument,
+                        asset.routeId,
+                        asset.hashHex,
+                    );
+                    results.push(await extractAsset(asset, target));
+                }
             }
+        } finally {
+            setIsExtractingAll(false);
         }
 
-        setIsExtractingAll(false);
         const successCount = results.filter(r => r.success).length;
         const namingWarnings = results.filter((r) => r.success && r.namingWarning);
         if (successCount > 0) {
@@ -277,7 +291,7 @@ export default function CharacterIdTableView({
                 toast.success(`Successfully extracted ${successCount} assets`);
             }
         }
-    }, [selectedRow, isExtractingAll, resolvedAssetRefs, extractOutputPath]);
+    }, [selectedRow, isExtractingAll, resolvedAssetRefs, extractOutputPath, workspaceDocument]);
 
     const deleteCandidateRow = useMemo(() => {
         if (deleteCandidateIndex === null) return null;
@@ -1008,6 +1022,7 @@ export default function CharacterIdTableView({
                                                             extractOutputPath={extractOutputPath}
                                                             obDplCachePath={obDplCachePath}
                                                             obModPath={obModPath}
+                                                            workspaceDocument={workspaceDocument}
                                                             resourceRegistry={resourceRegistry}
                                                             onReveal={onRevealTreeFolder}
                                                             onFieldUpdate={handleAssetFieldUpdate}
@@ -1037,6 +1052,7 @@ export default function CharacterIdTableView({
                                                             extractOutputPath={extractOutputPath}
                                                             obDplCachePath={obDplCachePath}
                                                             obModPath={obModPath}
+                                                            workspaceDocument={workspaceDocument}
                                                             resourceRegistry={resourceRegistry}
                                                             onReveal={onRevealTreeFolder}
                                                             onFieldUpdate={handleAssetFieldUpdate}
@@ -1066,6 +1082,7 @@ export default function CharacterIdTableView({
                                                             extractOutputPath={extractOutputPath}
                                                             obDplCachePath={obDplCachePath}
                                                             obModPath={obModPath}
+                                                            workspaceDocument={workspaceDocument}
                                                             resourceRegistry={resourceRegistry}
                                                             onReveal={onRevealTreeFolder}
                                                             onFieldUpdate={handleAssetFieldUpdate}
@@ -1095,6 +1112,7 @@ export default function CharacterIdTableView({
                                                             extractOutputPath={extractOutputPath}
                                                             obDplCachePath={obDplCachePath}
                                                             obModPath={obModPath}
+                                                            workspaceDocument={workspaceDocument}
                                                             resourceRegistry={resourceRegistry}
                                                             onReveal={onRevealTreeFolder}
                                                             onFieldUpdate={handleAssetFieldUpdate}
@@ -1124,6 +1142,7 @@ export default function CharacterIdTableView({
                                                             extractOutputPath={extractOutputPath}
                                                             obDplCachePath={obDplCachePath}
                                                             obModPath={obModPath}
+                                                            workspaceDocument={workspaceDocument}
                                                             resourceRegistry={resourceRegistry}
                                                             onReveal={onRevealTreeFolder}
                                                             onFieldUpdate={handleAssetFieldUpdate}
@@ -1153,6 +1172,7 @@ export default function CharacterIdTableView({
                                                             extractOutputPath={extractOutputPath}
                                                             obDplCachePath={obDplCachePath}
                                                             obModPath={obModPath}
+                                                            workspaceDocument={workspaceDocument}
                                                             resourceRegistry={resourceRegistry}
                                                             onReveal={onRevealTreeFolder}
                                                             onFieldUpdate={handleAssetFieldUpdate}

@@ -1,9 +1,9 @@
 import { readFile, exists } from '@tauri-apps/plugin-fs';
-import { join } from '@tauri-apps/api/path';
 import { invoke } from '@tauri-apps/api/core';
 import { Buffer } from 'buffer';
 import { ExtractFHMData, Fhm2d_type_format, ExtractType } from '@/models/fhm2d';
 import { AssetRefInfo } from './assetRef';
+import type { ResolvedFhm2dPackPaths } from "@/services/testEditorWorkspace/paths";
 
 export interface ExtractResult {
   success: boolean;
@@ -22,21 +22,16 @@ export type ExtractAssetOptions = {
 };
 
 export async function getExtractOutputFolderCollisionInfo(
-  extractOutputPath: string,
-  hashHex: string
+  target: ResolvedFhm2dPackPaths,
 ): Promise<{ targetDir: string; folderExists: boolean }> {
-  const root = extractOutputPath.trim();
-  if (!root) {
-    return { targetDir: '', folderExists: false };
-  }
-  const targetDir = await join(root, hashHex);
+  const targetDir = target.folderPath;
   const folderExists = await invoke<boolean>('path_exists', { path: targetDir });
   return { targetDir, folderExists };
 }
 
 export async function extractAsset(
   asset: AssetRefInfo,
-  extractOutputPath: string,
+  target: ResolvedFhm2dPackPaths,
   options?: ExtractAssetOptions
 ): Promise<ExtractResult> {
   try {
@@ -49,7 +44,7 @@ export async function extractAsset(
       return { success: false, error: `Source file not found: ${asset.sourceFilePath}` };
     }
 
-    if (!extractOutputPath) {
+    if (!target.folderPath) {
       return { success: false, error: 'Extract output path not configured' };
     }
 
@@ -74,7 +69,7 @@ export async function extractAsset(
     }
     logExtractPhase('validate FHM2D magic');
 
-    const targetDir = await join(extractOutputPath, asset.hashHex);
+    const targetDir = target.folderPath;
     logExtractPhase('resolve target directory');
 
     const extractFormat: Fhm2d_type_format | undefined = asset.isEffectAsset
