@@ -37,6 +37,7 @@ const FILE_NAME_FIELDS = new Set(["fileName", "vsSD", "vsSL", "vsSn"]);
 interface StageFormProps {
   stage: StageListEntry;
   index: number;
+  editable?: boolean;
   onChange: (updated: StageListEntry) => void;
   obDplCachePath?: string;
   obModPath?: string;
@@ -51,6 +52,7 @@ interface StageFormProps {
 export function StageForm({
   stage,
   index,
+  editable = true,
   onChange,
   obDplCachePath = "",
   obModPath = "",
@@ -95,17 +97,19 @@ export function StageForm({
 
   const handleFieldChange = useCallback(
     (fieldName: keyof StageListEntry, value: number) => {
+      if (!editable) return;
       const updated = { ...stage, [fieldName]: value };
       onChange(updated);
     },
-    [stage, onChange]
+    [editable, stage, onChange]
   );
 
   const handleNameChange = useCallback(
     (value: string) => {
+      if (!editable) return;
       onChange({ ...stage, name: value });
     },
-    [stage, onChange]
+    [editable, stage, onChange]
   );
 
   const getNumericValue = (fieldName: (typeof NUMERIC_FIELDS)[number]["name"]): number => {
@@ -143,6 +147,7 @@ export function StageForm({
           type="text"
           value={stage.name ?? ""}
           onChange={(e) => handleNameChange(e.target.value)}
+          disabled={!editable}
           className="h-8"
         />
       </div>
@@ -174,7 +179,7 @@ export function StageForm({
             }
             value={getNumericValue(field.name)}
             property={`${field.name}-${index}`}
-            editable
+            editable={editable}
             editingProperty={null}
             editValue=""
             validationError=""

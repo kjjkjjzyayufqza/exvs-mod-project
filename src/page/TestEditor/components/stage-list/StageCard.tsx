@@ -10,6 +10,7 @@ import { formatSeriesPngFileNameFromBaseName, resolveMappedSeriesBaseName } from
 interface StageCardProps {
   stage: StageListEntry;
   index: number;
+  editable?: boolean;
   isSelected: boolean;
   onClick: () => void;
   onCopy: () => void;
@@ -18,7 +19,17 @@ interface StageCardProps {
   stageIconBaseNameOrder?: Array<string | null>;
 }
 
-export function StageCard({ stage, index, isSelected, onClick, onCopy, onDelete, stageIconConvertDirPath, stageIconBaseNameOrder }: StageCardProps) {
+export function StageCard({
+  stage,
+  index,
+  editable = true,
+  isSelected,
+  onClick,
+  onCopy,
+  onDelete,
+  stageIconConvertDirPath,
+  stageIconBaseNameOrder,
+}: StageCardProps) {
   const stageName = stage.name ?? "";
   const baseName = resolveMappedSeriesBaseName(stageIconBaseNameOrder, stage.iconIndex ?? 0);
   const fileName = baseName ? formatSeriesPngFileNameFromBaseName(baseName) : null;
@@ -86,8 +97,10 @@ export function StageCard({ stage, index, isSelected, onClick, onCopy, onDelete,
           variant="ghost"
           size="sm"
           className="text-primary hover:text-primary hover:bg-primary/10 p-0"
+          disabled={!editable}
           onClick={(e) => {
             e.stopPropagation();
+            if (!editable) return;
             onCopy();
           }}
           title="Copy as new"
@@ -98,8 +111,10 @@ export function StageCard({ stage, index, isSelected, onClick, onCopy, onDelete,
           variant="ghost"
           size="sm"
           className="text-destructive hover:text-destructive hover:bg-destructive/10 p-0"
+          disabled={!editable}
           onClick={(e) => {
             e.stopPropagation();
+            if (!editable) return;
             onDelete();
           }}
           title="Delete"

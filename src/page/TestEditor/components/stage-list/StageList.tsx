@@ -54,6 +54,7 @@ const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
 
 interface StageListProps {
   stageData: StageListEntry[];
+  editable?: boolean;
   selectedIndex: number;
   onSelect: (index: number) => void;
   onCopy: (index: number) => void;
@@ -72,6 +73,7 @@ interface StageListProps {
 
 export function StageList({
   stageData,
+  editable = true,
   selectedIndex,
   onSelect,
   onCopy,
@@ -320,6 +322,7 @@ export function StageList({
                 <StageCard
                   stage={row}
                   index={idx}
+                  editable={editable}
                   isSelected={idx === selectedIndex}
                   onClick={() => onSelect(idx)}
                   onCopy={() => onCopy(idx)}

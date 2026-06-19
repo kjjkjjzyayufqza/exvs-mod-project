@@ -39,10 +39,14 @@ import {
 import type { StageIconIndexPickerGroup } from "./stage-list/StageIconIndexPickerPopover";
 import { extractCardIconItems } from "./card-icon-list/cardIconStructure";
 import { buildCardIconPreviewPath } from "./card-icon-list/cardIconUtils";
+import {
+  resolveWorkspaceContent,
+  type WorkspaceContentId,
+} from "@/services/testEditorWorkspace/contentCatalog";
+import { resolveWorkspaceRouteRoot } from "@/services/testEditorWorkspace/paths";
+import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 
 const STAGE_LIST_HASH = "0xCE74091E";
-const STAGE_ICON_HASH = "0x3CC8B10B";
-const STAGE_ICON_SECONDARY_HASH = "0x0CEE3991";
 const STAGE_INFO_MODAL_DIMENSIONS = {
   width: 560,
   height: 380,
@@ -110,13 +114,21 @@ interface StageListViewProps {
   isActive: boolean;
   onUnsavedChanges?: (hasChanges: boolean) => void;
   onRevealTreeFolder?: (path: string) => void;
+  workspaceDocument: TestEditorWorkspaceDocument;
 }
 
 type LoadState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error"; filePath: string; message: string }
-  | { status: "ready"; filePath: string; list: StageListData };
+  | {
+      status: "ready";
+      filePath: string;
+      configuredFilePath: string;
+      sourceLayout: "configured" | "legacy" | "missing";
+      writable: boolean;
+      list: StageListData;
+    };
 
 type StageIconState =
   | { status: "idle" }
@@ -130,7 +142,13 @@ interface GvsSession {
   list: StageListGVS;
 }
 
-export default function StageListView({ folderPath, isActive, onUnsavedChanges, onRevealTreeFolder }: StageListViewProps) {
+export default function StageListView({
+  folderPath,
+  isActive,
+  onUnsavedChanges,
+  onRevealTreeFolder,
+  workspaceDocument,
+}: StageListViewProps) {
   const getSetting = useConfigStore((s) => s.getSetting);
   const resourceRegistry = useResourceRegistry(folderPath || null);
   const [obDplCachePath, setObDplCachePath] = useState("");
@@ -172,24 +190,34 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
   const [gvsAssetExtractSuccesses, setGvsAssetExtractSuccesses] = useState<GvsImageConvertSuccess[]>([]);
   const [gvsAssetExtractFailures, setGvsAssetExtractFailures] = useState<GvsImageConvertFailure[]>([]);
   const [stageIconState, setStageIconState] = useState<StageIconState>({ status: "idle" });
+  const [stageModelRouteRootPath, setStageModelRouteRootPath] = useState("");
   const lastLoadedKeyRef = useRef<string>("");
 
-  const resolveFilePath = useCallback(async () => {
-    return await join(folderPath, STAGE_LIST_HASH, "stage_list.bin");
-  }, [folderPath]);
-
-  const resolveStageIconConvertDir = useCallback(
-    async (hash: string) => {
-      return await join(folderPath, hash, "__convert");
+  const resolveContent = useCallback(
+    async (id: WorkspaceContentId) => {
+      return await resolveWorkspaceContent(folderPath, workspaceDocument, id);
     },
-    [folderPath]
+    [folderPath, workspaceDocument],
   );
 
-  const resolveStageIconStructureJsonPath = useCallback(
-    async (hash: string) => {
-      return await join(folderPath, `${hash}_structure.json`);
+  const resolveContentFilePath = useCallback(
+    async (id: WorkspaceContentId) => {
+      const content = await resolveContent(id);
+      return {
+        content,
+        filePath: content.existing?.filePath ?? content.configured.filePath,
+      };
     },
-    [folderPath]
+    [resolveContent],
+  );
+
+  const resolveContentPackPaths = useCallback(
+    async (id: WorkspaceContentId) => {
+      const content = await resolveContent(id);
+      const pack = content.existing ?? content.configured;
+      return { content, pack };
+    },
+    [resolveContent],
   );
 
   const loadStageIconCount = useCallback(async () => {
@@ -200,16 +228,15 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
 
     setStageIconState({ status: "loading" });
     try {
-      const groupDefs: Array<{ key: string; title: string; hash: string }> = [
-        { key: "first", title: "Group 1", hash: STAGE_ICON_HASH },
-        { key: "second", title: "Group 2", hash: STAGE_ICON_SECONDARY_HASH },
+      const groupDefs: Array<{ key: string; title: string; id: WorkspaceContentId }> = [
+        { key: "first", title: "Group 1", id: "stage-icons-primary" },
+        { key: "second", title: "Group 2", id: "stage-icons-secondary" },
       ];
       const groups = await Promise.all(
         groupDefs.map(async (def) => {
-          const [dirPath, structurePath] = await Promise.all([
-            resolveStageIconConvertDir(def.hash),
-            resolveStageIconStructureJsonPath(def.hash),
-          ]);
+          const { pack } = await resolveContentPackPaths(def.id);
+          const dirPath = await join(pack.folderPath, "__convert");
+          const structurePath = pack.structureJsonPath;
           const raw = await readTextFile(structurePath);
           const json = JSON.parse(raw);
           const iconItems = extractCardIconItems(json);
@@ -235,7 +262,7 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
         message: error instanceof Error ? error.message : "Unknown error",
       });
     }
-  }, [folderPath, resolveStageIconConvertDir, resolveStageIconStructureJsonPath]);
+  }, [folderPath, resolveContentPackPaths]);
 
   const resetEditorState = useCallback(() => {
     setHasChanges(false);
@@ -249,14 +276,27 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
       return;
     }
 
-    const filePath = await resolveFilePath();
+    const { content, filePath } = await resolveContentFilePath("stage-list");
+    if (!filePath) {
+      setLoadState({ status: "error", filePath: "", message: "Stage list content path is not configured" });
+      resetEditorState();
+      return;
+    }
+
     setLoadState({ status: "loading" });
     try {
       const list = await invoke<StageListData>("parse_typed_param_file", {
         path: filePath,
         paramType: "stagelist",
       });
-      setLoadState({ status: "ready", filePath, list });
+      setLoadState({
+        status: "ready",
+        filePath,
+        configuredFilePath: content.configured.filePath ?? "",
+        sourceLayout: content.sourceLayout,
+        writable: content.writable,
+        list,
+      });
       resetEditorState();
       setSelectedIndex((prev) => {
         const len = list.entries.length;
@@ -272,7 +312,7 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
       });
       resetEditorState();
     }
-  }, [folderPath, resetEditorState, resolveFilePath]);
+  }, [folderPath, resetEditorState, resolveContentFilePath]);
 
   useEffect(() => {
     const loadConfig = async () => {
@@ -284,20 +324,52 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
 
   useEffect(() => {
     if (!isActive) return;
-    const key = `${folderPath}::stagelist`;
+    const key = [
+      folderPath,
+      workspaceDocument.assetRoutes["list.stage"]?.prefix ?? "",
+      workspaceDocument.legacyReadFallback ? "legacy-on" : "legacy-off",
+      "stagelist",
+    ].join("::");
     if (key === lastLoadedKeyRef.current) return;
     lastLoadedKeyRef.current = key;
     void load();
-  }, [folderPath, isActive, load]);
+  }, [folderPath, isActive, load, workspaceDocument]);
 
   useEffect(() => {
     if (!isActive) return;
     if (!folderPath) return;
     void loadStageIconCount();
-  }, [folderPath, isActive, loadStageIconCount]);
+  }, [folderPath, isActive, loadStageIconCount, workspaceDocument]);
+
+  useEffect(() => {
+    if (!folderPath) {
+      setStageModelRouteRootPath("");
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const routeRootPath = await resolveWorkspaceRouteRoot(folderPath, workspaceDocument, "stage.model");
+        if (!cancelled) {
+          setStageModelRouteRootPath(routeRootPath);
+        }
+      } catch (error) {
+        console.error(error);
+        if (!cancelled) {
+          setStageModelRouteRootPath(folderPath);
+        }
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [folderPath, workspaceDocument]);
 
   const handleEditorChange = useCallback(
     (next: StageListData) => {
+      if (loadState.status !== "ready" || !loadState.writable) return;
       setLoadState((prev) => {
         if (prev.status !== "ready") return prev;
         return { ...prev, list: next };
@@ -305,11 +377,15 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
       setHasChanges(true);
       onUnsavedChanges?.(true);
     },
-    [onUnsavedChanges]
+    [loadState, onUnsavedChanges]
   );
 
   const handleSaveFile = useCallback(async () => {
     if (loadState.status !== "ready") return;
+    if (!loadState.writable) {
+      toast.error("Legacy flat workspace content is read-only");
+      return;
+    }
     const filePath = loadState.filePath;
     try {
       const backupPath = filePath.replace(/\.bin$/i, "_bak.bin");
@@ -578,6 +654,10 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
 
   const handlePickImportStageJson = useCallback(async () => {
     if (loadState.status !== "ready") return;
+    if (!loadState.writable) {
+      toast.error("Legacy flat workspace content is read-only");
+      return;
+    }
     if (isImporting) return;
 
     setIsImporting(true);
@@ -603,6 +683,10 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
 
   const handleConfirmImport = useCallback(async () => {
     if (loadState.status !== "ready") return;
+    if (!loadState.writable) {
+      toast.error("Legacy flat workspace content is read-only");
+      return;
+    }
     if (!importPreview) return;
     if (isImporting) return;
 
@@ -630,6 +714,10 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
 
   const handleDebugBatch = useCallback(() => {
     if (loadState.status !== "ready") return;
+    if (!loadState.writable) {
+      toast.error("Legacy flat workspace content is read-only");
+      return;
+    }
     if (gvsSession !== null) return;
 
     const list = loadState.list;
@@ -799,6 +887,12 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
                   {fileMeta.secondary ? <div className="text-xs text-muted-foreground mt-1 break-all">{fileMeta.secondary}</div> : null}
                 </>
               )}
+              {!isGvsActive && loadState.status === "ready" && !loadState.writable ? (
+                <div className="mt-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300">
+                  Legacy flat workspace content is read-only. Writes target{" "}
+                  <span className="font-mono break-all">{loadState.configuredFilePath}</span>.
+                </div>
+              ) : null}
             </div>
             <div className="flex flex-col items-end gap-2 shrink-0">
               <div className="flex items-center gap-2">
@@ -810,7 +904,7 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
                   size="sm"
                   variant="outline"
                   onClick={() => void handlePickImportStageJson()}
-                  disabled={isImporting || isGvsActive || loadState.status !== "ready"}
+                  disabled={isImporting || isGvsActive || loadState.status !== "ready" || !loadState.writable}
                   className="inline-flex items-center gap-2"
                   title={isGvsActive ? "Not available in GVS variant view" : "Import stages from JSON"}
                 >
@@ -841,7 +935,7 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
                   size="sm"
                   variant="outline"
                   onClick={() => handleDebugBatch()}
-                  disabled={gvsSession !== null || loadState.status !== "ready"}
+                  disabled={gvsSession !== null || loadState.status !== "ready" || !loadState.writable}
                   className="inline-flex items-center gap-2"
                   title={`Copy as new from id ${DEBUG_SOURCE_ID} with predefined GVS entries`}
                 >
@@ -856,7 +950,7 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
                 <Button
                   size="sm"
                   onClick={() => void handleSaveFile()}
-                  disabled={!hasChanges || isGvsActive}
+                  disabled={!hasChanges || isGvsActive || loadState.status !== "ready" || !loadState.writable}
                   className="inline-flex items-center gap-2"
                 >
                   <Save className="w-4 h-4" />
@@ -918,6 +1012,7 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
           ) : (
             <StageEditor
               stageListData={loadState.status === "ready" ? loadState.list : null}
+              editable={loadState.status === "ready" ? loadState.writable : false}
               selectedIndex={selectedIndex}
               onSelectChange={setSelectedIndex}
               sortKey={sortKey}
@@ -930,7 +1025,7 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
               onComposingChange={setIsComposing}
               obDplCachePath={obDplCachePath}
               obModPath={obModPath}
-              workspacePath={folderPath}
+              workspacePath={stageModelRouteRootPath || folderPath}
               onReveal={onRevealTreeFolder}
               onChange={handleEditorChange}
               stageIconConvertDirPath={stageIconConvertDirPath}
@@ -1182,7 +1277,13 @@ export default function StageListView({ folderPath, isActive, onUnsavedChanges, 
               </Button>
               <Button
                 onClick={() => void handleConfirmImport()}
-                disabled={!importPreview || importPreview.validCount === 0 || isImporting}
+                disabled={
+                  loadState.status !== "ready" ||
+                  !loadState.writable ||
+                  !importPreview ||
+                  importPreview.validCount === 0 ||
+                  isImporting
+                }
                 className="inline-flex items-center gap-2"
               >
                 Import

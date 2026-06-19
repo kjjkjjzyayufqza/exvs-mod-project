@@ -134,6 +134,7 @@ const tabs: StageTab[] = [
         folderPath={props.folderPath ?? ""}
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDocument={props.workspaceDocument}
       />
     ),
   },
@@ -453,6 +454,7 @@ const MainView = ({
               isActive={activeTab === "stage-list"}
               onUnsavedChanges={handleStageListUnsaved}
               onRevealTreeFolder={props.onRevealTreeFolder}
+              workspaceDocument={props.workspaceDocument}
             />
           ),
         };

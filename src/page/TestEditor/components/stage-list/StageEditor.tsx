@@ -42,6 +42,7 @@ function createEmptyStage(id: number): StageListEntry {
 
 interface StageEditorProps {
   stageListData?: StageListData | null;
+  editable?: boolean;
   selectedIndex: number;
   onSelectChange: (index: number) => void;
   sortKey?: StageListSortKey;
@@ -67,6 +68,7 @@ interface StageEditorProps {
 
 export function StageEditor({
   stageListData,
+  editable = true,
   selectedIndex,
   onSelectChange,
   sortKey = "selectOrderDefault",
@@ -133,9 +135,10 @@ export function StageEditor({
   );
 
   const openDeleteDialog = useCallback((index: number) => {
+    if (!editable) return;
     setDeleteCandidateIndex(index);
     setDeleteDialogOpen(true);
-  }, []);
+  }, [editable]);
 
   const closeDeleteDialog = useCallback(() => {
     setDeleteDialogOpen(false);
@@ -143,6 +146,7 @@ export function StageEditor({
   }, []);
 
   const confirmDelete = useCallback(() => {
+    if (!editable) return;
     if (!stageListData) return;
     if (deleteCandidateIndex === null) return;
 
@@ -160,7 +164,7 @@ export function StageEditor({
     onSelectChange(nextIndex);
 
     closeDeleteDialog();
-  }, [stageListData, closeDeleteDialog, deleteCandidateIndex, selectedIndex, onSelectChange, updateList]);
+  }, [editable, stageListData, closeDeleteDialog, deleteCandidateIndex, selectedIndex, onSelectChange, updateList]);
 
   const getNextId = useCallback(() => {
     if (!stageListData || stageListData.entries.length === 0) return 0;
@@ -182,6 +186,7 @@ export function StageEditor({
   }, [stageListData]);
 
   const handleAdd = useCallback(() => {
+    if (!editable) return;
     if (!stageListData) return;
 
     const newId = getNextId();
@@ -191,10 +196,11 @@ export function StageEditor({
     });
 
     onSelectChange(stageListData.entries.length);
-  }, [stageListData, getNextId, onSelectChange, updateList]);
+  }, [editable, stageListData, getNextId, onSelectChange, updateList]);
 
   const handleCopyAsNew = useCallback(
     (index: number) => {
+      if (!editable) return;
       if (!stageListData) return;
       const sourceStage = stageListData.entries[index];
       if (!sourceStage) return;
@@ -214,7 +220,7 @@ export function StageEditor({
 
       onSelectChange(stageListData.entries.length);
     },
-    [stageListData, getNextId, getNextSelectOrder, onSelectChange, updateList]
+    [editable, stageListData, getNextId, getNextSelectOrder, onSelectChange, updateList]
   );
 
   if (!stageListData) {
@@ -230,7 +236,7 @@ export function StageEditor({
       <div className="w-1/3 border rounded-lg p-3 overflow-hidden flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-3">
           <div className="font-semibold text-sm">Stages ({stageListData.entries.length})</div>
-          <Button size="sm" onClick={handleAdd} className="inline-flex items-center gap-2">
+          <Button size="sm" onClick={handleAdd} disabled={!editable} className="inline-flex items-center gap-2">
             <Plus className="w-4 h-4" />
             Add
           </Button>
@@ -238,6 +244,7 @@ export function StageEditor({
 
         <StageListComponent
           stageData={stageListData.entries}
+          editable={editable}
           selectedIndex={selectedIndex}
           onSelect={handleSelect}
           onCopy={handleCopyAsNew}
@@ -260,6 +267,7 @@ export function StageEditor({
           <StageForm
             stage={selectedStage}
             index={selectedIndex}
+            editable={editable}
             onChange={handleUpdateStage}
             obDplCachePath={obDplCachePath}
             obModPath={obModPath}
@@ -300,7 +308,7 @@ export function StageEditor({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={closeDeleteDialog}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction onClick={confirmDelete} disabled={!editable} className="bg-red-600 hover:bg-red-700">
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
