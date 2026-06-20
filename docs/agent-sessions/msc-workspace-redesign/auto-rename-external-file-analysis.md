@@ -6,7 +6,7 @@ grounded in the actual EXVS2 resource dump at `e:\XB\解包\vs2\x64`.
 ## Related research
 
 - [MSC research index](../../msc-research/README.md)
-- [Dynamic naming and JSON overlay design](../../msc-research/dynamic-naming-overlay.md)
+- [2.c function role map](../../msc-research/2c-function-role-map-for-modders.md)
 - [`func_1044` slot callback evidence atlas](../../msc-research/func1044-slot-callback-atlas.md)
 - [`func_1044` simulated rename output](../../msc-research/func1044-simulated-renames.md)
 

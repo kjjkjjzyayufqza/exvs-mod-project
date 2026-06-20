@@ -425,6 +425,25 @@ function CanvasContentInvalidator({
   return null;
 }
 
+/**
+ * On a `demand` frameloop, switching back from `previewSuspended` (frameloop="never")
+ * does not auto-render. The scene can change while frozen — e.g. a model is (re)loaded
+ * behind an open modal — so force a render on resume to flush the latest draws instead
+ * of leaving the last (stale) frame on screen.
+ */
+function FrameLoopResumeInvalidator({ suspended }: { suspended: boolean }) {
+  const invalidate = useThree((s) => s.invalidate);
+
+  useEffect(() => {
+    if (suspended) return;
+    invalidate();
+    const raf = requestAnimationFrame(() => invalidate());
+    return () => cancelAnimationFrame(raf);
+  }, [suspended, invalidate]);
+
+  return null;
+}
+
 function PreviewUvFlipSync({
   draws,
   uvFlipU,
@@ -1893,6 +1912,7 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
           textureDataMap={restSceneProps.textureDataMap}
           drawMaterialBindingsByDrawKey={restSceneProps.drawMaterialBindingsByDrawKey}
         />
+        <FrameLoopResumeInvalidator suspended={previewSuspended} />
         <Scene
           {...restSceneProps}
           background={background}

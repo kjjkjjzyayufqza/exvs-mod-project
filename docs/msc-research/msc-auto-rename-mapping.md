@@ -31,7 +31,7 @@ native-truth 辅助层；TestEditor 的 Auto Rename 应该在编辑器自己的 
 |---|---|
 | `src/page/TestEditor/utils/mscActionRename.ts` | 当前已实现的旧 action-mask rename utility。 |
 | `renameScript2CallbacksByActionMask(script0Content, script2Content)` | 从 `0.c func_143` 的 mask 路由推导 `ACTION_*` 名称，再改写 `2.c` 的 `func_241` 绑定显示。 |
-| `docs/msc-research/dynamic-naming-overlay.md` | 解释为什么不能持久绑定 `func_N`，以及 overlay / resolved view 的总体方案。 |
+| `docs/msc-research/2c-function-role-map-for-modders.md` | 解释为什么不能持久绑定 `func_N`，以及怎样用 `.c` evidence shape 建立工作名。 |
 | `docs/msc-research/func1044-simulated-renames.md` | `func_1044` slot callback 的 Auto Rename 期望输出。 |
 
 ## 多层 Mapping
@@ -183,71 +183,20 @@ func_241(0x12345678, ACTION_AC_SPECIAL_SHOT_LOCK_SWITCH); //特射 换锁分支
 4. 用 `sys_1(0x10001, 0x2, slot, callback)` 找到 slot callback。
 5. 从 slot callback 里提取 `func_74/76(resourceIndex, ...)`、状态位、
    direction branch、shell / boost / guard / camera / ammo 证据。
-6. 按 overlay 中的 `semanticId`、置信度、证据规则决定显示名。
+6. 按当前 `.c` 的 action hash、slot、callback shape、置信度和证据决定显示名。
 
-## 建议 JSON 结构
+## 当前记录格式
 
-后续如果要把这份文档落成实际数据文件，可以使用类似结构：
+不再为研究单独生成 mapping JSON。用 Markdown 保存可复查证据：
 
-```json
-{
-  "schema": "exvs.msc.auto_rename_mapping.v0",
-  "sample": {
-    "packHash": "0xBDBE6FEA",
-    "scriptIndex": 2
-  },
-  "lifecycleFunctions": [
-    {
-      "currentFunction": "func_877",
-      "semanticId": "depiction.unitShellResourceInitializer",
-      "symbol": "INIT_UNIT_SHELL_RESOURCE_ACTION_TABLES",
-      "displayNameCn": "本机 shell / 武装槽 / 默认外观 / action-resource 表初始化",
-      "confidence": "high",
-      "evidence": {
-        "calledFrom": "func_1",
-        "mustCall": ["func_887", "func_1042"],
-        "mustWrite": ["global20", "global170", "global1"],
-        "mustContain": ["sys_4B(0,", "sys_4F(0xb,"]
-      }
-    }
-  ],
-  "actions": [
-    {
-      "actionHash": "0x9475130e",
-      "semanticId": "action.transform.entry",
-      "symbol": "ACTION_TRANSFORM_DASH_ENTRY",
-      "displayNameCn": "变形突入 / 飞机模式入口",
-      "confidence": "high",
-      "evidence": {
-        "actionIndex": "0x17",
-        "handler": "func_450",
-        "slotIds": ["0x23"],
-        "slotCallbacks": ["func_870"],
-        "resourceIndices": ["0x37"]
-      }
-    }
-  ],
-  "slotCallbacks": [
-    {
-      "registry": "0x10001/0x2",
-      "slot": "0x23",
-      "semanticId": "depiction.slot.transform.entry",
-      "symbol": "SLOT_CB_TRANSFORM_ENTRY",
-      "displayNameCn": "变形进入表现",
-      "confidence": "high",
-      "evidence": {
-        "callback": "func_870",
-        "resourceIndices": ["0x37"],
-        "stateWrites": ["global143"]
-      }
-    }
-  ]
-}
-```
+| Kind | Stable key | Current symbol | Working name | Required evidence |
+|---|---|---|---|---|
+| Lifecycle | called from `func_1` | `func_877` | unit shell/resource initializer | calls `func_887/1042`; writes `global20/170/1`; contains `sys_4B/sys_4F` |
+| Action | hash `0x9475130E` | `func_450` | transform dash entry | action index `0x17`; slot `0x23`; callback `func_870`; resource `0x37` |
+| Slot callback | registry `0x10001/0x2`, slot `0x23` | `func_870` | transform entry depiction | resource `0x37`; writes `global143` |
 
-注意：`handler`、`callback` 里的 `func_N` 只能作为当前样本定位信息。
-真正可复用的是 `actionHash`、registry 形态、slot、resource index、
-常量集合和行为证据。
+`func_N` 只能作为当前样本定位信息。真正可复用的是 action hash、registry 形态、
+slot、resource index、常量集合和行为证据。
 
 ## 当前确认示例
 
@@ -336,7 +285,7 @@ func_241(0x9475130e, 0); //disabled: 变形突入 / 飞机模式入口
 ## 相关文档
 
 - [MSC Research 阅读入口](./README.md)
-- [动态命名与 JSON overlay 方案](./dynamic-naming-overlay.md)
+- [2.c 函数角色地图](./2c-function-role-map-for-modders.md)
 - [`func_1044` slot callback 全链路逆向](./func1044-slot-callback-atlas.md)
 - [`func_1044` 模拟重命名稿](./func1044-simulated-renames.md)
 - [MSC Auto-Rename 外部文件分析](../agent-sessions/msc-workspace-redesign/auto-rename-external-file-analysis.md)

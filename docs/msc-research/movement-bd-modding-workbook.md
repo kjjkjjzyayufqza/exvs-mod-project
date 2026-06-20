@@ -576,7 +576,7 @@ tests:
 ## 15. 来源
 
 - 当前样本：`E:\XB\解包\com\file\0xBDBE6FEA\2.c`
-- 结构化快照：[generated/0xBDBE6FEA-2.analysis.json](./generated/0xBDBE6FEA-2.analysis.json)
+- 当前源码：`E:\XB\解包\com\file\0xBDBE6FEA\2.c`
 - `speed_param` 字段：[command_mapping.md](../command_mapping.md)
 - Notion MSC 页：`https://app.notion.com/p/1601ebad394d8027a042df115e61b6dd`
 - OverBoost wiki システム：`https://w.atwiki.jp/exvs2ob/pages/593.html`

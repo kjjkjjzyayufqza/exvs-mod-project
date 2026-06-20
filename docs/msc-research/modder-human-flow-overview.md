@@ -12,11 +12,7 @@ E:\XB\解包\com\file\0xBDBE6FEA\2.c
 我作为逆向者，怎么从“玩家按了什么 / 想改什么”追到 `2.c` 里真正能改的地方？
 ```
 
-不要把它当 syscall 表，也不要把它当函数重命名表。它是读码路线图。真正的证据层在：
-
-- [当前样本 semantic overlay JSON](./overlays/0xBDBE6FEA-2.semantic-overlay.json)
-- [0xBDBE6FEA / 2.c semantic overlay 解析视图](./resolved/0xBDBE6FEA-2.resolved-labels.md)
-- [结构化分析 JSON](./generated/0xBDBE6FEA-2.analysis.json)
+不要把它当 syscall 表，也不要把它当函数重命名表。它是读码路线图。真正的证据层在当前 workspace 的 `0.c / 2.c`、Param row、action hash、callback shape 和最终 syscall/resource 输出。
 
 ## 1. 先建立边界
 
@@ -553,11 +549,11 @@ func_940_is_side_move_forever
 
 打开新机体 `2.c`，按这个顺序：
 
-1. 跑 `tools/msc_c_static_analyzer.py` 生成 analysis JSON。
+1. 打开新机体的 `0.c / 2.c`。
 2. 找入口 shape：`main -> func_1 -> callFunc3(loop)`。
 3. 找 action registry shape：大量 `func_241(hash, callback)`。
 4. 找 shell initializer shape：`sys_4B(0,baseShell)`、`global20=sys_4B(1)`、`func_887`、`func_1042`。
-5. 找目标 action hash 对应 `ACTION_*`。
+5. 找目标 action hash 对应 callback。
 6. 进入 `ACTION_*`，判断 runtime family。
 7. 顺着 callback global 找 segment。
 8. 在 segment 里找真正输出。
@@ -595,7 +591,6 @@ func_940_is_side_move_forever
 - OverBoost wiki テクニック：`https://w.atwiki.jp/exvs2ob/pages/683.html`
 - OverBoost wiki 初心者指南 / BR ズンダ：`https://w.atwiki.jp/exvs2ob/pages/560.html`
 - OverBoost wiki 用语集：`https://w.atwiki.jp/exvs2ob/pages/82.html`
-- [0xBDBE6FEA / 2.c semantic overlay 解析视图](./resolved/0xBDBE6FEA-2.resolved-labels.md)
-- [动态命名与 JSON Overlay 方案](./dynamic-naming-overlay.md)
+- 跨样本工作名原则：`func_N` 只当当前样本坐标，最终回到 `.c` evidence shape。
 - [BD / 移动 / `sys_46` 模组开发工作簿](./movement-bd-modding-workbook.md)
 - [`func_11` / `0xc000*` boost gate 状态槽地图](./func11-c000-boost-gate-map.md)

@@ -19,7 +19,7 @@ OverBoost 玩家侧系统里，BD 是跳键二连、step 是同方向方向键�
 | 玩家想改的东西 | 当前样本入口 | 运行时驱动 | 关键 callback / syscall | 先看什么 |
 |---|---|---|---|---|
 | 主射 | `ACTION_A_SHOT` / hash `0xf48d2d49` | `func_586` 后进入 ranged runtime | `func_914` 播放动作，`func_915` 用 `sys_4F(0,0,0xcc9f6df0)` 发射 | 弹种 hash、ammo slot 0、`func_123(0x280)` 取消开放 |
-| 副射 | `ACTION_AB_SUB` / hash `0x31f61d6c` | ranged runtime | 走 `sys_4F` 的武器 slot 路径 | 先用 JSON 查 `ACTION_AB_SUB` 的 callback 槽，再看发射 hash |
+| 副射 | `ACTION_AB_SUB` / hash `0x31f61d6c` | ranged runtime | 走 `sys_4F` 的武器 slot 路径 | 直接读 action registry 找 callback，再看发射 hash |
 | 特射援护 | `ACTION_AC_SPECIAL_SHOT_DIRECTIONAL` / hash `0x23df217e` | `func_488` 后进入 `func_502` 系列 | `func_952` 用 `sys_51(0x20000,0,0x2,index,type)` 叫出援护，再用 `sys_4F(0x7,0x2,1)` 扣特射 ammo | `global200` 方向分支、`sys_51` type、slot 2 ammo |
 | 特射换锁 / 召唤段 | `ACTION_AC_SPECIAL_SHOT_LOCK_SWITCH` / hash `0x9c05b42d` | `func_586` 后进入多段 ranged runtime | `func_1025/1026/1027`，包含 `func_888(0x8)`、`sys_4B`、`sys_4F`、特效 | shell 进出、slot 5、锁定切换动作段 |
 | 特格 / 变形突击 | `ACTION_BC_SPECIAL_MELEE_ALT_2` / hash `0x6ab12717`，以及 `ACTION_BC_SPECIAL_MELEE` / hash `0x193fe550` | `func_488` 后进入 `func_489` 或 `func_507` 系列 | `func_936/937/940`，包含 `func_888(0x7)`、`func_219(...)`、`sys_46`、`func_532` | 移动参数 row、变形 shell、速度 / 诱导 / cancel 窗口 |
@@ -59,7 +59,7 @@ func_1
 以后 offset 或 `func_N` 变了，不要从函数编号硬记。按下面顺序反查，结论更稳：
 
 1. 从玩家动作确定 action 家族：射击、格斗、特射、特格、觉醒技、换锁、变形。
-2. 在 `func_1043` 或生成的 `generated/0xBDBE6FEA-2.analysis.json` 里找 action hash 到 `ACTION_*` 的注册关系。
+2. 在当前 `2.c` 的 action registry 里找 action hash 到 callback 的注册关系。
 3. 看 `ACTION_*` 包装函数，它通常会设置一组 runtime callback 槽。
 4. 根据槽位判断 runtime 家族：
    - `global676..681`：ranged / weapon runtime，常由 `func_586` 初始化。

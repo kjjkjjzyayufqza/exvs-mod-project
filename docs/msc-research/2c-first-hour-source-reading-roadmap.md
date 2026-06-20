@@ -643,7 +643,7 @@ native / resource / 实机测试负责最终证明。
 ## 16. 来源
 
 - 当前样本：`E:\XB\解包\com\file\0xBDBE6FEA\2.c`
-- 结构化快照：[generated/0xBDBE6FEA-2.analysis.json](./generated/0xBDBE6FEA-2.analysis.json)
+- 当前源码：`E:\XB\解包\com\file\0xBDBE6FEA\2.c`
 - Notion MSC 页：`https://app.notion.com/p/1601ebad394d8027a042df115e61b6dd`
 - OverBoost wiki 系统页：`https://w.atwiki.jp/exvs2ob/pages/593.html`
 - OverBoost wiki 初心者指南 / BR ズンダ：`https://w.atwiki.jp/exvs2ob/pages/560.html`

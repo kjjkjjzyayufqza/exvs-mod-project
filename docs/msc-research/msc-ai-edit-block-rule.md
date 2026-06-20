@@ -69,7 +69,7 @@ AI 修改 MSC 时必须像逆向分析者一样命名。目标不是让代码“
 - AI 新增符号必须使用语义名，名字来自已证明的角色、资源、slot、shell id、action hash 或调用链。
 - 不确定的语义不要装成确定结论；用 `maybe`、`candidate`、`approx`、`scriptSide` 等词，或把不确定性写进 `Origin:`。
 - 如果只知道序号，不知道左右 / 前后，不要命名成 `left` / `right`；用 `0` / `1` 或 shell id 相关名字。
-- 如果工具链或迁移场景临时必须保留 `globalNN`，必须在同一个 AI block 或 semantic overlay 里写出 `globalNN -> semantic meaning`，并把它标成需要下一次清理的兼容限制。
+- 如果工具链或迁移场景临时必须保留 `globalNN`，必须在同一个 AI block 或相邻研究注释里写出 `globalNN -> semantic meaning`，并把它标成需要下一次清理的兼容限制。
 
 反例：
 

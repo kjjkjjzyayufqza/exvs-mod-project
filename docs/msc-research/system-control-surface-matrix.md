@@ -122,7 +122,7 @@ sys_1(0x60008, 0x1b12ae7d)
 | segment output 层 | 时间线片段真正输出子弹、援护、位移、镜头、模型、特效 | `func_79/308/309`、`func_489/502/586` family、`func_321`、`func_536` | 最常见的局部改点，风险比 shared driver 低 |
 | syscall/native 层 | 脚本请求 engine 执行表现、移动、相机、模型、武装、状态读写 | `sys_4F`、`sys_51`、`sys_46`、`sys_53`、`sys_4B`、`sys_47`、`sys_4A`、`sys_58` | 参数可改，但 case 语义不硬时要谨慎 |
 | 资源层 | 武装、弹体、角色速度、boost、damage、hitbox 等数据 | `command_mapping.md` 的 `character_param`、`arms_param`、`bullet_param`、`commandlist` | 改基础性能和弹体参数时优先查这里 |
-| semantic overlay 层 | 跨样本稳定命名，不依赖当前 `func_N` | `overlays/0xBDBE6FEA-2.semantic-overlay.json` | 后续 offset 变化时用 evidence shape 重新匹配 |
+| 工作名层 | 跨样本稳定讨论，不依赖当前 `func_N` | 当前 `.c` evidence shape | 后续 offset 变化时重新读 registry/callback/syscall |
 
 ## 2. 系统控制面总表
 
@@ -478,7 +478,7 @@ ACTION_* segment
 | 格斗突进更强 | `func_219(row)`、`sys_46`、tracking 资源 | melee driver | 不要改 shared driver 后影响全部格斗 |
 | 觉醒技镜头 | `func_321` / `sys_53(0x4)` | `sys_53(0x5)` cleanup | 进入和清理必须成对验证 |
 | 动作中换装 | action-local `func_888` / `sys_4B/47` | `func_887` restore | 检查 cancel 和被打断 |
-| 跨版本命名稳定 | semantic overlay evidence shape | 当前 `func_N` 只当定位 | 换样本后先重跑 analysis JSON |
+| 跨版本命名稳定 | action hash + callback shape + syscall output | 当前 `func_N` 只当定位 | 换样本后直接读当前 `.c` 验证 |
 
 ## 4. 两条完整跟读示例
 
@@ -583,10 +583,10 @@ patchRole: action-local fire output
 
 换样本时流程：
 
-1. 对新 `2.c` 重新生成 `generated/*.analysis.json`。
-2. 用 overlay 的 evidence shape 匹配函数，而不是用旧 offset。
-3. 匹配成功后更新 `currentSample.function`。
-4. 人类讨论继续使用 `semanticId`，例如 `action.mainShot.fireSegment`、`depiction.actionHashRegistry`、`depiction.defaultShellLoadoutSelector`。
+1. 打开新样本 `0.c / 2.c`。
+2. 用 action hash、registry shape、callback 写入和 syscall 输出匹配函数，而不是用旧 offset。
+3. 匹配成功后记录当前样本的函数号和行号。
+4. 人类讨论可以使用稳定工作名，例如 `action.mainShot.fireSegment`、`depiction.actionHashRegistry`、`depiction.defaultShellLoadoutSelector`。
 
 当前可复用 evidence shape：
 
@@ -611,7 +611,7 @@ patchRole: action-local fire output
 | `sys_0(0xc000*)` | 脚本侧能作为 boost/cancel gate 状态槽阅读 | engine 状态槽 dispatch 和实机状态对照 |
 | hitbox / damage / proration | 能从 action、resource、hitgroup hash 入口追踪 | native hit handler、资源 hash 到具体判定表 |
 | 原始输入到 action hash | 能确认 `2.c` 消费 action hash，不直接读按钮 | `0.c` 或 native input selector 的完整链路 |
-| 跨机体 overlay 稳定性 | 当前样本已有第一批 semantic overlay | 至少第二个机体样本验证 |
+| 跨机体工作名稳定性 | 当前样本已有第一批 action/hash/callback 工作名 | 至少第二个机体样本直接读 `.c` 验证 |
 
 这些区域可以讨论和试改，但文档命名要保留“候选 / 工作模型”语气，不能写成最终 native 事实。
 
@@ -625,9 +625,6 @@ patchRole: action-local fire output
 - 一页式操作手册：[msc-modder-operating-manual.md](./msc-modder-operating-manual.md)
 - 关键函数职责表：[2c-key-function-atlas-for-patching.md](./2c-key-function-atlas-for-patching.md)
 - worked traces：[modder-worked-traces.md](./modder-worked-traces.md)
-- 动态命名方案：[dynamic-naming-overlay.md](./dynamic-naming-overlay.md)
-- overlay JSON：[overlays/0xBDBE6FEA-2.semantic-overlay.json](./overlays/0xBDBE6FEA-2.semantic-overlay.json)
-- overlay 解析视图：[resolved/0xBDBE6FEA-2.resolved-labels.md](./resolved/0xBDBE6FEA-2.resolved-labels.md)
 - input/action 研究：[../exvs-msc-input-action-weapon-pipeline.md](../exvs-msc-input-action-weapon-pipeline.md)
 - camera syscall 研究：[../exvs-msc-syscall-53-notes.md](../exvs-msc-syscall-53-notes.md)
 - 资源字段映射：[../command_mapping.md](../command_mapping.md)

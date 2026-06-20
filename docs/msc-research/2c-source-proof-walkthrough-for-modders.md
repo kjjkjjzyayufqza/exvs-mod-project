@@ -6,7 +6,7 @@
 E:\XB\解包\com\file\0xBDBE6FEA\2.c
 ```
 
-结构化快照：
+源码快照：
 
 ```text
 source sha256: 1BE5DACB24FC6565680CC15C4B4045FEC80229E958D690E5AE8BABE973224589
@@ -968,15 +968,13 @@ patchRole: action-local movement segment
 | `0xc000*` 状态槽 | 能从 `func_11` 读出 gate 参与条件 | engine 状态槽 dispatch 和实机状态对照 |
 | hitbox / damage / proration | 能从 action、resource、hitgroup hash 找入口 | native hit handler 和资源表完整映射 |
 | 原始按键到 action hash | 能证明 `2.c` 消费 action hash，不直接读按钮 | `0.c` 或 native input selector 的完整链路 |
-| 跨机体稳定性 | 当前样本有 overlay 和 analysis JSON | 至少第二个机体样本验证 |
+| 跨机体稳定性 | 当前样本有 action hash、callback shape、syscall 输出 | 至少第二个机体样本直接读 `.c` 验证 |
 
 ## 17. 交叉引用
 
 - 系统控制面矩阵：[system-control-surface-matrix.md](./system-control-surface-matrix.md)
 - 一页式操作手册：[msc-modder-operating-manual.md](./msc-modder-operating-manual.md)
 - 关键函数职责表：[2c-key-function-atlas-for-patching.md](./2c-key-function-atlas-for-patching.md)
-- 动态命名方案：[dynamic-naming-overlay.md](./dynamic-naming-overlay.md)
-- analysis JSON 工作流：[generated-analysis-workflow.md](./generated-analysis-workflow.md)
 - Notion MSC 交叉索引：[notion-msc-cross-reference.md](./notion-msc-cross-reference.md)
 - input/action 研究：[../exvs-msc-input-action-weapon-pipeline.md](../exvs-msc-input-action-weapon-pipeline.md)
 - camera syscall 研究：[../exvs-msc-syscall-53-notes.md](../exvs-msc-syscall-53-notes.md)

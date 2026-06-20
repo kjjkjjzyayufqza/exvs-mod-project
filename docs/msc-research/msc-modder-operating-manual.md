@@ -520,13 +520,7 @@ cancel 恢复
 | `camera.presetWrapper` | `func_321` | 包装 `sys_53(0x4,hash,...)` |
 | `shell.defaultLoadoutSelector` | `func_887` | 根据 `global170` 调 `func_888(0/1)` |
 
-机器可读记录应写进：
-
-```text
-docs/msc-research/overlays/0xBDBE6FEA-2.semantic-overlay.json
-```
-
-讨论时优先引用 `semanticId`，`func_N` 只作为当前样本定位。
+工作名应写在人工研究文档里，并附当前 `.c` 行号、action hash、callback shape 和 syscall/resource 输出。讨论时可以引用稳定工作名，`func_N` 只作为当前样本定位。
 
 ## 8. 实机验证矩阵
 
@@ -550,7 +544,7 @@ docs/msc-research/overlays/0xBDBE6FEA-2.semantic-overlay.json
 - OverBoost wiki 初心者指南：`https://w.atwiki.jp/exvs2ob/pages/559.html`
 - [MSC 模组开发 worked traces：从目标到 patch 点](./modder-worked-traces.md)
 - [MSC 逆向模组开发总览：从玩家动作追到 `2.c` 可改点](./modder-human-flow-overview.md)
-- [0xBDBE6FEA / 2.c semantic overlay 解析视图](./resolved/0xBDBE6FEA-2.resolved-labels.md)
+- 跨样本工作名原则：`func_N` 只当当前样本坐标，最终回到 `.c` evidence shape。
 - [BD / 移动 / `sys_46` 模组开发工作簿](./movement-bd-modding-workbook.md)
 - [`func_11` / `0xc000*` boost gate 状态槽地图](./func11-c000-boost-gate-map.md)
 - [EXVS MSC Input -> Action Hash -> Weapon Callback Pipeline](../exvs-msc-input-action-weapon-pipeline.md)

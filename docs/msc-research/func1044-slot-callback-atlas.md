@@ -10,8 +10,7 @@ slot callback，重点是 `func_850..876` 在游戏里具体负责什么。
 - [MSC Research 阅读入口](./README.md)
 - [`func_1044` 模拟重命名稿](./func1044-simulated-renames.md)：把本文证据转换成
   TestEditor Auto Rename 的完整期望显示结果。
-- [动态命名与 JSON overlay 方案](./dynamic-naming-overlay.md)：说明为什么不能把
-  `func_N` 当作跨版本主键。
+- 跨版本工作名原则：说明为什么不能把 `func_N` 当作跨版本主键。
 - [MSC Auto Rename Mapping](./msc-auto-rename-mapping.md)：记录 `ACTION_*` /
   `SLOT_CB_*` 显示规则，以及为什么这类命名不写进 `command_mapping.md`。
 - [MSC Auto-Rename 外部文件分析](../agent-sessions/msc-workspace-redesign/auto-rename-external-file-analysis.md)：
@@ -109,8 +108,8 @@ func_76(resourceIndex, blend, startTime);
 RX-78-2 的文件：
 
 ```text
-E:\XB\解包\com\file\0xF22E425D\0.c
-E:\XB\解包\com\file\0xF22E425D\2.c
+E:\XB\解包\com\file\040msc\0xF22E425D\0.c
+E:\XB\解包\com\file\040msc\0xF22E425D\2.c
 ```
 
 其输入层和 action registry 同样包含：
@@ -1038,7 +1037,7 @@ result label 完全锁死。
 ## Auto Rename 设计
 
 不要增加 `--exvsMapping` 之类依赖固定版本的外部开关。应在 TestEditor
-现有 Auto Rename 流程中增加动态 semantic overlay。
+现有 Auto Rename 流程中增加基于 `.c` evidence shape 的人工工作名。
 
 ### 识别顺序
 
@@ -1123,8 +1122,8 @@ Rename 应保留置信度，避免把推测伪装成原始符号。
 
 - `E:\XB\解包\com\file\0xBDBE6FEA\0.c`
 - `E:\XB\解包\com\file\0xBDBE6FEA\2.c`
-- `E:\XB\解包\com\file\0xF22E425D\0.c`
-- `E:\XB\解包\com\file\0xF22E425D\2.c`
+- `E:\XB\解包\com\file\040msc\0xF22E425D\0.c`
+- `E:\XB\解包\com\file\040msc\0xF22E425D\2.c`
 - `docs/command_mapping.md`
 - `docs/msc-research/movement-bd-modding-workbook.md`
 - `docs/msc-research/movement-boost-sys46-func11-map.md`

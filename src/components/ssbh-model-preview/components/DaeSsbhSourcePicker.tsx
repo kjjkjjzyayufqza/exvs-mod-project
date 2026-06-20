@@ -9,18 +9,29 @@ import { useDaeSsbhSessionStore } from "../store/daeSsbhSessionStore";
 import { DialogLastPathKey, getDialogDefaultPath, rememberDialogSelection } from "@/utils/dialogLastPath";
 import { ssbhAnalyzeDae, ssbhAnalyzeFbx } from "../ssbhDaeIoService";
 import { useSsbhModelPreview } from "../SsbhModelPreviewContext";
+import { sanitizeBaseFilename } from "@/page/SceneEdit/components/dae-import/daeImportDefaults";
+
+/** Directory portion of a Windows/POSIX path, or null when the path has no parent segment. */
+function parentDirOf(path: string): string | null {
+  const normalized = path.replace(/[\\/]+$/, "");
+  const lastSep = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
+  return lastSep > 0 ? normalized.slice(0, lastSep) : null;
+}
 
 export function DaeSsbhSourcePicker() {
   const { workspaceRoot } = useSsbhModelPreview();
-  const { importKind, sourcePath, setImportKind, setSourcePath, loadAnalysis } = useDaeSsbhSessionStore(
-    useShallow((state) => ({
-      importKind: state.importKind,
-      sourcePath: state.sourcePath,
-      setImportKind: state.setImportKind,
-      setSourcePath: state.setSourcePath,
-      loadAnalysis: state.loadAnalysis,
-    })),
-  );
+  const { importKind, sourcePath, setImportKind, setSourcePath, setOutputBaseName, setOutputDir, loadAnalysis } =
+    useDaeSsbhSessionStore(
+      useShallow((state) => ({
+        importKind: state.importKind,
+        sourcePath: state.sourcePath,
+        setImportKind: state.setImportKind,
+        setSourcePath: state.setSourcePath,
+        setOutputBaseName: state.setOutputBaseName,
+        setOutputDir: state.setOutputDir,
+        loadAnalysis: state.loadAnalysis,
+      })),
+    );
   const [busy, setBusy] = useState(false);
 
   const importSourceKey =
@@ -68,6 +79,22 @@ export function DaeSsbhSourcePicker() {
                 rememberDialogSelection(importSourceKey, selected.trim(), "file");
                 const nextPath = selected.trim();
                 setSourcePath(nextPath);
+                // Align with the Scene Editor import: derive the output base name from
+                // the source file and default the output directory. For an open Unit
+                // model workspace, target its per-model folder (`<root>\models\<name>`)
+                // so the converted SSBH lands in the current layout instead of the
+                // package root; otherwise fall back to the source folder. Filling the
+                // output directory also enables NUMATB texture-reference validation,
+                // which reads the package's nutexb / textures pool.
+                const sourceFileName = nextPath.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? nextPath;
+                const baseName = sanitizeBaseFilename(sourceFileName);
+                setOutputBaseName(baseName);
+                const nextOutputDir = workspaceRoot
+                  ? `${workspaceRoot.replace(/[\\/]+$/, "")}\\models\\${baseName}`
+                  : parentDirOf(nextPath);
+                if (nextOutputDir) {
+                  setOutputDir(nextOutputDir);
+                }
                 setBusy(true);
                 void (async () => {
                   try {

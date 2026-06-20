@@ -1,5 +1,7 @@
 # MSC research 覆盖度与下一步缺口
 
+> BDBE provenance：本页后半的行号和 syscall 基线来自 patch 前 `0xBDBE6FEA/2.c`（SHA `1BE5...`）。当前同路径 C 已含 Delta Kai AI patch；后续官方版本结论必须回到有源 FHM2D 的 workspace 和 `.c`。
+
 这页是当前 `docs/msc-research/` 的进度账本。它不重复解释整套系统，而是回答：
 
 - 哪些内容已经足够支撑逆向者进行模组开发。
@@ -19,7 +21,7 @@
 | 解释动作、射击、格斗、镜头、移动、BD 等复杂系统 | `0c-to-2c-input-action-boundary.md`、`resource-control-surface-for-modders.md`、`system-control-surface-matrix.md`、`2c-source-proof-walkthrough-for-modders.md`、`msc-modder-operating-manual.md`、`2c-key-function-atlas-for-patching.md`、`modder-human-flow-overview.md`、`modder-worked-traces.md`、`2c-function-responsibility-proof-handbook.md`、`modding-system-cards-handbook.md`、`modding-walkthroughs-action-to-patch-points.md`、`2c-frame-lifecycle-human-trace.md`、runtime map、cookbook、practical guide、`movement-bd-modding-workbook.md`、movement / BD 文档、`sys_46` 参数地图、`func_11` / `0xc000*` 状态槽地图 | 脚本侧已能指导实战，新增 `0.c -> 2.c` 边界、资源层 patch 指南、控制面矩阵和源码证据走读，把每个系统落到真实行号、输入/action selector、资源层、脚本层、syscall 层和验证点；movement / gate native 仍需深化 |
 | 使用 Notion MCP 记录的经验 | `notion-msc-cross-reference.md`，本轮重新 fetch Notion 页面并用于 `sys_46/global172` 说明 | 已覆盖 |
 | 使用 OverBoost wiki 熟悉游戏操作系统 | cookbook 和 movement 文档引用系统页、初心者指南、用语集 | 已覆盖外部语义 |
-| 解决 offset / `func_N` 变化后命名失效 | `2c-function-role-map-for-modders.md`、`dynamic-naming-overlay.md`、`generated-analysis-workflow.md`、`generated/0xBDBE6FEA-2.analysis.json`、`overlays/0xBDBE6FEA-2.semantic-overlay.json`、`resolved/0xBDBE6FEA-2.resolved-labels.md` | 当前样本已落地第一批 semantic overlay，仍需跨样本验证 |
+| 解决 offset / `func_N` 变化后命名失效 | `2c-function-role-map-for-modders.md`、五台真实源样本 `.c` 快照、action hash、callback 指纹、Param row 字段落点 | 已完成首轮跨样本验证：五台共享 25 个 handler hash；Delta Plus 55 个 action wrapper 可按 hash/指纹辅助定位，仍需逐个回到源码验证 |
 
 ## 目前已经能支撑模组开发的部分
 
@@ -143,27 +145,20 @@ main
 - 改组件挂接不要只改 `func_888`，还要看动作结束是否通过 `func_887()` 恢复。
 - 变形 / 特格 / 格斗中 `global170` 和 `global143` 可能改变外观组。
 
-### 6. 动态 semantic overlay
+### 6. 跨样本语义定位
 
-当前已经落地第一份机器可读 overlay：
-
-```text
-generated/0xBDBE6FEA-2.analysis.json
-  -> overlays/0xBDBE6FEA-2.semantic-overlay.json
-  -> resolved/0xBDBE6FEA-2.resolved-labels.md
-```
+早期 overlay 只作为历史辅助。当前优先级改为源码证据：
 
 模组意义：
 
-- 讨论时优先引用 `semanticId`，例如 `depiction.actionHashRegistry`、`action.mainShot.fireSegment`、`action.bcSpecialMelee.directionalMovementSegment`。
+- 讨论时可以使用稳定工作名，例如 `depiction.actionHashRegistry`、`action.mainShot.fireSegment`、`action.bcSpecialMelee.directionalMovementSegment`。
 - `func_N` 只作为当前样本定位，不作为跨版本主键。
-- 当前 overlay 已覆盖启动、初始化、主循环、boost/cancel gate、action registry、dispatch、shell、主射、援护、N 格派生、特格移动、镜头 wrapper。
-- 以后换另一个机体样本时，应先重新生成 analysis JSON，再用 overlay 的 evidence shape 匹配当前函数。
+- 换另一个机体样本时，先读当前 `0.c / 2.c` 的 registry、action wrapper、group callback、最终 syscall；再决定是否沿用旧工作名。
 
 当前边界：
 
 - `sys_46` 和 `0xc000*` 仍只记录脚本侧工作模型，不能直接写最终 native 参数名。
-- 这份 overlay 还没有第二个机体样本做稳定性验证。
+- 旧 overlay 不足以替代新样本读码。
 
 ## 当前仍然不够硬的部分
 
@@ -246,11 +241,13 @@ global48/global49/global92/global140
 
 ### 5. 动态 overlay 的跨样本验证
 
-当前已有 analyzer 和 JSON 输出，但还需要用另一个机体样本验证：
+当前已完成 Unicorn、Sinanju、NEXA-N、AGE-FX、Delta Plus 五台真实源样本的初步验证：
 
-- `func_N` 改变后，是否能靠 action hash、syscall shape、global family、motion / weapon hash 重新定位。
-- `func_887/888` 这类 loadout 函数在不同机体里是否保持同类 shape。
-- `sys_46` 子命令分布是否跨机体稳定。
+- `func_N` 漂移后，25 个共享 action handler hash 仍稳定。
+- Delta Plus 的 55 个 action wrapper 可通过 action hash + callback 指纹与历史 semantic label 对齐。
+- `sys_46`、loadout、unit callback 仍有明显单位差异，不能仅靠单一 syscall count 命名。
+
+仍需扩大作品、形态系统和 Param shape 覆盖，并把 semantic candidate 追到最终 resource hash。
 
 ## 下一轮最有价值的研究顺序
 
@@ -281,8 +278,6 @@ global48/global49/global92/global140
 - [2.c 移动 / BD / `sys_46` / `func_11` 地图](./movement-boost-sys46-func11-map.md)
 - [`sys_46` 脚本侧参数地图：动作内移动怎么读、怎么改](./sys46-script-parameter-atlas.md)
 - [`func_11` / `0xc000*` boost gate 状态槽地图](./func11-c000-boost-gate-map.md)
-- [当前样本 semantic overlay JSON](./overlays/0xBDBE6FEA-2.semantic-overlay.json)
-- [0xBDBE6FEA / 2.c semantic overlay 解析视图](./resolved/0xBDBE6FEA-2.resolved-labels.md)
 
 本轮复核来源：
 

@@ -37,7 +37,9 @@ import {
   UNIT_MODEL_HIERARCHY_TAB_TRIGGER,
   UNIT_MODEL_HIERARCHY_TABS_LIST,
 } from "./utils/unitModelEditorSettings";
-import { listUnitModelTextures } from "./utils/unitModelTextureService";
+import { listUnitModelTextures, unitTextureToManagerEntry } from "./utils/unitModelTextureService";
+import type { TextureManagerEntry } from "@/page/SceneEdit/store/sceneTextureManagerStore";
+import { NumatbTextureOptionsProvider } from "@/components/ssbh-model-preview/numatbTextureOptionsContext";
 import { getParentDir, inferUnitModelStructurePath } from "./utils/unitModelRepackService";
 import { rememberStoredDialogSelection } from "@/utils/dialogDefaultPathStore";
 import { normalizeComparePath, resolveUnitModelNodeAbsPath } from "./utils/unitModelNodePaths";
@@ -57,6 +59,7 @@ function UnitModelEditWorkspace({
   daeExchangeOpen,
   setDaeExchangeOpen,
   setDaeModalViewportSuspend,
+  setModelImportViewportSuspend,
 }: {
   unitRoot: string | null;
   onUnitRootChange: (path: string | null) => void;
@@ -65,6 +68,7 @@ function UnitModelEditWorkspace({
   daeExchangeOpen: boolean;
   setDaeExchangeOpen: (open: boolean) => void;
   setDaeModalViewportSuspend: (suspended: boolean) => void;
+  setModelImportViewportSuspend: (suspended: boolean) => void;
 }) {
   const workspace = useUnitModelWorkspace(unitRoot, onUnitRootChange);
   const preview = useSsbhModelPreview();
@@ -74,19 +78,27 @@ function UnitModelEditWorkspace({
   }>({ open: false, targets: [] });
   const [leftTab, setLeftTab] = useState<"structure" | "textures">("structure");
   const [textureCount, setTextureCount] = useState(0);
+  // Package nutexb pool fed to the NUMATB texture-path picker (DAE/FBX to SSBH flows),
+  // so its dropdown lists this Unit model's textures instead of "No scene textures yet".
+  const [textureManagerEntries, setTextureManagerEntries] = useState<TextureManagerEntry[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     if (!workspace.activeRoot || !workspace.structurePath) {
       setTextureCount(0);
+      setTextureManagerEntries([]);
       return;
     }
     void listUnitModelTextures(workspace.activeRoot, workspace.structurePath)
       .then((inventory) => {
-        if (!cancelled) setTextureCount(inventory.textures.length);
+        if (cancelled) return;
+        setTextureCount(inventory.textures.length);
+        setTextureManagerEntries(inventory.textures.map(unitTextureToManagerEntry));
       })
       .catch(() => {
-        if (!cancelled) setTextureCount(0);
+        if (cancelled) return;
+        setTextureCount(0);
+        setTextureManagerEntries([]);
       });
     return () => {
       cancelled = true;
@@ -97,12 +109,23 @@ function UnitModelEditWorkspace({
     const onTexturesChanged = () => {
       if (!workspace.activeRoot || !workspace.structurePath) return;
       void listUnitModelTextures(workspace.activeRoot, workspace.structurePath)
-        .then((inventory) => setTextureCount(inventory.textures.length))
-        .catch(() => setTextureCount(0));
+        .then((inventory) => {
+          setTextureCount(inventory.textures.length);
+          setTextureManagerEntries(inventory.textures.map(unitTextureToManagerEntry));
+        })
+        .catch(() => {
+          setTextureCount(0);
+          setTextureManagerEntries([]);
+        });
     };
     window.addEventListener("unit-model-textures-changed", onTexturesChanged);
     return () => window.removeEventListener("unit-model-textures-changed", onTexturesChanged);
   }, [workspace.activeRoot, workspace.structurePath]);
+
+  const numatbTextureOptions = useMemo(
+    () => ({ entries: textureManagerEntries, recentEntryIds: [] as string[] }),
+    [textureManagerEntries],
+  );
 
   // --- SSBH file editing (numatb / numdlb / nuhlpb / jnttbl) ------------------
   const [modifiedPaths, setModifiedPaths] = useState<Set<string>>(new Set());
@@ -327,7 +350,7 @@ function UnitModelEditWorkspace({
   );
 
   return (
-    <>
+    <NumatbTextureOptionsProvider value={numatbTextureOptions}>
       <UnitModelToolbar
         folderName={workspace.folderName}
         statusLabel={workspace.statusLabel}
@@ -399,6 +422,7 @@ function UnitModelEditWorkspace({
                   onRevealNode={handleRevealNode}
                   onCopyNodePath={handleCopyNodePath}
                   onShowTextureInPanel={handleShowTextureInPanel}
+                  onModelImportViewportSuspendChange={setModelImportViewportSuspend}
                   editingPaths={editingRelPaths}
                   modifiedPaths={modifiedPaths}
                 />
@@ -485,7 +509,7 @@ function UnitModelEditWorkspace({
       />
 
       <SsbhFileEditorHosts {...editors.hostProps} shlModelFolderNames={shlModelFolderNames} />
-    </>
+    </NumatbTextureOptionsProvider>
   );
 }
 
@@ -495,6 +519,7 @@ export default function UnitModelEdit() {
   const [reloadTick, setReloadTick] = useState(0);
   const [daeExchangeOpen, setDaeExchangeOpen] = useState(false);
   const [daeModalViewportSuspend, setDaeModalViewportSuspend] = useState(false);
+  const [modelImportViewportSuspend, setModelImportViewportSuspend] = useState(false);
   const isPageActive = useIsKeepAliveRouteActive(UNIT_MODEL_EDIT_ROUTE_URL);
 
   useEffect(() => {
@@ -523,7 +548,8 @@ export default function UnitModelEdit() {
     };
   }, [unitRoot, reloadTick]);
 
-  const previewSuspended = !isPageActive || daeExchangeOpen || daeModalViewportSuspend;
+  const previewSuspended =
+    !isPageActive || daeExchangeOpen || daeModalViewportSuspend || modelImportViewportSuspend;
 
   return (
     <SsbhModelPreviewProvider workspaceRoot={unitRoot} previewSuspended={previewSuspended}>
@@ -537,6 +563,7 @@ export default function UnitModelEdit() {
             daeExchangeOpen={daeExchangeOpen}
             setDaeExchangeOpen={setDaeExchangeOpen}
             setDaeModalViewportSuspend={setDaeModalViewportSuspend}
+            setModelImportViewportSuspend={setModelImportViewportSuspend}
           />
         </div>
       </TooltipProvider>

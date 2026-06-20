@@ -244,8 +244,7 @@ shell：找到进入点以后必须找恢复点。
 ## 来源
 
 - [MSC 模组开发操作手册：从 29664 行 `2.c` 读到可改点](./msc-modder-operating-manual.md)
-- [0xBDBE6FEA / 2.c semantic overlay 解析视图](./resolved/0xBDBE6FEA-2.resolved-labels.md)
-- [当前样本 semantic overlay JSON](./overlays/0xBDBE6FEA-2.semantic-overlay.json)
+- 当前命名只作为读码工作名；跨样本时回到 `.c` 的 action hash、callback shape 和 syscall 输出重新确认。
 - [2.c 函数角色地图：把 `func_N` 翻成人话](./2c-function-role-map-for-modders.md)
 - [MSC 模组开发 worked traces：从目标到 patch 点](./modder-worked-traces.md)
 - Notion MSC 页：`https://app.notion.com/p/1601ebad394d8027a042df115e61b6dd`

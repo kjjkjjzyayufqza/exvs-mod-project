@@ -747,7 +747,7 @@ currentSymbol:
   - ACTION_A_SHOT
 ```
 
-本目录里的 `generated/0xBDBE6FEA-2.analysis.json` 和 `tools/msc_c_static_analyzer.py` 就是给这个动态 overlay 用的。后续换样本时，先跑结构化分析，再用 shape 匹配，而不是重新靠肉眼从 `func_N` 开始猜。
+后续换样本时不要复用旧编号。直接打开当前样本 `.c`，按 registry、wrapper 写入、syscall 输出和 resource hash 的 shape 重新定位。
 
 ## 17. 实际跟读练习：从主射到发射点
 
@@ -847,7 +847,6 @@ shell: global170=1 -> func_887()
 ## 20. 来源
 
 - 当前样本：`E:\XB\解包\com\file\0xBDBE6FEA\2.c`
-- 结构化快照：[generated/0xBDBE6FEA-2.analysis.json](./generated/0xBDBE6FEA-2.analysis.json)
 - Notion MSC 页：`https://app.notion.com/p/1601ebad394d8027a042df115e61b6dd`
 - OverBoost wiki システム：`https://w.atwiki.jp/exvs2ob/pages/593.html`
 - OverBoost wiki テクニック：`https://w.atwiki.jp/exvs2ob/pages/683.html`

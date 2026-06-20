@@ -152,7 +152,7 @@ sys_51(0x20000, 0, 0x2, assistIndex, type)
 
 当前 `2.c` 对应证据：
 
-- 生成 JSON 统计 `sys_51` 静态调用 36 次。
+- 直接扫描当前 `2.c`，`sys_51` 静态调用共 36 次。
 - `ACTION_AC_SPECIAL_SHOT_DIRECTIONAL` 和 lock-switch special shot family 是优先检查区域，因为 OverBoost wiki 的デルタプラス特射是ジェスタ呼出。
 
 当前结论：

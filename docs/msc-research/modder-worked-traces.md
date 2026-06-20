@@ -658,7 +658,7 @@ Notion 经验：
 | `sys_46` 每个 case 的最终名 | 拆 native syscall handler |
 | `sys_0(0xc000*)` 来源 | 拆 native state table / engine 状态 |
 | damage / down / proration | 接 `arms_param`、`bullet_param`、hitgroup 和 native |
-| 跨机体稳定性 | 用第二个 `2.c` 验证 semantic overlay |
+| 跨机体稳定性 | 用第二个 `2.c` 直接验证 action hash、callback shape 和 syscall 输出 |
 
 ## 来源
 
@@ -666,7 +666,7 @@ Notion 经验：
 - OverBoost wiki システム：`https://w.atwiki.jp/exvs2ob/pages/593.html`
 - OverBoost wiki テクニック：`https://w.atwiki.jp/exvs2ob/pages/683.html`
 - OverBoost wiki 用语集：`https://w.atwiki.jp/exvs2ob/pages/82.html`
-- [0xBDBE6FEA / 2.c semantic overlay 解析视图](./resolved/0xBDBE6FEA-2.resolved-labels.md)
+- 跨样本工作名原则：`func_N` 只当当前样本坐标，最终回到 `.c` evidence shape。
 - [MSC 逆向模组开发总览：从玩家动作追到 `2.c` 可改点](./modder-human-flow-overview.md)
 - [BD / 移动 / `sys_46` 模组开发工作簿](./movement-bd-modding-workbook.md)
 - [`func_11` / `0xc000*` boost gate 状态槽地图](./func11-c000-boost-gate-map.md)

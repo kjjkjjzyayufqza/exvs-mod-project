@@ -12,12 +12,12 @@
 - [MSC Research 阅读入口](./README.md)
 - [`func_1044` slot callback 全链路逆向](./func1044-slot-callback-atlas.md)：本稿的
   调用链与行为证据来源。
-- [动态命名与 JSON overlay 方案](./dynamic-naming-overlay.md)：跨版本 semantic ID、
-  generated facts、overlay 和 resolved view 的总体设计。
+- 跨版本工作名原则：不要持久绑定 `func_N`；用当前 `.c` 的 registry、
+  callback shape 和 syscall/resource 输出重新确认。
 - [MSC Auto Rename Mapping](./msc-auto-rename-mapping.md)：专门记录
   `ACTION_*`、`SLOT_CB_*` 和中文注释的 TestEditor 显示规则，避免误改
   `command_mapping.md`。
-- [结构化分析 JSON 工作流](./generated-analysis-workflow.md)：生成当前样本事实层。
+- 当前策略：不再生成持久机器缓存；直接从当前 `.c` 的 registry、callback shape 和 syscall 输出建立工作名。
 - [MSC Auto-Rename 外部文件分析](../agent-sessions/msc-workspace-redesign/auto-rename-external-file-analysis.md)：
   现有 TestEditor rename 路径与 action hash 来源限制。
 
@@ -315,5 +315,5 @@ low confidence
 尤其不能为了让代码“看起来完整”而删除 `LIKELY` / `UNCONFIRMED`。
 
 这份模拟稿描述的是 Auto Rename 的期望显示结果。真正实现时，应把识别规则放进
-TestEditor 的 rename utility/semantic overlay 流程，不使用 `--exvsMapping`，也不直接修改
+TestEditor 的 rename utility / working-name 流程，不使用 `--exvsMapping`，也不直接修改
 反编译器生成的稳定事实层。

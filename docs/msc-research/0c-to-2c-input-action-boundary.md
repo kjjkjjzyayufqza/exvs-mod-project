@@ -28,36 +28,24 @@ E:\XB\解包\com\file\0xBDBE6FEA\
   -> 2.c segment 输出 sys_4F / sys_51 / sys_46 / sys_53 / sys_4B / sys_47
 ```
 
-## 1. 当前快照
+## 1. 当前源码快照
 
-`0.c` 的结构化快照：
+`0.c`：
 
 ```text
 source: E:\XB\解包\com\file\0xBDBE6FEA\0.c
 sha256: 9EC31CCB370770863F2FB020A8CFA699DFE53D1ED76636F5BDCC136314AF26C0
-analysis lineCount: 3525
+lineCount: 3525
 functionCount: 145
 ```
 
-已生成：
-
-```text
-docs/msc-research/generated/0xBDBE6FEA-0.analysis.json
-```
-
-`2.c` 的结构化快照：
+`2.c`：
 
 ```text
 source: E:\XB\解包\com\file\0xBDBE6FEA\2.c
 sha256: 1BE5DACB24FC6565680CC15C4B4045FEC80229E958D690E5AE8BABE973224589
-analysis lineCount: 29664
+lineCount: 29664
 functionCount: 1047
-```
-
-已生成：
-
-```text
-docs/msc-research/generated/0xBDBE6FEA-2.analysis.json
 ```
 
 ## 2. `0.c` 的主循环形状
@@ -694,8 +682,6 @@ boost_gauge / boost_dash / step fields
 - 操作手册：[msc-modder-operating-manual.md](./msc-modder-operating-manual.md)
 - input/action 研究旧入口：[../exvs-msc-input-action-weapon-pipeline.md](../exvs-msc-input-action-weapon-pipeline.md)
 - 资源字段映射：[../command_mapping.md](../command_mapping.md)
-- `0.c` analysis JSON：[generated/0xBDBE6FEA-0.analysis.json](./generated/0xBDBE6FEA-0.analysis.json)
-- `2.c` analysis JSON：[generated/0xBDBE6FEA-2.analysis.json](./generated/0xBDBE6FEA-2.analysis.json)
 - OverBoost wiki システム：https://w.atwiki.jp/exvs2ob/pages/593.html
 - OverBoost wiki テクニック：https://w.atwiki.jp/exvs2ob/pages/683.html
 - OverBoost wiki 初心者指南：https://w.atwiki.jp/exvs2ob/pages/559.html

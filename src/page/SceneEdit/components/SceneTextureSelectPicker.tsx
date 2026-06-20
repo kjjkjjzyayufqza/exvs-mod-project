@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useSceneTextureManagerStore } from "../store/sceneTextureManagerStore";
+import { useNumatbTextureOptionsOverride } from "@/components/ssbh-model-preview/numatbTextureOptionsContext";
 
 const MAX_OPTIONS_WITHOUT_QUERY = 80;
 const MAX_OPTIONS_FILTERED = 200;
@@ -123,12 +124,16 @@ export function SceneTextureSelectPicker({
   const inputId = `${instanceId}-texture-input`;
   const anchorRef = useRef<HTMLDivElement>(null);
 
-  const { entries, recentEntryIds } = useSceneTextureManagerStore(
+  const sceneStore = useSceneTextureManagerStore(
     useShallow((state) => ({
       entries: state.entries,
       recentEntryIds: state.recentEntryIds,
     })),
   );
+  // Hosts other than the Scene Editor (e.g. the Unit Model Editor's DAE→SSBH flow)
+  // inject their own package texture pool; fall back to the shared scene store.
+  const override = useNumatbTextureOptionsOverride();
+  const { entries, recentEntryIds } = override ?? sceneStore;
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState(value);
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);

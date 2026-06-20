@@ -595,7 +595,7 @@ func_309(anyArg, time)
 
 ### 2. 从 action hash 或 `ACTION_*` 定位入口
 
-用 `func_1043` 或生成 JSON 找：
+直接读 `func_1043` 的 registry：
 
 ```text
 action hash -> ACTION_* callback
@@ -622,25 +622,15 @@ action hash -> ACTION_* callback
 
 ### 5. 最后才给名字
 
-命名建议写成“角色 + 证据”，不要写成“绝对结论”：
+命名建议写成“角色 + 证据”，不要写成“绝对结论”。直接在 Markdown 记录：
 
-```json
-{
-  "action_hash": "0x23df217e",
-  "label_zh": "特射方向分支 / 援护",
-  "entry": "ACTION_AC_SPECIAL_SHOT_DIRECTIONAL",
-  "runtime_family": "melee_special_runtime_func_502",
-  "callbacks": {
-    "main": "func_952"
-  },
-  "evidence": [
-    "sets_global609",
-    "branches_on_global200",
-    "calls_sys_51_assist",
-    "deducts_ammo_slot_2_with_sys_4F_0x7"
-  ]
-}
-```
+| Item | Evidence |
+|---|---|
+| Action | `0x23DF217E / ACTION_AC_SPECIAL_SHOT_DIRECTIONAL` |
+| Working label | 特射方向分支 / 援护 |
+| Runtime | `func_488 -> func_502` family |
+| Current callback | `func_952` |
+| Proof | writes `global609`; branches on `global200`; calls `sys_51`; uses `sys_4F(0x7,2,1)` |
 
 这样下次 offset 或 `func_N` 变了，仍然可以根据 action hash、runtime family、syscall 组合重新定位。
 

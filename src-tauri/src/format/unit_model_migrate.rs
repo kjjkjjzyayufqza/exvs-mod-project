@@ -496,10 +496,18 @@ fn build_ext_by_index(entries: &[SubFileDataEntry]) -> HashMap<i32, String> {
     entries
         .iter()
         .map(|entry| {
-            let ext = if entry.file_type.trim().is_empty() {
-                file_extension(&entry.file_url)
+            // Mirror the extractor (`unit_model_extract.rs`): the logical file kind
+            // that drives folder placement comes from the `fileUrl`, not the coarse
+            // FHM2D `file_type` container tag. The game stores logical kinds such as
+            // `.jnttbl` (and `.shl`) as the generic `.bin`, so classifying by
+            // `file_type` leaves per-model `.jnttbl` files stranded at the root
+            // instead of grouping them under `models\<model>`. Fall back to the type
+            // tag only when the URL carries no extension.
+            let url_ext = file_extension(&entry.file_url);
+            let ext = if url_ext.is_empty() {
+                entry.file_type.trim().to_ascii_lowercase()
             } else {
-                entry.file_type.to_ascii_lowercase()
+                url_ext
             };
             (entry.file_index, ext)
         })
@@ -1301,6 +1309,116 @@ mod tests {
         assert!(analysis.can_migrate);
         assert!(analysis.model_count > 0);
         assert!(analysis.planned_file_url_updates > 0);
+    }
+
+    fn write_minimal_legacy_unit_with_bin_tagged_jnttbl(root: &Path, structure_path: &Path) {
+        fs::create_dir_all(root).unwrap();
+        let files = [
+            "body.nusktb",
+            "body__maya__.numatb",
+            "body.numshb",
+            "body.numdlb",
+            "body.jnttbl",
+            "body_texture.nutexb",
+            "body.nuhlpb",
+            "characterid_body.bin",
+            "shell_body.shl",
+        ];
+        for name in files {
+            fs::write(root.join(name), name.as_bytes()).unwrap();
+        }
+        let root_name = root.file_name().unwrap().to_string_lossy();
+        // The FHM2D container tags `.jnttbl` and `.shl` files as the generic `.bin`;
+        // only the fileUrl carries their logical extension. The jnttbl item also sits
+        // as a direct child of the model group, exactly like real character extracts.
+        let data = vec![
+            data_entry(0, ".nusktb", &format!(".\\{root_name}\\body.nusktb")),
+            data_entry(
+                1,
+                ".numatb",
+                &format!(".\\{root_name}\\body__maya__.numatb"),
+            ),
+            data_entry(2, ".numshb", &format!(".\\{root_name}\\body.numshb")),
+            data_entry(3, ".numdlb", &format!(".\\{root_name}\\body.numdlb")),
+            data_entry(4, ".bin", &format!(".\\{root_name}\\body.jnttbl")),
+            data_entry(
+                5,
+                ".nutexb",
+                &format!(".\\{root_name}\\body_texture.nutexb"),
+            ),
+            data_entry(6, ".nuhlpb", &format!(".\\{root_name}\\body.nuhlpb")),
+            data_entry(7, ".bin", &format!(".\\{root_name}\\characterid_body.bin")),
+            data_entry(8, ".bin", &format!(".\\{root_name}\\shell_body.shl")),
+        ];
+        let structure = vec![
+            folder(3, 0),
+            item(7, "00000000", Some("characterid_body")),
+            item(8, "00000000", Some("shell_body")),
+            folder(1, 0),
+            folder(6, 0),
+            item(0, "10000000", Some("body")),
+            folder(1, 32),
+            item(5, "00000000", Some("body_texture")),
+            end(1),
+            item(1, "21000000", Some("body")),
+            item(2, "30000000", Some("body")),
+            item(3, "40000000", Some("body")),
+            item(4, "50000000", Some("body")),
+            end(1),
+            end(1),
+            folder(1, 0),
+            item(6, "00000000", Some("body")),
+            end(1),
+            end(1),
+        ];
+        let value = json!({
+            "Magic": 10,
+            "Fhm2dTotalCount": data.len(),
+            "UnkCount": 4,
+            "SubFileData": data,
+            "SubFileStructure": structure,
+        });
+        fs::write(
+            structure_path,
+            format!("{}\n", serde_json::to_string_pretty(&value).unwrap()),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn migrate_groups_bin_tagged_jnttbl_into_model_folder() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("0xUNIT");
+        let structure = temp.path().join("0xUNIT_structure.json");
+        write_minimal_legacy_unit_with_bin_tagged_jnttbl(&root, &structure);
+
+        let result = migrate_unit_model_folder_layout(
+            &root.to_string_lossy(),
+            Some(&structure.to_string_lossy()),
+        )
+        .unwrap();
+
+        assert!(result.migrated);
+        // The jnttbl (tagged `.bin`) must land beside its model, not stay at root.
+        assert!(root
+            .join("models")
+            .join("body")
+            .join("body.jnttbl")
+            .is_file());
+        assert!(!root.join("body.jnttbl").exists());
+        // The `.shl` control bin and `characterid` bin stay at the layout root.
+        assert!(root.join("shell_body.shl").is_file());
+        assert!(root.join("characterid_body.bin").is_file());
+
+        let raw = fs::read_to_string(&structure).unwrap();
+        assert!(raw.contains(".\\\\0xUNIT\\\\models\\\\body\\\\body.jnttbl"));
+
+        let analysis = analyze_unit_model_folder_migration(
+            &root.to_string_lossy(),
+            Some(&structure.to_string_lossy()),
+        )
+        .unwrap();
+        assert_eq!(analysis.state, UnitModelMigrationState::Current);
     }
 
     #[test]

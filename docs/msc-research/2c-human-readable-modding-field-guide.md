@@ -533,5 +533,5 @@ Notion 记录中，`sys_4B(0x2, modelHash, boneIndex, actionHash, targetModel)` 
 - 本仓库：[command_mapping.md](../command_mapping.md)
 - 本仓库：[EXVS MSC Syscall 53 Investigation Notes](../exvs-msc-syscall-53-notes.md)
 - 本仓库：[EXVS MSC Syscall 4F Investigation Notes](../exvs-msc-syscall-4f-notes.md)
-- 相关研究：[动态命名与 JSON overlay 方案](./dynamic-naming-overlay.md)
+- 相关原则：跨样本命名不要绑定 `func_N`；回到当前 `.c` 的 action hash、callback shape、syscall/resource 输出重新确认。
 - 相关研究：[`func_11` / `0xc000*` boost gate 状态槽地图](./func11-c000-boost-gate-map.md)

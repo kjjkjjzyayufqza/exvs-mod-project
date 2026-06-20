@@ -6,7 +6,7 @@
 E:\XB\解包\com\file\0xBDBE6FEA\2.c
 ```
 
-结构化快照：
+源码快照：
 
 ```text
 lineCount: 29664
@@ -781,8 +781,6 @@ cleanup 证据:
 ## 17. 来源
 
 - 当前样本：`E:\XB\解包\com\file\0xBDBE6FEA\2.c`
-- 结构化快照：[generated/0xBDBE6FEA-2.analysis.json](./generated/0xBDBE6FEA-2.analysis.json)
-- 动态命名方案：[dynamic-naming-overlay.md](./dynamic-naming-overlay.md)
 - BD / movement 工作簿：[movement-bd-modding-workbook.md](./movement-bd-modding-workbook.md)
 - `speed_param` 字段：[command_mapping.md](../command_mapping.md)
 - Notion MSC 页：`https://app.notion.com/p/1601ebad394d8027a042df115e61b6dd`

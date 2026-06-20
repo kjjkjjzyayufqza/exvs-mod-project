@@ -69,10 +69,15 @@ export function DaeSsbhSessionLayout() {
       ),
     [session.mayaFile, session.nustFile, session.writeNumatb, session.writeMayaProfile],
   );
+  // Texture references resolve against the package's shared nutexb pool at
+  // `<workspaceRoot>/textures/`. The write output dir is now a per-model
+  // `models/<name>` folder that has no textures, so validate against the
+  // workspace (package) root instead, falling back to the output dir.
+  const textureValidationStageRoot = preview.workspaceRoot ?? session.outputDir;
   const textureReferenceValidation = useNumatbTextureReferenceValidation({
-    enabled: Boolean(session.sourcePath && session.outputDir),
+    enabled: Boolean(session.sourcePath && textureValidationStageRoot),
     sourcePath: session.sourcePath,
-    stageRoot: session.outputDir,
+    stageRoot: textureValidationStageRoot,
     slots: declaredTextureSlots,
   });
   const textureReferenceIssueMessages = useMemo(
@@ -192,7 +197,9 @@ export function DaeSsbhSessionLayout() {
       ].filter(Boolean);
       toast.success("Converted to SSBH", { description: lines.join("\n") });
       if (result.files.numdlbPath && preview.autoLoadAfterConvertToSsbh) {
-        await preview.loadModelAt(result.files.numdlbPath);
+        // Append the converted model instead of replacing the scene, so the
+        // already-loaded Unit model package keeps showing all of its meshes.
+        await preview.addModelAt(result.files.numdlbPath);
       }
     } catch (error) {
       toast.error(String(error));

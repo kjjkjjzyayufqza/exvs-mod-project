@@ -483,7 +483,7 @@ low: 只做索引，等更多样本或 native 证据
 
 ## 13. 和动态 overlay 的关系
 
-这页给人读，`dynamic-naming-overlay.md` 给机器和跨样本流程读。
+这页给人读。跨样本时不要套旧 `func_N`；直接读新 `.c` 的 registry、callback shape 和 syscall/resource 输出。
 
 人工讨论可以写：
 
@@ -510,6 +510,6 @@ match:
 - 当前样本：`E:\XB\解包\com\file\0xBDBE6FEA\2.c`
 - [2.c 逐帧生命周期：从玩家动作到 MSC 输出](./2c-frame-lifecycle-human-trace.md)
 - [MSC 调用链快速决策树：从问题到可改点](./modding-decision-tree-system-cards.md)
-- [动态命名与 JSON overlay 方案](./dynamic-naming-overlay.md)
+- 跨样本命名原则：以当前 `.c` 证据为准，`func_N` 只当本样本坐标。
 - [MSC 模组开发 cookbook：按改动目标反查 `2.c`](./modding-cookbook-action-editing.md)
 - Notion MSC 页：`https://app.notion.com/p/1601ebad394d8027a042df115e61b6dd`

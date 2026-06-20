@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
 import { FileBox } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SsbhDaeExchangePanel } from "@/components/ssbh-model-preview/SsbhDaeExchangePanel";
+import { useDaeSsbhSessionStore } from "@/components/ssbh-model-preview/store/daeSsbhSessionStore";
 import { SceneEditRndModalShell } from "@/page/SceneEdit/components/SceneEditRndModalShell";
 import {
   SCENE_EDIT_RND_DRAG_HANDLE,
@@ -89,6 +90,17 @@ export function UnitModelDaeExchangeModal({
       onViewportSuspendChange?.(false);
     };
   }, [onViewportSuspendChange]);
+
+  // Start each conversion from a clean slate: discard the previous session's NUMATB
+  // material content and output settings instead of caching the last configuration.
+  const resetSession = useDaeSsbhSessionStore((state) => state.resetSession);
+  const wasOpenRef = useRef(false);
+  useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      resetSession();
+    }
+    wasOpenRef.current = open;
+  }, [open, resetSession]);
 
   if (!open || typeof document === "undefined") {
     return null;

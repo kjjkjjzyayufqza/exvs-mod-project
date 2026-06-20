@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { open } from "@tauri-apps/plugin-dialog";
 import {
@@ -83,6 +83,11 @@ interface UnitModelModelManagerPanelProps {
   onSelectModel?: (model: UnitModelTreeNode) => void;
   /** Called after a successful add/remove so the host can reload the structure JSON. */
   onMutated?: () => void;
+  /**
+   * Notifies the host while the FBX/DAE import modal (or its progress dialog) is open so it
+   * can pause the background 3D viewport, matching the standalone DAE/FBX to SSBH modal.
+   */
+  onViewportSuspendChange?: (suspended: boolean) => void;
   className?: string;
 }
 
@@ -267,6 +272,7 @@ export function UnitModelModelManagerPanel({
   selectedModelLabel,
   onSelectModel,
   onMutated,
+  onViewportSuspendChange,
   className,
 }: UnitModelModelManagerPanelProps) {
   const [busy, setBusy] = useState<string | null>(null);
@@ -288,6 +294,14 @@ export function UnitModelModelManagerPanel({
   });
 
   const canMutate = Boolean(modelRoot && structureJsonPath);
+
+  // Pause the background 3D viewport while the heavy import config modal or its
+  // progress dialog is open, so dragging/resizing it stays smooth even for large meshes.
+  const importUiOpen = showImportConfig || importProgress.open;
+  useEffect(() => {
+    onViewportSuspendChange?.(importUiOpen);
+  }, [importUiOpen, onViewportSuspendChange]);
+  useEffect(() => () => onViewportSuspendChange?.(false), [onViewportSuspendChange]);
 
   const handleAddFolder = async () => {
     if (!modelRoot || !structureJsonPath) {

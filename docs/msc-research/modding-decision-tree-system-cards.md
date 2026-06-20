@@ -94,7 +94,7 @@ init_depiction_script_runtime
 | 移动 / BD | boost dash、step、特殊移动 | `func_11`、动作内 `sys_46`、`speed_param` | global gate、动作位移、速度资源 | `sys_46` native case 语义还需继续拆 | 地上/空中/overheat/step/BD/动作结束 |
 | 镜头 | 格斗镜头、觉醒技镜头 | `func_321` / `sys_53` | camera hash、启用时机、清理时机 | 只加不清会残留镜头 | 命中、空挥、被打断、动作结束镜头恢复 |
 | shell / 换装 | 组件挂接、卸下、变形外观 | `func_877 -> func_887/888` | `global170/global143`、`sys_4B`、`sys_47` | 改 action 中 shell 后，要确认结束恢复 | 每个动作进出、取消、死亡、复归都恢复 |
-| 动态命名 | offset / `func_N` 变了怎么办 | analyzer JSON + overlay | hash、syscall shape、global family、call-chain role | 不要把一次反编译编号写死为最终真名 | 换第二个样本仍能重新定位 |
+| 动态命名 | offset / `func_N` 变了怎么办 | 当前 `.c` registry + callback body | hash、syscall shape、global family、call-chain role | 不要把一次反编译编号写死为最终真名 | 换第二个样本仍能重新定位 |
 
 ## 3. 几条完整链路
 
@@ -290,7 +290,7 @@ ACTION_* segment
 | `func_887/888` | 使用 `global170`、`global143`、`sys_4B`、`sys_47` 控制 shell loadout |
 | `func_11` | 主循环内 gate 状态机，密集读取 `sys_0(0xc000*)` 和写 `global23/43/45/46/54` |
 
-跨样本时，先用 analyzer JSON 抽出：
+跨样本时，直接从两份 `.c` 记录：
 
 ```text
 action registry entries
@@ -300,7 +300,7 @@ callers/callees
 motion / weapon / camera hash
 ```
 
-然后把这些 shape 映射回 overlay 名称。不要把 `func_888` 这种编号写成永久真名。
+然后按这些 shape 建立 Markdown 工作名。不要把 `func_888` 这种编号写成永久真名。
 
 ## 5. 最小模组 worksheet
 
@@ -335,4 +335,4 @@ motion / weapon / camera hash
 - [MSC 模组开发 cookbook：按改动目标反查 `2.c`](./modding-cookbook-action-editing.md)
 - [2.c 移动 / BD / `sys_46` / `func_11` 地图](./movement-boost-sys46-func11-map.md)
 - [`func_11` / `0xc000*` boost gate 状态槽地图](./func11-c000-boost-gate-map.md)
-- [动态命名与 JSON overlay 方案](./dynamic-naming-overlay.md)
+- 跨样本命名原则：以当前 `.c` 的 action hash、callback shape、syscall/resource 输出为准。

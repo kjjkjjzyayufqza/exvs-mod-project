@@ -8,9 +8,13 @@ E:\XB\解包\com\file\0xBDBE6FEA\0.c
 E:\XB\解包\com\file\0xBDBE6FEA\2.c
 
 RX-78-2:
-E:\XB\解包\com\file\0xF22E425D\0.c
-E:\XB\解包\com\file\0xF22E425D\2.c
+E:\XB\解包\com\file\040msc\0xF22E425D\0.c
+E:\XB\解包\com\file\040msc\0xF22E425D\2.c
 ```
+
+证据边界：Delta 部分保留 BDBE 历史/人工工作副本上下文；RX 部分已于
+2026-06-20 从 OB v27 源 `0xF22E425D.fhm2d + 0xA3D57845.fhm2d` 重新抽取。
+当前 RX `.c` 和 Param 值以 `040msc/041cpm` workspace 为准。
 
 本页只分析主射。目标是回答：
 
@@ -586,7 +590,7 @@ E:\XB\解包\vs2\x64\041cpm\arms_param\armsparam_015gndmuc_004deltpl_001.vgsht2
 entry index 1 = 0x1486a84f
 
 RX-78-2:
-E:\XB\解包\vs2\x64\041cpm\arms_param\armsparam_001gundam_001gundam_001.vgsht2
+E:\XB\解包\com\file\041cpm\0xA3D57845\armsparam.bin
 entry index 2 = 0xe4fab738
 ```
 
@@ -609,7 +613,7 @@ entry rows
 | `0x04A2CFD6` | `reload_start_frame` | `0` | `120` |
 | `0x103171AE` | `reload_time_total` | `0` | `40` |
 | `0xA502BCF2` | `reload_per_shot_frame` | `0` | `180` |
-| `0xA635CFC2` | `reload_lock_frame` | `60` | `120` |
+| `0xA635CFC2` | `reload_lock_frame` | `60` | `90` |
 | `0xEDC16AE3` | `ammo_reload_wait_frame` | `0` | `40` |
 | `0x67364138` | `cooldown_frame` | `0` | `120` |
 
@@ -648,7 +652,7 @@ RX main:    reload_type 2 + 0xA502BCF2=180 -> constant 3-second per-round reload
 ```text
 0x04A2CFD6:   0 -> 120
 0x103171AE:   0 -> 40
-0xA635CFC2:  60 -> 120
+0xA635CFC2:  60 -> 90
 0xEDC16AE3:   0 -> 40
 0x67364138:   0 -> 120
 ```

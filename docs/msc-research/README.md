@@ -1,4 +1,6 @@
-# MSC Research 入口：以 `0xBDBE6FEA/2.c` 为样本
+# MSC Research 入口：以真实 `.c` 与 raw Param 为证据
+
+> Provenance warning：本目录多数早期深挖文档基于 BDBE patch 前快照；当前 `E:\XB\解包\com\file\0xBDBE6FEA\2.c/2.dscex` 已含 2026-06-19 Delta Kai AI patch。旧 generated analysis/overlay/resolved-label 工作流已删除并废弃；除非有明确必要，不再用 generated JSON 作为研究输入。当前研究直接读取 `.c`、原始 Param 与资源二进制；真实 OB v27 Delta Plus 证据改用 `0x04AD9F33 + 0x5556A52B`。
 
 这组笔记用于继续研究 EXVS MSC 系统，当前样本是：
 
@@ -33,6 +35,20 @@ AI 新增符号还必须使用逆向语义名，不能新建 `global777` 这类�
 如果当前问题是“普通 BD、step、boost、射击伤害、弹体 hitbox、格斗追踪这些该改脚本还是资源”，看 [MSC 资源层 patch 指南：BD / step / boost / 射击 / 格斗该改哪些表](./resource-control-surface-for-modders.md)。它把 `speed_param`、`arms_param`、`bullet_param`、`character_param` 和 `0.c/2.c` 调用链对齐。
 
 如果当前问题是“Delta Plus 主射为什么 2 连射、为什么空弹后手动换弹，以及怎样改成 RX-78-2 那样单发 + 自动回弹”，看 [Delta Plus 主射调用链与 RX-78-2 风格自动回弹方案](./delta-plus-main-shot-rx78-style-auto-reload.md)。它把 wiki 行为、`0.c` 空弹分支、`2.c` 主射/换弹 action、RX 对比和 patch 步骤放在同一页。
+
+Delta Plus 当前 OB v27 的独立机体页见 [15004001 Delta Plus MSC 研究](./units/15004001-delta-plus/README.md)。该页直接读取 `0x04AD9F33` 的 `0.c/1.c/2.c` 与 `0x5556A52B` raw Param，证明 classic selector 下主射、手动装填、CS、副射、Jesta assist、Waverider rush、变形主射/副射/特射与速度行的代表闭环；不使用 generated analysis JSON。
+
+RX-78-2 当前 OB v27 的独立机体页见 [1001001 RX-78-2 Gundam MSC 研究](./units/1001001-rx-78-2/README.md)。该页从 Character ID Table 定位 `0xF22E425D + 0xA3D57845`，重新抽取并直接读取三份 `.c`，把主射、CS、Bazooka、assist、Hammer、Beam Javelin 三段和 Last Shooting projectile 段连到原始 arms/bullet Param row。
+
+G-Self 当前 OB v27 的独立机体页见 [42001001 G-Self MSC 研究](./units/42001001-g-self/README.md)。该页直接读取 `0x72CD747F` 的 `0.c/1.c/2.c` 与 `0x23364E67` raw Param，证明 classic selector 下 Space / Reflector stored/deployed / Assault 四状态候选、主射、CS 与 Assault Pack 多段 projectile family；不使用 generated analysis JSON。
+
+Mack Knife（Mask）当前 OB v27 的独立机体页见 [42002001 Mack Knife MSC 研究](./units/42002001-mack-knife-mask/README.md)。该页直接读取 `0xC33AA885` 的 `0.c/1.c/2.c` 与 `0x92C1929D` raw Param，证明 classic selector 下 normal / Long-Range Booster 两个本地状态、slot 1/2 loadout bridge，以及 Beam Vulcan、Plasma Claw、Grenade Launcher 候选链；不使用 generated analysis JSON。
+
+真正的 Aerial 是 `66001001`。独立机体页见 [66001001 Gundam Aerial MSC 研究](./units/66001001-gundam-aerial/README.md)。该页直接读取 `0x19CE466D` 的 `0.c/1.c/2.c` 与 `0x48357C75` raw Param，证明 46-action external Param table、动态 action/phase registry、slot-1/slot-5 多弹体族与 raw bullet rows；不使用 generated analysis JSON。
+
+Unicorn 当前 OB v27 的独立机体页见 [15001001 Unicorn MSC 研究](./units/15001001-unicorn/README.md)。该页直接读取 `0x0B180D9E` 的 `0.c/1.c/2.c` 与 `0x5AE33786` raw Param，证明 Unicorn/Destroy 主形态轴、两套 loadout、代表射击/援护、NT-D 和觉醒技强制换装链；不使用 generated analysis JSON。
+
+Sinanju 当前 OB v27 的独立机体页见 [15003001 Sinanju MSC 研究](./units/15003001-sinanju/README.md)。该页直接读取 `0xCF8FC16A` 的 `0.c/1.c/2.c` 与 `0x9E74FB72` raw Param，证明 classic selector 下主射、CS、格斗 CS、四向 Bazooka、Rozen Zulu assist、Meteor Kick 与 `赤い彗星の再来` 时限强化的代表闭环；不使用 generated analysis JSON。
 
 如果当前问题是“右边第三槽为什么红、特射援护/浮游炮怎样扣槽、Delta Kai clone 后 slot 2 为什么不可用、背包浮游炮怎么发射和锁定”，看 [Delta Kai 浮游炮 / 援护 slot 2 调用链研究](./delta-kai-funnel-assist-slot2.md)。它把 `0.c` 输入 gate、`2.c` 特射 `sys_51`、slot 2 armsparam、HUD 红槽维护和 `connect funnel to backpack` 的风险放在同一页。
 
@@ -91,29 +107,37 @@ AI 新增符号还必须使用逆向语义名，不能新建 `global777` 这类�
    - 把 `global23/43/45/46/54`、`0xc0001/3/5/6/7/8/9/b/c/e/f`、`speed_param` 和 `sys_52/sys_4C/sys_46` 串成脚本侧 gate 流程。
 21. [2.c 调用链与运行时流程](./2c-call-chain-runtime-flow.md)
    - 用“人话”串起 `main -> func_1 -> func_4 -> func_44 -> ACTION_* -> runtime -> syscall`，并解释移动、BD、镜头、动作、射击、格斗分别落在哪些链上。
-22. [结构化分析 JSON 工作流](./generated-analysis-workflow.md)
-   - 说明 `tools/msc_c_static_analyzer.py` 和 `generated/0xBDBE6FEA-2.analysis.json` 怎么避免 offset / `func_N` 变化后结论失效。
-23. [当前样本 semantic overlay JSON](./overlays/0xBDBE6FEA-2.semantic-overlay.json)
-   - 第一批高置信 semanticId、证据规则、当前 `func_N` 临时定位和模组用途；后续跨样本匹配应优先扩展这里，而不是直接改反编译输出。
-24. [0xBDBE6FEA / 2.c semantic overlay 解析视图](./resolved/0xBDBE6FEA-2.resolved-labels.md)
-   - 把 overlay JSON 翻成人话，按启动、registry、shell、主射、援护、格斗、特格、镜头组织，适合实际读 `2.c` 时放在旁边对照。
-25. [2.c 全文件地图](./2c-whole-file-map.md)
+22. [跨机体 MSC 研究总览](./cross-unit-msc-research-overview.md)
+   - 当前跨机体入口。优先记录真实 `0.c / 1.c / 2.c`、Param row、函数行号、syscall/resource 输出，不把机器缓存当正文证据。
+23. [59001001 NEXA-N MSC 研究](./units/59001001-nexa-n/README.md)
+   - external Param action-table 样本；已经开始按 `0.c -> chrsysparam row -> 2.c group callback` 直接追代码。
+24. [1001001 RX-78-2 Gundam MSC 研究](./units/1001001-rx-78-2/README.md)
+   - classic local selector 样本；直接按 `0.c input -> action hash -> 2.c callback -> arms/bullet row` 追代码。
+25. [42001001 G-Self MSC 研究](./units/42001001-g-self/README.md)
+   - classic local selector 样本；四个 `global39` 状态、`func_1125/1127/1128/1130` loadout bridge 与 Assault Pack 多弹体族已直接读 `.c` 和 raw Param。
+26. [42002001 Mack Knife (Mask) MSC 研究](./units/42002001-mack-knife-mask/README.md)
+   - classic local selector 样本；`global39 == 0/1`、normal / Long-Range Booster loadout bridge、Beam Vulcan、Plasma Claw 与 Grenade Launcher 候选链已直接读 `.c` 和 raw Param。
+27. [66001001 Gundam Aerial MSC 研究](./units/66001001-gundam-aerial/README.md)
+   - external Param action-table 样本；46 个非空 action rows、141-key phase resolver、动态 registry 与代表性 `sys_4F -> bulletparam` 链已直接读 `.c` 和 raw Param。
+28. [MSC 代际与 Param Action Bridge 对比](./msc-generation-param-bridge-comparison.md)
+   - 区分 external Param action-table、classic local selector、legacy embedded B4AC，并记录后续读 `.c` 的顺序。
+29. [2.c 全文件地图](./2c-whole-file-map.md)
    - 当前样本的行数、函数数、启动流、注册表、syscall 热区、`global170/global143` 证据。
-26. [2.c 函数群与区段索引](./2c-function-clusters.md)
+30. [2.c 函数群与区段索引](./2c-function-clusters.md)
    - 把 1,047 个函数按区段、热点和研究优先级拆开，解决“整份文件太乱”的问题。
-27. [func_887 / func_888 shell loadout 研究](./shell-loadout-func-887-888.md)
+31. [func_887 / func_888 shell loadout 研究](./shell-loadout-func-887-888.md)
    - 你正在看的换装 / 组件挂接系统，已经放回高层流程中解释。
-28. [Notion MSC 页交叉索引](./notion-msc-cross-reference.md)
+32. [Notion MSC 页交叉索引](./notion-msc-cross-reference.md)
    - 把 MCP 读取到的 Notion 记录映射到当前样本和项目文档。
-29. [动态命名与 JSON overlay 方案](./dynamic-naming-overlay.md)
-   - 解决 `func_N` 和 offset 变化后命名失效的问题。
-30. [MSC Auto Rename Mapping](./msc-auto-rename-mapping.md)
+33. [2.c 函数角色地图](./2c-function-role-map-for-modders.md)
+   - 用当前 `.c` 的 action hash、callback shape、syscall/resource 输出建立工作名，避免把 `func_N` 当跨样本真名。
+34. [MSC Auto Rename Mapping](./msc-auto-rename-mapping.md)
    - 专门记录 `ACTION_*`、`SLOT_CB_*` 和中文注释的 TestEditor 显示规则，避免误改 `command_mapping.md`。
-31. [`func_1044` slot callback 全链路逆向](./func1044-slot-callback-atlas.md)
+34. [`func_1044` slot callback 全链路逆向](./func1044-slot-callback-atlas.md)
    - 从输入、action hash、handler、slot、resource index 证明基础移动、step、BD、防御、变形和 result callback 的职责。
-32. [`func_1044` 模拟重命名稿](./func1044-simulated-renames.md)
+35. [`func_1044` 模拟重命名稿](./func1044-simulated-renames.md)
    - 把证据转换成完整的 Auto Rename 模拟结果，并为低置信项保留 `LIKELY` / `UNCONFIRMED`。
-33. [MSC research 覆盖度与下一步缺口](./msc-research-gap-map.md)
+36. [MSC research 覆盖度与下一步缺口](./msc-research-gap-map.md)
    - 记录当前哪些已经足够指导模组开发，哪些还只是工作模型，下一轮应该继续拆哪里。
 
 历史上的局部笔记仍保留在 [../exvs-msc-func-887-888-shell-loadout-notes.md](../exvs-msc-func-887-888-shell-loadout-notes.md)。后续讨论优先在本目录继续。
