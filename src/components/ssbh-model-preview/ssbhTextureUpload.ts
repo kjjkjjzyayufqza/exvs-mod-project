@@ -77,6 +77,24 @@ export class SceneTexturePool {
     this.pool.clear();
   }
 
+  /**
+   * Dispose and drop every pooled texture whose key is not in `activeKeys`.
+   * Call after a model/draw change so textures no longer referenced by the
+   * current draws are freed (otherwise the pool grows unbounded across model
+   * switches and leaks GPU memory). Returns the number of textures disposed.
+   */
+  pruneExcept(activeKeys: ReadonlySet<string>): number {
+    let removed = 0;
+    for (const [key, tex] of this.pool) {
+      if (!activeKeys.has(key)) {
+        tex.dispose();
+        this.pool.delete(key);
+        removed += 1;
+      }
+    }
+    return removed;
+  }
+
   get size(): number {
     return this.pool.size;
   }

@@ -378,8 +378,8 @@ export function NumatbTemplateEditor({ themeVariant = "default" }: NumatbTemplat
       </div>
 
       <div className="grid min-h-[460px] items-start gap-3 xl:grid-cols-[240px_minmax(0,1fr)]">
-        <div className="flex flex-col gap-3 rounded-md border bg-card/95 p-3 shadow-sm xl:sticky xl:top-3 xl:self-start xl:max-h-[calc(100dvh-7rem)]">
-          <div className="space-y-2">
+        <div className="flex min-h-0 flex-col gap-3 overflow-hidden rounded-md border bg-card/95 p-3 shadow-sm xl:sticky xl:top-3 xl:self-start xl:max-h-[calc(100dvh-7rem)]">
+          <div className="shrink-0 space-y-2">
             <div className="flex items-center justify-between">
               <Label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <Boxes className="h-3.5 w-3.5" />
@@ -415,7 +415,7 @@ export function NumatbTemplateEditor({ themeVariant = "default" }: NumatbTemplat
             </div>
           </div>
 
-          <div className="relative">
+          <div className="relative shrink-0">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={materialQuery}
@@ -425,8 +425,10 @@ export function NumatbTemplateEditor({ themeVariant = "default" }: NumatbTemplat
             />
           </div>
 
-          <div className="min-h-[200px] flex-1 overflow-hidden rounded-md border bg-background/40">
-            <div ref={materialListScrollRef} className="h-full overflow-auto">
+          <div
+            ref={materialListScrollRef}
+            className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-md border bg-background/40"
+          >
               {filteredMaterials.length === 0 ? (
                 <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">
                   {entries.length === 0
@@ -472,14 +474,13 @@ export function NumatbTemplateEditor({ themeVariant = "default" }: NumatbTemplat
                   })}
                 </div>
               )}
-            </div>
           </div>
 
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 w-full text-[10px] uppercase tracking-wide text-destructive"
+            className="h-8 w-full shrink-0 text-[10px] uppercase tracking-wide text-destructive"
             disabled={!selectedEntry}
             onClick={() => {
               if (!selectedEntry) return;

@@ -763,6 +763,33 @@ function buildDrawMeshSlots(
   return slots;
 }
 
+/**
+ * Pool keys referenced by the CURRENT draws — mirrors the key each DrawMeshEntry
+ * builds when it `acquire`s its textures. Used to prune textures left over from
+ * previously loaded models so the shared pool does not grow unbounded across
+ * "open folder" switches.
+ */
+function collectActivePoolKeys(
+  draws: readonly BuiltMeshDraw[],
+  drawMaterialBindingsByDrawKey: ReadonlyMap<string, ResolvedMaterialBinding>,
+  textureDataMap: ReadonlyMap<string, NutexbTextureData>,
+  materialDebugViewMode: MaterialDebugViewMode,
+  normalMapEnabled: boolean,
+): Set<string> {
+  const keys = new Set<string>();
+  for (const draw of draws) {
+    const binding = drawMaterialBindingsByDrawKey.get(draw.key) ?? null;
+    if (!binding) continue;
+    const slots = buildDrawMeshSlots(binding, textureDataMap, materialDebugViewMode, normalMapEnabled);
+    for (const s of slots) {
+      keys.add(
+        `${buildTexturePoolKey(s.path, s.kind, binding, s.data.width, s.data.height)}|v${textureDataIdentity(s.data)}`,
+      );
+    }
+  }
+  return keys;
+}
+
 const DrawMeshEntry = memo(function DrawMeshEntry({
   draw,
   textureDataMap,
@@ -1734,6 +1761,27 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
   // deduped by content key across draws/instances (scene-editor core path).
   const texturePool = useMemo(() => new SceneTexturePool(), []);
   useEffect(() => () => texturePool.disposeAll(), [texturePool]);
+  // Free GPU textures left behind by previously loaded models. Runs after the
+  // current draws have acquired their textures, then disposes any pool entry no
+  // current draw references — prevents unbounded VRAM growth across "open folder".
+  useEffect(() => {
+    texturePool.pruneExcept(
+      collectActivePoolKeys(
+        restSceneProps.draws,
+        restSceneProps.drawMaterialBindingsByDrawKey,
+        restSceneProps.textureDataMap,
+        restSceneProps.materialDebugViewMode,
+        restSceneProps.normalMapEnabled,
+      ),
+    );
+  }, [
+    texturePool,
+    restSceneProps.draws,
+    restSceneProps.drawMaterialBindingsByDrawKey,
+    restSceneProps.textureDataMap,
+    restSceneProps.materialDebugViewMode,
+    restSceneProps.normalMapEnabled,
+  ]);
   const activeInstance = activePreviewInstanceId
     ? (previewInstances.find((i) => i.id === activePreviewInstanceId) ?? null)
     : null;
