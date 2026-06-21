@@ -281,7 +281,7 @@ export function AppRndModalShell({
           tabIndex={-1}
           data-active={isActive ? "true" : "false"}
           className={cn(
-            "flex h-full min-h-0 flex-col overflow-hidden border transition-shadow duration-200",
+            "flex h-full min-h-0 flex-col overflow-hidden border transition-shadow duration-200 motion-reduce:transition-none",
             isActive
               ? "border-primary/40 shadow-2xl ring-1 ring-primary/20"
               : "border-border/60 opacity-[0.97] shadow-lg",
@@ -290,7 +290,7 @@ export function AppRndModalShell({
         >
           <div
             className={cn(
-              "flex shrink-0 cursor-grab select-none items-center justify-between border-b bg-linear-to-r px-4 py-3 transition-colors duration-200 active:cursor-grabbing",
+              "flex shrink-0 cursor-grab select-none items-center justify-between border-b bg-linear-to-r px-4 py-3 transition-colors duration-200 active:cursor-grabbing motion-reduce:transition-none",
               isActive ? "from-muted/80 to-muted/40" : "from-muted/40 to-muted/15",
               APP_RND_MODAL_HANDLE,
             )}
