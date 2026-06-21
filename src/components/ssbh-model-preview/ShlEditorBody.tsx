@@ -109,7 +109,7 @@ export function ShlEditorBody({
       modelId: 0,
       modelType: 3,
       folderIndex: nextFolder,
-      unk1: 0,
+      unk1: 1,
       slotIndex: records.length,
     };
     onChange({ ...data, records: appendShlRecord(data.records, next) });
@@ -235,11 +235,9 @@ export function ShlEditorBody({
                       value={String(folder)}
                       onChange={(e) => {
                         const nextFolder = Number.parseInt(e.target.value, 10) >>> 0;
-                        const reuseId = folderModelId.get(nextFolder);
                         updateRecord(rowIndex, {
                           ...row,
                           folderIndex: nextFolder,
-                          modelId: reuseId !== undefined ? reuseId : row.modelId,
                         });
                       }}
                     >

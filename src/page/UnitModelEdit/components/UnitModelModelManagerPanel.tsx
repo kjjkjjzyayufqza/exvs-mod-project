@@ -68,6 +68,7 @@ import {
 } from "../utils/unitModelModelService";
 import { listUnitModelTextures } from "../utils/unitModelTextureService";
 import { UnitModelAddFolderModal } from "./UnitModelAddFolderModal";
+import { UnitModelRemoveModelModal } from "./UnitModelRemoveModelModal";
 import { UnitModelReplaceFolderModal } from "./UnitModelReplaceFolderModal";
 import type { UnitModelSourceTexturePlan } from "./UnitModelSourceValidationPreview";
 import {
@@ -286,6 +287,7 @@ export function UnitModelModelManagerPanel({
     source: string;
     preview: UnitModelReplacePreview;
   } | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<string | null>(null);
   const [importEntries, setImportEntries] = useState<DaeImportEntry[]>([]);
   const [showImportConfig, setShowImportConfig] = useState(false);
   const [importProgress, setImportProgress] = useState<UnitImportProgressState>({
@@ -529,6 +531,7 @@ export function UnitModelModelManagerPanel({
         description: `${result.modelCount} models, ${result.totalFiles} files. Empty NUHLPB created automatically.`,
       });
       setImportEntries([]);
+      window.dispatchEvent(new Event("unit-model-textures-changed"));
       onMutated?.();
     } catch (error) {
       toast.error("Failed to import FBX/DAE as Unit model", {
@@ -549,12 +552,18 @@ export function UnitModelModelManagerPanel({
       toast.success("Model removed", {
         description: `${result.modelCount} models, ${result.removedFiles.length} files deleted`,
       });
+      setRemoveTarget(null);
       onMutated?.();
     } catch (error) {
       toast.error("Failed to remove model", { description: String(error) });
     } finally {
       setBusy(null);
     }
+  };
+
+  const handleRequestRemove = (label: string) => {
+    if (!canMutate || busy !== null) return;
+    setRemoveTarget(label);
   };
 
   const handleReplaceFolder = async (label: string) => {
@@ -786,7 +795,7 @@ export function UnitModelModelManagerPanel({
                         variant="ghost"
                         className="h-6 w-6 text-muted-foreground opacity-0 transition-colors hover:text-red-600 group-hover:opacity-100 focus-visible:opacity-100 dark:hover:text-red-400"
                         disabled={busy !== null}
-                        onClick={() => void handleRemove(model.label)}
+                        onClick={() => handleRequestRemove(model.label)}
                         title={`Remove ${model.label}`}
                         aria-label={`Remove ${model.label}`}
                       >
@@ -826,6 +835,15 @@ export function UnitModelModelManagerPanel({
         busy={busy === `replace:${replaceFolderPreview?.preview.target.modelName ?? ""}`}
         onConfirm={() => void handleConfirmReplaceFolder()}
         onCancel={() => setReplaceFolderPreview(null)}
+      />
+      <UnitModelRemoveModelModal
+        open={removeTarget !== null}
+        modelLabel={removeTarget}
+        busy={removeTarget !== null && busy === `remove:${removeTarget}`}
+        onConfirm={() => {
+          if (removeTarget) void handleRemove(removeTarget);
+        }}
+        onCancel={() => setRemoveTarget(null)}
       />
       {showImportConfig && importEntries.length > 0 ? (
         <DaeImportConfigModal

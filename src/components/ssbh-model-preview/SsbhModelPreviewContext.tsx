@@ -927,6 +927,7 @@ export function SsbhModelPreviewProvider({
         return loaded.draws;
       });
       setPreviewInstances(loaded.instances);
+      setVisibleKeys(new Set(loaded.draws.map((draw) => draw.key)));
       setDrawError(null);
     });
     const disposeIds = oldMemorySessionIds.filter(

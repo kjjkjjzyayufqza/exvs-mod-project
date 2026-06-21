@@ -410,9 +410,12 @@ function AdaptiveCanvasPerformanceController({
 function CanvasContentInvalidator({
   textureDataMap,
   drawMaterialBindingsByDrawKey,
+  drawListSignature,
 }: {
   textureDataMap: ReadonlyMap<string, NutexbTextureData>;
   drawMaterialBindingsByDrawKey: ReadonlyMap<string, ResolvedMaterialBinding>;
+  /** Mesh draw identity; demand frameloop does not repaint when only draws change. */
+  drawListSignature: string;
 }) {
   const invalidate = useThree((s) => s.invalidate);
 
@@ -420,7 +423,7 @@ function CanvasContentInvalidator({
     invalidate();
     const raf = requestAnimationFrame(() => invalidate());
     return () => cancelAnimationFrame(raf);
-  }, [textureDataMap, drawMaterialBindingsByDrawKey, invalidate]);
+  }, [textureDataMap, drawMaterialBindingsByDrawKey, drawListSignature, invalidate]);
 
   return null;
 }
@@ -1745,6 +1748,10 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
     () => measureDrawComplexity(restSceneProps.draws),
     [restSceneProps.draws],
   );
+  const drawListSignature = useMemo(
+    () => restSceneProps.draws.map((draw) => draw.key).join("\0"),
+    [restSceneProps.draws],
+  );
   const canvasPerformanceProfile = useMemo(
     () =>
       getSsbhCanvasPerformanceProfile({
@@ -1911,6 +1918,7 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
         <CanvasContentInvalidator
           textureDataMap={restSceneProps.textureDataMap}
           drawMaterialBindingsByDrawKey={restSceneProps.drawMaterialBindingsByDrawKey}
+          drawListSignature={drawListSignature}
         />
         <FrameLoopResumeInvalidator suspended={previewSuspended} />
         <Scene

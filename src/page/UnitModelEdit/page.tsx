@@ -21,7 +21,6 @@ import {
 } from "@/page/SceneEdit/components/DaeExportDialog";
 import { exportStageDaeBatchToDirectory } from "@/page/SceneEdit/utils/daeExportImport";
 import { UNIT_MODEL_EDIT_ROUTE_URL } from "./constants";
-import { UnitModelDaeExchangeModal } from "./components/UnitModelDaeExchangeModal";
 import { UnitModelHierarchyPanel } from "./components/UnitModelHierarchyPanel";
 import { UnitModelPropertiesPanel } from "./components/UnitModelPropertiesPanel";
 import { UnitModelRepackDialog } from "./components/UnitModelRepackDialog";
@@ -58,18 +57,12 @@ function UnitModelEditWorkspace({
   onUnitRootChange,
   structureJson,
   onStructureMutated,
-  daeExchangeOpen,
-  setDaeExchangeOpen,
-  setDaeModalViewportSuspend,
   setModelImportViewportSuspend,
 }: {
   unitRoot: string | null;
   onUnitRootChange: (path: string | null) => void;
   structureJson: unknown | null;
   onStructureMutated: () => void;
-  daeExchangeOpen: boolean;
-  setDaeExchangeOpen: (open: boolean) => void;
-  setDaeModalViewportSuspend: (suspended: boolean) => void;
   setModelImportViewportSuspend: (suspended: boolean) => void;
 }) {
   const workspace = useUnitModelWorkspace(unitRoot, onUnitRootChange);
@@ -165,11 +158,20 @@ function UnitModelEditWorkspace({
   const schedulePreviewReload = useCallback(() => {
     const root = workspace.activeRoot;
     if (!root) return;
+    setModelImportViewportSuspend(false);
     if (previewReloadTimer.current) window.clearTimeout(previewReloadTimer.current);
     previewReloadTimer.current = window.setTimeout(() => {
-      void preview.loadModelAt(root);
+      void (async () => {
+        try {
+          await preview.loadModelAt(root);
+          preview.requestCameraFit();
+        } catch (error) {
+          console.error("Failed to reload unit model preview after package mutation", error);
+          toast.error("Preview reload failed", { description: String(error) });
+        }
+      })();
     }, 200);
-  }, [preview, workspace.activeRoot]);
+  }, [preview, workspace.activeRoot, setModelImportViewportSuspend]);
 
   const handleEditorSaved = useCallback(
     (savedAbsPath: string) => {
@@ -395,7 +397,6 @@ function UnitModelEditWorkspace({
         onValidate={() => void workspace.runValidation()}
         onRepack={workspace.openRepackDialog}
         onCopyReviewPayload={() => void workspace.copyReviewPayload()}
-        onOpenDaeExchange={() => setDaeExchangeOpen(true)}
         onExportDae={openDaeExportDialog}
         showGrid={preview.showGrid}
         showAxes={preview.showAxesGizmo}
@@ -503,12 +504,6 @@ function UnitModelEditWorkspace({
         </ResizablePanel>
       </ResizablePanelGroup>
 
-      <UnitModelDaeExchangeModal
-        open={daeExchangeOpen}
-        onClose={() => setDaeExchangeOpen(false)}
-        onViewportSuspendChange={setDaeModalViewportSuspend}
-      />
-
       <DaeExportDialog
         open={daeExportDialog.open}
         targets={daeExportDialog.targets}
@@ -545,8 +540,6 @@ export default function UnitModelEdit() {
   const [unitRoot, setUnitRoot] = useState<string | null>(null);
   const [structureJson, setStructureJson] = useState<unknown | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
-  const [daeExchangeOpen, setDaeExchangeOpen] = useState(false);
-  const [daeModalViewportSuspend, setDaeModalViewportSuspend] = useState(false);
   const [modelImportViewportSuspend, setModelImportViewportSuspend] = useState(false);
   const isPageActive = useIsKeepAliveRouteActive(UNIT_MODEL_EDIT_ROUTE_URL);
 
@@ -576,8 +569,7 @@ export default function UnitModelEdit() {
     };
   }, [unitRoot, reloadTick]);
 
-  const previewSuspended =
-    !isPageActive || daeModalViewportSuspend || modelImportViewportSuspend;
+  const previewSuspended = !isPageActive || modelImportViewportSuspend;
 
   return (
     <SsbhModelPreviewProvider workspaceRoot={unitRoot} previewSuspended={previewSuspended}>
@@ -588,9 +580,6 @@ export default function UnitModelEdit() {
             onUnitRootChange={setUnitRoot}
             structureJson={structureJson}
             onStructureMutated={() => setReloadTick((t) => t + 1)}
-            daeExchangeOpen={daeExchangeOpen}
-            setDaeExchangeOpen={setDaeExchangeOpen}
-            setDaeModalViewportSuspend={setDaeModalViewportSuspend}
             setModelImportViewportSuspend={setModelImportViewportSuspend}
           />
         </div>

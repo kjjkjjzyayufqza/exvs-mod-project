@@ -12,7 +12,6 @@ import {
   PackageOpen,
   RefreshCw,
   RotateCcw,
-  Upload,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,7 +43,6 @@ type UnitModelToolbarProps = {
   onValidate: () => void;
   onRepack: () => void;
   onCopyReviewPayload: () => void;
-  onOpenDaeExchange: () => void;
   onExportDae: () => void;
   showGrid: boolean;
   showAxes: boolean;
@@ -73,7 +71,6 @@ export function UnitModelToolbar({
   onValidate,
   onRepack,
   onCopyReviewPayload,
-  onOpenDaeExchange,
   onExportDae,
   showGrid,
   showAxes,
@@ -155,22 +152,6 @@ export function UnitModelToolbar({
       </Tooltip>
 
       <Separator orientation="vertical" className="mx-0.5 h-4" />
-
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={onOpenDaeExchange}
-            disabled={isBusy}
-            aria-label="Import DAE or FBX to SSBH"
-          >
-            <Upload className="h-3.5 w-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">Import DAE / FBX to SSBH</TooltipContent>
-      </Tooltip>
 
       <Tooltip>
         <TooltipTrigger asChild>

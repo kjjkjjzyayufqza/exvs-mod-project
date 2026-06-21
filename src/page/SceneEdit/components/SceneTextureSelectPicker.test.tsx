@@ -203,6 +203,35 @@ describe("SceneTextureSelectPicker", () => {
     expect(screen.queryByText("fog_lut")).not.toBeInTheDocument();
   });
 
+  it("renders a scrollable dropdown when the filtered list exceeds the menu height", async () => {
+    useSceneTextureManagerStore.getState().setEntries(
+      Array.from({ length: 40 }, (_, index) =>
+        makeEntry({
+          id: `tex-${index + 1}`,
+          filename: `stage_tex_${String(index + 1).padStart(3, "0")}.nutexb`,
+        }),
+      ),
+    );
+
+    render(
+      <SceneTextureSelectPicker
+        value=""
+        paramId="Texture1"
+        onChange={() => {}}
+      />,
+    );
+
+    act(() => {
+      fireEvent.focus(screen.getByRole("combobox"));
+    });
+
+    const listbox = await screen.findByRole("listbox");
+    const menu = listbox.parentElement;
+    expect(menu).not.toBeNull();
+    expect(menu).toHaveClass("overflow-y-auto");
+    expect(menu?.style.maxHeight).not.toBe("");
+  });
+
   it("matches and commits the basename when the user enters a full nutexb path", async () => {
     useSceneTextureManagerStore.getState().setEntries([
       makeEntry({ id: "atlas", filename: "atlas_66bdf54d_0.nutexb" }),

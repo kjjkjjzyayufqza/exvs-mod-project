@@ -12,7 +12,6 @@ import { Check, ChevronsUpDown } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useSceneTextureManagerStore } from "../store/sceneTextureManagerStore";
 import { useNumatbTextureOptionsOverride } from "@/components/ssbh-model-preview/numatbTextureOptionsContext";
@@ -227,21 +226,21 @@ export function SceneTextureSelectPicker({
               onMouseDown={() => setOpen(false)}
             />
             <div
-              className="fixed z-[var(--z-popover)] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md"
+              className="fixed z-[var(--z-popover)] overflow-y-auto overscroll-contain rounded-md border bg-popover text-popover-foreground shadow-md"
               style={{
                 top: menuPosition.top,
                 left: menuPosition.left,
                 width: menuPosition.width,
                 maxHeight: menuPosition.maxHeight,
               }}
+              onWheel={(event) => event.stopPropagation()}
             >
-              <ScrollArea className="h-full max-h-[inherit]">
-                <div
-                  id={listboxId}
-                  role="listbox"
-                  aria-label="Scene textures"
-                  className="p-1"
-                >
+              <div
+                id={listboxId}
+                role="listbox"
+                aria-label="Scene textures"
+                className="p-1"
+              >
                   {textureOptions.length > MAX_OPTIONS_WITHOUT_QUERY && !queryTrim && (
                     <p className="px-2 py-1 text-[10px] text-muted-foreground">
                       Showing first {MAX_OPTIONS_WITHOUT_QUERY} of{" "}
@@ -306,8 +305,7 @@ export function SceneTextureSelectPicker({
                       No additional matches.
                     </p>
                   )}
-                </div>
-              </ScrollArea>
+              </div>
             </div>
           </>,
           document.body,

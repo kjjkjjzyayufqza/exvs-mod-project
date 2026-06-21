@@ -20,6 +20,8 @@ use ssbh_data::prelude::{MeshData, ModlData, SkelData};
 use crate::format::fhm2d::SubFileStructureEntry;
 use crate::jnttbl_format::parse_jnttbl_bytes;
 
+const UNIT_MODEL_BASE_MATERIAL_VARIANT: i32 = 1;
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UnitModelMutationResult {
@@ -956,8 +958,8 @@ pub fn add_unit_model_model(
         name: Some(source.model_name.clone()),
     });
 
-    for (i, numatb_path) in source.numatbs.iter().enumerate() {
-        let variant = (i + 1) as i32;
+    for numatb_path in &source.numatbs {
+        let variant = UNIT_MODEL_BASE_MATERIAL_VARIANT;
         let refs = numatb_texture_refs(numatb_path)?;
         let mut container_children = Vec::new();
         for tex_name in &refs {
@@ -1313,8 +1315,8 @@ pub fn replace_unit_model_model(
         file_index: nusktb_fi,
         name: Some(source.model_name.clone()),
     });
-    for (i, numatb_path) in source.numatbs.iter().enumerate() {
-        let variant = (i + 1) as i32;
+    for numatb_path in &source.numatbs {
+        let variant = UNIT_MODEL_BASE_MATERIAL_VARIANT;
         let refs = numatb_texture_refs(numatb_path)?;
         let mut container_children = Vec::new();
         for tex_name in &refs {
@@ -2415,11 +2417,11 @@ mod tests {
                     name: Some("alpha__maya__".into()),
                 },
                 Node::Folder {
-                    entry: make_folder(32, 2),
+                    entry: make_folder(32, 1),
                     children: vec![],
                 },
                 Node::Item {
-                    entry: make_item(5, "21000000", 2, "alpha__nust__"),
+                    entry: make_item(5, "21000000", 1, "alpha__nust__"),
                     file_index: 5,
                     name: Some("alpha__nust__".into()),
                 },
@@ -2479,6 +2481,108 @@ mod tests {
             alpha_dir,
             nuhlpb_dir,
         }
+    }
+
+    fn read_structure_tree(structure_path: &Path) -> (Node, HashMap<i32, String>) {
+        let raw = fs::read_to_string(structure_path).unwrap();
+        let value: Value = serde_json::from_str(&raw).unwrap();
+        let sub_file_data = value.get("SubFileData").and_then(Value::as_array).unwrap();
+        let ext_by_index = build_ext_by_index(sub_file_data);
+        let structure: Vec<SubFileStructureEntry> =
+            serde_json::from_value(value.get("SubFileStructure").cloned().unwrap()).unwrap();
+        let root = parse_root(&structure).unwrap();
+        (root, ext_by_index)
+    }
+
+    fn find_model_group_by_name<'a>(
+        node: &'a Node,
+        model_name: &str,
+        ext_by_index: &HashMap<i32, String>,
+    ) -> Option<&'a Node> {
+        match node {
+            Node::Item { .. } => None,
+            Node::Folder { children, .. } => {
+                if folder_has_direct_ext(node, ".numdlb", ext_by_index)
+                    && model_group_name(node, ext_by_index).as_deref() == Some(model_name)
+                {
+                    return Some(node);
+                }
+                children
+                    .iter()
+                    .find_map(|child| find_model_group_by_name(child, model_name, ext_by_index))
+            }
+        }
+    }
+
+    fn material_structure_variants_for_model(
+        root: &Node,
+        model_name: &str,
+        ext_by_index: &HashMap<i32, String>,
+    ) -> Vec<(i32, i32)> {
+        let group = find_model_group_by_name(root, model_name, ext_by_index)
+            .unwrap_or_else(|| panic!("missing model group {model_name}"));
+        let Node::Folder { children, .. } = group else {
+            panic!("model group must be a folder");
+        };
+        let mut variants = Vec::new();
+        for (index, child) in children.iter().enumerate() {
+            let Node::Folder { entry, .. } = child else {
+                continue;
+            };
+            let folder_variant = match entry {
+                SubFileStructureEntry::Folder { unk3, unk5, .. } if *unk3 == 32 => *unk5,
+                _ => continue,
+            };
+            let mut item_variant = None;
+            for next in children.iter().skip(index + 1) {
+                match next {
+                    Node::Item {
+                        entry, file_index, ..
+                    } if ext_by_index.get(file_index).map(String::as_str) == Some(".numatb") => {
+                        if let SubFileStructureEntry::Item { unk3, .. } = entry {
+                            item_variant = Some(*unk3);
+                        }
+                        break;
+                    }
+                    Node::Folder { entry, .. } => {
+                        if matches!(entry, SubFileStructureEntry::Folder { unk3: 32, .. }) {
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            variants.push((
+                folder_variant,
+                item_variant.unwrap_or_else(|| {
+                    panic!("texture container in {model_name} has no paired numatb")
+                }),
+            ));
+        }
+        variants
+    }
+
+    #[test]
+    fn add_writes_base_material_variants_for_maya_and_nust() {
+        let parent = tempfile::tempdir().unwrap();
+        let fixture = write_replace_fixture(parent.path());
+        let beta = tempfile::tempdir().unwrap();
+        write_min_source(beta.path(), "beta");
+
+        let result = add_unit_model_model(
+            fixture.root.to_string_lossy().as_ref(),
+            Some(fixture.structure_path.to_string_lossy().as_ref()),
+            beta.path().to_string_lossy().as_ref(),
+        )
+        .expect("add should succeed");
+
+        assert_eq!(result.model_count, 2, "new model appended");
+        let (root, ext_by_index) = read_structure_tree(&fixture.structure_path);
+        assert_eq!(
+            material_structure_variants_for_model(&root, "beta", &ext_by_index),
+            vec![(1, 1), (1, 1)],
+            "maya and base nust material pairs both use base profile variant"
+        );
     }
 
     #[test]
@@ -2549,6 +2653,11 @@ mod tests {
             count_model_groups(&reparsed, &ext),
             1,
             "still one model group"
+        );
+        assert_eq!(
+            material_structure_variants_for_model(&reparsed, "alpha", &ext),
+            vec![(1, 1), (1, 1)],
+            "replace must not write the second base material pair as variant 2"
         );
     }
 
