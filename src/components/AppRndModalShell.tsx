@@ -1,17 +1,21 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   type ComponentProps,
   type MouseEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { Rnd } from "react-rnd";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { getFloatingWindowLayer } from "@/components/floatingWindowLayer";
+import { useFloatingWindowStore } from "@/store/floatingWindowStore";
 
 const APP_RND_MODAL_HANDLE = "app-rnd-modal-handle";
 const VIEWPORT_MARGIN = 24;
@@ -214,8 +218,28 @@ export function AppRndModalShell({
 
   const { maxWidth, maxHeight } = resolveMaxDimensions(stableDimensions);
 
-  return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 top-[var(--layout-topbar-height)] z-[var(--z-modal)]">
+  // Participate in the app-wide floating-window z-order (shared with the SSBH editor windows),
+  // so clicking any window raises it above the rest.
+  const bringToFront = useFloatingWindowStore((state) => state.bringToFront);
+  const release = useFloatingWindowStore((state) => state.release);
+  const storedZ = useFloatingWindowStore((state) => state.zById[titleId]);
+  const isActive = useFloatingWindowStore((state) => state.topId === titleId);
+
+  useLayoutEffect(() => {
+    bringToFront(titleId);
+    return () => release(titleId);
+  }, [titleId, bringToFront, release]);
+
+  const raise = useCallback(() => {
+    bringToFront(titleId);
+  }, [bringToFront, titleId]);
+
+  return createPortal(
+    <div
+      className="pointer-events-none absolute inset-0"
+      style={{ zIndex: storedZ ?? 0 }}
+      onPointerDownCapture={raise}
+    >
       <Rnd
         size={size}
         position={position}
@@ -255,11 +279,19 @@ export function AppRndModalShell({
           aria-modal="true"
           aria-labelledby={titleId}
           tabIndex={-1}
-          className={cn("flex h-full min-h-0 flex-col overflow-hidden border shadow-2xl", className)}
+          data-active={isActive ? "true" : "false"}
+          className={cn(
+            "flex h-full min-h-0 flex-col overflow-hidden border transition-shadow duration-200",
+            isActive
+              ? "border-primary/40 shadow-2xl ring-1 ring-primary/20"
+              : "border-border/60 opacity-[0.97] shadow-lg",
+            className,
+          )}
         >
           <div
             className={cn(
-              "flex shrink-0 cursor-grab select-none items-center justify-between border-b bg-linear-to-r from-muted/80 to-muted/40 px-4 py-3 active:cursor-grabbing",
+              "flex shrink-0 cursor-grab select-none items-center justify-between border-b bg-linear-to-r px-4 py-3 transition-colors duration-200 active:cursor-grabbing",
+              isActive ? "from-muted/80 to-muted/40" : "from-muted/40 to-muted/15",
               APP_RND_MODAL_HANDLE,
             )}
           >
@@ -300,6 +332,7 @@ export function AppRndModalShell({
           {footer ? <div className="shrink-0 border-t">{footer}</div> : null}
         </Card>
       </Rnd>
-    </div>
+    </div>,
+    getFloatingWindowLayer(),
   );
 }

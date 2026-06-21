@@ -1,17 +1,21 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useState,
   type ComponentProps,
   type MouseEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { Rnd } from "react-rnd";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { getFloatingWindowLayer } from "@/components/floatingWindowLayer";
+import { useFloatingWindowStore } from "@/store/floatingWindowStore";
 import { useSceneModalViewportSuspendInteraction } from "../hooks/useSceneModalViewportSuspendInteraction";
 import {
   SCENE_EDIT_RND_DRAG_HANDLE,
@@ -40,6 +44,8 @@ export type ModalViewportSuspendInteraction = {
 type SceneEditRndModalShellProps = {
   cascadeIndex: number;
   zIndex: number;
+  /** Stable unique id for app-wide z-ordering. Defaults to titleId. */
+  windowId?: string;
   titleId: string;
   title: string;
   subtitle: string;
@@ -60,6 +66,7 @@ type SceneEditRndModalShellProps = {
 export function SceneEditRndModalShell({
   cascadeIndex,
   zIndex,
+  windowId,
   titleId,
   title,
   subtitle,
@@ -78,6 +85,26 @@ export function SceneEditRndModalShell({
   const sceneViewportSuspend = useSceneModalViewportSuspendInteraction();
   const { startViewportSuspend, stopViewportSuspend, onDragHandlePointerDownCapture } =
     viewportSuspend ?? sceneViewportSuspend;
+
+  // App-wide z-order. Every floating window shares one monotonic counter and one DOM layer, so
+  // clicking any window (regardless of editor kind) raises it above all others (Windows-style).
+  const resolvedWindowId = windowId ?? titleId;
+  const bringToFront = useFloatingWindowStore((state) => state.bringToFront);
+  const release = useFloatingWindowStore((state) => state.release);
+  const storedZ = useFloatingWindowStore((state) => state.zById[resolvedWindowId]);
+  const isActive = useFloatingWindowStore((state) => state.topId === resolvedWindowId);
+
+  useLayoutEffect(() => {
+    bringToFront(resolvedWindowId);
+    return () => release(resolvedWindowId);
+  }, [resolvedWindowId, bringToFront, release]);
+
+  const raise = useCallback(() => {
+    bringToFront(resolvedWindowId);
+  }, [bringToFront, resolvedWindowId]);
+
+  // Fall back to the caller-provided z only for the first paint before registration lands.
+  const effectiveZ = storedZ ?? zIndex;
   const [constraints, setConstraints] = useState(getDimensions);
   const [size, setSize] = useState(() => {
     const dims = getDimensions();
@@ -162,10 +189,11 @@ export function SceneEditRndModalShell({
     [getDimensions, sizeStorageKey, stopViewportSuspend],
   );
 
-  return (
+  return createPortal(
     <div
       className="pointer-events-none absolute inset-0"
-      style={{ zIndex }}
+      style={{ zIndex: effectiveZ }}
+      onPointerDownCapture={raise}
     >
       <Rnd
         size={size}
@@ -204,11 +232,18 @@ export function SceneEditRndModalShell({
           aria-modal="true"
           aria-labelledby={titleId}
           tabIndex={-1}
-          className="flex h-full min-h-0 flex-col overflow-hidden border shadow-2xl"
+          data-active={isActive ? "true" : "false"}
+          className={cn(
+            "flex h-full min-h-0 flex-col overflow-hidden border transition-shadow duration-200",
+            isActive
+              ? "border-primary/40 shadow-2xl ring-1 ring-primary/20"
+              : "border-border/60 opacity-[0.97] shadow-lg",
+          )}
         >
           <div
             className={cn(
-              "flex shrink-0 items-center justify-between border-b bg-linear-to-r from-muted/80 to-muted/40 px-4 py-3 select-none",
+              "flex shrink-0 items-center justify-between border-b px-4 py-3 select-none bg-linear-to-r transition-colors duration-200",
+              isActive ? "from-muted/80 to-muted/40" : "from-muted/40 to-muted/15",
               SCENE_EDIT_RND_DRAG_HANDLE,
               "cursor-grab active:cursor-grabbing",
             )}
@@ -252,6 +287,7 @@ export function SceneEditRndModalShell({
           {footer ? <div className="shrink-0 border-t">{footer}</div> : null}
         </Card>
       </Rnd>
-    </div>
+    </div>,
+    getFloatingWindowLayer(),
   );
 }
