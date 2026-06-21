@@ -19,6 +19,7 @@
 | N-EXTREME Gundam Explosion | `59001001` | `0x693F756D` | `0x38C44F75` | `E:\XB\解包\com\file\040msc\0x693F756D` | `E:\XB\解包\com\file\041cpm\0x38C44F75` |
 | Gundam AGE-FX | `33004001` | `0x605245CC` | `0x31A97FD4` | `E:\XB\解包\com\file\040msc\0x605245CC` | `E:\XB\解包\com\file\041cpm\0x31A97FD4` |
 | Delta Plus | `15004001` | `0x04AD9F33` | `0x5556A52B` | `E:\XB\解包\com\file\040msc\0x04AD9F33` | `E:\XB\解包\com\file\041cpm\0x5556A52B` |
+| Hyaku Shiki | `2002001` | `0x43BB8719` | `0x1240BD01` | `E:\XB\解包\com\file\040msc\0x43BB8719` | `E:\XB\解包\com\file\041cpm\0x1240BD01` |
 | RX-78-2 Gundam | `1001001` | `0xF22E425D` | `0xA3D57845` | `E:\XB\解包\com\file\040msc\0xF22E425D` | `E:\XB\解包\com\file\041cpm\0xA3D57845` |
 | G-Self | `42001001` | `0x72CD747F` | `0x23364E67` | `E:\XB\解包\com\file\040msc\0x72CD747F` | `E:\XB\解包\com\file\041cpm\0x23364E67` |
 | Mack Knife (Mask) | `42002001` | `0xC33AA885` | `0x92C1929D` | `E:\XB\解包\com\file\040msc\0xC33AA885` | `E:\XB\解包\com\file\041cpm\0x92C1929D` |
@@ -73,18 +74,19 @@ AGE-FX: global57 = 0x6D00AEAA; func_13(); func_14(); func_135()
 - Kshatriya `0x3724E360`
 - Sinanju `0xCF8FC16A`
 - Delta Plus `0x04AD9F33`
+- Hyaku Shiki `0x43BB8719`
 - RX-78-2 `0xF22E425D`
 - G-Self `0x72CD747F`
 - Mack Knife (Mask) `0xC33AA885`
 
 识别特征：
 
-- Unicorn / Kshatriya / Sinanju / Delta Plus / RX-78-2 / G-Self / Mack Knife 的 `chrsysparam.csyspm` 都是 68 bytes。
-- 七个文件都只有两张 `1 x 1` 空表：table0 marker `0xA8BBBAB9`，table1 marker `0xA8BAA9BA`。
+- Unicorn / Kshatriya / Sinanju / Delta Plus / Hyaku Shiki / RX-78-2 / G-Self / Mack Knife 的 `chrsysparam.csyspm` 都是 68 bytes。
+- 八个文件都只有两张 `1 x 1` 空表：table0 marker `0xA8BBBAB9`，table1 marker `0xA8BAA9BA`。
 - `0.c` 没有 `0x700000/1/2` 调用。
 - `2.c` 没有 `0x700000/1/2` 调用。
 - `0.c func_144()` 直接注册 17 个固定 `hash -> callback`：`sys_1(0x10002, 0x1, hash, func_N)`。
-- RX、Unicorn、Kshatriya、Sinanju、Delta Plus、G-Self、Mack Knife 的 `func_144()` 源码逐字相同，均含 17 个非零 callback 加一条 zero row。
+- RX、Unicorn、Kshatriya、Sinanju、Delta Plus、Hyaku Shiki、G-Self、Mack Knife 的 `func_144()` 源码逐字相同，均含 17 个非零 callback 加一条 zero row。
 
 历史 `0xBDBE6FEA` 目录仍保留相同 registry 形状，但其当前 `2.c/2.dscex` 含 2026-06-19 Delta Kai AI patch，且当前源库没有对应 FHM2D。它只作为 semantic reference，不再作为未经修改的官方版本证据。
 
@@ -163,7 +165,7 @@ unit behavior layer
 - `0.c` 类似 input/category adapter 与 action request dispatcher。
 - `2.c` 前中段类似共享 character controller/runtime framework。
 - `2.c` 后段 callback 类似单位状态、武器、形态和表现层脚本。
-- `1.c` 在十一个当前真实源样本中完全相同，仍是 6 函数 / 34 行 glue stub。
+- `1.c` 在十三个当前真实源样本中完全相同，仍是 6 函数 / 34 行 glue stub。
 
 ## RX-78-2：classic selector 的直接闭环
 
@@ -268,6 +270,43 @@ WR mode:   slot0/1/2 = 0x377D1397 / 0xF100A0DA / 0x1799C911
 觉醒技后续 `0x99A7A777` 的 `func_958/959` 临时切到 `0x0577EF6D`，`func_960` 再恢复 normal。
 完整 selector、transform loadout、projectile row 与 wiki 边界见
 [15004001 Delta Plus](units/15004001-delta-plus/README.md)。本结论没有使用 generated JSON。
+
+## Hyaku Shiki：classic selector 的 Dodai flight mode 闭环
+
+Hyaku Shiki 是 `2002001 / 0x43BB8719 + 0x1240BD01`。它同样是
+68-byte empty `chrsysparam`，但 `0.c` 通过 common transform slots
+`0x17/0x18/0x19` 进入飞行控制，`2.c` 再由百式自己的 slot callbacks 切 Dodai
+loadout 和 release projectile。
+
+直接 `.c + raw Param` 链：
+
+```text
+0.c func_71/72/106/124
+  -> action 0x9475130E
+  -> 2.c func_450
+  -> slot 0x23 / func_874
+  -> func_1085(1)
+  -> global143 = 2
+  -> flying arms rows 0x7C7E8E4C / 0x45FA9DE8 / 0x824A521A / 0x0C205B60
+
+flight loop:
+  0x77B100FF -> func_452/453
+  -> speed row 0xC2B19D12
+  -> yaw / pitch / side movement through sys_46
+
+release:
+  0xA02D57DC -> func_464
+  -> slot 0x25 / func_876
+  -> func_1084(...)
+  -> Dodai projectile rows 0xBE7CA2EF / 0x3CBC54AC / 0xDFD91DB9
+  -> func_1085(0) restores normal loadout
+```
+
+`func_1086` sets `global143=1` for revival, switches to speed row `0xC67DA7B2`,
+and disables `0x9475130E / 0x77B100FF / 0xA02D57DC` with `func_241(hash,0)`.
+这与 wiki 的复活后无变形一致。完整证据见
+[2002001 Hyaku Shiki](units/2002001-hyaku-shiki/README.md)。本结论没有使用
+generated JSON。
 
 ## G-Self：classic selector 的四形态换装桥
 

@@ -74,6 +74,8 @@ Character ID Table 只用于定位源资源：`id` 对应机体，`Msc` / `Param
 |---|---:|---|---|---|
 | Gundam AGE-FX | `33004001` | `0x605245CC` | `0x31A97FD4` | MSC + Param 解包、0/1/2 反编译、group 摘要与 NEXA registry/field 语义对照完成 |
 | Delta Plus | `15004001` | `0x04AD9F33` | `0x5556A52B` | MSC + Param 解包、0/1/2 反编译；主射/手动装填/CS/副射/变形主射/变形副射/变形特射已连到 raw Param row |
+| Hyaku Shiki | `2002001` | `0x43BB8719` | `0x1240BD01` | fresh MSC + Param 解包；0/1/2 直接读码；Dodai flight mode 的进入 gate、持续飞行控制、loadout、release projectile 与复活禁变形已连到 raw Param |
+| Dijeh | `2018001` | `0x660B7580` | `0x37F04F98` | fresh MSC + Param 解包；0/1/2 直接读码；48-row external action table 加本地 Dodai transform slots 的 hybrid 架构、riding loadout 与 release projectile 已连到 raw Param |
 | Kshatriya | `15002001` | `0x3724E360` | `0x66DFD978` | fresh MSC + Param 解包；普通态/Besserung 状态轴、5-to-3 loadout、character/speed 双行切换和 98/98 projectile literal bridge 已直接读码 |
 | RX-78-2 Gundam | `1001001` | `0xF22E425D` | `0xA3D57845` | fresh MSC + Param 解包；0/1/2 直接读码；主射、CS、Bazooka、assist、Hammer、Beam Javelin 三段、Last Shooting projectile 段已连到 Param row；另完成 MBON-derived legacy 1011 同机体对比 |
 | G-Self | `42001001` | `0x72CD747F` | `0x23364E67` | fresh MSC + Param 解包；0/1/2 直接读码；Space / Reflector / Assault 四状态候选与 Assault Pack 多弹体族已连到 raw Param |
@@ -148,7 +150,7 @@ python tools\msclang.py "<script.c>" -o "<script.mscsb>" -i
 ## 首批实际产物
 
 当前持续使用 `src-tauri/src/bin/fhm2d_extract_folder.rs` 调用现有 Rust FHM2D 解包函数；
-十二个真实源样本均已完成 `0/1/2` 解包、反编译和源码快照记录。
+十四个真实源样本均已完成 `0/1/2` 解包、反编译和源码快照记录。
 
 解包与反编译输出：
 
@@ -159,6 +161,8 @@ python tools\msclang.py "<script.c>" -o "<script.mscsb>" -i
 | `0x693F756D` | `E:\XB\解包\com\file\040msc\0x693F756D` | `0.bscex`, `1.cscex`, `2.dscex` | `0.c`, `1.c`, `2.c`, `0.txt`, `1.txt`, `2.txt` |
 | `0x605245CC` | `E:\XB\解包\com\file\040msc\0x605245CC` | `0.bscex`, `1.cscex`, `2.dscex` | `0.c`, `1.c`, `2.c` |
 | `0x04AD9F33` | `E:\XB\解包\com\file\040msc\0x04AD9F33` | `0.bscex`, `1.cscex`, `2.dscex` | `0.c`, `1.c`, `2.c` |
+| `0x43BB8719` | `E:\XB\解包\com\file\040msc\0x43BB8719` | `0.bscex`, `1.cscex`, `2.dscex` | `0.c`, `1.c`, `2.c` |
+| `0x660B7580` | `E:\XB\解包\com\file\040msc\0x660B7580` | `0.bscex`, `1.cscex`, `2.dscex` | `0.c`, `1.c`, `2.c` |
 | `0x3724E360` | `E:\XB\解包\com\file\040msc\0x3724E360` | `0.bscex`, `1.cscex`, `2.dscex` | `0.c`, `1.c`, `2.c` |
 | `0xF22E425D` | `E:\XB\解包\com\file\040msc\0xF22E425D` | `0.bscex`, `1.cscex`, `2.dscex` | `0.c`, `1.c`, `2.c` |
 | `0x72CD747F` | `E:\XB\解包\com\file\040msc\0x72CD747F` | `0.bscex`, `1.cscex`, `2.dscex` | `0.c`, `1.c`, `2.c` |
@@ -183,6 +187,8 @@ E:\XB\解包\com\file\041cpm\0x9E74FB72  # Sinanju
 E:\XB\解包\com\file\041cpm\0x38C44F75  # NEXA-N
 E:\XB\解包\com\file\041cpm\0x31A97FD4  # AGE-FX
 E:\XB\解包\com\file\041cpm\0x5556A52B  # Delta Plus
+E:\XB\解包\com\file\041cpm\0x1240BD01  # Hyaku Shiki
+E:\XB\解包\com\file\041cpm\0x37F04F98  # Dijeh
 E:\XB\解包\com\file\041cpm\0x66DFD978  # Kshatriya
 E:\XB\解包\com\file\041cpm\0xA3D57845  # RX-78-2
 E:\XB\解包\com\file\041cpm\0x23364E67  # G-Self
@@ -201,6 +207,8 @@ E:\XB\解包\com\file\041cpm\0x682678AF  # Darilbalde
 | NEXA-N | `28224` | `55 x 128` | external Param action-table |
 | AGE-FX | `38744` | `72 x 128` | external Param action-table |
 | Delta Plus | `68` | `1 x 1` empty | classic local selector |
+| Hyaku Shiki | `68` | `1 x 1` empty | classic local selector |
+| Dijeh | `24640` | `48 x 128`, rows `1..47` nonempty | hybrid: external Param action-table plus local transform slots |
 | Kshatriya | `68` | `1 x 1` empty | classic local selector |
 | RX-78-2 | `68` | `1 x 1` empty | classic local selector |
 | G-Self | `68` | `1 x 1` empty | classic local selector |
@@ -224,6 +232,19 @@ Delta Plus 进一步证明 classic selector 也能承载 WR / transform loadout�
 `global20 & 0x4000` 分支选择 `0x91CE1EFC / 0x3470C0CF / 0x9C05B42D`，`2.c func_1037/1038`
 在 `0x1486A84F/0x10B251B4/0xA8E202BF` 与 `0x377D1397/0xF100A0DA/0x1799C911` 两套
 raw arms rows 间切换，代表 projectile 已命中 `bulletparam.bin` rows。
+Hyaku Shiki 进一步证明 classic selector 也能承载“站在飞行器上”的 sub-flight
+system：`0.c func_71/72/106/124` 负责 transform entry gate 与方向缓存，`2.c
+func_450/452/464` 复用 common transform controller，百式自己的 `func_874/875/876`
+和 `func_1084/1085/1086` 负责 Dodai riding bit、flying arms rows、三种 Dodai
+release projectile 和复活态禁变形。完整证据见
+[2002001 Hyaku Shiki](units/2002001-hyaku-shiki/README.md)。
+Dijeh 则证明同一 Dodai / sub-flight common transform controller 可以挂在 external
+action-table 样本上：`chrsysparam` table0 有 48 行，但飞行核心 hash
+`0x9475130E/0x77B100FF/0xA02D57DC` 不在表内，而是由本地 slot
+`0x17/0x18/0x19` 进入 `func_450/452/464`；单位差异由
+`func_1118/1119/1120/1185/1186/1187/1188` 绑定 `global143=1` riding loadout 和
+release projectile `0x86D28C63`。完整证据见
+[2018001 Dijeh](units/2018001-dijeh/README.md)。
 G-Self 进一步证明 classic selector 也能承载密集的换装状态桥：
 `0.c func_143` 按 `global39 == 0/1/2/3` 选择四套 action hash，`2.c func_1125/1127/1128/1130`
 分别重装 slot 0..4 arms rows、`characterparam` row 和 `speedparam` row。`func_1146` 还用
@@ -271,7 +292,7 @@ resource list
   -> Msc/2.c group resolver and phase callbacks
 ```
 
-早期“旧式都内嵌 B4AC、新式都依赖 chrsysparam”的假设已被当前硬盘样本修正。RX、Unicorn、Kshatriya、Sinanju、Delta Plus、G-Self、Mack Knife 都是 classic local selector；NEXA-N、AGE-FX、Gundam Aerial、Gundam Pharact、Darilbalde 是 external Param action-table；只有独立 [legacy 1011 对照](units/1001001-rx-78-2/legacy-1011-vs-ob-v27.md) 命中 embedded B4AC。该文件是 MBON-derived、FB-compatible 且含 XB-style Burst 改造的混合代码，不是 clean official build。跨机体比较不能只做 `2.c` diff，必须同步记录：
+早期“旧式都内嵌 B4AC、新式都依赖 chrsysparam”的假设已被当前硬盘样本修正。RX、Unicorn、Kshatriya、Sinanju、Delta Plus、Hyaku Shiki、G-Self、Mack Knife 都是 classic local selector；NEXA-N、AGE-FX、Gundam Aerial、Gundam Pharact、Darilbalde 是 external Param action-table；Dijeh 是 external action-table 加本地 transform slots 的 hybrid；只有独立 [legacy 1011 对照](units/1001001-rx-78-2/legacy-1011-vs-ob-v27.md) 命中 embedded B4AC。该文件是 MBON-derived、FB-compatible 且含 XB-style Burst 改造的混合代码，不是 clean official build。跨机体比较不能只做 `2.c` diff，必须同步记录：
 
 - Character ID row
 - Msc hash
@@ -316,6 +337,7 @@ docs/msc-research/units/<character-id>-<short-name>/
 - Kshatriya 已完成普通态/Besserung selector、5-to-3 arms loadout、character/speed 双行切换、普通态主要射击族和 98/98 literal bullet bridge；下一步拆 native revival event、Besserung 精确武装语义与 24-row all-fire family。
 - Sinanju 已完成 classic local selector 的 fixed input hash -> callback -> unit behavior 代表对齐；下一步拆 awakening N/back precise split、Rozen Zulu summon payload 与 slot 4 gauge native 绑定。
 - Delta Plus 已完成 classic selector 的主射、手动装填、CS、副射、变形主射/副射/特射与 speed row 代表闭环；下一步拆 Jesta `sys_51` payload、Waverider rush hitbox 与觉醒技全段。
+- Dijeh 已完成 hybrid action-table + local Dodai transform slots 的代表闭环；下一步把 48-row external table 的普通/变形武装逐个连到 wiki 语义和 raw Param。
 - RX-78-2 已完成 fresh source 抽取和 classic selector 代表链；Beam Javelin 三段 charge 已连到 bullet row `0/14/25`，Last Shooting projectile 段已连到 row `27/2`。继续追 Last Shooting melee 起手 damage runtime、Javelin slow debuff 归因、assist arms entry 到 slot 2 的 native 初始化路径。
 - G-Self 已完成 fresh source 抽取和 classic selector 代表链；四个 `global39` 状态、slot loadout、CS 到 Assault state、state 3 多弹体 rows 与 `global776` resource count 已连到 raw Param。下一步追 motion/resource 名称并区分 Reflector stored/deployed。
 - Mack Knife 已完成 fresh source 抽取和 classic selector 代表链；`global39 == 0/1`、slot 1/2 loadout、normal / Long-Range Booster speed row 与三类射击候选链已连到 raw Param。下一步追 `func_921`/`0x1000`、方向特射、Plasma Claw interaction/hitgroup 与 slot 0 native 初始化。

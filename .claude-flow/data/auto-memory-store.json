@@ -34,5 +34,17 @@
       "quality": 0.85
     },
     "createdAt": 1780335628732
+  },
+  {
+    "id": "task-unit-model-export-ux-fixes",
+    "key": "unit-model-export-ux-fixes",
+    "content": "Task completed: unit-model-export-ux-fixes",
+    "namespace": "tasks",
+    "type": "task-outcome",
+    "metadata": {
+      "success": true,
+      "quality": 0.85
+    },
+    "createdAt": 1782056042213
   }
 ]

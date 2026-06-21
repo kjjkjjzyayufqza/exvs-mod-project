@@ -21,7 +21,7 @@
 | 解释动作、射击、格斗、镜头、移动、BD 等复杂系统 | `0c-to-2c-input-action-boundary.md`、`resource-control-surface-for-modders.md`、`system-control-surface-matrix.md`、`2c-source-proof-walkthrough-for-modders.md`、`msc-modder-operating-manual.md`、`2c-key-function-atlas-for-patching.md`、`modder-human-flow-overview.md`、`modder-worked-traces.md`、`2c-function-responsibility-proof-handbook.md`、`modding-system-cards-handbook.md`、`modding-walkthroughs-action-to-patch-points.md`、`2c-frame-lifecycle-human-trace.md`、runtime map、cookbook、practical guide、`movement-bd-modding-workbook.md`、movement / BD 文档、`sys_46` 参数地图、`func_11` / `0xc000*` 状态槽地图 | 脚本侧已能指导实战，新增 `0.c -> 2.c` 边界、资源层 patch 指南、控制面矩阵和源码证据走读，把每个系统落到真实行号、输入/action selector、资源层、脚本层、syscall 层和验证点；movement / gate native 仍需深化 |
 | 使用 Notion MCP 记录的经验 | `notion-msc-cross-reference.md`，本轮重新 fetch Notion 页面并用于 `sys_46/global172` 说明 | 已覆盖 |
 | 使用 OverBoost wiki 熟悉游戏操作系统 | cookbook 和 movement 文档引用系统页、初心者指南、用语集 | 已覆盖外部语义 |
-| 解决 offset / `func_N` 变化后命名失效 | `2c-function-role-map-for-modders.md`、十二台真实源样本 `.c`、action hash、callback shape、Param row 与 resource 输出 | 已完成第二轮跨样本验证：十二台共享 25 个 handler hash；Aerial/Pharact/Darilbalde 的 `0.c/1.c` 完全相同但单位 action graph 不同，Kshatriya 又证明相同 field `0x17` 可承载不同形态机制，因此必须回到当前 `.c + raw Param`，不能靠旧 overlay 或单独 action hash |
+| 解决 offset / `func_N` 变化后命名失效 | `2c-function-role-map-for-modders.md`、十三台真实源样本 `.c`、action hash、callback shape、Param row 与 resource 输出 | 已完成第二轮跨样本验证：十三台共享 25 个 handler hash；Aerial/Pharact/Darilbalde 的 `0.c/1.c` 完全相同但单位 action graph 不同，Kshatriya 证明相同 field `0x17` 可承载不同形态机制，Hyaku Shiki 又证明 common transform controller 需要回到本机 slot callback 与 raw Dodai rows 才能解释，因此必须回到当前 `.c + raw Param`，不能靠旧 overlay 或单独 action hash |
 
 ## 目前已经能支撑模组开发的部分
 
@@ -223,7 +223,7 @@ Param 证据：
 
 ### 4. 上游原始输入与 native selector
 
-当前十二台样本已经把 `0.c` 纳入主证据链。classic 样本可直接读取固定 input/action
+当前十三台样本已经把 `0.c` 纳入主证据链。classic 样本可直接读取固定 input/action
 selector；external-table 样本可读取 `func_143 -> sys_41 -> row index -> func_145`。
 因此“只看 `2.c` 不知道 action 从哪里来”的缺口已部分关闭，但仍不能单靠脚本证明：
 
@@ -247,7 +247,7 @@ global48/global49/global92/global140
 ### 5. 直接 `.c` 的跨样本验证
 
 当前已完成 Unicorn、Kshatriya、Sinanju、NEXA-N、AGE-FX、Delta Plus、RX-78-2、G-Self、
-Mack Knife、Gundam Aerial、Gundam Pharact、Darilbalde 十二台真实源样本的验证：
+Mack Knife、Hyaku Shiki、Gundam Aerial、Gundam Pharact、Darilbalde 十三台真实源样本的验证：
 
 - `func_N` 漂移后，25 个共享 nonzero action handler hash 仍稳定。
 - Aerial、Pharact、Darilbalde 的 `0.c/1.c` 完全相同，但 `2.c`、external rows、resolver、

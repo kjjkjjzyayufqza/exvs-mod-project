@@ -44,7 +44,7 @@ import {
   Vector2,
   Vector3,
 } from "three";
-import type { BufferGeometry, Texture } from "three";
+import type { BufferGeometry, Object3D, Texture } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { StageOrbitControls } from "@/components/viewport/StageOrbitControls";
 import { ViewportMarqueeOverlay } from "@/components/viewport/ViewportMarqueeOverlay";
@@ -240,6 +240,12 @@ type SsbhModelCanvasProps = {
   viewportControls?: "default" | "unreal";
   onViewportSelectInstance?: ViewportSelectHandler;
   onViewportSelectInstances?: ViewportMultiSelectHandler;
+  /** Optional bridge for unit-model / batch FBX export from preview instance groups. */
+  exportHandleRef?: MutableRefObject<SsbhModelCanvasExportHandle | null>;
+};
+
+export type SsbhModelCanvasExportHandle = {
+  getExportObjectsByInstanceId: () => ReadonlyMap<string, { object: Object3D }>;
 };
 
 function MotionCameraController({
@@ -1037,6 +1043,7 @@ const Scene = memo(function Scene({
   onViewportSelectInstances,
   viewportPickRefs,
   onMarqueeRectChange,
+  exportHandleRef,
 }: Omit<
   SsbhModelCanvasProps,
   | "previewSuspended"
@@ -1061,6 +1068,7 @@ const Scene = memo(function Scene({
     marqueeActiveRef: RefObject<boolean>;
   };
   onMarqueeRectChange: (rect: ScreenRect | null) => void;
+  exportHandleRef?: MutableRefObject<SsbhModelCanvasExportHandle | null>;
 }) {
   const modelRootRef = useRef<Group>(null);
   const controlsRef = useRef<OrbitControlsImpl>(null);
@@ -1152,6 +1160,23 @@ const Scene = memo(function Scene({
     return map;
   }, [draws, previewInstances, singleInstance]);
   const instanceGroupRefs = useRef<Map<string, Group>>(new Map());
+
+  useEffect(() => {
+    if (!exportHandleRef) return;
+    exportHandleRef.current = {
+      getExportObjectsByInstanceId: () => {
+        const map = new Map<string, { object: Object3D }>();
+        for (const [instanceId, group] of instanceGroupRefs.current.entries()) {
+          map.set(instanceId, { object: group });
+        }
+        return map;
+      },
+    };
+    return () => {
+      exportHandleRef.current = null;
+    };
+  }, [exportHandleRef, previewInstances]);
+
   const boneIndexByNameByInstance = useMemo(() => {
     const map = new Map<string, Map<string, number>>();
     for (const inst of previewInstances) {
@@ -1730,11 +1755,13 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
     onViewportSelectInstances,
     ...sceneProps
   } = props;
+  const canvasExportHandleRef = sceneProps.exportHandleRef;
   const {
     onViewportBoneSelectionClear,
     onBoneTransformHotkey,
     onUndoBonePose,
     onRedoBonePose,
+    exportHandleRef: _exportHandleRef,
     ...restSceneProps
   } = sceneProps;
   const isUnrealViewport = viewportControls === "unreal";
@@ -1971,6 +1998,7 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
         <FrameLoopResumeInvalidator suspended={previewSuspended} />
         <Scene
           {...restSceneProps}
+          exportHandleRef={canvasExportHandleRef}
           background={background}
           motionScrubbing={motionScrubbing}
           texturePool={texturePool}

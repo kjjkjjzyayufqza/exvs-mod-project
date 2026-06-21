@@ -1,7 +1,7 @@
-import { useCallback, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { SsbhModelCanvas } from "./SsbhModelCanvas";
+import { SsbhModelCanvas, type SsbhModelCanvasExportHandle } from "./SsbhModelCanvas";
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
 import { SsbhModelPreviewLoadingOverlay } from "./SsbhModelPreviewLoadingOverlay";
 import { SsbhModelPreviewQuickActions } from "./SsbhModelPreviewQuickActions";
@@ -10,13 +10,43 @@ import { Fhm2dMemoryPreviewModal } from "./Fhm2dMemoryPreviewModal";
 import { shouldRenderPreviewSkeletonLines } from "./ssbhPreviewSkeletonVisibility";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
-export function SsbhModelPreviewViewport({
-  viewportControls = "unreal",
-}: {
-  /** Match Scene Editor when "unreal"; legacy Blender orbit when "default". */
-  viewportControls?: "default" | "unreal";
-}) {
+export type SsbhModelPreviewViewportHandle = SsbhModelCanvasExportHandle;
+
+export const SsbhModelPreviewViewport = forwardRef<
+  SsbhModelPreviewViewportHandle,
+  {
+    /** Match Scene Editor when "unreal"; legacy Blender orbit when "default". */
+    viewportControls?: "default" | "unreal";
+    onExportObjectIdsChange?: (ids: string[]) => void;
+  }
+>(function SsbhModelPreviewViewport(
+  { viewportControls = "unreal", onExportObjectIdsChange },
+  ref,
+) {
   const p = useSsbhModelPreview();
+  const canvasExportHandleRef = useRef<SsbhModelCanvasExportHandle | null>(null);
+  useImperativeHandle(
+    ref,
+    () => ({
+      getExportObjectsByInstanceId: () =>
+        canvasExportHandleRef.current?.getExportObjectsByInstanceId() ?? new Map(),
+    }),
+    [],
+  );
+  useEffect(() => {
+    if (!onExportObjectIdsChange) return;
+    const frame = window.requestAnimationFrame(() => {
+      const ids = Array.from(canvasExportHandleRef.current?.getExportObjectsByInstanceId().keys() ?? []);
+      onExportObjectIdsChange(ids);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    onExportObjectIdsChange,
+    p.activePreviewInstanceId,
+    p.hiddenPreviewInstanceIds,
+    p.previewInstances,
+    p.previewViewMode,
+  ]);
   const motionScrubFrameRef = useRef<number | null>(null);
   const [motionScrubbing, setMotionScrubbing] = useState(false);
   const onViewportBoneSelect = useCallback(
@@ -146,6 +176,7 @@ export function SsbhModelPreviewViewport({
         <ResizablePanel defaultSize={90} minSize={45}>
           <div className="relative h-full min-h-0 px-1 pb-1">
             <SsbhModelCanvas
+              exportHandleRef={canvasExportHandleRef}
               draws={p.draws}
               textureDataMap={p.textureDataMap}
               drawMaterialBindingsByDrawKey={p.drawMaterialBindingsByDrawKey}
@@ -221,4 +252,4 @@ export function SsbhModelPreviewViewport({
       <Fhm2dMemoryPreviewModal />
     </div>
   );
-}
+});

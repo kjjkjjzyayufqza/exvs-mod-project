@@ -36,14 +36,14 @@ type UnitModelToolbarProps = {
   busy: UnitModelWorkspaceBusy;
   canUseLoadedRoot: boolean;
   canOperateOnRoot: boolean;
-  canExportDae: boolean;
+  canExportModels: boolean;
   onOpenFolder: () => void;
   onExtractFhm2d: () => void;
   onUseLoadedRoot: () => void;
   onValidate: () => void;
   onRepack: () => void;
   onCopyReviewPayload: () => void;
-  onExportDae: () => void;
+  onExportModels: () => void;
   showGrid: boolean;
   showAxes: boolean;
   wireframe: boolean;
@@ -64,14 +64,14 @@ export function UnitModelToolbar({
   busy,
   canUseLoadedRoot,
   canOperateOnRoot,
-  canExportDae,
+  canExportModels,
   onOpenFolder,
   onExtractFhm2d,
   onUseLoadedRoot,
   onValidate,
   onRepack,
   onCopyReviewPayload,
-  onExportDae,
+  onExportModels,
   showGrid,
   showAxes,
   wireframe,
@@ -159,14 +159,14 @@ export function UnitModelToolbar({
             variant="ghost"
             size="icon"
             className="h-6 w-6"
-            onClick={onExportDae}
-            disabled={!canExportDae || isBusy}
-            aria-label="Export model as DAE"
+            onClick={onExportModels}
+            disabled={!canExportModels || isBusy}
+            aria-label="Export loaded models as DAE or FBX"
           >
             <Download className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Export model as DAE / FBX</TooltipContent>
+        <TooltipContent side="bottom">Export loaded models as DAE / FBX</TooltipContent>
       </Tooltip>
 
       <Separator orientation="vertical" className="mx-0.5 h-4" />
