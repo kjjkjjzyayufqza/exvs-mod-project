@@ -725,6 +725,13 @@ pub fn remove_unit_model_model(
         .map_err(|e| format!("Failed to write {}: {e}", structure_path.display()))?;
 
     for url in &removed_files {
+        // Never physically delete pooled `.nutexb` textures when removing a model. Textures live
+        // in the shared deduped pool; an orphaned texture should stay on disk so it remains
+        // reusable (it is dropped from the structure, but the asset itself is preserved). Only
+        // model-specific files (numdlb/numshb/nusktb/jnttbl/numatb/nuhlpb) are deleted.
+        if url.to_ascii_lowercase().ends_with(".nutexb") {
+            continue;
+        }
         delete_pool_file_if_safe(&root_path, &json_dir, url);
     }
 
