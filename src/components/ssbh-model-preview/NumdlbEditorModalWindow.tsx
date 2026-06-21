@@ -25,6 +25,8 @@ export type NumdlbEditorWindowSession = {
   loadError: string | null;
   baseData: NumdlbReadResult | null;
   draftData: NumdlbReadResult | null;
+  /** maya+nust numatb material_label union for the referenced numatb; combobox suggestions. */
+  materialLabelOptions: string[];
   zIndex: number;
 };
 
@@ -192,6 +194,7 @@ export function NumdlbEditorModalWindow({
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
             <NumdlbMappingEditorBody
               data={session.draftData}
+              availableMaterialLabels={session.materialLabelOptions}
               onChange={onDraftChange}
               disabled={session.saving}
               embedTableWithoutInnerScroll

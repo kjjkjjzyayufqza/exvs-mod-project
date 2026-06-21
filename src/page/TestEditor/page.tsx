@@ -406,6 +406,7 @@ const TestEditorPage = () => {
         loadError: null,
         baseData: null,
         draftData: null,
+        materialLabelOptions: [],
         zIndex: nextZ,
       };
       void ssbhReadNumdlbMapping(filePath)

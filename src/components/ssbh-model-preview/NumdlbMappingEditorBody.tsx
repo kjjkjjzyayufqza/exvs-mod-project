@@ -2,9 +2,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { NumdlbReadResult } from "./ssbhDaeIoService";
 import { NumdlbMaterialMappingEditor } from "./components/NumdlbMaterialMappingEditor";
+import { applyMeshNameAsMaterialLabel } from "./numdlbEditorUtils";
 
 type NumdlbMappingEditorBodyProps = {
   data: NumdlbReadResult;
+  /** numatb-sourced material labels (maya+nust union) offered as combobox suggestions. */
+  availableMaterialLabels?: string[];
   onChange: (next: NumdlbReadResult) => void;
   disabled?: boolean;
   /** When true, mapping table does not use its own fixed-height scroll; use with a parent scroll container. */
@@ -13,6 +16,7 @@ type NumdlbMappingEditorBodyProps = {
 
 export function NumdlbMappingEditorBody({
   data,
+  availableMaterialLabels = [],
   onChange,
   disabled = false,
   embedTableWithoutInnerScroll = false,
@@ -79,6 +83,8 @@ export function NumdlbMappingEditorBody({
       <NumdlbMaterialMappingEditor
         embedTableWithoutInnerScroll={embedTableWithoutInnerScroll}
         rows={data.entries}
+        availableMaterialLabels={availableMaterialLabels}
+        onAutoApply={() => onChange({ ...data, entries: applyMeshNameAsMaterialLabel(data.entries) })}
         onChangeMaterialLabel={(rowIndex, nextLabel) =>
           onChange({
             ...data,

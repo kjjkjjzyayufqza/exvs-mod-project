@@ -21,6 +21,22 @@ export function applyMeshNameAsMaterialLabel(entries: NumdlbMappingRow[]): Numdl
   });
 }
 
+/**
+ * Resolve the numatb file a numdlb references, as a forward-slash path next to the numdlb.
+ * Picks the first `.numatb` among the numdlb's material file names; returns null when none.
+ */
+export function numatbPathForNumdlb(
+  numdlbFilePath: string,
+  materialFileNames: string[],
+): string | null {
+  const numatbName = materialFileNames.find((name) => name.trim().toLowerCase().endsWith(".numatb"));
+  if (!numatbName) return null;
+  const normalized = numdlbFilePath.replace(/\\/g, "/");
+  const slash = normalized.lastIndexOf("/");
+  const dir = slash >= 0 ? normalized.slice(0, slash) : "";
+  return dir ? `${dir}/${numatbName.trim()}` : numatbName.trim();
+}
+
 function cloneStructured<T>(data: T): T {
   return structuredClone(data);
 }

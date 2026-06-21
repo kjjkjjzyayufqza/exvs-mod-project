@@ -16,6 +16,7 @@ import {
   cloneNumdlbReadResult,
   assertNumdlbValidForSave,
   isNumdlbDraftDirty,
+  numatbPathForNumdlb,
 } from "./numdlbEditorUtils";
 import type { NuhlpbEditorWindowSession } from "./NuhlpbEditorModalWindow";
 import { cloneNuhlpbReadResult, isNuhlpbDraftDirty } from "./nuhlpbEditorUtils";
@@ -47,8 +48,10 @@ import type { NumatbEditorWindowSession } from "./NumatbEditorModalWindow";
 import {
   buildNumatbModalBundleFromProfiles,
   cloneNumatbBundle,
+  collectMaterialLabels,
   deriveNumatbSisterPathCandidates,
   detectNumatbProfileFromPath,
+  resolveNumatbProfilePaths,
   type NumatbModalBundle,
   type NumatbProfilePaths,
 } from "./numatbEditorUtils";
@@ -130,6 +133,46 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
   numdlbSessionsRef.current = numdlbSessions;
   const [numdlbGuard, setNumdlbGuard] = useState<SsbhFileEditorGuard>(null);
 
+  /**
+   * Combobox suggestion source: the maya+nust numatb material_label union for the numatb a
+   * numdlb references. A missing/unreadable numatb yields an empty list (the combobox still
+   * works from in-row labels + create-new) — this is an additive suggestion source, not a
+   * fallback for core save/parse logic.
+   */
+  const loadNumdlbMaterialOptions = useCallback(
+    async (filePath: string, materialFileNames: string[]): Promise<string[]> => {
+      const numatbPath = numatbPathForNumdlb(filePath, materialFileNames);
+      if (!numatbPath) return [];
+      const { maya, nust } = resolveNumatbProfilePaths([numatbPath]);
+      const readSafe = async (path: string | null): Promise<MatlDataJson | null> => {
+        if (!path) return null;
+        try {
+          return await ssbhTemplateReadNumatb(path);
+        } catch {
+          return null;
+        }
+      };
+      const [mayaFile, nustFile] = await Promise.all([readSafe(maya), readSafe(nust)]);
+      return collectMaterialLabels(mayaFile, nustFile);
+    },
+    [],
+  );
+
+  /** Recompute material-label suggestions for every open numdlb editor (e.g. after a numatb save). */
+  const refreshNumdlbMaterialOptions = useCallback(() => {
+    for (const session of numdlbSessionsRef.current) {
+      if (!session.draftData) continue;
+      const sessionId = session.id;
+      void loadNumdlbMaterialOptions(session.filePath, session.draftData.materialFileNames).then(
+        (options) => {
+          setNumdlbSessions((prev) =>
+            prev.map((s) => (s.id === sessionId ? { ...s, materialLabelOptions: options } : s)),
+          );
+        },
+      );
+    }
+  }, [loadNumdlbMaterialOptions]);
+
   const openNumdlbSession = useCallback((filePath: string) => {
     const normalized = normalizePathKey(filePath);
     setNumdlbSessions((prev) => {
@@ -148,6 +191,7 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
         loadError: null,
         baseData: null,
         draftData: null,
+        materialLabelOptions: [],
         zIndex: nextZ,
       };
       void ssbhReadNumdlbMapping(filePath)
@@ -161,6 +205,11 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
                 : s,
             ),
           );
+          void loadNumdlbMaterialOptions(filePath, data.materialFileNames).then((options) => {
+            setNumdlbSessions((p) =>
+              p.map((s) => (s.id === id ? { ...s, materialLabelOptions: options } : s)),
+            );
+          });
         })
         .catch((err) => {
           setNumdlbSessions((p) =>
@@ -169,7 +218,7 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
         });
       return [...prev, newSession];
     });
-  }, []);
+  }, [loadNumdlbMaterialOptions]);
 
   const activateNumdlbSession = useCallback((sessionId: string) => {
     setNumdlbSessions((prev) => {
@@ -831,12 +880,13 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
         ),
       );
       toast.success("Saved NUMATB");
+      refreshNumdlbMaterialOptions();
       onSavedRef.current?.(path);
     } catch (e) {
       toast.error(String(e));
       setNumatbSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, saving: false } : s)));
     }
-  }, []);
+  }, [refreshNumdlbMaterialOptions]);
 
   const resetNumatbSession = useCallback((sessionId: string) => {
     setNumatbSessions((prev) =>

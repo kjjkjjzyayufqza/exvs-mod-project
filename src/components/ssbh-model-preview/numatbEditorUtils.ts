@@ -16,6 +16,30 @@ import {
   updateShaderLabel,
 } from "./store/numatbTemplateStoreHelpers";
 
+/**
+ * Sorted, case-insensitively de-duplicated union of `material_label` across the given numatb
+ * profiles (e.g. a model's maya + nust files). Null/blank profiles and labels are skipped.
+ * First spelling of a label wins.
+ */
+export function collectMaterialLabels(
+  ...files: (MatlDataJson | null | undefined)[]
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const file of files) {
+    if (!file) continue;
+    for (const entry of file.entries) {
+      const label = entry.material_label?.trim();
+      if (!label) continue;
+      const key = label.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(label);
+    }
+  }
+  return out.sort((left, right) => left.localeCompare(right));
+}
+
 export type NumatbModalBundle = {
   mayaFile: MatlDataJson;
   nustFile: MatlDataJson;

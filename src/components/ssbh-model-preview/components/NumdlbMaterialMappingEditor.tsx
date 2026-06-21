@@ -1,20 +1,27 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useCallback, useDeferredValue, useId, useMemo, useRef, useState } from "react";
-import { Search, WandSparkles } from "lucide-react";
+import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
+import { Search, Sparkles, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import type { NumdlbMappingRow } from "../daeSsbhTypes";
+import { MaterialLabelCombobox } from "./MaterialLabelCombobox";
 import { SsbhEditorThemeScope, type SsbhEditorThemeVariant } from "./ssbhEditorTheme";
 
 const MAPPING_ROW_HEIGHT = 49;
-const MAX_DATALIST_OPTIONS = 200;
 
 type NumdlbMaterialMappingEditorProps = {
   rows: NumdlbMappingRow[];
+  /** numatb-sourced material labels (maya+nust union) offered as combobox suggestions. */
+  availableMaterialLabels?: string[];
   onChangeMaterialLabel: (rowIndex: number, nextLabel: string) => void;
   onReplaceAll: (nextLabel: string, rowIndices: number[]) => void;
+  /**
+   * Snap every row's material label to its mesh name (drops the generated __partN suffix).
+   * The "Auto apply" button is rendered only when this handler is provided.
+   */
+  onAutoApply?: () => void;
   /** When true, table body is not in a nested ScrollArea (parent provides scroll). */
   embedTableWithoutInnerScroll?: boolean;
   themeVariant?: SsbhEditorThemeVariant;
@@ -22,14 +29,15 @@ type NumdlbMaterialMappingEditorProps = {
 
 export function NumdlbMaterialMappingEditor({
   rows,
+  availableMaterialLabels = [],
   onChangeMaterialLabel,
   onReplaceAll,
+  onAutoApply,
   embedTableWithoutInnerScroll = false,
   themeVariant = "default",
 }: NumdlbMaterialMappingEditorProps) {
   const [filter, setFilter] = useState("");
   const [replaceAllValue, setReplaceAllValue] = useState("");
-  const datalistId = useId();
   const deferredFilter = useDeferredValue(filter);
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -39,7 +47,16 @@ export function NumdlbMaterialMappingEditor({
     );
   }, [rows]);
 
-  const datalistLabels = useMemo(() => materialLabels.slice(0, MAX_DATALIST_OPTIONS), [materialLabels]);
+  /** Combobox options = numatb-sourced labels (maya+nust) unioned with labels already in use. */
+  const comboboxOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const label of availableMaterialLabels) {
+      const trimmed = label.trim();
+      if (trimmed) set.add(trimmed);
+    }
+    for (const label of materialLabels) set.add(label);
+    return Array.from(set).sort((left, right) => left.localeCompare(right));
+  }, [availableMaterialLabels, materialLabels]);
 
   const filteredEntries = useMemo(() => {
     const normalized = deferredFilter.trim().toLowerCase();
@@ -108,11 +125,10 @@ export function NumdlbMaterialMappingEditor({
                     </div>
                   </div>
                   <div className="font-mono text-[11px] text-muted-foreground">{row.meshObjectSubindex}</div>
-                  <Input
+                  <MaterialLabelCombobox
                     value={row.materialLabel}
-                    onChange={(event) => onChangeMaterialLabel(rowIndex, event.target.value)}
-                    className="h-8 text-[11px]"
-                    list={datalistId}
+                    options={comboboxOptions}
+                    onChange={(next) => onChangeMaterialLabel(rowIndex, next)}
                   />
                 </div>
               </div>
@@ -147,12 +163,11 @@ export function NumdlbMaterialMappingEditor({
               </span>
             </div>
             <div className="flex gap-2">
-              <Input
+              <MaterialLabelCombobox
                 value={replaceAllValue}
-                onChange={(event) => setReplaceAllValue(event.target.value)}
-                className="h-8 text-[11px]"
+                options={comboboxOptions}
+                onChange={setReplaceAllValue}
                 placeholder="New material label"
-                list={datalistId}
               />
               <Button
                 type="button"
@@ -173,19 +188,27 @@ export function NumdlbMaterialMappingEditor({
           </div>
         </div>
 
-        <datalist id={datalistId}>
-          {datalistLabels.map((label) => (
-            <option key={label} value={label} />
-          ))}
-        </datalist>
-
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary" className="text-[10px]">
             Meshes: {rows.length}
           </Badge>
           <Badge variant="secondary" className="text-[10px]">
             Materials: {materialLabels.length}
           </Badge>
+          {onAutoApply ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="ml-auto h-8 px-3 text-[10px] uppercase tracking-wide"
+              onClick={onAutoApply}
+              disabled={rows.length === 0}
+              title="Set every material label to its mesh name (drops the generated __partN suffix)"
+            >
+              <Sparkles className="mr-1 h-3.5 w-3.5" />
+              Auto apply
+            </Button>
+          ) : null}
         </div>
 
         <div className="rounded-md border">

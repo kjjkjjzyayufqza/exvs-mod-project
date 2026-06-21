@@ -1,6 +1,29 @@
 import { describe, expect, it } from "vitest";
 import type { NumdlbMappingRow } from "./daeSsbhTypes";
-import { applyMeshNameAsMaterialLabel, stripPartSuffix } from "./numdlbEditorUtils";
+import {
+  applyMeshNameAsMaterialLabel,
+  numatbPathForNumdlb,
+  stripPartSuffix,
+} from "./numdlbEditorUtils";
+
+describe("numatbPathForNumdlb", () => {
+  it("joins the referenced numatb name to the numdlb directory (windows path)", () => {
+    expect(numatbPathForNumdlb("C:\\models\\unit\\model.numdlb", ["model.numatb"])).toBe(
+      "C:/models/unit/model.numatb",
+    );
+  });
+
+  it("picks the first .numatb entry among the material file names", () => {
+    expect(
+      numatbPathForNumdlb("/m/model.numdlb", ["ignore.txt", "mat.numatb", "other.numatb"]),
+    ).toBe("/m/mat.numatb");
+  });
+
+  it("returns null when there is no referenced numatb", () => {
+    expect(numatbPathForNumdlb("/m/model.numdlb", [])).toBeNull();
+    expect(numatbPathForNumdlb("/m/model.numdlb", ["foo.bin"])).toBeNull();
+  });
+});
 
 describe("stripPartSuffix", () => {
   it("strips a single-digit __part suffix", () => {
