@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 
-import { buildUnitModelStructureTree, type UnitModelTreeNode } from "./unitModelStructureTree";
+import {
+  buildUnitModelStructureTree,
+  collectModelGroupNames,
+  mergeShlModelFolderNames,
+  type UnitModelTreeNode,
+} from "./unitModelStructureTree";
 
 const STRUCTURE = {
   Magic: 10,
@@ -50,5 +55,45 @@ describe("buildUnitModelStructureTree fileUrl", () => {
     };
     const { root } = buildUnitModelStructureTree(noUrl);
     expect(findItem(root, 0)?.fileUrl).toBeUndefined();
+  });
+});
+
+describe("mergeShlModelFolderNames", () => {
+  it("keeps structure order and appends disk-only models", () => {
+    expect(mergeShlModelFolderNames(["body", "wing"], ["body", "N2_not_boom_mix_ship"])).toEqual([
+      "body",
+      "wing",
+      "N2_not_boom_mix_ship",
+    ]);
+  });
+
+  it("deduplicates case-insensitively", () => {
+    expect(mergeShlModelFolderNames(["Body"], ["body", "Wing"])).toEqual(["Body", "Wing"]);
+  });
+});
+
+describe("collectModelGroupNames", () => {
+  it("walks model-group nodes in DFS order", () => {
+    const tree = {
+      Magic: 10,
+      SubFileData: [
+        { fileIndex: 0, fileType: ".numdlb", fileBaseName: "body", fileUrl: "models/body/body.numdlb" },
+        { fileIndex: 1, fileType: ".numdlb", fileBaseName: "wing", fileUrl: "models/wing/wing.numdlb" },
+      ],
+      SubFileStructure: [
+        { type: "Folder", unk2: "", unk3: 0, unk5: 0 },
+        { type: "Folder", unk2: "", unk3: 0, unk5: 0 },
+        { type: "Folder", unk2: "", unk3: 0, unk5: 0 },
+        { type: "Item", fileIndex: 0, unk2: "40000000", unk3: 0, Name: "body" },
+        { type: "EndMark", endMarkCount: 1 },
+        { type: "Folder", unk2: "", unk3: 0, unk5: 0 },
+        { type: "Item", fileIndex: 1, unk2: "40000000", unk3: 0, Name: "wing" },
+        { type: "EndMark", endMarkCount: 1 },
+        { type: "EndMark", endMarkCount: 2 },
+        { type: "EndMark", endMarkCount: 1 },
+      ],
+    };
+    const { root } = buildUnitModelStructureTree(tree);
+    expect(collectModelGroupNames(root)).toEqual(["body", "wing"]);
   });
 });

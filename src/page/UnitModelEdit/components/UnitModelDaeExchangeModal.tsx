@@ -2,7 +2,6 @@ import {
   useCallback,
   useEffect,
   useId,
-  useMemo,
   useRef,
   type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -12,8 +11,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { SsbhDaeExchangePanel } from "@/components/ssbh-model-preview/SsbhDaeExchangePanel";
 import { useDaeSsbhSessionStore } from "@/components/ssbh-model-preview/store/daeSsbhSessionStore";
 import { SceneEditRndModalShell } from "@/page/SceneEdit/components/SceneEditRndModalShell";
+import { useCallbackModalViewportSuspendInteraction } from "@/page/SceneEdit/hooks/useSceneModalViewportSuspendInteraction";
 import {
-  SCENE_EDIT_RND_DRAG_HANDLE,
   SCENE_EDIT_RND_VIEWPORT_MARGIN,
   SSBH_MAX_WIDTH,
   type SceneEditRndModalDimensions,
@@ -53,43 +52,7 @@ export function UnitModelDaeExchangeModal({
 }: UnitModelDaeExchangeModalProps) {
   const titleId = useId();
   const getDimensions = useCallback(() => getDaeExchangeModalDimensions(), []);
-  const activeSuspendRef = useRef(false);
-  const viewportSuspend = useMemo(
-    () => ({
-      startViewportSuspend: () => {
-        if (activeSuspendRef.current) return;
-        activeSuspendRef.current = true;
-        onViewportSuspendChange?.(true);
-      },
-      stopViewportSuspend: () => {
-        if (!activeSuspendRef.current) return;
-        activeSuspendRef.current = false;
-        onViewportSuspendChange?.(false);
-      },
-      onDragHandlePointerDownCapture: (event: ReactPointerEvent) => {
-        if (event.button !== 0) return;
-        if (
-          event.target instanceof HTMLElement &&
-          (event.target.closest("button") ||
-            event.target.closest(`.${SCENE_EDIT_RND_DRAG_HANDLE}`) === null)
-        ) {
-          return;
-        }
-        if (activeSuspendRef.current) return;
-        activeSuspendRef.current = true;
-        onViewportSuspendChange?.(true);
-      },
-    }),
-    [onViewportSuspendChange],
-  );
-
-  useEffect(() => {
-    return () => {
-      if (!activeSuspendRef.current) return;
-      activeSuspendRef.current = false;
-      onViewportSuspendChange?.(false);
-    };
-  }, [onViewportSuspendChange]);
+  const viewportSuspend = useCallbackModalViewportSuspendInteraction(onViewportSuspendChange);
 
   // Start each conversion from a clean slate: discard the previous session's NUMATB
   // material content and output settings instead of caching the last configuration.

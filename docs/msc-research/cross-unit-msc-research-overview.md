@@ -78,6 +78,7 @@ Character ID Table 只用于定位源资源：`id` 对应机体，`Msc` / `Param
 | G-Self | `42001001` | `0x72CD747F` | `0x23364E67` | fresh MSC + Param 解包；0/1/2 直接读码；Space / Reflector / Assault 四状态候选与 Assault Pack 多弹体族已连到 raw Param |
 | Mack Knife (Mask) | `42002001` | `0xC33AA885` | `0x92C1929D` | fresh MSC + Param 解包；0/1/2 直接读码；normal / Long-Range Booster selector、slot 1/2 loadout、Beam Vulcan / Plasma Claw / Grenade Launcher 候选链已连到 raw Param |
 | Gundam Aerial | `66001001` | `0x19CE466D` | `0x48357C75` | fresh MSC + Param 解包；0/1/2 直接读码；46-action external table、动态 action/phase registry 与代表性多弹体族已连到 raw Param |
+| Gundam Pharact | `66002001` | `0x33BAAE59` | `0x62419441` | fresh MSC + Param 解包；0/1/2 直接读码；32-action external table、方向特殊移动、82 个 literal bullet hashes 与临时超远锁定态已连到 raw Param |
 
 既有旧样本：
 
@@ -114,7 +115,7 @@ Rust 内部函数：
 app_lib::format::fhm2d::extract_fhm2d_to_folder_impl(...)
 ```
 
-本轮新增临时 CLI：
+当前复用的本地 CLI：
 
 ```text
 src-tauri/src/bin/fhm2d_extract_folder.rs
@@ -144,7 +145,8 @@ python tools\msclang.py "<script.c>" -o "<script.mscsb>" -i
 
 ## 首批实际产物
 
-本轮已使用新增 CLI `src-tauri/src/bin/fhm2d_extract_folder.rs` 调用现有 Rust FHM2D 解包函数，并完成 3 个样本的 `0/1/2` 解包、反编译和源码快照记录。
+当前持续使用 `src-tauri/src/bin/fhm2d_extract_folder.rs` 调用现有 Rust FHM2D 解包函数；
+十个真实源样本均已完成 `0/1/2` 解包、反编译和源码快照记录。
 
 解包与反编译输出：
 
@@ -159,6 +161,7 @@ python tools\msclang.py "<script.c>" -o "<script.mscsb>" -i
 | `0x72CD747F` | `E:\XB\解包\com\file\040msc\0x72CD747F` | `0.bscex`, `1.cscex`, `2.dscex` | `0.c`, `1.c`, `2.c` |
 | `0xC33AA885` | `E:\XB\解包\com\file\040msc\0xC33AA885` | `0.bscex`, `1.cscex`, `2.dscex` | `0.c`, `1.c`, `2.c` |
 | `0x19CE466D` | `E:\XB\解包\com\file\040msc\0x19CE466D` | `0.bscex`, `1.cscex`, `2.dscex` | `0.c`, `1.c`, `2.c` |
+| `0x33BAAE59` | `E:\XB\解包\com\file\040msc\0x33BAAE59` | `0.bscex`, `1.cscex`, `2.dscex` | `0.c`, `1.c`, `2.c` |
 
 正文不列机器缓存。跨机体结论只引用 `.c` 文件、函数行号、注册 hash、Param row 字段落点和 syscall/resource 输出。
 
@@ -180,6 +183,7 @@ E:\XB\解包\com\file\041cpm\0xA3D57845  # RX-78-2
 E:\XB\解包\com\file\041cpm\0x23364E67  # G-Self
 E:\XB\解包\com\file\041cpm\0x92C1929D  # Mack Knife (Mask)
 E:\XB\解包\com\file\041cpm\0x48357C75  # Gundam Aerial
+E:\XB\解包\com\file\041cpm\0x62419441  # Gundam Pharact
 ```
 
 `chrsysparam.csyspm` shape：
@@ -195,6 +199,7 @@ E:\XB\解包\com\file\041cpm\0x48357C75  # Gundam Aerial
 | G-Self | `68` | `1 x 1` empty | classic local selector |
 | Mack Knife (Mask) | `68` | `1 x 1` empty | classic local selector |
 | Gundam Aerial | `24128` | `47 x 128`, rows `1..46` nonempty | external Param action-table |
+| Gundam Pharact | `16960` | `33 x 128`, rows `1..32` nonempty | external Param action-table |
 
 当前硬盘证据不支持简单“新/旧”二分。至少区分：external Param action-table、classic local selector、legacy embedded B4AC。
 
@@ -226,6 +231,14 @@ Aerial 则属于 external Param action-table：`0.c func_143/145` 通过 `sys_41
 156-row `bulletparam.bin`。完整证据见
 [66001001 Gundam Aerial](units/66001001-gundam-aerial/README.md)。
 
+Pharact 复用与 Aerial byte-for-byte 相同的 `0.c/1.c` external-table 模板，但 raw
+`chrsysparam` 缩为 32 个 action rows，`2.c func_965` resolver 为 101 cases。其
+`func_1115` 直接实现左右方向特殊移动，`func_997` 把四方向 movement 与 5 个 raw
+bullet rows 接起来；全文件 82 个唯一 literal bullet hashes 全部命中 93-row
+`bulletparam.bin`。`func_1054/1055` 还在单次动作中把 `characterparam` 距离从
+`380.0` 切到 `5000.0` 后恢复。完整证据见
+[66002001 Gundam Pharact](units/66002001-gundam-pharact/README.md)。
+
 ## 新旧 MSC 比较假设
 
 当前最重要的假设来自旧 session 文档：
@@ -239,7 +252,7 @@ resource list
   -> Msc/2.c group resolver and phase callbacks
 ```
 
-早期“旧式都内嵌 B4AC、新式都依赖 chrsysparam”的假设已被当前硬盘样本修正。RX、Unicorn、Sinanju、Delta Plus、G-Self、Mack Knife 都是 classic local selector；NEXA-N、AGE-FX、Gundam Aerial 是 external Param action-table；只有独立 legacy 对照命中 embedded B4AC。跨机体比较不能只做 `2.c` diff，必须同步记录：
+早期“旧式都内嵌 B4AC、新式都依赖 chrsysparam”的假设已被当前硬盘样本修正。RX、Unicorn、Sinanju、Delta Plus、G-Self、Mack Knife 都是 classic local selector；NEXA-N、AGE-FX、Gundam Aerial、Gundam Pharact 是 external Param action-table；只有独立 legacy 对照命中 embedded B4AC。跨机体比较不能只做 `2.c` diff，必须同步记录：
 
 - Character ID row
 - Msc hash
@@ -287,4 +300,5 @@ docs/msc-research/units/<character-id>-<short-name>/
 - G-Self 已完成 fresh source 抽取和 classic selector 代表链；四个 `global39` 状态、slot loadout、CS 到 Assault state、state 3 多弹体 rows 与 `global776` resource count 已连到 raw Param。下一步追 motion/resource 名称并区分 Reflector stored/deployed。
 - Mack Knife 已完成 fresh source 抽取和 classic selector 代表链；`global39 == 0/1`、slot 1/2 loadout、normal / Long-Range Booster speed row 与三类射击候选链已连到 raw Param。下一步追 `func_921`/`0x1000`、方向特射、Plasma Claw interaction/hitgroup 与 slot 0 native 初始化。
 - Gundam Aerial 已完成 fresh source 抽取和 external table 代表链；46 个非空 action rows、动态 registry、141-key phase resolver 与代表性 `sys_4F -> bulletparam` 多弹体族已读实码。下一步解析全部 action input、`sys_51` Demi Trainer 候选、GUND-BIT resource/effect 与四个 arms rows 的 native slot 绑定。
+- Gundam Pharact 已完成 fresh source 抽取和 external table 代表链；32 个非空 action rows、101-case resolver、方向特殊移动、Corax/Beakfoot 候选、82 个 literal bullet hashes 与临时超远锁定态已读实码。下一步拆 rows `15..31` 的 melee/hitgroup/interaction，并确认 5 个 arms rows 的 native slot 绑定。
 - 扩展批量脚本前先决定输出规模：全量 1692 条 Character ID 会产生大量 `040msc` 文件；正文研究仍按少量样本逐台读 `.c`，不堆机器缓存。

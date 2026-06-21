@@ -197,9 +197,23 @@ export function DaeSsbhSessionLayout() {
       ].filter(Boolean);
       toast.success("Converted to SSBH", { description: lines.join("\n") });
       if (result.files.numdlbPath && preview.autoLoadAfterConvertToSsbh) {
-        // Append the converted model instead of replacing the scene, so the
-        // already-loaded Unit model package keeps showing all of its meshes.
-        await preview.addModelAt(result.files.numdlbPath);
+        const workspaceRoot = preview.workspaceRoot?.trim() ?? null;
+        const hasDiskPackage =
+          workspaceRoot &&
+          preview.previewInstances.some((inst) => inst.bundle.sourceKind === "disk");
+        if (hasDiskPackage) {
+          // Reload the open Unit model package so new/changed on-disk models appear
+          // without closing the modal or manually refreshing the viewport.
+          try {
+            await preview.reloadCurrentModel();
+          } catch {
+            await preview.loadModelAt(workspaceRoot);
+          }
+        } else if (workspaceRoot) {
+          await preview.loadModelAt(workspaceRoot);
+        } else {
+          await preview.addModelAt(result.files.numdlbPath);
+        }
       }
     } catch (error) {
       toast.error(String(error));

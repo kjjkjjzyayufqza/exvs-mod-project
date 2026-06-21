@@ -21,7 +21,7 @@
 | 解释动作、射击、格斗、镜头、移动、BD 等复杂系统 | `0c-to-2c-input-action-boundary.md`、`resource-control-surface-for-modders.md`、`system-control-surface-matrix.md`、`2c-source-proof-walkthrough-for-modders.md`、`msc-modder-operating-manual.md`、`2c-key-function-atlas-for-patching.md`、`modder-human-flow-overview.md`、`modder-worked-traces.md`、`2c-function-responsibility-proof-handbook.md`、`modding-system-cards-handbook.md`、`modding-walkthroughs-action-to-patch-points.md`、`2c-frame-lifecycle-human-trace.md`、runtime map、cookbook、practical guide、`movement-bd-modding-workbook.md`、movement / BD 文档、`sys_46` 参数地图、`func_11` / `0xc000*` 状态槽地图 | 脚本侧已能指导实战，新增 `0.c -> 2.c` 边界、资源层 patch 指南、控制面矩阵和源码证据走读，把每个系统落到真实行号、输入/action selector、资源层、脚本层、syscall 层和验证点；movement / gate native 仍需深化 |
 | 使用 Notion MCP 记录的经验 | `notion-msc-cross-reference.md`，本轮重新 fetch Notion 页面并用于 `sys_46/global172` 说明 | 已覆盖 |
 | 使用 OverBoost wiki 熟悉游戏操作系统 | cookbook 和 movement 文档引用系统页、初心者指南、用语集 | 已覆盖外部语义 |
-| 解决 offset / `func_N` 变化后命名失效 | `2c-function-role-map-for-modders.md`、五台真实源样本 `.c` 快照、action hash、callback 指纹、Param row 字段落点 | 已完成首轮跨样本验证：五台共享 25 个 handler hash；Delta Plus 55 个 action wrapper 可按 hash/指纹辅助定位，仍需逐个回到源码验证 |
+| 解决 offset / `func_N` 变化后命名失效 | `2c-function-role-map-for-modders.md`、十台真实源样本 `.c`、action hash、callback shape、Param row 与 resource 输出 | 已完成第二轮跨样本验证：十台共享 25 个 handler hash；Aerial/Pharact 的 `0.c/1.c` 完全相同但单位 action graph 不同，证明必须回到当前 `.c + raw Param`，不能靠旧 overlay 或单独 action hash |
 
 ## 目前已经能支撑模组开发的部分
 
@@ -49,10 +49,10 @@ main
 - 新增的系统卡片手册把启动、registry、射击、援护、格斗、BD / boost、动作内移动、镜头、shell、动态命名拆成统一格式，适合实际改动前逐项检查。
 - 新增的决策树页把“我要改动作 / 射击 / 格斗 / BD / 镜头 / shell”映射到入口、可改点和验证场景，适合作为实际改动前的第一张检查表。
 - 新增的逐帧生命周期页把 `main -> func_1 -> func_4 -> func_21/24/25 -> func_11 -> func_44/52 -> ACTION_* -> runtime segment -> syscall` 连成一个故事，适合判断某个 `func_N` 处在 init、读状态、调度、runtime 还是输出层。
-- 新增的函数角色地图把丑函数名、关键 `global`、runtime family、syscall family 映射到工作名和证据，适合在真正改动作前先建立本地命名 overlay。
+- 新增的函数角色地图把丑函数名、关键 `global`、runtime family、syscall family 映射到工作名和证据，适合在真正改动作前建立人工可复核的本地术语表。
 - 新增的函数职责证明手册把“谁调用、读什么、写什么、输出什么、是否复用”固化成五问法，适合判断一个 `func_N` 到底是 init、loop、dispatch、driver、segment 还是 cleanup。
 - 新增的实战 walkthrough 把主射、特射援护、特格突进、N 格派生、镜头、shell 六个目标从 action hash 追到具体 patch 点、风险和验证场景，适合实际开始改机体。
-- 新增的实战总览页把 wiki 玩家语义、Notion syscall 经验、当前 `2.c` 调用链和 overlay semanticId 放到一条路线里，适合作为打开 `2.c` 后的第一入口。
+- 新增的实战总览页把 wiki 玩家语义、Notion syscall 经验与当前 `2.c` 调用链放到一条路线里，适合作为打开 `2.c` 后的第一入口。
 - 新增的 worked traces 把 `func_1`、主射、BDC / BRズンダ、援护、N 格、特格横移、变形突进、镜头、shell 写成“目标 -> 证据链 -> 可改点 -> 不要先动 -> 必测场景”，适合作为实际 patch 前的操作清单。
 - 新增的操作手册把“目标 -> action hash -> ACTION -> runtime family -> segment output -> cleanup -> 实机测试”固化成一套读码协议，解决文档多但入口不够聚焦的问题。
 - 新增的系统控制面矩阵把 BD、移动、镜头、动作、射击、格斗、shell 拆成玩家语义、`2.c` 控制面、资源层、syscall 层、patch 点和验证点，适合回答“这个系统到底该改哪一层”。
@@ -147,18 +147,19 @@ main
 
 ### 6. 跨样本语义定位
 
-早期 overlay 只作为历史辅助。当前优先级改为源码证据：
+generated analysis/overlay/resolved-label 工作流已删除并废弃。当前优先级是源码与 raw
+Param 证据：
 
 模组意义：
 
-- 讨论时可以使用稳定工作名，例如 `depiction.actionHashRegistry`、`action.mainShot.fireSegment`、`action.bcSpecialMelee.directionalMovementSegment`。
+- 讨论时可以使用稳定工作名，例如 `depiction.actionHashRegistry`、`action.mainShot.fireSegment`、`action.bcSpecialMelee.directionalMovementSegment`，但必须附当前 unit 的函数、row 与输出证据。
 - `func_N` 只作为当前样本定位，不作为跨版本主键。
 - 换另一个机体样本时，先读当前 `0.c / 2.c` 的 registry、action wrapper、group callback、最终 syscall；再决定是否沿用旧工作名。
 
 当前边界：
 
 - `sys_46` 和 `0xc000*` 仍只记录脚本侧工作模型，不能直接写最终 native 参数名。
-- 旧 overlay 不足以替代新样本读码。
+- 旧 overlay 不再作为研究输入，也不能替代新样本读码。
 
 ## 当前仍然不够硬的部分
 
@@ -220,16 +221,19 @@ main
 
 下一步需要从 `sys_4A/sys_4F/sys_48/sys_58` 和资源表一起拆。
 
-### 4. 上游原始输入
+### 4. 上游原始输入与 native selector
 
-`2.c` 当前能说明 action hash 如何 dispatch 到 callback，但不能单独证明：
+当前十台样本已经把 `0.c` 纳入主证据链。classic 样本可直接读取固定 input/action
+selector；external-table 样本可读取 `func_143 -> sys_41 -> row index -> func_145`。
+因此“只看 `2.c` 不知道 action 从哪里来”的缺口已部分关闭，但仍不能单靠脚本证明：
 
 ```text
 玩家按 A 一定如何变成 0xf48d2d49
 玩家跳键二连一定如何变成 BD gate
 ```
 
-原因是原始输入识别在更上游脚本或 native 层。当前 `2.c` 主要读：
+原因是按键硬件状态到 `sys_41` 结果、以及部分 `0xc000*` gate 仍在 native 层。当前脚本
+主要读：
 
 ```text
 sys_0(0x10000,...)
@@ -237,30 +241,42 @@ global87/global172/global200
 global48/global49/global92/global140
 ```
 
-下一步需要把 `0.c`、`1.c` 或 native input/action selector 一起纳入同一张图。
+下一步需要拆 native input/action selector，并用实机 trace 验证 `sys_41` 的 row 选择；不再
+需要先生成中间 JSON。
 
-### 5. 动态 overlay 的跨样本验证
+### 5. 直接 `.c` 的跨样本验证
 
-当前已完成 Unicorn、Sinanju、NEXA-N、AGE-FX、Delta Plus 五台真实源样本的初步验证：
+当前已完成 Unicorn、Sinanju、NEXA-N、AGE-FX、Delta Plus、RX-78-2、G-Self、
+Mack Knife、Gundam Aerial、Gundam Pharact 十台真实源样本的验证：
 
-- `func_N` 漂移后，25 个共享 action handler hash 仍稳定。
-- Delta Plus 的 55 个 action wrapper 可通过 action hash + callback 指纹与历史 semantic label 对齐。
+- `func_N` 漂移后，25 个共享 nonzero action handler hash 仍稳定。
+- Aerial 与 Pharact 的 `0.c/1.c` 完全相同，但 `2.c`、external rows、resolver、bullet
+  rows 与 assist surface 明显不同。
+- 同一 `0xD02D6AD4` 在 Aerial 是多弹体 timeline，在 Pharact 是临时
+  `characterparam` 超远锁定态；action hash 不能单独当跨机体语义主键。
 - `sys_46`、loadout、unit callback 仍有明显单位差异，不能仅靠单一 syscall count 命名。
 
-仍需扩大作品、形态系统和 Param shape 覆盖，并把 semantic candidate 追到最终 resource hash。
+仍需扩大作品、形态系统和 Param shape 覆盖，并把 semantic candidate 继续追到 motion、
+effect、hitgroup、interaction 与 native slot binding。
 
 ## 下一轮最有价值的研究顺序
 
 1. `sys_46` native handler：补成像 `sys_47/sys_53` 一样的 case 级说明。
 2. `0xc000*` native handler：验证当前脚本侧状态槽工作名。
 3. 格斗判定 / projectile 数据：把 `func_532`、`sys_4A`、`sys_4F`、`sys_48`、`sys_58` 连到资源。
-4. 跨样本动态 overlay：选第二个 `2.c` 样本验证命名方案。
-5. 上游输入链：从 `0.c` / native input selector 证明 raw input 到 action hash 的转换。
+4. 跨样本直接读码：继续按 Character ID 选择新的 classic/external/legacy 样本，记录
+   `0.c/1.c/2.c + raw Param`，不恢复 generated JSON。
+5. 上游输入链：拆 native input selector，证明 raw input 到 `sys_41` row/action hash 的转换。
 
 ## 本轮新增证据
 
 本轮新增：
 
+- [66002001 Gundam Pharact MSC 研究](./units/66002001-gundam-pharact/README.md)
+- Pharact `0x33BAAE59/0.c` 与 Aerial `0x19CE466D/0.c` byte-for-byte 相同；单位差异落在
+  raw action table 与 `2.c`。
+- Pharact 32 个 external rows、101-case resolver、82/93 literal bullet coverage、无
+  `sys_51(0x20000)` 与临时 `characterparam 380.0 -> 5000.0` 状态已直接闭环。
 - [MSC 模组开发操作手册：从 29664 行 `2.c` 读到可改点](./msc-modder-operating-manual.md)
 - [2.c 关键函数职责表：给模组 patch 用的工作名](./2c-key-function-atlas-for-patching.md)
 - [MSC 逆向模组开发总览：从玩家动作追到 `2.c` 可改点](./modder-human-flow-overview.md)
@@ -287,7 +303,10 @@ global48/global49/global92/global140
 - OverBoost wiki 初心者指南：`https://w.atwiki.jp/exvs2ob/pages/559.html`
 - OverBoost wiki 初心者指南 / BRズンダ页：`https://w.atwiki.jp/exvs2ob/pages/560.html`
 - OverBoost wiki 用语集：`https://w.atwiki.jp/exvs2ob/pages/82.html`
-- 当前样本：`E:\XB\解包\com\file\0xBDBE6FEA\2.c`
+- Pharact wiki：`https://w.atwiki.jp/exvs2ob/pages/675.html`
+- 当前真实源样本：`E:\XB\解包\com\file\040msc\0x33BAAE59\0.c/1.c/2.c`
+- 当前 raw Param：`E:\XB\解包\com\file\041cpm\0x62419441`
+- 历史行号基线：`E:\XB\解包\com\file\0xBDBE6FEA\2.c`
 
 本轮用到的关键源码范围：
 

@@ -257,6 +257,25 @@ export function collectModelGroupNames(node: UnitModelTreeNode): string[] {
 }
 
 /**
+ * Merge structure-JSON model names (authoritative `folder_index` order) with on-disk
+ * `models/*` folders that are not yet registered in `_structure.json`.
+ */
+export function mergeShlModelFolderNames(
+  structureNames: readonly string[],
+  diskNames: readonly string[],
+): string[] {
+  const seen = new Set(structureNames.map((name) => name.toLowerCase()));
+  const out = [...structureNames];
+  for (const name of diskNames) {
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out;
+}
+
+/**
  * Build the renderable structure tree from a parsed `_structure.json` object.
  * Throws on malformed input (missing or non-array SubFileStructure / SubFileData).
  */

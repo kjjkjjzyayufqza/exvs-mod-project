@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { open } from "@tauri-apps/plugin-dialog";
 import {
@@ -53,6 +53,7 @@ import {
   buildSsbhSessionImportConfig,
 } from "@/page/SceneEdit/utils/sceneDaeSessionImport";
 import type { StaticMeshImportProgress } from "@/page/SceneEdit/utils/sceneSessionService";
+import { useCallbackModalViewportSuspendInteraction } from "@/page/SceneEdit/hooks/useSceneModalViewportSuspendInteraction";
 
 import { buildUnitModelStructureTree, type UnitModelTreeNode } from "../utils/unitModelStructureTree";
 import {
@@ -295,13 +296,7 @@ export function UnitModelModelManagerPanel({
 
   const canMutate = Boolean(modelRoot && structureJsonPath);
 
-  // Pause the background 3D viewport while the heavy import config modal or its
-  // progress dialog is open, so dragging/resizing it stays smooth even for large meshes.
-  const importUiOpen = showImportConfig || importProgress.open;
-  useEffect(() => {
-    onViewportSuspendChange?.(importUiOpen);
-  }, [importUiOpen, onViewportSuspendChange]);
-  useEffect(() => () => onViewportSuspendChange?.(false), [onViewportSuspendChange]);
+  const viewportSuspend = useCallbackModalViewportSuspendInteraction(onViewportSuspendChange);
 
   const handleAddFolder = async () => {
     if (!modelRoot || !structureJsonPath) {
@@ -838,6 +833,7 @@ export function UnitModelModelManagerPanel({
           havokInfo={null}
           stageRoot={modelRoot ?? null}
           workflowMode="unitModel"
+          viewportSuspend={viewportSuspend}
           onConfigChange={handleImportConfigChange}
           onImport={() => void handleConfirmStaticMeshImport()}
           onCancel={() => {

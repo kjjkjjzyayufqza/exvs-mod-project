@@ -1,10 +1,10 @@
 # 首批跨机体 MSC 对比
 
-生成日期：2026-06-20
+生成日期：2026-06-21
 
 本页记录第一批从 Character ID Table 映射出的 MSC FHM2D 抽取、反编译和直接 `.c` 读码结果。入口页见：[跨机体 MSC 研究总览](cross-unit-msc-research-overview.md)。
 
-后续 Param 配对与 AGE-FX 扩展见：[MSC 代际与 Param Action Bridge 对比](msc-generation-param-bridge-comparison.md)。
+后续 Param 配对与代际扩展见：[MSC 代际与 Param Action Bridge 对比](msc-generation-param-bridge-comparison.md)。
 
 ## 输入与源码工作区
 
@@ -28,11 +28,11 @@ E:\XB\解包\com\file\040msc
 
 ## 总结论
 
-- `1.c` 在当前九个真实源样本中完全一致：6 个函数、34 行、反编译 `.c` SHA-256 相同，当前可视为小型 glue/占位层。
+- `1.c` 在当前十个真实源样本中完全一致：6 个函数、34 行、反编译 `.c` SHA-256 相同，当前可视为小型 glue/占位层。
 - `0.c` 结构高度稳定：classic selector 样本通常是 145 个函数，external Param action-table 样本是 162 个函数；样本都只在 `func_6` 与 `func_92` 出现 `sys_1(0x10001, ...)` 注册。
 - `2.c` 是主差异层：函数数从 1047 到 1292 不等，action registry、slot registry、weapon/movement/camera/shell syscall 都集中在这里。
 - 尾部 registry 函数编号随机体漂移：Unicorn 是 `func_1065..1068`，Sinanju 是 `func_1095..1098`，NEXA-N 是 `func_1219..1222`。因此跨机体对齐不能只靠函数号，必须看 registry 内容、hash、syscall 分布和调用形状。
-- 首批三样本与 BDBE 历史基线共享 25 个固定 handler hash；Delta Plus、AGE-FX、RX-78-2、G-Self、Mack Knife、真实 Aerial 加入后，九台真实源样本仍包含同一组 25 个固定 hash。
+- 首批三样本与 BDBE 历史基线共享 25 个固定 handler hash；Delta Plus、AGE-FX、RX-78-2、G-Self、Mack Knife、真实 Aerial、Pharact 加入后，十台真实源样本仍包含同一组 25 个固定 hash。
 - 本轮反编译未传入 `--exvsMapping`，所以新样本函数名保持 `func_N`。旧 `0xBDBE6FEA` 分析文件中已有 21 个 `ACTION_*` 名称，不能直接用名称数量比较新旧样本。
 - Param 配对后确认：Unicorn / Sinanju 属于 classic local selector；NEXA-N 属于 external Param action-table。两类都不同于 `sys_2C/sys_2D` legacy embedded B4AC。
 - Unicorn 的 `global143 -> field 0x17 -> 0.c global39` 已证明是双形态 selector 轴；slot 1 从 raw arms row 的 1 发切到 20 发，主射 callback 同时切换 bullet resource row。
@@ -41,6 +41,7 @@ E:\XB\解包\com\file\040msc
 - G-Self 的 `global39 == 0/1/2/3` selector 分支已证明四状态 loadout：`func_1125/1127/1128/1130` 分别绑定 raw arms rows、`characterparam` row 和 `speedparam` row；CS 到 Assault-state、多段 projectile family 与 `global776` resource count 已连到 raw Param row。
 - Mack Knife 的 `global39 == 0/1` selector 分支已证明 normal / Long-Range Booster 二状态 loadout：`func_1101/1102/1106/1107` 绑定 slot 1/2、`characterparam` row 和 `speedparam` row；Beam Vulcan、Plasma Claw、Grenade Launcher 候选链已连到 raw Param row。
 - 真实 Aerial `66001001` 不使用 classic selector：`0.c func_143/145` 读取 external action row，`2.c func_849` 动态注册 46 个 action 与 phase callbacks，代表性多弹体函数已命中 raw `bulletparam.bin`。
+- Pharact `66002001` 与 Aerial 的 `0.c/1.c` byte-for-byte 相同，但只有 32 个 external rows 与 101-case resolver；82 个唯一 literal bullet hashes 全部命中 raw `bulletparam.bin`，且没有 `sys_51(0x20000)` assist summon。
 
 ## 样本矩阵
 
@@ -56,8 +57,9 @@ E:\XB\解包\com\file\040msc
 | G-Self | `42001001` | `0x72CD747F` | `0x23364E67` | `145 / 3706` | `6 / 34` | `1169 / 32709` | `75 + 1 dynamic` | `700` |
 | Mack Knife (Mask) | `42002001` | `0xC33AA885` | `0x92C1929D` | `145 / 3572` | `6 / 34` | `1120 / 31418` | `69` | `545` |
 | Gundam Aerial | `66001001` | `0x19CE466D` | `0x48357C75` | `162 / 3594` | `6 / 34` | `1198 / 33544` | `26 fixed rows + 46 dynamic rows` | `566` |
+| Gundam Pharact | `66002001` | `0x33BAAE59` | `0x62419441` | `162 / 3594` | `6 / 34` | `1153 / 33339` | `26 fixed rows + 32 dynamic rows` | `546` |
 
-注：NEXA-N / AGE-FX 的 `26` 包含一处源码级动态 `func_241(var2,var4)`；RX 的 `52` 只计非零 callback，另有三个 transform hash 显式注册为 `0`。G-Self 的 `75 + 1 dynamic` 是 tail registry `func_1166` 的 75 个固定 handler 加一处动态 `func_241`。真实 Aerial 的 `func_1194` 有 26 个固定注册行（23 nonzero + 3 null），`func_849` 运行时再遍历 46 个外部 action rows。BDBE 行只作历史上下文。
+注：NEXA-N / AGE-FX 的 `26` 包含一处源码级动态 `func_241(var2,var4)`；RX 的 `52` 只计非零 callback，另有三个 transform hash 显式注册为 `0`。G-Self 的 `75 + 1 dynamic` 是 tail registry `func_1166` 的 75 个固定 handler 加一处动态 `func_241`。Aerial 与 Pharact 的固定 registry 都是 26 行（23 nonzero + 3 null）；各自 `func_849` 再遍历 46 / 32 个外部 action rows，其中 Pharact 有 5 行没有 group callback、只保留 phase path。BDBE 行只作历史上下文。
 
 ## 脚本产物核验
 
@@ -72,8 +74,9 @@ E:\XB\解包\com\file\040msc
 | `0x72CD747F` | `E:\XB\解包\com\file\040msc\0x72CD747F` | `0.bscex=29712`, `1.cscex=192`, `2.dscex=308192` | `0.c=70720`, `1.c=254`, `2.c=694550` |
 | `0xC33AA885` | `E:\XB\解包\com\file\040msc\0xC33AA885` | `0.bscex=28624`, `1.cscex=192`, `2.dscex=287328` | `0.c=67557`, `1.c=254`, `2.c=657399` |
 | `0x19CE466D` | `E:\XB\解包\com\file\040msc\0x19CE466D` | `0.bscex=27232`, `1.cscex=192`, `2.dscex=313392` | `0.c=65526`, `1.c=254`, `2.c=710924` |
+| `0x33BAAE59` | `E:\XB\解包\com\file\040msc\0x33BAAE59` | `0.bscex=27232`, `1.cscex=192`, `2.dscex=314848` | `0.c=65526`, `1.c=254`, `2.c=716740` |
 
-## SHA-256
+## Decompiled `.c` SHA-256
 
 | Msc hex | Part | SHA-256 |
 |---|---:|---|
@@ -98,12 +101,15 @@ E:\XB\解包\com\file\040msc
 | `0x72CD747F` | `0` | `8D01BD1202BEF1126105A4EA4D4567A29FFB6B4A695FE876072731FDEB45CDD9` |
 | `0x72CD747F` | `1` | `24FF3EEB5235F34AE9B99918B1C59CC5D5D8972CEE09121DBAF3135F35E6452F` |
 | `0x72CD747F` | `2` | `CF48C54997B7D50CE0798B7292AB08C92FAFF759E2545862CED60C0E5D6A4760` |
-| `0xC33AA885` | `0` | `1E5CC9DB56902B1DCEF3200637163ABA87C52AA1B0D382569E83768B6789FDD3` |
-| `0xC33AA885` | `1` | `3BA97A583CC93CEC2E2BFBF85F02FDA0729C17ABE3E2959E4451FBCC04B1C151` |
-| `0xC33AA885` | `2` | `681E2427D496FADA09D7DB9825136B073D205BA8CF75DC3D67A281090FDB5C04` |
-| `0x19CE466D` | `0` | `50CA4F4B00B7D5AFAAC14684679C65DADFC8FDB81B641631AC02DFDECF308E39` |
-| `0x19CE466D` | `1` | `3BA97A583CC93CEC2E2BFBF85F02FDA0729C17ABE3E2959E4451FBCC04B1C151` |
-| `0x19CE466D` | `2` | `6368BAE05E77188444FD870575A082CB873710ACED81D4901FA6687F0DC49CE5` |
+| `0xC33AA885` | `0` | `85A7A4FF229931AAEFC5BF64BB4895A3917AC6104AFB59049C0D46FC101E757E` |
+| `0xC33AA885` | `1` | `24FF3EEB5235F34AE9B99918B1C59CC5D5D8972CEE09121DBAF3135F35E6452F` |
+| `0xC33AA885` | `2` | `6B0EF0BAE62D564E87DEA79775F89B54438C763E8BE9F3AEEFB10F6AEDA644FA` |
+| `0x19CE466D` | `0` | `70F360731C28E2B3DCD9DA14915FCAC0452A57861A65919193BE31B330871795` |
+| `0x19CE466D` | `1` | `24FF3EEB5235F34AE9B99918B1C59CC5D5D8972CEE09121DBAF3135F35E6452F` |
+| `0x19CE466D` | `2` | `1F3F59DE67F7BEF7C0A6D6F1893ECD31DD9E1A30F29704FCC1212E259D232964` |
+| `0x33BAAE59` | `0` | `70F360731C28E2B3DCD9DA14915FCAC0452A57861A65919193BE31B330871795` |
+| `0x33BAAE59` | `1` | `24FF3EEB5235F34AE9B99918B1C59CC5D5D8972CEE09121DBAF3135F35E6452F` |
+| `0x33BAAE59` | `2` | `1287A81D28FA2659A1FABC00E3BE4B743364EA3AD73B4E804E2AA730C92D6D81` |
 
 ## Registry 对齐
 
@@ -120,6 +126,7 @@ E:\XB\解包\com\file\040msc
 | `0x72CD747F` | `func_6` line 144, `func_92` line 2283 |
 | `0xC33AA885` | `func_6` line 144, `func_92` line 2283 |
 | `0x19CE466D` | `func_6` line 145, `func_92` line 2284 |
+| `0x33BAAE59` | `func_6` line 145, `func_92` line 2284 |
 | `0xBDBE6FEA` | `func_6` line 313, `func_92` line 2283 |
 
 `2.c` registry 函数：
@@ -135,11 +142,12 @@ E:\XB\解包\com\file\040msc
 | `0x72CD747F` | `func_835=172 sys1`, `func_836=8 sys1` | `func_1166=75 handlers` | `func_1167=48`, `func_1168=221`, `func_1169=15` |
 | `0xC33AA885` | `func_835=172 sys1`, `func_836=9 sys1` | `func_1117=69 handlers` | `func_1118=48`, `func_1119=62`, `func_1120=15` |
 | `0x19CE466D` | `func_835=172 sys1`, `func_836=7 sys1` | `func_1194=23 nonzero + 3 null`, plus 46 dynamic rows in `func_849` | `func_1195=49`, `func_1196=58`, `func_1197=15` |
+| `0x33BAAE59` | `func_835=172 sys1`, `func_836=7 sys1` | `func_1149=23 nonzero + 3 null`, plus 32 dynamic rows in `func_849` | `func_1150=49`, `func_1151=58`, `func_1152=15` |
 | `0xBDBE6FEA` | `func_835=172 sys1`, `func_836=7 sys1` | `func_1043=55 handlers` | `func_1044=48`, `func_1045=106`, `func_1046=15` |
 
 ## 共同 action handler hash
 
-这 25 个固定 handler hash 同时出现在 Unicorn、Sinanju、NEXA-N、AGE-FX、Delta Plus、RX-78-2、G-Self、Mack Knife、Gundam Aerial 九台真实源样本；Aerial 的 `0x900AB393/0xF32AA1BA` 位于早期 `func_2` 注册面，其余主要位于 `func_1194`。BDBE 历史基线也包含同一组：
+这 25 个固定 handler hash 同时出现在 Unicorn、Sinanju、NEXA-N、AGE-FX、Delta Plus、RX-78-2、G-Self、Mack Knife、Gundam Aerial、Gundam Pharact 十台真实源样本；external-table 样本的 `0x900AB393/0xF32AA1BA` 位于早期 `func_2` 注册面，其余主要位于 tail registry。BDBE 历史基线也包含同一组：
 
 ```text
 0x14b0aea3
@@ -186,6 +194,7 @@ E:\XB\解包\com\file\040msc
 | `0x72CD747F` | `sys_0=1219`, `sys_1=700`, `sys_47=481`, `sys_46=381`, `sys_4B=345`, `sys_4A=268` |
 | `0xC33AA885` | `sys_0=1227`, `sys_1=545`, `sys_46=416`, `sys_47=352`, `sys_4B=275`, `sys_4A=203` |
 | `0x19CE466D` | `sys_0=1271`, `sys_1=566`, `sys_47=556`, `sys_46=386`, `sys_4A=322`, `sys_4B=309` |
+| `0x33BAAE59` | `sys_0=1294`, `sys_1=546`, `sys_47=557`, `sys_4A=527`, `sys_46=388`, `sys_4B=299` |
 | `0xBDBE6FEA` pre-patch snapshot | `sys_0=1196`, `sys_1=590`, `sys_46=391`, `sys_47=332`, `sys_4B=283`, `sys_4A=219` |
 
 当前解释仍沿用现有文档共识：`sys_4F` 偏 weapon/ammo/presentation entry control，`sys_51` 偏 assist/summon，`sys_46` 偏动作内 movement bus。具体武装语义必须继续和 Param/chrsysparam、resource hash、动作输入路径配对。
@@ -203,3 +212,4 @@ E:\XB\解包\com\file\040msc
 - G-Self `0x72CD747F` 已把四个 `global39` 状态、slot loadout、CS 到 Assault state、状态 3 projectile family 和 `global776` resource count 连到 `.c` 与 raw Param；后续追 Reflector stored/deployed 精确语义、assist payload 和资源名。
 - Mack Knife `0xC33AA885` 已把 `global39 == 0/1` 二状态、slot 1/2 loadout、Beam Vulcan / Plasma Claw / Grenade Launcher 候选与 Booster derivative 连到 `.c` 与 raw Param；后续追 `func_921`/`0x1000`、方向特射、interaction/hitgroup 与 slot 0 native 初始化。
 - Gundam Aerial `0x19CE466D` 已把 46 个 external action rows、三相 callback、141-key resolver 和代表性多弹体族连到 `.c` 与 raw Param；后续追全部 input 映射、Demi Trainer `sys_51`、GUND-BIT resource/effect 和 arms slot 绑定。
+- Gundam Pharact `0x33BAAE59` 已把 32 个 external action rows、101-case resolver、方向特殊移动、Corax/Beakfoot 候选、82 个 literal bullet hashes 和临时超远锁定态连到 `.c` 与 raw Param；后续追 rows `15..31` 的 melee/hitgroup/interaction 与 arms slot 绑定。

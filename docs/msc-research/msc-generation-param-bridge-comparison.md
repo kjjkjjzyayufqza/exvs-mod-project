@@ -1,6 +1,6 @@
 # MSC 代际与 Param Action Bridge 对比
 
-生成日期：2026-06-20
+生成日期：2026-06-21
 
 本页记录真实 `Character ID Table -> Msc/Param FHM2D -> 0.c/1.c/2.c` 配对证据，并修正“新 MSC / 旧 MSC”过度二分的说法。
 
@@ -22,6 +22,7 @@
 | G-Self | `42001001` | `0x72CD747F` | `0x23364E67` | `E:\XB\解包\com\file\040msc\0x72CD747F` | `E:\XB\解包\com\file\041cpm\0x23364E67` |
 | Mack Knife (Mask) | `42002001` | `0xC33AA885` | `0x92C1929D` | `E:\XB\解包\com\file\040msc\0xC33AA885` | `E:\XB\解包\com\file\041cpm\0x92C1929D` |
 | Gundam Aerial | `66001001` | `0x19CE466D` | `0x48357C75` | `E:\XB\解包\com\file\040msc\0x19CE466D` | `E:\XB\解包\com\file\041cpm\0x48357C75` |
+| Gundam Pharact | `66002001` | `0x33BAAE59` | `0x62419441` | `E:\XB\解包\com\file\040msc\0x33BAAE59` | `E:\XB\解包\com\file\041cpm\0x62419441` |
 
 所有源 FHM2D 只读。输出写入 TestEditor workspace route：
 
@@ -41,6 +42,7 @@ Param -> unit.param -> 041cpm
 - `59001001 / 0x693F756D + 0x38C44F75`
 - `33004001 / 0x605245CC + 0x31A97FD4`
 - `66001001 / 0x19CE466D + 0x48357C75`
+- `66002001 / 0x33BAAE59 + 0x62419441`
 
 识别特征：
 
@@ -50,8 +52,8 @@ Param -> unit.param -> 041cpm
 - `0.c func_144..160` 是外部 action row bridge；传统固定 registry 后移到 `func_161`。
 - `2.c` 通过 group resolver 和 phase hash resolver 把 Param row 连到单位 callback。
 
-三机 `0.c func_144..161` 中 17/18 个函数源码完全一致。NEXA-N 与 Aerial 的 18 个
-函数逐字相同；AGE-FX 只有单位初始化钩子 `func_152` 不同：
+四机 `0.c func_144..161` 中 17/18 个函数源码完全一致。NEXA-N、Aerial 与 Pharact 的
+18 个函数逐字相同；AGE-FX 只有单位初始化钩子 `func_152` 不同：
 
 ```text
 NEXA-N: func_135()
@@ -106,7 +108,7 @@ legacy embedded B4AC
 
 ## 外部-table 桥接函数
 
-NEXA-N、AGE-FX 与 Aerial 的稳定 `0.c` 结构：
+NEXA-N、AGE-FX、Aerial 与 Pharact 的稳定 `0.c` 结构：
 
 | Function | Evidence-based role |
 |---|---|
@@ -121,7 +123,7 @@ NEXA-N、AGE-FX 与 Aerial 的稳定 `0.c` 结构：
 
 ## 共享 runtime 与单位数据分层
 
-两个外部-table样本给出很强的分层证据：
+NEXA-N / AGE-FX 的首轮对照给出分层证据，Aerial / Pharact 的同模板异数据结果继续复核该分层：
 
 | Evidence | NEXA-N | AGE-FX | Cross-unit result |
 |---|---:|---:|---|
@@ -149,7 +151,7 @@ unit behavior layer
 - `0.c` 类似 input/category adapter 与 action request dispatcher。
 - `2.c` 前中段类似共享 character controller/runtime framework。
 - `2.c` 后段 callback 类似单位状态、武器、形态和表现层脚本。
-- `1.c` 在七个当前真实源样本中完全相同，仍是 6 函数 / 34 行 glue stub。
+- `1.c` 在十个当前真实源样本中完全相同，仍是 6 函数 / 34 行 glue stub。
 
 ## RX-78-2：classic selector 的直接闭环
 
@@ -355,6 +357,50 @@ phase callback 与 raw projectile 的直接桥；GUND-BIT / Long Barrel / Demi T
 wiki 语义候选。完整证据见
 [66001001 Gundam Aerial](units/66001001-gundam-aerial/README.md)。本结论没有使用 generated JSON。
 
+## Gundam Pharact：32-action external Param bridge
+
+Pharact 是 `66002001 / 0x33BAAE59 + 0x62419441`。它与 Aerial 的 `0.c/1.c`
+byte-for-byte 相同，但单位 action graph 明显更小：
+
+| Evidence | Pharact | Aerial |
+|---|---:|---:|
+| `chrsysparam` table0 | `33 x 128`, 32 live rows | `47 x 128`, 46 live rows |
+| Phase resolver | `func_965`, 101 cases | `func_973`, 141 cases |
+| `2.c` functions / lines | `1153 / 33339` | `1198 / 33544` |
+| Raw bullet rows | `93` | `156` |
+| Literal bullet hashes | `82`, all matched | `92`, all matched |
+| `sys_51(0x20000)` | `0` | `2` |
+
+直接 `.c` 链：
+
+```text
+0.c func_143/145
+  -> same external-row input adapter as Aerial
+
+2.c func_849
+  -> registers 32 action rows and three phase slots
+  -> func_873 supports groups 0x03/0x0C/0x19/0x1F/0x26
+  -> groups 0x27/0x29 remain phase-only
+
+row 9 field1C = 0xD3A742A8
+  -> func_924 -> func_914 -> func_965 -> func_1115
+  -> left/right directional sys_46 movement
+
+rows 10..13
+  -> func_997
+  -> four directional movement-shot bullet rows + slot-3 row 0x4F2D7AD3
+```
+
+row 32 `0xD02D6AD4` 还通过 `func_1054/1055` 临时把 `characterparam` 从
+`0x1B12AE7D` 切到 `0x6C159EEB` 再恢复；六个距离字段由 `380.0` 提升到
+`5000.0`。同一 action hash 在 Aerial row 46 却是 group `0x1F` 多弹体时间线，证明
+action hash 不能脱离 unit/group/callback/resource shape 跨机体命名。
+
+`func_965` 中的 `0xCE6034F9 -> func_973` 没有被 Pharact raw table 的任何 field
+引用；不能把该模板残留函数当作本机 shooting CS。完整 32-row 表、arms/bullet rows 与
+证据边界见 [66002001 Gundam Pharact](units/66002001-gundam-pharact/README.md)。
+本结论没有使用 generated JSON。
+
 ## NEXA-N action table
 
 `0x38C44F75/chrsysparam.csyspm`：
@@ -471,6 +517,7 @@ EXVS2OB wiki 只提供玩家可见名称与输入候选。它不能单独证明�
 | G-Self | Space / Reflector stored/deployed / Assault forms; Beam Rifle; Assault missiles; High-Torque Pack / Montero candidates | [EXVS2OB G-Self](https://w.atwiki.jp/exvs2ob/pages/345.html) |
 | Mack Knife (Mask) | Beam Vulcan; concentrated CS; Plasma Claw irradiation; Grenade Launcher; Barara assist; Long-Range Booster | [EXVS2OB Mack Knife](https://w.atwiki.jp/exvs2ob/pages/179.html) |
 | Gundam Aerial | Beam Rifle; Long Barrel irradiation/stance/moving shots; GUND-BIT all-range/deploy; Demi Trainer assist | [EXVS2OB Gundam Aerial](https://w.atwiki.jp/exvs2ob/pages/28.html) |
+| Gundam Pharact | Beam Arquebus; irradiation CS; Corax all-range/deploy; Beakfoot retreat/moving shots; directional special movement; no assist | [EXVS2OB Gundam Pharact](https://w.atwiki.jp/exvs2ob/pages/675.html) |
 
 使用规则：
 
@@ -480,7 +527,7 @@ EXVS2OB wiki 只提供玩家可见名称与输入候选。它不能单独证明�
 
 ## 代码优先记录规则
 
-本页不再把机器导出结果作为交付物列出。NEXA-N、AGE-FX 与 Aerial 等 external-table
+本页不再把机器导出结果作为交付物列出。NEXA-N、AGE-FX、Aerial 与 Pharact 等 external-table
 样本的后续研究按下面顺序写：
 
 1. 从 `0.c` 证明 action row 如何被选择并写入 `func_95`。
@@ -498,5 +545,6 @@ EXVS2OB wiki 只提供玩家可见名称与输入候选。它不能单独证明�
 - G-Self 已建立四状态 classic selector、Assault-state 多弹体族与 resource count 的 `.c -> raw Param` 闭环；下一步追 Reflector stored/deployed 精确语义、motion/resource 名称与 assist payload。
 - Mack Knife 已建立二状态 classic selector、slot 1/2 loadout 与 Beam Vulcan / Plasma Claw / Grenade Launcher 候选链；下一步追 `func_921`/`0x1000`、方向特射、interaction/hitgroup 与 slot 0 native 初始化。
 - Gundam Aerial 已建立 46-action external table、动态 action/phase registry 和代表性多弹体族的 `.c -> raw Param` 闭环；下一步追全部输入映射、Demi Trainer `sys_51`、GUND-BIT resource/effect 与 arms slot 绑定。
+- Gundam Pharact 已建立 32-action external table、方向特殊移动、Corax/Beakfoot 候选、82 个 literal bullet hashes 与临时超远锁定态的 `.c -> raw Param` 闭环；下一步追 rows `15..31` 的 melee/hitgroup/interaction 与 arms slot 绑定。
 - 加入更多 Character ID 样本，优先每个大 chrsysparam 一机、每个 68-byte empty chrsysparam 一机，避免只按作品或知名度采样。
 - wiki 只维护 semantic candidate；最终名称必须回到硬盘证据验证。

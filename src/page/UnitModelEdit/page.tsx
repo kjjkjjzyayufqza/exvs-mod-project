@@ -43,9 +43,11 @@ import { NumatbTextureOptionsProvider } from "@/components/ssbh-model-preview/nu
 import { getParentDir, inferUnitModelStructurePath } from "./utils/unitModelRepackService";
 import { rememberStoredDialogSelection } from "@/utils/dialogDefaultPathStore";
 import { normalizeComparePath, resolveUnitModelNodeAbsPath } from "./utils/unitModelNodePaths";
+import { listUnitModelDiskModelNames } from "./utils/unitModelDiskModels";
 import {
   buildUnitModelStructureTree,
   collectModelGroupNames,
+  mergeShlModelFolderNames,
   type UnitModelTreeNode,
 } from "./utils/unitModelStructureTree";
 import { useSsbhFileEditorSessions } from "@/components/ssbh-model-preview/useSsbhFileEditorSessions";
@@ -195,7 +197,8 @@ function UnitModelEditWorkspace({
   const handleStructureMutated = useCallback(() => {
     onStructureMutated();
     workspace.markValidationStale();
-  }, [onStructureMutated, workspace.markValidationStale]);
+    schedulePreviewReload();
+  }, [onStructureMutated, workspace.markValidationStale, schedulePreviewReload]);
 
   // Editor `editingPaths` are absolute; the tree compares relative fileUrls.
   const editingRelPaths = useMemo(() => {
@@ -207,15 +210,40 @@ function UnitModelEditWorkspace({
     return set;
   }, [editors.editingPaths, toRelKey]);
 
-  // Structure-ordered model folder names; the index is the `folder_index` used by SHL records.
-  const shlModelFolderNames = useMemo(() => {
-    if (structureJson == null) return undefined;
+  const structureModelNames = useMemo(() => {
+    if (structureJson == null) return [];
     try {
       return collectModelGroupNames(buildUnitModelStructureTree(structureJson).root);
     } catch {
-      return undefined;
+      return [];
     }
   }, [structureJson]);
+
+  const [diskModelNames, setDiskModelNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!workspace.activeRoot) {
+      setDiskModelNames([]);
+      return;
+    }
+    void listUnitModelDiskModelNames(workspace.activeRoot)
+      .then((names) => {
+        if (!cancelled) setDiskModelNames(names);
+      })
+      .catch(() => {
+        if (!cancelled) setDiskModelNames([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspace.activeRoot, structureJson]);
+
+  // Structure order defines `folder_index`; append disk-only models so SHL can target new folders.
+  const shlModelFolderNames = useMemo(() => {
+    const merged = mergeShlModelFolderNames(structureModelNames, diskModelNames);
+    return merged.length > 0 ? merged : undefined;
+  }, [structureModelNames, diskModelNames]);
 
   const handleOpenEditor = useCallback(
     (node: UnitModelTreeNode) => {
@@ -549,7 +577,7 @@ export default function UnitModelEdit() {
   }, [unitRoot, reloadTick]);
 
   const previewSuspended =
-    !isPageActive || daeExchangeOpen || daeModalViewportSuspend || modelImportViewportSuspend;
+    !isPageActive || daeModalViewportSuspend || modelImportViewportSuspend;
 
   return (
     <SsbhModelPreviewProvider workspaceRoot={unitRoot} previewSuspended={previewSuspended}>

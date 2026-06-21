@@ -205,8 +205,10 @@ Aerial combines two registry layers:
 
 - Dynamic layer: `func_849` registers all 46 nonempty external action rows and their phase
   callbacks.
-- Fixed layer: `2.c:33363-33391`, `func_1194`, registers 25 shared handlers; three hashes
-  (`0x9475130E`, `0x77B100FF`, `0xA02D57DC`) have explicit zero callbacks.
+- Fixed layer: `2.c:33363-33391`, `func_1194`, registers 26 fixed rows: 23 nonzero callbacks
+  and three explicit zero callbacks (`0x9475130E`, `0x77B100FF`, `0xA02D57DC`). Together
+  with two early registrations, this sample still contains the 25 nonzero hashes shared by all
+  current real-source units.
 - `func_1195/1196/1197` then register slot, resource and extra callbacks.
 
 This explains why a simple tail-registry diff undercounts Aerial's actual action surface.

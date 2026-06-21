@@ -46,6 +46,8 @@ Mack Knife（Mask）当前 OB v27 的独立机体页见 [42002001 Mack Knife MSC
 
 真正的 Aerial 是 `66001001`。独立机体页见 [66001001 Gundam Aerial MSC 研究](./units/66001001-gundam-aerial/README.md)。该页直接读取 `0x19CE466D` 的 `0.c/1.c/2.c` 与 `0x48357C75` raw Param，证明 46-action external Param table、动态 action/phase registry、slot-1/slot-5 多弹体族与 raw bullet rows；不使用 generated analysis JSON。
 
+Gundam Pharact 是 `66002001`。独立机体页见 [66002001 Gundam Pharact MSC 研究](./units/66002001-gundam-pharact/README.md)。该页直接读取 `0x33BAAE59` 的 `0.c/1.c/2.c` 与 `0x62419441` raw Param，证明 32-action external Param table、Corax/Beakfoot/方向特殊移动候选弹体族、无 assist summon，以及动作内临时超远 `characterparam` 状态；不使用 generated analysis JSON。
+
 Unicorn 当前 OB v27 的独立机体页见 [15001001 Unicorn MSC 研究](./units/15001001-unicorn/README.md)。该页直接读取 `0x0B180D9E` 的 `0.c/1.c/2.c` 与 `0x5AE33786` raw Param，证明 Unicorn/Destroy 主形态轴、两套 loadout、代表射击/援护、NT-D 和觉醒技强制换装链；不使用 generated analysis JSON。
 
 Sinanju 当前 OB v27 的独立机体页见 [15003001 Sinanju MSC 研究](./units/15003001-sinanju/README.md)。该页直接读取 `0xCF8FC16A` 的 `0.c/1.c/2.c` 与 `0x9E74FB72` raw Param，证明 classic selector 下主射、CS、格斗 CS、四向 Bazooka、Rozen Zulu assist、Meteor Kick 与 `赤い彗星の再来` 时限强化的代表闭环；不使用 generated analysis JSON。
@@ -119,25 +121,27 @@ Sinanju 当前 OB v27 的独立机体页见 [15003001 Sinanju MSC 研究](./unit
    - classic local selector 样本；`global39 == 0/1`、normal / Long-Range Booster loadout bridge、Beam Vulcan、Plasma Claw 与 Grenade Launcher 候选链已直接读 `.c` 和 raw Param。
 27. [66001001 Gundam Aerial MSC 研究](./units/66001001-gundam-aerial/README.md)
    - external Param action-table 样本；46 个非空 action rows、141-key phase resolver、动态 registry 与代表性 `sys_4F -> bulletparam` 链已直接读 `.c` 和 raw Param。
-28. [MSC 代际与 Param Action Bridge 对比](./msc-generation-param-bridge-comparison.md)
+28. [66002001 Gundam Pharact MSC 研究](./units/66002001-gundam-pharact/README.md)
+   - external Param action-table 样本；32 个非空 action rows、101-case resolver、方向特殊移动、82 个 literal bullet hashes 命中与临时超远锁定态已直接读 `.c` 和 raw Param。
+29. [MSC 代际与 Param Action Bridge 对比](./msc-generation-param-bridge-comparison.md)
    - 区分 external Param action-table、classic local selector、legacy embedded B4AC，并记录后续读 `.c` 的顺序。
-29. [2.c 全文件地图](./2c-whole-file-map.md)
+30. [2.c 全文件地图](./2c-whole-file-map.md)
    - 当前样本的行数、函数数、启动流、注册表、syscall 热区、`global170/global143` 证据。
-30. [2.c 函数群与区段索引](./2c-function-clusters.md)
+31. [2.c 函数群与区段索引](./2c-function-clusters.md)
    - 把 1,047 个函数按区段、热点和研究优先级拆开，解决“整份文件太乱”的问题。
-31. [func_887 / func_888 shell loadout 研究](./shell-loadout-func-887-888.md)
+32. [func_887 / func_888 shell loadout 研究](./shell-loadout-func-887-888.md)
    - 你正在看的换装 / 组件挂接系统，已经放回高层流程中解释。
-32. [Notion MSC 页交叉索引](./notion-msc-cross-reference.md)
+33. [Notion MSC 页交叉索引](./notion-msc-cross-reference.md)
    - 把 MCP 读取到的 Notion 记录映射到当前样本和项目文档。
-33. [2.c 函数角色地图](./2c-function-role-map-for-modders.md)
+34. [2.c 函数角色地图](./2c-function-role-map-for-modders.md)
    - 用当前 `.c` 的 action hash、callback shape、syscall/resource 输出建立工作名，避免把 `func_N` 当跨样本真名。
-34. [MSC Auto Rename Mapping](./msc-auto-rename-mapping.md)
+35. [MSC Auto Rename Mapping](./msc-auto-rename-mapping.md)
    - 专门记录 `ACTION_*`、`SLOT_CB_*` 和中文注释的 TestEditor 显示规则，避免误改 `command_mapping.md`。
-34. [`func_1044` slot callback 全链路逆向](./func1044-slot-callback-atlas.md)
+36. [`func_1044` slot callback 全链路逆向](./func1044-slot-callback-atlas.md)
    - 从输入、action hash、handler、slot、resource index 证明基础移动、step、BD、防御、变形和 result callback 的职责。
-35. [`func_1044` 模拟重命名稿](./func1044-simulated-renames.md)
+37. [`func_1044` 模拟重命名稿](./func1044-simulated-renames.md)
    - 把证据转换成完整的 Auto Rename 模拟结果，并为低置信项保留 `LIKELY` / `UNCONFIRMED`。
-36. [MSC research 覆盖度与下一步缺口](./msc-research-gap-map.md)
+38. [MSC research 覆盖度与下一步缺口](./msc-research-gap-map.md)
    - 记录当前哪些已经足够指导模组开发，哪些还只是工作模型，下一轮应该继续拆哪里。
 
 历史上的局部笔记仍保留在 [../exvs-msc-func-887-888-shell-loadout-notes.md](../exvs-msc-func-887-888-shell-loadout-notes.md)。后续讨论优先在本目录继续。

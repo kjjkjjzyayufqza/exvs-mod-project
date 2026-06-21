@@ -34,6 +34,7 @@ import {
 } from "./daeImportUi";
 import { SCENE_EDIT_RND_SIZE_KEYS } from "../sceneEditRndSizePersistence";
 import { SceneEditRndModalShell } from "../SceneEditRndModalShell";
+import type { ModalViewportSuspendInteraction } from "../SceneEditRndModalShell";
 
 export type DaeImportPrimaryMode = "preview" | "ssbh";
 export type DaeImportWorkflowMode = "standard" | "batchDisk" | "unitModel";
@@ -130,6 +131,8 @@ interface DaeImportConfigModalProps {
   onConfigChange: (importId: string, config: DaeImportConfig) => void;
   onImport: () => void;
   onCancel: () => void;
+  /** Pause the host 3D viewport only during modal drag/resize (Unit Model Editor). */
+  viewportSuspend?: ModalViewportSuspendInteraction;
 }
 
 function getPrimaryMode(config: DaeImportConfig): DaeImportPrimaryMode {
@@ -500,6 +503,7 @@ export function DaeImportConfigModal({
   onConfigChange,
   onImport,
   onCancel,
+  viewportSuspend,
 }: DaeImportConfigModalProps) {
   const entry = entries[0];
   const config = entry?.config;
@@ -546,6 +550,7 @@ export function DaeImportConfigModal({
         getInitialPosition={getInitialPosition}
         sizeStorageKey={getDaeImportSizeStorageKey(primaryMode)}
         skipActivate
+        viewportSuspend={viewportSuspend}
       >
         <DaeImportConfigModalBody
           entry={entry}
